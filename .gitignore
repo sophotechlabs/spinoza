@@ -30,3 +30,17 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Embedded build output (keep the dir, ignore built assets)
+/web/dist/*
+!/web/dist/.gitkeep
+
+# Built binary
+/spinoza
+
+# macOS
+.DS_Store
