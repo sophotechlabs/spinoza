@@ -1,0 +1,24 @@
+pre-commit:
+  parallel: true
+  commands:
+    go-fmt:
+      glob: "*.go"
+      run: gofumpt -w {staged_files}
+      stage_fixed: true
+    frontend-fmt:
+      glob: "frontend/**/*.{ts,tsx,css,json,md}"
+      run: frontend/node_modules/.bin/prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+    secrets:
+      run: gitleaks git --staged --no-banner --redact
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx --yes --package @commitlint/cli --package @commitlint/config-conventional commitlint --edit {1}
+
+pre-push:
+  parallel: false
+  commands:
+    check:
+      run: just check
