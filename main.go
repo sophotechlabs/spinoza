@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/broker"
+	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
@@ -24,12 +25,26 @@ var embedded embed.FS
 func main() {
 	addr := flag.String("addr", "127.0.0.1:34115", "listen address")
 	openBrowser := flag.Bool("open", false, "open the default browser on start")
+	fake := flag.Bool("fake", false, "use the in-memory fake data source instead of a real cluster")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	b := broker.NewStub(ctx)
+	var b broker.Broker
+	if *fake {
+		b = broker.NewStub(ctx)
+	} else {
+		cs, contextName, namespace, err := kube.Load()
+		if err != nil {
+			log.Fatalf("kube: %v", err)
+		}
+		b, err = broker.NewInformer(ctx, cs)
+		if err != nil {
+			log.Fatalf("informer: %v", err)
+		}
+		log.Printf("spinoza connected to context %q (namespace %q)", contextName, namespace)
+	}
 
 	assets, err := fs.Sub(embedded, "web/dist")
 	if err != nil {
