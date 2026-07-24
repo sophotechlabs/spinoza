@@ -6,8 +6,8 @@ pre-commit:
       run: PATH="$HOME/go/bin:$PATH" gofumpt -w {staged_files}
       stage_fixed: true
     frontend-fmt:
-      glob: "frontend/**/*.{ts,tsx,css,json,md}"
-      run: frontend/node_modules/.bin/prettier --write --ignore-unknown {staged_files}
+      root: "frontend/"
+      run: node_modules/.bin/prettier --write --ignore-unknown {staged_files}
       stage_fixed: true
     secrets:
       run: gitleaks git --staged --no-banner --redact
