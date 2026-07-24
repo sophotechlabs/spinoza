@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import type { GraphNode } from '../lib/types';
 import { fetchGraph } from '../lib/graph';
 import { controlPlane, toFlow } from '../lib/graphLayout';
