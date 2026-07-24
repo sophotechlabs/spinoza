@@ -14,6 +14,16 @@ export interface Category {
 
 export interface Column {
   name: string;
+  render?: string;
+}
+
+export interface ContainerState {
+  name: string;
+  state: string;
+  reason?: string;
+  ready: boolean;
+  restarts: number;
+  init: boolean;
 }
 
 export interface Row {
@@ -22,6 +32,7 @@ export interface Row {
   namespace: string;
   createdAt: string;
   cells: string[];
+  containers?: ContainerState[];
 }
 
 export type ClientMsg =

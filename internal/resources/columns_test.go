@@ -37,7 +37,7 @@ func TestColumnsFor(t *testing.T) {
 		kind string
 		want []string
 	}{
-		{"Pod", []string{"Ready", "Status", "Restarts", "Node"}},
+		{"Pod", []string{"Containers", "Status", "Restarts", "Node"}},
 		{"Deployment", []string{"Ready", "Up-to-date", "Available"}},
 		{"ReplicaSet", []string{"Ready", "Up-to-date", "Available"}},
 		{"StatefulSet", []string{"Ready", "Up-to-date", "Available"}},
@@ -53,6 +53,90 @@ func TestColumnsFor(t *testing.T) {
 		t.Run(tc.kind, func(t *testing.T) {
 			eq(t, colNames(t, tc.kind), tc.want)
 		})
+	}
+}
+
+func TestColumnRenders(t *testing.T) {
+	pod := columnsFor("Pod")
+	if pod[0].Render != "containers" {
+		t.Fatalf("pod[0] render = %q, want containers", pod[0].Render)
+	}
+	if pod[2].Render != "restarts" {
+		t.Fatalf("pod[2] render = %q, want restarts", pod[2].Render)
+	}
+	if columnsFor("Deployment")[0].Render != "ratio" {
+		t.Fatalf("deployment[0] render, want ratio")
+	}
+	if columnsFor("Job")[0].Render != "ratio" {
+		t.Fatalf("job[0] render, want ratio")
+	}
+	if columnsFor("ConfigMap")[0].Render != "" {
+		t.Fatalf("configmap[0] render, want empty")
+	}
+}
+
+func TestContainersForNonPod(t *testing.T) {
+	if got := containersFor(u(map[string]interface{}{}), "Deployment"); got != nil {
+		t.Fatalf("containersFor non-pod = %v, want nil", got)
+	}
+}
+
+func TestContainersForEmptyPod(t *testing.T) {
+	if got := containersFor(u(map[string]interface{}{}), "Pod"); got != nil {
+		t.Fatalf("containersFor empty pod = %v, want nil", got)
+	}
+}
+
+func TestContainersForPod(t *testing.T) {
+	pod := u(map[string]interface{}{
+		"status": map[string]interface{}{
+			"initContainerStatuses": []interface{}{
+				map[string]interface{}{
+					"name":         "init",
+					"ready":        true,
+					"restartCount": int64(0),
+					"state":        map[string]interface{}{"terminated": map[string]interface{}{"reason": "Completed"}},
+				},
+			},
+			"containerStatuses": []interface{}{
+				"not-a-map",
+				map[string]interface{}{
+					"name":         "app",
+					"ready":        true,
+					"restartCount": int64(1),
+					"state":        map[string]interface{}{"running": map[string]interface{}{}},
+				},
+				map[string]interface{}{
+					"name":         "sidecar",
+					"ready":        false,
+					"restartCount": int64(4),
+					"state":        map[string]interface{}{"waiting": map[string]interface{}{"reason": "CrashLoopBackOff"}},
+				},
+			},
+		},
+	})
+	states := containersFor(pod, "Pod")
+	if len(states) != 3 {
+		t.Fatalf("states = %d, want 3", len(states))
+	}
+	if !states[0].Init || states[0].Name != "init" || states[0].State != "terminated" || states[0].Reason != "Completed" {
+		t.Fatalf("init state = %+v", states[0])
+	}
+	if states[1].Init || states[1].Name != "app" || states[1].State != "running" || !states[1].Ready || states[1].Restarts != 1 {
+		t.Fatalf("app state = %+v", states[1])
+	}
+	if states[2].Name != "sidecar" || states[2].State != "waiting" || states[2].Reason != "CrashLoopBackOff" || states[2].Ready {
+		t.Fatalf("sidecar state = %+v", states[2])
+	}
+}
+
+func TestContainerStateReason(t *testing.T) {
+	if state, reason := containerStateReason(map[string]interface{}{}); state != "waiting" || reason != "" {
+		t.Fatalf("no state = %q,%q, want waiting,''", state, reason)
+	}
+	empty := map[string]interface{}{"state": map[string]interface{}{}}
+	if state, reason := containerStateReason(empty); state != "waiting" || reason != "" {
+		t.Fatalf("empty state = %q,%q, want waiting,''", state, reason)
 	}
 }
 

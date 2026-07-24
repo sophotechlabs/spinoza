@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   createColumnHelper,
   flexRender,
@@ -10,6 +11,8 @@ import type { ColumnDef, SortDirection, SortingState } from '@tanstack/react-tab
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ResourceDescriptor, Row } from '../lib/types';
 import { useSubColumns, useSubNamespaced, useSubRows } from '../store/resources';
+import { ratioColor, restartColor } from '../lib/status';
+import ContainerSquares from './ContainerSquares';
 
 interface ResourceTableProps {
   active: ResourceDescriptor | null;
@@ -49,6 +52,19 @@ function cellAt(row: Row, index: number): string {
     return '';
   }
   return row.cells[index];
+}
+
+function renderDataCell(render: string | undefined, value: string, row: Row): ReactNode {
+  if (render === 'containers') {
+    return <ContainerSquares row={row} fallback={value} />;
+  }
+  if (render === 'ratio') {
+    return <span className={ratioColor(value)}>{value}</span>;
+  }
+  if (render === 'restarts') {
+    return <span className={restartColor(value)}>{value}</span>;
+  }
+  return value;
 }
 
 function sortIndicator(dir: false | SortDirection): string {
@@ -114,6 +130,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
         columnHelper.accessor((row) => cellAt(row, index), {
           id: `cell-${index}`,
           header: column.name,
+          cell: (info) => renderDataCell(column.render, info.getValue(), info.row.original),
         }),
       );
     });

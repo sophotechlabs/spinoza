@@ -12,9 +12,18 @@ import (
 func columnsFor(kind string) []api.Column {
 	switch kind {
 	case "Pod":
-		return cols("Ready", "Status", "Restarts", "Node")
+		return []api.Column{
+			{Name: "Containers", Render: "containers"},
+			{Name: "Status"},
+			{Name: "Restarts", Render: "restarts"},
+			{Name: "Node"},
+		}
 	case "Deployment", "ReplicaSet", "StatefulSet", "ReplicationController":
-		return cols("Ready", "Up-to-date", "Available")
+		return []api.Column{
+			{Name: "Ready", Render: "ratio"},
+			{Name: "Up-to-date"},
+			{Name: "Available"},
+		}
 	case "DaemonSet":
 		return cols("Desired", "Ready", "Available")
 	case "Service":
@@ -24,7 +33,7 @@ func columnsFor(kind string) []api.Column {
 	case "Namespace":
 		return cols("Status")
 	case "Job":
-		return cols("Completions")
+		return []api.Column{{Name: "Completions", Render: "ratio"}}
 	default:
 		return cols("Status")
 	}
@@ -57,6 +66,62 @@ func cellsFor(u *unstructured.Unstructured, kind string) []string {
 	default:
 		return []string{conditionSummary(u)}
 	}
+}
+
+func containersFor(u *unstructured.Unstructured, kind string) []api.ContainerState {
+	if kind != "Pod" {
+		return nil
+	}
+	states := containerStates(u, "initContainerStatuses", true)
+	states = append(states, containerStates(u, "containerStatuses", false)...)
+	if len(states) == 0 {
+		return nil
+	}
+	return states
+}
+
+func containerStates(u *unstructured.Unstructured, field string, init bool) []api.ContainerState {
+	out := []api.ContainerState{}
+	for _, s := range nestedSlice(u, "status", field) {
+		m, ok := s.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		ready := false
+		if b, ok := m["ready"].(bool); ok {
+			ready = b
+		}
+		state, reason := containerStateReason(m)
+		out = append(out, api.ContainerState{
+			Name:     name,
+			State:    state,
+			Reason:   reason,
+			Ready:    ready,
+			Restarts: toInt64(m["restartCount"]),
+			Init:     init,
+		})
+	}
+	return out
+}
+
+func containerStateReason(m map[string]interface{}) (state, reason string) {
+	s, ok := m["state"].(map[string]interface{})
+	if !ok {
+		return "waiting", ""
+	}
+	if _, ok := s["running"]; ok {
+		return "running", ""
+	}
+	if term, ok := s["terminated"].(map[string]interface{}); ok {
+		termReason, _ := term["reason"].(string)
+		return "terminated", termReason
+	}
+	if wait, ok := s["waiting"].(map[string]interface{}); ok {
+		waitReason, _ := wait["reason"].(string)
+		return "waiting", waitReason
+	}
+	return "waiting", ""
 }
 
 func podCells(u *unstructured.Unstructured) []string {

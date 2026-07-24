@@ -15,15 +15,26 @@ type Category struct {
 }
 
 type Column struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Render string `json:"render,omitempty"`
+}
+
+type ContainerState struct {
+	Name     string `json:"name"`
+	State    string `json:"state"`
+	Reason   string `json:"reason,omitempty"`
+	Ready    bool   `json:"ready"`
+	Restarts int64  `json:"restarts"`
+	Init     bool   `json:"init"`
 }
 
 type Row struct {
-	UID       string   `json:"uid"`
-	Name      string   `json:"name"`
-	Namespace string   `json:"namespace"`
-	CreatedAt string   `json:"createdAt"`
-	Cells     []string `json:"cells"`
+	UID        string           `json:"uid"`
+	Name       string           `json:"name"`
+	Namespace  string           `json:"namespace"`
+	CreatedAt  string           `json:"createdAt"`
+	Cells      []string         `json:"cells"`
+	Containers []ContainerState `json:"containers,omitempty"`
 }
 
 type ClientMsg struct {

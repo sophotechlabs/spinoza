@@ -65,6 +65,55 @@ describe('ResourceTable', () => {
     expect(screen.getByText('Pending')).toBeInTheDocument();
   });
 
+  it('renders container squares, colored ratios and restart counts by render hint', async () => {
+    seed(
+      [
+        { name: 'Containers', render: 'containers' },
+        { name: 'Ready', render: 'ratio' },
+        { name: 'Restarts', render: 'restarts' },
+      ],
+      true,
+      [
+        makeRow({
+          uid: 'a',
+          name: 'pod-a',
+          namespace: 'prod',
+          cells: ['1/2', '1/2', '7'],
+          containers: [
+            { name: 'app', state: 'running', ready: true, restarts: 0, init: false },
+            {
+              name: 'sidecar',
+              state: 'waiting',
+              reason: 'CrashLoopBackOff',
+              ready: false,
+              restarts: 7,
+              init: false,
+            },
+          ],
+        }),
+      ],
+    );
+    renderTable(descriptor, null);
+    await screen.findByRole('button', { name: 'pod-a' });
+    expect(screen.getByTitle('app: running')).toBeInTheDocument();
+    expect(
+      screen.getByTitle('sidecar: waiting (CrashLoopBackOff) · 7 restarts'),
+    ).toBeInTheDocument();
+    const ratio = screen.getByText('1/2');
+    expect(ratio.className).toContain('text-yellow-400');
+    const restarts = screen.getByText('7');
+    expect(restarts.className).toContain('text-red-400');
+  });
+
+  it('falls back to the cell text when a container column has no container data', async () => {
+    seed([{ name: 'Containers', render: 'containers' }], true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: ['0/1'] }),
+    ]);
+    renderTable(descriptor, null);
+    await screen.findByRole('button', { name: 'pod-a' });
+    expect(screen.getByText('0/1')).toBeInTheDocument();
+  });
+
   it('renders an empty cell when a row has fewer cells than columns', async () => {
     seed(makeColumns(['Ready', 'Status']), false, [
       makeRow({ uid: 'a', name: 'pod-a', cells: ['1/1'] }),

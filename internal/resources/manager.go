@@ -263,11 +263,12 @@ func toUnstructured(obj interface{}) (*unstructured.Unstructured, bool) {
 
 func toRow(u *unstructured.Unstructured, kind string) api.Row {
 	return api.Row{
-		UID:       string(u.GetUID()),
-		Name:      u.GetName(),
-		Namespace: u.GetNamespace(),
-		CreatedAt: u.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
-		Cells:     cellsFor(u, kind),
+		UID:        string(u.GetUID()),
+		Name:       u.GetName(),
+		Namespace:  u.GetNamespace(),
+		CreatedAt:  u.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
+		Cells:      cellsFor(u, kind),
+		Containers: containersFor(u, kind),
 	}
 }
 
