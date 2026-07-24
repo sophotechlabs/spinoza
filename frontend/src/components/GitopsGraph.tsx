@@ -4,10 +4,11 @@ import type { NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { GraphNode } from '../lib/types';
 import { fetchGraph } from '../lib/graph';
-import { toFlow } from '../lib/graphLayout';
+import { controlPlane, toFlow } from '../lib/graphLayout';
 import type { GitopsFlow, GitopsFlowNode } from '../lib/graphLayout';
 
 const POLL_INTERVAL_MS = 5000;
+const MAX_NODES = 400;
 
 interface GitopsGraphProps {
   onSelect?: (node: GraphNode) => void;
@@ -35,6 +36,7 @@ function errorMessage(err: unknown): string {
 export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
   const [flow, setFlow] = useState<GitopsFlow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [overLimit, setOverLimit] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -42,7 +44,14 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
       try {
         const graph = await fetchGraph();
         if (mounted) {
-          setFlow(toFlow(graph));
+          const reduced = controlPlane(graph);
+          if (reduced.nodes.length > MAX_NODES) {
+            setOverLimit(reduced.nodes.length);
+            setFlow(null);
+          } else {
+            setOverLimit(null);
+            setFlow(toFlow(reduced));
+          }
           setError(null);
         }
       } catch (err: unknown) {
@@ -69,6 +78,14 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
     },
     [onSelect],
   );
+
+  if (overLimit !== null) {
+    return (
+      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-neutral-500">
+        GitOps control plane has {overLimit} nodes — too many to render.
+      </div>
+    );
+  }
 
   if (flow === null) {
     if (error !== null) {

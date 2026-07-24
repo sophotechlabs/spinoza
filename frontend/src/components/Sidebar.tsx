@@ -37,9 +37,9 @@ function resourceClass(active: boolean): string {
 
 function gitopsClass(active: boolean): string {
   const base =
-    'mb-1 block w-full px-3 py-1 text-left text-[11px] font-semibold tracking-wide text-neutral-400 uppercase hover:text-neutral-200';
+    'mb-2 block w-full border-b border-neutral-800 px-3 py-2 text-left text-sm text-emerald-400 hover:bg-neutral-900';
   if (active) {
-    return `${base} bg-neutral-800 text-neutral-100`;
+    return `${base} bg-neutral-800 font-semibold text-emerald-300`;
   }
   return base;
 }

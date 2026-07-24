@@ -110,6 +110,13 @@ function toFlowEdge(edge: GraphEdge): Edge {
   };
 }
 
+export function controlPlane(graph: Graph): Graph {
+  const nodes = graph.nodes.filter((node) => node.category !== 'managed');
+  const kept = new Set(nodes.map((node) => node.id));
+  const edges = graph.edges.filter((edge) => kept.has(edge.from) && kept.has(edge.to));
+  return { nodes, edges };
+}
+
 export function toFlow(graph: Graph): GitopsFlow {
   const g: LayoutGraph = new dagre.graphlib.Graph<GraphLabel, NodeLabel, EdgeLabel>();
   g.setGraph({ rankdir: 'LR', ranksep: RANK_SEPARATION, nodesep: NODE_SEPARATION });
