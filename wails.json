@@ -1,0 +1,10 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "spinoza",
+  "outputfilename": "Spinoza",
+  "frontend:install": "npm ci",
+  "frontend:build": "npm run build",
+  "author": {
+    "name": "Sophotech"
+  }
+}

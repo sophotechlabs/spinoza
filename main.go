@@ -1,9 +1,12 @@
+//go:build !desktop
+
 package main
 
 import (
 	"context"
-	"embed"
+	"errors"
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -14,15 +17,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sophotechlabs/spinoza/internal/broker"
-	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
-//go:embed all:web/dist
-var embedded embed.FS
-
 func main() {
+	if err := run(); err != nil {
+		log.Fatalf("spinoza: %v", err)
+	}
+}
+
+func run() error {
 	addr := flag.String("addr", "127.0.0.1:34115", "listen address")
 	openBrowser := flag.Bool("open", false, "open the default browser on start")
 	fake := flag.Bool("fake", false, "use the in-memory fake data source instead of a real cluster")
@@ -31,30 +35,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	var b broker.Broker
-	if *fake {
-		b = broker.NewStub(ctx)
-	} else {
-		cs, contextName, namespace, err := kube.Load()
-		if err != nil {
-			log.Fatalf("kube: %v", err)
-		}
-		b, err = broker.NewInformer(ctx, cs)
-		if err != nil {
-			log.Fatalf("informer: %v", err)
-		}
-		log.Printf("spinoza connected to context %q (namespace %q)", contextName, namespace)
-	}
+	b := makeBroker(ctx, *fake)
 
 	assets, err := fs.Sub(embedded, "web/dist")
 	if err != nil {
-		log.Fatalf("assets: %v", err)
+		return fmt.Errorf("assets: %w", err)
 	}
 
 	srv := server.New(b, assets)
 	httpServer := &http.Server{
-		Addr:    *addr,
-		Handler: srv.Handler(),
+		Addr:              *addr,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	url := "http://" + *addr
@@ -70,9 +62,11 @@ func main() {
 		_ = httpServer.Shutdown(shutCtx)
 	}()
 
-	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server: %v", err)
+	err = httpServer.ListenAndServe()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("server: %w", err)
 	}
+	return nil
 }
 
 func openURL(url string) {
