@@ -1,22 +1,120 @@
-const inactiveGroups = ['Config', 'Network', 'Storage', 'Access Control', 'Custom Resources'];
+import { useEffect, useState } from 'react';
+import type { Category, ResourceDescriptor } from '../lib/types';
+import { fetchResources } from '../lib/discovery';
 
-export default function Sidebar() {
+interface SidebarProps {
+  activeResource: ResourceDescriptor | null;
+  onSelect: (descriptor: ResourceDescriptor) => void;
+}
+
+function descriptorKey(descriptor: ResourceDescriptor): string {
+  return `${descriptor.group}/${descriptor.version}/${descriptor.resource}`;
+}
+
+function isActive(active: ResourceDescriptor | null, descriptor: ResourceDescriptor): boolean {
+  if (active === null) {
+    return false;
+  }
+  return descriptorKey(active) === descriptorKey(descriptor);
+}
+
+function chevron(collapsed: boolean): string {
+  if (collapsed) {
+    return '▸';
+  }
+  return '▾';
+}
+
+function resourceClass(active: boolean): string {
+  const base = 'block w-full px-6 py-1 text-left text-neutral-300 hover:bg-neutral-900';
+  if (active) {
+    return `${base} bg-neutral-800 text-neutral-100`;
+  }
+  return base;
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return 'discovery request failed';
+}
+
+export default function Sidebar({ activeResource, onSelect }: SidebarProps) {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const data = await fetchResources();
+        if (mounted) {
+          setCategories(data);
+        }
+      } catch (err: unknown) {
+        if (mounted) {
+          setError(errorMessage(err));
+        }
+      }
+    };
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  function toggle(name: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  }
+
   return (
     <nav className="w-56 shrink-0 overflow-y-auto border-r border-neutral-800 bg-neutral-950 py-2">
-      <div className="mb-2">
-        <div className="px-3 py-1 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
-          Workloads
-        </div>
-        <div className="mx-1 rounded bg-neutral-800 px-3 py-1 text-neutral-100">Pods</div>
-      </div>
-      {inactiveGroups.map((group) => (
-        <div
-          key={group}
-          className="px-3 py-1 text-[11px] font-semibold tracking-wide text-neutral-600 uppercase"
-        >
-          {group}
-        </div>
-      ))}
+      {error !== null && <div className="px-3 py-1 text-[11px] text-red-400">{error}</div>}
+      {categories.map((category) => {
+        const isCollapsed = collapsed.has(category.name);
+        return (
+          <div key={category.name} className="mb-1">
+            <button
+              type="button"
+              onClick={() => {
+                toggle(category.name);
+              }}
+              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase hover:text-neutral-200"
+            >
+              <span>
+                {chevron(isCollapsed)} {category.name}
+              </span>
+              <span className="text-neutral-600">{category.resources.length}</span>
+            </button>
+            {!isCollapsed && (
+              <div>
+                {category.resources.map((resource) => (
+                  <button
+                    key={descriptorKey(resource)}
+                    type="button"
+                    onClick={() => {
+                      onSelect(resource);
+                    }}
+                    className={resourceClass(isActive(activeResource, resource))}
+                  >
+                    {resource.kind}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </nav>
   );
 }

@@ -1,11 +1,11 @@
-import type { FeedStatus } from '../lib/feed';
+import type { ConnectionStatus } from '../lib/feed';
 
 interface TopBarProps {
-  status: FeedStatus['status'];
+  status: ConnectionStatus;
   onReconnect?: () => void;
 }
 
-function statusColor(status: FeedStatus['status']): string {
+function statusColor(status: ConnectionStatus): string {
   if (status === 'connected') {
     return 'bg-green-500';
   }

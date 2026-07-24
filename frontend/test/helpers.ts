@@ -1,15 +1,32 @@
-import type { PodRow } from '../src/lib/types';
+import type { Category, Column, ResourceDescriptor, Row } from '../src/lib/types';
 
-export function makePod(overrides: Partial<PodRow>): PodRow {
-  const base: PodRow = {
+export function makeRow(overrides: Partial<Row>): Row {
+  const base: Row = {
     uid: 'uid-0',
-    name: 'pod-0',
+    name: 'row-0',
     namespace: 'default',
-    phase: 'Running',
-    ready: '1/1',
-    restarts: 0,
-    node: 'node-a',
     createdAt: '2026-07-01T00:00:00Z',
+    cells: [],
   };
   return { ...base, ...overrides };
+}
+
+export function makeDescriptor(overrides: Partial<ResourceDescriptor>): ResourceDescriptor {
+  const base: ResourceDescriptor = {
+    group: '',
+    version: 'v1',
+    resource: 'pods',
+    kind: 'Pod',
+    namespaced: true,
+    category: 'Workloads',
+  };
+  return { ...base, ...overrides };
+}
+
+export function makeColumns(names: string[]): Column[] {
+  return names.map((name) => ({ name }));
+}
+
+export function makeCategory(name: string, resources: ResourceDescriptor[]): Category {
+  return { name, resources };
 }

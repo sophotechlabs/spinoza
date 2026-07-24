@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import type { PodRow } from '../../src/lib/types';
-import { usePodsFeed } from '../../src/lib/feed';
-import { usePodStore } from '../../src/store/pods';
-import { makePod } from '../helpers';
+import type { Row } from '../../src/lib/types';
+import { useResourceFeed } from '../../src/lib/feed';
+import { useResourcesStore } from '../../src/store/resources';
+import { makeColumns, makeDescriptor, makeRow } from '../helpers';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -13,6 +13,7 @@ class FakeWebSocket {
   onmessage: ((event: MessageEvent) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
   onclose: ((event: CloseEvent) => void) | null = null;
+  send = vi.fn<(data: string) => void>();
   close = vi.fn((): void => {
     this.readyState = 3;
   });
@@ -35,15 +36,22 @@ function clearOverride(): void {
   delete (window as unknown as WsWindow).__SPINOZA_WS_BASE__;
 }
 
-function snapshotData(pod: PodRow): string {
-  return JSON.stringify({ type: 'snapshot', resource: 'pods', items: [pod], rv: '1' });
+function openSocket(socket: FakeWebSocket): void {
+  socket.readyState = 1;
+  socket.onopen?.(new Event('open'));
 }
 
 function resetStore(): void {
-  usePodStore.setState({ rows: new Map(), sorted: [] });
+  useResourcesStore.setState({ subs: new Map() });
 }
 
-describe('usePodsFeed', () => {
+function sentMessages(socket: FakeWebSocket): unknown[] {
+  return socket.send.mock.calls.map((call) => JSON.parse(call[0]) as unknown);
+}
+
+const descriptor = makeDescriptor({ group: 'apps', version: 'v1', resource: 'deployments' });
+
+describe('useResourceFeed', () => {
   beforeEach(() => {
     FakeWebSocket.instances = [];
     vi.stubGlobal('WebSocket', FakeWebSocket);
@@ -59,48 +67,46 @@ describe('usePodsFeed', () => {
   });
 
   it('connects to the same-origin /ws endpoint by default', () => {
-    renderHook(() => usePodsFeed());
+    renderHook(() => useResourceFeed());
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(FakeWebSocket.instances[0].url).toBe(`ws://${location.host}/ws`);
   });
 
   it('uses the window override base when present', () => {
     overrideBase('ws://custom-host:9999');
-    renderHook(() => usePodsFeed());
+    renderHook(() => useResourceFeed());
     expect(FakeWebSocket.instances[0].url).toBe('ws://custom-host:9999/ws');
   });
 
   it('upgrades to wss when the page is served over https', () => {
     vi.stubGlobal('location', { protocol: 'https:', host: 'secure.example' });
-    renderHook(() => usePodsFeed());
+    renderHook(() => useResourceFeed());
     expect(FakeWebSocket.instances[0].url).toBe('wss://secure.example/ws');
   });
 
   it('starts in the connecting state', () => {
-    const { result } = renderHook(() => usePodsFeed());
+    const { result } = renderHook(() => useResourceFeed());
     expect(result.current.status).toBe('connecting');
   });
 
   it('reports connected after the socket opens', () => {
-    const { result } = renderHook(() => usePodsFeed());
-    const socket = FakeWebSocket.instances[0];
+    const { result } = renderHook(() => useResourceFeed());
     act(() => {
-      socket.onopen?.(new Event('open'));
+      openSocket(FakeWebSocket.instances[0]);
     });
     expect(result.current.status).toBe('connected');
   });
 
   it('reports disconnected after the socket closes', () => {
-    const { result } = renderHook(() => usePodsFeed());
-    const socket = FakeWebSocket.instances[0];
+    const { result } = renderHook(() => useResourceFeed());
     act(() => {
-      socket.onclose?.(new CloseEvent('close'));
+      FakeWebSocket.instances[0].onclose?.(new CloseEvent('close'));
     });
     expect(result.current.status).toBe('disconnected');
   });
 
   it('closes the socket on error', () => {
-    renderHook(() => usePodsFeed());
+    renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
       socket.onerror?.(new Event('error'));
@@ -108,90 +114,270 @@ describe('usePodsFeed', () => {
     expect(socket.close).toHaveBeenCalled();
   });
 
-  it('applies a snapshot message to the store', () => {
-    renderHook(() => usePodsFeed());
-    const socket = FakeWebSocket.instances[0];
-    const data = snapshotData(makePod({ uid: 'a', name: 'alpha' }));
-    act(() => {
-      socket.onmessage?.(new MessageEvent('message', { data }));
-    });
-    expect(usePodStore.getState().rows.get('a')?.name).toBe('alpha');
-  });
-
-  it('applies an added delta message to the store', () => {
-    renderHook(() => usePodsFeed());
+  it('routes a snapshot message to the store by subId', () => {
+    renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     const data = JSON.stringify({
-      type: 'added',
-      resource: 'pods',
-      item: makePod({ uid: 'b', name: 'bravo' }),
+      type: 'snapshot',
+      subId: 'main',
+      columns: makeColumns(['Ready']),
+      namespaced: true,
+      rows: [makeRow({ uid: 'a', name: 'alpha' })],
     });
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data }));
     });
-    expect(usePodStore.getState().rows.get('b')?.name).toBe('bravo');
+    expect(useResourcesStore.getState().subs.get('main')?.rows.get('a')?.name).toBe('alpha');
   });
 
-  it('applies a modified delta message to the store', () => {
-    usePodStore.getState().applySnapshot([makePod({ uid: 'c', phase: 'Pending' })]);
-    renderHook(() => usePodsFeed());
+  it('routes an added delta message to the store', () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    const row: Row = makeRow({ uid: 'b', name: 'bravo' });
+    const data = JSON.stringify({ type: 'added', subId: 'main', row });
+    act(() => {
+      socket.onmessage?.(new MessageEvent('message', { data }));
+    });
+    expect(useResourcesStore.getState().subs.get('main')?.rows.get('b')?.name).toBe('bravo');
+  });
+
+  it('routes a modified delta message to the store', () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main', makeColumns([]), true, [makeRow({ uid: 'c', name: 'before' })]);
+    renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     const data = JSON.stringify({
       type: 'modified',
-      resource: 'pods',
-      item: makePod({ uid: 'c', phase: 'Running' }),
+      subId: 'main',
+      row: makeRow({ uid: 'c', name: 'after' }),
     });
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data }));
     });
-    expect(usePodStore.getState().rows.get('c')?.phase).toBe('Running');
+    expect(useResourcesStore.getState().subs.get('main')?.rows.get('c')?.name).toBe('after');
   });
 
-  it('applies a deleted delta message to the store', () => {
-    usePodStore.getState().applySnapshot([makePod({ uid: 'd', name: 'delta' })]);
-    renderHook(() => usePodsFeed());
+  it('routes a deleted delta message to the store', () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main', makeColumns([]), true, [makeRow({ uid: 'd' })]);
+    renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
-    const data = JSON.stringify({ type: 'deleted', resource: 'pods', uid: 'd' });
+    const data = JSON.stringify({ type: 'deleted', subId: 'main', uid: 'd' });
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data }));
     });
-    expect(usePodStore.getState().rows.has('d')).toBe(false);
+    expect(useResourcesStore.getState().subs.get('main')?.rows.has('d')).toBe(false);
   });
 
-  it('marks the feed disconnected on an error message', () => {
+  it('logs an error message without changing connection state', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { result } = renderHook(() => usePodsFeed());
-    const socket = FakeWebSocket.instances[0];
-    const data = JSON.stringify({ type: 'error', message: 'stream failed' });
+    const { result } = renderHook(() => useResourceFeed());
     act(() => {
-      socket.onmessage?.(new MessageEvent('message', { data }));
+      openSocket(FakeWebSocket.instances[0]);
     });
-    expect(result.current.status).toBe('disconnected');
-    expect(errorSpy).toHaveBeenCalledWith('pods feed error:', 'stream failed');
+    const data = JSON.stringify({ type: 'error', subId: 'main', message: 'stream failed' });
+    act(() => {
+      FakeWebSocket.instances[0].onmessage?.(new MessageEvent('message', { data }));
+    });
+    expect(result.current.status).toBe('connected');
+    expect(errorSpy).toHaveBeenCalledWith('resource feed error:', 'main', 'stream failed');
   });
 
   it('ignores malformed json without throwing', () => {
-    renderHook(() => usePodsFeed());
+    renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data: 'not-json' }));
     });
-    expect(usePodStore.getState().rows.size).toBe(0);
+    expect(useResourcesStore.getState().subs.size).toBe(0);
   });
 
   it('ignores messages with an unknown type', () => {
-    renderHook(() => usePodsFeed());
+    renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
-    const data = JSON.stringify({ type: 'heartbeat' });
+    const data = JSON.stringify({ type: 'heartbeat', subId: 'main' });
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data }));
     });
-    expect(usePodStore.getState().rows.size).toBe(0);
+    expect(useResourcesStore.getState().subs.size).toBe(0);
+  });
+
+  it('sends a subscribe frame immediately when the socket is open', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      result.current.subscribe('main', descriptor, 'prod');
+    });
+    expect(sentMessages(socket)).toEqual([
+      {
+        type: 'subscribe',
+        subId: 'main',
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+        namespace: 'prod',
+      },
+    ]);
+  });
+
+  it('queues a subscription while closed and flushes it on open', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      result.current.subscribe('main', descriptor, '');
+    });
+    expect(socket.send).not.toHaveBeenCalled();
+    act(() => {
+      openSocket(socket);
+    });
+    expect(sentMessages(socket)).toEqual([
+      {
+        type: 'subscribe',
+        subId: 'main',
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+        namespace: '',
+      },
+    ]);
+  });
+
+  it('re-sends active subscriptions after a reconnect', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+    });
+    act(() => {
+      result.current.subscribe('main', descriptor, 'prod');
+    });
+    act(() => {
+      first.onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    const second = FakeWebSocket.instances[1];
+    act(() => {
+      openSocket(second);
+    });
+    expect(sentMessages(second)).toEqual([
+      {
+        type: 'subscribe',
+        subId: 'main',
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+        namespace: 'prod',
+      },
+    ]);
+  });
+
+  it('sends an unsubscribe frame and clears the sub from the store', () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main', makeColumns([]), true, [makeRow({ uid: 'a' })]);
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      result.current.subscribe('main', descriptor, '');
+    });
+    socket.send.mockClear();
+    act(() => {
+      result.current.unsubscribe('main');
+    });
+    expect(sentMessages(socket)).toEqual([{ type: 'unsubscribe', subId: 'main' }]);
+    expect(useResourcesStore.getState().subs.has('main')).toBe(false);
+  });
+
+  it('does not re-send an unsubscribed subscription after a reconnect', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+    });
+    act(() => {
+      result.current.subscribe('main', descriptor, '');
+    });
+    act(() => {
+      result.current.unsubscribe('main');
+    });
+    act(() => {
+      first.onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    const second = FakeWebSocket.instances[1];
+    act(() => {
+      openSocket(second);
+    });
+    expect(second.send).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when subscribe is called after unmount', () => {
+    const { result, unmount } = renderHook(() => useResourceFeed());
+    const subscribe = result.current.subscribe;
+    unmount();
+    expect(() => {
+      subscribe('main', descriptor, '');
+    }).not.toThrow();
+  });
+
+  it('reconnect closes the current socket and opens a new one immediately', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+    });
+    act(() => {
+      result.current.reconnect();
+    });
+    expect(first.close).toHaveBeenCalled();
+    expect(first.onclose).toBeNull();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it('does nothing when reconnect is called after unmount', () => {
+    const { result, unmount } = renderHook(() => useResourceFeed());
+    const reconnect = result.current.reconnect;
+    unmount();
+    expect(() => {
+      reconnect();
+    }).not.toThrow();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it('reconnect cancels a pending backoff timer', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useResourceFeed());
+    act(() => {
+      FakeWebSocket.instances[0].onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      result.current.reconnect();
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
   });
 
   it('reconnects on an exponential backoff schedule capped at 5000ms', () => {
     vi.useFakeTimers();
-    renderHook(() => usePodsFeed());
+    renderHook(() => useResourceFeed());
     const delays = [500, 1000, 2000, 4000, 5000, 5000];
     let index = 0;
     while (index < delays.length) {
@@ -215,7 +401,7 @@ describe('usePodsFeed', () => {
 
   it('resets the backoff after a successful reconnect', () => {
     vi.useFakeTimers();
-    renderHook(() => usePodsFeed());
+    renderHook(() => useResourceFeed());
     act(() => {
       FakeWebSocket.instances[0].onclose?.(new CloseEvent('close'));
     });
@@ -223,7 +409,7 @@ describe('usePodsFeed', () => {
       vi.advanceTimersByTime(500);
     });
     act(() => {
-      FakeWebSocket.instances[1].onopen?.(new Event('open'));
+      openSocket(FakeWebSocket.instances[1]);
     });
     act(() => {
       FakeWebSocket.instances[1].onclose?.(new CloseEvent('close'));
@@ -240,7 +426,7 @@ describe('usePodsFeed', () => {
   });
 
   it('nulls the socket handlers and closes it on unmount', () => {
-    const { unmount } = renderHook(() => usePodsFeed());
+    const { unmount } = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     unmount();
     expect(socket.close).toHaveBeenCalled();
@@ -251,25 +437,31 @@ describe('usePodsFeed', () => {
   });
 
   it('ignores socket events delivered after unmount', () => {
-    const { unmount } = renderHook(() => usePodsFeed());
+    const { unmount } = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     const onopen = socket.onopen;
     const onmessage = socket.onmessage;
     const onclose = socket.onclose;
     unmount();
+    const data = JSON.stringify({
+      type: 'snapshot',
+      subId: 'main',
+      columns: [],
+      namespaced: true,
+      rows: [makeRow({ uid: 'z' })],
+    });
     onopen?.(new Event('open'));
-    onmessage?.(new MessageEvent('message', { data: snapshotData(makePod({ uid: 'z' })) }));
+    onmessage?.(new MessageEvent('message', { data }));
     onclose?.(new CloseEvent('close'));
-    expect(usePodStore.getState().rows.size).toBe(0);
+    expect(useResourcesStore.getState().subs.size).toBe(0);
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
   it('does not reconnect when a retry timer fires after unmount', () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
-    const { unmount } = renderHook(() => usePodsFeed());
-    const socket = FakeWebSocket.instances[0];
+    const { unmount } = renderHook(() => useResourceFeed());
     act(() => {
-      socket.onclose?.(new CloseEvent('close'));
+      FakeWebSocket.instances[0].onclose?.(new CloseEvent('close'));
     });
     const scheduled = setTimeoutSpy.mock.calls.find((call) => call[1] === 500);
     if (!scheduled) {

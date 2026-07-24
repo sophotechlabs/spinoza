@@ -1,15 +1,15 @@
-import type { PodRow } from '../lib/types';
+import type { Row } from '../lib/types';
 
 interface DetailsDrawerProps {
-  pod: PodRow | null;
+  row: Row | null;
   onClose?: () => void;
 }
 
-export default function DetailsDrawer({ pod, onClose }: DetailsDrawerProps) {
-  if (!pod) {
+export default function DetailsDrawer({ row, onClose }: DetailsDrawerProps) {
+  if (!row) {
     return (
       <aside className="w-80 shrink-0 border-l border-neutral-800 bg-neutral-950 p-4 text-xs text-neutral-500">
-        Select a pod to see details.
+        Select a row to see details.
       </aside>
     );
   }
@@ -21,20 +21,16 @@ export default function DetailsDrawer({ pod, onClose }: DetailsDrawerProps) {
   }
 
   const fields: [string, string][] = [
-    ['Name', pod.name],
-    ['Namespace', pod.namespace],
-    ['Status', pod.phase],
-    ['Ready', pod.ready],
-    ['Restarts', String(pod.restarts)],
-    ['Node', pod.node],
-    ['Created', pod.createdAt],
-    ['UID', pod.uid],
+    ['Name', row.name],
+    ['Namespace', row.namespace],
+    ['Created', row.createdAt],
+    ['UID', row.uid],
   ];
 
   return (
     <aside className="w-80 shrink-0 overflow-y-auto border-l border-neutral-800 bg-neutral-950 text-xs">
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
-        <span className="truncate font-semibold text-neutral-100">{pod.name}</span>
+        <span className="truncate font-semibold text-neutral-100">{row.name}</span>
         <button
           type="button"
           onClick={handleClose}
