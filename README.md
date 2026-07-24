@@ -9,8 +9,8 @@ A fast, lightweight, open-source Kubernetes GUI. Go backend with client-go infor
 Prereqs: Go 1.26+, Node 20+.
 
 ```
-make deps    # once — install frontend deps
-make run     # build frontend + binary, start server
+just deps    # once — install frontend deps
+just run     # build frontend + binary, start server
 ```
 
 Then open `http://127.0.0.1:34115`.
@@ -18,8 +18,8 @@ Then open `http://127.0.0.1:34115`.
 ## Develop (hot reload, two terminals)
 
 ```
-make dev-api   # Go server on :34115 (stub data)
-make dev-web   # Vite dev server, proxies /ws to the API
+just dev-api   # Go server on :34115 (stub data)
+just dev-web   # Vite dev server, proxies /ws to the API
 ```
 
 ## Architecture
