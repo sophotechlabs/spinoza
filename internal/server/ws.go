@@ -17,7 +17,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer c.CloseNow()
+	defer func() { _ = c.CloseNow() }()
 
 	ctx := r.Context()
 	events, cancel := s.broker.Subscribe()

@@ -35,27 +35,9 @@ func NewInformer(ctx context.Context, cs kubernetes.Interface) (Broker, error) {
 	}
 
 	_, err := shared.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			pod, ok := obj.(*corev1.Pod)
-			if !ok {
-				return
-			}
-			i.publish(Event{Kind: "added", Row: podToRow(pod)})
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			pod, ok := newObj.(*corev1.Pod)
-			if !ok {
-				return
-			}
-			i.publish(Event{Kind: "modified", Row: podToRow(pod)})
-		},
-		DeleteFunc: func(obj interface{}) {
-			pod, ok := podFromDelete(obj)
-			if !ok {
-				return
-			}
-			i.publish(Event{Kind: "deleted", UID: string(pod.UID)})
-		},
+		AddFunc:    i.onAdd,
+		UpdateFunc: i.onUpdate,
+		DeleteFunc: i.onDelete,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("add event handler: %w", err)
@@ -67,6 +49,30 @@ func NewInformer(ctx context.Context, cs kubernetes.Interface) (Broker, error) {
 	}
 
 	return i, nil
+}
+
+func (i *informer) onAdd(obj interface{}) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return
+	}
+	i.publish(Event{Kind: "added", Row: podToRow(pod)})
+}
+
+func (i *informer) onUpdate(_, newObj interface{}) {
+	pod, ok := newObj.(*corev1.Pod)
+	if !ok {
+		return
+	}
+	i.publish(Event{Kind: "modified", Row: podToRow(pod)})
+}
+
+func (i *informer) onDelete(obj interface{}) {
+	pod, ok := podFromDelete(obj)
+	if !ok {
+		return
+	}
+	i.publish(Event{Kind: "deleted", UID: string(pod.UID)})
 }
 
 func (i *informer) publish(ev Event) {

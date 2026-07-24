@@ -29,6 +29,10 @@ type stub struct {
 }
 
 func NewStub(ctx context.Context) Broker {
+	return newStub(ctx, 4*time.Second)
+}
+
+func newStub(ctx context.Context, interval time.Duration) *stub {
 	s := &stub{
 		rows: map[string]api.PodRow{},
 		subs: map[chan Event]struct{}{},
@@ -48,12 +52,12 @@ func NewStub(ctx context.Context) Broker {
 			CreatedAt: now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339),
 		}
 	}
-	go s.loop(ctx)
+	go s.loop(ctx, interval)
 	return s
 }
 
-func (s *stub) loop(ctx context.Context) {
-	t := time.NewTicker(4 * time.Second)
+func (s *stub) loop(ctx context.Context, interval time.Duration) {
+	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
 		select {
