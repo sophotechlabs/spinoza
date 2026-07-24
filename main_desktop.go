@@ -7,6 +7,7 @@ import (
 	"context"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -22,43 +23,41 @@ import (
 
 const desktopAddr = "127.0.0.1:34115"
 
-type desktopApp struct {
-	assets fs.FS
-}
-
-func (a *desktopApp) startup(ctx context.Context) {
-	go func() {
-		mgr := makeManager(ctx)
-		srv := server.New(mgr, a.assets)
-		httpServer := &http.Server{
-			Addr:              desktopAddr,
-			Handler:           srv.Handler(),
-			ReadHeaderTimeout: 10 * time.Second,
-		}
-		listenErr := httpServer.ListenAndServe()
-		if listenErr != nil && listenErr != http.ErrServerClosed {
-			log.Printf("server: %v", listenErr)
-		}
-	}()
-}
-
 func main() {
+	mgr := makeManager(context.Background())
+
 	assets, err := fs.Sub(embedded, "web/dist")
 	if err != nil {
 		log.Fatalf("assets: %v", err)
 	}
-	app := &desktopApp{assets: assets}
-	err = wails.Run(&options.App{
-		Title:     "Spinoza",
-		Width:     1280,
-		Height:    800,
-		OnStartup: app.startup,
+
+	srv := server.New(mgr, assets)
+	httpServer := &http.Server{
+		Addr:              desktopAddr,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	listener, err := net.Listen("tcp", desktopAddr)
+	if err != nil {
+		log.Fatalf("listen: %v", err)
+	}
+	go func() {
+		serveErr := httpServer.Serve(listener)
+		if serveErr != nil && serveErr != http.ErrServerClosed {
+			log.Printf("server: %v", serveErr)
+		}
+	}()
+
+	runErr := wails.Run(&options.App{
+		Title:  "Spinoza",
+		Width:  1280,
+		Height: 800,
 		AssetServer: &assetserver.Options{
 			Handler: desktopAssets(assets),
 		},
 	})
-	if err != nil {
-		log.Fatalf("wails: %v", err)
+	if runErr != nil {
+		log.Fatalf("wails: %v", runErr)
 	}
 }
 
