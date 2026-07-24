@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -14,8 +17,16 @@ jobs:
         with:
           go-version: '1.26'
       - run: go build ./...
+      - run: go build -tags desktop ./...
       - run: go vet ./...
-      - run: go test ./...
+      - run: go vet -tags desktop ./...
+      - run: go test -race -covermode=atomic -coverprofile=coverage.out ./internal/... .
+      - run: go tool cover -func=coverage.out
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+      - run: golangci-lint run ./...
+      - run: golangci-lint run --build-tags desktop ./...
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./internal/... .
 
   frontend:
     runs-on: ubuntu-latest
@@ -30,4 +41,30 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run format:check
+      - run: npm run test:coverage
+      - run: npm run knip
+      - run: npm run depcheck
+      - run: npm run madge
       - run: npm run build
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  commits:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6
