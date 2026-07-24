@@ -20,8 +20,8 @@ func New(mgr *resources.Manager, assets fs.FS) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthz)
-	mux.HandleFunc("/api/resources", s.handleResources)
-	mux.HandleFunc("/api/gitops/graph", s.handleGraph)
+	mux.HandleFunc("/api/resources", cors(s.handleResources))
+	mux.HandleFunc("/api/gitops/graph", cors(s.handleGraph))
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.Handle("/", http.FileServerFS(s.assets))
 	return mux
@@ -30,6 +30,19 @@ func (s *Server) Handler() http.Handler {
 func healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+func cors(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		h(w, r)
+	}
 }
 
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {

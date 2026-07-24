@@ -115,6 +115,35 @@ func TestHealthzReturnsOK(t *testing.T) {
 	}
 }
 
+func TestCORSHeadersOnAPI(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := New(mgr, testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/resources")
+	if err != nil {
+		t.Fatalf("GET /api/resources: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("missing CORS origin header")
+	}
+
+	req, err := http.NewRequest(http.MethodOptions, ts.URL+"/api/resources", nil)
+	if err != nil {
+		t.Fatalf("build OPTIONS: %v", err)
+	}
+	optResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("OPTIONS request: %v", err)
+	}
+	defer func() { _ = optResp.Body.Close() }()
+	if optResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("OPTIONS status = %d, want 204", optResp.StatusCode)
+	}
+}
+
 func TestRootServesSPAIndex(t *testing.T) {
 	mgr, _ := testManager(t)
 	srv := New(mgr, testAssets())
