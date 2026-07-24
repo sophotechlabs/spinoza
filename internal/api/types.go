@@ -66,3 +66,26 @@ type Graph struct {
 	Nodes []GraphNode `json:"nodes"`
 	Edges []GraphEdge `json:"edges"`
 }
+
+type FluxResource struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Ready     string `json:"ready"`
+	Suspended bool   `json:"suspended"`
+	Revision  string `json:"revision"`
+	Source    string `json:"source"`
+	Message   string `json:"message"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type FluxGroup struct {
+	Name      string         `json:"name"`
+	Ready     int            `json:"ready"`
+	Total     int            `json:"total"`
+	Resources []FluxResource `json:"resources"`
+}
+
+type FluxDashboard struct {
+	Groups []FluxGroup `json:"groups"`
+}

@@ -299,6 +299,67 @@ func TestGraphEndpoint(t *testing.T) {
 	}
 }
 
+func TestFluxEndpoint(t *testing.T) {
+	gitRepoGVR := schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}
+	kustGVR := schema.GroupVersionResource{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Resource: "kustomizations"}
+	scheme := runtime.NewScheme()
+	kinds := map[schema.GroupVersionResource]string{
+		gitRepoGVR: "GitRepositoryList",
+		kustGVR:    "KustomizationList",
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds, fluxGitRepo(), fluxKustomization())
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("source.toolkit.fluxcd.io", "v1", "gitrepositories"): {
+			Group:      "source.toolkit.fluxcd.io",
+			Version:    "v1",
+			Resource:   "gitrepositories",
+			Kind:       "GitRepository",
+			Namespaced: true,
+			Category:   "Custom Resources",
+		},
+		discovery.Key("kustomize.toolkit.fluxcd.io", "v1", "kustomizations"): {
+			Group:      "kustomize.toolkit.fluxcd.io",
+			Version:    "v1",
+			Resource:   "kustomizations",
+			Kind:       "Kustomization",
+			Namespaced: true,
+			Category:   "Custom Resources",
+		},
+	}
+	mgr := resources.NewManager(ctx, dyn, nil, descs)
+	srv := New(mgr, testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/flux")
+	if err != nil {
+		t.Fatalf("GET /api/flux: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if resp.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", resp.Header.Get("Content-Type"))
+	}
+	var dash api.FluxDashboard
+	if err := json.NewDecoder(resp.Body).Decode(&dash); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(dash.Groups) != 2 {
+		t.Fatalf("groups = %d, want 2", len(dash.Groups))
+	}
+	if dash.Groups[0].Name != "Kustomizations" {
+		t.Fatalf("group 0 = %q, want Kustomizations", dash.Groups[0].Name)
+	}
+	if dash.Groups[1].Name != "Sources" {
+		t.Fatalf("group 1 = %q, want Sources", dash.Groups[1].Name)
+	}
+}
+
 func TestEventToMsgDeleted(t *testing.T) {
 	msg := eventToMsg("sub-1", resources.Event{Kind: "deleted", UID: "uid-1"})
 	if msg.Type != "deleted" {

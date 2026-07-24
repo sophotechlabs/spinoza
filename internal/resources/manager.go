@@ -15,6 +15,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
 )
 
@@ -61,6 +62,10 @@ func (m *Manager) Resources() []api.Category {
 
 func (m *Manager) Graph(ctx context.Context) api.Graph {
 	return gitops.Build(ctx, m.dyn, m.descs)
+}
+
+func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
+	return flux.Build(ctx, m.dyn, m.descs)
 }
 
 type streamKey struct {
