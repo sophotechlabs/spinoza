@@ -86,7 +86,12 @@ const categories: Category[] = [makeCategory('Workloads', [podDescriptor, deploy
 function stubFetch(): void {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(categories) }),
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/metrics') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ pods: {}, nodes: {} }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(categories) });
+    }),
   );
 }
 

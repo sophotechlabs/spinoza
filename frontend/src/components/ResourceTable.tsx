@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   createColumnHelper,
@@ -9,10 +9,13 @@ import {
 } from '@tanstack/react-table';
 import type { ColumnDef, SortDirection, SortingState } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { ResourceDescriptor, Row } from '../lib/types';
+import type { Metrics, ResourceDescriptor, ResourceUsage, Row } from '../lib/types';
 import { useSubColumns, useSubNamespaced, useSubRows } from '../store/resources';
 import { ratioColor, restartColor } from '../lib/status';
+import { formatCpu, formatMem, useMetrics } from '../lib/metrics';
+import { useElementWidth } from '../lib/useElementWidth';
 import ContainerSquares from './ContainerSquares';
+import UsageBar from './UsageBar';
 
 interface ResourceTableProps {
   active: ResourceDescriptor | null;
@@ -22,6 +25,14 @@ interface ResourceTableProps {
 }
 
 const ROW_HEIGHT = 28;
+const FLEX_COLUMN_IDS = new Set(['name']);
+
+function columnWidth(id: string, base: number, perFlex: number): number {
+  if (FLEX_COLUMN_IDS.has(id)) {
+    return base + perFlex;
+  }
+  return base;
+}
 
 function age(createdAt: string): string {
   const created = new Date(createdAt).getTime();
@@ -67,6 +78,43 @@ function renderDataCell(render: string | undefined, value: string, row: Row): Re
   return value;
 }
 
+const METRIC_KINDS = new Set(['Pod', 'Node']);
+
+function metricUsage(kind: string, metrics: Metrics, row: Row): ResourceUsage | undefined {
+  if (kind === 'Node') {
+    return metrics.nodes[row.name];
+  }
+  return metrics.pods[`${row.namespace}/${row.name}`];
+}
+
+function nodeUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
+  if (usage === undefined) {
+    return <UsageBar percent={0} label="" />;
+  }
+  if (memory) {
+    return <UsageBar percent={usage.memPercent} label={formatMem(usage.memoryMi)} />;
+  }
+  return <UsageBar percent={usage.cpuPercent} label={formatCpu(usage.cpuMilli)} />;
+}
+
+function podUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
+  if (usage === undefined) {
+    return <span className="text-neutral-600">—</span>;
+  }
+  if (memory) {
+    return <span className="text-neutral-400">{formatMem(usage.memoryMi)}</span>;
+  }
+  return <span className="text-neutral-400">{formatCpu(usage.cpuMilli)}</span>;
+}
+
+function renderMetricCell(kind: string, metrics: Metrics, row: Row, memory: boolean): ReactNode {
+  const usage = metricUsage(kind, metrics, row);
+  if (kind === 'Node') {
+    return nodeUsageCell(usage, memory);
+  }
+  return podUsageCell(usage, memory);
+}
+
 function sortIndicator(dir: false | SortDirection): string {
   if (dir === 'asc') {
     return ' ▲';
@@ -102,7 +150,19 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const namespaced = useSubNamespaced(subId);
   const rows = useSubRows(subId);
   const [sorting, setSorting] = useState<SortingState>([]);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const setScroll = useCallback((node: HTMLDivElement | null) => {
+    scrollRef.current = node;
+    setScrollEl(node);
+  }, []);
+
+  let activeKind = '';
+  if (active !== null) {
+    activeKind = active.kind;
+  }
+  const wantMetrics = METRIC_KINDS.has(activeKind);
+  const metrics = useMetrics(wantMetrics);
 
   const columns = useMemo<ColumnDef<Row, string>[]>(() => {
     const defs: ColumnDef<Row, string>[] = [];
@@ -137,6 +197,23 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
         }),
       );
     });
+    if (wantMetrics && metrics !== null) {
+      const loaded = metrics;
+      defs.push({
+        id: 'cpu',
+        header: 'CPU',
+        size: 110,
+        enableSorting: false,
+        cell: (info) => renderMetricCell(activeKind, loaded, info.row.original, false),
+      });
+      defs.push({
+        id: 'memory',
+        header: 'Memory',
+        size: 110,
+        enableSorting: false,
+        cell: (info) => renderMetricCell(activeKind, loaded, info.row.original, true),
+      });
+    }
     defs.push(
       columnHelper.accessor('createdAt', {
         id: 'age',
@@ -147,7 +224,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
       }),
     );
     return defs;
-  }, [dataColumns, namespaced, onSelect]);
+  }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics]);
 
   const table = useReactTable({
     data: rows,
@@ -162,6 +239,13 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
 
   const tableRows = table.getRowModel().rows;
   const leafColumnCount = table.getVisibleLeafColumns().length;
+  const containerWidth = useElementWidth(scrollEl);
+  const totalSize = table.getTotalSize();
+  const flexCount = table
+    .getVisibleLeafColumns()
+    .filter((column) => FLEX_COLUMN_IDS.has(column.id)).length;
+  const perFlex = Math.max(0, containerWidth - totalSize) / Math.max(1, flexCount);
+  const tableWidth = Math.max(containerWidth, totalSize);
 
   const virtualizer = useVirtualizer({
     count: tableRows.length,
@@ -192,10 +276,10 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   }
 
   return (
-    <div ref={scrollRef} className="h-full overflow-auto">
+    <div ref={setScroll} className="h-full overflow-auto">
       <table
         className="table-fixed border-collapse text-left text-xs"
-        style={{ width: `${table.getTotalSize()}px` }}
+        style={{ width: `${tableWidth}px` }}
       >
         <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
           {table.getHeaderGroups().map((headerGroup) => (
@@ -205,7 +289,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                   key={header.id}
                   aria-sort={ariaSort(header.column.getIsSorted())}
                   className="relative px-2 py-1 font-medium"
-                  style={{ width: `${header.getSize()}px` }}
+                  style={{ width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px` }}
                 >
                   <button
                     type="button"
@@ -244,7 +328,9 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                   <td
                     key={cell.id}
                     className="truncate px-2 py-1 text-neutral-200"
-                    style={{ width: `${cell.column.getSize()}px` }}
+                    style={{
+                      width: `${columnWidth(cell.column.id, cell.column.getSize(), perFlex)}px`,
+                    }}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>

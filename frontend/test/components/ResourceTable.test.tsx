@@ -30,6 +30,7 @@ describe('ResourceTable', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     resetStore();
   });
 
@@ -231,5 +232,50 @@ describe('ResourceTable', () => {
       throw new Error('row element not found');
     }
     expect(tr.className).toContain('bg-neutral-800');
+  });
+
+  it('shows pod CPU and memory from metrics, with a dash when a pod is missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: { 'prod/pod-a': { cpuMilli: 150, memoryMi: 192, cpuPercent: 0, memPercent: 0 } },
+            nodes: {},
+          }),
+      }),
+    );
+    seed(makeColumns(['Ready']), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod' }),
+    ]);
+    renderTable(descriptor, null);
+    expect(await screen.findByText('150m')).toBeInTheDocument();
+    expect(screen.getByText('192Mi')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('shows node CPU and memory usage bars from metrics', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: {},
+            nodes: { 'node-1': { cpuMilli: 1500, memoryMi: 2048, cpuPercent: 37, memPercent: 25 } },
+          }),
+      }),
+    );
+    const nodeDescriptor = makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false });
+    seed(makeColumns(['Status']), false, [
+      makeRow({ uid: 'a', name: 'node-1', namespace: '' }),
+      makeRow({ uid: 'b', name: 'node-2', namespace: '' }),
+    ]);
+    renderTable(nodeDescriptor, null);
+    expect(await screen.findByText('37%')).toBeInTheDocument();
+    expect(screen.getByText('25%')).toBeInTheDocument();
+    expect(screen.getAllByText('0%').length).toBeGreaterThan(0);
   });
 });
