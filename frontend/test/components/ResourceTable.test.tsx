@@ -114,6 +114,15 @@ describe('ResourceTable', () => {
     expect(screen.getByText('0/1')).toBeInTheDocument();
   });
 
+  it('gives each column a width and a drag-to-resize handle', async () => {
+    seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
+    const { container } = renderTable(descriptor, null);
+    await screen.findByRole('button', { name: 'pod-a' });
+    const nameHeader = screen.getAllByRole('columnheader')[0];
+    expect(nameHeader.getAttribute('style')).toContain('width');
+    expect(container.querySelectorAll('.cursor-col-resize').length).toBeGreaterThan(0);
+  });
+
   it('renders an empty cell when a row has fewer cells than columns', async () => {
     seed(makeColumns(['Ready', 'Status']), false, [
       makeRow({ uid: 'a', name: 'pod-a', cells: ['1/1'] }),

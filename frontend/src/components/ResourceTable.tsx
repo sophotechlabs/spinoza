@@ -109,13 +109,15 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     defs.push(
       columnHelper.accessor('name', {
         header: 'Name',
+        size: 240,
+        minSize: 100,
         cell: (info) => (
           <button
             type="button"
             onClick={() => {
               onSelect(info.row.original);
             }}
-            className="w-full cursor-pointer text-left text-neutral-100 hover:underline"
+            className="block w-full cursor-pointer truncate text-left text-neutral-100 hover:underline"
           >
             {info.getValue()}
           </button>
@@ -123,13 +125,14 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
       }),
     );
     if (namespaced) {
-      defs.push(columnHelper.accessor('namespace', { header: 'Namespace' }));
+      defs.push(columnHelper.accessor('namespace', { header: 'Namespace', size: 150 }));
     }
     dataColumns.forEach((column, index) => {
       defs.push(
         columnHelper.accessor((row) => cellAt(row, index), {
           id: `cell-${index}`,
           header: column.name,
+          size: 130,
           cell: (info) => renderDataCell(column.render, info.getValue(), info.row.original),
         }),
       );
@@ -138,6 +141,8 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
       columnHelper.accessor('createdAt', {
         id: 'age',
         header: 'Age',
+        size: 72,
+        minSize: 50,
         cell: (info) => age(info.getValue()),
       }),
     );
@@ -149,6 +154,8 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     columns,
     state: { sorting },
     onSortingChange: setSorting,
+    columnResizeMode: 'onChange',
+    defaultColumn: { minSize: 60 },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
@@ -186,7 +193,10 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
 
   return (
     <div ref={scrollRef} className="h-full overflow-auto">
-      <table className="w-full border-collapse text-left text-xs">
+      <table
+        className="table-fixed border-collapse text-left text-xs"
+        style={{ width: `${table.getTotalSize()}px` }}
+      >
         <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="border-b border-neutral-800">
@@ -194,16 +204,23 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                 <th
                   key={header.id}
                   aria-sort={ariaSort(header.column.getIsSorted())}
-                  className="px-2 py-1 font-medium"
+                  className="relative px-2 py-1 font-medium"
+                  style={{ width: `${header.getSize()}px` }}
                 >
                   <button
                     type="button"
                     onClick={header.column.getToggleSortingHandler()}
-                    className="flex cursor-pointer items-center font-medium select-none hover:text-neutral-100"
+                    className="flex w-full cursor-pointer items-center truncate font-medium select-none hover:text-neutral-100"
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {sortIndicator(header.column.getIsSorted())}
                   </button>
+                  <div
+                    aria-hidden="true"
+                    onMouseDown={header.getResizeHandler()}
+                    onTouchStart={header.getResizeHandler()}
+                    className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-neutral-600 opacity-0 select-none hover:opacity-100"
+                  />
                 </th>
               ))}
             </tr>
@@ -224,7 +241,11 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                 style={{ height: `${ROW_HEIGHT}px` }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-2 py-1 text-neutral-200">
+                  <td
+                    key={cell.id}
+                    className="truncate px-2 py-1 text-neutral-200"
+                    style={{ width: `${cell.column.getSize()}px` }}
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
