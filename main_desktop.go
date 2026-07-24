@@ -21,8 +21,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
-const desktopAddr = "127.0.0.1:34115"
-
 func main() {
 	mgr := makeManager(context.Background())
 
@@ -31,15 +29,16 @@ func main() {
 		log.Fatalf("assets: %v", err)
 	}
 
-	srv := server.New(mgr, assets)
-	httpServer := &http.Server{
-		Addr:              desktopAddr,
-		Handler:           srv.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	listener, err := net.Listen("tcp", desktopAddr)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		log.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	srv := server.New(mgr, assets)
+	httpServer := &http.Server{
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
 		serveErr := httpServer.Serve(listener)
@@ -53,7 +52,7 @@ func main() {
 		Width:  1280,
 		Height: 800,
 		AssetServer: &assetserver.Options{
-			Handler: desktopAssets(assets),
+			Handler: desktopAssets(assets, addr),
 		},
 	})
 	if runErr != nil {
@@ -61,10 +60,10 @@ func main() {
 	}
 }
 
-func desktopAssets(assets fs.FS) http.Handler {
+func desktopAssets(assets fs.FS, addr string) http.Handler {
 	fileServer := http.FileServerFS(assets)
-	proxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: desktopAddr})
-	injected := []byte(`<script>window.__SPINOZA_WS_BASE__="ws://` + desktopAddr + `";</script></head>`)
+	proxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: addr})
+	injected := []byte(`<script>window.__SPINOZA_WS_BASE__="ws://` + addr + `";</script></head>`)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			proxy.ServeHTTP(w, r)
