@@ -1,3 +1,5 @@
+export PATH := env_var('HOME') + '/go/bin:' + env_var('PATH')
+
 default:
     @just --list
 

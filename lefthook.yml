@@ -3,7 +3,7 @@ pre-commit:
   commands:
     go-fmt:
       glob: "*.go"
-      run: gofumpt -w {staged_files}
+      run: PATH="$HOME/go/bin:$PATH" gofumpt -w {staged_files}
       stage_fixed: true
     frontend-fmt:
       glob: "frontend/**/*.{ts,tsx,css,json,md}"
