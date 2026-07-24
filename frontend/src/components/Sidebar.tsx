@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { Category, ResourceDescriptor } from '../lib/types';
+import type { Category, ResourceDescriptor, View } from '../lib/types';
 import { fetchResources } from '../lib/discovery';
 
 interface SidebarProps {
+  view: View;
   activeResource: ResourceDescriptor | null;
   onSelect: (descriptor: ResourceDescriptor) => void;
+  onSelectGitops: () => void;
 }
 
 function descriptorKey(descriptor: ResourceDescriptor): string {
@@ -33,6 +35,15 @@ function resourceClass(active: boolean): string {
   return base;
 }
 
+function gitopsClass(active: boolean): string {
+  const base =
+    'mb-1 block w-full px-3 py-1 text-left text-[11px] font-semibold tracking-wide text-neutral-400 uppercase hover:text-neutral-200';
+  if (active) {
+    return `${base} bg-neutral-800 text-neutral-100`;
+  }
+  return base;
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
@@ -40,7 +51,7 @@ function errorMessage(err: unknown): string {
   return 'discovery request failed';
 }
 
-export default function Sidebar({ activeResource, onSelect }: SidebarProps) {
+export default function Sidebar({ view, activeResource, onSelect, onSelectGitops }: SidebarProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +90,9 @@ export default function Sidebar({ activeResource, onSelect }: SidebarProps) {
 
   return (
     <nav className="w-56 shrink-0 overflow-y-auto border-r border-neutral-800 bg-neutral-950 py-2">
+      <button type="button" onClick={onSelectGitops} className={gitopsClass(view === 'gitops')}>
+        GitOps
+      </button>
       {error !== null && <div className="px-3 py-1 text-[11px] text-red-400">{error}</div>}
       {categories.map((category) => {
         const isCollapsed = collapsed.has(category.name);

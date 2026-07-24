@@ -1,4 +1,11 @@
-import type { Category, Column, ResourceDescriptor, Row } from '../src/lib/types';
+import type {
+  Category,
+  Column,
+  GraphEdge,
+  GraphNode,
+  ResourceDescriptor,
+  Row,
+} from '../src/lib/types';
 
 export function makeRow(overrides: Partial<Row>): Row {
   const base: Row = {
@@ -29,4 +36,26 @@ export function makeColumns(names: string[]): Column[] {
 
 export function makeCategory(name: string, resources: ResourceDescriptor[]): Category {
   return { name, resources };
+}
+
+export function makeGraphNode(overrides: Partial<GraphNode>): GraphNode {
+  const base: GraphNode = {
+    id: 'node-0',
+    kind: 'GitRepository',
+    group: 'source.toolkit.fluxcd.io',
+    name: 'flux-system',
+    namespace: 'flux-system',
+    status: 'Ready',
+    category: 'source',
+  };
+  return { ...base, ...overrides };
+}
+
+export function makeGraphEdge(overrides: Partial<GraphEdge>): GraphEdge {
+  const base: GraphEdge = {
+    from: 'node-0',
+    to: 'node-1',
+    kind: 'source',
+  };
+  return { ...base, ...overrides };
 }

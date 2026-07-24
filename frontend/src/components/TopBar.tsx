@@ -1,7 +1,9 @@
 import type { ConnectionStatus } from '../lib/feed';
+import type { View } from '../lib/types';
 
 interface TopBarProps {
   status: ConnectionStatus;
+  view?: View;
   onReconnect?: () => void;
 }
 
@@ -15,7 +17,7 @@ function statusColor(status: ConnectionStatus): string {
   return 'bg-red-500';
 }
 
-export default function TopBar({ status, onReconnect }: TopBarProps) {
+export default function TopBar({ status, view, onReconnect }: TopBarProps) {
   function handleReconnect() {
     if (onReconnect) {
       onReconnect();
@@ -27,6 +29,11 @@ export default function TopBar({ status, onReconnect }: TopBarProps) {
       <span className="font-semibold text-neutral-100">current-context</span>
       <span className="text-neutral-500">/</span>
       <span className="text-neutral-300">all namespaces</span>
+      {view !== undefined && (
+        <span className="rounded border border-neutral-700 px-1.5 py-0.5 text-neutral-300">
+          {view}
+        </span>
+      )}
       <div className="ml-auto flex items-center gap-3">
         <span className="flex items-center gap-1.5 text-neutral-400">
           <span className={`h-2 w-2 rounded-full ${statusColor(status)}`} />

@@ -18,6 +18,45 @@ vi.mock('../src/lib/feed', () => ({
   }),
 }));
 
+interface GraphNodeStub {
+  id: string;
+  kind: string;
+  group: string;
+  name: string;
+  namespace: string;
+  status: string;
+  category: string;
+}
+
+const graphMocks = vi.hoisted<{ node: GraphNodeStub }>(() => ({
+  node: {
+    id: 'gn-1',
+    kind: 'HelmRelease',
+    group: 'helm.toolkit.fluxcd.io',
+    name: 'podinfo',
+    namespace: 'apps',
+    status: 'Ready',
+    category: 'app',
+  },
+}));
+
+vi.mock('../src/components/GitopsGraph', () => ({
+  default: ({ onSelect }: { onSelect?: (node: GraphNodeStub) => void }) => (
+    <div data-testid="gitops-graph">
+      <button
+        type="button"
+        onClick={() => {
+          if (onSelect) {
+            onSelect(graphMocks.node);
+          }
+        }}
+      >
+        select-node
+      </button>
+    </div>
+  ),
+}));
+
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
@@ -124,5 +163,43 @@ describe('App', () => {
     render(<App />);
     await user.click(screen.getByRole('button', { name: /Panel/ }));
     expect(screen.getByText('No output.')).toBeInTheDocument();
+  });
+
+  it('switches to the gitops view and shows the graph', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    expect(screen.getByTestId('gitops-graph')).toBeInTheDocument();
+    expect(screen.getByText('Select a node to see details.')).toBeInTheDocument();
+    expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
+  });
+
+  it('shows node details when a graph node is selected', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    await user.click(screen.getByRole('button', { name: 'select-node' }));
+    expect(screen.getByText('podinfo')).toBeInTheDocument();
+    expect(screen.getByText('HelmRelease')).toBeInTheDocument();
+  });
+
+  it('clears the selected node when the node panel is closed', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    await user.click(screen.getByRole('button', { name: 'select-node' }));
+    expect(screen.getByText('podinfo')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.getByText('Select a node to see details.')).toBeInTheDocument();
+  });
+
+  it('returns to the resources view when a resource is selected', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    expect(screen.getByTestId('gitops-graph')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Pod' }));
+    expect(screen.queryByTestId('gitops-graph')).not.toBeInTheDocument();
+    expect(screen.getByText('Select a row to see details.')).toBeInTheDocument();
   });
 });

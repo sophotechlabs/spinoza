@@ -30,6 +30,11 @@ describe('TopBar', () => {
     expect(dotFor(container).className).toContain('bg-red-500');
   });
 
+  it('shows the active view when one is provided', () => {
+    render(<TopBar status="connected" view="gitops" />);
+    expect(screen.getByText('gitops')).toBeInTheDocument();
+  });
+
   it('calls onReconnect when the reconnect button is clicked', async () => {
     const user = userEvent.setup();
     const onReconnect = vi.fn();

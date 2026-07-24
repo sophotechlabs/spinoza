@@ -1,9 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Category } from '../../src/lib/types';
+import type { Category, ResourceDescriptor, View } from '../../src/lib/types';
 import Sidebar from '../../src/components/Sidebar';
 import { makeCategory, makeDescriptor } from '../helpers';
+
+interface RenderOverrides {
+  view?: View;
+  activeResource?: ResourceDescriptor | null;
+  onSelect?: (descriptor: ResourceDescriptor) => void;
+  onSelectGitops?: () => void;
+}
+
+function renderSidebar(overrides: RenderOverrides = {}) {
+  const props = {
+    view: overrides.view ?? 'resources',
+    activeResource: overrides.activeResource ?? null,
+    onSelect: overrides.onSelect ?? vi.fn(),
+    onSelectGitops: overrides.onSelectGitops ?? vi.fn(),
+  };
+  return render(<Sidebar {...props} />);
+}
 
 function stubFetch(categories: Category[]): void {
   const fetchMock = vi.fn().mockResolvedValue({
@@ -30,7 +47,7 @@ afterEach(() => {
 describe('Sidebar', () => {
   it('renders categories with resource counts after discovery loads', async () => {
     stubFetch(categories);
-    render(<Sidebar activeResource={null} onSelect={vi.fn()} />);
+    renderSidebar();
     expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Deployment' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'ConfigMap' })).toBeInTheDocument();
@@ -41,7 +58,7 @@ describe('Sidebar', () => {
   it('calls onSelect with the descriptor when a resource is clicked', async () => {
     stubFetch(categories);
     const onSelect = vi.fn();
-    render(<Sidebar activeResource={null} onSelect={onSelect} />);
+    renderSidebar({ onSelect });
     const button = await screen.findByRole('button', { name: 'Deployment' });
     await userEvent.click(button);
     expect(onSelect).toHaveBeenCalledWith(
@@ -51,7 +68,7 @@ describe('Sidebar', () => {
 
   it('collapses and expands a category', async () => {
     stubFetch(categories);
-    render(<Sidebar activeResource={null} onSelect={vi.fn()} />);
+    renderSidebar();
     await screen.findByRole('button', { name: 'Pod' });
     const header = screen.getByRole('button', { name: /Workloads/ });
     await userEvent.click(header);
@@ -63,7 +80,7 @@ describe('Sidebar', () => {
   it('highlights the active resource', async () => {
     stubFetch(categories);
     const active = makeDescriptor({ group: 'apps', version: 'v1', resource: 'deployments' });
-    render(<Sidebar activeResource={active} onSelect={vi.fn()} />);
+    renderSidebar({ activeResource: active });
     const button = await screen.findByRole('button', { name: 'Deployment' });
     expect(button.className).toContain('bg-neutral-800');
     expect(screen.getByRole('button', { name: 'Pod' }).className).not.toContain('bg-neutral-800');
@@ -71,13 +88,35 @@ describe('Sidebar', () => {
 
   it('shows the error message when discovery fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
-    render(<Sidebar activeResource={null} onSelect={vi.fn()} />);
+    renderSidebar();
     expect(await screen.findByText('network down')).toBeInTheDocument();
   });
 
   it('shows a generic message when discovery rejects with a non-error value', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue('boom'));
-    render(<Sidebar activeResource={null} onSelect={vi.fn()} />);
+    renderSidebar();
     expect(await screen.findByText('discovery request failed')).toBeInTheDocument();
+  });
+
+  it('calls onSelectGitops when the GitOps entry is clicked', async () => {
+    stubFetch(categories);
+    const onSelectGitops = vi.fn();
+    renderSidebar({ onSelectGitops });
+    await userEvent.click(screen.getByRole('button', { name: 'GitOps' }));
+    expect(onSelectGitops).toHaveBeenCalledTimes(1);
+  });
+
+  it('highlights the GitOps entry when the gitops view is active', () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'gitops' });
+    expect(screen.getByRole('button', { name: 'GitOps' }).className).toContain('bg-neutral-800');
+  });
+
+  it('does not highlight the GitOps entry in the resources view', () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'resources' });
+    expect(screen.getByRole('button', { name: 'GitOps' }).className).not.toContain(
+      'bg-neutral-800',
+    );
   });
 });
