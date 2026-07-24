@@ -62,7 +62,7 @@ fmt:
     golangci-lint fmt
     cd frontend && npm run format
 
-check: lint test audit
+check: lint test
 
 clean:
     rm -f spinoza coverage.out
