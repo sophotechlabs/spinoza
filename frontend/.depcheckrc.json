@@ -1,0 +1,22 @@
+{
+  "ignores": [
+    "@eslint/js",
+    "typescript-eslint",
+    "eslint-plugin-react-hooks",
+    "eslint-plugin-react-refresh",
+    "eslint-plugin-jsx-a11y",
+    "eslint-config-prettier",
+    "globals",
+    "prettier-plugin-tailwindcss",
+    "knip",
+    "depcheck",
+    "madge",
+    "@vitest/coverage-v8",
+    "jsdom",
+    "@testing-library/dom",
+    "@types/react",
+    "@types/react-dom",
+    "tailwindcss"
+  ],
+  "ignorePatterns": ["dist", "coverage", "html"]
+}

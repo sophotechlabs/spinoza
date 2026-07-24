@@ -11,7 +11,19 @@ export interface FeedStatus {
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 5000;
 
+function wsBaseOverride(): string | null {
+  const w = window as unknown as { __SPINOZA_WS_BASE__?: string };
+  if (typeof w.__SPINOZA_WS_BASE__ === 'string') {
+    return w.__SPINOZA_WS_BASE__;
+  }
+  return null;
+}
+
 function wsURL(): string {
+  const override = wsBaseOverride();
+  if (override !== null) {
+    return `${override}/ws`;
+  }
   let proto = 'ws';
   if (location.protocol === 'https:') {
     proto = 'wss';
@@ -32,9 +44,6 @@ export function usePodsFeed(): FeedStatus {
     let disposed = false;
 
     function scheduleReconnect() {
-      if (disposed) {
-        return;
-      }
       const delay = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** attempt);
       attempt += 1;
       reconnectTimer = setTimeout(connect, delay);
@@ -46,17 +55,23 @@ export function usePodsFeed(): FeedStatus {
       }
       let msg: ServerMsg;
       try {
-        msg = JSON.parse(event.data);
+        msg = JSON.parse(event.data as string) as ServerMsg;
       } catch {
         return;
       }
-      if (msg.type === 'snapshot') {
-        applySnapshot(msg.items);
-      } else if (msg.type === 'added' || msg.type === 'modified' || msg.type === 'deleted') {
-        applyDelta(msg);
-      } else if (msg.type === 'error') {
-        console.error('pods feed error:', msg.message);
-        setStatus('disconnected');
+      switch (msg.type) {
+        case 'snapshot':
+          applySnapshot(msg.items);
+          break;
+        case 'added':
+        case 'modified':
+        case 'deleted':
+          applyDelta(msg);
+          break;
+        case 'error':
+          console.error('pods feed error:', msg.message);
+          setStatus('disconnected');
+          break;
       }
     }
 

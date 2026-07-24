@@ -43,9 +43,7 @@ export default function BottomDock() {
         )}
       </div>
       {open && (
-        <div className="h-40 border-t border-neutral-800 p-3 text-neutral-600">
-          No output.
-        </div>
+        <div className="h-40 border-t border-neutral-800 p-3 text-neutral-600">No output.</div>
       )}
     </div>
   );

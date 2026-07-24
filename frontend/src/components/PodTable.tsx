@@ -49,8 +49,18 @@ function sortIndicator(dir: false | SortDirection): string {
   return '';
 }
 
+function ariaSort(dir: false | SortDirection): 'ascending' | 'descending' | 'none' {
+  if (dir === 'asc') {
+    return 'ascending';
+  }
+  if (dir === 'desc') {
+    return 'descending';
+  }
+  return 'none';
+}
+
 function rowClass(selected: boolean): string {
-  const base = 'cursor-pointer border-b border-neutral-900 hover:bg-neutral-900';
+  const base = 'border-b border-neutral-900 hover:bg-neutral-900';
   if (selected) {
     return `${base} bg-neutral-800`;
   }
@@ -64,7 +74,20 @@ export default function PodTable({ rows, selectedUid, onSelect }: PodTableProps)
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('name', { header: 'Name' }),
+      columnHelper.accessor('name', {
+        header: 'Name',
+        cell: (info) => (
+          <button
+            type="button"
+            onClick={() => {
+              onSelect(info.row.original);
+            }}
+            className="w-full cursor-pointer text-left text-neutral-100 hover:underline"
+          >
+            {info.getValue()}
+          </button>
+        ),
+      }),
       columnHelper.accessor('namespace', { header: 'Namespace' }),
       columnHelper.accessor('phase', { header: 'Status' }),
       columnHelper.accessor('ready', { header: 'Ready' }),
@@ -76,7 +99,7 @@ export default function PodTable({ rows, selectedUid, onSelect }: PodTableProps)
       }),
       columnHelper.accessor('node', { header: 'Node' }),
     ],
-    [],
+    [onSelect],
   );
 
   const table = useReactTable({
@@ -96,11 +119,17 @@ export default function PodTable({ rows, selectedUid, onSelect }: PodTableProps)
             {headerGroup.headers.map((header) => (
               <th
                 key={header.id}
-                onClick={header.column.getToggleSortingHandler()}
-                className="cursor-pointer select-none px-2 py-1 font-medium hover:text-neutral-100"
+                aria-sort={ariaSort(header.column.getIsSorted())}
+                className="px-2 py-1 font-medium"
               >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-                {sortIndicator(header.column.getIsSorted())}
+                <button
+                  type="button"
+                  onClick={header.column.getToggleSortingHandler()}
+                  className="flex cursor-pointer items-center font-medium select-none hover:text-neutral-100"
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                  {sortIndicator(header.column.getIsSorted())}
+                </button>
               </th>
             ))}
           </tr>
@@ -108,11 +137,7 @@ export default function PodTable({ rows, selectedUid, onSelect }: PodTableProps)
       </thead>
       <tbody>
         {table.getRowModel().rows.map((row) => (
-          <tr
-            key={row.id}
-            onClick={() => onSelect(row.original)}
-            className={rowClass(row.original.uid === selectedUid)}
-          >
+          <tr key={row.id} className={rowClass(row.original.uid === selectedUid)}>
             {row.getVisibleCells().map((cell) => (
               <td key={cell.id} className="px-2 py-1 text-neutral-200">
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}

@@ -20,7 +20,7 @@ export default function DetailsDrawer({ pod, onClose }: DetailsDrawerProps) {
     }
   }
 
-  const fields: Array<[string, string]> = [
+  const fields: [string, string][] = [
     ['Name', pod.name],
     ['Namespace', pod.namespace],
     ['Status', pod.phase],
@@ -32,7 +32,7 @@ export default function DetailsDrawer({ pod, onClose }: DetailsDrawerProps) {
   ];
 
   return (
-    <aside className="w-80 shrink-0 border-l border-neutral-800 bg-neutral-950 overflow-y-auto text-xs">
+    <aside className="w-80 shrink-0 overflow-y-auto border-l border-neutral-800 bg-neutral-950 text-xs">
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
         <span className="truncate font-semibold text-neutral-100">{pod.name}</span>
         <button
@@ -46,7 +46,7 @@ export default function DetailsDrawer({ pod, onClose }: DetailsDrawerProps) {
       <dl className="p-4">
         {fields.map(([label, value]) => (
           <div key={label} className="mb-2">
-            <dt className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</dt>
+            <dt className="text-[11px] tracking-wide text-neutral-500 uppercase">{label}</dt>
             <dd className="break-all text-neutral-200">{value}</dd>
           </div>
         ))}
