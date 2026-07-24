@@ -1,0 +1,120 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
+import type { FluxDashboard as FluxDashboardData } from '../../src/lib/types';
+import FluxDashboard from '../../src/components/FluxDashboard';
+import { makeFluxResource } from '../helpers';
+
+function stubFlux(dashboard: FluxDashboardData): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(dashboard) }),
+  );
+}
+
+const dashboard: FluxDashboardData = {
+  groups: [
+    {
+      name: 'Sources',
+      ready: 1,
+      total: 3,
+      resources: [
+        makeFluxResource({
+          kind: 'GitRepository',
+          name: 'res-a',
+          ready: 'True',
+          suspended: false,
+          message: '',
+          createdAt: '2026-07-24T09:00:00Z',
+        }),
+        makeFluxResource({
+          kind: 'HelmRelease',
+          name: 'res-b',
+          ready: 'False',
+          suspended: true,
+          message: 'install retries exhausted',
+          createdAt: '2026-07-20T09:00:00Z',
+        }),
+        makeFluxResource({
+          kind: 'Bucket',
+          name: 'res-c',
+          ready: '',
+          suspended: false,
+          message: '',
+          createdAt: '',
+        }),
+      ],
+    },
+  ],
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe('FluxDashboard', () => {
+  it('shows a loading state before the dashboard resolves', async () => {
+    stubFlux({ groups: [] });
+    render(<FluxDashboard />);
+    expect(screen.getByText('Loading Flux resources…')).toBeInTheDocument();
+    expect(await screen.findByText('No Flux resources found.')).toBeInTheDocument();
+  });
+
+  it('renders each group with its resources and reconciliation health', async () => {
+    stubFlux(dashboard);
+    render(<FluxDashboard />);
+    expect(await screen.findByText('res-a')).toBeInTheDocument();
+    expect(screen.getByText('res-b')).toBeInTheDocument();
+    expect(screen.getByText('res-c')).toBeInTheDocument();
+    expect(screen.getByText('Sources')).toBeInTheDocument();
+    expect(screen.getByText('1/3 ready')).toBeInTheDocument();
+    expect(screen.getByText('Ready', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText('Not ready')).toBeInTheDocument();
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
+    expect(screen.getByText('Suspended', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText(/install retries exhausted/)).toBeInTheDocument();
+    expect(screen.getByText('2026-07-24')).toBeInTheDocument();
+    expect(screen.getByText('2026-07-20')).toBeInTheDocument();
+  });
+
+  it('shows the error message when the fetch rejects with an error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('flux down')));
+    render(<FluxDashboard />);
+    expect(await screen.findByText('flux down')).toBeInTheDocument();
+  });
+
+  it('shows a generic message when the fetch rejects with a non-error value', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('boom'));
+    render(<FluxDashboard />);
+    expect(await screen.findByText('flux request failed')).toBeInTheDocument();
+  });
+
+  it('re-fetches on the poll interval', async () => {
+    vi.useFakeTimers();
+    const first: FluxDashboardData = {
+      groups: [
+        { name: 'Sources', ready: 1, total: 1, resources: [makeFluxResource({ name: 'first' })] },
+      ],
+    };
+    const second: FluxDashboardData = {
+      groups: [
+        { name: 'Sources', ready: 1, total: 1, resources: [makeFluxResource({ name: 'second' })] },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(first) })
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve(second) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<FluxDashboard />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('first')).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(screen.getByText('second')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

@@ -7,6 +7,7 @@ interface SidebarProps {
   activeResource: ResourceDescriptor | null;
   onSelect: (descriptor: ResourceDescriptor) => void;
   onSelectGitops: () => void;
+  onSelectFlux: () => void;
 }
 
 function descriptorKey(descriptor: ResourceDescriptor): string {
@@ -35,11 +36,10 @@ function resourceClass(active: boolean): string {
   return base;
 }
 
-function gitopsClass(active: boolean): string {
-  const base =
-    'mb-2 block w-full border-b border-neutral-800 px-3 py-2 text-left text-sm text-emerald-400 hover:bg-neutral-900';
+function navClass(active: boolean, accent: string, accentActive: string): string {
+  const base = `block w-full border-b border-neutral-800 px-3 py-2 text-left text-sm ${accent} hover:bg-neutral-900`;
   if (active) {
-    return `${base} bg-neutral-800 font-semibold text-emerald-300`;
+    return `${base} bg-neutral-800 font-semibold ${accentActive}`;
   }
   return base;
 }
@@ -51,7 +51,13 @@ function errorMessage(err: unknown): string {
   return 'discovery request failed';
 }
 
-export default function Sidebar({ view, activeResource, onSelect, onSelectGitops }: SidebarProps) {
+export default function Sidebar({
+  view,
+  activeResource,
+  onSelect,
+  onSelectGitops,
+  onSelectFlux,
+}: SidebarProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -90,9 +96,22 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectGitops
 
   return (
     <nav className="w-56 shrink-0 overflow-y-auto border-r border-neutral-800 bg-neutral-950 py-2">
-      <button type="button" onClick={onSelectGitops} className={gitopsClass(view === 'gitops')}>
-        GitOps
-      </button>
+      <div className="mb-2">
+        <button
+          type="button"
+          onClick={onSelectGitops}
+          className={navClass(view === 'gitops', 'text-emerald-400', 'text-emerald-300')}
+        >
+          GitOps
+        </button>
+        <button
+          type="button"
+          onClick={onSelectFlux}
+          className={navClass(view === 'flux', 'text-sky-400', 'text-sky-300')}
+        >
+          Flux
+        </button>
+      </div>
       {error !== null && <div className="px-3 py-1 text-[11px] text-red-400">{error}</div>}
       {categories.map((category) => {
         const isCollapsed = collapsed.has(category.name);

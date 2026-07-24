@@ -42,7 +42,30 @@ export type ServerMsg =
   | { type: 'deleted'; subId: string; uid: string }
   | { type: 'error'; subId: string; message: string };
 
-export type View = 'resources' | 'gitops';
+export type View = 'resources' | 'gitops' | 'flux';
+
+export interface FluxResource {
+  kind: string;
+  name: string;
+  namespace: string;
+  ready: string;
+  suspended: boolean;
+  revision: string;
+  source: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface FluxGroup {
+  name: string;
+  ready: number;
+  total: number;
+  resources: FluxResource[];
+}
+
+export interface FluxDashboard {
+  groups: FluxGroup[];
+}
 
 export type GraphNodeCategory = 'source' | 'applier' | 'app' | 'managed';
 

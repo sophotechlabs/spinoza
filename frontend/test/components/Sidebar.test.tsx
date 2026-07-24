@@ -10,6 +10,7 @@ interface RenderOverrides {
   activeResource?: ResourceDescriptor | null;
   onSelect?: (descriptor: ResourceDescriptor) => void;
   onSelectGitops?: () => void;
+  onSelectFlux?: () => void;
 }
 
 function renderSidebar(overrides: RenderOverrides = {}) {
@@ -18,6 +19,7 @@ function renderSidebar(overrides: RenderOverrides = {}) {
     activeResource: overrides.activeResource ?? null,
     onSelect: overrides.onSelect ?? vi.fn(),
     onSelectGitops: overrides.onSelectGitops ?? vi.fn(),
+    onSelectFlux: overrides.onSelectFlux ?? vi.fn(),
   };
   return render(<Sidebar {...props} />);
 }
@@ -118,5 +120,19 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: 'GitOps' }).className).not.toContain(
       'bg-neutral-800',
     );
+  });
+
+  it('calls onSelectFlux when the Flux entry is clicked', async () => {
+    stubFetch(categories);
+    const onSelectFlux = vi.fn();
+    renderSidebar({ onSelectFlux });
+    await userEvent.click(screen.getByRole('button', { name: 'Flux' }));
+    expect(onSelectFlux).toHaveBeenCalledTimes(1);
+  });
+
+  it('highlights the Flux entry when the flux view is active', () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'flux' });
+    expect(screen.getByRole('button', { name: 'Flux' }).className).toContain('bg-neutral-800');
   });
 });

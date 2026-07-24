@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { GraphNode, ResourceDescriptor, Row, View } from './lib/types';
 import { useResourceFeed } from './lib/feed';
 import Sidebar from './components/Sidebar';
@@ -7,6 +8,7 @@ import ResourceTable from './components/ResourceTable';
 import DetailsDrawer from './components/DetailsDrawer';
 import GitopsGraph from './components/GitopsGraph';
 import GitopsNodePanel from './components/GitopsNodePanel';
+import FluxDashboard from './components/FluxDashboard';
 import BottomDock from './components/BottomDock';
 
 const MAIN_SUB_ID = 'main';
@@ -40,6 +42,10 @@ export default function App() {
     setView('gitops');
   }
 
+  function handleSelectFlux() {
+    setView('flux');
+  }
+
   function handleSelectRow(row: Row) {
     setSelected(row);
   }
@@ -67,10 +73,16 @@ export default function App() {
   if (view === 'gitops') {
     mainArea = <GitopsGraph onSelect={handleSelectNode} />;
   }
+  if (view === 'flux') {
+    mainArea = <FluxDashboard />;
+  }
 
-  let sidePanel = <DetailsDrawer row={selected} onClose={handleCloseRow} />;
+  let sidePanel: ReactNode = <DetailsDrawer row={selected} onClose={handleCloseRow} />;
   if (view === 'gitops') {
     sidePanel = <GitopsNodePanel node={selectedNode} onClose={handleCloseNode} />;
+  }
+  if (view === 'flux') {
+    sidePanel = null;
   }
 
   return (
@@ -82,6 +94,7 @@ export default function App() {
           activeResource={active}
           onSelect={handleSelectResource}
           onSelectGitops={handleSelectGitops}
+          onSelectFlux={handleSelectFlux}
         />
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1">{mainArea}</div>

@@ -57,6 +57,10 @@ vi.mock('../src/components/GitopsGraph', () => ({
   ),
 }));
 
+vi.mock('../src/components/FluxDashboard', () => ({
+  default: () => <div data-testid="flux-dashboard" />,
+}));
+
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
@@ -191,6 +195,15 @@ describe('App', () => {
     expect(screen.getByText('podinfo')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.getByText('Select a node to see details.')).toBeInTheDocument();
+  });
+
+  it('switches to the flux view and shows the dashboard', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Flux' }));
+    expect(screen.getByTestId('flux-dashboard')).toBeInTheDocument();
+    expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Select a node to see details.')).not.toBeInTheDocument();
   });
 
   it('returns to the resources view when a resource is selected', async () => {

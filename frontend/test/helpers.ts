@@ -1,6 +1,7 @@
 import type {
   Category,
   Column,
+  FluxResource,
   GraphEdge,
   GraphNode,
   ResourceDescriptor,
@@ -47,6 +48,21 @@ export function makeGraphNode(overrides: Partial<GraphNode>): GraphNode {
     namespace: 'flux-system',
     status: 'Ready',
     category: 'source',
+  };
+  return { ...base, ...overrides };
+}
+
+export function makeFluxResource(overrides: Partial<FluxResource>): FluxResource {
+  const base: FluxResource = {
+    kind: 'Kustomization',
+    name: 'apps',
+    namespace: 'flux-system',
+    ready: 'True',
+    suspended: false,
+    revision: 'main@sha1:abc',
+    source: 'GitRepository/app-repo',
+    message: '',
+    createdAt: '2026-07-24T09:00:00Z',
   };
   return { ...base, ...overrides };
 }
