@@ -1,0 +1,339 @@
+package resources
+
+import (
+	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+func u(obj map[string]interface{}) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: obj}
+}
+
+func eq(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("cells = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("cells = %v, want %v", got, want)
+		}
+	}
+}
+
+func colNames(t *testing.T, kind string) []string {
+	t.Helper()
+	cols := columnsFor(kind)
+	names := make([]string, 0, len(cols))
+	for _, c := range cols {
+		names = append(names, c.Name)
+	}
+	return names
+}
+
+func TestColumnsFor(t *testing.T) {
+	cases := []struct {
+		kind string
+		want []string
+	}{
+		{"Pod", []string{"Ready", "Status", "Restarts", "Node"}},
+		{"Deployment", []string{"Ready", "Up-to-date", "Available"}},
+		{"ReplicaSet", []string{"Ready", "Up-to-date", "Available"}},
+		{"StatefulSet", []string{"Ready", "Up-to-date", "Available"}},
+		{"ReplicationController", []string{"Ready", "Up-to-date", "Available"}},
+		{"DaemonSet", []string{"Desired", "Ready", "Available"}},
+		{"Service", []string{"Type", "Cluster-IP", "Ports"}},
+		{"Node", []string{"Status", "Roles", "Version"}},
+		{"Namespace", []string{"Status"}},
+		{"Job", []string{"Completions"}},
+		{"ConfigMap", []string{"Status"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			eq(t, colNames(t, tc.kind), tc.want)
+		})
+	}
+}
+
+func TestPodCells(t *testing.T) {
+	pod := u(map[string]interface{}{
+		"spec": map[string]interface{}{
+			"nodeName": "node-1",
+			"containers": []interface{}{
+				map[string]interface{}{"name": "a"},
+				map[string]interface{}{"name": "b"},
+			},
+		},
+		"status": map[string]interface{}{
+			"phase": "Running",
+			"containerStatuses": []interface{}{
+				map[string]interface{}{"ready": true, "restartCount": int64(2)},
+				map[string]interface{}{"ready": false, "restartCount": int64(3)},
+			},
+		},
+	})
+	eq(t, podCells(pod), []string{"1/2", "Running", "5", "node-1"})
+}
+
+func TestPodCellsEmpty(t *testing.T) {
+	pod := u(map[string]interface{}{})
+	eq(t, podCells(pod), []string{"0/0", "", "0", ""})
+}
+
+func TestPodCellsSkipsNonMapContainerStatus(t *testing.T) {
+	pod := u(map[string]interface{}{
+		"spec": map[string]interface{}{
+			"containers": []interface{}{map[string]interface{}{"name": "a"}},
+		},
+		"status": map[string]interface{}{
+			"phase": "Running",
+			"containerStatuses": []interface{}{
+				"not-a-map",
+				map[string]interface{}{"ready": true, "restartCount": int64(1)},
+			},
+		},
+	})
+	eq(t, podCells(pod), []string{"1/1", "Running", "1", ""})
+}
+
+func TestWorkloadCells(t *testing.T) {
+	dep := u(map[string]interface{}{
+		"spec": map[string]interface{}{"replicas": int64(3)},
+		"status": map[string]interface{}{
+			"readyReplicas":     int64(2),
+			"updatedReplicas":   int64(3),
+			"availableReplicas": int64(2),
+		},
+	})
+	eq(t, workloadCells(dep), []string{"2/3", "3", "2"})
+}
+
+func TestWorkloadCellsMissing(t *testing.T) {
+	dep := u(map[string]interface{}{})
+	eq(t, workloadCells(dep), []string{"0/0", "0", "0"})
+}
+
+func TestDaemonCells(t *testing.T) {
+	ds := u(map[string]interface{}{
+		"status": map[string]interface{}{
+			"desiredNumberScheduled": int64(4),
+			"numberReady":            int64(3),
+			"numberAvailable":        int64(3),
+		},
+	})
+	eq(t, daemonCells(ds), []string{"4", "3", "3"})
+}
+
+func TestServiceCells(t *testing.T) {
+	svc := u(map[string]interface{}{
+		"spec": map[string]interface{}{
+			"type":      "ClusterIP",
+			"clusterIP": "10.0.0.1",
+			"ports": []interface{}{
+				map[string]interface{}{"port": int64(80), "protocol": "TCP"},
+				map[string]interface{}{"port": int64(443), "protocol": "TCP"},
+			},
+		},
+	})
+	eq(t, serviceCells(svc), []string{"ClusterIP", "10.0.0.1", "80/TCP,443/TCP"})
+}
+
+func TestServiceCellsPortWithoutProtocol(t *testing.T) {
+	svc := u(map[string]interface{}{
+		"spec": map[string]interface{}{
+			"type":      "NodePort",
+			"clusterIP": "10.0.0.2",
+			"ports": []interface{}{
+				"not-a-map",
+				map[string]interface{}{"port": int64(8080)},
+			},
+		},
+	})
+	eq(t, serviceCells(svc), []string{"NodePort", "10.0.0.2", "8080/"})
+}
+
+func TestNodeCellsReady(t *testing.T) {
+	node := u(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": map[string]interface{}{
+				"node-role.kubernetes.io/control-plane": "",
+				"node-role.kubernetes.io/worker":        "",
+				"kubernetes.io/hostname":                "node-1",
+			},
+		},
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "MemoryPressure", "status": "False"},
+				map[string]interface{}{"type": "Ready", "status": "True"},
+			},
+			"nodeInfo": map[string]interface{}{"kubeletVersion": "v1.31.0"},
+		},
+	})
+	cells := nodeCells(node)
+	if cells[0] != "Ready" {
+		t.Fatalf("status = %q, want Ready", cells[0])
+	}
+	if cells[2] != "v1.31.0" {
+		t.Fatalf("version = %q, want v1.31.0", cells[2])
+	}
+	roles := cells[1]
+	if roles != "control-plane,worker" && roles != "worker,control-plane" {
+		t.Fatalf("roles = %q, want control-plane and worker", roles)
+	}
+}
+
+func TestNodeCellsNotReady(t *testing.T) {
+	node := u(map[string]interface{}{
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				"not-a-map",
+				map[string]interface{}{"type": "Ready", "status": "False"},
+			},
+		},
+	})
+	eq(t, nodeCells(node), []string{"NotReady", "", ""})
+}
+
+func TestNodeCellsSkipsEmptyRole(t *testing.T) {
+	node := u(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": map[string]interface{}{
+				"node-role.kubernetes.io/": "",
+			},
+		},
+		"status": map[string]interface{}{},
+	})
+	eq(t, nodeCells(node), []string{"NotReady", "", ""})
+}
+
+func TestJobCells(t *testing.T) {
+	job := u(map[string]interface{}{
+		"spec":   map[string]interface{}{"completions": int64(5)},
+		"status": map[string]interface{}{"succeeded": int64(3)},
+	})
+	eq(t, jobCells(job), []string{"3/5"})
+}
+
+func TestConditionSummaryReady(t *testing.T) {
+	obj := u(map[string]interface{}{
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
+			},
+		},
+	})
+	if got := conditionSummary(obj); got != "Ready" {
+		t.Fatalf("conditionSummary = %q, want Ready", got)
+	}
+}
+
+func TestConditionSummaryReason(t *testing.T) {
+	obj := u(map[string]interface{}{
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Available", "status": "False"},
+				map[string]interface{}{"type": "Ready", "status": "False", "reason": "MinimumReplicasUnavailable"},
+			},
+		},
+	})
+	if got := conditionSummary(obj); got != "MinimumReplicasUnavailable" {
+		t.Fatalf("conditionSummary = %q, want MinimumReplicasUnavailable", got)
+	}
+}
+
+func TestConditionSummaryNotReady(t *testing.T) {
+	obj := u(map[string]interface{}{
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				"not-a-map",
+				map[string]interface{}{"type": "Ready", "status": "False"},
+			},
+		},
+	})
+	if got := conditionSummary(obj); got != "NotReady" {
+		t.Fatalf("conditionSummary = %q, want NotReady", got)
+	}
+}
+
+func TestConditionSummaryEmpty(t *testing.T) {
+	obj := u(map[string]interface{}{})
+	if got := conditionSummary(obj); got != "" {
+		t.Fatalf("conditionSummary = %q, want empty", got)
+	}
+}
+
+func TestCellsForDispatch(t *testing.T) {
+	pod := u(map[string]interface{}{
+		"spec":   map[string]interface{}{"containers": []interface{}{map[string]interface{}{"name": "a"}}},
+		"status": map[string]interface{}{"phase": "Running"},
+	})
+	eq(t, cellsFor(pod, "Pod"), []string{"0/1", "Running", "0", ""})
+
+	dep := u(map[string]interface{}{
+		"spec":   map[string]interface{}{"replicas": int64(1)},
+		"status": map[string]interface{}{"readyReplicas": int64(1), "updatedReplicas": int64(1), "availableReplicas": int64(1)},
+	})
+	eq(t, cellsFor(dep, "Deployment"), []string{"1/1", "1", "1"})
+
+	ds := u(map[string]interface{}{
+		"status": map[string]interface{}{"desiredNumberScheduled": int64(1), "numberReady": int64(1), "numberAvailable": int64(1)},
+	})
+	eq(t, cellsFor(ds, "DaemonSet"), []string{"1", "1", "1"})
+
+	svc := u(map[string]interface{}{
+		"spec": map[string]interface{}{"type": "ClusterIP", "clusterIP": "10.0.0.1"},
+	})
+	eq(t, cellsFor(svc, "Service"), []string{"ClusterIP", "10.0.0.1", ""})
+
+	node := u(map[string]interface{}{"status": map[string]interface{}{}})
+	eq(t, cellsFor(node, "Node"), []string{"NotReady", "", ""})
+
+	ns := u(map[string]interface{}{"status": map[string]interface{}{"phase": "Active"}})
+	eq(t, cellsFor(ns, "Namespace"), []string{"Active"})
+
+	job := u(map[string]interface{}{
+		"spec":   map[string]interface{}{"completions": int64(1)},
+		"status": map[string]interface{}{"succeeded": int64(1)},
+	})
+	eq(t, cellsFor(job, "Job"), []string{"1/1"})
+
+	generic := u(map[string]interface{}{
+		"status": map[string]interface{}{"conditions": []interface{}{map[string]interface{}{"type": "Ready", "status": "True"}}},
+	})
+	eq(t, cellsFor(generic, "ConfigMap"), []string{"Ready"})
+}
+
+func TestToInt64(t *testing.T) {
+	if got := toInt64(int64(7)); got != 7 {
+		t.Fatalf("toInt64(int64) = %d, want 7", got)
+	}
+	if got := toInt64(float64(9)); got != 9 {
+		t.Fatalf("toInt64(float64) = %d, want 9", got)
+	}
+	if got := toInt64("nope"); got != 0 {
+		t.Fatalf("toInt64(string) = %d, want 0", got)
+	}
+	if got := toInt64(nil); got != 0 {
+		t.Fatalf("toInt64(nil) = %d, want 0", got)
+	}
+}
+
+func TestNestedHelpersOnWrongType(t *testing.T) {
+	obj := u(map[string]interface{}{
+		"spec": map[string]interface{}{
+			"replicas": "three",
+			"nodeName": int64(5),
+			"ports":    "not-a-slice",
+		},
+	})
+	if got := nestedString(obj, "spec", "nodeName"); got != "" {
+		t.Fatalf("nestedString on non-string = %q, want empty", got)
+	}
+	if got := nestedInt(obj, "spec", "replicas"); got != 0 {
+		t.Fatalf("nestedInt on non-int = %d, want 0", got)
+	}
+	if got := nestedSlice(obj, "spec", "ports"); got != nil {
+		t.Fatalf("nestedSlice on non-slice = %v, want nil", got)
+	}
+}

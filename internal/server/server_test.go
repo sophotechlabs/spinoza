@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -13,31 +14,62 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/fake"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
-	"github.com/sophotechlabs/spinoza/internal/broker"
+	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
-type fakeBroker struct {
-	rows   []api.PodRow
-	rv     string
-	events chan broker.Event
-}
+var depGVR = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 
-func (b *fakeBroker) Snapshot() ([]api.PodRow, string) {
-	return b.rows, b.rv
-}
-
-func (b *fakeBroker) Subscribe() (<-chan broker.Event, func()) {
-	return b.events, func() {}
-}
-
-func newFakeBroker() *fakeBroker {
-	return &fakeBroker{
-		rows:   []api.PodRow{{UID: "uid-1", Name: "pod-a", Namespace: "ns-a"}},
-		rv:     "7",
-		events: make(chan broker.Event, 4),
+func deploymentDesc() api.ResourceDescriptor {
+	return api.ResourceDescriptor{
+		Group:      "apps",
+		Version:    "v1",
+		Resource:   "deployments",
+		Kind:       "Deployment",
+		Namespaced: true,
+		Category:   "Workloads",
 	}
+}
+
+func newDeployment(namespace, name string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]interface{}{
+			"name":      name,
+			"namespace": namespace,
+			"uid":       "uid-" + name,
+		},
+		"spec": map[string]interface{}{"replicas": int64(1)},
+		"status": map[string]interface{}{
+			"readyReplicas":     int64(1),
+			"updatedReplicas":   int64(1),
+			"availableReplicas": int64(1),
+		},
+	}}
+}
+
+func testManager(t *testing.T, objs ...runtime.Object) (*resources.Manager, dynamic.Interface) {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	gvrToListKind := map[schema.GroupVersionResource]string{depGVR: "DeploymentList"}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind, objs...)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("apps", "v1", "deployments"): deploymentDesc(),
+	}
+	cats := []api.Category{{Name: "Workloads", Resources: []api.ResourceDescriptor{deploymentDesc()}}}
+	mgr := resources.NewManager(ctx, dyn, cats, descs)
+	return mgr, dyn
 }
 
 func testAssets() fstest.MapFS {
@@ -50,8 +82,18 @@ func wsURL(httpURL string) string {
 	return "ws" + strings.TrimPrefix(httpURL, "http") + "/ws"
 }
 
+func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg {
+	t.Helper()
+	var msg api.ServerMsg
+	if err := wsjson.Read(ctx, c, &msg); err != nil {
+		t.Fatalf("read message: %v", err)
+	}
+	return msg
+}
+
 func TestHealthzReturnsOK(t *testing.T) {
-	srv := New(newFakeBroker(), testAssets())
+	mgr, _ := testManager(t)
+	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -74,7 +116,8 @@ func TestHealthzReturnsOK(t *testing.T) {
 }
 
 func TestRootServesSPAIndex(t *testing.T) {
-	srv := New(newFakeBroker(), testAssets())
+	mgr, _ := testManager(t)
+	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -96,43 +139,87 @@ func TestRootServesSPAIndex(t *testing.T) {
 	}
 }
 
+func TestResourcesEndpoint(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := New(mgr, testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/resources")
+	if err != nil {
+		t.Fatalf("GET /api/resources: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", resp.Header.Get("Content-Type"))
+	}
+	var cats []api.Category
+	if err := json.NewDecoder(resp.Body).Decode(&cats); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(cats) != 1 {
+		t.Fatalf("categories = %d, want 1", len(cats))
+	}
+	if cats[0].Name != "Workloads" {
+		t.Fatalf("category = %q, want Workloads", cats[0].Name)
+	}
+	if len(cats[0].Resources) != 1 || cats[0].Resources[0].Resource != "deployments" {
+		t.Fatalf("resources = %v, want [deployments]", cats[0].Resources)
+	}
+}
+
 func TestEventToMsgDeleted(t *testing.T) {
-	msg := eventToMsg(broker.Event{Kind: "deleted", UID: "uid-1"})
+	msg := eventToMsg("sub-1", resources.Event{Kind: "deleted", UID: "uid-1"})
 	if msg.Type != "deleted" {
 		t.Fatalf("Type = %q, want deleted", msg.Type)
 	}
-	if msg.Resource != "pods" {
-		t.Fatalf("Resource = %q, want pods", msg.Resource)
+	if msg.SubID != "sub-1" {
+		t.Fatalf("SubID = %q, want sub-1", msg.SubID)
 	}
 	if msg.UID != "uid-1" {
 		t.Fatalf("UID = %q, want uid-1", msg.UID)
 	}
-	if msg.Item != nil {
-		t.Fatalf("Item = %v, want nil", msg.Item)
+	if msg.Row != nil {
+		t.Fatalf("Row = %v, want nil", msg.Row)
 	}
 }
 
 func TestEventToMsgAdded(t *testing.T) {
-	row := api.PodRow{UID: "uid-2", Name: "pod-b"}
-	msg := eventToMsg(broker.Event{Kind: "added", Row: row})
+	row := api.Row{UID: "uid-2", Name: "dep-b"}
+	msg := eventToMsg("sub-2", resources.Event{Kind: "added", Row: row})
 	if msg.Type != "added" {
 		t.Fatalf("Type = %q, want added", msg.Type)
 	}
-	if msg.Item == nil {
-		t.Fatal("Item = nil, want row")
+	if msg.SubID != "sub-2" {
+		t.Fatalf("SubID = %q, want sub-2", msg.SubID)
 	}
-	if msg.Item.UID != "uid-2" {
-		t.Fatalf("Item.UID = %q, want uid-2", msg.Item.UID)
+	if msg.Row == nil {
+		t.Fatal("Row = nil, want row")
+	}
+	if msg.Row.UID != "uid-2" {
+		t.Fatalf("Row.UID = %q, want uid-2", msg.Row.UID)
 	}
 }
 
-func TestHandleWSDeliversSnapshotAndDelta(t *testing.T) {
-	b := newFakeBroker()
-	srv := New(b, testAssets())
+func TestEventToMsgModified(t *testing.T) {
+	row := api.Row{UID: "uid-3", Name: "dep-c"}
+	msg := eventToMsg("sub-3", resources.Event{Kind: "modified", Row: row})
+	if msg.Type != "modified" {
+		t.Fatalf("Type = %q, want modified", msg.Type)
+	}
+	if msg.Row == nil || msg.Row.Name != "dep-c" {
+		t.Fatalf("Row = %v, want dep-c", msg.Row)
+	}
+}
+
+func TestWSSnapshotAndDeltas(t *testing.T) {
+	mgr, dyn := testManager(t, newDeployment("default", "web"))
+	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
@@ -141,41 +228,76 @@ func TestHandleWSDeliversSnapshotAndDelta(t *testing.T) {
 	}
 	defer func() { _ = c.CloseNow() }()
 
-	var snap api.ServerMsg
-	if err := wsjson.Read(ctx, c, &snap); err != nil {
-		t.Fatalf("read snapshot: %v", err)
+	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
+	if err := wsjson.Write(ctx, c, sub); err != nil {
+		t.Fatalf("write subscribe: %v", err)
 	}
+
+	snap := readMsg(ctx, t, c)
 	if snap.Type != "snapshot" {
-		t.Fatalf("snapshot Type = %q, want snapshot", snap.Type)
+		t.Fatalf("Type = %q, want snapshot", snap.Type)
 	}
-	if snap.RV != "7" {
-		t.Fatalf("snapshot RV = %q, want 7", snap.RV)
+	if snap.SubID != "s1" {
+		t.Fatalf("SubID = %q, want s1", snap.SubID)
 	}
-	if len(snap.Items) != 1 {
-		t.Fatalf("snapshot Items = %d, want 1", len(snap.Items))
+	if !snap.Namespaced {
+		t.Fatal("Namespaced = false, want true")
+	}
+	if len(snap.Columns) != 3 {
+		t.Fatalf("columns = %d, want 3", len(snap.Columns))
+	}
+	if len(snap.Rows) != 1 || snap.Rows[0].Name != "web" {
+		t.Fatalf("rows = %v, want [web]", snap.Rows)
 	}
 
-	b.events <- broker.Event{Kind: "added", Row: api.PodRow{UID: "uid-3", Name: "pod-c"}}
+	_, err = dyn.Resource(depGVR).Namespace("default").Create(ctx, newDeployment("default", "api"), metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	added := readMsg(ctx, t, c)
+	if added.Type != "added" {
+		t.Fatalf("Type = %q, want added", added.Type)
+	}
+	if added.Row == nil || added.Row.Name != "api" {
+		t.Fatalf("Row = %v, want api", added.Row)
+	}
 
-	var delta api.ServerMsg
-	if err := wsjson.Read(ctx, c, &delta); err != nil {
-		t.Fatalf("read delta: %v", err)
+	cur, err := dyn.Resource(depGVR).Namespace("default").Get(ctx, "api", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get: %v", err)
 	}
-	if delta.Type != "added" {
-		t.Fatalf("delta Type = %q, want added", delta.Type)
+	if err := unstructured.SetNestedField(cur.Object, int64(3), "spec", "replicas"); err != nil {
+		t.Fatalf("set replicas: %v", err)
 	}
-	if delta.Item == nil || delta.Item.UID != "uid-3" {
-		t.Fatalf("delta Item = %v, want uid-3", delta.Item)
+	_, err = dyn.Resource(depGVR).Namespace("default").Update(ctx, cur, metav1.UpdateOptions{})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	modified := readMsg(ctx, t, c)
+	if modified.Type != "modified" {
+		t.Fatalf("Type = %q, want modified", modified.Type)
+	}
+
+	err = dyn.Resource(depGVR).Namespace("default").Delete(ctx, "api", metav1.DeleteOptions{})
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	deleted := readMsg(ctx, t, c)
+	if deleted.Type != "deleted" {
+		t.Fatalf("Type = %q, want deleted", deleted.Type)
+	}
+	if deleted.UID != "uid-api" {
+		t.Fatalf("UID = %q, want uid-api", deleted.UID)
 	}
 }
 
-func TestHandleWSExitsWhenEventChannelCloses(t *testing.T) {
-	b := newFakeBroker()
-	srv := New(b, testAssets())
+func TestWSUnsubscribeStopsDeltas(t *testing.T) {
+	mgr, dyn := testManager(t)
+	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
@@ -184,32 +306,113 @@ func TestHandleWSExitsWhenEventChannelCloses(t *testing.T) {
 	}
 	defer func() { _ = c.CloseNow() }()
 
-	var snap api.ServerMsg
-	if err := wsjson.Read(ctx, c, &snap); err != nil {
-		t.Fatalf("read snapshot: %v", err)
+	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
+	if err := wsjson.Write(ctx, c, sub); err != nil {
+		t.Fatalf("write subscribe: %v", err)
+	}
+	snap := readMsg(ctx, t, c)
+	if snap.Type != "snapshot" {
+		t.Fatalf("Type = %q, want snapshot", snap.Type)
 	}
 
-	close(b.events)
+	unsub := api.ClientMsg{Type: "unsubscribe", SubID: "s1"}
+	if err := wsjson.Write(ctx, c, unsub); err != nil {
+		t.Fatalf("write unsubscribe: %v", err)
+	}
 
-	_, _, readErr := c.Read(ctx)
+	time.Sleep(200 * time.Millisecond)
+	_, err = dyn.Resource(depGVR).Namespace("default").Create(ctx, newDeployment("default", "api"), metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	readCtx, readCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer readCancel()
+	var msg api.ServerMsg
+	readErr := wsjson.Read(readCtx, c, &msg)
 	if readErr == nil {
-		t.Fatal("expected connection to close after event channel closed")
+		t.Fatalf("received unexpected message after unsubscribe: %+v", msg)
 	}
 }
 
-func TestHandleWSExitsOnContextCancel(t *testing.T) {
-	b := newFakeBroker()
-	srv := New(b, testAssets())
+func TestWSSubscribeUnknownResource(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := New(mgr, testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = c.CloseNow() }()
+
+	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "statefulsets", Namespace: "default"}
+	if err := wsjson.Write(ctx, c, sub); err != nil {
+		t.Fatalf("write subscribe: %v", err)
+	}
+
+	msg := readMsg(ctx, t, c)
+	if msg.Type != "error" {
+		t.Fatalf("Type = %q, want error", msg.Type)
+	}
+	if msg.SubID != "s1" {
+		t.Fatalf("SubID = %q, want s1", msg.SubID)
+	}
+	if msg.Message == "" {
+		t.Fatal("Message = empty, want error text")
+	}
+}
+
+func TestWSResubscribeReplacesSubscription(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	srv := New(mgr, testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = c.CloseNow() }()
+
+	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
+	if err := wsjson.Write(ctx, c, sub); err != nil {
+		t.Fatalf("write subscribe: %v", err)
+	}
+	first := readMsg(ctx, t, c)
+	if first.Type != "snapshot" {
+		t.Fatalf("Type = %q, want snapshot", first.Type)
+	}
+
+	if err := wsjson.Write(ctx, c, sub); err != nil {
+		t.Fatalf("write resubscribe: %v", err)
+	}
+	second := readMsg(ctx, t, c)
+	if second.Type != "snapshot" {
+		t.Fatalf("Type = %q, want snapshot on resubscribe", second.Type)
+	}
+}
+
+func TestWSExitsOnServerContextCancel(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	srv := New(mgr, testAssets())
 
 	ts := httptest.NewUnstartedServer(srv.Handler())
 	baseCtx, cancelBase := context.WithCancel(context.Background())
-	ts.Config.BaseContext = func(_ net.Listener) context.Context {
+	ts.Config.BaseContext = func(net.Listener) context.Context {
 		return baseCtx
 	}
 	ts.Start()
 	defer ts.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
@@ -218,21 +421,26 @@ func TestHandleWSExitsOnContextCancel(t *testing.T) {
 	}
 	defer func() { _ = c.CloseNow() }()
 
-	var snap api.ServerMsg
-	if err := wsjson.Read(ctx, c, &snap); err != nil {
-		t.Fatalf("read snapshot: %v", err)
+	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
+	if err := wsjson.Write(ctx, c, sub); err != nil {
+		t.Fatalf("write subscribe: %v", err)
+	}
+	snap := readMsg(ctx, t, c)
+	if snap.Type != "snapshot" {
+		t.Fatalf("Type = %q, want snapshot", snap.Type)
 	}
 
 	cancelBase()
 
 	_, _, readErr := c.Read(ctx)
 	if readErr == nil {
-		t.Fatal("expected connection to close after context cancel")
+		t.Fatal("expected connection to close after server context cancel")
 	}
 }
 
-func TestHandleWSRejectsNonWebsocketRequest(t *testing.T) {
-	srv := New(newFakeBroker(), testAssets())
+func TestWSRejectsNonWebsocketRequest(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 

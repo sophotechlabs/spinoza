@@ -36,22 +36,31 @@ func writeKubeconfig(t *testing.T, content string) string {
 	return path
 }
 
-func TestLoadReturnsClientsetContextAndNamespace(t *testing.T) {
+func TestLoadReturnsBundle(t *testing.T) {
 	path := writeKubeconfig(t, validKubeconfig)
 	t.Setenv("KUBECONFIG", path)
 
-	cs, contextName, namespace, err := Load()
+	bundle, err := Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cs == nil {
-		t.Fatal("clientset = nil, want non-nil")
+	if bundle.Clientset == nil {
+		t.Fatal("Clientset = nil, want non-nil")
 	}
-	if contextName != "test-ctx" {
-		t.Fatalf("contextName = %q, want test-ctx", contextName)
+	if bundle.Dynamic == nil {
+		t.Fatal("Dynamic = nil, want non-nil")
 	}
-	if namespace != "test-ns" {
-		t.Fatalf("namespace = %q, want test-ns", namespace)
+	if bundle.Discovery == nil {
+		t.Fatal("Discovery = nil, want non-nil")
+	}
+	if bundle.Mapper == nil {
+		t.Fatal("Mapper = nil, want non-nil")
+	}
+	if bundle.Context != "test-ctx" {
+		t.Fatalf("Context = %q, want test-ctx", bundle.Context)
+	}
+	if bundle.Namespace != "test-ns" {
+		t.Fatalf("Namespace = %q, want test-ns", bundle.Namespace)
 	}
 }
 
@@ -59,8 +68,18 @@ func TestLoadReturnsErrorForEmptyKubeconfig(t *testing.T) {
 	path := writeKubeconfig(t, "")
 	t.Setenv("KUBECONFIG", path)
 
-	_, _, _, err := Load()
+	_, err := Load()
 	if err == nil {
 		t.Fatal("Load returned nil error for empty kubeconfig")
+	}
+}
+
+func TestLoadReturnsErrorForInvalidKubeconfig(t *testing.T) {
+	path := writeKubeconfig(t, "not: [valid: yaml")
+	t.Setenv("KUBECONFIG", path)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load returned nil error for invalid kubeconfig")
 	}
 }

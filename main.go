@@ -29,20 +29,19 @@ func main() {
 func run() error {
 	addr := flag.String("addr", "127.0.0.1:34115", "listen address")
 	openBrowser := flag.Bool("open", false, "open the default browser on start")
-	fake := flag.Bool("fake", false, "use the in-memory fake data source instead of a real cluster")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	b := makeBroker(ctx, *fake)
+	mgr := makeManager(ctx)
 
 	assets, err := fs.Sub(embedded, "web/dist")
 	if err != nil {
 		return fmt.Errorf("assets: %w", err)
 	}
 
-	srv := server.New(b, assets)
+	srv := server.New(mgr, assets)
 	httpServer := &http.Server{
 		Addr:              *addr,
 		Handler:           srv.Handler(),

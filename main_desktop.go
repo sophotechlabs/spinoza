@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -25,10 +24,9 @@ type desktopApp struct {
 }
 
 func (a *desktopApp) startup(ctx context.Context) {
-	fake := os.Getenv("SPINOZA_FAKE") != ""
 	go func() {
-		b := makeBroker(ctx, fake)
-		srv := server.New(b, a.assets)
+		mgr := makeManager(ctx)
+		srv := server.New(mgr, a.assets)
 		httpServer := &http.Server{
 			Addr:              desktopAddr,
 			Handler:           srv.Handler(),
