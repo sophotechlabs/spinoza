@@ -1,9 +1,27 @@
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import type { FluxDashboard as FluxDashboardData, FluxGroup, FluxResource } from '../lib/types';
+import { Fragment, useEffect, useState } from 'react';
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
+import type { FluxDashboard as FluxDashboardData, FluxResource } from '../lib/types';
 import { fetchFlux } from '../lib/flux';
 
 const POLL_INTERVAL_MS = 5000;
+const EMPTY: FluxResource[] = [];
+
+const columnHelper = createColumnHelper<FluxResource>();
+
+const COLUMNS = [
+  columnHelper.display({ id: 'kind', header: 'Kind', size: 120 }),
+  columnHelper.display({ id: 'name', header: 'Name', size: 180 }),
+  columnHelper.display({ id: 'namespace', header: 'Namespace', size: 130 }),
+  columnHelper.display({ id: 'status', header: 'Status', size: 110 }),
+  columnHelper.display({ id: 'revision', header: 'Revision', size: 300 }),
+  columnHelper.display({ id: 'source', header: 'Source', size: 180 }),
+  columnHelper.display({ id: 'created', header: 'Created', size: 90 }),
+];
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -42,13 +60,25 @@ function readyLabel(ready: string): string {
   return 'Unknown';
 }
 
-function suspendedBadge(suspended: boolean): ReactNode {
-  if (!suspended) {
-    return null;
+function statusDot(resource: FluxResource): string {
+  if (resource.suspended) {
+    return 'bg-amber-500';
   }
-  return (
-    <span className="rounded bg-amber-950 px-1.5 py-0.5 text-[10px] text-amber-300">Suspended</span>
-  );
+  return readyDot(resource.ready);
+}
+
+function statusText(resource: FluxResource): string {
+  if (resource.suspended) {
+    return 'text-amber-400';
+  }
+  return readyText(resource.ready);
+}
+
+function statusLabel(resource: FluxResource): string {
+  if (resource.suspended) {
+    return 'Suspended';
+  }
+  return readyLabel(resource.ready);
 }
 
 function created(createdAt: string): string {
@@ -58,94 +88,42 @@ function created(createdAt: string): string {
   return createdAt.slice(0, 10);
 }
 
-const HEADERS = [
-  'Kind',
-  'Name',
-  'Namespace',
-  'Ready',
-  'Suspended',
-  'Revision',
-  'Source',
-  'Created',
-];
+function rowKey(resource: FluxResource): string {
+  return `${resource.kind}/${resource.namespace}/${resource.name}`;
+}
 
 function ResourceRow({ resource }: { resource: FluxResource }) {
   return (
     <tr className="border-t border-neutral-900 hover:bg-neutral-900">
-      <td className="px-2 py-1 text-neutral-400">{resource.kind}</td>
-      <td className="px-2 py-1 text-neutral-100">{resource.name}</td>
-      <td className="px-2 py-1 text-neutral-400">{resource.namespace}</td>
-      <td className="px-2 py-1">
-        <span className={`inline-flex items-center gap-1.5 ${readyText(resource.ready)}`}>
-          <span className={`h-2 w-2 rounded-full ${readyDot(resource.ready)}`} />
-          {readyLabel(resource.ready)}
+      <td className="truncate px-2 py-1 text-neutral-400">{resource.kind}</td>
+      <td className="truncate px-2 py-1 text-neutral-100">{resource.name}</td>
+      <td className="truncate px-2 py-1 text-neutral-400">{resource.namespace}</td>
+      <td className="truncate px-2 py-1" title={resource.message}>
+        <span className={`inline-flex items-center gap-1.5 ${statusText(resource)}`}>
+          <span className={`h-2 w-2 rounded-full ${statusDot(resource)}`} />
+          {statusLabel(resource)}
         </span>
       </td>
-      <td className="px-2 py-1">{suspendedBadge(resource.suspended)}</td>
-      <td className="px-2 py-1 text-neutral-400">{resource.revision}</td>
-      <td className="px-2 py-1 text-neutral-400">{resource.source}</td>
-      <td className="px-2 py-1 text-neutral-500">{created(resource.createdAt)}</td>
+      <td className="truncate px-2 py-1 text-neutral-400" title={resource.revision}>
+        {resource.revision}
+      </td>
+      <td className="truncate px-2 py-1 text-neutral-400">{resource.source}</td>
+      <td className="truncate px-2 py-1 text-neutral-500">{created(resource.createdAt)}</td>
     </tr>
-  );
-}
-
-function GroupSection({ group }: { group: FluxGroup }) {
-  return (
-    <section className="mb-5">
-      <h2 className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold tracking-wide text-neutral-300 uppercase">
-        {group.name}
-        <span className="text-[11px] font-normal text-neutral-600">
-          {group.ready}/{group.total} ready
-        </span>
-      </h2>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left text-xs">
-          <thead>
-            <tr className="text-neutral-500">
-              {HEADERS.map((header) => (
-                <th key={header} className="px-2 py-1 font-normal">
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {group.resources.map((resource) => (
-              <ResourceRow
-                key={`${resource.kind}/${resource.namespace}/${resource.name}`}
-                resource={resource}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {group.resources.map((resource) => (
-        <Message
-          key={`${resource.kind}/${resource.namespace}/${resource.name}`}
-          resource={resource}
-        />
-      ))}
-    </section>
-  );
-}
-
-function Message({ resource }: { resource: FluxResource }) {
-  if (resource.message === '') {
-    return null;
-  }
-  return (
-    <p className="px-2 pt-1 text-[11px] text-neutral-600">
-      <span className="text-neutral-500">
-        {resource.kind}/{resource.name}:
-      </span>{' '}
-      {resource.message}
-    </p>
   );
 }
 
 export default function FluxDashboard() {
   const [data, setData] = useState<FluxDashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const table = useReactTable({
+    data: EMPTY,
+    columns: COLUMNS,
+    columnResizeMode: 'onChange',
+    defaultColumn: { minSize: 60 },
+    getCoreRowModel: getCoreRowModel(),
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -193,11 +171,59 @@ export default function FluxDashboard() {
     );
   }
 
+  const columnCount = COLUMNS.length;
+
   return (
-    <div className="h-full overflow-y-auto p-3">
-      {data.groups.map((group) => (
-        <GroupSection key={group.name} group={group} />
-      ))}
+    <div className="h-full overflow-auto">
+      <table
+        className="table-fixed border-collapse text-left text-xs whitespace-nowrap"
+        style={{ width: `${table.getTotalSize()}px` }}
+      >
+        <colgroup>
+          {table.getVisibleLeafColumns().map((column) => (
+            <col key={column.id} style={{ width: `${column.getSize()}px` }} />
+          ))}
+        </colgroup>
+        <thead className="sticky top-0 z-10 bg-neutral-950 text-neutral-500">
+          <tr className="border-b border-neutral-800">
+            {table.getFlatHeaders().map((header) => (
+              <th
+                key={header.id}
+                className="relative px-2 py-1 font-normal"
+                style={{ width: `${header.getSize()}px` }}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+                <div
+                  aria-hidden="true"
+                  onMouseDown={header.getResizeHandler()}
+                  onTouchStart={header.getResizeHandler()}
+                  className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-neutral-600 opacity-0 select-none hover:opacity-100"
+                />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.groups.map((group) => (
+            <Fragment key={group.name}>
+              <tr>
+                <td
+                  colSpan={columnCount}
+                  className="bg-neutral-900/50 px-2 pt-3 pb-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase"
+                >
+                  {group.name}
+                  <span className="ml-2 text-[11px] font-normal text-neutral-600">
+                    {group.ready}/{group.total} ready
+                  </span>
+                </td>
+              </tr>
+              {group.resources.map((resource) => (
+                <ResourceRow key={rowKey(resource)} resource={resource} />
+              ))}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

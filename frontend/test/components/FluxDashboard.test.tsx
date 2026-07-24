@@ -16,7 +16,7 @@ const dashboard: FluxDashboardData = {
     {
       name: 'Sources',
       ready: 1,
-      total: 3,
+      total: 4,
       resources: [
         makeFluxResource({
           kind: 'GitRepository',
@@ -30,7 +30,7 @@ const dashboard: FluxDashboardData = {
           kind: 'HelmRelease',
           name: 'res-b',
           ready: 'False',
-          suspended: true,
+          suspended: false,
           message: 'install retries exhausted',
           createdAt: '2026-07-20T09:00:00Z',
         }),
@@ -41,6 +41,14 @@ const dashboard: FluxDashboardData = {
           suspended: false,
           message: '',
           createdAt: '',
+        }),
+        makeFluxResource({
+          kind: 'OCIRepository',
+          name: 'res-d',
+          ready: 'False',
+          suspended: true,
+          message: 'suppressed while suspended',
+          createdAt: '2026-07-19T09:00:00Z',
         }),
       ],
     },
@@ -60,21 +68,31 @@ describe('FluxDashboard', () => {
     expect(await screen.findByText('No Flux resources found.')).toBeInTheDocument();
   });
 
-  it('renders each group with its resources and reconciliation health', async () => {
+  it('renders each group with its resources and a combined status', async () => {
     stubFlux(dashboard);
     render(<FluxDashboard />);
     expect(await screen.findByText('res-a')).toBeInTheDocument();
     expect(screen.getByText('res-b')).toBeInTheDocument();
     expect(screen.getByText('res-c')).toBeInTheDocument();
+    expect(screen.getByText('res-d')).toBeInTheDocument();
     expect(screen.getByText('Sources')).toBeInTheDocument();
-    expect(screen.getByText('1/3 ready')).toBeInTheDocument();
+    expect(screen.getByText('1/4 ready')).toBeInTheDocument();
     expect(screen.getByText('Ready', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByText('Not ready')).toBeInTheDocument();
     expect(screen.getByText('Unknown')).toBeInTheDocument();
     expect(screen.getByText('Suspended', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByText(/install retries exhausted/)).toBeInTheDocument();
+    expect(screen.getByTitle('install retries exhausted')).toBeInTheDocument();
     expect(screen.getByText('2026-07-24')).toBeInTheDocument();
     expect(screen.getByText('2026-07-20')).toBeInTheDocument();
+  });
+
+  it('gives each column a width and a drag-to-resize handle', async () => {
+    stubFlux(dashboard);
+    const { container } = render(<FluxDashboard />);
+    await screen.findByText('res-a');
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers[0].getAttribute('style')).toContain('width');
+    expect(container.querySelectorAll('.cursor-col-resize').length).toBeGreaterThan(0);
   });
 
   it('shows the error message when the fetch rejects with an error', async () => {
