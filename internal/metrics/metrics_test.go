@@ -1,0 +1,156 @@
+package metrics
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
+)
+
+func listKinds() map[schema.GroupVersionResource]string {
+	return map[schema.GroupVersionResource]string{
+		podMetricsGVR:  "PodMetricsList",
+		nodeMetricsGVR: "NodeMetricsList",
+		nodeGVR:        "NodeList",
+	}
+}
+
+func obj(apiVersion, kind, name, namespace string, extra map[string]interface{}) *unstructured.Unstructured {
+	o := map[string]interface{}{
+		"apiVersion": apiVersion,
+		"kind":       kind,
+		"metadata":   map[string]interface{}{"name": name, "namespace": namespace},
+	}
+	for k, v := range extra {
+		o[k] = v
+	}
+	return &unstructured.Unstructured{Object: o}
+}
+
+func create(t *testing.T, dyn *fake.FakeDynamicClient, gvr schema.GroupVersionResource, ns string, o *unstructured.Unstructured) {
+	t.Helper()
+	var err error
+	if ns == "" {
+		_, err = dyn.Resource(gvr).Create(context.Background(), o, metav1.CreateOptions{})
+	} else {
+		_, err = dyn.Resource(gvr).Namespace(ns).Create(context.Background(), o, metav1.CreateOptions{})
+	}
+	if err != nil {
+		t.Fatalf("create %s/%s: %v", gvr.Resource, o.GetName(), err)
+	}
+}
+
+func seed(t *testing.T) *fake.FakeDynamicClient {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, listKinds())
+	create(t, dyn, podMetricsGVR, "prod", obj("metrics.k8s.io/v1beta1", "PodMetrics", "web", "prod", map[string]interface{}{
+		"containers": []interface{}{
+			"not-a-map",
+			map[string]interface{}{"name": "no-usage"},
+			map[string]interface{}{"name": "a", "usage": map[string]interface{}{"cpu": "100m", "memory": "128Mi"}},
+			map[string]interface{}{"name": "b", "usage": map[string]interface{}{"cpu": "50m", "memory": "64Mi"}},
+		},
+	}))
+	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n1", "", map[string]interface{}{
+		"usage": map[string]interface{}{"cpu": "1500m", "memory": "2048Mi"},
+	}))
+	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n2", "", map[string]interface{}{
+		"usage": map[string]interface{}{"cpu": "500m", "memory": "512Mi"},
+	}))
+	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n-nousage", "", map[string]interface{}{}))
+	create(t, dyn, nodeGVR, "", obj("v1", "Node", "n1", "", map[string]interface{}{
+		"status": map[string]interface{}{"allocatable": map[string]interface{}{"cpu": "4", "memory": "8192Mi"}},
+	}))
+	create(t, dyn, nodeGVR, "", obj("v1", "Node", "n3", "", map[string]interface{}{
+		"status": map[string]interface{}{},
+	}))
+	return dyn
+}
+
+func TestBuild(t *testing.T) {
+	m := Build(context.Background(), seed(t))
+
+	web := m.Pods["prod/web"]
+	if web.CPUMilli != 150 || web.MemoryMi != 192 {
+		t.Fatalf("pod web = %+v, want cpu 150 mem 192", web)
+	}
+
+	if len(m.Nodes) != 2 {
+		t.Fatalf("nodes = %d, want 2 (n-nousage skipped)", len(m.Nodes))
+	}
+	n1 := m.Nodes["n1"]
+	if n1.CPUMilli != 1500 || n1.MemoryMi != 2048 || n1.CPUPercent != 37 || n1.MemPercent != 25 {
+		t.Fatalf("node n1 = %+v", n1)
+	}
+	n2 := m.Nodes["n2"]
+	if n2.CPUMilli != 500 || n2.CPUPercent != 0 || n2.MemPercent != 0 {
+		t.Fatalf("node n2 = %+v, want no percent", n2)
+	}
+}
+
+func TestBuildListErrors(t *testing.T) {
+	scheme := runtime.NewScheme()
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, listKinds())
+	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("pods list failed")
+	})
+	dyn.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("nodes list failed")
+	})
+	m := Build(context.Background(), dyn)
+	if len(m.Pods) != 0 {
+		t.Fatalf("pods = %d, want 0", len(m.Pods))
+	}
+	if len(m.Nodes) != 0 {
+		t.Fatalf("nodes = %d, want 0", len(m.Nodes))
+	}
+}
+
+func TestNodeAllocatableListError(t *testing.T) {
+	dyn := seed(t)
+	dyn.PrependReactor("list", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetResource().Group == "" {
+			return true, nil, errors.New("core nodes list failed")
+		}
+		return false, nil, nil
+	})
+	m := Build(context.Background(), dyn)
+	n1 := m.Nodes["n1"]
+	if n1.CPUMilli != 1500 || n1.CPUPercent != 0 {
+		t.Fatalf("node n1 = %+v, want usage without percent", n1)
+	}
+}
+
+func TestQuantityHelpers(t *testing.T) {
+	if got := milli(map[string]interface{}{"cpu": "250m"}, "cpu"); got != 250 {
+		t.Fatalf("milli valid = %d, want 250", got)
+	}
+	if got := mebi(map[string]interface{}{"memory": "512Mi"}, "memory"); got != 512 {
+		t.Fatalf("mebi valid = %d, want 512", got)
+	}
+	if got := milli(map[string]interface{}{"cpu": 5}, "cpu"); got != 0 {
+		t.Fatalf("milli non-string = %d, want 0", got)
+	}
+	if got := mebi(map[string]interface{}{"memory": "bad"}, "memory"); got != 0 {
+		t.Fatalf("mebi parse error = %d, want 0", got)
+	}
+	if got := milli(map[string]interface{}{}, "cpu"); got != 0 {
+		t.Fatalf("milli missing = %d, want 0", got)
+	}
+}
+
+func TestPercent(t *testing.T) {
+	if got := percent(50, 200); got != 25 {
+		t.Fatalf("percent(50,200) = %d, want 25", got)
+	}
+	if got := percent(5, 0); got != 0 {
+		t.Fatalf("percent(5,0) = %d, want 0", got)
+	}
+}

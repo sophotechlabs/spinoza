@@ -78,6 +78,18 @@ export interface FluxDashboard {
   groups: FluxGroup[];
 }
 
+export interface ResourceUsage {
+  cpuMilli: number;
+  memoryMi: number;
+  cpuPercent: number;
+  memPercent: number;
+}
+
+export interface Metrics {
+  pods: Record<string, ResourceUsage>;
+  nodes: Record<string, ResourceUsage>;
+}
+
 export type GraphNodeCategory = 'source' | 'applier' | 'app' | 'managed';
 
 export interface GraphNode {

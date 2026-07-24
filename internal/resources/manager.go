@@ -17,6 +17,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
+	"github.com/sophotechlabs/spinoza/internal/metrics"
 )
 
 type Event struct {
@@ -66,6 +67,10 @@ func (m *Manager) Graph(ctx context.Context) api.Graph {
 
 func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
 	return flux.Build(ctx, m.dyn, m.descs)
+}
+
+func (m *Manager) Metrics(ctx context.Context) api.Metrics {
+	return metrics.Build(ctx, m.dyn)
 }
 
 type streamKey struct {

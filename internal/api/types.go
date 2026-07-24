@@ -100,3 +100,15 @@ type FluxGroup struct {
 type FluxDashboard struct {
 	Groups []FluxGroup `json:"groups"`
 }
+
+type ResourceUsage struct {
+	CPUMilli   int64 `json:"cpuMilli"`
+	MemoryMi   int64 `json:"memoryMi"`
+	CPUPercent int64 `json:"cpuPercent"`
+	MemPercent int64 `json:"memPercent"`
+}
+
+type Metrics struct {
+	Pods  map[string]ResourceUsage `json:"pods"`
+	Nodes map[string]ResourceUsage `json:"nodes"`
+}

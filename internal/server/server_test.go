@@ -360,6 +360,36 @@ func TestFluxEndpoint(t *testing.T) {
 	}
 }
 
+func TestMetricsEndpoint(t *testing.T) {
+	scheme := runtime.NewScheme()
+	kinds := map[schema.GroupVersionResource]string{
+		{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "pods"}:  "PodMetricsList",
+		{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "nodes"}: "NodeMetricsList",
+		{Group: "", Version: "v1", Resource: "nodes"}:                    "NodeList",
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := resources.NewManager(ctx, dyn, nil, nil)
+	srv := New(mgr, testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/metrics")
+	if err != nil {
+		t.Fatalf("GET /api/metrics: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var m api.Metrics
+	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+}
+
 func TestEventToMsgDeleted(t *testing.T) {
 	msg := eventToMsg("sub-1", resources.Event{Kind: "deleted", UID: "uid-1"})
 	if msg.Type != "deleted" {

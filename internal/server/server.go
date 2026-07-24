@@ -23,6 +23,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/resources", cors(s.handleResources))
 	mux.HandleFunc("/api/gitops/graph", cors(s.handleGraph))
 	mux.HandleFunc("/api/flux", cors(s.handleFlux))
+	mux.HandleFunc("/api/metrics", cors(s.handleMetrics))
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.Handle("/", http.FileServerFS(s.assets))
 	return mux
@@ -59,4 +60,9 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFlux(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(s.mgr.Flux(r.Context()))
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(s.mgr.Metrics(r.Context()))
 }

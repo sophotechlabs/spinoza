@@ -218,6 +218,27 @@ func TestManagerFlux(t *testing.T) {
 	}
 }
 
+func TestManagerMetrics(t *testing.T) {
+	scheme := runtime.NewScheme()
+	kinds := map[schema.GroupVersionResource]string{
+		{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "pods"}:  "PodMetricsList",
+		{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "nodes"}: "NodeMetricsList",
+		{Group: "", Version: "v1", Resource: "nodes"}:                    "NodeList",
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mgr := NewManager(ctx, dyn, nil, nil)
+
+	m := mgr.Metrics(ctx)
+	if len(m.Pods) != 0 {
+		t.Fatalf("pods = %d, want 0", len(m.Pods))
+	}
+	if len(m.Nodes) != 0 {
+		t.Fatalf("nodes = %d, want 0", len(m.Nodes))
+	}
+}
+
 func TestResources(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
