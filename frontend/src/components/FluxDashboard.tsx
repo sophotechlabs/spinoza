@@ -7,9 +7,18 @@ import {
 } from '@tanstack/react-table';
 import type { FluxDashboard as FluxDashboardData, FluxResource } from '../lib/types';
 import { fetchFlux } from '../lib/flux';
+import { useElementWidth } from '../lib/useElementWidth';
 
 const POLL_INTERVAL_MS = 5000;
 const EMPTY: FluxResource[] = [];
+const FLEX_COLUMN_IDS = new Set(['name', 'revision']);
+
+function columnWidth(id: string, base: number, perFlex: number): number {
+  if (FLEX_COLUMN_IDS.has(id)) {
+    return base + perFlex;
+  }
+  return base;
+}
 
 const columnHelper = createColumnHelper<FluxResource>();
 
@@ -116,6 +125,8 @@ function ResourceRow({ resource }: { resource: FluxResource }) {
 export default function FluxDashboard() {
   const [data, setData] = useState<FluxDashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const containerWidth = useElementWidth(scrollEl);
 
   const table = useReactTable({
     data: EMPTY,
@@ -172,16 +183,25 @@ export default function FluxDashboard() {
   }
 
   const columnCount = COLUMNS.length;
+  const totalSize = table.getTotalSize();
+  const flexCount = table
+    .getVisibleLeafColumns()
+    .filter((column) => FLEX_COLUMN_IDS.has(column.id)).length;
+  const perFlex = Math.max(0, containerWidth - totalSize) / Math.max(1, flexCount);
+  const tableWidth = Math.max(containerWidth, totalSize);
 
   return (
-    <div className="h-full overflow-auto">
+    <div ref={setScrollEl} className="h-full overflow-auto">
       <table
         className="table-fixed border-collapse text-left text-xs whitespace-nowrap"
-        style={{ width: `${table.getTotalSize()}px` }}
+        style={{ width: `${tableWidth}px` }}
       >
         <colgroup>
           {table.getVisibleLeafColumns().map((column) => (
-            <col key={column.id} style={{ width: `${column.getSize()}px` }} />
+            <col
+              key={column.id}
+              style={{ width: `${columnWidth(column.id, column.getSize(), perFlex)}px` }}
+            />
           ))}
         </colgroup>
         <thead className="sticky top-0 z-10 bg-neutral-950 text-neutral-500">
@@ -190,7 +210,7 @@ export default function FluxDashboard() {
               <th
                 key={header.id}
                 className="relative px-2 py-1 font-normal"
-                style={{ width: `${header.getSize()}px` }}
+                style={{ width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px` }}
               >
                 {flexRender(header.column.columnDef.header, header.getContext())}
                 <div
