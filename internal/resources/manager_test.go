@@ -126,6 +126,54 @@ func streamCount(m *Manager) int {
 	return len(m.streams)
 }
 
+func TestManagerGraph(t *testing.T) {
+	gitRepoGVR := schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}
+	scheme := runtime.NewScheme()
+	kinds := map[schema.GroupVersionResource]string{gitRepoGVR: "GitRepositoryList"}
+	repo := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "GitRepository",
+		"metadata": map[string]interface{}{
+			"name":      "app-repo",
+			"namespace": "flux-system",
+		},
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
+			},
+		},
+	}}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds, repo)
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("source.toolkit.fluxcd.io", "v1", "gitrepositories"): {
+			Group:      "source.toolkit.fluxcd.io",
+			Version:    "v1",
+			Resource:   "gitrepositories",
+			Kind:       "GitRepository",
+			Namespaced: true,
+			Category:   "Custom Resources",
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mgr := NewManager(ctx, dyn, nil, descs)
+
+	graph := mgr.Graph(ctx)
+	if len(graph.Nodes) != 1 {
+		t.Fatalf("nodes = %d, want 1", len(graph.Nodes))
+	}
+	node := graph.Nodes[0]
+	if node.ID != "source.toolkit.fluxcd.io/GitRepository/flux-system/app-repo" {
+		t.Fatalf("id = %q, want the GitRepository node", node.ID)
+	}
+	if node.Category != "source" {
+		t.Fatalf("category = %q, want source", node.Category)
+	}
+	if node.Status != "Ready" {
+		t.Fatalf("status = %q, want Ready", node.Status)
+	}
+}
+
 func TestResources(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()

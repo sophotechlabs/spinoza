@@ -169,6 +169,107 @@ func TestResourcesEndpoint(t *testing.T) {
 	}
 }
 
+func fluxGitRepo() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "GitRepository",
+		"metadata": map[string]interface{}{
+			"name":      "app-repo",
+			"namespace": "flux-system",
+		},
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
+			},
+		},
+	}}
+}
+
+func fluxKustomization() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata": map[string]interface{}{
+			"name":      "apps",
+			"namespace": "flux-system",
+		},
+		"spec": map[string]interface{}{
+			"sourceRef": map[string]interface{}{
+				"kind": "GitRepository",
+				"name": "app-repo",
+			},
+		},
+	}}
+}
+
+func TestGraphEndpoint(t *testing.T) {
+	gitRepoGVR := schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}
+	kustGVR := schema.GroupVersionResource{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Resource: "kustomizations"}
+	scheme := runtime.NewScheme()
+	kinds := map[schema.GroupVersionResource]string{
+		gitRepoGVR: "GitRepositoryList",
+		kustGVR:    "KustomizationList",
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds, fluxGitRepo(), fluxKustomization())
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("source.toolkit.fluxcd.io", "v1", "gitrepositories"): {
+			Group:      "source.toolkit.fluxcd.io",
+			Version:    "v1",
+			Resource:   "gitrepositories",
+			Kind:       "GitRepository",
+			Namespaced: true,
+			Category:   "Custom Resources",
+		},
+		discovery.Key("kustomize.toolkit.fluxcd.io", "v1", "kustomizations"): {
+			Group:      "kustomize.toolkit.fluxcd.io",
+			Version:    "v1",
+			Resource:   "kustomizations",
+			Kind:       "Kustomization",
+			Namespaced: true,
+			Category:   "Custom Resources",
+		},
+	}
+	mgr := resources.NewManager(ctx, dyn, nil, descs)
+	srv := New(mgr, testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/gitops/graph")
+	if err != nil {
+		t.Fatalf("GET /api/gitops/graph: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if resp.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", resp.Header.Get("Content-Type"))
+	}
+	var graph api.Graph
+	if err := json.NewDecoder(resp.Body).Decode(&graph); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(graph.Nodes) != 2 {
+		t.Fatalf("nodes = %d, want 2", len(graph.Nodes))
+	}
+	if len(graph.Edges) != 1 {
+		t.Fatalf("edges = %d, want 1", len(graph.Edges))
+	}
+	edge := graph.Edges[0]
+	if edge.Kind != "source" {
+		t.Fatalf("edge kind = %q, want source", edge.Kind)
+	}
+	if edge.From != "source.toolkit.fluxcd.io/GitRepository/flux-system/app-repo" {
+		t.Fatalf("edge from = %q, want the GitRepository node", edge.From)
+	}
+	if edge.To != "kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps" {
+		t.Fatalf("edge to = %q, want the Kustomization node", edge.To)
+	}
+}
+
 func TestEventToMsgDeleted(t *testing.T) {
 	msg := eventToMsg("sub-1", resources.Event{Kind: "deleted", UID: "uid-1"})
 	if msg.Type != "deleted" {

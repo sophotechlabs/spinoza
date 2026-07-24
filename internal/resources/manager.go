@@ -15,6 +15,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/gitops"
 )
 
 type Event struct {
@@ -56,6 +57,10 @@ func NewManager(ctx context.Context, dyn dynamic.Interface, cats []api.Category,
 
 func (m *Manager) Resources() []api.Category {
 	return m.cats
+}
+
+func (m *Manager) Graph(ctx context.Context) api.Graph {
+	return gitops.Build(ctx, m.dyn, m.descs)
 }
 
 type streamKey struct {
