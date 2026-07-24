@@ -8,7 +8,7 @@ import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'coverage', 'html', 'node_modules'],
+    ignores: ['dist', 'coverage', 'html', 'node_modules', 'wailsjs'],
   },
   {
     files: ['**/*.{ts,tsx}'],

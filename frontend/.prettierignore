@@ -4,3 +4,4 @@ coverage
 html
 package-lock.json
 ../web/dist
+wailsjs
