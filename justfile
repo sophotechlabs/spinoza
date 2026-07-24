@@ -19,6 +19,9 @@ run: build
 build-desktop:
     wails build -tags desktop -skipbindings
 
+rund: build-desktop
+    open build/bin/spinoza.app
+
 dev-desktop:
     wails dev -tags desktop -skipbindings
 
