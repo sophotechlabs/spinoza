@@ -1,0 +1,217 @@
+package inspect
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	k8stesting "k8s.io/client-go/testing"
+)
+
+func newEvent(name string, fields map[string]interface{}) *unstructured.Unstructured {
+	obj := map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Event",
+		"metadata": map[string]interface{}{
+			"name":      name,
+			"namespace": "flux-system",
+		},
+		"involvedObject": map[string]interface{}{"uid": "pod-uid"},
+	}
+	for k, v := range fields {
+		obj[k] = v
+	}
+	return &unstructured.Unstructured{Object: obj}
+}
+
+func TestEventsMapsAndSortsNewestFirst(t *testing.T) {
+	older := newEvent("older", map[string]interface{}{
+		"type":           "Normal",
+		"reason":         "Pulled",
+		"message":        "image pulled",
+		"count":          int64(2),
+		"firstTimestamp": "2026-07-27T08:00:00Z",
+		"lastTimestamp":  "2026-07-27T08:30:00Z",
+		"source":         map[string]interface{}{"component": "kubelet"},
+	})
+	newer := newEvent("newer", map[string]interface{}{
+		"type":           "Warning",
+		"reason":         "BackOff",
+		"message":        "restarting",
+		"count":          int64(7),
+		"firstTimestamp": "2026-07-27T09:00:00Z",
+		"lastTimestamp":  "2026-07-27T09:30:00Z",
+		"source":         map[string]interface{}{"component": "kubelet"},
+	})
+
+	events := Events(context.Background(), newClient(older, newer), "flux-system", "pod-uid")
+
+	if len(events) != 2 {
+		t.Fatalf("events = %d, want 2", len(events))
+	}
+	if events[0].Reason != "BackOff" {
+		t.Fatalf("first reason = %q, want BackOff (newest first)", events[0].Reason)
+	}
+	if events[0].Type != "Warning" {
+		t.Fatalf("type = %q, want Warning", events[0].Type)
+	}
+	if events[0].Message != "restarting" {
+		t.Fatalf("message = %q", events[0].Message)
+	}
+	if events[0].Source != "kubelet" {
+		t.Fatalf("source = %q, want kubelet", events[0].Source)
+	}
+	if events[0].Count != 7 {
+		t.Fatalf("count = %d, want 7", events[0].Count)
+	}
+	if events[0].FirstSeen != "2026-07-27T09:00:00Z" {
+		t.Fatalf("firstSeen = %q", events[0].FirstSeen)
+	}
+	if events[0].LastSeen != "2026-07-27T09:30:00Z" {
+		t.Fatalf("lastSeen = %q", events[0].LastSeen)
+	}
+}
+
+func TestEventsSendsUIDFieldSelector(t *testing.T) {
+	client := newClient()
+	selector := ""
+	client.PrependReactor("list", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		list, ok := action.(k8stesting.ListAction)
+		if ok {
+			selector = list.GetListRestrictions().Fields.String()
+		}
+		return false, nil, nil
+	})
+
+	Events(context.Background(), client, "flux-system", "pod-uid")
+
+	if selector != "involvedObject.uid=pod-uid" {
+		t.Fatalf("field selector = %q, want involvedObject.uid=pod-uid", selector)
+	}
+}
+
+func TestEventsWithoutNamespaceListsClusterWide(t *testing.T) {
+	client := newClient()
+	namespace := "unset"
+	client.PrependReactor("list", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		namespace = action.GetNamespace()
+		return false, nil, nil
+	})
+
+	Events(context.Background(), client, "", "node-uid")
+
+	if namespace != "" {
+		t.Fatalf("namespace = %q, want empty for a cluster-wide list", namespace)
+	}
+}
+
+func TestEventsEmptyWithoutUID(t *testing.T) {
+	events := Events(context.Background(), newClient(), "flux-system", "")
+	if len(events) != 0 {
+		t.Fatalf("events = %d, want 0", len(events))
+	}
+}
+
+func TestEventsEmptyOnListError(t *testing.T) {
+	client := newClient()
+	client.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("boom")
+	})
+
+	events := Events(context.Background(), client, "flux-system", "pod-uid")
+
+	if len(events) != 0 {
+		t.Fatalf("events = %d, want 0", len(events))
+	}
+}
+
+func TestEventCountFallsBackToSeries(t *testing.T) {
+	event := newEvent("series", map[string]interface{}{
+		"series":    map[string]interface{}{"count": int64(4), "lastObservedTime": "2026-07-27T11:00:00Z"},
+		"eventTime": "2026-07-27T10:00:00Z",
+	})
+
+	events := Events(context.Background(), newClient(event), "flux-system", "pod-uid")
+
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1", len(events))
+	}
+	if events[0].Count != 4 {
+		t.Fatalf("count = %d, want 4", events[0].Count)
+	}
+	if events[0].LastSeen != "2026-07-27T11:00:00Z" {
+		t.Fatalf("lastSeen = %q, want the series observation time", events[0].LastSeen)
+	}
+}
+
+func TestEventCountDefaultsToOne(t *testing.T) {
+	event := newEvent("bare", map[string]interface{}{
+		"eventTime":          "2026-07-27T10:00:00Z",
+		"reportingComponent": "kustomize-controller",
+	})
+
+	events := Events(context.Background(), newClient(event), "flux-system", "pod-uid")
+
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1", len(events))
+	}
+	if events[0].Count != 1 {
+		t.Fatalf("count = %d, want 1", events[0].Count)
+	}
+	if events[0].Source != "kustomize-controller" {
+		t.Fatalf("source = %q, want the reporting component", events[0].Source)
+	}
+	if events[0].LastSeen != "2026-07-27T10:00:00Z" {
+		t.Fatalf("lastSeen = %q, want the event time", events[0].LastSeen)
+	}
+}
+
+func TestEventLastSeenEmptyWhenNoTimestamps(t *testing.T) {
+	events := Events(context.Background(), newClient(newEvent("bare", nil)), "flux-system", "pod-uid")
+
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1", len(events))
+	}
+	if events[0].LastSeen != "" {
+		t.Fatalf("lastSeen = %q, want empty", events[0].LastSeen)
+	}
+}
+
+func TestEventsSortMixesTimestampPrecision(t *testing.T) {
+	secondPrecision := newEvent("second", map[string]interface{}{
+		"reason":        "Pulled",
+		"lastTimestamp": "2026-07-27T09:34:00Z",
+	})
+	subSecond := newEvent("sub-second", map[string]interface{}{
+		"reason":    "Scheduled",
+		"eventTime": "2026-07-27T09:34:00.546384Z",
+	})
+
+	events := Events(context.Background(), newClient(secondPrecision, subSecond), "flux-system", "pod-uid")
+
+	if len(events) != 2 {
+		t.Fatalf("events = %d, want 2", len(events))
+	}
+	if events[0].Reason != "Scheduled" {
+		t.Fatalf("first reason = %q, want Scheduled (the later sub-second stamp)", events[0].Reason)
+	}
+}
+
+func TestEventsSortKeepsUnparseableStampsLast(t *testing.T) {
+	good := newEvent("good", map[string]interface{}{
+		"reason":        "Pulled",
+		"lastTimestamp": "2026-07-27T09:34:00Z",
+	})
+	bad := newEvent("bad", map[string]interface{}{"reason": "Broken"})
+
+	events := Events(context.Background(), newClient(good, bad), "flux-system", "pod-uid")
+
+	if len(events) != 2 {
+		t.Fatalf("events = %d, want 2", len(events))
+	}
+	if events[0].Reason != "Pulled" {
+		t.Fatalf("first reason = %q, want Pulled", events[0].Reason)
+	}
+}

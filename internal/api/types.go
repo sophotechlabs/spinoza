@@ -37,6 +37,53 @@ type Row struct {
 	Containers []ContainerState `json:"containers,omitempty"`
 }
 
+type ObjectRef struct {
+	Group     string `json:"group"`
+	Version   string `json:"version"`
+	Resource  string `json:"resource"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+type OwnerRef struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+	UID  string `json:"uid"`
+}
+
+type Condition struct {
+	Type    string `json:"type"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason,omitempty"`
+	Message string `json:"message,omitempty"`
+	Updated string `json:"updated,omitempty"`
+}
+
+type ObjectDetail struct {
+	APIVersion  string            `json:"apiVersion"`
+	Kind        string            `json:"kind"`
+	Name        string            `json:"name"`
+	Namespace   string            `json:"namespace"`
+	UID         string            `json:"uid"`
+	CreatedAt   string            `json:"createdAt"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Owners      []OwnerRef        `json:"owners,omitempty"`
+	Conditions  []Condition       `json:"conditions,omitempty"`
+	Containers  []string          `json:"containers,omitempty"`
+	YAML        string            `json:"yaml"`
+}
+
+type Event struct {
+	Type      string `json:"type"`
+	Reason    string `json:"reason"`
+	Message   string `json:"message"`
+	Source    string `json:"source"`
+	Count     int64  `json:"count"`
+	FirstSeen string `json:"firstSeen"`
+	LastSeen  string `json:"lastSeen"`
+}
+
 type ClientMsg struct {
 	Type      string `json:"type"`
 	SubID     string `json:"subId"`
@@ -44,6 +91,10 @@ type ClientMsg struct {
 	Version   string `json:"version"`
 	Resource  string `json:"resource"`
 	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Container string `json:"container"`
+	TailLines int64  `json:"tailLines"`
+	Follow    bool   `json:"follow"`
 }
 
 type ServerMsg struct {
@@ -54,6 +105,7 @@ type ServerMsg struct {
 	Rows       []Row    `json:"rows,omitempty"`
 	Row        *Row     `json:"row,omitempty"`
 	UID        string   `json:"uid,omitempty"`
+	Lines      []string `json:"lines,omitempty"`
 	Message    string   `json:"message,omitempty"`
 }
 
@@ -61,6 +113,8 @@ type GraphNode struct {
 	ID        string `json:"id"`
 	Kind      string `json:"kind"`
 	Group     string `json:"group"`
+	Version   string `json:"version"`
+	Resource  string `json:"resource"`
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 	Status    string `json:"status"`
@@ -80,6 +134,9 @@ type Graph struct {
 
 type FluxResource struct {
 	Kind      string `json:"kind"`
+	Group     string `json:"group"`
+	Version   string `json:"version"`
+	Resource  string `json:"resource"`
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 	Ready     string `json:"ready"`
