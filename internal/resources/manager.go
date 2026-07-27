@@ -11,12 +11,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
+	"github.com/sophotechlabs/spinoza/internal/inspect"
+	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
 )
 
@@ -41,16 +44,18 @@ func (s *Subscription) Close() {
 type Manager struct {
 	rootCtx context.Context
 	dyn     dynamic.Interface
+	cs      kubernetes.Interface
 	cats    []api.Category
 	descs   map[string]api.ResourceDescriptor
 	mu      sync.Mutex
 	streams map[streamKey]*stream
 }
 
-func NewManager(ctx context.Context, dyn dynamic.Interface, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
+func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
 	return &Manager{
 		rootCtx: ctx,
 		dyn:     dyn,
+		cs:      cs,
 		cats:    cats,
 		descs:   descs,
 		streams: map[streamKey]*stream{},
@@ -59,6 +64,26 @@ func NewManager(ctx context.Context, dyn dynamic.Interface, cats []api.Category,
 
 func (m *Manager) Resources() []api.Category {
 	return m.cats
+}
+
+func (m *Manager) Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDetail, error) {
+	return inspect.Get(ctx, m.dyn, ref)
+}
+
+func (m *Manager) ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error) {
+	return inspect.Apply(ctx, m.dyn, ref, doc)
+}
+
+func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef) error {
+	return inspect.Delete(ctx, m.dyn, ref)
+}
+
+func (m *Manager) Events(ctx context.Context, namespace, uid string) []api.Event {
+	return inspect.Events(ctx, m.dyn, namespace, uid)
+}
+
+func (m *Manager) Logs(ctx context.Context, req logs.Request) (*logs.Stream, error) {
+	return logs.Open(ctx, m.cs, req)
 }
 
 func (m *Manager) Graph(ctx context.Context) api.Graph {

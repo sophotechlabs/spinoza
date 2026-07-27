@@ -10,8 +10,11 @@ import (
 	"github.com/coder/websocket/wsjson"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
+
+const maxLogBatch = 200
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -30,6 +33,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		ctx:  ctx,
 		mgr:  s.mgr,
 		subs: map[string]*resources.Subscription{},
+		logs: map[string]*logs.Stream{},
 	}
 	defer sess.closeAll()
 
@@ -48,6 +52,7 @@ type wsSession struct {
 	mgr  *resources.Manager
 	mu   sync.Mutex
 	subs map[string]*resources.Subscription
+	logs map[string]*logs.Stream
 }
 
 func (sess *wsSession) handle(msg api.ClientMsg) {
@@ -56,6 +61,10 @@ func (sess *wsSession) handle(msg api.ClientMsg) {
 		sess.subscribe(msg)
 	case "unsubscribe":
 		sess.unsubscribe(msg.SubID)
+	case "logs-subscribe":
+		sess.subscribeLogs(msg)
+	case "logs-unsubscribe":
+		sess.unsubscribeLogs(msg.SubID)
 	}
 }
 
@@ -107,16 +116,87 @@ func (sess *wsSession) unsubscribe(subID string) {
 	}
 }
 
+func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
+	sess.unsubscribeLogs(msg.SubID)
+	stream, err := sess.mgr.Logs(sess.ctx, logs.Request{
+		Namespace: msg.Namespace,
+		Name:      msg.Name,
+		Container: msg.Container,
+		TailLines: msg.TailLines,
+		Follow:    msg.Follow,
+	})
+	if err != nil {
+		sess.write(api.ServerMsg{Type: "error", SubID: msg.SubID, Message: err.Error()})
+		return
+	}
+	sess.mu.Lock()
+	sess.logs[msg.SubID] = stream
+	sess.mu.Unlock()
+
+	go sess.relayLogs(msg.SubID, stream)
+}
+
+func (sess *wsSession) relayLogs(subID string, stream *logs.Stream) {
+	for {
+		select {
+		case <-sess.ctx.Done():
+			return
+		case line, ok := <-stream.Lines:
+			if !ok {
+				sess.write(api.ServerMsg{Type: "log-end", SubID: subID})
+				return
+			}
+			sess.write(api.ServerMsg{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)})
+		}
+	}
+}
+
+func batchLines(lines <-chan string, first string) []string {
+	batch := []string{first}
+	for len(batch) < maxLogBatch {
+		select {
+		case line, ok := <-lines:
+			if !ok {
+				return batch
+			}
+			batch = append(batch, line)
+		default:
+			return batch
+		}
+	}
+	return batch
+}
+
+func (sess *wsSession) unsubscribeLogs(subID string) {
+	sess.mu.Lock()
+	stream, ok := sess.logs[subID]
+	if ok {
+		delete(sess.logs, subID)
+	}
+	sess.mu.Unlock()
+	if ok {
+		stream.Close()
+	}
+}
+
 func (sess *wsSession) closeAll() {
 	sess.mu.Lock()
 	subs := make([]*resources.Subscription, 0, len(sess.subs))
 	for _, sub := range sess.subs {
 		subs = append(subs, sub)
 	}
+	streams := make([]*logs.Stream, 0, len(sess.logs))
+	for _, stream := range sess.logs {
+		streams = append(streams, stream)
+	}
 	sess.subs = map[string]*resources.Subscription{}
+	sess.logs = map[string]*logs.Stream{}
 	sess.mu.Unlock()
 	for _, sub := range subs {
 		sub.Close()
+	}
+	for _, stream := range streams {
+		stream.Close()
 	}
 }
 

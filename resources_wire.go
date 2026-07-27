@@ -19,5 +19,5 @@ func makeManager(ctx context.Context) *resources.Manager {
 		log.Printf("discovery (partial): %v", discErr)
 	}
 	log.Printf("spinoza connected to context %q — %d resource types, %d categories", bundle.Context, len(descs), len(cats))
-	return resources.NewManager(ctx, bundle.Dynamic, cats, descs)
+	return resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, cats, descs)
 }
