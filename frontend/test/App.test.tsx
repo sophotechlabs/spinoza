@@ -61,6 +61,14 @@ vi.mock('../src/components/FluxDashboard', () => ({
   default: () => <div data-testid="flux-dashboard" />,
 }));
 
+vi.mock('../src/components/FluxTiles', () => ({
+  default: () => <div data-testid="flux-tiles" />,
+}));
+
+vi.mock('../src/components/FluxResources', () => ({
+  default: () => <div data-testid="flux-resources" />,
+}));
+
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
@@ -99,6 +107,10 @@ function resetStore(): void {
   useResourcesStore.setState({ subs: new Map() });
 }
 
+async function expandWorkloads(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.click(await screen.findByRole('button', { name: /Workloads/ }));
+}
+
 describe('App', () => {
   beforeEach(() => {
     resetStore();
@@ -128,6 +140,7 @@ describe('App', () => {
       ]);
     const user = userEvent.setup();
     render(<App />);
+    await expandWorkloads(user);
     await user.click(await screen.findByRole('button', { name: 'Pod' }));
     expect(feedMocks.subscribe).toHaveBeenCalledWith('main', podDescriptor, '');
     expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
@@ -142,6 +155,7 @@ describe('App', () => {
       ]);
     const user = userEvent.setup();
     render(<App />);
+    await expandWorkloads(user);
     await user.click(await screen.findByRole('button', { name: 'Pod' }));
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
     const drawer = screen.getByRole('complementary');
@@ -153,6 +167,7 @@ describe('App', () => {
   it('unsubscribes the previous resource when switching resources', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandWorkloads(user);
     await user.click(await screen.findByRole('button', { name: 'Pod' }));
     feedMocks.unsubscribe.mockClear();
     await user.click(screen.getByRole('button', { name: 'Deployment' }));
@@ -177,7 +192,7 @@ describe('App', () => {
   it('switches to the gitops view and shows the graph', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
     expect(screen.getByTestId('gitops-graph')).toBeInTheDocument();
     expect(screen.getByText('Select a node to see details.')).toBeInTheDocument();
     expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
@@ -186,7 +201,7 @@ describe('App', () => {
   it('shows node details when a graph node is selected', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
     await user.click(screen.getByRole('button', { name: 'select-node' }));
     expect(screen.getByText('podinfo')).toBeInTheDocument();
     expect(screen.getByText('HelmRelease')).toBeInTheDocument();
@@ -195,7 +210,7 @@ describe('App', () => {
   it('clears the selected node when the node panel is closed', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
     await user.click(screen.getByRole('button', { name: 'select-node' }));
     expect(screen.getByText('podinfo')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Close' }));
@@ -211,11 +226,28 @@ describe('App', () => {
     expect(screen.queryByText('Select a node to see details.')).not.toBeInTheDocument();
   });
 
+  it('switches to the flux tiles view', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Flux Dashboard' }));
+    expect(screen.getByTestId('flux-tiles')).toBeInTheDocument();
+    expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
+  });
+
+  it('switches to the flux resources overview', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.getByTestId('flux-resources')).toBeInTheDocument();
+    expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
+  });
+
   it('returns to the resources view when a resource is selected', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
     expect(screen.getByTestId('gitops-graph')).toBeInTheDocument();
+    await expandWorkloads(user);
     await user.click(await screen.findByRole('button', { name: 'Pod' }));
     expect(screen.queryByTestId('gitops-graph')).not.toBeInTheDocument();
     expect(screen.getByText('Select a row to see details.')).toBeInTheDocument();

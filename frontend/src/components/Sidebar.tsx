@@ -8,6 +8,8 @@ interface SidebarProps {
   onSelect: (descriptor: ResourceDescriptor) => void;
   onSelectGitops: () => void;
   onSelectFlux: () => void;
+  onSelectTiles: () => void;
+  onSelectResources: () => void;
 }
 
 function descriptorKey(descriptor: ResourceDescriptor): string {
@@ -36,14 +38,6 @@ function resourceClass(active: boolean): string {
   return base;
 }
 
-function navClass(active: boolean, accent: string, accentActive: string): string {
-  const base = `block w-full border-b border-neutral-800 px-3 py-2 text-left text-sm ${accent} hover:bg-neutral-900`;
-  if (active) {
-    return `${base} bg-neutral-800 font-semibold ${accentActive}`;
-  }
-  return base;
-}
-
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
@@ -51,12 +45,17 @@ function errorMessage(err: unknown): string {
   return 'discovery request failed';
 }
 
+const sectionClass =
+  'flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase hover:text-neutral-200';
+
 export default function Sidebar({
   view,
   activeResource,
   onSelect,
   onSelectGitops,
   onSelectFlux,
+  onSelectTiles,
+  onSelectResources,
 }: SidebarProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -69,6 +68,7 @@ export default function Sidebar({
         const data = await fetchResources();
         if (mounted) {
           setCategories(data);
+          setCollapsed(new Set(data.map((category) => category.name)));
         }
       } catch (err: unknown) {
         if (mounted) {
@@ -94,23 +94,48 @@ export default function Sidebar({
     });
   }
 
+  const gitopsCollapsed = collapsed.has('GitOps');
+
   return (
     <nav className="w-56 shrink-0 overflow-y-auto border-r border-neutral-800 bg-neutral-950 py-2">
-      <div className="mb-2">
+      <div className="mb-1">
         <button
           type="button"
-          onClick={onSelectGitops}
-          className={navClass(view === 'gitops', 'text-emerald-400', 'text-emerald-300')}
+          onClick={() => {
+            toggle('GitOps');
+          }}
+          className={sectionClass}
         >
-          GitOps
+          <span>{chevron(gitopsCollapsed)} GitOps</span>
         </button>
-        <button
-          type="button"
-          onClick={onSelectFlux}
-          className={navClass(view === 'flux', 'text-sky-400', 'text-sky-300')}
-        >
-          Flux
-        </button>
+        {!gitopsCollapsed && (
+          <div>
+            <button
+              type="button"
+              onClick={onSelectGitops}
+              className={resourceClass(view === 'gitops')}
+            >
+              Graph
+            </button>
+            <button type="button" onClick={onSelectFlux} className={resourceClass(view === 'flux')}>
+              Flux
+            </button>
+            <button
+              type="button"
+              onClick={onSelectTiles}
+              className={resourceClass(view === 'flux-tiles')}
+            >
+              Flux Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={onSelectResources}
+              className={resourceClass(view === 'flux-resources')}
+            >
+              Overview
+            </button>
+          </div>
+        )}
       </div>
       {error !== null && <div className="px-3 py-1 text-[11px] text-red-400">{error}</div>}
       {categories.map((category) => {
@@ -122,7 +147,7 @@ export default function Sidebar({
               onClick={() => {
                 toggle(category.name);
               }}
-              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase hover:text-neutral-200"
+              className={sectionClass}
             >
               <span>
                 {chevron(isCollapsed)} {category.name}

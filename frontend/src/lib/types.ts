@@ -53,7 +53,7 @@ export type ServerMsg =
   | { type: 'deleted'; subId: string; uid: string }
   | { type: 'error'; subId: string; message: string };
 
-export type View = 'resources' | 'gitops' | 'flux';
+export type View = 'resources' | 'gitops' | 'flux' | 'flux-tiles' | 'flux-resources';
 
 export interface FluxResource {
   kind: string;

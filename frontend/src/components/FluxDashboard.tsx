@@ -1,15 +1,15 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import type { FluxDashboard as FluxDashboardData, FluxResource } from '../lib/types';
-import { fetchFlux } from '../lib/flux';
+import type { FluxResource } from '../lib/types';
+import { useFlux } from '../lib/flux';
+import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
 import { useElementWidth } from '../lib/useElementWidth';
 
-const POLL_INTERVAL_MS = 5000;
 const EMPTY: FluxResource[] = [];
 const FLEX_COLUMN_IDS = new Set(['name', 'revision']);
 
@@ -31,71 +31,6 @@ const COLUMNS = [
   columnHelper.display({ id: 'source', header: 'Source', size: 180 }),
   columnHelper.display({ id: 'created', header: 'Created', size: 90 }),
 ];
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'flux request failed';
-}
-
-function readyDot(ready: string): string {
-  if (ready === 'True') {
-    return 'bg-green-500';
-  }
-  if (ready === 'False') {
-    return 'bg-red-500';
-  }
-  return 'bg-neutral-500';
-}
-
-function readyText(ready: string): string {
-  if (ready === 'True') {
-    return 'text-green-400';
-  }
-  if (ready === 'False') {
-    return 'text-red-400';
-  }
-  return 'text-neutral-500';
-}
-
-function readyLabel(ready: string): string {
-  if (ready === 'True') {
-    return 'Ready';
-  }
-  if (ready === 'False') {
-    return 'Not ready';
-  }
-  return 'Unknown';
-}
-
-function statusDot(resource: FluxResource): string {
-  if (resource.suspended) {
-    return 'bg-amber-500';
-  }
-  return readyDot(resource.ready);
-}
-
-function statusText(resource: FluxResource): string {
-  if (resource.suspended) {
-    return 'text-amber-400';
-  }
-  return readyText(resource.ready);
-}
-
-function statusLabel(resource: FluxResource): string {
-  if (resource.suspended) {
-    return 'Suspended';
-  }
-  return readyLabel(resource.ready);
-}
-
-function created(createdAt: string): string {
-  if (createdAt === '') {
-    return '';
-  }
-  return createdAt.slice(0, 10);
-}
 
 function rowKey(resource: FluxResource): string {
   return `${resource.kind}/${resource.namespace}/${resource.name}`;
@@ -123,8 +58,7 @@ function ResourceRow({ resource }: { resource: FluxResource }) {
 }
 
 export default function FluxDashboard() {
-  const [data, setData] = useState<FluxDashboardData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error } = useFlux();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const containerWidth = useElementWidth(scrollEl);
 
@@ -135,31 +69,6 @@ export default function FluxDashboard() {
     defaultColumn: { minSize: 60 },
     getCoreRowModel: getCoreRowModel(),
   });
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const dash = await fetchFlux();
-        if (mounted) {
-          setData(dash);
-          setError(null);
-        }
-      } catch (err: unknown) {
-        if (mounted) {
-          setError(errorMessage(err));
-        }
-      }
-    };
-    void load();
-    const timer = setInterval(() => {
-      void load();
-    }, POLL_INTERVAL_MS);
-    return () => {
-      mounted = false;
-      clearInterval(timer);
-    };
-  }, []);
 
   if (data === null) {
     if (error !== null) {
