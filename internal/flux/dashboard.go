@@ -25,6 +25,7 @@ var sourceResources = map[string]bool{
 	"gitrepositories":  true,
 	"helmrepositories": true,
 	"ocirepositories":  true,
+	"helmcharts":       true,
 	"buckets":          true,
 }
 
