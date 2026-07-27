@@ -337,3 +337,62 @@ func TestContainerNamesEmptyWhenNoneNamed(t *testing.T) {
 }
 
 var _ dynamic.Interface = (*fake.FakeDynamicClient)(nil)
+
+func TestSuspendedReportsTheSpecField(t *testing.T) {
+	pod := newPod()
+	if err := unstructured.SetNestedField(pod.Object, true, "spec", "suspend"); err != nil {
+		t.Fatalf("set suspend: %v", err)
+	}
+
+	detail, err := Get(context.Background(), newClient(pod), podRef())
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Suspended == nil {
+		t.Fatalf("suspended = nil, want true")
+	}
+	if !*detail.Suspended {
+		t.Fatalf("suspended = false, want true")
+	}
+}
+
+func TestSuspendedDistinguishesFalseFromAbsent(t *testing.T) {
+	pod := newPod()
+	if err := unstructured.SetNestedField(pod.Object, false, "spec", "suspend"); err != nil {
+		t.Fatalf("set suspend: %v", err)
+	}
+
+	detail, err := Get(context.Background(), newClient(pod), podRef())
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Suspended == nil {
+		t.Fatalf("suspended = nil, want an explicit false")
+	}
+	if *detail.Suspended {
+		t.Fatalf("suspended = true, want false")
+	}
+
+	absent, absentErr := Get(context.Background(), newClient(newPod()), podRef())
+	if absentErr != nil {
+		t.Fatalf("get: %v", absentErr)
+	}
+	if absent.Suspended != nil {
+		t.Fatalf("suspended = %v, want nil when the field is absent", *absent.Suspended)
+	}
+}
+
+func TestSuspendedIgnoresNonBool(t *testing.T) {
+	pod := newPod()
+	if err := unstructured.SetNestedField(pod.Object, "yes", "spec", "suspend"); err != nil {
+		t.Fatalf("set suspend: %v", err)
+	}
+
+	detail, err := Get(context.Background(), newClient(pod), podRef())
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Suspended != nil {
+		t.Fatalf("suspended = %v, want nil for a non-bool field", *detail.Suspended)
+	}
+}

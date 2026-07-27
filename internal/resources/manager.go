@@ -90,6 +90,10 @@ func (m *Manager) Logs(ctx context.Context, req logs.Request) (*logs.Stream, err
 	return logs.Open(ctx, m.cs, req)
 }
 
+func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) error {
+	return flux.Do(ctx, m.dyn, ref, action, time.Now())
+}
+
 func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {
 	if m.schemas == nil {
 		return nil, fmt.Errorf("schemas unavailable")

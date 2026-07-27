@@ -84,6 +84,7 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		Owners:      ownersOf(clean),
 		Conditions:  conditionsOf(clean),
 		Containers:  containerNames(clean),
+		Suspended:   suspendedOf(clean),
 		YAML:        string(raw),
 	}, nil
 }
@@ -151,6 +152,14 @@ func transitionOf(m map[string]interface{}) string {
 		return v
 	}
 	return stringField(m, "lastUpdateTime")
+}
+
+func suspendedOf(u *unstructured.Unstructured) *bool {
+	value, found, err := unstructured.NestedBool(u.Object, "spec", "suspend")
+	if !found || err != nil {
+		return nil
+	}
+	return &value
 }
 
 func containerNames(u *unstructured.Unstructured) []string {

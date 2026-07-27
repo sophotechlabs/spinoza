@@ -71,6 +71,7 @@ type ObjectDetail struct {
 	Owners      []OwnerRef        `json:"owners,omitempty"`
 	Conditions  []Condition       `json:"conditions,omitempty"`
 	Containers  []string          `json:"containers,omitempty"`
+	Suspended   *bool             `json:"suspended,omitempty"`
 	YAML        string            `json:"yaml"`
 }
 

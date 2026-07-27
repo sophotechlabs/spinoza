@@ -6,11 +6,17 @@ import (
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/openapi"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/flux"
+	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 )
 
@@ -119,5 +125,90 @@ func TestManagerLogs(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("timed out waiting for a log line")
+	}
+}
+
+type stubGroupVersion struct{ doc string }
+
+func (s stubGroupVersion) Schema(string) ([]byte, error) { return []byte(s.doc), nil }
+
+func (s stubGroupVersion) ServerRelativeURL() string { return "" }
+
+type stubOpenAPI struct {
+	paths map[string]openapi.GroupVersion
+}
+
+func (s *stubOpenAPI) Paths() (map[string]openapi.GroupVersion, error) { return s.paths, nil }
+
+const podSchemaDoc = `{"components":{"schemas":{
+  "io.k8s.api.core.v1.Pod": {"x-kubernetes-group-version-kind": [{"group":"","kind":"Pod","version":"v1"}]}
+}}}`
+
+func TestManagerSchema(t *testing.T) {
+	schemas := jsonschema.NewClient(&stubOpenAPI{
+		paths: map[string]openapi.GroupVersion{"api/v1": stubGroupVersion{doc: podSchemaDoc}},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, newClient(t), k8sfake.NewClientset(), schemas, nil, testDescs())
+
+	raw, err := mgr.Schema(jsonschema.GVK{Version: "v1", Kind: "Pod"})
+	if err != nil {
+		t.Fatalf("schema: %v", err)
+	}
+	if !strings.Contains(string(raw), "io.k8s.api.core.v1.Pod") {
+		t.Fatalf("bundle = %s", raw)
+	}
+}
+
+func TestManagerSchemaWithoutASource(t *testing.T) {
+	mgr := inspectManager(t)
+
+	_, err := mgr.Schema(jsonschema.GVK{Version: "v1", Kind: "Pod"})
+
+	if err == nil {
+		t.Fatalf("expected an error when no schema source is configured")
+	}
+}
+
+func TestManagerFluxAction(t *testing.T) {
+	gvr := schema.GroupVersionResource{
+		Group:    "kustomize.toolkit.fluxcd.io",
+		Version:  "v1",
+		Resource: "kustomizations",
+	}
+	kustomization := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]interface{}{"name": "apps", "namespace": "flux-system"},
+		"spec":       map[string]interface{}{"suspend": false},
+	}}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{gvr: "KustomizationList"},
+		kustomization,
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, testDescs())
+	ref := api.ObjectRef{
+		Group:     "kustomize.toolkit.fluxcd.io",
+		Version:   "v1",
+		Resource:  "kustomizations",
+		Namespace: "flux-system",
+		Name:      "apps",
+	}
+
+	err := mgr.FluxAction(context.Background(), ref, flux.Suspend)
+	if err != nil {
+		t.Fatalf("flux action: %v", err)
+	}
+	got, getErr := dyn.Resource(gvr).Namespace("flux-system").Get(context.Background(), "apps", metav1.GetOptions{})
+	if getErr != nil {
+		t.Fatalf("read back: %v", getErr)
+	}
+	suspended, _, _ := unstructured.NestedBool(got.Object, "spec", "suspend")
+	if !suspended {
+		t.Fatalf("spec.suspend was not set")
 	}
 }

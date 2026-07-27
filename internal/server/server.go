@@ -9,6 +9,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
@@ -30,6 +31,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/resources", cors(s.handleResources))
 	mux.HandleFunc("/api/gitops/graph", cors(s.handleGraph))
 	mux.HandleFunc("/api/flux", cors(s.handleFlux))
+	mux.HandleFunc("/api/flux/action", cors(s.handleFluxAction))
 	mux.HandleFunc("/api/metrics", cors(s.handleMetrics))
 	mux.HandleFunc("/api/object", cors(s.handleObject))
 	mux.HandleFunc("/api/events", cors(s.handleEvents))
@@ -106,6 +108,24 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	writeJSON(w, s.mgr.Events(r.Context(), q.Get("namespace"), q.Get("uid")))
+}
+
+func (s *Server) handleFluxAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	ref := refFrom(r)
+	if ref.Version == "" || ref.Resource == "" || ref.Name == "" {
+		writeError(w, http.StatusBadRequest, "version, resource and name are required")
+		return
+	}
+	err := s.mgr.FluxAction(r.Context(), ref, flux.Action(r.URL.Query().Get("action")))
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
