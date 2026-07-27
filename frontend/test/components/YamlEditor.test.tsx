@@ -37,7 +37,14 @@ import YamlEditor from '../../src/components/YamlEditor';
 
 describe('YamlEditor', () => {
   it('renders yaml content in a read-write editor', () => {
-    render(<YamlEditor value="kind: Pod" readOnly={false} onChange={vi.fn()} />);
+    render(
+      <YamlEditor
+        value="kind: Pod"
+        path="spinoza/core/v1/Pod.yaml"
+        readOnly={false}
+        onChange={vi.fn()}
+      />,
+    );
 
     expect(screen.getByTestId('language')).toHaveTextContent('yaml');
     expect(screen.getByTestId('read-only')).toHaveTextContent('false');
@@ -45,7 +52,9 @@ describe('YamlEditor', () => {
   });
 
   it('passes the read-only flag through', () => {
-    render(<YamlEditor value="" readOnly={true} onChange={vi.fn()} />);
+    render(
+      <YamlEditor value="" path="spinoza/core/v1/Pod.yaml" readOnly={true} onChange={vi.fn()} />,
+    );
 
     expect(screen.getByTestId('read-only')).toHaveTextContent('true');
   });
@@ -53,7 +62,9 @@ describe('YamlEditor', () => {
   it('reports edits', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<YamlEditor value="" readOnly={false} onChange={onChange} />);
+    render(
+      <YamlEditor value="" path="spinoza/core/v1/Pod.yaml" readOnly={false} onChange={onChange} />,
+    );
 
     await user.type(screen.getByLabelText('yaml'), 'a');
 
@@ -63,7 +74,9 @@ describe('YamlEditor', () => {
   it('ignores an undefined value from the editor', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<YamlEditor value="" readOnly={false} onChange={onChange} />);
+    render(
+      <YamlEditor value="" path="spinoza/core/v1/Pod.yaml" readOnly={false} onChange={onChange} />,
+    );
 
     await user.click(screen.getByRole('button', { name: 'emit-undefined' }));
 

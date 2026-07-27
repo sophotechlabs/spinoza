@@ -22,7 +22,7 @@ vi.mock('@monaco-editor/react', () => ({
 }));
 
 import InspectYaml from '../../src/components/InspectYaml';
-import type { ObjectRef } from '../../src/lib/types';
+import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const target: ObjectRef = {
   group: 'apps',
@@ -34,11 +34,28 @@ const target: ObjectRef = {
 
 const YAML = 'kind: Deployment\n';
 
+function detailFor(yaml: string): ObjectDetail {
+  return {
+    apiVersion: 'apps/v1',
+    kind: 'Deployment',
+    name: 'web',
+    namespace: 'flux-system',
+    uid: 'uid-web',
+    createdAt: '2026-07-27T09:00:00Z',
+    yaml,
+  };
+}
+
 function renderYaml(yaml = YAML) {
   const onApplied = vi.fn();
   const onDeleted = vi.fn();
   const view = render(
-    <InspectYaml target={target} yaml={yaml} onApplied={onApplied} onDeleted={onDeleted} />,
+    <InspectYaml
+      target={target}
+      detail={detailFor(yaml)}
+      onApplied={onApplied}
+      onDeleted={onDeleted}
+    />,
   );
   return { onApplied, onDeleted, view };
 }
@@ -188,7 +205,12 @@ describe('InspectYaml', () => {
 
     const next = 'kind: Deployment\nreplicas: 3\n';
     view.rerender(
-      <InspectYaml target={target} yaml={next} onApplied={vi.fn()} onDeleted={vi.fn()} />,
+      <InspectYaml
+        target={target}
+        detail={detailFor(next)}
+        onApplied={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
     );
 
     expect(screen.getByLabelText('yaml')).toHaveValue(next);

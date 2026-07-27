@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { ObjectRef } from '../lib/types';
+import type { ObjectDetail, ObjectRef } from '../lib/types';
 import { applyObject, deleteObject } from '../lib/object';
+import { fetchSchema, gvkOf, registerSchema, schemaPath } from '../lib/schema';
 import YamlEditor from './YamlEditor';
 
 interface InspectYamlProps {
   target: ObjectRef;
-  yaml: string;
+  detail: ObjectDetail;
   onApplied: () => void;
   onDeleted: () => void;
 }
@@ -17,7 +18,9 @@ function errorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export default function InspectYaml({ target, yaml, onApplied, onDeleted }: InspectYamlProps) {
+export default function InspectYaml({ target, detail, onApplied, onDeleted }: InspectYamlProps) {
+  const yaml = detail.yaml;
+  const path = schemaPath(gvkOf(detail));
   const [draft, setDraft] = useState(yaml);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -30,6 +33,24 @@ export default function InspectYaml({ target, yaml, onApplied, onDeleted }: Insp
     setNotice(null);
     setConfirming(false);
   }, [yaml]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const schema = await fetchSchema(gvkOf(detail));
+        if (mounted) {
+          registerSchema(path, schema);
+        }
+      } catch {
+        return;
+      }
+    };
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, [path, detail]);
 
   const dirty = draft !== yaml;
 
@@ -80,7 +101,7 @@ export default function InspectYaml({ target, yaml, onApplied, onDeleted }: Insp
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1">
-        <YamlEditor value={draft} readOnly={busy} onChange={setDraft} />
+        <YamlEditor value={draft} path={path} readOnly={busy} onChange={setDraft} />
       </div>
       {error !== null && (
         <p className="border-t border-neutral-800 bg-red-950/40 px-3 py-1.5 text-xs break-words text-red-300">

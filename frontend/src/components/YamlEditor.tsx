@@ -2,11 +2,12 @@ import Editor from '@monaco-editor/react';
 
 interface YamlEditorProps {
   value: string;
+  path: string;
   readOnly: boolean;
   onChange: (value: string) => void;
 }
 
-export default function YamlEditor({ value, readOnly, onChange }: YamlEditorProps) {
+export default function YamlEditor({ value, path, readOnly, onChange }: YamlEditorProps) {
   function handleChange(next: string | undefined) {
     if (next === undefined) {
       return;
@@ -18,6 +19,7 @@ export default function YamlEditor({ value, readOnly, onChange }: YamlEditorProp
     <Editor
       language="yaml"
       theme="vs-dark"
+      path={path}
       value={value}
       onChange={handleChange}
       loading={<div className="p-3 text-xs text-neutral-600">Loading editor…</div>}
@@ -30,6 +32,8 @@ export default function YamlEditor({ value, readOnly, onChange }: YamlEditorProp
         tabSize: 2,
         renderWhitespace: 'selection',
         automaticLayout: true,
+        links: false,
+        quickSuggestions: { other: true, comments: false, strings: true },
       }}
     />
   );

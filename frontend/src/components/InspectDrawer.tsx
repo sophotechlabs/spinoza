@@ -114,7 +114,7 @@ export default function InspectDrawer({
     body = (
       <InspectYaml
         target={target}
-        yaml={detail.yaml}
+        detail={detail}
         onApplied={handleApplied}
         onDeleted={onDeleted}
       />
