@@ -18,6 +18,7 @@ export default defineConfig({
         '**/*.d.ts',
         '**/*.config.*',
         'src/main.tsx',
+        'src/lib/monaco.ts',
         'src/lib/types.ts',
       ],
       reportOnFailure: true,
