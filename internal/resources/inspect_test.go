@@ -43,7 +43,7 @@ func inspectManager(t *testing.T, objs ...runtime.Object) *Manager {
 	dyn := newClient(t, objs...)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	return NewManager(ctx, dyn, k8sfake.NewClientset(), nil, testDescs())
+	return NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, testDescs())
 }
 
 func TestManagerObject(t *testing.T) {

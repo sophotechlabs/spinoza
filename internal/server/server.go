@@ -9,6 +9,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
@@ -32,6 +33,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/metrics", cors(s.handleMetrics))
 	mux.HandleFunc("/api/object", cors(s.handleObject))
 	mux.HandleFunc("/api/events", cors(s.handleEvents))
+	mux.HandleFunc("/api/schema", cors(s.handleSchema))
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.Handle("/", http.FileServerFS(s.assets))
 	return mux
@@ -104,6 +106,23 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	writeJSON(w, s.mgr.Events(r.Context(), q.Get("namespace"), q.Get("uid")))
+}
+
+func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	kind := q.Get("kind")
+	version := q.Get("version")
+	if kind == "" || version == "" {
+		writeError(w, http.StatusBadRequest, "version and kind are required")
+		return
+	}
+	doc, err := s.mgr.Schema(jsonschema.GVK{Group: q.Get("group"), Version: version, Kind: kind})
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(doc)
 }
 
 func (s *Server) handleObject(w http.ResponseWriter, r *http.Request) {

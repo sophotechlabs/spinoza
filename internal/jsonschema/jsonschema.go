@@ -1,0 +1,241 @@
+package jsonschema
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"sync"
+
+	"k8s.io/client-go/openapi"
+)
+
+const (
+	openapiRefPrefix = "#/components/schemas/"
+	bundleRefPrefix  = "#/definitions/"
+	draft            = "http://json-schema.org/draft-07/schema#"
+)
+
+type GVK struct {
+	Group   string
+	Version string
+	Kind    string
+}
+
+func (g GVK) String() string {
+	if g.Group == "" {
+		return g.Version + "/" + g.Kind
+	}
+	return g.Group + "/" + g.Version + "/" + g.Kind
+}
+
+type Client struct {
+	oapi  openapi.Client
+	mu    sync.Mutex
+	docs  map[string]map[string]map[string]interface{}
+	cache map[GVK]json.RawMessage
+}
+
+func NewClient(oapi openapi.Client) *Client {
+	return &Client{
+		oapi:  oapi,
+		docs:  map[string]map[string]map[string]interface{}{},
+		cache: map[GVK]json.RawMessage{},
+	}
+}
+
+func (c *Client) For(gvk GVK) (json.RawMessage, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	cached, ok := c.cache[gvk]
+	if ok {
+		return cached, nil
+	}
+
+	schemas, err := c.schemas(pathFor(gvk))
+	if err != nil {
+		return nil, err
+	}
+	root, found := rootName(schemas, gvk)
+	if !found {
+		return nil, fmt.Errorf("no schema for %s", gvk)
+	}
+	raw, marshalErr := json.Marshal(bundle(schemas, root))
+	if marshalErr != nil {
+		return nil, fmt.Errorf("marshal schema: %w", marshalErr)
+	}
+	c.cache[gvk] = raw
+	return raw, nil
+}
+
+func (c *Client) schemas(path string) (map[string]map[string]interface{}, error) {
+	cached, ok := c.docs[path]
+	if ok {
+		return cached, nil
+	}
+
+	paths, err := c.oapi.Paths()
+	if err != nil {
+		return nil, fmt.Errorf("openapi paths: %w", err)
+	}
+	gv, ok := paths[path]
+	if !ok {
+		return nil, fmt.Errorf("no openapi document for %s", path)
+	}
+	raw, schemaErr := gv.Schema("application/json")
+	if schemaErr != nil {
+		return nil, fmt.Errorf("openapi schema for %s: %w", path, schemaErr)
+	}
+
+	var doc struct {
+		Components struct {
+			Schemas map[string]map[string]interface{} `json:"schemas"`
+		} `json:"components"`
+	}
+	unmarshalErr := json.Unmarshal(raw, &doc)
+	if unmarshalErr != nil {
+		return nil, fmt.Errorf("parse openapi document for %s: %w", path, unmarshalErr)
+	}
+
+	c.docs[path] = doc.Components.Schemas
+	return doc.Components.Schemas, nil
+}
+
+func pathFor(gvk GVK) string {
+	if gvk.Group == "" {
+		return "api/" + gvk.Version
+	}
+	return "apis/" + gvk.Group + "/" + gvk.Version
+}
+
+func rootName(schemas map[string]map[string]interface{}, gvk GVK) (string, bool) {
+	match := ""
+	for name, schema := range schemas {
+		if !declares(schema, gvk) {
+			continue
+		}
+		if strings.HasSuffix(name, "."+gvk.Kind) {
+			return name, true
+		}
+		if match == "" {
+			match = name
+		}
+	}
+	return match, match != ""
+}
+
+func declares(schema map[string]interface{}, gvk GVK) bool {
+	entries, ok := schema["x-kubernetes-group-version-kind"].([]interface{})
+	if !ok {
+		return false
+	}
+	for _, entry := range entries {
+		if matches(entry, gvk) {
+			return true
+		}
+	}
+	return false
+}
+
+func matches(entry interface{}, gvk GVK) bool {
+	m, ok := entry.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	group, ok := field(m, "group")
+	if !ok {
+		return false
+	}
+	if group != gvk.Group {
+		return false
+	}
+	version, ok := field(m, "version")
+	if !ok {
+		return false
+	}
+	if version != gvk.Version {
+		return false
+	}
+	kind, ok := field(m, "kind")
+	if !ok {
+		return false
+	}
+	return kind == gvk.Kind
+}
+
+func field(m map[string]interface{}, key string) (string, bool) {
+	v, ok := m[key].(string)
+	return v, ok
+}
+
+func bundle(schemas map[string]map[string]interface{}, root string) map[string]interface{} {
+	definitions := map[string]interface{}{}
+	pending := []string{root}
+	for len(pending) > 0 {
+		name := pending[0]
+		pending = pending[1:]
+		_, done := definitions[name]
+		if done {
+			continue
+		}
+		schema, ok := schemas[name]
+		if !ok {
+			continue
+		}
+		refs := []string{}
+		definitions[name] = rewrite(schema, &refs)
+		pending = append(pending, refs...)
+	}
+	return map[string]interface{}{
+		"$schema":     draft,
+		"$ref":        bundleRefPrefix + root,
+		"definitions": definitions,
+	}
+}
+
+func rewrite(node interface{}, refs *[]string) interface{} {
+	switch value := node.(type) {
+	case map[string]interface{}:
+		return rewriteMap(value, refs)
+	case []interface{}:
+		return rewriteSlice(value, refs)
+	default:
+		return node
+	}
+}
+
+func rewriteMap(node map[string]interface{}, refs *[]string) interface{} {
+	out := make(map[string]interface{}, len(node))
+	for key, value := range node {
+		name, isRef := refTarget(key, value)
+		if isRef {
+			*refs = append(*refs, name)
+			out[key] = bundleRefPrefix + name
+			continue
+		}
+		out[key] = rewrite(value, refs)
+	}
+	return out
+}
+
+func rewriteSlice(node []interface{}, refs *[]string) interface{} {
+	out := make([]interface{}, 0, len(node))
+	for _, item := range node {
+		out = append(out, rewrite(item, refs))
+	}
+	return out
+}
+
+func refTarget(key string, value interface{}) (string, bool) {
+	if key != "$ref" {
+		return "", false
+	}
+	target, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	if !strings.HasPrefix(target, openapiRefPrefix) {
+		return "", false
+	}
+	return strings.TrimPrefix(target, openapiRefPrefix), true
+}

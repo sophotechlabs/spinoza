@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
@@ -19,5 +20,6 @@ func makeManager(ctx context.Context) *resources.Manager {
 		log.Printf("discovery (partial): %v", discErr)
 	}
 	log.Printf("spinoza connected to context %q — %d resource types, %d categories", bundle.Context, len(descs), len(cats))
-	return resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, cats, descs)
+	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3())
+	return resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, cats, descs)
 }

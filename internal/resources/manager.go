@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
+	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
 )
@@ -45,17 +47,19 @@ type Manager struct {
 	rootCtx context.Context
 	dyn     dynamic.Interface
 	cs      kubernetes.Interface
+	schemas *jsonschema.Client
 	cats    []api.Category
 	descs   map[string]api.ResourceDescriptor
 	mu      sync.Mutex
 	streams map[streamKey]*stream
 }
 
-func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
+func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
 	return &Manager{
 		rootCtx: ctx,
 		dyn:     dyn,
 		cs:      cs,
+		schemas: schemas,
 		cats:    cats,
 		descs:   descs,
 		streams: map[streamKey]*stream{},
@@ -84,6 +88,13 @@ func (m *Manager) Events(ctx context.Context, namespace, uid string) []api.Event
 
 func (m *Manager) Logs(ctx context.Context, req logs.Request) (*logs.Stream, error) {
 	return logs.Open(ctx, m.cs, req)
+}
+
+func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {
+	if m.schemas == nil {
+		return nil, fmt.Errorf("schemas unavailable")
+	}
+	return m.schemas.For(gvk)
 }
 
 func (m *Manager) Graph(ctx context.Context) api.Graph {
