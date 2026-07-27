@@ -20,6 +20,8 @@ function errorMessage(err: unknown, fallback: string): string {
 
 export default function InspectYaml({ target, detail, onApplied, onDeleted }: InspectYamlProps) {
   const yaml = detail.yaml;
+  const apiVersion = detail.apiVersion;
+  const kind = detail.kind;
   const path = schemaPath(gvkOf(detail));
   const [draft, setDraft] = useState(yaml);
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     let mounted = true;
     const load = async () => {
       try {
-        const schema = await fetchSchema(gvkOf(detail));
+        const schema = await fetchSchema(gvkOf({ apiVersion, kind }));
         if (mounted) {
           registerSchema(path, schema);
         }
@@ -50,7 +52,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     return () => {
       mounted = false;
     };
-  }, [path, detail]);
+  }, [path, apiVersion, kind]);
 
   const dirty = draft !== yaml;
 

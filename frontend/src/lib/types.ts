@@ -133,6 +133,8 @@ export interface FluxResource {
   ready: string;
   suspended: boolean;
   revision: string;
+  latest?: string;
+  outdated?: boolean;
   source: string;
   message: string;
   createdAt: string;

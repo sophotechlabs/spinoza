@@ -57,3 +57,20 @@ export function created(createdAt: string): string {
   }
   return createdAt.slice(0, 10);
 }
+
+export function latestColor(resource: FluxResource): string {
+  if (resource.outdated === true) {
+    return 'text-amber-400';
+  }
+  return 'text-neutral-600';
+}
+
+export function latestTitle(resource: FluxResource): string {
+  if (resource.latest === undefined || resource.latest === '') {
+    return '';
+  }
+  if (resource.outdated === true) {
+    return `${resource.revision} → ${resource.latest} available`;
+  }
+  return 'up to date';
+}

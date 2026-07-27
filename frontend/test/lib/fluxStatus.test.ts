@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   created,
+  latestColor,
+  latestTitle,
   readyDot,
   readyLabel,
   readyText,
@@ -50,5 +52,24 @@ describe('created', () => {
   it('slices the timestamp to a date and blanks the empty value', () => {
     expect(created('2026-07-24T09:00:00Z')).toBe('2026-07-24');
     expect(created('')).toBe('');
+  });
+});
+
+describe('latest version presentation', () => {
+  it('highlights an outdated release', () => {
+    const resource = makeFluxResource({ revision: '6.14.0', latest: '6.15.1', outdated: true });
+    expect(latestColor(resource)).toBe('text-amber-400');
+    expect(latestTitle(resource)).toBe('6.14.0 → 6.15.1 available');
+  });
+
+  it('dims a current release', () => {
+    const resource = makeFluxResource({ revision: '6.15.1', latest: '6.15.1' });
+    expect(latestColor(resource)).toBe('text-neutral-600');
+    expect(latestTitle(resource)).toBe('up to date');
+  });
+
+  it('has no title when the latest version is unknown', () => {
+    expect(latestTitle(makeFluxResource({ latest: undefined }))).toBe('');
+    expect(latestTitle(makeFluxResource({ latest: '' }))).toBe('');
   });
 });

@@ -7,7 +7,14 @@ import {
 } from '@tanstack/react-table';
 import type { FluxResource } from '../lib/types';
 import { useFlux } from '../lib/flux';
-import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
+import {
+  created,
+  latestColor,
+  latestTitle,
+  statusDot,
+  statusLabel,
+  statusText,
+} from '../lib/fluxStatus';
 import { useElementWidth } from '../lib/useElementWidth';
 
 const EMPTY: FluxResource[] = [];
@@ -27,7 +34,8 @@ const COLUMNS = [
   columnHelper.display({ id: 'name', header: 'Name', size: 180 }),
   columnHelper.display({ id: 'namespace', header: 'Namespace', size: 130 }),
   columnHelper.display({ id: 'status', header: 'Status', size: 110 }),
-  columnHelper.display({ id: 'revision', header: 'Revision', size: 300 }),
+  columnHelper.display({ id: 'revision', header: 'Revision', size: 260 }),
+  columnHelper.display({ id: 'latest', header: 'Latest', size: 110 }),
   columnHelper.display({ id: 'source', header: 'Source', size: 180 }),
   columnHelper.display({ id: 'created', header: 'Created', size: 90 }),
 ];
@@ -68,6 +76,9 @@ function ResourceRow({
       </td>
       <td className="truncate px-2 py-1 text-neutral-400" title={resource.revision}>
         {resource.revision}
+      </td>
+      <td className={`truncate px-2 py-1 ${latestColor(resource)}`} title={latestTitle(resource)}>
+        {resource.latest}
       </td>
       <td className="truncate px-2 py-1 text-neutral-400">{resource.source}</td>
       <td className="truncate px-2 py-1 text-neutral-500">{created(resource.createdAt)}</td>

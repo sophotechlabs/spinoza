@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { K8sEvent } from '../lib/types';
 import { fetchEvents } from '../lib/object';
 
+const EVENTS_POLL_MS = 10000;
+
 interface InspectEventsProps {
   namespace: string;
   uid: string;
@@ -41,8 +43,12 @@ export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
       }
     };
     void load();
+    const timer = setInterval(() => {
+      void load();
+    }, EVENTS_POLL_MS);
     return () => {
       mounted = false;
+      clearInterval(timer);
     };
   }, [namespace, uid]);
 

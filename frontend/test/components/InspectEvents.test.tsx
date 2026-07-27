@@ -74,3 +74,35 @@ describe('InspectEvents', () => {
     expect(await screen.findByText('events request failed')).toBeInTheDocument();
   });
 });
+
+describe('InspectEvents polling', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('refetches on an interval so the list does not go stale', async () => {
+    vi.useFakeTimers();
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+    vi.stubGlobal('fetch', mock);
+    render(<InspectEvents namespace="flux-system" uid="pod-uid" />);
+
+    expect(mock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(10000);
+
+    expect(mock).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops polling once unmounted', async () => {
+    vi.useFakeTimers();
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+    vi.stubGlobal('fetch', mock);
+    const view = render(<InspectEvents namespace="flux-system" uid="pod-uid" />);
+
+    view.unmount();
+    await vi.advanceTimersByTimeAsync(30000);
+
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+});

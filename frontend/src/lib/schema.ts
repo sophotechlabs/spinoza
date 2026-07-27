@@ -16,7 +16,7 @@ export interface SchemaEntry {
 
 export type SchemaApplier = (schemas: SchemaEntry[]) => void;
 
-export function gvkOf(detail: ObjectDetail): SchemaGVK {
+export function gvkOf(detail: Pick<ObjectDetail, 'apiVersion' | 'kind'>): SchemaGVK {
   const parts = detail.apiVersion.split('/');
   if (parts.length === 2) {
     return { group: parts[0], version: parts[1], kind: detail.kind };
