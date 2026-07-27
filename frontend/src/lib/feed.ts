@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMsg, ResourceDescriptor, ServerMsg } from './types';
+import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { useResourcesStore } from '../store/resources';
+import { useLogsStore } from '../store/logs';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -13,6 +14,8 @@ export interface ResourceFeed {
   status: ConnectionStatus;
   subscribe: (subId: string, descriptor: ResourceDescriptor, namespace: string) => void;
   unsubscribe: (subId: string) => void;
+  subscribeLogs: (subId: string, request: LogRequest) => void;
+  unsubscribeLogs: (subId: string) => void;
   reconnect: () => void;
 }
 
@@ -51,6 +54,18 @@ function subscribeMsg(subId: string, sub: Subscription): ClientMsg {
   };
 }
 
+function logsMsg(subId: string, request: LogRequest): ClientMsg {
+  return {
+    type: 'logs-subscribe',
+    subId,
+    namespace: request.namespace,
+    name: request.name,
+    container: request.container,
+    tailLines: request.tailLines,
+    follow: request.follow,
+  };
+}
+
 function send(socket: WebSocket, msg: ClientMsg): void {
   socket.send(JSON.stringify(msg));
 }
@@ -66,6 +81,7 @@ export function useResourceFeed(): ResourceFeed {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const socketRef = useRef<WebSocket | null>(null);
   const subsRef = useRef<Map<string, Subscription>>(new Map());
+  const logSubsRef = useRef<Map<string, LogRequest>>(new Map());
   const reconnectRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -73,6 +89,7 @@ export function useResourceFeed(): ResourceFeed {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
     const store = useResourcesStore.getState();
+    const logs = useLogsStore.getState();
 
     function clearTimer() {
       if (reconnectTimer !== null) {
@@ -90,6 +107,10 @@ export function useResourceFeed(): ResourceFeed {
     function resubscribeAll(socket: WebSocket) {
       for (const [subId, sub] of subsRef.current) {
         send(socket, subscribeMsg(subId, sub));
+      }
+      for (const [subId, request] of logSubsRef.current) {
+        logs.startStream(subId);
+        send(socket, logsMsg(subId, request));
       }
     }
 
@@ -111,6 +132,12 @@ export function useResourceFeed(): ResourceFeed {
         case 'modified':
         case 'deleted':
           store.applyDelta(msg.subId, msg);
+          break;
+        case 'log':
+          logs.appendLines(msg.subId, msg.lines);
+          break;
+        case 'log-end':
+          logs.endStream(msg.subId);
           break;
         case 'error':
           console.error('resource feed error:', msg.subId, msg.message);
@@ -208,6 +235,24 @@ export function useResourceFeed(): ResourceFeed {
     useResourcesStore.getState().clearSub(subId);
   }, []);
 
+  const subscribeLogs = useCallback((subId: string, request: LogRequest) => {
+    logSubsRef.current.set(subId, request);
+    useLogsStore.getState().startStream(subId);
+    const socket = socketRef.current;
+    if (canSend(socket)) {
+      send(socket, logsMsg(subId, request));
+    }
+  }, []);
+
+  const unsubscribeLogs = useCallback((subId: string) => {
+    logSubsRef.current.delete(subId);
+    const socket = socketRef.current;
+    if (canSend(socket)) {
+      send(socket, { type: 'logs-unsubscribe', subId });
+    }
+    useLogsStore.getState().clearStream(subId);
+  }, []);
+
   const reconnect = useCallback(() => {
     const run = reconnectRef.current;
     if (run !== null) {
@@ -215,5 +260,5 @@ export function useResourceFeed(): ResourceFeed {
     }
   }, []);
 
-  return { status, subscribe, unsubscribe, reconnect };
+  return { status, subscribe, unsubscribe, subscribeLogs, unsubscribeLogs, reconnect };
 }

@@ -17,6 +17,9 @@ describe('fetchFlux', () => {
           resources: [
             {
               kind: 'GitRepository',
+              group: 'source.toolkit.fluxcd.io',
+              version: 'v1',
+              resource: 'gitrepositories',
               name: 'app-repo',
               namespace: 'flux-system',
               ready: 'True',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import './lib/monaco';
 import './index.css';
 
 const el = document.getElementById('root');

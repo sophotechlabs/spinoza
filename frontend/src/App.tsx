@@ -1,28 +1,59 @@
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import type { GraphNode, ResourceDescriptor, Row, View } from './lib/types';
+import type {
+  ContainerState,
+  FluxResource,
+  GraphNode,
+  ObjectRef,
+  ResourceDescriptor,
+  Row,
+  View,
+} from './lib/types';
 import { useResourceFeed } from './lib/feed';
+import { refFromFlux, refFromNode, refFromRow } from './lib/refs';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ResourceTable from './components/ResourceTable';
-import DetailsDrawer from './components/DetailsDrawer';
+import InspectDrawer from './components/InspectDrawer';
 import GitopsGraph from './components/GitopsGraph';
-import GitopsNodePanel from './components/GitopsNodePanel';
 import FluxDashboard from './components/FluxDashboard';
 import FluxTiles from './components/FluxTiles';
 import FluxResources from './components/FluxResources';
 import BottomDock from './components/BottomDock';
+import type { PodTarget } from './components/BottomDock';
 
 const MAIN_SUB_ID = 'main';
+
+function containerNames(containers: ContainerState[]): string[] {
+  const regular = containers.filter((container) => !container.init);
+  const init = containers.filter((container) => container.init);
+  return [...regular, ...init].map((container) => container.name);
+}
+
+function podTarget(row: Row | null): PodTarget | null {
+  if (row === null) {
+    return null;
+  }
+  if (row.containers === undefined) {
+    return null;
+  }
+  if (row.containers.length === 0) {
+    return null;
+  }
+  return {
+    namespace: row.namespace,
+    name: row.name,
+    containers: containerNames(row.containers),
+  };
+}
 
 export default function App() {
   const feed = useResourceFeed();
   const [view, setView] = useState<View>('resources');
   const [active, setActive] = useState<ResourceDescriptor | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [target, setTarget] = useState<ObjectRef | null>(null);
 
-  const { subscribe, unsubscribe } = feed;
+  const { subscribe, unsubscribe, subscribeLogs, unsubscribeLogs } = feed;
 
   useEffect(() => {
     if (active === null) {
@@ -34,42 +65,35 @@ export default function App() {
     };
   }, [active, subscribe, unsubscribe]);
 
+  function clearSelection() {
+    setSelected(null);
+    setTarget(null);
+  }
+
   function handleSelectResource(descriptor: ResourceDescriptor) {
     setActive(descriptor);
-    setSelected(null);
+    clearSelection();
     setView('resources');
   }
 
-  function handleSelectGitops() {
-    setView('gitops');
-  }
-
-  function handleSelectFlux() {
-    setView('flux');
-  }
-
-  function handleSelectTiles() {
-    setView('flux-tiles');
-  }
-
-  function handleSelectResources() {
-    setView('flux-resources');
+  function switchView(next: View) {
+    setView(next);
+    clearSelection();
   }
 
   function handleSelectRow(row: Row) {
     setSelected(row);
-  }
-
-  function handleCloseRow() {
-    setSelected(null);
+    setTarget(refFromRow(active, row));
   }
 
   function handleSelectNode(node: GraphNode) {
-    setSelectedNode(node);
+    setSelected(null);
+    setTarget(refFromNode(node));
   }
 
-  function handleCloseNode() {
-    setSelectedNode(null);
+  function handleSelectFlux(resource: FluxResource) {
+    setSelected(null);
+    setTarget(refFromFlux(resource));
   }
 
   let mainArea = (
@@ -84,27 +108,13 @@ export default function App() {
     mainArea = <GitopsGraph onSelect={handleSelectNode} />;
   }
   if (view === 'flux') {
-    mainArea = <FluxDashboard />;
+    mainArea = <FluxDashboard onSelect={handleSelectFlux} />;
   }
   if (view === 'flux-tiles') {
-    mainArea = <FluxTiles />;
+    mainArea = <FluxTiles onSelect={handleSelectFlux} />;
   }
   if (view === 'flux-resources') {
-    mainArea = <FluxResources />;
-  }
-
-  let sidePanel: ReactNode = <DetailsDrawer row={selected} onClose={handleCloseRow} />;
-  if (view === 'gitops') {
-    sidePanel = <GitopsNodePanel node={selectedNode} onClose={handleCloseNode} />;
-  }
-  if (view === 'flux') {
-    sidePanel = null;
-  }
-  if (view === 'flux-tiles') {
-    sidePanel = null;
-  }
-  if (view === 'flux-resources') {
-    sidePanel = null;
+    mainArea = <FluxResources onSelect={handleSelectFlux} />;
   }
 
   return (
@@ -115,16 +125,33 @@ export default function App() {
           view={view}
           activeResource={active}
           onSelect={handleSelectResource}
-          onSelectGitops={handleSelectGitops}
-          onSelectFlux={handleSelectFlux}
-          onSelectTiles={handleSelectTiles}
-          onSelectResources={handleSelectResources}
+          onSelectGitops={() => {
+            switchView('gitops');
+          }}
+          onSelectFlux={() => {
+            switchView('flux');
+          }}
+          onSelectTiles={() => {
+            switchView('flux-tiles');
+          }}
+          onSelectResources={() => {
+            switchView('flux-resources');
+          }}
         />
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1">{mainArea}</div>
-          <BottomDock />
+          <BottomDock
+            pod={podTarget(selected)}
+            subscribeLogs={subscribeLogs}
+            unsubscribeLogs={unsubscribeLogs}
+          />
         </div>
-        {sidePanel}
+        <InspectDrawer
+          target={target}
+          containers={selected?.containers}
+          onClose={clearSelection}
+          onDeleted={clearSelection}
+        />
       </div>
     </div>
   );

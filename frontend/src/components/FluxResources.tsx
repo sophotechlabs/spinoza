@@ -109,10 +109,12 @@ function KindList({
   kind,
   resources,
   onBack,
+  onSelect,
 }: {
   kind: string;
   resources: FluxResource[];
   onBack: () => void;
+  onSelect: (resource: FluxResource) => void;
 }) {
   return (
     <div className="h-full overflow-auto p-3">
@@ -128,9 +130,13 @@ function KindList({
       </div>
       <div className="border-t border-neutral-900">
         {resources.map((resource) => (
-          <div
+          <button
+            type="button"
             key={`${resource.namespace}/${resource.name}`}
-            className="flex items-center gap-2 border-b border-neutral-900 px-2 py-1.5 hover:bg-neutral-900"
+            onClick={() => {
+              onSelect(resource);
+            }}
+            className="flex w-full items-center gap-2 border-b border-neutral-900 px-2 py-1.5 text-left hover:bg-neutral-900"
             title={resource.message}
           >
             <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot(resource)}`} />
@@ -145,14 +151,18 @@ function KindList({
             <span className="shrink-0 text-[11px] text-neutral-600">
               {created(resource.createdAt)}
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
   );
 }
 
-export default function FluxResources() {
+interface FluxResourcesProps {
+  onSelect: (resource: FluxResource) => void;
+}
+
+export default function FluxResources({ onSelect }: FluxResourcesProps) {
   const { data, error } = useFlux();
   const [kind, setKind] = useState<string | null>(null);
 
@@ -179,6 +189,7 @@ export default function FluxResources() {
         onBack={() => {
           setKind(null);
         }}
+        onSelect={onSelect}
       />
     );
   }

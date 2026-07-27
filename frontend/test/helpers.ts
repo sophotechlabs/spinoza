@@ -44,6 +44,8 @@ export function makeGraphNode(overrides: Partial<GraphNode>): GraphNode {
     id: 'node-0',
     kind: 'GitRepository',
     group: 'source.toolkit.fluxcd.io',
+    version: 'v1',
+    resource: 'gitrepositories',
     name: 'flux-system',
     namespace: 'flux-system',
     status: 'Ready',
@@ -55,6 +57,9 @@ export function makeGraphNode(overrides: Partial<GraphNode>): GraphNode {
 export function makeFluxResource(overrides: Partial<FluxResource>): FluxResource {
   const base: FluxResource = {
     kind: 'Kustomization',
+    group: 'kustomize.toolkit.fluxcd.io',
+    version: 'v1',
+    resource: 'kustomizations',
     name: 'apps',
     namespace: 'flux-system',
     ready: 'True',

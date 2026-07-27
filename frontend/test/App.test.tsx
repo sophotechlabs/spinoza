@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Category } from '../src/lib/types';
+import type { Category, FluxResource, GraphNode, ObjectRef } from '../src/lib/types';
 
 const feedMocks = vi.hoisted(() => ({
   subscribe: vi.fn(),
   unsubscribe: vi.fn(),
+  subscribeLogs: vi.fn(),
+  unsubscribeLogs: vi.fn(),
   reconnect: vi.fn(),
 }));
 
@@ -14,41 +16,47 @@ vi.mock('../src/lib/feed', () => ({
     status: 'connected',
     subscribe: feedMocks.subscribe,
     unsubscribe: feedMocks.unsubscribe,
+    subscribeLogs: feedMocks.subscribeLogs,
+    unsubscribeLogs: feedMocks.unsubscribeLogs,
     reconnect: feedMocks.reconnect,
   }),
 }));
 
-interface GraphNodeStub {
-  id: string;
-  kind: string;
-  group: string;
-  name: string;
-  namespace: string;
-  status: string;
-  category: string;
-}
-
-const graphMocks = vi.hoisted<{ node: GraphNodeStub }>(() => ({
+const stubs = vi.hoisted((): { node: GraphNode; flux: FluxResource } => ({
   node: {
     id: 'gn-1',
     kind: 'HelmRelease',
     group: 'helm.toolkit.fluxcd.io',
+    version: 'v2',
+    resource: 'helmreleases',
     name: 'podinfo',
     namespace: 'apps',
     status: 'Ready',
     category: 'app',
   },
+  flux: {
+    kind: 'Kustomization',
+    group: 'kustomize.toolkit.fluxcd.io',
+    version: 'v1',
+    resource: 'kustomizations',
+    name: 'apps',
+    namespace: 'flux-system',
+    ready: 'True',
+    suspended: false,
+    revision: 'main@sha1:abc',
+    source: '',
+    message: '',
+    createdAt: '2026-07-24T00:00:00Z',
+  },
 }));
 
 vi.mock('../src/components/GitopsGraph', () => ({
-  default: ({ onSelect }: { onSelect?: (node: GraphNodeStub) => void }) => (
+  default: ({ onSelect }: { onSelect: (node: GraphNode) => void }) => (
     <div data-testid="gitops-graph">
       <button
         type="button"
         onClick={() => {
-          if (onSelect) {
-            onSelect(graphMocks.node);
-          }
+          onSelect(stubs.node);
         }}
       >
         select-node
@@ -57,16 +65,41 @@ vi.mock('../src/components/GitopsGraph', () => ({
   ),
 }));
 
-vi.mock('../src/components/FluxDashboard', () => ({
-  default: () => <div data-testid="flux-dashboard" />,
-}));
+function fluxStub(testId: string) {
+  return ({ onSelect }: { onSelect: (resource: FluxResource) => void }) => (
+    <div data-testid={testId}>
+      <button
+        type="button"
+        onClick={() => {
+          onSelect(stubs.flux);
+        }}
+      >
+        select-{testId}
+      </button>
+    </div>
+  );
+}
 
-vi.mock('../src/components/FluxTiles', () => ({
-  default: () => <div data-testid="flux-tiles" />,
-}));
+vi.mock('../src/components/FluxDashboard', () => ({ default: fluxStub('flux-dashboard') }));
+vi.mock('../src/components/FluxTiles', () => ({ default: fluxStub('flux-tiles') }));
+vi.mock('../src/components/FluxResources', () => ({ default: fluxStub('flux-resources') }));
 
-vi.mock('../src/components/FluxResources', () => ({
-  default: () => <div data-testid="flux-resources" />,
+vi.mock('../src/components/InspectDrawer', () => ({
+  default: ({ target, onClose }: { target: ObjectRef | null; onClose: () => void }) => {
+    if (target === null) {
+      return <aside>Select a row to inspect it.</aside>;
+    }
+    return (
+      <aside>
+        <span data-testid="inspect-target">
+          {`${target.resource}:${target.namespace}/${target.name}`}
+        </span>
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </aside>
+    );
+  },
 }));
 
 import App from '../src/App';
@@ -111,12 +144,19 @@ async function expandWorkloads(user: ReturnType<typeof userEvent.setup>): Promis
   await user.click(await screen.findByRole('button', { name: /Workloads/ }));
 }
 
+async function selectPod(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await expandWorkloads(user);
+  await user.click(await screen.findByRole('button', { name: 'Pod' }));
+}
+
 describe('App', () => {
   beforeEach(() => {
     resetStore();
     stubFetch();
     feedMocks.subscribe.mockClear();
     feedMocks.unsubscribe.mockClear();
+    feedMocks.subscribeLogs.mockClear();
+    feedMocks.unsubscribeLogs.mockClear();
     feedMocks.reconnect.mockClear();
   });
 
@@ -129,7 +169,7 @@ describe('App', () => {
     render(<App />);
     expect(screen.getByText('connected')).toBeInTheDocument();
     expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
-    expect(screen.getByText('Select a row to see details.')).toBeInTheDocument();
+    expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
   });
 
   it('subscribes and renders rows when a resource is selected', async () => {
@@ -140,14 +180,13 @@ describe('App', () => {
       ]);
     const user = userEvent.setup();
     render(<App />);
-    await expandWorkloads(user);
-    await user.click(await screen.findByRole('button', { name: 'Pod' }));
+    await selectPod(user);
     expect(feedMocks.subscribe).toHaveBeenCalledWith('main', podDescriptor, '');
     expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
     expect(screen.getByText('1/1')).toBeInTheDocument();
   });
 
-  it('opens and closes the details drawer when a row is selected', async () => {
+  it('targets the inspector at the selected row', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main', makeColumns([]), true, [
@@ -155,20 +194,20 @@ describe('App', () => {
       ]);
     const user = userEvent.setup();
     render(<App />);
-    await expandWorkloads(user);
-    await user.click(await screen.findByRole('button', { name: 'Pod' }));
+    await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
-    const drawer = screen.getByRole('complementary');
-    expect(within(drawer).getAllByText('pod-a')).toHaveLength(2);
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+
     await user.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.getByText('Select a row to see details.')).toBeInTheDocument();
+
+    expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
   });
 
   it('unsubscribes the previous resource when switching resources', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await expandWorkloads(user);
-    await user.click(await screen.findByRole('button', { name: 'Pod' }));
+    await selectPod(user);
     feedMocks.unsubscribe.mockClear();
     await user.click(screen.getByRole('button', { name: 'Deployment' }));
     expect(feedMocks.unsubscribe).toHaveBeenCalledWith('main');
@@ -182,64 +221,143 @@ describe('App', () => {
     expect(feedMocks.reconnect).toHaveBeenCalledTimes(1);
   });
 
-  it('toggles the bottom dock panel', async () => {
+  it('streams logs for a selected pod through the dock', async () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, [
+      makeRow({
+        uid: 'a',
+        name: 'pod-a',
+        namespace: 'prod',
+        containers: [{ name: 'app', state: 'running', ready: true, restarts: 0, init: false }],
+      }),
+    ]);
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: /Panel/ }));
-    expect(screen.getByText('No output.')).toBeInTheDocument();
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    await user.click(screen.getByRole('button', { name: /Logs/ }));
+
+    expect(feedMocks.subscribeLogs).toHaveBeenCalledWith(
+      'logs',
+      expect.objectContaining({ namespace: 'prod', name: 'pod-a', container: 'app' }),
+    );
   });
 
-  it('switches to the gitops view and shows the graph', async () => {
+  it('leaves the dock without a pod for rows that have no containers', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'dep-a', namespace: 'prod' }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'dep-a' }));
+    await user.click(screen.getByRole('button', { name: /Logs/ }));
+
+    expect(screen.getByText('Select a pod to stream its logs.')).toBeInTheDocument();
+    expect(feedMocks.subscribeLogs).not.toHaveBeenCalled();
+  });
+
+  it('offers regular containers before init containers in the log picker', async () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, [
+      makeRow({
+        uid: 'a',
+        name: 'pod-a',
+        namespace: 'prod',
+        containers: [
+          { name: 'copy-libs', state: 'terminated', ready: false, restarts: 0, init: true },
+          { name: 'app', state: 'running', ready: true, restarts: 0, init: false },
+        ],
+      }),
+    ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    await user.click(screen.getByRole('button', { name: /Logs/ }));
+
+    expect(feedMocks.subscribeLogs).toHaveBeenCalledWith(
+      'logs',
+      expect.objectContaining({ container: 'app' }),
+    );
+    const options = screen.getAllByRole('option').map((node) => node.textContent);
+    expect(options).toEqual(['app', 'copy-libs']);
+  });
+
+  it('leaves the dock without a pod for rows with an empty container list', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', containers: [] }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    await user.click(screen.getByRole('button', { name: /Logs/ }));
+
+    expect(screen.getByText('Select a pod to stream its logs.')).toBeInTheDocument();
+    expect(feedMocks.subscribeLogs).not.toHaveBeenCalled();
+  });
+
+  it('targets the inspector at a selected graph node', async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Graph' }));
     expect(screen.getByTestId('gitops-graph')).toBeInTheDocument();
-    expect(screen.getByText('Select a node to see details.')).toBeInTheDocument();
-    expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
-  });
 
-  it('shows node details when a graph node is selected', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Graph' }));
     await user.click(screen.getByRole('button', { name: 'select-node' }));
-    expect(screen.getByText('podinfo')).toBeInTheDocument();
-    expect(screen.getByText('HelmRelease')).toBeInTheDocument();
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('helmreleases:apps/podinfo');
   });
 
-  it('clears the selected node when the node panel is closed', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Graph' }));
-    await user.click(screen.getByRole('button', { name: 'select-node' }));
-    expect(screen.getByText('podinfo')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.getByText('Select a node to see details.')).toBeInTheDocument();
-  });
-
-  it('switches to the flux view and shows the dashboard', async () => {
+  it('targets the inspector from the flux table', async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Flux' }));
-    expect(screen.getByTestId('flux-dashboard')).toBeInTheDocument();
-    expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
-    expect(screen.queryByText('Select a node to see details.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'select-flux-dashboard' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent(
+      'kustomizations:flux-system/apps',
+    );
   });
 
-  it('switches to the flux tiles view', async () => {
+  it('targets the inspector from the flux tiles', async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Flux Dashboard' }));
-    expect(screen.getByTestId('flux-tiles')).toBeInTheDocument();
-    expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'select-flux-tiles' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent(
+      'kustomizations:flux-system/apps',
+    );
   });
 
-  it('switches to the flux resources overview', async () => {
+  it('targets the inspector from the flux overview', async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Overview' }));
-    expect(screen.getByTestId('flux-resources')).toBeInTheDocument();
-    expect(screen.queryByText('Select a row to see details.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'select-flux-resources' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent(
+      'kustomizations:flux-system/apps',
+    );
+  });
+
+  it('clears the target when switching views', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
+    await user.click(screen.getByRole('button', { name: 'select-node' }));
+    expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Flux' }));
+
+    expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+    expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
   });
 
   it('returns to the resources view when a resource is selected', async () => {
@@ -247,9 +365,8 @@ describe('App', () => {
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Graph' }));
     expect(screen.getByTestId('gitops-graph')).toBeInTheDocument();
-    await expandWorkloads(user);
-    await user.click(await screen.findByRole('button', { name: 'Pod' }));
+    await selectPod(user);
     expect(screen.queryByTestId('gitops-graph')).not.toBeInTheDocument();
-    expect(screen.getByText('Select a row to see details.')).toBeInTheDocument();
+    expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
   });
 });

@@ -2,10 +2,22 @@ import { useFlux } from '../lib/flux';
 import type { FluxGroup, FluxResource } from '../lib/types';
 import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
 
-function Tile({ resource }: { resource: FluxResource }) {
+function Tile({
+  resource,
+  onSelect,
+}: {
+  resource: FluxResource;
+  onSelect: (resource: FluxResource) => void;
+}) {
+  function handleSelect() {
+    onSelect(resource);
+  }
+
   return (
-    <div
-      className="rounded border border-neutral-800 bg-neutral-900 p-2.5 hover:border-neutral-700"
+    <button
+      type="button"
+      onClick={handleSelect}
+      className="rounded border border-neutral-800 bg-neutral-900 p-2.5 text-left hover:border-neutral-700"
       title={resource.message}
     >
       <div className="flex items-center justify-between gap-2">
@@ -21,11 +33,17 @@ function Tile({ resource }: { resource: FluxResource }) {
       </div>
       <div className="truncate text-[11px] text-neutral-500">{resource.source}</div>
       <div className="mt-1 text-[10px] text-neutral-600">{created(resource.createdAt)}</div>
-    </div>
+    </button>
   );
 }
 
-function TileGroup({ group }: { group: FluxGroup }) {
+function TileGroup({
+  group,
+  onSelect,
+}: {
+  group: FluxGroup;
+  onSelect: (resource: FluxResource) => void;
+}) {
   return (
     <section className="mb-5">
       <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase">
@@ -39,6 +57,7 @@ function TileGroup({ group }: { group: FluxGroup }) {
           <Tile
             key={`${resource.kind}/${resource.namespace}/${resource.name}`}
             resource={resource}
+            onSelect={onSelect}
           />
         ))}
       </div>
@@ -46,7 +65,11 @@ function TileGroup({ group }: { group: FluxGroup }) {
   );
 }
 
-export default function FluxTiles() {
+interface FluxTilesProps {
+  onSelect: (resource: FluxResource) => void;
+}
+
+export default function FluxTiles({ onSelect }: FluxTilesProps) {
   const { data, error } = useFlux();
 
   if (data === null) {
@@ -73,7 +96,7 @@ export default function FluxTiles() {
   return (
     <div className="h-full overflow-auto p-3">
       {data.groups.map((group) => (
-        <TileGroup key={group.name} group={group} />
+        <TileGroup key={group.name} group={group} onSelect={onSelect} />
       ))}
     </div>
   );

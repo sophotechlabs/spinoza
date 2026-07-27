@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import type { Row } from '../../src/lib/types';
 import { useResourceFeed } from '../../src/lib/feed';
 import { useResourcesStore } from '../../src/store/resources';
+import { useLogsStore } from '../../src/store/logs';
 import { makeColumns, makeDescriptor, makeRow } from '../helpers';
 
 class FakeWebSocket {
@@ -43,7 +44,16 @@ function openSocket(socket: FakeWebSocket): void {
 
 function resetStore(): void {
   useResourcesStore.setState({ subs: new Map() });
+  useLogsStore.setState({ streams: new Map() });
 }
+
+const logRequest = {
+  namespace: 'flux-system',
+  name: 'web',
+  container: 'app',
+  tailLines: 500,
+  follow: true,
+};
 
 function sentMessages(socket: FakeWebSocket): unknown[] {
   return socket.send.mock.calls.map((call) => JSON.parse(call[0]) as unknown);
@@ -476,5 +486,152 @@ describe('useResourceFeed', () => {
     unmount();
     reconnect();
     expect(FakeWebSocket.instances).toHaveLength(before);
+  });
+  it('sends a logs-subscribe frame and opens a stream', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      result.current.subscribeLogs('logs', logRequest);
+    });
+
+    expect(sentMessages(socket)).toContainEqual({
+      type: 'logs-subscribe',
+      subId: 'logs',
+      ...logRequest,
+    });
+    expect(useLogsStore.getState().streams.get('logs')).toEqual({ lines: [], ended: false });
+  });
+
+  it('queues a logs subscription while closed and flushes it on open', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      result.current.subscribeLogs('logs', logRequest);
+    });
+
+    expect(socket.send).not.toHaveBeenCalled();
+
+    act(() => {
+      openSocket(socket);
+    });
+
+    expect(sentMessages(socket)).toContainEqual({
+      type: 'logs-subscribe',
+      subId: 'logs',
+      ...logRequest,
+    });
+  });
+
+  it('appends streamed log lines to the store', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+      result.current.subscribeLogs('logs', logRequest);
+    });
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log', subId: 'logs', lines: ['first', 'second'] }),
+        }),
+      );
+    });
+
+    expect(useLogsStore.getState().streams.get('logs')?.lines).toEqual(['first', 'second']);
+  });
+
+  it('marks a stream ended on log-end', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+      result.current.subscribeLogs('logs', logRequest);
+    });
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log-end', subId: 'logs' }),
+        }),
+      );
+    });
+
+    expect(useLogsStore.getState().streams.get('logs')?.ended).toBe(true);
+  });
+
+  it('sends a logs-unsubscribe frame and clears the stream', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+      result.current.subscribeLogs('logs', logRequest);
+    });
+    act(() => {
+      result.current.unsubscribeLogs('logs');
+    });
+
+    expect(sentMessages(socket)).toContainEqual({ type: 'logs-unsubscribe', subId: 'logs' });
+    expect(useLogsStore.getState().streams.has('logs')).toBe(false);
+  });
+
+  it('re-sends an active log subscription after a reconnect', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+      result.current.subscribeLogs('logs', logRequest);
+    });
+    act(() => {
+      first.onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      result.current.reconnect();
+    });
+    const second = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    act(() => {
+      openSocket(second);
+    });
+
+    expect(sentMessages(second)).toContainEqual({
+      type: 'logs-subscribe',
+      subId: 'logs',
+      ...logRequest,
+    });
+  });
+
+  it('does not re-send an unsubscribed log stream after a reconnect', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+      result.current.subscribeLogs('logs', logRequest);
+      result.current.unsubscribeLogs('logs');
+    });
+    act(() => {
+      result.current.reconnect();
+    });
+    const second = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    act(() => {
+      openSocket(second);
+    });
+
+    expect(sentMessages(second)).not.toContainEqual(
+      expect.objectContaining({ type: 'logs-subscribe' }),
+    );
+  });
+
+  it('does not throw when log helpers are called after unmount', () => {
+    const { result, unmount } = renderHook(() => useResourceFeed());
+    act(() => {
+      openSocket(FakeWebSocket.instances[0]);
+    });
+    unmount();
+
+    expect(() => {
+      result.current.subscribeLogs('logs', logRequest);
+      result.current.unsubscribeLogs('logs');
+    }).not.toThrow();
   });
 });

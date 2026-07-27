@@ -36,11 +36,29 @@ function rowKey(resource: FluxResource): string {
   return `${resource.kind}/${resource.namespace}/${resource.name}`;
 }
 
-function ResourceRow({ resource }: { resource: FluxResource }) {
+function ResourceRow({
+  resource,
+  onSelect,
+}: {
+  resource: FluxResource;
+  onSelect: (resource: FluxResource) => void;
+}) {
+  function handleSelect() {
+    onSelect(resource);
+  }
+
   return (
     <tr className="border-t border-neutral-900 hover:bg-neutral-900">
       <td className="truncate px-2 py-1 text-neutral-400">{resource.kind}</td>
-      <td className="truncate px-2 py-1 text-neutral-100">{resource.name}</td>
+      <td className="truncate px-2 py-1 text-neutral-100">
+        <button
+          type="button"
+          onClick={handleSelect}
+          className="max-w-full truncate hover:underline"
+        >
+          {resource.name}
+        </button>
+      </td>
       <td className="truncate px-2 py-1 text-neutral-400">{resource.namespace}</td>
       <td className="truncate px-2 py-1" title={resource.message}>
         <span className={`inline-flex items-center gap-1.5 ${statusText(resource)}`}>
@@ -57,7 +75,11 @@ function ResourceRow({ resource }: { resource: FluxResource }) {
   );
 }
 
-export default function FluxDashboard() {
+interface FluxDashboardProps {
+  onSelect: (resource: FluxResource) => void;
+}
+
+export default function FluxDashboard({ onSelect }: FluxDashboardProps) {
   const { data, error } = useFlux();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const containerWidth = useElementWidth(scrollEl);
@@ -147,7 +169,7 @@ export default function FluxDashboard() {
                 </td>
               </tr>
               {group.resources.map((resource) => (
-                <ResourceRow key={rowKey(resource)} resource={resource} />
+                <ResourceRow key={rowKey(resource)} resource={resource} onSelect={onSelect} />
               ))}
             </Fragment>
           ))}

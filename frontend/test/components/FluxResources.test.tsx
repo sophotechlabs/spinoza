@@ -63,7 +63,7 @@ afterEach(() => {
 describe('FluxResources', () => {
   it('renders per-kind tiles with counts and badges', async () => {
     stubFlux(dashboard);
-    render(<FluxResources />);
+    render(<FluxResources onSelect={vi.fn()} />);
     expect(await screen.findByText('Kustomization')).toBeInTheDocument();
     expect(screen.getByText('HelmRelease')).toBeInTheDocument();
     expect(screen.getByText('GitRepository')).toBeInTheDocument();
@@ -77,18 +77,28 @@ describe('FluxResources', () => {
 
   it('shows the error message when the fetch fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
-    render(<FluxResources />);
+    render(<FluxResources onSelect={vi.fn()} />);
     expect(await screen.findByText('down')).toBeInTheDocument();
   });
 
   it('drills into a kind list and back to the tiles', async () => {
     stubFlux(dashboard);
-    render(<FluxResources />);
+    render(<FluxResources onSelect={vi.fn()} />);
     await userEvent.click(await screen.findByRole('button', { name: /Kustomization/ }));
     expect(await screen.findByText(/2 resources/)).toBeInTheDocument();
     expect(screen.getByText('apps')).toBeInTheDocument();
     expect(screen.getByText('infra')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Flux Resources/ }));
     expect(await screen.findByText('Appliers')).toBeInTheDocument();
+  });
+  it('reports the clicked row in a kind list to the caller', async () => {
+    stubFlux(dashboard);
+    const onSelect = vi.fn();
+    render(<FluxResources onSelect={onSelect} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Kustomization/ }));
+
+    await userEvent.click(await screen.findByRole('button', { name: /apps/ }));
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'apps' }));
   });
 });

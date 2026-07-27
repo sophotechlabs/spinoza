@@ -35,6 +35,61 @@ export interface Row {
   containers?: ContainerState[];
 }
 
+export interface ObjectRef {
+  group: string;
+  version: string;
+  resource: string;
+  namespace: string;
+  name: string;
+}
+
+export interface OwnerRef {
+  kind: string;
+  name: string;
+  uid: string;
+}
+
+export interface Condition {
+  type: string;
+  status: string;
+  reason?: string;
+  message?: string;
+  updated?: string;
+}
+
+export interface ObjectDetail {
+  apiVersion: string;
+  kind: string;
+  name: string;
+  namespace: string;
+  uid: string;
+  createdAt: string;
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+  owners?: OwnerRef[];
+  conditions?: Condition[];
+  containers?: string[];
+  yaml: string;
+}
+
+export interface K8sEvent {
+  type: string;
+  reason: string;
+  message: string;
+  source: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface LogRequest {
+  namespace: string;
+  name: string;
+  container: string;
+  tailLines: number;
+  follow: boolean;
+}
+
 export type ClientMsg =
   | {
       type: 'subscribe';
@@ -44,19 +99,34 @@ export type ClientMsg =
       resource: string;
       namespace: string;
     }
-  | { type: 'unsubscribe'; subId: string };
+  | { type: 'unsubscribe'; subId: string }
+  | {
+      type: 'logs-subscribe';
+      subId: string;
+      namespace: string;
+      name: string;
+      container: string;
+      tailLines: number;
+      follow: boolean;
+    }
+  | { type: 'logs-unsubscribe'; subId: string };
 
 export type ServerMsg =
   | { type: 'snapshot'; subId: string; columns: Column[]; namespaced: boolean; rows: Row[] }
   | { type: 'added'; subId: string; row: Row }
   | { type: 'modified'; subId: string; row: Row }
   | { type: 'deleted'; subId: string; uid: string }
+  | { type: 'log'; subId: string; lines: string[] }
+  | { type: 'log-end'; subId: string }
   | { type: 'error'; subId: string; message: string };
 
 export type View = 'resources' | 'gitops' | 'flux' | 'flux-tiles' | 'flux-resources';
 
 export interface FluxResource {
   kind: string;
+  group: string;
+  version: string;
+  resource: string;
   name: string;
   namespace: string;
   ready: string;
@@ -96,6 +166,8 @@ export interface GraphNode {
   id: string;
   kind: string;
   group: string;
+  version: string;
+  resource: string;
   name: string;
   namespace: string;
   status: string;
