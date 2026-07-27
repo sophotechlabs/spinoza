@@ -14,6 +14,7 @@ import { useSubColumns, useSubNamespaced, useSubRows } from '../store/resources'
 import { ratioColor, restartColor } from '../lib/status';
 import { formatCpu, formatMem, useMetrics } from '../lib/metrics';
 import { useElementWidth } from '../lib/useElementWidth';
+import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
 
@@ -150,6 +151,8 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const namespaced = useSubNamespaced(subId);
   const rows = useSubRows(subId);
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [query, setQuery] = useState('');
+  const [namespace, setNamespace] = useState(ALL_NAMESPACES);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const setScroll = useCallback((node: HTMLDivElement | null) => {
@@ -226,8 +229,11 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     return defs;
   }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics]);
 
+  const namespaces = useMemo(() => namespacesOf(rows), [rows]);
+  const visibleRows = useMemo(() => filterRows(rows, query, namespace), [rows, query, namespace]);
+
   const table = useReactTable({
-    data: rows,
+    data: visibleRows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -276,75 +282,111 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   }
 
   return (
-    <div ref={setScroll} className="h-full overflow-auto">
-      <table
-        className="table-fixed border-collapse text-left text-xs"
-        style={{ width: `${tableWidth}px` }}
-      >
-        <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id} className="border-b border-neutral-800">
-              {headerGroup.headers.map((header) => (
-                <th
-                  key={header.id}
-                  aria-sort={ariaSort(header.column.getIsSorted())}
-                  className="relative px-2 py-1 font-medium"
-                  style={{ width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px` }}
-                >
-                  <button
-                    type="button"
-                    onClick={header.column.getToggleSortingHandler()}
-                    className="flex w-full cursor-pointer items-center truncate font-medium select-none hover:text-neutral-100"
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {sortIndicator(header.column.getIsSorted())}
-                  </button>
-                  <div
-                    aria-hidden="true"
-                    onMouseDown={header.getResizeHandler()}
-                    onTouchStart={header.getResizeHandler()}
-                    className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-neutral-600 opacity-0 select-none hover:opacity-100"
-                  />
-                </th>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {paddingTop > 0 && (
-            <tr aria-hidden="true">
-              <td colSpan={leafColumnCount} style={{ height: `${paddingTop}px` }} />
-            </tr>
-          )}
-          {virtualItems.map((virtualRow) => {
-            const row = tableRows[virtualRow.index];
-            return (
-              <tr
-                key={row.id}
-                className={rowClass(row.original.uid === selectedUid)}
-                style={{ height: `${ROW_HEIGHT}px` }}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    className="truncate px-2 py-1 text-neutral-200"
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs">
+        <input
+          type="search"
+          aria-label="Filter by name"
+          placeholder="Filter by name…"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+          }}
+          className="w-56 rounded border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-200 placeholder:text-neutral-600 focus:border-neutral-600 focus:outline-none"
+        />
+        {namespaced && namespaces.length > 0 && (
+          <select
+            aria-label="Namespace"
+            value={namespace}
+            onChange={(event) => {
+              setNamespace(event.target.value);
+            }}
+            className="rounded border border-neutral-800 bg-neutral-900 px-1.5 py-1 text-neutral-200 focus:border-neutral-600 focus:outline-none"
+          >
+            <option value={ALL_NAMESPACES}>All namespaces</option>
+            {namespaces.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
+        <span className="ml-auto text-neutral-500">
+          {visibleRows.length} of {rows.length}
+        </span>
+      </div>
+      <div ref={setScroll} className="min-h-0 flex-1 overflow-auto">
+        <table
+          className="table-fixed border-collapse text-left text-xs"
+          style={{ width: `${tableWidth}px` }}
+        >
+          <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id} className="border-b border-neutral-800">
+                {headerGroup.headers.map((header) => (
+                  <th
+                    key={header.id}
+                    aria-sort={ariaSort(header.column.getIsSorted())}
+                    className="relative px-2 py-1 font-medium"
                     style={{
-                      width: `${columnWidth(cell.column.id, cell.column.getSize(), perFlex)}px`,
+                      width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px`,
                     }}
                   >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
+                    <button
+                      type="button"
+                      onClick={header.column.getToggleSortingHandler()}
+                      className="flex w-full cursor-pointer items-center truncate font-medium select-none hover:text-neutral-100"
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      {sortIndicator(header.column.getIsSorted())}
+                    </button>
+                    <div
+                      aria-hidden="true"
+                      onMouseDown={header.getResizeHandler()}
+                      onTouchStart={header.getResizeHandler()}
+                      className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-neutral-600 opacity-0 select-none hover:opacity-100"
+                    />
+                  </th>
                 ))}
               </tr>
-            );
-          })}
-          {paddingBottom > 0 && (
-            <tr aria-hidden="true">
-              <td colSpan={leafColumnCount} style={{ height: `${paddingBottom}px` }} />
-            </tr>
-          )}
-        </tbody>
-      </table>
+            ))}
+          </thead>
+          <tbody>
+            {paddingTop > 0 && (
+              <tr aria-hidden="true">
+                <td colSpan={leafColumnCount} style={{ height: `${paddingTop}px` }} />
+              </tr>
+            )}
+            {virtualItems.map((virtualRow) => {
+              const row = tableRows[virtualRow.index];
+              return (
+                <tr
+                  key={row.id}
+                  className={rowClass(row.original.uid === selectedUid)}
+                  style={{ height: `${ROW_HEIGHT}px` }}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <td
+                      key={cell.id}
+                      className="truncate px-2 py-1 text-neutral-200"
+                      style={{
+                        width: `${columnWidth(cell.column.id, cell.column.getSize(), perFlex)}px`,
+                      }}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+            {paddingBottom > 0 && (
+              <tr aria-hidden="true">
+                <td colSpan={leafColumnCount} style={{ height: `${paddingBottom}px` }} />
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

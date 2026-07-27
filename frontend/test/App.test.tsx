@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Category, FluxResource, GraphNode, ObjectRef } from '../src/lib/types';
 
@@ -280,7 +280,10 @@ describe('App', () => {
       'logs',
       expect.objectContaining({ container: 'app' }),
     );
-    const options = screen.getAllByRole('option').map((node) => node.textContent);
+    const picker = screen.getByLabelText('Container');
+    const options = within(picker)
+      .getAllByRole('option')
+      .map((node) => node.textContent);
     expect(options).toEqual(['app', 'copy-libs']);
   });
 

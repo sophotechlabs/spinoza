@@ -278,4 +278,42 @@ describe('ResourceTable', () => {
     expect(screen.getByText('25%')).toBeInTheDocument();
     expect(screen.getAllByText('0%').length).toBeGreaterThan(0);
   });
+  it('filters rows by name as you type', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'web-1', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'api-1', namespace: 'prod' }),
+    ]);
+    renderTable(descriptor, null);
+    expect(screen.getByText('2 of 2')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Filter by name'), 'web');
+
+    expect(screen.getByRole('button', { name: 'web-1' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'api-1' })).not.toBeInTheDocument();
+    expect(screen.getByText('1 of 2')).toBeInTheDocument();
+  });
+
+  it('filters rows by namespace', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'web-1', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'web-2', namespace: 'staging' }),
+    ]);
+    renderTable(descriptor, null);
+
+    await user.selectOptions(screen.getByLabelText('Namespace'), 'staging');
+
+    expect(screen.getByRole('button', { name: 'web-2' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'web-1' })).not.toBeInTheDocument();
+    expect(screen.getByText('1 of 2')).toBeInTheDocument();
+  });
+
+  it('hides the namespace picker for cluster-scoped resources', () => {
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'node-1', namespace: '' })]);
+    renderTable(descriptor, null);
+
+    expect(screen.queryByLabelText('Namespace')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Filter by name')).toBeInTheDocument();
+  });
 });
