@@ -24,10 +24,11 @@ var fluxSourceResources = map[string]bool{
 
 func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) api.Graph {
 	b := &builder{
-		ctx:   ctx,
-		dyn:   dyn,
-		nodes: map[string]api.GraphNode{},
-		edges: map[string]api.GraphEdge{},
+		ctx:    ctx,
+		dyn:    dyn,
+		byKind: indexByKind(descs),
+		nodes:  map[string]api.GraphNode{},
+		edges:  map[string]api.GraphEdge{},
 	}
 	for _, d := range descs {
 		category := graphCategory(d)
@@ -37,6 +38,14 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 		b.collect(d, category)
 	}
 	return b.graph()
+}
+
+func indexByKind(descs map[string]api.ResourceDescriptor) map[string]api.ResourceDescriptor {
+	byKind := map[string]api.ResourceDescriptor{}
+	for _, d := range descs {
+		byKind[d.Group+"/"+d.Kind] = d
+	}
+	return byKind
 }
 
 func graphCategory(d api.ResourceDescriptor) string {
@@ -56,10 +65,11 @@ func graphCategory(d api.ResourceDescriptor) string {
 }
 
 type builder struct {
-	ctx   context.Context
-	dyn   dynamic.Interface
-	nodes map[string]api.GraphNode
-	edges map[string]api.GraphEdge
+	ctx    context.Context
+	dyn    dynamic.Interface
+	byKind map[string]api.ResourceDescriptor
+	nodes  map[string]api.GraphNode
+	edges  map[string]api.GraphEdge
 }
 
 func (b *builder) collect(d api.ResourceDescriptor, category string) {
@@ -70,16 +80,18 @@ func (b *builder) collect(d api.ResourceDescriptor, category string) {
 	}
 	for i := range list.Items {
 		u := &list.Items[i]
-		b.addObject(u, d.Kind, d.Group, category)
+		b.addObject(u, d, category)
 	}
 }
 
-func (b *builder) addObject(u *unstructured.Unstructured, kind, group, category string) {
-	id := nodeID(group, kind, u.GetNamespace(), u.GetName())
+func (b *builder) addObject(u *unstructured.Unstructured, d api.ResourceDescriptor, category string) {
+	id := nodeID(d.Group, d.Kind, u.GetNamespace(), u.GetName())
 	b.nodes[id] = api.GraphNode{
 		ID:        id,
-		Kind:      kind,
-		Group:     group,
+		Kind:      d.Kind,
+		Group:     d.Group,
+		Version:   d.Version,
+		Resource:  d.Resource,
 		Name:      u.GetName(),
 		Namespace: u.GetNamespace(),
 		Status:    statusOf(u, category),
@@ -177,10 +189,13 @@ func (b *builder) ensureRef(id, group, kind, namespace, name, category string) {
 	if _, ok := b.nodes[id]; ok {
 		return
 	}
+	d := b.byKind[group+"/"+kind]
 	b.nodes[id] = api.GraphNode{
 		ID:        id,
 		Kind:      kind,
 		Group:     group,
+		Version:   d.Version,
+		Resource:  d.Resource,
 		Name:      name,
 		Namespace: namespace,
 		Status:    "",

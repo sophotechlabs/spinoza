@@ -54,7 +54,7 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 			continue
 		}
 		for i := range list.Items {
-			byGroup[group] = append(byGroup[group], resourceOf(&list.Items[i], d.Kind))
+			byGroup[group] = append(byGroup[group], resourceOf(&list.Items[i], d))
 		}
 	}
 	return assemble(byGroup)
@@ -126,10 +126,13 @@ func readyCount(items []api.FluxResource) int {
 	return count
 }
 
-func resourceOf(u *unstructured.Unstructured, kind string) api.FluxResource {
+func resourceOf(u *unstructured.Unstructured, d api.ResourceDescriptor) api.FluxResource {
 	ready, message := readyCondition(u)
 	return api.FluxResource{
-		Kind:      kind,
+		Kind:      d.Kind,
+		Group:     d.Group,
+		Version:   d.Version,
+		Resource:  d.Resource,
 		Name:      u.GetName(),
 		Namespace: u.GetNamespace(),
 		Ready:     ready,
