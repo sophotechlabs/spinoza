@@ -69,6 +69,7 @@ export interface ObjectDetail {
   owners?: OwnerRef[];
   conditions?: Condition[];
   containers?: string[];
+  suspended?: boolean;
   yaml: string;
 }
 

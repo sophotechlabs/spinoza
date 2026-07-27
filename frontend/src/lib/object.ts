@@ -18,7 +18,7 @@ export function sameRef(a: ObjectRef | null, b: ObjectRef | null): boolean {
   return refQuery(a) === refQuery(b);
 }
 
-async function failure(response: Response, fallback: string): Promise<Error> {
+export async function failure(response: Response, fallback: string): Promise<Error> {
   try {
     const body = (await response.json()) as { message?: string };
     if (typeof body.message === 'string' && body.message !== '') {

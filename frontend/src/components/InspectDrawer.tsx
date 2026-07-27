@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { ContainerState, ObjectDetail, ObjectRef } from '../lib/types';
 import { fetchObject } from '../lib/object';
 import { DRAWER_NUDGE_STEP, useDrawerWidth } from '../lib/useDrawerWidth';
+import { isFluxObject } from '../lib/fluxActions';
+import InspectActions from './InspectActions';
 import InspectOverview from './InspectOverview';
 import InspectYaml from './InspectYaml';
 import InspectEvents from './InspectEvents';
@@ -162,6 +164,9 @@ export default function InspectDrawer({
             </button>
           ))}
         </div>
+        {detail !== null && isFluxObject(detail.apiVersion) && (
+          <InspectActions target={target} suspended={detail.suspended} onDone={handleApplied} />
+        )}
         <div className="flex min-h-0 flex-1 flex-col">{body}</div>
       </div>
     </aside>
