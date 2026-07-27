@@ -157,7 +157,7 @@ func newClient(t *testing.T) *fake.FakeDynamicClient {
 
 func TestBuild(t *testing.T) {
 	dyn := newClient(t)
-	dash := Build(context.Background(), dyn, fluxDescs())
+	dash := Build(context.Background(), dyn, fluxDescs(), nil)
 
 	wantGroups := []struct {
 		name  string
@@ -241,7 +241,7 @@ func TestBuildEmpty(t *testing.T) {
 	descs := map[string]api.ResourceDescriptor{
 		discovery.Key("apps", "v1", "deployments"): desc("apps", "v1", "deployments", "Deployment"),
 	}
-	dash := Build(context.Background(), dyn, descs)
+	dash := Build(context.Background(), dyn, descs, nil)
 	if len(dash.Groups) != 0 {
 		t.Fatalf("groups = %d, want 0", len(dash.Groups))
 	}

@@ -143,6 +143,8 @@ type FluxResource struct {
 	Ready     string `json:"ready"`
 	Suspended bool   `json:"suspended"`
 	Revision  string `json:"revision"`
+	Latest    string `json:"latest,omitempty"`
+	Outdated  bool   `json:"outdated,omitempty"`
 	Source    string `json:"source"`
 	Message   string `json:"message"`
 	CreatedAt string `json:"createdAt"`

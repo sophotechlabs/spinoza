@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
@@ -24,6 +26,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
 )
+
+const chartFetchTimeout = 30 * time.Second
 
 type Event struct {
 	Kind string
@@ -48,6 +52,7 @@ type Manager struct {
 	dyn     dynamic.Interface
 	cs      kubernetes.Interface
 	schemas *jsonschema.Client
+	charts  *charts.Cache
 	cats    []api.Category
 	descs   map[string]api.ResourceDescriptor
 	mu      sync.Mutex
@@ -60,6 +65,7 @@ func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interf
 		dyn:     dyn,
 		cs:      cs,
 		schemas: schemas,
+		charts:  charts.New(ctx, &http.Client{Timeout: chartFetchTimeout}, charts.DefaultTTL),
 		cats:    cats,
 		descs:   descs,
 		streams: map[streamKey]*stream{},
@@ -106,7 +112,7 @@ func (m *Manager) Graph(ctx context.Context) api.Graph {
 }
 
 func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
-	return flux.Build(ctx, m.dyn, m.descs)
+	return flux.Build(ctx, m.dyn, m.descs, m.charts)
 }
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {

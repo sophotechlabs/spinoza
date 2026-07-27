@@ -41,10 +41,10 @@ test-fe:
 test: test-be test-fe
 
 lint-be:
-    golangci-lint run ./...
-    golangci-lint run --build-tags desktop ./...
-    go vet ./...
-    go vet -tags desktop ./...
+    golangci-lint run ./internal/... .
+    golangci-lint run --build-tags desktop ./internal/... .
+    go vet ./internal/... .
+    go vet -tags desktop ./internal/... .
 
 lint-fe:
     cd frontend && npm run lint

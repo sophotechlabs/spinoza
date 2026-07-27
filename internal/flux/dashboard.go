@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/charts"
 )
 
 var groupOrder = []string{
@@ -41,8 +42,14 @@ var notificationResources = map[string]bool{
 	"receivers": true,
 }
 
-func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) api.FluxDashboard {
+type Charts interface {
+	Latest(repo charts.Repo, chart string) string
+	Warm(repo charts.Repo, chart string)
+}
+
+func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, index Charts) api.FluxDashboard {
 	byGroup := map[string][]api.FluxResource{}
+	items := map[string][]*unstructured.Unstructured{}
 	for _, d := range descs {
 		group := categoryOf(d)
 		if group == "" {
@@ -55,9 +62,83 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 		}
 		for i := range list.Items {
 			byGroup[group] = append(byGroup[group], resourceOf(&list.Items[i], d))
+			items[group] = append(items[group], &list.Items[i])
 		}
 	}
+	applyLatest(byGroup, items, repoIndex(ctx, dyn, descs), index)
 	return assemble(byGroup)
+}
+
+func repoIndex(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {
+	out := map[string]charts.Repo{}
+	for _, d := range descs {
+		if d.Group != "source.toolkit.fluxcd.io" {
+			continue
+		}
+		if d.Resource != "helmrepositories" {
+			continue
+		}
+		gvr := schema.GroupVersionResource{Group: d.Group, Version: d.Version, Resource: d.Resource}
+		list, err := dyn.Resource(gvr).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			continue
+		}
+		for i := range list.Items {
+			repo := &list.Items[i]
+			out[repo.GetNamespace()+"/"+repo.GetName()] = charts.Repo{
+				URL: nestedString(repo, "spec", "url"),
+				OCI: nestedString(repo, "spec", "type") == "oci",
+			}
+		}
+	}
+	return out
+}
+
+func applyLatest(byGroup map[string][]api.FluxResource, items map[string][]*unstructured.Unstructured, repos map[string]charts.Repo, index Charts) {
+	if index == nil {
+		return
+	}
+	rows := byGroup["Helm Releases"]
+	objects := items["Helm Releases"]
+	for i := range rows {
+		if i >= len(objects) {
+			continue
+		}
+		repo, chart, ok := chartSource(objects[i], repos)
+		if !ok {
+			continue
+		}
+		index.Warm(repo, chart)
+		latest := index.Latest(repo, chart)
+		rows[i].Latest = latest
+		rows[i].Outdated = charts.Newer(rows[i].Revision, latest)
+	}
+}
+
+func chartSource(u *unstructured.Unstructured, repos map[string]charts.Repo) (charts.Repo, string, bool) {
+	chart := nestedString(u, "spec", "chart", "spec", "chart")
+	if chart == "" {
+		return charts.Repo{}, "", false
+	}
+	if nestedString(u, "spec", "chart", "spec", "sourceRef", "kind") != "HelmRepository" {
+		return charts.Repo{}, "", false
+	}
+	name := nestedString(u, "spec", "chart", "spec", "sourceRef", "name")
+	if name == "" {
+		return charts.Repo{}, "", false
+	}
+	namespace := nestedString(u, "spec", "chart", "spec", "sourceRef", "namespace")
+	if namespace == "" {
+		namespace = u.GetNamespace()
+	}
+	repo, ok := repos[namespace+"/"+name]
+	if !ok {
+		return charts.Repo{}, "", false
+	}
+	if repo.URL == "" {
+		return charts.Repo{}, "", false
+	}
+	return repo, chart, true
 }
 
 func categoryOf(d api.ResourceDescriptor) string {
