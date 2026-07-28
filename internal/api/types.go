@@ -72,7 +72,27 @@ type ObjectDetail struct {
 	Conditions  []Condition       `json:"conditions,omitempty"`
 	Containers  []string          `json:"containers,omitempty"`
 	Suspended   *bool             `json:"suspended,omitempty"`
+	Ports       []ObjectPort      `json:"ports,omitempty"`
 	YAML        string            `json:"yaml"`
+}
+
+type ObjectPort struct {
+	Name     string `json:"name,omitempty"`
+	Port     int32  `json:"port"`
+	Protocol string `json:"protocol,omitempty"`
+}
+
+type PortForward struct {
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Namespace  string `json:"namespace"`
+	Name       string `json:"name"`
+	Pod        string `json:"pod,omitempty"`
+	RemotePort int32  `json:"remotePort"`
+	LocalPort  int32  `json:"localPort"`
+	State      string `json:"state"`
+	Error      string `json:"error,omitempty"`
+	StartedAt  string `json:"startedAt"`
 }
 
 type Event struct {

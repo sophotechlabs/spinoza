@@ -16,15 +16,17 @@ import (
 )
 
 var (
-	podGVR  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	nodeGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
+	podGVR     = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+	nodeGVR    = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
+	serviceGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}
 )
 
 func listKinds() map[schema.GroupVersionResource]string {
 	return map[schema.GroupVersionResource]string{
-		podGVR:   "PodList",
-		nodeGVR:  "NodeList",
-		eventGVR: "EventList",
+		podGVR:     "PodList",
+		nodeGVR:    "NodeList",
+		serviceGVR: "ServiceList",
+		eventGVR:   "EventList",
 	}
 }
 
@@ -394,5 +396,151 @@ func TestSuspendedIgnoresNonBool(t *testing.T) {
 	}
 	if detail.Suspended != nil {
 		t.Fatalf("suspended = %v, want nil for a non-bool field", *detail.Suspended)
+	}
+}
+
+func TestPortsForAPod(t *testing.T) {
+	pod := newPod()
+	containers := []interface{}{
+		map[string]interface{}{
+			"name": "app",
+			"ports": []interface{}{
+				map[string]interface{}{"name": "http", "containerPort": int64(8080), "protocol": "TCP"},
+				map[string]interface{}{"name": "metrics", "containerPort": int64(9090)},
+				map[string]interface{}{"name": "dns", "containerPort": int64(53), "protocol": "UDP"},
+				map[string]interface{}{"name": "broken"},
+				"not-a-map",
+			},
+		},
+		map[string]interface{}{
+			"name":  "sidecar",
+			"ports": []interface{}{map[string]interface{}{"containerPort": float64(15000)}},
+		},
+		"not-a-map",
+	}
+	if err := unstructured.SetNestedSlice(pod.Object, containers, "spec", "containers"); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	detail, err := Get(context.Background(), newClient(pod), podRef())
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	if len(detail.Ports) != 3 {
+		t.Fatalf("ports = %+v, want http, metrics and the sidecar port", detail.Ports)
+	}
+	if detail.Ports[0].Name != "http" || detail.Ports[0].Port != 8080 || detail.Ports[0].Protocol != "TCP" {
+		t.Fatalf("first port = %+v", detail.Ports[0])
+	}
+	if detail.Ports[2].Port != 15000 {
+		t.Fatalf("sidecar port = %+v", detail.Ports[2])
+	}
+	for _, port := range detail.Ports {
+		if port.Protocol == "UDP" {
+			t.Fatalf("a udp port was offered for forwarding: %+v", port)
+		}
+	}
+}
+
+func TestPortsForAPodWithoutAny(t *testing.T) {
+	detail, err := Get(context.Background(), newClient(newPod()), podRef())
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Ports != nil {
+		t.Fatalf("ports = %+v, want nil", detail.Ports)
+	}
+}
+
+func TestPortsForAService(t *testing.T) {
+	svc := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Service",
+		"metadata":   map[string]interface{}{"name": "prometheus", "namespace": "flux-system"},
+		"spec": map[string]interface{}{
+			"ports": []interface{}{
+				map[string]interface{}{"name": "http", "port": int64(9090), "protocol": "TCP"},
+				map[string]interface{}{"name": "gossip", "port": int64(7946), "protocol": "UDP"},
+			},
+		},
+	}}
+	ref := api.ObjectRef{Version: "v1", Resource: "services", Namespace: "flux-system", Name: "prometheus"}
+
+	detail, err := Get(context.Background(), newClient(svc), ref)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	if len(detail.Ports) != 1 {
+		t.Fatalf("ports = %+v, want only the tcp port", detail.Ports)
+	}
+	if detail.Ports[0].Port != 9090 {
+		t.Fatalf("port = %+v", detail.Ports[0])
+	}
+}
+
+func TestPortsForAServiceWithoutAny(t *testing.T) {
+	svc := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Service",
+		"metadata":   map[string]interface{}{"name": "headless", "namespace": "flux-system"},
+		"spec":       map[string]interface{}{},
+	}}
+	ref := api.ObjectRef{Version: "v1", Resource: "services", Namespace: "flux-system", Name: "headless"}
+
+	detail, err := Get(context.Background(), newClient(svc), ref)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Ports != nil {
+		t.Fatalf("ports = %+v, want nil", detail.Ports)
+	}
+}
+
+func TestPortsIgnoredForOtherKinds(t *testing.T) {
+	node := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   map[string]interface{}{"name": "p-mk1"},
+		"spec":       map[string]interface{}{"ports": []interface{}{map[string]interface{}{"port": int64(10250)}}},
+	}}
+	ref := api.ObjectRef{Version: "v1", Resource: "nodes", Name: "p-mk1"}
+
+	detail, err := Get(context.Background(), newClient(node), ref)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Ports != nil {
+		t.Fatalf("ports = %+v, want nil for a node", detail.Ports)
+	}
+}
+
+func TestPortsRejectOutOfRangeNumbers(t *testing.T) {
+	pod := newPod()
+	containers := []interface{}{
+		map[string]interface{}{
+			"name": "app",
+			"ports": []interface{}{
+				map[string]interface{}{"containerPort": int64(70000)},
+				map[string]interface{}{"containerPort": int64(-1)},
+				map[string]interface{}{"containerPort": int64(8080)},
+			},
+		},
+	}
+	if err := unstructured.SetNestedSlice(pod.Object, containers, "spec", "containers"); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	detail, err := Get(context.Background(), newClient(pod), podRef())
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	if len(detail.Ports) != 1 {
+		t.Fatalf("ports = %+v, want only the in-range port", detail.Ports)
+	}
+	if detail.Ports[0].Port != 8080 {
+		t.Fatalf("port = %+v", detail.Ports[0])
 	}
 }

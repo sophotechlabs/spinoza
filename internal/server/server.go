@@ -5,12 +5,14 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"strconv"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
+	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
@@ -36,6 +38,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/object", cors(s.handleObject))
 	mux.HandleFunc("/api/events", cors(s.handleEvents))
 	mux.HandleFunc("/api/schema", cors(s.handleSchema))
+	mux.HandleFunc("/api/portforward", cors(s.handleForwards))
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.Handle("/", http.FileServerFS(s.assets))
 	return mux
@@ -143,6 +146,58 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(doc)
+}
+
+func (s *Server) handleForwards(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, s.mgr.Forwards())
+	case http.MethodPost:
+		s.startForward(w, r)
+	case http.MethodDelete:
+		s.stopForward(w, r)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	target := portforward.Target{
+		Kind:      q.Get("kind"),
+		Namespace: q.Get("namespace"),
+		Name:      q.Get("name"),
+	}
+	if target.Kind == "" || target.Namespace == "" || target.Name == "" {
+		writeError(w, http.StatusBadRequest, "kind, namespace and name are required")
+		return
+	}
+	port, err := strconv.ParseInt(q.Get("port"), 10, 32)
+	if err != nil || port <= 0 {
+		writeError(w, http.StatusBadRequest, "a positive port is required")
+		return
+	}
+	forward, startErr := s.mgr.StartForward(r.Context(), target, int32(port))
+	if startErr != nil {
+		writeAPIError(w, startErr)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, forward)
+}
+
+func (s *Server) stopForward(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	err := s.mgr.StopForward(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleObject(w http.ResponseWriter, r *http.Request) {

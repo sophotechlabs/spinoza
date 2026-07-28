@@ -7,11 +7,13 @@ import (
 	memory "k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 type Bundle struct {
+	Config    *restclient.Config
 	Clientset *kubernetes.Clientset
 	Dynamic   dynamic.Interface
 	Discovery discovery.CachedDiscoveryInterface
@@ -56,6 +58,7 @@ func Load() (*Bundle, error) {
 	}
 
 	return &Bundle{
+		Config:    restConfig,
 		Clientset: cs,
 		Dynamic:   dyn,
 		Discovery: cached,

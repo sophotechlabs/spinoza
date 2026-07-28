@@ -18,6 +18,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
+	"github.com/sophotechlabs/spinoza/internal/portforward"
 )
 
 func deploymentRef() api.ObjectRef {
@@ -49,7 +50,7 @@ func inspectManager(t *testing.T, objs ...runtime.Object) *Manager {
 	dyn := newClient(t, objs...)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	return NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, testDescs())
+	return NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, testDescs())
 }
 
 func TestManagerObject(t *testing.T) {
@@ -150,7 +151,7 @@ func TestManagerSchema(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := NewManager(ctx, newClient(t), k8sfake.NewClientset(), schemas, nil, testDescs())
+	mgr := NewManager(ctx, newClient(t), k8sfake.NewClientset(), schemas, nil, nil, testDescs())
 
 	raw, err := mgr.Schema(jsonschema.GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
@@ -190,7 +191,7 @@ func TestManagerFluxAction(t *testing.T) {
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, testDescs())
+	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, testDescs())
 	ref := api.ObjectRef{
 		Group:     "kustomize.toolkit.fluxcd.io",
 		Version:   "v1",
@@ -210,5 +211,66 @@ func TestManagerFluxAction(t *testing.T) {
 	suspended, _, _ := unstructured.NestedBool(got.Object, "spec", "suspend")
 	if !suspended {
 		t.Fatalf("spec.suspend was not set")
+	}
+}
+
+type stubForwardRunner struct{ local int32 }
+
+func (s *stubForwardRunner) Run(_ context.Context, _ string, _ string, _ int32, ready chan<- int32, stop <-chan struct{}) error {
+	ready <- s.local
+	<-stop
+	return nil
+}
+
+type stubForwardResolver struct{}
+
+func (stubForwardResolver) Resolve(_ context.Context, target portforward.Target, port int32) (string, int32, error) {
+	return target.Name, port, nil
+}
+
+func forwardManager(t *testing.T) *Manager {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	registry := portforward.NewRegistry(ctx, &stubForwardRunner{local: 45123}, stubForwardResolver{}, nil)
+	t.Cleanup(registry.StopAll)
+	return NewManager(ctx, newClient(t), k8sfake.NewClientset(), nil, registry, nil, testDescs())
+}
+
+func TestManagerPortForwardLifecycle(t *testing.T) {
+	mgr := forwardManager(t)
+	target := portforward.Target{Kind: portforward.KindPod, Namespace: "flux-system", Name: "web"}
+
+	forward, err := mgr.StartForward(context.Background(), target, 8080)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if forward.LocalPort != 45123 {
+		t.Fatalf("localPort = %d", forward.LocalPort)
+	}
+	if len(mgr.Forwards()) != 1 {
+		t.Fatalf("forwards = %v", mgr.Forwards())
+	}
+
+	if err := mgr.StopForward(forward.ID); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if len(mgr.Forwards()) != 0 {
+		t.Fatalf("forward survived the stop")
+	}
+}
+
+func TestManagerPortForwardWithoutARegistry(t *testing.T) {
+	mgr := inspectManager(t)
+	target := portforward.Target{Kind: portforward.KindPod, Namespace: "flux-system", Name: "web"}
+
+	if _, err := mgr.StartForward(context.Background(), target, 8080); err == nil {
+		t.Fatalf("expected an error when port forwarding is unavailable")
+	}
+	if len(mgr.Forwards()) != 0 {
+		t.Fatalf("expected an empty list")
+	}
+	if err := mgr.StopForward("pf-1"); err == nil {
+		t.Fatalf("expected an error when port forwarding is unavailable")
 	}
 }

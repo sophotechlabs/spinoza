@@ -85,6 +85,7 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		Conditions:  conditionsOf(clean),
 		Containers:  containerNames(clean),
 		Suspended:   suspendedOf(clean),
+		Ports:       portsOf(clean),
 		YAML:        string(raw),
 	}, nil
 }
@@ -160,6 +161,94 @@ func suspendedOf(u *unstructured.Unstructured) *bool {
 		return nil
 	}
 	return &value
+}
+
+func portsOf(u *unstructured.Unstructured) []api.ObjectPort {
+	if u.GetKind() == "Pod" {
+		return podPorts(u)
+	}
+	if u.GetKind() == "Service" {
+		return servicePorts(u)
+	}
+	return nil
+}
+
+func podPorts(u *unstructured.Unstructured) []api.ObjectPort {
+	out := []api.ObjectPort{}
+	for _, container := range nestedSlice(u, "spec", "containers") {
+		m, ok := container.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		out = append(out, readPorts(m, "ports", "containerPort")...)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func servicePorts(u *unstructured.Unstructured) []api.ObjectPort {
+	out := readPorts(u.Object["spec"], "ports", "port")
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func readPorts(holder interface{}, field string, numberKey string) []api.ObjectPort {
+	parent, ok := holder.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	entries, ok := parent[field].([]interface{})
+	if !ok {
+		return nil
+	}
+	out := []api.ObjectPort{}
+	for _, entry := range entries {
+		m, isMap := entry.(map[string]interface{})
+		if !isMap {
+			continue
+		}
+		protocol := stringField(m, "protocol")
+		if protocol == "UDP" {
+			continue
+		}
+		number := intField(m, numberKey)
+		if number == 0 {
+			continue
+		}
+		out = append(out, api.ObjectPort{
+			Name:     stringField(m, "name"),
+			Port:     number,
+			Protocol: protocol,
+		})
+	}
+	return out
+}
+
+const maxPort = 65535
+
+func intField(m map[string]interface{}, key string) int32 {
+	switch value := m[key].(type) {
+	case int64:
+		return boundedPort(value)
+	case float64:
+		return boundedPort(int64(value))
+	default:
+		return 0
+	}
+}
+
+func boundedPort(value int64) int32 {
+	if value < 1 {
+		return 0
+	}
+	if value > maxPort {
+		return 0
+	}
+	return int32(value)
 }
 
 func containerNames(u *unstructured.Unstructured) []string {

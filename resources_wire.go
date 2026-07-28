@@ -7,6 +7,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/kube"
+	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
@@ -21,5 +22,11 @@ func makeManager(ctx context.Context) *resources.Manager {
 	}
 	log.Printf("spinoza connected to context %q — %d resource types, %d categories", bundle.Context, len(descs), len(cats))
 	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3())
-	return resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, cats, descs)
+	forwards := portforward.NewRegistry(
+		ctx,
+		portforward.NewRunner(bundle.Clientset, bundle.Config),
+		portforward.NewResolver(bundle.Clientset),
+		portforward.NewProber(bundle.Clientset),
+	)
+	return resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, cats, descs)
 }

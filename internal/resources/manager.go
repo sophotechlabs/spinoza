@@ -25,6 +25,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
+	"github.com/sophotechlabs/spinoza/internal/portforward"
 )
 
 const chartFetchTimeout = 30 * time.Second
@@ -48,27 +49,29 @@ func (s *Subscription) Close() {
 }
 
 type Manager struct {
-	rootCtx context.Context
-	dyn     dynamic.Interface
-	cs      kubernetes.Interface
-	schemas *jsonschema.Client
-	charts  *charts.Cache
-	cats    []api.Category
-	descs   map[string]api.ResourceDescriptor
-	mu      sync.Mutex
-	streams map[streamKey]*stream
+	rootCtx  context.Context
+	dyn      dynamic.Interface
+	cs       kubernetes.Interface
+	schemas  *jsonschema.Client
+	charts   *charts.Cache
+	forwards *portforward.Registry
+	cats     []api.Category
+	descs    map[string]api.ResourceDescriptor
+	mu       sync.Mutex
+	streams  map[streamKey]*stream
 }
 
-func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
+func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
 	return &Manager{
-		rootCtx: ctx,
-		dyn:     dyn,
-		cs:      cs,
-		schemas: schemas,
-		charts:  charts.New(ctx, &http.Client{Timeout: chartFetchTimeout}, charts.DefaultTTL),
-		cats:    cats,
-		descs:   descs,
-		streams: map[streamKey]*stream{},
+		rootCtx:  ctx,
+		dyn:      dyn,
+		cs:       cs,
+		schemas:  schemas,
+		charts:   charts.New(ctx, &http.Client{Timeout: chartFetchTimeout}, charts.DefaultTTL),
+		forwards: forwards,
+		cats:     cats,
+		descs:    descs,
+		streams:  map[streamKey]*stream{},
 	}
 }
 
@@ -98,6 +101,27 @@ func (m *Manager) Logs(ctx context.Context, req logs.Request) (*logs.Stream, err
 
 func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) error {
 	return flux.Do(ctx, m.dyn, ref, action, time.Now())
+}
+
+func (m *Manager) StartForward(ctx context.Context, target portforward.Target, port int32) (api.PortForward, error) {
+	if m.forwards == nil {
+		return api.PortForward{}, fmt.Errorf("port forwarding is unavailable")
+	}
+	return m.forwards.Start(ctx, target, port)
+}
+
+func (m *Manager) Forwards() []api.PortForward {
+	if m.forwards == nil {
+		return []api.PortForward{}
+	}
+	return m.forwards.List()
+}
+
+func (m *Manager) StopForward(id string) error {
+	if m.forwards == nil {
+		return fmt.Errorf("port forwarding is unavailable")
+	}
+	return m.forwards.Stop(id)
 }
 
 func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {
