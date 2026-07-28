@@ -38,14 +38,14 @@ func actionClient(objs ...runtime.Object) *fake.FakeDynamicClient {
 }
 
 func newKustomization(suspended bool) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
 		"kind":       "Kustomization",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "apps",
 			"namespace": "flux-system",
 		},
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"interval": "10m",
 			"suspend":  suspended,
 		},
@@ -148,10 +148,10 @@ func TestSuspendDoesNotAnnotate(t *testing.T) {
 }
 
 func TestClusterScopedTarget(t *testing.T) {
-	provider := &unstructured.Unstructured{Object: map[string]interface{}{
+	provider := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "notification.toolkit.fluxcd.io/v1beta3",
 		"kind":       "Provider",
-		"metadata":   map[string]interface{}{"name": "slack"},
+		"metadata":   map[string]any{"name": "slack"},
 	}}
 	client := actionClient(provider)
 	ref := api.ObjectRef{

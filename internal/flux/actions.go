@@ -55,9 +55,9 @@ func Do(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, action Ac
 func patchFor(action Action, requestedAt string) ([]byte, error) {
 	switch action {
 	case Reconcile:
-		return json.Marshal(map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"annotations": map[string]interface{}{
+		return json.Marshal(map[string]any{
+			"metadata": map[string]any{
+				"annotations": map[string]any{
 					reconcileAnnotation: requestedAt,
 				},
 			},
@@ -72,8 +72,8 @@ func patchFor(action Action, requestedAt string) ([]byte, error) {
 }
 
 func suspendPatch(value bool) ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-		"spec": map[string]interface{}{"suspend": value},
+	return json.Marshal(map[string]any{
+		"spec": map[string]any{"suspend": value},
 	})
 }
 

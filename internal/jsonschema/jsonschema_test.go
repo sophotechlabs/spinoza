@@ -72,25 +72,25 @@ const podDoc = `{
   }
 }`
 
-func clientFor(doc string, path string) (*Client, *int) {
+func clientFor(doc, path string) (*Client, *int) {
 	hits := 0
 	return NewClient(&fakeClient{
 		paths: map[string]openapi.GroupVersion{path: fakeGroupVersion{doc: doc, hits: &hits}},
 	}), &hits
 }
 
-func decode(t *testing.T, raw json.RawMessage) map[string]interface{} {
+func decode(t *testing.T, raw json.RawMessage) map[string]any {
 	t.Helper()
-	out := map[string]interface{}{}
+	out := map[string]any{}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatalf("decode bundle: %v", err)
 	}
 	return out
 }
 
-func definitions(t *testing.T, bundle map[string]interface{}) map[string]interface{} {
+func definitions(t *testing.T, bundle map[string]any) map[string]any {
 	t.Helper()
-	defs, ok := bundle["definitions"].(map[string]interface{})
+	defs, ok := bundle["definitions"].(map[string]any)
 	if !ok {
 		t.Fatalf("bundle has no definitions: %v", bundle)
 	}
@@ -136,16 +136,16 @@ func TestForRewritesRefsIntoDefinitions(t *testing.T) {
 	}
 
 	defs := definitions(t, decode(t, raw))
-	pod := defs["io.k8s.api.core.v1.Pod"].(map[string]interface{})
-	props := pod["properties"].(map[string]interface{})
-	spec := props["spec"].(map[string]interface{})
+	pod := defs["io.k8s.api.core.v1.Pod"].(map[string]any)
+	props := pod["properties"].(map[string]any)
+	spec := props["spec"].(map[string]any)
 	if spec["$ref"] != "#/definitions/io.k8s.api.core.v1.PodSpec" {
 		t.Fatalf("spec $ref = %v", spec["$ref"])
 	}
 
-	podSpec := defs["io.k8s.api.core.v1.PodSpec"].(map[string]interface{})
-	containers := podSpec["properties"].(map[string]interface{})["containers"].(map[string]interface{})
-	items := containers["items"].(map[string]interface{})
+	podSpec := defs["io.k8s.api.core.v1.PodSpec"].(map[string]any)
+	containers := podSpec["properties"].(map[string]any)["containers"].(map[string]any)
+	items := containers["items"].(map[string]any)
 	if items["$ref"] != "#/definitions/io.k8s.api.core.v1.Container" {
 		t.Fatalf("items $ref = %v (refs inside arrays not rewritten)", items["$ref"])
 	}
@@ -257,7 +257,7 @@ func TestForIgnoresMalformedGVKExtensions(t *testing.T) {
 func TestForCachesTheDocumentAndBundle(t *testing.T) {
 	client, hits := clientFor(podDoc, "api/v1")
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if _, err := client.For(GVK{Version: "v1", Kind: "Pod"}); err != nil {
 			t.Fatalf("for: %v", err)
 		}
@@ -365,11 +365,11 @@ func TestForLeavesForeignRefsAlone(t *testing.T) {
 	}
 
 	defs := definitions(t, decode(t, raw))
-	props := defs["Thing"].(map[string]interface{})["properties"].(map[string]interface{})
-	if props["numeric"].(map[string]interface{})["$ref"] != float64(5) {
+	props := defs["Thing"].(map[string]any)["properties"].(map[string]any)
+	if props["numeric"].(map[string]any)["$ref"] != float64(5) {
 		t.Fatalf("non-string $ref was altered: %v", props["numeric"])
 	}
-	if props["external"].(map[string]interface{})["$ref"] != "https://example.test/schema.json" {
+	if props["external"].(map[string]any)["$ref"] != "https://example.test/schema.json" {
 		t.Fatalf("external $ref was rewritten: %v", props["external"])
 	}
 }

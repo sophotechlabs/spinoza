@@ -34,6 +34,7 @@ func (e *errorStream) Identifier() uint32   { return 1 }
 
 type pipeStream struct {
 	net.Conn
+
 	headers http.Header
 }
 

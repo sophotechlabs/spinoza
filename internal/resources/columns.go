@@ -2,6 +2,7 @@ package resources
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -87,11 +88,11 @@ func containersFor(u *unstructured.Unstructured, kind string) []api.ContainerSta
 func containerStates(u *unstructured.Unstructured, field string, init bool) []api.ContainerState {
 	out := []api.ContainerState{}
 	for _, s := range nestedSlice(u, "status", field) {
-		m, ok := s.(map[string]interface{})
+		m, ok := s.(map[string]any)
 		if !ok {
 			continue
 		}
-		name, _ := m["name"].(string)
+		name := stringAt(m, "name")
 		ready := false
 		if b, ok := m["ready"].(bool); ok {
 			ready = b
@@ -109,20 +110,20 @@ func containerStates(u *unstructured.Unstructured, field string, init bool) []ap
 	return out
 }
 
-func containerStateReason(m map[string]interface{}) (state, reason string) {
-	s, ok := m["state"].(map[string]interface{})
+func containerStateReason(m map[string]any) (state, reason string) {
+	s, ok := m["state"].(map[string]any)
 	if !ok {
 		return "waiting", ""
 	}
 	if _, ok := s["running"]; ok {
 		return "running", ""
 	}
-	if term, ok := s["terminated"].(map[string]interface{}); ok {
-		termReason, _ := term["reason"].(string)
+	if term, ok := s["terminated"].(map[string]any); ok {
+		termReason := stringAt(term, "reason")
 		return "terminated", termReason
 	}
-	if wait, ok := s["waiting"].(map[string]interface{}); ok {
-		waitReason, _ := wait["reason"].(string)
+	if wait, ok := s["waiting"].(map[string]any); ok {
+		waitReason := stringAt(wait, "reason")
 		return "waiting", waitReason
 	}
 	return "waiting", ""
@@ -133,7 +134,7 @@ func podCells(u *unstructured.Unstructured) []string {
 	ready := 0
 	var restarts int64
 	for _, s := range nestedSlice(u, "status", "containerStatuses") {
-		m, ok := s.(map[string]interface{})
+		m, ok := s.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -145,7 +146,7 @@ func podCells(u *unstructured.Unstructured) []string {
 	return []string{
 		fmt.Sprintf("%d/%d", ready, total),
 		nestedString(u, "status", "phase"),
-		fmt.Sprintf("%d", restarts),
+		strconv.FormatInt(restarts, 10),
 		nestedString(u, "spec", "nodeName"),
 	}
 }
@@ -157,23 +158,23 @@ func workloadCells(u *unstructured.Unstructured) []string {
 	available := nestedInt(u, "status", "availableReplicas")
 	return []string{
 		fmt.Sprintf("%d/%d", ready, desired),
-		fmt.Sprintf("%d", updated),
-		fmt.Sprintf("%d", available),
+		strconv.FormatInt(updated, 10),
+		strconv.FormatInt(available, 10),
 	}
 }
 
 func daemonCells(u *unstructured.Unstructured) []string {
 	return []string{
-		fmt.Sprintf("%d", nestedInt(u, "status", "desiredNumberScheduled")),
-		fmt.Sprintf("%d", nestedInt(u, "status", "numberReady")),
-		fmt.Sprintf("%d", nestedInt(u, "status", "numberAvailable")),
+		strconv.FormatInt(nestedInt(u, "status", "desiredNumberScheduled"), 10),
+		strconv.FormatInt(nestedInt(u, "status", "numberReady"), 10),
+		strconv.FormatInt(nestedInt(u, "status", "numberAvailable"), 10),
 	}
 }
 
 func serviceCells(u *unstructured.Unstructured) []string {
 	parts := []string{}
 	for _, p := range nestedSlice(u, "spec", "ports") {
-		m, ok := p.(map[string]interface{})
+		m, ok := p.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -193,7 +194,7 @@ func serviceCells(u *unstructured.Unstructured) []string {
 func nodeCells(u *unstructured.Unstructured) []string {
 	status := "NotReady"
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]interface{})
+		m, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -220,7 +221,7 @@ func jobCells(u *unstructured.Unstructured) []string {
 
 func conditionSummary(u *unstructured.Unstructured) string {
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]interface{})
+		m, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -254,7 +255,7 @@ func nestedInt(u *unstructured.Unstructured, fields ...string) int64 {
 	return v
 }
 
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []interface{} {
+func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
 	v, found, err := unstructured.NestedSlice(u.Object, fields...)
 	if !found || err != nil {
 		return nil
@@ -262,7 +263,7 @@ func nestedSlice(u *unstructured.Unstructured, fields ...string) []interface{} {
 	return v
 }
 
-func toInt64(v interface{}) int64 {
+func toInt64(v any) int64 {
 	switch n := v.(type) {
 	case int64:
 		return n
@@ -271,4 +272,12 @@ func toInt64(v interface{}) int64 {
 	default:
 		return 0
 	}
+}
+
+func stringAt(m map[string]any, key string) string {
+	v, ok := m[key].(string)
+	if !ok {
+		return ""
+	}
+	return v
 }

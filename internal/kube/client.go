@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"k8s.io/client-go/discovery"
-	memory "k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"

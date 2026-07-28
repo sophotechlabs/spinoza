@@ -80,14 +80,14 @@ func TestSchemaEndpointReturnsABundle(t *testing.T) {
 	if resp.Header.Get("Content-Type") != "application/json" {
 		t.Fatalf("content type = %q", resp.Header.Get("Content-Type"))
 	}
-	bundle := map[string]interface{}{}
+	bundle := map[string]any{}
 	if err := json.Unmarshal(body, &bundle); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if bundle["$ref"] != "#/definitions/io.k8s.api.core.v1.Pod" {
 		t.Fatalf("$ref = %v", bundle["$ref"])
 	}
-	defs, ok := bundle["definitions"].(map[string]interface{})
+	defs, ok := bundle["definitions"].(map[string]any)
 	if !ok {
 		t.Fatalf("no definitions in %v", bundle)
 	}

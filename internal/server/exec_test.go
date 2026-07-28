@@ -386,7 +386,7 @@ func waitForServer(t *testing.T, cond func() bool, message string) {
 
 func TestResourcesRefreshRejectsOtherMethods(t *testing.T) {
 	ts := execServer(t, nil)
-	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/resources", nil)
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/resources", http.NoBody)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}

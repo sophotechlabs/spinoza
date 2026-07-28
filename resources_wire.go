@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -12,10 +13,10 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
-func makeManager(ctx context.Context) *resources.Manager {
+func makeManager(ctx context.Context) (*resources.Manager, error) {
 	bundle, err := kube.Load()
 	if err != nil {
-		log.Fatalf("kube: %v", err)
+		return nil, fmt.Errorf("kube: %w", err)
 	}
 	cats, descs, discErr := discovery.List(bundle.Discovery)
 	if discErr != nil {
@@ -35,5 +36,5 @@ func makeManager(ctx context.Context) *resources.Manager {
 	)
 	mgr := resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, cats, descs)
 	mgr.UseDiscovery(bundle.Discovery, discErr)
-	return mgr
+	return mgr, nil
 }

@@ -29,7 +29,7 @@ func (s *stubRunner) count() int {
 	return s.calls
 }
 
-func (s *stubRunner) Run(_ context.Context, _ string, _ string, _ int32, ready chan<- int32, stop <-chan struct{}) error {
+func (s *stubRunner) Run(_ context.Context, _, _ string, _ int32, ready chan<- int32, stop <-chan struct{}) error {
 	s.mu.Lock()
 	s.calls++
 	s.mu.Unlock()

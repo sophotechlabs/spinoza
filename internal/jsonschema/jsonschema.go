@@ -31,14 +31,14 @@ func (g GVK) String() string {
 type Client struct {
 	oapi  openapi.Client
 	mu    sync.Mutex
-	docs  map[string]map[string]map[string]interface{}
+	docs  map[string]map[string]map[string]any
 	cache map[GVK]json.RawMessage
 }
 
 func NewClient(oapi openapi.Client) *Client {
 	return &Client{
 		oapi:  oapi,
-		docs:  map[string]map[string]map[string]interface{}{},
+		docs:  map[string]map[string]map[string]any{},
 		cache: map[GVK]json.RawMessage{},
 	}
 }
@@ -68,7 +68,7 @@ func (c *Client) For(gvk GVK) (json.RawMessage, error) {
 	return raw, nil
 }
 
-func (c *Client) schemas(path string) (map[string]map[string]interface{}, error) {
+func (c *Client) schemas(path string) (map[string]map[string]any, error) {
 	cached, ok := c.docs[path]
 	if ok {
 		return cached, nil
@@ -89,7 +89,7 @@ func (c *Client) schemas(path string) (map[string]map[string]interface{}, error)
 
 	var doc struct {
 		Components struct {
-			Schemas map[string]map[string]interface{} `json:"schemas"`
+			Schemas map[string]map[string]any `json:"schemas"`
 		} `json:"components"`
 	}
 	unmarshalErr := json.Unmarshal(raw, &doc)
@@ -108,7 +108,7 @@ func pathFor(gvk GVK) string {
 	return "apis/" + gvk.Group + "/" + gvk.Version
 }
 
-func rootName(schemas map[string]map[string]interface{}, gvk GVK) (string, bool) {
+func rootName(schemas map[string]map[string]any, gvk GVK) (string, bool) {
 	match := ""
 	for name, schema := range schemas {
 		if !declares(schema, gvk) {
@@ -124,8 +124,8 @@ func rootName(schemas map[string]map[string]interface{}, gvk GVK) (string, bool)
 	return match, match != ""
 }
 
-func declares(schema map[string]interface{}, gvk GVK) bool {
-	entries, ok := schema["x-kubernetes-group-version-kind"].([]interface{})
+func declares(schema map[string]any, gvk GVK) bool {
+	entries, ok := schema["x-kubernetes-group-version-kind"].([]any)
 	if !ok {
 		return false
 	}
@@ -137,8 +137,8 @@ func declares(schema map[string]interface{}, gvk GVK) bool {
 	return false
 }
 
-func matches(entry interface{}, gvk GVK) bool {
-	m, ok := entry.(map[string]interface{})
+func matches(entry any, gvk GVK) bool {
+	m, ok := entry.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -163,13 +163,13 @@ func matches(entry interface{}, gvk GVK) bool {
 	return kind == gvk.Kind
 }
 
-func field(m map[string]interface{}, key string) (string, bool) {
+func field(m map[string]any, key string) (string, bool) {
 	v, ok := m[key].(string)
 	return v, ok
 }
 
-func bundle(schemas map[string]map[string]interface{}, root string) map[string]interface{} {
-	definitions := map[string]interface{}{}
+func bundle(schemas map[string]map[string]any, root string) map[string]any {
+	definitions := map[string]any{}
 	pending := []string{root}
 	for len(pending) > 0 {
 		name := pending[0]
@@ -186,26 +186,26 @@ func bundle(schemas map[string]map[string]interface{}, root string) map[string]i
 		definitions[name] = rewrite(schema, &refs)
 		pending = append(pending, refs...)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"$schema":     draft,
 		"$ref":        bundleRefPrefix + root,
 		"definitions": definitions,
 	}
 }
 
-func rewrite(node interface{}, refs *[]string) interface{} {
+func rewrite(node any, refs *[]string) any {
 	switch value := node.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return rewriteMap(value, refs)
-	case []interface{}:
+	case []any:
 		return rewriteSlice(value, refs)
 	default:
 		return node
 	}
 }
 
-func rewriteMap(node map[string]interface{}, refs *[]string) interface{} {
-	out := make(map[string]interface{}, len(node))
+func rewriteMap(node map[string]any, refs *[]string) any {
+	out := make(map[string]any, len(node))
 	for key, value := range node {
 		name, isRef := refTarget(key, value)
 		if isRef {
@@ -218,15 +218,15 @@ func rewriteMap(node map[string]interface{}, refs *[]string) interface{} {
 	return out
 }
 
-func rewriteSlice(node []interface{}, refs *[]string) interface{} {
-	out := make([]interface{}, 0, len(node))
+func rewriteSlice(node []any, refs *[]string) any {
+	out := make([]any, 0, len(node))
 	for _, item := range node {
 		out = append(out, rewrite(item, refs))
 	}
 	return out
 }
 
-func refTarget(key string, value interface{}) (string, bool) {
+func refTarget(key string, value any) (string, bool) {
 	if key != "$ref" {
 		return "", false
 	}

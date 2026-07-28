@@ -101,6 +101,7 @@ func (f *fakeKubelet) handle(ctx context.Context, conn *websocket.Conn, data []b
 			f.succeed(ctx, conn)
 			return true
 		}
+	default:
 	}
 	return false
 }

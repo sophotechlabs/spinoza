@@ -39,43 +39,43 @@ func podRef() api.ObjectRef {
 }
 
 func newPod() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Pod",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":              "web",
 			"namespace":         "flux-system",
 			"uid":               "pod-uid",
 			"creationTimestamp": "2026-07-27T09:00:00Z",
-			"labels":            map[string]interface{}{"app": "web"},
-			"annotations": map[string]interface{}{
+			"labels":            map[string]any{"app": "web"},
+			"annotations": map[string]any{
 				"note":                "keep",
 				lastAppliedAnnotation: `{"spec":{}}`,
 			},
-			"ownerReferences": []interface{}{
-				map[string]interface{}{
+			"ownerReferences": []any{
+				map[string]any{
 					"apiVersion": "apps/v1",
 					"kind":       "ReplicaSet",
 					"name":       "web-abc",
 					"uid":        "rs-uid",
 				},
 			},
-			"managedFields": []interface{}{
-				map[string]interface{}{"manager": "kubelet", "operation": "Update"},
+			"managedFields": []any{
+				map[string]any{"manager": "kubelet", "operation": "Update"},
 			},
 		},
-		"spec": map[string]interface{}{
-			"initContainers": []interface{}{
-				map[string]interface{}{"name": "init-db"},
+		"spec": map[string]any{
+			"initContainers": []any{
+				map[string]any{"name": "init-db"},
 			},
-			"containers": []interface{}{
-				map[string]interface{}{"name": "app"},
-				map[string]interface{}{"name": "sidecar"},
+			"containers": []any{
+				map[string]any{"name": "app"},
+				map[string]any{"name": "sidecar"},
 			},
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{
 					"type":               "Ready",
 					"status":             "True",
 					"reason":             "PodReady",
@@ -162,10 +162,10 @@ func TestGetDropsEmptyAnnotationMap(t *testing.T) {
 }
 
 func TestGetClusterScoped(t *testing.T) {
-	node := &unstructured.Unstructured{Object: map[string]interface{}{
+	node := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Node",
-		"metadata":   map[string]interface{}{"name": "p-mk1"},
+		"metadata":   map[string]any{"name": "p-mk1"},
 	}}
 	ref := api.ObjectRef{Version: "v1", Resource: "nodes", Name: "p-mk1"}
 
@@ -279,8 +279,8 @@ func TestDeleteMissingObject(t *testing.T) {
 
 func TestConditionFallsBackToLastUpdateTime(t *testing.T) {
 	pod := newPod()
-	conditions := []interface{}{
-		map[string]interface{}{
+	conditions := []any{
+		map[string]any{
 			"type":           "Ready",
 			"status":         "True",
 			"lastUpdateTime": "2026-07-27T10:00:00Z",
@@ -305,10 +305,10 @@ func TestConditionFallsBackToLastUpdateTime(t *testing.T) {
 
 func TestContainerNamesSkipMalformedEntries(t *testing.T) {
 	pod := newPod()
-	containers := []interface{}{
+	containers := []any{
 		"not-a-map",
-		map[string]interface{}{"image": "no-name"},
-		map[string]interface{}{"name": "app"},
+		map[string]any{"image": "no-name"},
+		map[string]any{"name": "app"},
 	}
 	if err := unstructured.SetNestedSlice(pod.Object, containers, "spec", "containers"); err != nil {
 		t.Fatalf("set containers: %v", err)
@@ -401,20 +401,20 @@ func TestSuspendedIgnoresNonBool(t *testing.T) {
 
 func TestPortsForAPod(t *testing.T) {
 	pod := newPod()
-	containers := []interface{}{
-		map[string]interface{}{
+	containers := []any{
+		map[string]any{
 			"name": "app",
-			"ports": []interface{}{
-				map[string]interface{}{"name": "http", "containerPort": int64(8080), "protocol": "TCP"},
-				map[string]interface{}{"name": "metrics", "containerPort": int64(9090)},
-				map[string]interface{}{"name": "dns", "containerPort": int64(53), "protocol": "UDP"},
-				map[string]interface{}{"name": "broken"},
+			"ports": []any{
+				map[string]any{"name": "http", "containerPort": int64(8080), "protocol": "TCP"},
+				map[string]any{"name": "metrics", "containerPort": int64(9090)},
+				map[string]any{"name": "dns", "containerPort": int64(53), "protocol": "UDP"},
+				map[string]any{"name": "broken"},
 				"not-a-map",
 			},
 		},
-		map[string]interface{}{
+		map[string]any{
 			"name":  "sidecar",
-			"ports": []interface{}{map[string]interface{}{"containerPort": float64(15000)}},
+			"ports": []any{map[string]any{"containerPort": float64(15000)}},
 		},
 		"not-a-map",
 	}
@@ -454,14 +454,14 @@ func TestPortsForAPodWithoutAny(t *testing.T) {
 }
 
 func TestPortsForAService(t *testing.T) {
-	svc := &unstructured.Unstructured{Object: map[string]interface{}{
+	svc := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Service",
-		"metadata":   map[string]interface{}{"name": "prometheus", "namespace": "flux-system"},
-		"spec": map[string]interface{}{
-			"ports": []interface{}{
-				map[string]interface{}{"name": "http", "port": int64(9090), "protocol": "TCP"},
-				map[string]interface{}{"name": "gossip", "port": int64(7946), "protocol": "UDP"},
+		"metadata":   map[string]any{"name": "prometheus", "namespace": "flux-system"},
+		"spec": map[string]any{
+			"ports": []any{
+				map[string]any{"name": "http", "port": int64(9090), "protocol": "TCP"},
+				map[string]any{"name": "gossip", "port": int64(7946), "protocol": "UDP"},
 			},
 		},
 	}}
@@ -481,11 +481,11 @@ func TestPortsForAService(t *testing.T) {
 }
 
 func TestPortsForAServiceWithoutAny(t *testing.T) {
-	svc := &unstructured.Unstructured{Object: map[string]interface{}{
+	svc := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Service",
-		"metadata":   map[string]interface{}{"name": "headless", "namespace": "flux-system"},
-		"spec":       map[string]interface{}{},
+		"metadata":   map[string]any{"name": "headless", "namespace": "flux-system"},
+		"spec":       map[string]any{},
 	}}
 	ref := api.ObjectRef{Version: "v1", Resource: "services", Namespace: "flux-system", Name: "headless"}
 
@@ -499,11 +499,11 @@ func TestPortsForAServiceWithoutAny(t *testing.T) {
 }
 
 func TestPortsIgnoredForOtherKinds(t *testing.T) {
-	node := &unstructured.Unstructured{Object: map[string]interface{}{
+	node := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Node",
-		"metadata":   map[string]interface{}{"name": "p-mk1"},
-		"spec":       map[string]interface{}{"ports": []interface{}{map[string]interface{}{"port": int64(10250)}}},
+		"metadata":   map[string]any{"name": "p-mk1"},
+		"spec":       map[string]any{"ports": []any{map[string]any{"port": int64(10250)}}},
 	}}
 	ref := api.ObjectRef{Version: "v1", Resource: "nodes", Name: "p-mk1"}
 
@@ -518,13 +518,13 @@ func TestPortsIgnoredForOtherKinds(t *testing.T) {
 
 func TestPortsRejectOutOfRangeNumbers(t *testing.T) {
 	pod := newPod()
-	containers := []interface{}{
-		map[string]interface{}{
+	containers := []any{
+		map[string]any{
 			"name": "app",
-			"ports": []interface{}{
-				map[string]interface{}{"containerPort": int64(70000)},
-				map[string]interface{}{"containerPort": int64(-1)},
-				map[string]interface{}{"containerPort": int64(8080)},
+			"ports": []any{
+				map[string]any{"containerPort": int64(70000)},
+				map[string]any{"containerPort": int64(-1)},
+				map[string]any{"containerPort": int64(8080)},
 			},
 		},
 	}

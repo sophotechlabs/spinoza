@@ -3,6 +3,7 @@ package charts
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -84,11 +85,9 @@ func (c *Cache) Warm(repo Repo, chart string) {
 	c.inflight[unit] = true
 	c.mu.Unlock()
 
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
+	c.wg.Go(func() {
 		c.refresh(unit, repo, chart)
-	}()
+	})
 }
 
 func (c *Cache) Wait() {
@@ -180,8 +179,8 @@ func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[st
 	return map[string]string{chart: latest}, nil
 }
 
-func (c *Cache) get(ctx context.Context, url string, token string) (io.ReadCloser, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func (c *Cache) get(ctx context.Context, url, token string) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +218,7 @@ func (c *Cache) token(ctx context.Context, challenge string) (string, error) {
 	}
 	url := realm + "?service=" + params["service"] + "&scope=" + params["scope"]
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return "", err
 	}
@@ -246,13 +245,13 @@ func (c *Cache) token(ctx context.Context, challenge string) (string, error) {
 	if doc.AccessToken != "" {
 		return doc.AccessToken, nil
 	}
-	return "", fmt.Errorf("empty token response")
+	return "", errors.New("empty token response")
 }
 
 func parseChallenge(header string) map[string]string {
 	out := map[string]string{}
 	trimmed := strings.TrimSpace(strings.TrimPrefix(header, "Bearer"))
-	for _, part := range strings.Split(trimmed, ",") {
+	for part := range strings.SplitSeq(trimmed, ",") {
 		pair := strings.SplitN(strings.TrimSpace(part), "=", 2)
 		if len(pair) != 2 {
 			continue
@@ -262,7 +261,7 @@ func parseChallenge(header string) map[string]string {
 	return out
 }
 
-func splitOCI(url string) (host string, path string, err error) {
+func splitOCI(url string) (host, path string, err error) {
 	trimmed := strings.TrimPrefix(url, "oci://")
 	trimmed = strings.Trim(trimmed, "/")
 	parts := strings.SplitN(trimmed, "/", 2)
@@ -299,7 +298,7 @@ func maxVersion(raw []string) string {
 	return best
 }
 
-func Newer(current string, latest string) bool {
+func Newer(current, latest string) bool {
 	if latest == "" {
 		return false
 	}

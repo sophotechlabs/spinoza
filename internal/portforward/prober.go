@@ -16,7 +16,7 @@ func NewProber(cs kubernetes.Interface) Prober {
 	return &podProber{cs: cs}
 }
 
-func (p *podProber) Alive(ctx context.Context, namespace string, pod string) bool {
+func (p *podProber) Alive(ctx context.Context, namespace, pod string) bool {
 	_, err := p.cs.CoreV1().Pods(namespace).Get(ctx, pod, metav1.GetOptions{})
 	if err == nil {
 		return true

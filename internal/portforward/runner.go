@@ -14,7 +14,7 @@ import (
 	streamhttp "k8s.io/streaming/pkg/httpstream"
 )
 
-type dialerFactory func(namespace string, pod string) (streamhttp.Dialer, error)
+type dialerFactory func(namespace, pod string) (streamhttp.Dialer, error)
 
 type streamRunner struct {
 	dialerFor dialerFactory
@@ -22,13 +22,13 @@ type streamRunner struct {
 
 func NewRunner(cs kubernetes.Interface, config *restclient.Config) Runner {
 	return &streamRunner{
-		dialerFor: func(namespace string, pod string) (streamhttp.Dialer, error) {
+		dialerFor: func(namespace, pod string) (streamhttp.Dialer, error) {
 			return apiDialer(cs, config, namespace, pod)
 		},
 	}
 }
 
-func apiDialer(cs kubernetes.Interface, config *restclient.Config, namespace string, pod string) (streamhttp.Dialer, error) {
+func apiDialer(cs kubernetes.Interface, config *restclient.Config, namespace, pod string) (streamhttp.Dialer, error) {
 	endpoint := cs.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -59,7 +59,7 @@ func shouldFallback(err error) bool {
 	return streamhttp.IsHTTPSProxyError(err)
 }
 
-func (s *streamRunner) Run(ctx context.Context, namespace string, pod string, remotePort int32, ready chan<- int32, stop <-chan struct{}) error {
+func (s *streamRunner) Run(ctx context.Context, namespace, pod string, remotePort int32, ready chan<- int32, stop <-chan struct{}) error {
 	dialer, err := s.dialerFor(namespace, pod)
 	if err != nil {
 		return err

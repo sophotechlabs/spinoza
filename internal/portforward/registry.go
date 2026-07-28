@@ -29,7 +29,7 @@ type Target struct {
 }
 
 type Runner interface {
-	Run(ctx context.Context, namespace string, pod string, remotePort int32, ready chan<- int32, stop <-chan struct{}) error
+	Run(ctx context.Context, namespace, pod string, remotePort int32, ready chan<- int32, stop <-chan struct{}) error
 }
 
 type Resolver interface {
@@ -37,7 +37,7 @@ type Resolver interface {
 }
 
 type Prober interface {
-	Alive(ctx context.Context, namespace string, pod string) bool
+	Alive(ctx context.Context, namespace, pod string) bool
 }
 
 type record struct {
@@ -126,7 +126,7 @@ func (r *Registry) Reap() {
 	}
 }
 
-func (r *Registry) fail(id string, message string) {
+func (r *Registry) fail(id, message string) {
 	r.mu.Lock()
 	entry, present := r.forwards[id]
 	if present {

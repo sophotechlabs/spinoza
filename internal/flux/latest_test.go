@@ -53,34 +53,34 @@ func latestDescs() map[string]api.ResourceDescriptor {
 	}
 }
 
-func newRepo(name string, url string, repoType string) *unstructured.Unstructured {
-	spec := map[string]interface{}{"url": url}
+func newRepo(name, url, repoType string) *unstructured.Unstructured {
+	spec := map[string]any{"url": url}
 	if repoType != "" {
 		spec["type"] = repoType
 	}
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",
 		"kind":       "HelmRepository",
-		"metadata":   map[string]interface{}{"name": name, "namespace": "flux-system"},
+		"metadata":   map[string]any{"name": name, "namespace": "flux-system"},
 		"spec":       spec,
 	}}
 }
 
-func newRelease(namespace string, name string, chart string, sourceName string, sourceNs string, revision string) *unstructured.Unstructured {
-	sourceRef := map[string]interface{}{"kind": "HelmRepository", "name": sourceName}
+func newRelease(namespace, name, chart, sourceName, sourceNs, revision string) *unstructured.Unstructured {
+	sourceRef := map[string]any{"kind": "HelmRepository", "name": sourceName}
 	if sourceNs != "" {
 		sourceRef["namespace"] = sourceNs
 	}
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "helm.toolkit.fluxcd.io/v2",
 		"kind":       "HelmRelease",
-		"metadata":   map[string]interface{}{"name": name, "namespace": namespace},
-		"spec": map[string]interface{}{
-			"chart": map[string]interface{}{
-				"spec": map[string]interface{}{"chart": chart, "sourceRef": sourceRef},
+		"metadata":   map[string]any{"name": name, "namespace": namespace},
+		"spec": map[string]any{
+			"chart": map[string]any{
+				"spec": map[string]any{"chart": chart, "sourceRef": sourceRef},
 			},
 		},
-		"status": map[string]interface{}{"lastAppliedRevision": revision},
+		"status": map[string]any{"lastAppliedRevision": revision},
 	}}
 }
 

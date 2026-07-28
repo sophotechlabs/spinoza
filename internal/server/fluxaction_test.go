@@ -29,14 +29,14 @@ const kustomizationQuery = "?group=kustomize.toolkit.fluxcd.io&version=v1&resour
 	"&namespace=flux-system&name=apps"
 
 func newKustomization() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
 		"kind":       "Kustomization",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "apps",
 			"namespace": "flux-system",
 		},
-		"spec": map[string]interface{}{"interval": "10m", "suspend": false},
+		"spec": map[string]any{"interval": "10m", "suspend": false},
 	}}
 }
 

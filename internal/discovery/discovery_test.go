@@ -12,6 +12,7 @@ import (
 
 type stubDiscovery struct {
 	clientdiscovery.DiscoveryInterface
+
 	lists []*metav1.APIResourceList
 	err   error
 }

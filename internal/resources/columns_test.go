@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func u(obj map[string]interface{}) *unstructured.Unstructured {
+func u(obj map[string]any) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: obj}
 }
 
@@ -88,41 +88,41 @@ func TestColumnRenders(t *testing.T) {
 }
 
 func TestContainersForNonPod(t *testing.T) {
-	if got := containersFor(u(map[string]interface{}{}), "Deployment"); got != nil {
+	if got := containersFor(u(map[string]any{}), "Deployment"); got != nil {
 		t.Fatalf("containersFor non-pod = %v, want nil", got)
 	}
 }
 
 func TestContainersForEmptyPod(t *testing.T) {
-	if got := containersFor(u(map[string]interface{}{}), "Pod"); got != nil {
+	if got := containersFor(u(map[string]any{}), "Pod"); got != nil {
 		t.Fatalf("containersFor empty pod = %v, want nil", got)
 	}
 }
 
 func TestContainersForPod(t *testing.T) {
-	pod := u(map[string]interface{}{
-		"status": map[string]interface{}{
-			"initContainerStatuses": []interface{}{
-				map[string]interface{}{
+	pod := u(map[string]any{
+		"status": map[string]any{
+			"initContainerStatuses": []any{
+				map[string]any{
 					"name":         "init",
 					"ready":        true,
 					"restartCount": int64(0),
-					"state":        map[string]interface{}{"terminated": map[string]interface{}{"reason": "Completed"}},
+					"state":        map[string]any{"terminated": map[string]any{"reason": "Completed"}},
 				},
 			},
-			"containerStatuses": []interface{}{
+			"containerStatuses": []any{
 				"not-a-map",
-				map[string]interface{}{
+				map[string]any{
 					"name":         "app",
 					"ready":        true,
 					"restartCount": int64(1),
-					"state":        map[string]interface{}{"running": map[string]interface{}{}},
+					"state":        map[string]any{"running": map[string]any{}},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"name":         "sidecar",
 					"ready":        false,
 					"restartCount": int64(4),
-					"state":        map[string]interface{}{"waiting": map[string]interface{}{"reason": "CrashLoopBackOff"}},
+					"state":        map[string]any{"waiting": map[string]any{"reason": "CrashLoopBackOff"}},
 				},
 			},
 		},
@@ -143,29 +143,29 @@ func TestContainersForPod(t *testing.T) {
 }
 
 func TestContainerStateReason(t *testing.T) {
-	if state, reason := containerStateReason(map[string]interface{}{}); state != "waiting" || reason != "" {
+	if state, reason := containerStateReason(map[string]any{}); state != "waiting" || reason != "" {
 		t.Fatalf("no state = %q,%q, want waiting,''", state, reason)
 	}
-	empty := map[string]interface{}{"state": map[string]interface{}{}}
+	empty := map[string]any{"state": map[string]any{}}
 	if state, reason := containerStateReason(empty); state != "waiting" || reason != "" {
 		t.Fatalf("empty state = %q,%q, want waiting,''", state, reason)
 	}
 }
 
 func TestPodCells(t *testing.T) {
-	pod := u(map[string]interface{}{
-		"spec": map[string]interface{}{
+	pod := u(map[string]any{
+		"spec": map[string]any{
 			"nodeName": "node-1",
-			"containers": []interface{}{
-				map[string]interface{}{"name": "a"},
-				map[string]interface{}{"name": "b"},
+			"containers": []any{
+				map[string]any{"name": "a"},
+				map[string]any{"name": "b"},
 			},
 		},
-		"status": map[string]interface{}{
+		"status": map[string]any{
 			"phase": "Running",
-			"containerStatuses": []interface{}{
-				map[string]interface{}{"ready": true, "restartCount": int64(2)},
-				map[string]interface{}{"ready": false, "restartCount": int64(3)},
+			"containerStatuses": []any{
+				map[string]any{"ready": true, "restartCount": int64(2)},
+				map[string]any{"ready": false, "restartCount": int64(3)},
 			},
 		},
 	})
@@ -173,20 +173,20 @@ func TestPodCells(t *testing.T) {
 }
 
 func TestPodCellsEmpty(t *testing.T) {
-	pod := u(map[string]interface{}{})
+	pod := u(map[string]any{})
 	eq(t, podCells(pod), []string{"0/0", "", "0", ""})
 }
 
 func TestPodCellsSkipsNonMapContainerStatus(t *testing.T) {
-	pod := u(map[string]interface{}{
-		"spec": map[string]interface{}{
-			"containers": []interface{}{map[string]interface{}{"name": "a"}},
+	pod := u(map[string]any{
+		"spec": map[string]any{
+			"containers": []any{map[string]any{"name": "a"}},
 		},
-		"status": map[string]interface{}{
+		"status": map[string]any{
 			"phase": "Running",
-			"containerStatuses": []interface{}{
+			"containerStatuses": []any{
 				"not-a-map",
-				map[string]interface{}{"ready": true, "restartCount": int64(1)},
+				map[string]any{"ready": true, "restartCount": int64(1)},
 			},
 		},
 	})
@@ -194,9 +194,9 @@ func TestPodCellsSkipsNonMapContainerStatus(t *testing.T) {
 }
 
 func TestWorkloadCells(t *testing.T) {
-	dep := u(map[string]interface{}{
-		"spec": map[string]interface{}{"replicas": int64(3)},
-		"status": map[string]interface{}{
+	dep := u(map[string]any{
+		"spec": map[string]any{"replicas": int64(3)},
+		"status": map[string]any{
 			"readyReplicas":     int64(2),
 			"updatedReplicas":   int64(3),
 			"availableReplicas": int64(2),
@@ -206,13 +206,13 @@ func TestWorkloadCells(t *testing.T) {
 }
 
 func TestWorkloadCellsMissing(t *testing.T) {
-	dep := u(map[string]interface{}{})
+	dep := u(map[string]any{})
 	eq(t, workloadCells(dep), []string{"0/0", "0", "0"})
 }
 
 func TestDaemonCells(t *testing.T) {
-	ds := u(map[string]interface{}{
-		"status": map[string]interface{}{
+	ds := u(map[string]any{
+		"status": map[string]any{
 			"desiredNumberScheduled": int64(4),
 			"numberReady":            int64(3),
 			"numberAvailable":        int64(3),
@@ -222,13 +222,13 @@ func TestDaemonCells(t *testing.T) {
 }
 
 func TestServiceCells(t *testing.T) {
-	svc := u(map[string]interface{}{
-		"spec": map[string]interface{}{
+	svc := u(map[string]any{
+		"spec": map[string]any{
 			"type":      "ClusterIP",
 			"clusterIP": "10.0.0.1",
-			"ports": []interface{}{
-				map[string]interface{}{"port": int64(80), "protocol": "TCP"},
-				map[string]interface{}{"port": int64(443), "protocol": "TCP"},
+			"ports": []any{
+				map[string]any{"port": int64(80), "protocol": "TCP"},
+				map[string]any{"port": int64(443), "protocol": "TCP"},
 			},
 		},
 	})
@@ -236,13 +236,13 @@ func TestServiceCells(t *testing.T) {
 }
 
 func TestServiceCellsPortWithoutProtocol(t *testing.T) {
-	svc := u(map[string]interface{}{
-		"spec": map[string]interface{}{
+	svc := u(map[string]any{
+		"spec": map[string]any{
 			"type":      "NodePort",
 			"clusterIP": "10.0.0.2",
-			"ports": []interface{}{
+			"ports": []any{
 				"not-a-map",
-				map[string]interface{}{"port": int64(8080)},
+				map[string]any{"port": int64(8080)},
 			},
 		},
 	})
@@ -250,20 +250,20 @@ func TestServiceCellsPortWithoutProtocol(t *testing.T) {
 }
 
 func TestNodeCellsReady(t *testing.T) {
-	node := u(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
+	node := u(map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]any{
 				"node-role.kubernetes.io/control-plane": "",
 				"node-role.kubernetes.io/worker":        "",
 				"kubernetes.io/hostname":                "node-1",
 			},
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "MemoryPressure", "status": "False"},
-				map[string]interface{}{"type": "Ready", "status": "True"},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "MemoryPressure", "status": "False"},
+				map[string]any{"type": "Ready", "status": "True"},
 			},
-			"nodeInfo": map[string]interface{}{"kubeletVersion": "v1.31.0"},
+			"nodeInfo": map[string]any{"kubeletVersion": "v1.31.0"},
 		},
 	})
 	cells := nodeCells(node)
@@ -280,11 +280,11 @@ func TestNodeCellsReady(t *testing.T) {
 }
 
 func TestNodeCellsNotReady(t *testing.T) {
-	node := u(map[string]interface{}{
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
+	node := u(map[string]any{
+		"status": map[string]any{
+			"conditions": []any{
 				"not-a-map",
-				map[string]interface{}{"type": "Ready", "status": "False"},
+				map[string]any{"type": "Ready", "status": "False"},
 			},
 		},
 	})
@@ -292,30 +292,30 @@ func TestNodeCellsNotReady(t *testing.T) {
 }
 
 func TestNodeCellsSkipsEmptyRole(t *testing.T) {
-	node := u(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": map[string]interface{}{
+	node := u(map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]any{
 				"node-role.kubernetes.io/": "",
 			},
 		},
-		"status": map[string]interface{}{},
+		"status": map[string]any{},
 	})
 	eq(t, nodeCells(node), []string{"NotReady", "", ""})
 }
 
 func TestJobCells(t *testing.T) {
-	job := u(map[string]interface{}{
-		"spec":   map[string]interface{}{"completions": int64(5)},
-		"status": map[string]interface{}{"succeeded": int64(3)},
+	job := u(map[string]any{
+		"spec":   map[string]any{"completions": int64(5)},
+		"status": map[string]any{"succeeded": int64(3)},
 	})
 	eq(t, jobCells(job), []string{"3/5"})
 }
 
 func TestConditionSummaryReady(t *testing.T) {
-	obj := u(map[string]interface{}{
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Ready", "status": "True"},
+	obj := u(map[string]any{
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
 			},
 		},
 	})
@@ -325,11 +325,11 @@ func TestConditionSummaryReady(t *testing.T) {
 }
 
 func TestConditionSummaryReason(t *testing.T) {
-	obj := u(map[string]interface{}{
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Available", "status": "False"},
-				map[string]interface{}{"type": "Ready", "status": "False", "reason": "MinimumReplicasUnavailable"},
+	obj := u(map[string]any{
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Available", "status": "False"},
+				map[string]any{"type": "Ready", "status": "False", "reason": "MinimumReplicasUnavailable"},
 			},
 		},
 	})
@@ -339,11 +339,11 @@ func TestConditionSummaryReason(t *testing.T) {
 }
 
 func TestConditionSummaryNotReady(t *testing.T) {
-	obj := u(map[string]interface{}{
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
+	obj := u(map[string]any{
+		"status": map[string]any{
+			"conditions": []any{
 				"not-a-map",
-				map[string]interface{}{"type": "Ready", "status": "False"},
+				map[string]any{"type": "Ready", "status": "False"},
 			},
 		},
 	})
@@ -353,49 +353,49 @@ func TestConditionSummaryNotReady(t *testing.T) {
 }
 
 func TestConditionSummaryEmpty(t *testing.T) {
-	obj := u(map[string]interface{}{})
+	obj := u(map[string]any{})
 	if got := conditionSummary(obj); got != "" {
 		t.Fatalf("conditionSummary = %q, want empty", got)
 	}
 }
 
 func TestCellsForDispatch(t *testing.T) {
-	pod := u(map[string]interface{}{
-		"spec":   map[string]interface{}{"containers": []interface{}{map[string]interface{}{"name": "a"}}},
-		"status": map[string]interface{}{"phase": "Running"},
+	pod := u(map[string]any{
+		"spec":   map[string]any{"containers": []any{map[string]any{"name": "a"}}},
+		"status": map[string]any{"phase": "Running"},
 	})
 	eq(t, cellsFor(pod, "Pod"), []string{"0/1", "Running", "0", ""})
 
-	dep := u(map[string]interface{}{
-		"spec":   map[string]interface{}{"replicas": int64(1)},
-		"status": map[string]interface{}{"readyReplicas": int64(1), "updatedReplicas": int64(1), "availableReplicas": int64(1)},
+	dep := u(map[string]any{
+		"spec":   map[string]any{"replicas": int64(1)},
+		"status": map[string]any{"readyReplicas": int64(1), "updatedReplicas": int64(1), "availableReplicas": int64(1)},
 	})
 	eq(t, cellsFor(dep, "Deployment"), []string{"1/1", "1", "1"})
 
-	ds := u(map[string]interface{}{
-		"status": map[string]interface{}{"desiredNumberScheduled": int64(1), "numberReady": int64(1), "numberAvailable": int64(1)},
+	ds := u(map[string]any{
+		"status": map[string]any{"desiredNumberScheduled": int64(1), "numberReady": int64(1), "numberAvailable": int64(1)},
 	})
 	eq(t, cellsFor(ds, "DaemonSet"), []string{"1", "1", "1"})
 
-	svc := u(map[string]interface{}{
-		"spec": map[string]interface{}{"type": "ClusterIP", "clusterIP": "10.0.0.1"},
+	svc := u(map[string]any{
+		"spec": map[string]any{"type": "ClusterIP", "clusterIP": "10.0.0.1"},
 	})
 	eq(t, cellsFor(svc, "Service"), []string{"ClusterIP", "10.0.0.1", ""})
 
-	node := u(map[string]interface{}{"status": map[string]interface{}{}})
+	node := u(map[string]any{"status": map[string]any{}})
 	eq(t, cellsFor(node, "Node"), []string{"NotReady", "", ""})
 
-	ns := u(map[string]interface{}{"status": map[string]interface{}{"phase": "Active"}})
+	ns := u(map[string]any{"status": map[string]any{"phase": "Active"}})
 	eq(t, cellsFor(ns, "Namespace"), []string{"Active"})
 
-	job := u(map[string]interface{}{
-		"spec":   map[string]interface{}{"completions": int64(1)},
-		"status": map[string]interface{}{"succeeded": int64(1)},
+	job := u(map[string]any{
+		"spec":   map[string]any{"completions": int64(1)},
+		"status": map[string]any{"succeeded": int64(1)},
 	})
 	eq(t, cellsFor(job, "Job"), []string{"1/1"})
 
-	generic := u(map[string]interface{}{
-		"status": map[string]interface{}{"conditions": []interface{}{map[string]interface{}{"type": "Ready", "status": "True"}}},
+	generic := u(map[string]any{
+		"status": map[string]any{"conditions": []any{map[string]any{"type": "Ready", "status": "True"}}},
 	})
 	eq(t, cellsFor(generic, "ConfigMap"), []string{"Ready"})
 }
@@ -416,8 +416,8 @@ func TestToInt64(t *testing.T) {
 }
 
 func TestNestedHelpersOnWrongType(t *testing.T) {
-	obj := u(map[string]interface{}{
-		"spec": map[string]interface{}{
+	obj := u(map[string]any{
+		"spec": map[string]any{
 			"replicas": "three",
 			"nodeName": int64(5),
 			"ports":    "not-a-slice",

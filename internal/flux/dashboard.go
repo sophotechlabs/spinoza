@@ -2,7 +2,8 @@ package flux
 
 import (
 	"context"
-	"sort"
+	"slices"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -187,14 +188,14 @@ func assemble(byGroup map[string][]api.FluxResource) api.FluxDashboard {
 }
 
 func sortResources(items []api.FluxResource) {
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].Kind != items[j].Kind {
-			return items[i].Kind < items[j].Kind
+	slices.SortFunc(items, func(a, b api.FluxResource) int {
+		if a.Kind != b.Kind {
+			return strings.Compare(a.Kind, b.Kind)
 		}
-		if items[i].Namespace != items[j].Namespace {
-			return items[i].Namespace < items[j].Namespace
+		if a.Namespace != b.Namespace {
+			return strings.Compare(a.Namespace, b.Namespace)
 		}
-		return items[i].Name < items[j].Name
+		return strings.Compare(a.Name, b.Name)
 	})
 }
 
@@ -238,15 +239,15 @@ func resourceOf(u *unstructured.Unstructured, d api.ResourceDescriptor) api.Flux
 
 func readyCondition(u *unstructured.Unstructured) (status, message string) {
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]interface{})
+		m, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
 		if m["type"] != "Ready" {
 			continue
 		}
-		status, _ = m["status"].(string)
-		message, _ = m["message"].(string)
+		status = stringAt(m, "status")
+		message = stringAt(m, "message")
 		return status, message
 	}
 	return "", ""
@@ -297,10 +298,18 @@ func nestedBool(u *unstructured.Unstructured, fields ...string) bool {
 	return v
 }
 
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []interface{} {
+func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
 	v, found, err := unstructured.NestedSlice(u.Object, fields...)
 	if !found || err != nil {
 		return nil
+	}
+	return v
+}
+
+func stringAt(m map[string]any, key string) string {
+	v, ok := m[key].(string)
+	if !ok {
+		return ""
 	}
 	return v
 }

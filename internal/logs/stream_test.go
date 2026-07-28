@@ -163,7 +163,7 @@ func TestCloseStopsAFollowingStream(t *testing.T) {
 	select {
 	case <-released:
 	case <-time.After(5 * time.Second):
-		t.Fatalf("server request was not cancelled by Close")
+		t.Fatalf("server request was not canceled by Close")
 	}
 
 	deadline := time.After(5 * time.Second)
@@ -181,7 +181,7 @@ func TestCloseStopsAFollowingStream(t *testing.T) {
 
 func TestCloseUnblocksAFullBuffer(t *testing.T) {
 	cs := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
-		for i := 0; i < lineBuffer*2; i++ {
+		for range lineBuffer * 2 {
 			_, _ = w.Write([]byte("line\n"))
 		}
 		w.(http.Flusher).Flush()
@@ -242,7 +242,7 @@ func TestCancelledContextStopsTheStream(t *testing.T) {
 				return
 			}
 		case <-deadline:
-			t.Fatalf("channel never closed after the context was cancelled")
+			t.Fatalf("channel never closed after the context was canceled")
 		}
 	}
 }

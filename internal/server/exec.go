@@ -122,6 +122,7 @@ func route(session *exec.Session, channel byte, payload []byte) {
 		_, _ = session.Write(payload)
 	case api.ExecChannelResize:
 		resize(session, payload)
+	default:
 	}
 }
 

@@ -65,7 +65,7 @@ func (s *stubStreamer) Stream(ctx context.Context, req Request, opts Options) er
 		<-s.gate
 	}
 
-	for i := 0; i < s.drain; i++ {
+	for range s.drain {
 		select {
 		case size := <-opts.Resize:
 			s.mu.Lock()

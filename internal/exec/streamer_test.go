@@ -98,6 +98,6 @@ func TestSizeQueueEndsWhenTheChannelCloses(t *testing.T) {
 
 func TestShouldFallbackIgnoresOrdinaryErrors(t *testing.T) {
 	if shouldFallback(context.Canceled) {
-		t.Fatal("a cancelled context is not an upgrade failure")
+		t.Fatal("a canceled context is not an upgrade failure")
 	}
 }

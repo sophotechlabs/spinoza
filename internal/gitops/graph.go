@@ -132,15 +132,15 @@ func (b *builder) sourceEdge(id string, u *unstructured.Unstructured) {
 
 func (b *builder) dependsOnEdges(id string, u *unstructured.Unstructured) {
 	for _, dep := range nestedSlice(u, "spec", "dependsOn") {
-		m, ok := dep.(map[string]interface{})
+		m, ok := dep.(map[string]any)
 		if !ok {
 			continue
 		}
-		name, _ := m["name"].(string)
+		name := stringAt(m, "name")
 		if name == "" {
 			continue
 		}
-		namespace, _ := m["namespace"].(string)
+		namespace := stringAt(m, "namespace")
 		if namespace == "" {
 			namespace = u.GetNamespace()
 		}
@@ -151,11 +151,11 @@ func (b *builder) dependsOnEdges(id string, u *unstructured.Unstructured) {
 
 func (b *builder) inventoryEdges(id string, u *unstructured.Unstructured) {
 	for _, e := range nestedSlice(u, "status", "inventory", "entries") {
-		m, ok := e.(map[string]interface{})
+		m, ok := e.(map[string]any)
 		if !ok {
 			continue
 		}
-		raw, _ := m["id"].(string)
+		raw := stringAt(m, "id")
 		ns, name, group, kind := parseInventoryID(raw)
 		if kind == "" || name == "" {
 			continue
@@ -168,17 +168,17 @@ func (b *builder) inventoryEdges(id string, u *unstructured.Unstructured) {
 
 func (b *builder) appEdges(id string, u *unstructured.Unstructured) {
 	for _, r := range nestedSlice(u, "status", "resources") {
-		m, ok := r.(map[string]interface{})
+		m, ok := r.(map[string]any)
 		if !ok {
 			continue
 		}
-		kind, _ := m["kind"].(string)
-		name, _ := m["name"].(string)
+		kind := stringAt(m, "kind")
+		name := stringAt(m, "name")
 		if kind == "" || name == "" {
 			continue
 		}
-		group, _ := m["group"].(string)
-		namespace, _ := m["namespace"].(string)
+		group := stringAt(m, "group")
+		namespace := stringAt(m, "namespace")
 		mid := nodeID(group, kind, namespace, name)
 		b.ensureRef(mid, group, kind, namespace, name, "managed")
 		b.addEdge(id, mid, "manages")
@@ -252,7 +252,7 @@ func statusOf(u *unstructured.Unstructured, category string) string {
 
 func conditionSummary(u *unstructured.Unstructured) string {
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]interface{})
+		m, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -279,10 +279,18 @@ func nestedString(u *unstructured.Unstructured, fields ...string) string {
 	return v
 }
 
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []interface{} {
+func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
 	v, found, err := unstructured.NestedSlice(u.Object, fields...)
 	if !found || err != nil {
 		return nil
+	}
+	return v
+}
+
+func stringAt(m map[string]any, key string) string {
+	v, ok := m[key].(string)
+	if !ok {
+		return ""
 	}
 	return v
 }

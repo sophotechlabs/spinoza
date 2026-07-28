@@ -3,6 +3,7 @@ package flux
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -61,86 +62,84 @@ func fluxDescs() map[string]api.ResourceDescriptor {
 	}
 }
 
-func obj(apiVersion, kind, name, namespace string, extra map[string]interface{}) *unstructured.Unstructured {
-	o := map[string]interface{}{
+func obj(apiVersion, kind, name, namespace string, extra map[string]any) *unstructured.Unstructured {
+	o := map[string]any{
 		"apiVersion": apiVersion,
 		"kind":       kind,
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      name,
 			"namespace": namespace,
 		},
 	}
-	for k, v := range extra {
-		o[k] = v
-	}
+	maps.Copy(o, extra)
 	return &unstructured.Unstructured{Object: o}
 }
 
 func fluxObjects() []runtime.Object {
 	return []runtime.Object{
-		obj("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "apps", "flux-system", map[string]interface{}{
-			"spec": map[string]interface{}{
-				"sourceRef": map[string]interface{}{"kind": "GitRepository", "name": "app-repo"},
+		obj("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "apps", "flux-system", map[string]any{
+			"spec": map[string]any{
+				"sourceRef": map[string]any{"kind": "GitRepository", "name": "app-repo"},
 			},
-			"status": map[string]interface{}{
+			"status": map[string]any{
 				"lastAppliedRevision": "main@sha1:abc123",
-				"conditions": []interface{}{
-					map[string]interface{}{"type": "Ready", "status": "True", "message": "Applied revision: main@sha1:abc123"},
+				"conditions": []any{
+					map[string]any{"type": "Ready", "status": "True", "message": "Applied revision: main@sha1:abc123"},
 				},
 			},
 		}),
-		obj("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "infra", "flux-system", map[string]interface{}{
-			"spec": map[string]interface{}{"suspend": true},
-			"status": map[string]interface{}{
-				"conditions": []interface{}{
-					map[string]interface{}{"type": "Ready", "status": "False", "message": "build failed"},
+		obj("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "infra", "flux-system", map[string]any{
+			"spec": map[string]any{"suspend": true},
+			"status": map[string]any{
+				"conditions": []any{
+					map[string]any{"type": "Ready", "status": "False", "message": "build failed"},
 				},
 			},
 		}),
-		obj("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "tenant", "team-a", map[string]interface{}{}),
-		obj("helm.toolkit.fluxcd.io/v2", "HelmRelease", "podinfo", "flux-system", map[string]interface{}{
-			"spec": map[string]interface{}{
-				"chart": map[string]interface{}{
-					"spec": map[string]interface{}{
-						"sourceRef": map[string]interface{}{"kind": "HelmRepository", "name": "podinfo"},
+		obj("kustomize.toolkit.fluxcd.io/v1", "Kustomization", "tenant", "team-a", map[string]any{}),
+		obj("helm.toolkit.fluxcd.io/v2", "HelmRelease", "podinfo", "flux-system", map[string]any{
+			"spec": map[string]any{
+				"chart": map[string]any{
+					"spec": map[string]any{
+						"sourceRef": map[string]any{"kind": "HelmRepository", "name": "podinfo"},
 					},
 				},
 			},
-			"status": map[string]interface{}{
+			"status": map[string]any{
 				"lastAttemptedRevision": "6.0.0",
-				"conditions": []interface{}{
+				"conditions": []any{
 					"not-a-map",
-					map[string]interface{}{"type": "Stalled", "status": "False"},
-					map[string]interface{}{"type": "Ready", "status": "False", "message": "install retries exhausted"},
+					map[string]any{"type": "Stalled", "status": "False"},
+					map[string]any{"type": "Ready", "status": "False", "message": "install retries exhausted"},
 				},
 			},
 		}),
-		obj("source.toolkit.fluxcd.io/v1", "GitRepository", "app-repo", "flux-system", map[string]interface{}{
-			"status": map[string]interface{}{
-				"artifact": map[string]interface{}{"revision": "main@sha1:def456"},
-				"conditions": []interface{}{
-					map[string]interface{}{"type": "Ready", "status": "True", "message": "stored artifact"},
+		obj("source.toolkit.fluxcd.io/v1", "GitRepository", "app-repo", "flux-system", map[string]any{
+			"status": map[string]any{
+				"artifact": map[string]any{"revision": "main@sha1:def456"},
+				"conditions": []any{
+					map[string]any{"type": "Ready", "status": "True", "message": "stored artifact"},
 				},
 			},
 		}),
-		obj("source.toolkit.fluxcd.io/v1", "HelmRepository", "podinfo", "flux-system", map[string]interface{}{
-			"status": map[string]interface{}{
-				"artifact": map[string]interface{}{"revision": "sha256:aaa"},
-				"conditions": []interface{}{
-					map[string]interface{}{"type": "Ready", "status": "True"},
+		obj("source.toolkit.fluxcd.io/v1", "HelmRepository", "podinfo", "flux-system", map[string]any{
+			"status": map[string]any{
+				"artifact": map[string]any{"revision": "sha256:aaa"},
+				"conditions": []any{
+					map[string]any{"type": "Ready", "status": "True"},
 				},
 			},
 		}),
-		obj("image.toolkit.fluxcd.io/v1beta2", "ImagePolicy", "app", "flux-system", map[string]interface{}{
-			"status": map[string]interface{}{
+		obj("image.toolkit.fluxcd.io/v1beta2", "ImagePolicy", "app", "flux-system", map[string]any{
+			"status": map[string]any{
 				"latestImage": "ghcr.io/org/app:1.2.3",
-				"conditions": []interface{}{
-					map[string]interface{}{"type": "Ready", "status": "True"},
+				"conditions": []any{
+					map[string]any{"type": "Ready", "status": "True"},
 				},
 			},
 		}),
-		obj("image.toolkit.fluxcd.io/v1beta2", "ImageRepository", "app", "flux-system", map[string]interface{}{
-			"status": map[string]interface{}{},
+		obj("image.toolkit.fluxcd.io/v1beta2", "ImageRepository", "app", "flux-system", map[string]any{
+			"status": map[string]any{},
 		}),
 	}
 }
@@ -281,10 +280,10 @@ func TestCategoryOf(t *testing.T) {
 }
 
 func TestReadyConditionNoReady(t *testing.T) {
-	u := obj("x/v1", "X", "n", "ns", map[string]interface{}{
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Stalled", "status": "True"},
+	u := obj("x/v1", "X", "n", "ns", map[string]any{
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Stalled", "status": "True"},
 			},
 		},
 	})

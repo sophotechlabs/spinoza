@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -148,7 +149,7 @@ func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux
 
 func (m *Manager) StartForward(ctx context.Context, target portforward.Target, port int32) (api.PortForward, error) {
 	if m.forwards == nil {
-		return api.PortForward{}, fmt.Errorf("port forwarding is unavailable")
+		return api.PortForward{}, errors.New("port forwarding is unavailable")
 	}
 	return m.forwards.Start(ctx, target, port)
 }
@@ -162,28 +163,28 @@ func (m *Manager) Forwards() []api.PortForward {
 
 func (m *Manager) StopForward(id string) error {
 	if m.forwards == nil {
-		return fmt.Errorf("port forwarding is unavailable")
+		return errors.New("port forwarding is unavailable")
 	}
 	return m.forwards.Stop(id)
 }
 
 func (m *Manager) ExecSupport(ctx context.Context, req exec.Request) (api.ExecSupport, error) {
 	if m.shells == nil {
-		return api.ExecSupport{}, fmt.Errorf("exec is unavailable")
+		return api.ExecSupport{}, errors.New("exec is unavailable")
 	}
 	return m.shells.Support(ctx, req)
 }
 
 func (m *Manager) StartExec(ctx context.Context, req exec.Request, stdout io.Writer) (*exec.Session, error) {
 	if m.shells == nil {
-		return nil, fmt.Errorf("exec is unavailable")
+		return nil, errors.New("exec is unavailable")
 	}
 	return m.shells.Start(ctx, req, stdout)
 }
 
 func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {
 	if m.schemas == nil {
-		return nil, fmt.Errorf("schemas unavailable")
+		return nil, errors.New("schemas unavailable")
 	}
 	return m.schemas.For(gvk)
 }
@@ -295,13 +296,13 @@ func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream
 	}
 
 	_, handlerErr := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			st.publish("added", obj)
 		},
-		UpdateFunc: func(_, obj interface{}) {
+		UpdateFunc: func(_, obj any) {
 			st.publish("modified", obj)
 		},
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			st.publishDelete(obj)
 		},
 	})
@@ -335,7 +336,7 @@ func (m *Manager) dropStream(key streamKey) {
 	st.cancel()
 }
 
-func (st *stream) publish(kind string, obj interface{}) {
+func (st *stream) publish(kind string, obj any) {
 	u, ok := toUnstructured(obj)
 	if !ok {
 		return
@@ -343,7 +344,7 @@ func (st *stream) publish(kind string, obj interface{}) {
 	st.fanout(Event{Kind: kind, Row: toRow(u, st.kind)})
 }
 
-func (st *stream) publishDelete(obj interface{}) {
+func (st *stream) publishDelete(obj any) {
 	u, ok := toUnstructured(obj)
 	if !ok {
 		return
@@ -378,7 +379,7 @@ func (st *stream) snapshot() []api.Row {
 	return rows
 }
 
-func toUnstructured(obj interface{}) (*unstructured.Unstructured, bool) {
+func toUnstructured(obj any) (*unstructured.Unstructured, bool) {
 	if u, ok := obj.(*unstructured.Unstructured); ok {
 		return u, true
 	}
@@ -404,7 +405,7 @@ func toRow(u *unstructured.Unstructured, kind string) api.Row {
 	}
 }
 
-func stripManagedFields(obj interface{}) (interface{}, error) {
+func stripManagedFields(obj any) (any, error) {
 	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return obj, nil

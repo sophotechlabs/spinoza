@@ -22,7 +22,10 @@ import (
 )
 
 func main() {
-	mgr := makeManager(context.Background())
+	mgr, err := makeManager(context.Background())
+	if err != nil {
+		log.Fatalf("manager: %v", err)
+	}
 
 	assets, err := fs.Sub(embedded, "web/dist")
 	if err != nil {

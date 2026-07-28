@@ -63,6 +63,7 @@ func (sess *wsSession) handle(msg api.ClientMsg) {
 		sess.subscribeLogs(msg)
 	case "logs-unsubscribe":
 		sess.unsubscribeLogs(msg.SubID)
+	default:
 	}
 }
 

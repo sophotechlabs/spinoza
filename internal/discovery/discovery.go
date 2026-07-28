@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -125,7 +126,7 @@ func groupByCategory(descs []api.ResourceDescriptor) []api.Category {
 			extra = append(extra, name)
 		}
 	}
-	sort.Strings(extra)
+	slices.Sort(extra)
 	for _, name := range extra {
 		rs := buckets[name]
 		sortDescs(name, rs)
@@ -152,7 +153,7 @@ var kindOrder = map[string][]string{
 	},
 }
 
-func rankOf(category string, kind string) int {
+func rankOf(category, kind string) int {
 	for i, name := range kindOrder[category] {
 		if name == kind {
 			return i

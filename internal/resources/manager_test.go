@@ -57,16 +57,16 @@ func testDescs() map[string]api.ResourceDescriptor {
 }
 
 func newDeployment(namespace, name string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      name,
 			"namespace": namespace,
 			"uid":       "uid-" + name,
 		},
-		"spec": map[string]interface{}{"replicas": int64(2)},
-		"status": map[string]interface{}{
+		"spec": map[string]any{"replicas": int64(2)},
+		"status": map[string]any{
 			"readyReplicas":     int64(2),
 			"updatedReplicas":   int64(2),
 			"availableReplicas": int64(2),
@@ -75,18 +75,18 @@ func newDeployment(namespace, name string) *unstructured.Unstructured {
 }
 
 func newNode(name string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Node",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name": name,
 			"uid":  "uid-" + name,
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Ready", "status": "True"},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
 			},
-			"nodeInfo": map[string]interface{}{"kubeletVersion": "v1.31.0"},
+			"nodeInfo": map[string]any{"kubeletVersion": "v1.31.0"},
 		},
 	}}
 }
@@ -137,16 +137,16 @@ func TestManagerGraph(t *testing.T) {
 	gitRepoGVR := schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}
 	scheme := runtime.NewScheme()
 	kinds := map[schema.GroupVersionResource]string{gitRepoGVR: "GitRepositoryList"}
-	repo := &unstructured.Unstructured{Object: map[string]interface{}{
+	repo := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",
 		"kind":       "GitRepository",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "app-repo",
 			"namespace": "flux-system",
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Ready", "status": "True"},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
 			},
 		},
 	}}
@@ -161,8 +161,7 @@ func TestManagerGraph(t *testing.T) {
 			Category:   "Custom Resources",
 		},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, descs)
 
 	graph := mgr.Graph(ctx)
@@ -185,16 +184,16 @@ func TestManagerFlux(t *testing.T) {
 	gitRepoGVR := schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}
 	scheme := runtime.NewScheme()
 	kinds := map[schema.GroupVersionResource]string{gitRepoGVR: "GitRepositoryList"}
-	repo := &unstructured.Unstructured{Object: map[string]interface{}{
+	repo := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",
 		"kind":       "GitRepository",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "app-repo",
 			"namespace": "flux-system",
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Ready", "status": "True"},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
 			},
 		},
 	}}
@@ -209,8 +208,7 @@ func TestManagerFlux(t *testing.T) {
 			Category:   "Custom Resources",
 		},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, descs)
 
 	dash := mgr.Flux(ctx)
@@ -233,8 +231,7 @@ func TestManagerMetrics(t *testing.T) {
 		{Group: "", Version: "v1", Resource: "nodes"}:                    "NodeList",
 	}
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil)
 
 	m := mgr.Metrics(ctx)
@@ -505,7 +502,7 @@ func TestSubscribeNamespaceIsolation(t *testing.T) {
 }
 
 func TestStripManagedFields(t *testing.T) {
-	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+	obj := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
 	}}
@@ -536,7 +533,7 @@ func TestStripManagedFields(t *testing.T) {
 }
 
 func TestStripManagedFieldsNoAnnotations(t *testing.T) {
-	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+	obj := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
 	}}
@@ -604,6 +601,7 @@ type discoveryResult struct {
 
 type stubDiscovery struct {
 	kubediscovery.CachedDiscoveryInterface
+
 	invalidated int
 	results     []discoveryResult
 	calls       int

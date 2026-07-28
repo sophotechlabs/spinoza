@@ -44,35 +44,35 @@ func podDesc() api.ResourceDescriptor {
 }
 
 func newPod() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Pod",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "web",
 			"namespace": "flux-system",
 			"uid":       "pod-uid",
 		},
-		"spec": map[string]interface{}{
-			"containers": []interface{}{map[string]interface{}{"name": "app"}},
+		"spec": map[string]any{
+			"containers": []any{map[string]any{"name": "app"}},
 		},
 	}}
 }
 
 func newPodEvent() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Event",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "web.1",
 			"namespace": "flux-system",
 		},
-		"involvedObject": map[string]interface{}{"uid": "pod-uid"},
+		"involvedObject": map[string]any{"uid": "pod-uid"},
 		"type":           "Warning",
 		"reason":         "BackOff",
 		"message":        "restarting",
 		"count":          int64(3),
 		"lastTimestamp":  "2026-07-27T09:30:00Z",
-		"source":         map[string]interface{}{"component": "kubelet"},
+		"source":         map[string]any{"component": "kubelet"},
 	}}
 }
 
@@ -415,7 +415,7 @@ func TestBatchLinesStopsAtClosedChannel(t *testing.T) {
 
 func TestBatchLinesStopsAtTheBatchCap(t *testing.T) {
 	lines := make(chan string, maxLogBatch*2)
-	for i := 0; i < maxLogBatch*2; i++ {
+	for range maxLogBatch * 2 {
 		lines <- "line"
 	}
 

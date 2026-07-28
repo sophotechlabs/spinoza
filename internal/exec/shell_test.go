@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -308,6 +309,6 @@ func pod() *corev1.Pod {
 	}
 }
 
-func contains(haystack string, needle string) bool {
-	return bytes.Contains([]byte(haystack), []byte(needle))
+func contains(haystack, needle string) bool {
+	return strings.Contains(haystack, needle)
 }

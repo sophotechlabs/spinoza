@@ -56,53 +56,53 @@ func graphDescs() map[string]api.ResourceDescriptor {
 }
 
 func gitRepository() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",
 		"kind":       "GitRepository",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "app-repo",
 			"namespace": "flux-system",
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Ready", "status": "True"},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
 			},
 		},
 	}}
 }
 
 func kustomizationApps() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
 		"kind":       "Kustomization",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "apps",
 			"namespace": "flux-system",
 		},
-		"spec": map[string]interface{}{
-			"sourceRef": map[string]interface{}{
+		"spec": map[string]any{
+			"sourceRef": map[string]any{
 				"kind":      "GitRepository",
 				"name":      "app-repo",
 				"namespace": "flux-system",
 			},
-			"dependsOn": []interface{}{
-				map[string]interface{}{"name": "infra"},
-				map[string]interface{}{"name": "db", "namespace": "data"},
-				map[string]interface{}{"namespace": "x"},
+			"dependsOn": []any{
+				map[string]any{"name": "infra"},
+				map[string]any{"name": "db", "namespace": "data"},
+				map[string]any{"namespace": "x"},
 				"not-a-map",
 			},
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Ready", "status": "True"},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
 			},
-			"inventory": map[string]interface{}{
-				"entries": []interface{}{
-					map[string]interface{}{"id": "default_web__Service", "v": "v1"},
-					map[string]interface{}{"id": "prod_api_apps_Deployment", "v": "v1"},
-					map[string]interface{}{"id": "prod_api_apps_Deployment", "v": "v1"},
-					map[string]interface{}{"id": "flux-system_app-repo_source.toolkit.fluxcd.io_GitRepository", "v": "v1"},
-					map[string]interface{}{"id": "bad-id", "v": "v1"},
+			"inventory": map[string]any{
+				"entries": []any{
+					map[string]any{"id": "default_web__Service", "v": "v1"},
+					map[string]any{"id": "prod_api_apps_Deployment", "v": "v1"},
+					map[string]any{"id": "prod_api_apps_Deployment", "v": "v1"},
+					map[string]any{"id": "flux-system_app-repo_source.toolkit.fluxcd.io_GitRepository", "v": "v1"},
+					map[string]any{"id": "bad-id", "v": "v1"},
 					"not-a-map",
 				},
 			},
@@ -111,10 +111,10 @@ func kustomizationApps() *unstructured.Unstructured {
 }
 
 func kustomizationOrphan() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
 		"kind":       "Kustomization",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "orphan",
 			"namespace": "flux-system",
 		},
@@ -122,31 +122,31 @@ func kustomizationOrphan() *unstructured.Unstructured {
 }
 
 func helmRelease() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "helm.toolkit.fluxcd.io/v2",
 		"kind":       "HelmRelease",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "podinfo",
 			"namespace": "flux-system",
 		},
-		"spec": map[string]interface{}{
-			"chart": map[string]interface{}{
-				"spec": map[string]interface{}{
-					"sourceRef": map[string]interface{}{
+		"spec": map[string]any{
+			"chart": map[string]any{
+				"spec": map[string]any{
+					"sourceRef": map[string]any{
 						"kind": "HelmRepository",
 						"name": "podinfo-charts",
 					},
 				},
 			},
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Stalled", "status": "False"},
-				map[string]interface{}{"type": "Ready", "status": "False", "reason": "InstallFailed"},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Stalled", "status": "False"},
+				map[string]any{"type": "Ready", "status": "False", "reason": "InstallFailed"},
 			},
-			"inventory": map[string]interface{}{
-				"entries": []interface{}{
-					map[string]interface{}{"id": "flux-system_podinfo__ConfigMap", "v": "v1"},
+			"inventory": map[string]any{
+				"entries": []any{
+					map[string]any{"id": "flux-system_podinfo__ConfigMap", "v": "v1"},
 				},
 			},
 		},
@@ -154,22 +154,22 @@ func helmRelease() *unstructured.Unstructured {
 }
 
 func argoApplication() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "argoproj.io/v1alpha1",
 		"kind":       "Application",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "guestbook",
 			"namespace": "argocd",
 		},
-		"status": map[string]interface{}{
-			"health": map[string]interface{}{"status": "Healthy"},
-			"sync":   map[string]interface{}{"status": "Synced"},
-			"resources": []interface{}{
-				map[string]interface{}{"group": "apps", "version": "v1", "kind": "Deployment", "namespace": "prod", "name": "api"},
-				map[string]interface{}{"group": "", "version": "v1", "kind": "Service", "namespace": "default", "name": "web"},
-				map[string]interface{}{"kind": "ConfigMap", "name": "settings", "namespace": "argocd"},
-				map[string]interface{}{"name": "no-kind"},
-				map[string]interface{}{"kind": "NoName"},
+		"status": map[string]any{
+			"health": map[string]any{"status": "Healthy"},
+			"sync":   map[string]any{"status": "Synced"},
+			"resources": []any{
+				map[string]any{"group": "apps", "version": "v1", "kind": "Deployment", "namespace": "prod", "name": "api"},
+				map[string]any{"group": "", "version": "v1", "kind": "Service", "namespace": "default", "name": "web"},
+				map[string]any{"kind": "ConfigMap", "name": "settings", "namespace": "argocd"},
+				map[string]any{"name": "no-kind"},
+				map[string]any{"kind": "NoName"},
 				"not-a-map",
 			},
 		},
@@ -368,9 +368,9 @@ func TestNodeID(t *testing.T) {
 	}
 }
 
-func conditionsObject(conditions []interface{}) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
-		"status": map[string]interface{}{
+func conditionsObject(conditions []any) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"status": map[string]any{
 			"conditions": conditions,
 		},
 	}}
@@ -379,40 +379,40 @@ func conditionsObject(conditions []interface{}) *unstructured.Unstructured {
 func TestConditionSummary(t *testing.T) {
 	cases := []struct {
 		name       string
-		conditions []interface{}
+		conditions []any
 		want       string
 	}{
 		{
 			name:       "ready",
-			conditions: []interface{}{map[string]interface{}{"type": "Ready", "status": "True"}},
+			conditions: []any{map[string]any{"type": "Ready", "status": "True"}},
 			want:       "Ready",
 		},
 		{
 			name:       "reason",
-			conditions: []interface{}{map[string]interface{}{"type": "Ready", "status": "False", "reason": "InstallFailed"}},
+			conditions: []any{map[string]any{"type": "Ready", "status": "False", "reason": "InstallFailed"}},
 			want:       "InstallFailed",
 		},
 		{
 			name:       "notReady",
-			conditions: []interface{}{map[string]interface{}{"type": "Ready", "status": "False"}},
+			conditions: []any{map[string]any{"type": "Ready", "status": "False"}},
 			want:       "NotReady",
 		},
 		{
 			name:       "onlyOtherType",
-			conditions: []interface{}{map[string]interface{}{"type": "Stalled", "status": "True"}},
+			conditions: []any{map[string]any{"type": "Stalled", "status": "True"}},
 			want:       "",
 		},
 		{
 			name: "skipsNonMap",
-			conditions: []interface{}{
+			conditions: []any{
 				"not-a-map",
-				map[string]interface{}{"type": "Ready", "status": "True"},
+				map[string]any{"type": "Ready", "status": "True"},
 			},
 			want: "Ready",
 		},
 		{
 			name:       "noConditions",
-			conditions: []interface{}{},
+			conditions: []any{},
 			want:       "",
 		},
 	}
@@ -425,22 +425,22 @@ func TestConditionSummary(t *testing.T) {
 }
 
 func TestStatusOf(t *testing.T) {
-	app := &unstructured.Unstructured{Object: map[string]interface{}{
-		"status": map[string]interface{}{
-			"health": map[string]interface{}{"status": "Degraded"},
-			"sync":   map[string]interface{}{"status": "OutOfSync"},
+	app := &unstructured.Unstructured{Object: map[string]any{
+		"status": map[string]any{
+			"health": map[string]any{"status": "Degraded"},
+			"sync":   map[string]any{"status": "OutOfSync"},
 		},
 	}}
 	if got := statusOf(app, "app"); got != "Degraded OutOfSync" {
 		t.Fatalf("statusOf app = %q, want Degraded OutOfSync", got)
 	}
 
-	empty := &unstructured.Unstructured{Object: map[string]interface{}{}}
+	empty := &unstructured.Unstructured{Object: map[string]any{}}
 	if got := statusOf(empty, "app"); got != "" {
 		t.Fatalf("statusOf empty app = %q, want empty", got)
 	}
 
-	applier := conditionsObject([]interface{}{map[string]interface{}{"type": "Ready", "status": "True"}})
+	applier := conditionsObject([]any{map[string]any{"type": "Ready", "status": "True"}})
 	if got := statusOf(applier, "applier"); got != "Ready" {
 		t.Fatalf("statusOf applier = %q, want Ready", got)
 	}

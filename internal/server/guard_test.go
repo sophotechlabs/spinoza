@@ -69,7 +69,7 @@ func TestGuardRefusesACrossOriginRead(t *testing.T) {
 	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestGuardRefusesARebottledHost(t *testing.T) {
 	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestGuardAdmitsTheDesktopWebview(t *testing.T) {
 	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestGuardRefusesCrossOriginAssets(t *testing.T) {
 	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/index.html", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/index.html", http.NoBody)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestHealthzStaysOpen(t *testing.T) {
 	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/healthz", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/healthz", http.NoBody)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}

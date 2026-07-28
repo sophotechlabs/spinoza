@@ -3,6 +3,7 @@ package inspect
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -10,40 +11,38 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-func newEvent(name string, fields map[string]interface{}) *unstructured.Unstructured {
-	obj := map[string]interface{}{
+func newEvent(name string, fields map[string]any) *unstructured.Unstructured {
+	obj := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Event",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      name,
 			"namespace": "flux-system",
 		},
-		"involvedObject": map[string]interface{}{"uid": "pod-uid"},
+		"involvedObject": map[string]any{"uid": "pod-uid"},
 	}
-	for k, v := range fields {
-		obj[k] = v
-	}
+	maps.Copy(obj, fields)
 	return &unstructured.Unstructured{Object: obj}
 }
 
 func TestEventsMapsAndSortsNewestFirst(t *testing.T) {
-	older := newEvent("older", map[string]interface{}{
+	older := newEvent("older", map[string]any{
 		"type":           "Normal",
 		"reason":         "Pulled",
 		"message":        "image pulled",
 		"count":          int64(2),
 		"firstTimestamp": "2026-07-27T08:00:00Z",
 		"lastTimestamp":  "2026-07-27T08:30:00Z",
-		"source":         map[string]interface{}{"component": "kubelet"},
+		"source":         map[string]any{"component": "kubelet"},
 	})
-	newer := newEvent("newer", map[string]interface{}{
+	newer := newEvent("newer", map[string]any{
 		"type":           "Warning",
 		"reason":         "BackOff",
 		"message":        "restarting",
 		"count":          int64(7),
 		"firstTimestamp": "2026-07-27T09:00:00Z",
 		"lastTimestamp":  "2026-07-27T09:30:00Z",
-		"source":         map[string]interface{}{"component": "kubelet"},
+		"source":         map[string]any{"component": "kubelet"},
 	})
 
 	events := Events(context.Background(), newClient(older, newer), "flux-system", "pod-uid")
@@ -128,8 +127,8 @@ func TestEventsEmptyOnListError(t *testing.T) {
 }
 
 func TestEventCountFallsBackToSeries(t *testing.T) {
-	event := newEvent("series", map[string]interface{}{
-		"series":    map[string]interface{}{"count": int64(4), "lastObservedTime": "2026-07-27T11:00:00Z"},
+	event := newEvent("series", map[string]any{
+		"series":    map[string]any{"count": int64(4), "lastObservedTime": "2026-07-27T11:00:00Z"},
 		"eventTime": "2026-07-27T10:00:00Z",
 	})
 
@@ -147,7 +146,7 @@ func TestEventCountFallsBackToSeries(t *testing.T) {
 }
 
 func TestEventCountDefaultsToOne(t *testing.T) {
-	event := newEvent("bare", map[string]interface{}{
+	event := newEvent("bare", map[string]any{
 		"eventTime":          "2026-07-27T10:00:00Z",
 		"reportingComponent": "kustomize-controller",
 	})
@@ -180,11 +179,11 @@ func TestEventLastSeenEmptyWhenNoTimestamps(t *testing.T) {
 }
 
 func TestEventsSortMixesTimestampPrecision(t *testing.T) {
-	secondPrecision := newEvent("second", map[string]interface{}{
+	secondPrecision := newEvent("second", map[string]any{
 		"reason":        "Pulled",
 		"lastTimestamp": "2026-07-27T09:34:00Z",
 	})
-	subSecond := newEvent("sub-second", map[string]interface{}{
+	subSecond := newEvent("sub-second", map[string]any{
 		"reason":    "Scheduled",
 		"eventTime": "2026-07-27T09:34:00.546384Z",
 	})
@@ -200,11 +199,11 @@ func TestEventsSortMixesTimestampPrecision(t *testing.T) {
 }
 
 func TestEventsSortKeepsUnparseableStampsLast(t *testing.T) {
-	good := newEvent("good", map[string]interface{}{
+	good := newEvent("good", map[string]any{
 		"reason":        "Pulled",
 		"lastTimestamp": "2026-07-27T09:34:00Z",
 	})
-	bad := newEvent("bad", map[string]interface{}{"reason": "Broken"})
+	bad := newEvent("bad", map[string]any{"reason": "Broken"})
 
 	events := Events(context.Background(), newClient(good, bad), "flux-system", "pod-uid")
 

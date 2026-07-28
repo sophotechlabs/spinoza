@@ -40,7 +40,7 @@ func eventsFor(dyn dynamic.Interface, namespace string) dynamic.ResourceInterfac
 }
 
 func sortEvents(events []api.Event) {
-	sort.SliceStable(events, func(i, j int) bool {
+	slices.SortStableFunc(events, func(i, j int) bool {
 		return seenAt(events[i].LastSeen).After(seenAt(events[j].LastSeen))
 	})
 }

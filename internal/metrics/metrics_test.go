@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,15 +22,13 @@ func listKinds() map[schema.GroupVersionResource]string {
 	}
 }
 
-func obj(apiVersion, kind, name, namespace string, extra map[string]interface{}) *unstructured.Unstructured {
-	o := map[string]interface{}{
+func obj(apiVersion, kind, name, namespace string, extra map[string]any) *unstructured.Unstructured {
+	o := map[string]any{
 		"apiVersion": apiVersion,
 		"kind":       kind,
-		"metadata":   map[string]interface{}{"name": name, "namespace": namespace},
+		"metadata":   map[string]any{"name": name, "namespace": namespace},
 	}
-	for k, v := range extra {
-		o[k] = v
-	}
+	maps.Copy(o, extra)
 	return &unstructured.Unstructured{Object: o}
 }
 
@@ -50,26 +49,26 @@ func seed(t *testing.T) *fake.FakeDynamicClient {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, listKinds())
-	create(t, dyn, podMetricsGVR, "prod", obj("metrics.k8s.io/v1beta1", "PodMetrics", "web", "prod", map[string]interface{}{
-		"containers": []interface{}{
+	create(t, dyn, podMetricsGVR, "prod", obj("metrics.k8s.io/v1beta1", "PodMetrics", "web", "prod", map[string]any{
+		"containers": []any{
 			"not-a-map",
-			map[string]interface{}{"name": "no-usage"},
-			map[string]interface{}{"name": "a", "usage": map[string]interface{}{"cpu": "100m", "memory": "128Mi"}},
-			map[string]interface{}{"name": "b", "usage": map[string]interface{}{"cpu": "50m", "memory": "64Mi"}},
+			map[string]any{"name": "no-usage"},
+			map[string]any{"name": "a", "usage": map[string]any{"cpu": "100m", "memory": "128Mi"}},
+			map[string]any{"name": "b", "usage": map[string]any{"cpu": "50m", "memory": "64Mi"}},
 		},
 	}))
-	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n1", "", map[string]interface{}{
-		"usage": map[string]interface{}{"cpu": "1500m", "memory": "2048Mi"},
+	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n1", "", map[string]any{
+		"usage": map[string]any{"cpu": "1500m", "memory": "2048Mi"},
 	}))
-	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n2", "", map[string]interface{}{
-		"usage": map[string]interface{}{"cpu": "500m", "memory": "512Mi"},
+	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n2", "", map[string]any{
+		"usage": map[string]any{"cpu": "500m", "memory": "512Mi"},
 	}))
-	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n-nousage", "", map[string]interface{}{}))
-	create(t, dyn, nodeGVR, "", obj("v1", "Node", "n1", "", map[string]interface{}{
-		"status": map[string]interface{}{"allocatable": map[string]interface{}{"cpu": "4", "memory": "8192Mi"}},
+	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n-nousage", "", map[string]any{}))
+	create(t, dyn, nodeGVR, "", obj("v1", "Node", "n1", "", map[string]any{
+		"status": map[string]any{"allocatable": map[string]any{"cpu": "4", "memory": "8192Mi"}},
 	}))
-	create(t, dyn, nodeGVR, "", obj("v1", "Node", "n3", "", map[string]interface{}{
-		"status": map[string]interface{}{},
+	create(t, dyn, nodeGVR, "", obj("v1", "Node", "n3", "", map[string]any{
+		"status": map[string]any{},
 	}))
 	return dyn
 }
@@ -129,19 +128,19 @@ func TestNodeAllocatableListError(t *testing.T) {
 }
 
 func TestQuantityHelpers(t *testing.T) {
-	if got := milli(map[string]interface{}{"cpu": "250m"}, "cpu"); got != 250 {
+	if got := milli(map[string]any{"cpu": "250m"}, "cpu"); got != 250 {
 		t.Fatalf("milli valid = %d, want 250", got)
 	}
-	if got := mebi(map[string]interface{}{"memory": "512Mi"}, "memory"); got != 512 {
+	if got := mebi(map[string]any{"memory": "512Mi"}, "memory"); got != 512 {
 		t.Fatalf("mebi valid = %d, want 512", got)
 	}
-	if got := milli(map[string]interface{}{"cpu": 5}, "cpu"); got != 0 {
+	if got := milli(map[string]any{"cpu": 5}, "cpu"); got != 0 {
 		t.Fatalf("milli non-string = %d, want 0", got)
 	}
-	if got := mebi(map[string]interface{}{"memory": "bad"}, "memory"); got != 0 {
+	if got := mebi(map[string]any{"memory": "bad"}, "memory"); got != 0 {
 		t.Fatalf("mebi parse error = %d, want 0", got)
 	}
-	if got := milli(map[string]interface{}{}, "cpu"); got != 0 {
+	if got := milli(map[string]any{}, "cpu"); got != 0 {
 		t.Fatalf("milli missing = %d, want 0", got)
 	}
 }

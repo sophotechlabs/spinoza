@@ -41,16 +41,16 @@ func deploymentDesc() api.ResourceDescriptor {
 }
 
 func newDeployment(namespace, name string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      name,
 			"namespace": namespace,
 			"uid":       "uid-" + name,
 		},
-		"spec": map[string]interface{}{"replicas": int64(1)},
-		"status": map[string]interface{}{
+		"spec": map[string]any{"replicas": int64(1)},
+		"status": map[string]any{
 			"readyReplicas":     int64(1),
 			"updatedReplicas":   int64(1),
 			"availableReplicas": int64(1),
@@ -191,31 +191,31 @@ func TestResourcesEndpoint(t *testing.T) {
 }
 
 func fluxGitRepo() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "source.toolkit.fluxcd.io/v1",
 		"kind":       "GitRepository",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "app-repo",
 			"namespace": "flux-system",
 		},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{
-				map[string]interface{}{"type": "Ready", "status": "True"},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
 			},
 		},
 	}}
 }
 
 func fluxKustomization() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
 		"kind":       "Kustomization",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "apps",
 			"namespace": "flux-system",
 		},
-		"spec": map[string]interface{}{
-			"sourceRef": map[string]interface{}{
+		"spec": map[string]any{
+			"sourceRef": map[string]any{
 				"kind": "GitRepository",
 				"name": "app-repo",
 			},

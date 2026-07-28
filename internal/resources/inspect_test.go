@@ -32,14 +32,14 @@ func deploymentRef() api.ObjectRef {
 }
 
 func newDeploymentEvent() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Event",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      "web.1",
 			"namespace": "flux-system",
 		},
-		"involvedObject": map[string]interface{}{"uid": "uid-web"},
+		"involvedObject": map[string]any{"uid": "uid-web"},
 		"reason":         "ScalingReplicaSet",
 		"lastTimestamp":  "2026-07-27T09:30:00Z",
 	}}
@@ -178,11 +178,11 @@ func TestManagerFluxAction(t *testing.T) {
 		Version:  "v1",
 		Resource: "kustomizations",
 	}
-	kustomization := &unstructured.Unstructured{Object: map[string]interface{}{
+	kustomization := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
 		"kind":       "Kustomization",
-		"metadata":   map[string]interface{}{"name": "apps", "namespace": "flux-system"},
-		"spec":       map[string]interface{}{"suspend": false},
+		"metadata":   map[string]any{"name": "apps", "namespace": "flux-system"},
+		"spec":       map[string]any{"suspend": false},
 	}}
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),
@@ -216,7 +216,7 @@ func TestManagerFluxAction(t *testing.T) {
 
 type stubForwardRunner struct{ local int32 }
 
-func (s *stubForwardRunner) Run(_ context.Context, _ string, _ string, _ int32, ready chan<- int32, stop <-chan struct{}) error {
+func (s *stubForwardRunner) Run(_ context.Context, _, _ string, _ int32, ready chan<- int32, stop <-chan struct{}) error {
 	ready <- s.local
 	<-stop
 	return nil

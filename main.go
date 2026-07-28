@@ -27,14 +27,20 @@ func main() {
 }
 
 func run() error {
-	addr := flag.String("addr", "127.0.0.1:34115", "listen address")
-	openBrowser := flag.Bool("open", false, "open the default browser on start")
-	flag.Parse()
+	flags := flag.NewFlagSet("spinoza", flag.ExitOnError)
+	addr := flags.String("addr", "127.0.0.1:34115", "listen address")
+	openBrowser := flags.Bool("open", false, "open the default browser on start")
+	if err := flags.Parse(os.Args[1:]); err != nil {
+		return err
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mgr := makeManager(ctx)
+	mgr, err := makeManager(ctx)
+	if err != nil {
+		return err
+	}
 
 	assets, err := fs.Sub(embedded, "web/dist")
 	if err != nil {
@@ -51,7 +57,7 @@ func run() error {
 	url := "http://" + *addr
 	log.Printf("spinoza listening on %s  (open it in a browser)", url)
 	if *openBrowser {
-		openURL(url)
+		openURL(ctx, url)
 	}
 
 	go func() {
@@ -68,7 +74,7 @@ func run() error {
 	return nil
 }
 
-func openURL(url string) {
+func openURL(ctx context.Context, url string) {
 	var name string
 	var args []string
 	switch runtime.GOOS {
@@ -82,5 +88,5 @@ func openURL(url string) {
 		name = "xdg-open"
 		args = []string{url}
 	}
-	_ = exec.Command(name, args...).Start()
+	_ = exec.CommandContext(ctx, name, args...).Start()
 }

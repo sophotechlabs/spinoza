@@ -25,7 +25,7 @@ func Get(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef) (api.Obj
 }
 
 func Apply(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error) {
-	obj := map[string]interface{}{}
+	obj := map[string]any{}
 	unmarshalErr := yaml.Unmarshal(doc, &obj)
 	if unmarshalErr != nil {
 		return api.ObjectDetail{}, fmt.Errorf("parse yaml: %w", unmarshalErr)
@@ -130,7 +130,7 @@ func ownersOf(u *unstructured.Unstructured) []api.OwnerRef {
 func conditionsOf(u *unstructured.Unstructured) []api.Condition {
 	out := []api.Condition{}
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]interface{})
+		m, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -148,7 +148,7 @@ func conditionsOf(u *unstructured.Unstructured) []api.Condition {
 	return out
 }
 
-func transitionOf(m map[string]interface{}) string {
+func transitionOf(m map[string]any) string {
 	v := stringField(m, "lastTransitionTime")
 	if v != "" {
 		return v
@@ -177,7 +177,7 @@ func portsOf(u *unstructured.Unstructured) []api.ObjectPort {
 func podPorts(u *unstructured.Unstructured) []api.ObjectPort {
 	out := []api.ObjectPort{}
 	for _, container := range nestedSlice(u, "spec", "containers") {
-		m, ok := container.(map[string]interface{})
+		m, ok := container.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -197,18 +197,18 @@ func servicePorts(u *unstructured.Unstructured) []api.ObjectPort {
 	return out
 }
 
-func readPorts(holder interface{}, field string, numberKey string) []api.ObjectPort {
-	parent, ok := holder.(map[string]interface{})
+func readPorts(holder any, field, numberKey string) []api.ObjectPort {
+	parent, ok := holder.(map[string]any)
 	if !ok {
 		return nil
 	}
-	entries, ok := parent[field].([]interface{})
+	entries, ok := parent[field].([]any)
 	if !ok {
 		return nil
 	}
 	out := []api.ObjectPort{}
 	for _, entry := range entries {
-		m, isMap := entry.(map[string]interface{})
+		m, isMap := entry.(map[string]any)
 		if !isMap {
 			continue
 		}
@@ -231,7 +231,7 @@ func readPorts(holder interface{}, field string, numberKey string) []api.ObjectP
 
 const maxPort = 65535
 
-func intField(m map[string]interface{}, key string) int32 {
+func intField(m map[string]any, key string) int32 {
 	switch value := m[key].(type) {
 	case int64:
 		return boundedPort(value)
@@ -267,7 +267,7 @@ func containerNames(u *unstructured.Unstructured) []string {
 func namesFrom(u *unstructured.Unstructured, field string) []string {
 	out := []string{}
 	for _, c := range nestedSlice(u, "spec", field) {
-		m, ok := c.(map[string]interface{})
+		m, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -280,7 +280,7 @@ func namesFrom(u *unstructured.Unstructured, field string) []string {
 	return out
 }
 
-func stringField(m map[string]interface{}, key string) string {
+func stringField(m map[string]any, key string) string {
 	v, ok := m[key].(string)
 	if !ok {
 		return ""
@@ -288,7 +288,7 @@ func stringField(m map[string]interface{}, key string) string {
 	return v
 }
 
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []interface{} {
+func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
 	v, found, err := unstructured.NestedSlice(u.Object, fields...)
 	if !found || err != nil {
 		return nil

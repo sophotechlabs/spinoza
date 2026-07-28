@@ -41,11 +41,11 @@ func podUsage(ctx context.Context, dyn dynamic.Interface) map[string]api.Resourc
 
 func containerTotals(u *unstructured.Unstructured) (cpuMilli, memMi int64) {
 	for _, c := range nestedSlice(u, "containers") {
-		m, ok := c.(map[string]interface{})
+		m, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
-		usage, ok := m["usage"].(map[string]interface{})
+		usage, ok := m["usage"].(map[string]any)
 		if !ok {
 			continue
 		}
@@ -105,7 +105,7 @@ func percent(used, total int64) int64 {
 	return used * 100 / total
 }
 
-func milli(m map[string]interface{}, key string) int64 {
+func milli(m map[string]any, key string) int64 {
 	q, ok := quantity(m, key)
 	if !ok {
 		return 0
@@ -113,7 +113,7 @@ func milli(m map[string]interface{}, key string) int64 {
 	return q.MilliValue()
 }
 
-func mebi(m map[string]interface{}, key string) int64 {
+func mebi(m map[string]any, key string) int64 {
 	q, ok := quantity(m, key)
 	if !ok {
 		return 0
@@ -121,7 +121,7 @@ func mebi(m map[string]interface{}, key string) int64 {
 	return q.Value() / (1024 * 1024)
 }
 
-func quantity(m map[string]interface{}, key string) (resource.Quantity, bool) {
+func quantity(m map[string]any, key string) (resource.Quantity, bool) {
 	s, ok := m[key].(string)
 	if !ok {
 		return resource.Quantity{}, false
@@ -133,7 +133,7 @@ func quantity(m map[string]interface{}, key string) (resource.Quantity, bool) {
 	return q, true
 }
 
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []interface{} {
+func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
 	v, found, err := unstructured.NestedSlice(u.Object, fields...)
 	if !found || err != nil {
 		return nil
@@ -141,7 +141,7 @@ func nestedSlice(u *unstructured.Unstructured, fields ...string) []interface{} {
 	return v
 }
 
-func nestedMap(u *unstructured.Unstructured, fields ...string) (map[string]interface{}, bool) {
+func nestedMap(u *unstructured.Unstructured, fields ...string) (map[string]any, bool) {
 	v, found, err := unstructured.NestedMap(u.Object, fields...)
 	if !found || err != nil {
 		return nil, false

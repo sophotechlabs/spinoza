@@ -43,7 +43,7 @@ func (c *cache) get(digest string) string {
 	return state
 }
 
-func (c *cache) set(digest string, state string) {
+func (c *cache) set(digest, state string) {
 	if digest == "" {
 		return
 	}
