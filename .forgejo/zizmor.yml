@@ -1,0 +1,15 @@
+rules:
+  excessive-permissions:
+    ignore:
+      - go.yaml
+      - frontend.yaml
+      - repo.yaml
+      - commits.yaml
+      - release.yaml
+  unpinned-images:
+    ignore:
+      - go.yaml
+      - frontend.yaml
+      - repo.yaml
+      - commits.yaml
+      - release.yaml

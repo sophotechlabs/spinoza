@@ -22,6 +22,19 @@ just dev-api   # Go server on :34115 (stub data)
 just dev-web   # Vite dev server, proxies /ws to the API
 ```
 
+## CI
+
+CI runs on the self-hosted Forgejo forge, not GitHub. Workflows live in `.forgejo/workflows/` and stay dormant until the repo is pushed there:
+
+```
+git remote add ci git@git.c.p-mk1.sopho.tech:arch/spinoza.git
+git push ci main
+```
+
+Every check is a `just` recipe, so the same command runs on a laptop and in CI. `just ci` runs the whole suite; `just check` is the fast pre-push subset that `lefthook` already calls.
+
+Runs: `https://git.c.p-mk1.sopho.tech/arch/spinoza/actions`
+
 ## Architecture
 
 Single Go binary: `client-go` informer → in-process broker → HTTP+WS server that streams a snapshot then deltas. The React SPA (embedded via `embed.FS`) applies them to a uid-keyed store and renders the table. The same HTTP+WS transport runs in a browser tab now and inside a Wails window later — no rewrite.

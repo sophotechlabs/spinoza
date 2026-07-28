@@ -1,0 +1,17 @@
+exclude_path = [
+  "frontend/node_modules",
+  "frontend/coverage",
+  "web/dist",
+  "dist",
+  "build/bin",
+]
+
+exclude = [
+  "^http://127\\.0\\.0\\.1",
+  "^http://localhost",
+]
+
+accept = [200, 206, 403, 429]
+max_retries = 2
+timeout = 20
+no_progress = true

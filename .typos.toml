@@ -1,0 +1,18 @@
+[files]
+extend-exclude = [
+  "frontend/node_modules/",
+  "frontend/package-lock.json",
+  "frontend/coverage/",
+  "web/dist/",
+  "dist/",
+  "go.sum",
+  "coverage.out",
+]
+
+[default.extend-words]
+crds = "crds"
+iam = "iam"
+ines = "ines"
+ro = "ro"
+unparseable = "unparseable"
+Unparseable = "Unparseable"

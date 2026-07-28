@@ -10,12 +10,13 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
     "depcheck": "depcheck",
-    "madge": "madge --circular --extensions ts,tsx src"
+    "madge": "madge --circular --extensions ts,tsx src",
+    "typecov": "type-coverage --at-least 99 --strict --ignore-files 'src/vite-env.d.ts'"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
@@ -55,6 +56,7 @@
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.0.0",
+    "type-coverage": "^2.30.1",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.65.0",
     "vite": "^6.0.0",

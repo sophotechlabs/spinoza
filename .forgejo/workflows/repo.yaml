@@ -1,0 +1,75 @@
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  secrets:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: just secrets
+
+  sast:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just sast
+
+  vulns:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just vulns
+
+  workflows:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just workflows
+
+  hygiene:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just hygiene
+
+  docs:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just docs
+
+  sbom:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just sbom

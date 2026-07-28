@@ -1,0 +1,16 @@
+{
+  "Exclude": [
+    "^frontend/node_modules/",
+    "^frontend/coverage/",
+    "^frontend/package-lock.json$",
+    "^frontend/wailsjs/",
+    "^web/dist/",
+    "^dist/",
+    "^build/bin/",
+    "^go\\.sum$",
+    "^coverage\\.out$",
+    "\\.svg$",
+    "\\.png$"
+  ],
+  "IgnoreDefaults": false
+}

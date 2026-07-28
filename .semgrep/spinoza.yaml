@@ -1,0 +1,74 @@
+rules:
+  - id: server-without-header-timeout
+    languages: [go]
+    severity: ERROR
+    message: http.Server needs ReadHeaderTimeout to bound slow-header clients
+    patterns:
+      - pattern: |
+          &http.Server{...}
+      - pattern-not: |
+          &http.Server{..., ReadHeaderTimeout: ..., ...}
+
+  - id: background-context-outside-entrypoint
+    languages: [go]
+    severity: ERROR
+    message: propagate the caller context instead of starting a new root context
+    paths:
+      include:
+        - internal/
+      exclude:
+        - "*_test.go"
+    pattern: context.Background()
+
+  - id: goroutine-without-context
+    languages: [go]
+    severity: WARNING
+    message: long-lived goroutine should observe a context for cancellation
+    paths:
+      include:
+        - internal/
+      exclude:
+        - "*_test.go"
+    patterns:
+      - pattern: |
+          go func() {
+            for {
+              ...
+            }
+          }()
+
+  - id: implicit-websocket-read-limit
+    languages: [go]
+    severity: WARNING
+    message: set an explicit SetReadLimit rather than relying on the library default
+    paths:
+      include:
+        - internal/
+      exclude:
+        - "*_test.go"
+    patterns:
+      - pattern: $C.Read($CTX)
+      - pattern-not-inside: |
+          $C.SetReadLimit(...)
+          ...
+
+  - id: response-body-without-status-check
+    languages: [go]
+    severity: WARNING
+    message: check resp.StatusCode before decoding the body
+    paths:
+      include:
+        - internal/
+      exclude:
+        - "*_test.go"
+    patterns:
+      - pattern: |
+          $RESP, $ERR := $CLIENT.Do($REQ)
+          ...
+          json.NewDecoder($RESP.Body).Decode($TARGET)
+      - pattern-not: |
+          $RESP, $ERR := $CLIENT.Do($REQ)
+          ...
+          if $RESP.StatusCode != ... { ... }
+          ...
+          json.NewDecoder($RESP.Body).Decode($TARGET)

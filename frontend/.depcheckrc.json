@@ -11,6 +11,7 @@
     "knip",
     "depcheck",
     "madge",
+    "type-coverage",
     "@vitest/coverage-v8",
     "jsdom",
     "@testing-library/dom",

@@ -1,0 +1,44 @@
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just ci-fe-lint
+
+  test:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just ci-fe-test
+
+  audit:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just ci-fe-audit
+
+  build:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: just ci-fe-build

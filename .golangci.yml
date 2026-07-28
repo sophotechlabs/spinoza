@@ -1,7 +1,8 @@
 version: "2"
 
 run:
-  timeout: 5m
+  timeout: 10m
+  tests: true
 
 issues:
   max-issues-per-linter: 0
@@ -10,47 +11,297 @@ issues:
 linters:
   default: standard
   enable:
-    - revive
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - depguard
+    - dogsled
+    - dupl
+    - dupword
+    - durationcheck
+    - embeddedstructfieldcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - forcetypeassert
+    - gocheckcompilerdirectives
+    - gochecknoinits
+    - gochecksumtype
+    - gocognit
+    - goconst
     - gocritic
+    - gocyclo
+    - godoclint
+    - godot
+    - gomoddirectives
+    - goprintffuncname
     - gosec
+    - gosmopolitan
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - interfacebloat
+    - intrange
+    - iotamixing
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
     - misspell
+    - modernize
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noctx
+    - nolintlint
+    - nosprintfhostport
+    - perfsprint
+    - prealloc
+    - predeclared
+    - reassign
+    - recvcheck
+    - revive
+    - sloglint
+    - tagalign
+    - testableexamples
+    - thelper
+    - tparallel
     - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+
   settings:
+    cyclop:
+      max-complexity: 15
+      package-average: 0
+    depguard:
+      rules:
+        all:
+          files: ["$all"]
+          deny:
+            - pkg: io/ioutil
+              desc: deprecated, use io and os
+            - pkg: github.com/pkg/errors
+              desc: use fmt.Errorf with %w
+            - pkg: math/rand$
+              desc: use math/rand/v2
+            - pkg: github.com/golang/protobuf
+              desc: use google.golang.org/protobuf
+        production:
+          files: ["!$test"]
+          deny:
+            - pkg: testing
+              desc: no testing imports in production code
+    dupl:
+      threshold: 120
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    exhaustive:
+      default-signifies-exhaustive: true
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^fmt\.Print.*$
+          msg: use log or a returned error
+        - pattern: ^print(ln)?$
+          msg: use log
+    gocognit:
+      min-complexity: 20
+    goconst:
+      min-len: 4
+      min-occurrences: 5
+      numbers: false
+      ignore-tests: true
+      find-duplicates: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+        - unnamedResult
+        - whyNoLint
+        - paramTypeCombine
+    gocyclo:
+      min-complexity: 15
+    godot:
+      scope: declarations
+      capital: false
+    gosec:
+      excludes:
+        - G115
+      config:
+        G306: "0600"
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    importas:
+      alias:
+        - pkg: k8s.io/api/core/v1
+          alias: corev1
+        - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
+          alias: metav1
+        - pkg: k8s.io/apimachinery/pkg/api/errors
+          alias: apierrors
+    interfacebloat:
+      max: 8
+    maintidx:
+      under: 20
+    misspell:
+      locale: US
+    nakedret:
+      max-func-lines: 0
+    nestif:
+      min-complexity: 5
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+    perfsprint:
+      strconcat: false
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: true
     revive:
+      confidence: 0.8
       rules:
         - name: blank-imports
+        - name: bool-literal-in-expr
+        - name: constant-logical-expr
         - name: context-as-argument
         - name: context-keys-type
+        - name: datarace
+        - name: deep-exit
+        - name: defer
         - name: dot-imports
+        - name: duplicated-imports
+        - name: early-return
         - name: empty-block
+        - name: empty-lines
+        - name: enforce-switch-style
         - name: error-naming
         - name: error-return
         - name: error-strings
         - name: errorf
+        - name: identical-branches
+        - name: identical-switch-branches
+        - name: if-return
         - name: increment-decrement
         - name: indent-error-flow
+        - name: modifies-parameter
+        - name: modifies-value-receiver
+        - name: optimize-operands-order
         - name: range
+        - name: range-val-address
+        - name: range-val-in-closure
         - name: receiver-naming
         - name: redefines-builtin-id
+        - name: redundant-build-tag
+        - name: redundant-import-alias
+        - name: redundant-test-main-exit
+        - name: string-of-int
+        - name: struct-tag
         - name: superfluous-else
+        - name: time-equal
         - name: time-naming
+        - name: unchecked-type-assertion
+        - name: unconditional-recursion
+        - name: unexported-naming
         - name: unexported-return
+        - name: unnecessary-format
+        - name: unnecessary-stmt
         - name: unreachable-code
+        - name: unsecure-url-scheme
+        - name: use-any
+        - name: use-errors-new
+        - name: use-slices-sort
+        - name: useless-break
         - name: var-declaration
         - name: var-naming
+        - name: waitgroup-by-value
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+        - -ST1020
+        - -ST1021
+        - -ST1022
+    tagalign:
+      align: false
+      sort: true
+    unparam:
+      check-exported: false
+    usetesting:
+      os-setenv: true
+      os-temp-dir: true
+
   exclusions:
     generated: lax
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+      - legacy
     rules:
-      - path: main\.go$
+      - path: _test\.go$
         linters:
-          - gosec
-        text: G204
+          - bodyclose
+          - contextcheck
+          - cyclop
+          - dupl
+          - errchkjson
+          - forcetypeassert
+          - gocognit
+          - gocyclo
+          - goconst
+          - maintidx
+          - nestif
+          - noctx
+          - unparam
+      - path: _test\.go$
+        linters:
+          - revive
+        text: 'unnecessary-format|unused-parameter|unused-receiver'
     paths:
       - frontend
+      - web
 
 formatters:
   enable:
     - gofumpt
+  settings:
+    gofumpt:
+      extra-rules: true
   exclusions:
     paths:
       - frontend
+      - web

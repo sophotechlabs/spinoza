@@ -1,0 +1,25 @@
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: docker
+    container:
+      image: infra-soph-ci-toolbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: just release-notes
+      - run: just release-dist
+      - uses: actions/forgejo-release@v2.13.4
+        with:
+          direction: upload
+          url: ${{ github.server_url }}
+          token: ${{ github.token }}
+          release-dir: dist/release
+          release-notes-file: dist/RELEASE_NOTES.md
