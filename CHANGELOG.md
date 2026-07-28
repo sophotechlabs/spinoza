@@ -1,0 +1,57 @@
+# Changelog
+
+## [0.2.0](https://github.com/sophotechlabs/spinoza/compare/spinoza-v0.1.0...spinoza-v0.2.0) (2026-07-28)
+
+
+### Features
+
+* **api:** carry group/version/resource on graph nodes and flux rows ([75d075d](https://github.com/sophotechlabs/spinoza/commit/75d075dcf9efc7d5d47ae82ae2e2f6f8e442f562))
+* **backend:** generic backend implementation — discovery, resource manager, server wiring ([fa96561](https://github.com/sophotechlabs/spinoza/commit/fa96561fc953e2437abd6ddeb19dcb8d376a3a82))
+* **backend:** generic resource backend — discovery + dynamic informers + column extraction ([34b5602](https://github.com/sophotechlabs/spinoza/commit/34b5602b57f9e07eb110254de08da62aa8196a27))
+* **backend:** pods WS spine with stub broker ([e4e4c2a](https://github.com/sophotechlabs/spinoza/commit/e4e4c2a61c3360bfe80eeb55db01fb1186b77759))
+* **backend:** real pods informer via client-go; --fake keeps the stub ([9daf989](https://github.com/sophotechlabs/spinoza/commit/9daf98939c2c5a6266f98a583f977e564f0f2eaa))
+* **charts:** resolve latest chart versions from helm and oci repositories ([163e4da](https://github.com/sophotechlabs/spinoza/commit/163e4da49add5c1b759d2519a6bb2ae3946d6bae))
+* **desktop:** wails native window, reusing the http+ws transport ([30af427](https://github.com/sophotechlabs/spinoza/commit/30af427b5f98948a6add8505e7cdab816ff18598))
+* **exec:** shell into pods from the dock terminal ([57cceb9](https://github.com/sophotechlabs/spinoza/commit/57cceb9d4a5c05b6156edc299910164c91588455))
+* **flux:** collapsible GitOps nav with graph, table, tiles and kind-overview boards ([4c3ca44](https://github.com/sophotechlabs/spinoza/commit/4c3ca448a589c7dbf4f1dc408a353129232ae8c7))
+* **flux:** flux dashboard view + sidebar entry ([7e6028d](https://github.com/sophotechlabs/spinoza/commit/7e6028dbfa0729738054d0f9617fbffb5b86e7c2))
+* **flux:** include HelmChart in the sources category ([127127b](https://github.com/sophotechlabs/spinoza/commit/127127be84d3a04faef14da476c225f21f14359e))
+* **flux:** read-only Flux dashboard endpoint ([96cc8f4](https://github.com/sophotechlabs/spinoza/commit/96cc8f48c92610c89cbf2bec44bc948b87d285c0))
+* **flux:** reconcile, suspend and resume actions ([adf7cbb](https://github.com/sophotechlabs/spinoza/commit/adf7cbb5f260c08cafe2730a66b37a29b4f2ba7d))
+* **flux:** single aligned resizable table with combined Status column ([aa0ff00](https://github.com/sophotechlabs/spinoza/commit/aa0ff00aaafd8ba9834abaeccb1d00ce0247c57c))
+* **frontend:** flux action bar in the inspect drawer ([397f8e4](https://github.com/sophotechlabs/spinoza/commit/397f8e49c56bd63f51ee184c8ea6c58e75bea677))
+* **frontend:** forwards dock tab and port forwarding from the drawer ([7d8a63b](https://github.com/sophotechlabs/spinoza/commit/7d8a63b25804fca57ae0bcb398fe040c53adc4bd))
+* **frontend:** generic resource browser — discovery sidebar + virtualized table ([bd94ac1](https://github.com/sophotechlabs/spinoza/commit/bd94ac11f5b5b3b70679c4130546f81745d09bfe))
+* **frontend:** gitops graph view (react flow) + resource/gitops view switch ([77adbc1](https://github.com/sophotechlabs/spinoza/commit/77adbc1a470df70da6cfc320eefcf536c55b81a2))
+* **frontend:** k8s schema autocomplete in the yaml editor ([6346c82](https://github.com/sophotechlabs/spinoza/commit/6346c82e99e64f82d19afa418e880e45734591e6))
+* **frontend:** latest chart version column; poll events; fix schema refetch ([7d99ad7](https://github.com/sophotechlabs/spinoza/commit/7d99ad75631326ef051d16c30a791469248eeec4))
+* **frontend:** lens skeleton UI (sidebar, pod table, drawer, dock) ([39d609f](https://github.com/sophotechlabs/spinoza/commit/39d609f37e672eb259e97c6d0bb83a077012f0e1))
+* **frontend:** monaco yaml editor with a curated language bundle ([db406c2](https://github.com/sophotechlabs/spinoza/commit/db406c286a54c6f40799f12440b6d333d9f4f70d))
+* **frontend:** name and namespace filters on the resource table ([bdf4bb9](https://github.com/sophotechlabs/spinoza/commit/bdf4bb960156bcd75b3b36a44b474911cb0f472d))
+* **frontend:** react+vite+tailwind scaffold, phase-0 pods table ([fe1225c](https://github.com/sophotechlabs/spinoza/commit/fe1225c398b383b930f513f58519292ee47d7113))
+* **frontend:** tabbed inspect drawer and live pod logs in the dock ([18fdd94](https://github.com/sophotechlabs/spinoza/commit/18fdd94ec2668e900f19ec18fa8f99ff4988d6e0))
+* **frontend:** uid-keyed pod store + reconnecting WS feed ([ef18d03](https://github.com/sophotechlabs/spinoza/commit/ef18d03c23635bbb6c28f0e81f4000c233224855))
+* **gitops:** flux/argo dependency graph — grapher + endpoint ([172485d](https://github.com/sophotechlabs/spinoza/commit/172485d6dcc10e5f73fedede094b4df76224b04a))
+* **inspect:** object detail, yaml apply/delete and events endpoints ([481b8df](https://github.com/sophotechlabs/spinoza/commit/481b8df1f292e4db158efe374362461da741b388))
+* **logs:** pod log streaming over the resource websocket ([ec2a05a](https://github.com/sophotechlabs/spinoza/commit/ec2a05a5190761ea39305c52c10a3477df83d124))
+* **metrics:** /api/metrics endpoint for pod and node CPU/memory usage ([2f410cb](https://github.com/sophotechlabs/spinoza/commit/2f410cb097953ca4b5e766cc94b05877e19689eb))
+* **metrics:** pod and node CPU/memory columns from /api/metrics ([227b046](https://github.com/sophotechlabs/spinoza/commit/227b046b0324fdec665637d6464c140ae2812e2b))
+* **portforward:** pod and service forwards with liveness reaping ([48ca702](https://github.com/sophotechlabs/spinoza/commit/48ca7023183b7f7e62aa8b1e876ae3156fdbdbb3))
+* **resources:** draggable column resizing with a narrower default Name column ([297c56c](https://github.com/sophotechlabs/spinoza/commit/297c56cdbcfdc8c5a83ffd2590dc03ed6b348f3d))
+* **resources:** pod container squares, colored ready ratios and restart counts ([1742b4a](https://github.com/sophotechlabs/spinoza/commit/1742b4a5ab5389a25b7dd636b7a6c33b7ee160dc))
+* **schema:** serve pruned json schema bundles from the cluster openapi ([9ccd770](https://github.com/sophotechlabs/spinoza/commit/9ccd7703c3c8c119ab3d403a08892409de7357c5))
+* **sidebar:** lens-style ordering and custom resources grouped by api group ([8120fd4](https://github.com/sophotechlabs/spinoza/commit/8120fd42f3d182622fab3991b386104ed75834ba))
+* **ui:** tables fill window width with designated fill columns ([aa37c2c](https://github.com/sophotechlabs/spinoza/commit/aa37c2cc23327edf5083ac7c0c3cd484d98ce960))
+
+
+### Bug Fixes
+
+* another cors fix ([91c5be0](https://github.com/sophotechlabs/spinoza/commit/91c5be04503240fa00bcfd1ef17043240f559423))
+* **build:** stop embedding stale frontend bundles in the binary ([a7b7e71](https://github.com/sophotechlabs/spinoza/commit/a7b7e71f34633da779e54b7bd1bab3732b3767b2))
+* **desktop:** bind a random free port to avoid colliding with the dev server ([1d683a9](https://github.com/sophotechlabs/spinoza/commit/1d683a9e4b54571d7e346218987d4980e934986b))
+* **desktop:** bind a random free port; add rund recipe ([fc19a6a](https://github.com/sophotechlabs/spinoza/commit/fc19a6a892bc9bcd64ff72c02aff8fa8b247bbfb))
+* gitops graph render ([0768b81](https://github.com/sophotechlabs/spinoza/commit/0768b81ffedbe31b016c6b5eb802de3975b755f7))
+* **gitops:** control-plane graph filter + node cap; layer react-flow css so node colors show ([d80b83d](https://github.com/sophotechlabs/spinoza/commit/d80b83d981446e9a95990a4e4232a2a2ea731c8d))
+* **hooks:** run frontend prettier from frontend/ so its tailwind plugin resolves ([a9f09bb](https://github.com/sophotechlabs/spinoza/commit/a9f09bbe5bfdc06cfab0bb2958f06645986edeb2))
+* startup error desktop app ([3e65c70](https://github.com/sophotechlabs/spinoza/commit/3e65c70dabb83f2c6d49b22a486197c49caa2c2b))
+* **tooling:** put ~/go/bin on PATH for just recipes and lefthook ([50616e8](https://github.com/sophotechlabs/spinoza/commit/50616e81203514feda476acac995ca2372c4dccf))
