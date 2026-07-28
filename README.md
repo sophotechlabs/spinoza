@@ -8,7 +8,7 @@ A fast, lightweight, open-source Kubernetes GUI. Go backend with client-go infor
 
 Prereqs: Go 1.26+, Node 20+.
 
-```
+```sh
 just deps    # once — install frontend deps
 just run     # build frontend + binary, start server
 ```
@@ -17,7 +17,7 @@ Then open `http://127.0.0.1:34115`.
 
 ## Develop (hot reload, two terminals)
 
-```
+```sh
 just dev-api   # Go server on :34115 (stub data)
 just dev-web   # Vite dev server, proxies /ws to the API
 ```
@@ -26,7 +26,7 @@ just dev-web   # Vite dev server, proxies /ws to the API
 
 CI runs on the self-hosted Forgejo forge, not GitHub. Workflows live in `.forgejo/workflows/` and stay dormant until the repo is pushed there:
 
-```
+```sh
 git remote add ci git@git.c.p-mk1.sopho.tech:arch/spinoza.git
 git push ci main
 ```

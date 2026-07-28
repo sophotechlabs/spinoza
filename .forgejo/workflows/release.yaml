@@ -16,7 +16,7 @@ jobs:
           persist-credentials: false
       - run: just release-notes
       - run: just release-dist
-      - uses: actions/forgejo-release@v2.13.4
+      - uses: actions/forgejo-release@98265452477dafb3f0f27ba9c462c90b18cb44fd
         with:
           direction: upload
           url: ${{ github.server_url }}
