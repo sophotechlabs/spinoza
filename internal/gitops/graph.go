@@ -2,7 +2,7 @@ package gitops
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -213,18 +213,18 @@ func (b *builder) graph() api.Graph {
 	for _, n := range b.nodes {
 		nodes = append(nodes, n)
 	}
-	sort.Slice(nodes, func(i, j int) bool {
-		return nodes[i].ID < nodes[j].ID
+	slices.SortFunc(nodes, func(a, b api.GraphNode) int {
+		return strings.Compare(a.ID, b.ID)
 	})
 	edges := make([]api.GraphEdge, 0, len(b.edges))
 	for _, e := range b.edges {
 		edges = append(edges, e)
 	}
-	sort.Slice(edges, func(i, j int) bool {
-		if edges[i].From != edges[j].From {
-			return edges[i].From < edges[j].From
+	slices.SortFunc(edges, func(a, b api.GraphEdge) int {
+		if a.From != b.From {
+			return strings.Compare(a.From, b.From)
 		}
-		return edges[i].To < edges[j].To
+		return strings.Compare(a.To, b.To)
 	})
 	return api.Graph{Nodes: nodes, Edges: edges}
 }

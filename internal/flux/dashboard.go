@@ -164,6 +164,7 @@ func categoryOf(d api.ResourceDescriptor) string {
 		if notificationResources[d.Resource] {
 			return "Notifications"
 		}
+	default:
 	}
 	return ""
 }

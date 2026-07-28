@@ -88,8 +88,8 @@ func (f *fakeKubelet) handle(ctx context.Context, conn *websocket.Conn, data []b
 		_ = conn.Write(ctx, websocket.MessageBinary, append([]byte{streamStdout}, bytes.ToUpper(payload)...))
 	case streamResize:
 		var size struct {
-			Width  uint16
-			Height uint16
+			Width  uint16 `json:"Width"`
+			Height uint16 `json:"Height"`
 		}
 		if json.Unmarshal(payload, &size) == nil {
 			f.mu.Lock()

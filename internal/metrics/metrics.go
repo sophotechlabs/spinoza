@@ -49,8 +49,8 @@ func containerTotals(u *unstructured.Unstructured) (cpuMilli, memMi int64) {
 		if !ok {
 			continue
 		}
-		cpuMilli += milli(usage, "cpu")
-		memMi += mebi(usage, "memory")
+		cpuMilli += milli(usage)
+		memMi += mebi(usage)
 	}
 	return cpuMilli, memMi
 }
@@ -68,8 +68,8 @@ func nodeUsage(ctx context.Context, dyn dynamic.Interface) map[string]api.Resour
 		if !ok {
 			continue
 		}
-		cpu := milli(usage, "cpu")
-		mem := mebi(usage, "memory")
+		cpu := milli(usage)
+		mem := mebi(usage)
 		use := api.ResourceUsage{CPUMilli: cpu, MemoryMi: mem}
 		alloc, ok := allocatable[u.GetName()]
 		if ok {
@@ -93,7 +93,7 @@ func nodeAllocatable(ctx context.Context, dyn dynamic.Interface) map[string]api.
 		if !ok {
 			continue
 		}
-		out[u.GetName()] = api.ResourceUsage{CPUMilli: milli(alloc, "cpu"), MemoryMi: mebi(alloc, "memory")}
+		out[u.GetName()] = api.ResourceUsage{CPUMilli: milli(alloc), MemoryMi: mebi(alloc)}
 	}
 	return out
 }
@@ -105,16 +105,16 @@ func percent(used, total int64) int64 {
 	return used * 100 / total
 }
 
-func milli(m map[string]any, key string) int64 {
-	q, ok := quantity(m, key)
+func milli(m map[string]any) int64 {
+	q, ok := quantity(m, "cpu")
 	if !ok {
 		return 0
 	}
 	return q.MilliValue()
 }
 
-func mebi(m map[string]any, key string) int64 {
-	q, ok := quantity(m, key)
+func mebi(m map[string]any) int64 {
+	q, ok := quantity(m, "memory")
 	if !ok {
 		return 0
 	}

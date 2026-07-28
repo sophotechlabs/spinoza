@@ -22,7 +22,8 @@ import (
 )
 
 func main() {
-	mgr, err := makeManager(context.Background())
+	ctx := context.Background()
+	mgr, err := makeManager(ctx)
 	if err != nil {
 		log.Fatalf("manager: %v", err)
 	}
@@ -32,7 +33,8 @@ func main() {
 		log.Fatalf("assets: %v", err)
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		log.Fatalf("listen: %v", err)
 	}

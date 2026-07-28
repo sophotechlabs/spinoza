@@ -12,7 +12,8 @@ import (
 const (
 	openapiRefPrefix = "#/components/schemas/"
 	bundleRefPrefix  = "#/definitions/"
-	draft            = "http://json-schema.org/draft-07/schema#"
+	//nolint:revive // draft-07 identifies itself over http; validators compare the string verbatim
+	draft = "http://json-schema.org/draft-07/schema#"
 )
 
 type GVK struct {

@@ -62,7 +62,7 @@ func run() error {
 
 	go func() {
 		<-ctx.Done()
-		shutCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(shutCtx)
 	}()

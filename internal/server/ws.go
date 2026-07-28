@@ -71,14 +71,14 @@ func (sess *wsSession) subscribe(msg api.ClientMsg) {
 	sess.unsubscribe(msg.SubID)
 	sub, err := sess.mgr.Subscribe(msg.Group, msg.Version, msg.Resource, msg.Namespace)
 	if err != nil {
-		sess.write(api.ServerMsg{Type: "error", SubID: msg.SubID, Message: err.Error()})
+		sess.write(sess.ctx, api.ServerMsg{Type: "error", SubID: msg.SubID, Message: err.Error()})
 		return
 	}
 	sess.mu.Lock()
 	sess.subs[msg.SubID] = sub
 	sess.mu.Unlock()
 
-	sess.write(api.ServerMsg{
+	sess.write(sess.ctx, api.ServerMsg{
 		Type:       "snapshot",
 		SubID:      msg.SubID,
 		Columns:    sub.Columns,
@@ -98,7 +98,7 @@ func (sess *wsSession) relay(subID string, sub *resources.Subscription) {
 			if !ok {
 				return
 			}
-			sess.write(eventToMsg(subID, ev))
+			sess.write(sess.ctx, eventToMsg(subID, ev))
 		}
 	}
 }
@@ -125,7 +125,7 @@ func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 		Follow:    msg.Follow,
 	})
 	if err != nil {
-		sess.write(api.ServerMsg{Type: "error", SubID: msg.SubID, Message: err.Error()})
+		sess.write(sess.ctx, api.ServerMsg{Type: "error", SubID: msg.SubID, Message: err.Error()})
 		return
 	}
 	sess.mu.Lock()
@@ -142,10 +142,10 @@ func (sess *wsSession) relayLogs(subID string, stream *logs.Stream) {
 			return
 		case line, ok := <-stream.Lines:
 			if !ok {
-				sess.write(api.ServerMsg{Type: "log-end", SubID: subID})
+				sess.write(sess.ctx, api.ServerMsg{Type: "log-end", SubID: subID})
 				return
 			}
-			sess.write(api.ServerMsg{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)})
+			sess.write(sess.ctx, api.ServerMsg{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)})
 		}
 	}
 }
@@ -199,8 +199,8 @@ func (sess *wsSession) closeAll() {
 	}
 }
 
-func (sess *wsSession) write(msg api.ServerMsg) {
-	writeCtx, cancel := context.WithTimeout(sess.ctx, 10*time.Second)
+func (sess *wsSession) write(ctx context.Context, msg api.ServerMsg) {
+	writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	_ = wsjson.Write(writeCtx, sess.conn, msg)
 }

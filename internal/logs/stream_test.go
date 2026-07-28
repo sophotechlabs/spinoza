@@ -143,7 +143,7 @@ func TestCloseStopsAFollowingStream(t *testing.T) {
 	released := make(chan struct{})
 	cs := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("first\n"))
-		w.(http.Flusher).Flush()
+		flush(w)
 		<-r.Context().Done()
 		close(released)
 	})
@@ -184,7 +184,7 @@ func TestCloseUnblocksAFullBuffer(t *testing.T) {
 		for range lineBuffer * 2 {
 			_, _ = w.Write([]byte("line\n"))
 		}
-		w.(http.Flusher).Flush()
+		flush(w)
 		<-r.Context().Done()
 	})
 
@@ -220,7 +220,7 @@ func TestCloseUnblocksAFullBuffer(t *testing.T) {
 func TestCancelledContextStopsTheStream(t *testing.T) {
 	cs := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("first\n"))
-		w.(http.Flusher).Flush()
+		flush(w)
 		<-r.Context().Done()
 	})
 
@@ -245,4 +245,12 @@ func TestCancelledContextStopsTheStream(t *testing.T) {
 			t.Fatalf("channel never closed after the context was canceled")
 		}
 	}
+}
+
+func flush(w http.ResponseWriter) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return
+	}
+	flusher.Flush()
 }

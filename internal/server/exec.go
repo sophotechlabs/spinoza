@@ -56,14 +56,14 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	conn := &execConn{conn: c, ctx: ctx}
 	session, startErr := s.mgr.StartExec(ctx, req, conn)
 	if startErr != nil {
-		conn.send(api.ExecChannelError, []byte(startErr.Error()))
+		conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
 		return
 	}
 	defer session.Close()
 
 	go func() {
 		streamErr := <-session.Done()
-		conn.send(api.ExecChannelError, endMessage(streamErr))
+		conn.send(ctx, api.ExecChannelError, endMessage(streamErr))
 		cancel()
 	}()
 
@@ -83,20 +83,20 @@ type execConn struct {
 	mu   sync.Mutex
 }
 
-func (e *execConn) send(channel byte, payload []byte) {
+func (e *execConn) send(ctx context.Context, channel byte, payload []byte) {
 	frame := make([]byte, 0, len(payload)+1)
 	frame = append(frame, channel)
 	frame = append(frame, payload...)
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(e.ctx), execWriteTimeout)
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), execWriteTimeout)
 	defer cancel()
 	_ = e.conn.Write(writeCtx, websocket.MessageBinary, frame)
 }
 
 func (e *execConn) Write(p []byte) (int, error) {
-	e.send(api.ExecChannelStdout, p)
+	e.send(e.ctx, api.ExecChannelStdout, p)
 	return len(p), nil
 }
 

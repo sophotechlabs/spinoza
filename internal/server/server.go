@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -53,13 +54,19 @@ func healthz(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, payload any) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(payload)
+	err := json.NewEncoder(w).Encode(payload)
+	if err != nil {
+		log.Printf("encode response: %v", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": message})
+	err := json.NewEncoder(w).Encode(map[string]string{"message": message})
+	if err != nil {
+		log.Printf("encode error response: %v", err)
+	}
 }
 
 func writeAPIError(w http.ResponseWriter, err error) {

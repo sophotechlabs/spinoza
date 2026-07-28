@@ -442,8 +442,9 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	defer func() { _ = c.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
-	if err := wsjson.Write(ctx, c, sub); err != nil {
-		t.Fatalf("write subscribe: %v", err)
+	writeErr := wsjson.Write(ctx, c, sub)
+	if writeErr != nil {
+		t.Fatalf("write subscribe: %v", writeErr)
 	}
 
 	snap := readMsg(ctx, t, c)
@@ -479,8 +480,9 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if err := unstructured.SetNestedField(cur.Object, int64(3), "spec", "replicas"); err != nil {
-		t.Fatalf("set replicas: %v", err)
+	setErr := unstructured.SetNestedField(cur.Object, int64(3), "spec", "replicas")
+	if setErr != nil {
+		t.Fatalf("set replicas: %v", setErr)
 	}
 	_, err = dyn.Resource(depGVR).Namespace("default").Update(ctx, cur, metav1.UpdateOptions{})
 	if err != nil {
@@ -520,8 +522,9 @@ func TestWSUnsubscribeStopsDeltas(t *testing.T) {
 	defer func() { _ = c.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
-	if err := wsjson.Write(ctx, c, sub); err != nil {
-		t.Fatalf("write subscribe: %v", err)
+	writeErr := wsjson.Write(ctx, c, sub)
+	if writeErr != nil {
+		t.Fatalf("write subscribe: %v", writeErr)
 	}
 	snap := readMsg(ctx, t, c)
 	if snap.Type != "snapshot" {
@@ -529,8 +532,9 @@ func TestWSUnsubscribeStopsDeltas(t *testing.T) {
 	}
 
 	unsub := api.ClientMsg{Type: "unsubscribe", SubID: "s1"}
-	if err := wsjson.Write(ctx, c, unsub); err != nil {
-		t.Fatalf("write unsubscribe: %v", err)
+	writeErr = wsjson.Write(ctx, c, unsub)
+	if writeErr != nil {
+		t.Fatalf("write unsubscribe: %v", writeErr)
 	}
 
 	time.Sleep(200 * time.Millisecond)
@@ -564,8 +568,9 @@ func TestWSSubscribeUnknownResource(t *testing.T) {
 	defer func() { _ = c.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "statefulsets", Namespace: "default"}
-	if err := wsjson.Write(ctx, c, sub); err != nil {
-		t.Fatalf("write subscribe: %v", err)
+	writeErr := wsjson.Write(ctx, c, sub)
+	if writeErr != nil {
+		t.Fatalf("write subscribe: %v", writeErr)
 	}
 
 	msg := readMsg(ctx, t, c)
@@ -596,16 +601,18 @@ func TestWSResubscribeReplacesSubscription(t *testing.T) {
 	defer func() { _ = c.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
-	if err := wsjson.Write(ctx, c, sub); err != nil {
-		t.Fatalf("write subscribe: %v", err)
+	writeErr := wsjson.Write(ctx, c, sub)
+	if writeErr != nil {
+		t.Fatalf("write subscribe: %v", writeErr)
 	}
 	first := readMsg(ctx, t, c)
 	if first.Type != "snapshot" {
 		t.Fatalf("Type = %q, want snapshot", first.Type)
 	}
 
-	if err := wsjson.Write(ctx, c, sub); err != nil {
-		t.Fatalf("write resubscribe: %v", err)
+	writeErr = wsjson.Write(ctx, c, sub)
+	if writeErr != nil {
+		t.Fatalf("write resubscribe: %v", writeErr)
 	}
 	second := readMsg(ctx, t, c)
 	if second.Type != "snapshot" {
@@ -635,8 +642,9 @@ func TestWSExitsOnServerContextCancel(t *testing.T) {
 	defer func() { _ = c.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
-	if err := wsjson.Write(ctx, c, sub); err != nil {
-		t.Fatalf("write subscribe: %v", err)
+	writeErr := wsjson.Write(ctx, c, sub)
+	if writeErr != nil {
+		t.Fatalf("write subscribe: %v", writeErr)
 	}
 	snap := readMsg(ctx, t, c)
 	if snap.Type != "snapshot" {

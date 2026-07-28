@@ -83,6 +83,12 @@ func (s *stubStreamer) Stream(ctx context.Context, req Request, opts Options) er
 	return s.err
 }
 
+func (s *stubStreamer) sizesSeen() []Size {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Size{}, s.sizes...)
+}
+
 func (s *stubStreamer) recorded() ([]byte, []Size, Request, []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -166,7 +172,7 @@ func TestResizeKeepsOnlyTheNewestSize(t *testing.T) {
 	close(streamer.release)
 	<-sess.Done()
 
-	_, sizes, _, _ := streamer.recorded()
+	sizes := streamer.sizesSeen()
 	if len(sizes) != 1 {
 		t.Fatalf("sizes = %v", sizes)
 	}

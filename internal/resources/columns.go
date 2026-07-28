@@ -10,6 +10,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
+const readyColumn = "Ready"
+
 func columnsFor(kind string) []api.Column {
 	switch kind {
 	case "Pod":
@@ -21,18 +23,16 @@ func columnsFor(kind string) []api.Column {
 		}
 	case "Deployment", "ReplicaSet", "StatefulSet", "ReplicationController":
 		return []api.Column{
-			{Name: "Ready", Render: "ratio"},
+			{Name: readyColumn, Render: "ratio"},
 			{Name: "Up-to-date"},
 			{Name: "Available"},
 		}
 	case "DaemonSet":
-		return cols("Desired", "Ready", "Available")
+		return cols("Desired", readyColumn, "Available")
 	case "Service":
 		return cols("Type", "Cluster-IP", "Ports")
 	case "Node":
 		return []api.Column{statusColumn(), {Name: "Roles"}, {Name: "Version"}}
-	case "Namespace":
-		return []api.Column{statusColumn()}
 	case "Job":
 		return []api.Column{{Name: "Completions", Render: "ratio"}}
 	default:

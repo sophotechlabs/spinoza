@@ -1,8 +1,8 @@
 package discovery
 
 import (
+	"cmp"
 	"slices"
-	"sort"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -163,12 +163,12 @@ func rankOf(category, kind string) int {
 }
 
 func sortDescs(category string, ds []api.ResourceDescriptor) {
-	sort.Slice(ds, func(i, j int) bool {
-		left := rankOf(category, ds[i].Kind)
-		right := rankOf(category, ds[j].Kind)
+	slices.SortFunc(ds, func(a, b api.ResourceDescriptor) int {
+		left := rankOf(category, a.Kind)
+		right := rankOf(category, b.Kind)
 		if left != right {
-			return left < right
+			return cmp.Compare(left, right)
 		}
-		return ds[i].Resource < ds[j].Resource
+		return strings.Compare(a.Resource, b.Resource)
 	})
 }

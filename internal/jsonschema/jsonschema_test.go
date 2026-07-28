@@ -90,10 +90,7 @@ func decode(t *testing.T, raw json.RawMessage) map[string]any {
 
 func definitions(t *testing.T, bundle map[string]any) map[string]any {
 	t.Helper()
-	defs, ok := bundle["definitions"].(map[string]any)
-	if !ok {
-		t.Fatalf("bundle has no definitions: %v", bundle)
-	}
+	defs := asMap(t, bundle["definitions"])
 	return defs
 }
 
@@ -136,16 +133,16 @@ func TestForRewritesRefsIntoDefinitions(t *testing.T) {
 	}
 
 	defs := definitions(t, decode(t, raw))
-	pod := defs["io.k8s.api.core.v1.Pod"].(map[string]any)
-	props := pod["properties"].(map[string]any)
-	spec := props["spec"].(map[string]any)
+	pod := asMap(t, defs["io.k8s.api.core.v1.Pod"])
+	props := asMap(t, pod["properties"])
+	spec := asMap(t, props["spec"])
 	if spec["$ref"] != "#/definitions/io.k8s.api.core.v1.PodSpec" {
 		t.Fatalf("spec $ref = %v", spec["$ref"])
 	}
 
-	podSpec := defs["io.k8s.api.core.v1.PodSpec"].(map[string]any)
-	containers := podSpec["properties"].(map[string]any)["containers"].(map[string]any)
-	items := containers["items"].(map[string]any)
+	podSpec := asMap(t, defs["io.k8s.api.core.v1.PodSpec"])
+	containers := asMap(t, asMap(t, podSpec["properties"])["containers"])
+	items := asMap(t, containers["items"])
 	if items["$ref"] != "#/definitions/io.k8s.api.core.v1.Container" {
 		t.Fatalf("items $ref = %v (refs inside arrays not rewritten)", items["$ref"])
 	}
@@ -365,11 +362,11 @@ func TestForLeavesForeignRefsAlone(t *testing.T) {
 	}
 
 	defs := definitions(t, decode(t, raw))
-	props := defs["Thing"].(map[string]any)["properties"].(map[string]any)
-	if props["numeric"].(map[string]any)["$ref"] != float64(5) {
+	props := asMap(t, asMap(t, defs["Thing"])["properties"])
+	if asMap(t, props["numeric"])["$ref"] != float64(5) {
 		t.Fatalf("non-string $ref was altered: %v", props["numeric"])
 	}
-	if props["external"].(map[string]any)["$ref"] != "https://example.test/schema.json" {
+	if asMap(t, props["external"])["$ref"] != "https://example.test/schema.json" {
 		t.Fatalf("external $ref was rewritten: %v", props["external"])
 	}
 }
@@ -389,4 +386,13 @@ func TestForIgnoresNonStringVersionAndKind(t *testing.T) {
 	if decode(t, raw)["$ref"] != "#/definitions/Good" {
 		t.Fatalf("$ref = %v", decode(t, raw)["$ref"])
 	}
+}
+
+func asMap(t *testing.T, v any) map[string]any {
+	t.Helper()
+	m, ok := v.(map[string]any)
+	if !ok {
+		t.Fatalf("value is %T, want a map", v)
+	}
+	return m
 }

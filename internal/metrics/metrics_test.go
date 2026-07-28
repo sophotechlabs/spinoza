@@ -128,19 +128,19 @@ func TestNodeAllocatableListError(t *testing.T) {
 }
 
 func TestQuantityHelpers(t *testing.T) {
-	if got := milli(map[string]any{"cpu": "250m"}, "cpu"); got != 250 {
+	if got := milli(map[string]any{"cpu": "250m"}); got != 250 {
 		t.Fatalf("milli valid = %d, want 250", got)
 	}
-	if got := mebi(map[string]any{"memory": "512Mi"}, "memory"); got != 512 {
+	if got := mebi(map[string]any{"memory": "512Mi"}); got != 512 {
 		t.Fatalf("mebi valid = %d, want 512", got)
 	}
-	if got := milli(map[string]any{"cpu": 5}, "cpu"); got != 0 {
+	if got := milli(map[string]any{"cpu": 5}); got != 0 {
 		t.Fatalf("milli non-string = %d, want 0", got)
 	}
-	if got := mebi(map[string]any{"memory": "bad"}, "memory"); got != 0 {
+	if got := mebi(map[string]any{"memory": "bad"}); got != 0 {
 		t.Fatalf("mebi parse error = %d, want 0", got)
 	}
-	if got := milli(map[string]any{}, "cpu"); got != 0 {
+	if got := milli(map[string]any{}); got != 0 {
 		t.Fatalf("milli missing = %d, want 0", got)
 	}
 }

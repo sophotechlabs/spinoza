@@ -2,7 +2,7 @@ package inspect
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,8 +40,8 @@ func eventsFor(dyn dynamic.Interface, namespace string) dynamic.ResourceInterfac
 }
 
 func sortEvents(events []api.Event) {
-	slices.SortStableFunc(events, func(i, j int) bool {
-		return seenAt(events[i].LastSeen).After(seenAt(events[j].LastSeen))
+	slices.SortStableFunc(events, func(a, b api.Event) int {
+		return seenAt(b.LastSeen).Compare(seenAt(a.LastSeen))
 	})
 }
 

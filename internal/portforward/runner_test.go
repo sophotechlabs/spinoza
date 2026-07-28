@@ -81,7 +81,7 @@ func (c *fakeConnection) RemoveStreams(...streamhttp.Stream) {}
 func (c *fakeConnection) portHeaders() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	out := []string{}
+	out := make([]string, 0, len(c.headers))
 	for _, h := range c.headers {
 		out = append(out, h.Get(corev1.PortHeader))
 	}

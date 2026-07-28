@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -253,8 +254,8 @@ func (r *Registry) List() []api.PortForward {
 	for _, entry := range r.forwards {
 		out = append(out, entry.forward)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].ID < out[j].ID
+	slices.SortFunc(out, func(a, b api.PortForward) int {
+		return strings.Compare(a.ID, b.ID)
 	})
 	return out
 }

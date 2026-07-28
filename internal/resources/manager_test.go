@@ -346,8 +346,9 @@ func TestSubscribeDeliversEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if err := unstructured.SetNestedField(cur.Object, int64(5), "spec", "replicas"); err != nil {
-		t.Fatalf("set replicas: %v", err)
+	setErr := unstructured.SetNestedField(cur.Object, int64(5), "spec", "replicas")
+	if setErr != nil {
+		t.Fatalf("set replicas: %v", setErr)
 	}
 	_, err = dyn.Resource(depGVR).Namespace("default").Update(ctx, cur, metav1.UpdateOptions{})
 	if err != nil {
