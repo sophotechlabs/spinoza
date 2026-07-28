@@ -135,14 +135,14 @@ func (s *Server) handleFluxAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	kind := q.Get("kind")
-	version := q.Get("version")
+	query := r.URL.Query()
+	kind := query.Get("kind")
+	version := query.Get("version")
 	if kind == "" || version == "" {
 		writeError(w, http.StatusBadRequest, "version and kind are required")
 		return
 	}
-	doc, err := s.mgr.Schema(jsonschema.GVK{Group: q.Get("group"), Version: version, Kind: kind})
+	doc, err := s.mgr.Schema(jsonschema.GVK{Group: query.Get("group"), Version: version, Kind: kind})
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -165,17 +165,17 @@ func (s *Server) handleForwards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	query := r.URL.Query()
 	target := portforward.Target{
-		Kind:      q.Get("kind"),
-		Namespace: q.Get("namespace"),
-		Name:      q.Get("name"),
+		Kind:      query.Get("kind"),
+		Namespace: query.Get("namespace"),
+		Name:      query.Get("name"),
 	}
 	if target.Kind == "" || target.Namespace == "" || target.Name == "" {
 		writeError(w, http.StatusBadRequest, "kind, namespace and name are required")
 		return
 	}
-	port, err := strconv.ParseInt(q.Get("port"), 10, 32)
+	port, err := strconv.ParseInt(query.Get("port"), 10, 32)
 	if err != nil || port <= 0 {
 		writeError(w, http.StatusBadRequest, "a positive port is required")
 		return
@@ -254,12 +254,12 @@ func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, ref api.Ob
 }
 
 func refFrom(r *http.Request) api.ObjectRef {
-	q := r.URL.Query()
+	query := r.URL.Query()
 	return api.ObjectRef{
-		Group:     q.Get("group"),
-		Version:   q.Get("version"),
-		Resource:  q.Get("resource"),
-		Namespace: q.Get("namespace"),
-		Name:      q.Get("name"),
+		Group:     query.Get("group"),
+		Version:   query.Get("version"),
+		Resource:  query.Get("resource"),
+		Namespace: query.Get("namespace"),
+		Name:      query.Get("name"),
 	}
 }

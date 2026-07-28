@@ -23,25 +23,25 @@ func listKinds() map[schema.GroupVersionResource]string {
 }
 
 func obj(apiVersion, kind, name, namespace string, extra map[string]any) *unstructured.Unstructured {
-	o := map[string]any{
+	object := map[string]any{
 		"apiVersion": apiVersion,
 		"kind":       kind,
 		"metadata":   map[string]any{"name": name, "namespace": namespace},
 	}
-	maps.Copy(o, extra)
-	return &unstructured.Unstructured{Object: o}
+	maps.Copy(object, extra)
+	return &unstructured.Unstructured{Object: object}
 }
 
-func create(t *testing.T, dyn *fake.FakeDynamicClient, gvr schema.GroupVersionResource, ns string, o *unstructured.Unstructured) {
+func create(t *testing.T, dyn *fake.FakeDynamicClient, gvr schema.GroupVersionResource, ns string, object *unstructured.Unstructured) {
 	t.Helper()
 	var err error
 	if ns == "" {
-		_, err = dyn.Resource(gvr).Create(context.Background(), o, metav1.CreateOptions{})
+		_, err = dyn.Resource(gvr).Create(context.Background(), object, metav1.CreateOptions{})
 	} else {
-		_, err = dyn.Resource(gvr).Namespace(ns).Create(context.Background(), o, metav1.CreateOptions{})
+		_, err = dyn.Resource(gvr).Namespace(ns).Create(context.Background(), object, metav1.CreateOptions{})
 	}
 	if err != nil {
-		t.Fatalf("create %s/%s: %v", gvr.Resource, o.GetName(), err)
+		t.Fatalf("create %s/%s: %v", gvr.Resource, object.GetName(), err)
 	}
 }
 
@@ -74,21 +74,21 @@ func seed(t *testing.T) *fake.FakeDynamicClient {
 }
 
 func TestBuild(t *testing.T) {
-	m := Build(context.Background(), seed(t))
+	metrics := Build(context.Background(), seed(t))
 
-	web := m.Pods["prod/web"]
+	web := metrics.Pods["prod/web"]
 	if web.CPUMilli != 150 || web.MemoryMi != 192 {
 		t.Fatalf("pod web = %+v, want cpu 150 mem 192", web)
 	}
 
-	if len(m.Nodes) != 2 {
-		t.Fatalf("nodes = %d, want 2 (n-nousage skipped)", len(m.Nodes))
+	if len(metrics.Nodes) != 2 {
+		t.Fatalf("nodes = %d, want 2 (n-nousage skipped)", len(metrics.Nodes))
 	}
-	n1 := m.Nodes["n1"]
+	n1 := metrics.Nodes["n1"]
 	if n1.CPUMilli != 1500 || n1.MemoryMi != 2048 || n1.CPUPercent != 37 || n1.MemPercent != 25 {
 		t.Fatalf("node n1 = %+v", n1)
 	}
-	n2 := m.Nodes["n2"]
+	n2 := metrics.Nodes["n2"]
 	if n2.CPUMilli != 500 || n2.CPUPercent != 0 || n2.MemPercent != 0 {
 		t.Fatalf("node n2 = %+v, want no percent", n2)
 	}

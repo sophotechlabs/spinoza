@@ -75,6 +75,7 @@ linters:
     - reassign
     - recvcheck
     - revive
+    - varnamelen
     - sloglint
     - tagalign
     - testableexamples
@@ -191,6 +192,22 @@ linters:
       simple: true
       range-loops: true
       for-loops: true
+    varnamelen:
+      min-name-length: 2
+      max-distance: 0
+      check-receiver: false
+      check-return: true
+      check-type-param: false
+      ignore-type-assert-ok: true
+      ignore-map-index-ok: true
+      ignore-chan-recv-ok: true
+      ignore-names:
+        - i
+        - j
+      ignore-decls:
+        - t *testing.T
+        - w http.ResponseWriter
+        - r *http.Request
     revive:
       confidence: 0.8
       rules:

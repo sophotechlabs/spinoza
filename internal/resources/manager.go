@@ -394,27 +394,27 @@ func toUnstructured(obj any) (*unstructured.Unstructured, bool) {
 	return u, true
 }
 
-func toRow(u *unstructured.Unstructured, kind string) api.Row {
+func toRow(obj *unstructured.Unstructured, kind string) api.Row {
 	return api.Row{
-		UID:        string(u.GetUID()),
-		Name:       u.GetName(),
-		Namespace:  u.GetNamespace(),
-		CreatedAt:  u.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
-		Cells:      cellsFor(u, kind),
-		Containers: containersFor(u, kind),
+		UID:        string(obj.GetUID()),
+		Name:       obj.GetName(),
+		Namespace:  obj.GetNamespace(),
+		CreatedAt:  obj.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
+		Cells:      cellsFor(obj, kind),
+		Containers: containersFor(obj, kind),
 	}
 }
 
-func stripManagedFields(obj any) (any, error) {
-	u, ok := obj.(*unstructured.Unstructured)
+func stripManagedFields(value any) (any, error) {
+	obj, ok := value.(*unstructured.Unstructured)
 	if !ok {
-		return obj, nil
+		return value, nil
 	}
-	u.SetManagedFields(nil)
-	annotations := u.GetAnnotations()
+	obj.SetManagedFields(nil)
+	annotations := obj.GetAnnotations()
 	if annotations != nil {
 		delete(annotations, "kubectl.kubernetes.io/last-applied-configuration")
-		u.SetAnnotations(annotations)
+		obj.SetAnnotations(annotations)
 	}
-	return u, nil
+	return obj, nil
 }

@@ -139,25 +139,25 @@ func declares(schema map[string]any, gvk GVK) bool {
 }
 
 func matches(entry any, gvk GVK) bool {
-	m, ok := entry.(map[string]any)
+	mapped, ok := entry.(map[string]any)
 	if !ok {
 		return false
 	}
-	group, ok := field(m, "group")
+	group, ok := field(mapped, "group")
 	if !ok {
 		return false
 	}
 	if group != gvk.Group {
 		return false
 	}
-	version, ok := field(m, "version")
+	version, ok := field(mapped, "version")
 	if !ok {
 		return false
 	}
 	if version != gvk.Version {
 		return false
 	}
-	kind, ok := field(m, "kind")
+	kind, ok := field(mapped, "kind")
 	if !ok {
 		return false
 	}

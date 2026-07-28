@@ -17,17 +17,17 @@ import (
 const maxLogBatch = 200
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	c, err := accept(w, r)
+	conn, err := accept(w, r)
 	if err != nil {
 		return
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
 	sess := &wsSession{
-		conn: c,
+		conn: conn,
 		ctx:  ctx,
 		mgr:  s.mgr,
 		subs: map[string]*resources.Subscription{},
@@ -37,7 +37,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		var msg api.ClientMsg
-		if readErr := wsjson.Read(ctx, c, &msg); readErr != nil {
+		if readErr := wsjson.Read(ctx, conn, &msg); readErr != nil {
 			return
 		}
 		sess.handle(msg)

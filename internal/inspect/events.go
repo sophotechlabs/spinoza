@@ -40,8 +40,8 @@ func eventsFor(dyn dynamic.Interface, namespace string) dynamic.ResourceInterfac
 }
 
 func sortEvents(events []api.Event) {
-	slices.SortStableFunc(events, func(a, b api.Event) int {
-		return seenAt(b.LastSeen).Compare(seenAt(a.LastSeen))
+	slices.SortStableFunc(events, func(left, right api.Event) int {
+		return seenAt(right.LastSeen).Compare(seenAt(left.LastSeen))
 	})
 }
 
@@ -53,15 +53,15 @@ func seenAt(stamp string) time.Time {
 	return t
 }
 
-func eventOf(u *unstructured.Unstructured) api.Event {
+func eventOf(obj *unstructured.Unstructured) api.Event {
 	return api.Event{
-		Type:      nestedString(u, "type"),
-		Reason:    nestedString(u, "reason"),
-		Message:   nestedString(u, "message"),
-		Source:    sourceOf(u),
-		Count:     countOf(u),
-		FirstSeen: nestedString(u, "firstTimestamp"),
-		LastSeen:  lastSeenOf(u),
+		Type:      nestedString(obj, "type"),
+		Reason:    nestedString(obj, "reason"),
+		Message:   nestedString(obj, "message"),
+		Source:    sourceOf(obj),
+		Count:     countOf(obj),
+		FirstSeen: nestedString(obj, "firstTimestamp"),
+		LastSeen:  lastSeenOf(obj),
 	}
 }
 
@@ -85,7 +85,7 @@ func countOf(u *unstructured.Unstructured) int64 {
 	return 1
 }
 
-func lastSeenOf(u *unstructured.Unstructured) string {
+func lastSeenOf(obj *unstructured.Unstructured) string {
 	paths := [][]string{
 		{"lastTimestamp"},
 		{"series", "lastObservedTime"},
@@ -93,7 +93,7 @@ func lastSeenOf(u *unstructured.Unstructured) string {
 		{"firstTimestamp"},
 	}
 	for _, p := range paths {
-		v := nestedString(u, p...)
+		v := nestedString(obj, p...)
 		if v != "" {
 			return v
 		}

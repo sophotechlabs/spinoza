@@ -29,23 +29,23 @@ func List(client discovery.DiscoveryInterface) ([]api.Category, map[string]api.R
 			continue
 		}
 		for i := range list.APIResources {
-			r := list.APIResources[i]
-			if strings.Contains(r.Name, "/") {
+			resource := list.APIResources[i]
+			if strings.Contains(resource.Name, "/") {
 				continue
 			}
-			if !supportsListWatch(r.Verbs) {
+			if !supportsListWatch(resource.Verbs) {
 				continue
 			}
-			d := api.ResourceDescriptor{
+			desc := api.ResourceDescriptor{
 				Group:      gv.Group,
 				Version:    gv.Version,
-				Resource:   r.Name,
-				Kind:       r.Kind,
-				Namespaced: r.Namespaced,
-				Category:   categoryFor(gv.Group, r.Name),
+				Resource:   resource.Name,
+				Kind:       resource.Kind,
+				Namespaced: resource.Namespaced,
+				Category:   categoryFor(gv.Group, resource.Name),
 			}
-			descs = append(descs, d)
-			byKey[Key(gv.Group, gv.Version, r.Name)] = d
+			descs = append(descs, desc)
+			byKey[Key(gv.Group, gv.Version, resource.Name)] = desc
 		}
 	}
 	return groupByCategory(descs), byKey, err
@@ -163,12 +163,12 @@ func rankOf(category, kind string) int {
 }
 
 func sortDescs(category string, ds []api.ResourceDescriptor) {
-	slices.SortFunc(ds, func(a, b api.ResourceDescriptor) int {
-		left := rankOf(category, a.Kind)
-		right := rankOf(category, b.Kind)
-		if left != right {
-			return cmp.Compare(left, right)
+	slices.SortFunc(ds, func(left, right api.ResourceDescriptor) int {
+		leftRank := rankOf(category, left.Kind)
+		rightRank := rankOf(category, right.Kind)
+		if leftRank != rightRank {
+			return cmp.Compare(leftRank, rightRank)
 		}
-		return strings.Compare(a.Resource, b.Resource)
+		return strings.Compare(left.Resource, right.Resource)
 	})
 }

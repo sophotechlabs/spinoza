@@ -130,16 +130,16 @@ func ownersOf(u *unstructured.Unstructured) []api.OwnerRef {
 func conditionsOf(u *unstructured.Unstructured) []api.Condition {
 	out := []api.Condition{}
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]any)
+		entry, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
 		out = append(out, api.Condition{
-			Type:    stringField(m, "type"),
-			Status:  stringField(m, "status"),
-			Reason:  stringField(m, "reason"),
-			Message: stringField(m, "message"),
-			Updated: transitionOf(m),
+			Type:    stringField(entry, "type"),
+			Status:  stringField(entry, "status"),
+			Reason:  stringField(entry, "reason"),
+			Message: stringField(entry, "message"),
+			Updated: transitionOf(entry),
 		})
 	}
 	if len(out) == 0 {
@@ -208,20 +208,20 @@ func readPorts(holder any, field, numberKey string) []api.ObjectPort {
 	}
 	out := []api.ObjectPort{}
 	for _, entry := range entries {
-		m, isMap := entry.(map[string]any)
+		mapped, isMap := entry.(map[string]any)
 		if !isMap {
 			continue
 		}
-		protocol := stringField(m, "protocol")
+		protocol := stringField(mapped, "protocol")
 		if protocol == "UDP" {
 			continue
 		}
-		number := intField(m, numberKey)
+		number := intField(mapped, numberKey)
 		if number == 0 {
 			continue
 		}
 		out = append(out, api.ObjectPort{
-			Name:     stringField(m, "name"),
+			Name:     stringField(mapped, "name"),
 			Port:     number,
 			Protocol: protocol,
 		})

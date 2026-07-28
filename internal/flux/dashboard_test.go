@@ -63,7 +63,7 @@ func fluxDescs() map[string]api.ResourceDescriptor {
 }
 
 func obj(apiVersion, kind, name, namespace string, extra map[string]any) *unstructured.Unstructured {
-	o := map[string]any{
+	object := map[string]any{
 		"apiVersion": apiVersion,
 		"kind":       kind,
 		"metadata": map[string]any{
@@ -71,8 +71,8 @@ func obj(apiVersion, kind, name, namespace string, extra map[string]any) *unstru
 			"namespace": namespace,
 		},
 	}
-	maps.Copy(o, extra)
-	return &unstructured.Unstructured{Object: o}
+	maps.Copy(object, extra)
+	return &unstructured.Unstructured{Object: object}
 }
 
 func fluxObjects() []runtime.Object {
@@ -171,16 +171,16 @@ func TestBuild(t *testing.T) {
 	if len(dash.Groups) != len(wantGroups) {
 		t.Fatalf("groups = %d, want %d", len(dash.Groups), len(wantGroups))
 	}
-	for i, w := range wantGroups {
-		g := dash.Groups[i]
-		if g.Name != w.name {
-			t.Fatalf("group %d name = %q, want %q", i, g.Name, w.name)
+	for i, expected := range wantGroups {
+		group := dash.Groups[i]
+		if group.Name != expected.name {
+			t.Fatalf("group %d name = %q, want %q", i, group.Name, expected.name)
 		}
-		if g.Ready != w.ready {
-			t.Fatalf("group %q ready = %d, want %d", g.Name, g.Ready, w.ready)
+		if group.Ready != expected.ready {
+			t.Fatalf("group %q ready = %d, want %d", group.Name, group.Ready, expected.ready)
 		}
-		if g.Total != w.total {
-			t.Fatalf("group %q total = %d, want %d", g.Name, g.Total, w.total)
+		if group.Total != expected.total {
+			t.Fatalf("group %q total = %d, want %d", group.Name, group.Total, expected.total)
 		}
 	}
 
@@ -280,14 +280,14 @@ func TestCategoryOf(t *testing.T) {
 }
 
 func TestReadyConditionNoReady(t *testing.T) {
-	u := obj("x/v1", "X", "n", "ns", map[string]any{
+	object := obj("x/v1", "X", "n", "ns", map[string]any{
 		"status": map[string]any{
 			"conditions": []any{
 				map[string]any{"type": "Stalled", "status": "True"},
 			},
 		},
 	})
-	status, message := readyCondition(u)
+	status, message := readyCondition(object)
 	if status != "" || message != "" {
 		t.Fatalf("readyCondition = %q,%q, want empty", status, message)
 	}

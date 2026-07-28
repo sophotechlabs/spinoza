@@ -268,13 +268,13 @@ func TestWSStreamsPodLogs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
-	sendMsg(ctx, t, c, api.ClientMsg{
+	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type:      "logs-subscribe",
 		SubID:     "logs",
 		Namespace: "flux-system",
@@ -283,7 +283,7 @@ func TestWSStreamsPodLogs(t *testing.T) {
 		TailLines: 100,
 	})
 
-	msg := readMsg(ctx, t, c)
+	msg := readMsg(ctx, t, conn)
 	if msg.Type != "log" {
 		t.Fatalf("type = %q, want log (message %q)", msg.Type, msg.Message)
 	}
@@ -294,7 +294,7 @@ func TestWSStreamsPodLogs(t *testing.T) {
 		t.Fatalf("no log lines delivered")
 	}
 
-	end := readMsg(ctx, t, c)
+	end := readMsg(ctx, t, conn)
 	if end.Type != "log-end" {
 		t.Fatalf("type = %q, want log-end", end.Type)
 	}
@@ -305,19 +305,19 @@ func TestWSLogsUnsubscribe(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
-	sendMsg(ctx, t, c, api.ClientMsg{Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web"})
-	readMsg(ctx, t, c)
-	sendMsg(ctx, t, c, api.ClientMsg{Type: "logs-unsubscribe", SubID: "logs"})
+	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web"})
+	readMsg(ctx, t, conn)
+	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-unsubscribe", SubID: "logs"})
 
-	sendMsg(ctx, t, c, api.ClientMsg{Type: "logs-subscribe", SubID: "second", Namespace: "flux-system", Name: "web"})
+	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "second", Namespace: "flux-system", Name: "web"})
 	for {
-		msg := readMsg(ctx, t, c)
+		msg := readMsg(ctx, t, conn)
 		if msg.SubID == "second" {
 			return
 		}
@@ -336,15 +336,15 @@ func TestWSLogsReportsOpenFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
-	sendMsg(ctx, t, c, api.ClientMsg{Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web"})
+	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web"})
 
-	msg := readMsg(ctx, t, c)
+	msg := readMsg(ctx, t, conn)
 	if msg.Type != "error" {
 		t.Fatalf("type = %q, want error", msg.Type)
 	}

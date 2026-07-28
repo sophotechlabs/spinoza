@@ -51,18 +51,18 @@ type Charts interface {
 func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, index Charts) api.FluxDashboard {
 	byGroup := map[string][]api.FluxResource{}
 	items := map[string][]*unstructured.Unstructured{}
-	for _, d := range descs {
-		group := categoryOf(d)
+	for _, desc := range descs {
+		group := categoryOf(desc)
 		if group == "" {
 			continue
 		}
-		gvr := schema.GroupVersionResource{Group: d.Group, Version: d.Version, Resource: d.Resource}
+		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 		list, err := dyn.Resource(gvr).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			continue
 		}
 		for i := range list.Items {
-			byGroup[group] = append(byGroup[group], resourceOf(&list.Items[i], d))
+			byGroup[group] = append(byGroup[group], resourceOf(&list.Items[i], desc))
 			items[group] = append(items[group], &list.Items[i])
 		}
 	}
@@ -72,14 +72,14 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 
 func repoIndex(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {
 	out := map[string]charts.Repo{}
-	for _, d := range descs {
-		if d.Group != "source.toolkit.fluxcd.io" {
+	for _, desc := range descs {
+		if desc.Group != "source.toolkit.fluxcd.io" {
 			continue
 		}
-		if d.Resource != "helmrepositories" {
+		if desc.Resource != "helmrepositories" {
 			continue
 		}
-		gvr := schema.GroupVersionResource{Group: d.Group, Version: d.Version, Resource: d.Resource}
+		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 		list, err := dyn.Resource(gvr).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			continue
@@ -116,21 +116,21 @@ func applyLatest(byGroup map[string][]api.FluxResource, items map[string][]*unst
 	}
 }
 
-func chartSource(u *unstructured.Unstructured, repos map[string]charts.Repo) (charts.Repo, string, bool) {
-	chart := nestedString(u, "spec", "chart", "spec", "chart")
+func chartSource(obj *unstructured.Unstructured, repos map[string]charts.Repo) (charts.Repo, string, bool) {
+	chart := nestedString(obj, "spec", "chart", "spec", "chart")
 	if chart == "" {
 		return charts.Repo{}, "", false
 	}
-	if nestedString(u, "spec", "chart", "spec", "sourceRef", "kind") != "HelmRepository" {
+	if nestedString(obj, "spec", "chart", "spec", "sourceRef", "kind") != "HelmRepository" {
 		return charts.Repo{}, "", false
 	}
-	name := nestedString(u, "spec", "chart", "spec", "sourceRef", "name")
+	name := nestedString(obj, "spec", "chart", "spec", "sourceRef", "name")
 	if name == "" {
 		return charts.Repo{}, "", false
 	}
-	namespace := nestedString(u, "spec", "chart", "spec", "sourceRef", "namespace")
+	namespace := nestedString(obj, "spec", "chart", "spec", "sourceRef", "namespace")
 	if namespace == "" {
-		namespace = u.GetNamespace()
+		namespace = obj.GetNamespace()
 	}
 	repo, ok := repos[namespace+"/"+name]
 	if !ok {
@@ -142,26 +142,26 @@ func chartSource(u *unstructured.Unstructured, repos map[string]charts.Repo) (ch
 	return repo, chart, true
 }
 
-func categoryOf(d api.ResourceDescriptor) string {
-	switch d.Group {
+func categoryOf(desc api.ResourceDescriptor) string {
+	switch desc.Group {
 	case "kustomize.toolkit.fluxcd.io":
-		if d.Resource == "kustomizations" {
+		if desc.Resource == "kustomizations" {
 			return "Kustomizations"
 		}
 	case "helm.toolkit.fluxcd.io":
-		if d.Resource == "helmreleases" {
+		if desc.Resource == "helmreleases" {
 			return "Helm Releases"
 		}
 	case "source.toolkit.fluxcd.io":
-		if sourceResources[d.Resource] {
+		if sourceResources[desc.Resource] {
 			return "Sources"
 		}
 	case "image.toolkit.fluxcd.io":
-		if imageResources[d.Resource] {
+		if imageResources[desc.Resource] {
 			return "Image Automation"
 		}
 	case "notification.toolkit.fluxcd.io":
-		if notificationResources[d.Resource] {
+		if notificationResources[desc.Resource] {
 			return "Notifications"
 		}
 	default:
@@ -189,14 +189,14 @@ func assemble(byGroup map[string][]api.FluxResource) api.FluxDashboard {
 }
 
 func sortResources(items []api.FluxResource) {
-	slices.SortFunc(items, func(a, b api.FluxResource) int {
-		if a.Kind != b.Kind {
-			return strings.Compare(a.Kind, b.Kind)
+	slices.SortFunc(items, func(left, right api.FluxResource) int {
+		if left.Kind != right.Kind {
+			return strings.Compare(left.Kind, right.Kind)
 		}
-		if a.Namespace != b.Namespace {
-			return strings.Compare(a.Namespace, b.Namespace)
+		if left.Namespace != right.Namespace {
+			return strings.Compare(left.Namespace, right.Namespace)
 		}
-		return strings.Compare(a.Name, b.Name)
+		return strings.Compare(left.Name, right.Name)
 	})
 }
 
@@ -220,41 +220,41 @@ func reportingCount(items []api.FluxResource) int {
 	return count
 }
 
-func resourceOf(u *unstructured.Unstructured, d api.ResourceDescriptor) api.FluxResource {
-	ready, message := readyCondition(u)
+func resourceOf(obj *unstructured.Unstructured, desc api.ResourceDescriptor) api.FluxResource {
+	ready, message := readyCondition(obj)
 	return api.FluxResource{
-		Kind:      d.Kind,
-		Group:     d.Group,
-		Version:   d.Version,
-		Resource:  d.Resource,
-		Name:      u.GetName(),
-		Namespace: u.GetNamespace(),
+		Kind:      desc.Kind,
+		Group:     desc.Group,
+		Version:   desc.Version,
+		Resource:  desc.Resource,
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
 		Ready:     ready,
-		Suspended: nestedBool(u, "spec", "suspend"),
-		Revision:  revisionOf(u),
-		Source:    sourceOf(u),
+		Suspended: nestedBool(obj, "spec", "suspend"),
+		Revision:  revisionOf(obj),
+		Source:    sourceOf(obj),
 		Message:   message,
-		CreatedAt: u.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
+		CreatedAt: obj.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
 	}
 }
 
 func readyCondition(u *unstructured.Unstructured) (status, message string) {
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]any)
+		entry, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
-		if m["type"] != "Ready" {
+		if entry["type"] != "Ready" {
 			continue
 		}
-		status = stringAt(m, "status")
-		message = stringAt(m, "message")
+		status = stringAt(entry, "status")
+		message = stringAt(entry, "message")
 		return status, message
 	}
 	return "", ""
 }
 
-func revisionOf(u *unstructured.Unstructured) string {
+func revisionOf(obj *unstructured.Unstructured) string {
 	paths := [][]string{
 		{"status", "lastAppliedRevision"},
 		{"status", "lastAttemptedRevision"},
@@ -262,7 +262,7 @@ func revisionOf(u *unstructured.Unstructured) string {
 		{"status", "latestImage"},
 	}
 	for _, p := range paths {
-		v := nestedString(u, p...)
+		v := nestedString(obj, p...)
 		if v != "" {
 			return v
 		}

@@ -52,24 +52,24 @@ func cols(names ...string) []api.Column {
 	return out
 }
 
-func cellsFor(u *unstructured.Unstructured, kind string) []string {
+func cellsFor(obj *unstructured.Unstructured, kind string) []string {
 	switch kind {
 	case "Pod":
-		return podCells(u)
+		return podCells(obj)
 	case "Deployment", "ReplicaSet", "StatefulSet", "ReplicationController":
-		return workloadCells(u)
+		return workloadCells(obj)
 	case "DaemonSet":
-		return daemonCells(u)
+		return daemonCells(obj)
 	case "Service":
-		return serviceCells(u)
+		return serviceCells(obj)
 	case "Node":
-		return nodeCells(u)
+		return nodeCells(obj)
 	case "Namespace":
-		return []string{nestedString(u, "status", "phase")}
+		return []string{nestedString(obj, "status", "phase")}
 	case "Job":
-		return jobCells(u)
+		return jobCells(obj)
 	default:
-		return []string{conditionSummary(u)}
+		return []string{conditionSummary(obj)}
 	}
 }
 
@@ -88,66 +88,66 @@ func containersFor(u *unstructured.Unstructured, kind string) []api.ContainerSta
 func containerStates(u *unstructured.Unstructured, field string, init bool) []api.ContainerState {
 	out := []api.ContainerState{}
 	for _, s := range nestedSlice(u, "status", field) {
-		m, ok := s.(map[string]any)
+		entry, ok := s.(map[string]any)
 		if !ok {
 			continue
 		}
-		name := stringAt(m, "name")
+		name := stringAt(entry, "name")
 		ready := false
-		if b, ok := m["ready"].(bool); ok {
+		if b, ok := entry["ready"].(bool); ok {
 			ready = b
 		}
-		state, reason := containerStateReason(m)
+		state, reason := containerStateReason(entry)
 		out = append(out, api.ContainerState{
 			Name:     name,
 			State:    state,
 			Reason:   reason,
 			Ready:    ready,
-			Restarts: toInt64(m["restartCount"]),
+			Restarts: toInt64(entry["restartCount"]),
 			Init:     init,
 		})
 	}
 	return out
 }
 
-func containerStateReason(m map[string]any) (state, reason string) {
-	s, ok := m["state"].(map[string]any)
+func containerStateReason(status map[string]any) (state, reason string) {
+	stateFields, ok := status["state"].(map[string]any)
 	if !ok {
 		return "waiting", ""
 	}
-	if _, ok := s["running"]; ok {
+	if _, ok := stateFields["running"]; ok {
 		return "running", ""
 	}
-	if term, ok := s["terminated"].(map[string]any); ok {
+	if term, ok := stateFields["terminated"].(map[string]any); ok {
 		termReason := stringAt(term, "reason")
 		return "terminated", termReason
 	}
-	if wait, ok := s["waiting"].(map[string]any); ok {
+	if wait, ok := stateFields["waiting"].(map[string]any); ok {
 		waitReason := stringAt(wait, "reason")
 		return "waiting", waitReason
 	}
 	return "waiting", ""
 }
 
-func podCells(u *unstructured.Unstructured) []string {
-	total := len(nestedSlice(u, "spec", "containers"))
+func podCells(obj *unstructured.Unstructured) []string {
+	total := len(nestedSlice(obj, "spec", "containers"))
 	ready := 0
 	var restarts int64
-	for _, s := range nestedSlice(u, "status", "containerStatuses") {
-		m, ok := s.(map[string]any)
+	for _, s := range nestedSlice(obj, "status", "containerStatuses") {
+		entry, ok := s.(map[string]any)
 		if !ok {
 			continue
 		}
-		if b, ok := m["ready"].(bool); ok && b {
+		if b, ok := entry["ready"].(bool); ok && b {
 			ready++
 		}
-		restarts += toInt64(m["restartCount"])
+		restarts += toInt64(entry["restartCount"])
 	}
 	return []string{
 		fmt.Sprintf("%d/%d", ready, total),
-		nestedString(u, "status", "phase"),
+		nestedString(obj, "status", "phase"),
 		strconv.FormatInt(restarts, 10),
-		nestedString(u, "spec", "nodeName"),
+		nestedString(obj, "spec", "nodeName"),
 	}
 }
 
@@ -171,29 +171,29 @@ func daemonCells(u *unstructured.Unstructured) []string {
 	}
 }
 
-func serviceCells(u *unstructured.Unstructured) []string {
+func serviceCells(obj *unstructured.Unstructured) []string {
 	parts := []string{}
-	for _, p := range nestedSlice(u, "spec", "ports") {
-		m, ok := p.(map[string]any)
+	for _, p := range nestedSlice(obj, "spec", "ports") {
+		entry, ok := p.(map[string]any)
 		if !ok {
 			continue
 		}
 		proto := ""
-		if s, ok := m["protocol"].(string); ok {
+		if s, ok := entry["protocol"].(string); ok {
 			proto = s
 		}
-		parts = append(parts, fmt.Sprintf("%d/%s", toInt64(m["port"]), proto))
+		parts = append(parts, fmt.Sprintf("%d/%s", toInt64(entry["port"]), proto))
 	}
 	return []string{
-		nestedString(u, "spec", "type"),
-		nestedString(u, "spec", "clusterIP"),
+		nestedString(obj, "spec", "type"),
+		nestedString(obj, "spec", "clusterIP"),
 		strings.Join(parts, ","),
 	}
 }
 
-func nodeCells(u *unstructured.Unstructured) []string {
+func nodeCells(obj *unstructured.Unstructured) []string {
 	status := "NotReady"
-	for _, c := range nestedSlice(u, "status", "conditions") {
+	for _, c := range nestedSlice(obj, "status", "conditions") {
 		m, ok := c.(map[string]any)
 		if !ok {
 			continue
@@ -203,7 +203,7 @@ func nodeCells(u *unstructured.Unstructured) []string {
 		}
 	}
 	roles := []string{}
-	for k := range u.GetLabels() {
+	for k := range obj.GetLabels() {
 		if !strings.HasPrefix(k, "node-role.kubernetes.io/") {
 			continue
 		}
@@ -212,7 +212,7 @@ func nodeCells(u *unstructured.Unstructured) []string {
 			roles = append(roles, role)
 		}
 	}
-	return []string{status, strings.Join(roles, ","), nestedString(u, "status", "nodeInfo", "kubeletVersion")}
+	return []string{status, strings.Join(roles, ","), nestedString(obj, "status", "nodeInfo", "kubeletVersion")}
 }
 
 func jobCells(u *unstructured.Unstructured) []string {
@@ -221,17 +221,17 @@ func jobCells(u *unstructured.Unstructured) []string {
 
 func conditionSummary(u *unstructured.Unstructured) string {
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]any)
+		entry, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
-		if m["type"] != "Ready" {
+		if entry["type"] != "Ready" {
 			continue
 		}
-		if m["status"] == "True" {
+		if entry["status"] == "True" {
 			return "Ready"
 		}
-		if reason, ok := m["reason"].(string); ok && reason != "" {
+		if reason, ok := entry["reason"].(string); ok && reason != "" {
 			return reason
 		}
 		return "NotReady"

@@ -17,13 +17,13 @@ func accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 	})
 }
 
-func guard(h http.HandlerFunc) http.HandlerFunc {
+func guard(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isLocal(r) {
 			writeError(w, http.StatusForbidden, "spinoza answers local requests only")
 			return
 		}
-		h(w, r)
+		handler(w, r)
 	}
 }
 

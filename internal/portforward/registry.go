@@ -254,8 +254,8 @@ func (r *Registry) List() []api.PortForward {
 	for _, entry := range r.forwards {
 		out = append(out, entry.forward)
 	}
-	slices.SortFunc(out, func(a, b api.PortForward) int {
-		return strings.Compare(a.ID, b.ID)
+	slices.SortFunc(out, func(left, right api.PortForward) int {
+		return strings.Compare(left.ID, right.ID)
 	})
 	return out
 }

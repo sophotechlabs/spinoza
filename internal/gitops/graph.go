@@ -23,7 +23,7 @@ var fluxSourceResources = map[string]bool{
 }
 
 func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) api.Graph {
-	b := &builder{
+	build := &builder{
 		ctx:    ctx,
 		dyn:    dyn,
 		byKind: indexByKind(descs),
@@ -35,9 +35,9 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 		if category == "" {
 			continue
 		}
-		b.collect(d, category)
+		build.collect(d, category)
 	}
-	return b.graph()
+	return build.graph()
 }
 
 func indexByKind(descs map[string]api.ResourceDescriptor) map[string]api.ResourceDescriptor {
@@ -48,17 +48,17 @@ func indexByKind(descs map[string]api.ResourceDescriptor) map[string]api.Resourc
 	return byKind
 }
 
-func graphCategory(d api.ResourceDescriptor) string {
-	if d.Group == fluxSourceGroup && fluxSourceResources[d.Resource] {
+func graphCategory(desc api.ResourceDescriptor) string {
+	if desc.Group == fluxSourceGroup && fluxSourceResources[desc.Resource] {
 		return "source"
 	}
-	if d.Group == "kustomize.toolkit.fluxcd.io" && d.Resource == "kustomizations" {
+	if desc.Group == "kustomize.toolkit.fluxcd.io" && desc.Resource == "kustomizations" {
 		return "applier"
 	}
-	if d.Group == "helm.toolkit.fluxcd.io" && d.Resource == "helmreleases" {
+	if desc.Group == "helm.toolkit.fluxcd.io" && desc.Resource == "helmreleases" {
 		return "applier"
 	}
-	if d.Group == "argoproj.io" && d.Resource == "applications" {
+	if desc.Group == "argoproj.io" && desc.Resource == "applications" {
 		return "app"
 	}
 	return ""
@@ -72,36 +72,36 @@ type builder struct {
 	edges  map[string]api.GraphEdge
 }
 
-func (b *builder) collect(d api.ResourceDescriptor, category string) {
-	gvr := schema.GroupVersionResource{Group: d.Group, Version: d.Version, Resource: d.Resource}
+func (b *builder) collect(desc api.ResourceDescriptor, category string) {
+	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	list, err := b.dyn.Resource(gvr).List(b.ctx, metav1.ListOptions{})
 	if err != nil {
 		return
 	}
 	for i := range list.Items {
 		u := &list.Items[i]
-		b.addObject(u, d, category)
+		b.addObject(u, desc, category)
 	}
 }
 
-func (b *builder) addObject(u *unstructured.Unstructured, d api.ResourceDescriptor, category string) {
-	id := nodeID(d.Group, d.Kind, u.GetNamespace(), u.GetName())
+func (b *builder) addObject(obj *unstructured.Unstructured, desc api.ResourceDescriptor, category string) {
+	id := nodeID(desc.Group, desc.Kind, obj.GetNamespace(), obj.GetName())
 	b.nodes[id] = api.GraphNode{
 		ID:        id,
-		Kind:      d.Kind,
-		Group:     d.Group,
-		Version:   d.Version,
-		Resource:  d.Resource,
-		Name:      u.GetName(),
-		Namespace: u.GetNamespace(),
-		Status:    statusOf(u, category),
+		Kind:      desc.Kind,
+		Group:     desc.Group,
+		Version:   desc.Version,
+		Resource:  desc.Resource,
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+		Status:    statusOf(obj, category),
 		Category:  category,
 	}
 	if category == "applier" {
-		b.applierEdges(id, u)
+		b.applierEdges(id, obj)
 	}
 	if category == "app" {
-		b.appEdges(id, u)
+		b.appEdges(id, obj)
 	}
 }
 
@@ -111,40 +111,40 @@ func (b *builder) applierEdges(id string, u *unstructured.Unstructured) {
 	b.inventoryEdges(id, u)
 }
 
-func (b *builder) sourceEdge(id string, u *unstructured.Unstructured) {
-	kind := nestedString(u, "spec", "sourceRef", "kind")
-	name := nestedString(u, "spec", "sourceRef", "name")
+func (b *builder) sourceEdge(id string, obj *unstructured.Unstructured) {
+	kind := nestedString(obj, "spec", "sourceRef", "kind")
+	name := nestedString(obj, "spec", "sourceRef", "name")
 	if kind == "" || name == "" {
-		kind = nestedString(u, "spec", "chart", "spec", "sourceRef", "kind")
-		name = nestedString(u, "spec", "chart", "spec", "sourceRef", "name")
+		kind = nestedString(obj, "spec", "chart", "spec", "sourceRef", "kind")
+		name = nestedString(obj, "spec", "chart", "spec", "sourceRef", "name")
 	}
 	if kind == "" || name == "" {
 		return
 	}
-	namespace := nestedString(u, "spec", "sourceRef", "namespace")
+	namespace := nestedString(obj, "spec", "sourceRef", "namespace")
 	if namespace == "" {
-		namespace = u.GetNamespace()
+		namespace = obj.GetNamespace()
 	}
 	sid := nodeID(fluxSourceGroup, kind, namespace, name)
 	b.ensureRef(sid, fluxSourceGroup, kind, namespace, name, "source")
 	b.addEdge(sid, id, "source")
 }
 
-func (b *builder) dependsOnEdges(id string, u *unstructured.Unstructured) {
-	for _, dep := range nestedSlice(u, "spec", "dependsOn") {
-		m, ok := dep.(map[string]any)
+func (b *builder) dependsOnEdges(id string, obj *unstructured.Unstructured) {
+	for _, dep := range nestedSlice(obj, "spec", "dependsOn") {
+		entry, ok := dep.(map[string]any)
 		if !ok {
 			continue
 		}
-		name := stringAt(m, "name")
+		name := stringAt(entry, "name")
 		if name == "" {
 			continue
 		}
-		namespace := stringAt(m, "namespace")
+		namespace := stringAt(entry, "namespace")
 		if namespace == "" {
-			namespace = u.GetNamespace()
+			namespace = obj.GetNamespace()
 		}
-		did := nodeID(u.GroupVersionKind().Group, u.GetKind(), namespace, name)
+		did := nodeID(obj.GroupVersionKind().Group, obj.GetKind(), namespace, name)
 		b.addEdge(did, id, "dependsOn")
 	}
 }
@@ -168,17 +168,17 @@ func (b *builder) inventoryEdges(id string, u *unstructured.Unstructured) {
 
 func (b *builder) appEdges(id string, u *unstructured.Unstructured) {
 	for _, r := range nestedSlice(u, "status", "resources") {
-		m, ok := r.(map[string]any)
+		entry, ok := r.(map[string]any)
 		if !ok {
 			continue
 		}
-		kind := stringAt(m, "kind")
-		name := stringAt(m, "name")
+		kind := stringAt(entry, "kind")
+		name := stringAt(entry, "name")
 		if kind == "" || name == "" {
 			continue
 		}
-		group := stringAt(m, "group")
-		namespace := stringAt(m, "namespace")
+		group := stringAt(entry, "group")
+		namespace := stringAt(entry, "namespace")
 		mid := nodeID(group, kind, namespace, name)
 		b.ensureRef(mid, group, kind, namespace, name, "managed")
 		b.addEdge(id, mid, "manages")
@@ -189,13 +189,13 @@ func (b *builder) ensureRef(id, group, kind, namespace, name, category string) {
 	if _, ok := b.nodes[id]; ok {
 		return
 	}
-	d := b.byKind[group+"/"+kind]
+	desc := b.byKind[group+"/"+kind]
 	b.nodes[id] = api.GraphNode{
 		ID:        id,
 		Kind:      kind,
 		Group:     group,
-		Version:   d.Version,
-		Resource:  d.Resource,
+		Version:   desc.Version,
+		Resource:  desc.Resource,
 		Name:      name,
 		Namespace: namespace,
 		Status:    "",
@@ -213,18 +213,18 @@ func (b *builder) graph() api.Graph {
 	for _, n := range b.nodes {
 		nodes = append(nodes, n)
 	}
-	slices.SortFunc(nodes, func(a, b api.GraphNode) int {
-		return strings.Compare(a.ID, b.ID)
+	slices.SortFunc(nodes, func(left, right api.GraphNode) int {
+		return strings.Compare(left.ID, right.ID)
 	})
 	edges := make([]api.GraphEdge, 0, len(b.edges))
 	for _, e := range b.edges {
 		edges = append(edges, e)
 	}
-	slices.SortFunc(edges, func(a, b api.GraphEdge) int {
-		if a.From != b.From {
-			return strings.Compare(a.From, b.From)
+	slices.SortFunc(edges, func(left, right api.GraphEdge) int {
+		if left.From != right.From {
+			return strings.Compare(left.From, right.From)
 		}
-		return strings.Compare(a.To, b.To)
+		return strings.Compare(left.To, right.To)
 	})
 	return api.Graph{Nodes: nodes, Edges: edges}
 }
@@ -241,28 +241,28 @@ func parseInventoryID(raw string) (namespace, name, group, kind string) {
 	return parts[0], parts[1], parts[2], parts[3]
 }
 
-func statusOf(u *unstructured.Unstructured, category string) string {
+func statusOf(obj *unstructured.Unstructured, category string) string {
 	if category == "app" {
-		health := nestedString(u, "status", "health", "status")
-		sync := nestedString(u, "status", "sync", "status")
+		health := nestedString(obj, "status", "health", "status")
+		sync := nestedString(obj, "status", "sync", "status")
 		return strings.TrimSpace(health + " " + sync)
 	}
-	return conditionSummary(u)
+	return conditionSummary(obj)
 }
 
 func conditionSummary(u *unstructured.Unstructured) string {
 	for _, c := range nestedSlice(u, "status", "conditions") {
-		m, ok := c.(map[string]any)
+		entry, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
-		if m["type"] != "Ready" {
+		if entry["type"] != "Ready" {
 			continue
 		}
-		if m["status"] == "True" {
+		if entry["status"] == "True" {
 			return "Ready"
 		}
-		reason, ok := m["reason"].(string)
+		reason, ok := entry["reason"].(string)
 		if ok && reason != "" {
 			return reason
 		}

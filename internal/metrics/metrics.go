@@ -63,20 +63,20 @@ func nodeUsage(ctx context.Context, dyn dynamic.Interface) map[string]api.Resour
 	}
 	allocatable := nodeAllocatable(ctx, dyn)
 	for i := range list.Items {
-		u := &list.Items[i]
-		usage, ok := nestedMap(u, "usage")
+		obj := &list.Items[i]
+		usage, ok := nestedMap(obj, "usage")
 		if !ok {
 			continue
 		}
 		cpu := milli(usage)
 		mem := mebi(usage)
 		use := api.ResourceUsage{CPUMilli: cpu, MemoryMi: mem}
-		alloc, ok := allocatable[u.GetName()]
+		alloc, ok := allocatable[obj.GetName()]
 		if ok {
 			use.CPUPercent = percent(cpu, alloc.CPUMilli)
 			use.MemPercent = percent(mem, alloc.MemoryMi)
 		}
-		out[u.GetName()] = use
+		out[obj.GetName()] = use
 	}
 	return out
 }

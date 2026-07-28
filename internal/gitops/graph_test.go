@@ -238,19 +238,19 @@ func TestBuild(t *testing.T) {
 		{"/ConfigMap/flux-system/podinfo", "managed", "ConfigMap", ""},
 		{"/ConfigMap/argocd/settings", "managed", "ConfigMap", ""},
 	}
-	for _, w := range wantNodes {
-		n, ok := nodesByID[w.id]
+	for _, expected := range wantNodes {
+		node, ok := nodesByID[expected.id]
 		if !ok {
-			t.Fatalf("missing node %q", w.id)
+			t.Fatalf("missing node %q", expected.id)
 		}
-		if n.Category != w.category {
-			t.Fatalf("node %q category = %q, want %q", w.id, n.Category, w.category)
+		if node.Category != expected.category {
+			t.Fatalf("node %q category = %q, want %q", expected.id, node.Category, expected.category)
 		}
-		if n.Kind != w.kind {
-			t.Fatalf("node %q kind = %q, want %q", w.id, n.Kind, w.kind)
+		if node.Kind != expected.kind {
+			t.Fatalf("node %q kind = %q, want %q", expected.id, node.Kind, expected.kind)
 		}
-		if n.Status != w.status {
-			t.Fatalf("node %q status = %q, want %q", w.id, n.Status, w.status)
+		if node.Status != expected.status {
+			t.Fatalf("node %q status = %q, want %q", expected.id, node.Status, expected.status)
 		}
 	}
 

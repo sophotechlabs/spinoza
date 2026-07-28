@@ -44,16 +44,16 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
-	c, err := accept(w, r)
+	socket, err := accept(w, r)
 	if err != nil {
 		return
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = socket.CloseNow() }()
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	conn := &execConn{conn: c, ctx: ctx}
+	conn := &execConn{conn: socket, ctx: ctx}
 	session, startErr := s.mgr.StartExec(ctx, req, conn)
 	if startErr != nil {
 		conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
@@ -67,7 +67,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		cancel()
 	}()
 
-	conn.pump(ctx, c, session)
+	conn.pump(ctx, socket, session)
 }
 
 func endMessage(err error) []byte {

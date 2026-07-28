@@ -435,19 +435,19 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
-	writeErr := wsjson.Write(ctx, c, sub)
+	writeErr := wsjson.Write(ctx, conn, sub)
 	if writeErr != nil {
 		t.Fatalf("write subscribe: %v", writeErr)
 	}
 
-	snap := readMsg(ctx, t, c)
+	snap := readMsg(ctx, t, conn)
 	if snap.Type != "snapshot" {
 		t.Fatalf("Type = %q, want snapshot", snap.Type)
 	}
@@ -468,7 +468,7 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	added := readMsg(ctx, t, c)
+	added := readMsg(ctx, t, conn)
 	if added.Type != "added" {
 		t.Fatalf("Type = %q, want added", added.Type)
 	}
@@ -488,7 +488,7 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	modified := readMsg(ctx, t, c)
+	modified := readMsg(ctx, t, conn)
 	if modified.Type != "modified" {
 		t.Fatalf("Type = %q, want modified", modified.Type)
 	}
@@ -497,7 +497,7 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	deleted := readMsg(ctx, t, c)
+	deleted := readMsg(ctx, t, conn)
 	if deleted.Type != "deleted" {
 		t.Fatalf("Type = %q, want deleted", deleted.Type)
 	}
@@ -515,24 +515,24 @@ func TestWSUnsubscribeStopsDeltas(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
-	writeErr := wsjson.Write(ctx, c, sub)
+	writeErr := wsjson.Write(ctx, conn, sub)
 	if writeErr != nil {
 		t.Fatalf("write subscribe: %v", writeErr)
 	}
-	snap := readMsg(ctx, t, c)
+	snap := readMsg(ctx, t, conn)
 	if snap.Type != "snapshot" {
 		t.Fatalf("Type = %q, want snapshot", snap.Type)
 	}
 
 	unsub := api.ClientMsg{Type: "unsubscribe", SubID: "s1"}
-	writeErr = wsjson.Write(ctx, c, unsub)
+	writeErr = wsjson.Write(ctx, conn, unsub)
 	if writeErr != nil {
 		t.Fatalf("write unsubscribe: %v", writeErr)
 	}
@@ -546,7 +546,7 @@ func TestWSUnsubscribeStopsDeltas(t *testing.T) {
 	readCtx, readCancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer readCancel()
 	var msg api.ServerMsg
-	readErr := wsjson.Read(readCtx, c, &msg)
+	readErr := wsjson.Read(readCtx, conn, &msg)
 	if readErr == nil {
 		t.Fatalf("received unexpected message after unsubscribe: %+v", msg)
 	}
@@ -561,19 +561,19 @@ func TestWSSubscribeUnknownResource(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "statefulsets", Namespace: "default"}
-	writeErr := wsjson.Write(ctx, c, sub)
+	writeErr := wsjson.Write(ctx, conn, sub)
 	if writeErr != nil {
 		t.Fatalf("write subscribe: %v", writeErr)
 	}
 
-	msg := readMsg(ctx, t, c)
+	msg := readMsg(ctx, t, conn)
 	if msg.Type != "error" {
 		t.Fatalf("Type = %q, want error", msg.Type)
 	}
@@ -594,27 +594,27 @@ func TestWSResubscribeReplacesSubscription(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
-	writeErr := wsjson.Write(ctx, c, sub)
+	writeErr := wsjson.Write(ctx, conn, sub)
 	if writeErr != nil {
 		t.Fatalf("write subscribe: %v", writeErr)
 	}
-	first := readMsg(ctx, t, c)
+	first := readMsg(ctx, t, conn)
 	if first.Type != "snapshot" {
 		t.Fatalf("Type = %q, want snapshot", first.Type)
 	}
 
-	writeErr = wsjson.Write(ctx, c, sub)
+	writeErr = wsjson.Write(ctx, conn, sub)
 	if writeErr != nil {
 		t.Fatalf("write resubscribe: %v", writeErr)
 	}
-	second := readMsg(ctx, t, c)
+	second := readMsg(ctx, t, conn)
 	if second.Type != "snapshot" {
 		t.Fatalf("Type = %q, want snapshot on resubscribe", second.Type)
 	}
@@ -635,25 +635,25 @@ func TestWSExitsOnServerContextCancel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer func() { _ = c.CloseNow() }()
+	defer func() { _ = conn.CloseNow() }()
 
 	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
-	writeErr := wsjson.Write(ctx, c, sub)
+	writeErr := wsjson.Write(ctx, conn, sub)
 	if writeErr != nil {
 		t.Fatalf("write subscribe: %v", writeErr)
 	}
-	snap := readMsg(ctx, t, c)
+	snap := readMsg(ctx, t, conn)
 	if snap.Type != "snapshot" {
 		t.Fatalf("Type = %q, want snapshot", snap.Type)
 	}
 
 	cancelBase()
 
-	_, _, readErr := c.Read(ctx)
+	_, _, readErr := conn.Read(ctx)
 	if readErr == nil {
 		t.Fatal("expected connection to close after server context cancel")
 	}
