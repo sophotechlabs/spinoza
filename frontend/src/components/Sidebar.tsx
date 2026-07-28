@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Category, ResourceDescriptor, View } from '../lib/types';
 import { fetchResources } from '../lib/discovery';
+import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 
 interface SidebarProps {
   view: View;
@@ -30,12 +31,30 @@ function chevron(collapsed: boolean): string {
   return '▾';
 }
 
-function resourceClass(active: boolean): string {
-  const base = 'block w-full px-6 py-1 text-left text-neutral-300 hover:bg-neutral-900';
+function resourceClass(active: boolean, nested = false): string {
+  let indent = 'px-6';
+  if (nested) {
+    indent = 'px-9';
+  }
+  const base = `block w-full truncate ${indent} py-1 text-left text-neutral-300 hover:bg-neutral-900`;
   if (active) {
     return `${base} bg-neutral-800 text-neutral-100`;
   }
   return base;
+}
+
+function collapsedKeys(categories: Category[]): Set<string> {
+  const keys = new Set<string>();
+  for (const category of categories) {
+    keys.add(category.name);
+    if (!isNested(category.name)) {
+      continue;
+    }
+    for (const group of groupByApiGroup(category.resources)) {
+      keys.add(`${category.name}/${group.name}`);
+    }
+  }
+  return keys;
 }
 
 function errorMessage(err: unknown): string {
@@ -68,7 +87,7 @@ export default function Sidebar({
         const data = await fetchResources();
         if (mounted) {
           setCategories(data);
-          setCollapsed(new Set(data.map((category) => category.name)));
+          setCollapsed(collapsedKeys(data));
         }
       } catch (err: unknown) {
         if (mounted) {
@@ -154,7 +173,7 @@ export default function Sidebar({
               </span>
               <span className="text-neutral-600">{category.resources.length}</span>
             </button>
-            {!isCollapsed && (
+            {!isCollapsed && !isNested(category.name) && (
               <div>
                 {category.resources.map((resource) => (
                   <button
@@ -163,11 +182,54 @@ export default function Sidebar({
                     onClick={() => {
                       onSelect(resource);
                     }}
+                    title={resource.kind}
                     className={resourceClass(isActive(activeResource, resource))}
                   >
                     {resource.kind}
                   </button>
                 ))}
+              </div>
+            )}
+            {!isCollapsed && isNested(category.name) && (
+              <div>
+                {groupByApiGroup(category.resources).map((group) => {
+                  const key = `${category.name}/${group.name}`;
+                  const groupCollapsed = collapsed.has(key);
+                  return (
+                    <div key={key}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          toggle(key);
+                        }}
+                        title={group.name}
+                        className="flex w-full items-center justify-between gap-1 px-5 py-1 text-left text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+                      >
+                        <span className="truncate">
+                          {chevron(groupCollapsed)} {group.name}
+                        </span>
+                        <span className="shrink-0 text-neutral-600">{group.resources.length}</span>
+                      </button>
+                      {!groupCollapsed && (
+                        <div>
+                          {group.resources.map((resource) => (
+                            <button
+                              key={descriptorKey(resource)}
+                              type="button"
+                              onClick={() => {
+                                onSelect(resource);
+                              }}
+                              title={resource.kind}
+                              className={resourceClass(isActive(activeResource, resource), true)}
+                            >
+                              {resource.kind}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

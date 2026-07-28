@@ -318,7 +318,7 @@ func TestListOrdersCategories(t *testing.T) {
 	}
 }
 
-func TestListSortsResourcesWithinCategory(t *testing.T) {
+func TestListOrdersWorkloadsByEverydayUse(t *testing.T) {
 	stub := &stubDiscovery{lists: fullLists()}
 	cats, _, err := List(stub)
 	if err != nil {
@@ -332,11 +332,71 @@ func TestListSortsResourcesWithinCategory(t *testing.T) {
 	for _, r := range workloads.Resources {
 		resources = append(resources, r.Resource)
 	}
-	expected := []string{"daemonsets", "deployments", "pods"}
+	expected := []string{"pods", "deployments", "daemonsets"}
 	for i := range expected {
 		if resources[i] != expected[i] {
-			t.Fatalf("Workloads resources = %v, want sorted %v", resources, expected)
+			t.Fatalf("Workloads resources = %v, want %v first", resources, expected)
 		}
+	}
+}
+
+func TestListPutsUnrankedKindsAfterRankedOnes(t *testing.T) {
+	lists := []*metav1.APIResourceList{
+		{
+			GroupVersion: "apps/v1",
+			APIResources: []metav1.APIResource{
+				{Name: "controllerrevisions", Kind: "ControllerRevision", Namespaced: true, Verbs: listWatch()},
+				{Name: "deployments", Kind: "Deployment", Namespaced: true, Verbs: listWatch()},
+			},
+		},
+		{
+			GroupVersion: "v1",
+			APIResources: []metav1.APIResource{
+				{Name: "pods", Kind: "Pod", Namespaced: true, Verbs: listWatch()},
+			},
+		},
+	}
+	cats, _, err := List(&stubDiscovery{lists: lists})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	workloads, ok := catByName(cats, "Workloads")
+	if !ok {
+		t.Fatal("missing Workloads category")
+	}
+
+	kinds := make([]string, 0, len(workloads.Resources))
+	for _, r := range workloads.Resources {
+		kinds = append(kinds, r.Kind)
+	}
+	want := []string{"Pod", "Deployment", "ControllerRevision"}
+	for i := range want {
+		if kinds[i] != want[i] {
+			t.Fatalf("kinds = %v, want %v", kinds, want)
+		}
+	}
+}
+
+func TestListSortsUnrankedCategoriesAlphabetically(t *testing.T) {
+	lists := []*metav1.APIResourceList{
+		{
+			GroupVersion: "cilium.io/v2",
+			APIResources: []metav1.APIResource{
+				{Name: "ciliumnetworkpolicies", Kind: "CiliumNetworkPolicy", Namespaced: true, Verbs: listWatch()},
+				{Name: "ciliumendpoints", Kind: "CiliumEndpoint", Namespaced: true, Verbs: listWatch()},
+			},
+		},
+	}
+	cats, _, err := List(&stubDiscovery{lists: lists})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	custom, ok := catByName(cats, "Custom Resources")
+	if !ok {
+		t.Fatal("missing Custom Resources category")
+	}
+	if custom.Resources[0].Resource != "ciliumendpoints" {
+		t.Fatalf("resources = %v, want alphabetical when unranked", custom.Resources)
 	}
 }
 

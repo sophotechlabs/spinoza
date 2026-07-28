@@ -153,4 +153,57 @@ describe('Sidebar', () => {
     await userEvent.click(screen.getByRole('button', { name: /GitOps/ }));
     expect(screen.queryByRole('button', { name: 'Graph' })).not.toBeInTheDocument();
   });
+  it('nests custom resources under their api group', async () => {
+    const user = userEvent.setup();
+    stubFetch([
+      makeCategory('Custom Resources', [
+        makeDescriptor({ group: 'cilium.io', resource: 'ciliumendpoints', kind: 'CiliumEndpoint' }),
+        makeDescriptor({ group: 'cilium.io', resource: 'ciliumnodes', kind: 'CiliumNode' }),
+        makeDescriptor({ group: 'traefik.io', resource: 'middlewares', kind: 'Middleware' }),
+      ]),
+    ]);
+    renderSidebar();
+
+    await user.click(await screen.findByRole('button', { name: /Custom Resources/ }));
+
+    const cilium = screen.getByRole('button', { name: /cilium\.io/ });
+    const traefik = screen.getByRole('button', { name: /traefik\.io/ });
+    expect(cilium).toBeInTheDocument();
+    expect(traefik).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'CiliumEndpoint' })).not.toBeInTheDocument();
+
+    await user.click(cilium);
+
+    expect(screen.getByRole('button', { name: 'CiliumEndpoint' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'CiliumNode' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Middleware' })).not.toBeInTheDocument();
+  });
+
+  it('selects a resource from a nested api group', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const descriptor = makeDescriptor({
+      group: 'cilium.io',
+      resource: 'ciliumendpoints',
+      kind: 'CiliumEndpoint',
+    });
+    stubFetch([makeCategory('Custom Resources', [descriptor])]);
+    renderSidebar({ onSelect });
+
+    await user.click(await screen.findByRole('button', { name: /Custom Resources/ }));
+    await user.click(screen.getByRole('button', { name: /cilium\.io/ }));
+    await user.click(screen.getByRole('button', { name: 'CiliumEndpoint' }));
+
+    expect(onSelect).toHaveBeenCalledWith(descriptor);
+  });
+
+  it('keeps flat categories flat', async () => {
+    const user = userEvent.setup();
+    stubFetch([makeCategory('Workloads', [makeDescriptor({ resource: 'pods', kind: 'Pod' })])]);
+    renderSidebar();
+
+    await user.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    expect(screen.getByRole('button', { name: 'Pod' })).toBeInTheDocument();
+  });
 });

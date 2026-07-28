@@ -115,7 +115,7 @@ func groupByCategory(descs []api.ResourceDescriptor) []api.Category {
 		if !ok {
 			continue
 		}
-		sortDescs(rs)
+		sortDescs(name, rs)
 		cats = append(cats, api.Category{Name: name, Resources: rs})
 		seen[name] = true
 	}
@@ -128,14 +128,46 @@ func groupByCategory(descs []api.ResourceDescriptor) []api.Category {
 	sort.Strings(extra)
 	for _, name := range extra {
 		rs := buckets[name]
-		sortDescs(rs)
+		sortDescs(name, rs)
 		cats = append(cats, api.Category{Name: name, Resources: rs})
 	}
 	return cats
 }
 
-func sortDescs(ds []api.ResourceDescriptor) {
+var kindOrder = map[string][]string{
+	"Cluster": {"Node", "Namespace", "Event"},
+	"Workloads": {
+		"Pod", "Deployment", "DaemonSet", "StatefulSet",
+		"ReplicaSet", "ReplicationController", "Job", "CronJob",
+	},
+	"Config": {
+		"ConfigMap", "Secret", "ResourceQuota", "LimitRange",
+		"HorizontalPodAutoscaler", "PodDisruptionBudget", "PriorityClass",
+		"RuntimeClass", "Lease",
+	},
+	"Network": {"Service", "Endpoints", "EndpointSlice", "Ingress", "IngressClass", "NetworkPolicy"},
+	"Storage": {"PersistentVolumeClaim", "PersistentVolume", "StorageClass"},
+	"Access Control": {
+		"ServiceAccount", "Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding",
+	},
+}
+
+func rankOf(category string, kind string) int {
+	for i, name := range kindOrder[category] {
+		if name == kind {
+			return i
+		}
+	}
+	return len(kindOrder[category])
+}
+
+func sortDescs(category string, ds []api.ResourceDescriptor) {
 	sort.Slice(ds, func(i, j int) bool {
+		left := rankOf(category, ds[i].Kind)
+		right := rankOf(category, ds[j].Kind)
+		if left != right {
+			return left < right
+		}
 		return ds[i].Resource < ds[j].Resource
 	})
 }
