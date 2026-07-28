@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubediscovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
@@ -58,8 +59,11 @@ type Manager struct {
 	charts   *charts.Cache
 	forwards *portforward.Registry
 	shells   *exec.Service
+	disco    kubediscovery.CachedDiscoveryInterface
+	catalog  sync.RWMutex
 	cats     []api.Category
 	descs    map[string]api.ResourceDescriptor
+	discErr  string
 	mu       sync.Mutex
 	streams  map[streamKey]*stream
 }
@@ -79,8 +83,43 @@ func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interf
 	}
 }
 
-func (m *Manager) Resources() []api.Category {
-	return m.cats
+func (m *Manager) UseDiscovery(disco kubediscovery.CachedDiscoveryInterface, discErr error) {
+	m.disco = disco
+	m.setCatalog(m.cats, m.descs, discErr)
+}
+
+func (m *Manager) Resources() api.ResourceCatalog {
+	m.catalog.RLock()
+	defer m.catalog.RUnlock()
+	return api.ResourceCatalog{Categories: m.cats, Error: m.discErr}
+}
+
+func (m *Manager) RefreshResources() api.ResourceCatalog {
+	if m.disco == nil {
+		return m.Resources()
+	}
+	m.disco.Invalidate()
+	cats, descs, err := discovery.List(m.disco)
+	m.setCatalog(cats, descs, err)
+	return m.Resources()
+}
+
+func (m *Manager) setCatalog(cats []api.Category, descs map[string]api.ResourceDescriptor, err error) {
+	message := ""
+	if err != nil {
+		message = err.Error()
+	}
+	m.catalog.Lock()
+	defer m.catalog.Unlock()
+	m.cats = cats
+	m.descs = descs
+	m.discErr = message
+}
+
+func (m *Manager) descriptors() map[string]api.ResourceDescriptor {
+	m.catalog.RLock()
+	defer m.catalog.RUnlock()
+	return m.descs
 }
 
 func (m *Manager) Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDetail, error) {
@@ -150,11 +189,11 @@ func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {
 }
 
 func (m *Manager) Graph(ctx context.Context) api.Graph {
-	return gitops.Build(ctx, m.dyn, m.descs)
+	return gitops.Build(ctx, m.dyn, m.descriptors())
 }
 
 func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
-	return flux.Build(ctx, m.dyn, m.descs, m.charts)
+	return flux.Build(ctx, m.dyn, m.descriptors(), m.charts)
 }
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
@@ -178,7 +217,7 @@ type stream struct {
 }
 
 func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscription, error) {
-	desc, ok := m.descs[discovery.Key(group, version, resource)]
+	desc, ok := m.descriptors()[discovery.Key(group, version, resource)]
 	if !ok {
 		return nil, fmt.Errorf("unknown resource %s/%s/%s", group, version, resource)
 	}

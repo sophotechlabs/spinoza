@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Category, ResourceDescriptor, View } from '../lib/types';
-import { fetchResources } from '../lib/discovery';
+import { fetchResources, refreshResources } from '../lib/discovery';
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 
@@ -65,6 +65,13 @@ function errorMessage(err: unknown): string {
   return 'discovery request failed';
 }
 
+function retryLabel(retrying: boolean): string {
+  if (retrying) {
+    return 'Retrying…';
+  }
+  return 'Retry';
+}
+
 const sectionClass =
   'flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase hover:text-neutral-200';
 
@@ -81,15 +88,17 @@ export default function Sidebar({
   const [categories, setCategories] = useState<Category[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
-        const data = await fetchResources();
+        const catalog = await fetchResources();
         if (mounted) {
-          setCategories(data);
-          setCollapsed(collapsedKeys(data));
+          setCategories(catalog.categories);
+          setCollapsed(collapsedKeys(catalog.categories));
+          setError(catalog.error ?? null);
         }
       } catch (err: unknown) {
         if (mounted) {
@@ -102,6 +111,20 @@ export default function Sidebar({
       mounted = false;
     };
   }, []);
+
+  async function retry() {
+    setRetrying(true);
+    try {
+      const catalog = await refreshResources();
+      setCategories(catalog.categories);
+      setCollapsed(collapsedKeys(catalog.categories));
+      setError(catalog.error ?? null);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   function toggle(name: string) {
     setCollapsed((prev) => {
@@ -183,7 +206,25 @@ export default function Sidebar({
             </div>
           )}
         </div>
-        {error !== null && <div className="px-3 py-1 text-[11px] text-red-400">{error}</div>}
+        {error !== null && (
+          <div className="mx-2 mb-1 rounded border border-red-900 bg-red-950/40 px-2 py-1.5 text-[11px]">
+            <div className="font-semibold text-red-400">Discovery failed</div>
+            <div className="mt-0.5 break-words text-red-300">{error}</div>
+            <button
+              type="button"
+              onClick={() => void retry()}
+              disabled={retrying}
+              className="mt-1.5 rounded border border-red-800 px-1.5 py-0.5 text-red-200 hover:bg-red-900 disabled:cursor-not-allowed disabled:text-red-500"
+            >
+              {retryLabel(retrying)}
+            </button>
+          </div>
+        )}
+        {error === null && categories.length === 0 && (
+          <div className="px-3 py-1 text-[11px] text-neutral-600">
+            No resource types discovered.
+          </div>
+        )}
         {categories.map((category) => {
           const isCollapsed = collapsed.has(category.name);
           return (

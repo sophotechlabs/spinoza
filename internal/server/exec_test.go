@@ -383,3 +383,35 @@ func waitForServer(t *testing.T, cond func() bool, message string) {
 	}
 	t.Fatal(message)
 }
+
+func TestResourcesRefreshRejectsOtherMethods(t *testing.T) {
+	ts := execServer(t, nil)
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/resources", nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+}
+
+func TestResourcesRefreshReturnsTheCatalog(t *testing.T) {
+	ts := execServer(t, nil)
+	res, err := http.Post(ts.URL+"/api/resources", "", nil)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+	var catalog api.ResourceCatalog
+	if err := json.NewDecoder(res.Body).Decode(&catalog); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+}

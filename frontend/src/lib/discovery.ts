@@ -1,10 +1,17 @@
-import type { Category } from './types';
+import type { ResourceCatalog } from './types';
 
-export async function fetchResources(): Promise<Category[]> {
-  const response = await fetch('/api/resources');
+async function request(method: string): Promise<ResourceCatalog> {
+  const response = await fetch('/api/resources', { method });
   if (!response.ok) {
     throw new Error(`discovery request failed with status ${response.status}`);
   }
-  const data = (await response.json()) as Category[];
-  return data;
+  return (await response.json()) as ResourceCatalog;
+}
+
+export async function fetchResources(): Promise<ResourceCatalog> {
+  return request('GET');
+}
+
+export async function refreshResources(): Promise<ResourceCatalog> {
+  return request('POST');
 }

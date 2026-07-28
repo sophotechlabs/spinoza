@@ -161,6 +161,11 @@ export interface FluxResource {
   createdAt: string;
 }
 
+export interface ResourceCatalog {
+  categories: Category[];
+  error?: string;
+}
+
 export interface FluxGroup {
   name: string;
   ready: number;

@@ -14,6 +14,11 @@ type Category struct {
 	Resources []ResourceDescriptor `json:"resources"`
 }
 
+type ResourceCatalog struct {
+	Categories []Category `json:"categories"`
+	Error      string     `json:"error,omitempty"`
+}
+
 type Column struct {
 	Name   string `json:"name"`
 	Render string `json:"render,omitempty"`

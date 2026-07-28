@@ -33,5 +33,7 @@ func makeManager(ctx context.Context) *resources.Manager {
 		exec.NewStreamer(bundle.Clientset, bundle.Config),
 		exec.NewImages(bundle.Clientset),
 	)
-	return resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, cats, descs)
+	mgr := resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, cats, descs)
+	mgr.UseDiscovery(bundle.Discovery, discErr)
+	return mgr
 }

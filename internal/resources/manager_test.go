@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+
+	kubediscovery "k8s.io/client-go/discovery"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -246,12 +249,15 @@ func TestManagerMetrics(t *testing.T) {
 func TestResources(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
-	cats := mgr.Resources()
-	if len(cats) != 1 {
-		t.Fatalf("categories = %d, want 1", len(cats))
+	catalog := mgr.Resources()
+	if len(catalog.Categories) != 1 {
+		t.Fatalf("categories = %d, want 1", len(catalog.Categories))
 	}
-	if cats[0].Name != "Workloads" {
-		t.Fatalf("category = %q, want Workloads", cats[0].Name)
+	if catalog.Categories[0].Name != "Workloads" {
+		t.Fatalf("category = %q, want Workloads", catalog.Categories[0].Name)
+	}
+	if catalog.Error != "" {
+		t.Fatalf("error = %q, want empty", catalog.Error)
 	}
 }
 
@@ -588,5 +594,99 @@ func TestToUnstructuredUnknownType(t *testing.T) {
 	_, ok := toUnstructured(42)
 	if ok {
 		t.Fatal("toUnstructured(int) ok = true, want false")
+	}
+}
+
+type discoveryResult struct {
+	lists []*metav1.APIResourceList
+	err   error
+}
+
+type stubDiscovery struct {
+	kubediscovery.CachedDiscoveryInterface
+	invalidated int
+	results     []discoveryResult
+	calls       int
+}
+
+func (s *stubDiscovery) Invalidate() {
+	s.invalidated++
+}
+
+func (s *stubDiscovery) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
+	if len(s.results) == 0 {
+		return nil, nil
+	}
+	index := s.calls
+	s.calls++
+	if index >= len(s.results) {
+		index = len(s.results) - 1
+	}
+	return s.results[index].lists, s.results[index].err
+}
+
+func podList() []*metav1.APIResourceList {
+	return []*metav1.APIResourceList{
+		{
+			GroupVersion: "v1",
+			APIResources: []metav1.APIResource{
+				{Name: "pods", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"list", "watch"}},
+			},
+		},
+	}
+}
+
+func TestResourcesReportsTheDiscoveryError(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+	mgr.UseDiscovery(&stubDiscovery{}, errors.New("connection refused"))
+
+	catalog := mgr.Resources()
+	if catalog.Error != "connection refused" {
+		t.Fatalf("error = %q", catalog.Error)
+	}
+}
+
+func TestRefreshResourcesRediscovers(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+	disco := &stubDiscovery{results: []discoveryResult{{lists: podList()}}}
+	mgr.UseDiscovery(disco, errors.New("connection refused"))
+
+	if mgr.Resources().Error == "" {
+		t.Fatal("expected the startup error to be reported")
+	}
+
+	catalog := mgr.RefreshResources()
+	if disco.invalidated != 1 {
+		t.Fatalf("invalidated %d times, want 1", disco.invalidated)
+	}
+	if catalog.Error != "" {
+		t.Fatalf("error = %q, want it cleared", catalog.Error)
+	}
+	if len(catalog.Categories) == 0 {
+		t.Fatal("expected categories after a successful refresh")
+	}
+}
+
+func TestRefreshResourcesKeepsReportingAFailure(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+	disco := &stubDiscovery{results: []discoveryResult{{err: errors.New("still down")}}}
+	mgr.UseDiscovery(disco, errors.New("still down"))
+
+	catalog := mgr.RefreshResources()
+	if catalog.Error != "still down" {
+		t.Fatalf("error = %q", catalog.Error)
+	}
+}
+
+func TestRefreshResourcesWithoutADiscoveryClient(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	catalog := mgr.RefreshResources()
+	if len(catalog.Categories) != 1 {
+		t.Fatalf("categories = %d, want the startup catalog", len(catalog.Categories))
 	}
 }

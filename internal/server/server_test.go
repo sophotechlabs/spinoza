@@ -174,10 +174,11 @@ func TestResourcesEndpoint(t *testing.T) {
 	if resp.Header.Get("Content-Type") != "application/json" {
 		t.Fatalf("Content-Type = %q, want application/json", resp.Header.Get("Content-Type"))
 	}
-	var cats []api.Category
-	if err := json.NewDecoder(resp.Body).Decode(&cats); err != nil {
+	var catalog api.ResourceCatalog
+	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	cats := catalog.Categories
 	if len(cats) != 1 {
 		t.Fatalf("categories = %d, want 1", len(cats))
 	}

@@ -82,7 +82,14 @@ func statusFor(err error) int {
 }
 
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.mgr.Resources())
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, s.mgr.Resources())
+	case http.MethodPost:
+		writeJSON(w, s.mgr.RefreshResources())
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
 }
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {

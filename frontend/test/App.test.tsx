@@ -131,7 +131,7 @@ function stubFetch(): void {
       if (url === '/api/metrics') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ pods: {}, nodes: {} }) });
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(categories) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
     }),
   );
 }

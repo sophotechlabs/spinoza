@@ -28,10 +28,17 @@ function renderSidebar(overrides: RenderOverrides = {}) {
   return render(<Sidebar {...props} />);
 }
 
+function stubCatalog(categories: Category[], error?: string): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ categories, error }) }),
+  );
+}
+
 function stubFetch(categories: Category[]): void {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
-    json: () => Promise.resolve(categories),
+    json: () => Promise.resolve({ categories }),
   });
   vi.stubGlobal('fetch', fetchMock);
 }
@@ -232,5 +239,55 @@ describe('Sidebar', () => {
 
     fireEvent.keyDown(handle, { key: 'Enter' });
     expect(panel).toHaveStyle({ width: '224px' });
+  });
+
+  it('surfaces a discovery failure with a retry', async () => {
+    stubCatalog([], 'the server could not find the requested resource');
+    renderSidebar({});
+
+    expect(await screen.findByText('Discovery failed')).toBeInTheDocument();
+    expect(
+      screen.getByText('the server could not find the requested resource'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByText('No resource types discovered.')).not.toBeInTheDocument();
+  });
+
+  it('re-runs discovery from the retry button', async () => {
+    const user = userEvent.setup();
+    stubCatalog([], 'connection refused');
+    renderSidebar({});
+    await screen.findByText('Discovery failed');
+
+    stubCatalog(categories);
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText(/Workloads/)).toBeInTheDocument();
+    expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
+    const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call).toEqual(['/api/resources', { method: 'POST' }]);
+  });
+
+  it('reports a failed retry', async () => {
+    const user = userEvent.setup();
+    stubCatalog([], 'connection refused');
+    renderSidebar({});
+    await screen.findByText('Discovery failed');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 503, json: () => Promise.resolve({}) }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('discovery request failed with status 503')).toBeInTheDocument();
+  });
+
+  it('says so when discovery succeeded but found nothing', async () => {
+    stubCatalog([]);
+    renderSidebar({});
+
+    expect(await screen.findByText('No resource types discovered.')).toBeInTheDocument();
+    expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
   });
 });
