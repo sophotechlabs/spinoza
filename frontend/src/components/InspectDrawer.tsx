@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ContainerState, ObjectDetail, ObjectRef } from '../lib/types';
 import { fetchObject } from '../lib/object';
-import { DRAWER_NUDGE_STEP, useDrawerWidth } from '../lib/useDrawerWidth';
+import { NUDGE_STEP, useDrawerWidth } from '../lib/usePanelWidth';
 import { isFluxObject } from '../lib/fluxActions';
 import { forwardKind } from '../lib/portForward';
 import InspectActions from './InspectActions';
@@ -108,12 +108,12 @@ export default function InspectDrawer({
   function handleResizeKey(event: React.KeyboardEvent<HTMLButtonElement>) {
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      nudge(DRAWER_NUDGE_STEP);
+      nudge(NUDGE_STEP);
       return;
     }
     if (event.key === 'ArrowRight') {
       event.preventDefault();
-      nudge(-DRAWER_NUDGE_STEP);
+      nudge(-NUDGE_STEP);
     }
   }
 

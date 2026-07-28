@@ -80,9 +80,9 @@ function fluxStub(testId: string) {
   );
 }
 
-vi.mock('../src/components/FluxDashboard', () => ({ default: fluxStub('flux-dashboard') }));
-vi.mock('../src/components/FluxTiles', () => ({ default: fluxStub('flux-tiles') }));
-vi.mock('../src/components/FluxResources', () => ({ default: fluxStub('flux-resources') }));
+vi.mock('../src/components/FluxList', () => ({ default: fluxStub('flux-dashboard') }));
+vi.mock('../src/components/FluxOverview', () => ({ default: fluxStub('flux-overview') }));
+vi.mock('../src/components/FluxRoles', () => ({ default: fluxStub('flux-roles') }));
 
 vi.mock('../src/components/InspectDrawer', () => ({
   default: ({ target, onClose }: { target: ObjectRef | null; onClose: () => void }) => {
@@ -317,21 +317,9 @@ describe('App', () => {
   it('targets the inspector from the flux table', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Flux' }));
+    await user.click(screen.getByRole('button', { name: 'Resource list' }));
 
     await user.click(screen.getByRole('button', { name: 'select-flux-dashboard' }));
-
-    expect(screen.getByTestId('inspect-target')).toHaveTextContent(
-      'kustomizations:flux-system/apps',
-    );
-  });
-
-  it('targets the inspector from the flux tiles', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Flux Dashboard' }));
-
-    await user.click(screen.getByRole('button', { name: 'select-flux-tiles' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent(
       'kustomizations:flux-system/apps',
@@ -343,7 +331,19 @@ describe('App', () => {
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Overview' }));
 
-    await user.click(screen.getByRole('button', { name: 'select-flux-resources' }));
+    await user.click(screen.getByRole('button', { name: 'select-flux-overview' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent(
+      'kustomizations:flux-system/apps',
+    );
+  });
+
+  it('targets the inspector from the by-role view', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'By role' }));
+
+    await user.click(screen.getByRole('button', { name: 'select-flux-roles' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent(
       'kustomizations:flux-system/apps',
@@ -357,7 +357,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'select-node' }));
     expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Flux' }));
+    await user.click(screen.getByRole('button', { name: 'Resource list' }));
 
     expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();

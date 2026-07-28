@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Category, ResourceDescriptor, View } from '../../src/lib/types';
 import Sidebar from '../../src/components/Sidebar';
@@ -9,10 +9,10 @@ interface RenderOverrides {
   view?: View;
   activeResource?: ResourceDescriptor | null;
   onSelect?: (descriptor: ResourceDescriptor) => void;
-  onSelectGitops?: () => void;
-  onSelectFlux?: () => void;
-  onSelectTiles?: () => void;
-  onSelectResources?: () => void;
+  onSelectGraph?: () => void;
+  onSelectList?: () => void;
+  onSelectOverview?: () => void;
+  onSelectRoles?: () => void;
 }
 
 function renderSidebar(overrides: RenderOverrides = {}) {
@@ -20,10 +20,10 @@ function renderSidebar(overrides: RenderOverrides = {}) {
     view: overrides.view ?? 'resources',
     activeResource: overrides.activeResource ?? null,
     onSelect: overrides.onSelect ?? vi.fn(),
-    onSelectGitops: overrides.onSelectGitops ?? vi.fn(),
-    onSelectFlux: overrides.onSelectFlux ?? vi.fn(),
-    onSelectTiles: overrides.onSelectTiles ?? vi.fn(),
-    onSelectResources: overrides.onSelectResources ?? vi.fn(),
+    onSelectGraph: overrides.onSelectGraph ?? vi.fn(),
+    onSelectList: overrides.onSelectList ?? vi.fn(),
+    onSelectOverview: overrides.onSelectOverview ?? vi.fn(),
+    onSelectRoles: overrides.onSelectRoles ?? vi.fn(),
   };
   return render(<Sidebar {...props} />);
 }
@@ -55,8 +55,8 @@ describe('Sidebar', () => {
     stubFetch(categories);
     renderSidebar();
     expect(screen.getByRole('button', { name: 'Graph' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Flux' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Flux Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resource list' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
   });
 
@@ -122,27 +122,25 @@ describe('Sidebar', () => {
 
   it('calls each GitOps entry handler when clicked', async () => {
     stubFetch(categories);
-    const onSelectGitops = vi.fn();
-    const onSelectFlux = vi.fn();
-    const onSelectTiles = vi.fn();
-    const onSelectResources = vi.fn();
-    renderSidebar({ onSelectGitops, onSelectFlux, onSelectTiles, onSelectResources });
+    const onSelectGraph = vi.fn();
+    const onSelectList = vi.fn();
+    const onSelectOverview = vi.fn();
+    const onSelectRoles = vi.fn();
+    renderSidebar({ onSelectGraph, onSelectList, onSelectOverview, onSelectRoles });
     await userEvent.click(screen.getByRole('button', { name: 'Graph' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Flux' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Flux Dashboard' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Resource list' }));
     await userEvent.click(screen.getByRole('button', { name: 'Overview' }));
-    expect(onSelectGitops).toHaveBeenCalledTimes(1);
-    expect(onSelectFlux).toHaveBeenCalledTimes(1);
-    expect(onSelectTiles).toHaveBeenCalledTimes(1);
-    expect(onSelectResources).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: 'By role' }));
+    expect(onSelectGraph).toHaveBeenCalledTimes(1);
+    expect(onSelectList).toHaveBeenCalledTimes(1);
+    expect(onSelectOverview).toHaveBeenCalledTimes(1);
+    expect(onSelectRoles).toHaveBeenCalledTimes(1);
   });
 
   it('highlights the GitOps entry that matches the active view', () => {
     stubFetch(categories);
-    renderSidebar({ view: 'flux-tiles' });
-    expect(screen.getByRole('button', { name: 'Flux Dashboard' }).className).toContain(
-      'bg-neutral-800',
-    );
+    renderSidebar({ view: 'flux-overview' });
+    expect(screen.getByRole('button', { name: 'Overview' }).className).toContain('bg-neutral-800');
     expect(screen.getByRole('button', { name: 'Graph' }).className).not.toContain('bg-neutral-800');
   });
 
@@ -205,5 +203,34 @@ describe('Sidebar', () => {
     await user.click(await screen.findByRole('button', { name: /Workloads/ }));
 
     expect(screen.getByRole('button', { name: 'Pod' })).toBeInTheDocument();
+  });
+
+  it('resizes from the handle', () => {
+    stubFetch(categories);
+    renderSidebar({});
+    const handle = screen.getByRole('button', { name: 'Resize sidebar' });
+    const panel = handle.parentElement;
+
+    fireEvent.mouseDown(handle, { clientX: 224 });
+    fireEvent.mouseMove(window, { clientX: 324 });
+    fireEvent.mouseUp(window);
+
+    expect(panel).toHaveStyle({ width: '324px' });
+  });
+
+  it('nudges the width from the keyboard', () => {
+    stubFetch(categories);
+    renderSidebar({});
+    const handle = screen.getByRole('button', { name: 'Resize sidebar' });
+    const panel = handle.parentElement;
+
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(panel).toHaveStyle({ width: '256px' });
+
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+    expect(panel).toHaveStyle({ width: '224px' });
+
+    fireEvent.keyDown(handle, { key: 'Enter' });
+    expect(panel).toHaveStyle({ width: '224px' });
   });
 });

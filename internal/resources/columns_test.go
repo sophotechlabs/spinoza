@@ -70,8 +70,20 @@ func TestColumnRenders(t *testing.T) {
 	if columnsFor("Job")[0].Render != "ratio" {
 		t.Fatalf("job[0] render, want ratio")
 	}
-	if columnsFor("ConfigMap")[0].Render != "" {
-		t.Fatalf("configmap[0] render, want empty")
+	if columnsFor("ConfigMap")[0].Render != "status" {
+		t.Fatalf("configmap[0] render, want status")
+	}
+	if columnsFor("Node")[0].Render != "status" {
+		t.Fatalf("node[0] render, want status")
+	}
+	if columnsFor("Node")[1].Render != "" {
+		t.Fatalf("node[1] render, want empty")
+	}
+	if columnsFor("Namespace")[0].Render != "status" {
+		t.Fatalf("namespace[0] render, want status")
+	}
+	if columnsFor("Pod")[1].Render != "status" {
+		t.Fatalf("pod[1] render, want status")
 	}
 }
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FluxDashboard } from '../../src/lib/types';
-import FluxTiles from '../../src/components/FluxTiles';
+import FluxOverview from '../../src/components/FluxOverview';
 import { makeFluxResource } from '../helpers';
 
 function stubFlux(dashboard: FluxDashboard): void {
@@ -44,10 +44,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('FluxTiles', () => {
+describe('FluxOverview', () => {
   it('shows a loading state then the resource tiles', async () => {
     stubFlux(dashboard);
-    render(<FluxTiles onSelect={vi.fn()} />);
+    render(<FluxOverview onSelect={vi.fn()} />);
     expect(screen.getByText('Loading Flux resources…')).toBeInTheDocument();
     expect(await screen.findByText('repo-a')).toBeInTheDocument();
     expect(screen.getByText('rel-b')).toBeInTheDocument();
@@ -60,19 +60,19 @@ describe('FluxTiles', () => {
 
   it('shows the error message when the fetch fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('flux down')));
-    render(<FluxTiles onSelect={vi.fn()} />);
+    render(<FluxOverview onSelect={vi.fn()} />);
     expect(await screen.findByText('flux down')).toBeInTheDocument();
   });
 
   it('shows an empty message when there are no groups', async () => {
     stubFlux({ groups: [] });
-    render(<FluxTiles onSelect={vi.fn()} />);
+    render(<FluxOverview onSelect={vi.fn()} />);
     expect(await screen.findByText('No Flux resources found.')).toBeInTheDocument();
   });
   it('reports the clicked tile to the caller', async () => {
     stubFlux(dashboard);
     const onSelect = vi.fn();
-    render(<FluxTiles onSelect={onSelect} />);
+    render(<FluxOverview onSelect={onSelect} />);
 
     await userEvent.click(await screen.findByRole('button', { name: /repo-a/ }));
 

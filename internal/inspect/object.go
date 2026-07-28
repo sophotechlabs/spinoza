@@ -85,6 +85,7 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		Conditions:  conditionsOf(clean),
 		Containers:  containerNames(clean),
 		Suspended:   suspendedOf(clean),
+		HandledAt:   nestedString(clean, "status", "lastHandledReconcileAt"),
 		Ports:       portsOf(clean),
 		YAML:        string(raw),
 	}, nil

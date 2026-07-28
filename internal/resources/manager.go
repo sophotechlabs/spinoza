@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
@@ -55,13 +57,14 @@ type Manager struct {
 	schemas  *jsonschema.Client
 	charts   *charts.Cache
 	forwards *portforward.Registry
+	shells   *exec.Service
 	cats     []api.Category
 	descs    map[string]api.ResourceDescriptor
 	mu       sync.Mutex
 	streams  map[streamKey]*stream
 }
 
-func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
+func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, shells *exec.Service, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
 	return &Manager{
 		rootCtx:  ctx,
 		dyn:      dyn,
@@ -69,6 +72,7 @@ func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interf
 		schemas:  schemas,
 		charts:   charts.New(ctx, &http.Client{Timeout: chartFetchTimeout}, charts.DefaultTTL),
 		forwards: forwards,
+		shells:   shells,
 		cats:     cats,
 		descs:    descs,
 		streams:  map[streamKey]*stream{},
@@ -99,7 +103,7 @@ func (m *Manager) Logs(ctx context.Context, req logs.Request) (*logs.Stream, err
 	return logs.Open(ctx, m.cs, req)
 }
 
-func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) error {
+func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error) {
 	return flux.Do(ctx, m.dyn, ref, action, time.Now())
 }
 
@@ -122,6 +126,20 @@ func (m *Manager) StopForward(id string) error {
 		return fmt.Errorf("port forwarding is unavailable")
 	}
 	return m.forwards.Stop(id)
+}
+
+func (m *Manager) ExecSupport(ctx context.Context, req exec.Request) (api.ExecSupport, error) {
+	if m.shells == nil {
+		return api.ExecSupport{}, fmt.Errorf("exec is unavailable")
+	}
+	return m.shells.Support(ctx, req)
+}
+
+func (m *Manager) StartExec(ctx context.Context, req exec.Request, stdout io.Writer) (*exec.Session, error) {
+	if m.shells == nil {
+		return nil, fmt.Errorf("exec is unavailable")
+	}
+	return m.shells.Start(ctx, req, stdout)
 }
 
 func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {

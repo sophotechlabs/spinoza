@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     outDir: '../web/dist',
-    emptyOutDir: false,
+    emptyOutDir: true,
   },
   server: {
     proxy: {

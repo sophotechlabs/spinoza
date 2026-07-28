@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { groupOf, isFluxObject, runFluxAction } from '../../src/lib/fluxActions';
-import type { ObjectRef } from '../../src/lib/types';
+import {
+  groupOf,
+  isFluxObject,
+  isSettled,
+  pollReconcile,
+  RECONCILE_POLL_MS,
+  RECONCILE_TIMEOUT_MS,
+  readyCondition,
+  reconcileProgress,
+  runFluxAction,
+} from '../../src/lib/fluxActions';
+import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const ref: ObjectRef = {
   group: 'kustomize.toolkit.fluxcd.io',
@@ -35,11 +45,12 @@ describe('fluxActions', () => {
     expect(isFluxObject('toolkit.fluxcd.io/v1')).toBe(false);
   });
 
-  it('posts the action to the endpoint', async () => {
-    const mock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+  it('posts the action to the endpoint and returns the token', async () => {
+    const result = { action: 'reconcile', requestedAt: '2026-07-28T12:00:00.5Z' };
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(result) });
     vi.stubGlobal('fetch', mock);
 
-    await expect(runFluxAction(ref, 'reconcile')).resolves.toBeUndefined();
+    await expect(runFluxAction(ref, 'reconcile')).resolves.toEqual(result);
     expect(mock).toHaveBeenCalledWith(
       '/api/flux/action?group=kustomize.toolkit.fluxcd.io&version=v1&resource=kustomizations&namespace=flux-system&name=apps&action=reconcile',
       { method: 'POST' },
@@ -70,5 +81,200 @@ describe('fluxActions', () => {
     );
 
     await expect(runFluxAction(ref, 'resume')).rejects.toThrow('resume failed with status 500');
+  });
+});
+
+const TOKEN = '2026-07-28T12:00:00.5Z';
+
+function detail(overrides: Partial<ObjectDetail> = {}): ObjectDetail {
+  return {
+    apiVersion: 'kustomize.toolkit.fluxcd.io/v1',
+    kind: 'Kustomization',
+    name: 'apps',
+    namespace: 'flux-system',
+    uid: 'uid-1',
+    createdAt: '2026-07-01T00:00:00Z',
+    yaml: '',
+    ...overrides,
+  };
+}
+
+describe('reconcileProgress', () => {
+  it('waits while the controller has not picked the request up', () => {
+    const progress = reconcileProgress(detail({ handledAt: 'older' }), TOKEN);
+
+    expect(progress.state).toBe('requested');
+    expect(progress.message).toBe('Reconciliation requested…');
+  });
+
+  it('reports running once handled but with no Ready condition yet', () => {
+    const progress = reconcileProgress(detail({ handledAt: TOKEN }), TOKEN);
+
+    expect(progress.state).toBe('running');
+  });
+
+  it('reports success from a true Ready condition', () => {
+    const progress = reconcileProgress(
+      detail({
+        handledAt: TOKEN,
+        conditions: [{ type: 'Ready', status: 'True', message: 'Applied revision main@sha1:abc' }],
+      }),
+      TOKEN,
+    );
+
+    expect(progress.state).toBe('succeeded');
+    expect(progress.message).toBe('Reconciliation succeeded: Applied revision main@sha1:abc');
+  });
+
+  it('reports failure with the controller message', () => {
+    const progress = reconcileProgress(
+      detail({
+        handledAt: TOKEN,
+        conditions: [{ type: 'Ready', status: 'False', message: 'kustomize build failed' }],
+      }),
+      TOKEN,
+    );
+
+    expect(progress.state).toBe('failed');
+    expect(progress.message).toBe('Reconciliation failed: kustomize build failed');
+  });
+
+  it('keeps waiting while Ready is unknown', () => {
+    const progress = reconcileProgress(
+      detail({
+        handledAt: TOKEN,
+        conditions: [{ type: 'Ready', status: 'Unknown', message: 'reconciliation in progress' }],
+      }),
+      TOKEN,
+    );
+
+    expect(progress.state).toBe('running');
+    expect(progress.message).toBe('Reconciliation running: reconciliation in progress');
+  });
+
+  it('drops the colon when the condition carries no message', () => {
+    const progress = reconcileProgress(
+      detail({ handledAt: TOKEN, conditions: [{ type: 'Ready', status: 'True' }] }),
+      TOKEN,
+    );
+
+    expect(progress.message).toBe('Reconciliation succeeded.');
+  });
+
+  it('finds the Ready condition among others', () => {
+    const found = readyCondition(
+      detail({
+        conditions: [
+          { type: 'Reconciling', status: 'True' },
+          { type: 'Ready', status: 'False' },
+        ],
+      }),
+    );
+
+    expect(found?.status).toBe('False');
+  });
+
+  it('returns nothing when there is no Ready condition', () => {
+    expect(readyCondition(detail())).toBeNull();
+    expect(
+      readyCondition(detail({ conditions: [{ type: 'Stalled', status: 'True' }] })),
+    ).toBeNull();
+  });
+
+  it('settles only on a terminal state', () => {
+    expect(isSettled('succeeded')).toBe(true);
+    expect(isSettled('failed')).toBe(true);
+    expect(isSettled('running')).toBe(false);
+    expect(isSettled('requested')).toBe(false);
+  });
+});
+
+describe('pollReconcile', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function stubObject(...responses: ObjectDetail[]) {
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        const body = responses[Math.min(call, responses.length - 1)];
+        call += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      }),
+    );
+  }
+
+  it('reports each step until the reconcile settles', async () => {
+    stubObject(
+      detail({ handledAt: 'older' }),
+      detail({ handledAt: TOKEN, conditions: [{ type: 'Ready', status: 'Unknown' }] }),
+      detail({ handledAt: TOKEN, conditions: [{ type: 'Ready', status: 'True' }] }),
+    );
+    const seen: string[] = [];
+
+    await pollReconcile(ref, TOKEN, (progress) => {
+      seen.push(progress.state);
+      return true;
+    });
+
+    expect(seen).toEqual(['requested', 'running', 'succeeded']);
+  });
+
+  it('stops when the caller loses interest', async () => {
+    stubObject(detail({ handledAt: 'older' }));
+    const seen: string[] = [];
+
+    await pollReconcile(ref, TOKEN, (progress) => {
+      seen.push(progress.state);
+      return false;
+    });
+
+    expect(seen).toEqual(['requested']);
+  });
+
+  it('rides out a failed fetch', async () => {
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.reject(new Error('offline'));
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              detail({ handledAt: TOKEN, conditions: [{ type: 'Ready', status: 'True' }] }),
+            ),
+        });
+      }),
+    );
+    const seen: string[] = [];
+
+    await pollReconcile(ref, TOKEN, (progress) => {
+      seen.push(progress.state);
+      return true;
+    });
+
+    expect(seen).toEqual(['succeeded']);
+  });
+
+  it('gives up after the timeout without claiming success', async () => {
+    vi.useFakeTimers();
+    stubObject(detail({ handledAt: 'older' }));
+    const seen: string[] = [];
+
+    const done = pollReconcile(ref, TOKEN, (progress) => {
+      seen.push(progress.message);
+      return true;
+    });
+    await vi.advanceTimersByTimeAsync(RECONCILE_TIMEOUT_MS + RECONCILE_POLL_MS);
+    await done;
+
+    expect(seen[seen.length - 1]).toBe('Reconciliation is still running.');
   });
 });

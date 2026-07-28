@@ -11,7 +11,7 @@ import type { ColumnDef, SortDirection, SortingState } from '@tanstack/react-tab
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Metrics, ResourceDescriptor, ResourceUsage, Row } from '../lib/types';
 import { useSubColumns, useSubNamespaced, useSubRows } from '../store/resources';
-import { ratioColor, restartColor } from '../lib/status';
+import { ratioColor, restartColor, statusColor } from '../lib/status';
 import { formatCpu, formatMem, useMetrics } from '../lib/metrics';
 import { useElementWidth } from '../lib/useElementWidth';
 import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
@@ -75,6 +75,9 @@ function renderDataCell(render: string | undefined, value: string, row: Row): Re
   }
   if (render === 'restarts') {
     return <span className={restartColor(value)}>{value}</span>;
+  }
+  if (render === 'status') {
+    return <span className={statusColor(value)}>{value}</span>;
   }
   return value;
 }

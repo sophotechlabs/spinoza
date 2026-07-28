@@ -76,7 +76,7 @@ func readBack(t *testing.T, client *fake.FakeDynamicClient) *unstructured.Unstru
 func TestReconcileSetsTheRequestAnnotation(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
+	_, err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestReconcileSetsTheRequestAnnotation(t *testing.T) {
 func TestReconcileLeavesTheSpecAlone(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
+	_, err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestReconcileLeavesTheSpecAlone(t *testing.T) {
 func TestSuspendSetsTheField(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	err := Do(context.Background(), client, kustomizationRef(), Suspend, stamp)
+	_, err := Do(context.Background(), client, kustomizationRef(), Suspend, stamp)
 	if err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestSuspendSetsTheField(t *testing.T) {
 func TestResumeClearsTheField(t *testing.T) {
 	client := actionClient(newKustomization(true))
 
-	err := Do(context.Background(), client, kustomizationRef(), Resume, stamp)
+	_, err := Do(context.Background(), client, kustomizationRef(), Resume, stamp)
 	if err != nil {
 		t.Fatalf("resume: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestResumeClearsTheField(t *testing.T) {
 func TestSuspendDoesNotAnnotate(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	err := Do(context.Background(), client, kustomizationRef(), Suspend, stamp)
+	_, err := Do(context.Background(), client, kustomizationRef(), Suspend, stamp)
 	if err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestClusterScopedTarget(t *testing.T) {
 		Name:     "slack",
 	}
 
-	err := Do(context.Background(), client, ref, Suspend, stamp)
+	_, err := Do(context.Background(), client, ref, Suspend, stamp)
 	if err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestRejectsNonFluxGroup(t *testing.T) {
 	client := actionClient()
 	ref := api.ObjectRef{Group: "apps", Version: "v1", Resource: "deployments", Namespace: "d", Name: "web"}
 
-	err := Do(context.Background(), client, ref, Reconcile, stamp)
+	_, err := Do(context.Background(), client, ref, Reconcile, stamp)
 
 	if err == nil {
 		t.Fatalf("expected a non-flux group to be rejected")
@@ -189,7 +189,7 @@ func TestRejectsNonFluxGroup(t *testing.T) {
 func TestRejectsUnknownAction(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	err := Do(context.Background(), client, kustomizationRef(), Action("explode"), stamp)
+	_, err := Do(context.Background(), client, kustomizationRef(), Action("explode"), stamp)
 
 	if err == nil {
 		t.Fatalf("expected an unknown action to be rejected")
@@ -199,7 +199,7 @@ func TestRejectsUnknownAction(t *testing.T) {
 func TestPropagatesAPIError(t *testing.T) {
 	client := actionClient()
 
-	err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
+	_, err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
 
 	if err == nil {
 		t.Fatalf("expected an error patching a missing object")

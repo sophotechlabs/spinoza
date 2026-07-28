@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FluxDashboard as FluxDashboardData } from '../../src/lib/types';
-import FluxDashboard from '../../src/components/FluxDashboard';
+import FluxList from '../../src/components/FluxList';
 import { makeFluxResource } from '../helpers';
 
 function stubFlux(dashboard: FluxDashboardData): void {
@@ -61,17 +61,17 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('FluxDashboard', () => {
+describe('FluxList', () => {
   it('shows a loading state before the dashboard resolves', async () => {
     stubFlux({ groups: [] });
-    render(<FluxDashboard onSelect={vi.fn()} />);
+    render(<FluxList onSelect={vi.fn()} />);
     expect(screen.getByText('Loading Flux resources…')).toBeInTheDocument();
     expect(await screen.findByText('No Flux resources found.')).toBeInTheDocument();
   });
 
   it('renders each group with its resources and a combined status', async () => {
     stubFlux(dashboard);
-    render(<FluxDashboard onSelect={vi.fn()} />);
+    render(<FluxList onSelect={vi.fn()} />);
     expect(await screen.findByText('res-a')).toBeInTheDocument();
     expect(screen.getByText('res-b')).toBeInTheDocument();
     expect(screen.getByText('res-c')).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('FluxDashboard', () => {
 
   it('gives each column a width and a drag-to-resize handle', async () => {
     stubFlux(dashboard);
-    const { container } = render(<FluxDashboard onSelect={vi.fn()} />);
+    const { container } = render(<FluxList onSelect={vi.fn()} />);
     await screen.findByText('res-a');
     const headers = screen.getAllByRole('columnheader');
     expect(headers[0].getAttribute('style')).toContain('width');
@@ -98,13 +98,13 @@ describe('FluxDashboard', () => {
 
   it('shows the error message when the fetch rejects with an error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('flux down')));
-    render(<FluxDashboard onSelect={vi.fn()} />);
+    render(<FluxList onSelect={vi.fn()} />);
     expect(await screen.findByText('flux down')).toBeInTheDocument();
   });
 
   it('shows a generic message when the fetch rejects with a non-error value', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue('boom'));
-    render(<FluxDashboard onSelect={vi.fn()} />);
+    render(<FluxList onSelect={vi.fn()} />);
     expect(await screen.findByText('flux request failed')).toBeInTheDocument();
   });
 
@@ -125,7 +125,7 @@ describe('FluxDashboard', () => {
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(first) })
       .mockResolvedValue({ ok: true, json: () => Promise.resolve(second) });
     vi.stubGlobal('fetch', fetchMock);
-    render(<FluxDashboard onSelect={vi.fn()} />);
+    render(<FluxList onSelect={vi.fn()} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -139,7 +139,7 @@ describe('FluxDashboard', () => {
   it('reports the clicked resource to the caller', async () => {
     stubFlux(dashboard);
     const onSelect = vi.fn();
-    render(<FluxDashboard onSelect={onSelect} />);
+    render(<FluxList onSelect={onSelect} />);
 
     await userEvent.click(await screen.findByRole('button', { name: 'res-a' }));
 

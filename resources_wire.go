@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
@@ -28,5 +29,9 @@ func makeManager(ctx context.Context) *resources.Manager {
 		portforward.NewResolver(bundle.Clientset),
 		portforward.NewProber(bundle.Clientset),
 	)
-	return resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, cats, descs)
+	shells := exec.NewService(
+		exec.NewStreamer(bundle.Clientset, bundle.Config),
+		exec.NewImages(bundle.Clientset),
+	)
+	return resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, cats, descs)
 }

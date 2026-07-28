@@ -62,7 +62,12 @@ func main() {
 
 func desktopAssets(assets fs.FS, addr string) http.Handler {
 	fileServer := http.FileServerFS(assets)
-	proxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: addr})
+	target := &url.URL{Scheme: "http", Host: addr}
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(target)
+		},
+	}
 	injected := []byte(`<script>window.__SPINOZA_WS_BASE__="ws://` + addr + `";</script></head>`)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {

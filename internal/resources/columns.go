@@ -14,7 +14,7 @@ func columnsFor(kind string) []api.Column {
 	case "Pod":
 		return []api.Column{
 			{Name: "Containers", Render: "containers"},
-			{Name: "Status"},
+			statusColumn(),
 			{Name: "Restarts", Render: "restarts"},
 			{Name: "Node"},
 		}
@@ -29,14 +29,18 @@ func columnsFor(kind string) []api.Column {
 	case "Service":
 		return cols("Type", "Cluster-IP", "Ports")
 	case "Node":
-		return cols("Status", "Roles", "Version")
+		return []api.Column{statusColumn(), {Name: "Roles"}, {Name: "Version"}}
 	case "Namespace":
-		return cols("Status")
+		return []api.Column{statusColumn()}
 	case "Job":
 		return []api.Column{{Name: "Completions", Render: "ratio"}}
 	default:
-		return cols("Status")
+		return []api.Column{statusColumn()}
 	}
+}
+
+func statusColumn() api.Column {
+	return api.Column{Name: "Status", Render: "status"}
 }
 
 func cols(names ...string) []api.Column {

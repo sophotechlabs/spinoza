@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import type { LogRequest } from '../lib/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { LogRequest, ShellState } from '../lib/types';
 import { useLogEnded, useLogLines } from '../store/logs';
+import { fetchExecSupport } from '../lib/exec';
 import ForwardsPanel from './ForwardsPanel';
+import TerminalPanel from './TerminalPanel';
 
 export const LOGS_SUB_ID = 'logs';
 const TAIL_LINES = 500;
@@ -42,13 +44,21 @@ function followLabel(follow: boolean): string {
   return 'Paused';
 }
 
-type DockTab = 'logs' | 'forwards';
+type DockTab = 'logs' | 'forwards' | 'terminal';
+
+function terminalTitle(shell: ShellState): string {
+  if (shell === 'absent') {
+    return 'This image ships without /bin/sh';
+  }
+  return 'Shell into the selected container';
+}
 
 export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: BottomDockProps) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<DockTab>('logs');
   const [follow, setFollow] = useState(true);
   const [container, setContainer] = useState('');
+  const [shell, setShell] = useState<ShellState>('unknown');
   const lines = useLogLines(LOGS_SUB_ID);
   const ended = useLogEnded(LOGS_SUB_ID);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -60,6 +70,41 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
   useEffect(() => {
     setContainer(firstContainer(pod));
   }, [podKey, pod]);
+
+  useEffect(() => {
+    setShell('unknown');
+    if (podName === '') {
+      return;
+    }
+    if (container === '') {
+      return;
+    }
+    let live = true;
+    fetchExecSupport({ namespace: podNamespace, pod: podName, container })
+      .then((support) => {
+        if (live) {
+          setShell(support.shell);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [podNamespace, podName, container]);
+
+  const markShellMissing = useCallback(() => {
+    setShell('absent');
+  }, []);
+
+  let terminalDisabled = true;
+  if (pod !== null && container !== '' && shell !== 'absent') {
+    terminalDisabled = false;
+  }
+
+  let podControls = false;
+  if (tab === 'logs' || tab === 'terminal') {
+    podControls = true;
+  }
 
   useEffect(() => {
     if (!open) {
@@ -113,6 +158,13 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
     return 'px-2 py-1 text-neutral-500 hover:text-neutral-300';
   }
 
+  function terminalClass(): string {
+    if (terminalDisabled) {
+      return 'cursor-not-allowed px-2 py-1 text-neutral-700';
+    }
+    return tabClass('terminal');
+  }
+
   function toggleFollow() {
     setFollow((value) => !value);
   }
@@ -150,10 +202,18 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
         >
           Forwards
         </button>
-        <button type="button" disabled className="cursor-not-allowed px-2 py-1 text-neutral-700">
+        <button
+          type="button"
+          disabled={terminalDisabled}
+          title={terminalTitle(shell)}
+          onClick={() => {
+            select('terminal');
+          }}
+          className={terminalClass()}
+        >
           Terminal
         </button>
-        {open && tab === 'logs' && (
+        {open && podControls && (
           <div className="flex flex-1 items-center gap-2 border-l border-neutral-800 pl-2">
             {pod !== null && (
               <span className="truncate text-neutral-500">
@@ -174,18 +234,32 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
                 ))}
               </select>
             )}
-            <button
-              type="button"
-              onClick={toggleFollow}
-              aria-pressed={follow}
-              className="rounded border border-neutral-700 px-1.5 py-0.5 text-neutral-300 hover:bg-neutral-800"
-            >
-              {followLabel(follow)}
-            </button>
-            {ended && <span className="text-neutral-600">stream ended</span>}
+            {tab === 'logs' && (
+              <button
+                type="button"
+                onClick={toggleFollow}
+                aria-pressed={follow}
+                className="rounded border border-neutral-700 px-1.5 py-0.5 text-neutral-300 hover:bg-neutral-800"
+              >
+                {followLabel(follow)}
+              </button>
+            )}
+            {tab === 'logs' && ended && <span className="text-neutral-600">stream ended</span>}
           </div>
         )}
       </div>
+      {open && tab === 'terminal' && !terminalDisabled && pod !== null && (
+        <TerminalPanel
+          key={`${podNamespace}/${podName}/${container}`}
+          target={{ namespace: podNamespace, pod: podName, container }}
+          onShellMissing={markShellMissing}
+        />
+      )}
+      {open && tab === 'terminal' && terminalDisabled && (
+        <div className="h-56 border-t border-neutral-800 bg-neutral-950 p-2 text-[11px] text-neutral-600">
+          {terminalTitle(shell)}
+        </div>
+      )}
       {open && tab === 'forwards' && (
         <div className="h-56 overflow-auto border-t border-neutral-800 bg-neutral-950 text-[11px]">
           <ForwardsPanel />

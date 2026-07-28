@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ObjectRef } from '../lib/types';
-import { runFluxAction } from '../lib/fluxActions';
-import type { FluxAction } from '../lib/fluxActions';
+import { pollReconcile, runFluxAction } from '../lib/fluxActions';
+import type { FluxAction, ReconcileProgress, ReconcileState } from '../lib/fluxActions';
 
 interface InspectActionsProps {
   target: ObjectRef;
@@ -18,7 +18,7 @@ function errorMessage(err: unknown): string {
 
 function noticeFor(action: FluxAction): string {
   if (action === 'reconcile') {
-    return 'Reconciliation requested.';
+    return 'Reconciliation requested…';
   }
   if (action === 'suspend') {
     return 'Suspended.';
@@ -26,28 +26,69 @@ function noticeFor(action: FluxAction): string {
   return 'Resumed.';
 }
 
+function noticeClass(state: ReconcileState | null): string {
+  if (state === 'failed') {
+    return 'mt-1.5 break-words text-red-400';
+  }
+  if (state === 'requested' || state === 'running') {
+    return 'mt-1.5 break-words text-neutral-400';
+  }
+  return 'mt-1.5 break-words text-green-400';
+}
+
 export default function InspectActions({ target, suspended, onDone }: InspectActionsProps) {
   const [busy, setBusy] = useState<FluxAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [state, setState] = useState<ReconcileState | null>(null);
+  const watchRef = useRef(0);
 
   useEffect(() => {
     setError(null);
     setNotice(null);
+    setState(null);
+    watchRef.current += 1;
   }, [target]);
+
+  useEffect(() => {
+    return () => {
+      watchRef.current += 1;
+    };
+  }, []);
 
   async function run(action: FluxAction) {
     setBusy(action);
     setError(null);
     setNotice(null);
+    setState(null);
+    watchRef.current += 1;
     try {
-      await runFluxAction(target, action);
+      const result = await runFluxAction(target, action);
       setNotice(noticeFor(action));
       onDone();
+      if (action === 'reconcile' && result.requestedAt !== undefined) {
+        void watch(result.requestedAt);
+      }
     } catch (err: unknown) {
       setError(errorMessage(err));
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function watch(requestedAt: string) {
+    const token = watchRef.current;
+    setState('requested');
+    await pollReconcile(target, requestedAt, (progress: ReconcileProgress) => {
+      if (watchRef.current !== token) {
+        return false;
+      }
+      setState(progress.state);
+      setNotice(progress.message);
+      return true;
+    });
+    if (watchRef.current === token) {
+      onDone();
     }
   }
 
@@ -88,7 +129,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
         {busy !== null && <span className="text-neutral-500">working…</span>}
       </div>
       {error !== null && <p className="mt-1.5 break-words text-red-400">{error}</p>}
-      {notice !== null && <p className="mt-1.5 text-green-400">{notice}</p>}
+      {notice !== null && <p className={noticeClass(state)}>{notice}</p>}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FluxDashboard } from '../../src/lib/types';
-import FluxResources from '../../src/components/FluxResources';
+import FluxRoles from '../../src/components/FluxRoles';
 import { makeFluxResource } from '../helpers';
 
 function stubFlux(dashboard: FluxDashboard): void {
@@ -60,10 +60,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('FluxResources', () => {
+describe('FluxRoles', () => {
   it('renders per-kind tiles with counts and badges', async () => {
     stubFlux(dashboard);
-    render(<FluxResources onSelect={vi.fn()} />);
+    render(<FluxRoles onSelect={vi.fn()} />);
     expect(await screen.findByText('Kustomization')).toBeInTheDocument();
     expect(screen.getByText('HelmRelease')).toBeInTheDocument();
     expect(screen.getByText('GitRepository')).toBeInTheDocument();
@@ -77,13 +77,13 @@ describe('FluxResources', () => {
 
   it('shows the error message when the fetch fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
-    render(<FluxResources onSelect={vi.fn()} />);
+    render(<FluxRoles onSelect={vi.fn()} />);
     expect(await screen.findByText('down')).toBeInTheDocument();
   });
 
   it('drills into a kind list and back to the tiles', async () => {
     stubFlux(dashboard);
-    render(<FluxResources onSelect={vi.fn()} />);
+    render(<FluxRoles onSelect={vi.fn()} />);
     await userEvent.click(await screen.findByRole('button', { name: /Kustomization/ }));
     expect(await screen.findByText(/2 resources/)).toBeInTheDocument();
     expect(screen.getByText('apps')).toBeInTheDocument();
@@ -94,7 +94,7 @@ describe('FluxResources', () => {
   it('reports the clicked row in a kind list to the caller', async () => {
     stubFlux(dashboard);
     const onSelect = vi.fn();
-    render(<FluxResources onSelect={onSelect} />);
+    render(<FluxRoles onSelect={onSelect} />);
     await userEvent.click(await screen.findByRole('button', { name: /Kustomization/ }));
 
     await userEvent.click(await screen.findByRole('button', { name: /apps/ }));

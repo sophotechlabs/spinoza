@@ -158,11 +158,11 @@ function KindList({
   );
 }
 
-interface FluxResourcesProps {
+interface FluxRolesProps {
   onSelect: (resource: FluxResource) => void;
 }
 
-export default function FluxResources({ onSelect }: FluxResourcesProps) {
+export default function FluxRoles({ onSelect }: FluxRolesProps) {
   const { data, error } = useFlux();
   const [kind, setKind] = useState<string | null>(null);
 

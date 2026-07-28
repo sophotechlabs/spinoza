@@ -106,6 +106,18 @@ describe('ResourceTable', () => {
     expect(restarts.className).toContain('text-red-400');
   });
 
+  it('colors the status column by phase', async () => {
+    seed([{ name: 'Status', render: 'status' }], true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: ['Running'] }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod', cells: ['CrashLoopBackOff'] }),
+    ]);
+    renderTable(descriptor, null);
+    await screen.findByRole('button', { name: 'pod-a' });
+
+    expect(screen.getByText('Running').className).toContain('text-green-400');
+    expect(screen.getByText('CrashLoopBackOff').className).toContain('text-red-400');
+  });
+
   it('falls back to the cell text when a container column has no container data', async () => {
     seed([{ name: 'Containers', render: 'containers' }], true, [
       makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: ['0/1'] }),

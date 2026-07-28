@@ -1,9 +1,38 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BottomDock, { LOGS_SUB_ID } from '../../src/components/BottomDock';
 import type { PodTarget } from '../../src/components/BottomDock';
 import { useLogsStore } from '../../src/store/logs';
+
+vi.mock('../../src/components/TerminalPanel', () => ({
+  default: ({
+    target,
+    onShellMissing,
+  }: {
+    target: { pod: string; container: string };
+    onShellMissing: () => void;
+  }) => (
+    <div data-testid="terminal-panel">
+      {target.pod}/{target.container}
+      <button type="button" onClick={onShellMissing}>
+        Report missing shell
+      </button>
+    </div>
+  ),
+}));
+
+function stubFetch(shell: string) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: string) => {
+      if (input.startsWith('/api/exec/support')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ shell }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }),
+  );
+}
 
 function pod(overrides: Partial<PodTarget> = {}): PodTarget {
   return {
@@ -26,13 +55,17 @@ function renderDock(target: PodTarget | null) {
 describe('BottomDock', () => {
   beforeEach(() => {
     useLogsStore.setState({ streams: new Map() });
+    stubFetch('unknown');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('renders collapsed with no log body', () => {
     renderDock(pod());
     expect(screen.getByRole('button', { name: 'Toggle panel' })).toHaveTextContent('▸');
     expect(screen.queryByText('Waiting for output…')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
   });
 
   it('opens and closes from the chevron', async () => {
@@ -176,10 +209,6 @@ describe('BottomDock', () => {
   });
   it('switches to the forwards tab and stops streaming logs', async () => {
     const user = userEvent.setup();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }),
-    );
     const { subscribeLogs, unsubscribeLogs } = renderDock(pod());
     await user.click(screen.getByRole('button', { name: 'Logs' }));
     expect(subscribeLogs).toHaveBeenCalledTimes(1);
@@ -200,5 +229,101 @@ describe('BottomDock', () => {
     await user.click(screen.getByRole('button', { name: 'Toggle panel' }));
 
     expect(screen.queryByRole('button', { name: 'Following' })).not.toBeInTheDocument();
+  });
+
+  it('opens a terminal for the selected container', async () => {
+    const user = userEvent.setup();
+    const { unsubscribeLogs } = renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    await user.click(screen.getByRole('button', { name: 'Terminal' }));
+
+    expect(await screen.findByTestId('terminal-panel')).toHaveTextContent('web/app');
+    expect(unsubscribeLogs).toHaveBeenCalledWith(LOGS_SUB_ID);
+  });
+
+  it('keeps the terminal shut without a pod', async () => {
+    const user = userEvent.setup();
+    renderDock(null);
+    await user.click(screen.getByRole('button', { name: 'Toggle panel' }));
+
+    expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
+  });
+
+  it('keeps the terminal shut for a pod with no containers', () => {
+    renderDock(pod({ containers: [] }));
+
+    expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
+  });
+
+  it('disables the terminal for an image with no shell', async () => {
+    stubFetch('absent');
+    renderDock(pod());
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
+    });
+    expect(screen.getByRole('button', { name: 'Terminal' })).toHaveAttribute(
+      'title',
+      'This image ships without /bin/sh',
+    );
+  });
+
+  it('closes the terminal when the next container has no shell', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) => {
+        let shell = 'unknown';
+        if (input.includes('container=sidecar')) {
+          shell = 'absent';
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ shell }) });
+      }),
+    );
+    renderDock(pod({ containers: ['app', 'sidecar'] }));
+    await user.click(screen.getByRole('button', { name: 'Terminal' }));
+    expect(await screen.findByTestId('terminal-panel')).toHaveTextContent('web/app');
+
+    await user.selectOptions(screen.getByLabelText('Container'), 'sidecar');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('terminal-panel')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('This image ships without /bin/sh')).toBeInTheDocument();
+  });
+
+  it('shows the container picker on the terminal tab', async () => {
+    const user = userEvent.setup();
+    renderDock(pod({ containers: ['app', 'sidecar'] }));
+
+    await user.click(screen.getByRole('button', { name: 'Terminal' }));
+
+    expect(screen.getByLabelText('Container')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Following' })).not.toBeInTheDocument();
+  });
+
+  it('survives a failed support lookup', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('offline'))),
+    );
+    renderDock(pod());
+
+    await user.click(screen.getByRole('button', { name: 'Terminal' }));
+
+    expect(await screen.findByTestId('terminal-panel')).toBeInTheDocument();
+  });
+
+  it('shuts the terminal when the session reports no shell', async () => {
+    const user = userEvent.setup();
+    renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Terminal' }));
+
+    await user.click(screen.getByRole('button', { name: 'Report missing shell' }));
+
+    expect(screen.queryByTestId('terminal-panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
   });
 });

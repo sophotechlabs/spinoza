@@ -38,6 +38,29 @@ export function containerTitle(container: ContainerState): string {
   return title;
 }
 
+const GOOD_STATUS = ['Running', 'Ready', 'Active', 'Bound', 'Available', 'Healthy'];
+const SETTLED_STATUS = ['Succeeded', 'Completed'];
+const BAD_STATUS = ['Failed', 'Error', 'Evicted', 'Lost', 'NotReady', 'Unhealthy', 'OOMKilled'];
+
+export function statusColor(value: string): string {
+  if (value === '') {
+    return 'text-neutral-600';
+  }
+  if (GOOD_STATUS.includes(value)) {
+    return 'text-green-400';
+  }
+  if (SETTLED_STATUS.includes(value)) {
+    return 'text-neutral-400';
+  }
+  if (BAD_STATUS.includes(value)) {
+    return 'text-red-400';
+  }
+  if (isBadWaiting(value)) {
+    return 'text-red-400';
+  }
+  return 'text-yellow-400';
+}
+
 export function ratioColor(value: string): string {
   const parts = value.split('/');
   if (parts.length !== 2) {

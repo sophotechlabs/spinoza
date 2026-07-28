@@ -64,7 +64,7 @@ describe('InspectActions', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
 
-    expect(await screen.findByText('Reconciliation requested.')).toBeInTheDocument();
+    expect(await screen.findByText('Reconciliation requested…')).toBeInTheDocument();
     expect(lastCallUrl()).toContain('action=reconcile');
     expect(onDone).toHaveBeenCalledTimes(1);
   });
@@ -123,13 +123,13 @@ describe('InspectActions', () => {
     const user = userEvent.setup();
     const { view } = renderActions(false);
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
-    await screen.findByText('Reconciliation requested.');
+    await screen.findByText('Reconciliation requested…');
 
     view.rerender(
       <InspectActions target={{ ...target, name: 'infra' }} suspended={false} onDone={vi.fn()} />,
     );
 
-    expect(screen.queryByText('Reconciliation requested.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reconciliation requested…')).not.toBeInTheDocument();
   });
 
   it('disables the buttons while an action is in flight', async () => {
@@ -159,6 +159,99 @@ describe('InspectActions', () => {
     expect(screen.getByRole('button', { name: 'Suspend' })).toBeDisabled();
 
     deferred.release();
-    expect(await screen.findByText('Reconciliation requested.')).toBeInTheDocument();
+    expect(await screen.findByText('Reconciliation requested…')).toBeInTheDocument();
+  });
+
+  function stubReconcile(ready: { status: string; message?: string }) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: { method?: string }) => {
+        if (init?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ action: 'reconcile', requestedAt: 'token-1' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              apiVersion: 'kustomize.toolkit.fluxcd.io/v1',
+              kind: 'Kustomization',
+              name: 'apps',
+              namespace: 'flux-system',
+              uid: 'uid-1',
+              createdAt: '2026-07-01T00:00:00Z',
+              yaml: '',
+              handledAt: 'token-1',
+              conditions: [{ type: 'Ready', ...ready }],
+            }),
+        });
+      }),
+    );
+  }
+
+  it('follows the reconcile through to success', async () => {
+    const user = userEvent.setup();
+    stubReconcile({ status: 'True', message: 'Applied revision main@sha1:abc' });
+    const { onDone } = renderActions(false);
+
+    await user.click(screen.getByRole('button', { name: 'Reconcile' }));
+
+    const settled = await screen.findByText(
+      'Reconciliation succeeded: Applied revision main@sha1:abc',
+      {},
+      { timeout: 5000 },
+    );
+    expect(settled.className).toContain('text-green-400');
+    expect(onDone).toHaveBeenCalledTimes(2);
+  });
+
+  it('follows the reconcile through to failure', async () => {
+    const user = userEvent.setup();
+    stubReconcile({ status: 'False', message: 'kustomize build failed' });
+    renderActions(false);
+
+    await user.click(screen.getByRole('button', { name: 'Reconcile' }));
+
+    const settled = await screen.findByText(
+      'Reconciliation failed: kustomize build failed',
+      {},
+      { timeout: 5000 },
+    );
+    expect(settled.className).toContain('text-red-400');
+  });
+
+  it('stops following once the target changes', async () => {
+    const user = userEvent.setup();
+    stubReconcile({ status: 'True', message: 'Applied revision main@sha1:abc' });
+    const { view } = renderActions(false);
+    await user.click(screen.getByRole('button', { name: 'Reconcile' }));
+    await screen.findByText('Reconciliation requested…');
+
+    view.rerender(
+      <InspectActions target={{ ...target, name: 'infra' }} suspended={false} onDone={vi.fn()} />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    expect(
+      screen.queryByText('Reconciliation succeeded: Applied revision main@sha1:abc'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves a reconcile with no token unwatched', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ action: 'reconcile' }),
+      }),
+    );
+    renderActions(false);
+
+    await user.click(screen.getByRole('button', { name: 'Reconcile' }));
+
+    expect(await screen.findByText('Reconciliation requested…')).toBeInTheDocument();
   });
 });

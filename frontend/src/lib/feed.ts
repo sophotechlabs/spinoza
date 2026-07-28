@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
+import { wsURL } from './wsBase';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -22,26 +23,6 @@ export interface ResourceFeed {
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 5000;
 const OPEN_STATE = 1;
-
-function wsBaseOverride(): string | null {
-  const w = window as unknown as { __SPINOZA_WS_BASE__?: string };
-  if (typeof w.__SPINOZA_WS_BASE__ === 'string') {
-    return w.__SPINOZA_WS_BASE__;
-  }
-  return null;
-}
-
-function wsURL(): string {
-  const override = wsBaseOverride();
-  if (override !== null) {
-    return `${override}/ws`;
-  }
-  let proto = 'ws';
-  if (location.protocol === 'https:') {
-    proto = 'wss';
-  }
-  return `${proto}://${location.host}/ws`;
-}
 
 function subscribeMsg(subId: string, sub: Subscription): ClientMsg {
   return {
@@ -157,7 +138,7 @@ export function useResourceFeed(): ResourceFeed {
         return;
       }
       setStatus('connecting');
-      const ws = new WebSocket(wsURL());
+      const ws = new WebSocket(wsURL('/ws'));
       socketRef.current = ws;
 
       ws.onopen = () => {

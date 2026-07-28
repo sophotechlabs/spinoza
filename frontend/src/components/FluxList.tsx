@@ -86,11 +86,11 @@ function ResourceRow({
   );
 }
 
-interface FluxDashboardProps {
+interface FluxListProps {
   onSelect: (resource: FluxResource) => void;
 }
 
-export default function FluxDashboard({ onSelect }: FluxDashboardProps) {
+export default function FluxList({ onSelect }: FluxListProps) {
   const { data, error } = useFlux();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const containerWidth = useElementWidth(scrollEl);

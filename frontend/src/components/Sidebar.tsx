@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react';
 import type { Category, ResourceDescriptor, View } from '../lib/types';
 import { fetchResources } from '../lib/discovery';
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
+import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 
 interface SidebarProps {
   view: View;
   activeResource: ResourceDescriptor | null;
   onSelect: (descriptor: ResourceDescriptor) => void;
-  onSelectGitops: () => void;
-  onSelectFlux: () => void;
-  onSelectTiles: () => void;
-  onSelectResources: () => void;
+  onSelectGraph: () => void;
+  onSelectList: () => void;
+  onSelectOverview: () => void;
+  onSelectRoles: () => void;
 }
 
 function descriptorKey(descriptor: ResourceDescriptor): string {
@@ -71,11 +72,12 @@ export default function Sidebar({
   view,
   activeResource,
   onSelect,
-  onSelectGitops,
-  onSelectFlux,
-  onSelectTiles,
-  onSelectResources,
+  onSelectGraph,
+  onSelectList,
+  onSelectOverview,
+  onSelectRoles,
 }: SidebarProps) {
+  const { width, startResize, nudge } = useSidebarWidth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -113,128 +115,163 @@ export default function Sidebar({
     });
   }
 
+  function handleResize(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    startResize(event.clientX);
+  }
+
+  function handleResizeKey(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      nudge(NUDGE_STEP);
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      nudge(-NUDGE_STEP);
+    }
+  }
+
   const gitopsCollapsed = collapsed.has('GitOps');
 
   return (
-    <nav className="w-56 shrink-0 overflow-y-auto border-r border-neutral-800 bg-neutral-950 py-2">
-      <div className="mb-1">
-        <button
-          type="button"
-          onClick={() => {
-            toggle('GitOps');
-          }}
-          className={sectionClass}
-        >
-          <span>{chevron(gitopsCollapsed)} GitOps</span>
-        </button>
-        {!gitopsCollapsed && (
-          <div>
-            <button
-              type="button"
-              onClick={onSelectGitops}
-              className={resourceClass(view === 'gitops')}
-            >
-              Graph
-            </button>
-            <button type="button" onClick={onSelectFlux} className={resourceClass(view === 'flux')}>
-              Flux
-            </button>
-            <button
-              type="button"
-              onClick={onSelectTiles}
-              className={resourceClass(view === 'flux-tiles')}
-            >
-              Flux Dashboard
-            </button>
-            <button
-              type="button"
-              onClick={onSelectResources}
-              className={resourceClass(view === 'flux-resources')}
-            >
-              Overview
-            </button>
-          </div>
-        )}
-      </div>
-      {error !== null && <div className="px-3 py-1 text-[11px] text-red-400">{error}</div>}
-      {categories.map((category) => {
-        const isCollapsed = collapsed.has(category.name);
-        return (
-          <div key={category.name} className="mb-1">
-            <button
-              type="button"
-              onClick={() => {
-                toggle(category.name);
-              }}
-              className={sectionClass}
-            >
-              <span>
-                {chevron(isCollapsed)} {category.name}
-              </span>
-              <span className="text-neutral-600">{category.resources.length}</span>
-            </button>
-            {!isCollapsed && !isNested(category.name) && (
-              <div>
-                {category.resources.map((resource) => (
-                  <button
-                    key={descriptorKey(resource)}
-                    type="button"
-                    onClick={() => {
-                      onSelect(resource);
-                    }}
-                    title={resource.kind}
-                    className={resourceClass(isActive(activeResource, resource))}
-                  >
-                    {resource.kind}
-                  </button>
-                ))}
-              </div>
-            )}
-            {!isCollapsed && isNested(category.name) && (
-              <div>
-                {groupByApiGroup(category.resources).map((group) => {
-                  const key = `${category.name}/${group.name}`;
-                  const groupCollapsed = collapsed.has(key);
-                  return (
-                    <div key={key}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          toggle(key);
-                        }}
-                        title={group.name}
-                        className="flex w-full items-center justify-between gap-1 px-5 py-1 text-left text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
-                      >
-                        <span className="truncate">
-                          {chevron(groupCollapsed)} {group.name}
-                        </span>
-                        <span className="shrink-0 text-neutral-600">{group.resources.length}</span>
-                      </button>
-                      {!groupCollapsed && (
-                        <div>
-                          {group.resources.map((resource) => (
-                            <button
-                              key={descriptorKey(resource)}
-                              type="button"
-                              onClick={() => {
-                                onSelect(resource);
-                              }}
-                              title={resource.kind}
-                              className={resourceClass(isActive(activeResource, resource), true)}
-                            >
-                              {resource.kind}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </nav>
+    <div
+      style={{ width: `${width}px` }}
+      className="flex min-h-0 shrink-0 border-r border-neutral-800 bg-neutral-950"
+    >
+      <nav className="min-w-0 flex-1 overflow-y-auto py-2">
+        <div className="mb-1">
+          <button
+            type="button"
+            onClick={() => {
+              toggle('GitOps');
+            }}
+            className={sectionClass}
+          >
+            <span>{chevron(gitopsCollapsed)} GitOps</span>
+          </button>
+          {!gitopsCollapsed && (
+            <div>
+              <button
+                type="button"
+                onClick={onSelectOverview}
+                className={resourceClass(view === 'flux-overview')}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                onClick={onSelectGraph}
+                className={resourceClass(view === 'gitops')}
+              >
+                Graph
+              </button>
+              <button
+                type="button"
+                onClick={onSelectList}
+                className={resourceClass(view === 'flux-list')}
+              >
+                Resource list
+              </button>
+              <button
+                type="button"
+                onClick={onSelectRoles}
+                className={resourceClass(view === 'flux-roles')}
+              >
+                By role
+              </button>
+            </div>
+          )}
+        </div>
+        {error !== null && <div className="px-3 py-1 text-[11px] text-red-400">{error}</div>}
+        {categories.map((category) => {
+          const isCollapsed = collapsed.has(category.name);
+          return (
+            <div key={category.name} className="mb-1">
+              <button
+                type="button"
+                onClick={() => {
+                  toggle(category.name);
+                }}
+                className={sectionClass}
+              >
+                <span>
+                  {chevron(isCollapsed)} {category.name}
+                </span>
+                <span className="text-neutral-600">{category.resources.length}</span>
+              </button>
+              {!isCollapsed && !isNested(category.name) && (
+                <div>
+                  {category.resources.map((resource) => (
+                    <button
+                      key={descriptorKey(resource)}
+                      type="button"
+                      onClick={() => {
+                        onSelect(resource);
+                      }}
+                      title={resource.kind}
+                      className={resourceClass(isActive(activeResource, resource))}
+                    >
+                      {resource.kind}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!isCollapsed && isNested(category.name) && (
+                <div>
+                  {groupByApiGroup(category.resources).map((group) => {
+                    const key = `${category.name}/${group.name}`;
+                    const groupCollapsed = collapsed.has(key);
+                    return (
+                      <div key={key}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toggle(key);
+                          }}
+                          title={group.name}
+                          className="flex w-full items-center justify-between gap-1 px-5 py-1 text-left text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+                        >
+                          <span className="truncate">
+                            {chevron(groupCollapsed)} {group.name}
+                          </span>
+                          <span className="shrink-0 text-neutral-600">
+                            {group.resources.length}
+                          </span>
+                        </button>
+                        {!groupCollapsed && (
+                          <div>
+                            {group.resources.map((resource) => (
+                              <button
+                                key={descriptorKey(resource)}
+                                type="button"
+                                onClick={() => {
+                                  onSelect(resource);
+                                }}
+                                title={resource.kind}
+                                className={resourceClass(isActive(activeResource, resource), true)}
+                              >
+                                {resource.kind}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+      <button
+        type="button"
+        aria-label="Resize sidebar"
+        onMouseDown={handleResize}
+        onKeyDown={handleResizeKey}
+        className="w-1 shrink-0 cursor-col-resize bg-neutral-900 hover:bg-neutral-700"
+      />
+    </div>
   );
 }

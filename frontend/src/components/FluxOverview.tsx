@@ -65,11 +65,11 @@ function TileGroup({
   );
 }
 
-interface FluxTilesProps {
+interface FluxOverviewProps {
   onSelect: (resource: FluxResource) => void;
 }
 
-export default function FluxTiles({ onSelect }: FluxTilesProps) {
+export default function FluxOverview({ onSelect }: FluxOverviewProps) {
   const { data, error } = useFlux();
 
   if (data === null) {

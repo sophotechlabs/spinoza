@@ -15,9 +15,9 @@ import TopBar from './components/TopBar';
 import ResourceTable from './components/ResourceTable';
 import InspectDrawer from './components/InspectDrawer';
 import GitopsGraph from './components/GitopsGraph';
-import FluxDashboard from './components/FluxDashboard';
-import FluxTiles from './components/FluxTiles';
-import FluxResources from './components/FluxResources';
+import FluxList from './components/FluxList';
+import FluxOverview from './components/FluxOverview';
+import FluxRoles from './components/FluxRoles';
 import BottomDock from './components/BottomDock';
 import type { PodTarget } from './components/BottomDock';
 
@@ -107,14 +107,14 @@ export default function App() {
   if (view === 'gitops') {
     mainArea = <GitopsGraph onSelect={handleSelectNode} />;
   }
-  if (view === 'flux') {
-    mainArea = <FluxDashboard onSelect={handleSelectFlux} />;
+  if (view === 'flux-list') {
+    mainArea = <FluxList onSelect={handleSelectFlux} />;
   }
-  if (view === 'flux-tiles') {
-    mainArea = <FluxTiles onSelect={handleSelectFlux} />;
+  if (view === 'flux-overview') {
+    mainArea = <FluxOverview onSelect={handleSelectFlux} />;
   }
-  if (view === 'flux-resources') {
-    mainArea = <FluxResources onSelect={handleSelectFlux} />;
+  if (view === 'flux-roles') {
+    mainArea = <FluxRoles onSelect={handleSelectFlux} />;
   }
 
   return (
@@ -125,17 +125,17 @@ export default function App() {
           view={view}
           activeResource={active}
           onSelect={handleSelectResource}
-          onSelectGitops={() => {
+          onSelectGraph={() => {
             switchView('gitops');
           }}
-          onSelectFlux={() => {
-            switchView('flux');
+          onSelectList={() => {
+            switchView('flux-list');
           }}
-          onSelectTiles={() => {
-            switchView('flux-tiles');
+          onSelectOverview={() => {
+            switchView('flux-overview');
           }}
-          onSelectResources={() => {
-            switchView('flux-resources');
+          onSelectRoles={() => {
+            switchView('flux-roles');
           }}
         />
         <div className="flex min-h-0 flex-1 flex-col">

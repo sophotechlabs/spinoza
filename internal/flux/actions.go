@@ -33,25 +33,32 @@ func IsFluxGroup(group string) bool {
 	return strings.HasSuffix(group, groupSuffix)
 }
 
-func Do(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, action Action, now time.Time) error {
+func Do(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, action Action, now time.Time) (api.FluxActionResult, error) {
+	result := api.FluxActionResult{Action: string(action)}
 	if !IsFluxGroup(ref.Group) {
-		return fmt.Errorf("%q is not a flux resource group", ref.Group)
+		return result, fmt.Errorf("%q is not a flux resource group", ref.Group)
 	}
-	patch, err := patchFor(action, now)
+	if action == Reconcile {
+		result.RequestedAt = now.UTC().Format(time.RFC3339Nano)
+	}
+	patch, err := patchFor(action, result.RequestedAt)
 	if err != nil {
-		return err
+		return result, err
 	}
 	_, patchErr := targetFor(dyn, ref).Patch(ctx, ref.Name, types.MergePatchType, patch, metav1.PatchOptions{FieldManager: fieldManager})
-	return patchErr
+	if patchErr != nil {
+		return api.FluxActionResult{Action: string(action)}, patchErr
+	}
+	return result, nil
 }
 
-func patchFor(action Action, now time.Time) ([]byte, error) {
+func patchFor(action Action, requestedAt string) ([]byte, error) {
 	switch action {
 	case Reconcile:
 		return json.Marshal(map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"annotations": map[string]interface{}{
-					reconcileAnnotation: now.UTC().Format(time.RFC3339Nano),
+					reconcileAnnotation: requestedAt,
 				},
 			},
 		})

@@ -72,6 +72,7 @@ type ObjectDetail struct {
 	Conditions  []Condition       `json:"conditions,omitempty"`
 	Containers  []string          `json:"containers,omitempty"`
 	Suspended   *bool             `json:"suspended,omitempty"`
+	HandledAt   string            `json:"handledAt,omitempty"`
 	Ports       []ObjectPort      `json:"ports,omitempty"`
 	YAML        string            `json:"yaml"`
 }
@@ -93,6 +94,33 @@ type PortForward struct {
 	State      string `json:"state"`
 	Error      string `json:"error,omitempty"`
 	StartedAt  string `json:"startedAt"`
+}
+
+const (
+	ExecChannelStdin  = 0x00
+	ExecChannelStdout = 0x01
+	ExecChannelStderr = 0x02
+	ExecChannelError  = 0x03
+	ExecChannelResize = 0x04
+)
+
+const (
+	ShellUnknown = "unknown"
+	ShellPresent = "present"
+	ShellAbsent  = "absent"
+)
+
+type FluxActionResult struct {
+	Action      string `json:"action"`
+	RequestedAt string `json:"requestedAt,omitempty"`
+}
+
+type ExecSupport struct {
+	Namespace string `json:"namespace"`
+	Pod       string `json:"pod"`
+	Container string `json:"container"`
+	Image     string `json:"image,omitempty"`
+	Shell     string `json:"shell"`
 }
 
 type Event struct {

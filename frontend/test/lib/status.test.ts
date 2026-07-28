@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ContainerState } from '../../src/lib/types';
-import { containerColor, containerTitle, ratioColor, restartColor } from '../../src/lib/status';
+import {
+  containerColor,
+  containerTitle,
+  ratioColor,
+  restartColor,
+  statusColor,
+} from '../../src/lib/status';
 
 function container(overrides: Partial<ContainerState>): ContainerState {
   const base: ContainerState = {
@@ -94,5 +100,43 @@ describe('restartColor', () => {
 
   it('is red for a high count', () => {
     expect(restartColor('9')).toBe('text-red-400');
+  });
+});
+
+describe('statusColor', () => {
+  it('greens the healthy states', () => {
+    expect(statusColor('Running')).toBe('text-green-400');
+    expect(statusColor('Ready')).toBe('text-green-400');
+    expect(statusColor('Active')).toBe('text-green-400');
+    expect(statusColor('Bound')).toBe('text-green-400');
+  });
+
+  it('mutes states that finished on purpose', () => {
+    expect(statusColor('Succeeded')).toBe('text-neutral-400');
+    expect(statusColor('Completed')).toBe('text-neutral-400');
+  });
+
+  it('reds the broken states', () => {
+    expect(statusColor('Failed')).toBe('text-red-400');
+    expect(statusColor('NotReady')).toBe('text-red-400');
+    expect(statusColor('Evicted')).toBe('text-red-400');
+  });
+
+  it('reds the container failure reasons', () => {
+    expect(statusColor('CrashLoopBackOff')).toBe('text-red-400');
+    expect(statusColor('ImagePullBackOff')).toBe('text-red-400');
+    expect(statusColor('ErrImagePull')).toBe('text-red-400');
+    expect(statusColor('InvalidImageName')).toBe('text-red-400');
+  });
+
+  it('warns on anything still in flight', () => {
+    expect(statusColor('Pending')).toBe('text-yellow-400');
+    expect(statusColor('Terminating')).toBe('text-yellow-400');
+    expect(statusColor('Unknown')).toBe('text-yellow-400');
+    expect(statusColor('ArtifactFailed')).toBe('text-red-400');
+  });
+
+  it('leaves an empty status unstyled', () => {
+    expect(statusColor('')).toBe('text-neutral-600');
   });
 });

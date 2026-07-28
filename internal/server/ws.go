@@ -17,9 +17,7 @@ import (
 const maxLogBatch = 200
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"*"},
-	})
+	c, err := accept(w, r)
 	if err != nil {
 		return
 	}

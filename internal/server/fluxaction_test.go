@@ -55,7 +55,7 @@ func fluxActionServer(t *testing.T, objs ...runtime.Object) (*httptest.Server, d
 			Namespaced: true,
 		},
 	}
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, descs)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, descs)
 	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts, dyn
@@ -77,7 +77,7 @@ func TestFluxActionSuspends(t *testing.T) {
 
 	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/flux/action"+kustomizationQuery+"&action=suspend", nil)
 
-	if resp.StatusCode != http.StatusNoContent {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 204: %s", resp.StatusCode, body)
 	}
 	suspended, _, _ := unstructured.NestedBool(storedKustomization(t, dyn).Object, "spec", "suspend")
@@ -95,7 +95,7 @@ func TestFluxActionResumes(t *testing.T) {
 
 	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/flux/action"+kustomizationQuery+"&action=resume", nil)
 
-	if resp.StatusCode != http.StatusNoContent {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
 	value, _, _ := unstructured.NestedBool(storedKustomization(t, dyn).Object, "spec", "suspend")
@@ -109,7 +109,7 @@ func TestFluxActionReconciles(t *testing.T) {
 
 	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/flux/action"+kustomizationQuery+"&action=reconcile", nil)
 
-	if resp.StatusCode != http.StatusNoContent {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
 	annotations := storedKustomization(t, dyn).GetAnnotations()

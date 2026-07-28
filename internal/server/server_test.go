@@ -69,7 +69,7 @@ func testManager(t *testing.T, objs ...runtime.Object) (*resources.Manager, dyna
 		discovery.Key("apps", "v1", "deployments"): deploymentDesc(),
 	}
 	cats := []api.Category{{Name: "Workloads", Resources: []api.ResourceDescriptor{deploymentDesc()}}}
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, cats, descs)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, cats, descs)
 	return mgr, dyn
 }
 
@@ -116,7 +116,7 @@ func TestHealthzReturnsOK(t *testing.T) {
 	}
 }
 
-func TestCORSHeadersOnAPI(t *testing.T) {
+func TestNoCrossOriginAccessIsGranted(t *testing.T) {
 	mgr, _ := testManager(t)
 	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
@@ -127,21 +127,11 @@ func TestCORSHeadersOnAPI(t *testing.T) {
 		t.Fatalf("GET /api/resources: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-		t.Fatalf("missing CORS origin header")
+	if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("the API grants cross-origin reads")
 	}
-
-	req, err := http.NewRequest(http.MethodOptions, ts.URL+"/api/resources", nil)
-	if err != nil {
-		t.Fatalf("build OPTIONS: %v", err)
-	}
-	optResp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("OPTIONS request: %v", err)
-	}
-	defer func() { _ = optResp.Body.Close() }()
-	if optResp.StatusCode != http.StatusNoContent {
-		t.Fatalf("OPTIONS status = %d, want 204", optResp.StatusCode)
+	if resp.Header.Get("Access-Control-Allow-Methods") != "" {
+		t.Fatal("the API grants cross-origin writes")
 	}
 }
 
@@ -261,7 +251,7 @@ func TestGraphEndpoint(t *testing.T) {
 			Category:   "Custom Resources",
 		},
 	}
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, descs)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, descs)
 	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -329,7 +319,7 @@ func TestFluxEndpoint(t *testing.T) {
 			Category:   "Custom Resources",
 		},
 	}
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, descs)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, descs)
 	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -371,7 +361,7 @@ func TestMetricsEndpoint(t *testing.T) {
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil)
 	srv := New(mgr, testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()

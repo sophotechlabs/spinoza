@@ -30,36 +30,25 @@ func New(mgr *resources.Manager, assets fs.FS) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthz)
-	mux.HandleFunc("/api/resources", cors(s.handleResources))
-	mux.HandleFunc("/api/gitops/graph", cors(s.handleGraph))
-	mux.HandleFunc("/api/flux", cors(s.handleFlux))
-	mux.HandleFunc("/api/flux/action", cors(s.handleFluxAction))
-	mux.HandleFunc("/api/metrics", cors(s.handleMetrics))
-	mux.HandleFunc("/api/object", cors(s.handleObject))
-	mux.HandleFunc("/api/events", cors(s.handleEvents))
-	mux.HandleFunc("/api/schema", cors(s.handleSchema))
-	mux.HandleFunc("/api/portforward", cors(s.handleForwards))
-	mux.HandleFunc("/ws", s.handleWS)
-	mux.Handle("/", http.FileServerFS(s.assets))
+	mux.HandleFunc("/api/resources", guard(s.handleResources))
+	mux.HandleFunc("/api/gitops/graph", guard(s.handleGraph))
+	mux.HandleFunc("/api/flux", guard(s.handleFlux))
+	mux.HandleFunc("/api/flux/action", guard(s.handleFluxAction))
+	mux.HandleFunc("/api/metrics", guard(s.handleMetrics))
+	mux.HandleFunc("/api/object", guard(s.handleObject))
+	mux.HandleFunc("/api/events", guard(s.handleEvents))
+	mux.HandleFunc("/api/schema", guard(s.handleSchema))
+	mux.HandleFunc("/api/portforward", guard(s.handleForwards))
+	mux.HandleFunc("/api/exec/support", guard(s.handleExecSupport))
+	mux.HandleFunc("/api/exec", guard(s.handleExec))
+	mux.HandleFunc("/ws", guard(s.handleWS))
+	mux.Handle("/", guard(http.FileServerFS(s.assets).ServeHTTP))
 	return mux
 }
 
 func healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
-}
-
-func cors(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		h(w, r)
-	}
 }
 
 func writeJSON(w http.ResponseWriter, payload interface{}) {
@@ -123,12 +112,12 @@ func (s *Server) handleFluxAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "version, resource and name are required")
 		return
 	}
-	err := s.mgr.FluxAction(r.Context(), ref, flux.Action(r.URL.Query().Get("action")))
+	result, err := s.mgr.FluxAction(r.Context(), ref, flux.Action(r.URL.Query().Get("action")))
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, result)
 }
 
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {

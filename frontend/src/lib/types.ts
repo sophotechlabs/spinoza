@@ -70,6 +70,7 @@ export interface ObjectDetail {
   conditions?: Condition[];
   containers?: string[];
   suspended?: boolean;
+  handledAt?: string;
   ports?: ObjectPort[];
   yaml: string;
 }
@@ -141,7 +142,7 @@ export type ServerMsg =
   | { type: 'log-end'; subId: string }
   | { type: 'error'; subId: string; message: string };
 
-export type View = 'resources' | 'gitops' | 'flux' | 'flux-tiles' | 'flux-resources';
+export type View = 'resources' | 'gitops' | 'flux-list' | 'flux-overview' | 'flux-roles';
 
 export interface FluxResource {
   kind: string;
@@ -208,4 +209,25 @@ export interface GraphEdge {
 export interface Graph {
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface ExecTarget {
+  namespace: string;
+  pod: string;
+  container: string;
+}
+
+export type ShellState = 'unknown' | 'present' | 'absent';
+
+export interface ExecSupport {
+  namespace: string;
+  pod: string;
+  container: string;
+  image?: string;
+  shell: ShellState;
+}
+
+export interface FluxActionResult {
+  action: string;
+  requestedAt?: string;
 }

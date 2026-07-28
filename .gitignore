@@ -35,9 +35,8 @@ go.work.sum
 node_modules/
 frontend/dist/
 
-# Embedded build output (keep the dir, ignore built assets)
-/web/dist/*
-!/web/dist/.gitkeep
+# Embedded build output (vite owns web/dist and empties it on build)
+/web/dist/
 
 # Built binary
 /spinoza
