@@ -70,7 +70,27 @@ export interface ObjectDetail {
   conditions?: Condition[];
   containers?: string[];
   suspended?: boolean;
+  ports?: ObjectPort[];
   yaml: string;
+}
+
+export interface ObjectPort {
+  name?: string;
+  port: number;
+  protocol?: string;
+}
+
+export interface PortForward {
+  id: string;
+  kind: string;
+  namespace: string;
+  name: string;
+  pod?: string;
+  remotePort: number;
+  localPort: number;
+  state: string;
+  error?: string;
+  startedAt: string;
 }
 
 export interface K8sEvent {

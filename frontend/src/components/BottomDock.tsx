@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LogRequest } from '../lib/types';
 import { useLogEnded, useLogLines } from '../store/logs';
+import ForwardsPanel from './ForwardsPanel';
 
 export const LOGS_SUB_ID = 'logs';
 const TAIL_LINES = 500;
@@ -41,8 +42,11 @@ function followLabel(follow: boolean): string {
   return 'Paused';
 }
 
+type DockTab = 'logs' | 'forwards';
+
 export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: BottomDockProps) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<DockTab>('logs');
   const [follow, setFollow] = useState(true);
   const [container, setContainer] = useState('');
   const lines = useLogLines(LOGS_SUB_ID);
@@ -61,6 +65,9 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
     if (!open) {
       return;
     }
+    if (tab !== 'logs') {
+      return;
+    }
     if (podName === '') {
       return;
     }
@@ -77,7 +84,7 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
     return () => {
       unsubscribeLogs(LOGS_SUB_ID);
     };
-  }, [open, podNamespace, podName, container, follow, subscribeLogs, unsubscribeLogs]);
+  }, [open, tab, podNamespace, podName, container, follow, subscribeLogs, unsubscribeLogs]);
 
   useEffect(() => {
     if (!follow) {
@@ -94,6 +101,18 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
     setOpen((value) => !value);
   }
 
+  function select(next: DockTab) {
+    setTab(next);
+    setOpen(true);
+  }
+
+  function tabClass(name: DockTab): string {
+    if (name === tab) {
+      return 'px-2 py-1 text-neutral-100';
+    }
+    return 'px-2 py-1 text-neutral-500 hover:text-neutral-300';
+  }
+
   function toggleFollow() {
     setFollow((value) => !value);
   }
@@ -107,13 +126,34 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
       <div className="flex items-center">
         <button
           type="button"
+          aria-label="Toggle panel"
           onClick={toggle}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-neutral-300 hover:bg-neutral-800"
+          className="px-2 py-1.5 text-neutral-300 hover:bg-neutral-800"
         >
-          <span>{chevron(open)}</span>
-          <span>Logs</span>
+          {chevron(open)}
         </button>
-        {open && (
+        <button
+          type="button"
+          onClick={() => {
+            select('logs');
+          }}
+          className={tabClass('logs')}
+        >
+          Logs
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            select('forwards');
+          }}
+          className={tabClass('forwards')}
+        >
+          Forwards
+        </button>
+        <button type="button" disabled className="cursor-not-allowed px-2 py-1 text-neutral-700">
+          Terminal
+        </button>
+        {open && tab === 'logs' && (
           <div className="flex flex-1 items-center gap-2 border-l border-neutral-800 pl-2">
             {pod !== null && (
               <span className="truncate text-neutral-500">
@@ -143,17 +183,15 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
               {followLabel(follow)}
             </button>
             {ended && <span className="text-neutral-600">stream ended</span>}
-            <button
-              type="button"
-              disabled
-              className="ml-auto cursor-not-allowed px-2 py-1 text-neutral-600"
-            >
-              Terminal
-            </button>
           </div>
         )}
       </div>
-      {open && (
+      {open && tab === 'forwards' && (
+        <div className="h-56 overflow-auto border-t border-neutral-800 bg-neutral-950 text-[11px]">
+          <ForwardsPanel />
+        </div>
+      )}
+      {open && tab === 'logs' && (
         <div
           ref={scrollRef}
           className="h-56 overflow-auto border-t border-neutral-800 bg-neutral-950 p-2 font-mono text-[11px] leading-4 text-neutral-300"

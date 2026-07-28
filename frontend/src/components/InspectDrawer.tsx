@@ -3,7 +3,9 @@ import type { ContainerState, ObjectDetail, ObjectRef } from '../lib/types';
 import { fetchObject } from '../lib/object';
 import { DRAWER_NUDGE_STEP, useDrawerWidth } from '../lib/useDrawerWidth';
 import { isFluxObject } from '../lib/fluxActions';
+import { forwardKind } from '../lib/portForward';
 import InspectActions from './InspectActions';
+import InspectPorts from './InspectPorts';
 import InspectOverview from './InspectOverview';
 import InspectYaml from './InspectYaml';
 import InspectEvents from './InspectEvents';
@@ -28,6 +30,16 @@ function errorMessage(err: unknown): string {
     return err.message;
   }
   return 'object request failed';
+}
+
+function forwardable(detail: ObjectDetail): string | null {
+  if (detail.ports === undefined) {
+    return null;
+  }
+  if (detail.ports.length === 0) {
+    return null;
+  }
+  return forwardKind(detail.apiVersion, detail.kind);
 }
 
 function tabClass(active: boolean): string {
@@ -110,7 +122,14 @@ export default function InspectDrawer({
     body = <div className="p-4 text-xs break-words text-red-400">{error}</div>;
   }
   if (detail !== null && tab === 'overview') {
-    body = <InspectOverview detail={detail} containers={containers} />;
+    body = (
+      <div className="overflow-y-auto">
+        {forwardable(detail) !== null && detail.ports !== undefined && (
+          <InspectPorts target={target} kind={forwardable(detail) ?? ''} ports={detail.ports} />
+        )}
+        <InspectOverview detail={detail} containers={containers} />
+      </div>
+    );
   }
   if (detail !== null && tab === 'yaml') {
     body = (

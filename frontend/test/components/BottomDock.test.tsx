@@ -30,20 +30,20 @@ describe('BottomDock', () => {
 
   it('renders collapsed with no log body', () => {
     renderDock(pod());
-    expect(screen.getByRole('button', { name: /Logs/ })).toHaveTextContent('▸');
-    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Toggle panel' })).toHaveTextContent('▸');
+    expect(screen.queryByText('Waiting for output…')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
   });
 
-  it('opens and closes on toggle', async () => {
+  it('opens and closes from the chevron', async () => {
     const user = userEvent.setup();
     renderDock(null);
-    const toggle = screen.getByRole('button', { name: /Logs/ });
+    const toggle = screen.getByRole('button', { name: 'Toggle panel' });
 
     await user.click(toggle);
 
     expect(toggle).toHaveTextContent('▾');
     expect(screen.getByText('Select a pod to stream its logs.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
 
     await user.click(toggle);
 
@@ -55,7 +55,7 @@ describe('BottomDock', () => {
     const user = userEvent.setup();
     const { subscribeLogs, unsubscribeLogs } = renderDock(pod());
 
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     expect(subscribeLogs).toHaveBeenCalledWith(LOGS_SUB_ID, {
       namespace: 'flux-system',
@@ -65,7 +65,7 @@ describe('BottomDock', () => {
       follow: true,
     });
 
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Toggle panel' }));
 
     expect(unsubscribeLogs).toHaveBeenCalledWith(LOGS_SUB_ID);
   });
@@ -74,7 +74,7 @@ describe('BottomDock', () => {
     const user = userEvent.setup();
     const { subscribeLogs } = renderDock(null);
 
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     expect(subscribeLogs).not.toHaveBeenCalled();
   });
@@ -83,7 +83,7 @@ describe('BottomDock', () => {
     const user = userEvent.setup();
     const { subscribeLogs } = renderDock(pod({ containers: [] }));
 
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     expect(subscribeLogs).not.toHaveBeenCalled();
   });
@@ -91,7 +91,7 @@ describe('BottomDock', () => {
   it('renders streamed lines and the waiting placeholder', async () => {
     const user = userEvent.setup();
     renderDock(pod());
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     expect(screen.getByText('Waiting for output…')).toBeInTheDocument();
 
@@ -106,7 +106,7 @@ describe('BottomDock', () => {
   it('shows the stream-ended marker', async () => {
     const user = userEvent.setup();
     renderDock(pod());
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     useLogsStore.getState().startStream(LOGS_SUB_ID);
     useLogsStore.getState().endStream(LOGS_SUB_ID);
@@ -117,7 +117,7 @@ describe('BottomDock', () => {
   it('toggles follow and resubscribes', async () => {
     const user = userEvent.setup();
     const { subscribeLogs } = renderDock(pod());
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     await user.click(screen.getByRole('button', { name: 'Following' }));
 
@@ -131,7 +131,7 @@ describe('BottomDock', () => {
   it('offers a container picker for multi-container pods', async () => {
     const user = userEvent.setup();
     const { subscribeLogs } = renderDock(pod({ containers: ['app', 'sidecar'] }));
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     await user.selectOptions(screen.getByLabelText('Container'), 'sidecar');
 
@@ -144,7 +144,7 @@ describe('BottomDock', () => {
   it('hides the container picker for single-container pods', async () => {
     const user = userEvent.setup();
     renderDock(pod());
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     expect(screen.queryByLabelText('Container')).not.toBeInTheDocument();
   });
@@ -152,7 +152,7 @@ describe('BottomDock', () => {
   it('keeps the view pinned to the newest line while following', async () => {
     const user = userEvent.setup();
     renderDock(pod());
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
 
     useLogsStore.getState().startStream(LOGS_SUB_ID);
     useLogsStore.getState().appendLines(LOGS_SUB_ID, ['line']);
@@ -166,12 +166,39 @@ describe('BottomDock', () => {
   it('stops pinning when follow is off', async () => {
     const user = userEvent.setup();
     renderDock(pod());
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
     await user.click(screen.getByRole('button', { name: 'Following' }));
 
     useLogsStore.getState().startStream(LOGS_SUB_ID);
     useLogsStore.getState().appendLines(LOGS_SUB_ID, ['line']);
 
     expect(await screen.findByText('line')).toBeInTheDocument();
+  });
+  it('switches to the forwards tab and stops streaming logs', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }),
+    );
+    const { subscribeLogs, unsubscribeLogs } = renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+    expect(subscribeLogs).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Forwards' }));
+
+    expect(await screen.findByText(/No active forwards/)).toBeInTheDocument();
+    expect(unsubscribeLogs).toHaveBeenCalledWith(LOGS_SUB_ID);
+    expect(screen.queryByRole('button', { name: 'Following' })).not.toBeInTheDocument();
+  });
+
+  it('collapses from the chevron', async () => {
+    const user = userEvent.setup();
+    renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+    expect(screen.getByRole('button', { name: 'Following' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Toggle panel' }));
+
+    expect(screen.queryByRole('button', { name: 'Following' })).not.toBeInTheDocument();
   });
 });

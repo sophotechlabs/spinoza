@@ -206,4 +206,33 @@ describe('InspectDrawer', () => {
 
     expect(drawer.style.width).not.toBe(initial);
   });
+  it('offers port forwarding for a pod with ports', async () => {
+    stubApi({ ...detail, ports: [{ name: 'http', port: 8080, protocol: 'TCP' }] });
+    renderDrawer();
+
+    expect(await screen.findByText('Ports')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Forward' })).toBeInTheDocument();
+    expect(screen.getByText('8080 · http')).toBeInTheDocument();
+  });
+
+  it('hides port forwarding for a kind that cannot be forwarded', async () => {
+    stubApi({
+      ...detail,
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      ports: [{ port: 8080 }],
+    });
+    renderDrawer();
+
+    await screen.findByText('Metadata');
+    expect(screen.queryByText('Ports')).not.toBeInTheDocument();
+  });
+
+  it('hides port forwarding when the object has no ports', async () => {
+    stubApi({ ...detail, ports: [] });
+    renderDrawer();
+
+    await screen.findByText('Metadata');
+    expect(screen.queryByText('Ports')).not.toBeInTheDocument();
+  });
 });
