@@ -13,6 +13,7 @@ describe('fetchFlux', () => {
         {
           name: 'Sources',
           ready: 1,
+          reporting: 1,
           total: 1,
           resources: [
             {

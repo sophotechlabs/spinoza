@@ -206,6 +206,7 @@ type FluxResource struct {
 type FluxGroup struct {
 	Name      string         `json:"name"`
 	Ready     int            `json:"ready"`
+	Reporting int            `json:"reporting"`
 	Total     int            `json:"total"`
 	Resources []FluxResource `json:"resources"`
 }

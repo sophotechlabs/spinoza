@@ -28,7 +28,8 @@ describe('ready helpers', () => {
   it('maps ready to labels', () => {
     expect(readyLabel('True')).toBe('Ready');
     expect(readyLabel('False')).toBe('Not ready');
-    expect(readyLabel('')).toBe('Unknown');
+    expect(readyLabel('')).toBe('No status');
+    expect(readyLabel('Unknown')).toBe('Unknown');
   });
 });
 

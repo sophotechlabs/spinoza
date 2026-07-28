@@ -1,4 +1,5 @@
 import { useFlux } from '../lib/flux';
+import { groupSummary } from '../lib/readiness';
 import type { FluxGroup, FluxResource } from '../lib/types';
 import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
 
@@ -48,9 +49,7 @@ function TileGroup({
     <section className="mb-5">
       <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase">
         {group.name}
-        <span className="text-[11px] font-normal text-neutral-600">
-          {group.ready}/{group.total} ready
-        </span>
+        <span className="text-[11px] font-normal text-neutral-600">{groupSummary(group)}</span>
       </h2>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {group.resources.map((resource) => (

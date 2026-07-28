@@ -293,3 +293,18 @@ func TestReadyConditionNoReady(t *testing.T) {
 		t.Fatalf("readyCondition = %q,%q, want empty", status, message)
 	}
 }
+
+func TestReportingCountExcludesResourcesWithoutAReadyCondition(t *testing.T) {
+	items := []api.FluxResource{
+		{Ready: "True"},
+		{Ready: "False"},
+		{Ready: ""},
+		{Ready: "Unknown"},
+	}
+	if got := readyCount(items); got != 1 {
+		t.Fatalf("readyCount = %d, want 1", got)
+	}
+	if got := reportingCount(items); got != 3 {
+		t.Fatalf("reportingCount = %d, want 3", got)
+	}
+}

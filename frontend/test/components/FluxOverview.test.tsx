@@ -17,6 +17,7 @@ const dashboard: FluxDashboard = {
     {
       name: 'Sources',
       ready: 1,
+      reporting: 2,
       total: 2,
       resources: [
         makeFluxResource({

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useFlux } from '../lib/flux';
+import { allReady, readyOf, readySummary, reportingOf } from '../lib/readiness';
 import type { FluxResource } from '../lib/types';
 import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
 
@@ -59,25 +60,17 @@ function kindResources(map: Map<string, FluxResource[]>, kind: string): FluxReso
   return list;
 }
 
-function readyCount(resources: FluxResource[]): number {
-  return resources.filter((resource) => resource.ready === 'True').length;
-}
-
-function tileBorder(count: number, ready: number): string {
+function tileBorder(ready: number, reporting: number, count: number): string {
   if (count === 0) {
     return 'border-neutral-800';
   }
-  if (ready === count) {
+  if (allReady(ready, reporting, count)) {
     return 'border-green-800';
   }
-  return 'border-amber-800';
-}
-
-function tileBadge(count: number, ready: number): string {
-  if (count === 0) {
-    return 'no resources';
+  if (reporting === 0) {
+    return 'border-neutral-800';
   }
-  return `${ready}/${count} ready`;
+  return 'border-amber-800';
 }
 
 function KindTile({
@@ -90,17 +83,20 @@ function KindTile({
   onSelect: () => void;
 }) {
   const count = resources.length;
-  const ready = readyCount(resources);
+  const ready = readyOf(resources);
+  const reporting = reportingOf(resources);
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`rounded border ${tileBorder(count, ready)} bg-neutral-900 p-2.5 text-left hover:bg-neutral-800`}
+      className={`rounded border ${tileBorder(ready, reporting, count)} bg-neutral-900 p-2.5 text-left hover:bg-neutral-800`}
     >
       <div className="truncate text-sm font-semibold text-neutral-100">{kind}</div>
       <div className="truncate text-[10px] text-neutral-500">{groupOf(kind)}</div>
       <div className="mt-2 text-xl font-semibold text-neutral-100">{count}</div>
-      <div className="mt-0.5 text-[10px] text-neutral-500">{tileBadge(count, ready)}</div>
+      <div className="mt-0.5 text-[10px] text-neutral-500">
+        {readySummary(ready, reporting, count)}
+      </div>
     </button>
   );
 }

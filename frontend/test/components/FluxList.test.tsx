@@ -17,6 +17,7 @@ const dashboard: FluxDashboardData = {
     {
       name: 'Sources',
       ready: 1,
+      reporting: 3,
       total: 4,
       resources: [
         makeFluxResource({
@@ -77,10 +78,10 @@ describe('FluxList', () => {
     expect(screen.getByText('res-c')).toBeInTheDocument();
     expect(screen.getByText('res-d')).toBeInTheDocument();
     expect(screen.getByText('Sources')).toBeInTheDocument();
-    expect(screen.getByText('1/4 ready')).toBeInTheDocument();
+    expect(screen.getByText('1/3 ready · 1 no status')).toBeInTheDocument();
     expect(screen.getByText('Ready', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByText('Not ready')).toBeInTheDocument();
-    expect(screen.getByText('Unknown')).toBeInTheDocument();
+    expect(screen.getByText('No status')).toBeInTheDocument();
     expect(screen.getByText('Suspended', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByTitle('install retries exhausted')).toBeInTheDocument();
     expect(screen.getByText('2026-07-24')).toBeInTheDocument();
@@ -112,12 +113,24 @@ describe('FluxList', () => {
     vi.useFakeTimers();
     const first: FluxDashboardData = {
       groups: [
-        { name: 'Sources', ready: 1, total: 1, resources: [makeFluxResource({ name: 'first' })] },
+        {
+          name: 'Sources',
+          ready: 1,
+          reporting: 1,
+          total: 1,
+          resources: [makeFluxResource({ name: 'first' })],
+        },
       ],
     };
     const second: FluxDashboardData = {
       groups: [
-        { name: 'Sources', ready: 1, total: 1, resources: [makeFluxResource({ name: 'second' })] },
+        {
+          name: 'Sources',
+          ready: 1,
+          reporting: 1,
+          total: 1,
+          resources: [makeFluxResource({ name: 'second' })],
+        },
       ],
     };
     const fetchMock = vi

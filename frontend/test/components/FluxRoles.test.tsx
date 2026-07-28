@@ -17,7 +17,8 @@ const dashboard: FluxDashboard = {
     {
       name: 'Appliers',
       ready: 2,
-      total: 3,
+      reporting: 3,
+      total: 5,
       resources: [
         makeFluxResource({
           kind: 'Kustomization',
@@ -38,11 +39,24 @@ const dashboard: FluxDashboard = {
           ready: 'False',
           message: 'install failed',
         }),
+        makeFluxResource({
+          kind: 'HelmChart',
+          name: 'static-a',
+          namespace: 'flux-system',
+          ready: '',
+        }),
+        makeFluxResource({
+          kind: 'HelmChart',
+          name: 'static-b',
+          namespace: 'flux-system',
+          ready: '',
+        }),
       ],
     },
     {
       name: 'Sources',
       ready: 1,
+      reporting: 1,
       total: 1,
       resources: [
         makeFluxResource({
@@ -73,6 +87,15 @@ describe('FluxRoles', () => {
     expect(screen.getByText('2/2 ready')).toBeInTheDocument();
     expect(screen.getByText('0/1 ready')).toBeInTheDocument();
     expect(screen.getAllByText('no resources').length).toBeGreaterThan(0);
+  });
+
+  it('leaves resources with no Ready condition out of the ratio', async () => {
+    stubFlux(dashboard);
+    render(<FluxRoles onSelect={vi.fn()} />);
+    await screen.findByText('Kustomization');
+
+    expect(screen.getByText('HelmChart')).toBeInTheDocument();
+    expect(screen.getByText('0/0 ready · 2 no status')).toBeInTheDocument();
   });
 
   it('shows the error message when the fetch fails', async () => {

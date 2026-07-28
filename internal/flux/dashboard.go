@@ -178,6 +178,7 @@ func assemble(byGroup map[string][]api.FluxResource) api.FluxDashboard {
 		groups = append(groups, api.FluxGroup{
 			Name:      name,
 			Ready:     readyCount(items),
+			Reporting: reportingCount(items),
 			Total:     len(items),
 			Resources: items,
 		})
@@ -201,6 +202,16 @@ func readyCount(items []api.FluxResource) int {
 	count := 0
 	for _, it := range items {
 		if it.Ready == "True" {
+			count++
+		}
+	}
+	return count
+}
+
+func reportingCount(items []api.FluxResource) int {
+	count := 0
+	for _, it := range items {
+		if it.Ready != "" {
 			count++
 		}
 	}

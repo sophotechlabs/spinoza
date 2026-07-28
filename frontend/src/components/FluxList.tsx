@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-table';
 import type { FluxResource } from '../lib/types';
 import { useFlux } from '../lib/flux';
+import { groupSummary } from '../lib/readiness';
 import {
   created,
   latestColor,
@@ -175,7 +176,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
                 >
                   {group.name}
                   <span className="ml-2 text-[11px] font-normal text-neutral-600">
-                    {group.ready}/{group.total} ready
+                    {groupSummary(group)}
                   </span>
                 </td>
               </tr>

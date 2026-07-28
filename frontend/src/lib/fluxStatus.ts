@@ -27,6 +27,9 @@ export function readyLabel(ready: string): string {
   if (ready === 'False') {
     return 'Not ready';
   }
+  if (ready === '') {
+    return 'No status';
+  }
   return 'Unknown';
 }
 

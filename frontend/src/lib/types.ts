@@ -169,6 +169,7 @@ export interface ResourceCatalog {
 export interface FluxGroup {
   name: string;
   ready: number;
+  reporting: number;
   total: number;
   resources: FluxResource[];
 }
