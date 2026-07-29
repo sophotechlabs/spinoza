@@ -18,12 +18,13 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
+	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
 func main() {
 	ctx := context.Background()
-	mgr, err := makeManager(ctx)
+	mgr, err := makeManager(ctx, debugcontainer.DefaultImage, debugcontainer.DefaultBinary)
 	if err != nil {
 		log.Fatalf("manager: %v", err)
 	}

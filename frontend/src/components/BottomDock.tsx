@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LogRequest, ShellState } from '../lib/types';
 import { useLogEnded, useLogLines } from '../store/logs';
 import { fetchExecSupport } from '../lib/exec';
+import { DEBUG_IMAGE } from '../lib/debugContainer';
+import DebugPrompt from './DebugPrompt';
 import ForwardsPanel from './ForwardsPanel';
 import TerminalPanel from './TerminalPanel';
 
@@ -48,7 +50,7 @@ type DockTab = 'logs' | 'forwards' | 'terminal';
 
 function terminalTitle(shell: ShellState): string {
   if (shell === 'absent') {
-    return 'This image ships without /bin/sh';
+    return 'No shell in this image — a debug container can be attached';
   }
   return 'Shell into the selected container';
 }
@@ -59,6 +61,7 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
   const [follow, setFollow] = useState(true);
   const [container, setContainer] = useState('');
   const [shell, setShell] = useState<ShellState>('unknown');
+  const [debugContainer, setDebugContainer] = useState<string | null>(null);
   const lines = useLogLines(LOGS_SUB_ID);
   const ended = useLogEnded(LOGS_SUB_ID);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -73,6 +76,7 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
 
   useEffect(() => {
     setShell('unknown');
+    setDebugContainer(null);
     if (podName === '') {
       return;
     }
@@ -97,8 +101,18 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
   }, []);
 
   let terminalDisabled = true;
-  if (pod !== null && container !== '' && shell !== 'absent') {
+  if (pod !== null && container !== '') {
     terminalDisabled = false;
+  }
+
+  let terminalContainer = container;
+  if (debugContainer !== null) {
+    terminalContainer = debugContainer;
+  }
+
+  let needsDebugContainer = false;
+  if (shell === 'absent' && debugContainer === null) {
+    needsDebugContainer = true;
   }
 
   let podControls = false;
@@ -248,10 +262,17 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
           </div>
         )}
       </div>
-      {open && tab === 'terminal' && !terminalDisabled && pod !== null && (
-        <TerminalPanel
-          key={`${podNamespace}/${podName}/${container}`}
+      {open && tab === 'terminal' && !terminalDisabled && pod !== null && needsDebugContainer && (
+        <DebugPrompt
           target={{ namespace: podNamespace, pod: podName, container }}
+          image={DEBUG_IMAGE}
+          onAttached={setDebugContainer}
+        />
+      )}
+      {open && tab === 'terminal' && !terminalDisabled && pod !== null && !needsDebugContainer && (
+        <TerminalPanel
+          key={`${podNamespace}/${podName}/${terminalContainer}`}
+          target={{ namespace: podNamespace, pod: podName, container: terminalContainer }}
           onShellMissing={markShellMissing}
         />
       )}

@@ -24,6 +24,7 @@ export interface ContainerState {
   ready: boolean;
   restarts: number;
   init: boolean;
+  ephemeral?: boolean;
 }
 
 export interface Row {
@@ -236,4 +237,17 @@ export interface ExecSupport {
 export interface FluxActionResult {
   action: string;
   requestedAt?: string;
+}
+
+export interface DebugSession {
+  container: string;
+  created: boolean;
+  image: string;
+  profile: string;
+}
+
+export interface DebugSupport {
+  namespace: string;
+  allowed: boolean;
+  reason?: string;
 }

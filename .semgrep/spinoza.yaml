@@ -37,20 +37,17 @@ rules:
             }
           }()
 
-  - id: implicit-websocket-read-limit
+  - id: websocket-accept-outside-guard
     languages: [go]
-    severity: WARNING
-    message: set an explicit SetReadLimit rather than relying on the library default
+    severity: ERROR
+    message: accept websockets through server.accept so the read limit is applied
     paths:
       include:
         - internal/
       exclude:
+        - internal/server/guard.go
         - "*_test.go"
-    patterns:
-      - pattern: $C.Read($CTX)
-      - pattern-not-inside: |
-          $C.SetReadLimit(...)
-          ...
+    pattern: websocket.Accept(...)
 
   - id: response-body-without-status-check
     languages: [go]

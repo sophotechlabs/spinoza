@@ -19,6 +19,7 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
@@ -109,7 +110,7 @@ func execServer(t *testing.T, service *exec.Service) *httptest.Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, service, nil, nil)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, service, nil, nil, nil)
 	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -413,5 +414,55 @@ func TestResourcesRefreshReturnsTheCatalog(t *testing.T) {
 	var catalog api.ResourceCatalog
 	if err := json.NewDecoder(res.Body).Decode(&catalog); err != nil {
 		t.Fatalf("decode: %v", err)
+	}
+}
+
+func debugServer(t *testing.T, service *debugcontainer.Service) *httptest.Server {
+	t.Helper()
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{podGVR: "PodList"},
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, service, nil, nil)
+	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func TestDebugRejectsAMissingPod(t *testing.T) {
+	ts := debugServer(t, nil)
+	res, err := http.Post(ts.URL+"/api/debug?namespace=monitoring", "", nil)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+}
+
+func TestDebugRejectsOtherMethods(t *testing.T) {
+	ts := debugServer(t, nil)
+	res, err := http.Get(ts.URL + "/api/debug" + execQuery)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+}
+
+func TestDebugIsUnavailableWithoutAService(t *testing.T) {
+	ts := debugServer(t, nil)
+	res, err := http.Post(ts.URL+"/api/debug"+execQuery, "", nil)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d", res.StatusCode)
 	}
 }

@@ -41,6 +41,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/schema", guard(s.handleSchema))
 	mux.HandleFunc("/api/portforward", guard(s.handleForwards))
 	mux.HandleFunc("/api/exec/support", guard(s.handleExecSupport))
+	mux.HandleFunc("/api/debug/support", guard(s.handleDebugSupport))
+	mux.HandleFunc("/api/debug", guard(s.handleDebug))
 	mux.HandleFunc("/api/exec", guard(s.handleExec))
 	mux.HandleFunc("/ws", guard(s.handleWS))
 	mux.Handle("/", guard(http.FileServerFS(s.assets).ServeHTTP))

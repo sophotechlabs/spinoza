@@ -11,10 +11,17 @@ import (
 
 const desktopScheme = "wails"
 
+const readLimit = 64 << 10
+
 func accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
-	return websocket.Accept(w, r, &websocket.AcceptOptions{
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"*"},
 	})
+	if err != nil {
+		return nil, err
+	}
+	conn.SetReadLimit(readLimit)
+	return conn, nil
 }
 
 func guard(handler http.HandlerFunc) http.HandlerFunc {

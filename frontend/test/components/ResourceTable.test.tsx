@@ -328,4 +328,31 @@ describe('ResourceTable', () => {
     expect(screen.queryByLabelText('Namespace')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Filter by name')).toBeInTheDocument();
   });
+
+  it('leaves debug containers out of the container squares', async () => {
+    seed([{ name: 'Containers', render: 'containers' }], true, [
+      makeRow({
+        uid: 'a',
+        name: 'pod-a',
+        namespace: 'prod',
+        cells: ['1/1'],
+        containers: [
+          { name: 'app', state: 'running', ready: true, restarts: 0, init: false },
+          {
+            name: 'spinoza-debug-1',
+            state: 'running',
+            ready: false,
+            restarts: 0,
+            init: false,
+            ephemeral: true,
+          },
+        ],
+      }),
+    ]);
+    renderTable(descriptor, null);
+    await screen.findByRole('button', { name: 'pod-a' });
+
+    expect(screen.getByTitle('app: running')).toBeInTheDocument();
+    expect(screen.queryByTitle(/spinoza-debug-1/)).not.toBeInTheDocument();
+  });
 });

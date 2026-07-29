@@ -10,6 +10,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 )
 
@@ -36,6 +37,39 @@ func (s *Server) handleExecSupport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, support)
+}
+
+func (s *Server) handleDebugSupport(w http.ResponseWriter, r *http.Request) {
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		writeError(w, http.StatusBadRequest, "namespace is required")
+		return
+	}
+	writeJSON(w, s.mgr.DebugSupport(r.Context(), namespace))
+}
+
+func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	query := r.URL.Query()
+	req := debugcontainer.Request{
+		Namespace: query.Get("namespace"),
+		Pod:       query.Get("pod"),
+		Container: query.Get("container"),
+		Profile:   query.Get("profile"),
+	}
+	if req.Namespace == "" || req.Pod == "" {
+		writeError(w, http.StatusBadRequest, "namespace and pod are required")
+		return
+	}
+	session, err := s.mgr.StartDebug(r.Context(), req)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, session)
 }
 
 func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {

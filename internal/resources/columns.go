@@ -73,19 +73,20 @@ func cellsFor(obj *unstructured.Unstructured, kind string) []string {
 	}
 }
 
-func containersFor(u *unstructured.Unstructured, kind string) []api.ContainerState {
+func containersFor(obj *unstructured.Unstructured, kind string) []api.ContainerState {
 	if kind != "Pod" {
 		return nil
 	}
-	states := containerStates(u, "initContainerStatuses", true)
-	states = append(states, containerStates(u, "containerStatuses", false)...)
+	states := containerStates(obj, "initContainerStatuses", true, false)
+	states = append(states, containerStates(obj, "containerStatuses", false, false)...)
+	states = append(states, containerStates(obj, "ephemeralContainerStatuses", false, true)...)
 	if len(states) == 0 {
 		return nil
 	}
 	return states
 }
 
-func containerStates(u *unstructured.Unstructured, field string, init bool) []api.ContainerState {
+func containerStates(u *unstructured.Unstructured, field string, init, ephemeral bool) []api.ContainerState {
 	out := []api.ContainerState{}
 	for _, s := range nestedSlice(u, "status", field) {
 		entry, ok := s.(map[string]any)
@@ -99,12 +100,13 @@ func containerStates(u *unstructured.Unstructured, field string, init bool) []ap
 		}
 		state, reason := containerStateReason(entry)
 		out = append(out, api.ContainerState{
-			Name:     name,
-			State:    state,
-			Reason:   reason,
-			Ready:    ready,
-			Restarts: toInt64(entry["restartCount"]),
-			Init:     init,
+			Name:      name,
+			State:     state,
+			Reason:    reason,
+			Ready:     ready,
+			Restarts:  toInt64(entry["restartCount"]),
+			Init:      init,
+			Ephemeral: ephemeral,
 		})
 	}
 	return out

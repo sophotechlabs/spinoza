@@ -1,0 +1,3 @@
+[[IgnoredVulns]]
+id = "GHSA-mh99-v99m-4gvg"
+reason = "brace-expansion ReDoS reached only through minimatch inside eslint/depcheck build tooling, never at runtime. The only fixed version is 5.0.8, whose API breaks the minimatch 3.x that @eslint/config-array pins, so an override takes eslint down. Revisit when eslint ships a minimatch that resolves brace-expansion >= 5.0.8."

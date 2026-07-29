@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
@@ -13,7 +14,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
-func makeManager(ctx context.Context) (*resources.Manager, error) {
+func makeManager(ctx context.Context, debugImage, kubectlBinary string) (*resources.Manager, error) {
 	bundle, err := kube.Load()
 	if err != nil {
 		return nil, fmt.Errorf("kube: %w", err)
@@ -34,7 +35,13 @@ func makeManager(ctx context.Context) (*resources.Manager, error) {
 		exec.NewStreamer(bundle.Clientset, bundle.Config),
 		exec.NewImages(bundle.Clientset),
 	)
-	mgr := resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, cats, descs)
+	debugger := debugcontainer.NewService(
+		debugcontainer.NewRunner(kubectlBinary),
+		bundle.Clientset,
+		debugImage,
+		bundle.Context,
+	)
+	mgr := resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, debugger, cats, descs)
 	mgr.UseDiscovery(bundle.Discovery, discErr)
 	return mgr, nil
 }

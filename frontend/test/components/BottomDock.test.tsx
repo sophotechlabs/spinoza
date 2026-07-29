@@ -5,6 +5,28 @@ import BottomDock, { LOGS_SUB_ID } from '../../src/components/BottomDock';
 import type { PodTarget } from '../../src/components/BottomDock';
 import { useLogsStore } from '../../src/store/logs';
 
+vi.mock('../../src/components/DebugPrompt', () => ({
+  default: ({
+    target,
+    onAttached,
+  }: {
+    target: { container: string };
+    onAttached: (name: string) => void;
+  }) => (
+    <div data-testid="debug-prompt">
+      no shell in {target.container}
+      <button
+        type="button"
+        onClick={() => {
+          onAttached('spinoza-debug-1');
+        }}
+      >
+        Attach debug container
+      </button>
+    </div>
+  ),
+}));
+
 vi.mock('../../src/components/TerminalPanel', () => ({
   default: ({
     target,
@@ -256,20 +278,35 @@ describe('BottomDock', () => {
     expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
   });
 
-  it('disables the terminal for an image with no shell', async () => {
+  it('offers a debug container for an image with no shell', async () => {
+    const user = userEvent.setup();
     stubFetch('absent');
     renderDock(pod());
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
-    });
+    await user.click(screen.getByRole('button', { name: 'Terminal' }));
+
+    expect(await screen.findByTestId('debug-prompt')).toHaveTextContent('no shell in app');
+    expect(screen.queryByTestId('terminal-panel')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Terminal' })).toHaveAttribute(
       'title',
-      'This image ships without /bin/sh',
+      'No shell in this image — a debug container can be attached',
     );
   });
 
-  it('closes the terminal when the next container has no shell', async () => {
+  it('opens a terminal into the debug container once attached', async () => {
+    const user = userEvent.setup();
+    stubFetch('absent');
+    renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Terminal' }));
+    await screen.findByTestId('debug-prompt');
+
+    await user.click(screen.getByRole('button', { name: 'Attach debug container' }));
+
+    expect(await screen.findByTestId('terminal-panel')).toHaveTextContent('web/spinoza-debug-1');
+    expect(screen.queryByTestId('debug-prompt')).not.toBeInTheDocument();
+  });
+
+  it('offers a debug container when the next container has no shell', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
       'fetch',
@@ -290,7 +327,7 @@ describe('BottomDock', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('terminal-panel')).not.toBeInTheDocument();
     });
-    expect(screen.getByText('This image ships without /bin/sh')).toBeInTheDocument();
+    expect(screen.getByTestId('debug-prompt')).toHaveTextContent('no shell in sidecar');
   });
 
   it('shows the container picker on the terminal tab', async () => {
@@ -316,7 +353,7 @@ describe('BottomDock', () => {
     expect(await screen.findByTestId('terminal-panel')).toBeInTheDocument();
   });
 
-  it('shuts the terminal when the session reports no shell', async () => {
+  it('offers a debug container when the session reports no shell', async () => {
     const user = userEvent.setup();
     renderDock(pod());
     await user.click(screen.getByRole('button', { name: 'Terminal' }));
@@ -324,6 +361,6 @@ describe('BottomDock', () => {
     await user.click(screen.getByRole('button', { name: 'Report missing shell' }));
 
     expect(screen.queryByTestId('terminal-panel')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Terminal' })).toBeDisabled();
+    expect(screen.getByTestId('debug-prompt')).toBeInTheDocument();
   });
 });

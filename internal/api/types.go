@@ -25,12 +25,13 @@ type Column struct {
 }
 
 type ContainerState struct {
-	Name     string `json:"name"`
-	State    string `json:"state"`
-	Reason   string `json:"reason,omitempty"`
-	Ready    bool   `json:"ready"`
-	Restarts int64  `json:"restarts"`
-	Init     bool   `json:"init"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	Reason    string `json:"reason,omitempty"`
+	Ready     bool   `json:"ready"`
+	Restarts  int64  `json:"restarts"`
+	Init      bool   `json:"init"`
+	Ephemeral bool   `json:"ephemeral,omitempty"`
 }
 
 type Row struct {
@@ -118,6 +119,19 @@ const (
 type FluxActionResult struct {
 	Action      string `json:"action"`
 	RequestedAt string `json:"requestedAt,omitempty"`
+}
+
+type DebugSupport struct {
+	Namespace string `json:"namespace"`
+	Allowed   bool   `json:"allowed"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+type DebugSession struct {
+	Container string `json:"container"`
+	Created   bool   `json:"created"`
+	Image     string `json:"image"`
+	Profile   string `json:"profile"`
 }
 
 type ExecSupport struct {

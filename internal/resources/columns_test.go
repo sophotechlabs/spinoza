@@ -433,3 +433,29 @@ func TestNestedHelpersOnWrongType(t *testing.T) {
 		t.Fatalf("nestedSlice on non-slice = %v, want nil", got)
 	}
 }
+
+func TestContainersForMarksEphemeralContainers(t *testing.T) {
+	pod := u(map[string]any{
+		"status": map[string]any{
+			"containerStatuses": []any{
+				map[string]any{"name": "app", "ready": true, "restartCount": int64(0), "state": map[string]any{"running": map[string]any{}}},
+			},
+			"ephemeralContainerStatuses": []any{
+				map[string]any{"name": "spinoza-debug-1", "ready": false, "restartCount": int64(0), "state": map[string]any{"running": map[string]any{}}},
+			},
+		},
+	})
+	states := containersFor(pod, "Pod")
+	if len(states) != 2 {
+		t.Fatalf("states = %d, want 2", len(states))
+	}
+	if states[0].Name != "app" || states[0].Ephemeral {
+		t.Fatalf("regular container = %+v", states[0])
+	}
+	if states[1].Name != "spinoza-debug-1" || !states[1].Ephemeral {
+		t.Fatalf("debug container = %+v, want Ephemeral true", states[1])
+	}
+	if states[1].Init {
+		t.Fatal("an ephemeral container is not an init container")
+	}
+}

@@ -100,7 +100,7 @@ func newClient(t *testing.T, objs ...runtime.Object) *fake.FakeDynamicClient {
 func newManager(t *testing.T, dyn dynamic.Interface) (*Manager, context.CancelFunc) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, []api.Category{{Name: "Workloads"}}, testDescs())
+	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, []api.Category{{Name: "Workloads"}}, testDescs())
 	return mgr, cancel
 }
 
@@ -162,7 +162,7 @@ func TestManagerGraph(t *testing.T) {
 		},
 	}
 	ctx := t.Context()
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, descs)
+	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, descs)
 
 	graph := mgr.Graph(ctx)
 	if len(graph.Nodes) != 1 {
@@ -209,7 +209,7 @@ func TestManagerFlux(t *testing.T) {
 		},
 	}
 	ctx := t.Context()
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, descs)
+	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, descs)
 
 	dash := mgr.Flux(ctx)
 	if len(dash.Groups) != 1 {
@@ -232,7 +232,7 @@ func TestManagerMetrics(t *testing.T) {
 	}
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds)
 	ctx := t.Context()
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil)
+	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil)
 
 	m := mgr.Metrics(ctx)
 	if len(m.Pods) != 0 {
@@ -308,7 +308,7 @@ func TestSubscribeUnknownResource(t *testing.T) {
 func TestSubscribeCacheSyncFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	mgr := NewManager(ctx, newClient(t), k8sfake.NewClientset(), nil, nil, nil, nil, testDescs())
+	mgr := NewManager(ctx, newClient(t), k8sfake.NewClientset(), nil, nil, nil, nil, nil, testDescs())
 	_, err := mgr.Subscribe("apps", "v1", "deployments", "default")
 	if err == nil {
 		t.Fatal("Subscribe returned nil error when cache sync could not complete")

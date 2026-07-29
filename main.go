@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
@@ -30,6 +31,8 @@ func run() error {
 	flags := flag.NewFlagSet("spinoza", flag.ExitOnError)
 	addr := flags.String("addr", "127.0.0.1:34115", "listen address")
 	openBrowser := flags.Bool("open", false, "open the default browser on start")
+	debugImage := flags.String("debug-image", debugcontainer.DefaultImage, "image used for debug containers")
+	kubectlBinary := flags.String("kubectl", debugcontainer.DefaultBinary, "kubectl binary used to create debug containers")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		return err
 	}
@@ -37,7 +40,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mgr, err := makeManager(ctx)
+	mgr, err := makeManager(ctx, *debugImage, *kubectlBinary)
 	if err != nil {
 		return err
 	}

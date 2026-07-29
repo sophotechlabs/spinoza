@@ -21,6 +21,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
+	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
@@ -60,6 +61,7 @@ type Manager struct {
 	charts   *charts.Cache
 	forwards *portforward.Registry
 	shells   *exec.Service
+	debugger *debugcontainer.Service
 	disco    kubediscovery.CachedDiscoveryInterface
 	catalog  sync.RWMutex
 	cats     []api.Category
@@ -69,7 +71,7 @@ type Manager struct {
 	streams  map[streamKey]*stream
 }
 
-func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, shells *exec.Service, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
+func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, shells *exec.Service, debugger *debugcontainer.Service, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
 	return &Manager{
 		rootCtx:  ctx,
 		dyn:      dyn,
@@ -78,6 +80,7 @@ func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interf
 		charts:   charts.New(ctx, &http.Client{Timeout: chartFetchTimeout}, charts.DefaultTTL),
 		forwards: forwards,
 		shells:   shells,
+		debugger: debugger,
 		cats:     cats,
 		descs:    descs,
 		streams:  map[streamKey]*stream{},
@@ -180,6 +183,20 @@ func (m *Manager) StartExec(ctx context.Context, req exec.Request, stdout io.Wri
 		return nil, errors.New("exec is unavailable")
 	}
 	return m.shells.Start(ctx, req, stdout)
+}
+
+func (m *Manager) DebugSupport(ctx context.Context, namespace string) api.DebugSupport {
+	if m.debugger == nil {
+		return api.DebugSupport{Namespace: namespace, Allowed: false, Reason: debugcontainer.ErrUnavailable.Error()}
+	}
+	return m.debugger.Allowed(ctx, namespace)
+}
+
+func (m *Manager) StartDebug(ctx context.Context, req debugcontainer.Request) (api.DebugSession, error) {
+	if m.debugger == nil {
+		return api.DebugSession{}, debugcontainer.ErrUnavailable
+	}
+	return m.debugger.Ensure(ctx, req)
 }
 
 func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {

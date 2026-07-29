@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type {
-  ContainerState,
   FluxResource,
   GraphNode,
   ObjectRef,
@@ -8,6 +7,7 @@ import type {
   Row,
   View,
 } from './lib/types';
+import { containerNames } from './lib/containers';
 import { useResourceFeed } from './lib/feed';
 import { refFromFlux, refFromNode, refFromRow } from './lib/refs';
 import Sidebar from './components/Sidebar';
@@ -22,12 +22,6 @@ import BottomDock from './components/BottomDock';
 import type { PodTarget } from './components/BottomDock';
 
 const MAIN_SUB_ID = 'main';
-
-function containerNames(containers: ContainerState[]): string[] {
-  const regular = containers.filter((container) => !container.init);
-  const init = containers.filter((container) => container.init);
-  return [...regular, ...init].map((container) => container.name);
-}
 
 function podTarget(row: Row | null): PodTarget | null {
   if (row === null) {

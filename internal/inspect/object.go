@@ -252,12 +252,13 @@ func boundedPort(value int64) int32 {
 	return int32(value)
 }
 
-func containerNames(u *unstructured.Unstructured) []string {
-	if u.GetKind() != "Pod" {
+func containerNames(obj *unstructured.Unstructured) []string {
+	if obj.GetKind() != "Pod" {
 		return nil
 	}
-	names := namesFrom(u, "initContainers")
-	names = append(names, namesFrom(u, "containers")...)
+	names := namesFrom(obj, "initContainers")
+	names = append(names, namesFrom(obj, "containers")...)
+	names = append(names, namesFrom(obj, "ephemeralContainers")...)
 	if len(names) == 0 {
 		return nil
 	}

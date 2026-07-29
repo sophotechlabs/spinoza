@@ -1,5 +1,6 @@
 import type { Row } from '../lib/types';
 import { containerColor, containerTitle } from '../lib/status';
+import { isDebugContainer } from '../lib/containers';
 
 interface ContainerSquaresProps {
   row: Row;
@@ -7,7 +8,7 @@ interface ContainerSquaresProps {
 }
 
 export default function ContainerSquares({ row, fallback }: ContainerSquaresProps) {
-  const containers = row.containers ?? [];
+  const containers = (row.containers ?? []).filter((container) => !isDebugContainer(container));
   if (containers.length === 0) {
     return <span className="text-neutral-400">{fallback}</span>;
   }
