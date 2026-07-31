@@ -93,7 +93,7 @@ func inspectServerWith(t *testing.T, cs kubernetes.Interface, objs ...runtime.Ob
 	descs := map[string]api.ResourceDescriptor{
 		discovery.Key("", "v1", "pods"): podDesc(),
 	}
-	mgr := resources.NewManager(ctx, dyn, cs, nil, nil, nil, nil, nil, descs)
+	mgr := resources.NewManager(ctx, dyn, cs, nil, nil, nil, nil, nil, nil, descs)
 	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts

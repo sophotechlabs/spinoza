@@ -251,3 +251,16 @@ export interface DebugSupport {
   allowed: boolean;
   reason?: string;
 }
+
+export interface MetricPoint {
+  at: number;
+  value: number;
+}
+
+export interface MetricHistory {
+  namespace: string;
+  pod: string;
+  source?: string;
+  cpu: MetricPoint[];
+  memory: MetricPoint[];
+}

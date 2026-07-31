@@ -31,6 +31,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
+	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
 const chartFetchTimeout = 30 * time.Second
@@ -62,6 +63,7 @@ type Manager struct {
 	forwards *portforward.Registry
 	shells   *exec.Service
 	debugger *debugcontainer.Service
+	prom     *prom.Client
 	disco    kubediscovery.CachedDiscoveryInterface
 	catalog  sync.RWMutex
 	cats     []api.Category
@@ -71,7 +73,7 @@ type Manager struct {
 	streams  map[streamKey]*stream
 }
 
-func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, shells *exec.Service, debugger *debugcontainer.Service, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
+func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, shells *exec.Service, debugger *debugcontainer.Service, promClient *prom.Client, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
 	return &Manager{
 		rootCtx:  ctx,
 		dyn:      dyn,
@@ -81,6 +83,7 @@ func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interf
 		forwards: forwards,
 		shells:   shells,
 		debugger: debugger,
+		prom:     promClient,
 		cats:     cats,
 		descs:    descs,
 		streams:  map[streamKey]*stream{},
@@ -197,6 +200,13 @@ func (m *Manager) StartDebug(ctx context.Context, req debugcontainer.Request) (a
 		return api.DebugSession{}, debugcontainer.ErrUnavailable
 	}
 	return m.debugger.Ensure(ctx, req)
+}
+
+func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {
+	if m.prom == nil {
+		return api.MetricHistory{}, prom.ErrUnavailable
+	}
+	return m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
 }
 
 func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {

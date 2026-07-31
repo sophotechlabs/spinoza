@@ -14,6 +14,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
+	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
@@ -35,6 +36,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/gitops/graph", guard(s.handleGraph))
 	mux.HandleFunc("/api/flux", guard(s.handleFlux))
 	mux.HandleFunc("/api/flux/action", guard(s.handleFluxAction))
+	mux.HandleFunc("/api/metrics/history", guard(s.handleMetricHistory))
 	mux.HandleFunc("/api/metrics", guard(s.handleMetrics))
 	mux.HandleFunc("/api/object", guard(s.handleObject))
 	mux.HandleFunc("/api/events", guard(s.handleEvents))
@@ -107,6 +109,27 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFlux(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.mgr.Flux(r.Context()))
+}
+
+func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	namespace := query.Get("namespace")
+	pod := query.Get("pod")
+	if namespace == "" || pod == "" {
+		writeError(w, http.StatusBadRequest, "namespace and pod are required")
+		return
+	}
+	span, err := prom.ParseSpan(query.Get("range"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	history, historyErr := s.mgr.MetricHistory(r.Context(), namespace, pod, span)
+	if historyErr != nil {
+		writeAPIError(w, historyErr)
+		return
+	}
+	writeJSON(w, history)
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {

@@ -33,6 +33,7 @@ func run() error {
 	openBrowser := flags.Bool("open", false, "open the default browser on start")
 	debugImage := flags.String("debug-image", debugcontainer.DefaultImage, "image used for debug containers")
 	kubectlBinary := flags.String("kubectl", debugcontainer.DefaultBinary, "kubectl binary used to create debug containers")
+	promSpec := flags.String("prometheus", "", "prometheus service as namespace/service:port; discovered when empty")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		return err
 	}
@@ -40,7 +41,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mgr, err := makeManager(ctx, *debugImage, *kubectlBinary)
+	mgr, err := makeManager(ctx, *debugImage, *kubectlBinary, *promSpec)
 	if err != nil {
 		return err
 	}

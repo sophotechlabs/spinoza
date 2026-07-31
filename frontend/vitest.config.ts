@@ -19,6 +19,7 @@ export default defineConfig({
         '**/*.config.*',
         'src/main.tsx',
         'src/lib/monaco.ts',
+        'src/lib/chart.ts',
         'src/lib/terminal.ts',
         'src/lib/types.ts',
       ],

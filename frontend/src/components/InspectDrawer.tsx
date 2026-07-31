@@ -9,14 +9,24 @@ import InspectPorts from './InspectPorts';
 import InspectOverview from './InspectOverview';
 import InspectYaml from './InspectYaml';
 import InspectEvents from './InspectEvents';
+import InspectMetrics from './InspectMetrics';
 
-type Tab = 'overview' | 'yaml' | 'events';
+type Tab = 'overview' | 'yaml' | 'events' | 'metrics';
 
-const TABS: { id: Tab; label: string }[] = [
+const BASE_TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'yaml', label: 'YAML' },
   { id: 'events', label: 'Events' },
 ];
+
+const METRICS_TAB: { id: Tab; label: string } = { id: 'metrics', label: 'Metrics' };
+
+function tabsFor(kind: string | undefined): { id: Tab; label: string }[] {
+  if (kind === 'Pod') {
+    return [...BASE_TABS, METRICS_TAB];
+  }
+  return BASE_TABS;
+}
 
 interface InspectDrawerProps {
   target: ObjectRef | null;
@@ -144,11 +154,16 @@ export default function InspectDrawer({
   if (detail !== null && tab === 'events') {
     body = <InspectEvents namespace={detail.namespace} uid={detail.uid} />;
   }
+  if (detail !== null && tab === 'metrics') {
+    body = <InspectMetrics namespace={detail.namespace} pod={detail.name} />;
+  }
+
+  const tabs = tabsFor(detail?.kind);
 
   return (
     <aside
       style={{ width: `${width}px` }}
-      className="flex min-h-0 shrink-0 border-l border-neutral-800 bg-neutral-950"
+      className="flex min-h-0 min-w-0 shrink-0 overflow-hidden border-l border-neutral-800 bg-neutral-950"
     >
       <button
         type="button"
@@ -170,7 +185,7 @@ export default function InspectDrawer({
           </button>
         </div>
         <div className="flex shrink-0 gap-3 border-b border-neutral-800 px-3 text-xs">
-          {TABS.map((entry) => (
+          {tabs.map((entry) => (
             <button
               key={entry.id}
               type="button"
@@ -186,7 +201,7 @@ export default function InspectDrawer({
         {detail !== null && isFluxObject(detail.apiVersion) && (
           <InspectActions target={target} suspended={detail.suspended} onDone={handleApplied} />
         )}
-        <div className="flex min-h-0 flex-1 flex-col">{body}</div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{body}</div>
       </div>
     </aside>
   );

@@ -236,6 +236,19 @@ type ResourceUsage struct {
 	MemPercent int64 `json:"memPercent"`
 }
 
+type MetricPoint struct {
+	At    int64   `json:"at"`
+	Value float64 `json:"value"`
+}
+
+type MetricHistory struct {
+	Namespace string        `json:"namespace"`
+	Pod       string        `json:"pod"`
+	Source    string        `json:"source,omitempty"`
+	CPU       []MetricPoint `json:"cpu"`
+	Memory    []MetricPoint `json:"memory"`
+}
+
 type Metrics struct {
 	Pods  map[string]ResourceUsage `json:"pods"`
 	Nodes map[string]ResourceUsage `json:"nodes"`

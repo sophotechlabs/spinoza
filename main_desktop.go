@@ -24,7 +24,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	mgr, err := makeManager(ctx, debugcontainer.DefaultImage, debugcontainer.DefaultBinary)
+	mgr, err := makeManager(ctx, debugcontainer.DefaultImage, debugcontainer.DefaultBinary, "")
 	if err != nil {
 		log.Fatalf("manager: %v", err)
 	}

@@ -11,10 +11,11 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
+	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
-func makeManager(ctx context.Context, debugImage, kubectlBinary string) (*resources.Manager, error) {
+func makeManager(ctx context.Context, debugImage, kubectlBinary, promSpec string) (*resources.Manager, error) {
 	bundle, err := kube.Load()
 	if err != nil {
 		return nil, fmt.Errorf("kube: %w", err)
@@ -41,7 +42,12 @@ func makeManager(ctx context.Context, debugImage, kubectlBinary string) (*resour
 		debugImage,
 		bundle.Context,
 	)
-	mgr := resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, debugger, cats, descs)
+	promTarget, targetErr := prom.ParseTarget(promSpec)
+	if targetErr != nil {
+		return nil, targetErr
+	}
+	promClient := prom.NewClient(bundle.Clientset, promTarget)
+	mgr := resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, debugger, promClient, cats, descs)
 	mgr.UseDiscovery(bundle.Discovery, discErr)
 	return mgr, nil
 }

@@ -47,6 +47,13 @@ function stubApi(objectPayload: unknown = detail, eventsPayload: unknown = []): 
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/metrics/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ namespace: 'flux-system', pod: 'web', cpu: [], memory: [] }),
+        });
+      }
       if (url.startsWith('/api/events')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(eventsPayload) });
       }
@@ -124,6 +131,16 @@ describe('InspectDrawer', () => {
     await user.click(screen.getByRole('button', { name: 'Events' }));
 
     expect(await screen.findByText('No events for this object.')).toBeInTheDocument();
+  });
+
+  it('switches to the metrics tab', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    await screen.findByText('Metadata');
+
+    await user.click(screen.getByRole('button', { name: 'Metrics' }));
+
+    expect(await screen.findByLabelText('Metric range')).toBeInTheDocument();
   });
 
   it('refetches after an apply', async () => {

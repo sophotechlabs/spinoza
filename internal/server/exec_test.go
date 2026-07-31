@@ -110,7 +110,7 @@ func execServer(t *testing.T, service *exec.Service) *httptest.Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, service, nil, nil, nil)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, service, nil, nil, nil, nil)
 	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -425,7 +425,7 @@ func debugServer(t *testing.T, service *debugcontainer.Service) *httptest.Server
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, service, nil, nil)
+	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, service, nil, nil, nil)
 	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -460,6 +460,42 @@ func TestDebugIsUnavailableWithoutAService(t *testing.T) {
 	res, err := http.Post(ts.URL+"/api/debug"+execQuery, "", nil)
 	if err != nil {
 		t.Fatalf("post: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+}
+
+func TestMetricHistoryRejectsAMissingPod(t *testing.T) {
+	ts := debugServer(t, nil)
+	res, err := http.Get(ts.URL + "/api/metrics/history?namespace=monitoring")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+}
+
+func TestMetricHistoryRejectsABadRange(t *testing.T) {
+	ts := debugServer(t, nil)
+	res, err := http.Get(ts.URL + "/api/metrics/history?namespace=monitoring&pod=loki-0&range=banana")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+}
+
+func TestMetricHistoryIsUnavailableWithoutPrometheus(t *testing.T) {
+	ts := debugServer(t, nil)
+	res, err := http.Get(ts.URL + "/api/metrics/history?namespace=monitoring&pod=loki-0")
+	if err != nil {
+		t.Fatalf("get: %v", err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusBadRequest {
