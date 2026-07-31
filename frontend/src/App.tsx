@@ -132,8 +132,8 @@ export default function App() {
             switchView('flux-roles');
           }}
         />
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1">{mainArea}</div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="min-h-0 min-w-0 flex-1">{mainArea}</div>
           <BottomDock
             pod={podTarget(selected)}
             subscribeLogs={subscribeLogs}
