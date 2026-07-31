@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
@@ -151,6 +152,10 @@ func (m *Manager) Logs(ctx context.Context, req logs.Request) (*logs.Stream, err
 
 func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error) {
 	return flux.Do(ctx, m.dyn, ref, action, time.Now())
+}
+
+func (m *Manager) Action(ctx context.Context, req actions.Request) (api.ActionResult, error) {
+	return actions.New(m.dyn, m.cs).Do(ctx, req, time.Now())
 }
 
 func (m *Manager) StartForward(ctx context.Context, target portforward.Target, port int32) (api.PortForward, error) {

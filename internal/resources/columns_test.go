@@ -459,3 +459,53 @@ func TestContainersForMarksEphemeralContainers(t *testing.T) {
 		t.Fatal("an ephemeral container is not an init container")
 	}
 }
+
+func TestNodeCellsMarkACordonedNode(t *testing.T) {
+	node := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   map[string]any{"name": "worker-1"},
+		"spec":       map[string]any{"unschedulable": true},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
+			},
+		},
+	}}
+
+	if got := nodeCells(node)[0]; got != "Ready,SchedulingDisabled" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestNodeCellsLeaveASchedulableNodeAlone(t *testing.T) {
+	node := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   map[string]any{"name": "worker-1"},
+		"spec":       map[string]any{"unschedulable": false},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{"type": "Ready", "status": "True"},
+			},
+		},
+	}}
+
+	if got := nodeCells(node)[0]; got != "Ready" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestNodeCellsIgnoreANonBoolUnschedulable(t *testing.T) {
+	node := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   map[string]any{"name": "worker-1"},
+		"spec":       map[string]any{"unschedulable": "yes"},
+		"status":     map[string]any{"conditions": []any{}},
+	}}
+
+	if got := nodeCells(node)[0]; got != "NotReady" {
+		t.Fatalf("status = %q", got)
+	}
+}

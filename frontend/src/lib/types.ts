@@ -71,6 +71,8 @@ export interface ObjectDetail {
   conditions?: Condition[];
   containers?: string[];
   suspended?: boolean;
+  replicas?: number;
+  schedulable?: boolean;
   handledAt?: string;
   ports?: ObjectPort[];
   yaml: string;
@@ -237,6 +239,20 @@ export interface ExecSupport {
 export interface FluxActionResult {
   action: string;
   requestedAt?: string;
+}
+
+export interface PodOutcome {
+  namespace: string;
+  name: string;
+  outcome: string;
+  reason?: string;
+}
+
+export interface ActionResult {
+  action: string;
+  message: string;
+  dryRun?: boolean;
+  pods?: PodOutcome[];
 }
 
 export interface DebugSession {

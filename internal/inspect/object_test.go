@@ -544,3 +544,104 @@ func TestPortsRejectOutOfRangeNumbers(t *testing.T) {
 		t.Fatalf("port = %+v", detail.Ports[0])
 	}
 }
+
+func TestReplicasReportsTheSpecField(t *testing.T) {
+	deployment := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   map[string]any{"name": "web", "namespace": "flux-system"},
+		"spec":       map[string]any{"replicas": int64(3)},
+	}}
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			{Group: "apps", Version: "v1", Resource: "deployments"}: "DeploymentList",
+		},
+		deployment,
+	)
+	ref := api.ObjectRef{Group: "apps", Version: "v1", Resource: "deployments", Namespace: "flux-system", Name: "web"}
+
+	detail, err := Get(context.Background(), client, ref)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Replicas == nil {
+		t.Fatal("replicas = nil, want 3")
+	}
+	if *detail.Replicas != 3 {
+		t.Fatalf("replicas = %d, want 3", *detail.Replicas)
+	}
+}
+
+func TestReplicasIsAbsentForAPod(t *testing.T) {
+	detail, err := Get(context.Background(), newClient(newPod()), podRef())
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Replicas != nil {
+		t.Fatalf("replicas = %d, want nil", *detail.Replicas)
+	}
+}
+
+func TestSchedulableIsTrueForAPlainNode(t *testing.T) {
+	node := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   map[string]any{"name": "worker-1"},
+	}}
+
+	detail, err := Get(context.Background(), newClient(node), api.ObjectRef{Version: "v1", Resource: "nodes", Name: "worker-1"})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Schedulable == nil {
+		t.Fatal("schedulable = nil, want true")
+	}
+	if !*detail.Schedulable {
+		t.Fatal("schedulable = false, want true")
+	}
+}
+
+func TestSchedulableIsFalseForACordonedNode(t *testing.T) {
+	node := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   map[string]any{"name": "worker-1"},
+		"spec":       map[string]any{"unschedulable": true},
+	}}
+
+	detail, err := Get(context.Background(), newClient(node), api.ObjectRef{Version: "v1", Resource: "nodes", Name: "worker-1"})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Schedulable == nil || *detail.Schedulable {
+		t.Fatalf("schedulable = %v, want false", detail.Schedulable)
+	}
+}
+
+func TestSchedulableIsAbsentForANonNode(t *testing.T) {
+	detail, err := Get(context.Background(), newClient(newPod()), podRef())
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Schedulable != nil {
+		t.Fatalf("schedulable = %v, want nil for a pod", *detail.Schedulable)
+	}
+}
+
+func TestSchedulableIgnoresANonBoolField(t *testing.T) {
+	node := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   map[string]any{"name": "worker-1"},
+		"spec":       map[string]any{"unschedulable": "yes"},
+	}}
+
+	detail, err := Get(context.Background(), newClient(node), api.ObjectRef{Version: "v1", Resource: "nodes", Name: "worker-1"})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if detail.Schedulable != nil {
+		t.Fatalf("schedulable = %v, want nil", *detail.Schedulable)
+	}
+}

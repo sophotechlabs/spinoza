@@ -2,6 +2,8 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -10,6 +12,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
@@ -36,6 +39,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/gitops/graph", guard(s.handleGraph))
 	mux.HandleFunc("/api/flux", guard(s.handleFlux))
 	mux.HandleFunc("/api/flux/action", guard(s.handleFluxAction))
+	mux.HandleFunc("/api/action", guard(s.handleAction))
 	mux.HandleFunc("/api/metrics/history", guard(s.handleMetricHistory))
 	mux.HandleFunc("/api/metrics", guard(s.handleMetrics))
 	mux.HandleFunc("/api/object", guard(s.handleObject))
@@ -157,6 +161,51 @@ func (s *Server) handleFluxAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, result)
+}
+
+func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	req, err := actionRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, actionErr := s.mgr.Action(r.Context(), req)
+	if actionErr != nil {
+		writeAPIError(w, actionErr)
+		return
+	}
+	writeJSON(w, result)
+}
+
+func actionRequest(r *http.Request) (actions.Request, error) {
+	ref := refFrom(r)
+	if ref.Version == "" || ref.Resource == "" || ref.Name == "" {
+		return actions.Request{}, errors.New("version, resource and name are required")
+	}
+	query := r.URL.Query()
+	req := actions.Request{
+		Ref:    ref,
+		Action: actions.Action(query.Get("action")),
+		Force:  query.Get("force") == "true",
+		DryRun: query.Get("dryRun") == "true",
+	}
+	replicas := query.Get("replicas")
+	if req.Action != actions.Scale {
+		return req, nil
+	}
+	if replicas == "" {
+		return actions.Request{}, errors.New("replicas is required to scale")
+	}
+	count, err := strconv.ParseInt(replicas, 10, 32)
+	if err != nil {
+		return actions.Request{}, fmt.Errorf("replicas must be a number: %w", err)
+	}
+	req.Replicas = count
+	return req, nil
 }
 
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {

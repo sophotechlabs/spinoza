@@ -204,6 +204,10 @@ func nodeCells(obj *unstructured.Unstructured) []string {
 			status = "Ready"
 		}
 	}
+	unschedulable, _, err := unstructured.NestedBool(obj.Object, "spec", "unschedulable")
+	if err == nil && unschedulable {
+		status += ",SchedulingDisabled"
+	}
 	roles := []string{}
 	for k := range obj.GetLabels() {
 		if !strings.HasPrefix(k, "node-role.kubernetes.io/") {

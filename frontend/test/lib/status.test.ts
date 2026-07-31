@@ -140,3 +140,10 @@ describe('statusColor', () => {
     expect(statusColor('')).toBe('text-neutral-600');
   });
 });
+
+describe('a cordoned node', () => {
+  it('reads as a warning rather than healthy', () => {
+    expect(statusColor('Ready')).toBe('text-green-400');
+    expect(statusColor('Ready,SchedulingDisabled')).toBe('text-yellow-400');
+  });
+});

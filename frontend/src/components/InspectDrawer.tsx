@@ -3,8 +3,10 @@ import type { ContainerState, ObjectDetail, ObjectRef } from '../lib/types';
 import { fetchObject } from '../lib/object';
 import { NUDGE_STEP, useDrawerWidth } from '../lib/usePanelWidth';
 import { isFluxObject } from '../lib/fluxActions';
+import { hasActions } from '../lib/objectActions';
 import { forwardKind } from '../lib/portForward';
 import InspectActions from './InspectActions';
+import InspectObjectActions from './InspectObjectActions';
 import InspectPorts from './InspectPorts';
 import InspectOverview from './InspectOverview';
 import InspectYaml from './InspectYaml';
@@ -200,6 +202,9 @@ export default function InspectDrawer({
         </div>
         {detail !== null && isFluxObject(detail.apiVersion) && (
           <InspectActions target={target} suspended={detail.suspended} onDone={handleApplied} />
+        )}
+        {detail !== null && hasActions(target) && (
+          <InspectObjectActions target={target} detail={detail} onDone={handleApplied} />
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">{body}</div>
       </div>

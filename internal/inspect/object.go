@@ -85,6 +85,8 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		Conditions:  conditionsOf(clean),
 		Containers:  containerNames(clean),
 		Suspended:   suspendedOf(clean),
+		Replicas:    replicasOf(clean),
+		Schedulable: schedulableOf(clean),
 		HandledAt:   nestedString(clean, "status", "lastHandledReconcileAt"),
 		Ports:       portsOf(clean),
 		YAML:        string(raw),
@@ -162,6 +164,26 @@ func suspendedOf(u *unstructured.Unstructured) *bool {
 		return nil
 	}
 	return &value
+}
+
+func replicasOf(u *unstructured.Unstructured) *int64 {
+	value, found, err := unstructured.NestedInt64(u.Object, "spec", "replicas")
+	if !found || err != nil {
+		return nil
+	}
+	return &value
+}
+
+func schedulableOf(u *unstructured.Unstructured) *bool {
+	if u.GetKind() != "Node" {
+		return nil
+	}
+	unschedulable, _, err := unstructured.NestedBool(u.Object, "spec", "unschedulable")
+	if err != nil {
+		return nil
+	}
+	schedulable := !unschedulable
+	return &schedulable
 }
 
 func portsOf(u *unstructured.Unstructured) []api.ObjectPort {

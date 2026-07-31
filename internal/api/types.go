@@ -78,6 +78,8 @@ type ObjectDetail struct {
 	Conditions  []Condition       `json:"conditions,omitempty"`
 	Containers  []string          `json:"containers,omitempty"`
 	Suspended   *bool             `json:"suspended,omitempty"`
+	Replicas    *int64            `json:"replicas,omitempty"`
+	Schedulable *bool             `json:"schedulable,omitempty"`
 	HandledAt   string            `json:"handledAt,omitempty"`
 	Ports       []ObjectPort      `json:"ports,omitempty"`
 	YAML        string            `json:"yaml"`
@@ -119,6 +121,28 @@ const (
 type FluxActionResult struct {
 	Action      string `json:"action"`
 	RequestedAt string `json:"requestedAt,omitempty"`
+}
+
+const (
+	OutcomeEvict   = "evict"
+	OutcomeEvicted = "evicted"
+	OutcomeBlocked = "blocked"
+	OutcomeSkipped = "skipped"
+	OutcomeFailed  = "failed"
+)
+
+type PodOutcome struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Outcome   string `json:"outcome"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+type ActionResult struct {
+	Action  string       `json:"action"`
+	Message string       `json:"message"`
+	DryRun  bool         `json:"dryRun,omitempty"`
+	Pods    []PodOutcome `json:"pods,omitempty"`
 }
 
 type DebugSupport struct {
