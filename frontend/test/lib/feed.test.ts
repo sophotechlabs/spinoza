@@ -140,6 +140,63 @@ describe('useResourceFeed', () => {
     expect(useResourcesStore.getState().subs.get('main')?.rows.get('a')?.name).toBe('alpha');
   });
 
+  it('survives a snapshot that carries no rows key', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    const data = JSON.stringify({
+      type: 'snapshot',
+      subId: 'main',
+      columns: makeColumns(['Ready']),
+      namespaced: true,
+    });
+    act(() => {
+      socket.onmessage?.(new MessageEvent('message', { data }));
+    });
+
+    const sub = useResourcesStore.getState().subs.get('main');
+    expect(sub).toBeDefined();
+    expect(sub?.rows.size).toBe(0);
+  });
+
+  it('still applies deltas after an empty snapshot', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'snapshot', subId: 'main', columns: makeColumns([]) }),
+        }),
+      );
+    });
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'added',
+            subId: 'main',
+            row: makeRow({ uid: 'z', name: 'zulu' }),
+          }),
+        }),
+      );
+    });
+
+    expect(useResourcesStore.getState().subs.get('main')?.rows.get('z')?.name).toBe('zulu');
+  });
+
+  it('treats a missing namespaced flag as cluster scoped', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'snapshot', subId: 'main', columns: [], rows: [] }),
+        }),
+      );
+    });
+
+    expect(useResourcesStore.getState().subs.get('main')?.namespaced).toBe(false);
+  });
+
   it('routes an added delta message to the store', () => {
     useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
     renderHook(() => useResourceFeed());

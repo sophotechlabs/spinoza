@@ -675,3 +675,78 @@ func TestWSRejectsNonWebsocketRequest(t *testing.T) {
 		t.Fatalf("status = %d, want a non-upgrade rejection", resp.StatusCode)
 	}
 }
+
+func readRaw(ctx context.Context, t *testing.T, c *websocket.Conn) map[string]json.RawMessage {
+	t.Helper()
+	fields := map[string]json.RawMessage{}
+	err := wsjson.Read(ctx, c, &fields)
+	if err != nil {
+		t.Fatalf("read message: %v", err)
+	}
+	return fields
+}
+
+func subscribeRaw(t *testing.T, mgr *resources.Manager, sub api.ClientMsg) map[string]json.RawMessage {
+	t.Helper()
+	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	t.Cleanup(ts.Close)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.CloseNow() })
+
+	writeErr := wsjson.Write(ctx, conn, sub)
+	if writeErr != nil {
+		t.Fatalf("write subscribe: %v", writeErr)
+	}
+	return readRaw(ctx, t, conn)
+}
+
+func TestWSSnapshotOfAnEmptyResourceCarriesRows(t *testing.T) {
+	mgr, _ := testManager(t)
+
+	fields := subscribeRaw(t, mgr, api.ClientMsg{
+		Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default",
+	})
+
+	if string(fields["type"]) != `"snapshot"` {
+		t.Fatalf("type = %s", fields["type"])
+	}
+	if string(fields["rows"]) != "[]" {
+		t.Fatalf("rows = %s, want []; the browser iterates it without a guard", fields["rows"])
+	}
+}
+
+func clusterScopedManager(t *testing.T) *resources.Manager {
+	t.Helper()
+	nodeGVR := schema.GroupVersionResource{Version: "v1", Resource: "nodes"}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{nodeGVR: "NodeList"},
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	desc := api.ResourceDescriptor{Version: "v1", Resource: "nodes", Kind: "Node", Namespaced: false}
+	descs := map[string]api.ResourceDescriptor{discovery.Key("", "v1", "nodes"): desc}
+	return resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
+}
+
+func TestWSSnapshotOfAClusterScopedResourceCarriesNamespaced(t *testing.T) {
+	mgr := clusterScopedManager(t)
+
+	fields := subscribeRaw(t, mgr, api.ClientMsg{
+		Type: "subscribe", SubID: "s1", Version: "v1", Resource: "nodes",
+	})
+
+	value, present := fields["namespaced"]
+	if !present {
+		t.Fatal("namespaced was dropped for a cluster-scoped resource")
+	}
+	if string(value) != "false" {
+		t.Fatalf("namespaced = %s, want false", value)
+	}
+}

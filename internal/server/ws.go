@@ -78,12 +78,12 @@ func (sess *wsSession) subscribe(msg api.ClientMsg) {
 	sess.subs[msg.SubID] = sub
 	sess.mu.Unlock()
 
-	sess.write(sess.ctx, api.ServerMsg{
+	sess.write(sess.ctx, api.Snapshot{
 		Type:       "snapshot",
 		SubID:      msg.SubID,
-		Columns:    sub.Columns,
+		Columns:    columnsOrEmpty(sub.Columns),
 		Namespaced: sub.Namespaced,
-		Rows:       sub.Rows,
+		Rows:       rowsOrEmpty(sub.Rows),
 	})
 
 	go sess.relay(msg.SubID, sub)
@@ -199,10 +199,24 @@ func (sess *wsSession) closeAll() {
 	}
 }
 
-func (sess *wsSession) write(ctx context.Context, msg api.ServerMsg) {
+func (sess *wsSession) write(ctx context.Context, msg any) {
 	writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	_ = wsjson.Write(writeCtx, sess.conn, msg)
+}
+
+func columnsOrEmpty(columns []api.Column) []api.Column {
+	if columns == nil {
+		return []api.Column{}
+	}
+	return columns
+}
+
+func rowsOrEmpty(rows []api.Row) []api.Row {
+	if rows == nil {
+		return []api.Row{}
+	}
+	return rows
 }
 
 func eventToMsg(subID string, ev resources.Event) api.ServerMsg {

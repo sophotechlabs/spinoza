@@ -58,6 +58,20 @@ function canSend(socket: WebSocket | null): socket is WebSocket {
   return socket.readyState === OPEN_STATE;
 }
 
+function listOr<T>(value: T[] | undefined): T[] {
+  if (value === undefined) {
+    return [];
+  }
+  return value;
+}
+
+function flagOr(value: boolean | undefined): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  return value;
+}
+
 export function useResourceFeed(): ResourceFeed {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const socketRef = useRef<WebSocket | null>(null);
@@ -107,7 +121,12 @@ export function useResourceFeed(): ResourceFeed {
       }
       switch (msg.type) {
         case 'snapshot':
-          store.applySnapshot(msg.subId, msg.columns, msg.namespaced, msg.rows);
+          store.applySnapshot(
+            msg.subId,
+            listOr(msg.columns),
+            flagOr(msg.namespaced),
+            listOr(msg.rows),
+          );
           break;
         case 'added':
         case 'modified':

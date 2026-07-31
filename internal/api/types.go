@@ -201,6 +201,14 @@ type ServerMsg struct {
 	Message    string   `json:"message,omitempty"`
 }
 
+type Snapshot struct {
+	Type       string   `json:"type"`
+	SubID      string   `json:"subId"`
+	Columns    []Column `json:"columns"`
+	Namespaced bool     `json:"namespaced"`
+	Rows       []Row    `json:"rows"`
+}
+
 type GraphNode struct {
 	ID        string `json:"id"`
 	Kind      string `json:"kind"`
