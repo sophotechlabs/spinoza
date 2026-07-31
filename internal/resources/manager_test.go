@@ -3,9 +3,12 @@ package resources
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -13,6 +16,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
 	kubediscovery "k8s.io/client-go/discovery"
@@ -687,5 +691,165 @@ func TestRefreshResourcesWithoutADiscoveryClient(t *testing.T) {
 	catalog := mgr.RefreshResources()
 	if len(catalog.Categories) != 1 {
 		t.Fatalf("categories = %d, want the startup catalog", len(catalog.Categories))
+	}
+}
+
+func stuckManager(t *testing.T, stuck string) (*Manager, *fake.FakeDynamicClient) {
+	t.Helper()
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+	client.PrependReactor("list", stuck, func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: stuck},
+			"",
+			errors.New(`User "spinoza" cannot list resource "`+stuck+`"`),
+		)
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, client, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, testDescs())
+	mgr.syncTimeout = 300 * time.Millisecond
+	return mgr, client
+}
+
+func TestSubscribeGivesUpWhenTheCacheNeverSyncs(t *testing.T) {
+	mgr, _ := stuckManager(t, "deployments")
+
+	start := time.Now()
+	_, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected a resource that never syncs to fail the subscribe")
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("subscribe took %s, want it bounded by the sync timeout", elapsed)
+	}
+	if !strings.Contains(err.Error(), "did not sync") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSubscribeReportsWhyTheWatchFailed(t *testing.T) {
+	mgr, _ := stuckManager(t, "deployments")
+
+	_, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "cannot list resource") {
+		t.Fatalf("err = %v, want the forbidden reason from the reflector", err)
+	}
+}
+
+func TestAStuckSubscribeDoesNotBlockOtherResources(t *testing.T) {
+	mgr, _ := stuckManager(t, "deployments")
+	mgr.syncTimeout = 20 * time.Second
+
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		_, _ = mgr.Subscribe("apps", "v1", "deployments", "default")
+	}()
+	<-started
+	time.Sleep(200 * time.Millisecond)
+
+	done := make(chan error, 1)
+	go func() {
+		sub, err := mgr.Subscribe("", "v1", "nodes", "")
+		if sub != nil {
+			sub.Close()
+		}
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("subscribe to a healthy resource: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a stuck resource blocked every other subscribe")
+	}
+}
+
+func TestCloseIsNotBlockedByAStuckSubscribe(t *testing.T) {
+	mgr, _ := stuckManager(t, "deployments")
+	mgr.syncTimeout = 20 * time.Second
+
+	sub, err := mgr.Subscribe("", "v1", "nodes", "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		_, _ = mgr.Subscribe("apps", "v1", "deployments", "default")
+	}()
+	<-started
+	time.Sleep(200 * time.Millisecond)
+
+	closed := make(chan struct{})
+	go func() {
+		sub.Close()
+		close(closed)
+	}()
+
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close blocked behind a stuck subscribe; the session would leak its goroutines")
+	}
+}
+
+func TestConcurrentSubscribersShareOneStream(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	t.Cleanup(cancel)
+
+	var group sync.WaitGroup
+	subs := make([]*Subscription, 8)
+	for i := range subs {
+		group.Add(1)
+		go func(index int) {
+			defer group.Done()
+			sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+			if err != nil {
+				return
+			}
+			subs[index] = sub
+		}(i)
+	}
+	group.Wait()
+
+	mgr.mu.Lock()
+	count := len(mgr.streams)
+	mgr.mu.Unlock()
+	if count != 1 {
+		t.Fatalf("built %d streams, want them shared", count)
+	}
+	for _, sub := range subs {
+		if sub == nil {
+			t.Fatal("a concurrent subscribe failed")
+		}
+		sub.Close()
+	}
+}
+
+func TestTheBuildGateIsReleased(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	t.Cleanup(cancel)
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	sub.Close()
+
+	mgr.mu.Lock()
+	gates := len(mgr.building)
+	mgr.mu.Unlock()
+	if gates != 0 {
+		t.Fatalf("%d build gates left behind", gates)
 	}
 }

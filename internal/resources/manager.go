@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -35,7 +36,10 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
-const chartFetchTimeout = 30 * time.Second
+const (
+	chartFetchTimeout  = 30 * time.Second
+	defaultSyncTimeout = 30 * time.Second
+)
 
 type Event struct {
 	Kind string
@@ -56,22 +60,29 @@ func (s *Subscription) Close() {
 }
 
 type Manager struct {
-	rootCtx  context.Context
-	dyn      dynamic.Interface
-	cs       kubernetes.Interface
-	schemas  *jsonschema.Client
-	charts   *charts.Cache
-	forwards *portforward.Registry
-	shells   *exec.Service
-	debugger *debugcontainer.Service
-	prom     *prom.Client
-	disco    kubediscovery.CachedDiscoveryInterface
-	catalog  sync.RWMutex
-	cats     []api.Category
-	descs    map[string]api.ResourceDescriptor
-	discErr  string
-	mu       sync.Mutex
-	streams  map[streamKey]*stream
+	rootCtx     context.Context
+	dyn         dynamic.Interface
+	cs          kubernetes.Interface
+	schemas     *jsonschema.Client
+	charts      *charts.Cache
+	forwards    *portforward.Registry
+	shells      *exec.Service
+	debugger    *debugcontainer.Service
+	prom        *prom.Client
+	disco       kubediscovery.CachedDiscoveryInterface
+	catalog     sync.RWMutex
+	cats        []api.Category
+	descs       map[string]api.ResourceDescriptor
+	discErr     string
+	mu          sync.Mutex
+	streams     map[streamKey]*stream
+	building    map[streamKey]*buildGate
+	syncTimeout time.Duration
+}
+
+type buildGate struct {
+	mu   sync.Mutex
+	refs int
 }
 
 func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, shells *exec.Service, debugger *debugcontainer.Service, promClient *prom.Client, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
@@ -88,6 +99,9 @@ func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interf
 		cats:     cats,
 		descs:    descs,
 		streams:  map[streamKey]*stream{},
+		building: map[streamKey]*buildGate{},
+
+		syncTimeout: defaultSyncTimeout,
 	}
 }
 
@@ -261,18 +275,10 @@ func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscr
 	}
 	key := streamKey{gvr: gvr, ns: effNs}
 
-	m.mu.Lock()
-	st, ok := m.streams[key]
-	if !ok {
-		created, err := m.newStream(key, desc)
-		if err != nil {
-			m.mu.Unlock()
-			return nil, err
-		}
-		st = created
-		m.streams[key] = st
+	st, err := m.streamFor(key, desc)
+	if err != nil {
+		return nil, err
 	}
-	m.mu.Unlock()
 
 	ch := make(chan Event, 256)
 	st.mu.Lock()
@@ -306,6 +312,68 @@ func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscr
 	}, nil
 }
 
+func (m *Manager) streamFor(key streamKey, desc api.ResourceDescriptor) (*stream, error) {
+	existing, gate := m.acquireGate(key)
+	if existing != nil {
+		return existing, nil
+	}
+	defer m.releaseGate(key)
+
+	gate.Lock()
+	defer gate.Unlock()
+
+	built, ok := m.lookupStream(key)
+	if ok {
+		return built, nil
+	}
+
+	created, err := m.newStream(key, desc)
+	if err != nil {
+		return nil, err
+	}
+
+	m.mu.Lock()
+	m.streams[key] = created
+	m.mu.Unlock()
+	return created, nil
+}
+
+func (m *Manager) lookupStream(key streamKey) (*stream, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st, ok := m.streams[key]
+	return st, ok
+}
+
+func (m *Manager) acquireGate(key streamKey) (*stream, *sync.Mutex) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st, ok := m.streams[key]
+	if ok {
+		return st, nil
+	}
+	gate, ok := m.building[key]
+	if !ok {
+		gate = &buildGate{}
+		m.building[key] = gate
+	}
+	gate.refs++
+	return nil, &gate.mu
+}
+
+func (m *Manager) releaseGate(key streamKey) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	gate, ok := m.building[key]
+	if !ok {
+		return
+	}
+	gate.refs--
+	if gate.refs == 0 {
+		delete(m.building, key)
+	}
+}
+
 func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream, error) {
 	ctx, cancel := context.WithCancel(m.rootCtx)
 	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dyn, 0, key.ns, nil)
@@ -316,6 +384,16 @@ func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream
 	if transformErr != nil {
 		cancel()
 		return nil, fmt.Errorf("set transform: %w", transformErr)
+	}
+
+	var lastWatchErr atomic.Pointer[string]
+	watchErr := informer.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
+		reason := err.Error()
+		lastWatchErr.Store(&reason)
+	})
+	if watchErr != nil {
+		cancel()
+		return nil, fmt.Errorf("set watch error handler: %w", watchErr)
 	}
 
 	st := &stream{
@@ -344,11 +422,28 @@ func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream
 	}
 
 	factory.Start(ctx.Done())
-	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+	syncCtx, cancelSync := context.WithTimeout(ctx, m.syncTimeout)
+	defer cancelSync()
+	if !cache.WaitForCacheSync(syncCtx.Done(), informer.HasSynced) {
 		cancel()
-		return nil, fmt.Errorf("cache sync failed for %s", key.gvr.String())
+		return nil, syncFailure(key, m.syncTimeout, watchFailure(&lastWatchErr))
 	}
 	return st, nil
+}
+
+func watchFailure(holder *atomic.Pointer[string]) string {
+	reason := holder.Load()
+	if reason == nil {
+		return ""
+	}
+	return *reason
+}
+
+func syncFailure(key streamKey, timeout time.Duration, reason string) error {
+	if reason == "" {
+		return fmt.Errorf("%s did not sync within %s", key.gvr.String(), timeout)
+	}
+	return fmt.Errorf("%s did not sync within %s: %s", key.gvr.String(), timeout, reason)
 }
 
 func (m *Manager) dropStream(key streamKey) {
