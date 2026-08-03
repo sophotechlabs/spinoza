@@ -24,7 +24,12 @@ export function useFlux(): { data: FluxDashboard | null; error: string | null } 
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let mounted = true;
+    let inFlight = false;
     const load = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       try {
         const dash = await fetchFlux();
         if (mounted) {
@@ -35,6 +40,8 @@ export function useFlux(): { data: FluxDashboard | null; error: string | null } 
         if (mounted) {
           setError(errorMessage(err));
         }
+      } finally {
+        inFlight = false;
       }
     };
     void load();
