@@ -49,6 +49,7 @@ export function makeGraphNode(overrides: Partial<GraphNode>): GraphNode {
     name: 'flux-system',
     namespace: 'flux-system',
     status: 'Ready',
+    ready: 'True',
     category: 'source',
   };
   return { ...base, ...overrides };

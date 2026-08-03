@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -433,4 +434,118 @@ func TestFailCurrentLogsStaysSilentOnceSuperseded(t *testing.T) {
 	if msg.Type != "marker" {
 		t.Fatalf("Type = %q, want the superseded error to have been dropped", msg.Type)
 	}
+}
+
+func TestAReplacedLogStreamStopsWritingUnderTheReusedSubID(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, client, ctx := rawSession(t, mgr)
+
+	stale := sess.claimLogs("logs")
+	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
+	if err != nil {
+		t.Fatalf("logs: %v", err)
+	}
+	if !sess.adoptLogs("logs", stale, stream) {
+		t.Fatal("adoptLogs refused the current generation")
+	}
+
+	sess.claimLogs("logs")
+
+	done := make(chan struct{})
+	go func() {
+		sess.relayLogs("logs", stale, stream)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stale relay never gave up")
+	}
+
+	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "logs"})
+	msg := readMsg(ctx, t, client)
+	if msg.Type != "marker" {
+		t.Fatalf("type = %q, want the replaced pod's lines and end marker to have been dropped", msg.Type)
+	}
+}
+
+func TestTheCurrentLogStreamStillReachesTheClient(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, client, ctx := rawSession(t, mgr)
+
+	gen := sess.claimLogs("logs")
+	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
+	if err != nil {
+		t.Fatalf("logs: %v", err)
+	}
+	if !sess.adoptLogs("logs", gen, stream) {
+		t.Fatal("adoptLogs refused the current generation")
+	}
+
+	go sess.relayLogs("logs", gen, stream)
+
+	msg := readMsg(ctx, t, client)
+	if msg.Type != "log" {
+		t.Fatalf("type = %q, want the live stream to deliver its lines", msg.Type)
+	}
+	if msg.SubID != "logs" {
+		t.Fatalf("subId = %q", msg.SubID)
+	}
+}
+
+func TestASessionBindsTheClusterItWasTrackedUnder(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	swapped, _ := testManager(t, newDeployment("default", "api"))
+	holder := &swappableCluster{manager: mgr}
+	srv := New(holder, testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	holder.swap(swapped)
+	conn, _, dialErr := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	if dialErr != nil {
+		t.Fatalf("dial: %v", dialErr)
+	}
+	t.Cleanup(func() { _ = conn.CloseNow() })
+
+	sub := api.ClientMsg{Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
+	if writeErr := wsjson.Write(ctx, conn, sub); writeErr != nil {
+		t.Fatalf("write: %v", writeErr)
+	}
+
+	msg := readMsg(ctx, t, conn)
+	if len(msg.Rows) != 1 {
+		t.Fatalf("rows = %d, want the one row of the cluster in force", len(msg.Rows))
+	}
+	if msg.Rows[0].Name != "api" {
+		t.Fatalf("row = %q, want the swapped-in cluster's row", msg.Rows[0].Name)
+	}
+}
+
+type swappableCluster struct {
+	mu      sync.Mutex
+	manager *resources.Manager
+}
+
+func (c *swappableCluster) swap(next *resources.Manager) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.manager = next
+}
+
+func (c *swappableCluster) Manager() *resources.Manager {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.manager
+}
+
+func (c *swappableCluster) Contexts() api.ContextList {
+	return api.ContextList{}
+}
+
+func (c *swappableCluster) Use(string) error {
+	return nil
 }

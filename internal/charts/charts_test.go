@@ -471,3 +471,21 @@ func TestMaxVersionComparesTranslatedTagsByVersionNotText(t *testing.T) {
 		t.Fatalf("latest = %q, want the higher version rather than the later build stamp", got)
 	}
 }
+
+func TestNewerComparesOCIBuildMetadataTags(t *testing.T) {
+	if !Newer("1.9.0_20260101", "1.10.0_20260102") {
+		t.Fatal("an outdated OCI release was reported as up to date; maxVersion hands back the raw underscore tag")
+	}
+}
+
+func TestNewerRefusesAnUpToDateOCITag(t *testing.T) {
+	if Newer("1.10.0_20260102", "1.10.0_20260102") {
+		t.Fatal("a release on the newest tag was reported as outdated")
+	}
+}
+
+func TestNewerStillRefusesGarbage(t *testing.T) {
+	if Newer("1.0.0_build_2", "2.0.0") {
+		t.Fatal("a tag that is not a version was compared anyway")
+	}
+}

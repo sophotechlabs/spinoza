@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Category, FluxResource, GraphNode, ObjectRef } from '../src/lib/types';
+import type { Category, FluxResource, GraphNode } from '../src/lib/types';
 
 const feedMocks = vi.hoisted(() => ({
   subscribe: vi.fn(),
@@ -32,6 +32,7 @@ const stubs = vi.hoisted((): { node: GraphNode; flux: FluxResource } => ({
     name: 'podinfo',
     namespace: 'apps',
     status: 'Ready',
+    ready: 'True',
     category: 'app',
   },
   flux: {
@@ -84,6 +85,18 @@ vi.mock('../src/components/FluxList', () => ({ default: fluxStub('flux-dashboard
 vi.mock('../src/components/FluxOverview', () => ({ default: fluxStub('flux-overview') }));
 vi.mock('../src/components/FluxRoles', () => ({ default: fluxStub('flux-roles') }));
 
+vi.mock('../src/components/ForwardsPanel', () => ({
+  default: () => <div data-testid="forwards-panel" />,
+}));
+
+vi.mock('../src/components/TerminalPanel', () => ({
+  default: ({ target }: { target: { pod: string; container: string } }) => (
+    <div data-testid="terminal-panel">
+      {target.pod}/{target.container}
+    </div>
+  ),
+}));
+
 vi.mock('../src/components/ContextPicker', () => ({
   default: ({ onSwitched }: { onSwitched: () => void }) => (
     <button type="button" data-testid="context-changed" onClick={onSwitched}>
@@ -92,35 +105,47 @@ vi.mock('../src/components/ContextPicker', () => ({
   ),
 }));
 
-vi.mock('../src/components/InspectDrawer', () => ({
+vi.mock('../src/components/PanelChrome', () => ({
   default: ({
     target,
-    containers,
     onClose,
+    children,
   }: {
-    target: ObjectRef | null;
-    containers?: { name: string; reason?: string; restarts: number }[];
+    target: { resource: string; namespace: string; name: string } | null;
     onClose: () => void;
-  }) => {
-    if (target === null) {
-      return <aside>Select a row to inspect it.</aside>;
-    }
-    return (
-      <aside>
+    children: React.ReactNode;
+  }) => (
+    <div>
+      {target !== null && (
         <span data-testid="inspect-target">
           {`${target.resource}:${target.namespace}/${target.name}`}
         </span>
-        <span data-testid="inspect-containers">
-          {(containers ?? [])
-            .map((one) => `${one.name}:${one.reason ?? ''}:${one.restarts}`)
-            .join(',')}
-        </span>
-        <button type="button" onClick={onClose}>
-          Close
-        </button>
-      </aside>
-    );
-  },
+      )}
+      <button type="button" onClick={onClose}>
+        Close
+      </button>
+      {children}
+    </div>
+  ),
+}));
+
+vi.mock('../src/components/InspectOverview', () => ({
+  default: ({
+    containers,
+  }: {
+    containers?: { name: string; reason?: string; restarts: number }[];
+  }) => (
+    <span data-testid="inspect-containers">
+      {(containers ?? []).map((one) => `${one.name}:${one.reason ?? ''}:${one.restarts}`).join(',')}
+    </span>
+  ),
+}));
+
+vi.mock('../src/components/InspectLogs', () => ({
+  default: ({ containers }: { containers: string[] }) => (
+    <span data-testid="inspect-log-feed">{containers.join(',')}</span>
+  ),
+  INSPECT_LOGS_SUB_ID: 'inspect-logs',
 }));
 
 import App from '../src/App';
@@ -145,12 +170,32 @@ const deploymentDescriptor = makeDescriptor({
 
 const categories: Category[] = [makeCategory('Workloads', [podDescriptor, deploymentDescriptor])];
 
+const objectDetail = {
+  apiVersion: 'v1',
+  kind: 'Pod',
+  name: 'pod-a',
+  namespace: 'prod',
+  uid: 'uid-pod-a',
+  createdAt: '2026-08-03T09:00:00Z',
+  containers: ['app'],
+  yaml: 'kind: Pod\n',
+};
+
 function stubFetch(): void {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation((url: string) => {
       if (url === '/api/metrics') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ pods: {}, nodes: {} }) });
+      }
+      if (url.startsWith('/api/object')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(objectDetail) });
+      }
+      if (url.startsWith('/api/events')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url.startsWith('/api/portforward')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
     }),
@@ -313,7 +358,7 @@ describe('App', () => {
     expect(feedMocks.reconnect).toHaveBeenCalledTimes(1);
   });
 
-  it('streams logs for a selected pod through the dock', async () => {
+  it('hands the log feed to the inspector, which is the only place logs stream', async () => {
     useResourcesStore.getState().applySnapshot('main#1', makeColumns([]), true, [
       makeRow({
         uid: 'a',
@@ -326,15 +371,13 @@ describe('App', () => {
     render(<App />);
     await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
 
-    expect(feedMocks.subscribeLogs).toHaveBeenCalledWith(
-      'logs',
-      expect.objectContaining({ namespace: 'prod', name: 'pod-a', container: 'app' }),
-    );
+    await user.click(screen.getByRole('tab', { name: 'Logs' }));
+
+    expect(screen.getByTestId('inspect-log-feed')).toHaveTextContent('app');
   });
 
-  it('leaves the dock without a pod for rows that have no containers', async () => {
+  it('leaves the terminal shut for rows that have no containers', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main#1', makeColumns([]), true, [
@@ -344,13 +387,11 @@ describe('App', () => {
     render(<App />);
     await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'dep-a' }));
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
 
-    expect(screen.getByText('Select a pod to stream its logs.')).toBeInTheDocument();
-    expect(feedMocks.subscribeLogs).not.toHaveBeenCalled();
+    expect(screen.getByRole('tab', { name: 'Terminal' })).toBeDisabled();
   });
 
-  it('offers regular containers before init containers in the log picker', async () => {
+  it('offers regular containers before init containers in the picker', async () => {
     useResourcesStore.getState().applySnapshot('main#1', makeColumns([]), true, [
       makeRow({
         uid: 'a',
@@ -366,12 +407,8 @@ describe('App', () => {
     render(<App />);
     await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
+    await user.click(screen.getByRole('tab', { name: 'Terminal' }));
 
-    expect(feedMocks.subscribeLogs).toHaveBeenCalledWith(
-      'logs',
-      expect.objectContaining({ container: 'app' }),
-    );
     const picker = screen.getByLabelText('Container');
     const options = within(picker)
       .getAllByRole('option')
@@ -379,7 +416,7 @@ describe('App', () => {
     expect(options).toEqual(['app', 'copy-libs']);
   });
 
-  it('leaves the dock without a pod for rows with an empty container list', async () => {
+  it('leaves the terminal shut for rows with an empty container list', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main#1', makeColumns([]), true, [
@@ -389,10 +426,8 @@ describe('App', () => {
     render(<App />);
     await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
-    await user.click(screen.getByRole('button', { name: /Logs/ }));
 
-    expect(screen.getByText('Select a pod to stream its logs.')).toBeInTheDocument();
-    expect(feedMocks.subscribeLogs).not.toHaveBeenCalled();
+    expect(screen.getByRole('tab', { name: 'Terminal' })).toBeDisabled();
   });
 
   it('targets the inspector at a selected graph node', async () => {
@@ -433,7 +468,8 @@ describe('App', () => {
   it('targets the inspector from the by-role view', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    const gitops = screen.getByLabelText('GitOps views');
+    await user.click(within(gitops).getByRole('button', { name: 'Overview' }));
 
     await user.click(screen.getByRole('button', { name: 'select-flux-roles' }));
 

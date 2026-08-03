@@ -67,6 +67,18 @@ describe('InspectLogs', () => {
     expect(screen.queryByLabelText('Log container')).not.toBeInTheDocument();
   });
 
+  it('switches container from the picker', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+
+    await user.selectOptions(screen.getByLabelText('Log container'), 'sidecar');
+
+    expect(subscribeLogs).toHaveBeenLastCalledWith(
+      INSPECT_LOGS_SUB_ID,
+      expect.objectContaining({ container: 'sidecar' }),
+    );
+  });
+
   it('scrolls to the newest line while following', () => {
     renderLogs();
     const body = screen.getByText('Waiting for output…').parentElement as HTMLDivElement;
@@ -99,5 +111,38 @@ describe('InspectLogs', () => {
     expect(() => {
       scrollToBottom(null);
     }).not.toThrow();
+  });
+});
+
+describe('InspectLogs stream state', () => {
+  it('shows no error banner before a stream exists', () => {
+    useLogsStore.setState({ streams: new Map() });
+    renderLogs();
+
+    expect(screen.queryByText('stream ended')).not.toBeInTheDocument();
+  });
+
+  it('shows why the stream failed', () => {
+    useLogsStore.setState({ streams: new Map() });
+    renderLogs();
+
+    act(() => {
+      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
+      useLogsStore.getState().failStream(INSPECT_LOGS_SUB_ID, 'pods/log is forbidden');
+    });
+
+    expect(screen.getByText('pods/log is forbidden')).toBeInTheDocument();
+  });
+
+  it('marks a stream that ended', () => {
+    useLogsStore.setState({ streams: new Map() });
+    renderLogs();
+
+    act(() => {
+      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
+      useLogsStore.getState().endStream(INSPECT_LOGS_SUB_ID);
+    });
+
+    expect(screen.getByText('stream ended')).toBeInTheDocument();
   });
 });

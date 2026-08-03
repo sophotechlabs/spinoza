@@ -9,10 +9,14 @@ function stateColor(state: string): string {
   return 'text-green-400';
 }
 
-export default function ForwardsPanel() {
+interface ForwardsPanelProps {
+  active?: boolean;
+}
+
+export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
   const forwards = useForwardsStore((state) => state.forwards);
   const [error, setError] = useState<string | null>(null);
-  useForwardPolling(true);
+  useForwardPolling(active);
 
   async function stop(id: string) {
     setError(null);

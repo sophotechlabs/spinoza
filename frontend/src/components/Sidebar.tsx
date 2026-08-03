@@ -86,7 +86,7 @@ export default function Sidebar({
   onSelectOverview,
   onSelectRoles,
 }: SidebarProps) {
-  const { width, startResize, nudge } = useSidebarWidth();
+  const { size: width, startResize, nudge } = useSidebarWidth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +176,7 @@ export default function Sidebar({
             <span>{chevron(gitopsCollapsed)} GitOps</span>
           </button>
           {!gitopsCollapsed && (
-            <div>
+            <div aria-label="GitOps views">
               <button
                 type="button"
                 onClick={onSelectRoles}

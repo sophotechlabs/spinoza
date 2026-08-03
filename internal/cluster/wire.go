@@ -25,12 +25,22 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 	}, kube.Contexts)
 }
 
+func unreachable(name string, discErr error) error {
+	if discErr != nil {
+		return fmt.Errorf("context %q lists no resource types: %w", name, discErr)
+	}
+	return fmt.Errorf("context %q lists no resource types", name)
+}
+
 func build(ctx context.Context, name string, options Options) (*resources.Manager, *kube.Bundle, error) {
 	bundle, err := kube.LoadContext(name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("kube: %w", err)
 	}
 	cats, descs, discErr := discovery.List(bundle.Discovery)
+	if len(descs) == 0 {
+		return nil, nil, unreachable(bundle.Context, discErr)
+	}
 	if discErr != nil {
 		log.Printf("discovery (partial): %v", discErr)
 	}

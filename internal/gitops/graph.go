@@ -15,6 +15,9 @@ import (
 const (
 	fluxSourceGroup = "source.toolkit.fluxcd.io"
 	statusMissing   = "NotFound"
+	readyTrue       = "True"
+	readyFalse      = "False"
+	readyUnknown    = "Unknown"
 	categoryManaged = "managed"
 )
 
@@ -109,6 +112,7 @@ func (b *builder) addObject(obj *unstructured.Unstructured, desc api.ResourceDes
 		Name:      obj.GetName(),
 		Namespace: obj.GetNamespace(),
 		Status:    statusOf(obj, category),
+		Ready:     readyOf(obj, category),
 		Category:  category,
 	}
 	if category == "applier" {
@@ -224,6 +228,7 @@ func (b *builder) ensureRef(id, group, kind, namespace, name, category, status s
 		Name:      name,
 		Namespace: namespace,
 		Status:    status,
+		Ready:     readyForPlaceholder(status),
 		Category:  category,
 	}
 }
@@ -272,6 +277,54 @@ func parseInventoryID(raw string) (namespace, name, group, kind string) {
 		return "", "", "", ""
 	}
 	return parts[0], parts[1], parts[2], parts[3]
+}
+
+func readyForPlaceholder(status string) string {
+	if status == statusMissing {
+		return readyFalse
+	}
+	return readyUnknown
+}
+
+func readyOf(obj *unstructured.Unstructured, category string) string {
+	if category == "app" {
+		return argoReady(obj)
+	}
+	return conditionReady(obj)
+}
+
+func argoReady(obj *unstructured.Unstructured) string {
+	health := nestedString(obj, "status", "health", "status")
+	if health == "Healthy" {
+		return readyTrue
+	}
+	if health == "Degraded" {
+		return readyFalse
+	}
+	if health == "Missing" {
+		return readyFalse
+	}
+	return readyUnknown
+}
+
+func conditionReady(u *unstructured.Unstructured) string {
+	for _, c := range nestedSlice(u, "status", "conditions") {
+		entry, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		if entry["type"] != "Ready" {
+			continue
+		}
+		if entry["status"] == "True" {
+			return readyTrue
+		}
+		if entry["status"] == "False" {
+			return readyFalse
+		}
+		return readyUnknown
+	}
+	return readyUnknown
 }
 
 func statusOf(obj *unstructured.Unstructured, category string) string {

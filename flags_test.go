@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
@@ -60,5 +61,24 @@ func TestAnUnknownFlagIsAnError(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("an unknown flag was accepted")
+	}
+}
+
+func TestHelpIsNotAFailure(t *testing.T) {
+	_, err := parseFlags([]string{"-h"})
+
+	if !errors.Is(err, errHelp) {
+		t.Fatalf("err = %v, want the help sentinel so the process can exit 0", err)
+	}
+}
+
+func TestABadFlagIsStillAFailure(t *testing.T) {
+	_, err := parseFlags([]string{"-nonsense"})
+
+	if err == nil {
+		t.Fatal("an unknown flag was accepted")
+	}
+	if errors.Is(err, errHelp) {
+		t.Fatal("an unknown flag was treated as a help request")
 	}
 }

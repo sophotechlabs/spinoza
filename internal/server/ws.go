@@ -29,13 +29,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	sess := &wsSession{
 		conn: conn,
 		ctx:  ctx,
-		mgr:  s.manager(),
 		subs: map[string]*subEntry{},
 		logs: map[string]*logEntry{},
 	}
 	defer sess.closeAll()
 	s.track(sess)
 	defer s.forget(sess)
+	sess.mgr = s.manager()
 
 	for {
 		var msg api.ClientMsg
@@ -265,7 +265,7 @@ func (sess *wsSession) buildLogs(msg api.ClientMsg, gen uint64) {
 		stream.Close()
 		return
 	}
-	sess.relayLogs(msg.SubID, stream)
+	sess.relayLogs(msg.SubID, gen, stream)
 }
 
 func (sess *wsSession) failCurrentLogs(subID string, gen uint64, err error) {
@@ -299,19 +299,32 @@ func (sess *wsSession) adoptLogs(subID string, gen uint64, stream *logs.Stream) 
 	return true
 }
 
-func (sess *wsSession) relayLogs(subID string, stream *logs.Stream) {
+func (sess *wsSession) relayLogs(subID string, gen uint64, stream *logs.Stream) {
 	for {
 		select {
 		case <-sess.ctx.Done():
 			return
 		case line, ok := <-stream.Lines:
 			if !ok {
-				sess.write(sess.ctx, api.ServerMsg{Type: "log-end", SubID: subID})
+				sess.writeCurrentLogs(subID, gen, api.ServerMsg{Type: "log-end", SubID: subID})
 				return
 			}
-			sess.write(sess.ctx, api.ServerMsg{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)})
+			batch := api.ServerMsg{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)}
+			if !sess.writeCurrentLogs(subID, gen, batch) {
+				return
+			}
 		}
 	}
+}
+
+func (sess *wsSession) writeCurrentLogs(subID string, gen uint64, msg any) bool {
+	sess.writeMu.Lock()
+	defer sess.writeMu.Unlock()
+	if !sess.isCurrentLogs(subID, gen) {
+		return false
+	}
+	sess.writeLocked(sess.ctx, msg)
+	return true
 }
 
 func batchLines(lines <-chan string, first string) []string {

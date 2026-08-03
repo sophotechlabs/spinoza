@@ -259,3 +259,38 @@ func TestASupersededSwitchDoesNotStrandItsManager(t *testing.T) {
 		t.Fatal("a superseded switch replaced the installed manager")
 	}
 }
+
+func TestAFailedSwitchKeepsTheWorkingCluster(t *testing.T) {
+	rec := &recorder{failOn: "broken", failErr: errors.New("context \"broken\" lists no resource types")}
+	cluster := newTestCluster(t, rec)
+	working := cluster.Manager()
+
+	err := cluster.Use("broken")
+
+	if err == nil {
+		t.Fatal("switching to an unusable context reported success")
+	}
+	if cluster.Manager() != working {
+		t.Fatal("the working cluster's manager was replaced by the unusable one")
+	}
+	if cluster.Current() != "default-context" {
+		t.Fatalf("current = %q, want the working context to still be in force", cluster.Current())
+	}
+}
+
+func TestAFailedSwitchLeavesTheWorkingInformersRunning(t *testing.T) {
+	rec := &recorder{failOn: "broken", failErr: errors.New("unreachable")}
+	cluster := newTestCluster(t, rec)
+	live := rec.live[0]
+
+	useErr := cluster.Use("broken")
+	if useErr == nil {
+		t.Fatal("expected the switch to fail")
+	}
+
+	select {
+	case <-live.Done():
+		t.Fatal("the working cluster's context was canceled by a switch that never took effect")
+	default:
+	}
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { DockSide } from './panels';
 
 export const MIN_DRAWER_WIDTH = 320;
 export const MAX_DRAWER_WIDTH = 1200;
@@ -8,6 +9,10 @@ export const MIN_SIDEBAR_WIDTH = 160;
 export const MAX_SIDEBAR_WIDTH = 560;
 export const DEFAULT_SIDEBAR_WIDTH = 224;
 
+export const MIN_DOCK_HEIGHT = 120;
+export const MAX_DOCK_HEIGHT = 900;
+export const DEFAULT_DOCK_HEIGHT = 240;
+
 export const NUDGE_STEP = 32;
 
 interface Limits {
@@ -15,6 +20,7 @@ interface Limits {
   max: number;
   initial: number;
   sign: number;
+  axis: 'x' | 'y';
 }
 
 const DRAWER: Limits = {
@@ -22,6 +28,15 @@ const DRAWER: Limits = {
   max: MAX_DRAWER_WIDTH,
   initial: DEFAULT_DRAWER_WIDTH,
   sign: -1,
+  axis: 'x',
+};
+
+const LEFT_DOCK: Limits = {
+  min: MIN_DRAWER_WIDTH,
+  max: MAX_DRAWER_WIDTH,
+  initial: DEFAULT_DRAWER_WIDTH,
+  sign: 1,
+  axis: 'x',
 };
 
 const SIDEBAR: Limits = {
@@ -29,27 +44,36 @@ const SIDEBAR: Limits = {
   max: MAX_SIDEBAR_WIDTH,
   initial: DEFAULT_SIDEBAR_WIDTH,
   sign: 1,
+  axis: 'x',
+};
+
+const BOTTOM_DOCK: Limits = {
+  min: MIN_DOCK_HEIGHT,
+  max: MAX_DOCK_HEIGHT,
+  initial: DEFAULT_DOCK_HEIGHT,
+  sign: -1,
+  axis: 'y',
 };
 
 interface DragStart {
-  x: number;
-  width: number;
+  at: number;
+  size: number;
 }
 
-export interface PanelWidth {
-  width: number;
-  startResize: (clientX: number) => void;
+export interface PanelSize {
+  size: number;
+  startResize: (client: number) => void;
   nudge: (delta: number) => void;
 }
 
-function clamp(limits: Limits, width: number): number {
-  if (width < limits.min) {
+function clamp(limits: Limits, size: number): number {
+  if (size < limits.min) {
     return limits.min;
   }
-  if (width > limits.max) {
+  if (size > limits.max) {
     return limits.max;
   }
-  return width;
+  return size;
 }
 
 export function clampWidth(width: number): number {
@@ -60,8 +84,29 @@ export function clampSidebar(width: number): number {
   return clamp(SIDEBAR, width);
 }
 
-function usePanelWidth(limits: Limits): PanelWidth {
-  const [width, setWidth] = useState(limits.initial);
+export function clampDockHeight(height: number): number {
+  return clamp(BOTTOM_DOCK, height);
+}
+
+function limitsFor(side: DockSide): Limits {
+  if (side === 'left') {
+    return LEFT_DOCK;
+  }
+  if (side === 'right') {
+    return DRAWER;
+  }
+  return BOTTOM_DOCK;
+}
+
+function pointOf(limits: Limits, event: MouseEvent): number {
+  if (limits.axis === 'x') {
+    return event.clientX;
+  }
+  return event.clientY;
+}
+
+function usePanelSize(limits: Limits): PanelSize {
+  const [size, setSize] = useState(limits.initial);
   const startRef = useRef<DragStart | null>(null);
 
   useEffect(() => {
@@ -70,7 +115,7 @@ function usePanelWidth(limits: Limits): PanelWidth {
       if (start === null) {
         return;
       }
-      setWidth(clamp(limits, start.width + limits.sign * (event.clientX - start.x)));
+      setSize(clamp(limits, start.size + limits.sign * (pointOf(limits, event) - start.at)));
     }
 
     function handleUp() {
@@ -86,26 +131,26 @@ function usePanelWidth(limits: Limits): PanelWidth {
   }, [limits]);
 
   const startResize = useCallback(
-    (clientX: number) => {
-      startRef.current = { x: clientX, width };
+    (client: number) => {
+      startRef.current = { at: client, size };
     },
-    [width],
+    [size],
   );
 
   const nudge = useCallback(
     (delta: number) => {
-      setWidth((current) => clamp(limits, current + delta));
+      setSize((current) => clamp(limits, current + delta));
     },
     [limits],
   );
 
-  return { width, startResize, nudge };
+  return { size, startResize, nudge };
 }
 
-export function useDrawerWidth(): PanelWidth {
-  return usePanelWidth(DRAWER);
+export function useSidebarWidth(): PanelSize {
+  return usePanelSize(SIDEBAR);
 }
 
-export function useSidebarWidth(): PanelWidth {
-  return usePanelWidth(SIDEBAR);
+export function useDockSize(side: DockSide): PanelSize {
+  return usePanelSize(limitsFor(side));
 }

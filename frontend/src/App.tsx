@@ -7,39 +7,20 @@ import type {
   Row,
   View,
 } from './lib/types';
-import { containerNames } from './lib/containers';
 import { useResourceFeed } from './lib/feed';
+import { podTarget } from './lib/pods';
 import { useSubRow } from './store/resources';
 import { refFromFlux, refFromNode, refFromRow } from './lib/refs';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ResourceTable from './components/ResourceTable';
-import InspectDrawer from './components/InspectDrawer';
+import PanelLayout from './components/PanelLayout';
 import GitopsGraph from './components/GitopsGraph';
 import FluxList from './components/FluxList';
 import FluxOverview from './components/FluxOverview';
 import FluxRoles from './components/FluxRoles';
-import BottomDock from './components/BottomDock';
-import type { PodTarget } from './components/BottomDock';
 
 const FIRST_SUB_ID = 'main#0';
-
-function podTarget(row: Row | null): PodTarget | null {
-  if (row === null) {
-    return null;
-  }
-  if (row.containers === undefined) {
-    return null;
-  }
-  if (row.containers.length === 0) {
-    return null;
-  }
-  return {
-    namespace: row.namespace,
-    name: row.name,
-    containers: containerNames(row.containers),
-  };
-}
 
 export default function App() {
   const feed = useResourceFeed();
@@ -147,22 +128,17 @@ export default function App() {
             switchView('flux-roles');
           }}
         />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 min-w-0 flex-1">{mainArea}</div>
-          <BottomDock
-            pod={podTarget(selected)}
-            subscribeLogs={subscribeLogs}
-            unsubscribeLogs={unsubscribeLogs}
-          />
-        </div>
-        <InspectDrawer
+        <PanelLayout
           target={target}
           containers={selected?.containers}
+          pod={podTarget(selected)}
           subscribeLogs={subscribeLogs}
           unsubscribeLogs={unsubscribeLogs}
           onClose={clearSelection}
           onDeleted={clearSelection}
-        />
+        >
+          {mainArea}
+        </PanelLayout>
       </div>
     </div>
   );

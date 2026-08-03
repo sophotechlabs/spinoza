@@ -641,3 +641,65 @@ func TestFluxGeneratedHelmChartsAreNotGraphed(t *testing.T) {
 		t.Fatal("flux generates one HelmChart per HelmRelease; graphing them buries the topology")
 	}
 }
+
+func readyOfNamed(t *testing.T, objs []*unstructured.Unstructured, name string) api.GraphNode {
+	t.Helper()
+	runtimeObjs := make([]runtime.Object, 0, len(objs))
+	for _, obj := range objs {
+		runtimeObjs = append(runtimeObjs, obj)
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), graphListKinds(), runtimeObjs...)
+	graph := Build(context.Background(), listerFor(dyn), graphDescs())
+	for _, node := range graph.Nodes {
+		if node.Name == name {
+			return node
+		}
+	}
+	t.Fatalf("no node named %q in %+v", name, graph.Nodes)
+	return api.GraphNode{}
+}
+
+func releaseWithReady(status, reason string) *unstructured.Unstructured {
+	release := helmRelease()
+	conditions := []any{map[string]any{"type": "Ready", "status": status, "reason": reason}}
+	if status == "" {
+		conditions = []any{}
+	}
+	release.Object["status"] = map[string]any{"conditions": conditions}
+	return release
+}
+
+func TestAFailedObjectIsMarkedNotReadyNotJustNamed(t *testing.T) {
+	node := readyOfNamed(t, []*unstructured.Unstructured{releaseWithReady("False", "InstallFailed")}, "podinfo")
+
+	if node.Ready != "False" {
+		t.Fatalf("ready = %q, want False; the reason alone never tells the browser it failed", node.Ready)
+	}
+	if node.Status != "InstallFailed" {
+		t.Fatalf("status = %q, want the reason kept for the reader", node.Status)
+	}
+}
+
+func TestAReadyObjectIsMarkedReady(t *testing.T) {
+	node := readyOfNamed(t, []*unstructured.Unstructured{releaseWithReady("True", "InstallSucceeded")}, "podinfo")
+
+	if node.Ready != "True" {
+		t.Fatalf("ready = %q, want True", node.Ready)
+	}
+}
+
+func TestAReconcilingObjectIsMarkedUnknown(t *testing.T) {
+	node := readyOfNamed(t, []*unstructured.Unstructured{releaseWithReady("Unknown", "Progressing")}, "podinfo")
+
+	if node.Ready != "Unknown" {
+		t.Fatalf("ready = %q, want Unknown; a reconcile in flight is not a failure", node.Ready)
+	}
+}
+
+func TestAnObjectWithNoConditionsIsMarkedUnknown(t *testing.T) {
+	node := readyOfNamed(t, []*unstructured.Unstructured{releaseWithReady("", "")}, "podinfo")
+
+	if node.Ready != "Unknown" {
+		t.Fatalf("ready = %q, want Unknown", node.Ready)
+	}
+}

@@ -28,6 +28,9 @@ func main() {
 
 func run() error {
 	opts, err := settingsFromArgs()
+	if errors.Is(err, errHelp) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

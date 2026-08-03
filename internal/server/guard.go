@@ -11,6 +11,8 @@ import (
 
 const desktopScheme = "wails"
 
+const desktopHost = "wails.localhost"
+
 const readLimit = 64 << 10
 
 func accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
@@ -50,6 +52,9 @@ func loopbackAuthority(authority string) bool {
 		host = authority
 	}
 	if host == "localhost" {
+		return true
+	}
+	if host == desktopHost {
 		return true
 	}
 	ip := net.ParseIP(strings.Trim(host, "[]"))

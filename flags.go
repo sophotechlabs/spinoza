@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"os"
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 )
+
+var errHelp = errors.New("help requested")
 
 type settings struct {
 	addr        string
@@ -22,6 +25,9 @@ func parseFlags(args []string) (settings, error) {
 	kubectlBinary := flags.String("kubectl", debugcontainer.DefaultBinary, "kubectl binary used to create debug containers")
 	promSpec := flags.String("prometheus", "", "prometheus service as namespace/service:port; discovered when empty")
 	err := flags.Parse(args)
+	if errors.Is(err, flag.ErrHelp) {
+		return settings{}, errHelp
+	}
 	if err != nil {
 		return settings{}, err
 	}

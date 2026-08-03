@@ -21,7 +21,7 @@ Spinoza uses your current kubeconfig context, switchable from the dropdown in th
 - **GitOps view** for Flux and Argo: an overview grouped by role, a dependency graph, per-kind lists and a status-tile board. Reconcile, suspend and resume Flux objects.
 - **Inspect drawer**: metadata, conditions, events, live YAML with schema-aware editing (Monaco + `monaco-yaml`), server-side apply and delete. Collapsible, and an edited YAML draft survives a background reload.
 - **Write actions**: scale, rollout restart, cordon, uncordon, and drain — drain plans first and shows what it would evict, skip and refuse before you confirm it.
-- **Logs** streamed per container, in the pod's inspect drawer and in the bottom dock. Pausing follow stops the scroll, not the stream.
+- **Logs** streamed per container in the pod's inspect drawer. Pausing follow stops the scroll, not the stream.
 - **Exec** into a container over `v5.channel.k8s.io` into a real terminal (xterm). Distroless images have no shell; spinoza probes once and caches the verdict per image digest.
 - **Ephemeral debug containers** by wrapping `kubectl debug` for the images with no shell. Needs `kubectl` on PATH.
 - **Port-forward** to a pod or service, listed and stoppable from one place, surviving navigation.

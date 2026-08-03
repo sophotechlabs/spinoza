@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import dagre from '@dagrejs/dagre';
 import type { Graph } from '../../src/lib/types';
-import { toFlow } from '../../src/lib/graphLayout';
+import { statusTone, toFlow } from '../../src/lib/graphLayout';
 import type { GitopsFlowNode } from '../../src/lib/graphLayout';
 import { makeGraphEdge, makeGraphNode } from '../helpers';
 
@@ -61,9 +61,9 @@ describe('toFlow', () => {
     expect(node.className).toContain('green');
   });
 
-  it('maps a NotReady status to the red style', () => {
+  it('maps a not-ready object to the red style whatever the reason says', () => {
     const graph: Graph = {
-      nodes: [makeGraphNode({ id: 'a', status: 'NotReady', category: 'app' })],
+      nodes: [makeGraphNode({ id: 'a', status: 'InstallFailed', ready: 'False', category: 'app' })],
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
@@ -72,7 +72,7 @@ describe('toFlow', () => {
 
   it('maps a source category with a neutral status to the sky style', () => {
     const graph: Graph = {
-      nodes: [makeGraphNode({ id: 'a', status: 'Unknown', category: 'source' })],
+      nodes: [makeGraphNode({ id: 'a', status: 'Unknown', ready: 'Unknown', category: 'source' })],
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
@@ -81,7 +81,7 @@ describe('toFlow', () => {
 
   it('maps an app category with a neutral status to the default style', () => {
     const graph: Graph = {
-      nodes: [makeGraphNode({ id: 'a', status: 'Unknown', category: 'app' })],
+      nodes: [makeGraphNode({ id: 'a', status: 'Unknown', ready: 'Unknown', category: 'app' })],
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
@@ -90,7 +90,9 @@ describe('toFlow', () => {
 
   it('maps an applier category with a neutral status to the default style', () => {
     const graph: Graph = {
-      nodes: [makeGraphNode({ id: 'a', status: 'Pending', category: 'applier' })],
+      nodes: [
+        makeGraphNode({ id: 'a', status: 'Progressing', ready: 'Unknown', category: 'applier' }),
+      ],
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
@@ -138,7 +140,15 @@ describe('toFlow', () => {
 describe('a dependency that is not there', () => {
   it('is drawn in the failure colour, not as an ordinary applier', () => {
     const flow = toFlow({
-      nodes: [makeGraphNode({ id: 'a', name: 'infra', status: 'NotFound', category: 'applier' })],
+      nodes: [
+        makeGraphNode({
+          id: 'a',
+          name: 'infra',
+          status: 'NotFound',
+          ready: 'False',
+          category: 'applier',
+        }),
+      ],
       edges: [],
     });
 
@@ -152,5 +162,26 @@ describe('a dependency that is not there', () => {
     });
 
     expect(flow.nodes[0].className).toContain('border-green-600');
+  });
+});
+
+describe('statusTone', () => {
+  it('follows the ready state the backend reports', () => {
+    expect(statusTone('True')).toBe('ok');
+    expect(statusTone('False')).toBe('error');
+    expect(statusTone('Unknown')).toBe('unknown');
+  });
+});
+
+describe('a failure the frontend has never heard of', () => {
+  it('is still drawn as a failure', () => {
+    const flow = toFlow({
+      nodes: [
+        makeGraphNode({ id: 'a', status: 'SomeBrandNewReason', ready: 'False', category: 'app' }),
+      ],
+      edges: [],
+    });
+
+    expect(flow.nodes[0].className).toContain('border-red-600');
   });
 });

@@ -48,7 +48,6 @@ export default function InspectLogs({
     namespace,
     name: pod,
     container,
-    active: true,
     subscribeLogs,
     unsubscribeLogs,
   });

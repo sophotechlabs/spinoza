@@ -466,3 +466,53 @@ func TestWithAChartIndexTheRepositoriesAreStillRead(t *testing.T) {
 		t.Fatalf("listed helmrepositories %d times; the chart index needs the repositories", listed)
 	}
 }
+
+func TestSourceOfNamesAChartRef(t *testing.T) {
+	release := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "helm.toolkit.fluxcd.io/v2",
+		"kind":       "HelmRelease",
+		"metadata":   map[string]any{"name": "podinfo", "namespace": "apps"},
+		"spec": map[string]any{
+			"chartRef": map[string]any{"kind": "OCIRepository", "name": "podinfo-oci"},
+		},
+	}}
+
+	if got := sourceOf(release); got != "OCIRepository/podinfo-oci" {
+		t.Fatalf("source = %q, want the chartRef the graph already follows", got)
+	}
+}
+
+func TestSourceOfPrefersChartRefOverTheChartBlock(t *testing.T) {
+	release := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "helm.toolkit.fluxcd.io/v2",
+		"kind":       "HelmRelease",
+		"metadata":   map[string]any{"name": "podinfo", "namespace": "apps"},
+		"spec": map[string]any{
+			"chartRef": map[string]any{"kind": "OCIRepository", "name": "podinfo-oci"},
+			"chart": map[string]any{
+				"spec": map[string]any{
+					"sourceRef": map[string]any{"kind": "HelmRepository", "name": "podinfo-charts"},
+				},
+			},
+		},
+	}}
+
+	if got := sourceOf(release); got != "OCIRepository/podinfo-oci" {
+		t.Fatalf("source = %q", got)
+	}
+}
+
+func TestSourceOfStillNamesAKustomizationSource(t *testing.T) {
+	kustomization := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"name": "apps", "namespace": "flux-system"},
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "GitRepository", "name": "app-repo"},
+		},
+	}}
+
+	if got := sourceOf(kustomization); got != "GitRepository/app-repo" {
+		t.Fatalf("source = %q", got)
+	}
+}

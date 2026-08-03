@@ -227,6 +227,7 @@ type GraphNode struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 	Status    string `json:"status"`
+	Ready     string `json:"ready"`
 	Category  string `json:"category"`
 }
 

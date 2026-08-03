@@ -23,6 +23,7 @@ func TestAllowedOrigin(t *testing.T) {
 		{"ipv6 loopback", "http://[::1]:34115", true},
 		{"wails webview", "wails://wails", true},
 		{"wails dev webview", "wails://wails.localhost:34115", true},
+		{"wails windows webview", "http://wails.localhost", true},
 		{"a hostile page", "https://evil.example", false},
 		{"a rebound name", "http://evil.example:34115", false},
 		{"sandboxed iframe", "null", false},
@@ -49,6 +50,9 @@ func TestLoopbackAuthority(t *testing.T) {
 		{"localhost:5173", true},
 		{"[::1]:34115", true},
 		{"[::1]", true},
+		{"wails.localhost", true},
+		{"wails.localhost:34115", true},
+		{"notwails.localhost:34115", false},
 		{"127.1.2.3:34115", true},
 		{"evil.example:34115", false},
 		{"192.168.1.10:34115", false},
@@ -196,5 +200,27 @@ func TestHealthzRefusesAForeignOrigin(t *testing.T) {
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403; no route should answer a foreign page", res.StatusCode)
+	}
+}
+
+func TestGuardAdmitsTheWindowsDesktopWebview(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	req.Host = "wails.localhost"
+	req.Header.Set("Origin", "http://wails.localhost")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; wails on Windows serves the app from http://wails.localhost", res.StatusCode)
 	}
 }

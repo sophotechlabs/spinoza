@@ -322,17 +322,24 @@ func historyChartVersion(obj *unstructured.Unstructured) string {
 	return stringAt(entry, "chartVersion")
 }
 
-func sourceOf(u *unstructured.Unstructured) string {
-	kind := nestedString(u, "spec", "sourceRef", "kind")
-	name := nestedString(u, "spec", "sourceRef", "name")
+func sourceOf(obj *unstructured.Unstructured) string {
+	kind, name := refAt(obj, "spec", "chartRef")
 	if kind == "" || name == "" {
-		kind = nestedString(u, "spec", "chart", "spec", "sourceRef", "kind")
-		name = nestedString(u, "spec", "chart", "spec", "sourceRef", "name")
+		kind, name = refAt(obj, "spec", "sourceRef")
+	}
+	if kind == "" || name == "" {
+		kind, name = refAt(obj, "spec", "chart", "spec", "sourceRef")
 	}
 	if kind == "" || name == "" {
 		return ""
 	}
 	return kind + "/" + name
+}
+
+func refAt(obj *unstructured.Unstructured, fields ...string) (kind, name string) {
+	kind = nestedString(obj, append(fields, "kind")...)
+	name = nestedString(obj, append(fields, "name")...)
+	return kind, name
 }
 
 func nestedString(u *unstructured.Unstructured, fields ...string) string {

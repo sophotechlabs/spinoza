@@ -212,8 +212,11 @@ export interface GraphNode {
   name: string;
   namespace: string;
   status: string;
+  ready: ReadyState;
   category: GraphNodeCategory;
 }
+
+export type ReadyState = 'True' | 'False' | 'Unknown';
 
 export type GraphEdgeKind = 'source' | 'dependsOn' | 'manages';
 

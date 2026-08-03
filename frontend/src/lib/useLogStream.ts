@@ -8,21 +8,14 @@ interface LogStream {
   namespace: string;
   name: string;
   container: string;
-  active: boolean;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
 }
 
 export function useLogStream(stream: LogStream) {
-  const { subId, namespace, name, container, active, subscribeLogs, unsubscribeLogs } = stream;
+  const { subId, namespace, name, container, subscribeLogs, unsubscribeLogs } = stream;
 
   useEffect(() => {
-    if (!active) {
-      return;
-    }
-    if (name === '') {
-      return;
-    }
     if (container === '') {
       return;
     }
@@ -36,5 +29,5 @@ export function useLogStream(stream: LogStream) {
     return () => {
       unsubscribeLogs(subId);
     };
-  }, [subId, namespace, name, container, active, subscribeLogs, unsubscribeLogs]);
+  }, [subId, namespace, name, container, subscribeLogs, unsubscribeLogs]);
 }

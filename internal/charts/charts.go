@@ -309,8 +309,8 @@ func Newer(current, latest string) bool {
 	if current == "" {
 		return false
 	}
-	currentParsed, currentErr := semver.NewVersion(current)
-	latestParsed, latestErr := semver.NewVersion(latest)
+	currentParsed, currentErr := semver.NewVersion(ociTagToSemver(current))
+	latestParsed, latestErr := semver.NewVersion(ociTagToSemver(latest))
 	if currentErr != nil || latestErr != nil {
 		return false
 	}

@@ -1,7 +1,14 @@
 import dagre from '@dagrejs/dagre';
 import type { Graph as DagreGraph, EdgeLabel, GraphLabel, NodeLabel } from '@dagrejs/dagre';
 import type { Edge, Node } from '@xyflow/react';
-import type { Graph, GraphEdge, GraphEdgeKind, GraphNode, GraphNodeCategory } from './types';
+import type {
+  Graph,
+  GraphEdge,
+  GraphEdgeKind,
+  GraphNode,
+  GraphNodeCategory,
+  ReadyState,
+} from './types';
 
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 44;
@@ -13,8 +20,6 @@ const NODE_BASE_CLASS = 'rounded border px-2 py-1 text-[11px] font-mono';
 const EDGE_SOURCE_STROKE = '#0ea5e9';
 const EDGE_DEPENDS_STROKE = '#f59e0b';
 const EDGE_MANAGES_STROKE = '#525252';
-
-const FAILED_STATUSES = new Set(['NotReady', 'Failed', 'False', 'Stalled', 'NotFound']);
 
 interface GitopsNodeData {
   label: string;
@@ -33,18 +38,18 @@ type LayoutGraph = DagreGraph<GraphLabel, NodeLabel, EdgeLabel>;
 
 type StatusTone = 'ok' | 'error' | 'unknown';
 
-function statusTone(status: string): StatusTone {
-  if (status === 'Ready') {
+export function statusTone(ready: ReadyState): StatusTone {
+  if (ready === 'True') {
     return 'ok';
   }
-  if (FAILED_STATUSES.has(status)) {
+  if (ready === 'False') {
     return 'error';
   }
   return 'unknown';
 }
 
-function nodeClassName(category: GraphNodeCategory, status: string): string {
-  const tone = statusTone(status);
+function nodeClassName(category: GraphNodeCategory, ready: ReadyState): string {
+  const tone = statusTone(ready);
   if (tone === 'ok') {
     return `${NODE_BASE_CLASS} border-green-600 bg-green-950 text-green-200`;
   }
@@ -92,7 +97,7 @@ function toFlowNode(g: LayoutGraph, node: GraphNode): GitopsFlowNode {
     id: node.id,
     position: layoutPosition(laid),
     data: { label: node.name, node },
-    className: nodeClassName(node.category, node.status),
+    className: nodeClassName(node.category, node.ready),
   };
 }
 
