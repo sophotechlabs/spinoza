@@ -27,15 +27,15 @@ function Tile({
         <span className="truncate text-sm text-neutral-100">{resource.name}</span>
         <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot(resource)}`} />
       </div>
-      <div className="mt-0.5 truncate text-[11px] text-neutral-500">
+      <div className="mt-0.5 truncate text-[11px] text-neutral-400">
         {resource.kind} · {resource.namespace}
       </div>
       <div className={`mt-2 text-[11px] ${statusText(resource)}`}>{statusLabel(resource)}</div>
       <div className="mt-1 truncate text-[11px] text-neutral-400" title={resource.revision}>
         {resource.revision}
       </div>
-      <div className="truncate text-[11px] text-neutral-500">{resource.source}</div>
-      <div className="mt-1 text-[10px] text-neutral-600">{created(resource.createdAt)}</div>
+      <div className="truncate text-[11px] text-neutral-400">{resource.source}</div>
+      <div className="mt-1 text-[10px] text-neutral-400">{created(resource.createdAt)}</div>
     </button>
   );
 }
@@ -51,7 +51,7 @@ function TileGroup({
     <section className="mb-5">
       <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase">
         {group.name}
-        <span className="text-[11px] font-normal text-neutral-600">{groupSummary(group)}</span>
+        <span className="text-[11px] font-normal text-neutral-400">{groupSummary(group)}</span>
       </h2>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {group.resources.map((resource) => (
@@ -80,7 +80,7 @@ export default function FluxOverview({ onSelect }: FluxOverviewProps) {
       );
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         Loading Flux resources…
       </div>
     );
@@ -91,7 +91,7 @@ export default function FluxOverview({ onSelect }: FluxOverviewProps) {
       return <LoadFailure what="Flux resources" message={data.error} />;
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         No Flux resources found.
       </div>
     );

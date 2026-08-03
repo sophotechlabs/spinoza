@@ -24,7 +24,7 @@ export function containerColor(container: ContainerState): string {
   if (container.state === 'waiting' && isBadWaiting(container.reason ?? '')) {
     return 'bg-red-500';
   }
-  return 'bg-yellow-500';
+  return 'bg-amber-500';
 }
 
 export function containerTitle(container: ContainerState): string {
@@ -58,7 +58,7 @@ export function statusColor(value: string): string {
   if (isBadWaiting(value)) {
     return 'text-red-400';
   }
-  return 'text-yellow-400';
+  return 'text-amber-400';
 }
 
 export function ratioColor(value: string): string {
@@ -72,7 +72,7 @@ export function ratioColor(value: string): string {
   if (parts[0] === '0') {
     return 'text-red-400';
   }
-  return 'text-yellow-400';
+  return 'text-amber-400';
 }
 
 export function restartColor(value: string): string {
@@ -83,5 +83,5 @@ export function restartColor(value: string): string {
   if (count >= 5) {
     return 'text-red-400';
   }
-  return 'text-yellow-400';
+  return 'text-amber-400';
 }

@@ -43,8 +43,8 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
   }
 
   return (
-    <section className="border-b border-neutral-900 px-4 py-3">
-      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
+    <section className="border-b border-neutral-800 px-4 py-3">
+      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
         Ports
       </h3>
       <div className="flex flex-col gap-1">

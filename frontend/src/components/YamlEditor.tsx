@@ -18,11 +18,11 @@ export default function YamlEditor({ value, path, readOnly, onChange }: YamlEdit
   return (
     <Editor
       language="yaml"
-      theme="vs-dark"
+      theme="spinoza-dark"
       path={path}
       value={value}
       onChange={handleChange}
-      loading={<div className="p-3 text-xs text-neutral-600">Loading editor…</div>}
+      loading={<div className="p-3 text-xs text-neutral-400">Loading editor…</div>}
       options={{
         readOnly,
         minimap: { enabled: false },

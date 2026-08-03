@@ -38,14 +38,14 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
 
   if (pod === null || container === '') {
     return (
-      <div className="p-3 text-[11px] text-neutral-600">Select a pod to open a shell in it.</div>
+      <div className="p-3 text-[11px] text-neutral-400">Select a pod to open a shell in it.</div>
     );
   }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-neutral-900 px-3 py-1.5 text-xs">
-        <span className="truncate text-neutral-500">
+      <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 px-3 py-1.5 text-xs">
+        <span className="truncate text-neutral-400">
           {pod.namespace}/{pod.name}
         </span>
         {pod.containers.length > 1 && (

@@ -44,7 +44,7 @@ describe('formatMem', () => {
 describe('barColor', () => {
   it('escalates green to yellow to red', () => {
     expect(barColor(10)).toBe('bg-green-500');
-    expect(barColor(75)).toBe('bg-yellow-500');
+    expect(barColor(75)).toBe('bg-amber-500');
     expect(barColor(95)).toBe('bg-red-500');
   });
 });

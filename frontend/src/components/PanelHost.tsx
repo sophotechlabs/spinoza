@@ -23,12 +23,12 @@ const DRAG_TYPE = 'application/x-spinoza-panel';
 
 function tabClass(active: boolean, disabled: boolean): string {
   if (disabled) {
-    return 'cursor-not-allowed border-b-2 border-transparent px-2 py-1.5 text-neutral-700';
+    return 'cursor-not-allowed border-b-2 border-transparent px-2 py-1.5 text-neutral-600';
   }
   if (active) {
     return 'border-b-2 border-neutral-300 px-2 py-1.5 text-neutral-100';
   }
-  return 'border-b-2 border-transparent px-2 py-1.5 text-neutral-500 hover:text-neutral-300';
+  return 'border-b-2 border-transparent px-2 py-1.5 text-neutral-400 hover:text-neutral-300';
 }
 
 function frameClass(side: DockSide): string {
@@ -43,9 +43,9 @@ function frameClass(side: DockSide): string {
 
 function handleClass(side: DockSide): string {
   if (side === 'bottom') {
-    return 'h-1 shrink-0 cursor-row-resize bg-neutral-900 hover:bg-neutral-700';
+    return 'h-1 shrink-0 cursor-row-resize bg-neutral-500 hover:bg-neutral-300';
   }
-  return 'w-1 shrink-0 cursor-col-resize bg-neutral-900 hover:bg-neutral-700';
+  return 'w-1 shrink-0 cursor-col-resize bg-neutral-500 hover:bg-neutral-300';
 }
 
 function emptyClass(side: DockSide): string {
@@ -195,7 +195,7 @@ export default function PanelHost({
           onClick={() => {
             setCollapsed(false);
           }}
-          className="rounded px-1 py-0.5 text-xs text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
+          className="rounded px-1 py-0.5 text-xs text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
         >
           {expandGlyph(side)}
         </button>
@@ -219,7 +219,7 @@ export default function PanelHost({
         onClick={() => {
           setCollapsed(true);
         }}
-        className="px-1 py-1.5 text-neutral-500 hover:text-neutral-200"
+        className="px-1 py-1.5 text-neutral-400 hover:text-neutral-200"
       >
         {collapseGlyph(side)}
       </button>
@@ -231,12 +231,15 @@ export default function PanelHost({
           aria-selected={active === tab.id}
           draggable
           title={tab.title}
-          disabled={tab.disabled}
+          aria-disabled={tab.disabled}
           onDragStart={(event) => {
             event.dataTransfer.setData(DRAG_TYPE, tab.id);
             event.dataTransfer.effectAllowed = 'move';
           }}
           onClick={() => {
+            if (tab.disabled) {
+              return;
+            }
             onActivate(tab.id);
           }}
           className={tabClass(active === tab.id, tab.disabled)}
@@ -254,7 +257,7 @@ export default function PanelHost({
               onClick={() => {
                 onMove(active, other);
               }}
-              className="rounded px-1 text-neutral-600 hover:bg-neutral-800 hover:text-neutral-200"
+              className="rounded px-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
             >
               {SIDE_GLYPHS[other]}
             </button>
@@ -276,7 +279,7 @@ export default function PanelHost({
 
   const body = (
     <>
-      {active === null && <div className="p-4 text-xs text-neutral-600">{emptyHint}</div>}
+      {active === null && <div className="p-4 text-xs text-neutral-400">{emptyHint}</div>}
       <div ref={hostRef} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" />
     </>
   );

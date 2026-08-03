@@ -145,7 +145,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         >
           Revert
         </button>
-        {dirty && !stale && <span className="text-neutral-600">unsaved changes</span>}
+        {dirty && !stale && <span className="text-neutral-400">unsaved changes</span>}
         {stale && (
           <span className="text-amber-400">
             changed on the server — Revert to load the new version

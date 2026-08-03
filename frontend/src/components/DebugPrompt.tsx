@@ -86,7 +86,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
       <p className="text-neutral-300">
         {target.container} has no shell, so it cannot be exec&apos;d into.
       </p>
-      <p className="mt-1 text-neutral-500">
+      <p className="mt-1 text-neutral-400">
         Kubernetes can add a temporary container beside it, sharing its processes, network and
         filesystem. It cannot be removed afterwards — it stays on the pod until the pod is replaced.
       </p>
@@ -99,7 +99,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
         >
           {buttonLabel(busy)}
         </button>
-        <label className="text-neutral-500" htmlFor="debug-profile">
+        <label className="text-neutral-400" htmlFor="debug-profile">
           profile
         </label>
         <select
@@ -115,7 +115,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
             </option>
           ))}
         </select>
-        <span className="truncate text-neutral-600">{image}</span>
+        <span className="truncate text-neutral-400">{image}</span>
       </div>
       {profile === 'sysadmin' && (
         <p className="mt-1.5 text-amber-400">

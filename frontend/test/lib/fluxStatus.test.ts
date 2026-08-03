@@ -22,7 +22,7 @@ describe('ready helpers', () => {
   it('maps ready to text colors', () => {
     expect(readyText('True')).toBe('text-green-400');
     expect(readyText('False')).toBe('text-red-400');
-    expect(readyText('')).toBe('text-neutral-500');
+    expect(readyText('')).toBe('text-neutral-400');
   });
 
   it('maps ready to labels', () => {
@@ -65,7 +65,7 @@ describe('latest version presentation', () => {
 
   it('dims a current release', () => {
     const resource = makeFluxResource({ revision: '6.15.1', latest: '6.15.1' });
-    expect(latestColor(resource)).toBe('text-neutral-600');
+    expect(latestColor(resource)).toBe('text-neutral-400');
     expect(latestTitle(resource)).toBe('up to date');
   });
 

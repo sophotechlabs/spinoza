@@ -64,11 +64,11 @@ export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
   }
 
   if (events === null) {
-    return <div className="p-4 text-xs text-neutral-600">Loading events…</div>;
+    return <div className="p-4 text-xs text-neutral-400">Loading events…</div>;
   }
 
   if (events.length === 0) {
-    return <div className="p-4 text-xs text-neutral-600">No events for this object.</div>;
+    return <div className="p-4 text-xs text-neutral-400">No events for this object.</div>;
   }
 
   return (
@@ -76,16 +76,16 @@ export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
       {events.map((event, index) => (
         <article
           key={`${event.reason}-${event.lastSeen}-${index}`}
-          className="border-b border-neutral-900 px-4 py-2"
+          className="border-b border-neutral-800 px-4 py-2"
         >
           <div className="flex items-baseline gap-2">
             <span className={eventColor(event.type)}>{event.reason}</span>
-            <span className="text-neutral-600">{event.source}</span>
-            <span className="ml-auto shrink-0 text-neutral-600">{event.lastSeen}</span>
+            <span className="text-neutral-400">{event.source}</span>
+            <span className="ml-auto shrink-0 text-neutral-400">{event.lastSeen}</span>
           </div>
           <p className="mt-0.5 break-words text-neutral-300">{event.message}</p>
           {event.count > 1 && (
-            <p className="mt-0.5 text-[11px] text-neutral-600">seen {event.count} times</p>
+            <p className="mt-0.5 text-[11px] text-neutral-400">seen {event.count} times</p>
           )}
         </article>
       ))}

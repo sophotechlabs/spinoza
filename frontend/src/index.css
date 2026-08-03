@@ -1,2 +1,11 @@
 @import 'tailwindcss';
 @import '@xyflow/react/dist/style.css' layer(base);
+
+html {
+  color-scheme: dark;
+  background-color: var(--color-neutral-950);
+}
+
+.react-flow.dark {
+  --xy-background-color: transparent;
+}

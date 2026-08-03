@@ -74,9 +74,10 @@ func runDesktop() error {
 	}()
 
 	runErr := wails.Run(&options.App{
-		Title:  "Spinoza",
-		Width:  1280,
-		Height: 800,
+		Title:            "Spinoza",
+		Width:            1280,
+		Height:           800,
+		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0a, A: 255},
 		AssetServer: &assetserver.Options{
 			Handler: desktopAssets(assets, addr),
 		},

@@ -293,3 +293,23 @@ describe('Sidebar', () => {
     expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
   });
 });
+
+describe('the active sidebar entry', () => {
+  it('keeps its highlight under the cursor', () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'flux-roles' });
+    const active = screen.getByRole('button', { name: 'Overview' });
+
+    expect(active.className).toContain('bg-neutral-800');
+    expect(active.className).not.toContain('hover:bg-neutral-900');
+  });
+
+  it('does not carry a text colour that a later rule overrides', () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'flux-roles' });
+    const active = screen.getByRole('button', { name: 'Overview' });
+
+    expect(active.className).toContain('text-neutral-100');
+    expect(active.className).not.toContain('text-neutral-300');
+  });
+});

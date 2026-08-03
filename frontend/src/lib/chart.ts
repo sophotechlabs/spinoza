@@ -51,7 +51,7 @@ export function createChart(node: HTMLElement, options: ChartOptions): ChartHand
       width: node.clientWidth || 320,
       height: 130,
       padding: [8, 8, 0, 0],
-      cursor: { y: false },
+      cursor: { y: false, drag: { x: false, y: false } },
       legend: { show: false },
       axes: [
         { stroke: '#737373', grid: { stroke: '#262626', width: 1 }, ticks: { stroke: '#262626' } },

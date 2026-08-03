@@ -183,7 +183,7 @@ export default function PanelLayout({
       return <div className="p-4 text-xs break-words text-red-400">{error}</div>;
     }
     if (detail === null) {
-      return <div className="p-4 text-xs text-neutral-600">Loading…</div>;
+      return <div className="p-4 text-xs text-neutral-400">Loading…</div>;
     }
     return node;
   }

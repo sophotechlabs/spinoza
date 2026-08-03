@@ -17,9 +17,9 @@ const NODE_SEPARATION = 28;
 
 const NODE_BASE_CLASS = 'rounded border px-2 py-1 text-[11px] font-mono';
 
-const EDGE_SOURCE_STROKE = '#0ea5e9';
-const EDGE_DEPENDS_STROKE = '#f59e0b';
-const EDGE_MANAGES_STROKE = '#525252';
+export const EDGE_SOURCE_STROKE = '#0ea5e9';
+export const EDGE_DEPENDS_STROKE = '#f59e0b';
+export const EDGE_MANAGES_STROKE = '#525252';
 
 interface GitopsNodeData {
   label: string;

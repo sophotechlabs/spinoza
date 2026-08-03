@@ -194,16 +194,16 @@ describe('PanelLayout', () => {
     renderLayout({ pod: null });
     await screen.findByText('Metadata');
 
-    expect(screen.getByRole('tab', { name: 'Logs' })).toBeDisabled();
-    expect(screen.getByRole('tab', { name: 'Metrics' })).toBeDisabled();
-    expect(screen.getByRole('tab', { name: 'Terminal' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('tab', { name: 'Metrics' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('greys out every object panel with nothing selected', () => {
     renderLayout({ target: null, pod: null });
 
-    expect(screen.getByRole('tab', { name: 'Overview' })).toBeDisabled();
-    expect(screen.getByRole('tab', { name: 'YAML' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('tab', { name: 'YAML' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getAllByText('Select a row to inspect it.').length).toBeGreaterThan(0);
   });
 

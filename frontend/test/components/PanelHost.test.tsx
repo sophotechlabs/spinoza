@@ -64,12 +64,16 @@ describe('PanelHost', () => {
     expect(onActivate).toHaveBeenCalledWith('yaml');
   });
 
-  it('refuses a disabled tab', async () => {
+  it('refuses a disabled tab but keeps it hoverable so its reason can be read', async () => {
     const user = userEvent.setup();
     const { onActivate } = renderHost({
       tabs: [{ id: 'logs', disabled: true, title: 'Select a pod to see this' }],
       active: null,
     });
+    const tab = screen.getByRole('tab', { name: 'Logs' });
+    expect(tab).toHaveAttribute('aria-disabled', 'true');
+    expect(tab).not.toBeDisabled();
+    expect(tab).toHaveAttribute('title', 'Select a pod to see this');
 
     await user.click(screen.getByRole('tab', { name: 'Logs' }));
 

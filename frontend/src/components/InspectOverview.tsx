@@ -1,4 +1,5 @@
 import type { Condition, ContainerState, ObjectDetail } from '../lib/types';
+import { containerColor } from '../lib/status';
 
 interface InspectOverviewProps {
   detail: ObjectDetail;
@@ -15,20 +16,10 @@ function conditionColor(condition: Condition): string {
   return 'text-neutral-400';
 }
 
-function containerColor(container: ContainerState): string {
-  if (container.state === 'running' && container.ready) {
-    return 'bg-green-600';
-  }
-  if (container.state === 'terminated') {
-    return 'bg-red-600';
-  }
-  return 'bg-amber-600';
-}
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-b border-neutral-900 px-4 py-3">
-      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
+    <section className="border-b border-neutral-800 px-4 py-3">
+      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
         {title}
       </h3>
       {children}
@@ -41,7 +32,7 @@ function Pairs({ pairs }: { pairs: [string, string][] }) {
     <dl className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-3 gap-y-1">
       {pairs.map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="truncate text-neutral-500">{label}</dt>
+          <dt className="truncate text-neutral-400">{label}</dt>
           <dd className="break-all text-neutral-200">{value}</dd>
         </div>
       ))}
@@ -86,10 +77,10 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
                 <div className="flex items-baseline gap-2">
                   <span className="text-neutral-200">{condition.type}</span>
                   <span className={conditionColor(condition)}>{condition.status}</span>
-                  <span className="ml-auto text-[11px] text-neutral-600">{condition.updated}</span>
+                  <span className="ml-auto text-[11px] text-neutral-400">{condition.updated}</span>
                 </div>
                 {condition.message !== undefined && condition.message !== '' && (
-                  <p className="mt-0.5 break-words text-neutral-500">{condition.message}</p>
+                  <p className="mt-0.5 break-words text-neutral-400">{condition.message}</p>
                 )}
               </div>
             ))}
@@ -104,8 +95,8 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
               <div key={container.name} className="flex items-center gap-2">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${containerColor(container)}`} />
                 <span className="truncate text-neutral-200">{container.name}</span>
-                <span className="text-neutral-600">{container.reason}</span>
-                <span className="ml-auto shrink-0 text-neutral-500">
+                <span className="text-neutral-400">{container.reason}</span>
+                <span className="ml-auto shrink-0 text-neutral-400">
                   {container.restarts} restarts
                 </span>
               </div>

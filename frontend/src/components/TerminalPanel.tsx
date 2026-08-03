@@ -14,7 +14,7 @@ function endNotice(message: string): string {
   if (message === '') {
     return '\r\n\x1b[38;5;244msession ended\x1b[0m\r\n';
   }
-  return `\r\n\x1b[38;5;203m${message}\x1b[0m\r\n`;
+  return `\r\n\x1b[38;5;214m${message}\x1b[0m\r\n`;
 }
 
 export default function TerminalPanel({ target, onShellMissing }: TerminalPanelProps) {

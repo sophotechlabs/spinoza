@@ -388,7 +388,7 @@ describe('App', () => {
     await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'dep-a' }));
 
-    expect(screen.getByRole('tab', { name: 'Terminal' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('offers regular containers before init containers in the picker', async () => {
@@ -427,7 +427,7 @@ describe('App', () => {
     await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
 
-    expect(screen.getByRole('tab', { name: 'Terminal' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('targets the inspector at a selected graph node', async () => {

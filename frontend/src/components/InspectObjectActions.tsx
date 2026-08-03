@@ -39,7 +39,7 @@ function outcomeClass(outcome: string): string {
     return 'text-red-400';
   }
   if (outcome === 'skipped') {
-    return 'text-neutral-500';
+    return 'text-neutral-400';
   }
   return 'text-green-400';
 }
@@ -52,7 +52,7 @@ function PodList({ pods }: { pods: PodOutcome[] }) {
           <span className={`w-14 shrink-0 ${outcomeClass(pod.outcome)}`}>{pod.outcome}</span>
           <span className="truncate text-neutral-300">{pod.name}</span>
           {pod.reason !== undefined && (
-            <span className="truncate text-neutral-600">{pod.reason}</span>
+            <span className="truncate text-neutral-400">{pod.reason}</span>
           )}
         </li>
       ))}
@@ -132,7 +132,7 @@ export default function InspectObjectActions({
       <div className="flex flex-wrap items-center gap-2">
         {canScale(target) && (
           <>
-            <label className="text-neutral-500" htmlFor="replica-count">
+            <label className="text-neutral-400" htmlFor="replica-count">
               replicas
             </label>
             <input
@@ -191,7 +191,7 @@ export default function InspectObjectActions({
           </button>
         )}
         {cordoned && <span className="text-amber-500">cordoned</span>}
-        {busy && <span className="text-neutral-500">working…</span>}
+        {busy && <span className="text-neutral-400">working…</span>}
       </div>
 
       {plan !== null && (

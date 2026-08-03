@@ -14,7 +14,7 @@ function statusColor(status: ConnectionStatus): string {
     return 'bg-green-500';
   }
   if (status === 'connecting') {
-    return 'bg-yellow-500';
+    return 'bg-amber-500';
   }
   return 'bg-red-500';
 }
@@ -37,7 +37,7 @@ export default function TopBar({ status, view, onReconnect, onContextChanged }: 
   return (
     <header className="flex h-10 shrink-0 items-center gap-4 border-b border-neutral-800 bg-neutral-900 px-3 text-xs">
       <ContextPicker onSwitched={handleContextChanged} />
-      <span className="text-neutral-500">/</span>
+      <span className="text-neutral-400">/</span>
       <span className="text-neutral-300">all namespaces</span>
       {view !== undefined && (
         <span className="rounded border border-neutral-700 px-1.5 py-0.5 text-neutral-300">

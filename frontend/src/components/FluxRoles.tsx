@@ -92,9 +92,9 @@ function KindTile({
       className={`rounded border ${tileBorder(ready, reporting, count)} bg-neutral-900 p-2.5 text-left hover:bg-neutral-800`}
     >
       <div className="truncate text-sm font-semibold text-neutral-100">{kind}</div>
-      <div className="truncate text-[10px] text-neutral-500">{groupOf(kind)}</div>
+      <div className="truncate text-[10px] text-neutral-400">{groupOf(kind)}</div>
       <div className="mt-2 text-xl font-semibold text-neutral-100">{count}</div>
-      <div className="mt-0.5 text-[10px] text-neutral-500">
+      <div className="mt-0.5 text-[10px] text-neutral-400">
         {readySummary(ready, reporting, count)}
       </div>
     </button>
@@ -121,10 +121,10 @@ function KindList({
       >
         ← Flux Resources
       </button>
-      <div className="mb-2 text-xs text-neutral-500">
+      <div className="mb-2 text-xs text-neutral-400">
         {kind} · {resources.length} resources
       </div>
-      <div className="border-t border-neutral-900">
+      <div className="border-t border-neutral-800">
         {resources.map((resource) => (
           <button
             type="button"
@@ -132,19 +132,19 @@ function KindList({
             onClick={() => {
               onSelect(resource);
             }}
-            className="flex w-full items-center gap-2 border-b border-neutral-900 px-2 py-1.5 text-left hover:bg-neutral-900"
+            className="flex w-full items-center gap-2 border-b border-neutral-800 px-2 py-1.5 text-left hover:bg-neutral-900"
             title={resource.message}
           >
             <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot(resource)}`} />
-            <span className="text-neutral-500">{resource.namespace}/</span>
+            <span className="text-neutral-400">{resource.namespace}/</span>
             <span className="truncate text-neutral-100">{resource.name}</span>
             <span className={`ml-2 shrink-0 text-[11px] ${statusText(resource)}`}>
               {statusLabel(resource)}
             </span>
-            <span className="ml-auto shrink-0 truncate pl-4 text-[11px] text-neutral-500">
+            <span className="ml-auto shrink-0 truncate pl-4 text-[11px] text-neutral-400">
               {resource.revision}
             </span>
-            <span className="shrink-0 text-[11px] text-neutral-600">
+            <span className="shrink-0 text-[11px] text-neutral-400">
               {created(resource.createdAt)}
             </span>
           </button>
@@ -169,7 +169,7 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
       );
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         Loading Flux resources…
       </div>
     );

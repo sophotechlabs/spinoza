@@ -108,7 +108,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
   return (
     <div className="overflow-y-auto p-3 text-xs">
       <div className="flex items-center gap-2">
-        <label className="text-neutral-500" htmlFor="metric-range">
+        <label className="text-neutral-400" htmlFor="metric-range">
           range
         </label>
         <select
@@ -125,13 +125,13 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           ))}
         </select>
         {history?.source !== undefined && (
-          <span className="ml-auto truncate text-[10px] text-neutral-600">{history.source}</span>
+          <span className="ml-auto truncate text-[10px] text-neutral-400">{history.source}</span>
         )}
       </div>
 
       {error !== null && <p className="mt-3 break-words text-red-400">{error}</p>}
       {empty && (
-        <p className="mt-3 text-neutral-600">
+        <p className="mt-3 text-neutral-400">
           Prometheus has no samples for this pod over the last {span}.
         </p>
       )}
@@ -140,7 +140,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
         <div className="mt-3">
           <div className="flex items-baseline justify-between">
             <span className="text-neutral-300">CPU</span>
-            <span className="text-neutral-500">peak {formatCpu(peak(cpu))}</span>
+            <span className="text-neutral-400">peak {formatCpu(peak(cpu))}</span>
           </div>
           <Chart
             points={cpu}
@@ -152,7 +152,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
 
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-neutral-300">Memory</span>
-            <span className="text-neutral-500">peak {formatMemory(peak(memory))}</span>
+            <span className="text-neutral-400">peak {formatMemory(peak(memory))}</span>
           </div>
           <Chart
             points={memory}

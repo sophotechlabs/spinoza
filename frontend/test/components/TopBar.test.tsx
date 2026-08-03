@@ -29,7 +29,7 @@ describe('TopBar', () => {
   it('shows a yellow dot when connecting', () => {
     const { container } = render(<TopBar status="connecting" />);
     expect(screen.getByText('connecting')).toBeInTheDocument();
-    expect(dotFor(container).className).toContain('bg-yellow-500');
+    expect(dotFor(container).className).toContain('bg-amber-500');
   });
 
   it('shows a red dot when disconnected', () => {

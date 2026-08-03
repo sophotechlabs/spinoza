@@ -35,4 +35,11 @@ setSchemaApplier((schemas) => {
   void monacoYaml.update({ schemas });
 });
 
+monaco.editor.defineTheme('spinoza-dark', {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [],
+  colors: { 'editor.background': '#0a0a0a' },
+});
+
 loader.config({ monaco });

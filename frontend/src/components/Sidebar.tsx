@@ -38,11 +38,11 @@ function resourceClass(active: boolean, nested = false): string {
   if (nested) {
     indent = 'px-9';
   }
-  const base = `block w-full truncate ${indent} py-1 text-left text-neutral-300 hover:bg-neutral-900`;
+  const base = `block w-full truncate ${indent} py-1 text-left`;
   if (active) {
     return `${base} bg-neutral-800 text-neutral-100`;
   }
-  return base;
+  return `${base} text-neutral-300 hover:bg-neutral-900`;
 }
 
 function collapsedKeys(categories: Category[]): Set<string> {
@@ -223,7 +223,7 @@ export default function Sidebar({
           </div>
         )}
         {error === null && categories.length === 0 && (
-          <div className="px-3 py-1 text-[11px] text-neutral-600">
+          <div className="px-3 py-1 text-[11px] text-neutral-400">
             No resource types discovered.
           </div>
         )}
@@ -241,7 +241,7 @@ export default function Sidebar({
                 <span>
                   {chevron(isCollapsed)} {category.name}
                 </span>
-                <span className="text-neutral-600">{category.resources.length}</span>
+                <span className="text-neutral-400">{category.resources.length}</span>
               </button>
               {!isCollapsed && !isNested(category.name) && (
                 <div>
@@ -278,7 +278,7 @@ export default function Sidebar({
                           <span className="truncate">
                             {chevron(groupCollapsed)} {group.name}
                           </span>
-                          <span className="shrink-0 text-neutral-600">
+                          <span className="shrink-0 text-neutral-400">
                             {group.resources.length}
                           </span>
                         </button>
@@ -313,7 +313,7 @@ export default function Sidebar({
         aria-label="Resize sidebar"
         onMouseDown={handleResize}
         onKeyDown={handleResizeKey}
-        className="w-1 shrink-0 cursor-col-resize bg-neutral-900 hover:bg-neutral-700"
+        className="w-1 shrink-0 cursor-col-resize bg-neutral-500 hover:bg-neutral-300"
       />
     </div>
   );

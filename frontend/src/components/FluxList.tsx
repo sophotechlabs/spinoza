@@ -59,7 +59,7 @@ function ResourceRow({
   }
 
   return (
-    <tr className="border-t border-neutral-900 hover:bg-neutral-900">
+    <tr className="border-t border-neutral-800 hover:bg-neutral-900">
       <td className="truncate px-2 py-1 text-neutral-400">{resource.kind}</td>
       <td className="truncate px-2 py-1 text-neutral-100">
         <button
@@ -84,7 +84,7 @@ function ResourceRow({
         {resource.latest}
       </td>
       <td className="truncate px-2 py-1 text-neutral-400">{resource.source}</td>
-      <td className="truncate px-2 py-1 text-neutral-500">{created(resource.createdAt)}</td>
+      <td className="truncate px-2 py-1 text-neutral-400">{created(resource.createdAt)}</td>
     </tr>
   );
 }
@@ -113,7 +113,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
       );
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         Loading Flux resources…
       </div>
     );
@@ -124,7 +124,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
       return <LoadFailure what="Flux resources" message={data.error} />;
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         No Flux resources found.
       </div>
     );
@@ -154,12 +154,12 @@ export default function FluxList({ onSelect }: FluxListProps) {
               />
             ))}
           </colgroup>
-          <thead className="sticky top-0 z-10 bg-neutral-950 text-neutral-500">
+          <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
             <tr className="border-b border-neutral-800">
               {table.getFlatHeaders().map((header) => (
                 <th
                   key={header.id}
-                  className="relative px-2 py-1 font-normal"
+                  className="relative px-2 py-1 font-medium"
                   style={{ width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px` }}
                 >
                   {flexRender(header.column.columnDef.header, header.getContext())}
@@ -182,7 +182,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
                     className="bg-neutral-900/50 px-2 pt-3 pb-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase"
                   >
                     {group.name}
-                    <span className="ml-2 text-[11px] font-normal text-neutral-600">
+                    <span className="ml-2 text-[11px] font-normal text-neutral-400">
                       {groupSummary(group)}
                     </span>
                   </td>

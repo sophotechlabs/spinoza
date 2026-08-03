@@ -104,7 +104,7 @@ function nodeUsageCell(usage: ResourceUsage | undefined, memory: boolean): React
 
 function podUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
   if (usage === undefined) {
-    return <span className="text-neutral-600">—</span>;
+    return <span className="text-neutral-400">—</span>;
   }
   if (memory) {
     return <span className="text-neutral-400">{formatMem(usage.memoryMi)}</span>;
@@ -141,11 +141,11 @@ function ariaSort(dir: false | SortDirection): 'ascending' | 'descending' | 'non
 }
 
 function rowClass(selected: boolean): string {
-  const base = 'border-b border-neutral-900 hover:bg-neutral-900';
+  const base = 'border-b border-neutral-800';
   if (selected) {
     return `${base} bg-neutral-800`;
   }
-  return base;
+  return `${base} hover:bg-neutral-900`;
 }
 
 const columnHelper = createColumnHelper<Row>();
@@ -288,7 +288,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
 
   if (active === null) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         Select a resource to view.
       </div>
     );
@@ -316,7 +316,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
           onChange={(event) => {
             setQuery(event.target.value);
           }}
-          className="w-56 rounded border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-200 placeholder:text-neutral-600 focus:border-neutral-600 focus:outline-none"
+          className="w-56 rounded border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-200 placeholder:text-neutral-400 focus:border-neutral-600"
         />
         {namespaced && namespaces.length > 0 && (
           <select
@@ -325,7 +325,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
             onChange={(event) => {
               setNamespace(event.target.value);
             }}
-            className="rounded border border-neutral-800 bg-neutral-900 px-1.5 py-1 text-neutral-200 focus:border-neutral-600 focus:outline-none"
+            className="rounded border border-neutral-800 bg-neutral-900 px-1.5 py-1 text-neutral-200 focus:border-neutral-600"
           >
             <option value={ALL_NAMESPACES}>All namespaces</option>
             {namespaces.map((name) => (
@@ -335,7 +335,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
             ))}
           </select>
         )}
-        <span className="ml-auto text-neutral-500">
+        <span className="ml-auto text-neutral-400">
           {visibleRows.length} of {rows.length}
         </span>
       </div>

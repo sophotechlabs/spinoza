@@ -126,7 +126,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
           </button>
         )}
         {suspended === true && <span className="text-amber-500">suspended</span>}
-        {busy !== null && <span className="text-neutral-500">working…</span>}
+        {busy !== null && <span className="text-neutral-400">working…</span>}
       </div>
       {error !== null && <p className="mt-1.5 break-words text-red-400">{error}</p>}
       {notice !== null && <p className={noticeClass(state)}>{notice}</p>}

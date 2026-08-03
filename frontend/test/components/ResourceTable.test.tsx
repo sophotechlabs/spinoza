@@ -191,7 +191,7 @@ describe('ResourceTable', () => {
       screen.getByTitle('sidecar: waiting (CrashLoopBackOff) · 7 restarts'),
     ).toBeInTheDocument();
     const ratio = screen.getByText('1/2');
-    expect(ratio.className).toContain('text-yellow-400');
+    expect(ratio.className).toContain('text-amber-400');
     const restarts = screen.getByText('7');
     expect(restarts.className).toContain('text-red-400');
   });
@@ -444,5 +444,21 @@ describe('ResourceTable', () => {
 
     expect(screen.getByTitle('app: running')).toBeInTheDocument();
     expect(screen.queryByTitle(/spinoza-debug-1/)).not.toBeInTheDocument();
+  });
+});
+
+describe('the selected row', () => {
+  it('keeps its highlight under the cursor', async () => {
+    const row = makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' });
+    seed(makeColumns([]), true, [row]);
+    renderTable(descriptor, row);
+    const button = await screen.findByRole('button', { name: 'pod-a' });
+    const tr = button.closest('tr');
+    if (!tr) {
+      throw new Error('row element not found');
+    }
+
+    expect(tr.className).toContain('bg-neutral-800');
+    expect(tr.className).not.toContain('hover:bg-neutral-900');
   });
 });

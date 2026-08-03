@@ -17,7 +17,7 @@ export function readyText(ready: string): string {
   if (ready === 'False') {
     return 'text-red-400';
   }
-  return 'text-neutral-500';
+  return 'text-neutral-400';
 }
 
 export function readyLabel(ready: string): string {
@@ -65,7 +65,7 @@ export function latestColor(resource: FluxResource): string {
   if (resource.outdated === true) {
     return 'text-amber-400';
   }
-  return 'text-neutral-600';
+  return 'text-neutral-400';
 }
 
 export function latestTitle(resource: FluxResource): string {

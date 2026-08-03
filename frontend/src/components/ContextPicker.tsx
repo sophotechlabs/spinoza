@@ -68,7 +68,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
           </option>
         ))}
       </select>
-      {busy && <span className="text-neutral-500">switching…</span>}
+      {busy && <span className="text-neutral-400">switching…</span>}
       {error !== null && <span className="max-w-md truncate text-red-400">{error}</span>}
     </span>
   );

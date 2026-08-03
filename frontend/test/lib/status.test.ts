@@ -25,7 +25,7 @@ describe('containerColor', () => {
   });
 
   it('is yellow for a running but not-ready container', () => {
-    expect(containerColor(container({ state: 'running', ready: false }))).toBe('bg-yellow-500');
+    expect(containerColor(container({ state: 'running', ready: false }))).toBe('bg-amber-500');
   });
 
   it('is neutral for a completed terminated container', () => {
@@ -46,12 +46,12 @@ describe('containerColor', () => {
 
   it('is yellow for a waiting container that is just starting', () => {
     expect(containerColor(container({ state: 'waiting', reason: 'ContainerCreating' }))).toBe(
-      'bg-yellow-500',
+      'bg-amber-500',
     );
   });
 
   it('is yellow for a waiting container with no reason', () => {
-    expect(containerColor(container({ state: 'waiting' }))).toBe('bg-yellow-500');
+    expect(containerColor(container({ state: 'waiting' }))).toBe('bg-amber-500');
   });
 });
 
@@ -79,7 +79,7 @@ describe('ratioColor', () => {
   });
 
   it('is yellow for a partial ratio', () => {
-    expect(ratioColor('2/3')).toBe('text-yellow-400');
+    expect(ratioColor('2/3')).toBe('text-amber-400');
   });
 
   it('is neutral when the value is not a two-part ratio', () => {
@@ -95,7 +95,7 @@ describe('restartColor', () => {
   });
 
   it('is yellow for a low count', () => {
-    expect(restartColor('3')).toBe('text-yellow-400');
+    expect(restartColor('3')).toBe('text-amber-400');
   });
 
   it('is red for a high count', () => {
@@ -130,9 +130,9 @@ describe('statusColor', () => {
   });
 
   it('warns on anything still in flight', () => {
-    expect(statusColor('Pending')).toBe('text-yellow-400');
-    expect(statusColor('Terminating')).toBe('text-yellow-400');
-    expect(statusColor('Unknown')).toBe('text-yellow-400');
+    expect(statusColor('Pending')).toBe('text-amber-400');
+    expect(statusColor('Terminating')).toBe('text-amber-400');
+    expect(statusColor('Unknown')).toBe('text-amber-400');
     expect(statusColor('ArtifactFailed')).toBe('text-red-400');
   });
 
@@ -144,6 +144,6 @@ describe('statusColor', () => {
 describe('a cordoned node', () => {
   it('reads as a warning rather than healthy', () => {
     expect(statusColor('Ready')).toBe('text-green-400');
-    expect(statusColor('Ready,SchedulingDisabled')).toBe('text-yellow-400');
+    expect(statusColor('Ready,SchedulingDisabled')).toBe('text-amber-400');
   });
 });

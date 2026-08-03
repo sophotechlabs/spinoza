@@ -3,7 +3,12 @@ import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import type { GraphNode } from '../lib/types';
 import { fetchGraph } from '../lib/graph';
-import { toFlow } from '../lib/graphLayout';
+import {
+  EDGE_DEPENDS_STROKE,
+  EDGE_MANAGES_STROKE,
+  EDGE_SOURCE_STROKE,
+  toFlow,
+} from '../lib/graphLayout';
 import type { GitopsFlow, GitopsFlowNode } from '../lib/graphLayout';
 import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
@@ -16,14 +21,26 @@ interface GitopsGraphProps {
 }
 
 interface LegendItem {
-  color: string;
+  swatch: string;
   label: string;
 }
 
 const LEGEND: LegendItem[] = [
-  { color: 'bg-green-500', label: 'Ready' },
-  { color: 'bg-red-500', label: 'Not ready or missing' },
-  { color: 'bg-sky-500', label: 'Source' },
+  { swatch: 'border-green-600 bg-green-950', label: 'Ready' },
+  { swatch: 'border-red-600 bg-red-950', label: 'Not ready or missing' },
+  { swatch: 'border-sky-700 bg-sky-950', label: 'Source, not ready yet' },
+  { swatch: 'border-neutral-600 bg-neutral-800', label: 'Unknown' },
+];
+
+interface EdgeLegendItem {
+  stroke: string;
+  label: string;
+}
+
+const EDGE_LEGEND: EdgeLegendItem[] = [
+  { stroke: EDGE_SOURCE_STROKE, label: 'Source' },
+  { stroke: EDGE_DEPENDS_STROKE, label: 'Depends on' },
+  { stroke: EDGE_MANAGES_STROKE, label: 'Manages' },
 ];
 
 function errorMessage(err: unknown): string {
@@ -89,7 +106,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
 
   if (overLimit !== null) {
     return (
-      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-neutral-500">
+      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-neutral-400">
         GitOps control plane has {overLimit} nodes — too many to render.
       </div>
     );
@@ -102,7 +119,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
       );
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         Loading graph…
       </div>
     );
@@ -113,7 +130,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
       return <LoadFailure what="The GitOps graph" message={partial} />;
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
         No GitOps resources found.
       </div>
     );
@@ -127,6 +144,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
           nodes={flow.nodes}
           edges={flow.edges}
           onNodeClick={handleNodeClick}
+          colorMode="dark"
           onlyRenderVisibleElements
           fitView
         >
@@ -136,7 +154,13 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
         <div className="pointer-events-none absolute top-2 right-2 z-10 rounded border border-neutral-800 bg-neutral-900/90 px-2 py-1.5 text-[11px] text-neutral-300">
           {LEGEND.map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${item.color}`} />
+              <span className={`h-2.5 w-2.5 rounded border ${item.swatch}`} />
+              {item.label}
+            </div>
+          ))}
+          {EDGE_LEGEND.map((item) => (
+            <div key={item.label} className="flex items-center gap-1.5">
+              <span className="h-0.5 w-2.5 rounded" style={{ backgroundColor: item.stroke }} />
               {item.label}
             </div>
           ))}

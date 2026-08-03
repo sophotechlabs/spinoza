@@ -11,8 +11,8 @@ export default function PanelChrome({ target, onClose, children }: PanelChromePr
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {target !== null && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-neutral-900 px-3 py-1.5">
-          <span className="shrink-0 text-[11px] text-neutral-500">{target.resource}</span>
+        <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 px-3 py-1.5">
+          <span className="shrink-0 text-[11px] text-neutral-400">{target.resource}</span>
           <span className="truncate text-xs font-semibold text-neutral-100">{target.name}</span>
           <button
             type="button"

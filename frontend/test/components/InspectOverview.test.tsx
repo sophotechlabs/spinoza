@@ -120,9 +120,9 @@ describe('InspectOverview', () => {
     expect(screen.getByText('Containers')).toBeInTheDocument();
     expect(screen.getByText('app')).toBeInTheDocument();
     expect(screen.getByText('4 restarts')).toBeInTheDocument();
-    expect(container.querySelectorAll('.bg-green-600')).toHaveLength(1);
-    expect(container.querySelectorAll('.bg-red-600')).toHaveLength(1);
-    expect(container.querySelectorAll('.bg-amber-600')).toHaveLength(1);
+    expect(container.querySelectorAll('.bg-green-500')).toHaveLength(1);
+    expect(container.querySelectorAll('.bg-red-500')).toHaveLength(1);
+    expect(container.querySelectorAll('.bg-amber-500')).toHaveLength(1);
   });
 
   it('treats a running but unready container as pending', () => {
@@ -131,6 +131,50 @@ describe('InspectOverview', () => {
     ];
     const { container } = render(<InspectOverview detail={detail()} containers={containers} />);
 
-    expect(container.querySelectorAll('.bg-amber-600')).toHaveLength(1);
+    expect(container.querySelectorAll('.bg-amber-500')).toHaveLength(1);
+  });
+});
+
+describe('container dots agree with the table', () => {
+  it('greys a completed init container instead of colouring it like a crash', () => {
+    render(
+      <InspectOverview
+        detail={detail()}
+        containers={[
+          {
+            name: 'copy-libs',
+            state: 'terminated',
+            reason: 'Completed',
+            ready: false,
+            restarts: 0,
+            init: true,
+          },
+        ]}
+      />,
+    );
+
+    const dot = document.querySelector('.bg-neutral-500');
+    expect(dot).not.toBeNull();
+  });
+
+  it('reds a container stuck in CrashLoopBackOff', () => {
+    render(
+      <InspectOverview
+        detail={detail()}
+        containers={[
+          {
+            name: 'app',
+            state: 'waiting',
+            reason: 'CrashLoopBackOff',
+            ready: false,
+            restarts: 7,
+            init: false,
+          },
+        ]}
+      />,
+    );
+
+    const dot = document.querySelector('.bg-red-500');
+    expect(dot).not.toBeNull();
   });
 });

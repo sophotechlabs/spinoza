@@ -204,3 +204,16 @@ describe('GitopsGraph partial failures', () => {
     expect(await screen.findByText('No GitOps resources found.')).toBeInTheDocument();
   });
 });
+
+describe('the graph legend', () => {
+  it('names the unknown status and every edge kind', async () => {
+    stubGraph({ nodes: [makeGraphNode({ id: 'a', name: 'alpha' })], edges: [] });
+    render(<GitopsGraph />);
+    await screen.findByText('alpha');
+
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
+    expect(screen.getByText('Source')).toBeInTheDocument();
+    expect(screen.getByText('Depends on')).toBeInTheDocument();
+    expect(screen.getByText('Manages')).toBeInTheDocument();
+  });
+});

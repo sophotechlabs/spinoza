@@ -89,13 +89,13 @@ export default function InspectLogs({
           {followLabel(follow)}
         </button>
         {error !== null && <span className="truncate text-red-400">{error}</span>}
-        {error === null && ended && <span className="text-neutral-600">stream ended</span>}
+        {error === null && ended && <span className="text-neutral-400">stream ended</span>}
       </div>
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[11px] text-neutral-300"
       >
-        {lines.length === 0 && <span className="text-neutral-600">Waiting for output…</span>}
+        {lines.length === 0 && <span className="text-neutral-400">Waiting for output…</span>}
         {lines.map((line, index) => (
           <div key={offset + index} className="break-all whitespace-pre-wrap">
             {line}

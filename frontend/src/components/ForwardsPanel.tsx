@@ -30,7 +30,7 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
 
   if (forwards.length === 0) {
     return (
-      <div className="p-3 text-neutral-600">
+      <div className="p-3 text-neutral-400">
         No active forwards. Open a Pod or Service and forward a port.
       </div>
     );
@@ -40,7 +40,7 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
     <div className="p-2">
       {error !== null && <p className="mb-1.5 text-red-400">{error}</p>}
       {forwards.map((forward) => (
-        <div key={forward.id} className="flex items-center gap-2 border-b border-neutral-900 py-1">
+        <div key={forward.id} className="flex items-center gap-2 border-b border-neutral-800 py-1">
           <span className={stateColor(forward.state)}>●</span>
           <span className="truncate text-neutral-300">
             {forward.kind.toLowerCase()}/{forward.namespace}/{forward.name}
@@ -60,7 +60,7 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
               127.0.0.1:{forward.localPort}
             </a>
           )}
-          <span className="text-neutral-600">→ {forward.remotePort}</span>
+          <span className="text-neutral-400">→ {forward.remotePort}</span>
           <button
             type="button"
             onClick={() => void stop(forward.id)}
