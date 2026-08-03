@@ -10,7 +10,6 @@ import type { DebugProfile } from '../lib/debugContainer';
 
 interface DebugPromptProps {
   target: ExecTarget;
-  image: string;
   onAttached: (container: string) => void;
 }
 
@@ -36,21 +35,23 @@ function buttonLabel(busy: boolean): string {
   return 'Attach debug container';
 }
 
-export default function DebugPrompt({ target, image, onAttached }: DebugPromptProps) {
+export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
   const [profile, setProfile] = useState<DebugProfile>(DEFAULT_PROFILE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  const [image, setImage] = useState('');
 
-  const { namespace } = target;
+  const { namespace, pod } = target;
 
   useEffect(() => {
     let live = true;
-    fetchDebugSupport(namespace)
+    fetchDebugSupport(namespace, pod)
       .then((support) => {
         if (!live) {
           return;
         }
+        setImage(support.image);
         if (support.allowed) {
           setRefused(null);
           return;
@@ -61,7 +62,7 @@ export default function DebugPrompt({ target, image, onAttached }: DebugPromptPr
     return () => {
       live = false;
     };
-  }, [namespace]);
+  }, [namespace, pod]);
 
   async function attach() {
     setBusy(true);

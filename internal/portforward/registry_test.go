@@ -95,7 +95,7 @@ func newTestRegistry(t *testing.T, runner Runner, resolver Resolver) *Registry {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	registry := newRegistry(ctx, runner, resolver, &stubProber{alive: true}, 2*time.Second, time.Hour)
+	registry := newRegistry(ctx, runner, resolver, &stubProber{alive: true}, 2*time.Second, time.Hour, time.Second)
 	t.Cleanup(registry.StopAll)
 	return registry
 }
@@ -258,7 +258,7 @@ func TestStartTimesOut(t *testing.T) {
 	runner.hang = true
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	registry := newRegistry(ctx, runner, &stubResolver{pod: "web", podPort: 8080}, nil, 50*time.Millisecond, time.Hour)
+	registry := newRegistry(ctx, runner, &stubResolver{pod: "web", podPort: 8080}, nil, 50*time.Millisecond, time.Hour, time.Second)
 	t.Cleanup(registry.StopAll)
 	_, err := registry.Start(context.Background(), podTarget(), 8080)
 
@@ -418,7 +418,7 @@ func TestListIsSortedByID(t *testing.T) {
 
 func TestShutdownStopsEveryForward(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, nil, 2*time.Second, time.Hour)
+	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, nil, 2*time.Second, time.Hour, time.Second)
 	if _, err := registry.Start(context.Background(), podTarget(), 8080); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -440,7 +440,7 @@ func TestReapMarksAForwardWhosePodIsGone(t *testing.T) {
 	prober := &stubProber{alive: true}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	registry := newRegistry(ctx, runner, &stubResolver{pod: "web", podPort: 8080}, prober, 2*time.Second, time.Hour)
+	registry := newRegistry(ctx, runner, &stubResolver{pod: "web", podPort: 8080}, prober, 2*time.Second, time.Hour, time.Second)
 	t.Cleanup(registry.StopAll)
 
 	forward, err := registry.Start(context.Background(), podTarget(), 8080)
@@ -475,7 +475,7 @@ func TestReapLeavesFailedForwardsAlone(t *testing.T) {
 	prober := &stubProber{alive: false}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, prober, 2*time.Second, time.Hour)
+	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, prober, 2*time.Second, time.Hour, time.Second)
 	t.Cleanup(registry.StopAll)
 	if _, err := registry.Start(context.Background(), podTarget(), 8080); err != nil {
 		t.Fatalf("start: %v", err)
@@ -493,7 +493,7 @@ func TestReapLeavesFailedForwardsAlone(t *testing.T) {
 func TestReapIsANoOpWithoutAProber(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, nil, 2*time.Second, time.Hour)
+	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, nil, 2*time.Second, time.Hour, time.Second)
 	t.Cleanup(registry.StopAll)
 	if _, err := registry.Start(context.Background(), podTarget(), 8080); err != nil {
 		t.Fatalf("start: %v", err)
@@ -510,7 +510,7 @@ func TestReapLoopRunsOnItsInterval(t *testing.T) {
 	prober := &stubProber{alive: true}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, prober, 2*time.Second, 10*time.Millisecond)
+	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, prober, 2*time.Second, 10*time.Millisecond, time.Second)
 	t.Cleanup(registry.StopAll)
 	if _, err := registry.Start(context.Background(), podTarget(), 8080); err != nil {
 		t.Fatalf("start: %v", err)
@@ -551,4 +551,130 @@ func TestNewRegistryUsesTheDefaultTimings(t *testing.T) {
 	if registry.reapEvery != DefaultReapInterval {
 		t.Fatalf("reapEvery = %v", registry.reapEvery)
 	}
+}
+
+type gateResolver struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (g *gateResolver) Resolve(context.Context, Target, int32) (string, int32, error) {
+	g.entered <- struct{}{}
+	<-g.release
+	return "web", 8080, nil
+}
+
+func TestConcurrentStartsShareOneForward(t *testing.T) {
+	runner := newStubRunner(45123)
+	resolver := &gateResolver{entered: make(chan struct{}, 2), release: make(chan struct{})}
+	registry := newTestRegistry(t, runner, resolver)
+
+	var group sync.WaitGroup
+	ids := make([]string, 2)
+	errs := make([]error, 2)
+	group.Go(func() {
+		forward, err := registry.Start(context.Background(), podTarget(), 8080)
+		ids[0] = forward.ID
+		errs[0] = err
+	})
+	<-resolver.entered
+
+	group.Go(func() {
+		forward, err := registry.Start(context.Background(), podTarget(), 8080)
+		ids[1] = forward.ID
+		errs[1] = err
+	})
+	time.Sleep(50 * time.Millisecond)
+	close(resolver.release)
+	group.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("start %d: %v", i, err)
+		}
+	}
+	if runner.count() != 1 {
+		t.Fatalf("ran %d forwards for one target, want the second call to reuse the first", runner.count())
+	}
+	if ids[0] != ids[1] {
+		t.Fatalf("ids = %q and %q, want both callers to get the same forward", ids[0], ids[1])
+	}
+	if len(registry.List()) != 1 {
+		t.Fatalf("registry holds %d forwards, want 1", len(registry.List()))
+	}
+}
+
+func TestAFailedStartReleasesTheReservation(t *testing.T) {
+	runner := newStubRunner(45123)
+	runner.startErr = errors.New("upgrade refused")
+	registry := newTestRegistry(t, runner, &stubResolver{pod: "web", podPort: 8080})
+
+	_, first := registry.Start(context.Background(), podTarget(), 8080)
+	if first == nil {
+		t.Fatal("expected the first start to fail")
+	}
+
+	runner.startErr = nil
+	forward, err := registry.Start(context.Background(), podTarget(), 8080)
+	if err != nil {
+		t.Fatalf("a retry after a failed start was blocked: %v", err)
+	}
+	if forward.LocalPort != 45123 {
+		t.Fatalf("localPort = %d", forward.LocalPort)
+	}
+}
+
+func TestAResolveFailureReleasesTheReservation(t *testing.T) {
+	resolver := &stubResolver{err: errors.New("no such service")}
+	registry := newTestRegistry(t, newStubRunner(45123), resolver)
+
+	_, first := registry.Start(context.Background(), podTarget(), 8080)
+	if first == nil {
+		t.Fatal("expected the resolve failure to surface")
+	}
+
+	resolver.err = nil
+	resolver.pod = "web"
+	resolver.podPort = 8080
+	_, err := registry.Start(context.Background(), podTarget(), 8080)
+	if err != nil {
+		t.Fatalf("a retry after a resolve failure was blocked: %v", err)
+	}
+}
+
+func TestReapGivesEachProbeADeadline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	prober := &deadlineProber{seen: make(chan bool, 4)}
+	registry := newRegistry(ctx, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080}, prober, 2*time.Second, time.Hour, 25*time.Millisecond)
+	t.Cleanup(registry.StopAll)
+	_, err := registry.Start(context.Background(), podTarget(), 8080)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	registry.Reap()
+
+	select {
+	case bounded := <-prober.seen:
+		if !bounded {
+			t.Fatal("the reap probe was handed a context with no deadline; one hung apiserver call stalls every probe")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reap never probed")
+	}
+}
+
+type deadlineProber struct {
+	seen chan bool
+}
+
+func (d *deadlineProber) Alive(ctx context.Context, _, _ string) bool {
+	_, hasDeadline := ctx.Deadline()
+	select {
+	case d.seen <- hasDeadline:
+	default:
+	}
+	<-ctx.Done()
+	return true
 }

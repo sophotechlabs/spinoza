@@ -462,7 +462,7 @@ func allowingClient(t *testing.T, allowed bool, reason string) *k8sfake.Clientse
 func TestAllowedReportsAPermittedNamespace(t *testing.T) {
 	service := NewService(&stubRunner{}, allowingClient(t, true, ""), "", "")
 
-	support := service.Allowed(context.Background(), "monitoring")
+	support := service.Allowed(context.Background(), "monitoring", "loki-0")
 	if !support.Allowed {
 		t.Fatal("expected the namespace to be allowed")
 	}
@@ -474,7 +474,7 @@ func TestAllowedReportsAPermittedNamespace(t *testing.T) {
 func TestAllowedReportsARefusalWithItsReason(t *testing.T) {
 	service := NewService(&stubRunner{}, allowingClient(t, false, "no RBAC policy matched"), "", "")
 
-	support := service.Allowed(context.Background(), "kube-system")
+	support := service.Allowed(context.Background(), "kube-system", "loki-0")
 	if support.Allowed {
 		t.Fatal("expected the namespace to be refused")
 	}
@@ -491,7 +491,7 @@ func TestAllowedDefaultsToPermittedWhenTheReviewItselfFails(t *testing.T) {
 		})
 	service := NewService(&stubRunner{}, client, "", "")
 
-	support := service.Allowed(context.Background(), "monitoring")
+	support := service.Allowed(context.Background(), "monitoring", "loki-0")
 	if !support.Allowed {
 		t.Fatal("an advisory check must never be stricter than the real API")
 	}
@@ -519,5 +519,175 @@ func TestWaitReportsTheLastWaitingReasonOnTimeout(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ContainerCreating") {
 		t.Fatalf("message = %q, want the last waiting reason", err.Error())
+	}
+}
+
+func debugPodWith(name string, common corev1.EphemeralContainerCommon) *corev1.Pod {
+	pod := runningPod()
+	common.Name = name
+	pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{{EphemeralContainerCommon: common}}
+	pod.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{
+		{
+			Name:  name,
+			Image: common.Image,
+			State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+		},
+	}
+	return pod
+}
+
+func TestReuseReportsTheImageTheContainerActuallyRuns(t *testing.T) {
+	pod := debugPodWith("spinoza-debug-1", corev1.EphemeralContainerCommon{Image: "alpine:3.20"})
+	service := newService(t, pod, &stubRunner{})
+
+	session, err := service.Ensure(context.Background(), request())
+	if err != nil {
+		t.Fatalf("ensure: %v", err)
+	}
+
+	if session.Image != "alpine:3.20" {
+		t.Fatalf("image = %q, want the running container's image rather than the configured one", session.Image)
+	}
+}
+
+func TestReuseReportsTheProfileTheContainerActuallyHas(t *testing.T) {
+	yes := true
+	pod := debugPodWith("spinoza-debug-1", corev1.EphemeralContainerCommon{
+		Image:           "busybox:1.37",
+		SecurityContext: &corev1.SecurityContext{Privileged: &yes},
+	})
+	service := newService(t, pod, &stubRunner{})
+
+	session, err := service.Ensure(context.Background(), request())
+	if err != nil {
+		t.Fatalf("ensure: %v", err)
+	}
+
+	if session.Profile != "sysadmin" {
+		t.Fatalf("profile = %q, want sysadmin read back from the container", session.Profile)
+	}
+}
+
+func TestReuseRefusesToPretendAnUnprivilegedContainerIsSysadmin(t *testing.T) {
+	pod := debugPodWith("spinoza-debug-1", corev1.EphemeralContainerCommon{
+		Image: "busybox:1.37",
+		SecurityContext: &corev1.SecurityContext{
+			Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"SYS_PTRACE"}},
+		},
+	})
+	runner := &stubRunner{}
+	service := newService(t, pod, runner)
+	req := request()
+	req.Profile = "sysadmin"
+
+	_, err := service.Ensure(context.Background(), req)
+
+	if err == nil {
+		t.Fatal("asking for sysadmin silently returned the unprivileged container")
+	}
+	if !strings.Contains(err.Error(), "not privileged") {
+		t.Fatalf("err = %v, want it to say why", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("kubectl ran %d times on a refusal", len(runner.calls))
+	}
+}
+
+func TestReuseReportsTheContainerItIsAttachedTo(t *testing.T) {
+	pod := debugPodWith("spinoza-debug-1", corev1.EphemeralContainerCommon{Image: "busybox:1.37"})
+	pod.Spec.EphemeralContainers[0].TargetContainerName = "loki"
+	service := newService(t, pod, &stubRunner{})
+
+	session, err := service.Ensure(context.Background(), request())
+	if err != nil {
+		t.Fatalf("ensure: %v", err)
+	}
+
+	if session.Target != "loki" {
+		t.Fatalf("target = %q, want the container the debug container shares a namespace with", session.Target)
+	}
+}
+
+func TestProfileOfLeavesAnUnknownShapeUnnamed(t *testing.T) {
+	cases := map[string]*corev1.SecurityContext{
+		"absent":  nil,
+		"unknown": {ReadOnlyRootFilesystem: new(bool)},
+	}
+	for name, security := range cases {
+		spec := &corev1.EphemeralContainer{
+			EphemeralContainerCommon: corev1.EphemeralContainerCommon{SecurityContext: security},
+		}
+		if got := profileOf(spec); got != "" {
+			t.Fatalf("%s: profileOf = %q, want an empty string rather than a guess", name, got)
+		}
+	}
+}
+
+func TestProfileOfNamesTheShapesKubectlWrites(t *testing.T) {
+	yes := true
+	cases := map[string]struct {
+		security *corev1.SecurityContext
+		want     string
+	}{
+		"sysadmin": {&corev1.SecurityContext{Privileged: &yes}, "sysadmin"},
+		"netadmin": {&corev1.SecurityContext{
+			Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"NET_ADMIN", "NET_RAW"}},
+		}, "netadmin"},
+		"general": {&corev1.SecurityContext{
+			Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"SYS_PTRACE"}},
+		}, "general"},
+		"restricted": {&corev1.SecurityContext{RunAsNonRoot: &yes}, "restricted"},
+	}
+	for name, tc := range cases {
+		spec := &corev1.EphemeralContainer{
+			EphemeralContainerCommon: corev1.EphemeralContainerCommon{SecurityContext: tc.security},
+		}
+		if got := profileOf(spec); got != tc.want {
+			t.Fatalf("%s: profileOf = %q, want %q", name, got, tc.want)
+		}
+	}
+}
+
+func TestAllowedAsksAboutTheSpecificPod(t *testing.T) {
+	service := newService(t, runningPod(), &stubRunner{})
+	clientset, ok := service.cs.(*k8sfake.Clientset)
+	if !ok {
+		t.Fatal("expected the fake clientset")
+	}
+	var seen *authv1.ResourceAttributes
+	clientset.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, isCreate := action.(k8stesting.CreateAction)
+		if !isCreate {
+			return false, nil, nil
+		}
+		review, isReview := create.GetObject().(*authv1.SelfSubjectAccessReview)
+		if !isReview {
+			return false, nil, nil
+		}
+		seen = review.Spec.ResourceAttributes
+		review.Status.Allowed = true
+		return true, review, nil
+	})
+
+	service.Allowed(context.Background(), "monitoring", "loki-0")
+
+	if seen == nil {
+		t.Fatal("no access review was sent")
+	}
+	if seen.Name != "loki-0" {
+		t.Fatalf("review name = %q; a resourceNames-scoped Role would read as denied", seen.Name)
+	}
+}
+
+func TestAllowedReportsTheImageItWouldUse(t *testing.T) {
+	service := newService(t, runningPod(), &stubRunner{})
+
+	support := service.Allowed(context.Background(), "monitoring", "loki-0")
+
+	if support.Image == "" {
+		t.Fatal("support did not report the image the prompt has to show")
+	}
+	if support.Pod != "loki-0" {
+		t.Fatalf("pod = %q", support.Pod)
 	}
 }

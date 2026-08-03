@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LogRequest, ShellState } from '../lib/types';
 import { useLogEnded, useLogError, useLogLines } from '../store/logs';
 import { fetchExecSupport } from '../lib/exec';
-import { DEBUG_IMAGE } from '../lib/debugContainer';
 import DebugPrompt from './DebugPrompt';
 import ForwardsPanel from './ForwardsPanel';
 import TerminalPanel from './TerminalPanel';
@@ -271,7 +270,6 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
       {open && tab === 'terminal' && !terminalDisabled && pod !== null && needsDebugContainer && (
         <DebugPrompt
           target={{ namespace: podNamespace, pod: podName, container }}
-          image={DEBUG_IMAGE}
           onAttached={setDebugContainer}
         />
       )}

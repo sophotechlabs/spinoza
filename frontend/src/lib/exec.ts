@@ -8,6 +8,7 @@ export const CHANNEL_STDERR = 0x02;
 export const CHANNEL_ERROR = 0x03;
 export const CHANNEL_RESIZE = 0x04;
 
+const CONNECTING_STATE = 0;
 const OPEN_STATE = 1;
 
 export interface ExecHandlers {
@@ -64,18 +65,25 @@ export function openExec(target: ExecTarget, handlers: ExecHandlers): ExecSessio
     handlers.onEnd(message);
   }
 
+  const stdoutDecoder = new TextDecoder();
+  const stderrDecoder = new TextDecoder();
+
   socket.onmessage = (event: MessageEvent) => {
     const data = new Uint8Array(event.data as ArrayBuffer);
     if (data.length === 0) {
       return;
     }
-    const text = new TextDecoder().decode(data.subarray(1));
-    if (data[0] === CHANNEL_STDOUT || data[0] === CHANNEL_STDERR) {
-      handlers.onOutput(text);
+    const payload = data.subarray(1);
+    if (data[0] === CHANNEL_STDOUT) {
+      handlers.onOutput(stdoutDecoder.decode(payload, { stream: true }));
+      return;
+    }
+    if (data[0] === CHANNEL_STDERR) {
+      handlers.onOutput(stderrDecoder.decode(payload, { stream: true }));
       return;
     }
     if (data[0] === CHANNEL_ERROR) {
-      finish(text);
+      finish(new TextDecoder().decode(payload));
     }
   };
 
@@ -87,7 +95,21 @@ export function openExec(target: ExecTarget, handlers: ExecHandlers): ExecSessio
     socket.close();
   };
 
+  let pending: Uint8Array[] = [];
+
+  socket.onopen = () => {
+    const queued = pending;
+    pending = [];
+    for (const frame of queued) {
+      socket.send(frame);
+    }
+  };
+
   function write(payload: Uint8Array) {
+    if (socket.readyState === CONNECTING_STATE) {
+      pending.push(payload);
+      return;
+    }
     if (socket.readyState !== OPEN_STATE) {
       return;
     }

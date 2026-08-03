@@ -21,7 +21,15 @@ const (
 
 	DefaultStartTimeout = 15 * time.Second
 	DefaultReapInterval = 10 * time.Second
+	DefaultProbeTimeout = 5 * time.Second
 )
+
+type startKey struct {
+	kind      string
+	namespace string
+	name      string
+	port      int32
+}
 
 type Target struct {
 	Kind      string
@@ -54,22 +62,24 @@ func (r *record) halt() {
 }
 
 type Registry struct {
-	root      context.Context
-	runner    Runner
-	resolver  Resolver
-	prober    Prober
-	now       func() time.Time
-	nextID    func() string
-	timeout   time.Duration
-	reapEvery time.Duration
+	root         context.Context
+	runner       Runner
+	resolver     Resolver
+	prober       Prober
+	now          func() time.Time
+	nextID       func() string
+	timeout      time.Duration
+	reapEvery    time.Duration
+	probeTimeout time.Duration
 
 	mu       sync.Mutex
 	forwards map[string]*record
+	starting map[startKey]chan struct{}
 	sequence int
 }
 
 func NewRegistry(root context.Context, runner Runner, resolver Resolver, prober Prober) *Registry {
-	return newRegistry(root, runner, resolver, prober, DefaultStartTimeout, DefaultReapInterval)
+	return newRegistry(root, runner, resolver, prober, DefaultStartTimeout, DefaultReapInterval, DefaultProbeTimeout)
 }
 
 func newRegistry(
@@ -79,16 +89,19 @@ func newRegistry(
 	prober Prober,
 	timeout time.Duration,
 	reapEvery time.Duration,
+	probeTimeout time.Duration,
 ) *Registry {
 	registry := &Registry{
-		root:      root,
-		runner:    runner,
-		resolver:  resolver,
-		prober:    prober,
-		now:       time.Now,
-		timeout:   timeout,
-		reapEvery: reapEvery,
-		forwards:  map[string]*record{},
+		root:         root,
+		runner:       runner,
+		resolver:     resolver,
+		prober:       prober,
+		now:          time.Now,
+		timeout:      timeout,
+		reapEvery:    reapEvery,
+		probeTimeout: probeTimeout,
+		forwards:     map[string]*record{},
+		starting:     map[startKey]chan struct{}{},
 	}
 	registry.nextID = registry.sequentialID
 	go registry.stopOnShutdown()
@@ -113,6 +126,10 @@ func (r *Registry) reapLoop() {
 }
 
 func (r *Registry) Reap() {
+	r.reap(r.root)
+}
+
+func (r *Registry) reap(ctx context.Context) {
 	if r.prober == nil {
 		return
 	}
@@ -120,11 +137,17 @@ func (r *Registry) Reap() {
 		if forward.State != StateRunning {
 			continue
 		}
-		if r.prober.Alive(r.root, forward.Namespace, forward.Pod) {
+		if r.aliveWithin(ctx, forward.Namespace, forward.Pod) {
 			continue
 		}
 		r.fail(forward.ID, fmt.Sprintf("pod %s/%s is gone", forward.Namespace, forward.Pod))
 	}
+}
+
+func (r *Registry) aliveWithin(ctx context.Context, namespace, pod string) bool {
+	probeCtx, cancel := context.WithTimeout(ctx, r.probeTimeout)
+	defer cancel()
+	return r.prober.Alive(probeCtx, namespace, pod)
 }
 
 func (r *Registry) fail(id, message string) {
@@ -151,10 +174,15 @@ func (r *Registry) stopOnShutdown() {
 }
 
 func (r *Registry) Start(ctx context.Context, target Target, port int32) (api.PortForward, error) {
-	existing, found := r.existing(target, port)
+	existing, found, wait := r.reserve(target, port)
+	for wait != nil {
+		<-wait
+		existing, found, wait = r.reserve(target, port)
+	}
 	if found {
 		return existing, nil
 	}
+	defer r.release(startKey{kind: target.Kind, namespace: target.Namespace, name: target.Name, port: port})
 
 	pod, podPort, err := r.resolver.Resolve(ctx, target, port)
 	if err != nil {
@@ -223,9 +251,34 @@ func (r *Registry) watch(id string, failed <-chan error) {
 	entry.forward.Error = err.Error()
 }
 
-func (r *Registry) existing(target Target, port int32) (api.PortForward, bool) {
+func (r *Registry) reserve(target Target, port int32) (api.PortForward, bool, <-chan struct{}) {
+	key := startKey{kind: target.Kind, namespace: target.Namespace, name: target.Name, port: port}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	forward, found := r.matchLocked(target, port)
+	if found {
+		return forward, true, nil
+	}
+	pending, busy := r.starting[key]
+	if busy {
+		return api.PortForward{}, false, pending
+	}
+	r.starting[key] = make(chan struct{})
+	return api.PortForward{}, false, nil
+}
+
+func (r *Registry) release(key startKey) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	pending, present := r.starting[key]
+	if !present {
+		return
+	}
+	delete(r.starting, key)
+	close(pending)
+}
+
+func (r *Registry) matchLocked(target Target, port int32) (api.PortForward, bool) {
 	for _, entry := range r.forwards {
 		if entry.forward.State != StateRunning {
 			continue

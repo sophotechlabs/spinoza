@@ -226,7 +226,7 @@ func TestAnnounceGivesUpWhenTheContextEnds(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		announce(ctx, nil, make(chan struct{}), ready)
+		announce(ctx, nil, make(chan struct{}), make(chan struct{}), ready)
 		close(done)
 	}()
 	cancel()
@@ -312,7 +312,7 @@ func TestAnnounceIgnoresAForwarderThatIsNotReady(t *testing.T) {
 	closed := make(chan struct{})
 	close(closed)
 
-	announce(context.Background(), forwarder, closed, ready)
+	announce(context.Background(), forwarder, closed, make(chan struct{}), ready)
 
 	if len(ready) != 0 {
 		t.Fatalf("announce reported a port for a forwarder that never bound one")
@@ -325,5 +325,26 @@ func TestShouldFallbackOnlyForUpgradeFailures(t *testing.T) {
 	}
 	if !shouldFallback(&streamhttp.UpgradeFailureError{Cause: errors.New("no")}) {
 		t.Fatalf("an upgrade failure must trigger the spdy fallback")
+	}
+}
+
+func TestAnnounceGivesUpWhenTheForwardEndsBeforeItIsReady(t *testing.T) {
+	ready := make(chan int32, 1)
+	done := make(chan struct{})
+	close(done)
+	returned := make(chan struct{})
+
+	go func() {
+		defer close(returned)
+		announce(context.Background(), nil, make(chan struct{}), done, ready)
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("announce parked after the forward failed; every failed start would leak a goroutine")
+	}
+	if len(ready) != 0 {
+		t.Fatalf("announce reported a port for a forward that never started")
 	}
 }

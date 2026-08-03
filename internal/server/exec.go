@@ -16,6 +16,8 @@ import (
 
 const execWriteTimeout = 10 * time.Second
 
+var execStdinTimeout = 10 * time.Second
+
 func execRequest(r *http.Request) exec.Request {
 	q := r.URL.Query()
 	return exec.Request{
@@ -31,7 +33,7 @@ func (s *Server) handleExecSupport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
-	support, err := s.mgr.ExecSupport(r.Context(), req)
+	support, err := s.manager().ExecSupport(r.Context(), req)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -40,12 +42,13 @@ func (s *Server) handleExecSupport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDebugSupport(w http.ResponseWriter, r *http.Request) {
-	namespace := r.URL.Query().Get("namespace")
+	query := r.URL.Query()
+	namespace := query.Get("namespace")
 	if namespace == "" {
 		writeError(w, http.StatusBadRequest, "namespace is required")
 		return
 	}
-	writeJSON(w, s.mgr.DebugSupport(r.Context(), namespace))
+	writeJSON(w, s.manager().DebugSupport(r.Context(), namespace, query.Get("pod")))
 }
 
 func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +67,7 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
-	session, err := s.mgr.StartDebug(r.Context(), req)
+	session, err := s.manager().StartDebug(r.Context(), req)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -88,7 +91,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	conn := &execConn{conn: socket, ctx: ctx}
-	session, startErr := s.mgr.StartExec(ctx, req, conn)
+	session, startErr := s.manager().StartExec(ctx, req, conn)
 	if startErr != nil {
 		conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
 		return
@@ -146,17 +149,39 @@ func (e *execConn) pump(ctx context.Context, c *websocket.Conn, session *exec.Se
 		if len(data) == 0 {
 			continue
 		}
-		route(session, data[0], data[1:])
+		if !route(session, data[0], data[1:]) {
+			return
+		}
 	}
 }
 
-func route(session *exec.Session, channel byte, payload []byte) {
+func route(session *exec.Session, channel byte, payload []byte) bool {
 	switch channel {
 	case api.ExecChannelStdin:
-		_, _ = session.Write(payload)
+		return writeStdin(session, payload)
 	case api.ExecChannelResize:
 		resize(session, payload)
+		return true
 	default:
+		return true
+	}
+}
+
+func writeStdin(session *exec.Session, payload []byte) bool {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = session.Write(payload)
+	}()
+	timer := time.NewTimer(execStdinTimeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		session.Close()
+		<-done
+		return false
 	}
 }
 

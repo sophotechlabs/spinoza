@@ -78,13 +78,23 @@ func (s *streamRunner) Run(ctx context.Context, namespace, pod string, remotePor
 		return err
 	}
 
-	go announce(ctx, forwarder, forwarderReady, ready)
+	done := make(chan struct{})
+	defer close(done)
+	go announce(ctx, forwarder, forwarderReady, done, ready)
 	return forwarder.ForwardPorts()
 }
 
-func announce(ctx context.Context, forwarder *portforward.PortForwarder, forwarderReady <-chan struct{}, ready chan<- int32) {
+func announce(
+	ctx context.Context,
+	forwarder *portforward.PortForwarder,
+	forwarderReady <-chan struct{},
+	done <-chan struct{},
+	ready chan<- int32,
+) {
 	select {
 	case <-ctx.Done():
+		return
+	case <-done:
 		return
 	case <-forwarderReady:
 	}

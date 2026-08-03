@@ -215,11 +215,11 @@ func (m *Manager) StartExec(ctx context.Context, req exec.Request, stdout io.Wri
 	return m.shells.Start(ctx, req, stdout)
 }
 
-func (m *Manager) DebugSupport(ctx context.Context, namespace string) api.DebugSupport {
+func (m *Manager) DebugSupport(ctx context.Context, namespace, pod string) api.DebugSupport {
 	if m.debugger == nil {
-		return api.DebugSupport{Namespace: namespace, Allowed: false, Reason: debugcontainer.ErrUnavailable.Error()}
+		return api.DebugSupport{Namespace: namespace, Pod: pod, Allowed: false, Reason: debugcontainer.ErrUnavailable.Error()}
 	}
-	return m.debugger.Allowed(ctx, namespace)
+	return m.debugger.Allowed(ctx, namespace, pod)
 }
 
 func (m *Manager) StartDebug(ctx context.Context, req debugcontainer.Request) (api.DebugSession, error) {

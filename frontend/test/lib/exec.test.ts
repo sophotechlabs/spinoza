@@ -19,6 +19,7 @@ class FakeWebSocket {
   binaryType = '';
   readyState = 1;
   onmessage: ((event: MessageEvent) => void) | null = null;
+  onopen: ((event: Event) => void) | null = null;
   onclose: ((event: CloseEvent) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
   send = vi.fn<(data: Uint8Array) => void>();
@@ -192,5 +193,121 @@ describe('openExec', () => {
     session.close();
 
     expect(latest().close).toHaveBeenCalledTimes(2);
+  });
+});
+
+function deliverBytes(socket: FakeWebSocket, channel: number, bytes: number[]): void {
+  const payload = new Uint8Array([channel, ...bytes]);
+  socket.onmessage?.({ data: payload.buffer } as MessageEvent);
+}
+
+describe('openExec output decoding', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('joins a multi-byte character split across two frames', () => {
+    const sink = handlers();
+    openExec(target(), sink);
+    const socket = latest();
+
+    const cyrillic = new TextEncoder().encode('привет');
+    deliverBytes(socket, CHANNEL_STDOUT, [...cyrillic.subarray(0, 5)]);
+    deliverBytes(socket, CHANNEL_STDOUT, [...cyrillic.subarray(5)]);
+
+    expect(sink.onOutput.mock.calls.map((call) => call[0]).join('')).toBe('привет');
+  });
+
+  it('does not emit a replacement character for a split box-drawing glyph', () => {
+    const sink = handlers();
+    openExec(target(), sink);
+    const socket = latest();
+
+    const glyph = new TextEncoder().encode('└─┐');
+    deliverBytes(socket, CHANNEL_STDOUT, [...glyph.subarray(0, 2)]);
+    deliverBytes(socket, CHANNEL_STDOUT, [...glyph.subarray(2)]);
+
+    const joined = sink.onOutput.mock.calls.map((call) => call[0]).join('');
+    expect(joined).toBe('└─┐');
+    expect(joined).not.toContain('\ufffd');
+  });
+
+  it('keeps stdout and stderr in separate decoders', () => {
+    const sink = handlers();
+    openExec(target(), sink);
+    const socket = latest();
+
+    const out = new TextEncoder().encode('привет');
+    const err = new TextEncoder().encode('ошибка');
+    deliverBytes(socket, CHANNEL_STDOUT, [...out.subarray(0, 5)]);
+    deliverBytes(socket, CHANNEL_STDERR, [...err.subarray(0, 5)]);
+    deliverBytes(socket, CHANNEL_STDOUT, [...out.subarray(5)]);
+    deliverBytes(socket, CHANNEL_STDERR, [...err.subarray(5)]);
+
+    const emitted = sink.onOutput.mock.calls.map((call) => call[0]);
+    expect(emitted.join('')).not.toContain('\ufffd');
+    expect(emitted[0] + emitted[2]).toBe('привет');
+    expect(emitted[1] + emitted[3]).toBe('ошибка');
+  });
+});
+
+class ConnectingSocket extends FakeWebSocket {
+  constructor(url: string) {
+    super(url);
+    this.readyState = 0;
+  }
+}
+
+describe('openExec frames sent before the socket opens', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', ConnectingSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('holds the initial terminal size until the handshake finishes', () => {
+    const session = openExec(target(), handlers());
+    const socket = latest();
+    session.resize(120, 40);
+
+    expect(socket.send).not.toHaveBeenCalled();
+
+    socket.readyState = 1;
+    socket.onopen?.(new Event('open'));
+
+    const sent = sentFrames(socket);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].channel).toBe(CHANNEL_RESIZE);
+    expect(JSON.parse(sent[0].text)).toEqual({ cols: 120, rows: 40 });
+  });
+
+  it('replays queued keystrokes in order once open', () => {
+    const session = openExec(target(), handlers());
+    const socket = latest();
+    session.send('a');
+    session.send('b');
+
+    socket.readyState = 1;
+    socket.onopen?.(new Event('open'));
+
+    expect(sentFrames(socket).map((entry) => entry.text)).toEqual(['a', 'b']);
+  });
+
+  it('drops frames written after the socket closed', () => {
+    const session = openExec(target(), handlers());
+    const socket = latest();
+    socket.readyState = 3;
+
+    session.send('late');
+
+    expect(socket.send).not.toHaveBeenCalled();
   });
 });

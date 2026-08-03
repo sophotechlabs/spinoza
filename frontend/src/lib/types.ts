@@ -164,6 +164,12 @@ export interface FluxResource {
   createdAt: string;
 }
 
+export interface ContextList {
+  contexts: string[];
+  current: string;
+  error?: string;
+}
+
 export interface ResourceCatalog {
   categories: Category[];
   error?: string;
@@ -262,12 +268,15 @@ export interface DebugSession {
   created: boolean;
   image: string;
   profile: string;
+  target?: string;
 }
 
 export interface DebugSupport {
   namespace: string;
+  pod?: string;
   allowed: boolean;
   reason?: string;
+  image: string;
 }
 
 export interface MetricPoint {

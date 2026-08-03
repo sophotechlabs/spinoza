@@ -14,6 +14,12 @@ type Category struct {
 	Resources []ResourceDescriptor `json:"resources"`
 }
 
+type ContextList struct {
+	Contexts []string `json:"contexts"`
+	Current  string   `json:"current"`
+	Error    string   `json:"error,omitempty"`
+}
+
 type ResourceCatalog struct {
 	Categories []Category `json:"categories"`
 	Error      string     `json:"error,omitempty"`
@@ -147,8 +153,10 @@ type ActionResult struct {
 
 type DebugSupport struct {
 	Namespace string `json:"namespace"`
+	Pod       string `json:"pod,omitempty"`
 	Allowed   bool   `json:"allowed"`
 	Reason    string `json:"reason,omitempty"`
+	Image     string `json:"image"`
 }
 
 type DebugSession struct {
@@ -156,6 +164,7 @@ type DebugSession struct {
 	Created   bool   `json:"created"`
 	Image     string `json:"image"`
 	Profile   string `json:"profile"`
+	Target    string `json:"target,omitempty"`
 }
 
 type ExecSupport struct {

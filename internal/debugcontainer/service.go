@@ -30,7 +30,41 @@ const (
 
 var ErrUnavailable = errors.New("debug containers are unavailable")
 
-var profiles = []string{"general", "baseline", "restricted", "netadmin", "sysadmin", "legacy"}
+const sysadminProfile = "sysadmin"
+
+var profiles = []string{"general", "baseline", "restricted", "netadmin", sysadminProfile, "legacy"}
+
+func profileOf(spec *corev1.EphemeralContainer) string {
+	security := spec.SecurityContext
+	if security == nil {
+		return ""
+	}
+	if security.Privileged != nil && *security.Privileged {
+		return sysadminProfile
+	}
+	added := addedCapabilities(security)
+	if slices.Contains(added, "NET_ADMIN") && slices.Contains(added, "NET_RAW") {
+		return "netadmin"
+	}
+	if slices.Contains(added, "SYS_PTRACE") {
+		return "general"
+	}
+	if security.RunAsNonRoot != nil && *security.RunAsNonRoot {
+		return "restricted"
+	}
+	return ""
+}
+
+func addedCapabilities(security *corev1.SecurityContext) []string {
+	if security.Capabilities == nil {
+		return nil
+	}
+	out := make([]string, 0, len(security.Capabilities.Add))
+	for _, capability := range security.Capabilities.Add {
+		out = append(out, string(capability))
+	}
+	return out
+}
 
 var nameFormat = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
 
@@ -80,12 +114,13 @@ func Supported(profile string) bool {
 	return slices.Contains(profiles, profile)
 }
 
-func (s *Service) Allowed(ctx context.Context, namespace string) api.DebugSupport {
-	support := api.DebugSupport{Namespace: namespace, Allowed: true}
+func (s *Service) Allowed(ctx context.Context, namespace, pod string) api.DebugSupport {
+	support := api.DebugSupport{Namespace: namespace, Pod: pod, Allowed: true, Image: s.image}
 	review := &authv1.SelfSubjectAccessReview{
 		Spec: authv1.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authv1.ResourceAttributes{
 				Namespace:   namespace,
+				Name:        pod,
 				Verb:        "patch",
 				Resource:    "pods",
 				Subresource: "ephemeralcontainers",
@@ -119,9 +154,20 @@ func (s *Service) Ensure(ctx context.Context, req Request) (api.DebugSession, er
 		return api.DebugSession{}, err
 	}
 
-	existing, found := runningDebugContainer(pod)
+	existing, runningImage, found := runningDebugContainer(pod)
 	if found {
-		return api.DebugSession{Container: existing, Image: s.image, Profile: profile}, nil
+		if req.Profile == sysadminProfile && !privileged(existing) {
+			return api.DebugSession{}, fmt.Errorf(
+				"%s already has debug container %q, which is not privileged; an ephemeral container cannot be changed once it exists, so attach to it or recreate the pod",
+				req.Pod, existing.Name,
+			)
+		}
+		return api.DebugSession{
+			Container: existing.Name,
+			Image:     imageOf(existing, runningImage),
+			Profile:   profileOf(existing),
+			Target:    existing.TargetContainerName,
+		}, nil
 	}
 
 	name := nextName(pod)
@@ -134,7 +180,13 @@ func (s *Service) Ensure(ctx context.Context, req Request) (api.DebugSession, er
 	if waitErr != nil {
 		return api.DebugSession{}, waitErr
 	}
-	return api.DebugSession{Container: name, Created: true, Image: s.image, Profile: profile}, nil
+	return api.DebugSession{
+		Container: name,
+		Created:   true,
+		Image:     s.image,
+		Profile:   profile,
+		Target:    req.Container,
+	}, nil
 }
 
 func (s *Service) args(req Request, name, profile string) []string {
@@ -236,7 +288,7 @@ func admits(pod *corev1.Pod, req Request) error {
 	return fmt.Errorf("pod %s/%s has no container %q to target", pod.Namespace, pod.Name, req.Container)
 }
 
-func runningDebugContainer(pod *corev1.Pod) (string, bool) {
+func runningDebugContainer(pod *corev1.Pod) (*corev1.EphemeralContainer, string, bool) {
 	for _, status := range pod.Status.EphemeralContainerStatuses {
 		if !strings.HasPrefix(status.Name, namePrefix) {
 			continue
@@ -244,9 +296,39 @@ func runningDebugContainer(pod *corev1.Pod) (string, bool) {
 		if status.State.Running == nil {
 			continue
 		}
-		return status.Name, true
+		spec := specFor(pod, status.Name)
+		if spec == nil {
+			continue
+		}
+		return spec, status.Image, true
 	}
-	return "", false
+	return nil, "", false
+}
+
+func specFor(pod *corev1.Pod, name string) *corev1.EphemeralContainer {
+	for i := range pod.Spec.EphemeralContainers {
+		if pod.Spec.EphemeralContainers[i].Name == name {
+			return &pod.Spec.EphemeralContainers[i]
+		}
+	}
+	return nil
+}
+
+func privileged(spec *corev1.EphemeralContainer) bool {
+	if spec.SecurityContext == nil {
+		return false
+	}
+	if spec.SecurityContext.Privileged == nil {
+		return false
+	}
+	return *spec.SecurityContext.Privileged
+}
+
+func imageOf(spec *corev1.EphemeralContainer, running string) string {
+	if spec.Image != "" {
+		return spec.Image
+	}
+	return running
 }
 
 func nextName(pod *corev1.Pod) string {

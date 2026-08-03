@@ -111,7 +111,7 @@ func execServer(t *testing.T, service *exec.Service) *httptest.Server {
 	t.Cleanup(cancel)
 
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, service, nil, nil, nil, nil)
-	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -426,7 +426,7 @@ func debugServer(t *testing.T, service *debugcontainer.Service) *httptest.Server
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, service, nil, nil, nil)
-	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -500,5 +500,46 @@ func TestMetricHistoryIsUnavailableWithoutPrometheus(t *testing.T) {
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503; a missing Prometheus is not the caller's mistake", res.StatusCode)
+	}
+}
+
+type stallShell struct {
+	entered  chan struct{}
+	readOne  chan struct{}
+	returned chan struct{}
+}
+
+func (f *stallShell) Stream(ctx context.Context, _ exec.Request, opts exec.Options) error {
+	defer close(f.returned)
+	close(f.entered)
+	buf := make([]byte, 256)
+	_, _ = opts.Stdin.Read(buf)
+	close(f.readOne)
+	<-ctx.Done()
+	return nil
+}
+
+func TestAStalledStdinDoesNotWedgeTheSession(t *testing.T) {
+	previous := execStdinTimeout
+	execStdinTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { execStdinTimeout = previous })
+
+	shell := &stallShell{
+		entered:  make(chan struct{}),
+		readOne:  make(chan struct{}),
+		returned: make(chan struct{}),
+	}
+	ts := execServer(t, exec.NewService(shell, &fakeImages{digest: "sha256:shelled"}))
+	conn := dialExec(t, ts, execQuery)
+	<-shell.entered
+
+	writeFrame(t, conn, api.ExecChannelStdin, []byte("a"))
+	<-shell.readOne
+	writeFrame(t, conn, api.ExecChannelStdin, []byte("b"))
+
+	select {
+	case <-shell.returned:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the session never tore down; the pump is wedged writing to stdin nobody reads")
 	}
 }

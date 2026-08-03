@@ -7,7 +7,7 @@ const target = { namespace: 'monitoring', pod: 'loki-0', container: 'loki' };
 
 function renderPrompt() {
   const onAttached = vi.fn();
-  render(<DebugPrompt target={target} image="busybox:1.37" onAttached={onAttached} />);
+  render(<DebugPrompt target={target} onAttached={onAttached} />);
   return { onAttached };
 }
 
@@ -16,7 +16,13 @@ function stubStart(container: string) {
     if (url.startsWith('/api/debug/support')) {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ namespace: 'monitoring', allowed: true }),
+        json: () =>
+          Promise.resolve({
+            namespace: 'monitoring',
+            pod: 'loki-0',
+            allowed: true,
+            image: 'busybox:1.37',
+          }),
       });
     }
     return Promise.resolve({
@@ -35,7 +41,14 @@ function stubRefusal(reason: string) {
     vi.fn(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ namespace: 'monitoring', allowed: false, reason }),
+        json: () =>
+          Promise.resolve({
+            namespace: 'monitoring',
+            pod: 'loki-0',
+            allowed: false,
+            reason,
+            image: 'busybox:1.37',
+          }),
       }),
     ),
   );
@@ -46,12 +59,35 @@ afterEach(() => {
 });
 
 describe('DebugPrompt', () => {
-  it('explains why exec is unavailable and names the image', () => {
+  it('explains why exec is unavailable', () => {
+    stubStart('spinoza-debug-1');
     renderPrompt();
 
     expect(screen.getByText(/loki has no shell/)).toBeInTheDocument();
     expect(screen.getByText(/cannot be removed afterwards/)).toBeInTheDocument();
-    expect(screen.getByText('busybox:1.37')).toBeInTheDocument();
+  });
+
+  it('names the image the server would actually run', async () => {
+    const seen: string[] = [];
+    const fetchMock = vi.fn((url: string) => {
+      seen.push(url);
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            namespace: 'monitoring',
+            pod: 'loki-0',
+            allowed: true,
+            image: 'ghcr.io/acme/toolbox:2.1',
+          }),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderPrompt();
+
+    expect(await screen.findByText('ghcr.io/acme/toolbox:2.1')).toBeInTheDocument();
+    expect(screen.queryByText('busybox:1.37')).not.toBeInTheDocument();
+    expect(seen[0]).toContain('pod=loki-0');
   });
 
   it('defaults to the non-privileged profile', () => {
@@ -215,7 +251,7 @@ describe('DebugPrompt', () => {
           }),
       ),
     );
-    const view = render(<DebugPrompt target={target} image="busybox:1.37" onAttached={vi.fn()} />);
+    const view = render(<DebugPrompt target={target} onAttached={vi.fn()} />);
 
     view.unmount();
     deferred.settle();
