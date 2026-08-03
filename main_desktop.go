@@ -5,13 +5,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -19,29 +19,39 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
-	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
 func main() {
-	ctx := context.Background()
-	clusters, err := cluster.New(ctx, cluster.Options{
-		DebugImage:    debugcontainer.DefaultImage,
-		KubectlBinary: debugcontainer.DefaultBinary,
-	})
+	err := runDesktop()
 	if err != nil {
-		log.Fatalf("manager: %v", err)
+		log.Fatalf("spinoza: %v", err)
+	}
+}
+
+func runDesktop() error {
+	opts, flagErr := settingsFromArgs()
+	if flagErr != nil {
+		return flagErr
+	}
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	clusters, err := cluster.New(ctx, opts.cluster)
+	if err != nil {
+		return fmt.Errorf("manager: %w", err)
 	}
 
 	assets, err := fs.Sub(embedded, "web/dist")
 	if err != nil {
-		log.Fatalf("assets: %v", err)
+		return fmt.Errorf("assets: %w", err)
 	}
 
 	var listenConfig net.ListenConfig
 	listener, err := listenConfig.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
-		log.Fatalf("listen: %v", err)
+		return fmt.Errorf("listen: %w", err)
 	}
 	addr := listener.Addr().String()
 
@@ -57,6 +67,12 @@ func main() {
 		}
 	}()
 
+	defer func() {
+		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(shutCtx)
+	}()
+
 	runErr := wails.Run(&options.App{
 		Title:  "Spinoza",
 		Width:  1280,
@@ -66,8 +82,9 @@ func main() {
 		},
 	})
 	if runErr != nil {
-		log.Fatalf("wails: %v", runErr)
+		return fmt.Errorf("wails: %w", runErr)
 	}
+	return nil
 }
 
 func desktopAssets(assets fs.FS, addr string) http.Handler {
@@ -80,7 +97,7 @@ func desktopAssets(assets fs.FS, addr string) http.Handler {
 	}
 	injected := []byte(`<script>window.__SPINOZA_WS_BASE__="ws://` + addr + `";</script></head>`)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") {
+		if server.IsBackendPath(r.URL.Path) {
 			proxy.ServeHTTP(w, r)
 			return
 		}

@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -18,7 +17,6 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
-	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
@@ -29,24 +27,20 @@ func main() {
 }
 
 func run() error {
-	flags := flag.NewFlagSet("spinoza", flag.ExitOnError)
-	addr := flags.String("addr", "127.0.0.1:34115", "listen address")
-	openBrowser := flags.Bool("open", false, "open the default browser on start")
-	debugImage := flags.String("debug-image", debugcontainer.DefaultImage, "image used for debug containers")
-	kubectlBinary := flags.String("kubectl", debugcontainer.DefaultBinary, "kubectl binary used to create debug containers")
-	promSpec := flags.String("prometheus", "", "prometheus service as namespace/service:port; discovered when empty")
-	if err := flags.Parse(os.Args[1:]); err != nil {
+	opts, err := settingsFromArgs()
+	if err != nil {
 		return err
+	}
+
+	addrErr := server.CheckLoopback(opts.addr)
+	if addrErr != nil {
+		return addrErr
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	clusters, err := cluster.New(ctx, cluster.Options{
-		DebugImage:    *debugImage,
-		KubectlBinary: *kubectlBinary,
-		PromSpec:      *promSpec,
-	})
+	clusters, err := cluster.New(ctx, opts.cluster)
 	if err != nil {
 		return err
 	}
@@ -58,14 +52,14 @@ func run() error {
 
 	srv := server.New(clusters, assets)
 	httpServer := &http.Server{
-		Addr:              *addr,
+		Addr:              opts.addr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	url := "http://" + *addr
+	url := "http://" + opts.addr
 	log.Printf("spinoza listening on %s  (open it in a browser)", url)
-	if *openBrowser {
+	if opts.openBrowser {
 		openURL(ctx, url)
 	}
 
