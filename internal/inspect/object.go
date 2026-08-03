@@ -24,14 +24,14 @@ func Get(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef) (api.Obj
 	return detailOf(u)
 }
 
-func Apply(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error) {
+func Apply(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, kind string, doc []byte) (api.ObjectDetail, error) {
 	obj := map[string]any{}
 	unmarshalErr := yaml.Unmarshal(doc, &obj)
 	if unmarshalErr != nil {
 		return api.ObjectDetail{}, fmt.Errorf("parse yaml: %w", unmarshalErr)
 	}
 	u := &unstructured.Unstructured{Object: obj}
-	matchErr := matchesRef(u, ref)
+	matchErr := matchesRef(u, ref, kind)
 	if matchErr != nil {
 		return api.ObjectDetail{}, matchErr
 	}
@@ -56,14 +56,31 @@ func resourceFor(dyn dynamic.Interface, ref api.ObjectRef) dynamic.ResourceInter
 	return dyn.Resource(gvr).Namespace(ref.Namespace)
 }
 
-func matchesRef(u *unstructured.Unstructured, ref api.ObjectRef) error {
-	if u.GetName() != ref.Name {
-		return fmt.Errorf("document name %q does not match %q", u.GetName(), ref.Name)
+func matchesRef(doc *unstructured.Unstructured, ref api.ObjectRef, kind string) error {
+	if doc.GetName() != ref.Name {
+		return fmt.Errorf("document name %q does not match %q", doc.GetName(), ref.Name)
 	}
-	if u.GetNamespace() != ref.Namespace {
-		return fmt.Errorf("document namespace %q does not match %q", u.GetNamespace(), ref.Namespace)
+	if doc.GetNamespace() != ref.Namespace {
+		return fmt.Errorf("document namespace %q does not match %q", doc.GetNamespace(), ref.Namespace)
+	}
+	want := apiVersionOf(ref)
+	if doc.GetAPIVersion() != want {
+		return fmt.Errorf("document apiVersion %q does not match %q", doc.GetAPIVersion(), want)
+	}
+	if kind == "" {
+		return nil
+	}
+	if doc.GetKind() != kind {
+		return fmt.Errorf("document kind %q does not match %q", doc.GetKind(), kind)
 	}
 	return nil
+}
+
+func apiVersionOf(ref api.ObjectRef) string {
+	if ref.Group == "" {
+		return ref.Version
+	}
+	return ref.Group + "/" + ref.Version
 }
 
 func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {

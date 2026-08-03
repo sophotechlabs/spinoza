@@ -201,7 +201,7 @@ func TestApplyUpdatesObject(t *testing.T) {
 	client := newClient(newPod())
 	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  labels:\n    app: edited\n")
 
-	detail, err := Apply(context.Background(), client, podRef(), doc)
+	detail, err := Apply(context.Background(), client, podRef(), "Pod", doc)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestApplyUpdatesObject(t *testing.T) {
 }
 
 func TestApplyRejectsBadYAML(t *testing.T) {
-	_, err := Apply(context.Background(), newClient(newPod()), podRef(), []byte("\tnot: [yaml"))
+	_, err := Apply(context.Background(), newClient(newPod()), podRef(), "Pod", []byte("\tnot: [yaml"))
 	if err == nil {
 		t.Fatalf("expected a parse error")
 	}
@@ -230,7 +230,7 @@ func TestApplyRejectsBadYAML(t *testing.T) {
 
 func TestApplyRejectsNameMismatch(t *testing.T) {
 	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: other\n  namespace: flux-system\n")
-	_, err := Apply(context.Background(), newClient(newPod()), podRef(), doc)
+	_, err := Apply(context.Background(), newClient(newPod()), podRef(), "Pod", doc)
 	if err == nil {
 		t.Fatalf("expected a name mismatch error")
 	}
@@ -241,7 +241,7 @@ func TestApplyRejectsNameMismatch(t *testing.T) {
 
 func TestApplyRejectsNamespaceMismatch(t *testing.T) {
 	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: default\n")
-	_, err := Apply(context.Background(), newClient(newPod()), podRef(), doc)
+	_, err := Apply(context.Background(), newClient(newPod()), podRef(), "Pod", doc)
 	if err == nil {
 		t.Fatalf("expected a namespace mismatch error")
 	}
@@ -252,7 +252,7 @@ func TestApplyRejectsNamespaceMismatch(t *testing.T) {
 
 func TestApplyPropagatesAPIError(t *testing.T) {
 	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
-	_, err := Apply(context.Background(), newClient(), podRef(), doc)
+	_, err := Apply(context.Background(), newClient(), podRef(), "Pod", doc)
 	if err == nil {
 		t.Fatalf("expected an update error for a missing object")
 	}
@@ -643,5 +643,50 @@ func TestSchedulableIgnoresANonBoolField(t *testing.T) {
 	}
 	if detail.Schedulable != nil {
 		t.Fatalf("schedulable = %v, want nil", *detail.Schedulable)
+	}
+}
+
+func TestApplyRejectsADocumentForAnotherKind(t *testing.T) {
+	pod := newPod()
+	client := newClient(pod)
+	doc := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: web\n  namespace: flux-system\n")
+
+	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
+
+	if err == nil {
+		t.Fatal("a document for a different kind was sent to the pods endpoint")
+	}
+}
+
+func TestApplyRejectsADocumentForAnotherGroup(t *testing.T) {
+	client := newClient(newPod())
+	doc := []byte("apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n  namespace: flux-system\n")
+
+	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
+
+	if err == nil {
+		t.Fatal("a document from another API group was accepted")
+	}
+	if !strings.Contains(err.Error(), "apiVersion") {
+		t.Fatalf("err = %v, want it to name the mismatch", err)
+	}
+}
+
+func TestApplyAcceptsAMatchingDocument(t *testing.T) {
+	client := newClient(newPod())
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+
+	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
+	if err != nil {
+		t.Fatalf("a matching document was rejected: %v", err)
+	}
+}
+
+func TestApiVersionOfJoinsTheGroup(t *testing.T) {
+	if got := apiVersionOf(api.ObjectRef{Version: "v1"}); got != "v1" {
+		t.Fatalf("apiVersion = %q", got)
+	}
+	if got := apiVersionOf(api.ObjectRef{Group: "apps", Version: "v1"}); got != "apps/v1" {
+		t.Fatalf("apiVersion = %q", got)
 	}
 }

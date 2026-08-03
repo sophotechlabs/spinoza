@@ -160,7 +160,15 @@ func (m *Manager) Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDeta
 }
 
 func (m *Manager) ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error) {
-	return inspect.Apply(ctx, m.dyn, ref, doc)
+	return inspect.Apply(ctx, m.dyn, ref, m.kindFor(ref), doc)
+}
+
+func (m *Manager) kindFor(ref api.ObjectRef) string {
+	desc, ok := m.descriptors()[discovery.Key(ref.Group, ref.Version, ref.Resource)]
+	if !ok {
+		return ""
+	}
+	return desc.Kind
 }
 
 func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef) error {

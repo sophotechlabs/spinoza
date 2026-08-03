@@ -280,3 +280,38 @@ func TestManagerPortForwardWithoutARegistry(t *testing.T) {
 		t.Fatalf("expected an error when port forwarding is unavailable")
 	}
 }
+
+func TestApplyRejectsADocumentForAnotherKindInTheSameGroup(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	t.Cleanup(cancel)
+	ref := api.ObjectRef{
+		Group:     "apps",
+		Version:   "v1",
+		Resource:  "deployments",
+		Namespace: "default",
+		Name:      "web",
+	}
+	doc := []byte("apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: web\n  namespace: default\n")
+
+	_, err := mgr.ApplyObject(context.Background(), ref, doc)
+
+	if err == nil {
+		t.Fatal("a StatefulSet document was accepted at the deployments endpoint")
+	}
+	if !strings.Contains(err.Error(), "kind") {
+		t.Fatalf("err = %v, want it to name the kind mismatch", err)
+	}
+}
+
+func TestApplyAllowsAnUnknownResourceThrough(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	t.Cleanup(cancel)
+	ref := api.ObjectRef{Group: "x.example.com", Version: "v1", Resource: "widgets", Name: "one"}
+	doc := []byte("apiVersion: x.example.com/v1\nkind: Widget\nmetadata:\n  name: one\n")
+
+	_, err := mgr.ApplyObject(context.Background(), ref, doc)
+
+	if err != nil && strings.Contains(err.Error(), "kind") {
+		t.Fatalf("a resource missing from discovery was blocked on kind: %v", err)
+	}
+}
