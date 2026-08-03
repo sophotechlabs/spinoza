@@ -853,3 +853,254 @@ func TestTheBuildGateIsReleased(t *testing.T) {
 		t.Fatalf("%d build gates left behind", gates)
 	}
 }
+
+const raceRounds = 40
+
+func deploymentKey() streamKey {
+	return streamKey{gvr: depGVR, ns: "default"}
+}
+
+func TestRegisterRefusesAStreamThatWasAlreadyDropped(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	t.Cleanup(cancel)
+	key := deploymentKey()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	st, err := mgr.streamFor(key, desc)
+	if err != nil {
+		t.Fatalf("streamFor: %v", err)
+	}
+
+	mgr.mu.Lock()
+	delete(mgr.streams, key)
+	mgr.mu.Unlock()
+	st.cancel()
+
+	_, ok := mgr.register(key, st)
+
+	if ok {
+		t.Fatal("registered against a torn-down stream; the subscriber would never see an event")
+	}
+}
+
+func TestAttachRebuildsAfterTheStreamIsDropped(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	t.Cleanup(cancel)
+	key := deploymentKey()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	first, err := mgr.streamFor(key, desc)
+	if err != nil {
+		t.Fatalf("streamFor: %v", err)
+	}
+	mgr.mu.Lock()
+	delete(mgr.streams, key)
+	mgr.mu.Unlock()
+	first.cancel()
+
+	st, entry, attachErr := mgr.attach(key, desc)
+	if attachErr != nil {
+		t.Fatalf("attach: %v", attachErr)
+	}
+	if st == first {
+		t.Fatal("attach handed back the dead stream")
+	}
+
+	st.fanout(Event{Kind: "added", Row: api.Row{UID: "u"}})
+	select {
+	case <-entry.events:
+	default:
+		t.Fatal("the rebuilt stream does not reach the subscriber")
+	}
+}
+
+func TestDetachLeavesAStreamThatWasAlreadyReplaced(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	t.Cleanup(cancel)
+	key := deploymentKey()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	old, entry, err := mgr.attach(key, desc)
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	mgr.mu.Lock()
+	delete(mgr.streams, key)
+	mgr.mu.Unlock()
+
+	replacement, replacementErr := mgr.streamFor(key, desc)
+	if replacementErr != nil {
+		t.Fatalf("streamFor: %v", replacementErr)
+	}
+
+	mgr.detach(key, old, entry)
+
+	mgr.mu.Lock()
+	live := mgr.streams[key]
+	mgr.mu.Unlock()
+	if live != replacement {
+		t.Fatal("detaching an old subscriber removed the replacement stream")
+	}
+}
+
+func TestASubscribeRacingTheLastCloseGetsALiveStream(t *testing.T) {
+	client := newClient(t, newDeployment("default", "web"))
+	mgr, cancel := newManager(t, client)
+	t.Cleanup(cancel)
+
+	for round := range raceRounds {
+		first, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+		if err != nil {
+			t.Fatalf("round %d: subscribe: %v", round, err)
+		}
+
+		var group sync.WaitGroup
+		group.Add(2)
+		var second *Subscription
+		var secondErr error
+		go func() {
+			defer group.Done()
+			first.Close()
+		}()
+		go func() {
+			defer group.Done()
+			second, secondErr = mgr.Subscribe("apps", "v1", "deployments", "default")
+		}()
+		group.Wait()
+
+		if secondErr != nil {
+			t.Fatalf("round %d: racing subscribe: %v", round, secondErr)
+		}
+		mgr.mu.Lock()
+		live := len(mgr.streams)
+		mgr.mu.Unlock()
+		if live != 1 {
+			t.Fatalf("round %d: %d streams alive, want the newcomer's stream kept", round, live)
+		}
+
+		_, createErr := client.Resource(depGVR).Namespace("default").
+			Create(context.Background(), newDeployment("default", "probe"), metav1.CreateOptions{})
+		if createErr != nil {
+			t.Fatalf("round %d: create: %v", round, createErr)
+		}
+		recvEvent(t, second.Events)
+		second.Close()
+
+		delErr := client.Resource(depGVR).Namespace("default").
+			Delete(context.Background(), "probe", metav1.DeleteOptions{})
+		if delErr != nil {
+			t.Fatalf("round %d: delete: %v", round, delErr)
+		}
+	}
+}
+
+func TestAFullBufferAsksForAResync(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	t.Cleanup(cancel)
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+
+	stream := sub.stream
+	for range eventBuffer + 10 {
+		stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u"}})
+	}
+
+	select {
+	case <-sub.Resync:
+	default:
+		t.Fatal("events were dropped without asking the session to resync")
+	}
+}
+
+func TestAResyncIsOnlySignalledOnce(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	t.Cleanup(cancel)
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+
+	for range eventBuffer * 3 {
+		sub.stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u"}})
+	}
+
+	<-sub.Resync
+	select {
+	case <-sub.Resync:
+		t.Fatal("resync signals piled up; one pending request is enough")
+	default:
+	}
+}
+
+func TestAHealthySubscriberIsNotAskedToResync(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	t.Cleanup(cancel)
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+
+	for range eventBuffer {
+		sub.stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u"}})
+	}
+
+	select {
+	case <-sub.Resync:
+		t.Fatal("a subscriber that kept up was asked to resync")
+	default:
+	}
+}
+
+func TestSnapshotReReadsTheCache(t *testing.T) {
+	client := newClient(t, newDeployment("default", "web"))
+	mgr, cancel := newManager(t, client)
+	t.Cleanup(cancel)
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+	if len(sub.Rows) != 1 {
+		t.Fatalf("initial rows = %d, want 1", len(sub.Rows))
+	}
+
+	_, createErr := client.Resource(depGVR).Namespace("default").
+		Create(context.Background(), newDeployment("default", "api"), metav1.CreateOptions{})
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
+	}
+	recvEvent(t, sub.Events)
+
+	if len(sub.Snapshot()) != 2 {
+		t.Fatalf("resync snapshot = %d rows, want 2", len(sub.Snapshot()))
+	}
+}
+
+func TestResyncChannelClosesWithTheSubscription(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	t.Cleanup(cancel)
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	sub.Close()
+
+	select {
+	case _, ok := <-sub.Resync:
+		if ok {
+			t.Fatal("resync delivered a value after close")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("resync channel was left open; the relay would leak")
+	}
+}

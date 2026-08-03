@@ -39,6 +39,8 @@ import (
 const (
 	chartFetchTimeout  = 30 * time.Second
 	defaultSyncTimeout = 30 * time.Second
+	eventBuffer        = 256
+	attachAttempts     = 3
 )
 
 type Event struct {
@@ -52,11 +54,17 @@ type Subscription struct {
 	Namespaced bool
 	Rows       []api.Row
 	Events     <-chan Event
+	Resync     <-chan struct{}
+	stream     *stream
 	cancel     func()
 }
 
 func (s *Subscription) Close() {
 	s.cancel()
+}
+
+func (s *Subscription) Snapshot() []api.Row {
+	return s.stream.snapshot()
 }
 
 type Manager struct {
@@ -252,6 +260,18 @@ type streamKey struct {
 	ns  string
 }
 
+type subscriber struct {
+	events chan Event
+	resync chan struct{}
+}
+
+func newSubscriber() *subscriber {
+	return &subscriber{
+		events: make(chan Event, eventBuffer),
+		resync: make(chan struct{}, 1),
+	}
+}
+
 type stream struct {
 	kind     string
 	columns  []api.Column
@@ -259,7 +279,7 @@ type stream struct {
 	lister   cache.GenericLister
 	cancel   context.CancelFunc
 	mu       sync.Mutex
-	subs     map[chan Event]struct{}
+	subs     map[*subscriber]struct{}
 	refs     int
 }
 
@@ -275,41 +295,73 @@ func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscr
 	}
 	key := streamKey{gvr: gvr, ns: effNs}
 
-	st, err := m.streamFor(key, desc)
+	st, entry, err := m.attach(key, desc)
 	if err != nil {
 		return nil, err
-	}
-
-	ch := make(chan Event, 256)
-	st.mu.Lock()
-	st.subs[ch] = struct{}{}
-	st.refs++
-	st.mu.Unlock()
-
-	rows := st.snapshot()
-
-	cancel := func() {
-		st.mu.Lock()
-		_, present := st.subs[ch]
-		if present {
-			delete(st.subs, ch)
-			close(ch)
-			st.refs--
-		}
-		refs := st.refs
-		st.mu.Unlock()
-		if present && refs == 0 {
-			m.dropStream(key)
-		}
 	}
 
 	return &Subscription{
 		Columns:    st.columns,
 		Namespaced: desc.Namespaced,
-		Rows:       rows,
-		Events:     ch,
-		cancel:     cancel,
+		Rows:       st.snapshot(),
+		Events:     entry.events,
+		Resync:     entry.resync,
+		stream:     st,
+		cancel: func() {
+			m.detach(key, st, entry)
+		},
 	}, nil
+}
+
+func (m *Manager) attach(key streamKey, desc api.ResourceDescriptor) (*stream, *subscriber, error) {
+	for range attachAttempts {
+		st, err := m.streamFor(key, desc)
+		if err != nil {
+			return nil, nil, err
+		}
+		entry, ok := m.register(key, st)
+		if ok {
+			return st, entry, nil
+		}
+	}
+	return nil, nil, fmt.Errorf("%s kept being torn down while subscribing", key.gvr.String())
+}
+
+func (m *Manager) register(key streamKey, st *stream) (*subscriber, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.streams[key] != st {
+		return nil, false
+	}
+	entry := newSubscriber()
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.subs[entry] = struct{}{}
+	st.refs++
+	return entry, true
+}
+
+func (m *Manager) detach(key streamKey, st *stream, entry *subscriber) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st.mu.Lock()
+	_, present := st.subs[entry]
+	if present {
+		delete(st.subs, entry)
+		close(entry.events)
+		close(entry.resync)
+		st.refs--
+	}
+	idle := st.refs == 0
+	st.mu.Unlock()
+	if !present || !idle {
+		return
+	}
+	if m.streams[key] != st {
+		return
+	}
+	delete(m.streams, key)
+	st.cancel()
 }
 
 func (m *Manager) streamFor(key streamKey, desc api.ResourceDescriptor) (*stream, error) {
@@ -402,7 +454,7 @@ func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream
 		informer: informer,
 		lister:   gi.Lister(),
 		cancel:   cancel,
-		subs:     map[chan Event]struct{}{},
+		subs:     map[*subscriber]struct{}{},
 	}
 
 	_, handlerErr := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -446,23 +498,6 @@ func syncFailure(key streamKey, timeout time.Duration, reason string) error {
 	return fmt.Errorf("%s did not sync within %s: %s", key.gvr.String(), timeout, reason)
 }
 
-func (m *Manager) dropStream(key streamKey) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	st, ok := m.streams[key]
-	if !ok {
-		return
-	}
-	st.mu.Lock()
-	refs := st.refs
-	st.mu.Unlock()
-	if refs > 0 {
-		return
-	}
-	delete(m.streams, key)
-	st.cancel()
-}
-
 func (st *stream) publish(kind string, obj any) {
 	u, ok := toUnstructured(obj)
 	if !ok {
@@ -482,11 +517,19 @@ func (st *stream) publishDelete(obj any) {
 func (st *stream) fanout(ev Event) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	for ch := range st.subs {
+	for sub := range st.subs {
 		select {
-		case ch <- ev:
+		case sub.events <- ev:
 		default:
+			signalResync(sub)
 		}
+	}
+}
+
+func signalResync(sub *subscriber) {
+	select {
+	case sub.resync <- struct{}{}:
+	default:
 	}
 }
 
