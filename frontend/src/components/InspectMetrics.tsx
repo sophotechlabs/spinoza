@@ -69,6 +69,14 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
   const [history, setHistory] = useState<MetricHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const podKey = `${namespace}/${pod}`;
+  const [lastPod, setLastPod] = useState(podKey);
+  if (podKey !== lastPod) {
+    setLastPod(podKey);
+    setHistory(null);
+    setError(null);
+  }
+
   useEffect(() => {
     let live = true;
     setError(null);

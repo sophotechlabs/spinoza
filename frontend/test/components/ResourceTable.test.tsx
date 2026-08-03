@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Column, ResourceDescriptor, Row } from '../../src/lib/types';
 import ResourceTable from '../../src/components/ResourceTable';
@@ -63,6 +63,65 @@ describe('ResourceTable', () => {
 
     expect(screen.queryByText('boom')).not.toBeInTheDocument();
     expect(screen.getByText('alpha')).toBeInTheDocument();
+  });
+
+  it('clears a namespace filter when the resource changes', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns(['Ready']), true, [
+      makeRow({ uid: 'a', name: 'alpha', namespace: 'one' }),
+      makeRow({ uid: 'b', name: 'bravo', namespace: 'two' }),
+    ]);
+    const view = renderTable(descriptor, null);
+    await user.selectOptions(screen.getByLabelText('Namespace'), 'two');
+    expect(screen.queryByText('alpha')).not.toBeInTheDocument();
+
+    useResourcesStore
+      .getState()
+      .applySnapshot('s2', makeColumns(['Ready']), false, [makeRow({ uid: 'c', name: 'charlie' })]);
+    view.rerender(
+      <ResourceTable
+        active={makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false })}
+        subId="s2"
+        selected={null}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('charlie')).toBeInTheDocument();
+  });
+
+  it('clears the name filter when the resource changes', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'alpha' })]);
+    const view = renderTable(descriptor, null);
+    await user.type(screen.getByLabelText('Filter by name'), 'zzz');
+    expect(screen.queryByText('alpha')).not.toBeInTheDocument();
+
+    useResourcesStore
+      .getState()
+      .applySnapshot('s2', makeColumns(['Ready']), true, [makeRow({ uid: 'c', name: 'charlie' })]);
+    view.rerender(
+      <ResourceTable active={descriptor} subId="s2" selected={null} onSelect={vi.fn()} />,
+    );
+
+    expect(screen.getByLabelText('Filter by name')).toHaveValue('');
+    expect(screen.getByText('charlie')).toBeInTheDocument();
+  });
+
+  it('keeps the age column moving without a websocket event', async () => {
+    vi.useFakeTimers();
+    const created = new Date(Date.now() - 5000).toISOString();
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'alpha', createdAt: created })]);
+    renderTable(descriptor, null);
+    expect(screen.getByText('5s')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(31000);
+    });
+
+    expect(screen.queryByText('5s')).not.toBeInTheDocument();
+    expect(screen.getByText('35s')).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it('renders a placeholder when no resource is active', () => {

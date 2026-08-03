@@ -9,6 +9,7 @@ import type {
 } from './lib/types';
 import { containerNames } from './lib/containers';
 import { useResourceFeed } from './lib/feed';
+import { useSubRow } from './store/resources';
 import { refFromFlux, refFromNode, refFromRow } from './lib/refs';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -46,10 +47,11 @@ export default function App() {
   const [active, setActive] = useState<ResourceDescriptor | null>(null);
   const [subId, setSubId] = useState(FIRST_SUB_ID);
   const subSeq = useRef(0);
-  const [selected, setSelected] = useState<Row | null>(null);
+  const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [target, setTarget] = useState<ObjectRef | null>(null);
 
   const { subscribe, unsubscribe, subscribeLogs, unsubscribeLogs } = feed;
+  const selected = useSubRow(subId, selectedUid);
 
   useEffect(() => {
     if (active === null) {
@@ -62,7 +64,7 @@ export default function App() {
   }, [active, subId, subscribe, unsubscribe]);
 
   function clearSelection() {
-    setSelected(null);
+    setSelectedUid(null);
     setTarget(null);
   }
 
@@ -80,17 +82,17 @@ export default function App() {
   }
 
   function handleSelectRow(row: Row) {
-    setSelected(row);
+    setSelectedUid(row.uid);
     setTarget(refFromRow(active, row));
   }
 
   function handleSelectNode(node: GraphNode) {
-    setSelected(null);
+    setSelectedUid(null);
     setTarget(refFromNode(node));
   }
 
   function handleSelectFlux(resource: FluxResource) {
-    setSelected(null);
+    setSelectedUid(null);
     setTarget(refFromFlux(resource));
   }
 

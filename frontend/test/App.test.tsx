@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Category, FluxResource, GraphNode, ObjectRef } from '../src/lib/types';
 
@@ -85,7 +85,15 @@ vi.mock('../src/components/FluxOverview', () => ({ default: fluxStub('flux-overv
 vi.mock('../src/components/FluxRoles', () => ({ default: fluxStub('flux-roles') }));
 
 vi.mock('../src/components/InspectDrawer', () => ({
-  default: ({ target, onClose }: { target: ObjectRef | null; onClose: () => void }) => {
+  default: ({
+    target,
+    containers,
+    onClose,
+  }: {
+    target: ObjectRef | null;
+    containers?: { name: string; reason?: string; restarts: number }[];
+    onClose: () => void;
+  }) => {
     if (target === null) {
       return <aside>Select a row to inspect it.</aside>;
     }
@@ -93,6 +101,11 @@ vi.mock('../src/components/InspectDrawer', () => ({
       <aside>
         <span data-testid="inspect-target">
           {`${target.resource}:${target.namespace}/${target.name}`}
+        </span>
+        <span data-testid="inspect-containers">
+          {(containers ?? [])
+            .map((one) => `${one.name}:${one.reason ?? ''}:${one.restarts}`)
+            .join(',')}
         </span>
         <button type="button" onClick={onClose}>
           Close
@@ -184,6 +197,47 @@ describe('App', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith('main#1', podDescriptor, '');
     expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
     expect(screen.getByText('1/1')).toBeInTheDocument();
+  });
+
+  it('keeps the selected row in step with the live feed', async () => {
+    useResourcesStore.getState().applySnapshot('main#1', makeColumns([]), true, [
+      makeRow({
+        uid: 'a',
+        name: 'pod-a',
+        namespace: 'prod',
+        containers: [{ name: 'app', state: 'running', ready: true, restarts: 0, init: false }],
+      }),
+    ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+
+    act(() => {
+      useResourcesStore.getState().applyDelta('main#1', {
+        type: 'modified',
+        subId: 'main#1',
+        row: makeRow({
+          uid: 'a',
+          name: 'pod-a',
+          namespace: 'prod',
+          containers: [
+            {
+              name: 'app',
+              state: 'waiting',
+              reason: 'CrashLoopBackOff',
+              ready: false,
+              restarts: 7,
+              init: false,
+            },
+          ],
+        }),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('inspect-containers')).toHaveTextContent('app:CrashLoopBackOff:7');
+    });
   });
 
   it('targets the inspector at the selected row', async () => {

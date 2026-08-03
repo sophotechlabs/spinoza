@@ -14,6 +14,7 @@ import { useSubColumns, useSubError, useSubNamespaced, useSubRows } from '../sto
 import { ratioColor, restartColor, statusColor } from '../lib/status';
 import { formatCpu, formatMem, useMetrics } from '../lib/metrics';
 import { useElementWidth } from '../lib/useElementWidth';
+import { useNow } from '../lib/useNow';
 import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
@@ -35,12 +36,12 @@ function columnWidth(id: string, base: number, perFlex: number): number {
   return base;
 }
 
-function age(createdAt: string): string {
+function age(createdAt: string, now: number): string {
   const created = new Date(createdAt).getTime();
   if (Number.isNaN(created)) {
     return '';
   }
-  let seconds = Math.floor((Date.now() - created) / 1000);
+  let seconds = Math.floor((now - created) / 1000);
   if (seconds < 0) {
     seconds = 0;
   }
@@ -154,9 +155,17 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const namespaced = useSubNamespaced(subId);
   const rows = useSubRows(subId);
   const error = useSubError(subId);
+  const now = useNow();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [query, setQuery] = useState('');
   const [namespace, setNamespace] = useState(ALL_NAMESPACES);
+  const [lastResource, setLastResource] = useState(subId);
+  if (subId !== lastResource) {
+    setLastResource(subId);
+    setSorting([]);
+    setQuery('');
+    setNamespace(ALL_NAMESPACES);
+  }
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const setScroll = useCallback((node: HTMLDivElement | null) => {
@@ -227,11 +236,11 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
         header: 'Age',
         size: 72,
         minSize: 50,
-        cell: (info) => age(info.getValue()),
+        cell: (info) => age(info.getValue(), now),
       }),
     );
     return defs;
-  }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics]);
+  }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics, now]);
 
   const namespaces = useMemo(() => namespacesOf(rows), [rows]);
   const visibleRows = useMemo(() => filterRows(rows, query, namespace), [rows, query, namespace]);

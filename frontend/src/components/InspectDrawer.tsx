@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ContainerState, ObjectDetail, ObjectRef } from '../lib/types';
-import { fetchObject } from '../lib/object';
+import { fetchObject, refQuery } from '../lib/object';
 import { NUDGE_STEP, useDrawerWidth } from '../lib/usePanelWidth';
 import { isFluxObject } from '../lib/fluxActions';
 import { hasActions } from '../lib/objectActions';
@@ -22,6 +22,13 @@ const BASE_TABS: { id: Tab; label: string }[] = [
 ];
 
 const METRICS_TAB: { id: Tab; label: string } = { id: 'metrics', label: 'Metrics' };
+
+function keyOf(target: ObjectRef | null): string {
+  if (target === null) {
+    return '';
+  }
+  return refQuery(target);
+}
 
 function tabsFor(kind: string | undefined): { id: Tab; label: string }[] {
   if (kind === 'Pod') {
@@ -72,6 +79,14 @@ export default function InspectDrawer({
   const [tab, setTab] = useState<Tab>('overview');
   const [reload, setReload] = useState(0);
   const { width, startResize, nudge } = useDrawerWidth();
+
+  const targetKey = keyOf(target);
+  const [lastKey, setLastKey] = useState(targetKey);
+  if (targetKey !== lastKey) {
+    setLastKey(targetKey);
+    setDetail(null);
+    setError(null);
+  }
 
   useEffect(() => {
     if (target === null) {
@@ -129,11 +144,14 @@ export default function InspectDrawer({
     }
   }
 
+  const available = tabsFor(detail?.kind);
+  const shown = available.some((entry) => entry.id === tab) ? tab : 'overview';
+
   let body = <div className="p-4 text-xs text-neutral-600">Loading {target.name}…</div>;
   if (error !== null) {
     body = <div className="p-4 text-xs break-words text-red-400">{error}</div>;
   }
-  if (detail !== null && tab === 'overview') {
+  if (detail !== null && shown === 'overview') {
     body = (
       <div className="overflow-y-auto">
         {forwardable(detail) !== null && detail.ports !== undefined && (
@@ -143,7 +161,7 @@ export default function InspectDrawer({
       </div>
     );
   }
-  if (detail !== null && tab === 'yaml') {
+  if (detail !== null && shown === 'yaml') {
     body = (
       <InspectYaml
         target={target}
@@ -153,14 +171,12 @@ export default function InspectDrawer({
       />
     );
   }
-  if (detail !== null && tab === 'events') {
+  if (detail !== null && shown === 'events') {
     body = <InspectEvents namespace={detail.namespace} uid={detail.uid} />;
   }
-  if (detail !== null && tab === 'metrics') {
+  if (detail !== null && shown === 'metrics') {
     body = <InspectMetrics namespace={detail.namespace} pod={detail.name} />;
   }
-
-  const tabs = tabsFor(detail?.kind);
 
   return (
     <aside
@@ -187,14 +203,14 @@ export default function InspectDrawer({
           </button>
         </div>
         <div className="flex shrink-0 gap-3 border-b border-neutral-800 px-3 text-xs">
-          {tabs.map((entry) => (
+          {available.map((entry) => (
             <button
               key={entry.id}
               type="button"
               onClick={() => {
                 setTab(entry.id);
               }}
-              className={`py-1.5 ${tabClass(tab === entry.id)}`}
+              className={`py-1.5 ${tabClass(shown === entry.id)}`}
             >
               {entry.label}
             </button>

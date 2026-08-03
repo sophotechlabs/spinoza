@@ -164,6 +164,16 @@ describe('InspectMetrics', () => {
     expect(resizes).toHaveLength(callbacks.length);
   });
 
+  it("clears the previous pod's charts before the next one loads", async () => {
+    stub(history());
+    const view = render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+    await screen.findAllByTestId('metric-chart');
+
+    view.rerender(<InspectMetrics namespace="monitoring" pod="loki-1" />);
+
+    expect(screen.queryByTestId('metric-chart')).not.toBeInTheDocument();
+  });
+
   it('drops an answer that lands after unmount', () => {
     const deferred = {
       settle: () => {

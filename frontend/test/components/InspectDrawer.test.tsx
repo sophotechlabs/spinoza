@@ -143,6 +143,92 @@ describe('InspectDrawer', () => {
     expect(await screen.findByLabelText('Metric range')).toBeInTheDocument();
   });
 
+  it('drops the old object before the new one arrives', async () => {
+    const user = userEvent.setup();
+    const view = renderDrawer();
+    await screen.findByText('Metadata');
+
+    view.view.rerender(
+      <InspectDrawer target={{ ...target, name: 'api' }} onClose={vi.fn()} onDeleted={vi.fn()} />,
+    );
+
+    expect(screen.getByText(/Loading api/)).toBeInTheDocument();
+    expect(screen.queryByText('Metadata')).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'YAML' }));
+  });
+
+  it('never hands the yaml editor one object with another one selected', async () => {
+    const user = userEvent.setup();
+    const view = renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'YAML' }));
+    expect(screen.getByLabelText('yaml')).toHaveValue('kind: Pod\n');
+
+    view.view.rerender(
+      <InspectDrawer target={{ ...target, name: 'api' }} onClose={vi.fn()} onDeleted={vi.fn()} />,
+    );
+
+    expect(screen.queryByLabelText('yaml')).not.toBeInTheDocument();
+  });
+
+  it('cancels a pending delete when a different object is selected', async () => {
+    const user = userEvent.setup();
+    const view = renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'YAML' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByText('Delete web?')).toBeInTheDocument();
+
+    view.view.rerender(
+      <InspectDrawer target={{ ...target, name: 'api' }} onClose={vi.fn()} onDeleted={vi.fn()} />,
+    );
+
+    expect(screen.queryByText(/Delete/)).not.toBeInTheDocument();
+  });
+
+  it('drops the action panel when a different object is selected', async () => {
+    stubApi({ ...detail, kind: 'Deployment', apiVersion: 'apps/v1' });
+    const view = render(
+      <InspectDrawer
+        target={{ ...target, group: 'apps', resource: 'deployments' }}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    expect(await screen.findByLabelText('replicas')).toBeInTheDocument();
+
+    view.rerender(
+      <InspectDrawer
+        target={{ ...target, group: 'apps', resource: 'deployments', name: 'other' }}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText('replicas')).not.toBeInTheDocument();
+  });
+
+  it('falls back to Overview when the new kind has no such tab', async () => {
+    const user = userEvent.setup();
+    const view = renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'Metrics' }));
+    expect(await screen.findByLabelText('Metric range')).toBeInTheDocument();
+
+    stubApi({ ...detail, kind: 'Deployment', name: 'web' });
+    view.view.rerender(
+      <InspectDrawer
+        target={{ ...target, resource: 'deployments', name: 'web-2' }}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+
+    await screen.findByText('Metadata');
+    expect(screen.queryByLabelText('Metric range')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Metrics' })).not.toBeInTheDocument();
+  });
+
   it('refetches after an apply', async () => {
     const user = userEvent.setup();
     renderDrawer();
