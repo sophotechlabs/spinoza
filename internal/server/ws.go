@@ -30,7 +30,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		conn: conn,
 		ctx:  ctx,
 		mgr:  s.mgr,
-		subs: map[string]*resources.Subscription{},
+		subs: map[string]*subEntry{},
 		logs: map[string]*logs.Stream{},
 	}
 	defer sess.closeAll()
@@ -45,12 +45,19 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 type wsSession struct {
-	conn *websocket.Conn
-	ctx  context.Context
-	mgr  *resources.Manager
-	mu   sync.Mutex
-	subs map[string]*resources.Subscription
-	logs map[string]*logs.Stream
+	conn    *websocket.Conn
+	ctx     context.Context
+	mgr     *resources.Manager
+	mu      sync.Mutex
+	subs    map[string]*subEntry
+	logs    map[string]*logs.Stream
+	nextGen uint64
+	writeMu sync.Mutex
+}
+
+type subEntry struct {
+	sub *resources.Subscription
+	gen uint64
 }
 
 func (sess *wsSession) handle(msg api.ClientMsg) {
@@ -75,43 +82,96 @@ func (sess *wsSession) subscribe(msg api.ClientMsg) {
 		return
 	}
 	sess.mu.Lock()
-	sess.subs[msg.SubID] = sub
+	sess.nextGen++
+	gen := sess.nextGen
+	sess.subs[msg.SubID] = &subEntry{sub: sub, gen: gen}
 	sess.mu.Unlock()
 
-	sess.write(sess.ctx, api.Snapshot{
-		Type:       "snapshot",
-		SubID:      msg.SubID,
-		Columns:    columnsOrEmpty(sub.Columns),
-		Namespaced: sub.Namespaced,
-		Rows:       rowsOrEmpty(sub.Rows),
-	})
+	sess.writeCurrent(msg.SubID, gen, snapshotOf(msg.SubID, sub, sub.Rows))
 
-	go sess.relay(msg.SubID, sub)
+	go sess.relay(msg.SubID, gen, sub)
 }
 
-func (sess *wsSession) relay(subID string, sub *resources.Subscription) {
+func snapshotOf(subID string, sub *resources.Subscription, rows []api.Row) api.Snapshot {
+	return api.Snapshot{
+		Type:       "snapshot",
+		SubID:      subID,
+		Columns:    columnsOrEmpty(sub.Columns),
+		Namespaced: sub.Namespaced,
+		Rows:       rowsOrEmpty(rows),
+	}
+}
+
+func (sess *wsSession) relay(subID string, gen uint64, sub *resources.Subscription) {
 	for {
 		select {
 		case <-sess.ctx.Done():
 			return
+		case _, ok := <-sub.Resync:
+			if !ok {
+				return
+			}
+			if !sess.sendResync(subID, gen, sub) {
+				return
+			}
 		case ev, ok := <-sub.Events:
 			if !ok {
 				return
 			}
-			sess.write(sess.ctx, eventToMsg(subID, ev))
+			if !sess.writeCurrent(subID, gen, eventToMsg(subID, ev)) {
+				return
+			}
 		}
 	}
 }
 
+func (sess *wsSession) sendResync(subID string, gen uint64, sub *resources.Subscription) bool {
+	drainEvents(sub.Events)
+	return sess.writeCurrent(subID, gen, snapshotOf(subID, sub, sub.Snapshot()))
+}
+
+func drainEvents(events <-chan resources.Event) {
+	for {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				return
+			}
+		default:
+			return
+		}
+	}
+}
+
+func (sess *wsSession) writeCurrent(subID string, gen uint64, msg any) bool {
+	sess.writeMu.Lock()
+	defer sess.writeMu.Unlock()
+	if !sess.isCurrent(subID, gen) {
+		return false
+	}
+	sess.writeLocked(sess.ctx, msg)
+	return true
+}
+
+func (sess *wsSession) isCurrent(subID string, gen uint64) bool {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	entry, ok := sess.subs[subID]
+	if !ok {
+		return false
+	}
+	return entry.gen == gen
+}
+
 func (sess *wsSession) unsubscribe(subID string) {
 	sess.mu.Lock()
-	sub, ok := sess.subs[subID]
+	entry, ok := sess.subs[subID]
 	if ok {
 		delete(sess.subs, subID)
 	}
 	sess.mu.Unlock()
 	if ok {
-		sub.Close()
+		entry.sub.Close()
 	}
 }
 
@@ -181,14 +241,14 @@ func (sess *wsSession) unsubscribeLogs(subID string) {
 func (sess *wsSession) closeAll() {
 	sess.mu.Lock()
 	subs := make([]*resources.Subscription, 0, len(sess.subs))
-	for _, sub := range sess.subs {
-		subs = append(subs, sub)
+	for _, entry := range sess.subs {
+		subs = append(subs, entry.sub)
 	}
 	streams := make([]*logs.Stream, 0, len(sess.logs))
 	for _, stream := range sess.logs {
 		streams = append(streams, stream)
 	}
-	sess.subs = map[string]*resources.Subscription{}
+	sess.subs = map[string]*subEntry{}
 	sess.logs = map[string]*logs.Stream{}
 	sess.mu.Unlock()
 	for _, sub := range subs {
@@ -200,6 +260,12 @@ func (sess *wsSession) closeAll() {
 }
 
 func (sess *wsSession) write(ctx context.Context, msg any) {
+	sess.writeMu.Lock()
+	defer sess.writeMu.Unlock()
+	sess.writeLocked(ctx, msg)
+}
+
+func (sess *wsSession) writeLocked(ctx context.Context, msg any) {
 	writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	_ = wsjson.Write(writeCtx, sess.conn, msg)
