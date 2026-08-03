@@ -59,7 +59,7 @@ func forwardServer(t *testing.T, runner portforward.Runner, resolver portforward
 		registry = portforward.NewRegistry(ctx, runner, resolver, nil)
 		t.Cleanup(registry.StopAll)
 	}
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, registry, nil, nil, nil, nil, nil)
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Forwards: registry})
 	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts

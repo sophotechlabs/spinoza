@@ -110,7 +110,7 @@ func execServer(t *testing.T, service *exec.Service) *httptest.Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, service, nil, nil, nil, nil)
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Shells: service})
 	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -425,7 +425,7 @@ func debugServer(t *testing.T, service *debugcontainer.Service) *httptest.Server
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, service, nil, nil, nil)
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Debugger: service})
 	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts

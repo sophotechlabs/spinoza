@@ -93,19 +93,31 @@ type buildGate struct {
 	refs int
 }
 
-func NewManager(ctx context.Context, dyn dynamic.Interface, cs kubernetes.Interface, schemas *jsonschema.Client, forwards *portforward.Registry, shells *exec.Service, debugger *debugcontainer.Service, promClient *prom.Client, cats []api.Category, descs map[string]api.ResourceDescriptor) *Manager {
+type Deps struct {
+	Dynamic     dynamic.Interface
+	Clientset   kubernetes.Interface
+	Schemas     *jsonschema.Client
+	Forwards    *portforward.Registry
+	Shells      *exec.Service
+	Debugger    *debugcontainer.Service
+	Prometheus  *prom.Client
+	Categories  []api.Category
+	Descriptors map[string]api.ResourceDescriptor
+}
+
+func NewManager(ctx context.Context, deps Deps) *Manager {
 	return &Manager{
 		rootCtx:  ctx,
-		dyn:      dyn,
-		cs:       cs,
-		schemas:  schemas,
+		dyn:      deps.Dynamic,
+		cs:       deps.Clientset,
+		schemas:  deps.Schemas,
 		charts:   charts.New(ctx, &http.Client{Timeout: chartFetchTimeout}, charts.DefaultTTL),
-		forwards: forwards,
-		shells:   shells,
-		debugger: debugger,
-		prom:     promClient,
-		cats:     cats,
-		descs:    descs,
+		forwards: deps.Forwards,
+		shells:   deps.Shells,
+		debugger: deps.Debugger,
+		prom:     deps.Prometheus,
+		cats:     deps.Categories,
+		descs:    deps.Descriptors,
 		streams:  map[streamKey]*stream{},
 		building: map[streamKey]*buildGate{},
 

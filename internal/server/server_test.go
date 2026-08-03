@@ -69,7 +69,7 @@ func testManager(t *testing.T, objs ...runtime.Object) (*resources.Manager, dyna
 		discovery.Key("apps", "v1", "deployments"): deploymentDesc(),
 	}
 	cats := []api.Category{{Name: "Workloads", Resources: []api.ResourceDescriptor{deploymentDesc()}}}
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, cats, descs)
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Categories: cats, Descriptors: descs})
 	return mgr, dyn
 }
 
@@ -252,7 +252,7 @@ func TestGraphEndpoint(t *testing.T) {
 			Category:   "Custom Resources",
 		},
 	}
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
 	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -320,7 +320,7 @@ func TestFluxEndpoint(t *testing.T) {
 			Category:   "Custom Resources",
 		},
 	}
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
 	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -362,7 +362,7 @@ func TestMetricsEndpoint(t *testing.T) {
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, nil)
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset()})
 	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -732,7 +732,7 @@ func clusterScopedManager(t *testing.T) *resources.Manager {
 	t.Cleanup(cancel)
 	desc := api.ResourceDescriptor{Version: "v1", Resource: "nodes", Kind: "Node", Namespaced: false}
 	descs := map[string]api.ResourceDescriptor{discovery.Key("", "v1", "nodes"): desc}
-	return resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
+	return resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
 }
 
 func TestWSSnapshotOfAClusterScopedResourceCarriesNamespaced(t *testing.T) {

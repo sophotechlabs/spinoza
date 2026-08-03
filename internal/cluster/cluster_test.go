@@ -29,7 +29,7 @@ func (r *recorder) build(ctx context.Context, name string) (*resources.Manager, 
 	if resolved == "" {
 		resolved = "default-context"
 	}
-	return resources.NewManager(ctx, nil, nil, nil, nil, nil, nil, nil, nil, nil), resolved, nil
+	return resources.NewManager(ctx, resources.Deps{}), resolved, nil
 }
 
 func newTestCluster(t *testing.T, rec *recorder) *Cluster {

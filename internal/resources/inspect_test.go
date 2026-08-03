@@ -50,7 +50,7 @@ func inspectManager(t *testing.T, objs ...runtime.Object) *Manager {
 	dyn := newClient(t, objs...)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	return NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, testDescs())
+	return NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: testDescs()})
 }
 
 func TestManagerObject(t *testing.T) {
@@ -157,7 +157,7 @@ func TestManagerSchema(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := NewManager(ctx, newClient(t), k8sfake.NewClientset(), schemas, nil, nil, nil, nil, nil, testDescs())
+	mgr := NewManager(ctx, Deps{Dynamic: newClient(t), Clientset: k8sfake.NewClientset(), Schemas: schemas, Descriptors: testDescs()})
 
 	raw, err := mgr.Schema(jsonschema.GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
@@ -197,7 +197,7 @@ func TestManagerFluxAction(t *testing.T) {
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, testDescs())
+	mgr := NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: testDescs()})
 	ref := api.ObjectRef{
 		Group:     "kustomize.toolkit.fluxcd.io",
 		Version:   "v1",
@@ -240,7 +240,7 @@ func forwardManager(t *testing.T) *Manager {
 	t.Cleanup(cancel)
 	registry := portforward.NewRegistry(ctx, &stubForwardRunner{local: 45123}, stubForwardResolver{}, nil)
 	t.Cleanup(registry.StopAll)
-	return NewManager(ctx, newClient(t), k8sfake.NewClientset(), nil, registry, nil, nil, nil, nil, testDescs())
+	return NewManager(ctx, Deps{Dynamic: newClient(t), Clientset: k8sfake.NewClientset(), Forwards: registry, Descriptors: testDescs()})
 }
 
 func TestManagerPortForwardLifecycle(t *testing.T) {

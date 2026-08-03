@@ -57,7 +57,17 @@ func build(ctx context.Context, name string, options Options) (*resources.Manage
 		return nil, nil, targetErr
 	}
 	promClient := prom.NewClient(bundle.Clientset, promTarget)
-	mgr := resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, debugger, promClient, cats, descs)
+	mgr := resources.NewManager(ctx, resources.Deps{
+		Dynamic:     bundle.Dynamic,
+		Clientset:   bundle.Clientset,
+		Schemas:     schemas,
+		Forwards:    forwards,
+		Shells:      shells,
+		Debugger:    debugger,
+		Prometheus:  promClient,
+		Categories:  cats,
+		Descriptors: descs,
+	})
 	mgr.UseDiscovery(bundle.Discovery, discErr)
 	return mgr, bundle, nil
 }

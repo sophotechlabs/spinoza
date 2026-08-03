@@ -104,7 +104,7 @@ func newClient(t *testing.T, objs ...runtime.Object) *fake.FakeDynamicClient {
 func newManager(t *testing.T, dyn dynamic.Interface) (*Manager, context.CancelFunc) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, []api.Category{{Name: "Workloads"}}, testDescs())
+	mgr := NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Categories: []api.Category{{Name: "Workloads"}}, Descriptors: testDescs()})
 	return mgr, cancel
 }
 
@@ -166,7 +166,7 @@ func TestManagerGraph(t *testing.T) {
 		},
 	}
 	ctx := t.Context()
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
+	mgr := NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
 
 	graph := mgr.Graph(ctx)
 	if len(graph.Nodes) != 1 {
@@ -213,7 +213,7 @@ func TestManagerFlux(t *testing.T) {
 		},
 	}
 	ctx := t.Context()
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
+	mgr := NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
 
 	dash := mgr.Flux(ctx)
 	if len(dash.Groups) != 1 {
@@ -236,7 +236,7 @@ func TestManagerMetrics(t *testing.T) {
 	}
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds)
 	ctx := t.Context()
-	mgr := NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, nil)
+	mgr := NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset()})
 
 	m := mgr.Metrics(ctx)
 	if len(m.Pods) != 0 {
@@ -312,7 +312,7 @@ func TestSubscribeUnknownResource(t *testing.T) {
 func TestSubscribeCacheSyncFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	mgr := NewManager(ctx, newClient(t), k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, testDescs())
+	mgr := NewManager(ctx, Deps{Dynamic: newClient(t), Clientset: k8sfake.NewClientset(), Descriptors: testDescs()})
 	_, err := mgr.Subscribe("apps", "v1", "deployments", "default")
 	if err == nil {
 		t.Fatal("Subscribe returned nil error when cache sync could not complete")
@@ -706,7 +706,7 @@ func stuckManager(t *testing.T, stuck string) (*Manager, *fake.FakeDynamicClient
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	mgr := NewManager(ctx, client, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, testDescs())
+	mgr := NewManager(ctx, Deps{Dynamic: client, Clientset: k8sfake.NewClientset(), Descriptors: testDescs()})
 	mgr.syncTimeout = 300 * time.Millisecond
 	return mgr, client
 }
