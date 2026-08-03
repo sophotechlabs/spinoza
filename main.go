@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
@@ -41,7 +42,11 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mgr, err := makeManager(ctx, *debugImage, *kubectlBinary, *promSpec)
+	clusters, err := cluster.New(ctx, cluster.Options{
+		DebugImage:    *debugImage,
+		KubectlBinary: *kubectlBinary,
+		PromSpec:      *promSpec,
+	})
 	if err != nil {
 		return err
 	}
@@ -51,7 +56,7 @@ func run() error {
 		return fmt.Errorf("assets: %w", err)
 	}
 
-	srv := server.New(mgr, assets)
+	srv := server.New(clusters, assets)
 	httpServer := &http.Server{
 		Addr:              *addr,
 		Handler:           srv.Handler(),

@@ -58,7 +58,7 @@ func schemaServer(t *testing.T, schemas *jsonschema.Client) *httptest.Server {
 		discovery.Key("", "v1", "pods"): podDesc(),
 	}
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), schemas, nil, nil, nil, nil, nil, descs)
-	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts
 }

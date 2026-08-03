@@ -65,7 +65,7 @@ func actionServer(t *testing.T, pods []runtime.Object, objs ...runtime.Object) (
 		},
 	}
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(pods...), nil, nil, nil, nil, nil, nil, descs)
-	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts, dyn
 }

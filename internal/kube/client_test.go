@@ -83,3 +83,93 @@ func TestLoadReturnsErrorForInvalidKubeconfig(t *testing.T) {
 		t.Fatal("Load returned nil error for invalid kubeconfig")
 	}
 }
+
+const twoContextKubeconfig = `apiVersion: v1
+kind: Config
+current-context: beta
+clusters:
+- name: c1
+  cluster:
+    server: https://127.0.0.1:6443
+    insecure-skip-tls-verify: true
+contexts:
+- name: beta
+  context:
+    cluster: c1
+    namespace: beta-ns
+    user: u1
+- name: alpha
+  context:
+    cluster: c1
+    namespace: alpha-ns
+    user: u1
+users:
+- name: u1
+  user:
+    token: t
+`
+
+func TestContextsListsEveryContextSorted(t *testing.T) {
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
+
+	names, current, err := Contexts()
+	if err != nil {
+		t.Fatalf("Contexts: %v", err)
+	}
+
+	if len(names) != 2 || names[0] != "alpha" || names[1] != "beta" {
+		t.Fatalf("names = %v, want them sorted", names)
+	}
+	if current != "beta" {
+		t.Fatalf("current = %q", current)
+	}
+}
+
+func TestContextsReportsAnUnreadableKubeconfig(t *testing.T) {
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, "not: [valid: yaml"))
+
+	_, _, err := Contexts()
+
+	if err == nil {
+		t.Fatal("an unreadable kubeconfig was reported as having no contexts")
+	}
+}
+
+func TestLoadContextTargetsTheNamedContext(t *testing.T) {
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
+
+	bundle, err := LoadContext("alpha")
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+
+	if bundle.Context != "alpha" {
+		t.Fatalf("Context = %q, want the requested one rather than the kubeconfig default", bundle.Context)
+	}
+	if bundle.Namespace != "alpha-ns" {
+		t.Fatalf("Namespace = %q, want the namespace of the requested context", bundle.Namespace)
+	}
+}
+
+func TestLoadContextRejectsAContextThatIsNotThere(t *testing.T) {
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
+
+	_, err := LoadContext("gone")
+
+	if err == nil {
+		t.Fatal("switching to a context that does not exist reported success")
+	}
+}
+
+func TestLoadContextWithNoNameKeepsTheDefault(t *testing.T) {
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
+
+	bundle, err := LoadContext("")
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+
+	if bundle.Context != "beta" {
+		t.Fatalf("Context = %q, want the kubeconfig's current-context", bundle.Context)
+	}
+}

@@ -56,7 +56,7 @@ func fluxActionServer(t *testing.T, objs ...runtime.Object) (*httptest.Server, d
 		},
 	}
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
-	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts, dyn
 }

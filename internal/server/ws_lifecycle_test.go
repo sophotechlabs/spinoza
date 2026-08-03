@@ -20,7 +20,7 @@ import (
 
 func openFeed(t *testing.T, mgr *resources.Manager) (*websocket.Conn, context.Context) {
 	t.Helper()
-	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)

@@ -66,7 +66,7 @@ func TestLoopbackAuthority(t *testing.T) {
 
 func TestGuardRefusesACrossOriginRead(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
+	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
@@ -87,7 +87,7 @@ func TestGuardRefusesACrossOriginRead(t *testing.T) {
 
 func TestGuardRefusesARebottledHost(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
+	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
@@ -109,7 +109,7 @@ func TestGuardRefusesARebottledHost(t *testing.T) {
 
 func TestGuardRefusesACrossOriginWebsocket(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
+	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
 	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
@@ -123,7 +123,7 @@ func TestGuardRefusesACrossOriginWebsocket(t *testing.T) {
 
 func TestGuardAdmitsTheDesktopWebview(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
+	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
@@ -144,7 +144,7 @@ func TestGuardAdmitsTheDesktopWebview(t *testing.T) {
 
 func TestGuardRefusesCrossOriginAssets(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
+	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/index.html", http.NoBody)
@@ -165,7 +165,7 @@ func TestGuardRefusesCrossOriginAssets(t *testing.T) {
 
 func TestHealthzStaysOpen(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(mgr, testAssets()).Handler())
+	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/healthz", http.NoBody)

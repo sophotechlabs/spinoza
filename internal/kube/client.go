@@ -2,6 +2,7 @@ package kube
 
 import (
 	"fmt"
+	"slices"
 
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -23,9 +24,30 @@ type Bundle struct {
 }
 
 func Load() (*Bundle, error) {
+	return LoadContext("")
+}
+
+func configFor(contextName string) clientcmd.ClientConfig {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	overrides := &clientcmd.ConfigOverrides{}
-	clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
+	overrides := &clientcmd.ConfigOverrides{CurrentContext: contextName}
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
+}
+
+func Contexts() ([]string, string, error) {
+	raw, err := configFor("").RawConfig()
+	if err != nil {
+		return nil, "", fmt.Errorf("kubeconfig: %w", err)
+	}
+	names := make([]string, 0, len(raw.Contexts))
+	for name := range raw.Contexts {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names, raw.CurrentContext, nil
+}
+
+func LoadContext(contextName string) (*Bundle, error) {
+	clientConfig := configFor(contextName)
 
 	restConfig, err := clientConfig.ClientConfig()
 	if err != nil {
@@ -45,10 +67,12 @@ func Load() (*Bundle, error) {
 	cached := memory.NewMemCacheClient(cs.Discovery())
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(cached)
 
-	contextName := ""
-	rawConfig, rawErr := clientConfig.RawConfig()
-	if rawErr == nil {
-		contextName = rawConfig.CurrentContext
+	resolved := contextName
+	if resolved == "" {
+		rawConfig, rawErr := clientConfig.RawConfig()
+		if rawErr == nil {
+			resolved = rawConfig.CurrentContext
+		}
 	}
 
 	namespace := ""
@@ -63,7 +87,7 @@ func Load() (*Bundle, error) {
 		Dynamic:   dyn,
 		Discovery: cached,
 		Mapper:    mapper,
-		Context:   contextName,
+		Context:   resolved,
 		Namespace: namespace,
 	}, nil
 }

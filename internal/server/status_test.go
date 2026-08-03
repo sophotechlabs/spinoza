@@ -86,7 +86,7 @@ func eventsServer(t *testing.T, listErr error) *httptest.Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, nil)
-	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	return ts
 }

@@ -5,7 +5,7 @@ exclude:
   paths:
     - ^main\.go$
     - ^main_desktop\.go$
-    - ^resources_wire\.go$
+    - ^internal/cluster/wire\.go$
     - ^assets_embed\.go$
 
 threshold:

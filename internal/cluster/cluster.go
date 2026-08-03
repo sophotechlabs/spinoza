@@ -1,53 +1,90 @@
-package main
+package cluster
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"sync"
 
-	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
-	"github.com/sophotechlabs/spinoza/internal/discovery"
-	"github.com/sophotechlabs/spinoza/internal/exec"
-	"github.com/sophotechlabs/spinoza/internal/jsonschema"
-	"github.com/sophotechlabs/spinoza/internal/kube"
-	"github.com/sophotechlabs/spinoza/internal/portforward"
-	"github.com/sophotechlabs/spinoza/internal/prom"
+	"github.com/sophotechlabs/spinoza/internal/api"
+
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
-func makeManager(ctx context.Context, debugImage, kubectlBinary, promSpec string) (*resources.Manager, error) {
-	bundle, err := kube.Load()
+type Options struct {
+	DebugImage    string
+	KubectlBinary string
+	PromSpec      string
+}
+
+type builder func(ctx context.Context, name string) (*resources.Manager, string, error)
+
+type lister func() ([]string, string, error)
+
+type Cluster struct {
+	root  context.Context
+	build builder
+	list  lister
+
+	mu      sync.Mutex
+	manager *resources.Manager
+	cancel  context.CancelFunc
+	current string
+}
+
+func newCluster(ctx context.Context, build builder, list lister) (*Cluster, error) {
+	cluster := &Cluster{root: ctx, build: build, list: list}
+	err := cluster.use(ctx, "")
 	if err != nil {
-		return nil, fmt.Errorf("kube: %w", err)
+		return nil, err
 	}
-	cats, descs, discErr := discovery.List(bundle.Discovery)
-	if discErr != nil {
-		log.Printf("discovery (partial): %v", discErr)
+	return cluster, nil
+}
+
+func (c *Cluster) Manager() *resources.Manager {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.manager
+}
+
+func (c *Cluster) Current() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.current
+}
+
+func (c *Cluster) Contexts() api.ContextList {
+	names, current, err := c.list()
+	list := api.ContextList{Contexts: names, Current: c.Current()}
+	if err != nil {
+		list.Error = err.Error()
+		return list
 	}
-	log.Printf("spinoza connected to context %q — %d resource types, %d categories", bundle.Context, len(descs), len(cats))
-	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3())
-	forwards := portforward.NewRegistry(
-		ctx,
-		portforward.NewRunner(bundle.Clientset, bundle.Config),
-		portforward.NewResolver(bundle.Clientset),
-		portforward.NewProber(bundle.Clientset),
-	)
-	shells := exec.NewService(
-		exec.NewStreamer(bundle.Clientset, bundle.Config),
-		exec.NewImages(bundle.Clientset),
-	)
-	debugger := debugcontainer.NewService(
-		debugcontainer.NewRunner(kubectlBinary),
-		bundle.Clientset,
-		debugImage,
-		bundle.Context,
-	)
-	promTarget, targetErr := prom.ParseTarget(promSpec)
-	if targetErr != nil {
-		return nil, targetErr
+	if list.Current == "" {
+		list.Current = current
 	}
-	promClient := prom.NewClient(bundle.Clientset, promTarget)
-	mgr := resources.NewManager(ctx, bundle.Dynamic, bundle.Clientset, schemas, forwards, shells, debugger, promClient, cats, descs)
-	mgr.UseDiscovery(bundle.Discovery, discErr)
-	return mgr, nil
+	return list
+}
+
+func (c *Cluster) Use(name string) error {
+	return c.use(c.root, name)
+}
+
+func (c *Cluster) use(root context.Context, name string) error {
+	ctx, cancel := context.WithCancel(root)
+	manager, current, err := c.build(ctx, name)
+	if err != nil {
+		cancel()
+		return err
+	}
+
+	c.mu.Lock()
+	previous := c.cancel
+	c.manager = manager
+	c.cancel = cancel
+	c.current = current
+	c.mu.Unlock()
+
+	if previous != nil {
+		previous()
+	}
+	return nil
 }

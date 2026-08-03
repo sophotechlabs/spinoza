@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -24,18 +25,31 @@ import (
 
 const maxDocBytes = 4 << 20
 
-type Server struct {
-	mgr    *resources.Manager
-	assets fs.FS
+type Cluster interface {
+	Manager() *resources.Manager
+	Contexts() api.ContextList
+	Use(name string) error
 }
 
-func New(mgr *resources.Manager, assets fs.FS) *Server {
-	return &Server{mgr: mgr, assets: assets}
+type Server struct {
+	cluster  Cluster
+	assets   fs.FS
+	mu       sync.Mutex
+	sessions map[*wsSession]struct{}
+}
+
+func New(cluster Cluster, assets fs.FS) *Server {
+	return &Server{cluster: cluster, assets: assets, sessions: map[*wsSession]struct{}{}}
+}
+
+func (s *Server) manager() *resources.Manager {
+	return s.cluster.Manager()
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthz)
+	mux.HandleFunc("/api/contexts", guard(s.handleContexts))
 	mux.HandleFunc("/api/resources", guard(s.handleResources))
 	mux.HandleFunc("/api/gitops/graph", guard(s.handleGraph))
 	mux.HandleFunc("/api/flux", guard(s.handleFlux))
@@ -119,23 +133,49 @@ func statusFor(err error) int {
 	}
 }
 
+func (s *Server) handleContexts(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, s.cluster.Contexts())
+	case http.MethodPost:
+		s.switchContext(w, r)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	err := s.cluster.Use(name)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	s.dropSessions()
+	writeJSON(w, s.cluster.Contexts())
+}
+
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, s.mgr.Resources())
+		writeJSON(w, s.manager().Resources())
 	case http.MethodPost:
-		writeJSON(w, s.mgr.RefreshResources())
+		writeJSON(w, s.manager().RefreshResources())
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.mgr.Graph(r.Context()))
+	writeJSON(w, s.manager().Graph(r.Context()))
 }
 
 func (s *Server) handleFlux(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.mgr.Flux(r.Context()))
+	writeJSON(w, s.manager().Flux(r.Context()))
 }
 
 func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +191,7 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	history, historyErr := s.mgr.MetricHistory(r.Context(), namespace, pod, span)
+	history, historyErr := s.manager().MetricHistory(r.Context(), namespace, pod, span)
 	if historyErr != nil {
 		writeAPIError(w, historyErr)
 		return
@@ -160,12 +200,12 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.mgr.Metrics(r.Context()))
+	writeJSON(w, s.manager().Metrics(r.Context()))
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	events, err := s.mgr.Events(r.Context(), query.Get("namespace"), query.Get("uid"))
+	events, err := s.manager().Events(r.Context(), query.Get("namespace"), query.Get("uid"))
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -183,7 +223,7 @@ func (s *Server) handleFluxAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "version, resource and name are required")
 		return
 	}
-	result, err := s.mgr.FluxAction(r.Context(), ref, flux.Action(r.URL.Query().Get("action")))
+	result, err := s.manager().FluxAction(r.Context(), ref, flux.Action(r.URL.Query().Get("action")))
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -201,7 +241,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	result, actionErr := s.mgr.Action(r.Context(), req)
+	result, actionErr := s.manager().Action(r.Context(), req)
 	if actionErr != nil {
 		writeAPIError(w, actionErr)
 		return
@@ -244,7 +284,7 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "version and kind are required")
 		return
 	}
-	doc, err := s.mgr.Schema(jsonschema.GVK{Group: query.Get("group"), Version: version, Kind: kind})
+	doc, err := s.manager().Schema(jsonschema.GVK{Group: query.Get("group"), Version: version, Kind: kind})
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -256,7 +296,7 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleForwards(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, s.mgr.Forwards())
+		writeJSON(w, s.manager().Forwards())
 	case http.MethodPost:
 		s.startForward(w, r)
 	case http.MethodDelete:
@@ -282,7 +322,7 @@ func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "a positive port is required")
 		return
 	}
-	forward, startErr := s.mgr.StartForward(r.Context(), target, int32(port))
+	forward, startErr := s.manager().StartForward(r.Context(), target, int32(port))
 	if startErr != nil {
 		writeAPIError(w, startErr)
 		return
@@ -297,7 +337,7 @@ func (s *Server) stopForward(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "id is required")
 		return
 	}
-	err := s.mgr.StopForward(id)
+	err := s.manager().StopForward(id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -324,7 +364,7 @@ func (s *Server) handleObject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	detail, err := s.mgr.Object(r.Context(), ref)
+	detail, err := s.manager().Object(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -338,7 +378,7 @@ func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.Obj
 		writeError(w, http.StatusBadRequest, readErr.Error())
 		return
 	}
-	detail, err := s.mgr.ApplyObject(r.Context(), ref, doc)
+	detail, err := s.manager().ApplyObject(r.Context(), ref, doc)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -347,7 +387,7 @@ func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.Obj
 }
 
 func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	err := s.mgr.DeleteObject(r.Context(), ref)
+	err := s.manager().DeleteObject(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return

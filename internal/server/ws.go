@@ -29,11 +29,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	sess := &wsSession{
 		conn: conn,
 		ctx:  ctx,
-		mgr:  s.mgr,
+		mgr:  s.manager(),
 		subs: map[string]*subEntry{},
 		logs: map[string]*logs.Stream{},
 	}
 	defer sess.closeAll()
+	s.track(sess)
+	defer s.forget(sess)
 
 	for {
 		var msg api.ClientMsg
@@ -291,4 +293,29 @@ func eventToMsg(subID string, ev resources.Event) api.ServerMsg {
 	}
 	row := ev.Row
 	return api.ServerMsg{Type: ev.Kind, SubID: subID, Row: &row}
+}
+
+func (s *Server) track(sess *wsSession) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessions[sess] = struct{}{}
+}
+
+func (s *Server) forget(sess *wsSession) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, sess)
+}
+
+func (s *Server) dropSessions() {
+	s.mu.Lock()
+	open := make([]*wsSession, 0, len(s.sessions))
+	for sess := range s.sessions {
+		open = append(open, sess)
+	}
+	s.sessions = map[*wsSession]struct{}{}
+	s.mu.Unlock()
+	for _, sess := range open {
+		_ = sess.conn.Close(websocket.StatusGoingAway, "context changed")
+	}
 }

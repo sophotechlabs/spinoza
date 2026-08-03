@@ -94,7 +94,7 @@ func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg
 
 func TestHealthzReturnsOK(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -118,7 +118,7 @@ func TestHealthzReturnsOK(t *testing.T) {
 
 func TestNoCrossOriginAccessIsGranted(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -137,7 +137,7 @@ func TestNoCrossOriginAccessIsGranted(t *testing.T) {
 
 func TestRootServesSPAIndex(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -161,7 +161,7 @@ func TestRootServesSPAIndex(t *testing.T) {
 
 func TestResourcesEndpoint(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -253,7 +253,7 @@ func TestGraphEndpoint(t *testing.T) {
 		},
 	}
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -321,7 +321,7 @@ func TestFluxEndpoint(t *testing.T) {
 		},
 	}
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, descs)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -363,7 +363,7 @@ func TestMetricsEndpoint(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	mgr := resources.NewManager(ctx, dyn, k8sfake.NewClientset(), nil, nil, nil, nil, nil, nil, nil)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -428,7 +428,7 @@ func TestEventToMsgModified(t *testing.T) {
 
 func TestWSSnapshotAndDeltas(t *testing.T) {
 	mgr, dyn := testManager(t, newDeployment("default", "web"))
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -508,7 +508,7 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 
 func TestWSUnsubscribeStopsDeltas(t *testing.T) {
 	mgr, dyn := testManager(t)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -554,7 +554,7 @@ func TestWSUnsubscribeStopsDeltas(t *testing.T) {
 
 func TestWSSubscribeUnknownResource(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -587,7 +587,7 @@ func TestWSSubscribeUnknownResource(t *testing.T) {
 
 func TestWSResubscribeReplacesSubscription(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -622,7 +622,7 @@ func TestWSResubscribeReplacesSubscription(t *testing.T) {
 
 func TestWSExitsOnServerContextCancel(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 
 	ts := httptest.NewUnstartedServer(srv.Handler())
 	baseCtx, cancelBase := context.WithCancel(context.Background())
@@ -661,7 +661,7 @@ func TestWSExitsOnServerContextCancel(t *testing.T) {
 
 func TestWSRejectsNonWebsocketRequest(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(mgr, testAssets())
+	srv := New(fixed(mgr), testAssets())
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -688,7 +688,7 @@ func readRaw(ctx context.Context, t *testing.T, c *websocket.Conn) map[string]js
 
 func subscribeRaw(t *testing.T, mgr *resources.Manager, sub api.ClientMsg) map[string]json.RawMessage {
 	t.Helper()
-	ts := httptest.NewServer(New(mgr, testAssets()).Handler())
+	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(ts.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)

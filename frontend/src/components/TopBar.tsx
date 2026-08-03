@@ -1,5 +1,6 @@
 import type { ConnectionStatus } from '../lib/feed';
 import type { View } from '../lib/types';
+import ContextPicker from './ContextPicker';
 
 interface TopBarProps {
   status: ConnectionStatus;
@@ -26,7 +27,7 @@ export default function TopBar({ status, view, onReconnect }: TopBarProps) {
 
   return (
     <header className="flex h-10 shrink-0 items-center gap-4 border-b border-neutral-800 bg-neutral-900 px-3 text-xs">
-      <span className="font-semibold text-neutral-100">current-context</span>
+      <ContextPicker onSwitched={handleReconnect} />
       <span className="text-neutral-500">/</span>
       <span className="text-neutral-300">all namespaces</span>
       {view !== undefined && (

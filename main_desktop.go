@@ -18,13 +18,17 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
+	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
 func main() {
 	ctx := context.Background()
-	mgr, err := makeManager(ctx, debugcontainer.DefaultImage, debugcontainer.DefaultBinary, "")
+	clusters, err := cluster.New(ctx, cluster.Options{
+		DebugImage:    debugcontainer.DefaultImage,
+		KubectlBinary: debugcontainer.DefaultBinary,
+	})
 	if err != nil {
 		log.Fatalf("manager: %v", err)
 	}
@@ -41,7 +45,7 @@ func main() {
 	}
 	addr := listener.Addr().String()
 
-	srv := server.New(mgr, assets)
+	srv := server.New(clusters, assets)
 	httpServer := &http.Server{
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
