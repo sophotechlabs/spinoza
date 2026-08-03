@@ -29,7 +29,12 @@ export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
 
   useEffect(() => {
     let mounted = true;
+    let inFlight = false;
     const load = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       try {
         const data = await fetchEvents(namespace, uid);
         if (mounted) {
@@ -40,6 +45,8 @@ export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
         if (mounted) {
           setError(errorMessage(err));
         }
+      } finally {
+        inFlight = false;
       }
     };
     void load();

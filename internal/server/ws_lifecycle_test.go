@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -143,7 +144,7 @@ func rawSession(t *testing.T, mgr *resources.Manager) (*wsSession, *websocket.Co
 		ctx:  ctx,
 		mgr:  mgr,
 		subs: map[string]*subEntry{},
-		logs: map[string]*logs.Stream{},
+		logs: map[string]*logEntry{},
 	}
 	return sess, client, ctx
 }
@@ -199,6 +200,7 @@ func TestResyncDrainsTheStaleEventsFirst(t *testing.T) {
 		t.Fatalf("create: %v", createErr)
 	}
 	waitForRows(t, sub, 2)
+	waitForQueuedEvent(t, sub)
 
 	sess.sendResync("main", 1, sub)
 
@@ -207,6 +209,18 @@ func TestResyncDrainsTheStaleEventsFirst(t *testing.T) {
 		t.Fatalf("a stale event survived the resync and would be applied after it: %+v", ev)
 	default:
 	}
+}
+
+func waitForQueuedEvent(t *testing.T, sub *resources.Subscription) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(sub.Events) > 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("no event was ever queued, so the drain would have had nothing to prove")
 }
 
 func TestResyncIsSkippedForAReplacedSubscription(t *testing.T) {
@@ -241,4 +255,182 @@ func waitForRows(t *testing.T, sub *resources.Subscription, want int) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("cache never reached %d rows", want)
+}
+
+func TestAdoptRefusesASupersededSubscription(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, _, _ := rawSession(t, mgr)
+
+	first := sess.claim("main")
+	second := sess.claim("main")
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+
+	if sess.adopt("main", first, sub) {
+		t.Fatal("a subscription built for an older request was installed")
+	}
+	if !sess.adopt("main", second, sub) {
+		t.Fatal("the newest request could not install its subscription")
+	}
+}
+
+func TestAdoptRefusesASubscriptionCancelledWhileBuilding(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, _, _ := rawSession(t, mgr)
+
+	gen := sess.claim("main")
+	sess.unsubscribe("main")
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+
+	if sess.adopt("main", gen, sub) {
+		t.Fatal("a subscription the client already dropped was installed")
+	}
+}
+
+func TestClaimClosesThePreviousSubscription(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, _, _ := rawSession(t, mgr)
+
+	first := sess.claim("main")
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	if !sess.adopt("main", first, sub) {
+		t.Fatal("adopt refused the current generation")
+	}
+
+	sess.claim("main")
+
+	select {
+	case _, open := <-sub.Events:
+		if open {
+			t.Fatal("the replaced subscription is still delivering events")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the replaced subscription was never closed")
+	}
+}
+
+func TestUnsubscribeIsSafeBeforeTheSubscriptionLands(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, _, _ := rawSession(t, mgr)
+
+	sess.claim("main")
+	sess.unsubscribe("main")
+	sess.unsubscribe("main")
+}
+
+func TestClaimLogsClosesThePreviousStream(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, _, ctx := rawSession(t, mgr)
+
+	gen := sess.claimLogs("logs")
+	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
+	if err != nil {
+		t.Fatalf("logs: %v", err)
+	}
+	if !sess.adoptLogs("logs", gen, stream) {
+		t.Fatal("adoptLogs refused the current generation")
+	}
+
+	sess.claimLogs("logs")
+
+	select {
+	case _, open := <-stream.Lines:
+		if open {
+			drainLines(t, stream.Lines)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the replaced log stream was never closed")
+	}
+}
+
+func drainLines(t *testing.T, lines <-chan string) {
+	t.Helper()
+	for {
+		select {
+		case _, open := <-lines:
+			if !open {
+				return
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("the replaced log stream was never closed")
+		}
+	}
+}
+
+func TestAdoptLogsRefusesASupersededStream(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, _, ctx := rawSession(t, mgr)
+
+	first := sess.claimLogs("logs")
+	sess.claimLogs("logs")
+
+	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
+	if err != nil {
+		t.Fatalf("logs: %v", err)
+	}
+	t.Cleanup(stream.Close)
+
+	if sess.adoptLogs("logs", first, stream) {
+		t.Fatal("a stream built for an older request was installed")
+	}
+}
+
+func TestAdoptLogsRefusesAStreamCancelledWhileOpening(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, _, ctx := rawSession(t, mgr)
+
+	gen := sess.claimLogs("logs")
+	sess.unsubscribeLogs("logs")
+
+	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
+	if err != nil {
+		t.Fatalf("logs: %v", err)
+	}
+	t.Cleanup(stream.Close)
+
+	if sess.adoptLogs("logs", gen, stream) {
+		t.Fatal("a stream the client already dropped was installed")
+	}
+}
+
+func TestFailCurrentStaysSilentOnceSuperseded(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, client, ctx := rawSession(t, mgr)
+
+	stale := sess.claim("main")
+	sess.claim("main")
+	sess.failCurrent("main", stale, errors.New("discovery failed"))
+	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "main"})
+
+	msg := readMsg(ctx, t, client)
+	if msg.Type != "marker" {
+		t.Fatalf("Type = %q, want the superseded error to have been dropped", msg.Type)
+	}
+}
+
+func TestFailCurrentLogsStaysSilentOnceSuperseded(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, client, ctx := rawSession(t, mgr)
+
+	stale := sess.claimLogs("logs")
+	sess.claimLogs("logs")
+	sess.failCurrentLogs("logs", stale, errors.New("pods/log is forbidden"))
+	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "logs"})
+
+	msg := readMsg(ctx, t, client)
+	if msg.Type != "marker" {
+		t.Fatalf("Type = %q, want the superseded error to have been dropped", msg.Type)
+	}
 }

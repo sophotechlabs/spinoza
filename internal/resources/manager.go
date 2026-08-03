@@ -41,6 +41,7 @@ const (
 	defaultSyncTimeout = 30 * time.Second
 	eventBuffer        = 256
 	attachAttempts     = 3
+	warmConcurrency    = 8
 )
 
 type Event struct {
@@ -101,6 +102,7 @@ type Deps struct {
 	Shells      *exec.Service
 	Debugger    *debugcontainer.Service
 	Prometheus  *prom.Client
+	Charts      *charts.Cache
 	Categories  []api.Category
 	Descriptors map[string]api.ResourceDescriptor
 }
@@ -111,7 +113,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		dyn:      deps.Dynamic,
 		cs:       deps.Clientset,
 		schemas:  deps.Schemas,
-		charts:   charts.New(ctx, &http.Client{Timeout: chartFetchTimeout}, charts.DefaultTTL),
+		charts:   chartCache(ctx, deps.Charts),
 		forwards: deps.Forwards,
 		shells:   deps.Shells,
 		debugger: deps.Debugger,
@@ -123,6 +125,13 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 
 		syncTimeout: defaultSyncTimeout,
 	}
+}
+
+func chartCache(ctx context.Context, provided *charts.Cache) *charts.Cache {
+	if provided != nil {
+		return provided
+	}
+	return charts.New(ctx, &http.Client{Timeout: chartFetchTimeout}, charts.DefaultTTL)
 }
 
 func (m *Manager) UseDiscovery(disco kubediscovery.CachedDiscoveryInterface, discErr error) {
@@ -369,6 +378,23 @@ func (m *Manager) List(desc api.ResourceDescriptor) ([]*unstructured.Unstructure
 		out = append(out, item)
 	}
 	return out, nil
+}
+
+func (m *Manager) Warm(descs []api.ResourceDescriptor) {
+	var group sync.WaitGroup
+	slots := make(chan struct{}, warmConcurrency)
+	for _, desc := range descs {
+		group.Add(1)
+		go func(target api.ResourceDescriptor) {
+			defer group.Done()
+			slots <- struct{}{}
+			defer func() {
+				<-slots
+			}()
+			_, _ = m.pinnedLister(target)
+		}(desc)
+	}
+	group.Wait()
 }
 
 func (m *Manager) pinnedLister(desc api.ResourceDescriptor) (cache.GenericLister, error) {

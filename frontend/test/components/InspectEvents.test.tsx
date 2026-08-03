@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import InspectEvents from '../../src/components/InspectEvents';
 import type { K8sEvent } from '../../src/lib/types';
 
@@ -104,5 +104,34 @@ describe('InspectEvents polling', () => {
     await vi.advanceTimersByTimeAsync(30000);
 
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a slow events poll', () => {
+  it('does not stack a second request on top of the first', async () => {
+    vi.useFakeTimers();
+    let resolveFirst: (value: unknown) => void = () => undefined;
+    const fetchMock = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<InspectEvents namespace="flux-system" uid="pod-uid" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst({ ok: true, json: () => Promise.resolve([]) });
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 });

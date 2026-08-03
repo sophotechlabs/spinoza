@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 interface EditorStubProps {
@@ -22,6 +22,9 @@ vi.mock('@monaco-editor/react', () => ({
 }));
 
 import InspectDrawer from '../../src/components/InspectDrawer';
+import { INSPECT_LOGS_SUB_ID } from '../../src/components/InspectLogs';
+import { TAIL_LINES } from '../../src/lib/useLogStream';
+import { useLogsStore } from '../../src/store/logs';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const target: ObjectRef = {
@@ -40,6 +43,7 @@ const detail: ObjectDetail = {
   uid: 'pod-uid',
   createdAt: '2026-07-27T09:00:00Z',
   labels: { app: 'web' },
+  containers: ['app', 'sidecar'],
   yaml: 'kind: Pod\n',
 };
 
@@ -65,8 +69,18 @@ function stubApi(objectPayload: unknown = detail, eventsPayload: unknown = []): 
 function renderDrawer(ref: ObjectRef | null = target) {
   const onClose = vi.fn();
   const onDeleted = vi.fn();
-  const view = render(<InspectDrawer target={ref} onClose={onClose} onDeleted={onDeleted} />);
-  return { onClose, onDeleted, view };
+  const subscribeLogs = vi.fn();
+  const unsubscribeLogs = vi.fn();
+  const view = render(
+    <InspectDrawer
+      target={ref}
+      subscribeLogs={subscribeLogs}
+      unsubscribeLogs={unsubscribeLogs}
+      onClose={onClose}
+      onDeleted={onDeleted}
+    />,
+  );
+  return { onClose, onDeleted, subscribeLogs, unsubscribeLogs, view };
 }
 
 describe('InspectDrawer', () => {
@@ -229,6 +243,45 @@ describe('InspectDrawer', () => {
     expect(screen.queryByRole('button', { name: 'Metrics' })).not.toBeInTheDocument();
   });
 
+  it('collapses to a strip and comes back', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    await screen.findByText('Metadata');
+
+    await user.click(screen.getByLabelText('Hide inspector'));
+
+    expect(screen.queryByText('Metadata')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Show inspector')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Show inspector'));
+
+    expect(await screen.findByText('Metadata')).toBeInTheDocument();
+  });
+
+  it('collapses from the empty state too', async () => {
+    const user = userEvent.setup();
+    renderDrawer(null);
+    expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Hide inspector'));
+
+    expect(screen.queryByText('Select a row to inspect it.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Show inspector')).toBeInTheDocument();
+  });
+
+  it('stays collapsed when a different object is selected', async () => {
+    const user = userEvent.setup();
+    const view = renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByLabelText('Hide inspector'));
+
+    view.view.rerender(
+      <InspectDrawer target={{ ...target, name: 'api' }} onClose={vi.fn()} onDeleted={vi.fn()} />,
+    );
+
+    expect(screen.getByLabelText('Show inspector')).toBeInTheDocument();
+  });
+
   it('refetches after an apply', async () => {
     const user = userEvent.setup();
     renderDrawer();
@@ -337,5 +390,150 @@ describe('InspectDrawer', () => {
 
     await screen.findByText('Metadata');
     expect(screen.queryByText('Ports')).not.toBeInTheDocument();
+  });
+});
+
+describe('InspectDrawer logs tab', () => {
+  beforeEach(() => {
+    stubApi();
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('streams the pod log once the tab is opened', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderDrawer();
+    await screen.findByText('Metadata');
+
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    expect(subscribeLogs).toHaveBeenCalledWith(INSPECT_LOGS_SUB_ID, {
+      namespace: 'flux-system',
+      name: 'web',
+      container: 'app',
+      tailLines: TAIL_LINES,
+      follow: true,
+    });
+  });
+
+  it('renders streamed lines and stops the stream when the tab is left', async () => {
+    const user = userEvent.setup();
+    const { unsubscribeLogs } = renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    act(() => {
+      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
+      useLogsStore.getState().appendLines(INSPECT_LOGS_SUB_ID, ['hello from the pod']);
+    });
+    expect(screen.getByText('hello from the pod')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+
+    expect(unsubscribeLogs).toHaveBeenCalledWith(INSPECT_LOGS_SUB_ID);
+  });
+
+  it('pauses following without dropping the stream', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs, unsubscribeLogs } = renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+    subscribeLogs.mockClear();
+    unsubscribeLogs.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Following' }));
+
+    expect(screen.getByRole('button', { name: 'Follow' })).toBeInTheDocument();
+    expect(subscribeLogs).not.toHaveBeenCalled();
+    expect(unsubscribeLogs).not.toHaveBeenCalled();
+  });
+
+  it('switches container and resubscribes', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    await user.selectOptions(screen.getByLabelText('Log container'), 'sidecar');
+
+    expect(subscribeLogs).toHaveBeenLastCalledWith(
+      INSPECT_LOGS_SUB_ID,
+      expect.objectContaining({ container: 'sidecar' }),
+    );
+  });
+
+  it('surfaces a stream failure', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    act(() => {
+      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
+      useLogsStore.getState().failStream(INSPECT_LOGS_SUB_ID, 'pods/log is forbidden');
+    });
+
+    expect(screen.getByText('pods/log is forbidden')).toBeInTheDocument();
+  });
+
+  it('marks an ended stream', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    act(() => {
+      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
+      useLogsStore.getState().endStream(INSPECT_LOGS_SUB_ID);
+    });
+
+    expect(screen.getByText('stream ended')).toBeInTheDocument();
+  });
+
+  it('prefers the live container list over the fetched detail', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onDeleted = vi.fn();
+    const subscribeLogs = vi.fn();
+    render(
+      <InspectDrawer
+        target={target}
+        containers={[
+          { name: 'app', state: 'running', ready: true, restarts: 0, init: false },
+          {
+            name: 'debugger',
+            state: 'running',
+            ready: true,
+            restarts: 0,
+            init: false,
+            ephemeral: true,
+          },
+        ]}
+        subscribeLogs={subscribeLogs}
+        unsubscribeLogs={vi.fn()}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+    );
+    await screen.findByText('Metadata');
+
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+    await user.selectOptions(screen.getByLabelText('Log container'), 'debugger');
+
+    expect(subscribeLogs).toHaveBeenLastCalledWith(
+      INSPECT_LOGS_SUB_ID,
+      expect.objectContaining({ container: 'debugger' }),
+    );
+  });
+
+  it('offers no logs tab for a non-pod', async () => {
+    stubApi({ ...detail, kind: 'Deployment', containers: undefined });
+    renderDrawer();
+    await screen.findByText('Metadata');
+
+    expect(screen.queryByRole('button', { name: 'Logs' })).not.toBeInTheDocument();
   });
 });

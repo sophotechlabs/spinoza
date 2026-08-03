@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LogRequest, ShellState } from '../lib/types';
 import { useLogEnded, useLogError, useLogLines, useLogOffset } from '../store/logs';
+import { useLogStream } from '../lib/useLogStream';
 import { fetchExecSupport } from '../lib/exec';
 import DebugPrompt from './DebugPrompt';
 import ForwardsPanel from './ForwardsPanel';
 import TerminalPanel from './TerminalPanel';
 
 export const LOGS_SUB_ID = 'logs';
-const TAIL_LINES = 500;
 
 export interface PodTarget {
   namespace: string;
@@ -58,7 +58,7 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<DockTab>('logs');
   const [follow, setFollow] = useState(true);
-  const [container, setContainer] = useState('');
+  const [container, setContainer] = useState(() => firstContainer(pod));
   const [shell, setShell] = useState<ShellState>('unknown');
   const [debugContainer, setDebugContainer] = useState<string | null>(null);
   const lines = useLogLines(LOGS_SUB_ID);
@@ -71,9 +71,11 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
   const podNamespace = pod === null ? '' : pod.namespace;
   const podName = pod === null ? '' : pod.name;
 
-  useEffect(() => {
+  const [lastPodKey, setLastPodKey] = useState(podKey);
+  if (podKey !== lastPodKey) {
+    setLastPodKey(podKey);
     setContainer(firstContainer(pod));
-  }, [podKey, pod]);
+  }
 
   useEffect(() => {
     setShell('unknown');
@@ -121,30 +123,15 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
     podControls = true;
   }
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    if (tab !== 'logs') {
-      return;
-    }
-    if (podName === '') {
-      return;
-    }
-    if (container === '') {
-      return;
-    }
-    subscribeLogs(LOGS_SUB_ID, {
-      namespace: podNamespace,
-      name: podName,
-      container,
-      tailLines: TAIL_LINES,
-      follow,
-    });
-    return () => {
-      unsubscribeLogs(LOGS_SUB_ID);
-    };
-  }, [open, tab, podNamespace, podName, container, follow, subscribeLogs, unsubscribeLogs]);
+  useLogStream({
+    subId: LOGS_SUB_ID,
+    namespace: podNamespace,
+    name: podName,
+    container,
+    active: open && tab === 'logs',
+    subscribeLogs,
+    unsubscribeLogs,
+  });
 
   useEffect(() => {
     if (!follow) {

@@ -12,6 +12,19 @@ export async function fetchMetrics(): Promise<Metrics> {
   return data;
 }
 
+export function isUsable(data: Metrics): boolean {
+  if (data.error === undefined) {
+    return true;
+  }
+  if (data.error === '') {
+    return true;
+  }
+  if (Object.keys(data.pods).length > 0) {
+    return true;
+  }
+  return Object.keys(data.nodes).length > 0;
+}
+
 export function useMetrics(enabled: boolean): Metrics | null {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   useEffect(() => {
@@ -20,14 +33,25 @@ export function useMetrics(enabled: boolean): Metrics | null {
       return;
     }
     let mounted = true;
+    let inFlight = false;
     const load = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       try {
         const data = await fetchMetrics();
-        if (mounted) {
-          setMetrics(data);
+        if (!mounted) {
+          return;
         }
+        if (!isUsable(data)) {
+          return;
+        }
+        setMetrics(data);
       } catch {
         return;
+      } finally {
+        inFlight = false;
       }
     };
     void load();

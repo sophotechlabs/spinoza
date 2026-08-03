@@ -68,10 +68,10 @@ function pod(overrides: Partial<PodTarget> = {}): PodTarget {
 function renderDock(target: PodTarget | null) {
   const subscribeLogs = vi.fn();
   const unsubscribeLogs = vi.fn();
-  render(
+  const view = render(
     <BottomDock pod={target} subscribeLogs={subscribeLogs} unsubscribeLogs={unsubscribeLogs} />,
   );
-  return { subscribeLogs, unsubscribeLogs };
+  return { subscribeLogs, unsubscribeLogs, rerender: view.rerender };
 }
 
 describe('BottomDock', () => {
@@ -191,6 +191,84 @@ describe('BottomDock', () => {
     expect(screen.queryByText('too late')).not.toBeInTheDocument();
   });
 
+  it('keeps the chosen container when the watched pod updates', async () => {
+    const user = userEvent.setup();
+    const two: PodTarget = {
+      namespace: 'flux-system',
+      name: 'web',
+      containers: ['app', 'sidecar'],
+    };
+    const view = renderDock(two);
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+    await user.selectOptions(screen.getByLabelText('Container'), 'sidecar');
+    expect(screen.getByLabelText('Container')).toHaveValue('sidecar');
+
+    view.rerender(
+      <BottomDock
+        pod={{ namespace: 'flux-system', name: 'web', containers: ['app', 'sidecar'] }}
+        subscribeLogs={view.subscribeLogs}
+        unsubscribeLogs={view.unsubscribeLogs}
+      />,
+    );
+
+    expect(screen.getByLabelText('Container')).toHaveValue('sidecar');
+  });
+
+  it('goes back to the first container when a different pod is selected', async () => {
+    const user = userEvent.setup();
+    const view = renderDock({
+      namespace: 'flux-system',
+      name: 'web',
+      containers: ['app', 'sidecar'],
+    });
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+    await user.selectOptions(screen.getByLabelText('Container'), 'sidecar');
+
+    view.rerender(
+      <BottomDock
+        pod={{ namespace: 'flux-system', name: 'other', containers: ['app', 'sidecar'] }}
+        subscribeLogs={view.subscribeLogs}
+        unsubscribeLogs={view.unsubscribeLogs}
+      />,
+    );
+
+    expect(screen.getByLabelText('Container')).toHaveValue('app');
+  });
+
+  it('stays shut when a pod is selected, so the drawer is the only log stream', () => {
+    const view = renderDock(null);
+    expect(screen.getByLabelText('Toggle panel')).toHaveTextContent('▸');
+
+    view.rerender(
+      <BottomDock
+        pod={pod()}
+        subscribeLogs={view.subscribeLogs}
+        unsubscribeLogs={view.unsubscribeLogs}
+      />,
+    );
+
+    expect(screen.getByLabelText('Toggle panel')).toHaveTextContent('▸');
+    expect(view.subscribeLogs).not.toHaveBeenCalled();
+  });
+
+  it('stays open across a pod change once it has been opened', () => {
+    const view = renderDock(pod());
+    act(() => {
+      screen.getByLabelText('Toggle panel').click();
+    });
+    expect(screen.getByLabelText('Toggle panel')).toHaveTextContent('▾');
+
+    view.rerender(
+      <BottomDock
+        pod={{ namespace: 'flux-system', name: 'later', containers: ['app'] }}
+        subscribeLogs={view.subscribeLogs}
+        unsubscribeLogs={view.unsubscribeLogs}
+      />,
+    );
+
+    expect(screen.getByLabelText('Toggle panel')).toHaveTextContent('▾');
+  });
+
   it('keeps the scrollback when follow is paused', async () => {
     const user = userEvent.setup();
     renderDock(pod());
@@ -208,18 +286,37 @@ describe('BottomDock', () => {
     expect(screen.getByText('second line')).toBeInTheDocument();
   });
 
-  it('toggles follow and resubscribes', async () => {
+  it('pauses without tearing the stream down', async () => {
     const user = userEvent.setup();
-    const { subscribeLogs } = renderDock(pod());
+    const { subscribeLogs, unsubscribeLogs } = renderDock(pod());
     await user.click(screen.getByRole('button', { name: 'Logs' }));
+    subscribeLogs.mockClear();
+    unsubscribeLogs.mockClear();
 
     await user.click(screen.getByRole('button', { name: 'Following' }));
 
     expect(screen.getByRole('button', { name: 'Paused' })).toBeInTheDocument();
-    expect(subscribeLogs).toHaveBeenLastCalledWith(
-      LOGS_SUB_ID,
-      expect.objectContaining({ follow: false }),
-    );
+    expect(subscribeLogs).not.toHaveBeenCalled();
+    expect(unsubscribeLogs).not.toHaveBeenCalled();
+  });
+
+  it('keeps scrollback when follow is toggled back on', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs, unsubscribeLogs } = renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+    act(() => {
+      useLogsStore.getState().startStream(LOGS_SUB_ID);
+      useLogsStore.getState().appendLines(LOGS_SUB_ID, ['first', 'second']);
+    });
+    subscribeLogs.mockClear();
+    unsubscribeLogs.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Following' }));
+    await user.click(screen.getByRole('button', { name: 'Paused' }));
+
+    expect(screen.getByText('first')).toBeInTheDocument();
+    expect(subscribeLogs).not.toHaveBeenCalled();
+    expect(unsubscribeLogs).not.toHaveBeenCalled();
   });
 
   it('offers a container picker for multi-container pods', async () => {

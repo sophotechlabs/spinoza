@@ -31,3 +31,5 @@ func (d *dynLister) List(desc api.ResourceDescriptor) ([]*unstructured.Unstructu
 	}
 	return out, nil
 }
+
+func (d *dynLister) Warm([]api.ResourceDescriptor) {}

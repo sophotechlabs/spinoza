@@ -19,6 +19,9 @@ import (
 
 const (
 	rangePath   = "api/v1/query_range"
+	defaultPort = "9090"
+	maxPort     = 65535
+	callTimeout = 15 * time.Second
 	buildPath   = "api/v1/status/buildinfo"
 	promNameKey = "app.kubernetes.io/name"
 	promNameVal = "prometheus"
@@ -51,9 +54,11 @@ type serviceProxy struct {
 }
 
 func (s *serviceProxy) Get(ctx context.Context, target Target, path string, params map[string]string) ([]byte, error) {
+	bounded, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
 	return s.cs.CoreV1().Services(target.Namespace).
 		ProxyGet(target.Scheme, target.Service, target.Port, path, params).
-		DoRaw(ctx)
+		DoRaw(bounded)
 }
 
 type Client struct {
@@ -68,7 +73,7 @@ func NewClient(cs kubernetes.Interface, override Target) *Client {
 	return &Client{cs: cs, proxy: &serviceProxy{cs: cs}, override: override}
 }
 
-func newClientWithProxy(cs kubernetes.Interface, proxy Proxy, override Target) *Client {
+func NewClientWithProxy(cs kubernetes.Interface, proxy Proxy, override Target) *Client {
 	return &Client{cs: cs, proxy: proxy, override: override}
 }
 
@@ -82,12 +87,30 @@ func ParseTarget(spec string) (Target, error) {
 	}
 	service, port, hasPort := strings.Cut(rest, ":")
 	if !hasPort {
-		port = "9090"
+		port = defaultPort
 	}
 	if namespace == "" || service == "" {
 		return Target{}, fmt.Errorf("expected namespace/service:port, got %q", spec)
 	}
+	portErr := validPort(port)
+	if portErr != nil {
+		return Target{}, fmt.Errorf("expected namespace/service:port, got %q: %w", spec, portErr)
+	}
 	return Target{Namespace: namespace, Service: service, Port: port}, nil
+}
+
+func validPort(port string) error {
+	number, err := strconv.Atoi(port)
+	if err != nil {
+		return fmt.Errorf("port %q is not a number", port)
+	}
+	if number < 1 {
+		return fmt.Errorf("port %d is out of range", number)
+	}
+	if number > maxPort {
+		return fmt.Errorf("port %d is out of range", number)
+	}
+	return nil
 }
 
 func (c *Client) Target(ctx context.Context) (Target, error) {
@@ -112,6 +135,18 @@ func (c *Client) Target(ctx context.Context) (Target, error) {
 	c.resolved = &target
 	c.mu.Unlock()
 	return target, nil
+}
+
+func (c *Client) forget(stale Target) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.resolved == nil {
+		return
+	}
+	if *c.resolved != stale {
+		return
+	}
+	c.resolved = nil
 }
 
 func (c *Client) discover(ctx context.Context) (Target, error) {
@@ -187,6 +222,7 @@ func (c *Client) Range(ctx context.Context, query string, start, end time.Time, 
 	}
 	raw, err := c.proxy.Get(ctx, target, rangePath, params)
 	if err != nil {
+		c.forget(target)
 		return nil, err
 	}
 	return decodeRange(raw)

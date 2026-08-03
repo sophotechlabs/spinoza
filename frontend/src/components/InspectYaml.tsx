@@ -11,6 +11,10 @@ interface InspectYamlProps {
   onDeleted: () => void;
 }
 
+function refKey(ref: ObjectRef): string {
+  return `${ref.group}/${ref.version}/${ref.resource}/${ref.namespace}/${ref.name}`;
+}
+
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) {
     return err.message;
@@ -24,17 +28,25 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   const kind = detail.kind;
   const path = schemaPath(gvkOf(detail));
   const [draft, setDraft] = useState(yaml);
+  const [base, setBase] = useState(yaml);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
+  const targetKey = refKey(target);
+  const [lastTarget, setLastTarget] = useState(targetKey);
+  if (targetKey !== lastTarget) {
+    setLastTarget(targetKey);
+    setBase(yaml);
     setDraft(yaml);
     setError(null);
     setNotice(null);
     setConfirming(false);
-  }, [yaml]);
+  } else if (yaml !== base && draft === base) {
+    setBase(yaml);
+    setDraft(yaml);
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -54,7 +66,8 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     };
   }, [path, apiVersion, kind]);
 
-  const dirty = draft !== yaml;
+  const dirty = draft !== base;
+  const stale = yaml !== base;
 
   async function handleApply() {
     setBusy(true);
@@ -62,6 +75,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     setNotice(null);
     try {
       await applyObject(target, draft);
+      setBase(draft);
       setNotice('Applied.');
       onApplied();
     } catch (err: unknown) {
@@ -87,6 +101,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   }
 
   function handleRevert() {
+    setBase(yaml);
     setDraft(yaml);
     setError(null);
     setNotice(null);
@@ -130,7 +145,12 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         >
           Revert
         </button>
-        {dirty && <span className="text-neutral-600">unsaved changes</span>}
+        {dirty && !stale && <span className="text-neutral-600">unsaved changes</span>}
+        {stale && (
+          <span className="text-amber-400">
+            changed on the server — Revert to load the new version
+          </span>
+        )}
         {!confirming && (
           <button
             type="button"

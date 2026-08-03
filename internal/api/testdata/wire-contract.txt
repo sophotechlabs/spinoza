@@ -98,6 +98,7 @@ MetricHistory.Pod pod
 MetricHistory.Source source,omitempty
 MetricPoint.At at
 MetricPoint.Value value
+Metrics.Error error,omitempty
 Metrics.Nodes nodes
 Metrics.Pods pods
 ObjectDetail.APIVersion apiVersion

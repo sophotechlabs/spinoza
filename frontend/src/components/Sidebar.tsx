@@ -5,6 +5,7 @@ import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 
 interface SidebarProps {
+  epoch?: number;
   view: View;
   activeResource: ResourceDescriptor | null;
   onSelect: (descriptor: ResourceDescriptor) => void;
@@ -76,6 +77,7 @@ const sectionClass =
   'flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase hover:text-neutral-200';
 
 export default function Sidebar({
+  epoch,
   view,
   activeResource,
   onSelect,
@@ -110,7 +112,7 @@ export default function Sidebar({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [epoch]);
 
   async function retry() {
     setRetrying(true);
@@ -177,8 +179,8 @@ export default function Sidebar({
             <div>
               <button
                 type="button"
-                onClick={onSelectOverview}
-                className={resourceClass(view === 'flux-overview')}
+                onClick={onSelectRoles}
+                className={resourceClass(view === 'flux-roles')}
               >
                 Overview
               </button>
@@ -198,10 +200,10 @@ export default function Sidebar({
               </button>
               <button
                 type="button"
-                onClick={onSelectRoles}
-                className={resourceClass(view === 'flux-roles')}
+                onClick={onSelectOverview}
+                className={resourceClass(view === 'flux-overview')}
               >
-                By role
+                Status tiles
               </button>
             </div>
           )}

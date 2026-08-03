@@ -31,7 +31,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		ctx:  ctx,
 		mgr:  s.manager(),
 		subs: map[string]*subEntry{},
-		logs: map[string]*logs.Stream{},
+		logs: map[string]*logEntry{},
 	}
 	defer sess.closeAll()
 	s.track(sess)
@@ -52,7 +52,7 @@ type wsSession struct {
 	mgr     *resources.Manager
 	mu      sync.Mutex
 	subs    map[string]*subEntry
-	logs    map[string]*logs.Stream
+	logs    map[string]*logEntry
 	nextGen uint64
 	writeMu sync.Mutex
 }
@@ -60,6 +60,11 @@ type wsSession struct {
 type subEntry struct {
 	sub *resources.Subscription
 	gen uint64
+}
+
+type logEntry struct {
+	stream *logs.Stream
+	gen    uint64
 }
 
 func (sess *wsSession) handle(msg api.ClientMsg) {
@@ -77,21 +82,63 @@ func (sess *wsSession) handle(msg api.ClientMsg) {
 }
 
 func (sess *wsSession) subscribe(msg api.ClientMsg) {
-	sess.unsubscribe(msg.SubID)
-	sub, err := sess.mgr.Subscribe(msg.Group, msg.Version, msg.Resource, msg.Namespace)
-	if err != nil {
-		sess.write(sess.ctx, api.ServerMsg{Type: "error", SubID: msg.SubID, Message: err.Error()})
-		return
-	}
+	gen := sess.claim(msg.SubID)
+	go sess.buildSub(msg, gen)
+}
+
+func (sess *wsSession) claim(subID string) uint64 {
 	sess.mu.Lock()
+	previous, existed := sess.subs[subID]
 	sess.nextGen++
 	gen := sess.nextGen
-	sess.subs[msg.SubID] = &subEntry{sub: sub, gen: gen}
+	sess.subs[subID] = &subEntry{gen: gen}
 	sess.mu.Unlock()
+	if existed {
+		closeSub(previous)
+	}
+	return gen
+}
 
+func closeSub(entry *subEntry) {
+	if entry.sub == nil {
+		return
+	}
+	entry.sub.Close()
+}
+
+func (sess *wsSession) buildSub(msg api.ClientMsg, gen uint64) {
+	sub, err := sess.mgr.Subscribe(msg.Group, msg.Version, msg.Resource, msg.Namespace)
+	if err != nil {
+		sess.failCurrent(msg.SubID, gen, err)
+		return
+	}
+	if !sess.adopt(msg.SubID, gen, sub) {
+		sub.Close()
+		return
+	}
 	sess.writeCurrent(msg.SubID, gen, snapshotOf(msg.SubID, sub, sub.Rows))
+	sess.relay(msg.SubID, gen, sub)
+}
 
-	go sess.relay(msg.SubID, gen, sub)
+func (sess *wsSession) failCurrent(subID string, gen uint64, err error) {
+	if !sess.isCurrent(subID, gen) {
+		return
+	}
+	sess.write(sess.ctx, api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()})
+}
+
+func (sess *wsSession) adopt(subID string, gen uint64, sub *resources.Subscription) bool {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	entry, ok := sess.subs[subID]
+	if !ok {
+		return false
+	}
+	if entry.gen != gen {
+		return false
+	}
+	entry.sub = sub
+	return true
 }
 
 func snapshotOf(subID string, sub *resources.Subscription, rows []api.Row) api.Snapshot {
@@ -173,12 +220,36 @@ func (sess *wsSession) unsubscribe(subID string) {
 	}
 	sess.mu.Unlock()
 	if ok {
-		entry.sub.Close()
+		closeSub(entry)
 	}
 }
 
 func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
-	sess.unsubscribeLogs(msg.SubID)
+	gen := sess.claimLogs(msg.SubID)
+	go sess.buildLogs(msg, gen)
+}
+
+func (sess *wsSession) claimLogs(subID string) uint64 {
+	sess.mu.Lock()
+	previous, existed := sess.logs[subID]
+	sess.nextGen++
+	gen := sess.nextGen
+	sess.logs[subID] = &logEntry{gen: gen}
+	sess.mu.Unlock()
+	if existed {
+		closeStream(previous)
+	}
+	return gen
+}
+
+func closeStream(entry *logEntry) {
+	if entry.stream == nil {
+		return
+	}
+	entry.stream.Close()
+}
+
+func (sess *wsSession) buildLogs(msg api.ClientMsg, gen uint64) {
 	stream, err := sess.mgr.Logs(sess.ctx, logs.Request{
 		Namespace: msg.Namespace,
 		Name:      msg.Name,
@@ -187,14 +258,45 @@ func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 		Follow:    msg.Follow,
 	})
 	if err != nil {
-		sess.write(sess.ctx, api.ServerMsg{Type: "error", SubID: msg.SubID, Message: err.Error()})
+		sess.failCurrentLogs(msg.SubID, gen, err)
 		return
 	}
-	sess.mu.Lock()
-	sess.logs[msg.SubID] = stream
-	sess.mu.Unlock()
+	if !sess.adoptLogs(msg.SubID, gen, stream) {
+		stream.Close()
+		return
+	}
+	sess.relayLogs(msg.SubID, stream)
+}
 
-	go sess.relayLogs(msg.SubID, stream)
+func (sess *wsSession) failCurrentLogs(subID string, gen uint64, err error) {
+	if !sess.isCurrentLogs(subID, gen) {
+		return
+	}
+	sess.write(sess.ctx, api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()})
+}
+
+func (sess *wsSession) isCurrentLogs(subID string, gen uint64) bool {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	entry, ok := sess.logs[subID]
+	if !ok {
+		return false
+	}
+	return entry.gen == gen
+}
+
+func (sess *wsSession) adoptLogs(subID string, gen uint64, stream *logs.Stream) bool {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	entry, ok := sess.logs[subID]
+	if !ok {
+		return false
+	}
+	if entry.gen != gen {
+		return false
+	}
+	entry.stream = stream
+	return true
 }
 
 func (sess *wsSession) relayLogs(subID string, stream *logs.Stream) {
@@ -230,34 +332,34 @@ func batchLines(lines <-chan string, first string) []string {
 
 func (sess *wsSession) unsubscribeLogs(subID string) {
 	sess.mu.Lock()
-	stream, ok := sess.logs[subID]
+	entry, ok := sess.logs[subID]
 	if ok {
 		delete(sess.logs, subID)
 	}
 	sess.mu.Unlock()
 	if ok {
-		stream.Close()
+		closeStream(entry)
 	}
 }
 
 func (sess *wsSession) closeAll() {
 	sess.mu.Lock()
-	subs := make([]*resources.Subscription, 0, len(sess.subs))
+	subs := make([]*subEntry, 0, len(sess.subs))
 	for _, entry := range sess.subs {
-		subs = append(subs, entry.sub)
+		subs = append(subs, entry)
 	}
-	streams := make([]*logs.Stream, 0, len(sess.logs))
-	for _, stream := range sess.logs {
-		streams = append(streams, stream)
+	streams := make([]*logEntry, 0, len(sess.logs))
+	for _, entry := range sess.logs {
+		streams = append(streams, entry)
 	}
 	sess.subs = map[string]*subEntry{}
-	sess.logs = map[string]*logs.Stream{}
+	sess.logs = map[string]*logEntry{}
 	sess.mu.Unlock()
-	for _, sub := range subs {
-		sub.Close()
+	for _, entry := range subs {
+		closeSub(entry)
 	}
-	for _, stream := range streams {
-		stream.Close()
+	for _, entry := range streams {
+		closeStream(entry)
 	}
 }
 

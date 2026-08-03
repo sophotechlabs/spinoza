@@ -627,3 +627,17 @@ func TestWorkloadInventoryNodesDoNotCrossTheWire(t *testing.T) {
 		}
 	}
 }
+
+func TestFluxGeneratedHelmChartsAreNotGraphed(t *testing.T) {
+	chart := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "HelmChart",
+		"metadata":   map[string]any{"name": "beyla-beyla", "namespace": "flux-system"},
+	}}
+	graph := graphWith(t, chart)
+
+	_, found := nodeByID(graph, "source.toolkit.fluxcd.io/HelmChart/flux-system/beyla-beyla")
+	if found {
+		t.Fatal("flux generates one HelmChart per HelmRelease; graphing them buries the topology")
+	}
+}

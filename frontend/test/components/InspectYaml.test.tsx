@@ -198,10 +198,8 @@ describe('InspectYaml', () => {
     expect(await screen.findByText('delete failed')).toBeInTheDocument();
   });
 
-  it('reseeds the draft when the object is refetched', async () => {
-    const user = userEvent.setup();
+  it('reseeds an untouched draft when the object is refetched', () => {
     const { view } = renderYaml();
-    await user.type(screen.getByLabelText('yaml'), 'x');
 
     const next = 'kind: Deployment\nreplicas: 3\n';
     view.rerender(
@@ -215,5 +213,91 @@ describe('InspectYaml', () => {
 
     expect(screen.getByLabelText('yaml')).toHaveValue(next);
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  });
+
+  it('keeps an edited draft when the object changes underneath', async () => {
+    const user = userEvent.setup();
+    const { view } = renderYaml();
+    await user.type(screen.getByLabelText('yaml'), 'x');
+    const mine = screen.getByLabelText<HTMLTextAreaElement>('yaml').value;
+
+    view.rerender(
+      <InspectYaml
+        target={target}
+        detail={detailFor('kind: Deployment\nreplicas: 3\n')}
+        onApplied={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('yaml')).toHaveValue(mine);
+    expect(
+      screen.getByText('changed on the server — Revert to load the new version'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
+  });
+
+  it('loads the server version when a stale draft is reverted', async () => {
+    const user = userEvent.setup();
+    const { view } = renderYaml();
+    await user.type(screen.getByLabelText('yaml'), 'x');
+
+    const next = 'kind: Deployment\nreplicas: 3\n';
+    view.rerender(
+      <InspectYaml
+        target={target}
+        detail={detailFor(next)}
+        onApplied={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Revert' }));
+
+    expect(screen.getByLabelText('yaml')).toHaveValue(next);
+    expect(
+      screen.queryByText('changed on the server — Revert to load the new version'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('drops an edited draft when a different object is selected', async () => {
+    const user = userEvent.setup();
+    const { view } = renderYaml();
+    await user.type(screen.getByLabelText('yaml'), 'x');
+
+    const next = 'kind: Deployment\nreplicas: 3\n';
+    view.rerender(
+      <InspectYaml
+        target={{ ...target, name: 'other' }}
+        detail={detailFor(next)}
+        onApplied={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('yaml')).toHaveValue(next);
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  });
+
+  it('settles after a successful apply is echoed back', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okResponse({})));
+    const { view } = renderYaml();
+    await user.type(screen.getByLabelText('yaml'), 'x');
+    const applied = screen.getByLabelText<HTMLTextAreaElement>('yaml').value;
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    view.rerender(
+      <InspectYaml
+        target={target}
+        detail={detailFor(applied)}
+        onApplied={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+    expect(
+      screen.queryByText('changed on the server — Revert to load the new version'),
+    ).not.toBeInTheDocument();
   });
 });

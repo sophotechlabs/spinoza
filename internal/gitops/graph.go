@@ -23,7 +23,6 @@ var fluxSourceResources = map[string]bool{
 	"helmrepositories": true,
 	"ocirepositories":  true,
 	"buckets":          true,
-	"helmcharts":       true,
 }
 
 func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor) api.Graph {
@@ -35,12 +34,16 @@ func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDesc
 		edges:    map[string]api.GraphEdge{},
 		failures: listerr.New(),
 	}
+	needed := []api.ResourceDescriptor{}
 	for _, d := range descs {
-		category := graphCategory(d)
-		if category == "" {
+		if graphCategory(d) == "" {
 			continue
 		}
-		build.collect(d, category)
+		needed = append(needed, d)
+	}
+	lister.Warm(needed)
+	for _, d := range needed {
+		build.collect(d, graphCategory(d))
 	}
 	return build.graph()
 }
@@ -71,6 +74,7 @@ func graphCategory(desc api.ResourceDescriptor) string {
 
 type Lister interface {
 	List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
+	Warm(descs []api.ResourceDescriptor)
 }
 
 type builder struct {

@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -18,6 +19,8 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/sophotechlabs/spinoza/internal/charts"
 
 	kubediscovery "k8s.io/client-go/discovery"
 
@@ -1208,5 +1211,69 @@ func TestListReportsAResourceThatNeverSyncs(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("a forbidden resource was reported as an empty list")
+	}
+}
+
+func TestWarmLeavesTheListersUsable(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	t.Cleanup(cancel)
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	mgr.Warm([]api.ResourceDescriptor{desc})
+
+	items, err := mgr.List(desc)
+	if err != nil {
+		t.Fatalf("list after warm: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+}
+
+func TestWarmSurvivesAResourceThatNeverSyncs(t *testing.T) {
+	mgr, _ := stuckManager(t, "deployments")
+	descs := []api.ResourceDescriptor{
+		testDescs()[discovery.Key("apps", "v1", "deployments")],
+		testDescs()[discovery.Key("", "v1", "nodes")],
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		mgr.Warm(descs)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("one unsyncable resource stalled the whole warm")
+	}
+
+	_, err := mgr.List(testDescs()[discovery.Key("", "v1", "nodes")])
+	if err != nil {
+		t.Fatalf("a healthy resource was unusable after a failed sibling: %v", err)
+	}
+}
+
+func TestManagerUsesAnInjectedChartCache(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	provided := charts.New(ctx, &http.Client{}, time.Minute)
+
+	mgr := NewManager(ctx, Deps{Charts: provided})
+
+	if mgr.charts != provided {
+		t.Fatal("the manager built its own chart cache instead of using the one it was given")
+	}
+}
+
+func TestManagerBuildsAChartCacheWhenGivenNone(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	mgr := NewManager(ctx, Deps{})
+
+	if mgr.charts == nil {
+		t.Fatal("the manager has no chart cache and would panic on the flux dashboard")
 	}
 }

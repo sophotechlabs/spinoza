@@ -84,6 +84,14 @@ vi.mock('../src/components/FluxList', () => ({ default: fluxStub('flux-dashboard
 vi.mock('../src/components/FluxOverview', () => ({ default: fluxStub('flux-overview') }));
 vi.mock('../src/components/FluxRoles', () => ({ default: fluxStub('flux-roles') }));
 
+vi.mock('../src/components/ContextPicker', () => ({
+  default: ({ onSwitched }: { onSwitched: () => void }) => (
+    <button type="button" data-testid="context-changed" onClick={onSwitched}>
+      switch context
+    </button>
+  ),
+}));
+
 vi.mock('../src/components/InspectDrawer', () => ({
   default: ({
     target,
@@ -268,6 +276,36 @@ describe('App', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith('main#2', deploymentDescriptor, '');
   });
 
+  it('drops the selection when the cluster changes', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+
+    await user.click(screen.getByTestId('context-changed'));
+
+    expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
+    expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+  });
+
+  it('unsubscribes the old cluster resource when the cluster changes', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    feedMocks.unsubscribe.mockClear();
+
+    await user.click(screen.getByTestId('context-changed'));
+
+    expect(feedMocks.unsubscribe).toHaveBeenCalledWith('main#1');
+    expect(feedMocks.reconnect).toHaveBeenCalled();
+  });
+
   it('reconnects when the reconnect button is clicked', async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -383,7 +421,7 @@ describe('App', () => {
   it('targets the inspector from the flux overview', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    await user.click(screen.getByRole('button', { name: 'Status tiles' }));
 
     await user.click(screen.getByRole('button', { name: 'select-flux-overview' }));
 
@@ -395,7 +433,7 @@ describe('App', () => {
   it('targets the inspector from the by-role view', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'By role' }));
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
 
     await user.click(screen.getByRole('button', { name: 'select-flux-roles' }));
 

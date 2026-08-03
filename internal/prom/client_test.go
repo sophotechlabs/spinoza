@@ -31,6 +31,12 @@ func TestParseTarget(t *testing.T) {
 		{spec: "noslash", bad: true},
 		{spec: "/prom:9090", bad: true},
 		{spec: "monitoring/:9090", bad: true},
+		{spec: "monitoring/prom:", bad: true},
+		{spec: "monitoring/prom:9090:extra", bad: true},
+		{spec: "monitoring/prom:web", bad: true},
+		{spec: "monitoring/prom:0", bad: true},
+		{spec: "monitoring/prom:65536", bad: true},
+		{spec: "monitoring/prom:65535", want: Target{Namespace: "monitoring", Service: "prom", Port: "65535"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.spec, func(t *testing.T) {
@@ -254,7 +260,7 @@ func operatedClient(t *testing.T, proxy Proxy) *Client {
 		service("monitoring", "prometheus-operated", map[string]string{"operated-prometheus": "true"},
 			corev1.ServicePort{Name: "http-web", Port: 9090}),
 	)
-	return newClientWithProxy(cs, proxy, Target{})
+	return NewClientWithProxy(cs, proxy, Target{})
 }
 
 func TestTargetProbesHTTPSFirst(t *testing.T) {
@@ -275,7 +281,7 @@ func TestTargetProbesHTTPSFirst(t *testing.T) {
 
 func TestTargetUsesTheOverrideWithoutListingServices(t *testing.T) {
 	proxy := &stubProxy{}
-	client := newClientWithProxy(
+	client := NewClientWithProxy(
 		k8sfake.NewClientset(),
 		proxy,
 		Target{Namespace: "obs", Service: "prom", Port: "9091"},
@@ -334,7 +340,7 @@ func TestTargetIsResolvedOnce(t *testing.T) {
 }
 
 func TestTargetReportsADiscoveryFailure(t *testing.T) {
-	client := newClientWithProxy(k8sfake.NewClientset(), &stubProxy{}, Target{})
+	client := NewClientWithProxy(k8sfake.NewClientset(), &stubProxy{}, Target{})
 
 	_, err := client.Target(context.Background())
 	if err == nil {
@@ -372,7 +378,7 @@ func TestRangeSurfacesAProxyFailure(t *testing.T) {
 }
 
 func TestRangeReportsAnUnresolvableTarget(t *testing.T) {
-	client := newClientWithProxy(k8sfake.NewClientset(), &stubProxy{}, Target{})
+	client := NewClientWithProxy(k8sfake.NewClientset(), &stubProxy{}, Target{})
 
 	_, err := client.Range(context.Background(), "up", time.Unix(0, 0), time.Unix(60, 0), time.Second)
 	if err == nil {
@@ -420,7 +426,7 @@ func TestPodHistoryQueriesCPUAndMemory(t *testing.T) {
 }
 
 func TestPodHistoryReportsAnUnresolvableTarget(t *testing.T) {
-	client := newClientWithProxy(k8sfake.NewClientset(), &stubProxy{}, Target{})
+	client := NewClientWithProxy(k8sfake.NewClientset(), &stubProxy{}, Target{})
 
 	_, err := client.PodHistory(context.Background(), "ns", "pod", time.Hour, time.Unix(0, 0))
 	if err == nil {
@@ -435,5 +441,68 @@ func TestPodHistorySurfacesAMemoryQueryFailure(t *testing.T) {
 	_, err := client.PodHistory(context.Background(), "ns", "pod", time.Hour, time.Unix(0, 0))
 	if err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+func TestRangeForgetsATargetThatStopsAnswering(t *testing.T) {
+	proxy := &stubProxy{}
+	client := operatedClient(t, proxy)
+	_, err := client.Target(context.Background())
+	if err != nil {
+		t.Fatalf("target: %v", err)
+	}
+
+	proxy.rangeErr = errors.New("connection refused")
+	_, rangeErr := client.Range(context.Background(), "up", time.Unix(0, 0), time.Unix(60, 0), time.Minute)
+	if rangeErr == nil {
+		t.Fatal("expected the range query to fail")
+	}
+
+	client.mu.Lock()
+	cached := client.resolved
+	client.mu.Unlock()
+	if cached != nil {
+		t.Fatalf("target %+v stayed cached after the endpoint stopped answering", cached)
+	}
+}
+
+func TestRangeKeepsATargetThatAnswers(t *testing.T) {
+	proxy := &stubProxy{body: `{"status":"success","data":{"result":[]}}`}
+	client := operatedClient(t, proxy)
+	_, err := client.Target(context.Background())
+	if err != nil {
+		t.Fatalf("target: %v", err)
+	}
+
+	_, rangeErr := client.Range(context.Background(), "up", time.Unix(0, 0), time.Unix(60, 0), time.Minute)
+	if rangeErr != nil {
+		t.Fatalf("range: %v", rangeErr)
+	}
+
+	client.mu.Lock()
+	cached := client.resolved
+	client.mu.Unlock()
+	if cached == nil {
+		t.Fatal("a working target was dropped from the cache")
+	}
+}
+
+func TestForgetKeepsATargetThatWasAlreadyReplaced(t *testing.T) {
+	client := &Client{resolved: &Target{Namespace: "monitoring", Service: "new", Port: "9090"}}
+
+	client.forget(Target{Namespace: "monitoring", Service: "old", Port: "9090"})
+
+	if client.resolved == nil {
+		t.Fatal("forget dropped a target it was not asked about")
+	}
+}
+
+func TestForgetIsSafeWithNothingCached(t *testing.T) {
+	client := &Client{}
+
+	client.forget(Target{Namespace: "monitoring", Service: "prom", Port: "9090"})
+
+	if client.resolved != nil {
+		t.Fatal("forget invented a target")
 	}
 }

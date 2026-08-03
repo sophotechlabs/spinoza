@@ -467,42 +467,6 @@ func TestDebugIsUnavailableWithoutAService(t *testing.T) {
 	}
 }
 
-func TestMetricHistoryRejectsAMissingPod(t *testing.T) {
-	ts := debugServer(t, nil)
-	res, err := http.Get(ts.URL + "/api/metrics/history?namespace=monitoring")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d", res.StatusCode)
-	}
-}
-
-func TestMetricHistoryRejectsABadRange(t *testing.T) {
-	ts := debugServer(t, nil)
-	res, err := http.Get(ts.URL + "/api/metrics/history?namespace=monitoring&pod=loki-0&range=banana")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d", res.StatusCode)
-	}
-}
-
-func TestMetricHistoryIsUnavailableWithoutPrometheus(t *testing.T) {
-	ts := debugServer(t, nil)
-	res, err := http.Get(ts.URL + "/api/metrics/history?namespace=monitoring&pod=loki-0")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503; a missing Prometheus is not the caller's mistake", res.StatusCode)
-	}
-}
-
 type stallShell struct {
 	entered  chan struct{}
 	readOne  chan struct{}

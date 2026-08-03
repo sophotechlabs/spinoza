@@ -3,6 +3,14 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
 
+vi.mock('../../src/components/ContextPicker', () => ({
+  default: ({ onSwitched }: { onSwitched: () => void }) => (
+    <button type="button" onClick={onSwitched}>
+      switch context
+    </button>
+  ),
+}));
+
 function dotFor(container: HTMLElement): Element {
   const dot = container.querySelector('span.rounded-full');
   if (!dot) {
@@ -48,5 +56,31 @@ describe('TopBar', () => {
     render(<TopBar status="disconnected" />);
     await user.click(screen.getByRole('button', { name: 'Reconnect' }));
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+  });
+});
+
+describe('TopBar context switch', () => {
+  it('reports the switch to the owner', async () => {
+    const user = userEvent.setup();
+    const onContextChanged = vi.fn();
+    const onReconnect = vi.fn();
+    render(
+      <TopBar status="connected" onReconnect={onReconnect} onContextChanged={onContextChanged} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'switch context' }));
+
+    expect(onContextChanged).toHaveBeenCalledOnce();
+    expect(onReconnect).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a reconnect when no owner is listening', async () => {
+    const user = userEvent.setup();
+    const onReconnect = vi.fn();
+    render(<TopBar status="connected" onReconnect={onReconnect} />);
+
+    await user.click(screen.getByRole('button', { name: 'switch context' }));
+
+    expect(onReconnect).toHaveBeenCalledOnce();
   });
 });

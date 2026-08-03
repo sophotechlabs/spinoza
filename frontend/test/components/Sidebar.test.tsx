@@ -64,7 +64,7 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: 'Graph' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Resource list' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Status tiles' })).toBeInTheDocument();
   });
 
   it('starts with resource categories collapsed and expands one on click', async () => {
@@ -136,8 +136,8 @@ describe('Sidebar', () => {
     renderSidebar({ onSelectGraph, onSelectList, onSelectOverview, onSelectRoles });
     await userEvent.click(screen.getByRole('button', { name: 'Graph' }));
     await userEvent.click(screen.getByRole('button', { name: 'Resource list' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Status tiles' }));
     await userEvent.click(screen.getByRole('button', { name: 'Overview' }));
-    await userEvent.click(screen.getByRole('button', { name: 'By role' }));
     expect(onSelectGraph).toHaveBeenCalledTimes(1);
     expect(onSelectList).toHaveBeenCalledTimes(1);
     expect(onSelectOverview).toHaveBeenCalledTimes(1);
@@ -147,7 +147,9 @@ describe('Sidebar', () => {
   it('highlights the GitOps entry that matches the active view', () => {
     stubFetch(categories);
     renderSidebar({ view: 'flux-overview' });
-    expect(screen.getByRole('button', { name: 'Overview' }).className).toContain('bg-neutral-800');
+    expect(screen.getByRole('button', { name: 'Status tiles' }).className).toContain(
+      'bg-neutral-800',
+    );
     expect(screen.getByRole('button', { name: 'Graph' }).className).not.toContain('bg-neutral-800');
   });
 

@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/listerr"
 )
 
 var (
@@ -19,15 +20,18 @@ var (
 )
 
 func Build(ctx context.Context, dyn dynamic.Interface) api.Metrics {
+	failures := listerr.New()
 	return api.Metrics{
-		Pods:  podUsage(ctx, dyn),
-		Nodes: nodeUsage(ctx, dyn),
+		Pods:  podUsage(ctx, dyn, failures),
+		Nodes: nodeUsage(ctx, dyn, failures),
+		Error: failures.Message(),
 	}
 }
 
-func podUsage(ctx context.Context, dyn dynamic.Interface) map[string]api.ResourceUsage {
+func podUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Collector) map[string]api.ResourceUsage {
 	out := map[string]api.ResourceUsage{}
 	list, err := dyn.Resource(podMetricsGVR).List(ctx, metav1.ListOptions{})
+	failures.Record("pods.metrics.k8s.io", err)
 	if err != nil {
 		return out
 	}
@@ -55,13 +59,14 @@ func containerTotals(u *unstructured.Unstructured) (cpuMilli, memMi int64) {
 	return cpuMilli, memMi
 }
 
-func nodeUsage(ctx context.Context, dyn dynamic.Interface) map[string]api.ResourceUsage {
+func nodeUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Collector) map[string]api.ResourceUsage {
 	out := map[string]api.ResourceUsage{}
 	list, err := dyn.Resource(nodeMetricsGVR).List(ctx, metav1.ListOptions{})
+	failures.Record("nodes.metrics.k8s.io", err)
 	if err != nil {
 		return out
 	}
-	allocatable := nodeAllocatable(ctx, dyn)
+	allocatable := nodeAllocatable(ctx, dyn, failures)
 	for i := range list.Items {
 		obj := &list.Items[i]
 		usage, ok := nestedMap(obj, "usage")
@@ -81,9 +86,10 @@ func nodeUsage(ctx context.Context, dyn dynamic.Interface) map[string]api.Resour
 	return out
 }
 
-func nodeAllocatable(ctx context.Context, dyn dynamic.Interface) map[string]api.ResourceUsage {
+func nodeAllocatable(ctx context.Context, dyn dynamic.Interface, failures *listerr.Collector) map[string]api.ResourceUsage {
 	out := map[string]api.ResourceUsage{}
 	list, err := dyn.Resource(nodeGVR).List(ctx, metav1.ListOptions{})
+	failures.Record("nodes", err)
 	if err != nil {
 		return out
 	}

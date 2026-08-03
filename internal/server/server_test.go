@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -748,5 +749,60 @@ func TestWSSnapshotOfAClusterScopedResourceCarriesNamespaced(t *testing.T) {
 	}
 	if string(value) != "false" {
 		t.Fatalf("namespaced = %s, want false", value)
+	}
+}
+
+func TestWSKeepsReadingWhileASubscriptionIsStillSyncing(t *testing.T) {
+	scheme := runtime.NewScheme()
+	gvrToListKind := map[schema.GroupVersionResource]string{depGVR: "DeploymentList"}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind, newDeployment("default", "web"))
+	gate := make(chan struct{})
+	dyn.PrependReactor("list", "deployments", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+		<-gate
+		return false, nil, nil
+	})
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("apps", "v1", "deployments"): deploymentDesc(),
+	}
+	cats := []api.Category{{Name: "Workloads", Resources: []api.ResourceDescriptor{deploymentDesc()}}}
+	mgr := resources.NewManager(t.Context(), resources.Deps{
+		Dynamic:     dyn,
+		Clientset:   k8sfake.NewClientset(),
+		Categories:  cats,
+		Descriptors: descs,
+	})
+
+	srv := New(fixed(mgr), testAssets())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+	defer close(gate)
+
+	slow := api.ClientMsg{Type: "subscribe", SubID: "slow", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default"}
+	writeErr := wsjson.Write(ctx, conn, slow)
+	if writeErr != nil {
+		t.Fatalf("write subscribe: %v", writeErr)
+	}
+
+	next := api.ClientMsg{Type: "subscribe", SubID: "unknown", Group: "apps", Version: "v1", Resource: "statefulsets", Namespace: "default"}
+	nextErr := wsjson.Write(ctx, conn, next)
+	if nextErr != nil {
+		t.Fatalf("write second subscribe: %v", nextErr)
+	}
+
+	msg := readMsg(ctx, t, conn)
+	if msg.SubID != "unknown" {
+		t.Fatalf("SubID = %q, want the second frame answered while %q was still syncing", msg.SubID, "slow")
+	}
+	if msg.Type != "error" {
+		t.Fatalf("Type = %q, want error", msg.Type)
 	}
 }

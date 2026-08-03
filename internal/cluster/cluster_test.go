@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
@@ -159,5 +160,102 @@ func TestContextsSurfacesAKubeconfigFailure(t *testing.T) {
 	}
 	if list.Current != "default-context" {
 		t.Fatalf("current = %q, want the connected context even when listing fails", list.Current)
+	}
+}
+
+type gatedBuilder struct {
+	gates   map[string]chan struct{}
+	entered chan string
+}
+
+func newGatedBuilder(slow string) *gatedBuilder {
+	return &gatedBuilder{
+		gates:   map[string]chan struct{}{slow: make(chan struct{})},
+		entered: make(chan string, 4),
+	}
+}
+
+func (g *gatedBuilder) build(ctx context.Context, name string) (*resources.Manager, string, error) {
+	g.entered <- name
+	gate, ok := g.gates[name]
+	if ok {
+		<-gate
+	}
+	return resources.NewManager(ctx, resources.Deps{}), name, nil
+}
+
+func (g *gatedBuilder) waitFor(t *testing.T, name string) {
+	t.Helper()
+	for {
+		select {
+		case entered := <-g.entered:
+			if entered == name {
+				return
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("the builder was never asked for %q", name)
+		}
+	}
+}
+
+func TestTheLastRequestedContextWinsEvenIfItBuildsFirst(t *testing.T) {
+	gated := newGatedBuilder("slow")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster, err := newCluster(ctx, gated.build, stubList)
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cluster.Use("slow")
+	}()
+	gated.waitFor(t, "slow")
+
+	fastErr := cluster.Use("fast")
+	if fastErr != nil {
+		t.Fatalf("use fast: %v", fastErr)
+	}
+
+	close(gated.gates["slow"])
+	slowErr := <-done
+	if slowErr != nil {
+		t.Fatalf("use slow: %v", slowErr)
+	}
+
+	if cluster.Current() != "fast" {
+		t.Fatalf("current = %q, want the context requested last", cluster.Current())
+	}
+}
+
+func TestASupersededSwitchDoesNotStrandItsManager(t *testing.T) {
+	gated := newGatedBuilder("slow")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster, err := newCluster(ctx, gated.build, stubList)
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cluster.Use("slow")
+	}()
+	gated.waitFor(t, "slow")
+
+	useErr := cluster.Use("fast")
+	if useErr != nil {
+		t.Fatalf("use fast: %v", useErr)
+	}
+	winner := cluster.Manager()
+
+	close(gated.gates["slow"])
+	if slowErr := <-done; slowErr != nil {
+		t.Fatalf("use slow: %v", slowErr)
+	}
+
+	if cluster.Manager() != winner {
+		t.Fatal("a superseded switch replaced the installed manager")
 	}
 }

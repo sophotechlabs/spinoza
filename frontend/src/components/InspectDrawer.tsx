@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ContainerState, ObjectDetail, ObjectRef } from '../lib/types';
+import type { ContainerState, LogRequest, ObjectDetail, ObjectRef } from '../lib/types';
+import { containerNames } from '../lib/containers';
 import { fetchObject, refQuery } from '../lib/object';
 import { NUDGE_STEP, useDrawerWidth } from '../lib/usePanelWidth';
 import { isFluxObject } from '../lib/fluxActions';
@@ -12,8 +13,9 @@ import InspectOverview from './InspectOverview';
 import InspectYaml from './InspectYaml';
 import InspectEvents from './InspectEvents';
 import InspectMetrics from './InspectMetrics';
+import InspectLogs from './InspectLogs';
 
-type Tab = 'overview' | 'yaml' | 'events' | 'metrics';
+type Tab = 'overview' | 'yaml' | 'events' | 'logs' | 'metrics';
 
 const BASE_TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -22,6 +24,7 @@ const BASE_TABS: { id: Tab; label: string }[] = [
 ];
 
 const METRICS_TAB: { id: Tab; label: string } = { id: 'metrics', label: 'Metrics' };
+const LOGS_TAB: { id: Tab; label: string } = { id: 'logs', label: 'Logs' };
 
 function keyOf(target: ObjectRef | null): string {
   if (target === null) {
@@ -32,7 +35,7 @@ function keyOf(target: ObjectRef | null): string {
 
 function tabsFor(kind: string | undefined): { id: Tab; label: string }[] {
   if (kind === 'Pod') {
-    return [...BASE_TABS, METRICS_TAB];
+    return [...BASE_TABS, LOGS_TAB, METRICS_TAB];
   }
   return BASE_TABS;
 }
@@ -40,8 +43,17 @@ function tabsFor(kind: string | undefined): { id: Tab; label: string }[] {
 interface InspectDrawerProps {
   target: ObjectRef | null;
   containers?: ContainerState[];
+  subscribeLogs?: (subId: string, request: LogRequest) => void;
+  unsubscribeLogs?: (subId: string) => void;
   onClose: () => void;
   onDeleted: () => void;
+}
+
+function logContainers(states: ContainerState[] | undefined, detail: ObjectDetail): string[] {
+  if (states !== undefined && states.length > 0) {
+    return containerNames(states);
+  }
+  return detail.containers ?? [];
 }
 
 function errorMessage(err: unknown): string {
@@ -71,6 +83,8 @@ function tabClass(active: boolean): string {
 export default function InspectDrawer({
   target,
   containers,
+  subscribeLogs,
+  unsubscribeLogs,
   onClose,
   onDeleted,
 }: InspectDrawerProps) {
@@ -78,6 +92,7 @@ export default function InspectDrawer({
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [reload, setReload] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
   const { width, startResize, nudge } = useDrawerWidth();
 
   const targetKey = keyOf(target);
@@ -115,9 +130,36 @@ export default function InspectDrawer({
     };
   }, [target, reload]);
 
+  if (collapsed) {
+    return (
+      <aside className="flex w-8 shrink-0 items-start justify-center border-l border-neutral-800 bg-neutral-950 pt-2">
+        <button
+          type="button"
+          aria-label="Show inspector"
+          onClick={() => {
+            setCollapsed(false);
+          }}
+          className="rounded px-1 py-0.5 text-xs text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
+        >
+          ‹
+        </button>
+      </aside>
+    );
+  }
+
   if (target === null) {
     return (
-      <aside className="w-80 shrink-0 border-l border-neutral-800 bg-neutral-950 p-4 text-xs text-neutral-500">
+      <aside className="flex w-80 shrink-0 items-start gap-2 border-l border-neutral-800 bg-neutral-950 p-4 text-xs text-neutral-500">
+        <button
+          type="button"
+          aria-label="Hide inspector"
+          onClick={() => {
+            setCollapsed(true);
+          }}
+          className="rounded px-1 text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
+        >
+          ›
+        </button>
         Select a row to inspect it.
       </aside>
     );
@@ -174,6 +216,22 @@ export default function InspectDrawer({
   if (detail !== null && shown === 'events') {
     body = <InspectEvents namespace={detail.namespace} uid={detail.uid} />;
   }
+  if (
+    detail !== null &&
+    shown === 'logs' &&
+    subscribeLogs !== undefined &&
+    unsubscribeLogs !== undefined
+  ) {
+    body = (
+      <InspectLogs
+        namespace={detail.namespace}
+        pod={detail.name}
+        containers={logContainers(containers, detail)}
+        subscribeLogs={subscribeLogs}
+        unsubscribeLogs={unsubscribeLogs}
+      />
+    );
+  }
   if (detail !== null && shown === 'metrics') {
     body = <InspectMetrics namespace={detail.namespace} pod={detail.name} />;
   }
@@ -200,6 +258,16 @@ export default function InspectDrawer({
             className="ml-auto shrink-0 rounded border border-neutral-700 px-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
           >
             Close
+          </button>
+          <button
+            type="button"
+            aria-label="Hide inspector"
+            onClick={() => {
+              setCollapsed(true);
+            }}
+            className="shrink-0 rounded border border-neutral-700 px-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+          >
+            ›
           </button>
         </div>
         <div className="flex shrink-0 gap-3 border-b border-neutral-800 px-3 text-xs">

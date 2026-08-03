@@ -198,6 +198,7 @@ export interface ResourceUsage {
 export interface Metrics {
   pods: Record<string, ResourceUsage>;
   nodes: Record<string, ResourceUsage>;
+  error?: string;
 }
 
 export type GraphNodeCategory = 'source' | 'applier' | 'app' | 'managed';

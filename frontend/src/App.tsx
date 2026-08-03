@@ -46,6 +46,7 @@ export default function App() {
   const [view, setView] = useState<View>('resources');
   const [active, setActive] = useState<ResourceDescriptor | null>(null);
   const [subId, setSubId] = useState(FIRST_SUB_ID);
+  const [contextEpoch, setContextEpoch] = useState(0);
   const subSeq = useRef(0);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [target, setTarget] = useState<ObjectRef | null>(null);
@@ -74,6 +75,13 @@ export default function App() {
     setSubId(`main#${String(subSeq.current)}`);
     clearSelection();
     setView('resources');
+  }
+
+  function handleContextChanged() {
+    setActive(null);
+    clearSelection();
+    setContextEpoch((epoch) => epoch + 1);
+    feed.reconnect();
   }
 
   function switchView(next: View) {
@@ -114,9 +122,15 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col bg-neutral-950 font-mono text-sm text-neutral-200">
-      <TopBar status={feed.status} view={view} onReconnect={feed.reconnect} />
+      <TopBar
+        status={feed.status}
+        view={view}
+        onReconnect={feed.reconnect}
+        onContextChanged={handleContextChanged}
+      />
       <div className="flex min-h-0 flex-1">
         <Sidebar
+          epoch={contextEpoch}
           view={view}
           activeResource={active}
           onSelect={handleSelectResource}
@@ -144,6 +158,8 @@ export default function App() {
         <InspectDrawer
           target={target}
           containers={selected?.containers}
+          subscribeLogs={subscribeLogs}
+          unsubscribeLogs={unsubscribeLogs}
           onClose={clearSelection}
           onDeleted={clearSelection}
         />

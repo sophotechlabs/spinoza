@@ -24,10 +24,12 @@ type Cluster struct {
 	build builder
 	list  lister
 
-	mu      sync.Mutex
-	manager *resources.Manager
-	cancel  context.CancelFunc
-	current string
+	mu        sync.Mutex
+	manager   *resources.Manager
+	cancel    context.CancelFunc
+	current   string
+	nextSeq   uint64
+	installed uint64
 }
 
 func newCluster(ctx context.Context, build builder, list lister) (*Cluster, error) {
@@ -69,6 +71,7 @@ func (c *Cluster) Use(name string) error {
 }
 
 func (c *Cluster) use(root context.Context, name string) error {
+	seq := c.claim()
 	ctx, cancel := context.WithCancel(root)
 	manager, current, err := c.build(ctx, name)
 	if err != nil {
@@ -77,7 +80,13 @@ func (c *Cluster) use(root context.Context, name string) error {
 	}
 
 	c.mu.Lock()
+	if seq < c.installed {
+		c.mu.Unlock()
+		cancel()
+		return nil
+	}
 	previous := c.cancel
+	c.installed = seq
 	c.manager = manager
 	c.cancel = cancel
 	c.current = current
@@ -87,4 +96,11 @@ func (c *Cluster) use(root context.Context, name string) error {
 		previous()
 	}
 	return nil
+}
+
+func (c *Cluster) claim() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.nextSeq++
+	return c.nextSeq
 }

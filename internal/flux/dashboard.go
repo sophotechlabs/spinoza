@@ -51,12 +51,14 @@ const helmGroup = "helm.toolkit.fluxcd.io"
 
 type Lister interface {
 	List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
+	Warm(descs []api.ResourceDescriptor)
 }
 
 func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor, index Charts) api.FluxDashboard {
 	byGroup := map[string][]api.FluxResource{}
 	items := map[string][]*unstructured.Unstructured{}
 	failures := listerr.New()
+	lister.Warm(needed(descs, index))
 	for _, desc := range descs {
 		group := categoryOf(desc)
 		if group == "" {
@@ -79,6 +81,27 @@ func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDesc
 	return dashboard
 }
 
+func needed(descs map[string]api.ResourceDescriptor, index Charts) []api.ResourceDescriptor {
+	out := []api.ResourceDescriptor{}
+	for _, desc := range descs {
+		if categoryOf(desc) != "" {
+			out = append(out, desc)
+			continue
+		}
+		if index != nil && isHelmRepository(desc) {
+			out = append(out, desc)
+		}
+	}
+	return out
+}
+
+func isHelmRepository(desc api.ResourceDescriptor) bool {
+	if desc.Group != "source.toolkit.fluxcd.io" {
+		return false
+	}
+	return desc.Resource == "helmrepositories"
+}
+
 func repos(lister Lister, descs map[string]api.ResourceDescriptor, index Charts) map[string]charts.Repo {
 	if index == nil {
 		return nil
@@ -89,10 +112,7 @@ func repos(lister Lister, descs map[string]api.ResourceDescriptor, index Charts)
 func repoIndex(lister Lister, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {
 	out := map[string]charts.Repo{}
 	for _, desc := range descs {
-		if desc.Group != "source.toolkit.fluxcd.io" {
-			continue
-		}
-		if desc.Resource != "helmrepositories" {
+		if !isHelmRepository(desc) {
 			continue
 		}
 		found, err := lister.List(desc)

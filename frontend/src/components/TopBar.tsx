@@ -6,6 +6,7 @@ interface TopBarProps {
   status: ConnectionStatus;
   view?: View;
   onReconnect?: () => void;
+  onContextChanged?: () => void;
 }
 
 function statusColor(status: ConnectionStatus): string {
@@ -18,16 +19,24 @@ function statusColor(status: ConnectionStatus): string {
   return 'bg-red-500';
 }
 
-export default function TopBar({ status, view, onReconnect }: TopBarProps) {
+export default function TopBar({ status, view, onReconnect, onContextChanged }: TopBarProps) {
   function handleReconnect() {
     if (onReconnect) {
       onReconnect();
     }
   }
 
+  function handleContextChanged() {
+    if (onContextChanged) {
+      onContextChanged();
+      return;
+    }
+    handleReconnect();
+  }
+
   return (
     <header className="flex h-10 shrink-0 items-center gap-4 border-b border-neutral-800 bg-neutral-900 px-3 text-xs">
-      <ContextPicker onSwitched={handleReconnect} />
+      <ContextPicker onSwitched={handleContextChanged} />
       <span className="text-neutral-500">/</span>
       <span className="text-neutral-300">all namespaces</span>
       {view !== undefined && (

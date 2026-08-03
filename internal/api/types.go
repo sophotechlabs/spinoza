@@ -295,4 +295,5 @@ type MetricHistory struct {
 type Metrics struct {
 	Pods  map[string]ResourceUsage `json:"pods"`
 	Nodes map[string]ResourceUsage `json:"nodes"`
+	Error string                   `json:"error,omitempty"`
 }
