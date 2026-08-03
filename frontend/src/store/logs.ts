@@ -4,6 +4,7 @@ export const MAX_LOG_LINES = 5000;
 
 interface StreamState {
   lines: string[];
+  dropped: number;
   ended: boolean;
   error?: string;
 }
@@ -19,11 +20,12 @@ interface LogsState {
 
 const EMPTY_LINES: string[] = [];
 
-function trim(lines: string[]): string[] {
+function trim(lines: string[]): { lines: string[]; dropped: number } {
   if (lines.length <= MAX_LOG_LINES) {
-    return lines;
+    return { lines, dropped: 0 };
   }
-  return lines.slice(lines.length - MAX_LOG_LINES);
+  const excess = lines.length - MAX_LOG_LINES;
+  return { lines: lines.slice(excess), dropped: excess };
 }
 
 export const useLogsStore = create<LogsState>((set) => ({
@@ -31,7 +33,7 @@ export const useLogsStore = create<LogsState>((set) => ({
   startStream: (subId) => {
     set((state) => {
       const streams = new Map(state.streams);
-      streams.set(subId, { lines: [], ended: false });
+      streams.set(subId, { lines: [], dropped: 0, ended: false });
       return { streams };
     });
   },
@@ -42,7 +44,12 @@ export const useLogsStore = create<LogsState>((set) => ({
         return state;
       }
       const streams = new Map(state.streams);
-      streams.set(subId, { ...existing, lines: trim([...existing.lines, ...lines]) });
+      const trimmed = trim([...existing.lines, ...lines]);
+      streams.set(subId, {
+        ...existing,
+        lines: trimmed.lines,
+        dropped: existing.dropped + trimmed.dropped,
+      });
       return { streams };
     });
   },
@@ -86,6 +93,14 @@ export function useLogLines(subId: string): string[] {
     return EMPTY_LINES;
   }
   return lines;
+}
+
+export function useLogOffset(subId: string): number {
+  const dropped = useLogsStore((state) => state.streams.get(subId)?.dropped);
+  if (dropped === undefined) {
+    return 0;
+  }
+  return dropped;
 }
 
 export function useLogError(subId: string): string | null {

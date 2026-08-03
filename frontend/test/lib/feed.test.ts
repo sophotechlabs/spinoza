@@ -298,7 +298,7 @@ describe('useResourceFeed', () => {
       );
     });
 
-    expect(useLogsStore.getState().streams.has('logs#1')).toBe(false);
+    expect(useLogsStore.getState().streams.get('logs#1')?.lines).toEqual([]);
   });
 
   it('shows a failed subscription instead of an empty table', () => {
@@ -734,7 +734,11 @@ describe('useResourceFeed', () => {
       subId: 'logs',
       ...logRequest,
     });
-    expect(useLogsStore.getState().streams.get('logs')).toEqual({ lines: [], ended: false });
+    expect(useLogsStore.getState().streams.get('logs')).toEqual({
+      lines: [],
+      dropped: 0,
+      ended: false,
+    });
   });
 
   it('queues a logs subscription while closed and flushes it on open', () => {
@@ -793,7 +797,7 @@ describe('useResourceFeed', () => {
     expect(useLogsStore.getState().streams.get('logs')?.ended).toBe(true);
   });
 
-  it('sends a logs-unsubscribe frame and clears the stream', () => {
+  it('sends a logs-unsubscribe frame and keeps what was already streamed', () => {
     const { result } = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
@@ -805,7 +809,7 @@ describe('useResourceFeed', () => {
     });
 
     expect(sentMessages(socket)).toContainEqual({ type: 'logs-unsubscribe', subId: 'logs' });
-    expect(useLogsStore.getState().streams.has('logs')).toBe(false);
+    expect(useLogsStore.getState().streams.get('logs')?.ended).toBe(true);
   });
 
   it('re-sends an active log subscription after a reconnect', () => {

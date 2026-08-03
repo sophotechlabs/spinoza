@@ -100,3 +100,34 @@ describe('useMetrics', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('a failed metrics poll', () => {
+  it('keeps the values already on screen', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(sample) });
+        }
+        return Promise.reject(new Error('metrics-server is down'));
+      }),
+    );
+
+    const { result } = renderHook(() => useMetrics(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(result.current).toEqual(sample);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11000);
+    });
+
+    expect(call).toBeGreaterThan(1);
+    expect(result.current).toEqual(sample);
+    vi.useRealTimers();
+  });
+});

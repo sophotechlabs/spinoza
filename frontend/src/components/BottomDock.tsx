@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LogRequest, ShellState } from '../lib/types';
-import { useLogEnded, useLogError, useLogLines } from '../store/logs';
+import { useLogEnded, useLogError, useLogLines, useLogOffset } from '../store/logs';
 import { fetchExecSupport } from '../lib/exec';
 import DebugPrompt from './DebugPrompt';
 import ForwardsPanel from './ForwardsPanel';
@@ -64,6 +64,7 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
   const lines = useLogLines(LOGS_SUB_ID);
   const ended = useLogEnded(LOGS_SUB_ID);
   const logError = useLogError(LOGS_SUB_ID);
+  const offset = useLogOffset(LOGS_SUB_ID);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const podKey = pod === null ? '' : `${pod.namespace}/${pod.name}`;
@@ -302,7 +303,7 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
             <span className="text-neutral-600">Waiting for output…</span>
           )}
           {lines.map((line, index) => (
-            <div key={`${index}-${line}`} className="break-all whitespace-pre-wrap">
+            <div key={offset + index} className="break-all whitespace-pre-wrap">
               {line}
             </div>
           ))}

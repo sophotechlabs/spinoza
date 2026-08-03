@@ -12,7 +12,11 @@ describe('logs store', () => {
   it('starts an empty stream', () => {
     useLogsStore.getState().startStream('logs');
 
-    expect(useLogsStore.getState().streams.get('logs')).toEqual({ lines: [], ended: false });
+    expect(useLogsStore.getState().streams.get('logs')).toEqual({
+      lines: [],
+      dropped: 0,
+      ended: false,
+    });
   });
 
   it('appends lines in order', () => {

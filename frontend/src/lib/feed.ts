@@ -264,7 +264,7 @@ export function useResourceFeed(): ResourceFeed {
     if (canSend(socket)) {
       send(socket, { type: 'logs-unsubscribe', subId });
     }
-    useLogsStore.getState().clearStream(subId);
+    useLogsStore.getState().endStream(subId);
   }, []);
 
   const reconnect = useCallback(() => {

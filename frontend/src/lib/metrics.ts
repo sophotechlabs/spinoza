@@ -27,9 +27,7 @@ export function useMetrics(enabled: boolean): Metrics | null {
           setMetrics(data);
         }
       } catch {
-        if (mounted) {
-          setMetrics(null);
-        }
+        return;
       }
     };
     void load();

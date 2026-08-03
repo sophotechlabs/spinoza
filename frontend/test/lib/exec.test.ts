@@ -301,6 +301,19 @@ describe('openExec frames sent before the socket opens', () => {
     expect(sentFrames(socket).map((entry) => entry.text)).toEqual(['a', 'b']);
   });
 
+  it('stops calling back once the caller has closed the session', () => {
+    const sink = handlers();
+    const session = openExec(target(), sink);
+    const socket = latest();
+
+    session.close();
+    socket.onmessage?.({ data: textFrame(CHANNEL_STDOUT, 'late').buffer } as MessageEvent);
+    socket.onclose?.(new CloseEvent('close'));
+
+    expect(sink.onOutput).not.toHaveBeenCalled();
+    expect(sink.onEnd).not.toHaveBeenCalled();
+  });
+
   it('drops frames written after the socket closed', () => {
     const session = openExec(target(), handlers());
     const socket = latest();

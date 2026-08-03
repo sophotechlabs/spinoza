@@ -124,6 +124,9 @@ export function openExec(target: ExecTarget, handlers: ExecHandlers): ExecSessio
       write(textFrame(CHANNEL_RESIZE, JSON.stringify({ cols, rows })));
     },
     close: () => {
+      socket.onmessage = null;
+      socket.onclose = null;
+      socket.onerror = null;
       socket.close();
     },
   };

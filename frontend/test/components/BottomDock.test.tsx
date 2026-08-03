@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BottomDock, { LOGS_SUB_ID } from '../../src/components/BottomDock';
 import type { PodTarget } from '../../src/components/BottomDock';
@@ -189,6 +189,23 @@ describe('BottomDock', () => {
     useLogsStore.getState().failStream(LOGS_SUB_ID, 'too late');
 
     expect(screen.queryByText('too late')).not.toBeInTheDocument();
+  });
+
+  it('keeps the scrollback when follow is paused', async () => {
+    const user = userEvent.setup();
+    renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    act(() => {
+      useLogsStore.getState().startStream(LOGS_SUB_ID);
+      useLogsStore.getState().appendLines(LOGS_SUB_ID, ['first line', 'second line']);
+    });
+    expect(await screen.findByText('first line')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Following' }));
+
+    expect(screen.getByText('first line')).toBeInTheDocument();
+    expect(screen.getByText('second line')).toBeInTheDocument();
   });
 
   it('toggles follow and resubscribes', async () => {
