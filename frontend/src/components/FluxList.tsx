@@ -17,6 +17,8 @@ import {
   statusText,
 } from '../lib/fluxStatus';
 import { useElementWidth } from '../lib/useElementWidth';
+import LoadWarning from './LoadWarning';
+import LoadFailure from './LoadFailure';
 
 const EMPTY: FluxResource[] = [];
 const FLEX_COLUMN_IDS = new Set(['name', 'revision']);
@@ -118,6 +120,9 @@ export default function FluxList({ onSelect }: FluxListProps) {
   }
 
   if (data.groups.length === 0) {
+    if (data.error !== undefined) {
+      return <LoadFailure what="Flux resources" message={data.error} />;
+    }
     return (
       <div className="flex h-full items-center justify-center text-xs text-neutral-600">
         No Flux resources found.
@@ -134,59 +139,62 @@ export default function FluxList({ onSelect }: FluxListProps) {
   const tableWidth = Math.max(containerWidth, totalSize);
 
   return (
-    <div ref={setScrollEl} className="h-full overflow-auto">
-      <table
-        className="table-fixed border-collapse text-left text-xs whitespace-nowrap"
-        style={{ width: `${tableWidth}px` }}
-      >
-        <colgroup>
-          {table.getVisibleLeafColumns().map((column) => (
-            <col
-              key={column.id}
-              style={{ width: `${columnWidth(column.id, column.getSize(), perFlex)}px` }}
-            />
-          ))}
-        </colgroup>
-        <thead className="sticky top-0 z-10 bg-neutral-950 text-neutral-500">
-          <tr className="border-b border-neutral-800">
-            {table.getFlatHeaders().map((header) => (
-              <th
-                key={header.id}
-                className="relative px-2 py-1 font-normal"
-                style={{ width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px` }}
-              >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-                <div
-                  aria-hidden="true"
-                  onMouseDown={header.getResizeHandler()}
-                  onTouchStart={header.getResizeHandler()}
-                  className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-neutral-600 opacity-0 select-none hover:opacity-100"
-                />
-              </th>
+    <div className="flex h-full min-h-0 flex-col">
+      {data.error !== undefined && <LoadWarning message={data.error} />}
+      <div ref={setScrollEl} className="min-h-0 flex-1 overflow-auto">
+        <table
+          className="table-fixed border-collapse text-left text-xs whitespace-nowrap"
+          style={{ width: `${tableWidth}px` }}
+        >
+          <colgroup>
+            {table.getVisibleLeafColumns().map((column) => (
+              <col
+                key={column.id}
+                style={{ width: `${columnWidth(column.id, column.getSize(), perFlex)}px` }}
+              />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.groups.map((group) => (
-            <Fragment key={group.name}>
-              <tr>
-                <td
-                  colSpan={columnCount}
-                  className="bg-neutral-900/50 px-2 pt-3 pb-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase"
+          </colgroup>
+          <thead className="sticky top-0 z-10 bg-neutral-950 text-neutral-500">
+            <tr className="border-b border-neutral-800">
+              {table.getFlatHeaders().map((header) => (
+                <th
+                  key={header.id}
+                  className="relative px-2 py-1 font-normal"
+                  style={{ width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px` }}
                 >
-                  {group.name}
-                  <span className="ml-2 text-[11px] font-normal text-neutral-600">
-                    {groupSummary(group)}
-                  </span>
-                </td>
-              </tr>
-              {group.resources.map((resource) => (
-                <ResourceRow key={rowKey(resource)} resource={resource} onSelect={onSelect} />
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                  <div
+                    aria-hidden="true"
+                    onMouseDown={header.getResizeHandler()}
+                    onTouchStart={header.getResizeHandler()}
+                    className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-neutral-600 opacity-0 select-none hover:opacity-100"
+                  />
+                </th>
               ))}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
+            </tr>
+          </thead>
+          <tbody>
+            {data.groups.map((group) => (
+              <Fragment key={group.name}>
+                <tr>
+                  <td
+                    colSpan={columnCount}
+                    className="bg-neutral-900/50 px-2 pt-3 pb-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase"
+                  >
+                    {group.name}
+                    <span className="ml-2 text-[11px] font-normal text-neutral-600">
+                      {groupSummary(group)}
+                    </span>
+                  </td>
+                </tr>
+                {group.resources.map((resource) => (
+                  <ResourceRow key={rowKey(resource)} resource={resource} onSelect={onSelect} />
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -152,3 +152,48 @@ describe('GitopsGraph', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('GitopsGraph partial failures', () => {
+  it('says the graph could not be loaded when nothing came back', async () => {
+    stubGraph({
+      nodes: [],
+      edges: [],
+      error: '2 of 9 resource types could not be listed; buckets: is forbidden',
+    });
+
+    render(<GitopsGraph />);
+
+    expect(await screen.findByText('The GitOps graph could not be loaded')).toBeInTheDocument();
+    expect(screen.getByText(/buckets: is forbidden/)).toBeInTheDocument();
+  });
+
+  it('warns above the graph when only some lists failed', async () => {
+    stubGraph({
+      nodes: [makeGraphNode({ id: 'a', name: 'apps' })],
+      edges: [],
+      error: '1 of 9 resource types could not be listed; buckets: is forbidden',
+    });
+
+    render(<GitopsGraph />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('buckets: is forbidden');
+    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+  });
+
+  it('shows no warning when every list worked', async () => {
+    stubGraph({ nodes: [makeGraphNode({ id: 'a', name: 'apps' })], edges: [] });
+
+    render(<GitopsGraph />);
+
+    await screen.findByTestId('react-flow');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('still says no resources when the cluster simply has none', async () => {
+    stubGraph({ nodes: [], edges: [] });
+
+    render(<GitopsGraph />);
+
+    expect(await screen.findByText('No GitOps resources found.')).toBeInTheDocument();
+  });
+});

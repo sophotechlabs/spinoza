@@ -5,6 +5,8 @@ import type { GraphNode } from '../lib/types';
 import { fetchGraph } from '../lib/graph';
 import { controlPlane, toFlow } from '../lib/graphLayout';
 import type { GitopsFlow, GitopsFlowNode } from '../lib/graphLayout';
+import LoadWarning from './LoadWarning';
+import LoadFailure from './LoadFailure';
 
 const POLL_INTERVAL_MS = 5000;
 const MAX_NODES = 400;
@@ -35,6 +37,7 @@ function errorMessage(err: unknown): string {
 export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
   const [flow, setFlow] = useState<GitopsFlow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [partial, setPartial] = useState<string | null>(null);
   const [overLimit, setOverLimit] = useState<number | null>(null);
 
   useEffect(() => {
@@ -43,6 +46,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
       try {
         const graph = await fetchGraph();
         if (mounted) {
+          setPartial(graph.error ?? null);
           const reduced = controlPlane(graph);
           if (reduced.nodes.length > MAX_NODES) {
             setOverLimit(reduced.nodes.length);
@@ -100,6 +104,9 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
   }
 
   if (flow.nodes.length === 0) {
+    if (partial !== null) {
+      return <LoadFailure what="The GitOps graph" message={partial} />;
+    }
     return (
       <div className="flex h-full items-center justify-center text-xs text-neutral-600">
         No GitOps resources found.
@@ -108,24 +115,27 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
   }
 
   return (
-    <div className="relative h-full w-full">
-      <ReactFlow
-        nodes={flow.nodes}
-        edges={flow.edges}
-        onNodeClick={handleNodeClick}
-        onlyRenderVisibleElements
-        fitView
-      >
-        <Background />
-        <Controls />
-      </ReactFlow>
-      <div className="pointer-events-none absolute top-2 right-2 z-10 rounded border border-neutral-800 bg-neutral-900/90 px-2 py-1.5 text-[11px] text-neutral-300">
-        {LEGEND.map((item) => (
-          <div key={item.label} className="flex items-center gap-1.5">
-            <span className={`h-2 w-2 rounded-full ${item.color}`} />
-            {item.label}
-          </div>
-        ))}
+    <div className="flex h-full min-h-0 w-full flex-col">
+      {partial !== null && <LoadWarning message={partial} />}
+      <div className="relative min-h-0 w-full flex-1">
+        <ReactFlow
+          nodes={flow.nodes}
+          edges={flow.edges}
+          onNodeClick={handleNodeClick}
+          onlyRenderVisibleElements
+          fitView
+        >
+          <Background />
+          <Controls />
+        </ReactFlow>
+        <div className="pointer-events-none absolute top-2 right-2 z-10 rounded border border-neutral-800 bg-neutral-900/90 px-2 py-1.5 text-[11px] text-neutral-300">
+          {LEGEND.map((item) => (
+            <div key={item.label} className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${item.color}`} />
+              {item.label}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

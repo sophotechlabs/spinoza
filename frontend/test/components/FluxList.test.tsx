@@ -159,3 +159,34 @@ describe('FluxList', () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'res-a' }));
   });
 });
+
+describe('FluxList partial failures', () => {
+  it('says Flux could not be loaded rather than that there is none', async () => {
+    stubFlux({
+      groups: [],
+      error: '4 of 9 resource types could not be listed; kustomizations: is forbidden',
+    });
+
+    render(<FluxList onSelect={vi.fn()} />);
+
+    expect(await screen.findByText('Flux resources could not be loaded')).toBeInTheDocument();
+    expect(screen.queryByText('No Flux resources found.')).not.toBeInTheDocument();
+  });
+
+  it('warns above the table when only some lists failed', async () => {
+    stubFlux({ ...dashboard, error: '1 of 9 resource types could not be listed; buckets: nope' });
+
+    render(<FluxList onSelect={vi.fn()} />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('buckets: nope');
+  });
+
+  it('shows no warning when every list worked', async () => {
+    stubFlux(dashboard);
+
+    render(<FluxList onSelect={vi.fn()} />);
+
+    await screen.findAllByRole('row');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});

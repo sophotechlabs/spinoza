@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LogRequest, ShellState } from '../lib/types';
-import { useLogEnded, useLogLines } from '../store/logs';
+import { useLogEnded, useLogError, useLogLines } from '../store/logs';
 import { fetchExecSupport } from '../lib/exec';
 import { DEBUG_IMAGE } from '../lib/debugContainer';
 import DebugPrompt from './DebugPrompt';
@@ -64,6 +64,7 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
   const [debugContainer, setDebugContainer] = useState<string | null>(null);
   const lines = useLogLines(LOGS_SUB_ID);
   const ended = useLogEnded(LOGS_SUB_ID);
+  const logError = useLogError(LOGS_SUB_ID);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const podKey = pod === null ? '' : `${pod.namespace}/${pod.name}`;
@@ -258,7 +259,12 @@ export default function BottomDock({ pod, subscribeLogs, unsubscribeLogs }: Bott
                 {followLabel(follow)}
               </button>
             )}
-            {tab === 'logs' && ended && <span className="text-neutral-600">stream ended</span>}
+            {tab === 'logs' && logError !== null && (
+              <span className="truncate text-red-400">{logError}</span>
+            )}
+            {tab === 'logs' && ended && logError === null && (
+              <span className="text-neutral-600">stream ended</span>
+            )}
           </div>
         )}
       </div>

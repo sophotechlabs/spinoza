@@ -10,8 +10,10 @@ interface SubState {
 
 interface ResourcesState {
   subs: Map<string, SubState>;
+  errors: Map<string, string>;
   applySnapshot: (subId: string, columns: Column[], namespaced: boolean, rows: Row[]) => void;
   applyDelta: (subId: string, msg: ServerMsg) => void;
+  failSub: (subId: string, message: string) => void;
   clearSub: (subId: string) => void;
 }
 
@@ -32,6 +34,7 @@ function sortRows(rows: Map<string, Row>): Row[] {
 
 export const useResourcesStore = create<ResourcesState>((set) => ({
   subs: new Map(),
+  errors: new Map(),
   applySnapshot: (subId, columns, namespaced, rows) => {
     set((state) => {
       const rowMap = new Map<string, Row>();
@@ -40,7 +43,16 @@ export const useResourcesStore = create<ResourcesState>((set) => ({
       }
       const subs = new Map(state.subs);
       subs.set(subId, { columns, namespaced, rows: rowMap });
-      return { subs };
+      const errors = new Map(state.errors);
+      errors.delete(subId);
+      return { subs, errors };
+    });
+  },
+  failSub: (subId, message) => {
+    set((state) => {
+      const errors = new Map(state.errors);
+      errors.set(subId, message);
+      return { errors };
     });
   },
   applyDelta: (subId, msg) => {
@@ -68,12 +80,14 @@ export const useResourcesStore = create<ResourcesState>((set) => ({
   },
   clearSub: (subId) => {
     set((state) => {
-      if (!state.subs.has(subId)) {
+      if (!state.subs.has(subId) && !state.errors.has(subId)) {
         return state;
       }
       const subs = new Map(state.subs);
       subs.delete(subId);
-      return { subs };
+      const errors = new Map(state.errors);
+      errors.delete(subId);
+      return { subs, errors };
     });
   },
 }));
@@ -92,6 +106,14 @@ export function useSubNamespaced(subId: string): boolean {
     return false;
   }
   return namespaced;
+}
+
+export function useSubError(subId: string): string | null {
+  const message = useResourcesStore((state) => state.errors.get(subId));
+  if (message === undefined) {
+    return null;
+  }
+  return message;
 }
 
 export function useSubRows(subId: string): Row[] {

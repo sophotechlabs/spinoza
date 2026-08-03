@@ -179,6 +179,7 @@ export interface FluxGroup {
 
 export interface FluxDashboard {
   groups: FluxGroup[];
+  error?: string;
 }
 
 export interface ResourceUsage {
@@ -218,6 +219,7 @@ export interface GraphEdge {
 export interface Graph {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  error?: string;
 }
 
 export interface ExecTarget {

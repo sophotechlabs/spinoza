@@ -1,6 +1,8 @@
 import { useFlux } from '../lib/flux';
 import { groupSummary } from '../lib/readiness';
 import type { FluxGroup, FluxResource } from '../lib/types';
+import LoadWarning from './LoadWarning';
+import LoadFailure from './LoadFailure';
 import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
 
 function Tile({
@@ -85,6 +87,9 @@ export default function FluxOverview({ onSelect }: FluxOverviewProps) {
   }
 
   if (data.groups.length === 0) {
+    if (data.error !== undefined) {
+      return <LoadFailure what="Flux resources" message={data.error} />;
+    }
     return (
       <div className="flex h-full items-center justify-center text-xs text-neutral-600">
         No Flux resources found.
@@ -93,10 +98,13 @@ export default function FluxOverview({ onSelect }: FluxOverviewProps) {
   }
 
   return (
-    <div className="h-full overflow-auto p-3">
-      {data.groups.map((group) => (
-        <TileGroup key={group.name} group={group} onSelect={onSelect} />
-      ))}
+    <div className="flex h-full min-h-0 flex-col">
+      {data.error !== undefined && <LoadWarning message={data.error} />}
+      <div className="min-h-0 flex-1 overflow-auto p-3">
+        {data.groups.map((group) => (
+          <TileGroup key={group.name} group={group} onSelect={onSelect} />
+        ))}
+      </div>
     </div>
   );
 }

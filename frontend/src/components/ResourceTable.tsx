@@ -10,7 +10,7 @@ import {
 import type { ColumnDef, SortDirection, SortingState } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Metrics, ResourceDescriptor, ResourceUsage, Row } from '../lib/types';
-import { useSubColumns, useSubNamespaced, useSubRows } from '../store/resources';
+import { useSubColumns, useSubError, useSubNamespaced, useSubRows } from '../store/resources';
 import { ratioColor, restartColor, statusColor } from '../lib/status';
 import { formatCpu, formatMem, useMetrics } from '../lib/metrics';
 import { useElementWidth } from '../lib/useElementWidth';
@@ -153,6 +153,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const dataColumns = useSubColumns(subId);
   const namespaced = useSubNamespaced(subId);
   const rows = useSubRows(subId);
+  const error = useSubError(subId);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [query, setQuery] = useState('');
   const [namespace, setNamespace] = useState(ALL_NAMESPACES);
@@ -280,6 +281,17 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     return (
       <div className="flex h-full items-center justify-center text-xs text-neutral-600">
         Select a resource to view.
+      </div>
+    );
+  }
+
+  if (error !== null) {
+    return (
+      <div className="flex h-full items-start justify-center p-6 text-xs">
+        <div className="max-w-2xl rounded border border-red-900 bg-red-950/40 px-3 py-2">
+          <div className="font-semibold text-red-400">{active.kind} could not be loaded</div>
+          <div className="mt-1 break-words text-red-300">{error}</div>
+        </div>
       </div>
     );
   }

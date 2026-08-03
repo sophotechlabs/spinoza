@@ -169,6 +169,28 @@ describe('BottomDock', () => {
     expect(await screen.findByText('stream ended')).toBeInTheDocument();
   });
 
+  it('shows why a log stream failed instead of just ending it', async () => {
+    const user = userEvent.setup();
+    renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    useLogsStore.getState().startStream(LOGS_SUB_ID);
+    useLogsStore.getState().failStream(LOGS_SUB_ID, 'pods/log is forbidden');
+
+    expect(await screen.findByText('pods/log is forbidden')).toBeInTheDocument();
+    expect(screen.queryByText('stream ended')).not.toBeInTheDocument();
+  });
+
+  it('ignores a failure for a stream it never started', async () => {
+    const user = userEvent.setup();
+    renderDock(pod());
+    await user.click(screen.getByRole('button', { name: 'Logs' }));
+
+    useLogsStore.getState().failStream(LOGS_SUB_ID, 'too late');
+
+    expect(screen.queryByText('too late')).not.toBeInTheDocument();
+  });
+
   it('toggles follow and resubscribes', async () => {
     const user = userEvent.setup();
     const { subscribeLogs } = renderDock(pod());

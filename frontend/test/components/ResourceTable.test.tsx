@@ -20,7 +20,7 @@ function renderTable(active: ResourceDescriptor | null, selected: Row | null, on
 }
 
 function resetStore(): void {
-  useResourcesStore.setState({ subs: new Map() });
+  useResourcesStore.setState({ subs: new Map(), errors: new Map() });
 }
 
 describe('ResourceTable', () => {
@@ -32,6 +32,37 @@ describe('ResourceTable', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     resetStore();
+  });
+
+  it('shows why the resource could not be loaded', () => {
+    useResourcesStore
+      .getState()
+      .failSub(SUB, 'pods is forbidden: User "spinoza" cannot list resource "pods"');
+
+    renderTable(descriptor, null);
+
+    expect(screen.getByText('Pod could not be loaded')).toBeInTheDocument();
+    expect(screen.getByText(/cannot list resource/)).toBeInTheDocument();
+  });
+
+  it('does not pretend the resource is empty while it is failing', () => {
+    seed(makeColumns(['Ready']), true, []);
+    useResourcesStore.getState().failSub(SUB, 'the cluster did not answer in time');
+
+    renderTable(descriptor, null);
+
+    expect(screen.queryByLabelText('Filter by name')).not.toBeInTheDocument();
+    expect(screen.getByText('the cluster did not answer in time')).toBeInTheDocument();
+  });
+
+  it('goes back to the table once a snapshot arrives', () => {
+    useResourcesStore.getState().failSub(SUB, 'boom');
+    seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'alpha' })]);
+
+    renderTable(descriptor, null);
+
+    expect(screen.queryByText('boom')).not.toBeInTheDocument();
+    expect(screen.getByText('alpha')).toBeInTheDocument();
   });
 
   it('renders a placeholder when no resource is active', () => {

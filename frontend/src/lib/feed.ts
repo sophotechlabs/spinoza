@@ -153,7 +153,8 @@ export function useResourceFeed(): ResourceFeed {
           logs.endStream(msg.subId);
           break;
         case 'error':
-          console.error('resource feed error:', msg.subId, msg.message);
+          store.failSub(msg.subId, msg.message);
+          logs.failStream(msg.subId, msg.message);
           break;
       }
     }

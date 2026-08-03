@@ -5,6 +5,7 @@ export const MAX_LOG_LINES = 5000;
 interface StreamState {
   lines: string[];
   ended: boolean;
+  error?: string;
 }
 
 interface LogsState {
@@ -12,6 +13,7 @@ interface LogsState {
   startStream: (subId: string) => void;
   appendLines: (subId: string, lines: string[]) => void;
   endStream: (subId: string) => void;
+  failStream: (subId: string, message: string) => void;
   clearStream: (subId: string) => void;
 }
 
@@ -44,6 +46,17 @@ export const useLogsStore = create<LogsState>((set) => ({
       return { streams };
     });
   },
+  failStream: (subId, message) => {
+    set((state) => {
+      const existing = state.streams.get(subId);
+      if (existing === undefined) {
+        return state;
+      }
+      const streams = new Map(state.streams);
+      streams.set(subId, { ...existing, ended: true, error: message });
+      return { streams };
+    });
+  },
   endStream: (subId) => {
     set((state) => {
       const existing = state.streams.get(subId);
@@ -73,6 +86,14 @@ export function useLogLines(subId: string): string[] {
     return EMPTY_LINES;
   }
   return lines;
+}
+
+export function useLogError(subId: string): string | null {
+  const message = useLogsStore((state) => state.streams.get(subId)?.error);
+  if (message === undefined) {
+    return null;
+  }
+  return message;
 }
 
 export function useLogEnded(subId: string): boolean {

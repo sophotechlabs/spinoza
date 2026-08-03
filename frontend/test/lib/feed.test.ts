@@ -301,6 +301,76 @@ describe('useResourceFeed', () => {
     expect(useLogsStore.getState().streams.has('logs#1')).toBe(false);
   });
 
+  it('shows a failed subscription instead of an empty table', () => {
+    const socket = openFeedFor('main');
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'error',
+            subId: 'main',
+            message: 'pods is forbidden: User "spinoza" cannot list resource "pods"',
+          }),
+        }),
+      );
+    });
+
+    expect(useResourcesStore.getState().errors.get('main')).toContain('is forbidden');
+  });
+
+  it('clears the error once a snapshot arrives', () => {
+    const socket = openFeedFor('main');
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'error', subId: 'main', message: 'boom' }),
+        }),
+      );
+    });
+    expect(useResourcesStore.getState().errors.get('main')).toBe('boom');
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'snapshot',
+            subId: 'main',
+            columns: makeColumns([]),
+            namespaced: true,
+            rows: [],
+          }),
+        }),
+      );
+    });
+
+    expect(useResourcesStore.getState().errors.has('main')).toBe(false);
+  });
+
+  it('marks a log stream as failed rather than silently ending it', () => {
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribeLogs('logs#1', logRequest);
+    });
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'error',
+            subId: 'logs#1',
+            message: 'pods/log is forbidden',
+          }),
+        }),
+      );
+    });
+
+    expect(useLogsStore.getState().streams.get('logs#1')?.error).toBe('pods/log is forbidden');
+  });
+
   it('routes an added delta message to the store', () => {
     useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
     const socket = openFeedFor('main');
@@ -340,18 +410,22 @@ describe('useResourceFeed', () => {
     expect(useResourcesStore.getState().subs.get('main')?.rows.has('d')).toBe(false);
   });
 
-  it('logs an error message without changing connection state', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { result } = renderHook(() => useResourceFeed());
+  it('records an error message without changing connection state', () => {
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
     act(() => {
-      openSocket(FakeWebSocket.instances[0]);
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribe('main', makeDescriptor({}), '');
     });
     const data = JSON.stringify({ type: 'error', subId: 'main', message: 'stream failed' });
     act(() => {
-      FakeWebSocket.instances[0].onmessage?.(new MessageEvent('message', { data }));
+      socket.onmessage?.(new MessageEvent('message', { data }));
     });
-    expect(result.current.status).toBe('connected');
-    expect(errorSpy).toHaveBeenCalledWith('resource feed error:', 'main', 'stream failed');
+
+    expect(hook.result.current.status).toBe('connected');
+    expect(useResourcesStore.getState().errors.get('main')).toBe('stream failed');
   });
 
   it('ignores malformed json without throwing', () => {

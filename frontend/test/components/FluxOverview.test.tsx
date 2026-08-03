@@ -80,3 +80,44 @@ describe('FluxOverview', () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'repo-a' }));
   });
 });
+
+describe('FluxOverview partial failures', () => {
+  it('says Flux could not be loaded rather than that there is none', async () => {
+    stubFlux({
+      groups: [],
+      error: '4 of 9 resource types could not be listed; kustomizations: is forbidden',
+    });
+
+    render(<FluxOverview onSelect={vi.fn()} />);
+
+    expect(await screen.findByText('Flux resources could not be loaded')).toBeInTheDocument();
+    expect(screen.getByText(/kustomizations: is forbidden/)).toBeInTheDocument();
+    expect(screen.queryByText('No Flux resources found.')).not.toBeInTheDocument();
+  });
+
+  it('warns above the tiles when only some lists failed', async () => {
+    stubFlux({ ...dashboard, error: '1 of 9 resource types could not be listed; buckets: nope' });
+
+    render(<FluxOverview onSelect={vi.fn()} />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('buckets: nope');
+    expect(screen.getByText('repo-a')).toBeInTheDocument();
+  });
+
+  it('shows no warning when every list worked', async () => {
+    stubFlux(dashboard);
+
+    render(<FluxOverview onSelect={vi.fn()} />);
+
+    await screen.findByText('repo-a');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('still says none found on a Flux-free cluster', async () => {
+    stubFlux({ groups: [] });
+
+    render(<FluxOverview onSelect={vi.fn()} />);
+
+    expect(await screen.findByText('No Flux resources found.')).toBeInTheDocument();
+  });
+});
