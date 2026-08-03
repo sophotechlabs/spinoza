@@ -13,7 +13,7 @@ just run     # build frontend + binary, start the server
 
 Then open `http://127.0.0.1:34115`. `just rund` builds and opens the desktop app instead.
 
-Spinoza uses your current kubeconfig context. It listens on loopback only and refuses requests whose Host or Origin is not local, because the process holds full cluster credentials.
+Spinoza uses your current kubeconfig context, switchable from the dropdown in the top bar. It refuses to start on a non-loopback address, and refuses requests whose Host or Origin is not local, because the process holds full cluster credentials.
 
 ## What it does
 
