@@ -498,7 +498,7 @@ func TestMetricHistoryIsUnavailableWithoutPrometheus(t *testing.T) {
 		t.Fatalf("get: %v", err)
 	}
 	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d", res.StatusCode)
+	if res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503; a missing Prometheus is not the caller's mistake", res.StatusCode)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 
@@ -77,12 +78,32 @@ func writeError(w http.ResponseWriter, code int, message string) {
 	}
 }
 
+func cannotReachCluster(err error) bool {
+	if errors.Is(err, prom.ErrUnavailable) {
+		return true
+	}
+	return errors.Is(err, resources.ErrNotSynced)
+}
+
+func unreachable(err error) bool {
+	switch {
+	case apierrors.IsServiceUnavailable(err), apierrors.IsTimeout(err), apierrors.IsServerTimeout(err):
+		return true
+	case apierrors.IsInternalError(err), apierrors.IsTooManyRequests(err):
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr)
+}
+
 func writeAPIError(w http.ResponseWriter, err error) {
 	writeError(w, statusFor(err), err.Error())
 }
 
 func statusFor(err error) int {
 	switch {
+	case cannotReachCluster(err):
+		return http.StatusServiceUnavailable
 	case apierrors.IsNotFound(err):
 		return http.StatusNotFound
 	case apierrors.IsConflict(err):
@@ -91,6 +112,8 @@ func statusFor(err error) int {
 		return http.StatusForbidden
 	case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
 		return http.StatusUnprocessableEntity
+	case unreachable(err):
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusBadRequest
 	}
@@ -141,8 +164,13 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	writeJSON(w, s.mgr.Events(r.Context(), q.Get("namespace"), q.Get("uid")))
+	query := r.URL.Query()
+	events, err := s.mgr.Events(r.Context(), query.Get("namespace"), query.Get("uid"))
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, events)
 }
 
 func (s *Server) handleFluxAction(w http.ResponseWriter, r *http.Request) {

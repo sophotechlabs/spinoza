@@ -2,6 +2,7 @@ package inspect
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
@@ -15,21 +16,21 @@ import (
 
 var eventGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}
 
-func Events(ctx context.Context, dyn dynamic.Interface, namespace, uid string) []api.Event {
+func Events(ctx context.Context, dyn dynamic.Interface, namespace, uid string) ([]api.Event, error) {
 	if uid == "" {
-		return []api.Event{}
+		return []api.Event{}, nil
 	}
 	opts := metav1.ListOptions{FieldSelector: "involvedObject.uid=" + uid}
 	list, err := eventsFor(dyn, namespace).List(ctx, opts)
 	if err != nil {
-		return []api.Event{}
+		return nil, fmt.Errorf("listing events: %w", err)
 	}
 	out := make([]api.Event, 0, len(list.Items))
 	for i := range list.Items {
 		out = append(out, eventOf(&list.Items[i]))
 	}
 	sortEvents(out)
-	return out
+	return out, nil
 }
 
 func eventsFor(dyn dynamic.Interface, namespace string) dynamic.ResourceInterface {

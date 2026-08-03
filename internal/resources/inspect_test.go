@@ -97,7 +97,10 @@ func TestManagerDeleteObject(t *testing.T) {
 func TestManagerEvents(t *testing.T) {
 	mgr := inspectManager(t, newDeployment("flux-system", "web"), newDeploymentEvent())
 
-	events := mgr.Events(context.Background(), "flux-system", "uid-web")
+	events, eventsErr := mgr.Events(context.Background(), "flux-system", "uid-web")
+	if eventsErr != nil {
+		t.Fatalf("events: %v", eventsErr)
+	}
 
 	if len(events) != 1 {
 		t.Fatalf("events = %d, want 1", len(events))

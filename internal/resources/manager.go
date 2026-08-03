@@ -164,7 +164,7 @@ func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef) error {
 	return inspect.Delete(ctx, m.dyn, ref)
 }
 
-func (m *Manager) Events(ctx context.Context, namespace, uid string) []api.Event {
+func (m *Manager) Events(ctx context.Context, namespace, uid string) ([]api.Event, error) {
 	return inspect.Events(ctx, m.dyn, namespace, uid)
 }
 
@@ -491,11 +491,13 @@ func watchFailure(holder *atomic.Pointer[string]) string {
 	return *reason
 }
 
+var ErrNotSynced = errors.New("the cluster did not answer in time")
+
 func syncFailure(key streamKey, timeout time.Duration, reason string) error {
 	if reason == "" {
-		return fmt.Errorf("%s did not sync within %s", key.gvr.String(), timeout)
+		return fmt.Errorf("%w: %s did not sync within %s", ErrNotSynced, key.gvr.String(), timeout)
 	}
-	return fmt.Errorf("%s did not sync within %s: %s", key.gvr.String(), timeout, reason)
+	return fmt.Errorf("%w: %s did not sync within %s: %s", ErrNotSynced, key.gvr.String(), timeout, reason)
 }
 
 func (st *stream) publish(kind string, obj any) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -45,7 +46,7 @@ func TestEventsMapsAndSortsNewestFirst(t *testing.T) {
 		"source":         map[string]any{"component": "kubelet"},
 	})
 
-	events := Events(context.Background(), newClient(older, newer), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(older, newer), "flux-system", "pod-uid")
 
 	if len(events) != 2 {
 		t.Fatalf("events = %d, want 2", len(events))
@@ -84,7 +85,7 @@ func TestEventsSendsUIDFieldSelector(t *testing.T) {
 		return false, nil, nil
 	})
 
-	Events(context.Background(), client, "flux-system", "pod-uid")
+	_, _ = Events(context.Background(), client, "flux-system", "pod-uid")
 
 	if selector != "involvedObject.uid=pod-uid" {
 		t.Fatalf("field selector = %q, want involvedObject.uid=pod-uid", selector)
@@ -99,7 +100,7 @@ func TestEventsWithoutNamespaceListsClusterWide(t *testing.T) {
 		return false, nil, nil
 	})
 
-	Events(context.Background(), client, "", "node-uid")
+	_, _ = Events(context.Background(), client, "", "node-uid")
 
 	if namespace != "" {
 		t.Fatalf("namespace = %q, want empty for a cluster-wide list", namespace)
@@ -107,22 +108,28 @@ func TestEventsWithoutNamespaceListsClusterWide(t *testing.T) {
 }
 
 func TestEventsEmptyWithoutUID(t *testing.T) {
-	events := Events(context.Background(), newClient(), "flux-system", "")
+	events, _ := Events(context.Background(), newClient(), "flux-system", "")
 	if len(events) != 0 {
 		t.Fatalf("events = %d, want 0", len(events))
 	}
 }
 
-func TestEventsEmptyOnListError(t *testing.T) {
+func TestEventsReportsAListFailure(t *testing.T) {
 	client := newClient()
 	client.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
-		return true, nil, errors.New("boom")
+		return true, nil, errors.New("events is forbidden")
 	})
 
-	events := Events(context.Background(), client, "flux-system", "pod-uid")
+	events, err := Events(context.Background(), client, "flux-system", "pod-uid")
 
-	if len(events) != 0 {
-		t.Fatalf("events = %d, want 0", len(events))
+	if err == nil {
+		t.Fatal("a list failure was reported as an empty event list")
+	}
+	if !strings.Contains(err.Error(), "events is forbidden") {
+		t.Fatalf("err = %v, want the reason from the apiserver", err)
+	}
+	if events != nil {
+		t.Fatalf("events = %v, want nil alongside the error", events)
 	}
 }
 
@@ -132,7 +139,7 @@ func TestEventCountFallsBackToSeries(t *testing.T) {
 		"eventTime": "2026-07-27T10:00:00Z",
 	})
 
-	events := Events(context.Background(), newClient(event), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(event), "flux-system", "pod-uid")
 
 	if len(events) != 1 {
 		t.Fatalf("events = %d, want 1", len(events))
@@ -151,7 +158,7 @@ func TestEventCountDefaultsToOne(t *testing.T) {
 		"reportingComponent": "kustomize-controller",
 	})
 
-	events := Events(context.Background(), newClient(event), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(event), "flux-system", "pod-uid")
 
 	if len(events) != 1 {
 		t.Fatalf("events = %d, want 1", len(events))
@@ -168,7 +175,7 @@ func TestEventCountDefaultsToOne(t *testing.T) {
 }
 
 func TestEventLastSeenEmptyWhenNoTimestamps(t *testing.T) {
-	events := Events(context.Background(), newClient(newEvent("bare", nil)), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(newEvent("bare", nil)), "flux-system", "pod-uid")
 
 	if len(events) != 1 {
 		t.Fatalf("events = %d, want 1", len(events))
@@ -188,7 +195,7 @@ func TestEventsSortMixesTimestampPrecision(t *testing.T) {
 		"eventTime": "2026-07-27T09:34:00.546384Z",
 	})
 
-	events := Events(context.Background(), newClient(secondPrecision, subSecond), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(secondPrecision, subSecond), "flux-system", "pod-uid")
 
 	if len(events) != 2 {
 		t.Fatalf("events = %d, want 2", len(events))
@@ -205,7 +212,7 @@ func TestEventsSortKeepsUnparseableStampsLast(t *testing.T) {
 	})
 	bad := newEvent("bad", map[string]any{"reason": "Broken"})
 
-	events := Events(context.Background(), newClient(good, bad), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(good, bad), "flux-system", "pod-uid")
 
 	if len(events) != 2 {
 		t.Fatalf("events = %d, want 2", len(events))
