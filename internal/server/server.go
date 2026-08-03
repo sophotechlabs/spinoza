@@ -48,7 +48,7 @@ func (s *Server) manager() *resources.Manager {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", healthz)
+	mux.HandleFunc("/healthz", guard(healthz))
 	mux.HandleFunc("/api/contexts", guard(s.handleContexts))
 	mux.HandleFunc("/api/resources", guard(s.handleResources))
 	mux.HandleFunc("/api/gitops/graph", guard(s.handleGraph))
@@ -76,7 +76,12 @@ func healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeJSON(w http.ResponseWriter, payload any) {
+	writeJSONStatus(w, http.StatusOK, payload)
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	err := json.NewEncoder(w).Encode(payload)
 	if err != nil {
 		log.Printf("encode response: %v", err)
@@ -327,8 +332,7 @@ func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, startErr)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, forward)
+	writeJSONStatus(w, http.StatusCreated, forward)
 }
 
 func (s *Server) stopForward(w http.ResponseWriter, r *http.Request) {

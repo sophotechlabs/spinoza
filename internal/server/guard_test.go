@@ -163,7 +163,22 @@ func TestGuardRefusesCrossOriginAssets(t *testing.T) {
 	}
 }
 
-func TestHealthzStaysOpen(t *testing.T) {
+func TestHealthzAnswersALocalProbe(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	t.Cleanup(srv.Close)
+
+	res, err := http.Get(srv.URL + "/healthz")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want a probe with no Origin to pass", res.StatusCode)
+	}
+}
+
+func TestHealthzRefusesAForeignOrigin(t *testing.T) {
 	mgr, _ := testManager(t)
 	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
 	t.Cleanup(srv.Close)
@@ -179,7 +194,7 @@ func TestHealthzStaysOpen(t *testing.T) {
 		t.Fatalf("do: %v", err)
 	}
 	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", res.StatusCode)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; no route should answer a foreign page", res.StatusCode)
 	}
 }
