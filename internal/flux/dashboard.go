@@ -13,6 +13,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
+	"github.com/sophotechlabs/spinoza/internal/listerr"
 )
 
 var groupOrder = []string{
@@ -51,6 +52,7 @@ type Charts interface {
 func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, index Charts) api.FluxDashboard {
 	byGroup := map[string][]api.FluxResource{}
 	items := map[string][]*unstructured.Unstructured{}
+	failures := listerr.New()
 	for _, desc := range descs {
 		group := categoryOf(desc)
 		if group == "" {
@@ -58,6 +60,7 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 		}
 		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 		list, err := dyn.Resource(gvr).List(ctx, metav1.ListOptions{})
+		failures.Record(gvr.GroupResource().String(), err)
 		if err != nil {
 			continue
 		}
@@ -67,7 +70,9 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 		}
 	}
 	applyLatest(byGroup, items, repoIndex(ctx, dyn, descs), index)
-	return assemble(byGroup)
+	dashboard := assemble(byGroup)
+	dashboard.Error = failures.Message()
+	return dashboard
 }
 
 func repoIndex(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {

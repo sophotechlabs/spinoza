@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -305,5 +306,37 @@ func TestReportingCountExcludesResourcesWithoutAReadyCondition(t *testing.T) {
 	}
 	if got := reportingCount(items); got != 3 {
 		t.Fatalf("reportingCount = %d, want 3", got)
+	}
+}
+
+func TestBuildReportsAListThatFailed(t *testing.T) {
+	dash := Build(context.Background(), newClient(t), fluxDescs(), nil)
+
+	if dash.Error == "" {
+		t.Fatal("a failed list was reported as an empty dashboard")
+	}
+	if !strings.Contains(dash.Error, "buckets") {
+		t.Fatalf("error = %q, want it to name the resource", dash.Error)
+	}
+	if !strings.Contains(dash.Error, "(list buckets failed)") {
+		t.Fatalf("error = %q, want the reason", dash.Error)
+	}
+}
+
+func TestBuildStillReturnsWhatItCouldList(t *testing.T) {
+	dash := Build(context.Background(), newClient(t), fluxDescs(), nil)
+
+	if len(dash.Groups) == 0 {
+		t.Fatal("one failing list threw away every group")
+	}
+}
+
+func TestBuildIsSilentWhenEveryListWorks(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds(), fluxObjects()...)
+
+	dash := Build(context.Background(), dyn, fluxDescs(), nil)
+
+	if dash.Error != "" {
+		t.Fatalf("error = %q, want none", dash.Error)
 	}
 }

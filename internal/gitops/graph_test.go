@@ -3,6 +3,7 @@ package gitops
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -443,5 +444,42 @@ func TestStatusOf(t *testing.T) {
 	applier := conditionsObject([]any{map[string]any{"type": "Ready", "status": "True"}})
 	if got := statusOf(applier, "applier"); got != "Ready" {
 		t.Fatalf("statusOf applier = %q, want Ready", got)
+	}
+}
+
+func TestBuildReportsAListThatFailed(t *testing.T) {
+	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+
+	if graph.Error == "" {
+		t.Fatal("a failed list was reported as a graph with nothing in it")
+	}
+	if !strings.Contains(graph.Error, "buckets") {
+		t.Fatalf("error = %q, want it to name the resource", graph.Error)
+	}
+	if !strings.Contains(graph.Error, "(list buckets failed)") {
+		t.Fatalf("error = %q, want the reason", graph.Error)
+	}
+}
+
+func TestBuildStillReturnsTheNodesItCouldRead(t *testing.T) {
+	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+
+	if len(graph.Nodes) == 0 {
+		t.Fatal("one failing list threw away every node")
+	}
+}
+
+func TestBuildIsSilentWhenEveryListWorks(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		graphListKinds(),
+		gitRepository(),
+		kustomizationApps(),
+	)
+
+	graph := Build(context.Background(), dyn, graphDescs())
+
+	if graph.Error != "" {
+		t.Fatalf("error = %q, want none", graph.Error)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/listerr"
 )
 
 const fluxSourceGroup = "source.toolkit.fluxcd.io"
@@ -24,11 +25,12 @@ var fluxSourceResources = map[string]bool{
 
 func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) api.Graph {
 	build := &builder{
-		ctx:    ctx,
-		dyn:    dyn,
-		byKind: indexByKind(descs),
-		nodes:  map[string]api.GraphNode{},
-		edges:  map[string]api.GraphEdge{},
+		ctx:      ctx,
+		dyn:      dyn,
+		byKind:   indexByKind(descs),
+		nodes:    map[string]api.GraphNode{},
+		edges:    map[string]api.GraphEdge{},
+		failures: listerr.New(),
 	}
 	for _, d := range descs {
 		category := graphCategory(d)
@@ -65,16 +67,18 @@ func graphCategory(desc api.ResourceDescriptor) string {
 }
 
 type builder struct {
-	ctx    context.Context
-	dyn    dynamic.Interface
-	byKind map[string]api.ResourceDescriptor
-	nodes  map[string]api.GraphNode
-	edges  map[string]api.GraphEdge
+	ctx      context.Context
+	dyn      dynamic.Interface
+	byKind   map[string]api.ResourceDescriptor
+	nodes    map[string]api.GraphNode
+	edges    map[string]api.GraphEdge
+	failures *listerr.Collector
 }
 
 func (b *builder) collect(desc api.ResourceDescriptor, category string) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	list, err := b.dyn.Resource(gvr).List(b.ctx, metav1.ListOptions{})
+	b.failures.Record(gvr.GroupResource().String(), err)
 	if err != nil {
 		return
 	}
@@ -226,7 +230,7 @@ func (b *builder) graph() api.Graph {
 		}
 		return strings.Compare(left.To, right.To)
 	})
-	return api.Graph{Nodes: nodes, Edges: edges}
+	return api.Graph{Nodes: nodes, Edges: edges, Error: b.failures.Message()}
 }
 
 func nodeID(group, kind, namespace, name string) string {

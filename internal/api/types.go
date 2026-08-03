@@ -230,6 +230,7 @@ type GraphEdge struct {
 type Graph struct {
 	Nodes []GraphNode `json:"nodes"`
 	Edges []GraphEdge `json:"edges"`
+	Error string      `json:"error,omitempty"`
 }
 
 type FluxResource struct {
@@ -259,6 +260,7 @@ type FluxGroup struct {
 
 type FluxDashboard struct {
 	Groups []FluxGroup `json:"groups"`
+	Error  string      `json:"error,omitempty"`
 }
 
 type ResourceUsage struct {
