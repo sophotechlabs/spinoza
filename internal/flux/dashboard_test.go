@@ -157,7 +157,7 @@ func newClient(t *testing.T) *fake.FakeDynamicClient {
 
 func TestBuild(t *testing.T) {
 	dyn := newClient(t)
-	dash := Build(context.Background(), dyn, fluxDescs(), nil)
+	dash := Build(context.Background(), listerFor(dyn), fluxDescs(), nil)
 
 	wantGroups := []struct {
 		name  string
@@ -241,7 +241,7 @@ func TestBuildEmpty(t *testing.T) {
 	descs := map[string]api.ResourceDescriptor{
 		discovery.Key("apps", "v1", "deployments"): desc("apps", "v1", "deployments", "Deployment"),
 	}
-	dash := Build(context.Background(), dyn, descs, nil)
+	dash := Build(context.Background(), listerFor(dyn), descs, nil)
 	if len(dash.Groups) != 0 {
 		t.Fatalf("groups = %d, want 0", len(dash.Groups))
 	}
@@ -310,7 +310,7 @@ func TestReportingCountExcludesResourcesWithoutAReadyCondition(t *testing.T) {
 }
 
 func TestBuildReportsAListThatFailed(t *testing.T) {
-	dash := Build(context.Background(), newClient(t), fluxDescs(), nil)
+	dash := Build(context.Background(), listerFor(newClient(t)), fluxDescs(), nil)
 
 	if dash.Error == "" {
 		t.Fatal("a failed list was reported as an empty dashboard")
@@ -324,7 +324,7 @@ func TestBuildReportsAListThatFailed(t *testing.T) {
 }
 
 func TestBuildStillReturnsWhatItCouldList(t *testing.T) {
-	dash := Build(context.Background(), newClient(t), fluxDescs(), nil)
+	dash := Build(context.Background(), listerFor(newClient(t)), fluxDescs(), nil)
 
 	if len(dash.Groups) == 0 {
 		t.Fatal("one failing list threw away every group")
@@ -334,7 +334,7 @@ func TestBuildStillReturnsWhatItCouldList(t *testing.T) {
 func TestBuildIsSilentWhenEveryListWorks(t *testing.T) {
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds(), fluxObjects()...)
 
-	dash := Build(context.Background(), dyn, fluxDescs(), nil)
+	dash := Build(context.Background(), listerFor(dyn), fluxDescs(), nil)
 
 	if dash.Error != "" {
 		t.Fatalf("error = %q, want none", dash.Error)
@@ -445,7 +445,7 @@ func TestWithoutAChartIndexTheRepositoriesAreNotListed(t *testing.T) {
 		return false, nil, nil
 	})
 
-	Build(context.Background(), dyn, fluxDescs(), nil)
+	Build(context.Background(), listerFor(dyn), fluxDescs(), nil)
 
 	if listed != 1 {
 		t.Fatalf("listed helmrepositories %d times, want only the dashboard's own list", listed)
@@ -460,7 +460,7 @@ func TestWithAChartIndexTheRepositoriesAreStillRead(t *testing.T) {
 		return false, nil, nil
 	})
 
-	Build(context.Background(), dyn, fluxDescs(), &stubCharts{})
+	Build(context.Background(), listerFor(dyn), fluxDescs(), &stubCharts{})
 
 	if listed < 2 {
 		t.Fatalf("listed helmrepositories %d times; the chart index needs the repositories", listed)

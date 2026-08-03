@@ -267,11 +267,11 @@ func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {
 }
 
 func (m *Manager) Graph(ctx context.Context) api.Graph {
-	return gitops.Build(ctx, m.dyn, m.descriptors())
+	return gitops.Build(ctx, m, m.descriptors())
 }
 
 func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
-	return flux.Build(ctx, m.dyn, m.descriptors(), m.charts)
+	return flux.Build(ctx, m, m.descriptors(), m.charts)
 }
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
@@ -304,6 +304,7 @@ type stream struct {
 	mu       sync.Mutex
 	subs     map[*subscriber]struct{}
 	refs     int
+	pinned   bool
 }
 
 func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscription, error) {
@@ -350,6 +351,53 @@ func (m *Manager) attach(key streamKey, desc api.ResourceDescriptor) (*stream, *
 	return nil, nil, fmt.Errorf("%s kept being torn down while subscribing", key.gvr.String())
 }
 
+func (m *Manager) List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	lister, err := m.pinnedLister(desc)
+	if err != nil {
+		return nil, err
+	}
+	objs, listErr := lister.List(labels.Everything())
+	if listErr != nil {
+		return nil, listErr
+	}
+	out := make([]*unstructured.Unstructured, 0, len(objs))
+	for _, obj := range objs {
+		item, ok := toUnstructured(obj)
+		if !ok {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (m *Manager) pinnedLister(desc api.ResourceDescriptor) (cache.GenericLister, error) {
+	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
+	key := streamKey{gvr: gvr}
+	for range attachAttempts {
+		st, err := m.streamFor(key, desc)
+		if err != nil {
+			return nil, err
+		}
+		if m.pin(key, st) {
+			return st.lister, nil
+		}
+	}
+	return nil, fmt.Errorf("%s kept being torn down while reading", gvr.String())
+}
+
+func (m *Manager) pin(key streamKey, st *stream) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.streams[key] != st {
+		return false
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.pinned = true
+	return true
+}
+
 func (m *Manager) register(key streamKey, st *stream) (*subscriber, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -375,7 +423,7 @@ func (m *Manager) detach(key streamKey, st *stream, entry *subscriber) {
 		close(entry.resync)
 		st.refs--
 	}
-	idle := st.refs == 0
+	idle := st.refs == 0 && !st.pinned
 	st.mu.Unlock()
 	if !present || !idle {
 		return

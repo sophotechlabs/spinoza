@@ -197,7 +197,7 @@ func newGraphClient(t *testing.T) *fake.FakeDynamicClient {
 
 func TestBuild(t *testing.T) {
 	dyn := newGraphClient(t)
-	graph := Build(context.Background(), dyn, graphDescs())
+	graph := Build(context.Background(), listerFor(dyn), graphDescs())
 
 	nodesByID := map[string]api.GraphNode{}
 	counts := map[string]int{}
@@ -206,8 +206,8 @@ func TestBuild(t *testing.T) {
 		counts[n.Category]++
 	}
 
-	if len(graph.Nodes) != 12 {
-		t.Fatalf("nodes = %d, want 12", len(graph.Nodes))
+	if len(graph.Nodes) != 8 {
+		t.Fatalf("nodes = %d, want 8 control-plane nodes", len(graph.Nodes))
 	}
 	if counts["source"] != 2 {
 		t.Fatalf("source nodes = %d, want 2", counts["source"])
@@ -218,8 +218,8 @@ func TestBuild(t *testing.T) {
 	if counts["app"] != 1 {
 		t.Fatalf("app nodes = %d, want 1", counts["app"])
 	}
-	if counts["managed"] != 4 {
-		t.Fatalf("managed nodes = %d, want 4", counts["managed"])
+	if counts["managed"] != 0 {
+		t.Fatalf("managed nodes = %d; the browser drops them, so they must not cross the wire", counts["managed"])
 	}
 
 	wantNodes := []struct {
@@ -234,10 +234,6 @@ func TestBuild(t *testing.T) {
 		{"kustomize.toolkit.fluxcd.io/Kustomization/flux-system/orphan", "applier", "Kustomization", ""},
 		{"helm.toolkit.fluxcd.io/HelmRelease/flux-system/podinfo", "applier", "HelmRelease", "InstallFailed"},
 		{"argoproj.io/Application/argocd/guestbook", "app", "Application", "Healthy Synced"},
-		{"/Service/default/web", "managed", "Service", ""},
-		{"apps/Deployment/prod/api", "managed", "Deployment", ""},
-		{"/ConfigMap/flux-system/podinfo", "managed", "ConfigMap", ""},
-		{"/ConfigMap/argocd/settings", "managed", "ConfigMap", ""},
 	}
 	for _, expected := range wantNodes {
 		node, ok := nodesByID[expected.id]
@@ -259,25 +255,27 @@ func TestBuild(t *testing.T) {
 	for _, e := range graph.Edges {
 		edgeSet[e.From+"|"+e.To+"|"+e.Kind] = true
 	}
-	if len(graph.Edges) != 11 {
-		t.Fatalf("edges = %d, want 11", len(graph.Edges))
+	if len(graph.Edges) != 5 {
+		t.Fatalf("edges = %d, want 5; an edge to a dropped node has nothing to draw to", len(graph.Edges))
 	}
 	wantEdges := []string{
 		"source.toolkit.fluxcd.io/GitRepository/flux-system/app-repo|kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps|source",
 		"source.toolkit.fluxcd.io/HelmRepository/flux-system/podinfo-charts|helm.toolkit.fluxcd.io/HelmRelease/flux-system/podinfo|source",
 		"kustomize.toolkit.fluxcd.io/Kustomization/flux-system/infra|kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps|dependsOn",
 		"kustomize.toolkit.fluxcd.io/Kustomization/data/db|kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps|dependsOn",
-		"kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps|/Service/default/web|manages",
-		"kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps|apps/Deployment/prod/api|manages",
 		"kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps|source.toolkit.fluxcd.io/GitRepository/flux-system/app-repo|manages",
-		"helm.toolkit.fluxcd.io/HelmRelease/flux-system/podinfo|/ConfigMap/flux-system/podinfo|manages",
-		"argoproj.io/Application/argocd/guestbook|apps/Deployment/prod/api|manages",
-		"argoproj.io/Application/argocd/guestbook|/Service/default/web|manages",
-		"argoproj.io/Application/argocd/guestbook|/ConfigMap/argocd/settings|manages",
 	}
 	for _, w := range wantEdges {
 		if !edgeSet[w] {
 			t.Fatalf("missing edge %q", w)
+		}
+	}
+	for _, dropped := range []string{
+		"kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps|/Service/default/web|manages",
+		"argoproj.io/Application/argocd/guestbook|/ConfigMap/argocd/settings|manages",
+	} {
+		if edgeSet[dropped] {
+			t.Fatalf("edge %q points at a node the browser never renders", dropped)
 		}
 	}
 
@@ -304,7 +302,7 @@ func TestBuildEmpty(t *testing.T) {
 	descs := map[string]api.ResourceDescriptor{
 		discovery.Key("apps", "v1", "deployments"): desc("apps", "v1", "deployments", "Deployment"),
 	}
-	graph := Build(context.Background(), dyn, descs)
+	graph := Build(context.Background(), listerFor(dyn), descs)
 	if len(graph.Nodes) != 0 {
 		t.Fatalf("nodes = %d, want 0", len(graph.Nodes))
 	}
@@ -448,7 +446,7 @@ func TestStatusOf(t *testing.T) {
 }
 
 func TestBuildReportsAListThatFailed(t *testing.T) {
-	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+	graph := Build(context.Background(), listerFor(newGraphClient(t)), graphDescs())
 
 	if graph.Error == "" {
 		t.Fatal("a failed list was reported as a graph with nothing in it")
@@ -462,7 +460,7 @@ func TestBuildReportsAListThatFailed(t *testing.T) {
 }
 
 func TestBuildStillReturnsTheNodesItCouldRead(t *testing.T) {
-	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+	graph := Build(context.Background(), listerFor(newGraphClient(t)), graphDescs())
 
 	if len(graph.Nodes) == 0 {
 		t.Fatal("one failing list threw away every node")
@@ -477,7 +475,7 @@ func TestBuildIsSilentWhenEveryListWorks(t *testing.T) {
 		kustomizationApps(),
 	)
 
-	graph := Build(context.Background(), dyn, graphDescs())
+	graph := Build(context.Background(), listerFor(dyn), graphDescs())
 
 	if graph.Error != "" {
 		t.Fatalf("error = %q, want none", graph.Error)
@@ -494,7 +492,7 @@ func nodeByID(graph api.Graph, id string) (api.GraphNode, bool) {
 }
 
 func TestADanglingDependsOnIsDrawnAsMissing(t *testing.T) {
-	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+	graph := Build(context.Background(), listerFor(newGraphClient(t)), graphDescs())
 
 	node, found := nodeByID(graph, "kustomize.toolkit.fluxcd.io/Kustomization/flux-system/infra")
 	if !found {
@@ -509,7 +507,7 @@ func TestADanglingDependsOnIsDrawnAsMissing(t *testing.T) {
 }
 
 func TestADependsOnInAnotherNamespaceKeepsThatNamespace(t *testing.T) {
-	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+	graph := Build(context.Background(), listerFor(newGraphClient(t)), graphDescs())
 
 	node, found := nodeByID(graph, "kustomize.toolkit.fluxcd.io/Kustomization/data/db")
 	if !found {
@@ -521,7 +519,7 @@ func TestADependsOnInAnotherNamespaceKeepsThatNamespace(t *testing.T) {
 }
 
 func TestARealDependencyKeepsItsOwnStatus(t *testing.T) {
-	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+	graph := Build(context.Background(), listerFor(newGraphClient(t)), graphDescs())
 
 	node, found := nodeByID(graph, "kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps")
 	if !found {
@@ -559,7 +557,7 @@ func graphWith(t *testing.T, objs ...*unstructured.Unstructured) api.Graph {
 		runtimeObjs = append(runtimeObjs, obj)
 	}
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), graphListKinds(), runtimeObjs...)
-	return Build(context.Background(), dyn, graphDescs())
+	return Build(context.Background(), listerFor(dyn), graphDescs())
 }
 
 func TestAChartSourceRefKeepsItsOwnNamespace(t *testing.T) {
@@ -605,5 +603,27 @@ func TestAChartRefIsGraphed(t *testing.T) {
 	_, found := nodeByID(graph, "source.toolkit.fluxcd.io/OCIRepository/flux-system/podinfo-oci")
 	if !found {
 		t.Fatal("spec.chartRef is not graphed, so an OCI-sourced HelmRelease has no source edge")
+	}
+}
+
+func TestAnInventoryEntryNamingAFluxKindSurvives(t *testing.T) {
+	graph := Build(context.Background(), listerFor(newGraphClient(t)), graphDescs())
+
+	node, found := nodeByID(graph, "source.toolkit.fluxcd.io/GitRepository/flux-system/app-repo")
+	if !found {
+		t.Fatal("a GitRepository listed in a Kustomization inventory was dropped as managed")
+	}
+	if node.Category == categoryManaged {
+		t.Fatalf("category = %q; addObject should have overwritten the inventory placeholder", node.Category)
+	}
+}
+
+func TestWorkloadInventoryNodesDoNotCrossTheWire(t *testing.T) {
+	graph := Build(context.Background(), listerFor(newGraphClient(t)), graphDescs())
+
+	for _, node := range graph.Nodes {
+		if node.Category == categoryManaged {
+			t.Fatalf("node %q is managed; the browser filters these out, so sending them is waste", node.ID)
+		}
 	}
 }

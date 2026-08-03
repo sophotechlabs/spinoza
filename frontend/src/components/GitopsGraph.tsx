@@ -3,7 +3,7 @@ import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import type { GraphNode } from '../lib/types';
 import { fetchGraph } from '../lib/graph';
-import { controlPlane, toFlow } from '../lib/graphLayout';
+import { toFlow } from '../lib/graphLayout';
 import type { GitopsFlow, GitopsFlowNode } from '../lib/graphLayout';
 import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
@@ -51,13 +51,12 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
         const graph = await fetchGraph();
         if (mounted) {
           setPartial(graph.error ?? null);
-          const reduced = controlPlane(graph);
-          if (reduced.nodes.length > MAX_NODES) {
-            setOverLimit(reduced.nodes.length);
+          if (graph.nodes.length > MAX_NODES) {
+            setOverLimit(graph.nodes.length);
             setFlow(null);
           } else {
             setOverLimit(null);
-            setFlow(toFlow(reduced));
+            setFlow(toFlow(graph));
           }
           setError(null);
         }

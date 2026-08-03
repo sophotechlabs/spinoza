@@ -79,21 +79,6 @@ describe('GitopsGraph', () => {
     expect(screen.getByTestId('react-flow')).toHaveAttribute('data-edges', '1');
   });
 
-  it('filters managed nodes out of the rendered control plane', async () => {
-    const graph: Graph = {
-      nodes: [
-        makeGraphNode({ id: 'a', name: 'alpha', category: 'source' }),
-        makeGraphNode({ id: 'z', name: 'zulu', category: 'managed' }),
-      ],
-      edges: [makeGraphEdge({ from: 'a', to: 'z', kind: 'manages' })],
-    };
-    stubGraph(graph);
-    render(<GitopsGraph />);
-    expect(await screen.findByText('alpha')).toBeInTheDocument();
-    expect(screen.queryByText('zulu')).not.toBeInTheDocument();
-    expect(screen.getByTestId('react-flow')).toHaveAttribute('data-edges', '0');
-  });
-
   it('shows an over-limit message when the control plane exceeds the node cap', async () => {
     const nodes = Array.from({ length: 401 }, (_unused, index) =>
       makeGraphNode({ id: `n-${index}`, name: `node-${index}`, category: 'app' }),

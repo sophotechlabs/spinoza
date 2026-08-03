@@ -1104,3 +1104,109 @@ func TestResyncChannelClosesWithTheSubscription(t *testing.T) {
 		t.Fatal("resync channel was left open; the relay would leak")
 	}
 }
+
+func TestListReadsTheInformerCacheNotTheApiserver(t *testing.T) {
+	client := newClient(t, newDeployment("default", "web"))
+	lists := 0
+	var listMu sync.Mutex
+	client.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		listMu.Lock()
+		lists++
+		listMu.Unlock()
+		return false, nil, nil
+	})
+	mgr, cancel := newManager(t, client)
+	t.Cleanup(cancel)
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	for range 5 {
+		items, err := mgr.List(desc)
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		if len(items) != 1 {
+			t.Fatalf("items = %d, want 1", len(items))
+		}
+	}
+
+	listMu.Lock()
+	defer listMu.Unlock()
+	if lists > 1 {
+		t.Fatalf("hit the apiserver %d times for 5 reads; the informer cache should serve them", lists)
+	}
+}
+
+func TestListSeesObjectsTheInformerPicksUp(t *testing.T) {
+	client := newClient(t)
+	mgr, cancel := newManager(t, client)
+	t.Cleanup(cancel)
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	before, err := mgr.List(desc)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(before) != 0 {
+		t.Fatalf("items = %d, want none", len(before))
+	}
+
+	_, createErr := client.Resource(depGVR).Namespace("default").
+		Create(context.Background(), newDeployment("default", "api"), metav1.CreateOptions{})
+	if createErr != nil {
+		t.Fatalf("create: %v", createErr)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		items, listErr := mgr.List(desc)
+		if listErr != nil {
+			t.Fatalf("list: %v", listErr)
+		}
+		if len(items) == 1 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the informer never delivered the new object to the lister")
+}
+
+func TestAPinnedStreamOutlivesItsSubscribers(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	t.Cleanup(cancel)
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	_, listErr := mgr.List(desc)
+	if listErr != nil {
+		t.Fatalf("list: %v", listErr)
+	}
+	sub.Close()
+
+	mgr.mu.Lock()
+	live := len(mgr.streams)
+	mgr.mu.Unlock()
+	if live != 1 {
+		t.Fatalf("streams = %d; closing the last subscriber tore down a stream a reader still needs", live)
+	}
+	items, afterErr := mgr.List(desc)
+	if afterErr != nil {
+		t.Fatalf("list after close: %v", afterErr)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %d after the subscriber left", len(items))
+	}
+}
+
+func TestListReportsAResourceThatNeverSyncs(t *testing.T) {
+	mgr, _ := stuckManager(t, "deployments")
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	_, err := mgr.List(desc)
+
+	if err == nil {
+		t.Fatal("a forbidden resource was reported as an empty list")
+	}
+}

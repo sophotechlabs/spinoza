@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import dagre from '@dagrejs/dagre';
 import type { Graph } from '../../src/lib/types';
-import { controlPlane, toFlow } from '../../src/lib/graphLayout';
+import { toFlow } from '../../src/lib/graphLayout';
 import type { GitopsFlowNode } from '../../src/lib/graphLayout';
 import { makeGraphEdge, makeGraphNode } from '../helpers';
 
@@ -79,15 +79,6 @@ describe('toFlow', () => {
     expect(node.className).toContain('sky');
   });
 
-  it('maps a managed category with a neutral status to the neutral style', () => {
-    const graph: Graph = {
-      nodes: [makeGraphNode({ id: 'a', status: 'Unknown', category: 'managed' })],
-      edges: [],
-    };
-    const node = nodeById(toFlow(graph).nodes, 'a');
-    expect(node.className).toContain('border-neutral-700');
-  });
-
   it('maps an app category with a neutral status to the default style', () => {
     const graph: Graph = {
       nodes: [makeGraphNode({ id: 'a', status: 'Unknown', category: 'app' })],
@@ -141,38 +132,6 @@ describe('toFlow', () => {
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
     expect(node.position).toEqual({ x: 0, y: 0 });
-  });
-});
-
-describe('controlPlane', () => {
-  it('drops managed nodes and every edge that touches one', () => {
-    const graph: Graph = {
-      nodes: [
-        makeGraphNode({ id: 'a', category: 'source' }),
-        makeGraphNode({ id: 'b', category: 'applier' }),
-        makeGraphNode({ id: 'c', category: 'managed' }),
-      ],
-      edges: [
-        makeGraphEdge({ from: 'a', to: 'b', kind: 'source' }),
-        makeGraphEdge({ from: 'b', to: 'c', kind: 'manages' }),
-      ],
-    };
-    const reduced = controlPlane(graph);
-    expect(reduced.nodes.map((node) => node.id)).toEqual(['a', 'b']);
-    expect(reduced.edges).toEqual([makeGraphEdge({ from: 'a', to: 'b', kind: 'source' })]);
-  });
-
-  it('keeps every node and edge when none are managed', () => {
-    const graph: Graph = {
-      nodes: [
-        makeGraphNode({ id: 'a', category: 'source' }),
-        makeGraphNode({ id: 'b', category: 'app' }),
-      ],
-      edges: [makeGraphEdge({ from: 'a', to: 'b', kind: 'source' })],
-    };
-    const reduced = controlPlane(graph);
-    expect(reduced.nodes).toHaveLength(2);
-    expect(reduced.edges).toHaveLength(1);
   });
 });
 

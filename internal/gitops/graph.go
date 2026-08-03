@@ -5,10 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/listerr"
@@ -17,6 +15,7 @@ import (
 const (
 	fluxSourceGroup = "source.toolkit.fluxcd.io"
 	statusMissing   = "NotFound"
+	categoryManaged = "managed"
 )
 
 var fluxSourceResources = map[string]bool{
@@ -27,10 +26,10 @@ var fluxSourceResources = map[string]bool{
 	"helmcharts":       true,
 }
 
-func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) api.Graph {
+func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor) api.Graph {
 	build := &builder{
 		ctx:      ctx,
-		dyn:      dyn,
+		lister:   lister,
 		byKind:   indexByKind(descs),
 		nodes:    map[string]api.GraphNode{},
 		edges:    map[string]api.GraphEdge{},
@@ -70,9 +69,13 @@ func graphCategory(desc api.ResourceDescriptor) string {
 	return ""
 }
 
+type Lister interface {
+	List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
+}
+
 type builder struct {
 	ctx      context.Context
-	dyn      dynamic.Interface
+	lister   Lister
 	byKind   map[string]api.ResourceDescriptor
 	nodes    map[string]api.GraphNode
 	edges    map[string]api.GraphEdge
@@ -81,14 +84,13 @@ type builder struct {
 
 func (b *builder) collect(desc api.ResourceDescriptor, category string) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
-	list, err := b.dyn.Resource(gvr).List(b.ctx, metav1.ListOptions{})
+	items, err := b.lister.List(desc)
 	b.failures.Record(gvr.GroupResource().String(), err)
 	if err != nil {
 		return
 	}
-	for i := range list.Items {
-		u := &list.Items[i]
-		b.addObject(u, desc, category)
+	for _, item := range items {
+		b.addObject(item, desc, category)
 	}
 }
 
@@ -180,7 +182,7 @@ func (b *builder) inventoryEdges(id string, u *unstructured.Unstructured) {
 			continue
 		}
 		mid := nodeID(group, kind, ns, name)
-		b.ensureRef(mid, group, kind, ns, name, "managed", "")
+		b.ensureRef(mid, group, kind, ns, name, categoryManaged, "")
 		b.addEdge(id, mid, "manages")
 	}
 }
@@ -199,7 +201,7 @@ func (b *builder) appEdges(id string, u *unstructured.Unstructured) {
 		group := stringAt(entry, "group")
 		namespace := stringAt(entry, "namespace")
 		mid := nodeID(group, kind, namespace, name)
-		b.ensureRef(mid, group, kind, namespace, name, "managed", "")
+		b.ensureRef(mid, group, kind, namespace, name, categoryManaged, "")
 		b.addEdge(id, mid, "manages")
 	}
 }
@@ -229,14 +231,22 @@ func (b *builder) addEdge(from, to, kind string) {
 
 func (b *builder) graph() api.Graph {
 	nodes := make([]api.GraphNode, 0, len(b.nodes))
-	for _, n := range b.nodes {
-		nodes = append(nodes, n)
+	kept := make(map[string]bool, len(b.nodes))
+	for id, node := range b.nodes {
+		if node.Category == categoryManaged {
+			continue
+		}
+		kept[id] = true
+		nodes = append(nodes, node)
 	}
 	slices.SortFunc(nodes, func(left, right api.GraphNode) int {
 		return strings.Compare(left.ID, right.ID)
 	})
 	edges := make([]api.GraphEdge, 0, len(b.edges))
 	for _, e := range b.edges {
+		if !kept[e.From] || !kept[e.To] {
+			continue
+		}
 		edges = append(edges, e)
 	}
 	slices.SortFunc(edges, func(left, right api.GraphEdge) int {

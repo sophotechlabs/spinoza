@@ -54,9 +54,6 @@ function nodeClassName(category: GraphNodeCategory, status: string): string {
   if (category === 'source') {
     return `${NODE_BASE_CLASS} border-sky-700 bg-sky-950 text-sky-200`;
   }
-  if (category === 'managed') {
-    return `${NODE_BASE_CLASS} border-neutral-700 bg-neutral-900 text-neutral-400`;
-  }
   return `${NODE_BASE_CLASS} border-neutral-600 bg-neutral-800 text-neutral-100`;
 }
 
@@ -108,13 +105,6 @@ function toFlowEdge(edge: GraphEdge): Edge {
     style: { stroke: edgeStroke(edge.kind) },
     data: { kind: edge.kind },
   };
-}
-
-export function controlPlane(graph: Graph): Graph {
-  const nodes = graph.nodes.filter((node) => node.category !== 'managed');
-  const kept = new Set(nodes.map((node) => node.id));
-  const edges = graph.edges.filter((edge) => kept.has(edge.from) && kept.has(edge.to));
-  return { nodes, edges };
 }
 
 export function toFlow(graph: Graph): GitopsFlow {

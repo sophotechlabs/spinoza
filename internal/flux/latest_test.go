@@ -119,7 +119,7 @@ func TestBuildMarksAnOutdatedRelease(t *testing.T) {
 	)
 	index := &stubCharts{versions: map[string]string{"https://example.test/charts|podinfo": "6.15.1"}}
 
-	dash := Build(context.Background(), client, latestDescs(), index)
+	dash := Build(context.Background(), listerFor(client), latestDescs(), index)
 
 	row := releaseRow(t, dash, "podinfo")
 	if row.Latest != "6.15.1" {
@@ -140,7 +140,7 @@ func TestBuildLeavesACurrentReleaseUnmarked(t *testing.T) {
 	)
 	index := &stubCharts{versions: map[string]string{"https://example.test/charts|podinfo": "6.15.1"}}
 
-	row := releaseRow(t, Build(context.Background(), client, latestDescs(), index), "podinfo")
+	row := releaseRow(t, Build(context.Background(), listerFor(client), latestDescs(), index), "podinfo")
 
 	if row.Latest != "6.15.1" {
 		t.Fatalf("latest = %q", row.Latest)
@@ -157,7 +157,7 @@ func TestBuildDefaultsTheSourceNamespaceToTheRelease(t *testing.T) {
 	)
 	index := &stubCharts{versions: map[string]string{"https://example.test/charts|podinfo": "6.15.1"}}
 
-	row := releaseRow(t, Build(context.Background(), client, latestDescs(), index), "podinfo")
+	row := releaseRow(t, Build(context.Background(), listerFor(client), latestDescs(), index), "podinfo")
 
 	if row.Latest != "6.15.1" {
 		t.Fatalf("latest = %q, want the same-namespace source to resolve", row.Latest)
@@ -171,7 +171,7 @@ func TestBuildFlagsOCIRepositories(t *testing.T) {
 	)
 	index := &stubCharts{versions: map[string]string{"oci://registry.test/team|keycloak": "0.22.0"}}
 
-	dash := Build(context.Background(), client, latestDescs(), index)
+	dash := Build(context.Background(), listerFor(client), latestDescs(), index)
 
 	if !releaseRow(t, dash, "keycloak").Outdated {
 		t.Fatalf("expected the oci-sourced release to be marked outdated")
@@ -189,7 +189,7 @@ func TestBuildSkipsReleasesWithoutAResolvableSource(t *testing.T) {
 			client := latestClient(newRepo("podinfo", "https://example.test/charts", ""), release)
 			index := &stubCharts{versions: map[string]string{"https://example.test/charts|podinfo": "9.9.9"}}
 
-			dash := Build(context.Background(), client, latestDescs(), index)
+			dash := Build(context.Background(), listerFor(client), latestDescs(), index)
 
 			if releaseRow(t, dash, release.GetName()).Latest != "" {
 				t.Fatalf("expected no latest version for %s", name)
@@ -206,7 +206,7 @@ func TestBuildSkipsANonHelmRepositorySource(t *testing.T) {
 	client := latestClient(newRepo("flux-system", "https://example.test/charts", ""), release)
 	index := &stubCharts{versions: map[string]string{"https://example.test/charts|podinfo": "9.9.9"}}
 
-	dash := Build(context.Background(), client, latestDescs(), index)
+	dash := Build(context.Background(), listerFor(client), latestDescs(), index)
 
 	if releaseRow(t, dash, "chart-from-git").Latest != "" {
 		t.Fatalf("a git chart source must not get a latest version")
@@ -220,7 +220,7 @@ func TestBuildSkipsARepositoryWithoutAURL(t *testing.T) {
 	)
 	index := &stubCharts{versions: map[string]string{"|podinfo": "6.15.1"}}
 
-	if releaseRow(t, Build(context.Background(), client, latestDescs(), index), "podinfo").Latest != "" {
+	if releaseRow(t, Build(context.Background(), listerFor(client), latestDescs(), index), "podinfo").Latest != "" {
 		t.Fatalf("a repository without a url must be skipped")
 	}
 }
@@ -231,7 +231,7 @@ func TestBuildWithoutAChartIndex(t *testing.T) {
 		newRelease("apps", "podinfo", "podinfo", "podinfo", "flux-system", "6.14.0"),
 	)
 
-	row := releaseRow(t, Build(context.Background(), client, latestDescs(), nil), "podinfo")
+	row := releaseRow(t, Build(context.Background(), listerFor(client), latestDescs(), nil), "podinfo")
 
 	if row.Latest != "" {
 		t.Fatalf("latest = %q, want empty when no index is configured", row.Latest)

@@ -6,10 +6,8 @@ import (
 	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
@@ -51,7 +49,11 @@ type Charts interface {
 
 const helmGroup = "helm.toolkit.fluxcd.io"
 
-func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, index Charts) api.FluxDashboard {
+type Lister interface {
+	List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
+}
+
+func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor, index Charts) api.FluxDashboard {
 	byGroup := map[string][]api.FluxResource{}
 	items := map[string][]*unstructured.Unstructured{}
 	failures := listerr.New()
@@ -61,30 +63,30 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 			continue
 		}
 		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
-		list, err := dyn.Resource(gvr).List(ctx, metav1.ListOptions{})
+		found, err := lister.List(desc)
 		failures.Record(gvr.GroupResource().String(), err)
 		if err != nil {
 			continue
 		}
-		for i := range list.Items {
-			byGroup[group] = append(byGroup[group], resourceOf(&list.Items[i], desc))
-			items[group] = append(items[group], &list.Items[i])
+		for _, item := range found {
+			byGroup[group] = append(byGroup[group], resourceOf(item, desc))
+			items[group] = append(items[group], item)
 		}
 	}
-	applyLatest(byGroup, items, repos(ctx, dyn, descs, index), index)
+	applyLatest(byGroup, items, repos(lister, descs, index), index)
 	dashboard := assemble(byGroup)
 	dashboard.Error = failures.Message()
 	return dashboard
 }
 
-func repos(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, index Charts) map[string]charts.Repo {
+func repos(lister Lister, descs map[string]api.ResourceDescriptor, index Charts) map[string]charts.Repo {
 	if index == nil {
 		return nil
 	}
-	return repoIndex(ctx, dyn, descs)
+	return repoIndex(lister, descs)
 }
 
-func repoIndex(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {
+func repoIndex(lister Lister, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {
 	out := map[string]charts.Repo{}
 	for _, desc := range descs {
 		if desc.Group != "source.toolkit.fluxcd.io" {
@@ -93,13 +95,11 @@ func repoIndex(ctx context.Context, dyn dynamic.Interface, descs map[string]api.
 		if desc.Resource != "helmrepositories" {
 			continue
 		}
-		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
-		list, err := dyn.Resource(gvr).List(ctx, metav1.ListOptions{})
+		found, err := lister.List(desc)
 		if err != nil {
 			continue
 		}
-		for i := range list.Items {
-			repo := &list.Items[i]
+		for _, repo := range found {
 			out[repo.GetNamespace()+"/"+repo.GetName()] = charts.Repo{
 				URL: nestedString(repo, "spec", "url"),
 				OCI: nestedString(repo, "spec", "type") == "oci",
