@@ -129,6 +129,9 @@ func (m *Manager) RefreshResources() api.ResourceCatalog {
 		return m.Resources()
 	}
 	m.disco.Invalidate()
+	if m.schemas != nil {
+		m.schemas.Refresh()
+	}
 	cats, descs, err := discovery.List(m.disco)
 	m.setCatalog(cats, descs, err)
 	return m.Resources()

@@ -72,11 +72,17 @@ const podDoc = `{
   }
 }`
 
+func sourceOf(client openapi.Client) Source {
+	return func() openapi.Client {
+		return client
+	}
+}
+
 func clientFor(doc, path string) (*Client, *int) {
 	hits := 0
-	return NewClient(&fakeClient{
+	return NewClient(sourceOf(&fakeClient{
 		paths: map[string]openapi.GroupVersion{path: fakeGroupVersion{doc: doc, hits: &hits}},
-	}), &hits
+	})), &hits
 }
 
 func decode(t *testing.T, raw json.RawMessage) map[string]any {
@@ -289,7 +295,7 @@ func TestForUnknownGroupVersion(t *testing.T) {
 }
 
 func TestForPathsError(t *testing.T) {
-	client := NewClient(&fakeClient{err: errors.New("boom")})
+	client := NewClient(sourceOf(&fakeClient{err: errors.New("boom")}))
 
 	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
 
@@ -299,9 +305,9 @@ func TestForPathsError(t *testing.T) {
 }
 
 func TestForSchemaError(t *testing.T) {
-	client := NewClient(&fakeClient{
+	client := NewClient(sourceOf(&fakeClient{
 		paths: map[string]openapi.GroupVersion{"api/v1": fakeGroupVersion{err: errors.New("boom")}},
-	})
+	}))
 
 	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
 
@@ -395,4 +401,82 @@ func asMap(t *testing.T, v any) map[string]any {
 		t.Fatalf("value is %T, want a map", v)
 	}
 	return m
+}
+
+type swappable struct {
+	current openapi.Client
+	handles int
+}
+
+func (s *swappable) source() openapi.Client {
+	s.handles++
+	return s.current
+}
+
+func docFor(kind string) string {
+	return `{"components":{"schemas":{"io.k8s.api.core.v1.` + kind +
+		`":{"type":"object","x-kubernetes-group-version-kind":[{"group":"","version":"v1","kind":"` +
+		kind + `"}]}}}}`
+}
+
+func TestRefreshPicksUpASchemaInstalledLater(t *testing.T) {
+	swap := &swappable{current: &fakeClient{
+		paths: map[string]openapi.GroupVersion{"api/v1": fakeGroupVersion{doc: docFor("Pod")}},
+	}}
+	client := NewClient(swap.source)
+
+	_, missing := client.For(GVK{Version: "v1", Kind: "Widget"})
+	if missing == nil {
+		t.Fatal("expected the unknown kind to fail first")
+	}
+
+	swap.current = &fakeClient{
+		paths: map[string]openapi.GroupVersion{"api/v1": fakeGroupVersion{doc: docFor("Widget")}},
+	}
+	client.Refresh()
+
+	_, err := client.For(GVK{Version: "v1", Kind: "Widget"})
+	if err != nil {
+		t.Fatalf("a schema installed mid-session is still unreachable after a refresh: %v", err)
+	}
+}
+
+func TestTheHandleIsFetchedEachTimeRatherThanCaptured(t *testing.T) {
+	swap := &swappable{current: &fakeClient{
+		paths: map[string]openapi.GroupVersion{"api/v1": fakeGroupVersion{doc: docFor("Pod")}},
+	}}
+	client := NewClient(swap.source)
+
+	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	if err != nil {
+		t.Fatalf("for: %v", err)
+	}
+	client.Refresh()
+	_, err = client.For(GVK{Version: "v1", Kind: "Pod"})
+	if err != nil {
+		t.Fatalf("for: %v", err)
+	}
+
+	if swap.handles < 2 {
+		t.Fatalf("asked for the openapi handle %d times; a stale handle never sees a new CRD", swap.handles)
+	}
+}
+
+func TestRefreshDropsTheMemoisedSchema(t *testing.T) {
+	client, hits := clientFor(podDoc, "api/v1")
+
+	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	if err != nil {
+		t.Fatalf("for: %v", err)
+	}
+	before := *hits
+	client.Refresh()
+	_, err = client.For(GVK{Version: "v1", Kind: "Pod"})
+	if err != nil {
+		t.Fatalf("for: %v", err)
+	}
+
+	if *hits == before {
+		t.Fatal("the document was served from the old memo after a refresh")
+	}
 }

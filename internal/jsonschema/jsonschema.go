@@ -29,19 +29,28 @@ func (g GVK) String() string {
 	return g.Group + "/" + g.Version + "/" + g.Kind
 }
 
+type Source func() openapi.Client
+
 type Client struct {
-	oapi  openapi.Client
-	mu    sync.Mutex
-	docs  map[string]map[string]map[string]any
-	cache map[GVK]json.RawMessage
+	source Source
+	mu     sync.Mutex
+	docs   map[string]map[string]map[string]any
+	cache  map[GVK]json.RawMessage
 }
 
-func NewClient(oapi openapi.Client) *Client {
+func NewClient(source Source) *Client {
 	return &Client{
-		oapi:  oapi,
-		docs:  map[string]map[string]map[string]any{},
-		cache: map[GVK]json.RawMessage{},
+		source: source,
+		docs:   map[string]map[string]map[string]any{},
+		cache:  map[GVK]json.RawMessage{},
 	}
+}
+
+func (c *Client) Refresh() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.docs = map[string]map[string]map[string]any{}
+	c.cache = map[GVK]json.RawMessage{}
 }
 
 func (c *Client) For(gvk GVK) (json.RawMessage, error) {
@@ -75,7 +84,7 @@ func (c *Client) schemas(path string) (map[string]map[string]any, error) {
 		return cached, nil
 	}
 
-	paths, err := c.oapi.Paths()
+	paths, err := c.source().Paths()
 	if err != nil {
 		return nil, fmt.Errorf("openapi paths: %w", err)
 	}

@@ -149,8 +149,11 @@ const podSchemaDoc = `{"components":{"schemas":{
 }}}`
 
 func TestManagerSchema(t *testing.T) {
-	schemas := jsonschema.NewClient(&stubOpenAPI{
+	oapi := &stubOpenAPI{
 		paths: map[string]openapi.GroupVersion{"api/v1": stubGroupVersion{doc: podSchemaDoc}},
+	}
+	schemas := jsonschema.NewClient(func() openapi.Client {
+		return oapi
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)

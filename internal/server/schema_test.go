@@ -64,8 +64,11 @@ func schemaServer(t *testing.T, schemas *jsonschema.Client) *httptest.Server {
 }
 
 func stubSchemas() *jsonschema.Client {
-	return jsonschema.NewClient(&stubOpenAPI{
+	oapi := &stubOpenAPI{
 		paths: map[string]openapi.GroupVersion{"api/v1": stubGroupVersion{doc: openapiDoc}},
+	}
+	return jsonschema.NewClient(func() openapi.Client {
+		return oapi
 	})
 }
 

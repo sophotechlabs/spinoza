@@ -35,7 +35,7 @@ func build(ctx context.Context, name string, options Options) (*resources.Manage
 		log.Printf("discovery (partial): %v", discErr)
 	}
 	log.Printf("spinoza connected to context %q — %d resource types, %d categories", bundle.Context, len(descs), len(cats))
-	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3())
+	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3)
 	forwards := portforward.NewRegistry(
 		ctx,
 		portforward.NewRunner(bundle.Clientset, bundle.Config),
