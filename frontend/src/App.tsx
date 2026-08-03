@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   FluxResource,
   GraphNode,
@@ -21,7 +21,7 @@ import FluxRoles from './components/FluxRoles';
 import BottomDock from './components/BottomDock';
 import type { PodTarget } from './components/BottomDock';
 
-const MAIN_SUB_ID = 'main';
+const FIRST_SUB_ID = 'main#0';
 
 function podTarget(row: Row | null): PodTarget | null {
   if (row === null) {
@@ -44,6 +44,8 @@ export default function App() {
   const feed = useResourceFeed();
   const [view, setView] = useState<View>('resources');
   const [active, setActive] = useState<ResourceDescriptor | null>(null);
+  const [subId, setSubId] = useState(FIRST_SUB_ID);
+  const subSeq = useRef(0);
   const [selected, setSelected] = useState<Row | null>(null);
   const [target, setTarget] = useState<ObjectRef | null>(null);
 
@@ -53,11 +55,11 @@ export default function App() {
     if (active === null) {
       return;
     }
-    subscribe(MAIN_SUB_ID, active, '');
+    subscribe(subId, active, '');
     return () => {
-      unsubscribe(MAIN_SUB_ID);
+      unsubscribe(subId);
     };
-  }, [active, subscribe, unsubscribe]);
+  }, [active, subId, subscribe, unsubscribe]);
 
   function clearSelection() {
     setSelected(null);
@@ -66,6 +68,8 @@ export default function App() {
 
   function handleSelectResource(descriptor: ResourceDescriptor) {
     setActive(descriptor);
+    subSeq.current += 1;
+    setSubId(`main#${String(subSeq.current)}`);
     clearSelection();
     setView('resources');
   }
@@ -91,12 +95,7 @@ export default function App() {
   }
 
   let mainArea = (
-    <ResourceTable
-      active={active}
-      subId={MAIN_SUB_ID}
-      selected={selected}
-      onSelect={handleSelectRow}
-    />
+    <ResourceTable active={active} subId={subId} selected={selected} onSelect={handleSelectRow} />
   );
   if (view === 'gitops') {
     mainArea = <GitopsGraph onSelect={handleSelectNode} />;

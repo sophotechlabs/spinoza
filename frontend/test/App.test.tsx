@@ -175,13 +175,13 @@ describe('App', () => {
   it('subscribes and renders rows when a resource is selected', async () => {
     useResourcesStore
       .getState()
-      .applySnapshot('main', makeColumns(['Ready']), true, [
+      .applySnapshot('main#1', makeColumns(['Ready']), true, [
         makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: ['1/1'] }),
       ]);
     const user = userEvent.setup();
     render(<App />);
     await selectPod(user);
-    expect(feedMocks.subscribe).toHaveBeenCalledWith('main', podDescriptor, '');
+    expect(feedMocks.subscribe).toHaveBeenCalledWith('main#1', podDescriptor, '');
     expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
     expect(screen.getByText('1/1')).toBeInTheDocument();
   });
@@ -189,7 +189,7 @@ describe('App', () => {
   it('targets the inspector at the selected row', async () => {
     useResourcesStore
       .getState()
-      .applySnapshot('main', makeColumns([]), true, [
+      .applySnapshot('main#1', makeColumns([]), true, [
         makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
       ]);
     const user = userEvent.setup();
@@ -210,8 +210,8 @@ describe('App', () => {
     await selectPod(user);
     feedMocks.unsubscribe.mockClear();
     await user.click(screen.getByRole('button', { name: 'Deployment' }));
-    expect(feedMocks.unsubscribe).toHaveBeenCalledWith('main');
-    expect(feedMocks.subscribe).toHaveBeenCalledWith('main', deploymentDescriptor, '');
+    expect(feedMocks.unsubscribe).toHaveBeenCalledWith('main#1');
+    expect(feedMocks.subscribe).toHaveBeenCalledWith('main#2', deploymentDescriptor, '');
   });
 
   it('reconnects when the reconnect button is clicked', async () => {
@@ -222,7 +222,7 @@ describe('App', () => {
   });
 
   it('streams logs for a selected pod through the dock', async () => {
-    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, [
+    useResourcesStore.getState().applySnapshot('main#1', makeColumns([]), true, [
       makeRow({
         uid: 'a',
         name: 'pod-a',
@@ -245,7 +245,7 @@ describe('App', () => {
   it('leaves the dock without a pod for rows that have no containers', async () => {
     useResourcesStore
       .getState()
-      .applySnapshot('main', makeColumns([]), true, [
+      .applySnapshot('main#1', makeColumns([]), true, [
         makeRow({ uid: 'a', name: 'dep-a', namespace: 'prod' }),
       ]);
     const user = userEvent.setup();
@@ -259,7 +259,7 @@ describe('App', () => {
   });
 
   it('offers regular containers before init containers in the log picker', async () => {
-    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, [
+    useResourcesStore.getState().applySnapshot('main#1', makeColumns([]), true, [
       makeRow({
         uid: 'a',
         name: 'pod-a',
@@ -290,7 +290,7 @@ describe('App', () => {
   it('leaves the dock without a pod for rows with an empty container list', async () => {
     useResourcesStore
       .getState()
-      .applySnapshot('main', makeColumns([]), true, [
+      .applySnapshot('main#1', makeColumns([]), true, [
         makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', containers: [] }),
       ]);
     const user = userEvent.setup();

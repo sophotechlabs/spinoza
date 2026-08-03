@@ -109,6 +109,16 @@ export function useResourceFeed(): ResourceFeed {
       }
     }
 
+    function knownSub(msg: ServerMsg): boolean {
+      if (msg.type === 'log' || msg.type === 'log-end') {
+        return logSubsRef.current.has(msg.subId);
+      }
+      if (msg.type === 'error') {
+        return true;
+      }
+      return subsRef.current.has(msg.subId);
+    }
+
     function handleMessage(event: MessageEvent) {
       if (disposed) {
         return;
@@ -117,6 +127,9 @@ export function useResourceFeed(): ResourceFeed {
       try {
         msg = JSON.parse(event.data as string) as ServerMsg;
       } catch {
+        return;
+      }
+      if (!knownSub(msg)) {
         return;
       }
       switch (msg.type) {

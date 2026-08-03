@@ -59,6 +59,18 @@ function sentMessages(socket: FakeWebSocket): unknown[] {
   return socket.send.mock.calls.map((call) => JSON.parse(call[0]) as unknown);
 }
 
+function openFeedFor(subId: string): FakeWebSocket {
+  const hook = renderHook(() => useResourceFeed());
+  const socket = FakeWebSocket.instances[0];
+  act(() => {
+    openSocket(socket);
+  });
+  act(() => {
+    hook.result.current.subscribe(subId, makeDescriptor({}), '');
+  });
+  return socket;
+}
+
 const descriptor = makeDescriptor({ group: 'apps', version: 'v1', resource: 'deployments' });
 
 describe('useResourceFeed', () => {
@@ -125,8 +137,7 @@ describe('useResourceFeed', () => {
   });
 
   it('routes a snapshot message to the store by subId', () => {
-    renderHook(() => useResourceFeed());
-    const socket = FakeWebSocket.instances[0];
+    const socket = openFeedFor('main');
     const data = JSON.stringify({
       type: 'snapshot',
       subId: 'main',
@@ -141,8 +152,7 @@ describe('useResourceFeed', () => {
   });
 
   it('survives a snapshot that carries no rows key', () => {
-    renderHook(() => useResourceFeed());
-    const socket = FakeWebSocket.instances[0];
+    const socket = openFeedFor('main');
     const data = JSON.stringify({
       type: 'snapshot',
       subId: 'main',
@@ -159,8 +169,7 @@ describe('useResourceFeed', () => {
   });
 
   it('still applies deltas after an empty snapshot', () => {
-    renderHook(() => useResourceFeed());
-    const socket = FakeWebSocket.instances[0];
+    const socket = openFeedFor('main');
     act(() => {
       socket.onmessage?.(
         new MessageEvent('message', {
@@ -184,8 +193,7 @@ describe('useResourceFeed', () => {
   });
 
   it('treats a missing namespaced flag as cluster scoped', () => {
-    renderHook(() => useResourceFeed());
-    const socket = FakeWebSocket.instances[0];
+    const socket = openFeedFor('main');
     act(() => {
       socket.onmessage?.(
         new MessageEvent('message', {
@@ -197,10 +205,105 @@ describe('useResourceFeed', () => {
     expect(useResourcesStore.getState().subs.get('main')?.namespaced).toBe(false);
   });
 
+  it('ignores a snapshot for a subscription that was already dropped', () => {
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribe('main#1', makeDescriptor({}), '');
+    });
+    act(() => {
+      hook.result.current.unsubscribe('main#1');
+      hook.result.current.subscribe('main#2', makeDescriptor({}), '');
+    });
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'snapshot',
+            subId: 'main#1',
+            columns: makeColumns([]),
+            namespaced: true,
+            rows: [makeRow({ uid: 'stale', name: 'from-the-old-resource' })],
+          }),
+        }),
+      );
+    });
+
+    expect(useResourcesStore.getState().subs.has('main#1')).toBe(false);
+  });
+
+  it('ignores a delta for a subscription that was already dropped', () => {
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribe('main#1', makeDescriptor({}), '');
+    });
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'snapshot',
+            subId: 'main#1',
+            columns: makeColumns([]),
+            namespaced: true,
+            rows: [],
+          }),
+        }),
+      );
+    });
+    act(() => {
+      hook.result.current.unsubscribe('main#1');
+    });
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'added',
+            subId: 'main#1',
+            row: makeRow({ uid: 'ghost', name: 'ghost' }),
+          }),
+        }),
+      );
+    });
+
+    expect(useResourcesStore.getState().subs.has('main#1')).toBe(false);
+  });
+
+  it('ignores log lines for a stream that was already stopped', () => {
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribeLogs('logs#1', logRequest);
+    });
+    act(() => {
+      hook.result.current.unsubscribeLogs('logs#1');
+    });
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log', subId: 'logs#1', lines: ['late'] }),
+        }),
+      );
+    });
+
+    expect(useLogsStore.getState().streams.has('logs#1')).toBe(false);
+  });
+
   it('routes an added delta message to the store', () => {
     useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
-    renderHook(() => useResourceFeed());
-    const socket = FakeWebSocket.instances[0];
+    const socket = openFeedFor('main');
     const row: Row = makeRow({ uid: 'b', name: 'bravo' });
     const data = JSON.stringify({ type: 'added', subId: 'main', row });
     act(() => {
@@ -213,8 +316,7 @@ describe('useResourceFeed', () => {
     useResourcesStore
       .getState()
       .applySnapshot('main', makeColumns([]), true, [makeRow({ uid: 'c', name: 'before' })]);
-    renderHook(() => useResourceFeed());
-    const socket = FakeWebSocket.instances[0];
+    const socket = openFeedFor('main');
     const data = JSON.stringify({
       type: 'modified',
       subId: 'main',
@@ -230,8 +332,7 @@ describe('useResourceFeed', () => {
     useResourcesStore
       .getState()
       .applySnapshot('main', makeColumns([]), true, [makeRow({ uid: 'd' })]);
-    renderHook(() => useResourceFeed());
-    const socket = FakeWebSocket.instances[0];
+    const socket = openFeedFor('main');
     const data = JSON.stringify({ type: 'deleted', subId: 'main', uid: 'd' });
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data }));
