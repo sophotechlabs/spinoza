@@ -175,3 +175,23 @@ describe('controlPlane', () => {
     expect(reduced.edges).toHaveLength(1);
   });
 });
+
+describe('a dependency that is not there', () => {
+  it('is drawn in the failure colour, not as an ordinary applier', () => {
+    const flow = toFlow({
+      nodes: [makeGraphNode({ id: 'a', name: 'infra', status: 'NotFound', category: 'applier' })],
+      edges: [],
+    });
+
+    expect(flow.nodes[0].className).toContain('border-red-600');
+  });
+
+  it('leaves a healthy applier alone', () => {
+    const flow = toFlow({
+      nodes: [makeGraphNode({ id: 'a', name: 'apps', status: 'Ready', category: 'applier' })],
+      edges: [],
+    });
+
+    expect(flow.nodes[0].className).toContain('border-green-600');
+  });
+});

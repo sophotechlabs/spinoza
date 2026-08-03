@@ -423,3 +423,51 @@ func TestParseChallengeIgnoresJunk(t *testing.T) {
 		t.Fatalf("service = %q", got["service"])
 	}
 }
+
+func TestMaxVersionAcceptsAnOCIBuildMetadataTag(t *testing.T) {
+	got := maxVersion([]string{"1.2.0", "1.3.0_20260101", "1.1.0"})
+
+	if got != "1.3.0_20260101" {
+		t.Fatalf("latest = %q; Helm writes + as _ in an OCI tag, so this one was being dropped", got)
+	}
+}
+
+func TestMaxVersionKeepsTheTagItWasGiven(t *testing.T) {
+	got := maxVersion([]string{"2.0.0_abc"})
+
+	if got != "2.0.0_abc" {
+		t.Fatalf("latest = %q, want the tag as published rather than a rewritten one", got)
+	}
+}
+
+func TestMaxVersionStillSkipsPrereleases(t *testing.T) {
+	got := maxVersion([]string{"1.0.0", "2.0.0-rc.1"})
+
+	if got != "1.0.0" {
+		t.Fatalf("latest = %q, want a prerelease left out the way Helm leaves it out", got)
+	}
+}
+
+func TestMaxVersionReportsNothingForAnAllPrereleaseRepo(t *testing.T) {
+	got := maxVersion([]string{"2.0.0-rc.1", "2.0.0-rc.2"})
+
+	if got != "" {
+		t.Fatalf("latest = %q, want none; suggesting an upgrade to a release candidate is worse than saying nothing", got)
+	}
+}
+
+func TestMaxVersionSkipsATagThatIsNotSemverEvenAfterTranslation(t *testing.T) {
+	got := maxVersion([]string{"1.0.0_build_2"})
+
+	if got != "" {
+		t.Fatalf("latest = %q; underscores are not legal in build metadata, so this is not a version", got)
+	}
+}
+
+func TestMaxVersionComparesTranslatedTagsByVersionNotText(t *testing.T) {
+	got := maxVersion([]string{"1.10.0_20260101", "1.9.0_20260102"})
+
+	if got != "1.10.0_20260101" {
+		t.Fatalf("latest = %q, want the higher version rather than the later build stamp", got)
+	}
+}

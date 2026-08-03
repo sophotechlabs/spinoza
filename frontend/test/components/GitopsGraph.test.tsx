@@ -153,6 +153,28 @@ describe('GitopsGraph', () => {
   });
 });
 
+describe('GitopsGraph polling', () => {
+  it('does not stack a second graph fetch on top of a slow one', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        calls += 1;
+        return new Promise(() => {
+          return undefined;
+        });
+      }),
+    );
+
+    render(<GitopsGraph />);
+    await vi.advanceTimersByTimeAsync(30000);
+
+    expect(calls).toBe(1);
+    vi.useRealTimers();
+  });
+});
+
 describe('GitopsGraph partial failures', () => {
   it('says the graph could not be loaded when nothing came back', async () => {
     stubGraph({

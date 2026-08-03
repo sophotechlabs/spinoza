@@ -22,9 +22,8 @@ interface LegendItem {
 
 const LEGEND: LegendItem[] = [
   { color: 'bg-green-500', label: 'Ready' },
-  { color: 'bg-red-500', label: 'Not ready' },
+  { color: 'bg-red-500', label: 'Not ready or missing' },
   { color: 'bg-sky-500', label: 'Source' },
-  { color: 'bg-neutral-500', label: 'Managed' },
 ];
 
 function errorMessage(err: unknown): string {
@@ -42,7 +41,12 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
 
   useEffect(() => {
     let mounted = true;
+    let inFlight = false;
     const load = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       try {
         const graph = await fetchGraph();
         if (mounted) {
@@ -61,6 +65,8 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
         if (mounted) {
           setError(errorMessage(err));
         }
+      } finally {
+        inFlight = false;
       }
     };
     void load();

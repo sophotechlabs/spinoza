@@ -49,6 +49,8 @@ type Charts interface {
 	Warm(repo charts.Repo, chart string)
 }
 
+const helmGroup = "helm.toolkit.fluxcd.io"
+
 func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, index Charts) api.FluxDashboard {
 	byGroup := map[string][]api.FluxResource{}
 	items := map[string][]*unstructured.Unstructured{}
@@ -69,10 +71,17 @@ func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Reso
 			items[group] = append(items[group], &list.Items[i])
 		}
 	}
-	applyLatest(byGroup, items, repoIndex(ctx, dyn, descs), index)
+	applyLatest(byGroup, items, repos(ctx, dyn, descs, index), index)
 	dashboard := assemble(byGroup)
 	dashboard.Error = failures.Message()
 	return dashboard
+}
+
+func repos(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, index Charts) map[string]charts.Repo {
+	if index == nil {
+		return nil
+	}
+	return repoIndex(ctx, dyn, descs)
 }
 
 func repoIndex(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {
@@ -153,7 +162,7 @@ func categoryOf(desc api.ResourceDescriptor) string {
 		if desc.Resource == "kustomizations" {
 			return "Kustomizations"
 		}
-	case "helm.toolkit.fluxcd.io":
+	case helmGroup:
 		if desc.Resource == "helmreleases" {
 			return "Helm Releases"
 		}
@@ -236,7 +245,7 @@ func resourceOf(obj *unstructured.Unstructured, desc api.ResourceDescriptor) api
 		Namespace: obj.GetNamespace(),
 		Ready:     ready,
 		Suspended: nestedBool(obj, "spec", "suspend"),
-		Revision:  revisionOf(obj),
+		Revision:  revisionOf(obj, desc),
 		Source:    sourceOf(obj),
 		Message:   message,
 		CreatedAt: obj.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
@@ -259,7 +268,13 @@ func readyCondition(u *unstructured.Unstructured) (status, message string) {
 	return "", ""
 }
 
-func revisionOf(obj *unstructured.Unstructured) string {
+func revisionOf(obj *unstructured.Unstructured, desc api.ResourceDescriptor) string {
+	if desc.Group == helmGroup && desc.Resource == "helmreleases" {
+		version := historyChartVersion(obj)
+		if version != "" {
+			return version
+		}
+	}
 	paths := [][]string{
 		{"status", "lastAppliedRevision"},
 		{"status", "lastAttemptedRevision"},
@@ -273,6 +288,18 @@ func revisionOf(obj *unstructured.Unstructured) string {
 		}
 	}
 	return ""
+}
+
+func historyChartVersion(obj *unstructured.Unstructured) string {
+	entries := nestedSlice(obj, "status", "history")
+	if len(entries) == 0 {
+		return ""
+	}
+	entry, ok := entries[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	return stringAt(entry, "chartVersion")
 }
 
 func sourceOf(u *unstructured.Unstructured) string {

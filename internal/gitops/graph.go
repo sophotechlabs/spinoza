@@ -14,13 +14,17 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/listerr"
 )
 
-const fluxSourceGroup = "source.toolkit.fluxcd.io"
+const (
+	fluxSourceGroup = "source.toolkit.fluxcd.io"
+	statusMissing   = "NotFound"
+)
 
 var fluxSourceResources = map[string]bool{
 	"gitrepositories":  true,
 	"helmrepositories": true,
 	"ocirepositories":  true,
 	"buckets":          true,
+	"helmcharts":       true,
 }
 
 func Build(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor) api.Graph {
@@ -116,22 +120,32 @@ func (b *builder) applierEdges(id string, u *unstructured.Unstructured) {
 }
 
 func (b *builder) sourceEdge(id string, obj *unstructured.Unstructured) {
-	kind := nestedString(obj, "spec", "sourceRef", "kind")
-	name := nestedString(obj, "spec", "sourceRef", "name")
-	if kind == "" || name == "" {
-		kind = nestedString(obj, "spec", "chart", "spec", "sourceRef", "kind")
-		name = nestedString(obj, "spec", "chart", "spec", "sourceRef", "name")
-	}
+	kind, name, namespace := sourceRefOf(obj)
 	if kind == "" || name == "" {
 		return
 	}
-	namespace := nestedString(obj, "spec", "sourceRef", "namespace")
 	if namespace == "" {
 		namespace = obj.GetNamespace()
 	}
 	sid := nodeID(fluxSourceGroup, kind, namespace, name)
-	b.ensureRef(sid, fluxSourceGroup, kind, namespace, name, "source")
+	b.ensureRef(sid, fluxSourceGroup, kind, namespace, name, "source", "")
 	b.addEdge(sid, id, "source")
+}
+
+func sourceRefOf(obj *unstructured.Unstructured) (string, string, string) {
+	kind := nestedString(obj, "spec", "chartRef", "kind")
+	name := nestedString(obj, "spec", "chartRef", "name")
+	if kind != "" && name != "" {
+		return kind, name, nestedString(obj, "spec", "chartRef", "namespace")
+	}
+	kind = nestedString(obj, "spec", "sourceRef", "kind")
+	name = nestedString(obj, "spec", "sourceRef", "name")
+	if kind != "" && name != "" {
+		return kind, name, nestedString(obj, "spec", "sourceRef", "namespace")
+	}
+	kind = nestedString(obj, "spec", "chart", "spec", "sourceRef", "kind")
+	name = nestedString(obj, "spec", "chart", "spec", "sourceRef", "name")
+	return kind, name, nestedString(obj, "spec", "chart", "spec", "sourceRef", "namespace")
 }
 
 func (b *builder) dependsOnEdges(id string, obj *unstructured.Unstructured) {
@@ -149,6 +163,7 @@ func (b *builder) dependsOnEdges(id string, obj *unstructured.Unstructured) {
 			namespace = obj.GetNamespace()
 		}
 		did := nodeID(obj.GroupVersionKind().Group, obj.GetKind(), namespace, name)
+		b.ensureRef(did, obj.GroupVersionKind().Group, obj.GetKind(), namespace, name, "applier", statusMissing)
 		b.addEdge(did, id, "dependsOn")
 	}
 }
@@ -165,7 +180,7 @@ func (b *builder) inventoryEdges(id string, u *unstructured.Unstructured) {
 			continue
 		}
 		mid := nodeID(group, kind, ns, name)
-		b.ensureRef(mid, group, kind, ns, name, "managed")
+		b.ensureRef(mid, group, kind, ns, name, "managed", "")
 		b.addEdge(id, mid, "manages")
 	}
 }
@@ -184,12 +199,12 @@ func (b *builder) appEdges(id string, u *unstructured.Unstructured) {
 		group := stringAt(entry, "group")
 		namespace := stringAt(entry, "namespace")
 		mid := nodeID(group, kind, namespace, name)
-		b.ensureRef(mid, group, kind, namespace, name, "managed")
+		b.ensureRef(mid, group, kind, namespace, name, "managed", "")
 		b.addEdge(id, mid, "manages")
 	}
 }
 
-func (b *builder) ensureRef(id, group, kind, namespace, name, category string) {
+func (b *builder) ensureRef(id, group, kind, namespace, name, category, status string) {
 	if _, ok := b.nodes[id]; ok {
 		return
 	}
@@ -202,7 +217,7 @@ func (b *builder) ensureRef(id, group, kind, namespace, name, category string) {
 		Resource:  desc.Resource,
 		Name:      name,
 		Namespace: namespace,
-		Status:    "",
+		Status:    status,
 		Category:  category,
 	}
 }

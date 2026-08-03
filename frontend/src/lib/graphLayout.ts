@@ -14,7 +14,7 @@ const EDGE_SOURCE_STROKE = '#0ea5e9';
 const EDGE_DEPENDS_STROKE = '#f59e0b';
 const EDGE_MANAGES_STROKE = '#525252';
 
-const FAILED_STATUSES = new Set(['NotReady', 'Failed', 'False', 'Stalled']);
+const FAILED_STATUSES = new Set(['NotReady', 'Failed', 'False', 'Stalled', 'NotFound']);
 
 interface GitopsNodeData {
   label: string;

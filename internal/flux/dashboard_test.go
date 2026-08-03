@@ -340,3 +340,129 @@ func TestBuildIsSilentWhenEveryListWorks(t *testing.T) {
 		t.Fatalf("error = %q, want none", dash.Error)
 	}
 }
+
+func helmReleaseDesc() api.ResourceDescriptor {
+	return api.ResourceDescriptor{
+		Group:    "helm.toolkit.fluxcd.io",
+		Version:  "v2",
+		Resource: "helmreleases",
+		Kind:     "HelmRelease",
+	}
+}
+
+func kustomizationDesc() api.ResourceDescriptor {
+	return api.ResourceDescriptor{
+		Group:    "kustomize.toolkit.fluxcd.io",
+		Version:  "v1",
+		Resource: "kustomizations",
+		Kind:     "Kustomization",
+	}
+}
+
+func withStatus(apiVersion, kind string, status map[string]any) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": apiVersion,
+		"kind":       kind,
+		"metadata":   map[string]any{"name": "app", "namespace": "flux-system"},
+		"status":     status,
+	}}
+}
+
+func TestAHelmReleaseReportsTheChartInHelmStorage(t *testing.T) {
+	release := withStatus("helm.toolkit.fluxcd.io/v2", "HelmRelease", map[string]any{
+		"lastAttemptedRevision": "6.9.0",
+		"history": []any{
+			map[string]any{"chartVersion": "6.5.0"},
+			map[string]any{"chartVersion": "6.4.0"},
+		},
+	})
+
+	got := revisionOf(release, helmReleaseDesc())
+
+	if got != "6.5.0" {
+		t.Fatalf("revision = %q, want the version actually released rather than the one attempted", got)
+	}
+}
+
+func TestAHelmReleaseWithNoHistoryFallsBackToTheAttempt(t *testing.T) {
+	release := withStatus("helm.toolkit.fluxcd.io/v2", "HelmRelease", map[string]any{
+		"lastAttemptedRevision": "6.9.0",
+	})
+
+	got := revisionOf(release, helmReleaseDesc())
+
+	if got != "6.9.0" {
+		t.Fatalf("revision = %q, want the attempt while no release has landed", got)
+	}
+}
+
+func TestAHelmReleaseIgnoresAMalformedHistoryEntry(t *testing.T) {
+	release := withStatus("helm.toolkit.fluxcd.io/v2", "HelmRelease", map[string]any{
+		"lastAttemptedRevision": "6.9.0",
+		"history":               []any{"not-a-map"},
+	})
+
+	got := revisionOf(release, helmReleaseDesc())
+
+	if got != "6.9.0" {
+		t.Fatalf("revision = %q", got)
+	}
+}
+
+func TestAKustomizationStillPrefersTheAppliedRevision(t *testing.T) {
+	kustomization := withStatus("kustomize.toolkit.fluxcd.io/v1", "Kustomization", map[string]any{
+		"lastAppliedRevision":   "main@sha1:aaa",
+		"lastAttemptedRevision": "main@sha1:bbb",
+	})
+
+	got := revisionOf(kustomization, kustomizationDesc())
+
+	if got != "main@sha1:aaa" {
+		t.Fatalf("revision = %q, want the applied revision for a Kustomization", got)
+	}
+}
+
+func TestAHelmReleaseDoesNotReadTheKustomizationField(t *testing.T) {
+	release := withStatus("helm.toolkit.fluxcd.io/v2", "HelmRelease", map[string]any{
+		"lastAppliedRevision": "6.0.0",
+		"history": []any{
+			map[string]any{"chartVersion": "6.5.0"},
+		},
+	})
+
+	got := revisionOf(release, helmReleaseDesc())
+
+	if got != "6.5.0" {
+		t.Fatalf("revision = %q, want history to win; lastAppliedRevision does not exist on v2", got)
+	}
+}
+
+func TestWithoutAChartIndexTheRepositoriesAreNotListed(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds(), fluxObjects()...)
+	listed := 0
+	dyn.PrependReactor("list", "helmrepositories", func(k8stesting.Action) (bool, runtime.Object, error) {
+		listed++
+		return false, nil, nil
+	})
+
+	Build(context.Background(), dyn, fluxDescs(), nil)
+
+	if listed != 1 {
+		t.Fatalf("listed helmrepositories %d times, want only the dashboard's own list", listed)
+	}
+}
+
+func TestWithAChartIndexTheRepositoriesAreStillRead(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds(), fluxObjects()...)
+	listed := 0
+	dyn.PrependReactor("list", "helmrepositories", func(k8stesting.Action) (bool, runtime.Object, error) {
+		listed++
+		return false, nil, nil
+	})
+
+	Build(context.Background(), dyn, fluxDescs(), &stubCharts{})
+
+	if listed < 2 {
+		t.Fatalf("listed helmrepositories %d times; the chart index needs the repositories", listed)
+	}
+}

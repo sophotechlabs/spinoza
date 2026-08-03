@@ -282,7 +282,7 @@ func maxVersion(raw []string) string {
 	best := ""
 	var bestParsed *semver.Version
 	for _, candidate := range raw {
-		parsed, err := semver.NewVersion(candidate)
+		parsed, err := semver.NewVersion(ociTagToSemver(candidate))
 		if err != nil {
 			continue
 		}
@@ -296,6 +296,10 @@ func maxVersion(raw []string) string {
 		best = candidate
 	}
 	return best
+}
+
+func ociTagToSemver(tag string) string {
+	return strings.Replace(tag, "_", "+", 1)
 }
 
 func Newer(current, latest string) bool {

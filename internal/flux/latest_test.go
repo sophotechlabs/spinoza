@@ -80,7 +80,11 @@ func newRelease(namespace, name, chart, sourceName, sourceNs, revision string) *
 				"spec": map[string]any{"chart": chart, "sourceRef": sourceRef},
 			},
 		},
-		"status": map[string]any{"lastAppliedRevision": revision},
+		"status": map[string]any{
+			"history": []any{
+				map[string]any{"chartVersion": revision},
+			},
+		},
 	}}
 }
 

@@ -206,14 +206,14 @@ func TestBuild(t *testing.T) {
 		counts[n.Category]++
 	}
 
-	if len(graph.Nodes) != 10 {
-		t.Fatalf("nodes = %d, want 10", len(graph.Nodes))
+	if len(graph.Nodes) != 12 {
+		t.Fatalf("nodes = %d, want 12", len(graph.Nodes))
 	}
 	if counts["source"] != 2 {
 		t.Fatalf("source nodes = %d, want 2", counts["source"])
 	}
-	if counts["applier"] != 3 {
-		t.Fatalf("applier nodes = %d, want 3", counts["applier"])
+	if counts["applier"] != 5 {
+		t.Fatalf("applier nodes = %d, want 5 including the two missing dependsOn targets", counts["applier"])
 	}
 	if counts["app"] != 1 {
 		t.Fatalf("app nodes = %d, want 1", counts["app"])
@@ -481,5 +481,129 @@ func TestBuildIsSilentWhenEveryListWorks(t *testing.T) {
 
 	if graph.Error != "" {
 		t.Fatalf("error = %q, want none", graph.Error)
+	}
+}
+
+func nodeByID(graph api.Graph, id string) (api.GraphNode, bool) {
+	for _, node := range graph.Nodes {
+		if node.ID == id {
+			return node, true
+		}
+	}
+	return api.GraphNode{}, false
+}
+
+func TestADanglingDependsOnIsDrawnAsMissing(t *testing.T) {
+	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+
+	node, found := nodeByID(graph, "kustomize.toolkit.fluxcd.io/Kustomization/flux-system/infra")
+	if !found {
+		t.Fatal("a dependsOn pointing at a Kustomization that is not there vanished from the graph")
+	}
+	if node.Status != "NotFound" {
+		t.Fatalf("status = %q, want NotFound so it is not confused with an unhealthy one", node.Status)
+	}
+	if node.Category != "applier" {
+		t.Fatalf("category = %q; managed nodes are dropped by the frontend filter", node.Category)
+	}
+}
+
+func TestADependsOnInAnotherNamespaceKeepsThatNamespace(t *testing.T) {
+	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+
+	node, found := nodeByID(graph, "kustomize.toolkit.fluxcd.io/Kustomization/data/db")
+	if !found {
+		t.Fatal("a cross-namespace dependsOn vanished")
+	}
+	if node.Namespace != "data" {
+		t.Fatalf("namespace = %q", node.Namespace)
+	}
+}
+
+func TestARealDependencyKeepsItsOwnStatus(t *testing.T) {
+	graph := Build(context.Background(), newGraphClient(t), graphDescs())
+
+	node, found := nodeByID(graph, "kustomize.toolkit.fluxcd.io/Kustomization/flux-system/apps")
+	if !found {
+		t.Fatal("the real Kustomization is missing")
+	}
+	if node.Status == "NotFound" {
+		t.Fatal("a Kustomization that exists was marked NotFound")
+	}
+}
+
+func chartOnlyRelease(namespace, sourceNamespace string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "helm.toolkit.fluxcd.io/v2",
+		"kind":       "HelmRelease",
+		"metadata":   map[string]any{"name": "cross", "namespace": namespace},
+		"spec": map[string]any{
+			"chart": map[string]any{
+				"spec": map[string]any{
+					"chart": "podinfo",
+					"sourceRef": map[string]any{
+						"kind":      "HelmRepository",
+						"name":      "charts",
+						"namespace": sourceNamespace,
+					},
+				},
+			},
+		},
+	}}
+}
+
+func graphWith(t *testing.T, objs ...*unstructured.Unstructured) api.Graph {
+	t.Helper()
+	runtimeObjs := make([]runtime.Object, 0, len(objs))
+	for _, obj := range objs {
+		runtimeObjs = append(runtimeObjs, obj)
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), graphListKinds(), runtimeObjs...)
+	return Build(context.Background(), dyn, graphDescs())
+}
+
+func TestAChartSourceRefKeepsItsOwnNamespace(t *testing.T) {
+	graph := graphWith(t, chartOnlyRelease("apps", "flux-system"))
+
+	_, phantom := nodeByID(graph, "source.toolkit.fluxcd.io/HelmRepository/apps/charts")
+	if phantom {
+		t.Fatal("the chart's sourceRef namespace was ignored, inventing a repo in the HelmRelease's namespace")
+	}
+	_, present := nodeByID(graph, "source.toolkit.fluxcd.io/HelmRepository/flux-system/charts")
+	if !present {
+		t.Fatal("the repo named by spec.chart.spec.sourceRef is missing from the graph")
+	}
+}
+
+func TestAChartSourceRefWithoutANamespaceFallsBackToTheRelease(t *testing.T) {
+	graph := graphWith(t, chartOnlyRelease("apps", ""))
+
+	_, found := nodeByID(graph, "source.toolkit.fluxcd.io/HelmRepository/apps/charts")
+	if !found {
+		t.Fatal("an omitted sourceRef namespace should default to the HelmRelease's own namespace")
+	}
+}
+
+func ociRelease() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "helm.toolkit.fluxcd.io/v2",
+		"kind":       "HelmRelease",
+		"metadata":   map[string]any{"name": "oci-app", "namespace": "apps"},
+		"spec": map[string]any{
+			"chartRef": map[string]any{
+				"kind":      "OCIRepository",
+				"name":      "podinfo-oci",
+				"namespace": "flux-system",
+			},
+		},
+	}}
+}
+
+func TestAChartRefIsGraphed(t *testing.T) {
+	graph := graphWith(t, ociRelease())
+
+	_, found := nodeByID(graph, "source.toolkit.fluxcd.io/OCIRepository/flux-system/podinfo-oci")
+	if !found {
+		t.Fatal("spec.chartRef is not graphed, so an OCI-sourced HelmRelease has no source edge")
 	}
 }
