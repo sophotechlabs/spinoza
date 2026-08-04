@@ -25,6 +25,7 @@ export interface ResourceFeed {
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 5000;
 const OPEN_STATE = 1;
+export const DELTA_FLUSH_MS = 100;
 
 function subscribeMsg(subId: string, sub: Subscription): ClientMsg {
   return {
@@ -102,6 +103,61 @@ export function useResourceFeed(): ResourceFeed {
     let attempt = 0;
     const store = useResourcesStore.getState();
     const logs = useLogsStore.getState();
+    const pending = new Map<string, ServerMsg[]>();
+    const pendingLines = new Map<string, string[]>();
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function flush() {
+      if (flushTimer !== null) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      for (const [subId, msgs] of pending) {
+        store.applyDeltas(subId, msgs);
+      }
+      pending.clear();
+      for (const [subId, lines] of pendingLines) {
+        logs.appendLines(subId, lines);
+      }
+      pendingLines.clear();
+    }
+
+    function schedule() {
+      flushTimer ??= setTimeout(flush, DELTA_FLUSH_MS);
+    }
+
+    function queue(msg: ServerMsg) {
+      const waiting = pending.get(msg.subId);
+      if (waiting === undefined) {
+        pending.set(msg.subId, [msg]);
+      } else {
+        waiting.push(msg);
+      }
+      schedule();
+    }
+
+    function queueLines(subId: string, lines: string[]) {
+      const waiting = pendingLines.get(subId);
+      if (waiting === undefined) {
+        pendingLines.set(subId, [...lines]);
+      } else {
+        waiting.push(...lines);
+      }
+      schedule();
+    }
+
+    function dropPending(subId: string) {
+      pending.delete(subId);
+    }
+
+    function clearFlush() {
+      if (flushTimer !== null) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      pending.clear();
+      pendingLines.clear();
+    }
 
     function clearTimer() {
       if (reconnectTimer !== null) {
@@ -158,20 +214,23 @@ export function useResourceFeed(): ResourceFeed {
       }
       switch (msg.type) {
         case 'snapshot':
+          dropPending(msg.subId);
           store.applySnapshot(msg.subId, msg.columns, msg.namespaced, msg.rows);
           break;
         case 'added':
         case 'modified':
         case 'deleted':
-          store.applyDelta(msg.subId, msg);
+          queue(msg);
           break;
         case 'log':
-          logs.appendLines(msg.subId, msg.lines);
+          queueLines(msg.subId, msg.lines);
           break;
         case 'log-end':
+          flush();
           logs.endStream(msg.subId);
           break;
         case 'error':
+          flush();
           if (subsRef.current.has(msg.subId)) {
             store.failSub(msg.subId, msg.message);
           }
@@ -226,6 +285,7 @@ export function useResourceFeed(): ResourceFeed {
         return;
       }
       clearTimer();
+      clearFlush();
       const socket = socketRef.current;
       if (socket !== null) {
         detach(socket);
@@ -242,6 +302,7 @@ export function useResourceFeed(): ResourceFeed {
     return () => {
       disposed = true;
       clearTimer();
+      clearFlush();
       const socket = socketRef.current;
       if (socket !== null) {
         detach(socket);

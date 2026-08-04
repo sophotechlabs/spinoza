@@ -15,6 +15,7 @@ describe('logs store', () => {
     expect(useLogsStore.getState().streams.get('logs')).toEqual({
       lines: [],
       dropped: 0,
+      revision: 0,
       ended: false,
     });
   });

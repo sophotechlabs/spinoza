@@ -224,6 +224,27 @@ export function rawSegments(line: string): LogSegment[] {
   return [{ text: line, className: '' }];
 }
 
+export const SEGMENT_CACHE_LIMIT = 12000;
+
+const parsed = new Map<string, LogSegment[]>();
+
+export function cachedSegments(line: string): LogSegment[] {
+  const hit = parsed.get(line);
+  if (hit !== undefined) {
+    return hit;
+  }
+  const segments = prettySegments(line);
+  if (parsed.size >= SEGMENT_CACHE_LIMIT) {
+    parsed.clear();
+  }
+  parsed.set(line, segments);
+  return segments;
+}
+
+export function forgetSegments(): void {
+  parsed.clear();
+}
+
 export function prettySegments(line: string): LogSegment[] {
   const fields = parseObject(line);
   if (fields === null) {

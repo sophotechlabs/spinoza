@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { Row } from '../../src/lib/types';
-import { useResourceFeed } from '../../src/lib/feed';
+import { DELTA_FLUSH_MS, useResourceFeed } from '../../src/lib/feed';
 import { useResourcesStore } from '../../src/store/resources';
 import { useLogsStore } from '../../src/store/logs';
 import { makeColumns, makeDescriptor, makeRow } from '../helpers';
+
+async function flushDeltas(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, DELTA_FLUSH_MS + 5));
+  });
+}
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -168,7 +174,7 @@ describe('useResourceFeed', () => {
     expect(sub?.rows.size).toBe(0);
   });
 
-  it('still applies deltas after an empty snapshot', () => {
+  it('still applies deltas after an empty snapshot', async () => {
     const socket = openFeedFor('main');
     act(() => {
       socket.onmessage?.(
@@ -189,6 +195,8 @@ describe('useResourceFeed', () => {
       );
     });
 
+    await flushDeltas();
+
     expect(useResourcesStore.getState().subs.get('main')?.rows.get('z')?.name).toBe('zulu');
   });
 
@@ -205,7 +213,7 @@ describe('useResourceFeed', () => {
     expect(useResourcesStore.getState().subs.get('main')?.namespaced).toBe(false);
   });
 
-  it('ignores a snapshot for a subscription that was already dropped', () => {
+  it('ignores a snapshot for a subscription that was already dropped', async () => {
     const hook = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
@@ -233,10 +241,12 @@ describe('useResourceFeed', () => {
       );
     });
 
+    await flushDeltas();
+
     expect(useResourcesStore.getState().subs.has('main#1')).toBe(false);
   });
 
-  it('ignores a delta for a subscription that was already dropped', () => {
+  it('ignores a delta for a subscription that was already dropped', async () => {
     const hook = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
@@ -273,6 +283,8 @@ describe('useResourceFeed', () => {
         }),
       );
     });
+
+    await flushDeltas();
 
     expect(useResourcesStore.getState().subs.has('main#1')).toBe(false);
   });
@@ -410,7 +422,7 @@ describe('useResourceFeed', () => {
     expect(useResourcesStore.getState().errors.has('logs#1')).toBe(false);
   });
 
-  it('routes an added delta message to the store', () => {
+  it('routes an added delta message to the store', async () => {
     useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
     const socket = openFeedFor('main');
     const row: Row = makeRow({ uid: 'b', name: 'bravo' });
@@ -418,10 +430,11 @@ describe('useResourceFeed', () => {
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data }));
     });
+    await flushDeltas();
     expect(useResourcesStore.getState().subs.get('main')?.rows.get('b')?.name).toBe('bravo');
   });
 
-  it('routes a modified delta message to the store', () => {
+  it('routes a modified delta message to the store', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main', makeColumns([]), true, [makeRow({ uid: 'c', name: 'before' })]);
@@ -434,10 +447,11 @@ describe('useResourceFeed', () => {
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data }));
     });
+    await flushDeltas();
     expect(useResourcesStore.getState().subs.get('main')?.rows.get('c')?.name).toBe('after');
   });
 
-  it('routes a deleted delta message to the store', () => {
+  it('routes a deleted delta message to the store', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main', makeColumns([]), true, [makeRow({ uid: 'd' })]);
@@ -446,6 +460,7 @@ describe('useResourceFeed', () => {
     act(() => {
       socket.onmessage?.(new MessageEvent('message', { data }));
     });
+    await flushDeltas();
     expect(useResourcesStore.getState().subs.get('main')?.rows.has('d')).toBe(false);
   });
 
@@ -776,6 +791,7 @@ describe('useResourceFeed', () => {
     expect(useLogsStore.getState().streams.get('logs')).toEqual({
       lines: [],
       dropped: 0,
+      revision: 0,
       ended: false,
     });
   });
@@ -800,7 +816,7 @@ describe('useResourceFeed', () => {
     });
   });
 
-  it('appends streamed log lines to the store', () => {
+  it('appends streamed log lines to the store', async () => {
     const { result } = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
@@ -814,6 +830,8 @@ describe('useResourceFeed', () => {
         }),
       );
     });
+
+    await flushDeltas();
 
     expect(useLogsStore.getState().streams.get('logs')?.lines).toEqual(['first', 'second']);
   });
@@ -915,5 +933,252 @@ describe('useResourceFeed', () => {
       result.current.subscribeLogs('logs', logRequest);
       result.current.unsubscribeLogs('logs');
     }).not.toThrow();
+  });
+});
+
+describe('a burst of watch events', () => {
+  beforeEach(() => {
+    useResourcesStore.setState({ subs: new Map(), errors: new Map() });
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useResourcesStore.setState({ subs: new Map(), errors: new Map() });
+  });
+
+  function send(socket: FakeWebSocket, msg: unknown): void {
+    act(() => {
+      socket.onmessage?.(new MessageEvent('message', { data: JSON.stringify(msg) }));
+    });
+  }
+
+  it('lands as a single store write instead of one per event', async () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
+    const socket = openFeedFor('main');
+    let writes = 0;
+    const stop = useResourcesStore.subscribe(() => {
+      writes += 1;
+    });
+
+    for (let index = 0; index < 50; index += 1) {
+      send(socket, {
+        type: 'added',
+        subId: 'main',
+        row: makeRow({ uid: `u-${String(index)}`, name: `pod-${String(index)}` }),
+      });
+    }
+    expect(writes).toBe(0);
+
+    await flushDeltas();
+    stop();
+
+    expect(writes).toBe(1);
+    expect(useResourcesStore.getState().subs.get('main')?.rows.size).toBe(50);
+  });
+
+  it('keeps the last value when the same object changes twice in one window', async () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
+    const socket = openFeedFor('main');
+
+    send(socket, { type: 'added', subId: 'main', row: makeRow({ uid: 'a', name: 'first' }) });
+    send(socket, { type: 'modified', subId: 'main', row: makeRow({ uid: 'a', name: 'second' }) });
+    await flushDeltas();
+
+    expect(useResourcesStore.getState().subs.get('main')?.rows.get('a')?.name).toBe('second');
+  });
+
+  it('drops buffered deltas when a fresh snapshot supersedes them', async () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
+    const socket = openFeedFor('main');
+
+    send(socket, { type: 'added', subId: 'main', row: makeRow({ uid: 'gone', name: 'gone' }) });
+    send(socket, {
+      type: 'snapshot',
+      subId: 'main',
+      columns: makeColumns([]),
+      namespaced: true,
+      rows: [makeRow({ uid: 'fresh', name: 'fresh' })],
+    });
+    await flushDeltas();
+
+    const rows = useResourcesStore.getState().subs.get('main')?.rows;
+    expect(rows?.has('gone')).toBe(false);
+    expect(rows?.has('fresh')).toBe(true);
+  });
+
+  it('does not write at all when the only delta deletes a row that was never there', async () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
+    const socket = openFeedFor('main');
+    let writes = 0;
+    const stop = useResourcesStore.subscribe(() => {
+      writes += 1;
+    });
+
+    send(socket, { type: 'deleted', subId: 'main', uid: 'never-existed' });
+    await flushDeltas();
+    stop();
+
+    expect(writes).toBe(0);
+  });
+});
+
+describe('deltas still waiting when the feed goes away', () => {
+  beforeEach(() => {
+    useResourcesStore.setState({ subs: new Map(), errors: new Map() });
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useResourcesStore.setState({ subs: new Map(), errors: new Map() });
+  });
+
+  it('are dropped rather than written after unmount', async () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribe('main', makeDescriptor({}), '');
+    });
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'added',
+            subId: 'main',
+            row: makeRow({ uid: 'late', name: 'late' }),
+          }),
+        }),
+      );
+    });
+
+    hook.unmount();
+    await flushDeltas();
+
+    expect(useResourcesStore.getState().subs.get('main')?.rows.has('late')).toBe(false);
+  });
+
+  it('are dropped when the feed reconnects before the window closes', async () => {
+    useResourcesStore.getState().applySnapshot('main', makeColumns([]), true, []);
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribe('main', makeDescriptor({}), '');
+    });
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'added',
+            subId: 'main',
+            row: makeRow({ uid: 'late', name: 'late' }),
+          }),
+        }),
+      );
+    });
+
+    act(() => {
+      hook.result.current.reconnect();
+    });
+    await flushDeltas();
+
+    expect(useResourcesStore.getState().subs.get('main')?.rows.has('late')).toBe(false);
+  });
+});
+
+describe('a chatty log stream', () => {
+  beforeEach(() => {
+    useLogsStore.setState({ streams: new Map() });
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  function openLogFeed() {
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribeLogs('logs', logRequest);
+    });
+    return { hook, socket };
+  }
+
+  function sendLines(socket: FakeWebSocket, lines: string[]): void {
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log', subId: 'logs', lines }),
+        }),
+      );
+    });
+  }
+
+  it('lands as one append instead of one per message', async () => {
+    const { socket } = openLogFeed();
+    let writes = 0;
+    const stop = useLogsStore.subscribe(() => {
+      writes += 1;
+    });
+
+    for (let index = 0; index < 20; index += 1) {
+      sendLines(socket, [`line ${String(index)}`]);
+    }
+    expect(writes).toBe(0);
+
+    await flushDeltas();
+    stop();
+
+    expect(writes).toBe(1);
+    expect(useLogsStore.getState().streams.get('logs')?.lines).toHaveLength(20);
+  });
+
+  it('does not lose the tail when the stream ends inside the window', () => {
+    const { socket } = openLogFeed();
+
+    sendLines(socket, ['last words']);
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log-end', subId: 'logs' }),
+        }),
+      );
+    });
+
+    const stream = useLogsStore.getState().streams.get('logs');
+    expect(stream?.lines).toEqual(['last words']);
+    expect(stream?.ended).toBe(true);
+  });
+
+  it('does not lose the tail when the stream fails inside the window', () => {
+    const { socket } = openLogFeed();
+
+    sendLines(socket, ['before the error']);
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'error', subId: 'logs', message: 'forbidden' }),
+        }),
+      );
+    });
+
+    const stream = useLogsStore.getState().streams.get('logs');
+    expect(stream?.lines).toEqual(['before the error']);
+    expect(stream?.error).toBe('forbidden');
   });
 });

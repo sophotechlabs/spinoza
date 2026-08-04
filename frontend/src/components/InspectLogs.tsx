@@ -1,17 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { LogRequest } from '../lib/types';
-import { useLogEnded, useLogError, useLogLines, useLogOffset } from '../store/logs';
+import { useLogEnded, useLogError, useLogLines, useLogOffset, useLogRevision } from '../store/logs';
 import { useLogStream } from '../lib/useLogStream';
-import { prettySegments, rawSegments } from '../lib/logColor';
+import { cachedSegments, rawSegments } from '../lib/logColor';
 import { scrollToBottom } from '../lib/scroll';
 import { useLogView } from '../store/settings';
 
 const INSPECT_LOGS_PREFIX = 'inspect-logs';
+const LOG_LINE_HEIGHT = 16;
 
 interface InspectLogsProps {
   namespace: string;
   pod: string;
   containers: string[];
+  active?: boolean;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
 }
@@ -34,6 +37,7 @@ export default function InspectLogs({
   namespace,
   pod,
   containers,
+  active = true,
   subscribeLogs,
   unsubscribeLogs,
 }: InspectLogsProps) {
@@ -55,26 +59,45 @@ export default function InspectLogs({
     namespace,
     name: pod,
     container,
+    enabled: active,
     subscribeLogs,
     unsubscribeLogs,
   });
 
   const lines = useLogLines(subId);
   const offset = useLogOffset(subId);
+  const revision = useLogRevision(subId);
   const ended = useLogEnded(subId);
   const error = useLogError(subId);
+
+  const virtualizer = useVirtualizer({
+    count: lines.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => LOG_LINE_HEIGHT,
+    overscan: 40,
+  });
+
+  const measure = useCallback(
+    (node: HTMLDivElement | null) => {
+      virtualizer.measureElement(node);
+    },
+    [virtualizer],
+  );
 
   useEffect(() => {
     if (!follow) {
       return;
     }
+    virtualizer.scrollToIndex(lines.length - 1);
     scrollToBottom(scrollRef.current);
-  }, [lines, follow]);
+  }, [revision, follow, lines.length, virtualizer]);
 
   let render = rawSegments;
   if (pretty) {
-    render = prettySegments;
+    render = cachedSegments;
   }
+
+  const items = virtualizer.getVirtualItems();
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -124,15 +147,23 @@ export default function InspectLogs({
         className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[11px] text-fg-soft"
       >
         {lines.length === 0 && <span className="text-fg-muted">Waiting for output…</span>}
-        {lines.map((line, index) => (
-          <div key={offset + index} className="break-all whitespace-pre-wrap">
-            {render(line).map((segment, part) => (
-              <span key={part} className={segment.className}>
-                {segment.text}
-              </span>
-            ))}
-          </div>
-        ))}
+        <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+          {items.map((item) => (
+            <div
+              key={offset + item.index}
+              data-index={item.index}
+              ref={measure}
+              style={{ transform: `translateY(${item.start}px)` }}
+              className="absolute top-0 left-0 w-full break-all whitespace-pre-wrap"
+            >
+              {render(lines[item.index]).map((segment, part) => (
+                <span key={part} className={segment.className}>
+                  {segment.text}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

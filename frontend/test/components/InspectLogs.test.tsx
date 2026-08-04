@@ -216,3 +216,99 @@ describe('reading a structured log line', () => {
     expect(screen.queryByText('Starting HTTP Server.')).not.toBeInTheDocument();
   });
 });
+
+describe('a very long log buffer', () => {
+  beforeEach(() => {
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  it('puts far fewer lines in the dom than the buffer holds', () => {
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(
+        subId,
+        Array.from({ length: 5000 }, (_unused, index) => `line ${String(index)}`),
+      );
+    });
+
+    expect(screen.getByText('line 0')).toBeInTheDocument();
+    expect(screen.queryByText('line 4999')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-index]').length).toBeLessThan(200);
+  });
+
+  it('tags every rendered line with its place in the buffer', () => {
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, ['alpha', 'bravo']);
+    });
+
+    const rendered = [...document.querySelectorAll<HTMLElement>('[data-index]')];
+    expect(rendered.map((node) => node.dataset.index)).toEqual(['0', '1']);
+    expect(rendered[0].className).toContain('absolute');
+  });
+
+  it('keeps the window small while the buffer keeps growing', () => {
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, ['only line']);
+    });
+    const small = document.querySelectorAll('[data-index]').length;
+
+    act(() => {
+      useLogsStore.getState().appendLines(
+        subId,
+        Array.from({ length: 4000 }, (_unused, index) => `more ${String(index)}`),
+      );
+    });
+
+    expect(document.querySelectorAll('[data-index]').length).toBeLessThan(small + 200);
+  });
+});
+
+describe('a logs panel behind another tab', () => {
+  beforeEach(() => {
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  it('never opens a stream while it is hidden', () => {
+    const subscribeLogs = vi.fn<(subId: string, request: unknown) => void>();
+    render(
+      <InspectLogs
+        namespace="flux-system"
+        pod="web"
+        containers={['app']}
+        active={false}
+        subscribeLogs={subscribeLogs}
+        unsubscribeLogs={vi.fn()}
+      />,
+    );
+
+    expect(subscribeLogs).not.toHaveBeenCalled();
+  });
+
+  it('drops the stream when its tab goes away and reopens it on return', () => {
+    const subscribeLogs = vi.fn<(subId: string, request: unknown) => void>();
+    const unsubscribeLogs = vi.fn<(subId: string) => void>();
+    const props = {
+      namespace: 'flux-system',
+      pod: 'web',
+      containers: ['app'],
+      subscribeLogs,
+      unsubscribeLogs,
+    };
+    const view = render(<InspectLogs {...props} active />);
+    const first = liveSubId(subscribeLogs);
+
+    view.rerender(<InspectLogs {...props} active={false} />);
+    expect(unsubscribeLogs).toHaveBeenCalledWith(first);
+
+    view.rerender(<InspectLogs {...props} active />);
+    expect(liveSubId(subscribeLogs)).not.toBe(first);
+  });
+});

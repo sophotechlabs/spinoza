@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  SEGMENT_CACHE_LIMIT,
+  cachedSegments,
   clockOf,
+  forgetSegments,
   hasAnsi,
   prettySegments,
   rawSegments,
@@ -272,5 +275,44 @@ describe('a structured log line rendered for a person', () => {
 
   it('still colours a plain text warning by its level', () => {
     expect(prettySegments('level=warn something happened')[0].className).toBe('text-warn');
+  });
+});
+
+describe('cachedSegments', () => {
+  beforeEach(() => {
+    forgetSegments();
+  });
+
+  it('gives the same parsed segments back for a line it has already seen', () => {
+    const line = '{"level":"info","msg":"up"}';
+
+    const first = cachedSegments(line);
+    const second = cachedSegments(line);
+
+    expect(second).toBe(first);
+    expect(joined(first)).toBe('INFO   up');
+  });
+
+  it('parses a line it has not seen before', () => {
+    expect(joined(cachedSegments('{"level":"warn","msg":"slow"}'))).toBe('WARN   slow');
+  });
+
+  it('starts over rather than growing without a bound', () => {
+    for (let index = 0; index < SEGMENT_CACHE_LIMIT; index += 1) {
+      cachedSegments(`line ${String(index)}`);
+    }
+    const before = cachedSegments('line 0');
+
+    cachedSegments('one more line');
+
+    expect(cachedSegments('line 0')).not.toBe(before);
+  });
+
+  it('forgets everything when told to', () => {
+    const first = cachedSegments('a line');
+
+    forgetSegments();
+
+    expect(cachedSegments('a line')).not.toBe(first);
   });
 });

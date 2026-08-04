@@ -5,6 +5,7 @@ export const MAX_LOG_LINES = 5000;
 interface StreamState {
   lines: string[];
   dropped: number;
+  revision: number;
   ended: boolean;
   error?: string;
 }
@@ -20,12 +21,16 @@ interface LogsState {
 
 const EMPTY_LINES: string[] = [];
 
-function trim(lines: string[]): { lines: string[]; dropped: number } {
-  if (lines.length <= MAX_LOG_LINES) {
-    return { lines, dropped: 0 };
+function append(buffer: string[], lines: string[]): number {
+  for (const line of lines) {
+    buffer.push(line);
   }
-  const excess = lines.length - MAX_LOG_LINES;
-  return { lines: lines.slice(excess), dropped: excess };
+  if (buffer.length <= MAX_LOG_LINES) {
+    return 0;
+  }
+  const excess = buffer.length - MAX_LOG_LINES;
+  buffer.splice(0, excess);
+  return excess;
 }
 
 export const useLogsStore = create<LogsState>((set) => ({
@@ -33,7 +38,7 @@ export const useLogsStore = create<LogsState>((set) => ({
   startStream: (subId) => {
     set((state) => {
       const streams = new Map(state.streams);
-      streams.set(subId, { lines: [], dropped: 0, ended: false });
+      streams.set(subId, { lines: [], dropped: 0, revision: 0, ended: false });
       return { streams };
     });
   },
@@ -43,12 +48,12 @@ export const useLogsStore = create<LogsState>((set) => ({
       if (existing === undefined) {
         return state;
       }
+      const dropped = append(existing.lines, lines);
       const streams = new Map(state.streams);
-      const trimmed = trim([...existing.lines, ...lines]);
       streams.set(subId, {
         ...existing,
-        lines: trimmed.lines,
-        dropped: existing.dropped + trimmed.dropped,
+        dropped: existing.dropped + dropped,
+        revision: existing.revision + 1,
       });
       return { streams };
     });
@@ -93,6 +98,14 @@ export function useLogLines(subId: string): string[] {
     return EMPTY_LINES;
   }
   return lines;
+}
+
+export function useLogRevision(subId: string): number {
+  const revision = useLogsStore((state) => state.streams.get(subId)?.revision);
+  if (revision === undefined) {
+    return 0;
+  }
+  return revision;
 }
 
 export function useLogOffset(subId: string): number {
