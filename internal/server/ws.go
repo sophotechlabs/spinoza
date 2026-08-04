@@ -20,6 +20,35 @@ const maxLogBatch = 200
 
 const msgError = "error"
 
+var minResyncInterval = 2 * time.Second
+
+type throttle struct {
+	interval time.Duration
+	now      func() time.Time
+	last     time.Time
+}
+
+func newThrottle(interval time.Duration) *throttle {
+	return &throttle{interval: interval, now: time.Now}
+}
+
+func (t *throttle) wait(ctx context.Context) bool {
+	remaining := t.interval - t.now().Sub(t.last)
+	if remaining <= 0 {
+		t.last = t.now()
+		return true
+	}
+	timer := time.NewTimer(remaining)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		t.last = t.now()
+		return true
+	}
+}
+
 type feed int
 
 const (
@@ -206,12 +235,16 @@ func snapshotOf(subID string, sub *resources.Subscription, rows []api.Row) api.S
 }
 
 func (sess *wsSession) relay(subID string, gen uint64, sub *resources.Subscription) {
+	spacing := newThrottle(minResyncInterval)
 	for {
 		select {
 		case <-sess.ctx.Done():
 			return
 		case _, ok := <-sub.Resync:
 			if !ok {
+				return
+			}
+			if !spacing.wait(sess.ctx) {
 				return
 			}
 			if !sess.sendResync(subID, gen, sub) {
