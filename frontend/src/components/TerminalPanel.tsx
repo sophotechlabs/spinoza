@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ExecTarget } from '../lib/types';
 import { openExec } from '../lib/exec';
 import { createTerminal } from '../lib/terminal';
@@ -20,6 +20,8 @@ function endNotice(message: string): string {
 export default function TerminalPanel({ target, onShellMissing }: TerminalPanelProps) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const [ended, setEnded] = useState('');
+  const shellMissingRef = useRef(onShellMissing);
+  shellMissingRef.current = onShellMissing;
 
   const { namespace, pod, container } = target;
 
@@ -40,7 +42,7 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
           term.write(endNotice(message));
           setEnded(message);
           if (message.includes('/bin/sh')) {
-            onShellMissing();
+            shellMissingRef.current();
           }
         },
       },
@@ -66,7 +68,7 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
       session.close();
       term.dispose();
     };
-  }, [host, namespace, pod, container, onShellMissing]);
+  }, [host, namespace, pod, container]);
 
   return (
     <div className="flex h-56 flex-col border-t border-neutral-800 bg-neutral-950">

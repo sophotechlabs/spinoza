@@ -17,7 +17,7 @@ interface InspectMetricsProps {
   pod: string;
 }
 
-interface ChartProps {
+export interface ChartProps {
   points: MetricPoint[];
   stroke: string;
   fill: string;
@@ -32,16 +32,26 @@ function errorMessage(err: unknown): string {
   return 'loading metrics failed';
 }
 
-function Chart({ points, stroke, fill, format, metric }: ChartProps) {
+export function Chart({ points, stroke, fill, format, metric }: ChartProps) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const chartRef = useRef<ChartHandle | null>(null);
+  const pointsRef = useRef(points);
+  pointsRef.current = points;
+  const colorsRef = useRef({ stroke, fill });
+  colorsRef.current = { stroke, fill };
 
   useEffect(() => {
     if (host === null) {
       return;
     }
-    const chart = createChart(host, { stroke, fill, format, metric });
+    const chart = createChart(host, {
+      stroke: colorsRef.current.stroke,
+      fill: colorsRef.current.fill,
+      format,
+      metric,
+    });
     chartRef.current = chart;
+    chart.update(pointsRef.current);
 
     const observer = new ResizeObserver(() => {
       chart.resize(host.clientWidth);
@@ -53,7 +63,11 @@ function Chart({ points, stroke, fill, format, metric }: ChartProps) {
       chart.destroy();
       chartRef.current = null;
     };
-  }, [host, stroke, fill, format, metric]);
+  }, [host, format, metric]);
+
+  useEffect(() => {
+    chartRef.current?.setColors(stroke, fill);
+  }, [stroke, fill]);
 
   useEffect(() => {
     chartRef.current?.update(points);

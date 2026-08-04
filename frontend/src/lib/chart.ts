@@ -4,6 +4,7 @@ import type { MetricPoint } from './types';
 
 export interface ChartHandle {
   update: (points: MetricPoint[]) => void;
+  setColors: (stroke: string, fill: string) => void;
   resize: (width: number) => void;
   destroy: () => void;
 }
@@ -81,6 +82,12 @@ export function createChart(node: HTMLElement, options: ChartOptions): ChartHand
   return {
     update: (next: MetricPoint[]) => {
       chart.setData(series(next));
+    },
+    setColors: (stroke: string, fill: string) => {
+      const line = chart.series[1];
+      line.stroke = stroke;
+      line.fill = fill;
+      chart.redraw(false, false);
     },
     resize: (width: number) => {
       chart.setSize({ width, height: 130 });

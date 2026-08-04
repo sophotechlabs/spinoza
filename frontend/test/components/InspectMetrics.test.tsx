@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import InspectMetrics from '../../src/components/InspectMetrics';
+import InspectMetrics, { Chart } from '../../src/components/InspectMetrics';
 import type { ChartHandle } from '../../src/lib/chart';
 import type { MetricPoint } from '../../src/lib/types';
 
 const createChart = vi.fn<(node: HTMLElement, options: unknown) => ChartHandle>();
 const updates: MetricPoint[][] = [];
 const resizes: number[] = [];
+const colorChanges: { stroke: string; fill: string }[] = [];
 
 vi.mock('../../src/lib/chart', () => ({
   createChart: (node: HTMLElement, options: unknown) => createChart(node, options),
@@ -17,6 +18,9 @@ function chartStub(): ChartHandle {
   return {
     update: (points: MetricPoint[]) => {
       updates.push(points);
+    },
+    setColors: (stroke: string, fill: string) => {
+      colorChanges.push({ stroke, fill });
     },
     resize: (width: number) => {
       resizes.push(width);
@@ -197,5 +201,50 @@ describe('InspectMetrics', () => {
     deferred.settle();
 
     expect(screen.queryByTestId('metric-chart')).not.toBeInTheDocument();
+  });
+});
+
+describe('a chart whose colours change', () => {
+  it('recolours in place instead of building a new chart', () => {
+    const view = render(
+      <Chart
+        points={[{ at: 100, value: 1 }]}
+        stroke="#0ea5e9"
+        fill="#082f49"
+        format={String}
+        metric="cpu"
+      />,
+    );
+
+    view.rerender(
+      <Chart
+        points={[{ at: 100, value: 1 }]}
+        stroke="#22c55e"
+        fill="#052e16"
+        format={String}
+        metric="cpu"
+      />,
+    );
+
+    expect(createChart).toHaveBeenCalledTimes(1);
+    expect(colorChanges.at(-1)).toEqual({ stroke: '#22c55e', fill: '#052e16' });
+  });
+
+  it('never leaves a rebuilt chart empty waiting for the next poll', () => {
+    const points = [
+      { at: 100, value: 1 },
+      { at: 160, value: 2 },
+    ];
+    const view = render(
+      <Chart points={points} stroke="#0ea5e9" fill="#082f49" format={String} metric="cpu" />,
+    );
+    updates.length = 0;
+
+    view.rerender(
+      <Chart points={points} stroke="#0ea5e9" fill="#082f49" format={String} metric="memory" />,
+    );
+
+    expect(createChart).toHaveBeenCalledTimes(2);
+    expect(updates.at(-1)).toEqual(points);
   });
 });

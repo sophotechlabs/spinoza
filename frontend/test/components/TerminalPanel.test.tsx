@@ -34,6 +34,7 @@ function harness(cols = 120, rows = 40): Harness {
     onData: vi.fn((handler: (data: string) => void) => {
       onData = handler;
     }),
+    setTheme: vi.fn(),
     fit: vi.fn(() => ({ cols, rows })),
     focus: vi.fn(),
     dispose: vi.fn(),
@@ -148,5 +149,60 @@ describe('TerminalPanel', () => {
 
     expect(bench.session.close).toHaveBeenCalled();
     expect(bench.term.dispose).toHaveBeenCalled();
+  });
+});
+
+describe('a re-render that only changes the callback', () => {
+  beforeEach(() => {
+    openExec.mockReset();
+    createTerminal.mockReset();
+  });
+
+  it('keeps the shell open instead of reconnecting', () => {
+    const stubs = harness();
+    const { view } = renderPanel();
+
+    view.rerender(
+      <TerminalPanel
+        target={{ namespace: 'monitoring', pod: 'loki-0', container: 'loki' }}
+        onShellMissing={vi.fn()}
+      />,
+    );
+
+    expect(stubs.session.close).not.toHaveBeenCalled();
+    expect(openExec).toHaveBeenCalledTimes(1);
+  });
+
+  it('still reports a missing shell through the newest callback', () => {
+    const stubs = harness();
+    const { view } = renderPanel();
+    const later = vi.fn();
+
+    view.rerender(
+      <TerminalPanel
+        target={{ namespace: 'monitoring', pod: 'loki-0', container: 'loki' }}
+        onShellMissing={later}
+      />,
+    );
+    act(() => {
+      stubs.handlers().onEnd('exec: "/bin/sh": executable file not found');
+    });
+
+    expect(later).toHaveBeenCalled();
+  });
+
+  it('still reconnects when the container changes', () => {
+    const stubs = harness();
+    const { view } = renderPanel();
+
+    view.rerender(
+      <TerminalPanel
+        target={{ namespace: 'monitoring', pod: 'loki-0', container: 'sidecar' }}
+        onShellMissing={vi.fn()}
+      />,
+    );
+
+    expect(stubs.session.close).toHaveBeenCalled();
+    expect(openExec).toHaveBeenCalledTimes(2);
   });
 });

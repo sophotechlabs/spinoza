@@ -7,9 +7,20 @@ interface TerminalSize {
   rows: number;
 }
 
+export interface TerminalTheme {
+  background: string;
+  foreground: string;
+}
+
+export const DEFAULT_TERMINAL_THEME: TerminalTheme = {
+  background: '#0a0a0a',
+  foreground: '#d4d4d4',
+};
+
 export interface TerminalHandle {
   write: (text: string) => void;
   onData: (handler: (data: string) => void) => void;
+  setTheme: (theme: TerminalTheme) => void;
   fit: () => TerminalSize;
   focus: () => void;
   dispose: () => void;
@@ -21,15 +32,17 @@ export function createTerminal(node: HTMLElement): TerminalHandle {
     fontSize: 12,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     cursorBlink: true,
-    theme: { background: '#0a0a0a', foreground: '#d4d4d4' },
   });
   const fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
   term.open(node);
 
-  return {
+  const handle: TerminalHandle = {
     write: (text: string) => {
       term.write(text);
+    },
+    setTheme: (theme: TerminalTheme) => {
+      term.options.theme = theme;
     },
     onData: (handler: (data: string) => void) => {
       term.onData(handler);
@@ -45,4 +58,6 @@ export function createTerminal(node: HTMLElement): TerminalHandle {
       term.dispose();
     },
   };
+  handle.setTheme(DEFAULT_TERMINAL_THEME);
+  return handle;
 }
