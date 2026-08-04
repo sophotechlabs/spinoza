@@ -11,6 +11,7 @@ import {
 } from '../lib/objectActions';
 import type { ObjectAction } from '../lib/objectActions';
 import { refQuery } from '../lib/object';
+import { notifyError, notifyOk } from '../store/toasts';
 
 interface InspectObjectActionsProps {
   target: ObjectRef;
@@ -96,11 +97,14 @@ export default function InspectObjectActions({
       } else {
         setPlan(null);
         setNotice(result.message);
+        notifyOk(`${target.name}: ${result.message}`);
       }
       onDone();
       return result;
     } catch (err: unknown) {
-      setError(errorMessage(err));
+      const message = errorMessage(err);
+      setError(message);
+      notifyError(`${action} ${target.name}: ${message}`);
       setPlan(null);
       return null;
     } finally {

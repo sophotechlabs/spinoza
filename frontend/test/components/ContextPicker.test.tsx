@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ContextPicker from '../../src/components/ContextPicker';
+import { useToastsStore } from '../../src/store/toasts';
 
 function stubContexts(list: unknown, post?: unknown) {
   const calls: { url: string; method?: string }[] = [];
@@ -23,8 +24,13 @@ function stubContexts(list: unknown, post?: unknown) {
   return calls;
 }
 
+beforeEach(() => {
+  useToastsStore.getState().clear();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  useToastsStore.getState().clear();
 });
 
 describe('ContextPicker', () => {
@@ -56,6 +62,9 @@ describe('ContextPicker', () => {
     const post = calls.find((call) => call.method === 'POST');
     expect(post?.url).toContain('name=p-mk1');
     expect(screen.getByLabelText('Kubernetes context')).toHaveValue('p-mk1');
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({ tone: 'ok', message: 'Switched to p-mk1' }),
+    ]);
   });
 
   it('reports a switch the server refused and keeps the old context', async () => {
@@ -69,6 +78,12 @@ describe('ContextPicker', () => {
 
     expect(await screen.findByText('context "gone" does not exist')).toBeInTheDocument();
     expect(onSwitched).not.toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        message: 'Switching to p-mk1: context "gone" does not exist',
+      }),
+    ]);
   });
 
   it('shows a plain label when the kubeconfig has no contexts', async () => {
@@ -80,7 +95,7 @@ describe('ContextPicker', () => {
     expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
   });
 
-  it('reports a listing the server refused', async () => {
+  it('reports a listing the server refused instead of an empty header slot', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -92,9 +107,50 @@ describe('ContextPicker', () => {
 
     render(<ContextPicker onSwitched={vi.fn()} />);
 
-    await waitFor(() => {
-      expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
-    });
+    expect(await screen.findByText(/kubeconfig is unreadable/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
+  });
+
+  it('recovers from the retry button once the backend answers', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ contexts: ['p-mk1', 'p-mk2'], current: 'p-mk1' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Retry' });
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByLabelText('Kubernetes context')).toHaveValue('p-mk1');
+  });
+
+  it('keeps retrying on its own until the backend comes back', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ contexts: ['p-mk1'], current: 'p-mk1' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Retry' });
+
+    expect(await screen.findByLabelText('Kubernetes context')).toBeInTheDocument();
+  });
+
+  it('surfaces the reason the kubeconfig produced no contexts', async () => {
+    stubContexts({ contexts: [], current: '', error: 'kubeconfig has no current-context' });
+
+    render(<ContextPicker onSwitched={vi.fn()} />);
+
+    expect(await screen.findByText(/kubeconfig has no current-context/)).toBeInTheDocument();
   });
 
   it('falls back to a generic message for a non-Error rejection', async () => {
@@ -146,6 +202,32 @@ describe('ContextPicker', () => {
     expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
   });
 
+  it('drops a listing failure that lands after unmount', async () => {
+    const deferred = {
+      fail: () => {
+        return undefined;
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            deferred.fail = () => {
+              reject(new Error('too late'));
+            };
+          }),
+      ),
+    );
+    const view = render(<ContextPicker onSwitched={vi.fn()} />);
+
+    view.unmount();
+    deferred.fail();
+    await Promise.resolve();
+
+    expect(screen.queryByText(/too late/)).not.toBeInTheDocument();
+  });
+
   it('ignores re-picking the context already in use', async () => {
     const user = userEvent.setup();
     const calls = stubContexts({ contexts: ['p-mk1', 'p-mk2'], current: 'p-mk2' });
@@ -167,13 +249,19 @@ describe('ContextPicker', () => {
     });
   });
 
-  it('survives a contexts request that fails', async () => {
+  it('names a contexts request that failed outright', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
 
     render(<ContextPicker onSwitched={vi.fn()} />);
 
-    await waitFor(() => {
-      expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
-    });
+    expect(await screen.findByText(/offline/)).toBeInTheDocument();
+  });
+
+  it('falls back to a generic message when the listing rejects with a non-Error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('nope'));
+
+    render(<ContextPicker onSwitched={vi.fn()} />);
+
+    expect(await screen.findByText(/the context list could not be loaded/)).toBeInTheDocument();
   });
 });

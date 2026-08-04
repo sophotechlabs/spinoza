@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectPorts from '../../src/components/InspectPorts';
 import { useForwardsStore } from '../../src/store/forwards';
+import { useToastsStore } from '../../src/store/toasts';
 import type { ObjectPort, ObjectRef } from '../../src/lib/types';
 
 const target: ObjectRef = {
@@ -38,6 +39,7 @@ describe('InspectPorts', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     useForwardsStore.setState({ forwards: [] });
+    useToastsStore.getState().clear();
   });
 
   it('labels named and unnamed ports', () => {
@@ -56,6 +58,9 @@ describe('InspectPorts', () => {
     await user.click(screen.getAllByRole('button', { name: 'Forward' })[0]);
 
     expect(await screen.findByText('127.0.0.1:45123 → 8080')).toBeInTheDocument();
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({ tone: 'ok', message: 'Forwarding web 127.0.0.1:45123 → 8080' }),
+    ]);
   });
 
   it('surfaces a failure', async () => {
@@ -73,6 +78,12 @@ describe('InspectPorts', () => {
     await user.click(screen.getAllByRole('button', { name: 'Forward' })[0]);
 
     expect(await screen.findByText('no ready pod')).toBeInTheDocument();
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        message: 'Forwarding web port 8080: no ready pod',
+      }),
+    ]);
   });
 
   it('falls back to a generic message for a non-Error rejection', async () => {

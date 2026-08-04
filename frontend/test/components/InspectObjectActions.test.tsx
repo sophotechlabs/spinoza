@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectObjectActions from '../../src/components/InspectObjectActions';
+import { useToastsStore } from '../../src/store/toasts';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const deployment: ObjectRef = {
@@ -54,8 +55,13 @@ function stubFailure(message: string) {
   return fetchMock;
 }
 
+beforeEach(() => {
+  useToastsStore.getState().clear();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  useToastsStore.getState().clear();
 });
 
 describe('scale', () => {
@@ -91,6 +97,9 @@ describe('scale', () => {
     expect(await screen.findByText('Scaled web to 5 replicas.')).toBeInTheDocument();
     expect(String(fetchMock.mock.calls[0][0])).toContain('replicas=5');
     expect(onDone).toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({ tone: 'ok', message: 'web: Scaled web to 5 replicas.' }),
+    ]);
   });
 
   it('refuses a fractional count without calling the server', async () => {
@@ -144,6 +153,12 @@ describe('scale', () => {
     await user.click(screen.getByRole('button', { name: 'Scale' }));
 
     expect(await screen.findByText('deployments.apps "web" is forbidden')).toBeInTheDocument();
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        message: 'scale web: deployments.apps "web" is forbidden',
+      }),
+    ]);
   });
 });
 
@@ -183,6 +198,12 @@ describe('node actions', () => {
 
     expect(await screen.findByText('worker-1 no longer accepts new pods.')).toBeInTheDocument();
     expect(String(fetchMock.mock.calls[0][0])).toContain('action=cordon');
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({
+        tone: 'ok',
+        message: 'worker-1: worker-1 no longer accepts new pods.',
+      }),
+    ]);
   });
 
   it('offers uncordon on a cordoned node', async () => {

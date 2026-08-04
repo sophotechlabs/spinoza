@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ObjectDetail, ObjectRef } from '../lib/types';
 import { applyObject, deleteObject } from '../lib/object';
+import { notifyOk } from '../store/toasts';
 import { fetchSchema, gvkOf, registerSchema, schemaPath } from '../lib/schema';
 import YamlEditor from './YamlEditor';
 
@@ -91,6 +92,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     setNotice(null);
     try {
       await deleteObject(target);
+      notifyOk(`Deleted ${detail.kind} ${target.name}`);
       onDeleted();
     } catch (err: unknown) {
       setError(errorMessage(err, 'delete failed'));

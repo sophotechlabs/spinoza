@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ObjectPort, ObjectRef } from '../lib/types';
 import { refreshForwards, startForward } from '../lib/portForward';
+import { notifyError, notifyOk } from '../store/toasts';
 
 interface InspectPortsProps {
   target: ObjectRef;
@@ -33,10 +34,14 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
     setNotice(null);
     try {
       const started = await startForward(kind, target, port);
-      setNotice(`127.0.0.1:${started.localPort} → ${port}`);
+      const route = `127.0.0.1:${started.localPort} → ${port}`;
+      setNotice(route);
+      notifyOk(`Forwarding ${target.name} ${route}`);
       await refreshForwards();
     } catch (err: unknown) {
-      setError(errorMessage(err));
+      const message = errorMessage(err);
+      setError(message);
+      notifyError(`Forwarding ${target.name} port ${port}: ${message}`);
     } finally {
       setBusy(null);
     }

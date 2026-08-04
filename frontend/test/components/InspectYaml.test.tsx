@@ -22,6 +22,7 @@ vi.mock('@monaco-editor/react', () => ({
 }));
 
 import InspectYaml from '../../src/components/InspectYaml';
+import { useToastsStore } from '../../src/store/toasts';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const target: ObjectRef = {
@@ -165,14 +166,18 @@ describe('InspectYaml', () => {
     expect(screen.queryByText('Delete web?')).not.toBeInTheDocument();
   });
 
-  it('deletes on confirmation', async () => {
+  it('deletes on confirmation and says so out loud', async () => {
     const user = userEvent.setup();
+    useToastsStore.getState().clear();
     const { onDeleted } = renderYaml();
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
     expect(onDeleted).toHaveBeenCalledTimes(1);
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({ tone: 'ok', message: 'Deleted Deployment web' }),
+    ]);
   });
 
   it('surfaces a delete failure', async () => {
