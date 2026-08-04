@@ -3,16 +3,30 @@ import { wsURL } from '../../src/lib/wsBase';
 
 interface WsWindow {
   __SPINOZA_WS_BASE__?: string;
+  __SPINOZA_TOKEN__?: string;
 }
 
 function clearOverride(): void {
   delete (window as unknown as WsWindow).__SPINOZA_WS_BASE__;
+  delete (window as unknown as WsWindow).__SPINOZA_TOKEN__;
 }
 
 describe('wsURL', () => {
   afterEach(() => {
     clearOverride();
     vi.unstubAllGlobals();
+  });
+
+  it('carries the token the socket has no header to put it in', () => {
+    (window as unknown as WsWindow).__SPINOZA_TOKEN__ = 's3cret';
+    expect(wsURL('/ws')).toBe(`ws://${location.host}/ws?token=s3cret`);
+  });
+
+  it('appends the token to a path that already has a query', () => {
+    (window as unknown as WsWindow).__SPINOZA_TOKEN__ = 's3c/ret';
+    expect(wsURL('/api/exec?pod=web')).toBe(
+      `ws://${location.host}/api/exec?pod=web&token=s3c%2Fret`,
+    );
   });
 
   it('upgrades to wss on an https page', () => {

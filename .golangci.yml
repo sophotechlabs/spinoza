@@ -158,6 +158,7 @@ linters:
     gosec:
       excludes:
         - G115
+        - G124
       config:
         G306: "0600"
     govet:

@@ -1,10 +1,21 @@
 package server
 
 import (
+	"crypto/rand"
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 )
+
+func NewToken() string {
+	return rand.Text()
+}
+
+func BrowserURL(addr, token string) string {
+	query := url.Values{AuthParam: []string{token}}
+	return "http://" + addr + "/?" + query.Encode()
+}
 
 func CheckLoopback(addr string) error {
 	host, _, err := net.SplitHostPort(addr)

@@ -62,7 +62,7 @@ func (s *stubCluster) calls() []string {
 
 func contextServer(t *testing.T, cluster Cluster) *httptest.Server {
 	t.Helper()
-	ts := httptest.NewServer(New(cluster, testAssets()).Handler())
+	ts := httptest.NewServer(authed(New(cluster, testAssets(), testToken).Handler()))
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -162,8 +162,8 @@ func decodeContexts(t *testing.T, body []byte) api.ContextList {
 func TestSwitchingClosesOpenSessions(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	cluster := fixed(mgr)
-	srv := New(cluster, testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(cluster, testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

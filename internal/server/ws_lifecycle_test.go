@@ -22,7 +22,7 @@ import (
 
 func openFeed(t *testing.T, mgr *resources.Manager) (*websocket.Conn, context.Context) {
 	t.Helper()
-	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	ts := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(ts.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -497,8 +497,8 @@ func TestASessionBindsTheClusterItWasTrackedUnder(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	swapped, _ := testManager(t, newDeployment("default", "api"))
 	holder := &swappableCluster{manager: mgr}
-	srv := New(holder, testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(holder, testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -53,14 +53,23 @@ func run() error {
 		return fmt.Errorf("assets: %w", err)
 	}
 
-	srv := server.New(clusters, assets)
+	token := server.NewToken()
+	tokenErr := writeTokenFile(opts.tokenFile, token)
+	if tokenErr != nil {
+		return tokenErr
+	}
+	if opts.tokenFile != "" {
+		defer func() { _ = os.Remove(opts.tokenFile) }()
+	}
+
+	srv := server.New(clusters, assets, token)
 	httpServer := &http.Server{
 		Addr:              opts.addr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	url := "http://" + opts.addr
+	url := server.BrowserURL(opts.addr, token)
 	log.Printf("spinoza listening on %s  (open it in a browser)", url)
 	if opts.openBrowser {
 		openURL(ctx, url)

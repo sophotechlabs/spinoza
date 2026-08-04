@@ -82,7 +82,7 @@ func historyServer(t *testing.T, body string) *httptest.Server {
 		Clientset:  k8sfake.NewClientset(),
 		Prometheus: client,
 	})
-	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	ts := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(ts.Close)
 	return ts
 }

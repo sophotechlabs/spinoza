@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,12 +35,20 @@ type Cluster interface {
 type Server struct {
 	cluster  Cluster
 	assets   fs.FS
+	files    http.Handler
+	token    string
 	mu       sync.Mutex
 	sessions map[*wsSession]struct{}
 }
 
-func New(cluster Cluster, assets fs.FS) *Server {
-	return &Server{cluster: cluster, assets: assets, sessions: map[*wsSession]struct{}{}}
+func New(cluster Cluster, assets fs.FS, token string) *Server {
+	return &Server{
+		cluster:  cluster,
+		assets:   assets,
+		files:    http.FileServerFS(assets),
+		token:    token,
+		sessions: map[*wsSession]struct{}{},
+	}
 }
 
 func (s *Server) manager() *resources.Manager {
@@ -48,32 +57,61 @@ func (s *Server) manager() *resources.Manager {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", guard(healthz))
-	mux.HandleFunc("/api/contexts", guard(s.handleContexts))
-	mux.HandleFunc("/api/resources/counts", guard(s.handleCounts))
-	mux.HandleFunc("/api/resources", guard(s.handleResources))
-	mux.HandleFunc("/api/gitops/graph", guard(s.handleGraph))
-	mux.HandleFunc("/api/flux", guard(s.handleFlux))
-	mux.HandleFunc("/api/flux/action", guard(s.handleFluxAction))
-	mux.HandleFunc("/api/action", guard(s.handleAction))
-	mux.HandleFunc("/api/metrics/history", guard(s.handleMetricHistory))
-	mux.HandleFunc("/api/metrics", guard(s.handleMetrics))
-	mux.HandleFunc("/api/object", guard(s.handleObject))
-	mux.HandleFunc("/api/events", guard(s.handleEvents))
-	mux.HandleFunc("/api/schema", guard(s.handleSchema))
-	mux.HandleFunc("/api/portforward", guard(s.handleForwards))
-	mux.HandleFunc("/api/exec/support", guard(s.handleExecSupport))
-	mux.HandleFunc("/api/debug/support", guard(s.handleDebugSupport))
-	mux.HandleFunc("/api/debug", guard(s.handleDebug))
-	mux.HandleFunc("/api/exec", guard(s.handleExec))
-	mux.HandleFunc("/ws", guard(s.handleWS))
-	mux.Handle("/", guard(http.FileServerFS(s.assets).ServeHTTP))
+	mux.HandleFunc("/healthz", s.guard(healthz))
+	mux.HandleFunc("/api/contexts", s.guard(s.handleContexts))
+	mux.HandleFunc("/api/resources/counts", s.guard(s.handleCounts))
+	mux.HandleFunc("/api/resources", s.guard(s.handleResources))
+	mux.HandleFunc("/api/gitops/graph", s.guard(s.handleGraph))
+	mux.HandleFunc("/api/flux", s.guard(s.handleFlux))
+	mux.HandleFunc("/api/flux/action", s.guard(s.handleFluxAction))
+	mux.HandleFunc("/api/action", s.guard(s.handleAction))
+	mux.HandleFunc("/api/metrics/history", s.guard(s.handleMetricHistory))
+	mux.HandleFunc("/api/metrics", s.guard(s.handleMetrics))
+	mux.HandleFunc("/api/object", s.guard(s.handleObject))
+	mux.HandleFunc("/api/events", s.guard(s.handleEvents))
+	mux.HandleFunc("/api/schema", s.guard(s.handleSchema))
+	mux.HandleFunc("/api/portforward", s.guard(s.handleForwards))
+	mux.HandleFunc("/api/exec/support", s.guard(s.handleExecSupport))
+	mux.HandleFunc("/api/debug/support", s.guard(s.handleDebugSupport))
+	mux.HandleFunc("/api/debug", s.guard(s.handleDebug))
+	mux.HandleFunc("/api/exec", s.guard(s.handleExec))
+	mux.HandleFunc("/ws", s.guard(s.handleWS))
+	mux.HandleFunc("/", s.guard(s.handleAssets))
 	return mux
 }
 
 func healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+func (s *Server) handleAssets(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+	w.Header().Set("X-Frame-Options", "DENY")
+	if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+		s.serveIndex(w)
+		return
+	}
+	s.files.ServeHTTP(w, r)
+}
+
+func (s *Server) serveIndex(w http.ResponseWriter) {
+	doc, err := fs.ReadFile(s.assets, "index.html")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "index.html is missing from the bundled assets")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(InjectHead(doc, TokenScript(s.token)))
+}
+
+func TokenScript(token string) string {
+	return "<script>window.__SPINOZA_TOKEN__=" + strconv.Quote(token) + ";</script>"
+}
+
+func InjectHead(doc []byte, markup string) []byte {
+	closing := []byte("</head>")
+	return bytes.Replace(doc, closing, append([]byte(markup), closing...), 1)
 }
 
 func writeJSON(w http.ResponseWriter, payload any) {

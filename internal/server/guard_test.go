@@ -12,31 +12,57 @@ import (
 
 func TestAllowedOrigin(t *testing.T) {
 	cases := []struct {
-		name   string
-		origin string
-		want   bool
+		name      string
+		origin    string
+		authority string
+		want      bool
 	}{
-		{"absent", "", true},
-		{"served page", "http://127.0.0.1:34115", true},
-		{"localhost name", "http://localhost:34115", true},
-		{"vite dev server", "http://localhost:5173", true},
-		{"ipv6 loopback", "http://[::1]:34115", true},
-		{"wails webview", "wails://wails", true},
-		{"wails dev webview", "wails://wails.localhost:34115", true},
-		{"wails windows webview", "http://wails.localhost", true},
-		{"a hostile page", "https://evil.example", false},
-		{"a rebound name", "http://evil.example:34115", false},
-		{"sandboxed iframe", "null", false},
-		{"file url", "file://", false},
-		{"unparseable", "http://[::1", false},
+		{"absent", "", "127.0.0.1:34115", true},
+		{"served page", "http://127.0.0.1:34115", "127.0.0.1:34115", true},
+		{"localhost name", "http://localhost:34115", "localhost:34115", true},
+		{"vite dev server proxying to itself", "http://localhost:5173", "localhost:5173", true},
+		{"ipv6 loopback", "http://[::1]:34115", "[::1]:34115", true},
+		{"wails webview", "wails://wails", "127.0.0.1:51234", true},
+		{"wails dev webview", "wails://wails.localhost:34115", "127.0.0.1:51234", true},
+		{"wails windows webview", "http://wails.localhost", "127.0.0.1:51234", true},
+		{"another loopback port", "http://localhost:5173", "127.0.0.1:34115", false},
+		{"the same host on another port", "http://127.0.0.1:9999", "127.0.0.1:34115", false},
+		{"loopback by another name", "http://localhost:34115", "127.0.0.1:34115", false},
+		{"a hostile wails origin", "wails://evil.example", "127.0.0.1:34115", false},
+		{"a hostile page", "https://evil.example", "127.0.0.1:34115", false},
+		{"a rebound name", "http://evil.example:34115", "127.0.0.1:34115", false},
+		{"sandboxed iframe", "null", "127.0.0.1:34115", false},
+		{"file url", "file://", "127.0.0.1:34115", false},
+		{"unparseable", "http://[::1", "127.0.0.1:34115", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := allowedOrigin(tc.origin)
+			got := allowedOrigin(tc.origin, tc.authority)
 			if got != tc.want {
-				t.Fatalf("allowedOrigin(%q) = %v", tc.origin, got)
+				t.Fatalf("allowedOrigin(%q, %q) = %v", tc.origin, tc.authority, got)
 			}
 		})
+	}
+}
+
+func TestGuardRefusesACrossSiteFetch(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; a page on another site may not reach the api", res.StatusCode)
 	}
 }
 
@@ -70,7 +96,7 @@ func TestLoopbackAuthority(t *testing.T) {
 
 func TestGuardRefusesACrossOriginRead(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
@@ -91,7 +117,7 @@ func TestGuardRefusesACrossOriginRead(t *testing.T) {
 
 func TestGuardRefusesARebottledHost(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
@@ -113,7 +139,7 @@ func TestGuardRefusesARebottledHost(t *testing.T) {
 
 func TestGuardRefusesACrossOriginWebsocket(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(srv.Close)
 
 	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
@@ -127,7 +153,7 @@ func TestGuardRefusesACrossOriginWebsocket(t *testing.T) {
 
 func TestGuardAdmitsTheDesktopWebview(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
@@ -148,7 +174,7 @@ func TestGuardAdmitsTheDesktopWebview(t *testing.T) {
 
 func TestGuardRefusesCrossOriginAssets(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/index.html", http.NoBody)
@@ -169,7 +195,7 @@ func TestGuardRefusesCrossOriginAssets(t *testing.T) {
 
 func TestHealthzAnswersALocalProbe(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(srv.Close)
 
 	res, err := http.Get(srv.URL + "/healthz")
@@ -184,7 +210,7 @@ func TestHealthzAnswersALocalProbe(t *testing.T) {
 
 func TestHealthzRefusesAForeignOrigin(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/healthz", http.NoBody)
@@ -205,7 +231,7 @@ func TestHealthzRefusesAForeignOrigin(t *testing.T) {
 
 func TestGuardAdmitsTheWindowsDesktopWebview(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)

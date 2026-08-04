@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
@@ -12,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -55,7 +55,16 @@ func runDesktop() error {
 	}
 	addr := listener.Addr().String()
 
-	srv := server.New(clusters, assets)
+	token := server.NewToken()
+	tokenErr := writeTokenFile(opts.tokenFile, token)
+	if tokenErr != nil {
+		return tokenErr
+	}
+	if opts.tokenFile != "" {
+		defer func() { _ = os.Remove(opts.tokenFile) }()
+	}
+
+	srv := server.New(clusters, assets, token)
 	httpServer := &http.Server{
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -79,7 +88,7 @@ func runDesktop() error {
 		Height:           800,
 		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0a, A: 255},
 		AssetServer: &assetserver.Options{
-			Handler: desktopAssets(assets, addr),
+			Handler: desktopAssets(assets, addr, token),
 		},
 	})
 	if runErr != nil {
@@ -88,15 +97,16 @@ func runDesktop() error {
 	return nil
 }
 
-func desktopAssets(assets fs.FS, addr string) http.Handler {
+func desktopAssets(assets fs.FS, addr, token string) http.Handler {
 	fileServer := http.FileServerFS(assets)
 	target := &url.URL{Scheme: "http", Host: addr}
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(target)
+			r.Out.Header.Set(server.AuthHeader, token)
 		},
 	}
-	injected := []byte(`<script>window.__SPINOZA_WS_BASE__="ws://` + addr + `";</script></head>`)
+	injected := `<script>window.__SPINOZA_WS_BASE__="ws://` + addr + `";</script>` + server.TokenScript(token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if server.IsBackendPath(r.URL.Path) {
 			proxy.ServeHTTP(w, r)
@@ -108,9 +118,8 @@ func desktopAssets(assets fs.FS, addr string) http.Handler {
 				http.Error(w, "index missing", http.StatusInternalServerError)
 				return
 			}
-			out := bytes.Replace(data, []byte("</head>"), injected, 1)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write(out)
+			_, _ = w.Write(server.InjectHead(data, injected))
 			return
 		}
 		fileServer.ServeHTTP(w, r)

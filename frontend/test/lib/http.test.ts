@@ -3,9 +3,27 @@ import {
   REQUEST_TIMEOUT_MS,
   SLOW_REQUEST_TIMEOUT_MS,
   TIMEOUT_MESSAGE,
+  TOKEN_HEADER,
+  authToken,
   request,
 } from '../../src/lib/http';
 import { anySignal, rejectsWith } from '../helpers';
+
+interface TokenWindow {
+  __SPINOZA_TOKEN__?: string;
+}
+
+function injectToken(token: string): void {
+  (window as unknown as TokenWindow).__SPINOZA_TOKEN__ = token;
+}
+
+function clearToken(): void {
+  delete (window as unknown as TokenWindow).__SPINOZA_TOKEN__;
+}
+
+function headersOf(mock: ReturnType<typeof stubFetch>): Headers {
+  return new Headers((mock.mock.calls[0][1] as RequestInit).headers);
+}
 
 function reasonOf(signal: AbortSignal | null | undefined): Error {
   if (signal === null || signal === undefined) {
@@ -28,10 +46,76 @@ function signalOf(mock: ReturnType<typeof stubFetch>): AbortSignal {
   return signal;
 }
 
+describe('authToken', () => {
+  afterEach(() => {
+    clearToken();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('prefers the token the server injected into the page', () => {
+    injectToken('from-index');
+    window.history.replaceState(null, '', '/?token=from-url');
+
+    expect(authToken()).toBe('from-index');
+  });
+
+  it('falls back to the token in the page url', () => {
+    window.history.replaceState(null, '', '/?token=from-url');
+
+    expect(authToken()).toBe('from-url');
+  });
+
+  it('ignores an empty injected token', () => {
+    injectToken('');
+    window.history.replaceState(null, '', '/?token=from-url');
+
+    expect(authToken()).toBe('from-url');
+  });
+
+  it('ignores an empty token in the url', () => {
+    window.history.replaceState(null, '', '/?token=');
+
+    expect(authToken()).toBeNull();
+  });
+
+  it('has no token on a page that was never handed one', () => {
+    expect(authToken()).toBeNull();
+  });
+});
+
 describe('request', () => {
   afterEach(() => {
+    clearToken();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it('carries the token on every call', async () => {
+    injectToken('s3cret');
+    const mock = stubFetch(() => Promise.resolve({ ok: true }));
+
+    await request('/api/flux');
+
+    expect(headersOf(mock).get(TOKEN_HEADER)).toBe('s3cret');
+  });
+
+  it('keeps the headers the caller passed alongside the token', async () => {
+    injectToken('s3cret');
+    const mock = stubFetch(() => Promise.resolve({ ok: true }));
+
+    await request('/api/object', { headers: { 'Content-Type': 'application/yaml' } });
+
+    const headers = headersOf(mock);
+    expect(headers.get('Content-Type')).toBe('application/yaml');
+    expect(headers.get(TOKEN_HEADER)).toBe('s3cret');
+  });
+
+  it('sends no token header when the page has none', async () => {
+    const mock = stubFetch(() => Promise.resolve({ ok: true }));
+
+    await request('/api/flux');
+
+    expect(headersOf(mock).get(TOKEN_HEADER)).toBeNull();
   });
 
   it('attaches an abort signal every caller gets for free', async () => {

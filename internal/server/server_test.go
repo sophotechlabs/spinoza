@@ -74,10 +74,22 @@ func testManager(t *testing.T, objs ...runtime.Object) (*resources.Manager, dyna
 	return mgr, dyn
 }
 
+const testToken = "SPINOZATESTTOKEN0000000000"
+
 func testAssets() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html": &fstest.MapFile{Data: []byte("<html>spinoza-index</html>")},
+		"index.html": &fstest.MapFile{Data: []byte("<html><head></head><body>spinoza-index</body></html>")},
+		"app.js":     &fstest.MapFile{Data: []byte("spinoza-bundle")},
 	}
+}
+
+func authed(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(AuthHeader) == "" {
+			r.Header.Set(AuthHeader, testToken)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func wsURL(httpURL string) string {
@@ -95,8 +107,8 @@ func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg
 
 func TestHealthzReturnsOK(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/healthz")
@@ -119,8 +131,8 @@ func TestHealthzReturnsOK(t *testing.T) {
 
 func TestNoCrossOriginAccessIsGranted(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/api/resources")
@@ -138,8 +150,8 @@ func TestNoCrossOriginAccessIsGranted(t *testing.T) {
 
 func TestRootServesSPAIndex(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/")
@@ -162,8 +174,8 @@ func TestRootServesSPAIndex(t *testing.T) {
 
 func TestResourcesEndpoint(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/api/resources")
@@ -254,8 +266,8 @@ func TestGraphEndpoint(t *testing.T) {
 		},
 	}
 	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/api/gitops/graph")
@@ -322,8 +334,8 @@ func TestFluxEndpoint(t *testing.T) {
 		},
 	}
 	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/api/flux")
@@ -364,8 +376,8 @@ func TestMetricsEndpoint(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset()})
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/api/metrics")
@@ -429,8 +441,8 @@ func TestEventToMsgModified(t *testing.T) {
 
 func TestWSSnapshotAndDeltas(t *testing.T) {
 	mgr, dyn := testManager(t, newDeployment("default", "web"))
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -509,8 +521,8 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 
 func TestWSUnsubscribeStopsDeltas(t *testing.T) {
 	mgr, dyn := testManager(t)
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -555,8 +567,8 @@ func TestWSUnsubscribeStopsDeltas(t *testing.T) {
 
 func TestWSSubscribeUnknownResource(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -588,8 +600,8 @@ func TestWSSubscribeUnknownResource(t *testing.T) {
 
 func TestWSResubscribeReplacesSubscription(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -623,9 +635,9 @@ func TestWSResubscribeReplacesSubscription(t *testing.T) {
 
 func TestWSExitsOnServerContextCancel(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
-	srv := New(fixed(mgr), testAssets())
+	srv := New(fixed(mgr), testAssets(), testToken)
 
-	ts := httptest.NewUnstartedServer(srv.Handler())
+	ts := httptest.NewUnstartedServer(authed(srv.Handler()))
 	baseCtx, cancelBase := context.WithCancel(context.Background())
 	ts.Config.BaseContext = func(net.Listener) context.Context {
 		return baseCtx
@@ -662,8 +674,8 @@ func TestWSExitsOnServerContextCancel(t *testing.T) {
 
 func TestWSRejectsNonWebsocketRequest(t *testing.T) {
 	mgr, _ := testManager(t)
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/ws")
@@ -689,7 +701,7 @@ func readRaw(ctx context.Context, t *testing.T, c *websocket.Conn) map[string]js
 
 func subscribeRaw(t *testing.T, mgr *resources.Manager, sub api.ClientMsg) map[string]json.RawMessage {
 	t.Helper()
-	ts := httptest.NewServer(New(fixed(mgr), testAssets()).Handler())
+	ts := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(ts.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
@@ -772,8 +784,8 @@ func TestWSKeepsReadingWhileASubscriptionIsStillSyncing(t *testing.T) {
 		Descriptors: descs,
 	})
 
-	srv := New(fixed(mgr), testAssets())
-	ts := httptest.NewServer(srv.Handler())
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

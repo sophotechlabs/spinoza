@@ -11,9 +11,9 @@ just deps    # once — install frontend deps
 just run     # build frontend + binary, start the server
 ```
 
-Then open `http://127.0.0.1:34115`. `just rund` builds and opens the desktop app instead.
+Open the URL it prints on start — it carries a token generated for that run, and the page keeps it in a cookie so a reload still works. `just rund` builds and opens the desktop app instead.
 
-Spinoza uses your current kubeconfig context, switchable from the dropdown in the top bar. It refuses to start on a non-loopback address, and refuses requests whose Host or Origin is not local, because the process holds full cluster credentials.
+Spinoza uses your current kubeconfig context, switchable from the dropdown in the top bar. It refuses to start on a non-loopback address, and refuses requests whose Host or Origin is not local, because the process holds full cluster credentials. Loopback is not a permission boundary, so every route and both WebSockets also require this run's token, as the `X-Spinoza-Token` header, a `token` query parameter or the cookie. `--token-file PATH` writes it out (mode 0600) for scripts.
 
 ## What it does
 
@@ -33,6 +33,8 @@ Spinoza uses your current kubeconfig context, switchable from the dropdown in th
 just dev-api   # Go server on :34115
 just dev-web   # Vite dev server, proxies to the API
 ```
+
+Vite serves its own `index.html`, so it cannot inject the token: open `http://localhost:5173/?token=<the token dev-api printed>` and the app picks it up from the URL.
 
 ## CI
 
