@@ -120,19 +120,6 @@ export function useSubError(subId: string): string | null {
   return message;
 }
 
-export function useSubRow(subId: string, uid: string | null): Row | null {
-  const row = useResourcesStore((state) => {
-    if (uid === null) {
-      return undefined;
-    }
-    return state.subs.get(subId)?.rows.get(uid);
-  });
-  if (row === undefined) {
-    return null;
-  }
-  return row;
-}
-
 export function useSubRows(subId: string): Row[] {
   const rows = useResourcesStore((state) => state.subs.get(subId)?.rows);
   return useMemo(() => {

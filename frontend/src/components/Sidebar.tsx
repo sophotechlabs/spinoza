@@ -9,11 +9,20 @@ interface SidebarProps {
   view: View;
   activeResource: ResourceDescriptor | null;
   onSelect: (descriptor: ResourceDescriptor) => void;
-  onSelectGraph: () => void;
-  onSelectList: () => void;
-  onSelectOverview: () => void;
-  onSelectRoles: () => void;
+  onSelectView: (view: View) => void;
 }
+
+interface GitopsEntry {
+  view: View;
+  label: string;
+}
+
+const GITOPS_VIEWS: GitopsEntry[] = [
+  { view: 'flux-roles', label: 'Overview' },
+  { view: 'gitops', label: 'Graph' },
+  { view: 'flux-list', label: 'Resource list' },
+  { view: 'flux-overview', label: 'Status tiles' },
+];
 
 function descriptorKey(descriptor: ResourceDescriptor): string {
   return `${descriptor.group}/${descriptor.version}/${descriptor.resource}`;
@@ -107,10 +116,7 @@ export default function Sidebar({
   view,
   activeResource,
   onSelect,
-  onSelectGraph,
-  onSelectList,
-  onSelectOverview,
-  onSelectRoles,
+  onSelectView,
 }: SidebarProps) {
   const { size: width, startResize, nudge } = useSidebarWidth();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -226,34 +232,18 @@ export default function Sidebar({
           </button>
           {!gitopsCollapsed && (
             <div aria-label="GitOps views">
-              <button
-                type="button"
-                onClick={onSelectRoles}
-                className={resourceClass(view === 'flux-roles')}
-              >
-                Overview
-              </button>
-              <button
-                type="button"
-                onClick={onSelectGraph}
-                className={resourceClass(view === 'gitops')}
-              >
-                Graph
-              </button>
-              <button
-                type="button"
-                onClick={onSelectList}
-                className={resourceClass(view === 'flux-list')}
-              >
-                Resource list
-              </button>
-              <button
-                type="button"
-                onClick={onSelectOverview}
-                className={resourceClass(view === 'flux-overview')}
-              >
-                Status tiles
-              </button>
+              {GITOPS_VIEWS.map((entry) => (
+                <button
+                  key={entry.view}
+                  type="button"
+                  onClick={() => {
+                    onSelectView(entry.view);
+                  }}
+                  className={resourceClass(view === entry.view)}
+                >
+                  {entry.label}
+                </button>
+              ))}
             </div>
           )}
         </div>

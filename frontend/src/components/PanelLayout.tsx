@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ContainerState, LogRequest, ObjectDetail, ObjectRef } from '../lib/types';
-import type { DockSide, PanelId } from '../lib/panels';
-import type { PodTarget } from '../lib/pods';
-import { DOCK_SIDES, PANEL_LABELS, panelsOn } from '../lib/panels';
+import type { DockSide, PanelContext, PanelId } from '../lib/panels';
+import type { Selection } from '../lib/refs';
+import { DOCK_SIDES, panelById, panelsOn } from '../lib/panels';
+import { podFor } from '../lib/pods';
 import { usePanelsStore } from '../store/panels';
 import { containerNames } from '../lib/containers';
 import { forwardKind } from '../lib/portForward';
@@ -26,9 +27,7 @@ import ForwardsPanel from './ForwardsPanel';
 import TerminalTab from './TerminalTab';
 
 interface PanelLayoutProps {
-  target: ObjectRef | null;
-  containers?: ContainerState[];
-  pod: PodTarget | null;
+  selection: Selection | null;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
   onClose: () => void;
@@ -39,6 +38,30 @@ interface PanelLayoutProps {
 type Hosts = Record<DockSide, HTMLDivElement | null>;
 
 const NO_HOSTS: Hosts = { left: null, right: null, bottom: null };
+
+interface RenderContext extends PanelContext {
+  error: string | null;
+  open: boolean;
+  subscribeLogs: (subId: string, request: LogRequest) => void;
+  unsubscribeLogs: (subId: string) => void;
+  reload: () => void;
+  onClose: () => void;
+  onDeleted: () => void;
+}
+
+function liveContainers(selection: Selection): ContainerState[] | undefined {
+  if (selection.row === null) {
+    return undefined;
+  }
+  return selection.row.containers;
+}
+
+function refOf(selection: Selection | null): ObjectRef | null {
+  if (selection === null) {
+    return null;
+  }
+  return selection.ref;
+}
 
 function logContainers(states: ContainerState[] | undefined, detail: ObjectDetail): string[] {
   if (states !== undefined && states.length > 0) {
@@ -57,17 +80,83 @@ function forwardable(detail: ObjectDetail): string | null {
   return forwardKind(detail.apiVersion, detail.kind);
 }
 
-function podOnly(detail: ObjectDetail | null): boolean {
-  if (detail === null) {
-    return false;
-  }
-  return detail.kind === 'Pod';
+type ObjectBody = (selection: Selection, detail: ObjectDetail) => ReactNode;
+
+function objectPanel(ctx: RenderContext, body: ObjectBody): ReactNode {
+  return (
+    <PanelChrome target={refOf(ctx.selection)} onClose={ctx.onClose}>
+      {objectBody(ctx, body)}
+    </PanelChrome>
+  );
 }
 
+function objectBody(ctx: RenderContext, body: ObjectBody): ReactNode {
+  if (ctx.error !== null) {
+    return <div className="p-4 text-xs break-words text-error">{ctx.error}</div>;
+  }
+  if (ctx.selection === null || ctx.detail === null) {
+    return <div className="p-4 text-xs text-fg-muted">Loading…</div>;
+  }
+  return body(ctx.selection, ctx.detail);
+}
+
+const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
+  forwards: (ctx) => (
+    <div className="min-h-0 flex-1 overflow-auto text-[11px]">
+      <ForwardsPanel active={ctx.open} />
+    </div>
+  ),
+  terminal: (ctx) => <TerminalTab pod={ctx.pod} />,
+  overview: (ctx) =>
+    objectPanel(ctx, (selection, detail) => (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {isFluxObject(detail.apiVersion) && (
+          <InspectActions target={selection.ref} suspended={detail.suspended} onDone={ctx.reload} />
+        )}
+        {hasActions(selection.ref) && (
+          <InspectObjectActions target={selection.ref} detail={detail} onDone={ctx.reload} />
+        )}
+        {forwardable(detail) !== null && detail.ports !== undefined && (
+          <InspectPorts
+            target={selection.ref}
+            kind={forwardable(detail) ?? ''}
+            ports={detail.ports}
+          />
+        )}
+        <InspectOverview detail={detail} containers={liveContainers(selection)} />
+      </div>
+    )),
+  yaml: (ctx) =>
+    objectPanel(ctx, (selection, detail) => (
+      <InspectYaml
+        target={selection.ref}
+        detail={detail}
+        onApplied={ctx.reload}
+        onDeleted={ctx.onDeleted}
+      />
+    )),
+  events: (ctx) =>
+    objectPanel(ctx, (_selection, detail) => (
+      <InspectEvents namespace={detail.namespace} uid={detail.uid} />
+    )),
+  logs: (ctx) =>
+    objectPanel(ctx, (selection, detail) => (
+      <InspectLogs
+        namespace={detail.namespace}
+        pod={detail.name}
+        containers={logContainers(liveContainers(selection), detail)}
+        subscribeLogs={ctx.subscribeLogs}
+        unsubscribeLogs={ctx.unsubscribeLogs}
+      />
+    )),
+  metrics: (ctx) =>
+    objectPanel(ctx, (_selection, detail) => (
+      <InspectMetrics namespace={detail.namespace} pod={detail.name} />
+    )),
+};
+
 export default function PanelLayout({
-  target,
-  containers,
-  pod,
+  selection,
   subscribeLogs,
   unsubscribeLogs,
   onClose,
@@ -76,14 +165,13 @@ export default function PanelLayout({
 }: PanelLayoutProps) {
   const placement = usePanelsStore((state) => state.placement);
   const move = usePanelsStore((state) => state.move);
+  const chosen = usePanelsStore((state) => state.active);
+  const activate = usePanelsStore((state) => state.activate);
   const [hosts, setHosts] = useState<Hosts>(NO_HOSTS);
-  const [activeBySide, setActiveBySide] = useState<Record<DockSide, PanelId | null>>({
-    left: null,
-    right: null,
-    bottom: null,
-  });
   const [opened, setOpened] = useState<PanelId[]>([]);
-  const { detail, error, reload } = useObjectDetail(target);
+  const { detail, error, reload } = useObjectDetail(refOf(selection));
+
+  const ctx: PanelContext = { selection, detail, pod: podFor(selection, detail) };
 
   const live = DOCK_SIDES.map((side) => activeOn(side)).filter((id) => id !== null);
   const liveKey = live.join(',');
@@ -112,34 +200,21 @@ export default function PanelLayout({
   }, []);
 
   function enabledOf(id: PanelId): boolean {
-    if (id === 'forwards') {
-      return true;
-    }
-    if (id === 'terminal') {
-      return pod !== null;
-    }
-    if (id === 'logs' || id === 'metrics') {
-      return podOnly(detail);
-    }
-    return target !== null;
+    return panelById(id).enabled(ctx);
   }
 
   function titleOf(id: PanelId): string {
+    const panel = panelById(id);
     if (enabledOf(id)) {
-      return `${PANEL_LABELS[id]} — drag to another dock to move it`;
+      return `${panel.label} — drag to another dock to move it`;
     }
-    if (id === 'terminal') {
-      return 'Select a pod to open a shell in it';
-    }
-    if (id === 'logs' || id === 'metrics') {
-      return 'Select a pod to see this';
-    }
-    return 'Select a row to inspect it';
+    return panel.hint;
   }
 
   function tabsFor(side: DockSide): PanelTab[] {
     return panelsOn(placement, side).map((id) => ({
       id,
+      label: panelById(id).label,
       disabled: !enabledOf(id),
       title: titleOf(id),
     }));
@@ -147,9 +222,9 @@ export default function PanelLayout({
 
   function activeOn(side: DockSide): PanelId | null {
     const here = panelsOn(placement, side);
-    const chosen = activeBySide[side];
-    if (chosen !== null && here.includes(chosen) && enabledOf(chosen)) {
-      return chosen;
+    const wanted = chosen[side];
+    if (wanted !== null && here.includes(wanted) && enabledOf(wanted)) {
+      return wanted;
     }
     const usable = here.filter((id) => enabledOf(id));
     if (usable.length === 0) {
@@ -159,100 +234,22 @@ export default function PanelLayout({
   }
 
   function hintFor(side: DockSide): string {
-    const here = panelsOn(placement, side);
-    if (here.includes('terminal') && pod === null) {
-      return 'Select a pod to open a shell in it.';
+    const blocked = panelsOn(placement, side).find((id) => !enabledOf(id));
+    if (blocked === undefined) {
+      return 'Nothing docked here yet.';
     }
-    if (here.some((id) => id !== 'forwards' && id !== 'terminal')) {
-      return 'Select a row to inspect it.';
-    }
-    return 'Nothing docked here yet.';
+    return `${panelById(blocked).hint}.`;
   }
 
-  function activate(side: DockSide) {
+  function activateOn(side: DockSide) {
     return (id: PanelId) => {
-      setActiveBySide((current) => ({ ...current, [side]: id }));
+      activate(side, id);
     };
   }
 
   function handleMove(id: PanelId, side: DockSide) {
     move(id, side);
-    setActiveBySide((current) => ({ ...current, [side]: id }));
-  }
-
-  function objectBody(node: ReactNode): ReactNode {
-    if (error !== null) {
-      return <div className="p-4 text-xs break-words text-error">{error}</div>;
-    }
-    if (detail === null) {
-      return <div className="p-4 text-xs text-fg-muted">Loading…</div>;
-    }
-    return node;
-  }
-
-  function objectPanel(ref: ObjectRef | null, node: (target: ObjectRef) => ReactNode): ReactNode {
-    return (
-      <PanelChrome target={ref} onClose={onClose}>
-        {objectBody(ref === null || detail === null ? null : node(ref))}
-      </PanelChrome>
-    );
-  }
-
-  function bodyOf(id: PanelId, active: boolean): ReactNode {
-    if (id === 'forwards') {
-      return (
-        <div className="min-h-0 flex-1 overflow-auto text-[11px]">
-          <ForwardsPanel active={active} />
-        </div>
-      );
-    }
-    if (id === 'terminal') {
-      return <TerminalTab pod={pod} />;
-    }
-    if (id === 'overview') {
-      return objectPanel(target, (ref) => (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {detail !== null && isFluxObject(detail.apiVersion) && (
-            <InspectActions target={ref} suspended={detail.suspended} onDone={reload} />
-          )}
-          {detail !== null && hasActions(ref) && (
-            <InspectObjectActions target={ref} detail={detail} onDone={reload} />
-          )}
-          {detail !== null && forwardable(detail) !== null && detail.ports !== undefined && (
-            <InspectPorts target={ref} kind={forwardable(detail) ?? ''} ports={detail.ports} />
-          )}
-          {detail !== null && <InspectOverview detail={detail} containers={containers} />}
-        </div>
-      ));
-    }
-    if (id === 'yaml') {
-      return objectPanel(target, (ref) =>
-        detail === null ? null : (
-          <InspectYaml target={ref} detail={detail} onApplied={reload} onDeleted={onDeleted} />
-        ),
-      );
-    }
-    if (id === 'events') {
-      return objectPanel(target, () =>
-        detail === null ? null : <InspectEvents namespace={detail.namespace} uid={detail.uid} />,
-      );
-    }
-    if (id === 'logs') {
-      return objectPanel(target, () =>
-        detail === null ? null : (
-          <InspectLogs
-            namespace={detail.namespace}
-            pod={detail.name}
-            containers={logContainers(containers, detail)}
-            subscribeLogs={subscribeLogs}
-            unsubscribeLogs={unsubscribeLogs}
-          />
-        ),
-      );
-    }
-    return objectPanel(target, () =>
-      detail === null ? null : <InspectMetrics namespace={detail.namespace} pod={detail.name} />,
-    );
+    activate(side, id);
   }
 
   const mounts = DOCK_SIDES.flatMap((side) =>
@@ -260,10 +257,20 @@ export default function PanelLayout({
       .filter((id) => enabledOf(id))
       .filter((id) => opened.includes(id))
       .map((id) => {
-        const active = activeOn(side) === id;
+        const open = activeOn(side) === id;
+        const render: RenderContext = {
+          ...ctx,
+          error,
+          open,
+          subscribeLogs,
+          unsubscribeLogs,
+          reload,
+          onClose,
+          onDeleted,
+        };
         return (
-          <PanelMount key={id} host={hosts[side]} active={active} label={PANEL_LABELS[id]}>
-            {bodyOf(id, active)}
+          <PanelMount key={id} host={hosts[side]} active={open} label={panelById(id).label}>
+            {RENDERERS[id](render)}
           </PanelMount>
         );
       }),
@@ -275,7 +282,7 @@ export default function PanelLayout({
         side="left"
         tabs={tabsFor('left')}
         active={activeOn('left')}
-        onActivate={activate('left')}
+        onActivate={activateOn('left')}
         onMove={handleMove}
         hostRef={registerHost.left}
         emptyHint={hintFor('left')}
@@ -286,7 +293,7 @@ export default function PanelLayout({
           side="bottom"
           tabs={tabsFor('bottom')}
           active={activeOn('bottom')}
-          onActivate={activate('bottom')}
+          onActivate={activateOn('bottom')}
           onMove={handleMove}
           hostRef={registerHost.bottom}
           emptyHint={hintFor('bottom')}
@@ -296,7 +303,7 @@ export default function PanelLayout({
         side="right"
         tabs={tabsFor('right')}
         active={activeOn('right')}
-        onActivate={activate('right')}
+        onActivate={activateOn('right')}
         onMove={handleMove}
         hostRef={registerHost.right}
         emptyHint={hintFor('right')}

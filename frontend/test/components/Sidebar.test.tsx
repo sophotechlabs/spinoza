@@ -10,10 +10,7 @@ interface RenderOverrides {
   view?: View;
   activeResource?: ResourceDescriptor | null;
   onSelect?: (descriptor: ResourceDescriptor) => void;
-  onSelectGraph?: () => void;
-  onSelectList?: () => void;
-  onSelectOverview?: () => void;
-  onSelectRoles?: () => void;
+  onSelectView?: (view: View) => void;
 }
 
 function sidebarProps(overrides: RenderOverrides = {}) {
@@ -23,10 +20,7 @@ function sidebarProps(overrides: RenderOverrides = {}) {
     view,
     activeResource: overrides.activeResource ?? null,
     onSelect: overrides.onSelect ?? vi.fn(),
-    onSelectGraph: overrides.onSelectGraph ?? vi.fn(),
-    onSelectList: overrides.onSelectList ?? vi.fn(),
-    onSelectOverview: overrides.onSelectOverview ?? vi.fn(),
-    onSelectRoles: overrides.onSelectRoles ?? vi.fn(),
+    onSelectView: overrides.onSelectView ?? vi.fn(),
   };
 }
 
@@ -137,21 +131,16 @@ describe('Sidebar', () => {
     expect(await screen.findByText('discovery request failed')).toBeInTheDocument();
   });
 
-  it('calls each GitOps entry handler when clicked', async () => {
+  it('names the view behind every GitOps entry', async () => {
     stubFetch(categories);
-    const onSelectGraph = vi.fn();
-    const onSelectList = vi.fn();
-    const onSelectOverview = vi.fn();
-    const onSelectRoles = vi.fn();
-    renderSidebar({ onSelectGraph, onSelectList, onSelectOverview, onSelectRoles });
+    const onSelectView = vi.fn<(view: View) => void>();
+    renderSidebar({ onSelectView });
     await userEvent.click(screen.getByRole('button', { name: 'Graph' }));
     await userEvent.click(screen.getByRole('button', { name: 'Resource list' }));
     await userEvent.click(screen.getByRole('button', { name: 'Status tiles' }));
     await userEvent.click(screen.getByRole('button', { name: 'Overview' }));
-    expect(onSelectGraph).toHaveBeenCalledTimes(1);
-    expect(onSelectList).toHaveBeenCalledTimes(1);
-    expect(onSelectOverview).toHaveBeenCalledTimes(1);
-    expect(onSelectRoles).toHaveBeenCalledTimes(1);
+    const seen = onSelectView.mock.calls.map((call) => call[0]);
+    expect(seen).toEqual(['gitops', 'flux-list', 'flux-overview', 'flux-roles']);
   });
 
   it('highlights the GitOps entry that matches the active view', () => {

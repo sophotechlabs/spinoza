@@ -1,16 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import type {
-  FluxResource,
-  GraphNode,
-  ObjectRef,
-  ResourceDescriptor,
-  Row,
-  View,
-} from './lib/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FluxResource, GraphNode, ResourceDescriptor, Row, View } from './lib/types';
 import { useResourceFeed } from './lib/feed';
-import { podTarget } from './lib/pods';
-import { useSubRow } from './store/resources';
-import { refFromFlux, refFromNode, refFromRow } from './lib/refs';
+import { fetchContexts } from './lib/contexts';
+import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
+import type { Selection } from './lib/refs';
+import { refFromFlux, refFromNode, refFromRow, useRowForRef } from './lib/refs';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -26,16 +20,35 @@ const FIRST_SUB_ID = 'main#0';
 
 export default function App() {
   const feed = useResourceFeed();
-  const [view, setView] = useState<View>('resources');
-  const [active, setActive] = useState<ResourceDescriptor | null>(null);
-  const [subId, setSubId] = useState(FIRST_SUB_ID);
+  const { route, navigate, replace } = useRouter();
   const [contextEpoch, setContextEpoch] = useState(0);
+  const [contextName, setContextName] = useState('');
   const subSeq = useRef(0);
-  const [selectedUid, setSelectedUid] = useState<string | null>(null);
-  const [target, setTarget] = useState<ObjectRef | null>(null);
+  const [subId, setSubId] = useState(FIRST_SUB_ID);
+
+  const key = resourceKey(route.resource);
+  const [lastKey, setLastKey] = useState(key);
+  if (key !== lastKey) {
+    setLastKey(key);
+    subSeq.current += 1;
+    setSubId(`main#${String(subSeq.current)}`);
+  }
+
+  const active = useMemo(() => {
+    if (route.resource === null) {
+      return null;
+    }
+    return descriptorOf(route.resource);
+  }, [route.resource]);
 
   const { subscribe, unsubscribe, subscribeLogs, unsubscribeLogs } = feed;
-  const selected = useSubRow(subId, selectedUid);
+  const selectedRow = useRowForRef(subId, active, route.selection);
+  const selection = useMemo<Selection | null>(() => {
+    if (route.selection === null) {
+      return null;
+    }
+    return { ref: route.selection, row: selectedRow };
+  }, [route.selection, selectedRow]);
 
   useEffect(() => {
     if (active === null) {
@@ -47,59 +60,97 @@ export default function App() {
     };
   }, [active, subId, subscribe, unsubscribe]);
 
+  useEffect(() => {
+    let live = true;
+    fetchContexts()
+      .then((list) => {
+        if (live) {
+          setContextName(list.current);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [contextEpoch]);
+
+  useEffect(() => {
+    if (contextName === '') {
+      return;
+    }
+    if (route.context === contextName) {
+      return;
+    }
+    if (route.context === '') {
+      replace({ ...route, context: contextName });
+      return;
+    }
+    replace({ ...route, context: contextName, selection: null });
+  }, [contextName, route, replace]);
+
+  useEffect(() => {
+    document.title = documentTitle(route);
+  }, [route]);
+
   function clearSelection() {
-    setSelectedUid(null);
-    setTarget(null);
+    navigate({ ...route, selection: null });
   }
 
   function handleSelectResource(descriptor: ResourceDescriptor) {
-    setActive(descriptor);
-    subSeq.current += 1;
-    setSubId(`main#${String(subSeq.current)}`);
-    clearSelection();
-    setView('resources');
+    navigate({
+      context: route.context,
+      view: 'resources',
+      resource: {
+        group: descriptor.group,
+        version: descriptor.version,
+        resource: descriptor.resource,
+        kind: descriptor.kind,
+      },
+      selection: null,
+    });
   }
 
   function handleContextChanged() {
-    setActive(null);
-    clearSelection();
+    navigate({ context: '', view: route.view, resource: null, selection: null });
+    setContextName('');
     setContextEpoch((epoch) => epoch + 1);
     feed.reconnect();
   }
 
-  function switchView(next: View) {
-    setView(next);
-    clearSelection();
+  function handleSelectView(next: View) {
+    navigate({ ...route, view: next, selection: null });
   }
 
   function handleSelectRow(row: Row) {
-    setSelectedUid(row.uid);
-    setTarget(refFromRow(active, row));
+    navigate({ ...route, selection: refFromRow(active, row) });
   }
 
   function handleSelectNode(node: GraphNode) {
-    setSelectedUid(null);
-    setTarget(refFromNode(node));
+    navigate({ ...route, selection: refFromNode(node) });
   }
 
   function handleSelectFlux(resource: FluxResource) {
-    setSelectedUid(null);
-    setTarget(refFromFlux(resource));
+    navigate({ ...route, selection: refFromFlux(resource) });
   }
 
   let mainArea = (
-    <ResourceTable active={active} subId={subId} selected={selected} onSelect={handleSelectRow} />
+    <ResourceTable
+      active={active}
+      subId={subId}
+      selected={selectedRow}
+      onSelect={handleSelectRow}
+    />
   );
-  if (view === 'gitops') {
+  if (route.view === 'gitops') {
     mainArea = <GitopsGraph onSelect={handleSelectNode} />;
   }
-  if (view === 'flux-list') {
+  if (route.view === 'flux-list') {
     mainArea = <FluxList onSelect={handleSelectFlux} />;
   }
-  if (view === 'flux-overview') {
+  if (route.view === 'flux-overview') {
     mainArea = <FluxOverview onSelect={handleSelectFlux} />;
   }
-  if (view === 'flux-roles') {
+  if (route.view === 'flux-roles') {
     mainArea = <FluxRoles onSelect={handleSelectFlux} />;
   }
 
@@ -107,39 +158,26 @@ export default function App() {
     <div className="flex h-screen flex-col bg-surface font-mono text-sm text-fg">
       <TopBar
         status={feed.status}
-        view={view}
+        view={route.view}
         onReconnect={feed.reconnect}
         onContextChanged={handleContextChanged}
       />
       <div className="flex min-h-0 flex-1">
         <Sidebar
           epoch={contextEpoch}
-          view={view}
+          view={route.view}
           activeResource={active}
           onSelect={handleSelectResource}
-          onSelectGraph={() => {
-            switchView('gitops');
-          }}
-          onSelectList={() => {
-            switchView('flux-list');
-          }}
-          onSelectOverview={() => {
-            switchView('flux-overview');
-          }}
-          onSelectRoles={() => {
-            switchView('flux-roles');
-          }}
+          onSelectView={handleSelectView}
         />
         <PanelLayout
-          target={target}
-          containers={selected?.containers}
-          pod={podTarget(selected)}
+          selection={selection}
           subscribeLogs={subscribeLogs}
           unsubscribeLogs={unsubscribeLogs}
           onClose={clearSelection}
           onDeleted={clearSelection}
         >
-          <ErrorBoundary label={view}>{mainArea}</ErrorBoundary>
+          <ErrorBoundary label={route.view}>{mainArea}</ErrorBoundary>
         </PanelLayout>
       </div>
       <Toasts />

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { DockSide } from './panels';
+import { usePanelsStore } from '../store/panels';
 
 export const MIN_DRAWER_WIDTH = 320;
 export const MAX_DRAWER_WIDTH = 1200;
@@ -105,9 +106,22 @@ function pointOf(limits: Limits, event: MouseEvent): number {
   return event.clientY;
 }
 
-function usePanelSize(limits: Limits): PanelSize {
-  const [size, setSize] = useState(limits.initial);
+function sizeOf(limits: Limits, stored: number | null): number {
+  if (stored === null) {
+    return limits.initial;
+  }
+  return clamp(limits, stored);
+}
+
+function usePanelSize(
+  limits: Limits,
+  stored: number | null,
+  apply: (size: number) => void,
+): PanelSize {
+  const size = sizeOf(limits, stored);
   const startRef = useRef<DragStart | null>(null);
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
 
   useEffect(() => {
     function handleMove(event: MouseEvent) {
@@ -119,7 +133,7 @@ function usePanelSize(limits: Limits): PanelSize {
         startRef.current = null;
         return;
       }
-      setSize(clamp(limits, start.size + limits.sign * (pointOf(limits, event) - start.at)));
+      apply(clamp(limits, start.size + limits.sign * (pointOf(limits, event) - start.at)));
     }
 
     function handleUp() {
@@ -132,29 +146,36 @@ function usePanelSize(limits: Limits): PanelSize {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [limits]);
+  }, [limits, apply]);
 
-  const startResize = useCallback(
-    (client: number) => {
-      startRef.current = { at: client, size };
-    },
-    [size],
-  );
+  const startResize = useCallback((client: number) => {
+    startRef.current = { at: client, size: sizeRef.current };
+  }, []);
 
   const nudge = useCallback(
     (delta: number) => {
-      setSize((current) => clamp(limits, current + limits.sign * delta));
+      apply(clamp(limits, sizeRef.current + limits.sign * delta));
     },
-    [limits],
+    [limits, apply],
   );
 
   return { size, startResize, nudge };
 }
 
 export function useSidebarWidth(): PanelSize {
-  return usePanelSize(SIDEBAR);
+  const stored = usePanelsStore((state) => state.sidebar);
+  const apply = usePanelsStore((state) => state.resizeSidebar);
+  return usePanelSize(SIDEBAR, stored, apply);
 }
 
 export function useDockSize(side: DockSide): PanelSize {
-  return usePanelSize(limitsFor(side));
+  const stored = usePanelsStore((state) => state.sizes[side]);
+  const resize = usePanelsStore((state) => state.resize);
+  const apply = useCallback(
+    (size: number) => {
+      resize(side, size);
+    },
+    [resize, side],
+  );
+  return usePanelSize(limitsFor(side), stored, apply);
 }

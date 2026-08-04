@@ -1,4 +1,26 @@
 import type { FluxResource, GraphNode, ObjectRef, ResourceDescriptor, Row } from './types';
+import { useResourcesStore } from '../store/resources';
+
+export interface Selection {
+  ref: ObjectRef;
+  row: Row | null;
+}
+
+interface Gvr {
+  group: string;
+  version: string;
+  resource: string;
+}
+
+export function sameGvr(a: Gvr, b: Gvr): boolean {
+  if (a.group !== b.group) {
+    return false;
+  }
+  if (a.version !== b.version) {
+    return false;
+  }
+  return a.resource === b.resource;
+}
 
 export function refFromRow(descriptor: ResourceDescriptor | null, row: Row): ObjectRef | null {
   if (descriptor === null) {
@@ -34,4 +56,35 @@ export function refFromFlux(resource: FluxResource): ObjectRef {
     namespace: resource.namespace,
     name: resource.name,
   };
+}
+
+export function useRowForRef(
+  subId: string,
+  descriptor: ResourceDescriptor | null,
+  ref: ObjectRef | null,
+): Row | null {
+  return useResourcesStore((state) => {
+    if (ref === null) {
+      return null;
+    }
+    if (descriptor === null) {
+      return null;
+    }
+    if (!sameGvr(descriptor, ref)) {
+      return null;
+    }
+    const sub = state.subs.get(subId);
+    if (sub === undefined) {
+      return null;
+    }
+    for (const row of sub.rows.values()) {
+      if (row.namespace !== ref.namespace) {
+        continue;
+      }
+      if (row.name === ref.name) {
+        return row;
+      }
+    }
+    return null;
+  });
 }

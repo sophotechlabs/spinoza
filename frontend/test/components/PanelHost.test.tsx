@@ -4,9 +4,10 @@ import userEvent from '@testing-library/user-event';
 import PanelHost from '../../src/components/PanelHost';
 import type { PanelTab } from '../../src/components/PanelHost';
 import type { DockSide, PanelId } from '../../src/lib/panels';
+import { panelById } from '../../src/lib/panels';
 
 function tabs(...ids: PanelId[]): PanelTab[] {
-  return ids.map((id) => ({ id, disabled: false, title: id }));
+  return ids.map((id) => ({ id, label: panelById(id).label, disabled: false, title: id }));
 }
 
 function renderHost(overrides: Partial<Parameters<typeof PanelHost>[0]> = {}) {
@@ -67,7 +68,7 @@ describe('PanelHost', () => {
   it('refuses a disabled tab but keeps it hoverable so its reason can be read', async () => {
     const user = userEvent.setup();
     const { onActivate } = renderHost({
-      tabs: [{ id: 'logs', disabled: true, title: 'Select a pod to see this' }],
+      tabs: [{ id: 'logs', label: 'Logs', disabled: true, title: 'Select a pod to see this' }],
       active: null,
     });
     const tab = screen.getByRole('tab', { name: 'Logs' });

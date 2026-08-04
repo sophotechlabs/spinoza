@@ -59,3 +59,79 @@ describe('where each panel is docked', () => {
     );
   });
 });
+
+describe('the rest of the layout', () => {
+  it('starts unset so each dock uses its own default', async () => {
+    const { usePanelsStore } = await freshStore();
+
+    expect(usePanelsStore.getState().sizes).toEqual({ left: null, right: null, bottom: null });
+    expect(usePanelsStore.getState().sidebar).toBeNull();
+    expect(usePanelsStore.getState().collapsed.right).toBe(false);
+    expect(usePanelsStore.getState().active.right).toBeNull();
+  });
+
+  it('remembers a dock size for the next session', async () => {
+    const { usePanelsStore } = await freshStore();
+
+    usePanelsStore.getState().resize('right', 700);
+
+    expect(usePanelsStore.getState().sizes.right).toBe(700);
+    const reopened = await freshStore();
+    expect(reopened.usePanelsStore.getState().sizes.right).toBe(700);
+  });
+
+  it('remembers the sidebar width', async () => {
+    const { usePanelsStore } = await freshStore();
+
+    usePanelsStore.getState().resizeSidebar(300);
+
+    const reopened = await freshStore();
+    expect(reopened.usePanelsStore.getState().sidebar).toBe(300);
+  });
+
+  it('remembers a collapsed dock', async () => {
+    const { usePanelsStore } = await freshStore();
+
+    usePanelsStore.getState().collapse('bottom', true);
+
+    const reopened = await freshStore();
+    expect(reopened.usePanelsStore.getState().collapsed.bottom).toBe(true);
+  });
+
+  it('remembers the open tab of each dock', async () => {
+    const { usePanelsStore } = await freshStore();
+
+    usePanelsStore.getState().activate('right', 'events');
+
+    const reopened = await freshStore();
+    expect(reopened.usePanelsStore.getState().active.right).toBe('events');
+  });
+
+  it('puts sizes, collapse and open tabs back on reset', async () => {
+    const { usePanelsStore } = await freshStore();
+    usePanelsStore.getState().resize('right', 700);
+    usePanelsStore.getState().resizeSidebar(300);
+    usePanelsStore.getState().collapse('bottom', true);
+    usePanelsStore.getState().activate('right', 'events');
+
+    usePanelsStore.getState().reset();
+
+    expect(usePanelsStore.getState().sizes).toEqual({ left: null, right: null, bottom: null });
+    expect(usePanelsStore.getState().sidebar).toBeNull();
+    expect(usePanelsStore.getState().collapsed.bottom).toBe(false);
+    expect(usePanelsStore.getState().active.right).toBeNull();
+    const reopened = await freshStore();
+    expect(reopened.usePanelsStore.getState().sizes.right).toBeNull();
+  });
+
+  it('keeps each stored piece independent of the others', async () => {
+    const { usePanelsStore } = await freshStore();
+
+    usePanelsStore.getState().resize('right', 700);
+    usePanelsStore.getState().collapse('left', true);
+
+    const reopened = await freshStore();
+    expect(reopened.usePanelsStore.getState().sizes.right).toBe(700);
+    expect(reopened.usePanelsStore.getState().collapsed.left).toBe(true);
+  });
+});

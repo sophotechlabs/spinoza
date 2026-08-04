@@ -272,7 +272,10 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             </Row>
           )}
           {section === 'Panels' && (
-            <Row label="Dock layout" hint="Put every panel back where it started.">
+            <Row
+              label="Dock layout"
+              hint="Put every panel, dock size and collapsed dock back where it started."
+            >
               <button
                 type="button"
                 onClick={resetPanels}

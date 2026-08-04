@@ -1,12 +1,19 @@
 import { useRef, useState } from 'react';
 import type { DockSide, PanelId } from '../lib/panels';
-import { DOCK_SIDES, PANEL_LABELS, SIDE_GLYPHS, SIDE_LABELS } from '../lib/panels';
+import { DOCK_SIDES, SIDE_GLYPHS, SIDE_LABELS } from '../lib/panels';
 import { NUDGE_STEP, useDockSize } from '../lib/usePanelWidth';
+import { usePanelsStore } from '../store/panels';
 
 export interface PanelTab {
   id: PanelId;
+  label: string;
   disabled: boolean;
   title: string;
+}
+
+function labelOf(tabs: PanelTab[], id: PanelId): string {
+  const tab = tabs.find((one) => one.id === id);
+  return tab?.label ?? '';
 }
 
 interface PanelHostProps {
@@ -105,7 +112,8 @@ export default function PanelHost({
   hostRef,
   emptyHint,
 }: PanelHostProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = usePanelsStore((state) => state.collapsed[side]);
+  const collapse = usePanelsStore((state) => state.collapse);
   const [over, setOver] = useState(false);
   const insideRef = useRef(0);
   const { size, startResize, nudge } = useDockSize(side);
@@ -210,7 +218,7 @@ export default function PanelHost({
           type="button"
           aria-label={`Show the ${SIDE_LABELS[side]} dock`}
           onClick={() => {
-            setCollapsed(false);
+            collapse(side, false);
           }}
           className="rounded px-1 py-0.5 text-xs text-fg-muted hover:bg-surface-raised hover:text-fg"
         >
@@ -235,7 +243,7 @@ export default function PanelHost({
         type="button"
         aria-label={`Hide the ${SIDE_LABELS[side]} dock`}
         onClick={() => {
-          setCollapsed(true);
+          collapse(side, true);
         }}
         className="px-1 py-1.5 text-fg-muted hover:text-fg"
       >
@@ -262,7 +270,7 @@ export default function PanelHost({
           }}
           className={tabClass(active === tab.id, tab.disabled)}
         >
-          {PANEL_LABELS[tab.id]}
+          {tab.label}
         </button>
       ))}
       {active !== null && (
@@ -271,7 +279,7 @@ export default function PanelHost({
             <button
               key={other}
               type="button"
-              aria-label={`Move ${PANEL_LABELS[active]} to the ${SIDE_LABELS[other]}`}
+              aria-label={`Move ${labelOf(tabs, active)} to the ${SIDE_LABELS[other]}`}
               onClick={() => {
                 onMove(active, other);
               }}

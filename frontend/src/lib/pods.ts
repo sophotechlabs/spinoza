@@ -1,4 +1,5 @@
-import type { Row } from './types';
+import type { ObjectDetail, Row } from './types';
+import type { Selection } from './refs';
 import { containerNames } from './containers';
 
 export interface PodTarget {
@@ -22,6 +23,31 @@ export function podTarget(row: Row | null): PodTarget | null {
     name: row.name,
     containers: containerNames(row.containers),
   };
+}
+
+function podFromDetail(detail: ObjectDetail | null): PodTarget | null {
+  if (detail === null) {
+    return null;
+  }
+  if (detail.kind !== 'Pod') {
+    return null;
+  }
+  const names = detail.containers ?? [];
+  if (names.length === 0) {
+    return null;
+  }
+  return { namespace: detail.namespace, name: detail.name, containers: names };
+}
+
+export function podFor(selection: Selection | null, detail: ObjectDetail | null): PodTarget | null {
+  if (selection === null) {
+    return null;
+  }
+  const live = podTarget(selection.row);
+  if (live !== null) {
+    return live;
+  }
+  return podFromDetail(detail);
 }
 
 export function firstContainer(pod: PodTarget | null): string {

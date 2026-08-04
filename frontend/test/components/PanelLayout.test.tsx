@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../../src/components/ForwardsPanel', () => ({
@@ -28,6 +28,7 @@ import PanelLayout from '../../src/components/PanelLayout';
 import { PLACEMENT_KEY } from '../../src/lib/panels';
 import { usePanelsStore } from '../../src/store/panels';
 import type { ObjectRef } from '../../src/lib/types';
+import { makeRow, parentOf } from '../helpers';
 
 const podRef: ObjectRef = {
   group: '',
@@ -68,8 +69,18 @@ function renderLayout(overrides: Partial<Parameters<typeof PanelLayout>[0]> = {}
   const onDeleted = vi.fn();
   const view = render(
     <PanelLayout
-      target={podRef}
-      pod={{ namespace: 'prod', name: 'web', containers: ['app', 'sidecar'] }}
+      selection={{
+        ref: podRef,
+        row: makeRow({
+          uid: 'uid-web',
+          name: 'web',
+          namespace: 'prod',
+          containers: [
+            { name: 'app', state: 'running', ready: true, restarts: 0, init: false },
+            { name: 'sidecar', state: 'running', ready: true, restarts: 0, init: false },
+          ],
+        }),
+      }}
       subscribeLogs={vi.fn()}
       unsubscribeLogs={vi.fn()}
       onClose={onClose}
@@ -194,7 +205,7 @@ describe('PanelLayout', () => {
         json: () => Promise.resolve({ ...detail, kind: 'Deployment', containers: undefined }),
       }),
     );
-    renderLayout({ pod: null });
+    renderLayout({ selection: { ref: podRef, row: null } });
     await screen.findByText('Metadata');
 
     expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-disabled', 'true');
@@ -203,7 +214,7 @@ describe('PanelLayout', () => {
   });
 
   it('greys out every object panel with nothing selected', () => {
-    renderLayout({ target: null, pod: null });
+    renderLayout({ selection: null });
 
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('tab', { name: 'YAML' })).toHaveAttribute('aria-disabled', 'true');
@@ -312,6 +323,74 @@ describe('PanelLayout', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('the layout a session leaves behind', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    usePanelsStore.getState().reset();
+    window.localStorage.clear();
+    stubApi();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reopens on the tab that was left open', async () => {
+    const user = userEvent.setup();
+    const first = renderLayout();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('tab', { name: 'Events' }));
+    await screen.findByText('No events for this object.');
+    first.view.unmount();
+
+    renderLayout();
+
+    expect(await screen.findByText('No events for this object.')).toBeInTheDocument();
+  });
+
+  it('reopens with the dock still collapsed', async () => {
+    const user = userEvent.setup();
+    const first = renderLayout();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'Hide the right dock' }));
+    first.view.unmount();
+
+    renderLayout();
+
+    expect(await screen.findByRole('button', { name: 'Show the right dock' })).toBeInTheDocument();
+  });
+
+  it('reopens at the dock size the last drag left', async () => {
+    const first = renderLayout();
+    await screen.findByText('Metadata');
+    const handle = screen.getByRole('button', { name: 'Resize the right dock' });
+    fireEvent.mouseDown(handle, { clientX: 900 });
+    fireEvent.mouseMove(window, { clientX: 800, buttons: 1 });
+    fireEvent.mouseUp(window);
+    first.view.unmount();
+
+    renderLayout();
+
+    const frame = parentOf(screen.getByRole('button', { name: 'Resize the right dock' }));
+    expect(frame.style.width).toBe('660px');
+  });
+
+  it('forgets all of it when the layout is reset', async () => {
+    const user = userEvent.setup();
+    const first = renderLayout();
+    await screen.findByText('Metadata');
+    await user.click(screen.getByRole('button', { name: 'Hide the right dock' }));
+    first.view.unmount();
+
+    act(() => {
+      usePanelsStore.getState().reset();
+    });
+    renderLayout();
+
+    expect(await screen.findByRole('button', { name: 'Hide the right dock' })).toBeInTheDocument();
   });
 });
 

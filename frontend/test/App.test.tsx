@@ -22,7 +22,19 @@ vi.mock('../src/lib/feed', () => ({
   }),
 }));
 
-const stubs = vi.hoisted((): { node: GraphNode; flux: FluxResource } => ({
+const stubs = vi.hoisted((): { node: GraphNode; podNode: GraphNode; flux: FluxResource } => ({
+  podNode: {
+    id: 'gn-2',
+    kind: 'Pod',
+    group: '',
+    version: 'v1',
+    resource: 'pods',
+    name: 'pod-a',
+    namespace: 'prod',
+    status: 'Running',
+    ready: 'True',
+    category: 'managed',
+  },
   node: {
     id: 'gn-1',
     kind: 'HelmRelease',
@@ -61,6 +73,14 @@ vi.mock('../src/components/GitopsGraph', () => ({
         }}
       >
         select-node
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onSelect(stubs.podNode);
+        }}
+      >
+        select-pod-node
       </button>
     </div>
   ),
@@ -180,15 +200,44 @@ const objectDetail = {
   yaml: 'kind: Pod\n',
 };
 
+function detailFor(url: string) {
+  if (url.includes('resource=pods')) {
+    return objectDetail;
+  }
+  if (url.includes('resource=helmreleases')) {
+    return {
+      ...objectDetail,
+      apiVersion: 'helm.toolkit.fluxcd.io/v2',
+      kind: 'HelmRelease',
+      name: 'podinfo',
+      namespace: 'apps',
+      containers: undefined,
+    };
+  }
+  return {
+    ...objectDetail,
+    apiVersion: 'apps/v1',
+    kind: 'Deployment',
+    name: 'dep-a',
+    containers: undefined,
+  };
+}
+
 function stubFetch(): void {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/contexts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ contexts: ['kind-dev'], current: 'kind-dev' }),
+        });
+      }
       if (url === '/api/metrics') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ pods: {}, nodes: {} }) });
       }
       if (url.startsWith('/api/object')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(objectDetail) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(detailFor(url)) });
       }
       if (url.startsWith('/api/events')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
@@ -205,6 +254,17 @@ function resetStore(): void {
   useResourcesStore.setState({ subs: new Map() });
 }
 
+function openAt(hash: string): void {
+  window.history.replaceState(null, '', hash);
+}
+
+function goBackTo(hash: string): void {
+  act(() => {
+    window.history.replaceState(null, '', hash);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+}
+
 async function expandWorkloads(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.click(await screen.findByRole('button', { name: /Workloads/ }));
 }
@@ -212,6 +272,11 @@ async function expandWorkloads(user: ReturnType<typeof userEvent.setup>): Promis
 async function selectPod(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await expandWorkloads(user);
   await user.click(await screen.findByRole('button', { name: 'Pod' }));
+}
+
+async function selectDeployment(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await expandWorkloads(user);
+  await user.click(await screen.findByRole('button', { name: 'Deployment' }));
 }
 
 describe('App', () => {
@@ -246,7 +311,11 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
     await selectPod(user);
-    expect(feedMocks.subscribe).toHaveBeenCalledWith('main#1', podDescriptor, '');
+    expect(feedMocks.subscribe).toHaveBeenCalledWith(
+      'main#1',
+      expect.objectContaining({ group: '', version: 'v1', resource: 'pods', kind: 'Pod' }),
+      '',
+    );
     expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
     expect(screen.getByText('1/1')).toBeInTheDocument();
   });
@@ -317,7 +386,11 @@ describe('App', () => {
     feedMocks.unsubscribe.mockClear();
     await user.click(screen.getByRole('button', { name: 'Deployment' }));
     expect(feedMocks.unsubscribe).toHaveBeenCalledWith('main#1');
-    expect(feedMocks.subscribe).toHaveBeenCalledWith('main#2', deploymentDescriptor, '');
+    expect(feedMocks.subscribe).toHaveBeenCalledWith(
+      'main#2',
+      expect.objectContaining({ group: 'apps', version: 'v1', resource: 'deployments' }),
+      '',
+    );
   });
 
   it('drops the selection when the cluster changes', async () => {
@@ -376,7 +449,7 @@ describe('App', () => {
     expect(screen.getByTestId('inspect-log-feed')).toHaveTextContent('app');
   });
 
-  it('leaves the terminal shut for rows that have no containers', async () => {
+  it('leaves the terminal shut for an object that is not a pod', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main#1', makeColumns([]), true, [
@@ -384,10 +457,15 @@ describe('App', () => {
       ]);
     const user = userEvent.setup();
     render(<App />);
-    await selectPod(user);
+    await selectDeployment(user);
     await user.click(await screen.findByRole('button', { name: 'dep-a' }));
 
-    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
   });
 
   it('offers regular containers before init containers in the picker', async () => {
@@ -415,7 +493,7 @@ describe('App', () => {
     expect(options).toEqual(['app', 'copy-libs']);
   });
 
-  it('leaves the terminal shut for rows with an empty container list', async () => {
+  it('opens the terminal for a pod whose row carries no containers', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main#1', makeColumns([]), true, [
@@ -426,7 +504,12 @@ describe('App', () => {
     await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
 
-    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute(
+        'aria-disabled',
+        'false',
+      );
+    });
   });
 
   it('targets the inspector at a selected graph node', async () => {
@@ -498,5 +581,236 @@ describe('App', () => {
     await selectPod(user);
     expect(screen.queryByTestId('gitops-graph')).not.toBeInTheDocument();
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
+  });
+});
+
+describe('the address bar', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+    feedMocks.subscribe.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetStore();
+  });
+
+  it('records the chosen resource so the page can be linked', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await selectPod(user);
+
+    expect(window.location.hash).toContain('resource=pods');
+    expect(window.location.hash).toContain('kind=Pod');
+  });
+
+  it('records the selected object next to its resource', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+
+    expect(window.location.hash).toContain('namespace=prod');
+    expect(window.location.hash).toContain('name=pod-a');
+    expect(window.location.hash).not.toContain('selResource');
+  });
+
+  it('spells out an object picked from a view with no table behind it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
+
+    await user.click(screen.getByRole('button', { name: 'select-node' }));
+
+    expect(window.location.hash).toContain('selResource=helmreleases');
+    expect(window.location.hash).toContain('view=gitops');
+  });
+
+  it('subscribes and selects again from a link that was opened cold', async () => {
+    openAt('#version=v1&resource=pods&kind=Pod&namespace=prod&name=pod-a');
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#0', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+
+    render(<App />);
+
+    expect(feedMocks.subscribe).toHaveBeenCalledWith(
+      'main#0',
+      expect.objectContaining({ resource: 'pods' }),
+      '',
+    );
+    expect(await screen.findByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+  });
+
+  it('keeps the resource but drops an object from another cluster', async () => {
+    openAt('#context=other-cluster&version=v1&resource=pods&kind=Pod&namespace=prod&name=pod-a');
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#0', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=kind-dev');
+    });
+    expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
+  });
+
+  it('follows the back button out of a selection', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+
+    goBackTo('#version=v1&resource=pods&kind=Pod');
+
+    expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+  });
+
+  it('names the object, the resource and the cluster in the tab title', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+
+    await waitFor(() => {
+      expect(document.title).toBe('pod-a · pods · kind-dev — Spinoza');
+    });
+  });
+
+  it('leaves the cluster out of the title when it cannot be read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/contexts')) {
+          return Promise.reject(new Error('offline'));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    const user = userEvent.setup();
+    render(<App />);
+
+    await selectPod(user);
+
+    await waitFor(() => {
+      expect(document.title).toBe('pods — Spinoza');
+    });
+    expect(window.location.hash).not.toContain('context=');
+  });
+
+  it('forgets the resource when the cluster changes', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    expect(window.location.hash).toContain('resource=pods');
+
+    await user.click(screen.getByTestId('context-changed'));
+
+    expect(window.location.hash).not.toContain('resource=pods');
+  });
+});
+
+describe('a selection that outlives its row', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetStore();
+  });
+
+  it('re-binds to the same pod after it is recreated under a new uid', async () => {
+    useResourcesStore.getState().applySnapshot('main#1', makeColumns([]), true, [
+      makeRow({
+        uid: 'a',
+        name: 'pod-a',
+        namespace: 'prod',
+        containers: [{ name: 'app', state: 'running', ready: true, restarts: 0, init: false }],
+      }),
+    ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    expect(screen.getByTestId('inspect-containers')).toHaveTextContent('app::0');
+
+    act(() => {
+      useResourcesStore
+        .getState()
+        .applyDelta('main#1', { type: 'deleted', subId: 'main#1', uid: 'a' });
+      useResourcesStore.getState().applyDelta('main#1', {
+        type: 'added',
+        subId: 'main#1',
+        row: makeRow({
+          uid: 'b',
+          name: 'pod-a',
+          namespace: 'prod',
+          containers: [{ name: 'app', state: 'running', ready: true, restarts: 3, init: false }],
+        }),
+      });
+    });
+
+    expect(screen.getByTestId('inspect-containers')).toHaveTextContent('app::3');
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+  });
+
+  it('opens the terminal for a pod picked out of the graph', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
+
+    await user.click(screen.getByRole('button', { name: 'select-pod-node' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute(
+        'aria-disabled',
+        'false',
+      );
+    });
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+  });
+
+  it('leaves a selection from another resource unresolved', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'podinfo', namespace: 'apps' }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
+
+    await user.click(screen.getByRole('button', { name: 'select-node' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('helmreleases:apps/podinfo');
+    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
   });
 });
