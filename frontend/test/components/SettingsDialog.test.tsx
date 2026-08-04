@@ -98,3 +98,92 @@ describe('the settings dialog', () => {
     expect(showModal).not.toHaveBeenCalled();
   });
 });
+
+describe('importing a theme', () => {
+  const SOLARIZED = JSON.stringify({
+    id: 'solarized',
+    name: 'Solarized Light',
+    base: 'light',
+    tokens: { surface: '#fdf6e3' },
+  });
+
+  afterEach(() => {
+    act(() => {
+      for (const theme of useThemeStore.getState().custom) {
+        useThemeStore.getState().removeTheme(theme.id);
+      }
+      useThemeStore.getState().setPreference('dark');
+    });
+  });
+
+  it('installs it, selects it and lists it', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByLabelText('Import a theme'));
+    await user.paste(SOLARIZED);
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    expect(useThemeStore.getState().custom).toHaveLength(1);
+    expect(useThemeStore.getState().preference).toBe('solarized');
+    expect(document.documentElement.style.getPropertyValue('--surface')).toBe('#fdf6e3');
+    expect(screen.getByRole('option', { name: 'Solarized Light' })).toBeInTheDocument();
+  });
+
+  it('says why it refused a broken file', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByLabelText('Import a theme'));
+    await user.paste('{"id":"x","name":"X","base":"sideways"}');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    expect(screen.getByText('base must be "dark" or "light"')).toBeInTheDocument();
+    expect(useThemeStore.getState().custom).toHaveLength(0);
+  });
+
+  it('says so when the file is not JSON at all', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByLabelText('Import a theme'));
+    await user.paste('nonsense');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    expect(screen.getByText('that is not valid JSON')).toBeInTheDocument();
+  });
+
+  it('warns when a theme leaves the background to its base', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByLabelText('Import a theme'));
+    await user.paste('{"id":"accent","name":"Accent","base":"dark","tokens":{"ok":"#00ff00"}}');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    expect(screen.getByText(/inherits the background of its base/)).toBeInTheDocument();
+  });
+
+  it('removes one on request', async () => {
+    const user = userEvent.setup();
+    open();
+    await user.click(screen.getByLabelText('Import a theme'));
+    await user.paste(SOLARIZED);
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    await user.click(screen.getByRole('button', { name: 'Remove Solarized Light' }));
+
+    expect(useThemeStore.getState().custom).toHaveLength(0);
+  });
+
+  it('copies the current theme out as json', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Copy current as JSON' }));
+
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"id": "dark"'));
+  });
+});

@@ -27,10 +27,13 @@ describe('parseTheme', () => {
     expect(parseTheme('system')).toBe('system');
   });
 
-  it('falls back to dark for anything else', () => {
+  it('falls back to dark when nothing was stored', () => {
     expect(parseTheme(null)).toBe('dark');
     expect(parseTheme('')).toBe('dark');
-    expect(parseTheme('solarized')).toBe('dark');
+  });
+
+  it('passes a custom id through for the registry to resolve', () => {
+    expect(parseTheme('solarized')).toBe('solarized');
   });
 });
 

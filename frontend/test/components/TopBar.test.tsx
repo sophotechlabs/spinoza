@@ -99,8 +99,8 @@ describe('the theme picker', () => {
     const picker = screen.getByLabelText('Theme');
 
     expect(picker).toHaveValue('dark');
-    expect(screen.getByRole('option', { name: 'light' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'system' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Light' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'System' })).toBeInTheDocument();
   });
 
   it('repaints the document when a theme is chosen', async () => {

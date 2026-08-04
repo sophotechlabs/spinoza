@@ -3,9 +3,8 @@ import type { ConnectionStatus } from '../lib/feed';
 import SettingsDialog from './SettingsDialog';
 import type { View } from '../lib/types';
 import ContextPicker from './ContextPicker';
-import { THEMES } from '../lib/theme';
-import type { ThemePreference } from '../lib/theme';
-import { useThemePreference, useThemeStore } from '../store/theme';
+import { SYSTEM } from '../lib/theme';
+import { useThemePreference, useThemeStore, useThemes } from '../store/theme';
 
 interface TopBarProps {
   status: ConnectionStatus;
@@ -26,6 +25,7 @@ function statusColor(status: ConnectionStatus): string {
 
 export default function TopBar({ status, view, onReconnect, onContextChanged }: TopBarProps) {
   const preference = useThemePreference();
+  const themes = useThemes();
   const setPreference = useThemeStore((state) => state.setPreference);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -56,15 +56,16 @@ export default function TopBar({ status, view, onReconnect, onContextChanged }: 
           aria-label="Theme"
           value={preference}
           onChange={(event) => {
-            setPreference(event.target.value as ThemePreference);
+            setPreference(event.target.value);
           }}
           className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
         >
-          {THEMES.map((name) => (
-            <option key={name} value={name}>
-              {name}
+          {themes.map((theme) => (
+            <option key={theme.id} value={theme.id}>
+              {theme.name}
             </option>
           ))}
+          <option value={SYSTEM}>System</option>
         </select>
         <span className="flex items-center gap-1.5 text-fg-muted">
           <span

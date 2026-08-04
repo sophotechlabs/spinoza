@@ -1,8 +1,82 @@
-export const THEMES = ['dark', 'light', 'system'] as const;
+export const SYSTEM = 'system';
 
-export type ThemePreference = (typeof THEMES)[number];
+export type ThemePreference = string;
 
 export type ThemeBase = 'dark' | 'light';
+
+export const TOKEN_NAMES = [
+  'surface',
+  'surface-raised',
+  'surface-active',
+  'handle',
+  'handle-active',
+  'grip',
+  'fg-strong',
+  'fg',
+  'fg-soft',
+  'fg-muted',
+  'fg-subtle',
+  'fg-faint',
+  'edge',
+  'edge-strong',
+  'edge-emphasis',
+  'edge-active',
+  'idle-solid',
+  'ok',
+  'ok-contrast',
+  'ok-solid',
+  'ok-tint',
+  'ok-emphasis',
+  'ok-line',
+  'ok-line-strong',
+  'error',
+  'error-strong',
+  'error-contrast',
+  'error-muted',
+  'error-solid',
+  'error-tint',
+  'error-tint-strong',
+  'error-emphasis',
+  'error-line',
+  'error-line-strong',
+  'warn',
+  'warn-strong',
+  'warn-muted',
+  'warn-solid',
+  'warn-tint',
+  'warn-line',
+  'warn-line-strong',
+  'info-contrast',
+  'info-tint',
+  'info-line',
+  'ansi-black',
+  'ansi-red',
+  'ansi-green',
+  'ansi-yellow',
+  'ansi-blue',
+  'ansi-magenta',
+  'ansi-cyan',
+  'ansi-white',
+  'ansi-bright-black',
+  'ansi-bright-red',
+  'ansi-bright-green',
+  'ansi-bright-yellow',
+  'ansi-bright-blue',
+  'ansi-bright-magenta',
+  'ansi-bright-cyan',
+  'ansi-bright-white',
+];
+
+export const CANVAS_NAMES = [
+  'chartAxis',
+  'chartGrid',
+  'cpuStroke',
+  'cpuFill',
+  'memoryStroke',
+  'memoryFill',
+  'terminalBackground',
+  'terminalForeground',
+];
 
 export interface CanvasColors {
   chartAxis: string;
@@ -33,12 +107,10 @@ export const THEME_KEY = 'spinoza.theme.v1';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 export function parseTheme(raw: string | null): ThemePreference {
-  for (const theme of THEMES) {
-    if (theme === raw) {
-      return theme;
-    }
+  if (raw === null || raw === '') {
+    return 'dark';
   }
-  return 'dark';
+  return raw;
 }
 
 export function readTheme(): ThemePreference {
@@ -88,7 +160,7 @@ export function resolveTheme(
   preference: ThemePreference,
   system: ThemeBase,
 ): Theme {
-  if (preference === 'system') {
+  if (preference === SYSTEM) {
     return themeById(themes, system);
   }
   return themeById(themes, preference);

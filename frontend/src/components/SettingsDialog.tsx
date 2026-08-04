@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { THEMES } from '../lib/theme';
-import type { ThemePreference } from '../lib/theme';
+import { SYSTEM } from '../lib/theme';
+import { validateTheme } from '../lib/customThemes';
 import { LOG_VIEWS } from '../lib/settings';
 import type { LogView } from '../lib/settings';
-import { useThemePreference, useThemeStore } from '../store/theme';
+import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '../store/theme';
 import { useLogView, useSettingsStore } from '../store/settings';
 import { usePanelsStore } from '../store/panels';
 
@@ -52,6 +52,38 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const logView = useLogView();
   const setLogView = useSettingsStore((state) => state.setLogView);
   const resetPanels = usePanelsStore((state) => state.reset);
+  const themes = useThemes();
+  const custom = useThemeStore((state) => state.custom);
+  const addTheme = useThemeStore((state) => state.addTheme);
+  const removeTheme = useThemeStore((state) => state.removeTheme);
+  const resolved = useResolvedTheme();
+  const [draft, setDraft] = useState('');
+  const [report, setReport] = useState<{ errors: string[]; warnings: string[] }>({
+    errors: [],
+    warnings: [],
+  });
+
+  function handleImport() {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(draft);
+    } catch {
+      setReport({ errors: ['that is not valid JSON'], warnings: [] });
+      return;
+    }
+    const checked = validateTheme(parsed);
+    setReport({ errors: checked.errors, warnings: checked.warnings });
+    if (checked.theme === null) {
+      return;
+    }
+    addTheme(checked.theme);
+    setPreference(checked.theme.id);
+    setDraft('');
+  }
+
+  function handleExport() {
+    void navigator.clipboard.writeText(JSON.stringify(resolved, null, 2));
+  }
 
   useEffect(() => {
     const dialog = ref.current;
@@ -98,22 +130,89 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         </nav>
         <div className="min-w-0 flex-1 p-3">
           {section === 'Appearance' && (
-            <Row label="Theme" hint="Follow the system, or pick one and keep it.">
-              <select
-                aria-label="Theme preference"
-                value={preference}
-                onChange={(event) => {
-                  setPreference(event.target.value as ThemePreference);
-                }}
-                className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
-              >
-                {THEMES.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </Row>
+            <>
+              <Row label="Theme" hint="Follow the system, or pick one and keep it.">
+                <select
+                  aria-label="Theme preference"
+                  value={preference}
+                  onChange={(event) => {
+                    setPreference(event.target.value);
+                  }}
+                  className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
+                >
+                  {themes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.name}
+                    </option>
+                  ))}
+                  <option value={SYSTEM}>System</option>
+                </select>
+              </Row>
+              <Row label="Your themes" hint="Imported themes live here until you remove them.">
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
+                >
+                  Copy current as JSON
+                </button>
+              </Row>
+              {custom.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {custom.map((theme) => (
+                    <li key={theme.id} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-fg-soft">
+                        {theme.name} <span className="text-fg-muted">({theme.base})</span>
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${theme.name}`}
+                        onClick={() => {
+                          removeTheme(theme.id);
+                        }}
+                        className="rounded border border-error-line px-1.5 py-0.5 text-error hover:bg-error-tint"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-3">
+                <label htmlFor="theme-import" className="text-fg">
+                  Import a theme
+                </label>
+                <textarea
+                  id="theme-import"
+                  value={draft}
+                  spellCheck={false}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                  }}
+                  placeholder='{"id":"solarized","name":"Solarized","base":"light","tokens":{"surface":"#fdf6e3"}}'
+                  className="mt-1 h-24 w-full rounded border border-edge-strong bg-surface-raised p-2 font-mono text-[11px] text-fg"
+                />
+                <div className="mt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleImport}
+                    className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
+                  >
+                    Import
+                  </button>
+                  {report.errors.map((message) => (
+                    <span key={message} className="text-error">
+                      {message}
+                    </span>
+                  ))}
+                  {report.warnings.map((message) => (
+                    <span key={message} className="text-warn">
+                      {message}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
           {section === 'Logs' && (
             <Row label="Default view" hint="How log lines open before you toggle them.">

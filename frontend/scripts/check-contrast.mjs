@@ -119,6 +119,42 @@ function selfCheck() {
 
 selfCheck();
 
+function tokenNamesFromCss() {
+  const names = [];
+  const pattern = /^\s+--color-([a-z0-9-]+):/gm;
+  let match = pattern.exec(css);
+  while (match !== null) {
+    names.push(match[1]);
+    match = pattern.exec(css);
+  }
+  return names;
+}
+
+function tokenNamesFromSource() {
+  const source = readFileSync(new URL('../src/lib/theme.ts', import.meta.url), 'utf8');
+  const block = /export const TOKEN_NAMES = \[([\s\S]*?)\];/.exec(source);
+  if (block === null) {
+    throw new Error('TOKEN_NAMES not found in src/lib/theme.ts');
+  }
+  return [...block[1].matchAll(/'([a-z0-9-]+)'/g)].map((entry) => entry[1]);
+}
+
+const fromCss = tokenNamesFromCss();
+const fromSource = tokenNamesFromSource();
+const missing = fromCss.filter((name) => !fromSource.includes(name));
+const extra = fromSource.filter((name) => !fromCss.includes(name));
+
+if (missing.length > 0 || extra.length > 0) {
+  console.error('TOKEN_NAMES has drifted from src/index.css:');
+  for (const name of missing) {
+    console.error(`  in the css but not in TOKEN_NAMES: ${name}`);
+  }
+  for (const name of extra) {
+    console.error(`  in TOKEN_NAMES but not in the css: ${name}`);
+  }
+  process.exit(1);
+}
+
 const failures = [];
 for (const theme of THEMES) {
   const values = tokens(theme.selector);
@@ -144,5 +180,6 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `contrast: ${String(CONTENT_TOKENS.length * THEMES.length)} token/theme pairs clear AA`,
+  `theme: ${String(fromCss.length)} tokens in step with the css, ` +
+    `${String(CONTENT_TOKENS.length * THEMES.length)} token/theme pairs clear AA`,
 );

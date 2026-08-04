@@ -93,3 +93,35 @@ describe('the operating system changing under us', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 });
+
+describe('installing a theme someone imported', () => {
+  const solarized = {
+    id: 'solarized',
+    name: 'Solarized',
+    base: 'light' as const,
+    tokens: { surface: '#fdf6e3' },
+  };
+
+  it('replaces an earlier one with the same id instead of stacking duplicates', async () => {
+    const { useThemeStore } = await freshStore();
+
+    useThemeStore.getState().addTheme(solarized);
+    useThemeStore.getState().addTheme({ ...solarized, name: 'Solarized Light' });
+
+    expect(useThemeStore.getState().custom).toHaveLength(1);
+    expect(useThemeStore.getState().custom[0].name).toBe('Solarized Light');
+    expect(useThemeStore.getState().themes).toHaveLength(3);
+  });
+
+  it('drops back to a built-in when the selected theme is removed', async () => {
+    const { useThemeStore } = await freshStore();
+    useThemeStore.getState().addTheme(solarized);
+    useThemeStore.getState().setPreference('solarized');
+    expect(useThemeStore.getState().resolved.id).toBe('solarized');
+
+    useThemeStore.getState().removeTheme('solarized');
+
+    expect(useThemeStore.getState().resolved.id).toBe('dark');
+    expect(document.documentElement.style.getPropertyValue('--surface')).toBe('');
+  });
+});
