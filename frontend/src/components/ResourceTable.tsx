@@ -104,12 +104,12 @@ function nodeUsageCell(usage: ResourceUsage | undefined, memory: boolean): React
 
 function podUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
   if (usage === undefined) {
-    return <span className="text-neutral-400">—</span>;
+    return <span className="text-fg-muted">—</span>;
   }
   if (memory) {
-    return <span className="text-neutral-400">{formatMem(usage.memoryMi)}</span>;
+    return <span className="text-fg-muted">{formatMem(usage.memoryMi)}</span>;
   }
-  return <span className="text-neutral-400">{formatCpu(usage.cpuMilli)}</span>;
+  return <span className="text-fg-muted">{formatCpu(usage.cpuMilli)}</span>;
 }
 
 function renderMetricCell(kind: string, metrics: Metrics, row: Row, memory: boolean): ReactNode {
@@ -141,11 +141,11 @@ function ariaSort(dir: false | SortDirection): 'ascending' | 'descending' | 'non
 }
 
 function rowClass(selected: boolean): string {
-  const base = 'border-b border-neutral-800';
+  const base = 'border-b border-edge';
   if (selected) {
-    return `${base} bg-neutral-800`;
+    return `${base} bg-surface-active`;
   }
-  return `${base} hover:bg-neutral-900`;
+  return `${base} hover:bg-surface-raised`;
 }
 
 const columnHelper = createColumnHelper<Row>();
@@ -193,7 +193,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
             onClick={() => {
               onSelect(info.row.original);
             }}
-            className="block w-full cursor-pointer truncate text-left text-neutral-100 hover:underline"
+            className="block w-full cursor-pointer truncate text-left text-fg-strong hover:underline"
           >
             {info.getValue()}
           </button>
@@ -288,7 +288,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
 
   if (active === null) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
         Select a resource to view.
       </div>
     );
@@ -297,9 +297,9 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   if (error !== null) {
     return (
       <div className="flex h-full items-start justify-center p-6 text-xs">
-        <div className="max-w-2xl rounded border border-red-900 bg-red-950/40 px-3 py-2">
-          <div className="font-semibold text-red-400">{active.kind} could not be loaded</div>
-          <div className="mt-1 break-words text-red-300">{error}</div>
+        <div className="max-w-2xl rounded border border-error-line bg-error-tint/40 px-3 py-2">
+          <div className="font-semibold text-error">{active.kind} could not be loaded</div>
+          <div className="mt-1 break-words text-error-strong">{error}</div>
         </div>
       </div>
     );
@@ -307,7 +307,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs">
+      <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface px-2 py-1.5 text-xs">
         <input
           type="search"
           aria-label="Filter by name"
@@ -316,7 +316,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
           onChange={(event) => {
             setQuery(event.target.value);
           }}
-          className="w-56 rounded border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-200 placeholder:text-neutral-400 focus:border-neutral-600"
+          className="w-56 rounded border border-edge bg-surface-raised px-2 py-1 text-fg placeholder:text-fg-muted focus:border-edge-emphasis"
         />
         {namespaced && namespaces.length > 0 && (
           <select
@@ -325,7 +325,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
             onChange={(event) => {
               setNamespace(event.target.value);
             }}
-            className="rounded border border-neutral-800 bg-neutral-900 px-1.5 py-1 text-neutral-200 focus:border-neutral-600"
+            className="rounded border border-edge bg-surface-raised px-1.5 py-1 text-fg focus:border-edge-emphasis"
           >
             <option value={ALL_NAMESPACES}>All namespaces</option>
             {namespaces.map((name) => (
@@ -335,7 +335,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
             ))}
           </select>
         )}
-        <span className="ml-auto text-neutral-400">
+        <span className="ml-auto text-fg-muted">
           {visibleRows.length} of {rows.length}
         </span>
       </div>
@@ -344,9 +344,9 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
           className="table-fixed border-collapse text-left text-xs"
           style={{ width: `${tableWidth}px` }}
         >
-          <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
+          <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-neutral-800">
+              <tr key={headerGroup.id} className="border-b border-edge">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
@@ -359,7 +359,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                     <button
                       type="button"
                       onClick={header.column.getToggleSortingHandler()}
-                      className="flex w-full cursor-pointer items-center truncate font-medium select-none hover:text-neutral-100"
+                      className="flex w-full cursor-pointer items-center truncate font-medium select-none hover:text-fg-strong"
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {sortIndicator(header.column.getIsSorted())}
@@ -368,7 +368,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                       aria-hidden="true"
                       onMouseDown={header.getResizeHandler()}
                       onTouchStart={header.getResizeHandler()}
-                      className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-neutral-600 opacity-0 select-none hover:opacity-100"
+                      className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-grip opacity-0 select-none hover:opacity-100"
                     />
                   </th>
                 ))}
@@ -392,7 +392,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className="truncate px-2 py-1 text-neutral-200"
+                      className="truncate px-2 py-1 text-fg"
                       style={{
                         width: `${columnWidth(cell.column.id, cell.column.getSize(), perFlex)}px`,
                       }}

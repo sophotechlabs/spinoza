@@ -62,7 +62,7 @@ export default function InspectLogs({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 px-3 py-1.5 text-xs">
+      <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-1.5 text-xs">
         {containers.length > 1 && (
           <select
             aria-label="Log container"
@@ -70,7 +70,7 @@ export default function InspectLogs({
             onChange={(event) => {
               setContainer(event.target.value);
             }}
-            className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-neutral-200"
+            className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
           >
             {containers.map((name) => (
               <option key={name} value={name}>
@@ -85,18 +85,18 @@ export default function InspectLogs({
             setFollow((value) => !value);
           }}
           aria-pressed={follow}
-          className="rounded border border-neutral-700 px-1.5 py-0.5 text-neutral-300 hover:bg-neutral-800"
+          className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
         >
           {followLabel(follow)}
         </button>
-        {error !== null && <span className="truncate text-red-400">{error}</span>}
-        {error === null && ended && <span className="text-neutral-400">stream ended</span>}
+        {error !== null && <span className="truncate text-error">{error}</span>}
+        {error === null && ended && <span className="text-fg-muted">stream ended</span>}
       </div>
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[11px] text-neutral-300"
+        className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[11px] text-fg-soft"
       >
-        {lines.length === 0 && <span className="text-neutral-400">Waiting for output…</span>}
+        {lines.length === 0 && <span className="text-fg-muted">Waiting for output…</span>}
         {lines.map((line, index) => (
           <div key={offset + index} className="break-all whitespace-pre-wrap">
             {segmentsOf(line).map((segment, part) => (

@@ -82,11 +82,11 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
   }
 
   return (
-    <div className="h-56 overflow-auto border-t border-neutral-800 bg-neutral-950 p-3 text-[11px]">
-      <p className="text-neutral-300">
+    <div className="h-56 overflow-auto border-t border-edge bg-surface p-3 text-[11px]">
+      <p className="text-fg-soft">
         {target.container} has no shell, so it cannot be exec&apos;d into.
       </p>
-      <p className="mt-1 text-neutral-400">
+      <p className="mt-1 text-fg-muted">
         Kubernetes can add a temporary container beside it, sharing its processes, network and
         filesystem. It cannot be removed afterwards — it stays on the pod until the pod is replaced.
       </p>
@@ -95,11 +95,11 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
           type="button"
           onClick={() => void attach()}
           disabled={busy || refused !== null}
-          className="rounded border border-neutral-700 px-2 py-1 text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:text-neutral-600"
+          className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
           {buttonLabel(busy)}
         </button>
-        <label className="text-neutral-400" htmlFor="debug-profile">
+        <label className="text-fg-muted" htmlFor="debug-profile">
           profile
         </label>
         <select
@@ -107,7 +107,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
           aria-label="Debug profile"
           value={profile}
           onChange={handleProfile}
-          className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-neutral-200"
+          className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
         >
           {DEBUG_PROFILES.map((name) => (
             <option key={name} value={name}>
@@ -115,16 +115,16 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
             </option>
           ))}
         </select>
-        <span className="truncate text-neutral-400">{image}</span>
+        <span className="truncate text-fg-muted">{image}</span>
       </div>
       {profile === 'sysadmin' && (
-        <p className="mt-1.5 text-amber-400">
+        <p className="mt-1.5 text-warn">
           sysadmin runs the debug container privileged. general already grants the target&apos;s
           processes, network and filesystem.
         </p>
       )}
-      {refused !== null && <p className="mt-1.5 break-words text-red-400">{refused}</p>}
-      {error !== null && <p className="mt-1.5 break-words text-red-400">{error}</p>}
+      {refused !== null && <p className="mt-1.5 break-words text-error">{refused}</p>}
+      {error !== null && <p className="mt-1.5 break-words text-error">{error}</p>}
     </div>
   );
 }

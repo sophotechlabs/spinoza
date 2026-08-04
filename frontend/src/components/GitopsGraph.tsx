@@ -26,10 +26,10 @@ interface LegendItem {
 }
 
 const LEGEND: LegendItem[] = [
-  { swatch: 'border-green-600 bg-green-950', label: 'Ready' },
-  { swatch: 'border-red-600 bg-red-950', label: 'Not ready or missing' },
-  { swatch: 'border-sky-700 bg-sky-950', label: 'Source, not ready yet' },
-  { swatch: 'border-neutral-600 bg-neutral-800', label: 'Unknown' },
+  { swatch: 'border-ok-emphasis bg-ok-tint', label: 'Ready' },
+  { swatch: 'border-error-emphasis bg-error-tint', label: 'Not ready or missing' },
+  { swatch: 'border-info-line bg-info-tint', label: 'Source, not ready yet' },
+  { swatch: 'border-edge-emphasis bg-surface-active', label: 'Unknown' },
 ];
 
 interface EdgeLegendItem {
@@ -106,7 +106,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
 
   if (overLimit !== null) {
     return (
-      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-neutral-400">
+      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-fg-muted">
         GitOps control plane has {overLimit} nodes — too many to render.
       </div>
     );
@@ -115,11 +115,11 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
   if (flow === null) {
     if (error !== null) {
       return (
-        <div className="flex h-full items-center justify-center text-xs text-red-400">{error}</div>
+        <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
         Loading graph…
       </div>
     );
@@ -130,7 +130,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
       return <LoadFailure what="The GitOps graph" message={partial} />;
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
         No GitOps resources found.
       </div>
     );
@@ -151,7 +151,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
           <Background />
           <Controls />
         </ReactFlow>
-        <div className="pointer-events-none absolute top-2 right-2 z-10 rounded border border-neutral-800 bg-neutral-900/90 px-2 py-1.5 text-[11px] text-neutral-300">
+        <div className="pointer-events-none absolute top-2 right-2 z-10 rounded border border-edge bg-surface-raised/90 px-2 py-1.5 text-[11px] text-fg-soft">
           {LEGEND.map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
               <span className={`h-2.5 w-2.5 rounded border ${item.swatch}`} />

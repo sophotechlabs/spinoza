@@ -50,9 +50,9 @@ describe('InspectOverview', () => {
     );
 
     expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(screen.getByText('True')).toHaveClass('text-green-400');
-    expect(screen.getByText('False')).toHaveClass('text-red-400');
-    expect(screen.getByText('Unknown', { selector: 'span.text-neutral-400' })).toBeInTheDocument();
+    expect(screen.getByText('True')).toHaveClass('text-ok');
+    expect(screen.getByText('False')).toHaveClass('text-error');
+    expect(screen.getByText('Unknown', { selector: 'span.text-fg-muted' })).toBeInTheDocument();
     expect(screen.getByText('all good')).toBeInTheDocument();
   });
 

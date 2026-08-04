@@ -333,7 +333,7 @@ describe('ResourceTable', () => {
     if (!tr) {
       throw new Error('row element not found');
     }
-    expect(tr.className).toContain('bg-neutral-800');
+    expect(tr.className).toContain('bg-surface-active');
   });
 
   it('shows pod CPU and memory from metrics, with a dash when a pod is missing', async () => {
@@ -458,7 +458,7 @@ describe('the selected row', () => {
       throw new Error('row element not found');
     }
 
-    expect(tr.className).toContain('bg-neutral-800');
-    expect(tr.className).not.toContain('hover:bg-neutral-900');
+    expect(tr.className).toContain('bg-surface-active');
+    expect(tr.className).not.toContain('hover:bg-surface-raised');
   });
 });

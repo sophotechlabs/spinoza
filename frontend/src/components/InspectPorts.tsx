@@ -43,27 +43,27 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
   }
 
   return (
-    <section className="border-b border-neutral-800 px-4 py-3">
-      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+    <section className="border-b border-edge px-4 py-3">
+      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-fg-muted uppercase">
         Ports
       </h3>
       <div className="flex flex-col gap-1">
         {ports.map((port) => (
           <div key={`${port.port}-${port.name ?? ''}`} className="flex items-center gap-2">
-            <span className="text-neutral-200">{portLabel(port)}</span>
+            <span className="text-fg">{portLabel(port)}</span>
             <button
               type="button"
               onClick={() => void forward(port.port)}
               disabled={busy !== null}
-              className="ml-auto rounded border border-neutral-700 px-1.5 py-0.5 text-neutral-300 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:text-neutral-600"
+              className="ml-auto rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
             >
               Forward
             </button>
           </div>
         ))}
       </div>
-      {error !== null && <p className="mt-1.5 break-words text-red-400">{error}</p>}
-      {notice !== null && <p className="mt-1.5 text-green-400">{notice}</p>}
+      {error !== null && <p className="mt-1.5 break-words text-error">{error}</p>}
+      {notice !== null && <p className="mt-1.5 text-ok">{notice}</p>}
     </section>
   );
 }

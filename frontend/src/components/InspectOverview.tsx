@@ -8,18 +8,18 @@ interface InspectOverviewProps {
 
 function conditionColor(condition: Condition): string {
   if (condition.status === 'True') {
-    return 'text-green-400';
+    return 'text-ok';
   }
   if (condition.status === 'False') {
-    return 'text-red-400';
+    return 'text-error';
   }
-  return 'text-neutral-400';
+  return 'text-fg-muted';
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-b border-neutral-800 px-4 py-3">
-      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+    <section className="border-b border-edge px-4 py-3">
+      <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-fg-muted uppercase">
         {title}
       </h3>
       {children}
@@ -32,8 +32,8 @@ function Pairs({ pairs }: { pairs: [string, string][] }) {
     <dl className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-3 gap-y-1">
       {pairs.map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="truncate text-neutral-400">{label}</dt>
-          <dd className="break-all text-neutral-200">{value}</dd>
+          <dt className="truncate text-fg-muted">{label}</dt>
+          <dd className="break-all text-fg">{value}</dd>
         </div>
       ))}
     </dl>
@@ -75,12 +75,12 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
             {conditions.map((condition) => (
               <div key={condition.type}>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-neutral-200">{condition.type}</span>
+                  <span className="text-fg">{condition.type}</span>
                   <span className={conditionColor(condition)}>{condition.status}</span>
-                  <span className="ml-auto text-[11px] text-neutral-400">{condition.updated}</span>
+                  <span className="ml-auto text-[11px] text-fg-muted">{condition.updated}</span>
                 </div>
                 {condition.message !== undefined && condition.message !== '' && (
-                  <p className="mt-0.5 break-words text-neutral-400">{condition.message}</p>
+                  <p className="mt-0.5 break-words text-fg-muted">{condition.message}</p>
                 )}
               </div>
             ))}
@@ -94,9 +94,9 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
             {runtimeContainers.map((container) => (
               <div key={container.name} className="flex items-center gap-2">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${containerColor(container)}`} />
-                <span className="truncate text-neutral-200">{container.name}</span>
-                <span className="text-neutral-400">{container.reason}</span>
-                <span className="ml-auto shrink-0 text-neutral-400">
+                <span className="truncate text-fg">{container.name}</span>
+                <span className="text-fg-muted">{container.reason}</span>
+                <span className="ml-auto shrink-0 text-fg-muted">
                   {container.restarts} restarts
                 </span>
               </div>

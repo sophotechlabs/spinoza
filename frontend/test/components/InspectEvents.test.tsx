@@ -47,8 +47,8 @@ describe('InspectEvents', () => {
     render(<InspectEvents namespace="flux-system" uid="pod-uid" />);
 
     expect(await screen.findByText('Pulled')).toBeInTheDocument();
-    expect(screen.getByText('BackOff')).toHaveClass('text-amber-400');
-    expect(screen.getByText('Pulled')).toHaveClass('text-neutral-400');
+    expect(screen.getByText('BackOff')).toHaveClass('text-warn');
+    expect(screen.getByText('Pulled')).toHaveClass('text-fg-muted');
     expect(screen.getByText('seen 5 times')).toBeInTheDocument();
     expect(screen.getAllByText('2026-07-27T09:30:00Z')).toHaveLength(2);
   });

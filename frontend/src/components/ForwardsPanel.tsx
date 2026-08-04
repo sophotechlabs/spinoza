@@ -4,9 +4,9 @@ import { useForwardsStore } from '../store/forwards';
 
 function stateColor(state: string): string {
   if (state === 'failed') {
-    return 'text-red-400';
+    return 'text-error';
   }
-  return 'text-green-400';
+  return 'text-ok';
 }
 
 interface ForwardsPanelProps {
@@ -30,7 +30,7 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
 
   if (forwards.length === 0) {
     return (
-      <div className="p-3 text-neutral-400">
+      <div className="p-3 text-fg-muted">
         No active forwards. Open a Pod or Service and forward a port.
       </div>
     );
@@ -38,15 +38,15 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
 
   return (
     <div className="p-2">
-      {error !== null && <p className="mb-1.5 text-red-400">{error}</p>}
+      {error !== null && <p className="mb-1.5 text-error">{error}</p>}
       {forwards.map((forward) => (
-        <div key={forward.id} className="flex items-center gap-2 border-b border-neutral-800 py-1">
+        <div key={forward.id} className="flex items-center gap-2 border-b border-edge py-1">
           <span className={stateColor(forward.state)}>●</span>
-          <span className="truncate text-neutral-300">
+          <span className="truncate text-fg-soft">
             {forward.kind.toLowerCase()}/{forward.namespace}/{forward.name}
           </span>
           {forward.state === 'failed' && (
-            <span className="truncate text-red-400" title={forward.error}>
+            <span className="truncate text-error" title={forward.error}>
               {forward.error}
             </span>
           )}
@@ -55,16 +55,16 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
               href={`http://127.0.0.1:${forward.localPort}`}
               target="_blank"
               rel="noreferrer"
-              className="text-neutral-100 hover:underline"
+              className="text-fg-strong hover:underline"
             >
               127.0.0.1:{forward.localPort}
             </a>
           )}
-          <span className="text-neutral-400">→ {forward.remotePort}</span>
+          <span className="text-fg-muted">→ {forward.remotePort}</span>
           <button
             type="button"
             onClick={() => void stop(forward.id)}
-            className="ml-auto rounded border border-neutral-700 px-1.5 text-neutral-300 hover:bg-neutral-800"
+            className="ml-auto rounded border border-edge-strong px-1.5 text-fg-soft hover:bg-surface-active"
           >
             Stop
           </button>

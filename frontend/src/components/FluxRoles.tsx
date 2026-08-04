@@ -62,15 +62,15 @@ function kindResources(map: Map<string, FluxResource[]>, kind: string): FluxReso
 
 function tileBorder(ready: number, reporting: number, count: number): string {
   if (count === 0) {
-    return 'border-neutral-800';
+    return 'border-edge';
   }
   if (allReady(ready, reporting, count)) {
-    return 'border-green-800';
+    return 'border-ok-line-strong';
   }
   if (reporting === 0) {
-    return 'border-neutral-800';
+    return 'border-edge';
   }
-  return 'border-amber-800';
+  return 'border-warn-line-strong';
 }
 
 function KindTile({
@@ -89,12 +89,12 @@ function KindTile({
     <button
       type="button"
       onClick={onSelect}
-      className={`rounded border ${tileBorder(ready, reporting, count)} bg-neutral-900 p-2.5 text-left hover:bg-neutral-800`}
+      className={`rounded border ${tileBorder(ready, reporting, count)} bg-surface-raised p-2.5 text-left hover:bg-surface-active`}
     >
-      <div className="truncate text-sm font-semibold text-neutral-100">{kind}</div>
-      <div className="truncate text-[10px] text-neutral-400">{groupOf(kind)}</div>
-      <div className="mt-2 text-xl font-semibold text-neutral-100">{count}</div>
-      <div className="mt-0.5 text-[10px] text-neutral-400">
+      <div className="truncate text-sm font-semibold text-fg-strong">{kind}</div>
+      <div className="truncate text-[10px] text-fg-muted">{groupOf(kind)}</div>
+      <div className="mt-2 text-xl font-semibold text-fg-strong">{count}</div>
+      <div className="mt-0.5 text-[10px] text-fg-muted">
         {readySummary(ready, reporting, count)}
       </div>
     </button>
@@ -114,17 +114,13 @@ function KindList({
 }) {
   return (
     <div className="h-full overflow-auto p-3">
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-2 text-xs text-neutral-400 hover:text-neutral-200"
-      >
+      <button type="button" onClick={onBack} className="mb-2 text-xs text-fg-muted hover:text-fg">
         ← Flux Resources
       </button>
-      <div className="mb-2 text-xs text-neutral-400">
+      <div className="mb-2 text-xs text-fg-muted">
         {kind} · {resources.length} resources
       </div>
-      <div className="border-t border-neutral-800">
+      <div className="border-t border-edge">
         {resources.map((resource) => (
           <button
             type="button"
@@ -132,19 +128,19 @@ function KindList({
             onClick={() => {
               onSelect(resource);
             }}
-            className="flex w-full items-center gap-2 border-b border-neutral-800 px-2 py-1.5 text-left hover:bg-neutral-900"
+            className="flex w-full items-center gap-2 border-b border-edge px-2 py-1.5 text-left hover:bg-surface-raised"
             title={resource.message}
           >
             <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot(resource)}`} />
-            <span className="text-neutral-400">{resource.namespace}/</span>
-            <span className="truncate text-neutral-100">{resource.name}</span>
+            <span className="text-fg-muted">{resource.namespace}/</span>
+            <span className="truncate text-fg-strong">{resource.name}</span>
             <span className={`ml-2 shrink-0 text-[11px] ${statusText(resource)}`}>
               {statusLabel(resource)}
             </span>
-            <span className="ml-auto shrink-0 truncate pl-4 text-[11px] text-neutral-400">
+            <span className="ml-auto shrink-0 truncate pl-4 text-[11px] text-fg-muted">
               {resource.revision}
             </span>
-            <span className="shrink-0 text-[11px] text-neutral-400">
+            <span className="shrink-0 text-[11px] text-fg-muted">
               {created(resource.createdAt)}
             </span>
           </button>
@@ -165,11 +161,11 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
   if (data === null) {
     if (error !== null) {
       return (
-        <div className="flex h-full items-center justify-center text-xs text-red-400">{error}</div>
+        <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
         Loading Flux resources…
       </div>
     );
@@ -194,7 +190,7 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
     <div className="h-full overflow-auto p-3">
       {SECTIONS.map((section) => (
         <section key={section.name} className="mb-5">
-          <h2 className="mb-2 px-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase">
+          <h2 className="mb-2 px-1 text-xs font-semibold tracking-wide text-fg-soft uppercase">
             {section.name}
           </h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

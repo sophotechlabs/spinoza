@@ -28,12 +28,12 @@ function noticeFor(action: FluxAction): string {
 
 function noticeClass(state: ReconcileState | null): string {
   if (state === 'failed') {
-    return 'mt-1.5 break-words text-red-400';
+    return 'mt-1.5 break-words text-error';
   }
   if (state === 'requested' || state === 'running') {
-    return 'mt-1.5 break-words text-neutral-400';
+    return 'mt-1.5 break-words text-fg-muted';
   }
-  return 'mt-1.5 break-words text-green-400';
+  return 'mt-1.5 break-words text-ok';
 }
 
 export default function InspectActions({ target, suspended, onDone }: InspectActionsProps) {
@@ -95,13 +95,13 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
   const disabled = busy !== null;
 
   return (
-    <div className="shrink-0 border-b border-neutral-800 px-3 py-2 text-xs">
+    <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => void run('reconcile')}
           disabled={disabled}
-          className="rounded border border-neutral-700 px-2 py-1 text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:text-neutral-600"
+          className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
           Reconcile
         </button>
@@ -110,7 +110,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
             type="button"
             onClick={() => void run('resume')}
             disabled={disabled}
-            className="rounded border border-green-900 px-2 py-1 text-green-400 hover:bg-green-950 disabled:cursor-not-allowed disabled:text-neutral-600"
+            className="rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Resume
           </button>
@@ -120,15 +120,15 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
             type="button"
             onClick={() => void run('suspend')}
             disabled={disabled}
-            className="rounded border border-amber-900 px-2 py-1 text-amber-400 hover:bg-amber-950 disabled:cursor-not-allowed disabled:text-neutral-600"
+            className="rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Suspend
           </button>
         )}
-        {suspended === true && <span className="text-amber-500">suspended</span>}
-        {busy !== null && <span className="text-neutral-400">working…</span>}
+        {suspended === true && <span className="text-warn-muted">suspended</span>}
+        {busy !== null && <span className="text-fg-muted">working…</span>}
       </div>
-      {error !== null && <p className="mt-1.5 break-words text-red-400">{error}</p>}
+      {error !== null && <p className="mt-1.5 break-words text-error">{error}</p>}
       {notice !== null && <p className={noticeClass(state)}>{notice}</p>}
     </div>
   );

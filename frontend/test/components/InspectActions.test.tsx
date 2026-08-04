@@ -203,7 +203,7 @@ describe('InspectActions', () => {
       {},
       { timeout: 5000 },
     );
-    expect(settled.className).toContain('text-green-400');
+    expect(settled.className).toContain('text-ok');
     expect(onDone).toHaveBeenCalledTimes(2);
   });
 
@@ -219,7 +219,7 @@ describe('InspectActions', () => {
       {},
       { timeout: 5000 },
     );
-    expect(settled.className).toContain('text-red-400');
+    expect(settled.className).toContain('text-error');
   });
 
   it('stops following once the target changes', async () => {

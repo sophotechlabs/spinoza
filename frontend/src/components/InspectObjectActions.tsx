@@ -19,10 +19,10 @@ interface InspectObjectActionsProps {
 }
 
 const buttonClass =
-  'rounded border border-neutral-700 px-2 py-1 text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:text-neutral-600';
+  'rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint';
 
 const dangerClass =
-  'rounded border border-amber-900 px-2 py-1 text-amber-400 hover:bg-amber-950 disabled:cursor-not-allowed disabled:text-neutral-600';
+  'rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -33,15 +33,15 @@ function errorMessage(err: unknown): string {
 
 function outcomeClass(outcome: string): string {
   if (outcome === 'blocked') {
-    return 'text-amber-400';
+    return 'text-warn';
   }
   if (outcome === 'failed') {
-    return 'text-red-400';
+    return 'text-error';
   }
   if (outcome === 'skipped') {
-    return 'text-neutral-400';
+    return 'text-fg-muted';
   }
-  return 'text-green-400';
+  return 'text-ok';
 }
 
 function PodList({ pods }: { pods: PodOutcome[] }) {
@@ -50,10 +50,8 @@ function PodList({ pods }: { pods: PodOutcome[] }) {
       {pods.map((pod) => (
         <li key={`${pod.namespace}/${pod.name}`} className="flex gap-2 py-0.5">
           <span className={`w-14 shrink-0 ${outcomeClass(pod.outcome)}`}>{pod.outcome}</span>
-          <span className="truncate text-neutral-300">{pod.name}</span>
-          {pod.reason !== undefined && (
-            <span className="truncate text-neutral-400">{pod.reason}</span>
-          )}
+          <span className="truncate text-fg-soft">{pod.name}</span>
+          {pod.reason !== undefined && <span className="truncate text-fg-muted">{pod.reason}</span>}
         </li>
       ))}
     </ul>
@@ -128,11 +126,11 @@ export default function InspectObjectActions({
   const confirmDisabled = busy || (blocked > 0 && !force);
 
   return (
-    <div className="shrink-0 border-b border-neutral-800 px-3 py-2 text-xs">
+    <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-2">
         {canScale(target) && (
           <>
-            <label className="text-neutral-400" htmlFor="replica-count">
+            <label className="text-fg-muted" htmlFor="replica-count">
               replicas
             </label>
             <input
@@ -143,7 +141,7 @@ export default function InspectObjectActions({
               onChange={(event) => {
                 setReplicas(event.target.value);
               }}
-              className="w-16 rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-neutral-200"
+              className="w-16 rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
             />
             <button type="button" onClick={handleScale} disabled={busy} className={buttonClass}>
               Scale
@@ -175,7 +173,7 @@ export default function InspectObjectActions({
             type="button"
             onClick={() => void run('uncordon')}
             disabled={busy}
-            className="rounded border border-green-900 px-2 py-1 text-green-400 hover:bg-green-950 disabled:cursor-not-allowed disabled:text-neutral-600"
+            className="rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Uncordon
           </button>
@@ -190,16 +188,16 @@ export default function InspectObjectActions({
             Drain
           </button>
         )}
-        {cordoned && <span className="text-amber-500">cordoned</span>}
-        {busy && <span className="text-neutral-400">working…</span>}
+        {cordoned && <span className="text-warn-muted">cordoned</span>}
+        {busy && <span className="text-fg-muted">working…</span>}
       </div>
 
       {plan !== null && (
-        <div className="mt-2 rounded border border-neutral-800 bg-neutral-900/60 p-2">
-          <p className="text-neutral-300">{plan.message}</p>
+        <div className="mt-2 rounded border border-edge bg-surface-raised/60 p-2">
+          <p className="text-fg-soft">{plan.message}</p>
           <PodList pods={plan.pods ?? []} />
           {blocked > 0 && (
-            <label className="mt-1.5 flex items-center gap-1.5 text-amber-400">
+            <label className="mt-1.5 flex items-center gap-1.5 text-warn">
               <input
                 type="checkbox"
                 checked={force}
@@ -233,8 +231,8 @@ export default function InspectObjectActions({
         </div>
       )}
 
-      {error !== null && <p className="mt-1.5 break-words text-red-400">{error}</p>}
-      {notice !== null && <p className="mt-1.5 break-words text-green-400">{notice}</p>}
+      {error !== null && <p className="mt-1.5 break-words text-error">{error}</p>}
+      {notice !== null && <p className="mt-1.5 break-words text-ok">{notice}</p>}
     </div>
   );
 }

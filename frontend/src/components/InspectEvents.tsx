@@ -11,9 +11,9 @@ interface InspectEventsProps {
 
 function eventColor(type: string): string {
   if (type === 'Warning') {
-    return 'text-amber-400';
+    return 'text-warn';
   }
-  return 'text-neutral-400';
+  return 'text-fg-muted';
 }
 
 function errorMessage(err: unknown): string {
@@ -60,15 +60,15 @@ export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
   }, [namespace, uid]);
 
   if (error !== null) {
-    return <div className="p-4 text-xs text-red-400">{error}</div>;
+    return <div className="p-4 text-xs text-error">{error}</div>;
   }
 
   if (events === null) {
-    return <div className="p-4 text-xs text-neutral-400">Loading events…</div>;
+    return <div className="p-4 text-xs text-fg-muted">Loading events…</div>;
   }
 
   if (events.length === 0) {
-    return <div className="p-4 text-xs text-neutral-400">No events for this object.</div>;
+    return <div className="p-4 text-xs text-fg-muted">No events for this object.</div>;
   }
 
   return (
@@ -76,16 +76,16 @@ export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
       {events.map((event, index) => (
         <article
           key={`${event.reason}-${event.lastSeen}-${index}`}
-          className="border-b border-neutral-800 px-4 py-2"
+          className="border-b border-edge px-4 py-2"
         >
           <div className="flex items-baseline gap-2">
             <span className={eventColor(event.type)}>{event.reason}</span>
-            <span className="text-neutral-400">{event.source}</span>
-            <span className="ml-auto shrink-0 text-neutral-400">{event.lastSeen}</span>
+            <span className="text-fg-muted">{event.source}</span>
+            <span className="ml-auto shrink-0 text-fg-muted">{event.lastSeen}</span>
           </div>
-          <p className="mt-0.5 break-words text-neutral-300">{event.message}</p>
+          <p className="mt-0.5 break-words text-fg-soft">{event.message}</p>
           {event.count > 1 && (
-            <p className="mt-0.5 text-[11px] text-neutral-400">seen {event.count} times</p>
+            <p className="mt-0.5 text-[11px] text-fg-muted">seen {event.count} times</p>
           )}
         </article>
       ))}

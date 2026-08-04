@@ -59,9 +59,9 @@ function ResourceRow({
   }
 
   return (
-    <tr className="border-t border-neutral-800 hover:bg-neutral-900">
-      <td className="truncate px-2 py-1 text-neutral-400">{resource.kind}</td>
-      <td className="truncate px-2 py-1 text-neutral-100">
+    <tr className="border-t border-edge hover:bg-surface-raised">
+      <td className="truncate px-2 py-1 text-fg-muted">{resource.kind}</td>
+      <td className="truncate px-2 py-1 text-fg-strong">
         <button
           type="button"
           onClick={handleSelect}
@@ -70,21 +70,21 @@ function ResourceRow({
           {resource.name}
         </button>
       </td>
-      <td className="truncate px-2 py-1 text-neutral-400">{resource.namespace}</td>
+      <td className="truncate px-2 py-1 text-fg-muted">{resource.namespace}</td>
       <td className="truncate px-2 py-1" title={resource.message}>
         <span className={`inline-flex items-center gap-1.5 ${statusText(resource)}`}>
           <span className={`h-2 w-2 rounded-full ${statusDot(resource)}`} />
           {statusLabel(resource)}
         </span>
       </td>
-      <td className="truncate px-2 py-1 text-neutral-400" title={resource.revision}>
+      <td className="truncate px-2 py-1 text-fg-muted" title={resource.revision}>
         {resource.revision}
       </td>
       <td className={`truncate px-2 py-1 ${latestColor(resource)}`} title={latestTitle(resource)}>
         {resource.latest}
       </td>
-      <td className="truncate px-2 py-1 text-neutral-400">{resource.source}</td>
-      <td className="truncate px-2 py-1 text-neutral-400">{created(resource.createdAt)}</td>
+      <td className="truncate px-2 py-1 text-fg-muted">{resource.source}</td>
+      <td className="truncate px-2 py-1 text-fg-muted">{created(resource.createdAt)}</td>
     </tr>
   );
 }
@@ -109,11 +109,11 @@ export default function FluxList({ onSelect }: FluxListProps) {
   if (data === null) {
     if (error !== null) {
       return (
-        <div className="flex h-full items-center justify-center text-xs text-red-400">{error}</div>
+        <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
         Loading Flux resources…
       </div>
     );
@@ -124,7 +124,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
       return <LoadFailure what="Flux resources" message={data.error} />;
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
         No Flux resources found.
       </div>
     );
@@ -154,8 +154,8 @@ export default function FluxList({ onSelect }: FluxListProps) {
               />
             ))}
           </colgroup>
-          <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
-            <tr className="border-b border-neutral-800">
+          <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">
+            <tr className="border-b border-edge">
               {table.getFlatHeaders().map((header) => (
                 <th
                   key={header.id}
@@ -167,7 +167,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
                     aria-hidden="true"
                     onMouseDown={header.getResizeHandler()}
                     onTouchStart={header.getResizeHandler()}
-                    className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-neutral-600 opacity-0 select-none hover:opacity-100"
+                    className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-grip opacity-0 select-none hover:opacity-100"
                   />
                 </th>
               ))}
@@ -179,10 +179,10 @@ export default function FluxList({ onSelect }: FluxListProps) {
                 <tr>
                   <td
                     colSpan={columnCount}
-                    className="bg-neutral-900/50 px-2 pt-3 pb-1 text-xs font-semibold tracking-wide text-neutral-300 uppercase"
+                    className="bg-surface-raised/50 px-2 pt-3 pb-1 text-xs font-semibold tracking-wide text-fg-soft uppercase"
                   >
                     {group.name}
-                    <span className="ml-2 text-[11px] font-normal text-neutral-400">
+                    <span className="ml-2 text-[11px] font-normal text-fg-muted">
                       {groupSummary(group)}
                     </span>
                   </td>

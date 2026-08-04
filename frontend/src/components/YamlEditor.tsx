@@ -22,7 +22,7 @@ export default function YamlEditor({ value, path, readOnly, onChange }: YamlEdit
       path={path}
       value={value}
       onChange={handleChange}
-      loading={<div className="p-3 text-xs text-neutral-400">Loading editor…</div>}
+      loading={<div className="p-3 text-xs text-fg-muted">Loading editor…</div>}
       options={{
         readOnly,
         minimap: { enabled: false },

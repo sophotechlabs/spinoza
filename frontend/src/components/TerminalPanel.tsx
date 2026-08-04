@@ -71,12 +71,10 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
   }, [host, namespace, pod, container]);
 
   return (
-    <div className="flex h-56 flex-col border-t border-neutral-800 bg-neutral-950">
+    <div className="flex h-56 flex-col border-t border-edge bg-surface">
       <div ref={setHost} className="min-h-0 flex-1" data-testid="terminal-host" />
       {ended !== '' && (
-        <div className="border-t border-neutral-800 px-2 py-1 text-[11px] text-amber-400">
-          {ended}
-        </div>
+        <div className="border-t border-edge px-2 py-1 text-[11px] text-warn">{ended}</div>
       )}
     </div>
   );

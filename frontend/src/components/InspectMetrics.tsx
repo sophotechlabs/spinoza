@@ -122,7 +122,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
   return (
     <div className="overflow-y-auto p-3 text-xs">
       <div className="flex items-center gap-2">
-        <label className="text-neutral-400" htmlFor="metric-range">
+        <label className="text-fg-muted" htmlFor="metric-range">
           range
         </label>
         <select
@@ -130,7 +130,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           aria-label="Metric range"
           value={span}
           onChange={handleSpan}
-          className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-neutral-200"
+          className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
         >
           {RANGES.map((name) => (
             <option key={name} value={name}>
@@ -139,13 +139,13 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           ))}
         </select>
         {history?.source !== undefined && (
-          <span className="ml-auto truncate text-[10px] text-neutral-400">{history.source}</span>
+          <span className="ml-auto truncate text-[10px] text-fg-muted">{history.source}</span>
         )}
       </div>
 
-      {error !== null && <p className="mt-3 break-words text-red-400">{error}</p>}
+      {error !== null && <p className="mt-3 break-words text-error">{error}</p>}
       {empty && (
-        <p className="mt-3 text-neutral-400">
+        <p className="mt-3 text-fg-muted">
           Prometheus has no samples for this pod over the last {span}.
         </p>
       )}
@@ -153,8 +153,8 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
       {history !== null && !empty && error === null && (
         <div className="mt-3">
           <div className="flex items-baseline justify-between">
-            <span className="text-neutral-300">CPU</span>
-            <span className="text-neutral-400">peak {formatCpu(peak(cpu))}</span>
+            <span className="text-fg-soft">CPU</span>
+            <span className="text-fg-muted">peak {formatCpu(peak(cpu))}</span>
           </div>
           <Chart
             points={cpu}
@@ -165,8 +165,8 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           />
 
           <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-neutral-300">Memory</span>
-            <span className="text-neutral-400">peak {formatMemory(peak(memory))}</span>
+            <span className="text-fg-soft">Memory</span>
+            <span className="text-fg-muted">peak {formatMemory(peak(memory))}</span>
           </div>
           <Chart
             points={memory}
