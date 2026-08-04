@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import type { ConnectionStatus } from '../lib/feed';
-import SettingsDialog from './SettingsDialog';
 import type { View } from '../lib/types';
 import ContextPicker from './ContextPicker';
 
@@ -9,6 +7,8 @@ interface TopBarProps {
   view?: View;
   onReconnect?: () => void;
   onContextChanged?: () => void;
+  onOpenPalette?: () => void;
+  onOpenSettings?: () => void;
 }
 
 function statusColor(status: ConnectionStatus): string {
@@ -21,8 +21,25 @@ function statusColor(status: ConnectionStatus): string {
   return 'bg-error-solid';
 }
 
-export default function TopBar({ status, view, onReconnect, onContextChanged }: TopBarProps) {
-  const [settingsOpen, setSettingsOpen] = useState(false);
+export default function TopBar({
+  status,
+  view,
+  onReconnect,
+  onContextChanged,
+  onOpenPalette,
+  onOpenSettings,
+}: TopBarProps) {
+  function handlePalette() {
+    if (onOpenPalette) {
+      onOpenPalette();
+    }
+  }
+
+  function handleSettings() {
+    if (onOpenSettings) {
+      onOpenSettings();
+    }
+  }
 
   function handleReconnect() {
     if (onReconnect) {
@@ -47,6 +64,14 @@ export default function TopBar({ status, view, onReconnect, onContextChanged }: 
         <span className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft">{view}</span>
       )}
       <div className="ml-auto flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handlePalette}
+          title="Search resources, views and recent objects"
+          className="rounded border border-edge-strong px-2 py-0.5 text-fg-soft hover:bg-surface-active"
+        >
+          Search <span className="text-fg-muted">Ctrl K</span>
+        </button>
         <span className="flex items-center gap-1.5 text-fg-muted">
           <span
             data-testid="connection-dot"
@@ -64,20 +89,12 @@ export default function TopBar({ status, view, onReconnect, onContextChanged }: 
         <button
           type="button"
           aria-label="Settings"
-          onClick={() => {
-            setSettingsOpen(true);
-          }}
+          onClick={handleSettings}
           className="rounded border border-edge-strong px-1.5 py-0.5 text-base leading-none text-fg hover:bg-surface-active"
         >
           ⚙
         </button>
       </div>
-      <SettingsDialog
-        open={settingsOpen}
-        onClose={() => {
-          setSettingsOpen(false);
-        }}
-      />
     </header>
   );
 }

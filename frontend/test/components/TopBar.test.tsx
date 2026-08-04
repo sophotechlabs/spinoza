@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
@@ -90,29 +90,34 @@ describe('TopBar context switch', () => {
   });
 });
 
-describe('the settings dialog from the top bar', () => {
-  const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
-    this.open = true;
-  });
-  const close = vi.fn(function close(this: HTMLDialogElement) {
-    this.open = false;
+describe('the top bar entry points', () => {
+  it('asks the app to open settings from the gear', async () => {
+    const user = userEvent.setup();
+    const onOpenSettings = vi.fn();
+    render(<TopBar status="connected" onOpenSettings={onOpenSettings} />);
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
-  beforeEach(() => {
-    showModal.mockClear();
-    close.mockClear();
-    HTMLDialogElement.prototype.showModal = showModal;
-    HTMLDialogElement.prototype.close = close;
+  it('asks the app to open the palette from the search button', async () => {
+    const user = userEvent.setup();
+    const onOpenPalette = vi.fn();
+    render(<TopBar status="connected" onOpenPalette={onOpenPalette} />);
+
+    await user.click(screen.getByRole('button', { name: /Search/ }));
+
+    expect(onOpenPalette).toHaveBeenCalledTimes(1);
   });
 
-  it('opens from the gear and closes again', async () => {
+  it('does not blow up when neither handler is wired', async () => {
     const user = userEvent.setup();
     render(<TopBar status="connected" />);
 
     await user.click(screen.getByRole('button', { name: 'Settings' }));
-    expect(showModal).toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /Search/ }));
 
-    await user.click(screen.getByRole('button', { name: 'Close' }));
-    expect(close).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
   });
 });

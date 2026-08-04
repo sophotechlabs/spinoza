@@ -1,5 +1,12 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import type { FluxResource, GraphNode, ResourceDescriptor, Row, View } from './lib/types';
+import type {
+  FluxResource,
+  GraphNode,
+  ObjectRef,
+  ResourceDescriptor,
+  Row,
+  View,
+} from './lib/types';
 import { useResourceFeed } from './lib/feed';
 import { fetchContexts } from './lib/contexts';
 import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
@@ -7,6 +14,8 @@ import type { Selection } from './lib/refs';
 import { refFromFlux, refFromNode, refFromRow, useRowForRef } from './lib/refs';
 import { bumpClusterEpoch, useClusterEpoch } from './store/cluster';
 import { clearForwards } from './lib/portForward';
+import { focusFilter, useHotkeys } from './lib/hotkeys';
+import { clearRecents, rememberObject } from './store/recents';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -17,6 +26,9 @@ import FluxList from './components/FluxList';
 import FluxOverview from './components/FluxOverview';
 import FluxRoles from './components/FluxRoles';
 import Loading from './components/Loading';
+import SettingsDialog from './components/SettingsDialog';
+import CommandPalette from './components/CommandPalette';
+import type { Section } from './components/SettingsDialog';
 
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 
@@ -29,6 +41,9 @@ export default function App() {
   const [contextName, setContextName] = useState('');
   const subSeq = useRef(0);
   const [subId, setSubId] = useState(FIRST_SUB_ID);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
 
   const key = resourceKey(route.resource);
   const [lastKey, setLastKey] = useState(key);
@@ -100,6 +115,36 @@ export default function App() {
     navigate({ ...route, selection: null });
   }
 
+  function openSettings(section: Section) {
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  }
+
+  function handleEscape() {
+    if (paletteOpen) {
+      setPaletteOpen(false);
+      return;
+    }
+    if (settingsOpen) {
+      setSettingsOpen(false);
+      return;
+    }
+    if (route.selection !== null) {
+      clearSelection();
+    }
+  }
+
+  useHotkeys({
+    palette: () => {
+      setPaletteOpen(true);
+    },
+    filter: focusFilter,
+    help: () => {
+      openSettings('Keyboard');
+    },
+    close: handleEscape,
+  });
+
   function handleSelectResource(descriptor: ResourceDescriptor) {
     navigate({
       context: route.context,
@@ -117,6 +162,7 @@ export default function App() {
   function handleContextChanged() {
     navigate({ context: '', view: route.view, resource: null, selection: null });
     setContextName('');
+    clearRecents();
     clearForwards();
     bumpClusterEpoch();
     feed.reconnect();
@@ -126,16 +172,23 @@ export default function App() {
     navigate({ ...route, view: next, selection: null });
   }
 
+  function remember(ref: ObjectRef | null) {
+    if (ref !== null) {
+      rememberObject(ref);
+    }
+    navigate({ ...route, selection: ref });
+  }
+
   function handleSelectRow(row: Row) {
-    navigate({ ...route, selection: refFromRow(active, row) });
+    remember(refFromRow(active, row));
   }
 
   function handleSelectNode(node: GraphNode) {
-    navigate({ ...route, selection: refFromNode(node) });
+    remember(refFromNode(node));
   }
 
   function handleSelectFlux(resource: FluxResource) {
-    navigate({ ...route, selection: refFromFlux(resource) });
+    remember(refFromFlux(resource));
   }
 
   let mainArea = (
@@ -170,6 +223,12 @@ export default function App() {
         view={route.view}
         onReconnect={feed.reconnect}
         onContextChanged={handleContextChanged}
+        onOpenPalette={() => {
+          setPaletteOpen(true);
+        }}
+        onOpenSettings={() => {
+          openSettings('Appearance');
+        }}
       />
       <div className="flex min-h-0 flex-1">
         <Sidebar
@@ -189,6 +248,22 @@ export default function App() {
         </PanelLayout>
       </div>
       <Toasts />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => {
+          setPaletteOpen(false);
+        }}
+        onSelectView={handleSelectView}
+        onSelectResource={handleSelectResource}
+        onSelectObject={remember}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        section={settingsSection}
+        onClose={() => {
+          setSettingsOpen(false);
+        }}
+      />
     </div>
   );
 }

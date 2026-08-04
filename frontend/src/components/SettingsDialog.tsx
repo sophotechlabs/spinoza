@@ -6,13 +6,15 @@ import type { LogView } from '../lib/settings';
 import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '../store/theme';
 import { useLogView, useSettingsStore } from '../store/settings';
 import { usePanelsStore } from '../store/panels';
+import { HOTKEYS } from '../lib/hotkeys';
 
-const SECTIONS = ['Appearance', 'Logs', 'Panels'] as const;
+const SECTIONS = ['Appearance', 'Logs', 'Panels', 'Keyboard'] as const;
 
-type Section = (typeof SECTIONS)[number];
+export type Section = (typeof SECTIONS)[number];
 
 interface SettingsDialogProps {
   open: boolean;
+  section?: Section;
   onClose: () => void;
 }
 
@@ -44,10 +46,19 @@ function Row({
   );
 }
 
-export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
+export default function SettingsDialog({
+  open,
+  section: wanted = 'Appearance',
+  onClose,
+}: SettingsDialogProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const [section, setSection] = useState<Section>('Appearance');
+  const [section, setSection] = useState<Section>(wanted);
+  const [lastWanted, setLastWanted] = useState(wanted);
+  if (wanted !== lastWanted) {
+    setLastWanted(wanted);
+    setSection(wanted);
+  }
   const preference = useThemePreference();
   const setPreference = useThemeStore((state) => state.setPreference);
   const logView = useLogView();
@@ -270,6 +281,23 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 ))}
               </select>
             </Row>
+          )}
+          {section === 'Keyboard' && (
+            <table className="w-full text-left">
+              <caption className="sr-only">Keyboard shortcuts</caption>
+              <tbody>
+                {HOTKEYS.map((hotkey) => (
+                  <tr key={hotkey.keys} className="border-b border-edge last:border-b-0">
+                    <th scope="row" className="py-2 pr-4 font-normal text-fg-muted">
+                      <kbd className="rounded border border-edge-strong px-1.5 py-0.5 text-fg">
+                        {hotkey.keys}
+                      </kbd>
+                    </th>
+                    <td className="py-2 text-fg">{hotkey.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
           {section === 'Panels' && (
             <Row

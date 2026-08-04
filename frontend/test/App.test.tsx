@@ -169,6 +169,7 @@ vi.mock('../src/components/InspectLogs', () => ({
 
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
+import { clearRecents } from '../src/store/recents';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
 
 const podDescriptor = makeDescriptor({
@@ -816,5 +817,209 @@ describe('a selection that outlives its row', () => {
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('helmreleases:apps/podinfo');
     expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('the command palette and shortcuts', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+    clearRecents();
+    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+      this.open = false;
+    };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearRecents();
+    resetStore();
+  });
+
+  function press(key: string, init: KeyboardEventInit = {}): void {
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...init }));
+    });
+  }
+
+  it('opens on Ctrl K and jumps to the chosen kind', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    press('k', { ctrlKey: true });
+
+    await user.click(await screen.findByRole('button', { name: /Deployment/ }));
+
+    expect(await screen.findByLabelText('Filter by name')).toBeInTheDocument();
+    expect(feedMocks.subscribe).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ resource: 'deployments' }),
+      '',
+    );
+  });
+
+  it('switches view from the palette', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    press('k', { ctrlKey: true });
+    await user.click(await screen.findByRole('button', { name: /GitOps · Status tiles/ }));
+
+    expect(await screen.findByTestId('flux-overview')).toBeInTheDocument();
+  });
+
+  it('opens the search button in the top bar', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /Search/ }));
+
+    expect(await screen.findByLabelText(/Search resources/)).toBeInTheDocument();
+  });
+
+  it('lists a visited object as recent and reopens it', async () => {
+    const user = userEvent.setup();
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    press('k', { ctrlKey: true });
+
+    expect(await screen.findByRole('button', { name: /prod\/pod-a/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /prod\/pod-a/ }));
+    expect(await screen.findByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+  });
+
+  it('shows the shortcut list on ?', async () => {
+    render(<App />);
+
+    press('?');
+
+    expect(await screen.findByText('Open the command palette')).toBeInTheDocument();
+  });
+
+  it('opens settings from the gear at the appearance section', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(await screen.findByLabelText('Theme preference')).toBeInTheDocument();
+  });
+
+  it('closes settings again from its own Close button', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    await screen.findByLabelText('Theme preference');
+
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    expect(dialog).toHaveAttribute('open');
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => {
+      expect(dialog).not.toHaveAttribute('open');
+    });
+  });
+
+  it('jumps to the filter on /', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    const filter = await screen.findByLabelText('Filter by name');
+
+    press('/');
+
+    expect(document.activeElement).toBe(filter);
+  });
+
+  it('closes the palette on Escape before touching the selection', async () => {
+    const user = userEvent.setup();
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    press('k', { ctrlKey: true });
+    await screen.findByLabelText(/Search resources/);
+
+    press('Escape');
+
+    expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+  });
+
+  it('closes the shortcut list on Escape before touching the selection', async () => {
+    const user = userEvent.setup();
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    press('?');
+    await screen.findByText('Open the command palette');
+
+    press('Escape');
+
+    expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+  });
+
+  it('clears the selection on Escape once nothing is open', async () => {
+    const user = userEvent.setup();
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+
+    press('Escape');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+    });
+  });
+
+  it('does nothing on Escape with nothing open and nothing selected', () => {
+    render(<App />);
+
+    press('Escape');
+
+    expect(screen.getByText('connected')).toBeInTheDocument();
+  });
+
+  it('forgets recent objects when the cluster changes', async () => {
+    const user = userEvent.setup();
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+
+    await user.click(screen.getByTestId('context-changed'));
+    press('k', { ctrlKey: true });
+
+    await screen.findByLabelText(/Search resources/);
+    expect(screen.queryByRole('button', { name: /prod\/pod-a/ })).not.toBeInTheDocument();
   });
 });

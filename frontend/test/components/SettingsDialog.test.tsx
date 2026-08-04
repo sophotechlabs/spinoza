@@ -232,3 +232,21 @@ describe('importing a theme', () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"id": "dark"'));
   });
 });
+
+describe('the keyboard section', () => {
+  it('opens straight there when the app asks for it', () => {
+    render(<SettingsDialog open section="Keyboard" onClose={vi.fn()} />);
+
+    expect(screen.getByText('Open the command palette')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl K')).toBeInTheDocument();
+  });
+
+  it('follows the app when it asks for a different section', () => {
+    const view = render(<SettingsDialog open section="Appearance" onClose={vi.fn()} />);
+    expect(screen.getByLabelText('Theme preference')).toBeInTheDocument();
+
+    view.rerender(<SettingsDialog open section="Keyboard" onClose={vi.fn()} />);
+
+    expect(screen.getByText('Open the command palette')).toBeInTheDocument();
+  });
+});

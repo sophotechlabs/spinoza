@@ -23,6 +23,7 @@ import { cpuFromMilli, memFromMi } from '../lib/units';
 import { useElementWidth } from '../lib/useElementWidth';
 import { useNow } from '../lib/useNow';
 import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
+import { FILTER_INPUT_ID } from '../lib/hotkeys';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
 import StaleBanner from './StaleBanner';
@@ -343,6 +344,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
       )}
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface px-2 py-1.5 text-xs">
         <input
+          id={FILTER_INPUT_ID}
           type="search"
           aria-label="Filter by name"
           placeholder="Filter by name…"
