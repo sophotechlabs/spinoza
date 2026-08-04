@@ -3,8 +3,10 @@ package charts
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -387,6 +389,198 @@ func TestResolveRejectsAnUnusableURL(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("expected a request build error")
+	}
+}
+
+func internetFor(t *testing.T, handler http.HandlerFunc) *Cache {
+	t.Helper()
+	ts := httptest.NewTLSServer(handler)
+	t.Cleanup(ts.Close)
+	client := ts.Client()
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport = %T, want one that can be redialled", client.Transport)
+	}
+	transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, network, ts.Listener.Addr().String())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	return New(ctx, client, DefaultTTL)
+}
+
+func TestCheckRepoURLSortsFetchableFromNot(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want bool
+	}{
+		{"an https repository", "https://charts.example.com/stable", true},
+		{"a plain http repository", "http://charts.example.com/stable", true},
+		{"an oci registry", "oci://registry.example.com/team", true},
+		{"a public address", "https://93.184.216.34/charts", true},
+		{"a file url", "file:///etc/passwd", false},
+		{"a gopher url", "gopher://example.com/", false},
+		{"no host at all", "https:///charts", false},
+		{"cloud metadata", "http://169.254.169.254/latest/meta-data", false},
+		{"loopback", "http://127.0.0.1:9090/charts", false},
+		{"loopback by name", "http://localhost:9090/charts", false},
+		{"a localhost subdomain", "http://spinoza.localhost/charts", false},
+		{"ipv6 loopback", "http://[::1]:9090/charts", false},
+		{"an ipv4-mapped loopback", "http://[::ffff:127.0.0.1]/charts", false},
+		{"a private range", "http://10.4.0.9/charts", false},
+		{"a unique local address", "http://[fd00::1]/charts", false},
+		{"the unspecified address", "http://0.0.0.0/charts", false},
+		{"multicast", "http://224.0.0.1/charts", false},
+		{"unparseable", "://bad", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckRepoURL(tc.url)
+			if (err == nil) != tc.want {
+				t.Fatalf("CheckRepoURL(%q) = %v", tc.url, err)
+			}
+		})
+	}
+}
+
+func TestARedirectOntoThisMachineIsRefused(t *testing.T) {
+	cache := internetFor(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://127.0.0.1:9/index.yaml", http.StatusFound)
+	})
+
+	_, err := cache.Resolve(context.Background(), Repo{URL: "https://charts.example.com"}, "podinfo")
+
+	if err == nil {
+		t.Fatal("a chart repository redirected the fetch onto loopback and it followed")
+	}
+}
+
+func TestARedirectToAPublicHostIsFollowed(t *testing.T) {
+	cache := internetFor(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/index.yaml" {
+			http.Redirect(w, r, "https://example.com/mirror/index.yaml", http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte(indexBody))
+	})
+
+	found, err := cache.Resolve(context.Background(), Repo{URL: "https://example.com"}, "podinfo")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	if found["podinfo"] != "6.15.1" {
+		t.Fatalf("podinfo = %q", found["podinfo"])
+	}
+}
+
+func TestAnEndlessRedirectChainIsCutOff(t *testing.T) {
+	hops := 0
+	cache := internetFor(t, func(w http.ResponseWriter, r *http.Request) {
+		hops++
+		http.Redirect(w, r, "https://example.com/again", http.StatusFound)
+	})
+
+	_, err := cache.Resolve(context.Background(), Repo{URL: "https://example.com"}, "podinfo")
+
+	if err == nil {
+		t.Fatal("expected the redirect chain to be cut off")
+	}
+	if hops > maxRedirects+1 {
+		t.Fatalf("hops = %d, want the chain stopped at %d", hops, maxRedirects)
+	}
+}
+
+func TestABearerRealmOnAnotherHostIsRefused(t *testing.T) {
+	cache := internetFor(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="http://169.254.169.254/latest/meta-data",service="registry"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+
+	_, err := cache.Resolve(context.Background(), Repo{URL: "oci://registry.example.com/team", OCI: true}, "keycloak")
+
+	if err == nil {
+		t.Fatal("the registry pointed the token request at another host and it followed")
+	}
+}
+
+func TestABearerRealmOnASiblingOfTheRegistryIsAllowed(t *testing.T) {
+	cache := internetFor(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Host == "auth.example.com" {
+			_, _ = w.Write([]byte(`{"token":"abc123"}`))
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer abc123" {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="https://auth.example.com/token",service="registry"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"tags":["1.0.0"]}`))
+	})
+
+	found, err := cache.Resolve(context.Background(), Repo{URL: "oci://registry.example.com/team", OCI: true}, "keycloak")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	if found["keycloak"] != "1.0.0" {
+		t.Fatalf("keycloak = %q", found["keycloak"])
+	}
+}
+
+func TestTheTokenRequestEscapesTheChallengeAndKeepsTheRealmQuery(t *testing.T) {
+	asked := ""
+	cache := internetFor(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/token") {
+			asked = r.URL.RawQuery
+			_, _ = w.Write([]byte(`{"token":"abc123"}`))
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer abc123" {
+			w.Header().Set("WWW-Authenticate",
+				`Bearer realm="https://example.com/token?tenant=acme",service="reg istry",scope="repository:team/keycloak:pull"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"tags":["1.0.0"]}`))
+	})
+
+	_, err := cache.Resolve(context.Background(), Repo{URL: "oci://example.com/team", OCI: true}, "keycloak")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	query, parseErr := url.ParseQuery(asked)
+	if parseErr != nil {
+		t.Fatalf("parse %q: %v", asked, parseErr)
+	}
+	if query.Get("tenant") != "acme" {
+		t.Fatalf("query = %q, want the realm's own parameters kept", asked)
+	}
+	if query.Get("service") != "reg istry" {
+		t.Fatalf("service = %q, want it escaped rather than pasted in", query.Get("service"))
+	}
+	if query.Get("scope") != "repository:team/keycloak:pull" {
+		t.Fatalf("scope = %q", query.Get("scope"))
+	}
+}
+
+func TestTheChartNameCannotReshapeTheRegistryPath(t *testing.T) {
+	asked := ""
+	cache := internetFor(t, func(w http.ResponseWriter, r *http.Request) {
+		asked = r.URL.EscapedPath()
+		_, _ = w.Write([]byte(`{"tags":["1.0.0"]}`))
+	})
+
+	_, err := cache.Resolve(context.Background(), Repo{URL: "oci://example.com/team", OCI: true}, "../../secrets")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	if asked != "/v2/team/..%2F..%2Fsecrets/tags/list" {
+		t.Fatalf("path = %q, want the chart name kept inside one segment", asked)
 	}
 }
 

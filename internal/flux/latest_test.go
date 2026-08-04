@@ -225,6 +225,32 @@ func TestBuildSkipsARepositoryWithoutAURL(t *testing.T) {
 	}
 }
 
+func TestBuildSkipsARepositoryAimedAtThisMachine(t *testing.T) {
+	cases := []string{
+		"http://169.254.169.254/latest/meta-data",
+		"http://127.0.0.1:9090/charts",
+		"file:///etc/passwd",
+	}
+	for _, repoURL := range cases {
+		t.Run(repoURL, func(t *testing.T) {
+			client := latestClient(
+				newRepo("podinfo", repoURL, ""),
+				newRelease("apps", "podinfo", "podinfo", "podinfo", "flux-system", "6.14.0"),
+			)
+			index := &stubCharts{versions: map[string]string{repoURL + "|podinfo": "6.15.1"}}
+
+			row := releaseRow(t, Build(context.Background(), listerFor(client), latestDescs(), index), "podinfo")
+
+			if row.Latest != "" {
+				t.Fatalf("latest = %q, want a repository the cluster aimed at us skipped", row.Latest)
+			}
+			if len(index.warmed) != 0 {
+				t.Fatalf("warmed = %v, want no fetch at all", index.warmed)
+			}
+		})
+	}
+}
+
 func TestBuildWithoutAChartIndex(t *testing.T) {
 	client := latestClient(
 		newRepo("podinfo", "https://example.test/charts", ""),

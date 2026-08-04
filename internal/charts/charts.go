@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +22,7 @@ const (
 	fetchTimeout  = 30 * time.Second
 	DefaultTTL    = 30 * time.Minute
 	indexFilename = "index.yaml"
+	maxRedirects  = 10
 )
 
 type Repo struct {
@@ -48,13 +51,79 @@ type Cache struct {
 func New(ctx context.Context, client *http.Client, ttl time.Duration) *Cache {
 	return &Cache{
 		ctx:      ctx,
-		client:   client,
+		client:   publicOnly(client),
 		ttl:      ttl,
 		now:      time.Now,
 		versions: map[key]string{},
 		fetched:  map[key]time.Time{},
 		inflight: map[key]bool{},
 	}
+}
+
+func publicOnly(client *http.Client) *http.Client {
+	guarded := *client
+	guarded.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return errors.New("stopped after 10 redirects")
+		}
+		return CheckRepoURL(req.URL.String())
+	}
+	return &guarded
+}
+
+func CheckRepoURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("repository url %q: %w", raw, err)
+	}
+	if !fetchableScheme(parsed.Scheme) {
+		return fmt.Errorf("repository url %q: spinoza fetches http, https and oci only", raw)
+	}
+	return checkHost(parsed.Hostname())
+}
+
+func fetchableScheme(scheme string) bool {
+	switch scheme {
+	case "http", "https", "oci":
+		return true
+	default:
+		return false
+	}
+}
+
+func checkHost(host string) error {
+	if host == "" {
+		return errors.New("repository url has no host")
+	}
+	if localName(host) {
+		return fmt.Errorf("repository host %q is this machine", host)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return nil
+	}
+	if !routableIP(ip) {
+		return fmt.Errorf("repository host %q is not a public address", host)
+	}
+	return nil
+}
+
+func localName(host string) bool {
+	lowered := strings.ToLower(host)
+	if lowered == "localhost" {
+		return true
+	}
+	return strings.HasSuffix(lowered, ".localhost")
+}
+
+func routableIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() {
+		return false
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return false
+	}
+	return !ip.IsMulticast()
 }
 
 func (c *Cache) Latest(repo Repo, chart string) string {
@@ -120,8 +189,8 @@ func (c *Cache) Resolve(ctx context.Context, repo Repo, chart string) (map[strin
 }
 
 func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (map[string]string, error) {
-	url := strings.TrimSuffix(repo.URL, "/") + "/" + indexFilename
-	body, err := c.get(ctx, url, "")
+	endpoint := strings.TrimSuffix(repo.URL, "/") + "/" + indexFilename
+	body, err := c.get(ctx, endpoint, "")
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +203,7 @@ func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (map[string]string,
 	}
 	decodeErr := yaml.NewDecoder(io.LimitReader(body, maxBodyBytes)).Decode(&doc)
 	if decodeErr != nil {
-		return nil, fmt.Errorf("parse %s: %w", url, decodeErr)
+		return nil, fmt.Errorf("parse %s: %w", endpoint, decodeErr)
 	}
 
 	out := map[string]string{}
@@ -156,9 +225,9 @@ func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[st
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf("https://%s/v2/%s/%s/tags/list", host, path, chart)
+	endpoint := fmt.Sprintf("https://%s/v2/%s/%s/tags/list", host, path, url.PathEscape(chart))
 
-	body, err := c.get(ctx, url, "")
+	body, err := c.get(ctx, endpoint, "")
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +238,7 @@ func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[st
 	}
 	decodeErr := json.NewDecoder(io.LimitReader(body, maxBodyBytes)).Decode(&doc)
 	if decodeErr != nil {
-		return nil, fmt.Errorf("parse tags for %s: %w", url, decodeErr)
+		return nil, fmt.Errorf("parse tags for %s: %w", endpoint, decodeErr)
 	}
 
 	latest := maxVersion(doc.Tags)
@@ -179,8 +248,8 @@ func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[st
 	return map[string]string{chart: latest}, nil
 }
 
-func (c *Cache) get(ctx context.Context, url, token string) (io.ReadCloser, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+func (c *Cache) get(ctx context.Context, endpoint, token string) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -198,27 +267,26 @@ func (c *Cache) get(ctx context.Context, url, token string) (io.ReadCloser, erro
 	challenge := resp.Header.Get("WWW-Authenticate")
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
-		return nil, fmt.Errorf("%s: status %d", url, resp.StatusCode)
+		return nil, fmt.Errorf("%s: status %d", endpoint, resp.StatusCode)
 	}
 	if token != "" {
-		return nil, fmt.Errorf("%s: status %d", url, resp.StatusCode)
+		return nil, fmt.Errorf("%s: status %d", endpoint, resp.StatusCode)
 	}
-	fresh, tokenErr := c.token(ctx, challenge)
+	fresh, tokenErr := c.token(ctx, challenge, req.URL)
 	if tokenErr != nil {
 		return nil, tokenErr
 	}
-	return c.get(ctx, url, fresh)
+	return c.get(ctx, endpoint, fresh)
 }
 
-func (c *Cache) token(ctx context.Context, challenge string) (string, error) {
+func (c *Cache) token(ctx context.Context, challenge string, registry *url.URL) (string, error) {
 	params := parseChallenge(challenge)
-	realm := params["realm"]
-	if realm == "" {
-		return "", fmt.Errorf("no bearer realm in %q", challenge)
+	endpoint, err := tokenEndpoint(params, registry)
+	if err != nil {
+		return "", err
 	}
-	url := realm + "?service=" + params["service"] + "&scope=" + params["scope"]
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return "", err
 	}
@@ -248,6 +316,59 @@ func (c *Cache) token(ctx context.Context, challenge string) (string, error) {
 	return "", errors.New("empty token response")
 }
 
+func tokenEndpoint(params map[string]string, registry *url.URL) (string, error) {
+	realm := params["realm"]
+	if realm == "" {
+		return "", fmt.Errorf("no bearer realm in the challenge from %s", registry.Host)
+	}
+	parsed, err := url.Parse(realm)
+	if err != nil {
+		return "", fmt.Errorf("bearer realm %q: %w", realm, err)
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return "", fmt.Errorf("bearer realm %q is not an http url", realm)
+	}
+	if !sameRegistry(parsed.Host, registry.Host) {
+		return "", fmt.Errorf("bearer realm %q does not belong to %s", realm, registry.Host)
+	}
+	query := parsed.Query()
+	query.Set("service", params["service"])
+	query.Set("scope", params["scope"])
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func sameRegistry(realm, registry string) bool {
+	if strings.EqualFold(realm, registry) {
+		return true
+	}
+	realmHost := hostOnly(realm)
+	registryHost := hostOnly(registry)
+	if strings.EqualFold(realmHost, registryHost) {
+		return true
+	}
+	if net.ParseIP(realmHost) != nil || net.ParseIP(registryHost) != nil {
+		return false
+	}
+	return strings.EqualFold(parentDomain(realmHost), parentDomain(registryHost))
+}
+
+func hostOnly(authority string) string {
+	host, _, err := net.SplitHostPort(authority)
+	if err != nil {
+		return authority
+	}
+	return host
+}
+
+func parentDomain(host string) string {
+	labels := strings.Split(host, ".")
+	if len(labels) < 2 {
+		return host
+	}
+	return strings.Join(labels[len(labels)-2:], ".")
+}
+
 func parseChallenge(header string) map[string]string {
 	out := map[string]string{}
 	trimmed := strings.TrimSpace(strings.TrimPrefix(header, "Bearer"))
@@ -261,12 +382,12 @@ func parseChallenge(header string) map[string]string {
 	return out
 }
 
-func splitOCI(url string) (host, path string, err error) {
-	trimmed := strings.TrimPrefix(url, "oci://")
+func splitOCI(raw string) (host, path string, err error) {
+	trimmed := strings.TrimPrefix(raw, "oci://")
 	trimmed = strings.Trim(trimmed, "/")
 	parts := strings.SplitN(trimmed, "/", 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("cannot split oci url %q", url)
+		return "", "", fmt.Errorf("cannot split oci url %q", raw)
 	}
 	return parts[0], parts[1], nil
 }

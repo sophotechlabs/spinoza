@@ -120,8 +120,12 @@ func repoIndex(lister Lister, descs map[string]api.ResourceDescriptor) map[strin
 			continue
 		}
 		for _, repo := range found {
+			source := nestedString(repo, "spec", "url")
+			if charts.CheckRepoURL(source) != nil {
+				continue
+			}
 			out[repo.GetNamespace()+"/"+repo.GetName()] = charts.Repo{
-				URL: nestedString(repo, "spec", "url"),
+				URL: source,
 				OCI: nestedString(repo, "spec", "type") == "oci",
 			}
 		}
