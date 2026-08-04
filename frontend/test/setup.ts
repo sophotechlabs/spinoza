@@ -1,8 +1,15 @@
 import '@testing-library/jest-dom/vitest';
+import { beforeEach } from 'vitest';
 import { configure } from '@testing-library/react';
 import { installMatchMedia } from './helpers';
+import { usePanelsStore } from '../src/store/panels';
 
 configure({ asyncUtilTimeout: 5000 });
+
+beforeEach(() => {
+  window.history.replaceState(null, '', '/');
+  usePanelsStore.getState().reset();
+});
 
 class ResizeObserverStub {
   observe(): void {
