@@ -33,7 +33,13 @@ function Harness({ hostId, active }: { hostId: 'a' | 'b' | 'none'; active: boole
     <div>
       <div data-testid="host-a" ref={setA} />
       <div data-testid="host-b" ref={setB} />
-      <PanelMount host={host} active={active} label="Overview">
+      <PanelMount
+        host={host}
+        active={active}
+        label="Overview"
+        id="panel-body-overview"
+        labelledBy="panel-tab-overview"
+      >
         <Counter />
       </PanelMount>
     </div>
@@ -100,7 +106,13 @@ describe('PanelMount', () => {
     render(
       <div>
         <div data-testid="sibling">still here</div>
-        <PanelMount host={document.body} active label="Overview">
+        <PanelMount
+          host={document.body}
+          active
+          label="Overview"
+          id="panel-body-overview"
+          labelledBy="panel-tab-overview"
+        >
           <Broken />
         </PanelMount>
       </div>,
@@ -110,5 +122,31 @@ describe('PanelMount', () => {
     expect(screen.getByText('cell renderer blew up')).toBeInTheDocument();
     expect(screen.getByTestId('sibling')).toBeInTheDocument();
     onError.mockRestore();
+  });
+});
+
+describe('what a panel body tells assistive technology', () => {
+  it('is a tabpanel named by its tab', () => {
+    render(<Harness hostId="a" active />);
+
+    const panel = document.getElementById('panel-body-overview');
+    expect(panel?.getAttribute('role')).toBe('tabpanel');
+    expect(panel?.getAttribute('aria-labelledby')).toBe('panel-tab-overview');
+  });
+
+  it('is reachable by keyboard while it is the open one', () => {
+    render(<Harness hostId="a" active />);
+
+    const panel = document.getElementById('panel-body-overview');
+    expect(panel?.getAttribute('tabindex')).toBe('0');
+    expect(panel?.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('is hidden and out of the tab order while another tab is open', () => {
+    render(<Harness hostId="a" active={false} />);
+
+    const panel = document.getElementById('panel-body-overview');
+    expect(panel?.hasAttribute('hidden')).toBe(true);
+    expect(panel?.hasAttribute('tabindex')).toBe(false);
   });
 });

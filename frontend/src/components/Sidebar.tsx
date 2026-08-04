@@ -42,6 +42,13 @@ function chevron(collapsed: boolean): string {
   return '▾';
 }
 
+function current(active: boolean): 'page' | undefined {
+  if (active) {
+    return 'page';
+  }
+  return undefined;
+}
+
 function resourceClass(active: boolean, nested = false, empty = false): string {
   let indent = 'px-6';
   if (nested) {
@@ -218,12 +225,15 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
         <div className="mb-1">
           <button
             type="button"
+            aria-expanded={!gitopsCollapsed}
             onClick={() => {
               toggle('GitOps');
             }}
             className={sectionClass}
           >
-            <span>{chevron(gitopsCollapsed)} GitOps</span>
+            <span>
+              <span aria-hidden="true">{chevron(gitopsCollapsed)}</span> GitOps
+            </span>
           </button>
           {!gitopsCollapsed && (
             <div aria-label="GitOps views">
@@ -231,6 +241,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                 <button
                   key={entry.view}
                   type="button"
+                  aria-current={current(view === entry.view)}
                   onClick={() => {
                     onSelectView(entry.view);
                   }}
@@ -243,7 +254,10 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           )}
         </div>
         {error !== null && (
-          <div className="mx-2 mb-1 rounded border border-error-line bg-error-tint/40 px-2 py-1.5 text-[11px]">
+          <div
+            role="alert"
+            className="mx-2 mb-1 rounded border border-error-line bg-error-tint/40 px-2 py-1.5 text-[11px]"
+          >
             <div className="font-semibold text-error">Discovery failed</div>
             <div className="mt-0.5 break-words text-error-strong">{error}</div>
             <button
@@ -274,13 +288,14 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
             <div key={category.name} className="mb-1">
               <button
                 type="button"
+                aria-expanded={!isCollapsed}
                 onClick={() => {
                   toggle(category.name);
                 }}
                 className={sectionClass}
               >
                 <span>
-                  {chevron(isCollapsed)} {category.name}
+                  <span aria-hidden="true">{chevron(isCollapsed)}</span> {category.name}
                 </span>
                 <span className="text-fg-muted">{category.resources.length}</span>
               </button>
@@ -290,6 +305,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                     <button
                       key={descriptorKey(resource)}
                       type="button"
+                      aria-current={current(isActive(activeResource, resource))}
                       onClick={() => {
                         onSelect(resource);
                       }}
@@ -317,6 +333,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                       <div key={key}>
                         <button
                           type="button"
+                          aria-expanded={!groupCollapsed}
                           onClick={() => {
                             toggle(key);
                           }}
@@ -324,7 +341,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                           className="flex w-full items-center justify-between gap-1 px-5 py-1 text-left text-fg-muted hover:bg-surface-raised hover:text-fg"
                         >
                           <span className="truncate">
-                            {chevron(groupCollapsed)} {group.name}
+                            <span aria-hidden="true">{chevron(groupCollapsed)}</span> {group.name}
                           </span>
                           <span className="shrink-0 text-fg-muted">{group.resources.length}</span>
                         </button>
@@ -334,6 +351,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                               <button
                                 key={descriptorKey(resource)}
                                 type="button"
+                                aria-current={current(isActive(activeResource, resource))}
                                 onClick={() => {
                                   onSelect(resource);
                                 }}

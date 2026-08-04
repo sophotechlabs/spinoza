@@ -17,6 +17,8 @@ export default function ContainerSquares({ row, fallback }: ContainerSquaresProp
       {containers.map((container) => (
         <span
           key={container.name}
+          role="img"
+          aria-label={containerTitle(container)}
           title={containerTitle(container)}
           className={`inline-block h-2.5 w-2.5 rounded-[2px] ${containerColor(container)}`}
         />

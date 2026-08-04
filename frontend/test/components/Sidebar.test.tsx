@@ -462,3 +462,49 @@ describe('resource counts', () => {
     expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
   });
 });
+
+describe('what the sidebar tells assistive technology', () => {
+  it('says whether a section is open or shut', async () => {
+    const user = userEvent.setup();
+    stubFetch(categories, {});
+    renderSidebar();
+    const toggle = await screen.findByRole('button', { name: /Workloads/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(toggle);
+
+    expect(screen.getByRole('button', { name: /Workloads/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('says which view is the current one', () => {
+    stubFetch(categories, {});
+    renderSidebar({ view: 'gitops' });
+
+    expect(screen.getByRole('button', { name: 'Graph' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('says which resource is the current one', async () => {
+    const user = userEvent.setup();
+    stubFetch(categories, {});
+    renderSidebar({ activeResource: makeDescriptor({ resource: 'pods', kind: 'Pod' }) });
+    await user.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    expect(await screen.findByRole('button', { name: 'Pod' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('keeps the chevron glyphs out of the accessible name', async () => {
+    stubFetch(categories, {});
+    renderSidebar();
+
+    const header = await screen.findByRole('button', { name: /Workloads/ });
+    expect(header.textContent).toContain('▸');
+    expect(header).toHaveAccessibleName('Workloads2');
+  });
+});

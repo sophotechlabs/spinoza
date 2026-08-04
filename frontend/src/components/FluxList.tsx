@@ -12,6 +12,7 @@ import { groupSummary } from '../lib/readiness';
 import {
   created,
   latestColor,
+  latestNote,
   latestTitle,
   statusDot,
   statusLabel,
@@ -84,6 +85,7 @@ function ResourceRow({
       </td>
       <td className={`truncate px-2 py-1 ${latestColor(resource)}`} title={latestTitle(resource)}>
         {resource.latest}
+        <span className="sr-only"> {latestNote(resource)}</span>
       </td>
       <td className="truncate px-2 py-1 text-fg-muted">{resource.source}</td>
       <td className="truncate px-2 py-1 text-fg-muted">{created(resource.createdAt)}</td>

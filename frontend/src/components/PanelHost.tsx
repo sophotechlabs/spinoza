@@ -1,8 +1,28 @@
 import { useRef, useState } from 'react';
 import type { DockSide, PanelId } from '../lib/panels';
-import { DOCK_SIDES, SIDE_GLYPHS, SIDE_LABELS } from '../lib/panels';
+import { DOCK_SIDES, SIDE_GLYPHS, SIDE_LABELS, panelBodyId, tabId } from '../lib/panels';
 import { NUDGE_STEP, useDockSize } from '../lib/usePanelWidth';
 import { usePanelsStore } from '../store/panels';
+
+function arrowStep(key: string): number {
+  if (key === 'ArrowRight' || key === 'ArrowDown') {
+    return 1;
+  }
+  if (key === 'ArrowLeft' || key === 'ArrowUp') {
+    return -1;
+  }
+  return 0;
+}
+
+function rovingIndex(selected: boolean, index: number, active: PanelId | null): number {
+  if (selected) {
+    return 0;
+  }
+  if (active === null && index === 0) {
+    return 0;
+  }
+  return -1;
+}
 
 export interface PanelTab {
   id: PanelId;
@@ -187,6 +207,33 @@ export default function PanelHost({
 
   const dropClass = over ? ' bg-surface-active' : '';
 
+  function focusTab(index: number) {
+    const wanted = tabs[index];
+    document.getElementById(tabId(wanted.id))?.focus();
+    if (wanted.disabled) {
+      return;
+    }
+    onActivate(wanted.id);
+  }
+
+  function handleTabKey(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    const step = arrowStep(event.key);
+    if (step !== 0) {
+      event.preventDefault();
+      focusTab((index + step + tabs.length) % tabs.length);
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      focusTab(0);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      focusTab(tabs.length - 1);
+    }
+  }
+
   if (tabs.length === 0) {
     return (
       <div
@@ -249,18 +296,24 @@ export default function PanelHost({
       >
         {collapseGlyph(side)}
       </button>
-      {tabs.map((tab) => (
+      {tabs.map((tab, index) => (
         <button
           key={tab.id}
+          id={tabId(tab.id)}
           type="button"
           role="tab"
           aria-selected={active === tab.id}
+          aria-controls={panelBodyId(tab.id)}
+          tabIndex={rovingIndex(active === tab.id, index, active)}
           draggable
           title={tab.title}
           aria-disabled={tab.disabled}
           onDragStart={(event) => {
             event.dataTransfer.setData(DRAG_TYPE, tab.id);
             event.dataTransfer.effectAllowed = 'move';
+          }}
+          onKeyDown={(event) => {
+            handleTabKey(event, index);
           }}
           onClick={() => {
             if (tab.disabled) {

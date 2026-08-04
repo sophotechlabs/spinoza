@@ -5,6 +5,7 @@ import { useForwardsStore } from '../store/forwards';
 import { notifyError, notifyOk } from '../store/toasts';
 import StaleBanner from './StaleBanner';
 import CopyButton from './CopyButton';
+import Announce from './Announce';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -62,10 +63,12 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
     <div className="flex min-h-0 flex-col">
       {notice}
       <div className="p-2">
-        {error !== null && <p className="mb-1.5 text-error">{error}</p>}
+        <Announce message={error} urgent className="mb-1.5 text-error" />
         {forwards.map((forward) => (
           <div key={forward.id} className="flex items-center gap-2 border-b border-edge py-1">
-            <span className={stateColor(forward.state)}>●</span>
+            <span role="img" aria-label={forward.state} className={stateColor(forward.state)}>
+              ●
+            </span>
             <span className="truncate text-fg-soft">
               {forward.kind.toLowerCase()}/{forward.namespace}/{forward.name}
             </span>

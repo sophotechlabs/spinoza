@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   created,
   latestColor,
+  latestNote,
   latestTitle,
   readyDot,
   readyLabel,
@@ -72,5 +73,22 @@ describe('latest version presentation', () => {
   it('has no title when the latest version is unknown', () => {
     expect(latestTitle(makeFluxResource({ latest: undefined }))).toBe('');
     expect(latestTitle(makeFluxResource({ latest: '' }))).toBe('');
+  });
+});
+
+describe('latestNote', () => {
+  it('says a newer revision is waiting', () => {
+    expect(latestNote(makeFluxResource({ latest: '1.3.0', outdated: true }))).toBe(
+      'a newer revision is available',
+    );
+  });
+
+  it('says it is up to date otherwise', () => {
+    expect(latestNote(makeFluxResource({ latest: '1.2.0', outdated: false }))).toBe('up to date');
+  });
+
+  it('says nothing when there is no latest to compare against', () => {
+    expect(latestNote(makeFluxResource({ latest: undefined }))).toBe('');
+    expect(latestNote(makeFluxResource({ latest: '' }))).toBe('');
   });
 });

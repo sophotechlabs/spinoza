@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { ContainerState, LogRequest, ObjectDetail, ObjectRef, Row } from '../lib/types';
 import type { DockSide, PanelContext, PanelId } from '../lib/panels';
 import type { Selection } from '../lib/refs';
-import { DOCK_SIDES, panelById, panelsOn } from '../lib/panels';
+import { DOCK_SIDES, panelBodyId, panelById, panelsOn, tabId } from '../lib/panels';
 import { podFor } from '../lib/pods';
 import { usePanelsStore } from '../store/panels';
 import { containerNames } from '../lib/containers';
@@ -292,7 +292,14 @@ export default function PanelLayout({
           onDeleted,
         };
         return (
-          <PanelMount key={id} host={hosts[side]} active={open} label={panelById(id).label}>
+          <PanelMount
+            key={id}
+            host={hosts[side]}
+            active={open}
+            label={panelById(id).label}
+            id={panelBodyId(id)}
+            labelledBy={tabId(id)}
+          >
             {RENDERERS[id](render)}
           </PanelMount>
         );

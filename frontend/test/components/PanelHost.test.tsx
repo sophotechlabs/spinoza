@@ -343,3 +343,83 @@ describe('PanelHost chrome per side', () => {
     expect(screen.getByRole('button', { name: 'Show the bottom dock' })).toBeInTheDocument();
   });
 });
+
+describe('the dock tab contract', () => {
+  it('points every tab at the panel it controls', () => {
+    renderHost({ tabs: tabs('overview', 'yaml'), active: 'overview' });
+
+    const overview = screen.getByRole('tab', { name: 'Overview' });
+    expect(overview).toHaveAttribute('id', 'panel-tab-overview');
+    expect(overview).toHaveAttribute('aria-controls', 'panel-body-overview');
+  });
+
+  it('keeps one tab in the tab order and the rest out of it', () => {
+    renderHost({ tabs: tabs('overview', 'yaml'), active: 'yaml' });
+
+    expect(screen.getByRole('tab', { name: 'YAML' })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('falls back to the first tab when nothing is active', () => {
+    renderHost({ tabs: tabs('overview', 'yaml'), active: null });
+
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('tabindex', '0');
+  });
+
+  it('walks the strip with the arrow keys and wraps around', async () => {
+    const user = userEvent.setup();
+    const onActivate = vi.fn();
+    renderHost({
+      tabs: tabs('overview', 'yaml'),
+      active: 'overview',
+      onActivate,
+    });
+
+    screen.getByRole('tab', { name: 'Overview' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(onActivate).toHaveBeenLastCalledWith('yaml');
+
+    await user.keyboard('{ArrowLeft}');
+    expect(onActivate).toHaveBeenLastCalledWith('overview');
+  });
+
+  it('jumps to the ends with Home and End', async () => {
+    const user = userEvent.setup();
+    const onActivate = vi.fn();
+    renderHost({
+      tabs: tabs('overview', 'yaml', 'events'),
+      active: 'overview',
+      onActivate,
+    });
+
+    screen.getByRole('tab', { name: 'Overview' }).focus();
+    await user.keyboard('{End}');
+    expect(onActivate).toHaveBeenLastCalledWith('events');
+
+    await user.keyboard('{Home}');
+    expect(onActivate).toHaveBeenLastCalledWith('overview');
+  });
+
+  it('moves focus to a disabled tab without selecting it', async () => {
+    const user = userEvent.setup();
+    const onActivate = vi.fn();
+    renderHost({
+      tabs: [tabs('overview')[0], { ...tabs('yaml')[0], disabled: true }],
+      active: 'overview',
+      onActivate,
+    });
+
+    screen.getByRole('tab', { name: 'Overview' }).focus();
+    await user.keyboard('{ArrowRight}');
+
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'YAML' }));
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it('names an empty dock so a drop target is still findable', () => {
+    renderHost({ tabs: [], active: null });
+
+    expect(screen.getByRole('tablist', { name: 'Empty right dock' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+  });
+});

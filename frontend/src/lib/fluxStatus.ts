@@ -68,6 +68,16 @@ export function latestColor(resource: FluxResource): string {
   return 'text-fg-muted';
 }
 
+export function latestNote(resource: FluxResource): string {
+  if (resource.latest === undefined || resource.latest === '') {
+    return '';
+  }
+  if (resource.outdated === true) {
+    return 'a newer revision is available';
+  }
+  return 'up to date';
+}
+
 export function latestTitle(resource: FluxResource): string {
   if (resource.latest === undefined || resource.latest === '') {
     return '';

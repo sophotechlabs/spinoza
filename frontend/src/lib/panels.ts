@@ -85,6 +85,14 @@ export const DEFAULT_PLACEMENT: Placement = Object.fromEntries(
 
 export const DOCK_SIDES: DockSide[] = ['left', 'right', 'bottom'];
 
+export function tabId(id: PanelId): string {
+  return `panel-tab-${id}`;
+}
+
+export function panelBodyId(id: PanelId): string {
+  return `panel-body-${id}`;
+}
+
 export const SIDE_LABELS: Record<DockSide, string> = {
   left: 'left',
   right: 'right',
