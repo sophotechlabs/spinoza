@@ -4,6 +4,7 @@ import TerminalPanel from '../../src/components/TerminalPanel';
 import type { ExecHandlers, ExecSession } from '../../src/lib/exec';
 import type { TerminalHandle } from '../../src/lib/terminal';
 import { terminalTheme } from '../../src/lib/themeColors';
+import { BUILT_IN_THEMES, themeById } from '../../src/lib/theme';
 import { useThemeStore } from '../../src/store/theme';
 
 const openExec = vi.fn<(target: unknown, handlers: ExecHandlers) => ExecSession>();
@@ -225,13 +226,17 @@ describe('a live shell when the theme changes', () => {
     const stubs = harness();
     renderPanel();
 
-    expect(stubs.term.setTheme).toHaveBeenCalledWith(terminalTheme('dark'));
+    expect(stubs.term.setTheme).toHaveBeenCalledWith(
+      terminalTheme(themeById(BUILT_IN_THEMES, 'dark')),
+    );
 
     act(() => {
       useThemeStore.getState().setPreference('light');
     });
 
-    expect(stubs.term.setTheme).toHaveBeenCalledWith(terminalTheme('light'));
+    expect(stubs.term.setTheme).toHaveBeenCalledWith(
+      terminalTheme(themeById(BUILT_IN_THEMES, 'light')),
+    );
     expect(stubs.session.close).not.toHaveBeenCalled();
     expect(openExec).toHaveBeenCalledTimes(1);
     expect(createTerminal).toHaveBeenCalledTimes(1);

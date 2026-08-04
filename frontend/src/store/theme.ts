@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { ResolvedTheme, ThemePreference } from '../lib/theme';
+import type { Theme, ThemeBase, ThemePreference } from '../lib/theme';
 import {
+  BUILT_IN_THEMES,
   applyTheme,
   readTheme,
   resolveTheme,
@@ -10,28 +11,30 @@ import {
 } from '../lib/theme';
 
 interface ThemeState {
+  themes: Theme[];
   preference: ThemePreference;
-  system: ResolvedTheme;
-  resolved: ResolvedTheme;
+  system: ThemeBase;
+  resolved: Theme;
   setPreference: (preference: ThemePreference) => void;
-  setSystem: (system: ResolvedTheme) => void;
+  setSystem: (system: ThemeBase) => void;
 }
 
 const preference = readTheme();
 const system = systemTheme();
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
+  themes: BUILT_IN_THEMES,
   preference,
   system,
-  resolved: resolveTheme(preference, system),
+  resolved: resolveTheme(BUILT_IN_THEMES, preference, system),
   setPreference: (next) => {
-    const resolved = resolveTheme(next, get().system);
+    const resolved = resolveTheme(get().themes, next, get().system);
     writeTheme(next);
     applyTheme(resolved);
     set({ preference: next, resolved });
   },
   setSystem: (next) => {
-    const resolved = resolveTheme(get().preference, next);
+    const resolved = resolveTheme(get().themes, get().preference, next);
     applyTheme(resolved);
     set({ system: next, resolved });
   },
@@ -43,7 +46,7 @@ watchSystemTheme((next) => {
   useThemeStore.getState().setSystem(next);
 });
 
-export function useResolvedTheme(): ResolvedTheme {
+export function useResolvedTheme(): Theme {
   return useThemeStore((state) => state.resolved);
 }
 

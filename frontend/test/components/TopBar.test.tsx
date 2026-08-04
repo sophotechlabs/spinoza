@@ -122,7 +122,7 @@ describe('the theme picker', () => {
 
     await user.selectOptions(screen.getByLabelText('Theme'), 'system');
 
-    expect(useThemeStore.getState().resolved).toBe('dark');
+    expect(useThemeStore.getState().resolved.id).toBe('dark');
     act(() => {
       emitSystemDark(false);
     });

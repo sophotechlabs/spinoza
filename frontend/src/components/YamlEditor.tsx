@@ -9,7 +9,7 @@ interface YamlEditorProps {
 }
 
 export default function YamlEditor({ value, path, readOnly, onChange }: YamlEditorProps) {
-  const theme = `spinoza-${useResolvedTheme()}`;
+  const theme = `spinoza-${useResolvedTheme().base}`;
 
   function handleChange(next: string | undefined) {
     if (next === undefined) {

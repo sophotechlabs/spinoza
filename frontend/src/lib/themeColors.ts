@@ -1,18 +1,6 @@
-import type { ResolvedTheme } from './theme';
-import type { TerminalTheme } from './terminal';
+import type { CanvasColors, Theme, ThemeBase } from './theme';
 
-export interface CanvasColors {
-  chartAxis: string;
-  chartGrid: string;
-  cpuStroke: string;
-  cpuFill: string;
-  memoryStroke: string;
-  memoryFill: string;
-  terminalBackground: string;
-  terminalForeground: string;
-}
-
-const CANVAS_COLORS: Record<ResolvedTheme, CanvasColors> = {
+const CANVAS_COLORS: Record<ThemeBase, CanvasColors> = {
   dark: {
     chartAxis: '#737373',
     chartGrid: '#262626',
@@ -35,13 +23,11 @@ const CANVAS_COLORS: Record<ResolvedTheme, CanvasColors> = {
   },
 };
 
-export function canvasColors(theme: ResolvedTheme): CanvasColors {
-  return CANVAS_COLORS[theme];
+export function canvasColors(theme: Theme): CanvasColors {
+  return { ...CANVAS_COLORS[theme.base], ...theme.canvas };
 }
 
-export function terminalTheme(theme: ResolvedTheme): TerminalTheme {
-  return {
-    background: CANVAS_COLORS[theme].terminalBackground,
-    foreground: CANVAS_COLORS[theme].terminalForeground,
-  };
+export function terminalTheme(theme: Theme): { background: string; foreground: string } {
+  const colors = canvasColors(theme);
+  return { background: colors.terminalBackground, foreground: colors.terminalForeground };
 }

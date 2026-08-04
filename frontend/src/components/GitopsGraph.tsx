@@ -146,7 +146,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
           nodes={flow.nodes}
           edges={flow.edges}
           onNodeClick={handleNodeClick}
-          colorMode={resolvedTheme}
+          colorMode={resolvedTheme.base}
           onlyRenderVisibleElements
           fitView
         >

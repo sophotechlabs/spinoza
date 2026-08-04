@@ -23,7 +23,7 @@ describe('the theme a returning user gets', () => {
     const { useThemeStore } = await freshStore();
 
     expect(useThemeStore.getState().preference).toBe('dark');
-    expect(useThemeStore.getState().resolved).toBe('dark');
+    expect(useThemeStore.getState().resolved.id).toBe('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
@@ -32,7 +32,7 @@ describe('the theme a returning user gets', () => {
     const { useThemeStore } = await freshStore();
 
     expect(useThemeStore.getState().preference).toBe('light');
-    expect(useThemeStore.getState().resolved).toBe('light');
+    expect(useThemeStore.getState().resolved.id).toBe('light');
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
@@ -42,7 +42,7 @@ describe('the theme a returning user gets', () => {
     const { useThemeStore } = await freshStore();
 
     expect(useThemeStore.getState().preference).toBe('system');
-    expect(useThemeStore.getState().resolved).toBe('dark');
+    expect(useThemeStore.getState().resolved.id).toBe('dark');
   });
 });
 
@@ -52,7 +52,7 @@ describe('choosing a theme', () => {
 
     useThemeStore.getState().setPreference('light');
 
-    expect(useThemeStore.getState().resolved).toBe('light');
+    expect(useThemeStore.getState().resolved.id).toBe('light');
     expect(window.localStorage.getItem(THEME_KEY)).toBe('light');
     expect(document.documentElement.dataset.theme).toBe('light');
   });
@@ -63,7 +63,7 @@ describe('choosing a theme', () => {
 
     useThemeStore.getState().setPreference('system');
 
-    expect(useThemeStore.getState().resolved).toBe('dark');
+    expect(useThemeStore.getState().resolved.id).toBe('dark');
   });
 });
 
@@ -72,14 +72,14 @@ describe('the operating system changing under us', () => {
     window.localStorage.setItem(THEME_KEY, 'system');
     const { useThemeStore } = await freshStore();
 
-    expect(useThemeStore.getState().resolved).toBe('light');
+    expect(useThemeStore.getState().resolved.id).toBe('light');
 
     emitSystemDark(true);
-    expect(useThemeStore.getState().resolved).toBe('dark');
+    expect(useThemeStore.getState().resolved.id).toBe('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
 
     emitSystemDark(false);
-    expect(useThemeStore.getState().resolved).toBe('light');
+    expect(useThemeStore.getState().resolved.id).toBe('light');
   });
 
   it('is remembered but ignored while an explicit theme is set', async () => {
@@ -89,7 +89,7 @@ describe('the operating system changing under us', () => {
     emitSystemDark(true);
 
     expect(useThemeStore.getState().system).toBe('dark');
-    expect(useThemeStore.getState().resolved).toBe('light');
+    expect(useThemeStore.getState().resolved.id).toBe('light');
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 });

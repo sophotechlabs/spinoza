@@ -5,6 +5,7 @@ import InspectMetrics, { Chart } from '../../src/components/InspectMetrics';
 import type { ChartColors, ChartHandle } from '../../src/lib/chart';
 import type { MetricPoint } from '../../src/lib/types';
 import { canvasColors } from '../../src/lib/themeColors';
+import { BUILT_IN_THEMES, themeById } from '../../src/lib/theme';
 import { useThemeStore } from '../../src/store/theme';
 
 const createChart = vi.fn<(node: HTMLElement, options: unknown) => ChartHandle>();
@@ -252,7 +253,7 @@ describe('a chart whose colours change', () => {
       useThemeStore.getState().setPreference('light');
     });
 
-    const light = canvasColors('light');
+    const light = canvasColors(themeById(BUILT_IN_THEMES, 'light'));
     expect(createChart).toHaveBeenCalledTimes(built);
     expect(colorChanges.at(-1)).toEqual({
       stroke: light.memoryStroke,
