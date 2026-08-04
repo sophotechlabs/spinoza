@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
+import { parseColumn, parseRow } from './parse';
+import { asBoolean, asList, asRecord, asString, listOf } from './wire';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
 import { wsURL } from './wsBase';
@@ -58,18 +60,33 @@ function canSend(socket: WebSocket | null): socket is WebSocket {
   return socket.readyState === OPEN_STATE;
 }
 
-function listOr<T>(value: T[] | undefined): T[] {
-  if (value === undefined) {
-    return [];
+function serverMsg(raw: unknown): ServerMsg | null {
+  const item = asRecord(raw);
+  const subId = asString(item.subId);
+  switch (item.type) {
+    case 'snapshot':
+      return {
+        type: 'snapshot',
+        subId,
+        columns: listOf(item.columns, parseColumn),
+        namespaced: asBoolean(item.namespaced),
+        rows: listOf(item.rows, parseRow),
+      };
+    case 'added':
+      return { type: 'added', subId, row: parseRow(asRecord(item.row)) };
+    case 'modified':
+      return { type: 'modified', subId, row: parseRow(asRecord(item.row)) };
+    case 'deleted':
+      return { type: 'deleted', subId, uid: asString(item.uid) };
+    case 'log':
+      return { type: 'log', subId, lines: asList(item.lines).map(asString) };
+    case 'log-end':
+      return { type: 'log-end', subId };
+    case 'error':
+      return { type: 'error', subId, message: asString(item.message) };
+    default:
+      return null;
   }
-  return value;
-}
-
-function flagOr(value: boolean | undefined): boolean {
-  if (value === undefined) {
-    return false;
-  }
-  return value;
 }
 
 export function useResourceFeed(): ResourceFeed {
@@ -126,10 +143,14 @@ export function useResourceFeed(): ResourceFeed {
       if (disposed) {
         return;
       }
-      let msg: ServerMsg;
+      let raw: unknown = null;
       try {
-        msg = JSON.parse(event.data as string) as ServerMsg;
+        raw = JSON.parse(event.data as string);
       } catch {
+        return;
+      }
+      const msg = serverMsg(raw);
+      if (msg === null) {
         return;
       }
       if (!knownSub(msg)) {
@@ -137,12 +158,7 @@ export function useResourceFeed(): ResourceFeed {
       }
       switch (msg.type) {
         case 'snapshot':
-          store.applySnapshot(
-            msg.subId,
-            listOr(msg.columns),
-            flagOr(msg.namespaced),
-            listOr(msg.rows),
-          );
+          store.applySnapshot(msg.subId, msg.columns, msg.namespaced, msg.rows);
           break;
         case 'added':
         case 'modified':

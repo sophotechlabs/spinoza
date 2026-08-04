@@ -1,5 +1,6 @@
 import type { FluxDashboard } from './types';
 import { request } from './http';
+import { parseFluxDashboard } from './parse';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 
@@ -10,8 +11,7 @@ export async function fetchFlux(): Promise<FluxDashboard> {
   if (!response.ok) {
     throw new Error(`flux request failed with status ${response.status}`);
   }
-  const data = (await response.json()) as FluxDashboard;
-  return data;
+  return parseFluxDashboard(await response.json());
 }
 
 export function useFlux(): Polled<FluxDashboard> {

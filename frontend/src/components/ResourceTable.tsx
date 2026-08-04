@@ -18,7 +18,8 @@ import {
   useSubRows,
 } from '../store/resources';
 import { ratioColor, restartColor, statusColor } from '../lib/status';
-import { formatCpu, formatMem, useMetrics } from '../lib/metrics';
+import { useMetrics } from '../lib/metrics';
+import { cpuFromMilli, memFromMi } from '../lib/units';
 import { useElementWidth } from '../lib/useElementWidth';
 import { useNow } from '../lib/useNow';
 import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
@@ -104,9 +105,9 @@ function nodeUsageCell(usage: ResourceUsage | undefined, memory: boolean): React
     return <UsageBar percent={0} label="" />;
   }
   if (memory) {
-    return <UsageBar percent={usage.memPercent} label={formatMem(usage.memoryMi)} />;
+    return <UsageBar percent={usage.memPercent} label={memFromMi(usage.memoryMi)} />;
   }
-  return <UsageBar percent={usage.cpuPercent} label={formatCpu(usage.cpuMilli)} />;
+  return <UsageBar percent={usage.cpuPercent} label={cpuFromMilli(usage.cpuMilli)} />;
 }
 
 function podUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
@@ -114,9 +115,9 @@ function podUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactN
     return <span className="text-fg-muted">—</span>;
   }
   if (memory) {
-    return <span className="text-fg-muted">{formatMem(usage.memoryMi)}</span>;
+    return <span className="text-fg-muted">{memFromMi(usage.memoryMi)}</span>;
   }
-  return <span className="text-fg-muted">{formatCpu(usage.cpuMilli)}</span>;
+  return <span className="text-fg-muted">{cpuFromMilli(usage.cpuMilli)}</span>;
 }
 
 function renderMetricCell(kind: string, metrics: Metrics, row: Row, memory: boolean): ReactNode {

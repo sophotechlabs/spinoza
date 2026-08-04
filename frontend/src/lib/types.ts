@@ -17,9 +17,13 @@ export interface Column {
   render?: string;
 }
 
+export const CONTAINER_PHASES = ['running', 'waiting', 'terminated'] as const;
+
+export type ContainerPhase = (typeof CONTAINER_PHASES)[number];
+
 export interface ContainerState {
   name: string;
-  state: string;
+  state: ContainerPhase;
   reason?: string;
   ready: boolean;
   restarts: number;
@@ -58,6 +62,23 @@ export interface Condition {
   updated?: string;
 }
 
+export interface PodDetail {
+  containers: string[];
+}
+
+export interface WorkloadDetail {
+  replicas: number;
+}
+
+export interface NodeDetail {
+  schedulable: boolean;
+}
+
+export interface FluxDetail {
+  suspended: boolean;
+  handledAt?: string;
+}
+
 export interface ObjectDetail {
   apiVersion: string;
   kind: string;
@@ -69,13 +90,12 @@ export interface ObjectDetail {
   annotations?: Record<string, string>;
   owners?: OwnerRef[];
   conditions?: Condition[];
-  containers?: string[];
-  suspended?: boolean;
-  replicas?: number;
-  schedulable?: boolean;
-  handledAt?: string;
   ports?: ObjectPort[];
   yaml: string;
+  pod?: PodDetail;
+  workload?: WorkloadDetail;
+  node?: NodeDetail;
+  flux?: FluxDetail;
 }
 
 export interface ObjectPort {
@@ -83,6 +103,10 @@ export interface ObjectPort {
   port: number;
   protocol?: string;
 }
+
+export const FORWARD_STATES = ['running', 'failed'] as const;
+
+export type ForwardState = (typeof FORWARD_STATES)[number];
 
 export interface PortForward {
   id: string;
@@ -92,13 +116,17 @@ export interface PortForward {
   pod?: string;
   remotePort: number;
   localPort: number;
-  state: string;
+  state: ForwardState;
   error?: string;
   startedAt: string;
 }
 
+export const EVENT_TYPES = ['Normal', 'Warning'] as const;
+
+export type EventType = (typeof EVENT_TYPES)[number];
+
 export interface K8sEvent {
-  type: string;
+  type: EventType;
   reason: string;
   message: string;
   source: string;
@@ -154,7 +182,7 @@ export interface FluxResource {
   resource: string;
   name: string;
   namespace: string;
-  ready: string;
+  ready: ReadyState;
   suspended: boolean;
   revision: string;
   latest?: string;
@@ -205,7 +233,9 @@ export interface Metrics {
   error?: string;
 }
 
-export type GraphNodeCategory = 'source' | 'applier' | 'app' | 'managed';
+export const GRAPH_NODE_CATEGORIES = ['source', 'applier', 'app', 'managed'] as const;
+
+export type GraphNodeCategory = (typeof GRAPH_NODE_CATEGORIES)[number];
 
 export interface GraphNode {
   id: string;
@@ -220,9 +250,13 @@ export interface GraphNode {
   category: GraphNodeCategory;
 }
 
-export type ReadyState = 'True' | 'False' | 'Unknown';
+export const READY_STATES = ['True', 'False', 'Unknown', ''] as const;
 
-export type GraphEdgeKind = 'source' | 'dependsOn' | 'manages';
+export type ReadyState = (typeof READY_STATES)[number];
+
+export const GRAPH_EDGE_KINDS = ['source', 'dependsOn', 'manages'] as const;
+
+export type GraphEdgeKind = (typeof GRAPH_EDGE_KINDS)[number];
 
 export interface GraphEdge {
   from: string;

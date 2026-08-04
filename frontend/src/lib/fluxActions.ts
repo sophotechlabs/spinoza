@@ -1,5 +1,6 @@
 import type { Condition, FluxActionResult, ObjectDetail, ObjectRef } from './types';
 import { failure, fetchObject, refQuery } from './object';
+import { parseFluxActionResult } from './parse';
 import { request } from './http';
 
 export type FluxAction = 'reconcile' | 'suspend' | 'resume';
@@ -28,7 +29,7 @@ export async function runFluxAction(ref: ObjectRef, action: FluxAction): Promise
   if (!response.ok) {
     throw await failure(response, `${action} failed with status ${response.status}`);
   }
-  return (await response.json()) as FluxActionResult;
+  return parseFluxActionResult(await response.json());
 }
 
 export function readyCondition(detail: ObjectDetail): Condition | null {
@@ -49,7 +50,7 @@ export interface ReconcileProgress {
 }
 
 export function reconcileProgress(detail: ObjectDetail, requestedAt: string): ReconcileProgress {
-  if (detail.handledAt !== requestedAt) {
+  if (detail.flux?.handledAt !== requestedAt) {
     return { state: 'requested', message: 'Reconciliation requested…' };
   }
   const ready = readyCondition(detail);

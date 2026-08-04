@@ -1,12 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_RANGE,
-  RANGES,
-  fetchMetricHistory,
-  formatCpu,
-  formatMemory,
-  peak,
-} from '../../src/lib/metricsHistory';
+import { DEFAULT_RANGE, RANGES, fetchMetricHistory, peak } from '../../src/lib/metricsHistory';
 import { anySignal } from '../helpers';
 
 afterEach(() => {
@@ -56,18 +49,6 @@ describe('fetchMetricHistory', () => {
 });
 
 describe('formatting', () => {
-  it('renders CPU as millicores', () => {
-    expect(formatCpu(0.0284)).toBe('28m');
-    expect(formatCpu(1.5)).toBe('1500m');
-    expect(formatCpu(0)).toBe('0m');
-  });
-
-  it('renders memory in MiB and switches to GiB', () => {
-    expect(formatMemory(390721536)).toBe('373 MiB');
-    expect(formatMemory(3 * 1024 * 1024 * 1024)).toBe('3.00 GiB');
-    expect(formatMemory(0)).toBe('0 MiB');
-  });
-
   it('finds the peak, and returns zero for no samples', () => {
     expect(peak([{ value: 1 }, { value: 7 }, { value: 3 }])).toBe(7);
     expect(peak([])).toBe(0);

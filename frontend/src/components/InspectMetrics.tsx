@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MetricHistory, MetricPoint } from '../lib/types';
-import {
-  DEFAULT_RANGE,
-  RANGES,
-  fetchMetricHistory,
-  formatCpu,
-  formatMemory,
-  peak,
-} from '../lib/metricsHistory';
+import { DEFAULT_RANGE, RANGES, fetchMetricHistory, peak } from '../lib/metricsHistory';
 import type { MetricRange } from '../lib/metricsHistory';
+import { cpuFromCores, memFromBytes } from '../lib/units';
 import { createChart } from '../lib/chart';
 import type { ChartHandle } from '../lib/chart';
 import { canvasColors } from '../lib/themeColors';
@@ -158,7 +152,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
         <div className="mt-3">
           <div className="flex items-baseline justify-between">
             <span className="text-fg-soft">CPU</span>
-            <span className="text-fg-muted">peak {formatCpu(peak(cpu))}</span>
+            <span className="text-fg-muted">peak {cpuFromCores(peak(cpu))}</span>
           </div>
           <Chart
             points={cpu}
@@ -166,13 +160,13 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
             fill={colors.cpuFill}
             axis={colors.chartAxis}
             grid={colors.chartGrid}
-            format={formatCpu}
+            format={cpuFromCores}
             metric="cpu"
           />
 
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-fg-soft">Memory</span>
-            <span className="text-fg-muted">peak {formatMemory(peak(memory))}</span>
+            <span className="text-fg-muted">peak {memFromBytes(peak(memory))}</span>
           </div>
           <Chart
             points={memory}
@@ -180,7 +174,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
             fill={colors.memoryFill}
             axis={colors.chartAxis}
             grid={colors.chartGrid}
-            format={formatMemory}
+            format={memFromBytes}
             metric="memory"
           />
         </div>

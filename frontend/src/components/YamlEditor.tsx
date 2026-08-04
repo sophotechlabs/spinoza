@@ -1,4 +1,5 @@
 import Editor from '@monaco-editor/react';
+import '../lib/monaco';
 import { useResolvedTheme } from '../store/theme';
 
 interface YamlEditorProps {

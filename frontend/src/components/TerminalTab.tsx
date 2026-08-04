@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import type { PodTarget } from '../lib/pods';
 import { firstContainer } from '../lib/pods';
 import { useShellSupport } from '../lib/useShellSupport';
 import DebugPrompt from './DebugPrompt';
-import TerminalPanel from './TerminalPanel';
+import Loading from './Loading';
+
+const TerminalPanel = lazy(() => import('./TerminalPanel'));
 
 interface TerminalTabProps {
   pod: PodTarget | null;
@@ -72,11 +74,13 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
         />
       )}
       {!needsDebugContainer && (
-        <TerminalPanel
-          key={`${podNamespace}/${podName}/${terminalContainer}`}
-          target={{ namespace: podNamespace, pod: podName, container: terminalContainer }}
-          onShellMissing={markMissing}
-        />
+        <Suspense fallback={<Loading what="terminal" />}>
+          <TerminalPanel
+            key={`${podNamespace}/${podName}/${terminalContainer}`}
+            target={{ namespace: podNamespace, pod: podName, container: terminalContainer }}
+            onShellMissing={markMissing}
+          />
+        </Suspense>
       )}
     </div>
   );

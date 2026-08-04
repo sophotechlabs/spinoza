@@ -70,7 +70,7 @@ describe('scale', () => {
     render(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 3 })}
+        detail={detailFor({ workload: { replicas: 3 } })}
         onDone={vi.fn()}
       />,
     );
@@ -85,7 +85,7 @@ describe('scale', () => {
     render(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 3 })}
+        detail={detailFor({ workload: { replicas: 3 } })}
         onDone={onDone}
       />,
     );
@@ -108,7 +108,7 @@ describe('scale', () => {
     render(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 1 })}
+        detail={detailFor({ workload: { replicas: 1 } })}
         onDone={vi.fn()}
       />,
     );
@@ -127,7 +127,7 @@ describe('scale', () => {
     render(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 2 })}
+        detail={detailFor({ workload: { replicas: 2 } })}
         onDone={vi.fn()}
       />,
     );
@@ -145,7 +145,7 @@ describe('scale', () => {
     render(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 1 })}
+        detail={detailFor({ workload: { replicas: 1 } })}
         onDone={vi.fn()}
       />,
     );
@@ -189,7 +189,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: true })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
         onDone={vi.fn()}
       />,
     );
@@ -212,7 +212,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: false })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: false } })}
         onDone={vi.fn()}
       />,
     );
@@ -239,7 +239,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: true })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
         onDone={vi.fn()}
       />,
     );
@@ -266,7 +266,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: true })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
         onDone={vi.fn()}
       />,
     );
@@ -297,7 +297,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: true })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
         onDone={vi.fn()}
       />,
     );
@@ -326,7 +326,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: true })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
         onDone={vi.fn()}
       />,
     );
@@ -343,7 +343,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: true })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
         onDone={vi.fn()}
       />,
     );
@@ -369,7 +369,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: true })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
         onDone={vi.fn()}
       />,
     );
@@ -387,7 +387,7 @@ describe('node actions', () => {
     render(
       <InspectObjectActions
         target={node}
-        detail={detailFor({ kind: 'Node', schedulable: true })}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
         onDone={vi.fn()}
       />,
     );
@@ -404,7 +404,7 @@ describe('a rejection that is not an Error', () => {
     render(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 1 })}
+        detail={detailFor({ workload: { replicas: 1 } })}
         onDone={vi.fn()}
       />,
     );
@@ -422,7 +422,7 @@ describe('switching objects', () => {
     const view = render(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 1 })}
+        detail={detailFor({ workload: { replicas: 1 } })}
         onDone={vi.fn()}
       />,
     );
@@ -433,7 +433,7 @@ describe('switching objects', () => {
     view.rerender(
       <InspectObjectActions
         target={{ ...deployment, name: 'api' }}
-        detail={detailFor({ name: 'api', replicas: 7 })}
+        detail={detailFor({ name: 'api', workload: { replicas: 7 } })}
         onDone={vi.fn()}
       />,
     );
@@ -448,7 +448,7 @@ describe('switching objects', () => {
     const view = render(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 3 })}
+        detail={detailFor({ workload: { replicas: 3 } })}
         onDone={vi.fn()}
       />,
     );
@@ -461,7 +461,7 @@ describe('switching objects', () => {
     view.rerender(
       <InspectObjectActions
         target={deployment}
-        detail={detailFor({ replicas: 5 })}
+        detail={detailFor({ workload: { replicas: 5 } })}
         onDone={vi.fn()}
       />,
     );

@@ -1,6 +1,7 @@
 import type { MetricHistory } from './types';
 import { failure } from './object';
 import { request } from './http';
+import { parseMetricHistory } from './parse';
 
 export const RANGES = ['15m', '1h', '6h', '24h'] as const;
 
@@ -18,19 +19,7 @@ export async function fetchMetricHistory(
   if (!response.ok) {
     throw await failure(response, `metric history failed with status ${response.status}`);
   }
-  return (await response.json()) as MetricHistory;
-}
-
-export function formatCpu(value: number): string {
-  return `${(value * 1000).toFixed(0)}m`;
-}
-
-export function formatMemory(value: number): string {
-  const mib = value / (1024 * 1024);
-  if (mib >= 1024) {
-    return `${(mib / 1024).toFixed(2)} GiB`;
-  }
-  return `${mib.toFixed(0)} MiB`;
+  return parseMetricHistory(await response.json());
 }
 
 export function peak(points: { value: number }[]): number {

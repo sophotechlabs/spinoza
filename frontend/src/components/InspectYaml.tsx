@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import type { ObjectDetail, ObjectRef } from '../lib/types';
 import { applyObject, deleteObject } from '../lib/object';
 import { notifyOk } from '../store/toasts';
 import { fetchSchema, gvkOf, registerSchema, schemaPath } from '../lib/schema';
-import YamlEditor from './YamlEditor';
+import Loading from './Loading';
+
+const YamlEditor = lazy(() => import('./YamlEditor'));
 
 interface InspectYamlProps {
   target: ObjectRef;
@@ -120,7 +122,9 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1">
-        <YamlEditor value={draft} path={path} readOnly={busy} onChange={setDraft} />
+        <Suspense fallback={<Loading what="editor" />}>
+          <YamlEditor value={draft} path={path} readOnly={busy} onChange={setDraft} />
+        </Suspense>
       </div>
       {error !== null && (
         <p className="border-t border-edge bg-error-tint/40 px-3 py-1.5 text-xs break-words text-error-strong">

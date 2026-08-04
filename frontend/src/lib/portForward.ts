@@ -1,6 +1,8 @@
 import type { ObjectRef, PortForward } from './types';
 import { failure } from './object';
 import { request } from './http';
+import { parseForward, parseForwards } from './parse';
+import { asRecord } from './wire';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 import { useForwardsStore } from '../store/forwards';
@@ -25,7 +27,7 @@ export async function listForwards(): Promise<PortForward[]> {
   if (!response.ok) {
     throw await failure(response, `forward list failed with status ${response.status}`);
   }
-  return (await response.json()) as PortForward[];
+  return parseForwards(await response.json());
 }
 
 export async function startForward(
@@ -43,7 +45,7 @@ export async function startForward(
   if (!response.ok) {
     throw await failure(response, `port forward failed with status ${response.status}`);
   }
-  return (await response.json()) as PortForward;
+  return parseForward(asRecord(await response.json()));
 }
 
 export async function stopForward(id: string): Promise<void> {

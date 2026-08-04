@@ -1,12 +1,13 @@
-import type { ResourceCatalog, ResourceCounts } from './types';
+import type { ResourceCatalog } from './types';
 import { request } from './http';
+import { parseCatalog, parseCounts } from './parse';
 
 async function catalog(method: string): Promise<ResourceCatalog> {
   const response = await request('/api/resources', { method });
   if (!response.ok) {
     throw new Error(`discovery request failed with status ${response.status}`);
   }
-  return (await response.json()) as ResourceCatalog;
+  return parseCatalog(await response.json());
 }
 
 export async function fetchResources(): Promise<ResourceCatalog> {
@@ -22,6 +23,5 @@ export async function fetchResourceCounts(): Promise<Record<string, number>> {
   if (!response.ok) {
     throw new Error(`resource counts request failed with status ${response.status}`);
   }
-  const data = (await response.json()) as Partial<ResourceCounts>;
-  return data.counts ?? {};
+  return parseCounts(await response.json());
 }

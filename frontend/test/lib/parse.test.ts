@@ -1,0 +1,256 @@
+import { describe, expect, it } from 'vitest';
+import {
+  parseActionResult,
+  parseCatalog,
+  parseCounts,
+  parseDebugSession,
+  parseDebugSupport,
+  parseEvents,
+  parseExecSupport,
+  parseFluxActionResult,
+  parseFluxDashboard,
+  parseForward,
+  parseForwards,
+  parseGraph,
+  parseMetricHistory,
+  parseMetrics,
+  parseObjectDetail,
+  parseRow,
+} from '../../src/lib/parse';
+
+describe('parseRow', () => {
+  it('fills in every field a truncated row left out', () => {
+    expect(parseRow({ uid: 'u' })).toEqual({
+      uid: 'u',
+      name: '',
+      namespace: '',
+      createdAt: '',
+      cells: [],
+      containers: undefined,
+    });
+  });
+
+  it('narrows an unknown container state to waiting', () => {
+    const row = parseRow({
+      uid: 'u',
+      containers: [{ name: 'app', state: 'sleeping', ready: 'yes', restarts: '3' }],
+    });
+
+    expect(row.containers).toEqual([
+      {
+        name: 'app',
+        state: 'waiting',
+        reason: undefined,
+        ready: false,
+        restarts: 0,
+        init: false,
+        ephemeral: undefined,
+      },
+    ]);
+  });
+
+  it('drops cells that are not strings', () => {
+    expect(parseRow({ cells: ['a', 3, null] }).cells).toEqual(['a', '', '']);
+  });
+});
+
+describe('parseObjectDetail', () => {
+  it('groups the per-kind fields into facets', () => {
+    const detail = parseObjectDetail({
+      apiVersion: 'v1',
+      kind: 'Pod',
+      name: 'web',
+      namespace: 'prod',
+      uid: 'u',
+      createdAt: 'now',
+      containers: ['app', 'sidecar'],
+      replicas: 3,
+      schedulable: false,
+      suspended: true,
+      handledAt: 'token',
+      yaml: 'kind: Pod\n',
+    });
+
+    expect(detail.pod).toEqual({ containers: ['app', 'sidecar'] });
+    expect(detail.workload).toEqual({ replicas: 3 });
+    expect(detail.node).toEqual({ schedulable: false });
+    expect(detail.flux).toEqual({ suspended: true, handledAt: 'token' });
+  });
+
+  it('leaves every facet out when the object carries none of them', () => {
+    const detail = parseObjectDetail({ kind: 'ConfigMap', yaml: '' });
+
+    expect(detail.pod).toBeUndefined();
+    expect(detail.workload).toBeUndefined();
+    expect(detail.node).toBeUndefined();
+    expect(detail.flux).toBeUndefined();
+  });
+
+  it('keeps labels and annotations that are string maps and drops the rest', () => {
+    const detail = parseObjectDetail({ labels: { a: 'x', b: 2 }, annotations: 'nope' });
+
+    expect(detail.labels).toEqual({ a: 'x' });
+    expect(detail.annotations).toBeUndefined();
+  });
+
+  it('parses owners, conditions and ports', () => {
+    const detail = parseObjectDetail({
+      owners: [{ kind: 'ReplicaSet', name: 'web-1', uid: 'o' }],
+      conditions: [{ type: 'Ready', status: 'True', reason: 'ok' }],
+      ports: [{ name: 'http', port: 8080, protocol: 'TCP' }],
+    });
+
+    expect(detail.owners).toEqual([{ kind: 'ReplicaSet', name: 'web-1', uid: 'o' }]);
+    expect(detail.conditions?.[0].type).toBe('Ready');
+    expect(detail.ports).toEqual([{ name: 'http', port: 8080, protocol: 'TCP' }]);
+  });
+
+  it('survives a payload that is not an object at all', () => {
+    expect(parseObjectDetail('nope').kind).toBe('');
+  });
+});
+
+describe('parseEvents', () => {
+  it('narrows an unknown event type to Normal', () => {
+    const events = parseEvents([{ type: 'Catastrophe', reason: 'Boom', count: 2 }]);
+
+    expect(events[0].type).toBe('Normal');
+    expect(events[0].count).toBe(2);
+  });
+
+  it('keeps a Warning', () => {
+    expect(parseEvents([{ type: 'Warning' }])[0].type).toBe('Warning');
+  });
+});
+
+describe('parseForwards', () => {
+  it('treats an unknown forward state as failed rather than running', () => {
+    expect(parseForward({ id: 'pf-1', state: 'zombie' }).state).toBe('failed');
+    expect(parseForward({ id: 'pf-1', state: 'running' }).state).toBe('running');
+  });
+
+  it('parses a list', () => {
+    expect(parseForwards([{ id: 'a' }, { id: 'b' }]).map((one) => one.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('parseFluxDashboard', () => {
+  it('narrows an unrecognised ready value to Unknown', () => {
+    const dash = parseFluxDashboard({
+      groups: [{ name: 'Sources', resources: [{ name: 'repo', ready: 'Maybe' }] }],
+    });
+
+    expect(dash.groups[0].resources[0].ready).toBe('Unknown');
+  });
+
+  it('keeps a blank ready value, which means no status yet', () => {
+    const dash = parseFluxDashboard({ groups: [{ resources: [{ ready: '' }] }] });
+
+    expect(dash.groups[0].resources[0].ready).toBe('');
+  });
+
+  it('returns an empty dashboard for a payload with no groups', () => {
+    expect(parseFluxDashboard({}).groups).toEqual([]);
+  });
+});
+
+describe('parseGraph', () => {
+  it('narrows unknown node categories and edge kinds', () => {
+    const graph = parseGraph({
+      nodes: [{ id: 'a', category: 'wat', ready: 'True' }],
+      edges: [{ from: 'a', to: 'b', kind: 'wat' }],
+    });
+
+    expect(graph.nodes[0].category).toBe('managed');
+    expect(graph.edges[0].kind).toBe('manages');
+  });
+});
+
+describe('parseMetrics', () => {
+  it('zeroes usage numbers the backend sent as strings', () => {
+    const metrics = parseMetrics({ pods: { 'prod/web': { cpuMilli: '150', memoryMi: 192 } } });
+
+    expect(metrics.pods['prod/web']).toEqual({
+      cpuMilli: 0,
+      memoryMi: 192,
+      cpuPercent: 0,
+      memPercent: 0,
+    });
+  });
+
+  it('gives empty maps for a payload with neither pods nor nodes', () => {
+    expect(parseMetrics({})).toEqual({ pods: {}, nodes: {}, error: undefined });
+  });
+});
+
+describe('parseMetricHistory', () => {
+  it('keeps the two series apart and drops junk points', () => {
+    const history = parseMetricHistory({
+      namespace: 'prod',
+      pod: 'web',
+      cpu: [{ at: 1, value: 0.5 }],
+      memory: [{ at: 2, value: 'x' }],
+    });
+
+    expect(history.cpu).toEqual([{ at: 1, value: 0.5 }]);
+    expect(history.memory).toEqual([{ at: 2, value: 0 }]);
+  });
+});
+
+describe('parseCatalog', () => {
+  it('parses categories and their descriptors', () => {
+    const catalog = parseCatalog({
+      categories: [{ name: 'Workloads', resources: [{ kind: 'Pod', namespaced: true }] }],
+      error: 'partial',
+    });
+
+    expect(catalog.categories[0].resources[0].kind).toBe('Pod');
+    expect(catalog.categories[0].resources[0].namespaced).toBe(true);
+    expect(catalog.error).toBe('partial');
+  });
+});
+
+describe('parseCounts', () => {
+  it('keeps numeric counts only', () => {
+    expect(parseCounts({ counts: { '/v1/pods': 3, '/v1/nodes': 'x' } })).toEqual({ '/v1/pods': 3 });
+  });
+
+  it('is empty when the payload has no counts', () => {
+    expect(parseCounts({})).toEqual({});
+  });
+});
+
+describe('the remaining action payloads', () => {
+  it('parses an action result with its pod outcomes', () => {
+    const result = parseActionResult({
+      action: 'drain',
+      message: 'done',
+      dryRun: true,
+      pods: [{ namespace: 'prod', name: 'web', outcome: 'evicted' }],
+    });
+
+    expect(result.pods).toEqual([
+      { namespace: 'prod', name: 'web', outcome: 'evicted', reason: undefined },
+    ]);
+    expect(result.dryRun).toBe(true);
+  });
+
+  it('parses a flux action result', () => {
+    expect(parseFluxActionResult({ action: 'reconcile', requestedAt: 'token' })).toEqual({
+      action: 'reconcile',
+      requestedAt: 'token',
+    });
+  });
+
+  it('narrows an unknown shell state to unknown', () => {
+    expect(parseExecSupport({ shell: 'maybe' }).shell).toBe('unknown');
+    expect(parseExecSupport({ shell: 'present' }).shell).toBe('present');
+  });
+
+  it('parses a debug session and its support probe', () => {
+    expect(parseDebugSession({ container: 'dbg', created: true, image: 'busybox' }).created).toBe(
+      true,
+    );
+    expect(parseDebugSupport({ allowed: true, image: 'busybox' }).allowed).toBe(true);
+  });
+});

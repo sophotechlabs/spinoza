@@ -1,6 +1,6 @@
-import type { FluxResource } from './types';
+import type { FluxResource, ReadyState } from './types';
 
-export function readyDot(ready: string): string {
+export function readyDot(ready: ReadyState): string {
   if (ready === 'True') {
     return 'bg-ok-solid';
   }
@@ -10,7 +10,7 @@ export function readyDot(ready: string): string {
   return 'bg-idle-solid';
 }
 
-export function readyText(ready: string): string {
+export function readyText(ready: ReadyState): string {
   if (ready === 'True') {
     return 'text-ok';
   }
@@ -20,7 +20,7 @@ export function readyText(ready: string): string {
   return 'text-fg-muted';
 }
 
-export function readyLabel(ready: string): string {
+export function readyLabel(ready: ReadyState): string {
   if (ready === 'True') {
     return 'Ready';
   }

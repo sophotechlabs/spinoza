@@ -5,8 +5,6 @@ import {
   METRICS_CUTOFF_MS,
   barColor,
   fetchMetrics,
-  formatCpu,
-  formatMem,
   isUsable,
   loadMetrics,
   useMetrics,
@@ -27,21 +25,6 @@ function stubOk(data: Metrics): ReturnType<typeof vi.fn> {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
-});
-
-describe('formatCpu', () => {
-  it('formats millicores and hides zero', () => {
-    expect(formatCpu(150)).toBe('150m');
-    expect(formatCpu(0)).toBe('');
-  });
-});
-
-describe('formatMem', () => {
-  it('formats mebibytes, gibibytes and hides zero', () => {
-    expect(formatMem(192)).toBe('192Mi');
-    expect(formatMem(2048)).toBe('2.0Gi');
-    expect(formatMem(0)).toBe('');
-  });
 });
 
 describe('barColor', () => {

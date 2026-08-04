@@ -1,6 +1,7 @@
 import type { DebugSession, DebugSupport, ExecTarget } from './types';
 import { failure } from './object';
 import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
+import { parseDebugSession, parseDebugSupport } from './parse';
 import { execQuery } from './exec';
 
 export const DEBUG_PROFILES = [
@@ -26,7 +27,7 @@ export async function startDebug(target: ExecTarget, profile: DebugProfile): Pro
       `starting a debug container failed with status ${response.status}`,
     );
   }
-  return (await response.json()) as DebugSession;
+  return parseDebugSession(await response.json());
 }
 
 export async function fetchDebugSupport(namespace: string, pod: string): Promise<DebugSupport> {
@@ -35,5 +36,5 @@ export async function fetchDebugSupport(namespace: string, pod: string): Promise
   if (!response.ok) {
     throw await failure(response, `debug support failed with status ${response.status}`);
   }
-  return (await response.json()) as DebugSupport;
+  return parseDebugSupport(await response.json());
 }

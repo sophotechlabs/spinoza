@@ -1,6 +1,7 @@
 import type { ActionResult, ObjectDetail, ObjectRef } from './types';
 import { failure, refQuery } from './object';
 import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
+import { parseActionResult } from './parse';
 
 export type ObjectAction = 'scale' | 'restart' | 'cordon' | 'uncordon' | 'drain';
 
@@ -72,21 +73,23 @@ export async function runAction(
   if (!response.ok) {
     throw await failure(response, `${action} failed with status ${response.status}`);
   }
-  return (await response.json()) as ActionResult;
+  return parseActionResult(await response.json());
 }
 
 export function replicasOf(detail: ObjectDetail | null): number {
-  if (detail?.replicas === undefined) {
+  const workload = detail?.workload;
+  if (workload === undefined) {
     return 0;
   }
-  return detail.replicas;
+  return workload.replicas;
 }
 
 export function isCordoned(detail: ObjectDetail | null): boolean {
-  if (detail?.schedulable === undefined) {
+  const node = detail?.node;
+  if (node === undefined) {
     return false;
   }
-  return !detail.schedulable;
+  return !node.schedulable;
 }
 
 export function countBy(result: ActionResult, outcome: string): number {

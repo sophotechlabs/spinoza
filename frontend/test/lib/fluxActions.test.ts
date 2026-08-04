@@ -102,14 +102,20 @@ function detail(overrides: Partial<ObjectDetail> = {}): ObjectDetail {
 
 describe('reconcileProgress', () => {
   it('waits while the controller has not picked the request up', () => {
-    const progress = reconcileProgress(detail({ handledAt: 'older' }), TOKEN);
+    const progress = reconcileProgress(
+      detail({ flux: { suspended: false, handledAt: 'older' } }),
+      TOKEN,
+    );
 
     expect(progress.state).toBe('requested');
     expect(progress.message).toBe('Reconciliation requested…');
   });
 
   it('reports running once handled but with no Ready condition yet', () => {
-    const progress = reconcileProgress(detail({ handledAt: TOKEN }), TOKEN);
+    const progress = reconcileProgress(
+      detail({ flux: { suspended: false, handledAt: TOKEN } }),
+      TOKEN,
+    );
 
     expect(progress.state).toBe('running');
   });
@@ -117,7 +123,7 @@ describe('reconcileProgress', () => {
   it('reports success from a true Ready condition', () => {
     const progress = reconcileProgress(
       detail({
-        handledAt: TOKEN,
+        flux: { suspended: false, handledAt: TOKEN },
         conditions: [{ type: 'Ready', status: 'True', message: 'Applied revision main@sha1:abc' }],
       }),
       TOKEN,
@@ -130,7 +136,7 @@ describe('reconcileProgress', () => {
   it('reports failure with the controller message', () => {
     const progress = reconcileProgress(
       detail({
-        handledAt: TOKEN,
+        flux: { suspended: false, handledAt: TOKEN },
         conditions: [{ type: 'Ready', status: 'False', message: 'kustomize build failed' }],
       }),
       TOKEN,
@@ -143,7 +149,7 @@ describe('reconcileProgress', () => {
   it('keeps waiting while Ready is unknown', () => {
     const progress = reconcileProgress(
       detail({
-        handledAt: TOKEN,
+        flux: { suspended: false, handledAt: TOKEN },
         conditions: [{ type: 'Ready', status: 'Unknown', message: 'reconciliation in progress' }],
       }),
       TOKEN,
@@ -155,7 +161,10 @@ describe('reconcileProgress', () => {
 
   it('drops the colon when the condition carries no message', () => {
     const progress = reconcileProgress(
-      detail({ handledAt: TOKEN, conditions: [{ type: 'Ready', status: 'True' }] }),
+      detail({
+        flux: { suspended: false, handledAt: TOKEN },
+        conditions: [{ type: 'Ready', status: 'True' }],
+      }),
       TOKEN,
     );
 
@@ -196,12 +205,17 @@ describe('pollReconcile', () => {
     vi.unstubAllGlobals();
   });
 
+  function wire(one: ObjectDetail): Record<string, unknown> {
+    const { flux, ...rest } = one;
+    return { ...rest, suspended: flux?.suspended, handledAt: flux?.handledAt };
+  }
+
   function stubObject(...responses: ObjectDetail[]) {
     let call = 0;
     vi.stubGlobal(
       'fetch',
       vi.fn(() => {
-        const body = responses[Math.min(call, responses.length - 1)];
+        const body = wire(responses[Math.min(call, responses.length - 1)]);
         call += 1;
         return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
       }),
@@ -210,9 +224,15 @@ describe('pollReconcile', () => {
 
   it('reports each step until the reconcile settles', async () => {
     stubObject(
-      detail({ handledAt: 'older' }),
-      detail({ handledAt: TOKEN, conditions: [{ type: 'Ready', status: 'Unknown' }] }),
-      detail({ handledAt: TOKEN, conditions: [{ type: 'Ready', status: 'True' }] }),
+      detail({ flux: { suspended: false, handledAt: 'older' } }),
+      detail({
+        flux: { suspended: false, handledAt: TOKEN },
+        conditions: [{ type: 'Ready', status: 'Unknown' }],
+      }),
+      detail({
+        flux: { suspended: false, handledAt: TOKEN },
+        conditions: [{ type: 'Ready', status: 'True' }],
+      }),
     );
     const seen: string[] = [];
 
@@ -225,7 +245,7 @@ describe('pollReconcile', () => {
   });
 
   it('stops when the caller loses interest', async () => {
-    stubObject(detail({ handledAt: 'older' }));
+    stubObject(detail({ flux: { suspended: false, handledAt: 'older' } }));
     const seen: string[] = [];
 
     await pollReconcile(ref, TOKEN, (progress) => {
@@ -249,7 +269,12 @@ describe('pollReconcile', () => {
           ok: true,
           json: () =>
             Promise.resolve(
-              detail({ handledAt: TOKEN, conditions: [{ type: 'Ready', status: 'True' }] }),
+              wire(
+                detail({
+                  flux: { suspended: false, handledAt: TOKEN },
+                  conditions: [{ type: 'Ready', status: 'True' }],
+                }),
+              ),
             ),
         });
       }),
@@ -266,7 +291,7 @@ describe('pollReconcile', () => {
 
   it('gives up after the timeout without claiming success', async () => {
     vi.useFakeTimers();
-    stubObject(detail({ handledAt: 'older' }));
+    stubObject(detail({ flux: { suspended: false, handledAt: 'older' } }));
     const seen: string[] = [];
 
     const done = pollReconcile(ref, TOKEN, (progress) => {

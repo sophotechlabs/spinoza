@@ -1,6 +1,7 @@
 import type { ExecSupport, ExecTarget } from './types';
 import { failure } from './object';
 import { request } from './http';
+import { parseExecSupport } from './parse';
 import { wsURL } from './wsBase';
 
 export const CHANNEL_STDIN = 0x00;
@@ -47,7 +48,7 @@ export async function fetchExecSupport(target: ExecTarget): Promise<ExecSupport>
   if (!response.ok) {
     throw await failure(response, `exec support failed with status ${response.status}`);
   }
-  return (await response.json()) as ExecSupport;
+  return parseExecSupport(await response.json());
 }
 
 export function frame(channel: number, payload: Uint8Array): Uint8Array {

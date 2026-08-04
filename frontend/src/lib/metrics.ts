@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Metrics } from './types';
 import { request } from './http';
+import { parseMetrics } from './parse';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 
@@ -12,8 +13,7 @@ export async function fetchMetrics(): Promise<Metrics> {
   if (!response.ok) {
     throw new Error(`metrics request failed with status ${response.status}`);
   }
-  const data = (await response.json()) as Metrics;
-  return data;
+  return parseMetrics(await response.json());
 }
 
 export function isUsable(data: Metrics): boolean {
@@ -77,23 +77,6 @@ export function useMetrics(enabled: boolean): Polled<Metrics> {
     return polled;
   }
   return { data: null, error: polled.error, stale: true, reload: polled.reload };
-}
-
-export function formatCpu(milli: number): string {
-  if (milli <= 0) {
-    return '';
-  }
-  return `${milli}m`;
-}
-
-export function formatMem(mi: number): string {
-  if (mi <= 0) {
-    return '';
-  }
-  if (mi >= 1024) {
-    return `${(mi / 1024).toFixed(1)}Gi`;
-  }
-  return `${mi}Mi`;
 }
 
 export function barColor(percent: number): string {

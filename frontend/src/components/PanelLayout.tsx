@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ContainerState, LogRequest, ObjectDetail, ObjectRef, Row } from '../lib/types';
 import type { DockSide, PanelContext, PanelId } from '../lib/panels';
@@ -21,10 +21,12 @@ import InspectPorts from './InspectPorts';
 import InspectOverview from './InspectOverview';
 import InspectYaml from './InspectYaml';
 import InspectEvents from './InspectEvents';
-import InspectMetrics from './InspectMetrics';
 import InspectLogs from './InspectLogs';
 import ForwardsPanel from './ForwardsPanel';
 import TerminalTab from './TerminalTab';
+import Loading from './Loading';
+
+const InspectMetrics = lazy(() => import('./InspectMetrics'));
 
 interface PanelLayoutProps {
   selection: Selection | null;
@@ -75,7 +77,7 @@ function logContainers(states: ContainerState[] | undefined, detail: ObjectDetai
   if (states !== undefined && states.length > 0) {
     return containerNames(states);
   }
-  return detail.containers ?? [];
+  return detail.pod?.containers ?? [];
 }
 
 function forwardable(detail: ObjectDetail): string | null {
@@ -124,7 +126,11 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
     objectPanel(ctx, (selection, detail) => (
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isFluxObject(detail.apiVersion) && (
-          <InspectActions target={selection.ref} suspended={detail.suspended} onDone={ctx.reload} />
+          <InspectActions
+            target={selection.ref}
+            suspended={detail.flux?.suspended}
+            onDone={ctx.reload}
+          />
         )}
         {hasActions(selection.ref) && (
           <InspectObjectActions target={selection.ref} detail={detail} onDone={ctx.reload} />
@@ -164,7 +170,9 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
     )),
   metrics: (ctx) =>
     objectPanel(ctx, (_selection, detail) => (
-      <InspectMetrics namespace={detail.namespace} pod={detail.name} />
+      <Suspense fallback={<Loading what="charts" />}>
+        <InspectMetrics namespace={detail.namespace} pod={detail.name} />
+      </Suspense>
     )),
 };
 

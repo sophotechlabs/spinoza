@@ -7,6 +7,16 @@ export default defineConfig({
   build: {
     outDir: '../web/dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          monaco: ['monaco-editor', 'monaco-yaml', '@monaco-editor/react'],
+          xterm: ['@xterm/xterm', '@xterm/addon-fit'],
+          graph: ['@xyflow/react', '@dagrejs/dagre'],
+          charts: ['uplot'],
+        },
+      },
+    },
   },
   server: {
     proxy: {

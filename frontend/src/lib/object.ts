@@ -1,5 +1,6 @@
 import type { K8sEvent, ObjectDetail, ObjectRef } from './types';
 import { request } from './http';
+import { parseEvents, parseObjectDetail } from './parse';
 
 export function refQuery(ref: ObjectRef): string {
   const params = new URLSearchParams({
@@ -36,7 +37,7 @@ export async function fetchObject(ref: ObjectRef): Promise<ObjectDetail> {
   if (!response.ok) {
     throw await failure(response, `object request failed with status ${response.status}`);
   }
-  return (await response.json()) as ObjectDetail;
+  return parseObjectDetail(await response.json());
 }
 
 export async function applyObject(ref: ObjectRef, doc: string): Promise<ObjectDetail> {
@@ -48,7 +49,7 @@ export async function applyObject(ref: ObjectRef, doc: string): Promise<ObjectDe
   if (!response.ok) {
     throw await failure(response, `apply failed with status ${response.status}`);
   }
-  return (await response.json()) as ObjectDetail;
+  return parseObjectDetail(await response.json());
 }
 
 export async function deleteObject(ref: ObjectRef): Promise<void> {
@@ -64,5 +65,5 @@ export async function fetchEvents(namespace: string, uid: string): Promise<K8sEv
   if (!response.ok) {
     throw await failure(response, `events request failed with status ${response.status}`);
   }
-  return (await response.json()) as K8sEvent[];
+  return parseEvents(await response.json());
 }

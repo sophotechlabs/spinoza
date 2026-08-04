@@ -12,7 +12,7 @@ const detail: ObjectDetail = {
   namespace: 'prod',
   uid: 'uid-web',
   createdAt: '2026-08-03T09:00:00Z',
-  containers: ['app', 'sidecar'],
+  pod: { containers: ['app', 'sidecar'] },
   yaml: '',
 };
 
@@ -84,6 +84,6 @@ describe('podFor', () => {
   });
 
   it('offers nothing for a pod the server reports no containers for', () => {
-    expect(podFor({ ref, row: null }, { ...detail, containers: undefined })).toBeNull();
+    expect(podFor({ ref, row: null }, { ...detail, pod: undefined })).toBeNull();
   });
 });

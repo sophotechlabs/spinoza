@@ -156,15 +156,15 @@ describe('runAction', () => {
 
 describe('reading the detail', () => {
   it('reads the replica count, defaulting to zero', () => {
-    expect(replicasOf(detail({ replicas: 4 }))).toBe(4);
-    expect(replicasOf(detail({ replicas: 0 }))).toBe(0);
+    expect(replicasOf(detail({ workload: { replicas: 4 } }))).toBe(4);
+    expect(replicasOf(detail({ workload: { replicas: 0 } }))).toBe(0);
     expect(replicasOf(detail({}))).toBe(0);
     expect(replicasOf(null)).toBe(0);
   });
 
   it('knows a cordoned node from a schedulable one', () => {
-    expect(isCordoned(detail({ schedulable: false }))).toBe(true);
-    expect(isCordoned(detail({ schedulable: true }))).toBe(false);
+    expect(isCordoned(detail({ node: { schedulable: false } }))).toBe(true);
+    expect(isCordoned(detail({ node: { schedulable: true } }))).toBe(false);
     expect(isCordoned(detail({}))).toBe(false);
     expect(isCordoned(null)).toBe(false);
   });

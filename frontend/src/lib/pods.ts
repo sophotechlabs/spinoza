@@ -32,7 +32,7 @@ function podFromDetail(detail: ObjectDetail | null): PodTarget | null {
   if (detail.kind !== 'Pod') {
     return null;
   }
-  const names = detail.containers ?? [];
+  const names = detail.pod?.containers ?? [];
   if (names.length === 0) {
     return null;
   }

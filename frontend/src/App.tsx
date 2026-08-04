@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { FluxResource, GraphNode, ResourceDescriptor, Row, View } from './lib/types';
 import { useResourceFeed } from './lib/feed';
 import { fetchContexts } from './lib/contexts';
@@ -13,10 +13,12 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Toasts from './components/Toasts';
 import ResourceTable from './components/ResourceTable';
 import PanelLayout from './components/PanelLayout';
-import GitopsGraph from './components/GitopsGraph';
 import FluxList from './components/FluxList';
 import FluxOverview from './components/FluxOverview';
 import FluxRoles from './components/FluxRoles';
+import Loading from './components/Loading';
+
+const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 
 const FIRST_SUB_ID = 'main#0';
 
@@ -145,7 +147,11 @@ export default function App() {
     />
   );
   if (route.view === 'gitops') {
-    mainArea = <GitopsGraph onSelect={handleSelectNode} />;
+    mainArea = (
+      <Suspense fallback={<Loading what="graph" />}>
+        <GitopsGraph onSelect={handleSelectNode} />
+      </Suspense>
+    );
   }
   if (route.view === 'flux-list') {
     mainArea = <FluxList onSelect={handleSelectFlux} />;
