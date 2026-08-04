@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Category, ResourceDescriptor, View } from '../lib/types';
-import { fetchResources, refreshResources } from '../lib/discovery';
+import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/discovery';
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 
@@ -33,16 +33,42 @@ function chevron(collapsed: boolean): string {
   return '▾';
 }
 
-function resourceClass(active: boolean, nested = false): string {
+function resourceClass(active: boolean, nested = false, empty = false): string {
   let indent = 'px-6';
   if (nested) {
     indent = 'px-9';
   }
-  const base = `block w-full truncate ${indent} py-1 text-left`;
+  const base = `flex w-full items-center justify-between gap-1 ${indent} py-1 text-left`;
   if (active) {
     return `${base} bg-neutral-800 text-neutral-100`;
   }
+  if (empty) {
+    return `${base} text-neutral-500 hover:bg-neutral-900`;
+  }
   return `${base} text-neutral-300 hover:bg-neutral-900`;
+}
+
+function countLabel(count: number | undefined): string {
+  if (count === undefined) {
+    return '';
+  }
+  if (count < 0) {
+    return '—';
+  }
+  return String(count);
+}
+
+function isEmpty(count: number | undefined): boolean {
+  return count === 0;
+}
+
+function byPopulated(
+  resources: ResourceDescriptor[],
+  counts: Record<string, number>,
+): ResourceDescriptor[] {
+  const populated = resources.filter((one) => !isEmpty(counts[descriptorKey(one)]));
+  const empty = resources.filter((one) => isEmpty(counts[descriptorKey(one)]));
+  return [...populated, ...empty];
 }
 
 function collapsedKeys(categories: Category[]): Set<string> {
@@ -91,6 +117,7 @@ export default function Sidebar({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -101,6 +128,10 @@ export default function Sidebar({
           setCategories(catalog.categories);
           setCollapsed(collapsedKeys(catalog.categories));
           setError(catalog.error ?? null);
+        }
+        const tally = await fetchResourceCounts();
+        if (mounted) {
+          setCounts(tally);
         }
       } catch (err: unknown) {
         if (mounted) {
@@ -121,6 +152,8 @@ export default function Sidebar({
       setCategories(catalog.categories);
       setCollapsed(collapsedKeys(catalog.categories));
       setError(catalog.error ?? null);
+      const tally = await fetchResourceCounts();
+      setCounts(tally);
     } catch (err: unknown) {
       setError(errorMessage(err));
     } finally {
@@ -245,7 +278,7 @@ export default function Sidebar({
               </button>
               {!isCollapsed && !isNested(category.name) && (
                 <div>
-                  {category.resources.map((resource) => (
+                  {byPopulated(category.resources, counts).map((resource) => (
                     <button
                       key={descriptorKey(resource)}
                       type="button"
@@ -253,9 +286,16 @@ export default function Sidebar({
                         onSelect(resource);
                       }}
                       title={resource.kind}
-                      className={resourceClass(isActive(activeResource, resource))}
+                      className={resourceClass(
+                        isActive(activeResource, resource),
+                        false,
+                        isEmpty(counts[descriptorKey(resource)]),
+                      )}
                     >
-                      {resource.kind}
+                      <span className="truncate">{resource.kind}</span>{' '}
+                      <span className="shrink-0 text-neutral-500">
+                        {countLabel(counts[descriptorKey(resource)])}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -284,7 +324,7 @@ export default function Sidebar({
                         </button>
                         {!groupCollapsed && (
                           <div>
-                            {group.resources.map((resource) => (
+                            {byPopulated(group.resources, counts).map((resource) => (
                               <button
                                 key={descriptorKey(resource)}
                                 type="button"
@@ -292,9 +332,16 @@ export default function Sidebar({
                                   onSelect(resource);
                                 }}
                                 title={resource.kind}
-                                className={resourceClass(isActive(activeResource, resource), true)}
+                                className={resourceClass(
+                                  isActive(activeResource, resource),
+                                  true,
+                                  isEmpty(counts[descriptorKey(resource)]),
+                                )}
                               >
-                                {resource.kind}
+                                <span className="truncate">{resource.kind}</span>{' '}
+                                <span className="shrink-0 text-neutral-500">
+                                  {countLabel(counts[descriptorKey(resource)])}
+                                </span>
                               </button>
                             ))}
                           </div>

@@ -173,3 +173,20 @@ func TestLoadContextWithNoNameKeepsTheDefault(t *testing.T) {
 		t.Fatalf("Context = %q, want the kubeconfig's current-context", bundle.Context)
 	}
 }
+
+func TestLoadContextRaisesTheClientRateLimit(t *testing.T) {
+	path := writeKubeconfig(t, validKubeconfig)
+	t.Setenv("KUBECONFIG", path)
+
+	bundle, err := LoadContext("")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	if bundle.Config.QPS < 50 {
+		t.Fatalf("QPS = %v; client-go defaults to 5, which throttles a fan-out of 150 lists to 30s", bundle.Config.QPS)
+	}
+	if bundle.Config.Burst < 100 {
+		t.Fatalf("Burst = %d, want headroom for the catalog fan-out", bundle.Config.Burst)
+	}
+}

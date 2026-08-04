@@ -46,6 +46,11 @@ func Contexts() ([]string, string, error) {
 	return names, raw.CurrentContext, nil
 }
 
+const (
+	clientQPS   = 50
+	clientBurst = 100
+)
+
 func LoadContext(contextName string) (*Bundle, error) {
 	clientConfig := configFor(contextName)
 
@@ -53,6 +58,8 @@ func LoadContext(contextName string) (*Bundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kube client config: %w", err)
 	}
+	restConfig.QPS = clientQPS
+	restConfig.Burst = clientBurst
 
 	cs, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {

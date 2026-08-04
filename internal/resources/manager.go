@@ -283,6 +283,15 @@ func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
 	return flux.Build(ctx, m, m.descriptors(), m.charts)
 }
 
+func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
+	descs := m.descriptors()
+	flat := make([]api.ResourceDescriptor, 0, len(descs))
+	for _, desc := range descs {
+		flat = append(flat, desc)
+	}
+	return api.ResourceCounts{Counts: Count(ctx, m.dyn, flat)}
+}
+
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
 	return metrics.Build(ctx, m.dyn)
 }

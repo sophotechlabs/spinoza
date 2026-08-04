@@ -20,6 +20,10 @@ type ContextList struct {
 	Error    string   `json:"error,omitempty"`
 }
 
+type ResourceCounts struct {
+	Counts map[string]int `json:"counts"`
+}
+
 type ResourceCatalog struct {
 	Categories []Category `json:"categories"`
 	Error      string     `json:"error,omitempty"`

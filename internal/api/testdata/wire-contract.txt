@@ -146,6 +146,7 @@ PortForward.StartedAt startedAt
 PortForward.State state
 ResourceCatalog.Categories categories
 ResourceCatalog.Error error,omitempty
+ResourceCounts.Counts counts
 ResourceDescriptor.Category category
 ResourceDescriptor.Group group
 ResourceDescriptor.Kind kind

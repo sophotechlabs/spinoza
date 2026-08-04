@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchResources, refreshResources } from '../../src/lib/discovery';
+import { fetchResourceCounts, fetchResources, refreshResources } from '../../src/lib/discovery';
 import { makeCategory, makeDescriptor } from '../helpers';
 
 afterEach(() => {
@@ -63,5 +63,34 @@ describe('refreshResources', () => {
     );
 
     await expect(refreshResources()).rejects.toThrow('discovery request failed with status 500');
+  });
+});
+
+describe('fetchResourceCounts', () => {
+  it('returns the tally the server sends', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ counts: { '/v1/pods': 4 } }),
+      }),
+    );
+
+    await expect(fetchResourceCounts()).resolves.toEqual({ '/v1/pods': 4 });
+  });
+
+  it('throws when the server refuses', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+    await expect(fetchResourceCounts()).rejects.toThrow('503');
+  });
+
+  it('reads a payload that carries no counts as an empty tally', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }),
+    );
+
+    await expect(fetchResourceCounts()).resolves.toEqual({});
   });
 });

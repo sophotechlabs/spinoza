@@ -170,6 +170,10 @@ export interface ContextList {
   error?: string;
 }
 
+export interface ResourceCounts {
+  counts: Record<string, number>;
+}
+
 export interface ResourceCatalog {
   categories: Category[];
   error?: string;

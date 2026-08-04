@@ -35,10 +35,12 @@ function stubCatalog(categories: Category[], error?: string): void {
   );
 }
 
-function stubFetch(categories: Category[]): void {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ categories }),
+function stubFetch(categories: Category[], counts: Record<string, number> = {}): void {
+  const fetchMock = vi.fn().mockImplementation((url: string) => {
+    if (url.startsWith('/api/resources/counts')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts }) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
   });
   vi.stubGlobal('fetch', fetchMock);
 }
@@ -311,5 +313,80 @@ describe('the active sidebar entry', () => {
 
     expect(active.className).toContain('text-neutral-100');
     expect(active.className).not.toContain('text-neutral-300');
+  });
+});
+
+describe('resource counts', () => {
+  it('shows how many objects each type holds', async () => {
+    stubFetch(categories, { '/v1/pods': 57, 'apps/v1/deployments': 0 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    expect(await screen.findByRole('button', { name: 'Pod 57' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deployment 0' })).toBeInTheDocument();
+  });
+
+  it('dims a type that holds nothing', async () => {
+    stubFetch(categories, { '/v1/pods': 57, 'apps/v1/deployments': 0 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+    const empty = await screen.findByRole('button', { name: 'Deployment 0' });
+
+    expect(empty.className).toContain('text-neutral-500');
+    expect(screen.getByRole('button', { name: 'Pod 57' }).className).toContain('text-neutral-300');
+  });
+
+  it('sinks the empty types below the ones with objects', async () => {
+    stubFetch(categories, { '/v1/pods': 0, 'apps/v1/deployments': 3 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+    await screen.findByRole('button', { name: 'Pod 0' });
+
+    const labels = screen
+      .getAllByRole('button')
+      .map((node) => node.textContent)
+      .filter((text) => text.startsWith('Pod') || text.startsWith('Deployment'));
+    expect(labels[0]).toContain('Deployment');
+    expect(labels[1]).toContain('Pod');
+  });
+
+  it('marks a type it was not allowed to count', async () => {
+    stubFetch(categories, { '/v1/pods': -1 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    expect(await screen.findByRole('button', { name: 'Pod —' })).toBeInTheDocument();
+  });
+
+  it('carries on when the counts request fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/resources/counts')) {
+          return Promise.reject(new Error('counts down'));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
+  });
+
+  it('carries on when the counts payload has no counts', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/resources/counts')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
   });
 });

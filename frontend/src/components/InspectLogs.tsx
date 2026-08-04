@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { LogRequest } from '../lib/types';
 import { useLogEnded, useLogError, useLogLines, useLogOffset } from '../store/logs';
 import { useLogStream } from '../lib/useLogStream';
+import { segmentsOf } from '../lib/logColor';
 import { scrollToBottom } from '../lib/scroll';
 
 export const INSPECT_LOGS_SUB_ID = 'inspect-logs';
@@ -98,7 +99,11 @@ export default function InspectLogs({
         {lines.length === 0 && <span className="text-neutral-400">Waiting for output…</span>}
         {lines.map((line, index) => (
           <div key={offset + index} className="break-all whitespace-pre-wrap">
-            {line}
+            {segmentsOf(line).map((segment, part) => (
+              <span key={part} className={segment.className}>
+                {segment.text}
+              </span>
+            ))}
           </div>
         ))}
       </div>

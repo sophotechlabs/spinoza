@@ -50,6 +50,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", guard(healthz))
 	mux.HandleFunc("/api/contexts", guard(s.handleContexts))
+	mux.HandleFunc("/api/resources/counts", guard(s.handleCounts))
 	mux.HandleFunc("/api/resources", guard(s.handleResources))
 	mux.HandleFunc("/api/gitops/graph", guard(s.handleGraph))
 	mux.HandleFunc("/api/flux", guard(s.handleFlux))
@@ -202,6 +203,10 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, history)
+}
+
+func (s *Server) handleCounts(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Counts(r.Context()))
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
