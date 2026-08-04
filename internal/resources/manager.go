@@ -262,7 +262,7 @@ func (m *Manager) Action(ctx context.Context, req actions.Request) (api.ActionRe
 
 func (m *Manager) StartForward(ctx context.Context, target portforward.Target, port int32) (api.PortForward, error) {
 	if m.forwards == nil {
-		return api.PortForward{}, errors.New("port forwarding is unavailable")
+		return api.PortForward{}, fmt.Errorf("%w: port forwarding is not wired up", api.ErrInternal)
 	}
 	return m.forwards.Start(ctx, target, port)
 }
@@ -276,21 +276,21 @@ func (m *Manager) Forwards() []api.PortForward {
 
 func (m *Manager) StopForward(id string) error {
 	if m.forwards == nil {
-		return errors.New("port forwarding is unavailable")
+		return fmt.Errorf("%w: port forwarding is not wired up", api.ErrInternal)
 	}
 	return m.forwards.Stop(id)
 }
 
 func (m *Manager) ExecSupport(ctx context.Context, req exec.Request) (api.ExecSupport, error) {
 	if m.shells == nil {
-		return api.ExecSupport{}, errors.New("exec is unavailable")
+		return api.ExecSupport{}, fmt.Errorf("%w: exec is not wired up", api.ErrInternal)
 	}
 	return m.shells.Support(ctx, req)
 }
 
 func (m *Manager) StartExec(ctx context.Context, req exec.Request, stdout io.Writer) (*exec.Session, error) {
 	if m.shells == nil {
-		return nil, errors.New("exec is unavailable")
+		return nil, fmt.Errorf("%w: exec is not wired up", api.ErrInternal)
 	}
 	return m.shells.Start(ctx, req, stdout)
 }
@@ -318,7 +318,7 @@ func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span
 
 func (m *Manager) Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error) {
 	if m.schemas == nil {
-		return nil, errors.New("schemas unavailable")
+		return nil, fmt.Errorf("%w: schemas are not wired up", api.ErrInternal)
 	}
 	return m.schemas.For(ctx, gvk)
 }
@@ -415,7 +415,7 @@ func (m *Manager) attach(key streamKey, desc api.ResourceDescriptor) (*stream, *
 			return st, entry, nil
 		}
 	}
-	return nil, nil, fmt.Errorf("%s kept being torn down while subscribing", key.gvr.String())
+	return nil, nil, fmt.Errorf("%w: %s kept being torn down while subscribing", api.ErrInternal, key.gvr.String())
 }
 
 func (m *Manager) List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
@@ -467,7 +467,7 @@ func (m *Manager) pinnedLister(desc api.ResourceDescriptor) (cache.GenericLister
 			return st.lister, nil
 		}
 	}
-	return nil, fmt.Errorf("%s kept being torn down while reading", gvr.String())
+	return nil, fmt.Errorf("%w: %s kept being torn down while reading", api.ErrInternal, gvr.String())
 }
 
 func (m *Manager) pin(key streamKey, st *stream) bool {

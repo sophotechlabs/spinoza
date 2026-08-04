@@ -374,8 +374,8 @@ func TestExecIsUnavailableWithoutAService(t *testing.T) {
 		t.Fatalf("get: %v", err)
 	}
 	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d", res.StatusCode)
+	if res.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; a build without exec wiring is our fault, not the caller's", res.StatusCode)
 	}
 
 	conn := dialExec(t, ts, execQuery)
@@ -383,7 +383,7 @@ func TestExecIsUnavailableWithoutAService(t *testing.T) {
 	if channel != api.ExecChannelError {
 		t.Fatalf("channel = %d", channel)
 	}
-	if !strings.Contains(string(payload), "unavailable") {
+	if !strings.Contains(string(payload), "not wired up") {
 		t.Fatalf("payload = %q", payload)
 	}
 }

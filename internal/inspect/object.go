@@ -87,7 +87,7 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 	clean := sanitize(u)
 	raw, err := yaml.Marshal(clean.Object)
 	if err != nil {
-		return api.ObjectDetail{}, fmt.Errorf("marshal yaml: %w", err)
+		return api.ObjectDetail{}, fmt.Errorf("%w: could not render the object as yaml: %w", api.ErrInternal, err)
 	}
 	return api.ObjectDetail{
 		APIVersion:  clean.GetAPIVersion(),

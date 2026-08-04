@@ -422,8 +422,8 @@ func TestPutObjectRejectsOversizedBody(t *testing.T) {
 
 	resp, _ := doRequest(t, http.MethodPut, ts.URL+"/api/object"+objectQuery, body)
 
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413 so the client knows the size was the problem", resp.StatusCode)
 	}
 }
 
@@ -437,7 +437,7 @@ func TestStatusForMapsAPIErrors(t *testing.T) {
 		{"not found", apierrors.NewNotFound(gr, "web"), http.StatusNotFound},
 		{"conflict", apierrors.NewConflict(gr, "web", errors.New("changed")), http.StatusConflict},
 		{"forbidden", apierrors.NewForbidden(gr, "web", errors.New("denied")), http.StatusForbidden},
-		{"unauthorized", apierrors.NewUnauthorized("no token"), http.StatusForbidden},
+		{"unauthorized", apierrors.NewUnauthorized("no token"), http.StatusUnauthorized},
 		{"invalid", apierrors.NewInvalid(schema.GroupKind{Kind: "Pod"}, "web", nil), http.StatusUnprocessableEntity},
 		{"bad request", apierrors.NewBadRequest("nope"), http.StatusUnprocessableEntity},
 		{"plain", errors.New("boom"), http.StatusBadRequest},

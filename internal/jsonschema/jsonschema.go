@@ -3,6 +3,7 @@ package jsonschema
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -34,6 +35,8 @@ func (g GVK) String() string {
 type Source func() openapi.Client
 
 const fetchTimeout = 30 * time.Second
+
+var ErrNoSchema = errors.New("this kind has no schema")
 
 type fetch struct {
 	done    chan struct{}
@@ -94,7 +97,7 @@ func (c *Client) For(ctx context.Context, gvk GVK) (json.RawMessage, error) {
 	}
 	root, found := rootName(schemas, gvk)
 	if !found {
-		return nil, fmt.Errorf("no schema for %s", gvk)
+		return nil, fmt.Errorf("%w: %s", ErrNoSchema, gvk)
 	}
 	raw, marshalErr := json.Marshal(bundle(schemas, root))
 	if marshalErr != nil {
@@ -165,7 +168,7 @@ func (c *Client) load(path string) (map[string]map[string]any, error) {
 	}
 	gv, ok := paths[path]
 	if !ok {
-		return nil, fmt.Errorf("no openapi document for %s", path)
+		return nil, fmt.Errorf("%w: no openapi document for %s", ErrNoSchema, path)
 	}
 	raw, schemaErr := gv.Schema("application/json")
 	if schemaErr != nil {

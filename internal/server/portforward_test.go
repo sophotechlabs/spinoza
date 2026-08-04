@@ -212,8 +212,8 @@ func TestForwardsWithoutARegistry(t *testing.T) {
 	}
 
 	started, _ := doRequest(t, http.MethodPost, ts.URL+"/api/portforward"+forwardQuery, nil)
-	if started.StatusCode != http.StatusBadRequest {
-		t.Fatalf("start status = %d, want 400", started.StatusCode)
+	if started.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("start status = %d, want 500; missing wiring is not a bad request", started.StatusCode)
 	}
 
 	stopped, _ := doRequest(t, http.MethodDelete, ts.URL+"/api/portforward?id=pf-1", nil)

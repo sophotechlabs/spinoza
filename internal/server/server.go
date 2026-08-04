@@ -2,12 +2,13 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -24,6 +25,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
 const maxDocBytes = 4 << 20
@@ -61,7 +63,8 @@ func (s *Server) manager() *resources.Manager {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", s.guard(healthz))
+	mux.HandleFunc("/healthz", s.guard(s.handleHealth))
+	mux.HandleFunc("/api/version", s.guard(handleVersion))
 	mux.HandleFunc("/api/contexts", s.guard(s.handleContexts))
 	mux.HandleFunc("/api/resources/counts", s.guard(s.handleCounts))
 	mux.HandleFunc("/api/resources", s.guard(s.handleResources))
@@ -84,9 +87,16 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-func healthz(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, api.Health{
+		Status:  "ok",
+		Version: version.String(),
+		Context: s.cluster.Contexts().Current,
+	})
+}
+
+func handleVersion(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, api.Build{Version: version.String()})
 }
 
 func (s *Server) handleAssets(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +137,7 @@ func writeJSONStatus(w http.ResponseWriter, status int, payload any) {
 	w.WriteHeader(status)
 	err := json.NewEncoder(w).Encode(payload)
 	if err != nil {
-		log.Printf("encode response: %v", err)
+		slog.Warn("a response could not be encoded", "error", err)
 	}
 }
 
@@ -136,7 +146,7 @@ func writeError(w http.ResponseWriter, code int, message string) {
 	w.WriteHeader(code)
 	err := json.NewEncoder(w).Encode(map[string]string{"message": message})
 	if err != nil {
-		log.Printf("encode error response: %v", err)
+		slog.Warn("an error response could not be encoded", "error", err)
 	}
 }
 
@@ -162,17 +172,34 @@ func writeAPIError(w http.ResponseWriter, err error) {
 	writeError(w, statusFor(err), err.Error())
 }
 
+func oversized(err error) bool {
+	var tooBig *http.MaxBytesError
+	return errors.As(err, &tooBig)
+}
+
 func statusFor(err error) int {
 	switch {
+	case errors.Is(err, api.ErrInternal):
+		return http.StatusInternalServerError
+	case oversized(err):
+		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, inspect.ErrInvalidUID):
 		return http.StatusBadRequest
+	case errors.Is(err, jsonschema.ErrNoSchema):
+		return http.StatusNotFound
 	case cannotReachCluster(err):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, context.DeadlineExceeded):
+		return http.StatusGatewayTimeout
+	case errors.Is(err, context.Canceled):
 		return http.StatusServiceUnavailable
 	case apierrors.IsNotFound(err):
 		return http.StatusNotFound
 	case apierrors.IsConflict(err):
 		return http.StatusConflict
-	case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err):
+	case apierrors.IsUnauthorized(err):
+		return http.StatusUnauthorized
+	case apierrors.IsForbidden(err):
 		return http.StatusForbidden
 	case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
 		return http.StatusUnprocessableEntity
@@ -333,14 +360,14 @@ func actionRequest(r *http.Request) (actions.Request, error) {
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	kind := query.Get("kind")
-	version := query.Get("version")
-	if kind == "" || version == "" {
+	apiVersion := query.Get("version")
+	if kind == "" || apiVersion == "" {
 		writeError(w, http.StatusBadRequest, "version and kind are required")
 		return
 	}
-	doc, err := s.manager().Schema(r.Context(), jsonschema.GVK{Group: query.Get("group"), Version: version, Kind: kind})
+	doc, err := s.manager().Schema(r.Context(), jsonschema.GVK{Group: query.Get("group"), Version: apiVersion, Kind: kind})
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeAPIError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -428,7 +455,7 @@ func (s *Server) getObject(w http.ResponseWriter, r *http.Request, ref api.Objec
 func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
 	doc, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, maxDocBytes))
 	if readErr != nil {
-		writeError(w, http.StatusBadRequest, readErr.Error())
+		writeAPIError(w, readErr)
 		return
 	}
 	detail, err := s.manager().ApplyObject(r.Context(), ref, doc)

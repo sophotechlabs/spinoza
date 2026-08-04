@@ -2,10 +2,13 @@ package server
 
 import (
 	"crypto/subtle"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -43,8 +46,48 @@ func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "spinoza needs the token it printed at startup")
 			return
 		}
-		handler(w, r)
+		if !mutating(r.Method) {
+			handler(w, r)
+			return
+		}
+		recorded := &recorder{ResponseWriter: w, status: http.StatusOK}
+		started := time.Now()
+		handler(recorded, r)
+		slog.Info(
+			"acted on the cluster",
+			"method", strconv.Quote(r.Method),
+			"path", strconv.Quote(r.URL.Path),
+			"query", strconv.Quote(loggableQuery(r)),
+			"status", recorded.status,
+			"took", time.Since(started).Round(time.Millisecond),
+		)
 	}
+}
+
+func mutating(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+func loggableQuery(r *http.Request) string {
+	values := r.URL.Query()
+	values.Del(AuthParam)
+	return values.Encode()
+}
+
+type recorder struct {
+	http.ResponseWriter
+
+	status int
+}
+
+func (rec *recorder) WriteHeader(status int) {
+	rec.status = status
+	rec.ResponseWriter.WriteHeader(status)
 }
 
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request) bool {

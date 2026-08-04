@@ -2,6 +2,7 @@ ActionResult.Action action
 ActionResult.DryRun dryRun,omitempty
 ActionResult.Message message
 ActionResult.Pods pods,omitempty
+Build.Version version
 Category.Name name
 Category.Resources resources
 ClientMsg.Container container
@@ -92,6 +93,9 @@ GraphNode.Ready ready
 GraphNode.Resource resource
 GraphNode.Status status
 GraphNode.Version version
+Health.Context context
+Health.Status status
+Health.Version version
 MetricHistory.CPU cpu
 MetricHistory.Memory memory
 MetricHistory.Namespace namespace

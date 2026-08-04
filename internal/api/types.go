@@ -1,5 +1,19 @@
 package api
 
+import "errors"
+
+var ErrInternal = errors.New("spinoza could not do that")
+
+type Health struct {
+	Status  string `json:"status"`
+	Version string `json:"version"`
+	Context string `json:"context"`
+}
+
+type Build struct {
+	Version string `json:"version"`
+}
+
 type ResourceDescriptor struct {
 	Group      string `json:"group"`
 	Version    string `json:"version"`

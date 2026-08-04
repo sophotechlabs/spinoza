@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -72,6 +74,27 @@ func stubSchemas() *jsonschema.Client {
 	})
 }
 
+type brokenOpenAPI struct {
+	err error
+}
+
+func (b *brokenOpenAPI) Paths() (map[string]openapi.GroupVersion, error) {
+	return nil, b.err
+}
+
+func TestASchemaFetchThatFailedOnTheNetworkIsRetryable(t *testing.T) {
+	unreachable := &brokenOpenAPI{err: &net.OpError{Op: "dial", Err: errors.New("connection refused")}}
+	ts := schemaServer(t, jsonschema.NewClient(func() openapi.Client {
+		return unreachable
+	}))
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/schema?version=v1&kind=Pod", nil)
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 so a cached 404 does not cost the editor its validation: %s", resp.StatusCode, body)
+	}
+}
+
 func TestSchemaEndpointReturnsABundle(t *testing.T) {
 	ts := schemaServer(t, stubSchemas())
 
@@ -124,8 +147,8 @@ func TestSchemaEndpointWithoutASchemaSource(t *testing.T) {
 
 	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/schema?version=v1&kind=Pod", nil)
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; a build with no schema source is not a missing kind", resp.StatusCode)
 	}
 	if !json.Valid(body) {
 		t.Fatalf("body is not json: %s", body)

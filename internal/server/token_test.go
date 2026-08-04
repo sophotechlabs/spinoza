@@ -228,6 +228,44 @@ func TestAStaticAssetAlsoRefusesToBeFramed(t *testing.T) {
 	}
 }
 
+func TestTheActionLogNeverCarriesTheToken(t *testing.T) {
+	req, err := http.NewRequest(http.MethodDelete,
+		"http://127.0.0.1:34115/api/object?resource=secrets&name=db&"+AuthParam+"="+testToken, http.NoBody)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+
+	logged := loggableQuery(req)
+
+	if strings.Contains(logged, testToken) {
+		t.Fatalf("log line = %q, want the token left out of the terminal", logged)
+	}
+	if !strings.Contains(logged, "resource=secrets") {
+		t.Fatalf("log line = %q, want the object it acted on", logged)
+	}
+	if !strings.Contains(logged, "name=db") {
+		t.Fatalf("log line = %q, want the object it acted on", logged)
+	}
+}
+
+func TestAReadIsNotLoggedButAWriteIs(t *testing.T) {
+	cases := map[string]bool{
+		http.MethodGet:    false,
+		http.MethodHead:   false,
+		http.MethodPost:   true,
+		http.MethodPut:    true,
+		http.MethodPatch:  true,
+		http.MethodDelete: true,
+	}
+	for method, want := range cases {
+		t.Run(method, func(t *testing.T) {
+			if mutating(method) != want {
+				t.Fatalf("mutating(%s) = %v", method, mutating(method))
+			}
+		})
+	}
+}
+
 func TestAMissingIndexIsAnInternalFault(t *testing.T) {
 	mgr, _ := testManager(t)
 	empty := fstest.MapFS{}

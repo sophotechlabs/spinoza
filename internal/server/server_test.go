@@ -26,6 +26,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
 var depGVR = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
@@ -124,8 +125,38 @@ func TestHealthzReturnsOK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read body: %v", err)
 	}
-	if string(body) != "ok" {
-		t.Fatalf("body = %q, want ok", string(body))
+	var health api.Health
+	if decodeErr := json.Unmarshal(body, &health); decodeErr != nil {
+		t.Fatalf("decode %s: %v", body, decodeErr)
+	}
+	if health.Status != "ok" {
+		t.Fatalf("status = %q", health.Status)
+	}
+	if health.Version != version.String() {
+		t.Fatalf("version = %q, want the build to name itself", health.Version)
+	}
+	if health.Context != "p-mk2" {
+		t.Fatalf("context = %q, want the context a bug report needs", health.Context)
+	}
+}
+
+func TestVersionEndpointNamesTheBuild(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
+	defer ts.Close()
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/version", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	var build api.Build
+	if err := json.Unmarshal(body, &build); err != nil {
+		t.Fatalf("decode %s: %v", body, err)
+	}
+	if build.Version != version.String() {
+		t.Fatalf("version = %q", build.Version)
 	}
 }
 
