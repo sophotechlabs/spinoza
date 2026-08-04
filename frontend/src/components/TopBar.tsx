@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { ConnectionStatus } from '../lib/feed';
+import SettingsDialog from './SettingsDialog';
 import type { View } from '../lib/types';
 import ContextPicker from './ContextPicker';
 import { THEMES } from '../lib/theme';
@@ -25,6 +27,7 @@ function statusColor(status: ConnectionStatus): string {
 export default function TopBar({ status, view, onReconnect, onContextChanged }: TopBarProps) {
   const preference = useThemePreference();
   const setPreference = useThemeStore((state) => state.setPreference);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   function handleReconnect() {
     if (onReconnect) {
@@ -77,7 +80,23 @@ export default function TopBar({ status, view, onReconnect, onContextChanged }: 
         >
           Reconnect
         </button>
+        <button
+          type="button"
+          aria-label="Settings"
+          onClick={() => {
+            setSettingsOpen(true);
+          }}
+          className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
+        >
+          ⚙
+        </button>
       </div>
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+        }}
+      />
     </header>
   );
 }

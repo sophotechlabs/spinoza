@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
@@ -126,5 +126,32 @@ describe('the theme picker', () => {
     act(() => {
       emitSystemDark(false);
     });
+  });
+});
+
+describe('the settings dialog from the top bar', () => {
+  const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  });
+  const close = vi.fn(function close(this: HTMLDialogElement) {
+    this.open = false;
+  });
+
+  beforeEach(() => {
+    showModal.mockClear();
+    close.mockClear();
+    HTMLDialogElement.prototype.showModal = showModal;
+    HTMLDialogElement.prototype.close = close;
+  });
+
+  it('opens from the gear and closes again', async () => {
+    const user = userEvent.setup();
+    render(<TopBar status="connected" />);
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(showModal).toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(close).toHaveBeenCalled();
   });
 });

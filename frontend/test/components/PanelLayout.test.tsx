@@ -26,6 +26,7 @@ vi.mock('../../src/components/InspectMetrics', () => ({
 
 import PanelLayout from '../../src/components/PanelLayout';
 import { PLACEMENT_KEY } from '../../src/lib/panels';
+import { usePanelsStore } from '../../src/store/panels';
 import type { ObjectRef } from '../../src/lib/types';
 
 const podRef: ObjectRef = {
@@ -98,6 +99,8 @@ function transfer(id: string) {
 
 describe('PanelLayout', () => {
   beforeEach(() => {
+    window.localStorage.clear();
+    usePanelsStore.getState().reset();
     window.localStorage.clear();
     stubApi();
   });

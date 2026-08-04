@@ -1,5 +1,3 @@
-import { useCallback, useState } from 'react';
-
 export type PanelId = 'overview' | 'yaml' | 'events' | 'logs' | 'metrics' | 'forwards' | 'terminal';
 
 export type DockSide = 'left' | 'right' | 'bottom';
@@ -111,26 +109,4 @@ export function writePlacement(placement: Placement): void {
 
 export function panelsOn(placement: Placement, side: DockSide): PanelId[] {
   return PANEL_ORDER.filter((id) => placement[id] === side);
-}
-
-export interface PlacementState {
-  placement: Placement;
-  move: (id: PanelId, side: DockSide) => void;
-}
-
-export function usePlacement(): PlacementState {
-  const [placement, setPlacement] = useState<Placement>(readPlacement);
-
-  const move = useCallback((id: PanelId, side: DockSide) => {
-    setPlacement((current) => {
-      if (current[id] === side) {
-        return current;
-      }
-      const next = { ...current, [id]: side };
-      writePlacement(next);
-      return next;
-    });
-  }, []);
-
-  return { placement, move };
 }

@@ -1,13 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
 import {
   DEFAULT_PLACEMENT,
   PANEL_ORDER,
-  PLACEMENT_KEY,
   panelsOn,
   parsePlacement,
   readPlacement,
-  usePlacement,
   writePlacement,
 } from '../../src/lib/panels';
 
@@ -93,39 +90,6 @@ describe('stored placement', () => {
     expect(() => {
       writePlacement(DEFAULT_PLACEMENT);
     }).not.toThrow();
-  });
-});
-
-describe('usePlacement', () => {
-  it('moves a panel and remembers it for the next session', () => {
-    const { result } = renderHook(() => usePlacement());
-
-    act(() => {
-      result.current.move('logs', 'bottom');
-    });
-
-    expect(result.current.placement.logs).toBe('bottom');
-    expect(window.localStorage.getItem(PLACEMENT_KEY)).toContain('"logs":"bottom"');
-  });
-
-  it('leaves the placement alone when the panel is already there', () => {
-    const { result } = renderHook(() => usePlacement());
-    const before = result.current.placement;
-
-    act(() => {
-      result.current.move('logs', DEFAULT_PLACEMENT.logs);
-    });
-
-    expect(result.current.placement).toBe(before);
-    expect(window.localStorage.getItem(PLACEMENT_KEY)).toBeNull();
-  });
-
-  it('starts from what the last session stored', () => {
-    window.localStorage.setItem(PLACEMENT_KEY, JSON.stringify({ terminal: 'left' }));
-
-    const { result } = renderHook(() => usePlacement());
-
-    expect(result.current.placement.terminal).toBe('left');
   });
 });
 

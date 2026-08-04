@@ -4,6 +4,7 @@ import { useLogEnded, useLogError, useLogLines, useLogOffset } from '../store/lo
 import { useLogStream } from '../lib/useLogStream';
 import { prettySegments, rawSegments } from '../lib/logColor';
 import { scrollToBottom } from '../lib/scroll';
+import { useLogView } from '../store/settings';
 
 export const INSPECT_LOGS_SUB_ID = 'inspect-logs';
 
@@ -38,7 +39,8 @@ export default function InspectLogs({
 }: InspectLogsProps) {
   const [container, setContainer] = useState(() => containers[0] ?? '');
   const [follow, setFollow] = useState(true);
-  const [pretty, setPretty] = useState(true);
+  const logView = useLogView();
+  const [pretty, setPretty] = useState(() => logView === 'pretty');
   const lines = useLogLines(INSPECT_LOGS_SUB_ID);
   const offset = useLogOffset(INSPECT_LOGS_SUB_ID);
   const ended = useLogEnded(INSPECT_LOGS_SUB_ID);

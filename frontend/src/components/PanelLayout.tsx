@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import type { ContainerState, LogRequest, ObjectDetail, ObjectRef } from '../lib/types';
 import type { DockSide, PanelId } from '../lib/panels';
 import type { PodTarget } from '../lib/pods';
-import { DOCK_SIDES, PANEL_LABELS, panelsOn, usePlacement } from '../lib/panels';
+import { DOCK_SIDES, PANEL_LABELS, panelsOn } from '../lib/panels';
+import { usePanelsStore } from '../store/panels';
 import { containerNames } from '../lib/containers';
 import { forwardKind } from '../lib/portForward';
 import { isFluxObject } from '../lib/fluxActions';
@@ -73,7 +74,8 @@ export default function PanelLayout({
   onDeleted,
   children,
 }: PanelLayoutProps) {
-  const { placement, move } = usePlacement();
+  const placement = usePanelsStore((state) => state.placement);
+  const move = usePanelsStore((state) => state.move);
   const [hosts, setHosts] = useState<Hosts>(NO_HOSTS);
   const [activeBySide, setActiveBySide] = useState<Record<DockSide, PanelId | null>>({
     left: null,
