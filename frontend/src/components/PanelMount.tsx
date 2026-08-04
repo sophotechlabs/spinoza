@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
+import ErrorBoundary from './ErrorBoundary';
 
 interface PanelMountProps {
   host: HTMLElement | null;
   active: boolean;
+  label: string;
   children: ReactNode;
 }
 
-export default function PanelMount({ host, active, children }: PanelMountProps) {
+export default function PanelMount({ host, active, label, children }: PanelMountProps) {
   const [node] = useState(() => document.createElement('div'));
   const hostRef = useRef<HTMLElement | null>(null);
 
@@ -33,5 +35,5 @@ export default function PanelMount({ host, active, children }: PanelMountProps) 
     node.style.display = 'none';
   }, [active, node]);
 
-  return createPortal(children, node);
+  return createPortal(<ErrorBoundary label={label}>{children}</ErrorBoundary>, node);
 }

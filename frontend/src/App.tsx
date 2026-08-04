@@ -13,6 +13,8 @@ import { useSubRow } from './store/resources';
 import { refFromFlux, refFromNode, refFromRow } from './lib/refs';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
+import ErrorBoundary from './components/ErrorBoundary';
+import Toasts from './components/Toasts';
 import ResourceTable from './components/ResourceTable';
 import PanelLayout from './components/PanelLayout';
 import GitopsGraph from './components/GitopsGraph';
@@ -137,9 +139,10 @@ export default function App() {
           onClose={clearSelection}
           onDeleted={clearSelection}
         >
-          {mainArea}
+          <ErrorBoundary label={view}>{mainArea}</ErrorBoundary>
         </PanelLayout>
       </div>
+      <Toasts />
     </div>
   );
 }

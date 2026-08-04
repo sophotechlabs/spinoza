@@ -262,7 +262,7 @@ export default function PanelLayout({
       .map((id) => {
         const active = activeOn(side) === id;
         return (
-          <PanelMount key={id} host={hosts[side]} active={active}>
+          <PanelMount key={id} host={hosts[side]} active={active} label={PANEL_LABELS[id]}>
             {bodyOf(id, active)}
           </PanelMount>
         );

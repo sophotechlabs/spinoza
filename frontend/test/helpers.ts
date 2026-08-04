@@ -1,3 +1,4 @@
+import { expect, vi } from 'vitest';
 import type {
   Category,
   Column,
@@ -7,6 +8,22 @@ import type {
   ResourceDescriptor,
   Row,
 } from '../src/lib/types';
+
+export function anySignal(): AbortSignal {
+  return expect.any(AbortSignal) as AbortSignal;
+}
+
+export function parentOf(node: HTMLElement): HTMLElement {
+  const parent = node.parentElement;
+  if (parent === null) {
+    throw new Error('expected the element to have a parent');
+  }
+  return parent;
+}
+
+export function rejectsWith(value: unknown): () => Promise<never> {
+  return vi.fn<() => Promise<never>>().mockRejectedValue(value);
+}
 
 export function makeRow(overrides: Partial<Row>): Row {
   const base: Row = {

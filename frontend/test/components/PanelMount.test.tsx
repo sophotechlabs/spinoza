@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { useCallback, useState } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import PanelMount from '../../src/components/PanelMount';
@@ -33,7 +33,7 @@ function Harness({ hostId, active }: { hostId: 'a' | 'b' | 'none'; active: boole
     <div>
       <div data-testid="host-a" ref={setA} />
       <div data-testid="host-b" ref={setB} />
-      <PanelMount host={host} active={active}>
+      <PanelMount host={host} active={active} label="Overview">
         <Counter />
       </PanelMount>
     </div>
@@ -90,5 +90,25 @@ describe('PanelMount', () => {
 
     expect(screen.getByTestId('host-a')).toBeEmptyDOMElement();
     expect(screen.getByTestId('host-b')).toBeEmptyDOMElement();
+  });
+
+  it('keeps a panel that throws from taking the rest of the app with it', () => {
+    const onError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    function Broken(): never {
+      throw new Error('cell renderer blew up');
+    }
+    render(
+      <div>
+        <div data-testid="sibling">still here</div>
+        <PanelMount host={document.body} active label="Overview">
+          <Broken />
+        </PanelMount>
+      </div>,
+    );
+
+    expect(screen.getByText('Overview stopped rendering')).toBeInTheDocument();
+    expect(screen.getByText('cell renderer blew up')).toBeInTheDocument();
+    expect(screen.getByTestId('sibling')).toBeInTheDocument();
+    onError.mockRestore();
   });
 });
