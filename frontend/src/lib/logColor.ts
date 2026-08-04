@@ -6,9 +6,9 @@ export interface LogSegment {
 }
 
 const SEVERITY_CLASS: Record<LogSeverity, string> = {
-  error: 'text-red-400',
-  warn: 'text-amber-400',
-  debug: 'text-neutral-500',
+  error: 'text-error',
+  warn: 'text-warn',
+  debug: 'text-fg-subtle',
   info: '',
 };
 
@@ -50,22 +50,22 @@ const ESC = String.fromCharCode(27) + '[';
 const SGR = new RegExp(`${String.fromCharCode(27)}\\[([0-9;]*)m`, 'g');
 
 const ANSI_CLASS: Record<string, string | undefined> = {
-  '30': 'text-neutral-600',
-  '31': 'text-red-400',
-  '32': 'text-green-400',
-  '33': 'text-amber-400',
-  '34': 'text-sky-400',
-  '35': 'text-fuchsia-400',
-  '36': 'text-cyan-400',
-  '37': 'text-neutral-200',
-  '90': 'text-neutral-500',
-  '91': 'text-red-300',
-  '92': 'text-green-300',
-  '93': 'text-amber-300',
-  '94': 'text-sky-300',
-  '95': 'text-fuchsia-300',
-  '96': 'text-cyan-300',
-  '97': 'text-neutral-100',
+  '30': 'text-ansi-black',
+  '31': 'text-ansi-red',
+  '32': 'text-ansi-green',
+  '33': 'text-ansi-yellow',
+  '34': 'text-ansi-blue',
+  '35': 'text-ansi-magenta',
+  '36': 'text-ansi-cyan',
+  '37': 'text-ansi-white',
+  '90': 'text-ansi-bright-black',
+  '91': 'text-ansi-bright-red',
+  '92': 'text-ansi-bright-green',
+  '93': 'text-ansi-bright-yellow',
+  '94': 'text-ansi-bright-blue',
+  '95': 'text-ansi-bright-magenta',
+  '96': 'text-ansi-bright-cyan',
+  '97': 'text-ansi-bright-white',
 };
 
 export function hasAnsi(line: string): boolean {
@@ -120,7 +120,7 @@ export function segmentsOf(line: string): LogSegment[] {
     return [{ text: line, className: body }];
   }
   return [
-    { text: stamp[0], className: 'text-neutral-500' },
+    { text: stamp[0], className: 'text-fg-subtle' },
     { text: line.slice(stamp[0].length), className: body },
   ];
 }

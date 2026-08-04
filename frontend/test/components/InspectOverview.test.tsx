@@ -120,9 +120,9 @@ describe('InspectOverview', () => {
     expect(screen.getByText('Containers')).toBeInTheDocument();
     expect(screen.getByText('app')).toBeInTheDocument();
     expect(screen.getByText('4 restarts')).toBeInTheDocument();
-    expect(container.querySelectorAll('.bg-green-500')).toHaveLength(1);
-    expect(container.querySelectorAll('.bg-red-500')).toHaveLength(1);
-    expect(container.querySelectorAll('.bg-amber-500')).toHaveLength(1);
+    expect(container.querySelectorAll('.bg-ok-solid')).toHaveLength(1);
+    expect(container.querySelectorAll('.bg-error-solid')).toHaveLength(1);
+    expect(container.querySelectorAll('.bg-warn-solid')).toHaveLength(1);
   });
 
   it('treats a running but unready container as pending', () => {
@@ -131,7 +131,7 @@ describe('InspectOverview', () => {
     ];
     const { container } = render(<InspectOverview detail={detail()} containers={containers} />);
 
-    expect(container.querySelectorAll('.bg-amber-500')).toHaveLength(1);
+    expect(container.querySelectorAll('.bg-warn-solid')).toHaveLength(1);
   });
 });
 
@@ -153,7 +153,7 @@ describe('container dots agree with the table', () => {
       />,
     );
 
-    const dot = document.querySelector('.bg-neutral-500');
+    const dot = document.querySelector('.bg-idle-solid');
     expect(dot).not.toBeNull();
   });
 
@@ -174,7 +174,7 @@ describe('container dots agree with the table', () => {
       />,
     );
 
-    const dot = document.querySelector('.bg-red-500');
+    const dot = document.querySelector('.bg-error-solid');
     expect(dot).not.toBeNull();
   });
 });

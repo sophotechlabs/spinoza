@@ -58,7 +58,7 @@ describe('toFlow', () => {
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
-    expect(node.className).toContain('green');
+    expect(node.className).toContain('bg-ok-tint');
   });
 
   it('maps a not-ready object to the red style whatever the reason says', () => {
@@ -67,7 +67,7 @@ describe('toFlow', () => {
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
-    expect(node.className).toContain('red');
+    expect(node.className).toContain('bg-error-tint');
   });
 
   it('maps a source category with a neutral status to the sky style', () => {
@@ -76,7 +76,7 @@ describe('toFlow', () => {
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
-    expect(node.className).toContain('sky');
+    expect(node.className).toContain('bg-info-tint');
   });
 
   it('maps an app category with a neutral status to the default style', () => {
@@ -85,7 +85,7 @@ describe('toFlow', () => {
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
-    expect(node.className).toContain('border-neutral-600');
+    expect(node.className).toContain('border-edge-emphasis');
   });
 
   it('maps an applier category with a neutral status to the default style', () => {
@@ -96,7 +96,7 @@ describe('toFlow', () => {
       edges: [],
     };
     const node = nodeById(toFlow(graph).nodes, 'a');
-    expect(node.className).toContain('border-neutral-600');
+    expect(node.className).toContain('border-edge-emphasis');
   });
 
   it('maps each edge kind to a stroke and animation state', () => {
@@ -119,11 +119,11 @@ describe('toFlow', () => {
     expect(source.source).toBe('a');
     expect(source.target).toBe('b');
     expect(source.animated).toBe(true);
-    expect(source.style).toEqual({ stroke: '#0ea5e9' });
+    expect(source.style).toEqual({ stroke: 'var(--graph-edge-source)' });
     expect(depends.animated).toBe(false);
-    expect(depends.style).toEqual({ stroke: '#f59e0b' });
+    expect(depends.style).toEqual({ stroke: 'var(--graph-edge-depends)' });
     expect(manages.animated).toBe(false);
-    expect(manages.style).toEqual({ stroke: '#525252' });
+    expect(manages.style).toEqual({ stroke: 'var(--graph-edge-manages)' });
   });
 
   it('falls back to a zero position when layout leaves a node unpositioned', () => {
@@ -152,7 +152,7 @@ describe('a dependency that is not there', () => {
       edges: [],
     });
 
-    expect(flow.nodes[0].className).toContain('border-red-600');
+    expect(flow.nodes[0].className).toContain('border-error-emphasis');
   });
 
   it('leaves a healthy applier alone', () => {
@@ -161,7 +161,7 @@ describe('a dependency that is not there', () => {
       edges: [],
     });
 
-    expect(flow.nodes[0].className).toContain('border-green-600');
+    expect(flow.nodes[0].className).toContain('border-ok-emphasis');
   });
 });
 
@@ -182,6 +182,6 @@ describe('a failure the frontend has never heard of', () => {
       edges: [],
     });
 
-    expect(flow.nodes[0].className).toContain('border-red-600');
+    expect(flow.nodes[0].className).toContain('border-error-emphasis');
   });
 });

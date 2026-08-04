@@ -16,14 +16,14 @@ describe('UsageBar', () => {
     expect(screen.getByText('20%')).toBeInTheDocument();
     expect(screen.getByTitle('200m')).toBeInTheDocument();
     const fill = bar(container);
-    expect(fill.className).toContain('bg-green-500');
+    expect(fill.className).toContain('bg-ok-solid');
     expect(fill.style.width).toBe('20%');
   });
 
   it('clamps over-100 percent to full width and colors it red', () => {
     const { container } = render(<UsageBar percent={130} label="hot" />);
     const fill = bar(container);
-    expect(fill.className).toContain('bg-red-500');
+    expect(fill.className).toContain('bg-error-solid');
     expect(fill.style.width).toBe('100%');
   });
 

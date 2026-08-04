@@ -17,9 +17,9 @@ const NODE_SEPARATION = 28;
 
 const NODE_BASE_CLASS = 'rounded border px-2 py-1 text-[11px] font-mono';
 
-export const EDGE_SOURCE_STROKE = '#0ea5e9';
-export const EDGE_DEPENDS_STROKE = '#f59e0b';
-export const EDGE_MANAGES_STROKE = '#525252';
+export const EDGE_SOURCE_STROKE = 'var(--graph-edge-source)';
+export const EDGE_DEPENDS_STROKE = 'var(--graph-edge-depends)';
+export const EDGE_MANAGES_STROKE = 'var(--graph-edge-manages)';
 
 interface GitopsNodeData {
   label: string;
@@ -51,15 +51,15 @@ export function statusTone(ready: ReadyState): StatusTone {
 function nodeClassName(category: GraphNodeCategory, ready: ReadyState): string {
   const tone = statusTone(ready);
   if (tone === 'ok') {
-    return `${NODE_BASE_CLASS} border-green-600 bg-green-950 text-green-200`;
+    return `${NODE_BASE_CLASS} border-ok-emphasis bg-ok-tint text-ok-contrast`;
   }
   if (tone === 'error') {
-    return `${NODE_BASE_CLASS} border-red-600 bg-red-950 text-red-200`;
+    return `${NODE_BASE_CLASS} border-error-emphasis bg-error-tint text-error-contrast`;
   }
   if (category === 'source') {
-    return `${NODE_BASE_CLASS} border-sky-700 bg-sky-950 text-sky-200`;
+    return `${NODE_BASE_CLASS} border-info-line bg-info-tint text-info-contrast`;
   }
-  return `${NODE_BASE_CLASS} border-neutral-600 bg-neutral-800 text-neutral-100`;
+  return `${NODE_BASE_CLASS} border-edge-emphasis bg-surface-active text-fg-strong`;
 }
 
 function edgeStroke(kind: GraphEdgeKind): string {

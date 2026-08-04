@@ -85,10 +85,10 @@ export function formatMem(mi: number): string {
 
 export function barColor(percent: number): string {
   if (percent >= 90) {
-    return 'bg-red-500';
+    return 'bg-error-solid';
   }
   if (percent >= 70) {
-    return 'bg-amber-500';
+    return 'bg-warn-solid';
   }
-  return 'bg-green-500';
+  return 'bg-ok-solid';
 }

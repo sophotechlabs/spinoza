@@ -2,22 +2,22 @@ import type { FluxResource } from './types';
 
 export function readyDot(ready: string): string {
   if (ready === 'True') {
-    return 'bg-green-500';
+    return 'bg-ok-solid';
   }
   if (ready === 'False') {
-    return 'bg-red-500';
+    return 'bg-error-solid';
   }
-  return 'bg-neutral-500';
+  return 'bg-idle-solid';
 }
 
 export function readyText(ready: string): string {
   if (ready === 'True') {
-    return 'text-green-400';
+    return 'text-ok';
   }
   if (ready === 'False') {
-    return 'text-red-400';
+    return 'text-error';
   }
-  return 'text-neutral-400';
+  return 'text-fg-muted';
 }
 
 export function readyLabel(ready: string): string {
@@ -35,14 +35,14 @@ export function readyLabel(ready: string): string {
 
 export function statusDot(resource: FluxResource): string {
   if (resource.suspended) {
-    return 'bg-amber-500';
+    return 'bg-warn-solid';
   }
   return readyDot(resource.ready);
 }
 
 export function statusText(resource: FluxResource): string {
   if (resource.suspended) {
-    return 'text-amber-400';
+    return 'text-warn';
   }
   return readyText(resource.ready);
 }
@@ -63,9 +63,9 @@ export function created(createdAt: string): string {
 
 export function latestColor(resource: FluxResource): string {
   if (resource.outdated === true) {
-    return 'text-amber-400';
+    return 'text-warn';
   }
-  return 'text-neutral-400';
+  return 'text-fg-muted';
 }
 
 export function latestTitle(resource: FluxResource): string {

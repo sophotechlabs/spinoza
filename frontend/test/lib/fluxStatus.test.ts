@@ -14,15 +14,15 @@ import { makeFluxResource } from '../helpers';
 
 describe('ready helpers', () => {
   it('maps ready to dot colors', () => {
-    expect(readyDot('True')).toBe('bg-green-500');
-    expect(readyDot('False')).toBe('bg-red-500');
-    expect(readyDot('')).toBe('bg-neutral-500');
+    expect(readyDot('True')).toBe('bg-ok-solid');
+    expect(readyDot('False')).toBe('bg-error-solid');
+    expect(readyDot('')).toBe('bg-idle-solid');
   });
 
   it('maps ready to text colors', () => {
-    expect(readyText('True')).toBe('text-green-400');
-    expect(readyText('False')).toBe('text-red-400');
-    expect(readyText('')).toBe('text-neutral-400');
+    expect(readyText('True')).toBe('text-ok');
+    expect(readyText('False')).toBe('text-error');
+    expect(readyText('')).toBe('text-fg-muted');
   });
 
   it('maps ready to labels', () => {
@@ -36,15 +36,15 @@ describe('ready helpers', () => {
 describe('status helpers', () => {
   it('reports suspended regardless of ready', () => {
     const resource = makeFluxResource({ suspended: true, ready: 'True' });
-    expect(statusDot(resource)).toBe('bg-amber-500');
-    expect(statusText(resource)).toBe('text-amber-400');
+    expect(statusDot(resource)).toBe('bg-warn-solid');
+    expect(statusText(resource)).toBe('text-warn');
     expect(statusLabel(resource)).toBe('Suspended');
   });
 
   it('falls through to the ready state when not suspended', () => {
     const resource = makeFluxResource({ suspended: false, ready: 'False' });
-    expect(statusDot(resource)).toBe('bg-red-500');
-    expect(statusText(resource)).toBe('text-red-400');
+    expect(statusDot(resource)).toBe('bg-error-solid');
+    expect(statusText(resource)).toBe('text-error');
     expect(statusLabel(resource)).toBe('Not ready');
   });
 });
@@ -59,13 +59,13 @@ describe('created', () => {
 describe('latest version presentation', () => {
   it('highlights an outdated release', () => {
     const resource = makeFluxResource({ revision: '6.14.0', latest: '6.15.1', outdated: true });
-    expect(latestColor(resource)).toBe('text-amber-400');
+    expect(latestColor(resource)).toBe('text-warn');
     expect(latestTitle(resource)).toBe('6.14.0 → 6.15.1 available');
   });
 
   it('dims a current release', () => {
     const resource = makeFluxResource({ revision: '6.15.1', latest: '6.15.1' });
-    expect(latestColor(resource)).toBe('text-neutral-400');
+    expect(latestColor(resource)).toBe('text-fg-muted');
     expect(latestTitle(resource)).toBe('up to date');
   });
 

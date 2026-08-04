@@ -65,9 +65,9 @@ describe('severityOf', () => {
 
 describe('severityClass', () => {
   it('reds errors, ambers warnings and leaves info alone', () => {
-    expect(severityClass('error')).toBe('text-red-400');
-    expect(severityClass('warn')).toBe('text-amber-400');
-    expect(severityClass('debug')).toBe('text-neutral-500');
+    expect(severityClass('error')).toBe('text-error');
+    expect(severityClass('warn')).toBe('text-warn');
+    expect(severityClass('debug')).toBe('text-fg-subtle');
     expect(severityClass('info')).toBe('');
   });
 });
@@ -78,22 +78,22 @@ describe('segmentsOf', () => {
 
     expect(segments).toHaveLength(2);
     expect(segments[0].text.trim()).toBe('2026-08-03 17:39:11,358');
-    expect(segments[0].className).toBe('text-neutral-500');
-    expect(segments[1].className).toBe('text-amber-400');
+    expect(segments[0].className).toBe('text-fg-subtle');
+    expect(segments[1].className).toBe('text-warn');
   });
 
   it('dims the logfmt time= prefix too', () => {
     const segments = segmentsOf('time=2026-08-03T18:16:03Z level=error msg="boom"');
 
-    expect(segments[0].className).toBe('text-neutral-500');
-    expect(segments[1].className).toBe('text-red-400');
+    expect(segments[0].className).toBe('text-fg-subtle');
+    expect(segments[1].className).toBe('text-error');
   });
 
   it('leaves a line with no timestamp in one piece', () => {
     const segments = segmentsOf('{"level":"error","msg":"boom"}');
 
     expect(segments).toHaveLength(1);
-    expect(segments[0].className).toBe('text-red-400');
+    expect(segments[0].className).toBe('text-error');
   });
 
   it('keeps the whole line when there is nothing to colour', () => {
@@ -114,7 +114,7 @@ describe('a container that colours its own output', () => {
 
     expect(segments).toEqual([
       { text: 'ok ', className: '' },
-      { text: 'failed', className: 'text-red-400' },
+      { text: 'failed', className: 'text-ansi-red' },
       { text: ' done', className: '' },
     ]);
   });
@@ -122,15 +122,15 @@ describe('a container that colours its own output', () => {
   it('keeps a colour until it is reset', () => {
     const segments = segmentsOf(`${ESC}33mwarn one two${ESC}0m`);
 
-    expect(segments).toEqual([{ text: 'warn one two', className: 'text-amber-400' }]);
+    expect(segments).toEqual([{ text: 'warn one two', className: 'text-ansi-yellow' }]);
   });
 
   it('follows a later colour change', () => {
     const segments = segmentsOf(`${ESC}32mgreen${ESC}36mcyan`);
 
     expect(segments).toEqual([
-      { text: 'green', className: 'text-green-400' },
-      { text: 'cyan', className: 'text-cyan-400' },
+      { text: 'green', className: 'text-ansi-green' },
+      { text: 'cyan', className: 'text-ansi-cyan' },
     ]);
   });
 
@@ -144,7 +144,7 @@ describe('a container that colours its own output', () => {
     const segments = segmentsOf(`${ESC}31mred${ESC}mplain`);
 
     expect(segments).toEqual([
-      { text: 'red', className: 'text-red-400' },
+      { text: 'red', className: 'text-ansi-red' },
       { text: 'plain', className: '' },
     ]);
   });
@@ -158,7 +158,7 @@ describe('a container that colours its own output', () => {
   it('does not try to read a level out of a coloured line', () => {
     const segments = segmentsOf(`${ESC}90m2026-08-03${ESC}0m ERROR boom`);
 
-    expect(segments[0].className).toBe('text-neutral-500');
+    expect(segments[0].className).toBe('text-ansi-bright-black');
     expect(segments[1].className).toBe('');
   });
 });

@@ -191,9 +191,9 @@ describe('ResourceTable', () => {
       screen.getByTitle('sidecar: waiting (CrashLoopBackOff) · 7 restarts'),
     ).toBeInTheDocument();
     const ratio = screen.getByText('1/2');
-    expect(ratio.className).toContain('text-amber-400');
+    expect(ratio.className).toContain('text-warn');
     const restarts = screen.getByText('7');
-    expect(restarts.className).toContain('text-red-400');
+    expect(restarts.className).toContain('text-error');
   });
 
   it('colors the status column by phase', async () => {
@@ -204,8 +204,8 @@ describe('ResourceTable', () => {
     renderTable(descriptor, null);
     await screen.findByRole('button', { name: 'pod-a' });
 
-    expect(screen.getByText('Running').className).toContain('text-green-400');
-    expect(screen.getByText('CrashLoopBackOff').className).toContain('text-red-400');
+    expect(screen.getByText('Running').className).toContain('text-ok');
+    expect(screen.getByText('CrashLoopBackOff').className).toContain('text-error');
   });
 
   it('falls back to the cell text when a container column has no container data', async () => {

@@ -13,18 +13,18 @@ function isBadWaiting(reason: string): boolean {
 
 export function containerColor(container: ContainerState): string {
   if (container.state === 'running' && container.ready) {
-    return 'bg-green-500';
+    return 'bg-ok-solid';
   }
   if (container.state === 'terminated' && container.reason === 'Completed') {
-    return 'bg-neutral-500';
+    return 'bg-idle-solid';
   }
   if (container.state === 'terminated') {
-    return 'bg-red-500';
+    return 'bg-error-solid';
   }
   if (container.state === 'waiting' && isBadWaiting(container.reason ?? '')) {
-    return 'bg-red-500';
+    return 'bg-error-solid';
   }
-  return 'bg-amber-500';
+  return 'bg-warn-solid';
 }
 
 export function containerTitle(container: ContainerState): string {
@@ -44,44 +44,44 @@ const BAD_STATUS = ['Failed', 'Error', 'Evicted', 'Lost', 'NotReady', 'Unhealthy
 
 export function statusColor(value: string): string {
   if (value === '') {
-    return 'text-neutral-600';
+    return 'text-fg-faint';
   }
   if (GOOD_STATUS.includes(value)) {
-    return 'text-green-400';
+    return 'text-ok';
   }
   if (SETTLED_STATUS.includes(value)) {
-    return 'text-neutral-400';
+    return 'text-fg-muted';
   }
   if (BAD_STATUS.includes(value)) {
-    return 'text-red-400';
+    return 'text-error';
   }
   if (isBadWaiting(value)) {
-    return 'text-red-400';
+    return 'text-error';
   }
-  return 'text-amber-400';
+  return 'text-warn';
 }
 
 export function ratioColor(value: string): string {
   const parts = value.split('/');
   if (parts.length !== 2) {
-    return 'text-neutral-200';
+    return 'text-fg';
   }
   if (parts[0] === parts[1]) {
-    return 'text-green-400';
+    return 'text-ok';
   }
   if (parts[0] === '0') {
-    return 'text-red-400';
+    return 'text-error';
   }
-  return 'text-amber-400';
+  return 'text-warn';
 }
 
 export function restartColor(value: string): string {
   const count = Number(value);
   if (Number.isNaN(count) || count === 0) {
-    return 'text-neutral-400';
+    return 'text-fg-muted';
   }
   if (count >= 5) {
-    return 'text-red-400';
+    return 'text-error';
   }
-  return 'text-amber-400';
+  return 'text-warn';
 }
