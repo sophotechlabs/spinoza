@@ -3,13 +3,21 @@ import type { ReactNode } from 'react';
 import {
   createColumnHelper,
   flexRender,
+  functionalUpdate,
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import type { ColumnDef, SortDirection, SortingState } from '@tanstack/react-table';
+import type {
+  ColumnDef,
+  ColumnSizingState,
+  RowSelectionState,
+  SortDirection,
+  SortingState,
+  VisibilityState,
+} from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { Metrics, ResourceDescriptor, ResourceUsage, Row } from '../lib/types';
+import type { Metrics, ObjectRef, ResourceDescriptor, ResourceUsage, Row } from '../lib/types';
 import {
   useSubColumns,
   useSubError,
@@ -24,9 +32,12 @@ import { useElementWidth } from '../lib/useElementWidth';
 import { useNow } from '../lib/useNow';
 import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
 import { FILTER_INPUT_ID } from '../lib/hotkeys';
+import { columnLabel, readTableState, tableKey, writeTableState } from '../lib/tableState';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
 import StaleBanner from './StaleBanner';
+import BulkBar from './BulkBar';
+import CopyButton from './CopyButton';
 
 interface ResourceTableProps {
   active: ResourceDescriptor | null;
@@ -37,6 +48,7 @@ interface ResourceTableProps {
 
 const ROW_HEIGHT = 28;
 const FLEX_COLUMN_IDS = new Set(['name']);
+const SELECT_COLUMN_ID = 'select';
 
 function columnWidth(id: string, base: number, perFlex: number): number {
   if (FLEX_COLUMN_IDS.has(id)) {
@@ -166,15 +178,40 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const error = useSubError(subId);
   const loaded = useSubLoaded(subId);
   const now = useNow();
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const stateKey = tableKey(active);
+  const [sorting, setSorting] = useState<SortingState>(() => readTableState(stateKey).sorting);
+  const [visibility, setVisibility] = useState<VisibilityState>(
+    () => readTableState(stateKey).visibility,
+  );
+  const [sizing, setSizing] = useState<ColumnSizingState>(() => readTableState(stateKey).sizing);
+  const [selection, setSelection] = useState<RowSelectionState>({});
   const [query, setQuery] = useState('');
   const [namespace, setNamespace] = useState(ALL_NAMESPACES);
   const [lastResource, setLastResource] = useState(subId);
   if (subId !== lastResource) {
     setLastResource(subId);
-    setSorting([]);
+    const next = readTableState(stateKey);
+    setSorting(next.sorting);
+    setVisibility(next.visibility);
+    setSizing(next.sizing);
+    setSelection({});
     setQuery('');
     setNamespace(ALL_NAMESPACES);
+  }
+
+  function changeSorting(next: SortingState) {
+    setSorting(next);
+    writeTableState(stateKey, { sorting: next, visibility, sizing });
+  }
+
+  function changeVisibility(next: VisibilityState) {
+    setVisibility(next);
+    writeTableState(stateKey, { sorting, visibility: next, sizing });
+  }
+
+  function changeSizing(next: ColumnSizingState) {
+    setSizing(next);
+    writeTableState(stateKey, { sorting, visibility, sizing: next });
   }
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -197,21 +234,53 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
 
   const columns = useMemo<ColumnDef<Row, string>[]>(() => {
     const defs: ColumnDef<Row, string>[] = [];
+    defs.push({
+      id: SELECT_COLUMN_ID,
+      size: 32,
+      minSize: 32,
+      enableSorting: false,
+      enableResizing: false,
+      enableHiding: false,
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          aria-label="Select every row"
+          checked={table.getIsAllRowsSelected()}
+          ref={(node) => {
+            if (node !== null) {
+              node.indeterminate = table.getIsSomeRowsSelected();
+            }
+          }}
+          onChange={table.getToggleAllRowsSelectedHandler()}
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          aria-label={`Select ${row.original.name}`}
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+        />
+      ),
+    });
     defs.push(
       columnHelper.accessor('name', {
         header: 'Name',
         size: 240,
         minSize: 100,
         cell: (info) => (
-          <button
-            type="button"
-            onClick={() => {
-              onSelect(info.row.original);
-            }}
-            className="block w-full cursor-pointer truncate text-left text-fg-strong hover:underline"
-          >
-            {info.getValue()}
-          </button>
+          <span className="group flex items-baseline gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                onSelect(info.row.original);
+              }}
+              className="min-w-0 cursor-pointer truncate text-left text-fg-strong hover:underline"
+            >
+              {info.getValue()}
+            </button>
+            <CopyButton what={info.getValue()} text={info.getValue()} quiet />
+          </span>
         ),
       }),
     );
@@ -275,8 +344,21 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const table = useReactTable({
     data: visibleRows,
     columns,
-    state: { sorting },
-    onSortingChange: setSorting,
+    state: { sorting, columnVisibility: visibility, columnSizing: sizing, rowSelection: selection },
+    getRowId: (row) => row.uid,
+    enableRowSelection: true,
+    onRowSelectionChange: (updater) => {
+      setSelection(functionalUpdate(updater, selection));
+    },
+    onSortingChange: (updater) => {
+      changeSorting(functionalUpdate(updater, sorting));
+    },
+    onColumnVisibilityChange: (updater) => {
+      changeVisibility(functionalUpdate(updater, visibility));
+    },
+    onColumnSizingChange: (updater) => {
+      changeSizing(functionalUpdate(updater, sizing));
+    },
     columnResizeMode: 'onChange',
     defaultColumn: { minSize: 60 },
     getCoreRowModel: getCoreRowModel(),
@@ -316,6 +398,23 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   function clearFilter() {
     setQuery('');
     setNamespace(ALL_NAMESPACES);
+  }
+
+  function clearSelection() {
+    setSelection({});
+  }
+
+  const hideable = table.getAllLeafColumns().filter((column) => column.getCanHide());
+  const chosen = table.getSelectedRowModel().rows;
+  let targets: ObjectRef[] = [];
+  if (active !== null) {
+    targets = chosen.map((row) => ({
+      group: active.group,
+      version: active.version,
+      resource: active.resource,
+      namespace: row.original.namespace,
+      name: row.original.name,
+    }));
   }
 
   if (active === null) {
@@ -371,10 +470,33 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
             ))}
           </select>
         )}
+        <details className="relative">
+          <summary className="cursor-pointer rounded border border-edge px-2 py-1 text-fg-soft hover:bg-surface-raised">
+            Columns
+          </summary>
+          <div className="absolute z-20 mt-1 max-h-72 w-56 overflow-y-auto rounded border border-edge-strong bg-surface-raised p-2 shadow">
+            {hideable.map((column) => (
+              <label key={column.id} className="flex items-center gap-2 py-0.5 text-fg-soft">
+                <input
+                  type="checkbox"
+                  checked={column.getIsVisible()}
+                  onChange={column.getToggleVisibilityHandler()}
+                />
+                {columnLabel(column.columnDef.header, column.id)}
+              </label>
+            ))}
+          </div>
+        </details>
         <span className="ml-auto text-fg-muted">
           {visibleRows.length} of {rows.length}
         </span>
       </div>
+      <BulkBar
+        kind={active.kind}
+        targets={targets}
+        onDone={clearSelection}
+        onClear={clearSelection}
+      />
       <div ref={setScroll} className="min-h-0 flex-1 overflow-auto">
         <table
           className="table-fixed border-collapse text-left text-xs"
@@ -392,20 +514,26 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                       width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px`,
                     }}
                   >
-                    <button
-                      type="button"
-                      onClick={header.column.getToggleSortingHandler()}
-                      className="flex w-full cursor-pointer items-center truncate font-medium select-none hover:text-fg-strong"
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {sortIndicator(header.column.getIsSorted())}
-                    </button>
-                    <div
-                      aria-hidden="true"
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                      className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-grip opacity-0 select-none hover:opacity-100"
-                    />
+                    {header.column.getCanSort() && (
+                      <button
+                        type="button"
+                        onClick={header.column.getToggleSortingHandler()}
+                        className="flex w-full cursor-pointer items-center truncate font-medium select-none hover:text-fg-strong"
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {sortIndicator(header.column.getIsSorted())}
+                      </button>
+                    )}
+                    {!header.column.getCanSort() &&
+                      flexRender(header.column.columnDef.header, header.getContext())}
+                    {header.column.getCanResize() && (
+                      <div
+                        aria-hidden="true"
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
+                        className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-grip opacity-0 select-none hover:opacity-100"
+                      />
+                    )}
                   </th>
                 ))}
               </tr>

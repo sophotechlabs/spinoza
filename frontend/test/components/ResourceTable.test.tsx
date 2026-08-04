@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Column, ResourceDescriptor, Row } from '../../src/lib/types';
 import ResourceTable from '../../src/components/ResourceTable';
@@ -72,7 +72,7 @@ describe('ResourceTable', () => {
       makeRow({ uid: 'b', name: 'bravo', namespace: 'two' }),
     ]);
     const view = renderTable(descriptor, null);
-    await user.selectOptions(screen.getByLabelText('Namespace'), 'two');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Namespace' }), 'two');
     expect(screen.queryByText('alpha')).not.toBeInTheDocument();
 
     useResourcesStore
@@ -168,14 +168,14 @@ describe('ResourceTable', () => {
       makeRow({ uid: 'b', name: 'pod-b', namespace: 'temp' }),
     ]);
     renderTable(descriptor, null);
-    await user.selectOptions(screen.getByLabelText('Namespace'), 'temp');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Namespace' }), 'temp');
     expect(screen.queryByRole('button', { name: 'pod-a' })).not.toBeInTheDocument();
 
     act(() => {
       useResourcesStore.getState().applyDeltas(SUB, [{ type: 'deleted', subId: SUB, uid: 'b' }]);
     });
 
-    expect(screen.getByLabelText('Namespace')).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Namespace' })).toHaveValue('');
     expect(screen.getByRole('button', { name: 'pod-a' })).toBeInTheDocument();
   });
 
@@ -183,7 +183,7 @@ describe('ResourceTable', () => {
     const user = userEvent.setup();
     seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
     renderTable(descriptor, null);
-    await user.selectOptions(screen.getByLabelText('Namespace'), 'prod');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Namespace' }), 'prod');
 
     act(() => {
       useResourcesStore.setState({ subs: new Map(), errors: new Map() });
@@ -195,14 +195,20 @@ describe('ResourceTable', () => {
   it('renders Name, snapshot columns and Age for a cluster-scoped resource', () => {
     seed(makeColumns(['Ready', 'Status']), false, []);
     renderTable(descriptor, null);
-    const headers = screen.getAllByRole('columnheader').map((cell) => cell.textContent);
+    const headers = screen
+      .getAllByRole('columnheader')
+      .slice(1)
+      .map((cell) => cell.textContent);
     expect(headers).toEqual(['Name', 'Ready', 'Status', 'Age']);
   });
 
   it('inserts a Namespace column for a namespaced resource', () => {
     seed(makeColumns(['Ready']), true, []);
     renderTable(descriptor, null);
-    const headers = screen.getAllByRole('columnheader').map((cell) => cell.textContent);
+    const headers = screen
+      .getAllByRole('columnheader')
+      .slice(1)
+      .map((cell) => cell.textContent);
     expect(headers).toEqual(['Name', 'Namespace', 'Ready', 'Age']);
   });
 
@@ -284,7 +290,7 @@ describe('ResourceTable', () => {
     seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
     const { container } = renderTable(descriptor, null);
     await screen.findByRole('button', { name: 'pod-a' });
-    const nameHeader = screen.getAllByRole('columnheader')[0];
+    const nameHeader = screen.getAllByRole('columnheader')[1];
     expect(nameHeader.getAttribute('style')).toContain('width');
     expect(container.querySelectorAll('.cursor-col-resize').length).toBeGreaterThan(0);
   });
@@ -300,7 +306,7 @@ describe('ResourceTable', () => {
       throw new Error('row element not found');
     }
     const cells = row.querySelectorAll('td');
-    expect(cells.item(2).textContent).toBe('');
+    expect(cells.item(3).textContent).toBe('');
   });
 
   it('formats age for seconds, minutes, hours and days', () => {
@@ -340,7 +346,7 @@ describe('ResourceTable', () => {
       throw new Error('row element not found');
     }
     const cells = row.querySelectorAll('td');
-    expect(cells.item(1).textContent).toBe('');
+    expect(cells.item(2).textContent).toBe('');
   });
 
   it('virtualizes large row sets, rendering only a windowed subset', async () => {
@@ -366,7 +372,7 @@ describe('ResourceTable', () => {
       makeRow({ uid: '2', name: 'alpha', namespace: 'ns' }),
     ]);
     renderTable(descriptor, null);
-    const header = screen.getAllByRole('columnheader')[0];
+    const header = screen.getAllByRole('columnheader')[1];
     expect(header).toHaveAttribute('aria-sort', 'none');
     const headerButton = within(header).getByRole('button');
     await user.click(headerButton);
@@ -504,7 +510,7 @@ describe('ResourceTable', () => {
     ]);
     renderTable(descriptor, null);
 
-    await user.selectOptions(screen.getByLabelText('Namespace'), 'staging');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Namespace' }), 'staging');
 
     expect(screen.getByRole('button', { name: 'web-2' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'web-1' })).not.toBeInTheDocument();
@@ -560,5 +566,204 @@ describe('the selected row', () => {
 
     expect(tr.className).toContain('bg-surface-active');
     expect(tr.className).not.toContain('hover:bg-surface-raised');
+  });
+});
+
+describe('selecting several rows at once', () => {
+  beforeEach(() => {
+    resetStore();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetStore();
+  });
+
+  it('offers a checkbox per row and one for the lot', () => {
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod' }),
+    ]);
+    renderTable(descriptor, null);
+
+    expect(screen.getByLabelText('Select every row')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select pod-a')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select pod-b')).toBeInTheDocument();
+  });
+
+  it('counts what is selected and offers a delete', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod' }),
+    ]);
+    renderTable(descriptor, null);
+
+    await user.click(screen.getByLabelText('Select pod-a'));
+
+    expect(screen.getByText('1 Pod selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('takes the lot in one click', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod' }),
+    ]);
+    renderTable(descriptor, null);
+
+    await user.click(screen.getByLabelText('Select every row'));
+
+    expect(screen.getByText('2 Pod objects selected')).toBeInTheDocument();
+  });
+
+  it('lets go of the selection again', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+    await user.click(screen.getByLabelText('Select pod-a'));
+
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+
+    expect(screen.queryByText('1 Pod selected')).not.toBeInTheDocument();
+  });
+
+  it('drops the selection when the resource changes', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
+    const view = renderTable(descriptor, null);
+    await user.click(screen.getByLabelText('Select pod-a'));
+
+    useResourcesStore
+      .getState()
+      .applySnapshot('s2', makeColumns([]), true, [makeRow({ uid: 'c', name: 'node-1' })]);
+    view.rerender(
+      <ResourceTable active={descriptor} subId="s2" selected={null} onSelect={vi.fn()} />,
+    );
+
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+  });
+});
+
+describe('choosing which columns to show', () => {
+  beforeEach(() => {
+    resetStore();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('hides a column and keeps it hidden across a remount', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns(['Ready']), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    const first = renderTable(descriptor, null);
+
+    await user.click(screen.getByText('Columns'));
+    await user.click(screen.getByRole('checkbox', { name: 'Ready' }));
+
+    expect(
+      screen
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent)
+        .join(),
+    ).not.toContain('Ready');
+
+    first.unmount();
+    renderTable(descriptor, null);
+
+    expect(
+      screen
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent)
+        .join(),
+    ).not.toContain('Ready');
+  });
+
+  it('never offers to hide the checkbox column', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns(['Ready']), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+
+    await user.click(screen.getByText('Columns'));
+
+    expect(screen.queryByRole('checkbox', { name: 'select' })).not.toBeInTheDocument();
+  });
+});
+
+describe('a sort the user chose', () => {
+  beforeEach(() => {
+    resetStore();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('survives a remount', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), false, [
+      makeRow({ uid: 'a', name: 'bravo' }),
+      makeRow({ uid: 'b', name: 'alpha' }),
+    ]);
+    const first = renderTable(descriptor, null);
+
+    await user.click(screen.getAllByRole('columnheader')[1].querySelector('button') as HTMLElement);
+    first.unmount();
+
+    renderTable(descriptor, null);
+
+    expect(screen.getAllByRole('columnheader')[1].textContent).toContain('▲');
+  });
+
+  it('does not follow the user to another resource kind', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'bravo' })]);
+    const view = renderTable(descriptor, null);
+    await user.click(screen.getAllByRole('columnheader')[1].querySelector('button') as HTMLElement);
+
+    const other = makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false });
+    useResourcesStore
+      .getState()
+      .applySnapshot('s2', makeColumns([]), false, [makeRow({ uid: 'c', name: 'node-1' })]);
+    view.rerender(<ResourceTable active={other} subId="s2" selected={null} onSelect={vi.fn()} />);
+
+    expect(screen.getAllByRole('columnheader')[1].textContent).not.toContain('▲');
+  });
+});
+
+describe('a column the user resized', () => {
+  beforeEach(() => {
+    resetStore();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('keeps its width across a remount', () => {
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    const first = renderTable(descriptor, null);
+    const grip = screen.getAllByRole('columnheader')[1].querySelector('div[aria-hidden]');
+    if (grip === null) {
+      throw new Error('resize grip not found');
+    }
+
+    const before = screen.getAllByRole('columnheader')[1].style.width;
+    fireEvent.mouseDown(grip, { clientX: 0 });
+    fireEvent.mouseMove(document, { clientX: 60 });
+    fireEvent.mouseUp(document);
+    const widened = screen.getAllByRole('columnheader')[1].style.width;
+    expect(widened).not.toBe(before);
+    first.unmount();
+
+    renderTable(descriptor, null);
+
+    expect(screen.getAllByRole('columnheader')[1].style.width).toBe(widened);
   });
 });
