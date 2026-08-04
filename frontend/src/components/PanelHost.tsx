@@ -23,49 +23,49 @@ const DRAG_TYPE = 'application/x-spinoza-panel';
 
 function tabClass(active: boolean, disabled: boolean): string {
   if (disabled) {
-    return 'cursor-not-allowed border-b-2 border-transparent px-2 py-1.5 text-neutral-600';
+    return 'cursor-not-allowed border-b-2 border-transparent px-2 py-1.5 text-fg-faint';
   }
   if (active) {
-    return 'border-b-2 border-neutral-300 px-2 py-1.5 text-neutral-100';
+    return 'border-b-2 border-edge-active px-2 py-1.5 text-fg-strong';
   }
-  return 'border-b-2 border-transparent px-2 py-1.5 text-neutral-400 hover:text-neutral-300';
+  return 'border-b-2 border-transparent px-2 py-1.5 text-fg-muted hover:text-fg-soft';
 }
 
 function frameClass(side: DockSide): string {
   if (side === 'bottom') {
-    return 'flex shrink-0 flex-col border-t border-neutral-800 bg-neutral-950';
+    return 'flex shrink-0 flex-col border-t border-edge bg-surface';
   }
   if (side === 'left') {
-    return 'flex min-h-0 min-w-0 shrink-0 border-r border-neutral-800 bg-neutral-950';
+    return 'flex min-h-0 min-w-0 shrink-0 border-r border-edge bg-surface';
   }
-  return 'flex min-h-0 min-w-0 shrink-0 border-l border-neutral-800 bg-neutral-950';
+  return 'flex min-h-0 min-w-0 shrink-0 border-l border-edge bg-surface';
 }
 
 function handleClass(side: DockSide): string {
   if (side === 'bottom') {
-    return 'h-1 shrink-0 cursor-row-resize bg-neutral-500 hover:bg-neutral-300';
+    return 'h-1 shrink-0 cursor-row-resize bg-handle hover:bg-handle-active';
   }
-  return 'w-1 shrink-0 cursor-col-resize bg-neutral-500 hover:bg-neutral-300';
+  return 'w-1 shrink-0 cursor-col-resize bg-handle hover:bg-handle-active';
 }
 
 function emptyClass(side: DockSide): string {
   if (side === 'bottom') {
-    return 'h-2 shrink-0 border-t border-neutral-800 bg-neutral-950 hover:bg-neutral-900';
+    return 'h-2 shrink-0 border-t border-edge bg-surface hover:bg-surface-raised';
   }
   if (side === 'left') {
-    return 'w-2 shrink-0 border-r border-neutral-800 bg-neutral-950 hover:bg-neutral-900';
+    return 'w-2 shrink-0 border-r border-edge bg-surface hover:bg-surface-raised';
   }
-  return 'w-2 shrink-0 border-l border-neutral-800 bg-neutral-950 hover:bg-neutral-900';
+  return 'w-2 shrink-0 border-l border-edge bg-surface hover:bg-surface-raised';
 }
 
 function collapsedClass(side: DockSide): string {
   if (side === 'bottom') {
-    return 'flex shrink-0 items-center border-t border-neutral-800 bg-neutral-950 px-1';
+    return 'flex shrink-0 items-center border-t border-edge bg-surface px-1';
   }
   if (side === 'left') {
-    return 'flex w-8 shrink-0 items-start justify-center border-r border-neutral-800 bg-neutral-950 pt-2';
+    return 'flex w-8 shrink-0 items-start justify-center border-r border-edge bg-surface pt-2';
   }
-  return 'flex w-8 shrink-0 items-start justify-center border-l border-neutral-800 bg-neutral-950 pt-2';
+  return 'flex w-8 shrink-0 items-start justify-center border-l border-edge bg-surface pt-2';
 }
 
 function expandGlyph(side: DockSide): string {
@@ -162,7 +162,7 @@ export default function PanelHost({
     }
   }
 
-  const dropClass = over ? ' bg-neutral-800' : '';
+  const dropClass = over ? ' bg-surface-active' : '';
 
   if (tabs.length === 0) {
     return (
@@ -195,7 +195,7 @@ export default function PanelHost({
           onClick={() => {
             setCollapsed(false);
           }}
-          className="rounded px-1 py-0.5 text-xs text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+          className="rounded px-1 py-0.5 text-xs text-fg-muted hover:bg-surface-raised hover:text-fg"
         >
           {expandGlyph(side)}
         </button>
@@ -211,7 +211,7 @@ export default function PanelHost({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`flex shrink-0 flex-wrap items-center gap-1 border-b border-neutral-800 px-1 text-xs${dropClass}`}
+      className={`flex shrink-0 flex-wrap items-center gap-1 border-b border-edge px-1 text-xs${dropClass}`}
     >
       <button
         type="button"
@@ -219,7 +219,7 @@ export default function PanelHost({
         onClick={() => {
           setCollapsed(true);
         }}
-        className="px-1 py-1.5 text-neutral-400 hover:text-neutral-200"
+        className="px-1 py-1.5 text-fg-muted hover:text-fg"
       >
         {collapseGlyph(side)}
       </button>
@@ -257,7 +257,7 @@ export default function PanelHost({
               onClick={() => {
                 onMove(active, other);
               }}
-              className="rounded px-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+              className="rounded px-1 text-fg-muted hover:bg-surface-active hover:text-fg"
             >
               {SIDE_GLYPHS[other]}
             </button>
@@ -279,7 +279,7 @@ export default function PanelHost({
 
   const body = (
     <>
-      {active === null && <div className="p-4 text-xs text-neutral-400">{emptyHint}</div>}
+      {active === null && <div className="p-4 text-xs text-fg-muted">{emptyHint}</div>}
       <div ref={hostRef} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" />
     </>
   );

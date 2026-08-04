@@ -40,12 +40,12 @@ function resourceClass(active: boolean, nested = false, empty = false): string {
   }
   const base = `flex w-full items-center justify-between gap-1 ${indent} py-1 text-left`;
   if (active) {
-    return `${base} bg-neutral-800 text-neutral-100`;
+    return `${base} bg-surface-active text-fg-strong`;
   }
   if (empty) {
-    return `${base} text-neutral-500 hover:bg-neutral-900`;
+    return `${base} text-fg-subtle hover:bg-surface-raised`;
   }
-  return `${base} text-neutral-300 hover:bg-neutral-900`;
+  return `${base} text-fg-soft hover:bg-surface-raised`;
 }
 
 function countLabel(count: number | undefined): string {
@@ -100,7 +100,7 @@ function retryLabel(retrying: boolean): string {
 }
 
 const sectionClass =
-  'flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase hover:text-neutral-200';
+  'flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-fg-muted uppercase hover:text-fg';
 
 export default function Sidebar({
   epoch,
@@ -195,7 +195,7 @@ export default function Sidebar({
   return (
     <div
       style={{ width: `${width}px` }}
-      className="flex min-h-0 shrink-0 border-r border-neutral-800 bg-neutral-950"
+      className="flex min-h-0 shrink-0 border-r border-edge bg-surface"
     >
       <nav className="min-w-0 flex-1 overflow-y-auto py-2">
         <div className="mb-1">
@@ -242,23 +242,21 @@ export default function Sidebar({
           )}
         </div>
         {error !== null && (
-          <div className="mx-2 mb-1 rounded border border-red-900 bg-red-950/40 px-2 py-1.5 text-[11px]">
-            <div className="font-semibold text-red-400">Discovery failed</div>
-            <div className="mt-0.5 break-words text-red-300">{error}</div>
+          <div className="mx-2 mb-1 rounded border border-error-line bg-error-tint/40 px-2 py-1.5 text-[11px]">
+            <div className="font-semibold text-error">Discovery failed</div>
+            <div className="mt-0.5 break-words text-error-strong">{error}</div>
             <button
               type="button"
               onClick={() => void retry()}
               disabled={retrying}
-              className="mt-1.5 rounded border border-red-800 px-1.5 py-0.5 text-red-200 hover:bg-red-900 disabled:cursor-not-allowed disabled:text-red-500"
+              className="mt-1.5 rounded border border-error-line-strong px-1.5 py-0.5 text-error-contrast hover:bg-error-tint-strong disabled:cursor-not-allowed disabled:text-error-muted"
             >
               {retryLabel(retrying)}
             </button>
           </div>
         )}
         {error === null && categories.length === 0 && (
-          <div className="px-3 py-1 text-[11px] text-neutral-400">
-            No resource types discovered.
-          </div>
+          <div className="px-3 py-1 text-[11px] text-fg-muted">No resource types discovered.</div>
         )}
         {categories.map((category) => {
           const isCollapsed = collapsed.has(category.name);
@@ -274,7 +272,7 @@ export default function Sidebar({
                 <span>
                   {chevron(isCollapsed)} {category.name}
                 </span>
-                <span className="text-neutral-400">{category.resources.length}</span>
+                <span className="text-fg-muted">{category.resources.length}</span>
               </button>
               {!isCollapsed && !isNested(category.name) && (
                 <div>
@@ -293,7 +291,7 @@ export default function Sidebar({
                       )}
                     >
                       <span className="truncate">{resource.kind}</span>{' '}
-                      <span className="shrink-0 text-neutral-500">
+                      <span className="shrink-0 text-fg-subtle">
                         {countLabel(counts[descriptorKey(resource)])}
                       </span>
                     </button>
@@ -313,14 +311,12 @@ export default function Sidebar({
                             toggle(key);
                           }}
                           title={group.name}
-                          className="flex w-full items-center justify-between gap-1 px-5 py-1 text-left text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+                          className="flex w-full items-center justify-between gap-1 px-5 py-1 text-left text-fg-muted hover:bg-surface-raised hover:text-fg"
                         >
                           <span className="truncate">
                             {chevron(groupCollapsed)} {group.name}
                           </span>
-                          <span className="shrink-0 text-neutral-400">
-                            {group.resources.length}
-                          </span>
+                          <span className="shrink-0 text-fg-muted">{group.resources.length}</span>
                         </button>
                         {!groupCollapsed && (
                           <div>
@@ -339,7 +335,7 @@ export default function Sidebar({
                                 )}
                               >
                                 <span className="truncate">{resource.kind}</span>{' '}
-                                <span className="shrink-0 text-neutral-500">
+                                <span className="shrink-0 text-fg-subtle">
                                   {countLabel(counts[descriptorKey(resource)])}
                                 </span>
                               </button>
@@ -360,7 +356,7 @@ export default function Sidebar({
         aria-label="Resize sidebar"
         onMouseDown={handleResize}
         onKeyDown={handleResizeKey}
-        className="w-1 shrink-0 cursor-col-resize bg-neutral-500 hover:bg-neutral-300"
+        className="w-1 shrink-0 cursor-col-resize bg-handle hover:bg-handle-active"
       />
     </div>
   );

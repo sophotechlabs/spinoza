@@ -112,9 +112,11 @@ describe('Sidebar', () => {
     renderSidebar({ activeResource: active });
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
     expect(screen.getByRole('button', { name: 'Deployment' }).className).toContain(
-      'bg-neutral-800',
+      'bg-surface-active',
     );
-    expect(screen.getByRole('button', { name: 'Pod' }).className).not.toContain('bg-neutral-800');
+    expect(screen.getByRole('button', { name: 'Pod' }).className).not.toContain(
+      'bg-surface-active',
+    );
   });
 
   it('shows the error message when discovery fails', async () => {
@@ -150,9 +152,11 @@ describe('Sidebar', () => {
     stubFetch(categories);
     renderSidebar({ view: 'flux-overview' });
     expect(screen.getByRole('button', { name: 'Status tiles' }).className).toContain(
-      'bg-neutral-800',
+      'bg-surface-active',
     );
-    expect(screen.getByRole('button', { name: 'Graph' }).className).not.toContain('bg-neutral-800');
+    expect(screen.getByRole('button', { name: 'Graph' }).className).not.toContain(
+      'bg-surface-active',
+    );
   });
 
   it('collapses the GitOps section when its header is clicked', async () => {
@@ -302,8 +306,8 @@ describe('the active sidebar entry', () => {
     renderSidebar({ view: 'flux-roles' });
     const active = screen.getByRole('button', { name: 'Overview' });
 
-    expect(active.className).toContain('bg-neutral-800');
-    expect(active.className).not.toContain('hover:bg-neutral-900');
+    expect(active.className).toContain('bg-surface-active');
+    expect(active.className).not.toContain('hover:bg-surface-raised');
   });
 
   it('does not carry a text colour that a later rule overrides', () => {
@@ -311,8 +315,8 @@ describe('the active sidebar entry', () => {
     renderSidebar({ view: 'flux-roles' });
     const active = screen.getByRole('button', { name: 'Overview' });
 
-    expect(active.className).toContain('text-neutral-100');
-    expect(active.className).not.toContain('text-neutral-300');
+    expect(active.className).toContain('text-fg-strong');
+    expect(active.className).not.toContain('text-fg-soft');
   });
 });
 
@@ -332,8 +336,8 @@ describe('resource counts', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
     const empty = await screen.findByRole('button', { name: 'Deployment 0' });
 
-    expect(empty.className).toContain('text-neutral-500');
-    expect(screen.getByRole('button', { name: 'Pod 57' }).className).toContain('text-neutral-300');
+    expect(empty.className).toContain('text-fg-subtle');
+    expect(screen.getByRole('button', { name: 'Pod 57' }).className).toContain('text-fg-soft');
   });
 
   it('sinks the empty types below the ones with objects', async () => {

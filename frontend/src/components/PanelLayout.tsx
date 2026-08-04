@@ -180,10 +180,10 @@ export default function PanelLayout({
 
   function objectBody(node: ReactNode): ReactNode {
     if (error !== null) {
-      return <div className="p-4 text-xs break-words text-red-400">{error}</div>;
+      return <div className="p-4 text-xs break-words text-error">{error}</div>;
     }
     if (detail === null) {
-      return <div className="p-4 text-xs text-neutral-400">Loading…</div>;
+      return <div className="p-4 text-xs text-fg-muted">Loading…</div>;
     }
     return node;
   }

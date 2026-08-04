@@ -50,7 +50,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   }
 
   if (contexts.length === 0) {
-    return <span className="font-semibold text-neutral-100">{current}</span>;
+    return <span className="font-semibold text-fg-strong">{current}</span>;
   }
 
   return (
@@ -60,7 +60,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
         value={current}
         onChange={(event) => void handleChange(event)}
         disabled={busy}
-        className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 font-semibold text-neutral-100 disabled:text-neutral-500"
+        className="rounded border border-edge-strong bg-surface-raised px-1.5 py-0.5 font-semibold text-fg-strong disabled:text-fg-subtle"
       >
         {contexts.map((name) => (
           <option key={name} value={name}>
@@ -68,8 +68,8 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
           </option>
         ))}
       </select>
-      {busy && <span className="text-neutral-400">switching…</span>}
-      {error !== null && <span className="max-w-md truncate text-red-400">{error}</span>}
+      {busy && <span className="text-fg-muted">switching…</span>}
+      {error !== null && <span className="max-w-md truncate text-error">{error}</span>}
     </span>
   );
 }

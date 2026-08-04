@@ -102,7 +102,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-neutral-950 font-mono text-sm text-neutral-200">
+    <div className="flex h-screen flex-col bg-surface font-mono text-sm text-fg">
       <TopBar
         status={feed.status}
         view={view}

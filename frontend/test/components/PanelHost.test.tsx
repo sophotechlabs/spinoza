@@ -145,11 +145,11 @@ describe('PanelHost', () => {
     const strip = parentOf(screen.getByRole('tab', { name: 'Overview' }));
 
     fireEvent.dragOver(strip, { dataTransfer: dataTransfer({ [PANEL_TYPE]: 'metrics' }) });
-    expect(strip.className).toContain('bg-neutral-800');
+    expect(strip.className).toContain('bg-surface-active');
 
     fireEvent.dragLeave(strip);
 
-    expect(strip.className).not.toContain('bg-neutral-800');
+    expect(strip.className).not.toContain('bg-surface-active');
   });
 
   it('collapses and reopens', async () => {

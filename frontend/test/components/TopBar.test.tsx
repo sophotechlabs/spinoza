@@ -23,19 +23,19 @@ describe('TopBar', () => {
   it('shows a green dot when connected', () => {
     const { container } = render(<TopBar status="connected" />);
     expect(screen.getByText('connected')).toBeInTheDocument();
-    expect(dotFor(container).className).toContain('bg-green-500');
+    expect(dotFor(container).className).toContain('bg-ok-solid');
   });
 
   it('shows a yellow dot when connecting', () => {
     const { container } = render(<TopBar status="connecting" />);
     expect(screen.getByText('connecting')).toBeInTheDocument();
-    expect(dotFor(container).className).toContain('bg-amber-500');
+    expect(dotFor(container).className).toContain('bg-warn-solid');
   });
 
   it('shows a red dot when disconnected', () => {
     const { container } = render(<TopBar status="disconnected" />);
     expect(screen.getByText('disconnected')).toBeInTheDocument();
-    expect(dotFor(container).className).toContain('bg-red-500');
+    expect(dotFor(container).className).toContain('bg-error-solid');
   });
 
   it('shows the active view when one is provided', () => {
