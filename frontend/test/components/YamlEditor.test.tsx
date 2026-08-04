@@ -11,6 +11,8 @@ interface EditorStubProps {
   options: { readOnly: boolean };
 }
 
+vi.mock('../../src/lib/monaco', () => ({}));
+
 vi.mock('@monaco-editor/react', () => ({
   default: ({ value, language, theme, onChange, options }: EditorStubProps) => (
     <div>

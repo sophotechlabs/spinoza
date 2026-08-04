@@ -8,6 +8,8 @@ interface EditorStubProps {
   options: { readOnly: boolean };
 }
 
+vi.mock('../../src/lib/monaco', () => ({}));
+
 vi.mock('@monaco-editor/react', () => ({
   default: ({ value, onChange, options }: EditorStubProps) => (
     <textarea
@@ -78,10 +80,10 @@ describe('InspectYaml', () => {
     vi.unstubAllGlobals();
   });
 
-  it('starts clean with the actions disabled', () => {
+  it('starts clean with the actions disabled', async () => {
     renderYaml();
 
-    expect(screen.getByLabelText('yaml')).toHaveValue(YAML);
+    expect(await screen.findByLabelText('yaml')).toHaveValue(YAML);
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Revert' })).toBeDisabled();
     expect(screen.queryByText('unsaved changes')).not.toBeInTheDocument();
@@ -91,7 +93,7 @@ describe('InspectYaml', () => {
     const user = userEvent.setup();
     renderYaml();
 
-    await user.type(screen.getByLabelText('yaml'), 'x');
+    await user.type(await screen.findByLabelText('yaml'), 'x');
 
     expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
     expect(screen.getByText('unsaved changes')).toBeInTheDocument();
@@ -100,7 +102,7 @@ describe('InspectYaml', () => {
   it('reverts the draft', async () => {
     const user = userEvent.setup();
     renderYaml();
-    await user.type(screen.getByLabelText('yaml'), 'x');
+    await user.type(await screen.findByLabelText('yaml'), 'x');
 
     await user.click(screen.getByRole('button', { name: 'Revert' }));
 
@@ -111,7 +113,7 @@ describe('InspectYaml', () => {
   it('applies the draft and reports success', async () => {
     const user = userEvent.setup();
     const { onApplied } = renderYaml();
-    await user.type(screen.getByLabelText('yaml'), 'x');
+    await user.type(await screen.findByLabelText('yaml'), 'x');
 
     await user.click(screen.getByRole('button', { name: 'Apply' }));
 
@@ -203,8 +205,9 @@ describe('InspectYaml', () => {
     expect(await screen.findByText('delete failed')).toBeInTheDocument();
   });
 
-  it('reseeds an untouched draft when the object is refetched', () => {
+  it('reseeds an untouched draft when the object is refetched', async () => {
     const { view } = renderYaml();
+    await screen.findByLabelText('yaml');
 
     const next = 'kind: Deployment\nreplicas: 3\n';
     view.rerender(
@@ -223,7 +226,7 @@ describe('InspectYaml', () => {
   it('keeps an edited draft when the object changes underneath', async () => {
     const user = userEvent.setup();
     const { view } = renderYaml();
-    await user.type(screen.getByLabelText('yaml'), 'x');
+    await user.type(await screen.findByLabelText('yaml'), 'x');
     const mine = screen.getByLabelText<HTMLTextAreaElement>('yaml').value;
 
     view.rerender(
