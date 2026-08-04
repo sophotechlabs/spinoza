@@ -3,8 +3,6 @@ import type { ConnectionStatus } from '../lib/feed';
 import SettingsDialog from './SettingsDialog';
 import type { View } from '../lib/types';
 import ContextPicker from './ContextPicker';
-import { SYSTEM } from '../lib/theme';
-import { useThemePreference, useThemeStore, useThemes } from '../store/theme';
 
 interface TopBarProps {
   status: ConnectionStatus;
@@ -24,9 +22,6 @@ function statusColor(status: ConnectionStatus): string {
 }
 
 export default function TopBar({ status, view, onReconnect, onContextChanged }: TopBarProps) {
-  const preference = useThemePreference();
-  const themes = useThemes();
-  const setPreference = useThemeStore((state) => state.setPreference);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   function handleReconnect() {
@@ -52,21 +47,6 @@ export default function TopBar({ status, view, onReconnect, onContextChanged }: 
         <span className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft">{view}</span>
       )}
       <div className="ml-auto flex items-center gap-3">
-        <select
-          aria-label="Theme"
-          value={preference}
-          onChange={(event) => {
-            setPreference(event.target.value);
-          }}
-          className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
-        >
-          {themes.map((theme) => (
-            <option key={theme.id} value={theme.id}>
-              {theme.name}
-            </option>
-          ))}
-          <option value={SYSTEM}>System</option>
-        </select>
         <span className="flex items-center gap-1.5 text-fg-muted">
           <span
             data-testid="connection-dot"
@@ -87,7 +67,7 @@ export default function TopBar({ status, view, onReconnect, onContextChanged }: 
           onClick={() => {
             setSettingsOpen(true);
           }}
-          className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
+          className="rounded border border-edge-strong px-1.5 py-0.5 text-base leading-none text-fg hover:bg-surface-active"
         >
           ⚙
         </button>
