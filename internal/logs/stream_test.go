@@ -65,6 +65,81 @@ func TestOpenStreamsLines(t *testing.T) {
 	}
 }
 
+func TestACleanEndCarriesNoError(t *testing.T) {
+	cs := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("first\nsecond\n"))
+	})
+
+	stream, err := Open(context.Background(), cs, Request{Namespace: "flux-system", Name: "web"})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	drainLines(t, stream)
+
+	if stream.Err() != nil {
+		t.Fatalf("err = %v, want none for a pod that finished logging", stream.Err())
+	}
+}
+
+func TestALineTooLongToReadIsReportedRatherThanEndingTheStreamQuietly(t *testing.T) {
+	huge := make([]byte, maxLineBytes+1)
+	for i := range huge {
+		huge[i] = 'x'
+	}
+	cs := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("first\n"))
+		_, _ = w.Write(huge)
+		_, _ = w.Write([]byte("\n"))
+	})
+
+	stream, err := Open(context.Background(), cs, Request{Namespace: "flux-system", Name: "web", Follow: true})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	drainLines(t, stream)
+
+	if stream.Err() == nil {
+		t.Fatal("a log line the reader could not take ended the stream as if the pod had finished")
+	}
+}
+
+func TestClosingAStreamIsNotAFailure(t *testing.T) {
+	cs := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("first\n"))
+		flush(w)
+		<-r.Context().Done()
+	})
+
+	stream, err := Open(context.Background(), cs, Request{Namespace: "flux-system", Name: "web", Follow: true})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	collect(t, stream, 1)
+	stream.Close()
+	drainLines(t, stream)
+
+	if stream.Err() != nil {
+		t.Fatalf("err = %v, want a deliberate close to read as a clean end", stream.Err())
+	}
+}
+
+func drainLines(t *testing.T, stream *Stream) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case _, ok := <-stream.Lines:
+			if !ok {
+				return
+			}
+		case <-deadline:
+			t.Fatal("the stream never ended")
+		}
+	}
+}
+
 func TestOpenSendsLogOptions(t *testing.T) {
 	query := ""
 	path := ""

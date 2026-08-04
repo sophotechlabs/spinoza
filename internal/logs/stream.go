@@ -26,10 +26,24 @@ type Request struct {
 type Stream struct {
 	Lines  <-chan string
 	cancel func()
+	mu     sync.Mutex
+	err    error
 }
 
 func (s *Stream) Close() {
 	s.cancel()
+}
+
+func (s *Stream) Err() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.err
+}
+
+func (s *Stream) fail(err error) {
+	s.mu.Lock()
+	s.err = err
+	s.mu.Unlock()
 }
 
 func Open(ctx context.Context, cs kubernetes.Interface, req Request) (*Stream, error) {
@@ -49,13 +63,18 @@ func Open(ctx context.Context, cs kubernetes.Interface, req Request) (*Stream, e
 	}
 
 	lines := make(chan string, lineBuffer)
+	stream := &Stream{Lines: lines, cancel: shut}
 	go func() {
 		defer close(lines)
 		defer shut()
-		pump(streamCtx, rc, lines)
+		readErr := pump(streamCtx, rc, lines)
+		if streamCtx.Err() != nil {
+			return
+		}
+		stream.fail(readErr)
 	}()
 
-	return &Stream{Lines: lines, cancel: shut}, nil
+	return stream, nil
 }
 
 func optionsFor(req Request) *corev1.PodLogOptions {
@@ -71,14 +90,15 @@ func optionsFor(req Request) *corev1.PodLogOptions {
 	return opts
 }
 
-func pump(ctx context.Context, r io.Reader, lines chan<- string) {
+func pump(ctx context.Context, r io.Reader, lines chan<- string) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case lines <- scanner.Text():
 		}
 	}
+	return scanner.Err()
 }

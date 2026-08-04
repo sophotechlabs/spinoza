@@ -121,10 +121,12 @@ func (sess *wsSession) buildSub(msg api.ClientMsg, gen uint64) {
 }
 
 func (sess *wsSession) failCurrent(subID string, gen uint64, err error) {
+	sess.writeMu.Lock()
+	defer sess.writeMu.Unlock()
 	if !sess.isCurrent(subID, gen) {
 		return
 	}
-	sess.write(sess.ctx, api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()})
+	sess.writeLocked(sess.ctx, api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()})
 }
 
 func (sess *wsSession) adopt(subID string, gen uint64, sub *resources.Subscription) bool {
@@ -269,10 +271,12 @@ func (sess *wsSession) buildLogs(msg api.ClientMsg, gen uint64) {
 }
 
 func (sess *wsSession) failCurrentLogs(subID string, gen uint64, err error) {
+	sess.writeMu.Lock()
+	defer sess.writeMu.Unlock()
 	if !sess.isCurrentLogs(subID, gen) {
 		return
 	}
-	sess.write(sess.ctx, api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()})
+	sess.writeLocked(sess.ctx, api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()})
 }
 
 func (sess *wsSession) isCurrentLogs(subID string, gen uint64) bool {
@@ -306,7 +310,7 @@ func (sess *wsSession) relayLogs(subID string, gen uint64, stream *logs.Stream) 
 			return
 		case line, ok := <-stream.Lines:
 			if !ok {
-				sess.writeCurrentLogs(subID, gen, api.ServerMsg{Type: "log-end", SubID: subID})
+				sess.writeCurrentLogs(subID, gen, endOfLogs(subID, stream))
 				return
 			}
 			batch := api.ServerMsg{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)}
@@ -315,6 +319,14 @@ func (sess *wsSession) relayLogs(subID string, gen uint64, stream *logs.Stream) 
 			}
 		}
 	}
+}
+
+func endOfLogs(subID string, stream *logs.Stream) api.ServerMsg {
+	err := stream.Err()
+	if err == nil {
+		return api.ServerMsg{Type: "log-end", SubID: subID}
+	}
+	return api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()}
 }
 
 func (sess *wsSession) writeCurrentLogs(subID string, gen uint64, msg any) bool {
@@ -422,15 +434,35 @@ func (s *Server) forget(sess *wsSession) {
 	delete(s.sessions, sess)
 }
 
+func (s *Server) trackExec(conn *websocket.Conn) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.terminals[conn] = struct{}{}
+}
+
+func (s *Server) forgetExec(conn *websocket.Conn) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.terminals, conn)
+}
+
 func (s *Server) dropSessions() {
 	s.mu.Lock()
 	open := make([]*wsSession, 0, len(s.sessions))
 	for sess := range s.sessions {
 		open = append(open, sess)
 	}
+	shells := make([]*websocket.Conn, 0, len(s.terminals))
+	for conn := range s.terminals {
+		shells = append(shells, conn)
+	}
 	s.sessions = map[*wsSession]struct{}{}
+	s.terminals = map[*websocket.Conn]struct{}{}
 	s.mu.Unlock()
 	for _, sess := range open {
 		_ = sess.conn.Close(websocket.StatusGoingAway, "context changed")
+	}
+	for _, conn := range shells {
+		_ = conn.Close(websocket.StatusGoingAway, "context changed")
 	}
 }

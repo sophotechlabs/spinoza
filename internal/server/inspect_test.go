@@ -311,6 +311,58 @@ func TestWSStreamsPodLogs(t *testing.T) {
 	}
 }
 
+func unreadableLogClient(t *testing.T) kubernetes.Interface {
+	t.Helper()
+	huge := make([]byte, (1<<20)+1)
+	for i := range huge {
+		huge[i] = 'x'
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("first\n"))
+		_, _ = w.Write(huge)
+		_, _ = w.Write([]byte("\n"))
+	}))
+	t.Cleanup(server.Close)
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	return cs
+}
+
+func TestWSTellsABrokenLogStreamFromAFinishedOne(t *testing.T) {
+	ts := inspectServerWith(t, unreadableLogClient(t), newPod())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+
+	sendMsg(ctx, t, conn, api.ClientMsg{
+		Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web", Follow: true,
+	})
+
+	for {
+		msg := readMsg(ctx, t, conn)
+		if msg.Type == "log" {
+			continue
+		}
+		if msg.Type == "log-end" {
+			t.Fatal("a log stream that broke mid-follow was reported as a pod that finished logging")
+		}
+		if msg.Type != "error" {
+			t.Fatalf("type = %q, want error", msg.Type)
+		}
+		if msg.Message == "" {
+			t.Fatal("the error frame carried no reason")
+		}
+		return
+	}
+}
+
 func TestWSLogsUnsubscribe(t *testing.T) {
 	ts := inspectServer(t, newPod())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

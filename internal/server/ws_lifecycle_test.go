@@ -421,6 +421,60 @@ func TestFailCurrentStaysSilentOnceSuperseded(t *testing.T) {
 	}
 }
 
+func TestAFailureCannotLandAfterTheSnapshotThatReplacedIt(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, client, ctx := rawSession(t, mgr)
+
+	stale := sess.claim("main")
+	sess.writeMu.Lock()
+	failed := make(chan struct{})
+	go func() {
+		defer close(failed)
+		sess.failCurrent("main", stale, errors.New("discovery failed"))
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	sess.claim("main")
+	sess.writeLocked(ctx, api.ServerMsg{Type: "snapshot", SubID: "main"})
+	sess.writeMu.Unlock()
+	<-failed
+	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "main"})
+
+	if first := readMsg(ctx, t, client); first.Type != "snapshot" {
+		t.Fatalf("Type = %q, want the replacement snapshot first", first.Type)
+	}
+	if second := readMsg(ctx, t, client); second.Type != "marker" {
+		t.Fatalf("Type = %q, want the stale error dropped once the replacement had written", second.Type)
+	}
+}
+
+func TestALogFailureCannotLandAfterTheStreamThatReplacedIt(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, client, ctx := rawSession(t, mgr)
+
+	stale := sess.claimLogs("logs")
+	sess.writeMu.Lock()
+	failed := make(chan struct{})
+	go func() {
+		defer close(failed)
+		sess.failCurrentLogs("logs", stale, errors.New("pods/log is forbidden"))
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	sess.claimLogs("logs")
+	sess.writeLocked(ctx, api.ServerMsg{Type: "log", SubID: "logs"})
+	sess.writeMu.Unlock()
+	<-failed
+	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "logs"})
+
+	if first := readMsg(ctx, t, client); first.Type != "log" {
+		t.Fatalf("Type = %q, want the replacement stream first", first.Type)
+	}
+	if second := readMsg(ctx, t, client); second.Type != "marker" {
+		t.Fatalf("Type = %q, want the stale error dropped once the replacement had written", second.Type)
+	}
+}
+
 func TestFailCurrentLogsStaysSilentOnceSuperseded(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)

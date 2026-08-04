@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -86,6 +87,8 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = socket.CloseNow() }()
+	s.trackExec(socket)
+	defer s.forgetExec(socket)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -93,14 +96,14 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	conn := &execConn{conn: socket, ctx: ctx}
 	session, startErr := s.manager().StartExec(ctx, req, conn)
 	if startErr != nil {
-		conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
+		_ = conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
 		return
 	}
 	defer session.Close()
 
 	go func() {
 		streamErr := <-session.Done()
-		conn.send(ctx, api.ExecChannelError, endMessage(streamErr))
+		_ = conn.send(ctx, api.ExecChannelError, endMessage(streamErr))
 		cancel()
 	}()
 
@@ -120,7 +123,7 @@ type execConn struct {
 	mu   sync.Mutex
 }
 
-func (e *execConn) send(ctx context.Context, channel byte, payload []byte) {
+func (e *execConn) send(ctx context.Context, channel byte, payload []byte) error {
 	frame := make([]byte, 0, len(payload)+1)
 	frame = append(frame, channel)
 	frame = append(frame, payload...)
@@ -129,11 +132,14 @@ func (e *execConn) send(ctx context.Context, channel byte, payload []byte) {
 	defer e.mu.Unlock()
 	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), execWriteTimeout)
 	defer cancel()
-	_ = e.conn.Write(writeCtx, websocket.MessageBinary, frame)
+	return e.conn.Write(writeCtx, websocket.MessageBinary, frame)
 }
 
 func (e *execConn) Write(p []byte) (int, error) {
-	e.send(e.ctx, api.ExecChannelStdout, p)
+	err := e.send(e.ctx, api.ExecChannelStdout, p)
+	if err != nil {
+		return 0, fmt.Errorf("the terminal stopped reading: %w", err)
+	}
 	return len(p), nil
 }
 

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/coder/websocket"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
@@ -34,21 +35,23 @@ type Cluster interface {
 }
 
 type Server struct {
-	cluster  Cluster
-	assets   fs.FS
-	files    http.Handler
-	token    string
-	mu       sync.Mutex
-	sessions map[*wsSession]struct{}
+	cluster   Cluster
+	assets    fs.FS
+	files     http.Handler
+	token     string
+	mu        sync.Mutex
+	sessions  map[*wsSession]struct{}
+	terminals map[*websocket.Conn]struct{}
 }
 
 func New(cluster Cluster, assets fs.FS, token string) *Server {
 	return &Server{
-		cluster:  cluster,
-		assets:   assets,
-		files:    http.FileServerFS(assets),
-		token:    token,
-		sessions: map[*wsSession]struct{}{},
+		cluster:   cluster,
+		assets:    assets,
+		files:     http.FileServerFS(assets),
+		token:     token,
+		sessions:  map[*wsSession]struct{}{},
+		terminals: map[*websocket.Conn]struct{}{},
 	}
 }
 

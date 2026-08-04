@@ -198,6 +198,39 @@ func TestExecStreamsStdoutStdinAndResize(t *testing.T) {
 	}
 }
 
+func TestSwitchingContextsSeversAnOpenTerminal(t *testing.T) {
+	shell := newFakeShell()
+	shell.greet = "$ "
+	ts := execServer(t, exec.NewService(shell, &fakeImages{digest: "sha256:live"}))
+	conn := dialExec(t, ts, execQuery)
+	channel, payload := readFrame(t, conn)
+	if channel != api.ExecChannelStdout || string(payload) != "$ " {
+		t.Fatalf("frame = %d %q, want the shell prompt", channel, payload)
+	}
+
+	severed := make(chan struct{})
+	go func() {
+		defer close(severed)
+		for {
+			_, _, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=p-mk1", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("switch: %d %s", resp.StatusCode, body)
+	}
+
+	select {
+	case <-severed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the terminal survived a context switch and kept typing into the old cluster")
+	}
+}
+
 func TestExecReportsTheStreamError(t *testing.T) {
 	shell := newFakeShell()
 	shell.err = errors.New(`exec: "/bin/sh": stat /bin/sh: no such file or directory`)
