@@ -67,7 +67,7 @@ func (s *Subscription) Close() {
 	s.cancel()
 }
 
-func (s *Subscription) Snapshot() []api.Row {
+func (s *Subscription) Snapshot() ([]api.Row, error) {
 	return s.stream.snapshot()
 }
 
@@ -337,7 +337,7 @@ func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
 	for _, desc := range descs {
 		flat = append(flat, desc)
 	}
-	return api.ResourceCounts{Counts: Count(ctx, m.dyn, flat)}
+	return Count(ctx, m.dyn, flat)
 }
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
@@ -390,11 +390,16 @@ func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscr
 	if err != nil {
 		return nil, err
 	}
+	rows, snapErr := st.snapshot()
+	if snapErr != nil {
+		m.detach(key, st, entry)
+		return nil, snapErr
+	}
 
 	return &Subscription{
 		Columns:    st.columns,
 		Namespaced: desc.Namespaced,
-		Rows:       st.snapshot(),
+		Rows:       rows,
 		Events:     entry.events,
 		Resync:     entry.resync,
 		stream:     st,
@@ -762,10 +767,10 @@ func signalResync(sub *subscriber) {
 	}
 }
 
-func (st *stream) snapshot() []api.Row {
+func (st *stream) snapshot() ([]api.Row, error) {
 	objs, err := st.lister.List(labels.Everything())
 	if err != nil {
-		return []api.Row{}
+		return nil, fmt.Errorf("reading the cached %s: %w", st.kind, err)
 	}
 	rows := make([]api.Row, 0, len(objs))
 	for _, o := range objs {
@@ -775,7 +780,7 @@ func (st *stream) snapshot() []api.Row {
 		}
 		rows = append(rows, toRow(u, st.kind))
 	}
-	return rows
+	return rows, nil
 }
 
 func toUnstructured(obj any) (*unstructured.Unstructured, bool) {

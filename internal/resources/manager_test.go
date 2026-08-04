@@ -1265,8 +1265,12 @@ func TestSnapshotReReadsTheCache(t *testing.T) {
 	}
 	recvEvent(t, sub.Events)
 
-	if len(sub.Snapshot()) != 2 {
-		t.Fatalf("resync snapshot = %d rows, want 2", len(sub.Snapshot()))
+	rows, snapErr := sub.Snapshot()
+	if snapErr != nil {
+		t.Fatalf("snapshot: %v", snapErr)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("resync snapshot = %d rows, want 2", len(rows))
 	}
 }
 

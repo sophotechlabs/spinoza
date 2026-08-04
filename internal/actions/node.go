@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -81,7 +82,7 @@ func (s *Service) drain(ctx context.Context, req Request) (api.ActionResult, err
 	outcomes := s.evictAll(bounded, plans)
 	return api.ActionResult{
 		Action:  string(Drain),
-		Message: drainMessage(outcomes),
+		Message: drainMessage(outcomes, errors.Is(bounded.Err(), context.DeadlineExceeded)),
 		Pods:    outcomes,
 	}, nil
 }
@@ -184,11 +185,14 @@ func (s *Service) evictOne(ctx context.Context, pod *corev1.Pod) (string, string
 			return api.OutcomeSkipped, "already gone"
 		}
 		if !apierrors.IsTooManyRequests(err) {
+			if ctx.Err() != nil {
+				return api.OutcomeFailed, "the drain ran out of time before this pod was evicted"
+			}
 			return api.OutcomeFailed, err.Error()
 		}
 		wait := s.sleep(ctx)
 		if !wait {
-			return api.OutcomeBlocked, "a PodDisruptionBudget still forbids the eviction"
+			return api.OutcomeBlocked, "a PodDisruptionBudget still forbids the eviction, and the drain ran out of time"
 		}
 	}
 }
@@ -249,7 +253,7 @@ func planMessage(plans []podPlan) string {
 	return strings.Join(parts, ", ") + "."
 }
 
-func drainMessage(outcomes []api.PodOutcome) string {
+func drainMessage(outcomes []api.PodOutcome, expired bool) string {
 	evicted := tally(outcomes, api.OutcomeEvicted)
 	parts := []string{
 		fmt.Sprintf("Cordoned. Eviction requested for %d %s", evicted, podWord(evicted)),
@@ -257,7 +261,11 @@ func drainMessage(outcomes []api.PodOutcome) string {
 	parts = appendCount(parts, tally(outcomes, api.OutcomeSkipped), "left in place")
 	parts = appendCount(parts, tally(outcomes, api.OutcomeBlocked), "still blocked")
 	parts = appendCount(parts, tally(outcomes, api.OutcomeFailed), "failed")
-	return strings.Join(parts, ", ") + "."
+	message := strings.Join(parts, ", ") + "."
+	if expired {
+		return message + " The drain ran out of time, so run it again to finish."
+	}
+	return message
 }
 
 func appendCount(parts []string, count int, label string) []string {

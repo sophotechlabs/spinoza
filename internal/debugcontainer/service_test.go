@@ -495,6 +495,9 @@ func TestAllowedDefaultsToPermittedWhenTheReviewItselfFails(t *testing.T) {
 	if !support.Allowed {
 		t.Fatal("an advisory check must never be stricter than the real API")
 	}
+	if !strings.Contains(support.Reason, "cannot create selfsubjectaccessreviews") {
+		t.Fatalf("reason = %q, want the check failure carried rather than dropped", support.Reason)
+	}
 }
 
 func TestWaitReportsTheLastWaitingReasonOnTimeout(t *testing.T) {

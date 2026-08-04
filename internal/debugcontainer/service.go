@@ -129,6 +129,7 @@ func (s *Service) Allowed(ctx context.Context, namespace, pod string) api.DebugS
 	}
 	result, err := s.cs.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, review, metav1.CreateOptions{})
 	if err != nil {
+		support.Reason = "could not check whether ephemeral containers are allowed here: " + err.Error()
 		return support
 	}
 	support.Allowed = result.Status.Allowed

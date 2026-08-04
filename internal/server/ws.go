@@ -184,7 +184,12 @@ func (sess *wsSession) relay(subID string, gen uint64, sub *resources.Subscripti
 
 func (sess *wsSession) sendResync(subID string, gen uint64, sub *resources.Subscription) bool {
 	drainEvents(sub.Events)
-	return sess.writeCurrent(subID, gen, snapshotOf(subID, sub, sub.Snapshot()))
+	rows, err := sub.Snapshot()
+	if err != nil {
+		slog.Warn("a resync could not read the cache", "subId", subID, "error", err)
+		return sess.writeCurrent(subID, gen, api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()})
+	}
+	return sess.writeCurrent(subID, gen, snapshotOf(subID, sub, rows))
 }
 
 func drainEvents(events <-chan resources.Event) {

@@ -250,7 +250,11 @@ func waitForRows(t *testing.T, sub *resources.Subscription, want int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if len(sub.Snapshot()) >= want {
+		rows, err := sub.Snapshot()
+		if err != nil {
+			t.Fatalf("snapshot: %v", err)
+		}
+		if len(rows) >= want {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
