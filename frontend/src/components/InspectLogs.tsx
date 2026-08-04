@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { LogRequest } from '../lib/types';
 import { useLogEnded, useLogError, useLogLines, useLogOffset } from '../store/logs';
 import { useLogStream } from '../lib/useLogStream';
-import { segmentsOf } from '../lib/logColor';
+import { prettySegments, rawSegments } from '../lib/logColor';
 import { scrollToBottom } from '../lib/scroll';
 
 export const INSPECT_LOGS_SUB_ID = 'inspect-logs';
@@ -22,6 +22,13 @@ function followLabel(follow: boolean): string {
   return 'Follow';
 }
 
+function viewLabel(pretty: boolean): string {
+  if (pretty) {
+    return 'Pretty';
+  }
+  return 'Raw';
+}
+
 export default function InspectLogs({
   namespace,
   pod,
@@ -31,6 +38,7 @@ export default function InspectLogs({
 }: InspectLogsProps) {
   const [container, setContainer] = useState(() => containers[0] ?? '');
   const [follow, setFollow] = useState(true);
+  const [pretty, setPretty] = useState(true);
   const lines = useLogLines(INSPECT_LOGS_SUB_ID);
   const offset = useLogOffset(INSPECT_LOGS_SUB_ID);
   const ended = useLogEnded(INSPECT_LOGS_SUB_ID);
@@ -59,6 +67,11 @@ export default function InspectLogs({
     }
     scrollToBottom(scrollRef.current);
   }, [lines, follow]);
+
+  let render = rawSegments;
+  if (pretty) {
+    render = prettySegments;
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -89,6 +102,17 @@ export default function InspectLogs({
         >
           {followLabel(follow)}
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setPretty((value) => !value);
+          }}
+          aria-pressed={pretty}
+          title="Format structured log lines"
+          className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+        >
+          {viewLabel(pretty)}
+        </button>
         {error !== null && <span className="truncate text-error">{error}</span>}
         {error === null && ended && <span className="text-fg-muted">stream ended</span>}
       </div>
@@ -99,7 +123,7 @@ export default function InspectLogs({
         {lines.length === 0 && <span className="text-fg-muted">Waiting for output…</span>}
         {lines.map((line, index) => (
           <div key={offset + index} className="break-all whitespace-pre-wrap">
-            {segmentsOf(line).map((segment, part) => (
+            {render(line).map((segment, part) => (
               <span key={part} className={segment.className}>
                 {segment.text}
               </span>

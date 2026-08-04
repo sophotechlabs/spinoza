@@ -146,3 +146,40 @@ describe('InspectLogs stream state', () => {
     expect(screen.getByText('stream ended')).toBeInTheDocument();
   });
 });
+
+describe('reading a structured log line', () => {
+  const jsonLine =
+    '{"level":"info","ts":"2026-08-04T11:56:53.059Z","caller":"http/server.go:273","msg":"Starting HTTP Server.","addr":":9898"}';
+
+  function pushLine() {
+    act(() => {
+      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
+      useLogsStore.getState().appendLines(INSPECT_LOGS_SUB_ID, [jsonLine]);
+    });
+  }
+
+  beforeEach(() => {
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  it('formats it for reading by default', () => {
+    renderLogs();
+    pushLine();
+
+    expect(screen.getByRole('button', { name: 'Pretty' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Starting HTTP Server.')).toBeInTheDocument();
+    expect(screen.queryByText(jsonLine)).not.toBeInTheDocument();
+  });
+
+  it('hands back the untouched line when asked for raw', async () => {
+    const user = userEvent.setup();
+    renderLogs();
+    pushLine();
+
+    await user.click(screen.getByRole('button', { name: 'Pretty' }));
+
+    expect(screen.getByRole('button', { name: 'Raw' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText(jsonLine)).toBeInTheDocument();
+    expect(screen.queryByText('Starting HTTP Server.')).not.toBeInTheDocument();
+  });
+});

@@ -124,3 +124,134 @@ export function segmentsOf(line: string): LogSegment[] {
     { text: line.slice(stamp[0].length), className: body },
   ];
 }
+
+const LEVEL_KEYS = ['level', 'severity', 'lvl'];
+const TIME_KEYS = ['ts', 'time', 'timestamp', '@timestamp'];
+const MESSAGE_KEYS = ['msg', 'message'];
+
+const LEVEL_SEVERITY: Record<string, LogSeverity | undefined> = {
+  error: 'error',
+  err: 'error',
+  fatal: 'error',
+  panic: 'error',
+  critical: 'error',
+  warn: 'warn',
+  warning: 'warn',
+  debug: 'debug',
+  trace: 'debug',
+  info: 'info',
+  information: 'info',
+  notice: 'info',
+};
+
+const INDENT = '\n          ';
+
+function parseObject(line: string): Record<string, unknown> | null {
+  const text = line.trim();
+  if (!text.startsWith('{') || !text.endsWith('}')) {
+    return null;
+  }
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function take(fields: Record<string, unknown>, keys: string[], used: Set<string>): string | null {
+  for (const key of keys) {
+    const value = fields[key];
+    if (typeof value === 'string' && value !== '') {
+      used.add(key);
+      return value;
+    }
+    if (typeof value === 'number') {
+      used.add(key);
+      return String(value);
+    }
+  }
+  return null;
+}
+
+export function clockOf(raw: string | null): string {
+  if (raw === null) {
+    return '';
+  }
+  const iso = /\d{2}:\d{2}:\d{2}/.exec(raw);
+  if (iso !== null) {
+    return iso[0];
+  }
+  const epoch = Number(raw);
+  if (Number.isNaN(epoch)) {
+    return '';
+  }
+  let millis = epoch * 1000;
+  if (epoch > 1e11) {
+    millis = epoch;
+  }
+  return new Date(millis).toISOString().slice(11, 19);
+}
+
+function severityFrom(level: string | null): LogSeverity {
+  if (level === null) {
+    return 'info';
+  }
+  const known = LEVEL_SEVERITY[level.toLowerCase()];
+  if (known === undefined) {
+    return 'info';
+  }
+  return known;
+}
+
+function rest(fields: Record<string, unknown>, used: Set<string>): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(fields)) {
+    if (used.has(key)) {
+      continue;
+    }
+    if (typeof value === 'string') {
+      parts.push(`${key}=${value}`);
+      continue;
+    }
+    parts.push(`${key}=${JSON.stringify(value)}`);
+  }
+  return parts.join(' ');
+}
+
+export function rawSegments(line: string): LogSegment[] {
+  return [{ text: line, className: '' }];
+}
+
+export function prettySegments(line: string): LogSegment[] {
+  const fields = parseObject(line);
+  if (fields === null) {
+    return segmentsOf(line);
+  }
+  const used = new Set<string>();
+  const level = take(fields, LEVEL_KEYS, used);
+  const clock = clockOf(take(fields, TIME_KEYS, used));
+  const found = take(fields, MESSAGE_KEYS, used);
+  let message = '';
+  if (found !== null) {
+    message = found;
+  }
+  const severity = severityFrom(level);
+  const segments: LogSegment[] = [];
+
+  if (clock !== '') {
+    segments.push({ text: `${clock}  `, className: 'text-fg-subtle' });
+  }
+  if (level !== null) {
+    segments.push({ text: level.toUpperCase().padEnd(5), className: severityClass(severity) });
+    segments.push({ text: '  ', className: '' });
+  }
+  segments.push({ text: message, className: severityClass(severity) });
+
+  const tail = rest(fields, used);
+  if (tail !== '') {
+    segments.push({ text: `${INDENT}${tail}`, className: 'text-fg-subtle' });
+  }
+  return segments;
+}

@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { hasAnsi, segmentsOf, severityClass, severityOf } from '../../src/lib/logColor';
+import {
+  clockOf,
+  hasAnsi,
+  prettySegments,
+  rawSegments,
+  segmentsOf,
+  severityClass,
+  severityOf,
+} from '../../src/lib/logColor';
+
+function joined(segments: { text: string }[]): string {
+  return segments.map((segment) => segment.text).join('');
+}
 
 const ESC = '[';
 
@@ -160,5 +172,105 @@ describe('a container that colours its own output', () => {
 
     expect(segments[0].className).toBe('text-ansi-bright-black');
     expect(segments[1].className).toBe('');
+  });
+});
+
+describe('raw view', () => {
+  it('hands back the line exactly as the container wrote it', () => {
+    const line = '{"level":"info","ts":"2026-08-04T11:56:53.059Z","msg":"Starting"}';
+
+    expect(rawSegments(line)).toEqual([{ text: line, className: '' }]);
+  });
+});
+
+describe('clockOf', () => {
+  it('takes the wall clock out of an rfc3339 stamp', () => {
+    expect(clockOf('2026-08-04T11:56:53.059Z')).toBe('11:56:53');
+  });
+
+  it('converts epoch seconds and epoch milliseconds alike', () => {
+    expect(clockOf('1754308613')).toBe('11:56:53');
+    expect(clockOf('1754308613059')).toBe('11:56:53');
+  });
+
+  it('gives up on a stamp it cannot read', () => {
+    expect(clockOf(null)).toBe('');
+    expect(clockOf('yesterday')).toBe('');
+  });
+});
+
+describe('a structured log line rendered for a person', () => {
+  it('leads with the clock, the level and the message', () => {
+    const segments = prettySegments(
+      '{"level":"info","ts":"2026-08-04T11:56:53.059Z","caller":"http/server.go:273","msg":"Starting HTTP Server.","addr":":9898"}',
+    );
+
+    expect(joined(segments)).toBe(
+      '11:56:53  INFO   Starting HTTP Server.\n          caller=http/server.go:273 addr=:9898',
+    );
+  });
+
+  it('colours the level and message by severity', () => {
+    const segments = prettySegments('{"level":"error","msg":"boom"}');
+
+    expect(segments[0].text).toBe('ERROR');
+    expect(segments[0].className).toBe('text-error');
+    expect(segments[2].className).toBe('text-error');
+  });
+
+  it('reads the level whatever the field is called and wherever it sits', () => {
+    const late =
+      '{"ts":"2026-08-04T11:56:53.059Z","caller":"a/very/long/package/path/server.go:273","level":"error","msg":"boom"}';
+
+    expect(prettySegments(late)[1].className).toBe('text-error');
+    expect(prettySegments('{"severity":"warn","msg":"careful"}')[0].className).toBe('text-warn');
+    expect(prettySegments('{"lvl":"debug","msg":"noisy"}')[0].className).toBe('text-fg-subtle');
+  });
+
+  it('treats a level it has never seen as ordinary output', () => {
+    const segments = prettySegments('{"level":"whatever","msg":"hello"}');
+
+    expect(segments[0].text).toBe('WHATEVER');
+    expect(segments[0].className).toBe('');
+  });
+
+  it('accepts the other common field names', () => {
+    const segments = prettySegments(
+      '{"timestamp":"2026-08-04T11:56:53Z","message":"hi","level":"info"}',
+    );
+
+    expect(joined(segments)).toBe('11:56:53  INFO   hi');
+  });
+
+  it('renders non-string fields as json rather than dropping them', () => {
+    const segments = prettySegments('{"level":"info","msg":"served","code":200,"tags":["a","b"]}');
+
+    expect(joined(segments)).toBe('INFO   served\n          code=200 tags=["a","b"]');
+  });
+
+  it('copes with a line that carries nothing but a message', () => {
+    expect(joined(prettySegments('{"msg":"bare"}'))).toBe('bare');
+  });
+
+  it('copes with a line that carries no message at all', () => {
+    expect(joined(prettySegments('{"level":"info"}'))).toBe('INFO   ');
+  });
+
+  it('reads a numeric timestamp, the shape zap emits by default', () => {
+    const segments = prettySegments('{"level":"info","ts":1754308613,"msg":"up"}');
+
+    expect(joined(segments)).toBe('11:56:53  INFO   up');
+  });
+
+  it('falls back to the plain view for anything that is not a json object', () => {
+    expect(prettySegments('plain output')).toEqual([{ text: 'plain output', className: '' }]);
+    expect(prettySegments('{"broken":')).toEqual([{ text: '{"broken":', className: '' }]);
+    expect(prettySegments('{not json}')).toEqual([{ text: '{not json}', className: '' }]);
+    expect(prettySegments('[1,2,3]')).toEqual([{ text: '[1,2,3]', className: '' }]);
+    expect(prettySegments('null')).toEqual([{ text: 'null', className: '' }]);
+  });
+
+  it('still colours a plain text warning by its level', () => {
+    expect(prettySegments('level=warn something happened')[0].className).toBe('text-warn');
   });
 });
