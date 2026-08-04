@@ -239,6 +239,70 @@ describe('InspectActions', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('never starts the watch when the panel goes away while the POST is in flight', async () => {
+    const user = userEvent.setup();
+    const deferred = {
+      release: () => {
+        return undefined;
+      },
+    };
+    const fetchMock = vi.fn((_url: string, init?: { method?: string }) => {
+      if (init?.method === 'POST') {
+        return new Promise((resolve) => {
+          deferred.release = () => {
+            resolve({
+              ok: true,
+              json: () => Promise.resolve({ action: 'reconcile', requestedAt: 'token-1' }),
+            });
+          };
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { view, onDone } = renderActions(false);
+    await user.click(screen.getByRole('button', { name: 'Reconcile' }));
+    await screen.findByText('working…');
+
+    view.unmount();
+    deferred.release();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    expect(fetchMock.mock.calls.filter((call) => call[1]?.method !== 'POST')).toHaveLength(0);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('drops a failure that lands after the panel went away', async () => {
+    const user = userEvent.setup();
+    const deferred = {
+      reject: () => {
+        return undefined;
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            deferred.reject = () => {
+              reject(new Error('forbidden'));
+            };
+          }),
+      ),
+    );
+    const { view } = renderActions(false);
+    await user.click(screen.getByRole('button', { name: 'Reconcile' }));
+    await screen.findByText('working…');
+
+    view.rerender(
+      <InspectActions target={{ ...target, name: 'infra' }} suspended={false} onDone={vi.fn()} />,
+    );
+    deferred.reject();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(screen.queryByText('forbidden')).not.toBeInTheDocument();
+  });
+
   it('leaves a reconcile with no token unwatched', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(

@@ -62,22 +62,28 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
     setNotice(null);
     setState(null);
     watchRef.current += 1;
+    const token = watchRef.current;
     try {
       const result = await runFluxAction(target, action);
+      if (watchRef.current !== token) {
+        return;
+      }
       setNotice(noticeFor(action));
       onDone();
       if (action === 'reconcile' && result.requestedAt !== undefined) {
-        void watch(result.requestedAt);
+        void watch(result.requestedAt, token);
       }
     } catch (err: unknown) {
+      if (watchRef.current !== token) {
+        return;
+      }
       setError(errorMessage(err));
     } finally {
       setBusy(null);
     }
   }
 
-  async function watch(requestedAt: string) {
-    const token = watchRef.current;
+  async function watch(requestedAt: string, token: number) {
     setState('requested');
     await pollReconcile(target, requestedAt, (progress: ReconcileProgress) => {
       if (watchRef.current !== token) {
