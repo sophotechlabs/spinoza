@@ -25,6 +25,7 @@ vi.mock('@monaco-editor/react', () => ({
 
 import InspectYaml from '../../src/components/InspectYaml';
 import { useToastsStore } from '../../src/store/toasts';
+import { hasUnsaved, setUnsaved } from '../../src/lib/unsaved';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const target: ObjectRef = {
@@ -307,5 +308,61 @@ describe('InspectYaml', () => {
     expect(
       screen.queryByText('changed on the server — Revert to load the new version'),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('leaving with an unsaved draft', () => {
+  afterEach(() => {
+    setUnsaved(false);
+  });
+
+  it('tells the rest of the app the editor is dirty', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+    expect(hasUnsaved()).toBe(false);
+
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    expect(hasUnsaved()).toBe(true);
+  });
+
+  it('goes quiet again once the draft is reverted', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Revert' }));
+
+    expect(hasUnsaved()).toBe(false);
+  });
+
+  it('goes quiet when the editor goes away', async () => {
+    const user = userEvent.setup();
+    const { view } = renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    view.unmount();
+
+    expect(hasUnsaved()).toBe(false);
+  });
+
+  it('asks the browser to confirm a reload while dirty', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('lets a reload through once the draft is saved', () => {
+    renderYaml();
+
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
   });
 });

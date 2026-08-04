@@ -169,6 +169,7 @@ describe('restart', () => {
     render(<InspectObjectActions target={daemonSet} detail={detailFor()} onDone={vi.fn()} />);
 
     await user.click(screen.getByRole('button', { name: 'Restart' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
     expect(await screen.findByText('Rollout restart requested at X.')).toBeInTheDocument();
     expect(String(fetchMock.mock.calls[0][0])).toContain('action=restart');
@@ -195,6 +196,7 @@ describe('node actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Cordon' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
     expect(await screen.findByText('worker-1 no longer accepts new pods.')).toBeInTheDocument();
     expect(String(fetchMock.mock.calls[0][0])).toContain('action=cordon');
@@ -468,5 +470,118 @@ describe('switching objects', () => {
 
     expect(screen.getByText('Scaled web to 5 replicas.')).toBeInTheDocument();
     expect(screen.getByLabelText('replicas')).toHaveValue(5);
+  });
+});
+
+describe('the actions that cannot be undone', () => {
+  it('asks before restarting and does nothing if you back out', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'restart', message: 'done' });
+    render(<InspectObjectActions target={daemonSet} detail={detailFor()} onDone={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Restart' }));
+    expect(screen.getByText(/Restart web\? Every pod is replaced\./)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText(/Every pod is replaced/)).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('asks before cordoning', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'cordon', message: 'done' });
+    render(
+      <InspectObjectActions
+        target={node}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Cordon' }));
+
+    expect(screen.getByText(/Nothing new will be scheduled on it/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('asks before scaling to zero', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'scale', message: 'scaled' });
+    render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 3 } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText('replicas'));
+    await user.type(screen.getByLabelText('replicas'), '0');
+    await user.click(screen.getByRole('button', { name: 'Scale' }));
+
+    expect(screen.getByText(/Scale web to zero\? Every pod is removed\./)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByText('scaled')).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('replicas=0');
+  });
+
+  it('scales to a positive count without asking', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'scale', message: 'scaled' });
+    render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 1 } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText('replicas'));
+    await user.type(screen.getByLabelText('replicas'), '4');
+    await user.click(screen.getByRole('button', { name: 'Scale' }));
+
+    expect(await screen.findByText('scaled')).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('replicas=4');
+  });
+
+  it('uncordons without asking, since it only widens what is allowed', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'uncordon', message: 'back in service' });
+    render(
+      <InspectObjectActions
+        target={node}
+        detail={detailFor({ kind: 'Node', node: { schedulable: false } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Uncordon' }));
+
+    expect(await screen.findByText('back in service')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets a pending question when the target changes', async () => {
+    const user = userEvent.setup();
+    stub({ action: 'restart', message: 'done' });
+    const view = render(
+      <InspectObjectActions target={daemonSet} detail={detailFor()} onDone={vi.fn()} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Restart' }));
+
+    view.rerender(
+      <InspectObjectActions
+        target={{ ...daemonSet, name: 'other' }}
+        detail={detailFor()}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/Every pod is replaced/)).not.toBeInTheDocument();
   });
 });

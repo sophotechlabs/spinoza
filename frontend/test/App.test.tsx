@@ -185,6 +185,7 @@ import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { clearRecents } from '../src/store/recents';
 import { useToastsStore } from '../src/store/toasts';
+import { setUnsaved } from '../src/lib/unsaved';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
 
 const podDescriptor = makeDescriptor({
@@ -1120,5 +1121,97 @@ describe('a feed that dropped', () => {
 
     expect(useToastsStore.getState().toasts).toHaveLength(0);
     expect(screen.getByRole('status')).toHaveTextContent('attempt 1');
+  });
+});
+
+describe('navigating away from an unsaved draft', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+    setUnsaved(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setUnsaved(false);
+    resetStore();
+  });
+
+  async function selectPodA(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+  }
+
+  it('asks before dropping the draft and stays put when you say no', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPodA(user);
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+  });
+
+  it('lets go once you agree', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPodA(user);
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+    });
+  });
+
+  it('guards a jump to another resource', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPodA(user);
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+
+    await user.click(await screen.findByRole('button', { name: 'Deployment' }));
+
+    expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+  });
+
+  it('guards a jump to another view', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPodA(user);
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+
+    await user.click(screen.getByRole('button', { name: 'Graph' }));
+
+    expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+  });
+
+  it('guards a jump to another object', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPodA(user);
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+        makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod' }),
+      ]);
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+
+    await user.click(await screen.findByRole('button', { name: 'pod-b' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
   });
 });

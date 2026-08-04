@@ -15,6 +15,7 @@ import { refFromFlux, refFromNode, refFromRow, useRowForRef } from './lib/refs';
 import { bumpClusterEpoch, useClusterEpoch } from './store/cluster';
 import { clearForwards } from './lib/portForward';
 import { focusFilter, useHotkeys } from './lib/hotkeys';
+import { mayDiscard } from './lib/unsaved';
 import { clearRecents, rememberObject } from './store/recents';
 import { notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
@@ -137,6 +138,9 @@ export default function App() {
   }, [feed.status, wasDown]);
 
   function clearSelection() {
+    if (!mayDiscard()) {
+      return;
+    }
     navigate({ ...route, selection: null });
   }
 
@@ -171,6 +175,9 @@ export default function App() {
   });
 
   function handleSelectResource(descriptor: ResourceDescriptor) {
+    if (!mayDiscard()) {
+      return;
+    }
     navigate({
       context: route.context,
       view: 'resources',
@@ -194,10 +201,16 @@ export default function App() {
   }
 
   function handleSelectView(next: View) {
+    if (!mayDiscard()) {
+      return;
+    }
     navigate({ ...route, view: next, selection: null });
   }
 
   function remember(ref: ObjectRef | null) {
+    if (!mayDiscard()) {
+      return;
+    }
     if (ref !== null) {
       rememberObject(ref);
     }

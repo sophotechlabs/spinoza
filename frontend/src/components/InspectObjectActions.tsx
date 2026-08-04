@@ -32,6 +32,12 @@ function errorMessage(err: unknown): string {
   return 'action failed';
 }
 
+interface Pending {
+  action: ObjectAction;
+  options: Record<string, unknown>;
+  question: string;
+}
+
 function outcomeClass(outcome: string): string {
   if (outcome === 'blocked') {
     return 'text-warn';
@@ -70,6 +76,7 @@ export default function InspectObjectActions({
   const [notice, setNotice] = useState<string | null>(null);
   const [plan, setPlan] = useState<ActionResult | null>(null);
   const [force, setForce] = useState(false);
+  const [pending, setPending] = useState<Pending | null>(null);
 
   const refKey = refQuery(target);
 
@@ -78,6 +85,7 @@ export default function InspectObjectActions({
     setNotice(null);
     setPlan(null);
     setForce(false);
+    setPending(null);
   }, [refKey]);
 
   const currentReplicas = replicasOf(detail);
@@ -112,6 +120,21 @@ export default function InspectObjectActions({
     }
   }
 
+  function ask(action: ObjectAction, options: Record<string, unknown>, question: string) {
+    setError(null);
+    setNotice(null);
+    setPending({ action, options, question });
+  }
+
+  function confirmPending(chosen: Pending) {
+    setPending(null);
+    void run(chosen.action, chosen.options);
+  }
+
+  function cancelPending() {
+    setPending(null);
+  }
+
   function handleScale() {
     if (replicas.trim() === '') {
       setError('replicas must be a whole number, zero or more');
@@ -120,6 +143,10 @@ export default function InspectObjectActions({
     const count = Number(replicas);
     if (!Number.isInteger(count) || count < 0) {
       setError('replicas must be a whole number, zero or more');
+      return;
+    }
+    if (count === 0) {
+      ask('scale', { replicas: 0 }, `Scale ${target.name} to zero? Every pod is removed.`);
       return;
     }
     void run('scale', { replicas: count });
@@ -155,7 +182,9 @@ export default function InspectObjectActions({
         {canRestart(target) && (
           <button
             type="button"
-            onClick={() => void run('restart')}
+            onClick={() => {
+              ask('restart', {}, `Restart ${target.name}? Every pod is replaced.`);
+            }}
             disabled={busy}
             className={buttonClass}
           >
@@ -165,7 +194,9 @@ export default function InspectObjectActions({
         {isNode(target) && !cordoned && (
           <button
             type="button"
-            onClick={() => void run('cordon')}
+            onClick={() => {
+              ask('cordon', {}, `Cordon ${target.name}? Nothing new will be scheduled on it.`);
+            }}
             disabled={busy}
             className={dangerClass}
           >
@@ -195,6 +226,25 @@ export default function InspectObjectActions({
         {cordoned && <span className="text-warn-muted">cordoned</span>}
         {busy && <span className="text-fg-muted">working…</span>}
       </div>
+
+      {pending !== null && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-warn-line bg-warn-tint/40 p-2">
+          <span className="text-warn-strong">{pending.question}</span>
+          <button
+            type="button"
+            onClick={() => {
+              confirmPending(pending);
+            }}
+            disabled={busy}
+            className={dangerClass}
+          >
+            Confirm
+          </button>
+          <button type="button" onClick={cancelPending} disabled={busy} className={buttonClass}>
+            Cancel
+          </button>
+        </div>
+      )}
 
       {plan !== null && (
         <div className="mt-2 rounded border border-edge bg-surface-raised/60 p-2">

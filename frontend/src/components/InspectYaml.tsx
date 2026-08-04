@@ -3,7 +3,9 @@ import type { ObjectDetail, ObjectRef } from '../lib/types';
 import { applyObject, deleteObject } from '../lib/object';
 import { notifyOk } from '../store/toasts';
 import { fetchSchema, gvkOf, registerSchema, schemaPath } from '../lib/schema';
+import { setUnsaved } from '../lib/unsaved';
 import Loading from './Loading';
+import CopyButton from './CopyButton';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 
@@ -71,6 +73,26 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
 
   const dirty = draft !== base;
   const stale = yaml !== base;
+
+  useEffect(() => {
+    setUnsaved(dirty);
+    return () => {
+      setUnsaved(false);
+    };
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!dirty) {
+      return;
+    }
+    function warn(event: BeforeUnloadEvent) {
+      event.preventDefault();
+    }
+    window.addEventListener('beforeunload', warn);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+    };
+  }, [dirty]);
 
   async function handleApply() {
     setBusy(true);
@@ -151,6 +173,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         >
           Revert
         </button>
+        <CopyButton what="YAML" text={draft} />
         {dirty && !stale && <span className="text-fg-muted">unsaved changes</span>}
         {stale && (
           <span className="text-warn">changed on the server — Revert to load the new version</span>
