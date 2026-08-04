@@ -682,8 +682,28 @@ func TestRefreshResourcesKeepsReportingAFailure(t *testing.T) {
 	mgr.UseDiscovery(disco, errors.New("still down"))
 
 	catalog := mgr.RefreshResources()
-	if catalog.Error != "still down" {
+	if !strings.Contains(catalog.Error, "still down") {
 		t.Fatalf("error = %q", catalog.Error)
+	}
+}
+
+func TestRefreshKeepsAGoodCatalogThroughABlip(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+	before := mgr.Resources()
+	disco := &stubDiscovery{results: []discoveryResult{{err: errors.New("connection refused")}}}
+	mgr.UseDiscovery(disco, nil)
+
+	catalog := mgr.RefreshResources()
+
+	if len(catalog.Categories) != len(before.Categories) {
+		t.Fatalf("categories = %d, want the %d already known kept", len(catalog.Categories), len(before.Categories))
+	}
+	if !strings.Contains(catalog.Error, "connection refused") {
+		t.Fatalf("error = %q, want the blip reported alongside the kept catalog", catalog.Error)
+	}
+	if _, err := mgr.Subscribe("apps", "v1", "deployments", "default"); err != nil {
+		t.Fatalf("subscribe: %v, want the kept catalog still usable", err)
 	}
 }
 
@@ -742,6 +762,168 @@ func TestSubscribeReportsWhyTheWatchFailed(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "cannot list resource") {
 		t.Fatalf("err = %v, want the forbidden reason from the reflector", err)
+	}
+}
+
+func TestASecondSubscribeWaitsOutTheFailureInsteadOfRelisting(t *testing.T) {
+	mgr, client := stuckManager(t, "deployments")
+	lists := 0
+	client.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		lists++
+		return false, nil, nil
+	})
+
+	first, firstErr := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if firstErr == nil {
+		first.Close()
+		t.Fatal("expected the stuck resource to fail")
+	}
+	after := lists
+	_, secondErr := mgr.Subscribe("apps", "v1", "deployments", "default")
+
+	if secondErr == nil {
+		t.Fatal("expected the cached failure to be handed back")
+	}
+	if !strings.Contains(secondErr.Error(), "did not sync") {
+		t.Fatalf("err = %v, want the leader's failure", secondErr)
+	}
+	if lists != after {
+		t.Fatalf("lists = %d, want no fresh LIST inside the backoff window (was %d)", lists, after)
+	}
+}
+
+func TestTheBackoffLetsARecoveredResourceThrough(t *testing.T) {
+	mgr, client := stuckManager(t, "deployments")
+	if _, err := mgr.Subscribe("apps", "v1", "deployments", "default"); err == nil {
+		t.Fatal("expected the stuck resource to fail")
+	}
+
+	client.ReactionChain = client.ReactionChain[1:]
+	mgr.now = func() time.Time {
+		return time.Now().Add(2 * buildBackoff)
+	}
+
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v, want the retry allowed once the backoff elapsed", err)
+	}
+	sub.Close()
+}
+
+func TestABackoffGrowsWithRepeatedFailures(t *testing.T) {
+	mgr, _ := stuckManager(t, "deployments")
+	key := streamKey{gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, ns: "default"}
+
+	mgr.recordFailure(key, errors.New("first"))
+	first := mgr.failures[key].wait
+	mgr.recordFailure(key, errors.New("second"))
+	second := mgr.failures[key].wait
+
+	if first != buildBackoff {
+		t.Fatalf("first wait = %s, want %s", first, buildBackoff)
+	}
+	if second != 2*buildBackoff {
+		t.Fatalf("second wait = %s, want it doubled", second)
+	}
+}
+
+func TestAWatchThatBreaksAfterSyncReachesTheSubscriber(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+	st, ok := mgr.lookupStream(streamKey{
+		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+		ns:  "default",
+	})
+	if !ok {
+		t.Fatal("no stream was registered")
+	}
+
+	st.watchBroke("etcdserver: request timed out")
+
+	ev := recvEvent(t, sub.Events)
+	if ev.Kind != "error" {
+		t.Fatalf("kind = %q, want the broken watch reported rather than a frozen table", ev.Kind)
+	}
+	if !strings.Contains(ev.Message, "request timed out") {
+		t.Fatalf("message = %q", ev.Message)
+	}
+}
+
+func TestABrokenWatchIsReportedOnlyOnce(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+	st, _ := mgr.lookupStream(streamKey{
+		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+		ns:  "default",
+	})
+
+	st.watchBroke("etcdserver: request timed out")
+	recvEvent(t, sub.Events)
+	st.watchBroke("etcdserver: request timed out")
+
+	expectNoEvent(t, sub.Events)
+}
+
+func TestAWatchThatComesBackAsksForAFreshSnapshot(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+	st, _ := mgr.lookupStream(streamKey{
+		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+		ns:  "default",
+	})
+
+	st.watchBroke("etcdserver: request timed out")
+	recvEvent(t, sub.Events)
+	st.publish("modified", newDeployment("default", "web"))
+
+	select {
+	case <-sub.Resync:
+	case <-time.After(3 * time.Second):
+		t.Fatal("a watch that recovered never told the client to re-read the table")
+	}
+}
+
+func TestARefreshStopsAStreamWhoseResourceTypeIsGone(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+	disco := &stubDiscovery{results: []discoveryResult{{lists: podList()}}}
+	mgr.UseDiscovery(disco, nil)
+
+	mgr.RefreshResources()
+
+	select {
+	case _, open := <-sub.Events:
+		if open {
+			t.Fatal("the subscriber kept receiving from a resource type that no longer exists")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("a stream whose resource type vanished was left list-watching forever")
+	}
+	if _, present := mgr.lookupStream(streamKey{
+		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+		ns:  "default",
+	}); present {
+		t.Fatal("the vanished stream is still registered")
 	}
 }
 

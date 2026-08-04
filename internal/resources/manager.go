@@ -42,12 +42,15 @@ const (
 	eventBuffer        = 256
 	attachAttempts     = 3
 	warmConcurrency    = 8
+	buildBackoff       = 5 * time.Second
+	maxBuildBackoff    = 2 * time.Minute
 )
 
 type Event struct {
-	Kind string
-	Row  api.Row
-	UID  string
+	Kind    string
+	Row     api.Row
+	UID     string
+	Message string
 }
 
 type Subscription struct {
@@ -83,15 +86,23 @@ type Manager struct {
 	cats        []api.Category
 	descs       map[string]api.ResourceDescriptor
 	discErr     string
+	now         func() time.Time
 	mu          sync.Mutex
 	streams     map[streamKey]*stream
 	building    map[streamKey]*buildGate
+	failures    map[streamKey]buildFailure
 	syncTimeout time.Duration
 }
 
 type buildGate struct {
 	mu   sync.Mutex
 	refs int
+}
+
+type buildFailure struct {
+	err  error
+	at   time.Time
+	wait time.Duration
 }
 
 type Deps struct {
@@ -120,8 +131,10 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		prom:     deps.Prometheus,
 		cats:     deps.Categories,
 		descs:    deps.Descriptors,
+		now:      time.Now,
 		streams:  map[streamKey]*stream{},
 		building: map[streamKey]*buildGate{},
+		failures: map[streamKey]buildFailure{},
 
 		syncTimeout: defaultSyncTimeout,
 	}
@@ -154,8 +167,20 @@ func (m *Manager) RefreshResources() api.ResourceCatalog {
 		m.schemas.Refresh()
 	}
 	cats, descs, err := discovery.List(m.disco)
+	if len(descs) == 0 {
+		m.keepCatalog(emptyDiscovery(err))
+		return m.Resources()
+	}
 	m.setCatalog(cats, descs, err)
+	m.dropVanished(descs)
 	return m.Resources()
+}
+
+func emptyDiscovery(err error) error {
+	if err != nil {
+		return fmt.Errorf("kept the resource types already known: discovery listed none: %w", err)
+	}
+	return errors.New("kept the resource types already known: discovery listed none")
 }
 
 func (m *Manager) setCatalog(cats []api.Category, descs map[string]api.ResourceDescriptor, err error) {
@@ -168,6 +193,29 @@ func (m *Manager) setCatalog(cats []api.Category, descs map[string]api.ResourceD
 	m.cats = cats
 	m.descs = descs
 	m.discErr = message
+}
+
+func (m *Manager) keepCatalog(err error) {
+	m.catalog.Lock()
+	defer m.catalog.Unlock()
+	m.discErr = err.Error()
+}
+
+func (m *Manager) dropVanished(descs map[string]api.ResourceDescriptor) {
+	m.mu.Lock()
+	gone := make([]*stream, 0, len(m.streams))
+	for key, st := range m.streams {
+		_, kept := descs[discovery.Key(key.gvr.Group, key.gvr.Version, key.gvr.Resource)]
+		if kept {
+			continue
+		}
+		delete(m.streams, key)
+		gone = append(gone, st)
+	}
+	m.mu.Unlock()
+	for _, st := range gone {
+		st.shutdown()
+	}
 }
 
 func (m *Manager) descriptors() map[string]api.ResourceDescriptor {
@@ -323,6 +371,7 @@ type stream struct {
 	subs     map[*subscriber]struct{}
 	refs     int
 	pinned   bool
+	broken   bool
 }
 
 func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscription, error) {
@@ -484,16 +533,44 @@ func (m *Manager) streamFor(key streamKey, desc api.ResourceDescriptor) (*stream
 	if ok {
 		return built, nil
 	}
+	cooling, recent := m.coolingOff(key)
+	if cooling {
+		return nil, recent
+	}
 
 	created, err := m.newStream(key, desc)
 	if err != nil {
+		m.recordFailure(key, err)
 		return nil, err
 	}
 
 	m.mu.Lock()
+	delete(m.failures, key)
 	m.streams[key] = created
 	m.mu.Unlock()
 	return created, nil
+}
+
+func (m *Manager) coolingOff(key streamKey) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	failure, known := m.failures[key]
+	if !known {
+		return false, nil
+	}
+	if m.now().Sub(failure.at) >= failure.wait {
+		return false, nil
+	}
+	return true, failure.err
+}
+
+func (m *Manager) recordFailure(key streamKey, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.failures[key]
+	wait := max(previous.wait*2, buildBackoff)
+	wait = min(wait, maxBuildBackoff)
+	m.failures[key] = buildFailure{err: err, at: m.now(), wait: wait}
 }
 
 func (m *Manager) lookupStream(key streamKey) (*stream, bool) {
@@ -544,16 +621,6 @@ func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream
 		return nil, fmt.Errorf("set transform: %w", transformErr)
 	}
 
-	var lastWatchErr atomic.Pointer[string]
-	watchErr := informer.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
-		reason := err.Error()
-		lastWatchErr.Store(&reason)
-	})
-	if watchErr != nil {
-		cancel()
-		return nil, fmt.Errorf("set watch error handler: %w", watchErr)
-	}
-
 	st := &stream{
 		kind:     desc.Kind,
 		columns:  columnsFor(desc.Kind),
@@ -561,6 +628,17 @@ func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream
 		lister:   gi.Lister(),
 		cancel:   cancel,
 		subs:     map[*subscriber]struct{}{},
+	}
+
+	var lastWatchErr atomic.Pointer[string]
+	watchErr := informer.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
+		reason := err.Error()
+		lastWatchErr.Store(&reason)
+		st.watchBroke(reason)
+	})
+	if watchErr != nil {
+		cancel()
+		return nil, fmt.Errorf("set watch error handler: %w", watchErr)
 	}
 
 	_, handlerErr := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -611,6 +689,7 @@ func (st *stream) publish(kind string, obj any) {
 	if !ok {
 		return
 	}
+	st.watchRecovered()
 	st.fanout(Event{Kind: kind, Row: toRow(u, st.kind)})
 }
 
@@ -619,6 +698,7 @@ func (st *stream) publishDelete(obj any) {
 	if !ok {
 		return
 	}
+	st.watchRecovered()
 	st.fanout(Event{Kind: "deleted", UID: string(u.GetUID())})
 }
 
@@ -632,6 +712,47 @@ func (st *stream) fanout(ev Event) {
 			signalResync(sub)
 		}
 	}
+}
+
+func (st *stream) watchBroke(reason string) {
+	st.mu.Lock()
+	already := st.broken
+	st.broken = true
+	st.mu.Unlock()
+	if already {
+		return
+	}
+	st.fanout(Event{Kind: "error", Message: "the watch on " + st.kind + " broke: " + reason})
+}
+
+func (st *stream) watchRecovered() {
+	st.mu.Lock()
+	broken := st.broken
+	st.broken = false
+	subs := make([]*subscriber, 0, len(st.subs))
+	for sub := range st.subs {
+		subs = append(subs, sub)
+	}
+	st.mu.Unlock()
+	if !broken {
+		return
+	}
+	for _, sub := range subs {
+		signalResync(sub)
+	}
+}
+
+func (st *stream) shutdown() {
+	st.mu.Lock()
+	for sub := range st.subs {
+		close(sub.events)
+		close(sub.resync)
+	}
+	st.subs = map[*subscriber]struct{}{}
+	st.refs = 0
+	st.pinned = false
+	st.mu.Unlock()
+	st.cancel()
 }
 
 func signalResync(sub *subscriber) {

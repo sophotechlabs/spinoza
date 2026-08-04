@@ -16,6 +16,8 @@ import (
 
 const maxLogBatch = 200
 
+const msgError = "error"
+
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := accept(w, r)
 	if err != nil {
@@ -126,7 +128,7 @@ func (sess *wsSession) failCurrent(subID string, gen uint64, err error) {
 	if !sess.isCurrent(subID, gen) {
 		return
 	}
-	sess.writeLocked(sess.ctx, api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()})
+	sess.writeLocked(sess.ctx, api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()})
 }
 
 func (sess *wsSession) adopt(subID string, gen uint64, sub *resources.Subscription) bool {
@@ -276,7 +278,7 @@ func (sess *wsSession) failCurrentLogs(subID string, gen uint64, err error) {
 	if !sess.isCurrentLogs(subID, gen) {
 		return
 	}
-	sess.writeLocked(sess.ctx, api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()})
+	sess.writeLocked(sess.ctx, api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()})
 }
 
 func (sess *wsSession) isCurrentLogs(subID string, gen uint64) bool {
@@ -326,7 +328,7 @@ func endOfLogs(subID string, stream *logs.Stream) api.ServerMsg {
 	if err == nil {
 		return api.ServerMsg{Type: "log-end", SubID: subID}
 	}
-	return api.ServerMsg{Type: "error", SubID: subID, Message: err.Error()}
+	return api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()}
 }
 
 func (sess *wsSession) writeCurrentLogs(subID string, gen uint64, msg any) bool {
@@ -417,6 +419,9 @@ func rowsOrEmpty(rows []api.Row) []api.Row {
 func eventToMsg(subID string, ev resources.Event) api.ServerMsg {
 	if ev.Kind == "deleted" {
 		return api.ServerMsg{Type: "deleted", SubID: subID, UID: ev.UID}
+	}
+	if ev.Kind == msgError {
+		return api.ServerMsg{Type: msgError, SubID: subID, Message: ev.Message}
 	}
 	row := ev.Row
 	return api.ServerMsg{Type: ev.Kind, SubID: subID, Row: &row}
