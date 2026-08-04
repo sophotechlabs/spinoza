@@ -31,7 +31,7 @@ func fixed(mgr *resources.Manager) *stubCluster {
 	return &stubCluster{mgr: mgr, names: []string{"p-mk1", "p-mk2"}, current: "p-mk2"}
 }
 
-func (s *stubCluster) Manager() *resources.Manager {
+func (s *stubCluster) Manager() Backend {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.mgr

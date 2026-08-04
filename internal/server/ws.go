@@ -71,7 +71,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 type wsSession struct {
 	conn    *websocket.Conn
 	ctx     context.Context
-	mgr     *resources.Manager
+	mgr     Backend
 	mu      sync.Mutex
 	tables  map[string]*entry
 	logs    map[string]*entry

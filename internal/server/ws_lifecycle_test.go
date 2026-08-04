@@ -594,7 +594,7 @@ func (c *swappableCluster) swap(next *resources.Manager) {
 	c.manager = next
 }
 
-func (c *swappableCluster) Manager() *resources.Manager {
+func (c *swappableCluster) Manager() Backend {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.manager

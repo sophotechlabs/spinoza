@@ -7,6 +7,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
 type Options struct {
@@ -41,7 +42,7 @@ func newCluster(ctx context.Context, build builder, list lister) (*Cluster, erro
 	return cluster, nil
 }
 
-func (c *Cluster) Manager() *resources.Manager {
+func (c *Cluster) Manager() server.Backend {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.manager

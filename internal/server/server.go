@@ -31,7 +31,7 @@ import (
 const maxDocBytes = 4 << 20
 
 type Cluster interface {
-	Manager() *resources.Manager
+	Manager() Backend
 	Contexts() api.ContextList
 	Use(name string) error
 }
@@ -57,34 +57,74 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 	}
 }
 
-func (s *Server) manager() *resources.Manager {
+func (s *Server) manager() Backend {
 	return s.cluster.Manager()
+}
+
+type endpoint struct {
+	method  string
+	path    string
+	handler http.HandlerFunc
+}
+
+func (s *Server) routes() []endpoint {
+	return []endpoint{
+		{http.MethodGet, "/healthz", s.handleHealth},
+		{http.MethodGet, "/api/version", handleVersion},
+		{http.MethodGet, "/api/contexts", s.listContexts},
+		{http.MethodPost, "/api/contexts", s.switchContext},
+		{http.MethodGet, "/api/resources/counts", s.handleCounts},
+		{http.MethodGet, "/api/resources", s.listResources},
+		{http.MethodPost, "/api/resources", s.refreshResources},
+		{http.MethodGet, "/api/gitops/graph", s.handleGraph},
+		{http.MethodGet, "/api/flux", s.handleFlux},
+		{http.MethodPost, "/api/flux/action", withRef(s.fluxAction)},
+		{http.MethodPost, "/api/action", s.handleAction},
+		{http.MethodGet, "/api/metrics/history", s.handleMetricHistory},
+		{http.MethodGet, "/api/metrics", s.handleMetrics},
+		{http.MethodGet, "/api/object", withRef(s.getObject)},
+		{http.MethodPut, "/api/object", withRef(s.applyObject)},
+		{http.MethodDelete, "/api/object", withRef(s.deleteObject)},
+		{http.MethodGet, "/api/events", s.handleEvents},
+		{http.MethodGet, "/api/schema", s.handleSchema},
+		{http.MethodGet, "/api/portforward", s.listForwards},
+		{http.MethodPost, "/api/portforward", s.startForward},
+		{http.MethodDelete, "/api/portforward", s.stopForward},
+		{http.MethodGet, "/api/exec/support", s.handleExecSupport},
+		{http.MethodGet, "/api/debug/support", s.handleDebugSupport},
+		{http.MethodPost, "/api/debug", s.handleDebug},
+		{http.MethodGet, "/api/exec", s.handleExec},
+		{http.MethodGet, "/ws", s.handleWS},
+	}
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", s.guard(s.handleHealth))
-	mux.HandleFunc("/api/version", s.guard(handleVersion))
-	mux.HandleFunc("/api/contexts", s.guard(s.handleContexts))
-	mux.HandleFunc("/api/resources/counts", s.guard(s.handleCounts))
-	mux.HandleFunc("/api/resources", s.guard(s.handleResources))
-	mux.HandleFunc("/api/gitops/graph", s.guard(s.handleGraph))
-	mux.HandleFunc("/api/flux", s.guard(s.handleFlux))
-	mux.HandleFunc("/api/flux/action", s.guard(s.handleFluxAction))
-	mux.HandleFunc("/api/action", s.guard(s.handleAction))
-	mux.HandleFunc("/api/metrics/history", s.guard(s.handleMetricHistory))
-	mux.HandleFunc("/api/metrics", s.guard(s.handleMetrics))
-	mux.HandleFunc("/api/object", s.guard(s.handleObject))
-	mux.HandleFunc("/api/events", s.guard(s.handleEvents))
-	mux.HandleFunc("/api/schema", s.guard(s.handleSchema))
-	mux.HandleFunc("/api/portforward", s.guard(s.handleForwards))
-	mux.HandleFunc("/api/exec/support", s.guard(s.handleExecSupport))
-	mux.HandleFunc("/api/debug/support", s.guard(s.handleDebugSupport))
-	mux.HandleFunc("/api/debug", s.guard(s.handleDebug))
-	mux.HandleFunc("/api/exec", s.guard(s.handleExec))
-	mux.HandleFunc("/ws", s.guard(s.handleWS))
-	mux.HandleFunc("/", s.guard(s.handleAssets))
-	return mux
+	known := map[string]bool{}
+	for _, entry := range s.routes() {
+		mux.HandleFunc(entry.method+" "+entry.path, entry.handler)
+		known[entry.path] = true
+	}
+	for path := range known {
+		mux.HandleFunc(path, methodNotAllowed)
+	}
+	mux.HandleFunc("/", s.handleAssets)
+	return s.guard(mux.ServeHTTP)
+}
+
+func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+}
+
+func withRef(handler func(http.ResponseWriter, *http.Request, api.ObjectRef)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ref := refFrom(r)
+		if ref.Version == "" || ref.Resource == "" || ref.Name == "" {
+			writeError(w, http.StatusBadRequest, "version, resource and name are required")
+			return
+		}
+		handler(w, r, ref)
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -210,15 +250,8 @@ func statusFor(err error) int {
 	}
 }
 
-func (s *Server) handleContexts(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		writeJSON(w, s.cluster.Contexts())
-	case http.MethodPost:
-		s.switchContext(w, r)
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
+func (s *Server) listContexts(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.cluster.Contexts())
 }
 
 func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
@@ -236,15 +269,12 @@ func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.cluster.Contexts())
 }
 
-func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		writeJSON(w, s.manager().Resources())
-	case http.MethodPost:
-		writeJSON(w, s.manager().RefreshResources())
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
+func (s *Server) listResources(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Resources())
+}
+
+func (s *Server) refreshResources(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().RefreshResources())
 }
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
@@ -294,16 +324,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, events)
 }
 
-func (s *Server) handleFluxAction(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	ref := refFrom(r)
-	if ref.Version == "" || ref.Resource == "" || ref.Name == "" {
-		writeError(w, http.StatusBadRequest, "version, resource and name are required")
-		return
-	}
+func (s *Server) fluxAction(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
 	result, err := s.manager().FluxAction(r.Context(), ref, flux.Action(r.URL.Query().Get("action")))
 	if err != nil {
 		writeAPIError(w, err)
@@ -313,10 +334,6 @@ func (s *Server) handleFluxAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 	req, err := actionRequest(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -374,17 +391,8 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(doc)
 }
 
-func (s *Server) handleForwards(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		writeJSON(w, s.manager().Forwards())
-	case http.MethodPost:
-		s.startForward(w, r)
-	case http.MethodDelete:
-		s.stopForward(w, r)
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
+func (s *Server) listForwards(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Forwards())
 }
 
 func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
@@ -423,24 +431,6 @@ func (s *Server) stopForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) handleObject(w http.ResponseWriter, r *http.Request) {
-	ref := refFrom(r)
-	if ref.Version == "" || ref.Resource == "" || ref.Name == "" {
-		writeError(w, http.StatusBadRequest, "version, resource and name are required")
-		return
-	}
-	switch r.Method {
-	case http.MethodGet:
-		s.getObject(w, r, ref)
-	case http.MethodPut:
-		s.applyObject(w, r, ref)
-	case http.MethodDelete:
-		s.deleteObject(w, r, ref)
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
 }
 
 func (s *Server) getObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {

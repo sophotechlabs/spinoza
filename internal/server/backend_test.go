@@ -1,0 +1,116 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
+)
+
+type stubCatalog struct {
+	Backend
+
+	catalog   api.ResourceCatalog
+	counts    api.ResourceCounts
+	refreshed int
+}
+
+func (s *stubCatalog) Resources() api.ResourceCatalog {
+	return s.catalog
+}
+
+func (s *stubCatalog) RefreshResources() api.ResourceCatalog {
+	s.refreshed++
+	return s.catalog
+}
+
+func (s *stubCatalog) Counts(context.Context) api.ResourceCounts {
+	return s.counts
+}
+
+type stubBackendCluster struct {
+	backend Backend
+}
+
+func (s *stubBackendCluster) Manager() Backend {
+	return s.backend
+}
+
+func (s *stubBackendCluster) Contexts() api.ContextList {
+	return api.ContextList{Contexts: []string{"p-mk1"}, Current: "p-mk1"}
+}
+
+func (s *stubBackendCluster) Use(string) error {
+	return errors.New("this stub has one context")
+}
+
+func stubbedServer(t *testing.T, backend Backend) *httptest.Server {
+	t.Helper()
+	srv := New(&stubBackendCluster{backend: backend}, testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func TestTheCatalogEndpointNeedsNoClusterAtAll(t *testing.T) {
+	backend := &stubCatalog{catalog: api.ResourceCatalog{
+		Categories: []api.Category{{Name: "Workloads"}},
+		Error:      "discovery came back partial",
+	}}
+	ts := stubbedServer(t, backend)
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/resources", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	var catalog api.ResourceCatalog
+	if err := json.Unmarshal(body, &catalog); err != nil {
+		t.Fatalf("decode %s: %v", body, err)
+	}
+	if len(catalog.Categories) != 1 || catalog.Categories[0].Name != "Workloads" {
+		t.Fatalf("categories = %v", catalog.Categories)
+	}
+	if catalog.Error != "discovery came back partial" {
+		t.Fatalf("error = %q", catalog.Error)
+	}
+}
+
+func TestAPostRefreshesTheCatalogThroughTheNarrowInterface(t *testing.T) {
+	backend := &stubCatalog{catalog: api.ResourceCatalog{Categories: []api.Category{{Name: "Workloads"}}}}
+	ts := stubbedServer(t, backend)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/resources", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if backend.refreshed != 1 {
+		t.Fatalf("refreshed %d times, want 1", backend.refreshed)
+	}
+}
+
+func TestCountsCarryTheirReasonsThroughTheHandler(t *testing.T) {
+	backend := &stubCatalog{counts: api.ResourceCounts{
+		Counts: map[string]int{"apps/v1/deployments": -1},
+		Errors: map[string]string{"apps/v1/deployments": "deployments is forbidden"},
+	}}
+	ts := stubbedServer(t, backend)
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/resources/counts", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	var counts api.ResourceCounts
+	if err := json.Unmarshal(body, &counts); err != nil {
+		t.Fatalf("decode %s: %v", body, err)
+	}
+	if counts.Errors["apps/v1/deployments"] != "deployments is forbidden" {
+		t.Fatalf("errors = %v, want the reason carried to the browser", counts.Errors)
+	}
+}
