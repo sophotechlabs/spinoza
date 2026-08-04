@@ -15,6 +15,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 var (
@@ -288,7 +289,7 @@ func TestReadyConditionNoReady(t *testing.T) {
 			},
 		},
 	})
-	status, message := readyCondition(object)
+	status, message := unstr.Ready(object)
 	if status != "" || message != "" {
 		t.Fatalf("readyCondition = %q,%q, want empty", status, message)
 	}

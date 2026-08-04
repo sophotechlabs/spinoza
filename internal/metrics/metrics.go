@@ -11,6 +11,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/listerr"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 var (
@@ -44,7 +45,7 @@ func podUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Coll
 }
 
 func containerTotals(u *unstructured.Unstructured) (cpuMilli, memMi int64) {
-	for _, c := range nestedSlice(u, "containers") {
+	for _, c := range unstr.Slice(u, "containers") {
 		m, ok := c.(map[string]any)
 		if !ok {
 			continue
@@ -69,7 +70,7 @@ func nodeUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Col
 	allocatable := nodeAllocatable(ctx, dyn, failures)
 	for i := range list.Items {
 		obj := &list.Items[i]
-		usage, ok := nestedMap(obj, "usage")
+		usage, ok := unstr.Map(obj, "usage")
 		if !ok {
 			continue
 		}
@@ -95,7 +96,7 @@ func nodeAllocatable(ctx context.Context, dyn dynamic.Interface, failures *liste
 	}
 	for i := range list.Items {
 		u := &list.Items[i]
-		alloc, ok := nestedMap(u, "status", "allocatable")
+		alloc, ok := unstr.Map(u, "status", "allocatable")
 		if !ok {
 			continue
 		}
@@ -137,20 +138,4 @@ func quantity(m map[string]any, key string) (resource.Quantity, bool) {
 		return resource.Quantity{}, false
 	}
 	return q, true
-}
-
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
-	v, found, err := unstructured.NestedSlice(u.Object, fields...)
-	if !found || err != nil {
-		return nil
-	}
-	return v
-}
-
-func nestedMap(u *unstructured.Unstructured, fields ...string) (map[string]any, bool) {
-	v, found, err := unstructured.NestedMap(u.Object, fields...)
-	if !found || err != nil {
-		return nil, false
-	}
-	return v, true
 }

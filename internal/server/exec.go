@@ -55,10 +55,6 @@ func (s *Server) handleDebugSupport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 	query := r.URL.Query()
 	req := debugcontainer.Request{
 		Namespace: query.Get("namespace"),

@@ -14,6 +14,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 var (
@@ -416,7 +417,7 @@ func TestConditionSummary(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got := conditionSummary(conditionsObject(c.conditions))
+		got := unstr.ReadySummary(conditionsObject(c.conditions))
 		if got != c.want {
 			t.Fatalf("%s: conditionSummary = %q, want %q", c.name, got, c.want)
 		}

@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 const readyColumn = "Ready"
@@ -65,11 +66,11 @@ func cellsFor(obj *unstructured.Unstructured, kind string) []string {
 	case "Node":
 		return nodeCells(obj)
 	case "Namespace":
-		return []string{nestedString(obj, "status", "phase")}
+		return []string{unstr.String(obj, "status", "phase")}
 	case "Job":
 		return jobCells(obj)
 	default:
-		return []string{conditionSummary(obj)}
+		return []string{unstr.ReadySummary(obj)}
 	}
 }
 
@@ -88,12 +89,12 @@ func containersFor(obj *unstructured.Unstructured, kind string) []api.ContainerS
 
 func containerStates(u *unstructured.Unstructured, field string, init, ephemeral bool) []api.ContainerState {
 	out := []api.ContainerState{}
-	for _, s := range nestedSlice(u, "status", field) {
+	for _, s := range unstr.Slice(u, "status", field) {
 		entry, ok := s.(map[string]any)
 		if !ok {
 			continue
 		}
-		name := stringAt(entry, "name")
+		name := unstr.At(entry, "name")
 		ready := false
 		if b, ok := entry["ready"].(bool); ok {
 			ready = b
@@ -121,21 +122,21 @@ func containerStateReason(status map[string]any) (state, reason string) {
 		return "running", ""
 	}
 	if term, ok := stateFields["terminated"].(map[string]any); ok {
-		termReason := stringAt(term, "reason")
+		termReason := unstr.At(term, "reason")
 		return "terminated", termReason
 	}
 	if wait, ok := stateFields["waiting"].(map[string]any); ok {
-		waitReason := stringAt(wait, "reason")
+		waitReason := unstr.At(wait, "reason")
 		return "waiting", waitReason
 	}
 	return "waiting", ""
 }
 
 func podCells(obj *unstructured.Unstructured) []string {
-	total := len(nestedSlice(obj, "spec", "containers"))
+	total := len(unstr.Slice(obj, "spec", "containers"))
 	ready := 0
 	var restarts int64
-	for _, s := range nestedSlice(obj, "status", "containerStatuses") {
+	for _, s := range unstr.Slice(obj, "status", "containerStatuses") {
 		entry, ok := s.(map[string]any)
 		if !ok {
 			continue
@@ -147,17 +148,17 @@ func podCells(obj *unstructured.Unstructured) []string {
 	}
 	return []string{
 		fmt.Sprintf("%d/%d", ready, total),
-		nestedString(obj, "status", "phase"),
+		unstr.String(obj, "status", "phase"),
 		strconv.FormatInt(restarts, 10),
-		nestedString(obj, "spec", "nodeName"),
+		unstr.String(obj, "spec", "nodeName"),
 	}
 }
 
 func workloadCells(u *unstructured.Unstructured) []string {
-	desired := nestedInt(u, "spec", "replicas")
-	ready := nestedInt(u, "status", "readyReplicas")
-	updated := nestedInt(u, "status", "updatedReplicas")
-	available := nestedInt(u, "status", "availableReplicas")
+	desired := unstr.Int(u, "spec", "replicas")
+	ready := unstr.Int(u, "status", "readyReplicas")
+	updated := unstr.Int(u, "status", "updatedReplicas")
+	available := unstr.Int(u, "status", "availableReplicas")
 	return []string{
 		fmt.Sprintf("%d/%d", ready, desired),
 		strconv.FormatInt(updated, 10),
@@ -167,15 +168,15 @@ func workloadCells(u *unstructured.Unstructured) []string {
 
 func daemonCells(u *unstructured.Unstructured) []string {
 	return []string{
-		strconv.FormatInt(nestedInt(u, "status", "desiredNumberScheduled"), 10),
-		strconv.FormatInt(nestedInt(u, "status", "numberReady"), 10),
-		strconv.FormatInt(nestedInt(u, "status", "numberAvailable"), 10),
+		strconv.FormatInt(unstr.Int(u, "status", "desiredNumberScheduled"), 10),
+		strconv.FormatInt(unstr.Int(u, "status", "numberReady"), 10),
+		strconv.FormatInt(unstr.Int(u, "status", "numberAvailable"), 10),
 	}
 }
 
 func serviceCells(obj *unstructured.Unstructured) []string {
 	parts := []string{}
-	for _, p := range nestedSlice(obj, "spec", "ports") {
+	for _, p := range unstr.Slice(obj, "spec", "ports") {
 		entry, ok := p.(map[string]any)
 		if !ok {
 			continue
@@ -187,15 +188,15 @@ func serviceCells(obj *unstructured.Unstructured) []string {
 		parts = append(parts, fmt.Sprintf("%d/%s", toInt64(entry["port"]), proto))
 	}
 	return []string{
-		nestedString(obj, "spec", "type"),
-		nestedString(obj, "spec", "clusterIP"),
+		unstr.String(obj, "spec", "type"),
+		unstr.String(obj, "spec", "clusterIP"),
 		strings.Join(parts, ","),
 	}
 }
 
 func nodeCells(obj *unstructured.Unstructured) []string {
 	status := "NotReady"
-	for _, c := range nestedSlice(obj, "status", "conditions") {
+	for _, c := range unstr.Slice(obj, "status", "conditions") {
 		m, ok := c.(map[string]any)
 		if !ok {
 			continue
@@ -218,55 +219,11 @@ func nodeCells(obj *unstructured.Unstructured) []string {
 			roles = append(roles, role)
 		}
 	}
-	return []string{status, strings.Join(roles, ","), nestedString(obj, "status", "nodeInfo", "kubeletVersion")}
+	return []string{status, strings.Join(roles, ","), unstr.String(obj, "status", "nodeInfo", "kubeletVersion")}
 }
 
 func jobCells(u *unstructured.Unstructured) []string {
-	return []string{fmt.Sprintf("%d/%d", nestedInt(u, "status", "succeeded"), nestedInt(u, "spec", "completions"))}
-}
-
-func conditionSummary(u *unstructured.Unstructured) string {
-	for _, c := range nestedSlice(u, "status", "conditions") {
-		entry, ok := c.(map[string]any)
-		if !ok {
-			continue
-		}
-		if entry["type"] != "Ready" {
-			continue
-		}
-		if entry["status"] == "True" {
-			return "Ready"
-		}
-		if reason, ok := entry["reason"].(string); ok && reason != "" {
-			return reason
-		}
-		return "NotReady"
-	}
-	return ""
-}
-
-func nestedString(u *unstructured.Unstructured, fields ...string) string {
-	v, found, err := unstructured.NestedString(u.Object, fields...)
-	if !found || err != nil {
-		return ""
-	}
-	return v
-}
-
-func nestedInt(u *unstructured.Unstructured, fields ...string) int64 {
-	v, found, err := unstructured.NestedInt64(u.Object, fields...)
-	if !found || err != nil {
-		return 0
-	}
-	return v
-}
-
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
-	v, found, err := unstructured.NestedSlice(u.Object, fields...)
-	if !found || err != nil {
-		return nil
-	}
-	return v
+	return []string{fmt.Sprintf("%d/%d", unstr.Int(u, "status", "succeeded"), unstr.Int(u, "spec", "completions"))}
 }
 
 func toInt64(v any) int64 {
@@ -278,12 +235,4 @@ func toInt64(v any) int64 {
 	default:
 		return 0
 	}
-}
-
-func stringAt(m map[string]any, key string) string {
-	v, ok := m[key].(string)
-	if !ok {
-		return ""
-	}
-	return v
 }

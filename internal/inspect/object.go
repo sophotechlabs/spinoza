@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 const lastAppliedAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
@@ -104,7 +105,7 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		Suspended:   suspendedOf(clean),
 		Replicas:    replicasOf(clean),
 		Schedulable: schedulableOf(clean),
-		HandledAt:   nestedString(clean, "status", "lastHandledReconcileAt"),
+		HandledAt:   unstr.String(clean, "status", "lastHandledReconcileAt"),
 		Ports:       portsOf(clean),
 		YAML:        string(raw),
 	}, nil
@@ -148,7 +149,7 @@ func ownersOf(u *unstructured.Unstructured) []api.OwnerRef {
 
 func conditionsOf(u *unstructured.Unstructured) []api.Condition {
 	out := []api.Condition{}
-	for _, c := range nestedSlice(u, "status", "conditions") {
+	for _, c := range unstr.Slice(u, "status", "conditions") {
 		entry, ok := c.(map[string]any)
 		if !ok {
 			continue
@@ -215,7 +216,7 @@ func portsOf(u *unstructured.Unstructured) []api.ObjectPort {
 
 func podPorts(u *unstructured.Unstructured) []api.ObjectPort {
 	out := []api.ObjectPort{}
-	for _, container := range nestedSlice(u, "spec", "containers") {
+	for _, container := range unstr.Slice(u, "spec", "containers") {
 		m, ok := container.(map[string]any)
 		if !ok {
 			continue
@@ -306,7 +307,7 @@ func containerNames(obj *unstructured.Unstructured) []string {
 
 func namesFrom(u *unstructured.Unstructured, field string) []string {
 	out := []string{}
-	for _, c := range nestedSlice(u, "spec", field) {
+	for _, c := range unstr.Slice(u, "spec", field) {
 		m, ok := c.(map[string]any)
 		if !ok {
 			continue
@@ -324,14 +325,6 @@ func stringField(m map[string]any, key string) string {
 	v, ok := m[key].(string)
 	if !ok {
 		return ""
-	}
-	return v
-}
-
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
-	v, found, err := unstructured.NestedSlice(u.Object, fields...)
-	if !found || err != nil {
-		return nil
 	}
 	return v
 }

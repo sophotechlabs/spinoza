@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 func u(obj map[string]any) *unstructured.Unstructured {
@@ -319,7 +321,7 @@ func TestConditionSummaryReady(t *testing.T) {
 			},
 		},
 	})
-	if got := conditionSummary(obj); got != "Ready" {
+	if got := unstr.ReadySummary(obj); got != "Ready" {
 		t.Fatalf("conditionSummary = %q, want Ready", got)
 	}
 }
@@ -333,7 +335,7 @@ func TestConditionSummaryReason(t *testing.T) {
 			},
 		},
 	})
-	if got := conditionSummary(obj); got != "MinimumReplicasUnavailable" {
+	if got := unstr.ReadySummary(obj); got != "MinimumReplicasUnavailable" {
 		t.Fatalf("conditionSummary = %q, want MinimumReplicasUnavailable", got)
 	}
 }
@@ -347,14 +349,14 @@ func TestConditionSummaryNotReady(t *testing.T) {
 			},
 		},
 	})
-	if got := conditionSummary(obj); got != "NotReady" {
+	if got := unstr.ReadySummary(obj); got != "NotReady" {
 		t.Fatalf("conditionSummary = %q, want NotReady", got)
 	}
 }
 
 func TestConditionSummaryEmpty(t *testing.T) {
 	obj := u(map[string]any{})
-	if got := conditionSummary(obj); got != "" {
+	if got := unstr.ReadySummary(obj); got != "" {
 		t.Fatalf("conditionSummary = %q, want empty", got)
 	}
 }
@@ -423,13 +425,13 @@ func TestNestedHelpersOnWrongType(t *testing.T) {
 			"ports":    "not-a-slice",
 		},
 	})
-	if got := nestedString(obj, "spec", "nodeName"); got != "" {
+	if got := unstr.String(obj, "spec", "nodeName"); got != "" {
 		t.Fatalf("nestedString on non-string = %q, want empty", got)
 	}
-	if got := nestedInt(obj, "spec", "replicas"); got != 0 {
+	if got := unstr.Int(obj, "spec", "replicas"); got != 0 {
 		t.Fatalf("nestedInt on non-int = %d, want 0", got)
 	}
-	if got := nestedSlice(obj, "spec", "ports"); got != nil {
+	if got := unstr.Slice(obj, "spec", "ports"); got != nil {
 		t.Fatalf("nestedSlice on non-slice = %v, want nil", got)
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/listerr"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 const (
@@ -141,32 +142,32 @@ func (b *builder) sourceEdge(id string, obj *unstructured.Unstructured) {
 }
 
 func sourceRefOf(obj *unstructured.Unstructured) (string, string, string) {
-	kind := nestedString(obj, "spec", "chartRef", "kind")
-	name := nestedString(obj, "spec", "chartRef", "name")
+	kind := unstr.String(obj, "spec", "chartRef", "kind")
+	name := unstr.String(obj, "spec", "chartRef", "name")
 	if kind != "" && name != "" {
-		return kind, name, nestedString(obj, "spec", "chartRef", "namespace")
+		return kind, name, unstr.String(obj, "spec", "chartRef", "namespace")
 	}
-	kind = nestedString(obj, "spec", "sourceRef", "kind")
-	name = nestedString(obj, "spec", "sourceRef", "name")
+	kind = unstr.String(obj, "spec", "sourceRef", "kind")
+	name = unstr.String(obj, "spec", "sourceRef", "name")
 	if kind != "" && name != "" {
-		return kind, name, nestedString(obj, "spec", "sourceRef", "namespace")
+		return kind, name, unstr.String(obj, "spec", "sourceRef", "namespace")
 	}
-	kind = nestedString(obj, "spec", "chart", "spec", "sourceRef", "kind")
-	name = nestedString(obj, "spec", "chart", "spec", "sourceRef", "name")
-	return kind, name, nestedString(obj, "spec", "chart", "spec", "sourceRef", "namespace")
+	kind = unstr.String(obj, "spec", "chart", "spec", "sourceRef", "kind")
+	name = unstr.String(obj, "spec", "chart", "spec", "sourceRef", "name")
+	return kind, name, unstr.String(obj, "spec", "chart", "spec", "sourceRef", "namespace")
 }
 
 func (b *builder) dependsOnEdges(id string, obj *unstructured.Unstructured) {
-	for _, dep := range nestedSlice(obj, "spec", "dependsOn") {
+	for _, dep := range unstr.Slice(obj, "spec", "dependsOn") {
 		entry, ok := dep.(map[string]any)
 		if !ok {
 			continue
 		}
-		name := stringAt(entry, "name")
+		name := unstr.At(entry, "name")
 		if name == "" {
 			continue
 		}
-		namespace := stringAt(entry, "namespace")
+		namespace := unstr.At(entry, "namespace")
 		if namespace == "" {
 			namespace = obj.GetNamespace()
 		}
@@ -177,12 +178,12 @@ func (b *builder) dependsOnEdges(id string, obj *unstructured.Unstructured) {
 }
 
 func (b *builder) inventoryEdges(id string, u *unstructured.Unstructured) {
-	for _, e := range nestedSlice(u, "status", "inventory", "entries") {
+	for _, e := range unstr.Slice(u, "status", "inventory", "entries") {
 		m, ok := e.(map[string]any)
 		if !ok {
 			continue
 		}
-		raw := stringAt(m, "id")
+		raw := unstr.At(m, "id")
 		ns, name, group, kind := parseInventoryID(raw)
 		if kind == "" || name == "" {
 			continue
@@ -194,18 +195,18 @@ func (b *builder) inventoryEdges(id string, u *unstructured.Unstructured) {
 }
 
 func (b *builder) appEdges(id string, u *unstructured.Unstructured) {
-	for _, r := range nestedSlice(u, "status", "resources") {
+	for _, r := range unstr.Slice(u, "status", "resources") {
 		entry, ok := r.(map[string]any)
 		if !ok {
 			continue
 		}
-		kind := stringAt(entry, "kind")
-		name := stringAt(entry, "name")
+		kind := unstr.At(entry, "kind")
+		name := unstr.At(entry, "name")
 		if kind == "" || name == "" {
 			continue
 		}
-		group := stringAt(entry, "group")
-		namespace := stringAt(entry, "namespace")
+		group := unstr.At(entry, "group")
+		namespace := unstr.At(entry, "namespace")
 		mid := nodeID(group, kind, namespace, name)
 		b.ensureRef(mid, group, kind, namespace, name, categoryManaged, "")
 		b.addEdge(id, mid, "manages")
@@ -292,7 +293,7 @@ func readyOf(obj *unstructured.Unstructured, category string) string {
 }
 
 func argoReady(obj *unstructured.Unstructured) string {
-	health := nestedString(obj, "status", "health", "status")
+	health := unstr.String(obj, "status", "health", "status")
 	if health == "Healthy" {
 		return readyTrue
 	}
@@ -306,7 +307,7 @@ func argoReady(obj *unstructured.Unstructured) string {
 }
 
 func conditionReady(u *unstructured.Unstructured) string {
-	for _, c := range nestedSlice(u, "status", "conditions") {
+	for _, c := range unstr.Slice(u, "status", "conditions") {
 		entry, ok := c.(map[string]any)
 		if !ok {
 			continue
@@ -327,54 +328,9 @@ func conditionReady(u *unstructured.Unstructured) string {
 
 func statusOf(obj *unstructured.Unstructured, category string) string {
 	if category == "app" {
-		health := nestedString(obj, "status", "health", "status")
-		sync := nestedString(obj, "status", "sync", "status")
+		health := unstr.String(obj, "status", "health", "status")
+		sync := unstr.String(obj, "status", "sync", "status")
 		return strings.TrimSpace(health + " " + sync)
 	}
-	return conditionSummary(obj)
-}
-
-func conditionSummary(u *unstructured.Unstructured) string {
-	for _, c := range nestedSlice(u, "status", "conditions") {
-		entry, ok := c.(map[string]any)
-		if !ok {
-			continue
-		}
-		if entry["type"] != "Ready" {
-			continue
-		}
-		if entry["status"] == "True" {
-			return "Ready"
-		}
-		reason, ok := entry["reason"].(string)
-		if ok && reason != "" {
-			return reason
-		}
-		return "NotReady"
-	}
-	return ""
-}
-
-func nestedString(u *unstructured.Unstructured, fields ...string) string {
-	v, found, err := unstructured.NestedString(u.Object, fields...)
-	if !found || err != nil {
-		return ""
-	}
-	return v
-}
-
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
-	v, found, err := unstructured.NestedSlice(u.Object, fields...)
-	if !found || err != nil {
-		return nil
-	}
-	return v
-}
-
-func stringAt(m map[string]any, key string) string {
-	v, ok := m[key].(string)
-	if !ok {
-		return ""
-	}
-	return v
+	return unstr.ReadySummary(obj)
 }

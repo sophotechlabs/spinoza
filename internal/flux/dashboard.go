@@ -12,6 +12,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/listerr"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 var groupOrder = []string{
@@ -120,13 +121,13 @@ func repoIndex(ctx context.Context, lister Lister, descs map[string]api.Resource
 			continue
 		}
 		for _, repo := range found {
-			source := nestedString(repo, "spec", "url")
+			source := unstr.String(repo, "spec", "url")
 			if charts.CheckRepoURL(source) != nil {
 				continue
 			}
 			out[repo.GetNamespace()+"/"+repo.GetName()] = charts.Repo{
 				URL: source,
-				OCI: nestedString(repo, "spec", "type") == "oci",
+				OCI: unstr.String(repo, "spec", "type") == "oci",
 			}
 		}
 	}
@@ -155,18 +156,18 @@ func applyLatest(byGroup map[string][]api.FluxResource, items map[string][]*unst
 }
 
 func chartSource(obj *unstructured.Unstructured, repos map[string]charts.Repo) (charts.Repo, string, bool) {
-	chart := nestedString(obj, "spec", "chart", "spec", "chart")
+	chart := unstr.String(obj, "spec", "chart", "spec", "chart")
 	if chart == "" {
 		return charts.Repo{}, "", false
 	}
-	if nestedString(obj, "spec", "chart", "spec", "sourceRef", "kind") != "HelmRepository" {
+	if unstr.String(obj, "spec", "chart", "spec", "sourceRef", "kind") != "HelmRepository" {
 		return charts.Repo{}, "", false
 	}
-	name := nestedString(obj, "spec", "chart", "spec", "sourceRef", "name")
+	name := unstr.String(obj, "spec", "chart", "spec", "sourceRef", "name")
 	if name == "" {
 		return charts.Repo{}, "", false
 	}
-	namespace := nestedString(obj, "spec", "chart", "spec", "sourceRef", "namespace")
+	namespace := unstr.String(obj, "spec", "chart", "spec", "sourceRef", "namespace")
 	if namespace == "" {
 		namespace = obj.GetNamespace()
 	}
@@ -259,7 +260,7 @@ func reportingCount(items []api.FluxResource) int {
 }
 
 func resourceOf(obj *unstructured.Unstructured, desc api.ResourceDescriptor) api.FluxResource {
-	ready, message := readyCondition(obj)
+	ready, message := unstr.Ready(obj)
 	return api.FluxResource{
 		Kind:      desc.Kind,
 		Group:     desc.Group,
@@ -268,28 +269,12 @@ func resourceOf(obj *unstructured.Unstructured, desc api.ResourceDescriptor) api
 		Name:      obj.GetName(),
 		Namespace: obj.GetNamespace(),
 		Ready:     ready,
-		Suspended: nestedBool(obj, "spec", "suspend"),
+		Suspended: unstr.Bool(obj, "spec", "suspend"),
 		Revision:  revisionOf(obj, desc),
 		Source:    sourceOf(obj),
 		Message:   message,
 		CreatedAt: obj.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
 	}
-}
-
-func readyCondition(u *unstructured.Unstructured) (status, message string) {
-	for _, c := range nestedSlice(u, "status", "conditions") {
-		entry, ok := c.(map[string]any)
-		if !ok {
-			continue
-		}
-		if entry["type"] != "Ready" {
-			continue
-		}
-		status = stringAt(entry, "status")
-		message = stringAt(entry, "message")
-		return status, message
-	}
-	return "", ""
 }
 
 func revisionOf(obj *unstructured.Unstructured, desc api.ResourceDescriptor) string {
@@ -306,7 +291,7 @@ func revisionOf(obj *unstructured.Unstructured, desc api.ResourceDescriptor) str
 		{"status", "latestImage"},
 	}
 	for _, p := range paths {
-		v := nestedString(obj, p...)
+		v := unstr.String(obj, p...)
 		if v != "" {
 			return v
 		}
@@ -315,7 +300,7 @@ func revisionOf(obj *unstructured.Unstructured, desc api.ResourceDescriptor) str
 }
 
 func historyChartVersion(obj *unstructured.Unstructured) string {
-	entries := nestedSlice(obj, "status", "history")
+	entries := unstr.Slice(obj, "status", "history")
 	if len(entries) == 0 {
 		return ""
 	}
@@ -323,7 +308,7 @@ func historyChartVersion(obj *unstructured.Unstructured) string {
 	if !ok {
 		return ""
 	}
-	return stringAt(entry, "chartVersion")
+	return unstr.At(entry, "chartVersion")
 }
 
 func sourceOf(obj *unstructured.Unstructured) string {
@@ -341,39 +326,7 @@ func sourceOf(obj *unstructured.Unstructured) string {
 }
 
 func refAt(obj *unstructured.Unstructured, fields ...string) (kind, name string) {
-	kind = nestedString(obj, append(fields, "kind")...)
-	name = nestedString(obj, append(fields, "name")...)
+	kind = unstr.String(obj, append(fields, "kind")...)
+	name = unstr.String(obj, append(fields, "name")...)
 	return kind, name
-}
-
-func nestedString(u *unstructured.Unstructured, fields ...string) string {
-	v, found, err := unstructured.NestedString(u.Object, fields...)
-	if !found || err != nil {
-		return ""
-	}
-	return v
-}
-
-func nestedBool(u *unstructured.Unstructured, fields ...string) bool {
-	v, found, err := unstructured.NestedBool(u.Object, fields...)
-	if !found || err != nil {
-		return false
-	}
-	return v
-}
-
-func nestedSlice(u *unstructured.Unstructured, fields ...string) []any {
-	v, found, err := unstructured.NestedSlice(u.Object, fields...)
-	if !found || err != nil {
-		return nil
-	}
-	return v
-}
-
-func stringAt(m map[string]any, key string) string {
-	v, ok := m[key].(string)
-	if !ok {
-		return ""
-	}
-	return v
 }

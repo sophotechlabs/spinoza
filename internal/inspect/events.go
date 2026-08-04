@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 var eventGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}
@@ -65,30 +66,30 @@ func seenAt(stamp string) time.Time {
 
 func eventOf(obj *unstructured.Unstructured) api.Event {
 	return api.Event{
-		Type:      nestedString(obj, "type"),
-		Reason:    nestedString(obj, "reason"),
-		Message:   nestedString(obj, "message"),
+		Type:      unstr.String(obj, "type"),
+		Reason:    unstr.String(obj, "reason"),
+		Message:   unstr.String(obj, "message"),
 		Source:    sourceOf(obj),
 		Count:     countOf(obj),
-		FirstSeen: nestedString(obj, "firstTimestamp"),
+		FirstSeen: unstr.String(obj, "firstTimestamp"),
 		LastSeen:  lastSeenOf(obj),
 	}
 }
 
 func sourceOf(u *unstructured.Unstructured) string {
-	component := nestedString(u, "source", "component")
+	component := unstr.String(u, "source", "component")
 	if component != "" {
 		return component
 	}
-	return nestedString(u, "reportingComponent")
+	return unstr.String(u, "reportingComponent")
 }
 
 func countOf(u *unstructured.Unstructured) int64 {
-	count := nestedInt(u, "count")
+	count := unstr.Int(u, "count")
 	if count > 0 {
 		return count
 	}
-	series := nestedInt(u, "series", "count")
+	series := unstr.Int(u, "series", "count")
 	if series > 0 {
 		return series
 	}
@@ -103,26 +104,10 @@ func lastSeenOf(obj *unstructured.Unstructured) string {
 		{"firstTimestamp"},
 	}
 	for _, p := range paths {
-		v := nestedString(obj, p...)
+		v := unstr.String(obj, p...)
 		if v != "" {
 			return v
 		}
 	}
 	return ""
-}
-
-func nestedString(u *unstructured.Unstructured, fields ...string) string {
-	v, found, err := unstructured.NestedString(u.Object, fields...)
-	if !found || err != nil {
-		return ""
-	}
-	return v
-}
-
-func nestedInt(u *unstructured.Unstructured, fields ...string) int64 {
-	v, found, err := unstructured.NestedInt64(u.Object, fields...)
-	if !found || err != nil {
-		return 0
-	}
-	return v
 }
