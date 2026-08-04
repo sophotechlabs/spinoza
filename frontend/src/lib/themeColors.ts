@@ -1,4 +1,5 @@
 import type { CanvasColors, Theme, ThemeBase } from './theme';
+import { toHex } from './contrast';
 
 const CANVAS_COLORS: Record<ThemeBase, CanvasColors> = {
   dark: {
@@ -27,7 +28,60 @@ export function canvasColors(theme: Theme): CanvasColors {
   return { ...CANVAS_COLORS[theme.base], ...theme.canvas };
 }
 
-export function terminalTheme(theme: Theme): { background: string; foreground: string } {
+export const ANSI_SLOTS = [
+  'black',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
+  'white',
+  'brightBlack',
+  'brightRed',
+  'brightGreen',
+  'brightYellow',
+  'brightBlue',
+  'brightMagenta',
+  'brightCyan',
+  'brightWhite',
+] as const;
+
+export type AnsiSlot = (typeof ANSI_SLOTS)[number];
+
+export type AnsiPalette = Partial<Record<AnsiSlot, string>>;
+
+export interface XtermTheme extends AnsiPalette {
+  background: string;
+  foreground: string;
+}
+
+function cssName(slot: AnsiSlot): string {
+  const dashed = slot.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+  return `--ansi-${dashed}`;
+}
+
+export function ansiPalette(read: (name: string) => string): AnsiPalette {
+  const palette: AnsiPalette = {};
+  for (const slot of ANSI_SLOTS) {
+    const hex = toHex(read(cssName(slot)));
+    if (hex === null) {
+      continue;
+    }
+    palette[slot] = hex;
+  }
+  return palette;
+}
+
+function fromDocument(name: string): string {
+  return window.getComputedStyle(document.documentElement).getPropertyValue(name);
+}
+
+export function terminalTheme(theme: Theme, read = fromDocument): XtermTheme {
   const colors = canvasColors(theme);
-  return { background: colors.terminalBackground, foreground: colors.terminalForeground };
+  return {
+    background: colors.terminalBackground,
+    foreground: colors.terminalForeground,
+    ...ansiPalette(read),
+  };
 }

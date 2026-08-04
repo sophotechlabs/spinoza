@@ -3,22 +3,23 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TerminalPanel from '../../src/components/TerminalPanel';
 import type { ExecHandlers, ExecSession } from '../../src/lib/exec';
-import type { TerminalHandle } from '../../src/lib/terminal';
+import type { TerminalHandle, TerminalOptions } from '../../src/lib/terminal';
 import { terminalTheme } from '../../src/lib/themeColors';
 import { BUILT_IN_THEMES, themeById } from '../../src/lib/theme';
 import { useThemeStore } from '../../src/store/theme';
+import { useSettingsStore } from '../../src/store/settings';
 
 const CONNECT_FAILED = 'could not reach the exec endpoint';
 
 const openExec = vi.fn<(target: unknown, handlers: ExecHandlers) => ExecSession>();
-const createTerminal = vi.fn<(node: HTMLElement) => TerminalHandle>();
+const createTerminal = vi.fn<(node: HTMLElement, options?: TerminalOptions) => TerminalHandle>();
 
 vi.mock('../../src/lib/exec', () => ({
   openExec: (target: unknown, handlers: ExecHandlers) => openExec(target, handlers),
 }));
 
 vi.mock('../../src/lib/terminal', () => ({
-  createTerminal: (node: HTMLElement) => createTerminal(node),
+  createTerminal: (node: HTMLElement, options?: TerminalOptions) => createTerminal(node, options),
 }));
 
 interface Harness {
@@ -41,6 +42,7 @@ function harness(cols = 120, rows = 40): Harness {
       onData = handler;
     }),
     setTheme: vi.fn(),
+    setScreenReader: vi.fn(),
     fit: vi.fn(() => ({ cols, rows })),
     focus: vi.fn(),
     dispose: vi.fn(),
@@ -82,7 +84,9 @@ describe('TerminalPanel', () => {
     const { term, session } = harness();
     renderPanel();
 
-    expect(createTerminal).toHaveBeenCalledWith(screen.getByTestId('terminal-host'));
+    expect(createTerminal).toHaveBeenCalledWith(screen.getByTestId('terminal-host'), {
+      screenReader: false,
+    });
     expect(openExec.mock.calls[0][0]).toEqual({
       namespace: 'monitoring',
       pod: 'loki-0',
@@ -274,5 +278,80 @@ describe('a live shell when the theme changes', () => {
     expect(stubs.session.close).not.toHaveBeenCalled();
     expect(openExec).toHaveBeenCalledTimes(1);
     expect(createTerminal).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the terminal and a screen reader', () => {
+  beforeEach(() => {
+    openExec.mockReset();
+    createTerminal.mockReset();
+  });
+
+  afterEach(() => {
+    act(() => {
+      useSettingsStore.getState().setScreenReader(false);
+    });
+  });
+
+  it('opens with screen reader mode off by default', () => {
+    harness();
+    renderPanel();
+
+    expect(createTerminal.mock.calls[0][1]).toEqual({ screenReader: false });
+  });
+
+  it('opens with it on when the setting says so', () => {
+    harness();
+    act(() => {
+      useSettingsStore.getState().setScreenReader(true);
+    });
+
+    renderPanel();
+
+    expect(createTerminal.mock.calls[0][1]).toEqual({ screenReader: true });
+  });
+
+  it('turns it on for a live session when the setting changes', () => {
+    const bench = harness();
+    renderPanel();
+
+    act(() => {
+      useSettingsStore.getState().setScreenReader(true);
+    });
+
+    expect(bench.term.setScreenReader).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('the session-end notice', () => {
+  beforeEach(() => {
+    openExec.mockReset();
+    createTerminal.mockReset();
+  });
+
+  it('uses the themed sixteen-colour palette, not the 256-colour one', () => {
+    const bench = harness();
+    renderPanel();
+
+    act(() => {
+      bench.handlers().onEnd({ message: '', failed: false });
+    });
+
+    const written = bench.term.written.join('');
+    expect(written).toContain('\x1b[90msession ended');
+    expect(written).not.toContain('38;5;');
+  });
+
+  it('paints a failure in the themed yellow', () => {
+    const bench = harness();
+    renderPanel();
+
+    act(() => {
+      bench.handlers().onEnd({ message: 'exec failed', failed: true });
+    });
+
+    const written = bench.term.written.join('');
+    expect(written).toContain('\x1b[33mexec failed');
+    expect(written).not.toContain('38;5;');
   });
 });

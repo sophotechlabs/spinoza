@@ -6,6 +6,7 @@ import type { ExecEnd, ExecSession } from '../lib/exec';
 import type { TerminalHandle } from '../lib/terminal';
 import { terminalTheme } from '../lib/themeColors';
 import { useResolvedTheme, useThemeStore } from '../store/theme';
+import { useScreenReader } from '../store/settings';
 
 interface TerminalPanelProps {
   target: ExecTarget;
@@ -14,9 +15,9 @@ interface TerminalPanelProps {
 
 function endNotice(message: string): string {
   if (message === '') {
-    return '\r\n\x1b[38;5;244msession ended\x1b[0m\r\n';
+    return '\r\n\x1b[90msession ended\x1b[0m\r\n';
   }
-  return `\r\n\x1b[38;5;214m${message}\x1b[0m\r\n`;
+  return `\r\n\x1b[33m${message}\x1b[0m\r\n`;
 }
 
 export default function TerminalPanel({ target, onShellMissing }: TerminalPanelProps) {
@@ -27,6 +28,9 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
   shellMissingRef.current = onShellMissing;
   const termRef = useRef<TerminalHandle | null>(null);
   const resolvedTheme = useResolvedTheme();
+  const screenReader = useScreenReader();
+  const screenReaderRef = useRef(screenReader);
+  screenReaderRef.current = screenReader;
 
   const { namespace, pod, container } = target;
 
@@ -36,7 +40,9 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
     }
     setEnded(null);
 
-    const term: TerminalHandle = createTerminal(host);
+    const term: TerminalHandle = createTerminal(host, {
+      screenReader: screenReaderRef.current,
+    });
     termRef.current = term;
     term.setTheme(terminalTheme(useThemeStore.getState().resolved));
     const session: ExecSession = openExec(
@@ -82,6 +88,10 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
     termRef.current?.setTheme(terminalTheme(resolvedTheme));
   }, [host, resolvedTheme]);
 
+  useEffect(() => {
+    termRef.current?.setScreenReader(screenReader);
+  }, [host, screenReader]);
+
   function retry() {
     setAttempt((value) => value + 1);
   }
@@ -94,7 +104,9 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
           role="status"
           className="flex items-center gap-2 border-t border-edge px-2 py-1 text-[11px]"
         >
-          <span className="break-words text-error">{ended.message}</span>
+          <span role="alert" className="break-words text-error">
+            {ended.message}
+          </span>
           <button
             type="button"
             onClick={retry}

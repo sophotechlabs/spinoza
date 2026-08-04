@@ -23,7 +23,7 @@ describe('parseSettings', () => {
 
 describe('settings that outlive the tab', () => {
   it('round-trip through storage', () => {
-    writeSettings({ logView: 'raw' });
+    writeSettings({ logView: 'raw', screenReader: false });
 
     expect(window.localStorage.getItem(SETTINGS_KEY)).toContain('"logView":"raw"');
     expect(readSettings().logView).toBe('raw');
@@ -43,7 +43,22 @@ describe('settings that outlive the tab', () => {
     });
 
     expect(() => {
-      writeSettings({ logView: 'raw' });
+      writeSettings({ logView: 'raw', screenReader: false });
     }).not.toThrow();
+  });
+});
+
+describe('the screen reader setting', () => {
+  it('is off unless something stored says otherwise', () => {
+    expect(parseSettings(null).screenReader).toBe(false);
+    expect(parseSettings('{"logView":"raw"}').screenReader).toBe(false);
+  });
+
+  it('is read back when it was stored', () => {
+    expect(parseSettings('{"screenReader":true}').screenReader).toBe(true);
+  });
+
+  it('ignores a value that is not a boolean', () => {
+    expect(parseSettings('{"screenReader":"yes"}').screenReader).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SettingsDialog from '../../src/components/SettingsDialog';
 import { useThemeStore } from '../../src/store/theme';
@@ -248,5 +248,67 @@ describe('the keyboard section', () => {
     view.rerender(<SettingsDialog open section="Keyboard" onClose={vi.fn()} />);
 
     expect(screen.getByText('Open the command palette')).toBeInTheDocument();
+  });
+});
+
+describe('the about section', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('names the interface version and the backend it is talking to', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ version: 'v1.4.0' }) }),
+    );
+    render(<SettingsDialog open section="About" onClose={vi.fn()} />);
+
+    expect(screen.getByText('test')).toBeInTheDocument();
+    expect(await screen.findByText('v1.4.0')).toBeInTheDocument();
+  });
+
+  it('leaves the backend row blank when the endpoint is not there', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 404, json: () => Promise.resolve({}) }),
+    );
+    render(<SettingsDialog open section="About" onClose={vi.fn()} />);
+
+    expect(screen.getByText('test')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
+  });
+
+  it('does not ask for the version while it is closed', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<SettingsDialog open={false} section="About" onClose={vi.fn()} />);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('the terminal section', () => {
+  afterEach(() => {
+    act(() => {
+      useSettingsStore.getState().setScreenReader(false);
+    });
+  });
+
+  it('offers screen reader mode, off to begin with', () => {
+    render(<SettingsDialog open section="Terminal" onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText('Screen reader mode')).not.toBeChecked();
+  });
+
+  it('remembers the choice', async () => {
+    const user = userEvent.setup();
+    render(<SettingsDialog open section="Terminal" onClose={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Screen reader mode'));
+
+    expect(useSettingsStore.getState().screenReader).toBe(true);
+    expect(screen.getByLabelText('Screen reader mode')).toBeChecked();
   });
 });

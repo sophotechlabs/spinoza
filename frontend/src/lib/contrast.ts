@@ -1,4 +1,4 @@
-import { CONTENT_TOKENS } from './theme';
+import { CONTENT_TOKENS, backgroundsFor } from './theme';
 
 const AA = 4.5;
 
@@ -99,34 +99,51 @@ function luminance([r, g, b]: Rgb): number {
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
+export function toHex(value: string): string | null {
+  const rgb = toRgb(value);
+  if (rgb === null) {
+    return null;
+  }
+  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
 export function contrastRatio(a: Rgb, b: Rgb): number {
   const first = luminance(a);
   const second = luminance(b);
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
-export function contrastWarnings(tokens: Record<string, string | undefined>): string[] {
-  const surfaceValue = tokens.surface;
-  if (surfaceValue === undefined) {
-    return [];
+function fromDocument(name: string): string {
+  return window.getComputedStyle(document.documentElement).getPropertyValue(`--${name}`);
+}
+
+export function contrastWarnings(
+  tokens: Record<string, string | undefined>,
+  base: (name: string) => string = fromDocument,
+): string[] {
+  function resolve(name: string): Rgb | null {
+    const own = tokens[name];
+    if (own !== undefined) {
+      return toRgb(own);
+    }
+    return toRgb(base(name));
   }
-  const surface = toRgb(surfaceValue);
-  if (surface === null) {
-    return [];
-  }
+
   const warnings: string[] = [];
   for (const token of CONTENT_TOKENS) {
-    const value = tokens[token];
-    if (value === undefined) {
-      continue;
-    }
-    const rgb = toRgb(value);
+    const rgb = resolve(token);
     if (rgb === null) {
       continue;
     }
-    const ratio = contrastRatio(rgb, surface);
-    if (ratio < AA) {
-      warnings.push(`${token} is ${ratio.toFixed(2)}:1 against your surface, below AA`);
+    for (const name of backgroundsFor(token)) {
+      const behind = resolve(name);
+      if (behind === null) {
+        continue;
+      }
+      const ratio = contrastRatio(rgb, behind);
+      if (ratio < AA) {
+        warnings.push(`${token} is ${ratio.toFixed(2)}:1 on ${name}, below AA`);
+      }
     }
   }
   return warnings;

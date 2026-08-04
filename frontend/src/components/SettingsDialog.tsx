@@ -4,13 +4,13 @@ import { validateTheme } from '../lib/customThemes';
 import { LOG_VIEWS } from '../lib/settings';
 import type { LogView } from '../lib/settings';
 import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '../store/theme';
-import { useLogView, useSettingsStore } from '../store/settings';
+import { useLogView, useScreenReader, useSettingsStore } from '../store/settings';
 import { usePanelsStore } from '../store/panels';
 import { HOTKEYS } from '../lib/hotkeys';
 import { copyText } from '../lib/clipboard';
 import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
 
-const SECTIONS = ['Appearance', 'Logs', 'Panels', 'Keyboard', 'About'] as const;
+const SECTIONS = ['Appearance', 'Logs', 'Terminal', 'Panels', 'Keyboard', 'About'] as const;
 
 export type Section = (typeof SECTIONS)[number];
 
@@ -72,6 +72,8 @@ export default function SettingsDialog({
   const setPreference = useThemeStore((state) => state.setPreference);
   const logView = useLogView();
   const setLogView = useSettingsStore((state) => state.setLogView);
+  const screenReader = useScreenReader();
+  const setScreenReader = useSettingsStore((state) => state.setScreenReader);
   const resetPanels = usePanelsStore((state) => state.reset);
   const themes = useThemes();
   const custom = useThemeStore((state) => state.custom);
@@ -335,6 +337,21 @@ export default function SettingsDialog({
                 ))}
               </tbody>
             </table>
+          )}
+          {section === 'Terminal' && (
+            <Row
+              label="Screen reader mode"
+              hint="Let a screen reader read the terminal buffer. Costs some rendering speed."
+            >
+              <input
+                type="checkbox"
+                aria-label="Screen reader mode"
+                checked={screenReader}
+                onChange={(event) => {
+                  setScreenReader(event.target.checked);
+                }}
+              />
+            </Row>
           )}
           {section === 'Panels' && (
             <Row

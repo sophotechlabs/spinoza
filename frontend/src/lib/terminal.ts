@@ -1,6 +1,8 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import type { XtermTheme } from './themeColors';
+import { prefersReducedMotion } from './motion';
 
 interface TerminalSize {
   cols: number;
@@ -20,18 +22,24 @@ const DEFAULT_TERMINAL_THEME: TerminalTheme = {
 export interface TerminalHandle {
   write: (text: string) => void;
   onData: (handler: (data: string) => void) => void;
-  setTheme: (theme: TerminalTheme) => void;
+  setTheme: (theme: XtermTheme) => void;
+  setScreenReader: (on: boolean) => void;
   fit: () => TerminalSize;
   focus: () => void;
   dispose: () => void;
 }
 
-export function createTerminal(node: HTMLElement): TerminalHandle {
+export interface TerminalOptions {
+  screenReader?: boolean;
+}
+
+export function createTerminal(node: HTMLElement, options: TerminalOptions = {}): TerminalHandle {
   const term = new Terminal({
     convertEol: true,
     fontSize: 12,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-    cursorBlink: true,
+    cursorBlink: !prefersReducedMotion(),
+    screenReaderMode: options.screenReader === true,
   });
   const fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
@@ -41,8 +49,11 @@ export function createTerminal(node: HTMLElement): TerminalHandle {
     write: (text: string) => {
       term.write(text);
     },
-    setTheme: (theme: TerminalTheme) => {
+    setTheme: (theme: XtermTheme) => {
       term.options.theme = theme;
+    },
+    setScreenReader: (on: boolean) => {
+      term.options.screenReaderMode = on;
     },
     onData: (handler: (data: string) => void) => {
       term.onData(handler);

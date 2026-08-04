@@ -6,9 +6,10 @@ export const SETTINGS_KEY = 'spinoza.settings.v1';
 
 interface Settings {
   logView: LogView;
+  screenReader: boolean;
 }
 
-const DEFAULTS: Settings = { logView: 'pretty' };
+const DEFAULTS: Settings = { logView: 'pretty', screenReader: false };
 
 export function parseSettings(raw: string | null): Settings {
   if (raw === null) {
@@ -29,6 +30,9 @@ export function parseSettings(raw: string | null): Settings {
     if (stored.logView === view) {
       settings.logView = view;
     }
+  }
+  if (typeof stored.screenReader === 'boolean') {
+    settings.screenReader = stored.screenReader;
   }
   return settings;
 }
