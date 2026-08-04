@@ -335,25 +335,27 @@ describe('App', () => {
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
 
     act(() => {
-      useResourcesStore.getState().applyDelta('main#1', {
-        type: 'modified',
-        subId: 'main#1',
-        row: makeRow({
-          uid: 'a',
-          name: 'pod-a',
-          namespace: 'prod',
-          containers: [
-            {
-              name: 'app',
-              state: 'waiting',
-              reason: 'CrashLoopBackOff',
-              ready: false,
-              restarts: 7,
-              init: false,
-            },
-          ],
-        }),
-      });
+      useResourcesStore.getState().applyDeltas('main#1', [
+        {
+          type: 'modified',
+          subId: 'main#1',
+          row: makeRow({
+            uid: 'a',
+            name: 'pod-a',
+            namespace: 'prod',
+            containers: [
+              {
+                name: 'app',
+                state: 'waiting',
+                reason: 'CrashLoopBackOff',
+                ready: false,
+                restarts: 7,
+                init: false,
+              },
+            ],
+          }),
+        },
+      ]);
     });
 
     await waitFor(() => {
@@ -764,17 +766,19 @@ describe('a selection that outlives its row', () => {
     act(() => {
       useResourcesStore
         .getState()
-        .applyDelta('main#1', { type: 'deleted', subId: 'main#1', uid: 'a' });
-      useResourcesStore.getState().applyDelta('main#1', {
-        type: 'added',
-        subId: 'main#1',
-        row: makeRow({
-          uid: 'b',
-          name: 'pod-a',
-          namespace: 'prod',
-          containers: [{ name: 'app', state: 'running', ready: true, restarts: 3, init: false }],
-        }),
-      });
+        .applyDeltas('main#1', [{ type: 'deleted', subId: 'main#1', uid: 'a' }]);
+      useResourcesStore.getState().applyDeltas('main#1', [
+        {
+          type: 'added',
+          subId: 'main#1',
+          row: makeRow({
+            uid: 'b',
+            name: 'pod-a',
+            namespace: 'prod',
+            containers: [{ name: 'app', state: 'running', ready: true, restarts: 3, init: false }],
+          }),
+        },
+      ]);
     });
 
     expect(screen.getByTestId('inspect-containers')).toHaveTextContent('app::3');

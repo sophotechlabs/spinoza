@@ -116,12 +116,14 @@ describe('useRowForRef', () => {
     act(() => {
       useResourcesStore
         .getState()
-        .applyDelta('main#1', { type: 'deleted', subId: 'main#1', uid: 'a' });
-      useResourcesStore.getState().applyDelta('main#1', {
-        type: 'added',
-        subId: 'main#1',
-        row: makeRow({ uid: 'c', name: 'web-0', namespace: 'prod' }),
-      });
+        .applyDeltas('main#1', [{ type: 'deleted', subId: 'main#1', uid: 'a' }]);
+      useResourcesStore.getState().applyDeltas('main#1', [
+        {
+          type: 'added',
+          subId: 'main#1',
+          row: makeRow({ uid: 'c', name: 'web-0', namespace: 'prod' }),
+        },
+      ]);
     });
 
     expect(result.current?.uid).toBe('c');

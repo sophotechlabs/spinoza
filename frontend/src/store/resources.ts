@@ -6,13 +6,14 @@ interface SubState {
   columns: Column[];
   namespaced: boolean;
   rows: Map<string, Row>;
+  revision: number;
 }
 
 interface ResourcesState {
   subs: Map<string, SubState>;
   errors: Map<string, string>;
   applySnapshot: (subId: string, columns: Column[], namespaced: boolean, rows: Row[]) => void;
-  applyDelta: (subId: string, msg: ServerMsg) => void;
+  applyDeltas: (subId: string, msgs: ServerMsg[]) => void;
   failSub: (subId: string, message: string) => void;
   clearSub: (subId: string) => void;
 }
@@ -20,16 +21,29 @@ interface ResourcesState {
 const EMPTY_COLUMNS: Column[] = [];
 const EMPTY_ROWS: Row[] = [];
 
+const collator = new Intl.Collator();
+
 function sortRows(rows: Map<string, Row>): Row[] {
   const arr = [...rows.values()];
   arr.sort((a, b) => {
-    const byNamespace = a.namespace.localeCompare(b.namespace);
+    const byNamespace = collator.compare(a.namespace, b.namespace);
     if (byNamespace !== 0) {
       return byNamespace;
     }
-    return a.name.localeCompare(b.name);
+    return collator.compare(a.name, b.name);
   });
   return arr;
+}
+
+function applyOne(rows: Map<string, Row>, msg: ServerMsg): boolean {
+  if (msg.type === 'added' || msg.type === 'modified') {
+    rows.set(msg.row.uid, msg.row);
+    return true;
+  }
+  if (msg.type === 'deleted') {
+    return rows.delete(msg.uid);
+  }
+  return false;
 }
 
 export const useResourcesStore = create<ResourcesState>((set) => ({
@@ -42,7 +56,7 @@ export const useResourcesStore = create<ResourcesState>((set) => ({
         rowMap.set(row.uid, row);
       }
       const subs = new Map(state.subs);
-      subs.set(subId, { columns, namespaced, rows: rowMap });
+      subs.set(subId, { columns, namespaced, rows: rowMap, revision: 0 });
       const errors = new Map(state.errors);
       errors.delete(subId);
       return { subs, errors };
@@ -55,27 +69,24 @@ export const useResourcesStore = create<ResourcesState>((set) => ({
       return { errors };
     });
   },
-  applyDelta: (subId, msg) => {
+  applyDeltas: (subId, msgs) => {
     set((state) => {
       const existing = state.subs.get(subId);
       if (existing === undefined) {
         return state;
       }
-      if (msg.type === 'added' || msg.type === 'modified') {
-        const rows = new Map(existing.rows);
-        rows.set(msg.row.uid, msg.row);
-        const subs = new Map(state.subs);
-        subs.set(subId, { ...existing, rows });
-        return { subs };
+      let touched = false;
+      for (const msg of msgs) {
+        if (applyOne(existing.rows, msg)) {
+          touched = true;
+        }
       }
-      if (msg.type === 'deleted') {
-        const rows = new Map(existing.rows);
-        rows.delete(msg.uid);
-        const subs = new Map(state.subs);
-        subs.set(subId, { ...existing, rows });
-        return { subs };
+      if (!touched) {
+        return state;
       }
-      return state;
+      const subs = new Map(state.subs);
+      subs.set(subId, { ...existing, revision: existing.revision + 1 });
+      return { subs };
     });
   },
   clearSub: (subId) => {
@@ -121,11 +132,11 @@ export function useSubError(subId: string): string | null {
 }
 
 export function useSubRows(subId: string): Row[] {
-  const rows = useResourcesStore((state) => state.subs.get(subId)?.rows);
+  const sub = useResourcesStore((state) => state.subs.get(subId));
   return useMemo(() => {
-    if (rows === undefined) {
+    if (sub === undefined) {
       return EMPTY_ROWS;
     }
-    return sortRows(rows);
-  }, [rows]);
+    return sortRows(sub.rows);
+  }, [sub]);
 }

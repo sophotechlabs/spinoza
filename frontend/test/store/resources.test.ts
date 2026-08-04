@@ -75,7 +75,7 @@ describe('useResourcesStore', () => {
       subId: 's1',
       row: makeRow({ uid: 'x', name: 'x-row' }),
     };
-    useResourcesStore.getState().applyDelta('s1', msg);
+    useResourcesStore.getState().applyDeltas('s1', [msg]);
     expect(useResourcesStore.getState().subs.get('s1')?.rows.get('x')?.name).toBe('x-row');
   });
 
@@ -88,7 +88,7 @@ describe('useResourcesStore', () => {
       subId: 's1',
       row: makeRow({ uid: 'x', name: 'after' }),
     };
-    useResourcesStore.getState().applyDelta('s1', msg);
+    useResourcesStore.getState().applyDeltas('s1', [msg]);
     const sub = useResourcesStore.getState().subs.get('s1');
     expect(sub?.rows.get('x')?.name).toBe('after');
     expect(sub?.rows.size).toBe(1);
@@ -99,7 +99,7 @@ describe('useResourcesStore', () => {
       .getState()
       .applySnapshot('s1', makeColumns([]), true, [makeRow({ uid: 'x' }), makeRow({ uid: 'y' })]);
     const msg: ServerMsg = { type: 'deleted', subId: 's1', uid: 'x' };
-    useResourcesStore.getState().applyDelta('s1', msg);
+    useResourcesStore.getState().applyDeltas('s1', [msg]);
     const sub = useResourcesStore.getState().subs.get('s1');
     expect(sub?.rows.has('x')).toBe(false);
     expect(sub?.rows.has('y')).toBe(true);
@@ -111,7 +111,7 @@ describe('useResourcesStore', () => {
       .applySnapshot('s1', makeColumns([]), true, [makeRow({ uid: 'x' })]);
     const before = useResourcesStore.getState();
     const msg: ServerMsg = { type: 'added', subId: 'missing', row: makeRow({ uid: 'z' }) };
-    before.applyDelta('missing', msg);
+    before.applyDeltas('missing', [msg]);
     expect(useResourcesStore.getState().subs).toBe(before.subs);
   });
 
@@ -127,7 +127,7 @@ describe('useResourcesStore', () => {
       namespaced: true,
       rows: [],
     };
-    before.applyDelta('s1', msg);
+    before.applyDeltas('s1', [msg]);
     expect(useResourcesStore.getState().subs).toBe(before.subs);
   });
 
@@ -137,7 +137,7 @@ describe('useResourcesStore', () => {
       .applySnapshot('s1', makeColumns([]), true, [makeRow({ uid: 'x' })]);
     const before = useResourcesStore.getState();
     const msg: ServerMsg = { type: 'error', subId: 's1', message: 'boom' };
-    before.applyDelta('s1', msg);
+    before.applyDeltas('s1', [msg]);
     expect(useResourcesStore.getState().subs).toBe(before.subs);
   });
 

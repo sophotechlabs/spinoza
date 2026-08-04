@@ -172,7 +172,7 @@ describe('ResourceTable', () => {
     expect(screen.queryByRole('button', { name: 'pod-a' })).not.toBeInTheDocument();
 
     act(() => {
-      useResourcesStore.getState().applyDelta(SUB, { type: 'deleted', subId: SUB, uid: 'b' });
+      useResourcesStore.getState().applyDeltas(SUB, [{ type: 'deleted', subId: SUB, uid: 'b' }]);
     });
 
     expect(screen.getByLabelText('Namespace')).toHaveValue('');
