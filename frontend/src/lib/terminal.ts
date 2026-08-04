@@ -12,7 +12,7 @@ export interface TerminalTheme {
   foreground: string;
 }
 
-export const DEFAULT_TERMINAL_THEME: TerminalTheme = {
+const DEFAULT_TERMINAL_THEME: TerminalTheme = {
   background: '#0a0a0a',
   foreground: '#d4d4d4',
 };
