@@ -476,3 +476,25 @@ describe('working through a log buffer', () => {
     expect(screen.getByText('alpha one')).toBeInTheDocument();
   });
 });
+
+describe('copying the log buffer', () => {
+  beforeEach(() => {
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  it('copies what is on screen', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, ['alpha one', 'bravo two']);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledWith('alpha one\nbravo two');
+  });
+});

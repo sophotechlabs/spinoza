@@ -767,3 +767,20 @@ describe('a column the user resized', () => {
     expect(screen.getAllByRole('columnheader')[1].style.width).toBe(widened);
   });
 });
+
+describe('copying a row name', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('offers a copy button beside each name', () => {
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+
+    expect(screen.getByRole('button', { name: 'Copy pod-a' })).toBeInTheDocument();
+  });
+});

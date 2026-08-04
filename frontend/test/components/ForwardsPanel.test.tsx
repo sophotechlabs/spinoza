@@ -197,3 +197,19 @@ describe('ForwardsPanel', () => {
     expect(screen.getByText(/No active forwards/)).toBeInTheDocument();
   });
 });
+
+describe('copying a forward url', () => {
+  it('offers a copy button next to a running forward', async () => {
+    useForwardsStore.setState({ forwards: [forward()] });
+    render(<ForwardsPanel />);
+
+    expect(await screen.findByRole('button', { name: 'Copy web forward url' })).toBeInTheDocument();
+  });
+
+  it('offers nothing to copy for a failed one', () => {
+    useForwardsStore.setState({ forwards: [forward({ state: 'failed', error: 'boom' })] });
+    render(<ForwardsPanel />);
+
+    expect(screen.queryByRole('button', { name: /forward url/ })).not.toBeInTheDocument();
+  });
+});

@@ -178,3 +178,18 @@ describe('container dots agree with the table', () => {
     expect(dot).not.toBeNull();
   });
 });
+
+describe('copying a metadata value', () => {
+  it('offers a copy button per pair, named after the field', () => {
+    render(<InspectOverview detail={detail()} />);
+
+    expect(screen.getByRole('button', { name: 'Copy UID' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Name' })).toBeInTheDocument();
+  });
+
+  it('leaves an empty field without a button to press', () => {
+    render(<InspectOverview detail={detail({ namespace: '' })} />);
+
+    expect(screen.queryByRole('button', { name: 'Copy Namespace' })).not.toBeInTheDocument();
+  });
+});

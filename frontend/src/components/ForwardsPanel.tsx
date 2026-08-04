@@ -4,6 +4,7 @@ import { refreshForwards, stopForward, useForwardPolling } from '../lib/portForw
 import { useForwardsStore } from '../store/forwards';
 import { notifyError, notifyOk } from '../store/toasts';
 import StaleBanner from './StaleBanner';
+import CopyButton from './CopyButton';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -82,6 +83,12 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
               >
                 127.0.0.1:{forward.localPort}
               </a>
+            )}
+            {forward.state !== 'failed' && (
+              <CopyButton
+                what={`${forward.name} forward url`}
+                text={`http://127.0.0.1:${String(forward.localPort)}`}
+              />
             )}
             <span className="text-fg-muted">→ {forward.remotePort}</span>
             <button

@@ -7,8 +7,10 @@ import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '
 import { useLogView, useSettingsStore } from '../store/settings';
 import { usePanelsStore } from '../store/panels';
 import { HOTKEYS } from '../lib/hotkeys';
+import { copyText } from '../lib/clipboard';
+import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
 
-const SECTIONS = ['Appearance', 'Logs', 'Panels', 'Keyboard'] as const;
+const SECTIONS = ['Appearance', 'Logs', 'Panels', 'Keyboard', 'About'] as const;
 
 export type Section = (typeof SECTIONS)[number];
 
@@ -16,6 +18,13 @@ interface SettingsDialogProps {
   open: boolean;
   section?: Section;
   onClose: () => void;
+}
+
+function versionLabel(version: string): string {
+  if (version === '') {
+    return '—';
+  }
+  return version;
 }
 
 function sectionClass(active: boolean): string {
@@ -70,6 +79,7 @@ export default function SettingsDialog({
   const removeTheme = useThemeStore((state) => state.removeTheme);
   const resolved = useResolvedTheme();
   const [draft, setDraft] = useState('');
+  const [backend, setBackend] = useState('');
   const [report, setReport] = useState<{ errors: string[]; warnings: string[] }>({
     errors: [],
     warnings: [],
@@ -115,8 +125,25 @@ export default function SettingsDialog({
   }
 
   function handleExport() {
-    void navigator.clipboard.writeText(JSON.stringify(resolved, null, 2));
+    void copyText('the current theme', JSON.stringify(resolved, null, 2));
   }
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let live = true;
+    fetchBackendVersion()
+      .then((found) => {
+        if (live) {
+          setBackend(found);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [open]);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -281,6 +308,16 @@ export default function SettingsDialog({
                 ))}
               </select>
             </Row>
+          )}
+          {section === 'About' && (
+            <>
+              <Row label="Spinoza" hint="The interface bundled with this binary.">
+                <span className="font-mono text-fg-soft">{FRONTEND_VERSION}</span>
+              </Row>
+              <Row label="Backend" hint="Reported by the server this window is talking to.">
+                <span className="font-mono text-fg-soft">{versionLabel(backend)}</span>
+              </Row>
+            </>
           )}
           {section === 'Keyboard' && (
             <table className="w-full text-left">

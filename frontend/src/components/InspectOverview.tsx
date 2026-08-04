@@ -1,5 +1,6 @@
 import type { Condition, ContainerState, ObjectDetail } from '../lib/types';
 import { containerColor } from '../lib/status';
+import CopyButton from './CopyButton';
 
 interface InspectOverviewProps {
   detail: ObjectDetail;
@@ -33,7 +34,10 @@ function Pairs({ pairs }: { pairs: [string, string][] }) {
       {pairs.map(([label, value]) => (
         <div key={label} className="contents">
           <dt className="truncate text-fg-muted">{label}</dt>
-          <dd className="break-all text-fg">{value}</dd>
+          <dd className="group flex items-baseline gap-1 break-all text-fg">
+            <span className="min-w-0 break-all">{value}</span>
+            {value !== '' && <CopyButton what={label} text={value} quiet />}
+          </dd>
         </div>
       ))}
     </dl>

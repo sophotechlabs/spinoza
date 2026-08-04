@@ -366,3 +366,17 @@ describe('leaving with an unsaved draft', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 });
+
+describe('copying the manifest', () => {
+  it('copies the draft as it stands', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Copy YAML' }));
+
+    expect(writeText).toHaveBeenCalledWith(`${YAML}x`);
+  });
+});
