@@ -95,14 +95,14 @@ export function createChart(node: HTMLElement, options: ChartOptions): ChartHand
     },
     setColors: (colors: ChartColors) => {
       const line = chart.series[1];
-      line.stroke = colors.stroke;
-      line.fill = colors.fill;
+      line.stroke = () => colors.stroke;
+      line.fill = () => colors.fill;
       for (const axis of chart.axes) {
-        axis.stroke = colors.axis;
-        axis.grid = { stroke: colors.grid, width: 1 };
-        axis.ticks = { stroke: colors.grid };
+        axis.stroke = () => colors.axis;
+        axis.grid = { ...axis.grid, stroke: () => colors.grid };
+        axis.ticks = { ...axis.ticks, stroke: () => colors.grid };
       }
-      chart.redraw(false, false);
+      chart.redraw();
     },
     resize: (width: number) => {
       chart.setSize({ width, height: 130 });
