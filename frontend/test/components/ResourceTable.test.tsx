@@ -129,6 +129,69 @@ describe('ResourceTable', () => {
     expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
   });
 
+  it('says it is still waiting rather than showing an empty table', () => {
+    renderTable(descriptor, null);
+
+    expect(screen.getByText('Loading Pod…')).toBeInTheDocument();
+    expect(screen.queryByText('This cluster has no Pod objects.')).not.toBeInTheDocument();
+  });
+
+  it('says the resource is genuinely empty once the snapshot lands', () => {
+    seed(makeColumns(['Ready']), true, []);
+
+    renderTable(descriptor, null);
+
+    expect(screen.getByText('This cluster has no Pod objects.')).toBeInTheDocument();
+    expect(screen.queryByText('Loading Pod…')).not.toBeInTheDocument();
+  });
+
+  it('separates a filter with no match from an empty resource', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+
+    await user.type(screen.getByLabelText('Filter by name'), 'zzz');
+
+    expect(screen.getByText('Nothing matches the current filter.')).toBeInTheDocument();
+    expect(screen.queryByText('This cluster has no Pod objects.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear filter' }));
+
+    expect(screen.getByRole('button', { name: 'pod-a' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter by name')).toHaveValue('');
+  });
+
+  it('drops a namespace filter whose namespace is gone instead of filtering to nothing', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'temp' }),
+    ]);
+    renderTable(descriptor, null);
+    await user.selectOptions(screen.getByLabelText('Namespace'), 'temp');
+    expect(screen.queryByRole('button', { name: 'pod-a' })).not.toBeInTheDocument();
+
+    act(() => {
+      useResourcesStore.getState().applyDelta(SUB, { type: 'deleted', subId: SUB, uid: 'b' });
+    });
+
+    expect(screen.getByLabelText('Namespace')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'pod-a' })).toBeInTheDocument();
+  });
+
+  it('keeps a namespace filter while the snapshot has not arrived yet', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+    await user.selectOptions(screen.getByLabelText('Namespace'), 'prod');
+
+    act(() => {
+      useResourcesStore.setState({ subs: new Map(), errors: new Map() });
+    });
+
+    expect(screen.getByText('Loading Pod…')).toBeInTheDocument();
+  });
+
   it('renders Name, snapshot columns and Age for a cluster-scoped resource', () => {
     seed(makeColumns(['Ready', 'Status']), false, []);
     renderTable(descriptor, null);

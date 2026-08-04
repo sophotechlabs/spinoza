@@ -108,6 +108,10 @@ export function useSubNamespaced(subId: string): boolean {
   return namespaced;
 }
 
+export function useSubLoaded(subId: string): boolean {
+  return useResourcesStore((state) => state.subs.has(subId));
+}
+
 export function useSubError(subId: string): string | null {
   const message = useResourcesStore((state) => state.errors.get(subId));
   if (message === undefined) {

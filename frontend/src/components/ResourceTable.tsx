@@ -10,7 +10,13 @@ import {
 import type { ColumnDef, SortDirection, SortingState } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Metrics, ResourceDescriptor, ResourceUsage, Row } from '../lib/types';
-import { useSubColumns, useSubError, useSubNamespaced, useSubRows } from '../store/resources';
+import {
+  useSubColumns,
+  useSubError,
+  useSubLoaded,
+  useSubNamespaced,
+  useSubRows,
+} from '../store/resources';
 import { ratioColor, restartColor, statusColor } from '../lib/status';
 import { formatCpu, formatMem, useMetrics } from '../lib/metrics';
 import { useElementWidth } from '../lib/useElementWidth';
@@ -155,6 +161,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const namespaced = useSubNamespaced(subId);
   const rows = useSubRows(subId);
   const error = useSubError(subId);
+  const loaded = useSubLoaded(subId);
   const now = useNow();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [query, setQuery] = useState('');
@@ -214,20 +221,20 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
       );
     });
     if (wantMetrics && metrics !== null) {
-      const loaded = metrics;
+      const sample = metrics;
       defs.push({
         id: 'cpu',
         header: 'CPU',
         size: 110,
         enableSorting: false,
-        cell: (info) => renderMetricCell(activeKind, loaded, info.row.original, false),
+        cell: (info) => renderMetricCell(activeKind, sample, info.row.original, false),
       });
       defs.push({
         id: 'memory',
         header: 'Memory',
         size: 110,
         enableSorting: false,
-        cell: (info) => renderMetricCell(activeKind, loaded, info.row.original, true),
+        cell: (info) => renderMetricCell(activeKind, sample, info.row.original, true),
       });
     }
     defs.push(
@@ -243,7 +250,19 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics, now]);
 
   const namespaces = useMemo(() => namespacesOf(rows), [rows]);
-  const visibleRows = useMemo(() => filterRows(rows, query, namespace), [rows, query, namespace]);
+
+  let activeNamespace = namespace;
+  if (loaded && namespace !== ALL_NAMESPACES && !namespaces.includes(namespace)) {
+    activeNamespace = ALL_NAMESPACES;
+  }
+  if (activeNamespace !== namespace) {
+    setNamespace(activeNamespace);
+  }
+
+  const visibleRows = useMemo(
+    () => filterRows(rows, query, activeNamespace),
+    [rows, query, activeNamespace],
+  );
 
   const table = useReactTable({
     data: visibleRows,
@@ -286,6 +305,11 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     selectedUid = selected.uid;
   }
 
+  function clearFilter() {
+    setQuery('');
+    setNamespace(ALL_NAMESPACES);
+  }
+
   if (active === null) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">
@@ -321,7 +345,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
         {namespaced && namespaces.length > 0 && (
           <select
             aria-label="Namespace"
-            value={namespace}
+            value={activeNamespace}
             onChange={(event) => {
               setNamespace(event.target.value);
             }}
@@ -410,6 +434,24 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
             )}
           </tbody>
         </table>
+        {!loaded && <p className="p-6 text-center text-xs text-fg-muted">Loading {active.kind}…</p>}
+        {loaded && rows.length === 0 && (
+          <p className="p-6 text-center text-xs text-fg-muted">
+            This cluster has no {active.kind} objects.
+          </p>
+        )}
+        {loaded && rows.length > 0 && visibleRows.length === 0 && (
+          <div className="flex flex-col items-center gap-2 p-6 text-xs text-fg-muted">
+            <span>Nothing matches the current filter.</span>
+            <button
+              type="button"
+              onClick={clearFilter}
+              className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
