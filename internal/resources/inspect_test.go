@@ -159,7 +159,7 @@ func TestManagerSchema(t *testing.T) {
 	t.Cleanup(cancel)
 	mgr := NewManager(ctx, Deps{Dynamic: newClient(t), Clientset: k8sfake.NewClientset(), Schemas: schemas, Descriptors: testDescs()})
 
-	raw, err := mgr.Schema(jsonschema.GVK{Version: "v1", Kind: "Pod"})
+	raw, err := mgr.Schema(context.Background(), jsonschema.GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("schema: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestManagerSchema(t *testing.T) {
 func TestManagerSchemaWithoutASource(t *testing.T) {
 	mgr := inspectManager(t)
 
-	_, err := mgr.Schema(jsonschema.GVK{Version: "v1", Kind: "Pod"})
+	_, err := mgr.Schema(context.Background(), jsonschema.GVK{Version: "v1", Kind: "Pod"})
 
 	if err == nil {
 		t.Fatalf("expected an error when no schema source is configured")

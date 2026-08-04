@@ -338,7 +338,7 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "version and kind are required")
 		return
 	}
-	doc, err := s.manager().Schema(jsonschema.GVK{Group: query.Get("group"), Version: version, Kind: kind})
+	doc, err := s.manager().Schema(r.Context(), jsonschema.GVK{Group: query.Get("group"), Version: version, Kind: kind})
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return

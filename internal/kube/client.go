@@ -3,6 +3,7 @@ package kube
 import (
 	"fmt"
 	"slices"
+	"time"
 
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -47,9 +48,20 @@ func Contexts() ([]string, string, error) {
 }
 
 const (
-	clientQPS   = 50
-	clientBurst = 100
+	clientQPS        = 50
+	clientBurst      = 100
+	discoveryTimeout = 30 * time.Second
 )
+
+func boundedDiscovery(restConfig *restclient.Config) (discovery.DiscoveryInterface, error) {
+	timed := restclient.CopyConfig(restConfig)
+	timed.Timeout = discoveryTimeout
+	client, err := discovery.NewDiscoveryClientForConfig(timed)
+	if err != nil {
+		return nil, fmt.Errorf("kube discovery: %w", err)
+	}
+	return client, nil
+}
 
 func LoadContext(contextName string) (*Bundle, error) {
 	clientConfig := configFor(contextName)
@@ -71,7 +83,11 @@ func LoadContext(contextName string) (*Bundle, error) {
 		return nil, fmt.Errorf("kube dynamic: %w", err)
 	}
 
-	cached := memory.NewMemCacheClient(cs.Discovery())
+	bounded, err := boundedDiscovery(restConfig)
+	if err != nil {
+		return nil, err
+	}
+	cached := memory.NewMemCacheClient(bounded)
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(cached)
 
 	resolved := contextName

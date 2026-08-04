@@ -1,9 +1,12 @@
 package jsonschema
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"k8s.io/client-go/openapi"
 )
@@ -100,10 +103,123 @@ func definitions(t *testing.T, bundle map[string]any) map[string]any {
 	return defs
 }
 
+type blockingClient struct {
+	entered chan struct{}
+	release chan struct{}
+	calls   atomic.Int32
+	paths   map[string]openapi.GroupVersion
+}
+
+func newBlockingClient(doc, path string) *blockingClient {
+	return &blockingClient{
+		entered: make(chan struct{}, 8),
+		release: make(chan struct{}),
+		paths:   map[string]openapi.GroupVersion{path: fakeGroupVersion{doc: doc}},
+	}
+}
+
+func (b *blockingClient) Paths() (map[string]openapi.GroupVersion, error) {
+	b.calls.Add(1)
+	select {
+	case b.entered <- struct{}{}:
+	default:
+	}
+	<-b.release
+	return b.paths, nil
+}
+
+func TestAStalledFetchDoesNotWedgeTheCacheItself(t *testing.T) {
+	blocked := newBlockingClient(podDoc, "api/v1")
+	client := NewClient(sourceOf(blocked))
+	done := make(chan error, 1)
+
+	go func() {
+		_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+		done <- err
+	}()
+	<-blocked.entered
+
+	refreshed := make(chan struct{})
+	go func() {
+		defer close(refreshed)
+		client.Refresh()
+	}()
+
+	select {
+	case <-refreshed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a stalled openapi fetch held the lock every other caller needs")
+	}
+	close(blocked.release)
+	if err := <-done; err != nil {
+		t.Fatalf("for: %v", err)
+	}
+}
+
+func TestConcurrentCallersShareOneFetch(t *testing.T) {
+	blocked := newBlockingClient(podDoc, "api/v1")
+	client := NewClient(sourceOf(blocked))
+	const callers = 4
+	done := make(chan error, callers)
+
+	for range callers {
+		go func() {
+			_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+			done <- err
+		}()
+	}
+	<-blocked.entered
+	time.Sleep(50 * time.Millisecond)
+	close(blocked.release)
+
+	for range callers {
+		if err := <-done; err != nil {
+			t.Fatalf("for: %v", err)
+		}
+	}
+	if got := blocked.calls.Load(); got != 1 {
+		t.Fatalf("openapi fetches = %d, want the callers to share one", got)
+	}
+}
+
+func TestAWaitingCallerGivesUpWithItsRequest(t *testing.T) {
+	blocked := newBlockingClient(podDoc, "api/v1")
+	client := NewClient(sourceOf(blocked))
+	t.Cleanup(func() { close(blocked.release) })
+
+	go func() {
+		_, _ = client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+	}()
+	<-blocked.entered
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := client.For(ctx, GVK{Version: "v1", Kind: "Service"})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want the queued caller to leave with its request", err)
+	}
+}
+
+func TestAFailedFetchIsNotRemembered(t *testing.T) {
+	broken := &fakeClient{err: errors.New("apiserver is unreachable")}
+	client := NewClient(sourceOf(broken))
+
+	if _, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"}); err == nil {
+		t.Fatal("expected the fetch failure to surface")
+	}
+	broken.err = nil
+	broken.paths = map[string]openapi.GroupVersion{"api/v1": fakeGroupVersion{doc: podDoc}}
+
+	if _, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"}); err != nil {
+		t.Fatalf("for: %v, want the retry to reach the recovered apiserver", err)
+	}
+}
+
 func TestForBundlesTheReachableClosure(t *testing.T) {
 	client, _ := clientFor(podDoc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -133,7 +249,7 @@ func TestForBundlesTheReachableClosure(t *testing.T) {
 func TestForRewritesRefsIntoDefinitions(t *testing.T) {
 	client, _ := clientFor(podDoc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -162,7 +278,7 @@ func TestForTerminatesOnRecursiveSchemas(t *testing.T) {
 	  }}}}`
 	client, _ := clientFor(doc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Node"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Node"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -181,7 +297,7 @@ func TestForKeepsUnresolvableRefsOut(t *testing.T) {
 	  }}}}`
 	client, _ := clientFor(doc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Thing"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Thing"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -199,7 +315,7 @@ func TestForUsesTheGroupPath(t *testing.T) {
 	  }}}}`
 	client, _ := clientFor(doc, "apis/kustomize.toolkit.fluxcd.io/v1")
 
-	raw, err := client.For(GVK{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Kind: "Kustomization"})
+	raw, err := client.For(context.Background(), GVK{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Kind: "Kustomization"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -215,7 +331,7 @@ func TestForPrefersTheNameMatchingTheKind(t *testing.T) {
 	}}}`
 	client, _ := clientFor(doc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -230,7 +346,7 @@ func TestForFallsBackToAnyDeclaringSchema(t *testing.T) {
 	}}}`
 	client, _ := clientFor(doc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -248,7 +364,7 @@ func TestForIgnoresMalformedGVKExtensions(t *testing.T) {
 	}}}`
 	client, _ := clientFor(doc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -261,11 +377,11 @@ func TestForCachesTheDocumentAndBundle(t *testing.T) {
 	client, hits := clientFor(podDoc, "api/v1")
 
 	for range 3 {
-		if _, err := client.For(GVK{Version: "v1", Kind: "Pod"}); err != nil {
+		if _, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"}); err != nil {
 			t.Fatalf("for: %v", err)
 		}
 	}
-	if _, err := client.For(GVK{Version: "v1", Kind: "Service"}); err != nil {
+	if _, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Service"}); err != nil {
 		t.Fatalf("for service: %v", err)
 	}
 
@@ -277,7 +393,7 @@ func TestForCachesTheDocumentAndBundle(t *testing.T) {
 func TestForUnknownKind(t *testing.T) {
 	client, _ := clientFor(podDoc, "api/v1")
 
-	_, err := client.For(GVK{Version: "v1", Kind: "Widget"})
+	_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Widget"})
 
 	if err == nil {
 		t.Fatalf("expected an error for an unknown kind")
@@ -287,7 +403,7 @@ func TestForUnknownKind(t *testing.T) {
 func TestForUnknownGroupVersion(t *testing.T) {
 	client, _ := clientFor(podDoc, "api/v1")
 
-	_, err := client.For(GVK{Group: "apps", Version: "v1", Kind: "Deployment"})
+	_, err := client.For(context.Background(), GVK{Group: "apps", Version: "v1", Kind: "Deployment"})
 
 	if err == nil {
 		t.Fatalf("expected an error for a group-version the server does not serve")
@@ -297,7 +413,7 @@ func TestForUnknownGroupVersion(t *testing.T) {
 func TestForPathsError(t *testing.T) {
 	client := NewClient(sourceOf(&fakeClient{err: errors.New("boom")}))
 
-	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 
 	if err == nil {
 		t.Fatalf("expected the paths error to surface")
@@ -309,7 +425,7 @@ func TestForSchemaError(t *testing.T) {
 		paths: map[string]openapi.GroupVersion{"api/v1": fakeGroupVersion{err: errors.New("boom")}},
 	}))
 
-	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 
 	if err == nil {
 		t.Fatalf("expected the schema error to surface")
@@ -319,7 +435,7 @@ func TestForSchemaError(t *testing.T) {
 func TestForMalformedDocument(t *testing.T) {
 	client, _ := clientFor("{not json", "api/v1")
 
-	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 
 	if err == nil {
 		t.Fatalf("expected a parse error")
@@ -342,7 +458,7 @@ func TestForIgnoresNonStringGVKFields(t *testing.T) {
 	}}}`
 	client, _ := clientFor(doc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -362,7 +478,7 @@ func TestForLeavesForeignRefsAlone(t *testing.T) {
 	  }}}}`
 	client, _ := clientFor(doc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Thing"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Thing"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -385,7 +501,7 @@ func TestForIgnoresNonStringVersionAndKind(t *testing.T) {
 	}}}`
 	client, _ := clientFor(doc, "api/v1")
 
-	raw, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -425,7 +541,7 @@ func TestRefreshPicksUpASchemaInstalledLater(t *testing.T) {
 	}}
 	client := NewClient(swap.source)
 
-	_, missing := client.For(GVK{Version: "v1", Kind: "Widget"})
+	_, missing := client.For(context.Background(), GVK{Version: "v1", Kind: "Widget"})
 	if missing == nil {
 		t.Fatal("expected the unknown kind to fail first")
 	}
@@ -435,7 +551,7 @@ func TestRefreshPicksUpASchemaInstalledLater(t *testing.T) {
 	}
 	client.Refresh()
 
-	_, err := client.For(GVK{Version: "v1", Kind: "Widget"})
+	_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Widget"})
 	if err != nil {
 		t.Fatalf("a schema installed mid-session is still unreachable after a refresh: %v", err)
 	}
@@ -447,12 +563,12 @@ func TestTheHandleIsFetchedEachTimeRatherThanCaptured(t *testing.T) {
 	}}
 	client := NewClient(swap.source)
 
-	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
 	client.Refresh()
-	_, err = client.For(GVK{Version: "v1", Kind: "Pod"})
+	_, err = client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
@@ -465,13 +581,13 @@ func TestTheHandleIsFetchedEachTimeRatherThanCaptured(t *testing.T) {
 func TestRefreshDropsTheMemoisedSchema(t *testing.T) {
 	client, hits := clientFor(podDoc, "api/v1")
 
-	_, err := client.For(GVK{Version: "v1", Kind: "Pod"})
+	_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}
 	before := *hits
 	client.Refresh()
-	_, err = client.For(GVK{Version: "v1", Kind: "Pod"})
+	_, err = client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
 	if err != nil {
 		t.Fatalf("for: %v", err)
 	}

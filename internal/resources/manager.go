@@ -268,11 +268,11 @@ func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span
 	return m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
 }
 
-func (m *Manager) Schema(gvk jsonschema.GVK) (json.RawMessage, error) {
+func (m *Manager) Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error) {
 	if m.schemas == nil {
 		return nil, errors.New("schemas unavailable")
 	}
-	return m.schemas.For(gvk)
+	return m.schemas.For(ctx, gvk)
 }
 
 func (m *Manager) Graph(ctx context.Context) api.Graph {

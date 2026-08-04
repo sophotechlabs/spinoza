@@ -1,10 +1,12 @@
 package jsonschema
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"k8s.io/client-go/openapi"
 )
@@ -31,18 +33,30 @@ func (g GVK) String() string {
 
 type Source func() openapi.Client
 
+const fetchTimeout = 30 * time.Second
+
+type fetch struct {
+	done    chan struct{}
+	schemas map[string]map[string]any
+	err     error
+}
+
 type Client struct {
-	source Source
-	mu     sync.Mutex
-	docs   map[string]map[string]map[string]any
-	cache  map[GVK]json.RawMessage
+	source  Source
+	timeout time.Duration
+	mu      sync.Mutex
+	docs    map[string]map[string]map[string]any
+	cache   map[GVK]json.RawMessage
+	pending map[string]*fetch
 }
 
 func NewClient(source Source) *Client {
 	return &Client{
-		source: source,
-		docs:   map[string]map[string]map[string]any{},
-		cache:  map[GVK]json.RawMessage{},
+		source:  source,
+		timeout: fetchTimeout,
+		docs:    map[string]map[string]map[string]any{},
+		cache:   map[GVK]json.RawMessage{},
+		pending: map[string]*fetch{},
 	}
 }
 
@@ -53,16 +67,28 @@ func (c *Client) Refresh() {
 	c.cache = map[GVK]json.RawMessage{}
 }
 
-func (c *Client) For(gvk GVK) (json.RawMessage, error) {
+func (c *Client) cached(gvk GVK) (json.RawMessage, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	raw, ok := c.cache[gvk]
+	return raw, ok
+}
 
-	cached, ok := c.cache[gvk]
+func (c *Client) keep(gvk GVK, raw json.RawMessage) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache[gvk] = raw
+}
+
+func (c *Client) For(ctx context.Context, gvk GVK) (json.RawMessage, error) {
+	hit, ok := c.cached(gvk)
 	if ok {
-		return cached, nil
+		return hit, nil
 	}
 
-	schemas, err := c.schemas(pathFor(gvk))
+	bounded, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	schemas, err := c.schemas(bounded, pathFor(gvk))
 	if err != nil {
 		return nil, err
 	}
@@ -74,16 +100,65 @@ func (c *Client) For(gvk GVK) (json.RawMessage, error) {
 	if marshalErr != nil {
 		return nil, fmt.Errorf("marshal schema: %w", marshalErr)
 	}
-	c.cache[gvk] = raw
+	c.keep(gvk, raw)
 	return raw, nil
 }
 
-func (c *Client) schemas(path string) (map[string]map[string]any, error) {
+func (c *Client) schemas(ctx context.Context, path string) (map[string]map[string]any, error) {
+	leader, waiting := c.claim(path)
+	if waiting != nil {
+		return await(ctx, waiting)
+	}
+	schemas, err := c.load(path)
+	c.settle(path, leader, schemas, err)
+	return schemas, err
+}
+
+func (c *Client) claim(path string) (*fetch, *fetch) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	cached, ok := c.docs[path]
 	if ok {
-		return cached, nil
+		return nil, &fetch{done: closedChan(), schemas: cached}
 	}
+	running, busy := c.pending[path]
+	if busy {
+		return nil, running
+	}
+	leader := &fetch{done: make(chan struct{})}
+	c.pending[path] = leader
+	return leader, nil
+}
 
+func closedChan() chan struct{} {
+	done := make(chan struct{})
+	close(done)
+	return done
+}
+
+func (c *Client) settle(path string, leader *fetch, schemas map[string]map[string]any, err error) {
+	c.mu.Lock()
+	delete(c.pending, path)
+	if err == nil {
+		c.docs[path] = schemas
+	}
+	c.mu.Unlock()
+
+	leader.schemas = schemas
+	leader.err = err
+	close(leader.done)
+}
+
+func await(ctx context.Context, running *fetch) (map[string]map[string]any, error) {
+	select {
+	case <-running.done:
+		return running.schemas, running.err
+	case <-ctx.Done():
+		return nil, fmt.Errorf("openapi fetch: %w", ctx.Err())
+	}
+}
+
+func (c *Client) load(path string) (map[string]map[string]any, error) {
 	paths, err := c.source().Paths()
 	if err != nil {
 		return nil, fmt.Errorf("openapi paths: %w", err)
@@ -107,7 +182,6 @@ func (c *Client) schemas(path string) (map[string]map[string]any, error) {
 		return nil, fmt.Errorf("parse openapi document for %s: %w", path, unmarshalErr)
 	}
 
-	c.docs[path] = doc.Components.Schemas
 	return doc.Components.Schemas, nil
 }
 
