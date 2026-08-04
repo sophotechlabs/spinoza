@@ -14,6 +14,7 @@ interface LogsState {
   streams: Map<string, StreamState>;
   startStream: (subId: string) => void;
   appendLines: (subId: string, lines: string[]) => void;
+  clearLines: (subId: string) => void;
   endStream: (subId: string) => void;
   failStream: (subId: string, message: string) => void;
   clearStream: (subId: string) => void;
@@ -55,6 +56,18 @@ export const useLogsStore = create<LogsState>((set) => ({
         dropped: existing.dropped + dropped,
         revision: existing.revision + 1,
       });
+      return { streams };
+    });
+  },
+  clearLines: (subId) => {
+    set((state) => {
+      const existing = state.streams.get(subId);
+      if (existing === undefined) {
+        return state;
+      }
+      existing.lines.length = 0;
+      const streams = new Map(state.streams);
+      streams.set(subId, { ...existing, revision: existing.revision + 1 });
       return { streams };
     });
   },

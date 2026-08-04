@@ -316,3 +316,45 @@ describe('cachedSegments', () => {
     expect(cachedSegments('a line')).not.toBe(first);
   });
 });
+
+describe('hiding the timestamp a line carries', () => {
+  it('drops a leading iso stamp from a plain line', () => {
+    expect(joined(segmentsOf('2026-08-04T10:11:12Z hello', false))).toBe('hello');
+    expect(joined(segmentsOf('2026-08-04T10:11:12Z hello'))).toContain('2026-08-04');
+  });
+
+  it('leaves a line with no stamp alone', () => {
+    expect(joined(segmentsOf('hello', false))).toBe('hello');
+  });
+
+  it('drops the clock from a structured line', () => {
+    const line = '{"level":"info","ts":"2026-08-04T10:11:12Z","msg":"up"}';
+
+    expect(joined(prettySegments(line, false))).toBe('INFO   up');
+    expect(joined(prettySegments(line))).toContain('10:11:12');
+  });
+
+  it('caches the two views apart', () => {
+    forgetSegments();
+    const line = '{"level":"info","ts":"2026-08-04T10:11:12Z","msg":"up"}';
+
+    const withTime = cachedSegments(line, true);
+    const without = cachedSegments(line, false);
+
+    expect(cachedSegments(line, true)).toBe(withTime);
+    expect(cachedSegments(line, false)).toBe(without);
+    expect(joined(without)).not.toContain('10:11:12');
+  });
+
+  it('bounds the timestamp-free cache too', () => {
+    forgetSegments();
+    for (let index = 0; index < SEGMENT_CACHE_LIMIT; index += 1) {
+      cachedSegments(`line ${String(index)}`, false);
+    }
+    const before = cachedSegments('line 0', false);
+
+    cachedSegments('one more line', false);
+
+    expect(cachedSegments('line 0', false)).not.toBe(before);
+  });
+});

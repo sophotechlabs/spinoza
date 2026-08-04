@@ -104,3 +104,34 @@ describe('logs store', () => {
     expect(ended.result.current).toBe(true);
   });
 });
+
+describe('clearing a buffer without dropping the stream', () => {
+  it('empties the lines and keeps the stream alive', () => {
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().appendLines('logs', ['one', 'two']);
+
+    useLogsStore.getState().clearLines('logs');
+
+    const stream = useLogsStore.getState().streams.get('logs');
+    expect(stream?.lines).toEqual([]);
+    expect(stream?.ended).toBe(false);
+  });
+
+  it('bumps the revision so the view redraws', () => {
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().appendLines('logs', ['one']);
+    const before = useLogsStore.getState().streams.get('logs')?.revision ?? 0;
+
+    useLogsStore.getState().clearLines('logs');
+
+    expect(useLogsStore.getState().streams.get('logs')?.revision).toBe(before + 1);
+  });
+
+  it('ignores a stream that is not there', () => {
+    const before = useLogsStore.getState().streams;
+
+    useLogsStore.getState().clearLines('missing');
+
+    expect(useLogsStore.getState().streams).toBe(before);
+  });
+});

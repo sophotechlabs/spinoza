@@ -312,3 +312,167 @@ describe('a logs panel behind another tab', () => {
     expect(liveSubId(subscribeLogs)).not.toBe(first);
   });
 });
+
+describe('working through a log buffer', () => {
+  beforeEach(() => {
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function seedLines(subscribeLogs: SubscribeLogs, lines: string[]): string {
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, lines);
+    });
+    return subId;
+  }
+
+  it('keeps only the lines that match the filter', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['alpha one', 'bravo two', 'alpha three']);
+
+    await user.type(screen.getByLabelText('Filter log lines'), 'alpha');
+
+    expect(screen.getByText('alpha one')).toBeInTheDocument();
+    expect(screen.queryByText('bravo two')).not.toBeInTheDocument();
+    expect(screen.getByText('2 of 3')).toBeInTheDocument();
+  });
+
+  it('ignores case while filtering', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['Alpha one']);
+
+    await user.type(screen.getByLabelText('Filter log lines'), 'ALPHA');
+
+    expect(screen.getByText('Alpha one')).toBeInTheDocument();
+  });
+
+  it('says when the filter matches nothing', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['alpha one']);
+
+    await user.type(screen.getByLabelText('Filter log lines'), 'zzz');
+
+    expect(screen.getByText('No line matches that filter.')).toBeInTheDocument();
+  });
+
+  it('empties the buffer on Clear', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['alpha one']);
+
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+    expect(screen.getByText('Waiting for output…')).toBeInTheDocument();
+  });
+
+  it('downloads what is on screen, named after the pod', async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn().mockReturnValue('blob:log');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    const clicks: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function record(
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push(this.download);
+    });
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['alpha one', 'bravo two']);
+
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(clicks).toEqual(['flux-system-web-app.log']);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:log');
+    click.mockRestore();
+  });
+
+  it('names the file after the pod alone when it has no containers', async () => {
+    const user = userEvent.setup();
+    const clicks: string[] = [];
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: () => 'blob:log',
+      revokeObjectURL: vi.fn(),
+    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function record(
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push(this.download);
+    });
+    renderLogs({ containers: [] });
+
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+
+    expect(clicks).toEqual(['flux-system-web.log']);
+    click.mockRestore();
+  });
+
+  it('downloads only the filtered lines', async () => {
+    const user = userEvent.setup();
+    let saved = '';
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: (blob: Blob) => {
+        saved = String(blob.size);
+        return 'blob:log';
+      },
+      revokeObjectURL: vi.fn(),
+    });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['alpha one', 'bravo two']);
+
+    await user.type(screen.getByLabelText('Filter log lines'), 'alpha');
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+
+    expect(saved).toBe(String('alpha one'.length));
+    click.mockRestore();
+  });
+
+  it('drops the timestamp from a line when asked', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['{"level":"info","ts":"2026-08-04T10:11:12Z","msg":"up"}']);
+    expect(screen.getByText('10:11:12', { exact: false })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Timestamps' }));
+
+    expect(screen.queryByText('10:11:12', { exact: false })).not.toBeInTheDocument();
+    expect(screen.getByText('up')).toBeInTheDocument();
+  });
+
+  it('stops wrapping long lines when asked', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['a very long line']);
+    const line = document.querySelector('[data-index]');
+    expect(line?.className).toContain('whitespace-pre-wrap');
+
+    await user.click(screen.getByRole('button', { name: 'Wrap' }));
+
+    expect(document.querySelector('[data-index]')?.className).toContain('whitespace-pre');
+  });
+
+  it('offers a jump to the bottom only once follow is off', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+    seedLines(subscribeLogs, ['alpha one']);
+    expect(screen.queryByRole('button', { name: 'Jump to bottom' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Following' }));
+    await user.click(screen.getByRole('button', { name: 'Jump to bottom' }));
+
+    expect(screen.getByText('alpha one')).toBeInTheDocument();
+  });
+});

@@ -109,7 +109,7 @@ function ansiSegments(line: string): LogSegment[] {
   return segments;
 }
 
-export function segmentsOf(line: string): LogSegment[] {
+export function segmentsOf(line: string, withTime = true): LogSegment[] {
   if (hasAnsi(line)) {
     return ansiSegments(line);
   }
@@ -119,10 +119,11 @@ export function segmentsOf(line: string): LogSegment[] {
   if (stamp === null) {
     return [{ text: line, className: body }];
   }
-  return [
-    { text: stamp[0], className: 'text-fg-subtle' },
-    { text: line.slice(stamp[0].length), className: body },
-  ];
+  const rest = { text: line.slice(stamp[0].length), className: body };
+  if (!withTime) {
+    return [rest];
+  }
+  return [{ text: stamp[0], className: 'text-fg-subtle' }, rest];
 }
 
 const LEVEL_KEYS = ['level', 'severity', 'lvl'];
@@ -226,29 +227,39 @@ export function rawSegments(line: string): LogSegment[] {
 
 export const SEGMENT_CACHE_LIMIT = 12000;
 
-const parsed = new Map<string, LogSegment[]>();
+const stamped = new Map<string, LogSegment[]>();
+const bare = new Map<string, LogSegment[]>();
 
-export function cachedSegments(line: string): LogSegment[] {
-  const hit = parsed.get(line);
+function cacheFor(withTime: boolean): Map<string, LogSegment[]> {
+  if (withTime) {
+    return stamped;
+  }
+  return bare;
+}
+
+export function cachedSegments(line: string, withTime = true): LogSegment[] {
+  const cache = cacheFor(withTime);
+  const hit = cache.get(line);
   if (hit !== undefined) {
     return hit;
   }
-  const segments = prettySegments(line);
-  if (parsed.size >= SEGMENT_CACHE_LIMIT) {
-    parsed.clear();
+  const segments = prettySegments(line, withTime);
+  if (cache.size >= SEGMENT_CACHE_LIMIT) {
+    cache.clear();
   }
-  parsed.set(line, segments);
+  cache.set(line, segments);
   return segments;
 }
 
 export function forgetSegments(): void {
-  parsed.clear();
+  stamped.clear();
+  bare.clear();
 }
 
-export function prettySegments(line: string): LogSegment[] {
+export function prettySegments(line: string, withTime = true): LogSegment[] {
   const fields = parseObject(line);
   if (fields === null) {
-    return segmentsOf(line);
+    return segmentsOf(line, withTime);
   }
   const used = new Set<string>();
   const level = take(fields, LEVEL_KEYS, used);
@@ -261,7 +272,7 @@ export function prettySegments(line: string): LogSegment[] {
   const severity = severityFrom(level);
   const segments: LogSegment[] = [];
 
-  if (clock !== '') {
+  if (clock !== '' && withTime) {
     segments.push({ text: `${clock}  `, className: 'text-fg-subtle' });
   }
   if (level !== null) {
