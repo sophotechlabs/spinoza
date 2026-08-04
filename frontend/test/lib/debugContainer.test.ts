@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEBUG_PROFILES, DEFAULT_PROFILE, startDebug } from '../../src/lib/debugContainer';
 import type { ExecTarget } from '../../src/lib/types';
+import { anySignal } from '../helpers';
 
 const target: ExecTarget = { namespace: 'monitoring', pod: 'loki-0', container: 'loki' };
 
@@ -22,7 +23,7 @@ describe('startDebug', () => {
     await expect(startDebug(target, 'general')).resolves.toEqual(session);
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/debug?namespace=monitoring&pod=loki-0&container=loki&profile=general',
-      { method: 'POST' },
+      { method: 'POST', signal: anySignal() },
     );
   });
 

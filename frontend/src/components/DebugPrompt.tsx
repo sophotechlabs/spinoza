@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ExecTarget } from '../lib/types';
 import {
   DEBUG_PROFILES,
@@ -43,6 +43,15 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
   const [image, setImage] = useState('');
 
   const { namespace, pod } = target;
+  const targetKey = `${namespace}/${pod}/${target.container}`;
+  const liveTargetRef = useRef(targetKey);
+
+  useEffect(() => {
+    liveTargetRef.current = targetKey;
+    return () => {
+      liveTargetRef.current = '';
+    };
+  }, [targetKey]);
 
   useEffect(() => {
     let live = true;
@@ -65,12 +74,19 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
   }, [namespace, pod]);
 
   async function attach() {
+    const key = targetKey;
     setBusy(true);
     setError(null);
     try {
       const session = await startDebug(target, profile);
+      if (liveTargetRef.current !== key) {
+        return;
+      }
       onAttached(session.container);
     } catch (err: unknown) {
+      if (liveTargetRef.current !== key) {
+        return;
+      }
       setError(errorMessage(err));
     } finally {
       setBusy(false);
@@ -82,7 +98,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
   }
 
   return (
-    <div className="h-56 overflow-auto border-t border-edge bg-surface p-3 text-[11px]">
+    <div className="min-h-0 flex-1 overflow-auto border-t border-edge bg-surface p-3 text-[11px]">
       <p className="text-fg-soft">
         {target.container} has no shell, so it cannot be exec&apos;d into.
       </p>

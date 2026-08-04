@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHANNEL_ERROR,
+  CONNECT_FAILED,
+  CONNECTION_LOST,
   CHANNEL_RESIZE,
   CHANNEL_STDERR,
   CHANNEL_STDIN,
@@ -11,6 +13,7 @@ import {
   openExec,
   textFrame,
 } from '../../src/lib/exec';
+import type { ExecEnd } from '../../src/lib/exec';
 import type { ExecTarget } from '../../src/lib/types';
 
 class FakeWebSocket {
@@ -47,7 +50,7 @@ function target(overrides: Partial<ExecTarget> = {}): ExecTarget {
 }
 
 function handlers() {
-  return { onOutput: vi.fn<(text: string) => void>(), onEnd: vi.fn<(message: string) => void>() };
+  return { onOutput: vi.fn<(text: string) => void>(), onEnd: vi.fn<(end: ExecEnd) => void>() };
 }
 
 function sentFrames(socket: FakeWebSocket): { channel: number; text: string }[] {
@@ -142,16 +145,36 @@ describe('openExec', () => {
     latest().onclose?.({} as CloseEvent);
 
     expect(sink.onEnd).toHaveBeenCalledTimes(1);
-    expect(sink.onEnd).toHaveBeenCalledWith('no /bin/sh');
+    expect(sink.onEnd).toHaveBeenCalledWith({ message: 'no /bin/sh', failed: true });
   });
 
-  it('ends on a plain close', () => {
+  it('ends cleanly on the empty error frame the server sends at exit', () => {
+    const sink = handlers();
+    openExec(target(), sink);
+    latest().onopen?.(new Event('open'));
+
+    deliver(latest(), CHANNEL_ERROR, '');
+
+    expect(sink.onEnd).toHaveBeenCalledWith({ message: '', failed: false });
+  });
+
+  it('names a failed handshake instead of pretending the shell exited', () => {
     const sink = handlers();
     openExec(target(), sink);
 
     latest().onclose?.({} as CloseEvent);
 
-    expect(sink.onEnd).toHaveBeenCalledWith('');
+    expect(sink.onEnd).toHaveBeenCalledWith({ message: CONNECT_FAILED, failed: true });
+  });
+
+  it('names a connection that dropped once the shell was live', () => {
+    const sink = handlers();
+    openExec(target(), sink);
+    latest().onopen?.(new Event('open'));
+
+    latest().onclose?.({} as CloseEvent);
+
+    expect(sink.onEnd).toHaveBeenCalledWith({ message: CONNECTION_LOST, failed: true });
   });
 
   it('ignores empty and unknown frames', () => {

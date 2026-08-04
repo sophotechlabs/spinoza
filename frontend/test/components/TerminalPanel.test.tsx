@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import TerminalPanel from '../../src/components/TerminalPanel';
 import type { ExecHandlers, ExecSession } from '../../src/lib/exec';
 import type { TerminalHandle } from '../../src/lib/terminal';
 import { terminalTheme } from '../../src/lib/themeColors';
 import { BUILT_IN_THEMES, themeById } from '../../src/lib/theme';
 import { useThemeStore } from '../../src/store/theme';
+
+const CONNECT_FAILED = 'could not reach the exec endpoint';
 
 const openExec = vi.fn<(target: unknown, handlers: ExecHandlers) => ExecSession>();
 const createTerminal = vi.fn<(node: HTMLElement) => TerminalHandle>();
@@ -113,7 +116,7 @@ describe('TerminalPanel', () => {
     const { onShellMissing } = renderPanel();
 
     act(() => {
-      bench.handlers().onEnd('');
+      bench.handlers().onEnd({ message: '', failed: false });
     });
 
     expect(bench.term.written.join('')).toContain('session ended');
@@ -125,7 +128,9 @@ describe('TerminalPanel', () => {
     const { onShellMissing } = renderPanel();
 
     act(() => {
-      bench.handlers().onEnd('no shell: loki in monitoring/loki-0 has no /bin/sh');
+      bench
+        .handlers()
+        .onEnd({ message: 'no shell: loki in monitoring/loki-0 has no /bin/sh', failed: true });
     });
 
     expect(onShellMissing).toHaveBeenCalled();
@@ -137,11 +142,38 @@ describe('TerminalPanel', () => {
     const { onShellMissing } = renderPanel();
 
     act(() => {
-      bench.handlers().onEnd('pods "loki-0" is forbidden');
+      bench.handlers().onEnd({ message: 'pods "loki-0" is forbidden', failed: true });
     });
 
     expect(onShellMissing).not.toHaveBeenCalled();
     expect(screen.getByText('pods "loki-0" is forbidden')).toBeInTheDocument();
+  });
+
+  it('offers no retry after a clean exit', () => {
+    const bench = harness();
+    renderPanel();
+
+    act(() => {
+      bench.handlers().onEnd({ message: '', failed: false });
+    });
+
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+
+  it('reconnects from the retry button after a failed connect', async () => {
+    const user = userEvent.setup();
+    const bench = harness();
+    renderPanel();
+
+    act(() => {
+      bench.handlers().onEnd({ message: CONNECT_FAILED, failed: true });
+    });
+    expect(screen.getByText(CONNECT_FAILED)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(openExec).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(CONNECT_FAILED)).not.toBeInTheDocument();
   });
 
   it('closes the session and disposes the terminal on unmount', () => {
@@ -188,7 +220,9 @@ describe('a re-render that only changes the callback', () => {
       />,
     );
     act(() => {
-      stubs.handlers().onEnd('exec: "/bin/sh": executable file not found');
+      stubs
+        .handlers()
+        .onEnd({ message: 'exec: "/bin/sh": executable file not found', failed: true });
     });
 
     expect(later).toHaveBeenCalled();

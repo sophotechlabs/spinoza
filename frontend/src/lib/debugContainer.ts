@@ -1,5 +1,6 @@
 import type { DebugSession, DebugSupport, ExecTarget } from './types';
 import { failure } from './object';
+import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { execQuery } from './exec';
 
 export const DEBUG_PROFILES = [
@@ -15,8 +16,9 @@ export type DebugProfile = (typeof DEBUG_PROFILES)[number];
 export const DEFAULT_PROFILE: DebugProfile = 'general';
 
 export async function startDebug(target: ExecTarget, profile: DebugProfile): Promise<DebugSession> {
-  const response = await fetch(`/api/debug?${execQuery(target)}&profile=${profile}`, {
+  const response = await request(`/api/debug?${execQuery(target)}&profile=${profile}`, {
     method: 'POST',
+    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
   });
   if (!response.ok) {
     throw await failure(
@@ -29,7 +31,7 @@ export async function startDebug(target: ExecTarget, profile: DebugProfile): Pro
 
 export async function fetchDebugSupport(namespace: string, pod: string): Promise<DebugSupport> {
   const params = new URLSearchParams({ namespace, pod });
-  const response = await fetch(`/api/debug/support?${params.toString()}`);
+  const response = await request(`/api/debug/support?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `debug support failed with status ${response.status}`);
   }

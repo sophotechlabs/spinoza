@@ -230,6 +230,102 @@ describe('DebugPrompt', () => {
     });
   });
 
+  it('drops a debug container that finishes starting after the pod changed', async () => {
+    const user = userEvent.setup();
+    const deferred = {
+      settle: () => {
+        return undefined;
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (url: string) =>
+          new Promise((resolve) => {
+            if (url.startsWith('/api/debug/support')) {
+              resolve({
+                ok: true,
+                json: () =>
+                  Promise.resolve({ namespace: 'monitoring', allowed: true, image: 'busybox' }),
+              });
+              return;
+            }
+            deferred.settle = () => {
+              resolve({
+                ok: true,
+                json: () =>
+                  Promise.resolve({
+                    container: 'debugger-from-loki',
+                    created: true,
+                    image: '',
+                    profile: '',
+                  }),
+              });
+            };
+          }),
+      ),
+    );
+    const onAttached = vi.fn();
+    const view = render(<DebugPrompt target={target} onAttached={onAttached} />);
+
+    await user.click(screen.getByRole('button', { name: 'Attach debug container' }));
+    view.rerender(
+      <DebugPrompt
+        target={{ namespace: 'monitoring', pod: 'promtail-9', container: 'promtail' }}
+        onAttached={onAttached}
+      />,
+    );
+    deferred.settle();
+
+    await waitFor(() => {
+      expect(screen.getByText(/promtail has no shell/)).toBeInTheDocument();
+    });
+    expect(onAttached).not.toHaveBeenCalled();
+  });
+
+  it('drops an attach failure that lands after the pod changed', async () => {
+    const user = userEvent.setup();
+    const deferred = {
+      settle: () => {
+        return undefined;
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (url: string) =>
+          new Promise((resolve, reject) => {
+            if (url.startsWith('/api/debug/support')) {
+              resolve({
+                ok: true,
+                json: () =>
+                  Promise.resolve({ namespace: 'monitoring', allowed: true, image: 'busybox' }),
+              });
+              return;
+            }
+            deferred.settle = () => {
+              reject(new Error('image pull failed for loki'));
+            };
+          }),
+      ),
+    );
+    const view = render(<DebugPrompt target={target} onAttached={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Attach debug container' }));
+    view.rerender(
+      <DebugPrompt
+        target={{ namespace: 'monitoring', pod: 'promtail-9', container: 'promtail' }}
+        onAttached={vi.fn()}
+      />,
+    );
+    deferred.settle();
+
+    await waitFor(() => {
+      expect(screen.getByText(/promtail has no shell/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText('image pull failed for loki')).not.toBeInTheDocument();
+  });
+
   it('drops a support answer that lands after unmount', () => {
     const deferred = {
       settle: () => {

@@ -1,5 +1,6 @@
 import type { ExecSupport, ExecTarget } from './types';
 import { failure } from './object';
+import { request } from './http';
 import { wsURL } from './wsBase';
 
 export const CHANNEL_STDIN = 0x00;
@@ -11,9 +12,17 @@ export const CHANNEL_RESIZE = 0x04;
 const CONNECTING_STATE = 0;
 const OPEN_STATE = 1;
 
+export const CONNECT_FAILED = 'could not reach the exec endpoint';
+export const CONNECTION_LOST = 'the exec connection dropped';
+
+export interface ExecEnd {
+  message: string;
+  failed: boolean;
+}
+
 export interface ExecHandlers {
   onOutput: (text: string) => void;
-  onEnd: (message: string) => void;
+  onEnd: (end: ExecEnd) => void;
 }
 
 export interface ExecSession {
@@ -34,7 +43,7 @@ export function execQuery(target: ExecTarget): string {
 }
 
 export async function fetchExecSupport(target: ExecTarget): Promise<ExecSupport> {
-  const response = await fetch(`/api/exec/support?${execQuery(target)}`);
+  const response = await request(`/api/exec/support?${execQuery(target)}`);
   if (!response.ok) {
     throw await failure(response, `exec support failed with status ${response.status}`);
   }
@@ -56,13 +65,14 @@ export function openExec(target: ExecTarget, handlers: ExecHandlers): ExecSessio
   const socket = new WebSocket(wsURL(`/api/exec?${execQuery(target)}`));
   socket.binaryType = 'arraybuffer';
   let ended = false;
+  let opened = false;
 
-  function finish(message: string) {
+  function finish(message: string, failed: boolean) {
     if (ended) {
       return;
     }
     ended = true;
-    handlers.onEnd(message);
+    handlers.onEnd({ message, failed });
   }
 
   const stdoutDecoder = new TextDecoder();
@@ -83,12 +93,17 @@ export function openExec(target: ExecTarget, handlers: ExecHandlers): ExecSessio
       return;
     }
     if (data[0] === CHANNEL_ERROR) {
-      finish(new TextDecoder().decode(payload));
+      const message = new TextDecoder().decode(payload);
+      finish(message, message !== '');
     }
   };
 
   socket.onclose = () => {
-    finish('');
+    if (!opened) {
+      finish(CONNECT_FAILED, true);
+      return;
+    }
+    finish(CONNECTION_LOST, true);
   };
 
   socket.onerror = () => {
@@ -98,6 +113,7 @@ export function openExec(target: ExecTarget, handlers: ExecHandlers): ExecSessio
   let pending: Uint8Array[] = [];
 
   socket.onopen = () => {
+    opened = true;
     const queued = pending;
     pending = [];
     for (const frame of queued) {

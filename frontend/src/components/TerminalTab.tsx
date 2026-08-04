@@ -66,6 +66,7 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
       </div>
       {needsDebugContainer && (
         <DebugPrompt
+          key={`${podNamespace}/${podName}/${container}`}
           target={{ namespace: podNamespace, pod: podName, container }}
           onAttached={setDebugContainer}
         />

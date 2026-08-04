@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ExecTarget } from '../lib/types';
 import { openExec } from '../lib/exec';
 import { createTerminal } from '../lib/terminal';
-import type { ExecSession } from '../lib/exec';
+import type { ExecEnd, ExecSession } from '../lib/exec';
 import type { TerminalHandle } from '../lib/terminal';
 import { terminalTheme } from '../lib/themeColors';
 import { useResolvedTheme, useThemeStore } from '../store/theme';
@@ -21,7 +21,8 @@ function endNotice(message: string): string {
 
 export default function TerminalPanel({ target, onShellMissing }: TerminalPanelProps) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
-  const [ended, setEnded] = useState('');
+  const [ended, setEnded] = useState<ExecEnd | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const shellMissingRef = useRef(onShellMissing);
   shellMissingRef.current = onShellMissing;
   const termRef = useRef<TerminalHandle | null>(null);
@@ -33,7 +34,7 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
     if (host === null) {
       return;
     }
-    setEnded('');
+    setEnded(null);
 
     const term: TerminalHandle = createTerminal(host);
     termRef.current = term;
@@ -44,10 +45,10 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
         onOutput: (text) => {
           term.write(text);
         },
-        onEnd: (message) => {
-          term.write(endNotice(message));
-          setEnded(message);
-          if (message.includes('/bin/sh')) {
+        onEnd: (end) => {
+          term.write(endNotice(end.message));
+          setEnded(end);
+          if (end.message.includes('/bin/sh')) {
             shellMissingRef.current();
           }
         },
@@ -75,17 +76,33 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
       term.dispose();
       termRef.current = null;
     };
-  }, [host, namespace, pod, container]);
+  }, [host, namespace, pod, container, attempt]);
 
   useEffect(() => {
     termRef.current?.setTheme(terminalTheme(resolvedTheme));
   }, [host, resolvedTheme]);
 
+  function retry() {
+    setAttempt((value) => value + 1);
+  }
+
   return (
-    <div className="flex h-56 flex-col border-t border-edge bg-surface">
+    <div className="flex min-h-0 flex-1 flex-col border-t border-edge bg-surface">
       <div ref={setHost} className="min-h-0 flex-1" data-testid="terminal-host" />
-      {ended !== '' && (
-        <div className="border-t border-edge px-2 py-1 text-[11px] text-warn">{ended}</div>
+      {ended !== null && ended.failed && (
+        <div
+          role="status"
+          className="flex items-center gap-2 border-t border-edge px-2 py-1 text-[11px]"
+        >
+          <span className="break-words text-error">{ended.message}</span>
+          <button
+            type="button"
+            onClick={retry}
+            className="ml-auto shrink-0 rounded border border-edge-strong px-1.5 py-0.5 text-fg hover:bg-surface-active"
+          >
+            Retry
+          </button>
+        </div>
       )}
     </div>
   );
