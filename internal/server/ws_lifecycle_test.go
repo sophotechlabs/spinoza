@@ -141,11 +141,11 @@ func rawSession(t *testing.T, mgr *resources.Manager) (*wsSession, *websocket.Co
 
 	server := <-accepted
 	sess := &wsSession{
-		conn: server,
-		ctx:  ctx,
-		mgr:  mgr,
-		subs: map[string]*subEntry{},
-		logs: map[string]*logEntry{},
+		conn:   server,
+		ctx:    ctx,
+		mgr:    mgr,
+		tables: map[string]*entry{},
+		logs:   map[string]*entry{},
 	}
 	return sess, client, ctx
 }
@@ -159,7 +159,7 @@ func TestResyncSendsAFreshSnapshot(t *testing.T) {
 		t.Fatalf("subscribe: %v", err)
 	}
 	t.Cleanup(sub.Close)
-	sess.subs["main"] = &subEntry{sub: sub, gen: 1}
+	sess.tables["main"] = &entry{resource: sub, gen: 1}
 
 	_, createErr := dyn.Resource(depGVR).Namespace("default").
 		Create(ctx, newDeployment("default", "api"), metav1.CreateOptions{})
@@ -193,7 +193,7 @@ func TestResyncDrainsTheStaleEventsFirst(t *testing.T) {
 		t.Fatalf("subscribe: %v", err)
 	}
 	t.Cleanup(sub.Close)
-	sess.subs["main"] = &subEntry{sub: sub, gen: 1}
+	sess.tables["main"] = &entry{resource: sub, gen: 1}
 
 	_, createErr := dyn.Resource(depGVR).Namespace("default").
 		Create(ctx, newDeployment("default", "api"), metav1.CreateOptions{})
@@ -233,7 +233,7 @@ func TestResyncIsSkippedForAReplacedSubscription(t *testing.T) {
 		t.Fatalf("subscribe: %v", err)
 	}
 	t.Cleanup(sub.Close)
-	sess.subs["main"] = &subEntry{sub: sub, gen: 2}
+	sess.tables["main"] = &entry{resource: sub, gen: 2}
 
 	if sess.sendResync("main", 1, sub) {
 		t.Fatal("an old generation was allowed to write")
@@ -266,8 +266,8 @@ func TestAdoptRefusesASupersededSubscription(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, _, _ := rawSession(t, mgr)
 
-	first := sess.claim("main")
-	second := sess.claim("main")
+	first := sess.claim(tables, "main")
+	second := sess.claim(tables, "main")
 
 	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
@@ -275,10 +275,10 @@ func TestAdoptRefusesASupersededSubscription(t *testing.T) {
 	}
 	t.Cleanup(sub.Close)
 
-	if sess.adopt("main", first, sub) {
+	if sess.adopt(tables, "main", first, sub) {
 		t.Fatal("a subscription built for an older request was installed")
 	}
-	if !sess.adopt("main", second, sub) {
+	if !sess.adopt(tables, "main", second, sub) {
 		t.Fatal("the newest request could not install its subscription")
 	}
 }
@@ -287,8 +287,8 @@ func TestAdoptRefusesASubscriptionCancelledWhileBuilding(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, _, _ := rawSession(t, mgr)
 
-	gen := sess.claim("main")
-	sess.unsubscribe("main")
+	gen := sess.claim(tables, "main")
+	sess.drop(tables, "main")
 
 	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
@@ -296,7 +296,7 @@ func TestAdoptRefusesASubscriptionCancelledWhileBuilding(t *testing.T) {
 	}
 	t.Cleanup(sub.Close)
 
-	if sess.adopt("main", gen, sub) {
+	if sess.adopt(tables, "main", gen, sub) {
 		t.Fatal("a subscription the client already dropped was installed")
 	}
 }
@@ -305,16 +305,16 @@ func TestClaimClosesThePreviousSubscription(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, _, _ := rawSession(t, mgr)
 
-	first := sess.claim("main")
+	first := sess.claim(tables, "main")
 	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
-	if !sess.adopt("main", first, sub) {
+	if !sess.adopt(tables, "main", first, sub) {
 		t.Fatal("adopt refused the current generation")
 	}
 
-	sess.claim("main")
+	sess.claim(tables, "main")
 
 	select {
 	case _, open := <-sub.Events:
@@ -330,25 +330,25 @@ func TestUnsubscribeIsSafeBeforeTheSubscriptionLands(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, _, _ := rawSession(t, mgr)
 
-	sess.claim("main")
-	sess.unsubscribe("main")
-	sess.unsubscribe("main")
+	sess.claim(tables, "main")
+	sess.drop(tables, "main")
+	sess.drop(tables, "main")
 }
 
 func TestClaimLogsClosesThePreviousStream(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, _, ctx := rawSession(t, mgr)
 
-	gen := sess.claimLogs("logs")
+	gen := sess.claim(streams, "logs")
 	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
 	if err != nil {
 		t.Fatalf("logs: %v", err)
 	}
-	if !sess.adoptLogs("logs", gen, stream) {
-		t.Fatal("adoptLogs refused the current generation")
+	if !sess.adopt(streams, "logs", gen, stream) {
+		t.Fatal("adopt refused the current generation")
 	}
 
-	sess.claimLogs("logs")
+	sess.claim(streams, "logs")
 
 	select {
 	case _, open := <-stream.Lines:
@@ -378,8 +378,8 @@ func TestAdoptLogsRefusesASupersededStream(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, _, ctx := rawSession(t, mgr)
 
-	first := sess.claimLogs("logs")
-	sess.claimLogs("logs")
+	first := sess.claim(streams, "logs")
+	sess.claim(streams, "logs")
 
 	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
 	if err != nil {
@@ -387,7 +387,7 @@ func TestAdoptLogsRefusesASupersededStream(t *testing.T) {
 	}
 	t.Cleanup(stream.Close)
 
-	if sess.adoptLogs("logs", first, stream) {
+	if sess.adopt(streams, "logs", first, stream) {
 		t.Fatal("a stream built for an older request was installed")
 	}
 }
@@ -396,8 +396,8 @@ func TestAdoptLogsRefusesAStreamCancelledWhileOpening(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, _, ctx := rawSession(t, mgr)
 
-	gen := sess.claimLogs("logs")
-	sess.unsubscribeLogs("logs")
+	gen := sess.claim(streams, "logs")
+	sess.drop(streams, "logs")
 
 	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
 	if err != nil {
@@ -405,7 +405,7 @@ func TestAdoptLogsRefusesAStreamCancelledWhileOpening(t *testing.T) {
 	}
 	t.Cleanup(stream.Close)
 
-	if sess.adoptLogs("logs", gen, stream) {
+	if sess.adopt(streams, "logs", gen, stream) {
 		t.Fatal("a stream the client already dropped was installed")
 	}
 }
@@ -414,9 +414,9 @@ func TestFailCurrentStaysSilentOnceSuperseded(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
 
-	stale := sess.claim("main")
-	sess.claim("main")
-	sess.failCurrent("main", stale, errors.New("discovery failed"))
+	stale := sess.claim(tables, "main")
+	sess.claim(tables, "main")
+	sess.failCurrent(tables, "main", stale, errors.New("discovery failed"))
 	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "main"})
 
 	msg := readMsg(ctx, t, client)
@@ -429,16 +429,16 @@ func TestAFailureCannotLandAfterTheSnapshotThatReplacedIt(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
 
-	stale := sess.claim("main")
+	stale := sess.claim(tables, "main")
 	sess.writeMu.Lock()
 	failed := make(chan struct{})
 	go func() {
 		defer close(failed)
-		sess.failCurrent("main", stale, errors.New("discovery failed"))
+		sess.failCurrent(tables, "main", stale, errors.New("discovery failed"))
 	}()
 	time.Sleep(50 * time.Millisecond)
 
-	sess.claim("main")
+	sess.claim(tables, "main")
 	sess.writeLocked(ctx, api.ServerMsg{Type: "snapshot", SubID: "main"})
 	sess.writeMu.Unlock()
 	<-failed
@@ -456,16 +456,16 @@ func TestALogFailureCannotLandAfterTheStreamThatReplacedIt(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
 
-	stale := sess.claimLogs("logs")
+	stale := sess.claim(streams, "logs")
 	sess.writeMu.Lock()
 	failed := make(chan struct{})
 	go func() {
 		defer close(failed)
-		sess.failCurrentLogs("logs", stale, errors.New("pods/log is forbidden"))
+		sess.failCurrent(streams, "logs", stale, errors.New("pods/log is forbidden"))
 	}()
 	time.Sleep(50 * time.Millisecond)
 
-	sess.claimLogs("logs")
+	sess.claim(streams, "logs")
 	sess.writeLocked(ctx, api.ServerMsg{Type: "log", SubID: "logs"})
 	sess.writeMu.Unlock()
 	<-failed
@@ -483,9 +483,9 @@ func TestFailCurrentLogsStaysSilentOnceSuperseded(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
 
-	stale := sess.claimLogs("logs")
-	sess.claimLogs("logs")
-	sess.failCurrentLogs("logs", stale, errors.New("pods/log is forbidden"))
+	stale := sess.claim(streams, "logs")
+	sess.claim(streams, "logs")
+	sess.failCurrent(streams, "logs", stale, errors.New("pods/log is forbidden"))
 	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "logs"})
 
 	msg := readMsg(ctx, t, client)
@@ -498,16 +498,16 @@ func TestAReplacedLogStreamStopsWritingUnderTheReusedSubID(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
 
-	stale := sess.claimLogs("logs")
+	stale := sess.claim(streams, "logs")
 	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
 	if err != nil {
 		t.Fatalf("logs: %v", err)
 	}
-	if !sess.adoptLogs("logs", stale, stream) {
-		t.Fatal("adoptLogs refused the current generation")
+	if !sess.adopt(streams, "logs", stale, stream) {
+		t.Fatal("adopt refused the current generation")
 	}
 
-	sess.claimLogs("logs")
+	sess.claim(streams, "logs")
 
 	done := make(chan struct{})
 	go func() {
@@ -531,13 +531,13 @@ func TestTheCurrentLogStreamStillReachesTheClient(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
 
-	gen := sess.claimLogs("logs")
+	gen := sess.claim(streams, "logs")
 	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
 	if err != nil {
 		t.Fatalf("logs: %v", err)
 	}
-	if !sess.adoptLogs("logs", gen, stream) {
-		t.Fatal("adoptLogs refused the current generation")
+	if !sess.adopt(streams, "logs", gen, stream) {
+		t.Fatal("adopt refused the current generation")
 	}
 
 	go sess.relayLogs("logs", gen, stream)
