@@ -1,7 +1,12 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
+declare const process: { env: Record<string, string | undefined> };
+
 export default defineConfig({
+  define: {
+    __SPINOZA_VERSION__: JSON.stringify(process.env.SPINOZA_VERSION ?? 'test'),
+  },
   plugins: [react()],
   test: {
     environment: 'jsdom',
