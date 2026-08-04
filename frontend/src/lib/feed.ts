@@ -8,6 +8,16 @@ import { wsURL } from './wsBase';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
+export function offline(status: ConnectionStatus, attempt: number): boolean {
+  if (status === 'disconnected') {
+    return true;
+  }
+  if (status === 'connected') {
+    return false;
+  }
+  return attempt > 0;
+}
+
 interface Subscription {
   descriptor: ResourceDescriptor;
   namespace: string;
@@ -15,6 +25,7 @@ interface Subscription {
 
 export interface ResourceFeed {
   status: ConnectionStatus;
+  attempt: number;
   subscribe: (subId: string, descriptor: ResourceDescriptor, namespace: string) => void;
   unsubscribe: (subId: string) => void;
   subscribeLogs: (subId: string, request: LogRequest) => void;
@@ -92,6 +103,7 @@ function serverMsg(raw: unknown): ServerMsg | null {
 
 export function useResourceFeed(): ResourceFeed {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
+  const [attempt, setAttempt] = useState(0);
   const socketRef = useRef<WebSocket | null>(null);
   const subsRef = useRef<Map<string, Subscription>>(new Map());
   const logSubsRef = useRef<Map<string, LogRequest>>(new Map());
@@ -169,6 +181,7 @@ export function useResourceFeed(): ResourceFeed {
     function scheduleReconnect() {
       const delay = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** attempt);
       attempt += 1;
+      setAttempt(attempt);
       reconnectTimer = setTimeout(connect, delay);
     }
 
@@ -261,6 +274,7 @@ export function useResourceFeed(): ResourceFeed {
           return;
         }
         attempt = 0;
+        setAttempt(0);
         setStatus('connected');
         resubscribeAll(ws);
       };
@@ -293,6 +307,7 @@ export function useResourceFeed(): ResourceFeed {
         socketRef.current = null;
       }
       attempt = 0;
+      setAttempt(0);
       connect();
     }
 
@@ -358,5 +373,5 @@ export function useResourceFeed(): ResourceFeed {
     }
   }, []);
 
-  return { status, subscribe, unsubscribe, subscribeLogs, unsubscribeLogs, reconnect };
+  return { status, attempt, subscribe, unsubscribe, subscribeLogs, unsubscribeLogs, reconnect };
 }

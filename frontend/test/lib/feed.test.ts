@@ -133,6 +133,54 @@ describe('useResourceFeed', () => {
     expect(result.current.status).toBe('disconnected');
   });
 
+  it('counts the retries while the socket stays down', async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useResourceFeed());
+    expect(result.current.attempt).toBe(0);
+
+    act(() => {
+      FakeWebSocket.instances[0].onclose?.(new CloseEvent('close'));
+    });
+    expect(result.current.attempt).toBe(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    act(() => {
+      FakeWebSocket.instances[1].onclose?.(new CloseEvent('close'));
+    });
+
+    expect(result.current.attempt).toBe(2);
+    vi.useRealTimers();
+  });
+
+  it('goes back to zero retries once the socket opens', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    act(() => {
+      FakeWebSocket.instances[0].onclose?.(new CloseEvent('close'));
+    });
+    expect(result.current.attempt).toBe(1);
+
+    act(() => {
+      openSocket(FakeWebSocket.instances[0]);
+    });
+
+    expect(result.current.attempt).toBe(0);
+  });
+
+  it('goes back to zero retries when the user reconnects by hand', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    act(() => {
+      FakeWebSocket.instances[0].onclose?.(new CloseEvent('close'));
+    });
+
+    act(() => {
+      result.current.reconnect();
+    });
+
+    expect(result.current.attempt).toBe(0);
+  });
+
   it('closes the socket on error', () => {
     renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];

@@ -7,7 +7,7 @@ import type {
   Row,
   View,
 } from './lib/types';
-import { useResourceFeed } from './lib/feed';
+import { offline, useResourceFeed } from './lib/feed';
 import { fetchContexts } from './lib/contexts';
 import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
 import type { Selection } from './lib/refs';
@@ -16,6 +16,7 @@ import { bumpClusterEpoch, useClusterEpoch } from './store/cluster';
 import { clearForwards } from './lib/portForward';
 import { focusFilter, useHotkeys } from './lib/hotkeys';
 import { clearRecents, rememberObject } from './store/recents';
+import { notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -27,12 +28,20 @@ import FluxOverview from './components/FluxOverview';
 import FluxRoles from './components/FluxRoles';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
+import ConnectionBanner from './components/ConnectionBanner';
 import CommandPalette from './components/CommandPalette';
 import type { Section } from './components/SettingsDialog';
 
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 
 const FIRST_SUB_ID = 'main#0';
+
+function staleClass(stale: boolean): string {
+  if (stale) {
+    return 'opacity-60';
+  }
+  return '';
+}
 
 export default function App() {
   const feed = useResourceFeed();
@@ -110,6 +119,22 @@ export default function App() {
   useEffect(() => {
     document.title = documentTitle(route);
   }, [route]);
+
+  const [wasDown, setWasDown] = useState(false);
+  useEffect(() => {
+    if (feed.status === 'disconnected') {
+      setWasDown(true);
+      return;
+    }
+    if (feed.status !== 'connected') {
+      return;
+    }
+    if (!wasDown) {
+      return;
+    }
+    setWasDown(false);
+    notifyOk('Reconnected to the cluster');
+  }, [feed.status, wasDown]);
 
   function clearSelection() {
     navigate({ ...route, selection: null });
@@ -191,6 +216,8 @@ export default function App() {
     remember(refFromFlux(resource));
   }
 
+  const stale = offline(feed.status, feed.attempt);
+
   let mainArea = (
     <ResourceTable
       active={active}
@@ -230,6 +257,7 @@ export default function App() {
           openSettings('Appearance');
         }}
       />
+      <ConnectionBanner status={feed.status} attempt={feed.attempt} onReconnect={feed.reconnect} />
       <div className="flex min-h-0 flex-1">
         <Sidebar
           view={route.view}
@@ -237,15 +265,17 @@ export default function App() {
           onSelect={handleSelectResource}
           onSelectView={handleSelectView}
         />
-        <PanelLayout
-          selection={selection}
-          subscribeLogs={subscribeLogs}
-          unsubscribeLogs={unsubscribeLogs}
-          onClose={clearSelection}
-          onDeleted={clearSelection}
-        >
-          <ErrorBoundary label={route.view}>{mainArea}</ErrorBoundary>
-        </PanelLayout>
+        <div aria-busy={stale} className={`flex min-h-0 min-w-0 flex-1 ${staleClass(stale)}`}>
+          <PanelLayout
+            selection={selection}
+            subscribeLogs={subscribeLogs}
+            unsubscribeLogs={unsubscribeLogs}
+            onClose={clearSelection}
+            onDeleted={clearSelection}
+          >
+            <ErrorBoundary label={route.view}>{mainArea}</ErrorBoundary>
+          </PanelLayout>
+        </div>
       </div>
       <Toasts />
       <CommandPalette

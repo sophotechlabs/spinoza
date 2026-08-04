@@ -3,17 +3,31 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Category, FluxResource, GraphNode } from '../src/lib/types';
 
-const feedMocks = vi.hoisted(() => ({
-  subscribe: vi.fn(),
-  unsubscribe: vi.fn(),
-  subscribeLogs: vi.fn(),
-  unsubscribeLogs: vi.fn(),
-  reconnect: vi.fn(),
-}));
-
-vi.mock('../src/lib/feed', () => ({
-  useResourceFeed: () => ({
+const feedMocks = vi.hoisted(
+  (): {
+    status: 'connecting' | 'connected' | 'disconnected';
+    attempt: number;
+    subscribe: ReturnType<typeof vi.fn>;
+    unsubscribe: ReturnType<typeof vi.fn>;
+    subscribeLogs: ReturnType<typeof vi.fn>;
+    unsubscribeLogs: ReturnType<typeof vi.fn>;
+    reconnect: ReturnType<typeof vi.fn>;
+  } => ({
     status: 'connected',
+    attempt: 0,
+    subscribe: vi.fn(),
+    unsubscribe: vi.fn(),
+    subscribeLogs: vi.fn(),
+    unsubscribeLogs: vi.fn(),
+    reconnect: vi.fn(),
+  }),
+);
+
+vi.mock('../src/lib/feed', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/lib/feed')>()),
+  useResourceFeed: () => ({
+    status: feedMocks.status,
+    attempt: feedMocks.attempt,
     subscribe: feedMocks.subscribe,
     unsubscribe: feedMocks.unsubscribe,
     subscribeLogs: feedMocks.subscribeLogs,
@@ -170,6 +184,7 @@ vi.mock('../src/components/InspectLogs', () => ({
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { clearRecents } from '../src/store/recents';
+import { useToastsStore } from '../src/store/toasts';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
 
 const podDescriptor = makeDescriptor({
@@ -1021,5 +1036,89 @@ describe('the command palette and shortcuts', () => {
 
     await screen.findByLabelText(/Search resources/);
     expect(screen.queryByRole('button', { name: /prod\/pod-a/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('a feed that dropped', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+    useToastsStore.getState().clear();
+    feedMocks.status = 'connected';
+    feedMocks.attempt = 0;
+    feedMocks.reconnect.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    feedMocks.status = 'connected';
+    feedMocks.attempt = 0;
+    useToastsStore.getState().clear();
+    resetStore();
+  });
+
+  it('says so across the content area and counts the retries', () => {
+    feedMocks.status = 'disconnected';
+    feedMocks.attempt = 2;
+    render(<App />);
+
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent('The live connection dropped');
+    expect(banner).toHaveTextContent('attempt 2');
+  });
+
+  it('marks the content area as no longer live', () => {
+    feedMocks.status = 'disconnected';
+    render(<App />);
+
+    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+  });
+
+  it('leaves the content area alone while connected', () => {
+    render(<App />);
+
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(screen.queryByText(/The live connection dropped/)).not.toBeInTheDocument();
+  });
+
+  it('reconnects on demand from the banner', async () => {
+    const user = userEvent.setup();
+    feedMocks.status = 'disconnected';
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'Reconnect now' }));
+
+    expect(feedMocks.reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('says out loud when the connection comes back', () => {
+    feedMocks.status = 'disconnected';
+    const view = render(<App />);
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+
+    feedMocks.status = 'connected';
+    view.rerender(<App />);
+
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({ tone: 'ok', message: 'Reconnected to the cluster' }),
+    ]);
+  });
+
+  it('does not congratulate itself on the first connect', () => {
+    render(<App />);
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('stays quiet while it is still reconnecting', () => {
+    feedMocks.status = 'disconnected';
+    const view = render(<App />);
+
+    feedMocks.status = 'connecting';
+    feedMocks.attempt = 1;
+    view.rerender(<App />);
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+    expect(screen.getByRole('status')).toHaveTextContent('attempt 1');
   });
 });
