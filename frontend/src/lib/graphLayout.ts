@@ -112,6 +112,70 @@ function toFlowEdge(edge: GraphEdge): Edge {
   };
 }
 
+function sameNodeShape(a: GraphNode, b: GraphNode): boolean {
+  if (a.id !== b.id) {
+    return false;
+  }
+  if (a.name !== b.name) {
+    return false;
+  }
+  return a.category === b.category;
+}
+
+function sameEdge(a: GraphEdge, b: GraphEdge): boolean {
+  if (a.from !== b.from) {
+    return false;
+  }
+  if (a.to !== b.to) {
+    return false;
+  }
+  return a.kind === b.kind;
+}
+
+export function sameTopology(a: Graph, b: Graph): boolean {
+  if (a.nodes.length !== b.nodes.length) {
+    return false;
+  }
+  if (!a.nodes.every((node, index) => sameNodeShape(node, b.nodes[index]))) {
+    return false;
+  }
+  if (a.edges.length !== b.edges.length) {
+    return false;
+  }
+  return a.edges.every((edge, index) => sameEdge(edge, b.edges[index]));
+}
+
+export function sameGraph(a: Graph, b: Graph): boolean {
+  if (!sameTopology(a, b)) {
+    return false;
+  }
+  if (a.error !== b.error) {
+    return false;
+  }
+  return a.nodes.every((node, index) => {
+    const other = b.nodes[index];
+    if (node.status !== other.status) {
+      return false;
+    }
+    if (node.ready !== other.ready) {
+      return false;
+    }
+    return node.namespace === other.namespace;
+  });
+}
+
+export function restyle(flow: GitopsFlow, graph: Graph): GitopsFlow {
+  const nodes = flow.nodes.map((node, index) => {
+    const next = graph.nodes[index];
+    return {
+      ...node,
+      data: { label: next.name, node: next },
+      className: nodeClassName(next.category, next.ready),
+    };
+  });
+  return { nodes, edges: flow.edges };
+}
+
 export function toFlow(graph: Graph): GitopsFlow {
   const g: LayoutGraph = new dagre.graphlib.Graph<GraphLabel, NodeLabel, EdgeLabel>();
   g.setGraph({ rankdir: 'LR', ranksep: RANK_SEPARATION, nodesep: NODE_SEPARATION });

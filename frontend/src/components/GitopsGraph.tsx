@@ -1,13 +1,16 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useState } from 'react';
 import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
-import type { GraphNode } from '../lib/types';
+import type { Graph, GraphNode } from '../lib/types';
 import { fetchGraph } from '../lib/graph';
 import { usePoll } from '../lib/usePoll';
 import {
   EDGE_DEPENDS_STROKE,
   EDGE_MANAGES_STROKE,
   EDGE_SOURCE_STROKE,
+  restyle,
+  sameGraph,
+  sameTopology,
   toFlow,
 } from '../lib/graphLayout';
 import type { GitopsFlow, GitopsFlowNode } from '../lib/graphLayout';
@@ -46,6 +49,24 @@ const EDGE_LEGEND: EdgeLegendItem[] = [
   { stroke: EDGE_MANAGES_STROKE, label: 'Manages' },
 ];
 
+interface Laid {
+  graph: Graph;
+  flow: GitopsFlow;
+}
+
+function layOut(current: Laid | null, graph: Graph): Laid {
+  if (current === null) {
+    return { graph, flow: toFlow(graph) };
+  }
+  if (sameGraph(current.graph, graph)) {
+    return current;
+  }
+  if (sameTopology(current.graph, graph)) {
+    return { graph, flow: restyle(current.flow, graph) };
+  }
+  return { graph, flow: toFlow(graph) };
+}
+
 export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
   const resolvedTheme = useResolvedTheme();
   const { data, error, reload } = usePoll(fetchGraph, {
@@ -53,15 +74,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
     fallback: 'gitops graph request failed',
   });
 
-  const flow = useMemo<GitopsFlow | null>(() => {
-    if (data === null) {
-      return null;
-    }
-    if (data.nodes.length > MAX_NODES) {
-      return null;
-    }
-    return toFlow(data);
-  }, [data]);
+  const [laid, setLaid] = useState<Laid | null>(null);
 
   let partial: string | null = null;
   let overLimit: number | null = null;
@@ -70,6 +83,18 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
     if (data.nodes.length > MAX_NODES) {
       overLimit = data.nodes.length;
     }
+  }
+
+  if (data !== null && overLimit === null) {
+    const next = layOut(laid, data);
+    if (next !== laid) {
+      setLaid(next);
+    }
+  }
+
+  let flow: GitopsFlow | null = null;
+  if (laid !== null) {
+    flow = laid.flow;
   }
 
   const handleNodeClick = useCallback<NodeMouseHandler<GitopsFlowNode>>(
@@ -123,6 +148,9 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
           edges={flow.edges}
           onNodeClick={handleNodeClick}
           colorMode={resolvedTheme.base}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
           onlyRenderVisibleElements
           fitView
         >

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import dagre from '@dagrejs/dagre';
 import type { Graph } from '../../src/lib/types';
-import { statusTone, toFlow } from '../../src/lib/graphLayout';
+import { restyle, sameGraph, sameTopology, statusTone, toFlow } from '../../src/lib/graphLayout';
 import type { GitopsFlowNode } from '../../src/lib/graphLayout';
 import { makeGraphEdge, makeGraphNode } from '../helpers';
 
@@ -183,5 +183,124 @@ describe('a failure the frontend has never heard of', () => {
     });
 
     expect(flow.nodes[0].className).toContain('border-error-emphasis');
+  });
+});
+
+describe('comparing one poll against the last', () => {
+  function graph(overrides: Partial<Graph> = {}): Graph {
+    return {
+      nodes: [
+        makeGraphNode({ id: 'a', name: 'alpha' }),
+        makeGraphNode({ id: 'b', name: 'bravo', category: 'app' }),
+      ],
+      edges: [makeGraphEdge({ from: 'a', to: 'b', kind: 'source' })],
+      ...overrides,
+    };
+  }
+
+  const single: Graph = { nodes: [makeGraphNode({ id: 'a', name: 'alpha' })], edges: [] };
+
+  it('calls an identical payload the same graph', () => {
+    expect(sameGraph(graph(), graph())).toBe(true);
+    expect(sameTopology(graph(), graph())).toBe(true);
+  });
+
+  it('spots a node that changed readiness without changing the layout', () => {
+    const next = graph({
+      nodes: [
+        makeGraphNode({ id: 'a', name: 'alpha', ready: 'False' }),
+        makeGraphNode({ id: 'b', name: 'bravo', category: 'app' }),
+      ],
+    });
+
+    expect(sameGraph(graph(), next)).toBe(false);
+    expect(sameTopology(graph(), next)).toBe(true);
+  });
+
+  it('spots a node that changed status or namespace', () => {
+    const status: Graph = {
+      nodes: [makeGraphNode({ id: 'a', name: 'alpha', status: 'Failed' })],
+      edges: [],
+    };
+    const moved: Graph = {
+      nodes: [makeGraphNode({ id: 'a', name: 'alpha', namespace: 'other' })],
+      edges: [],
+    };
+
+    expect(sameGraph(single, status)).toBe(false);
+    expect(sameGraph(single, moved)).toBe(false);
+  });
+
+  it('spots a partial-failure message that appeared', () => {
+    expect(sameGraph(graph(), graph({ error: 'buckets: forbidden' }))).toBe(false);
+  });
+
+  it('spots a node added, renamed or recategorised', () => {
+    expect(sameTopology(graph(), single)).toBe(false);
+    expect(
+      sameTopology(
+        graph(),
+        graph({
+          nodes: [
+            makeGraphNode({ id: 'a', name: 'renamed' }),
+            makeGraphNode({ id: 'b', name: 'bravo', category: 'app' }),
+          ],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      sameTopology(
+        graph(),
+        graph({
+          nodes: [
+            makeGraphNode({ id: 'a', name: 'alpha', category: 'app' }),
+            makeGraphNode({ id: 'b', name: 'bravo', category: 'app' }),
+          ],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('spots an edge added, removed or redirected', () => {
+    expect(sameTopology(graph(), graph({ edges: [] }))).toBe(false);
+    expect(
+      sameTopology(
+        graph(),
+        graph({ edges: [makeGraphEdge({ from: 'b', to: 'a', kind: 'source' })] }),
+      ),
+    ).toBe(false);
+    expect(
+      sameTopology(
+        graph(),
+        graph({ edges: [makeGraphEdge({ from: 'a', to: 'c', kind: 'source' })] }),
+      ),
+    ).toBe(false);
+    expect(
+      sameTopology(
+        graph(),
+        graph({ edges: [makeGraphEdge({ from: 'a', to: 'b', kind: 'manages' })] }),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('restyle', () => {
+  it('keeps every position and edge while taking the new colours', () => {
+    const before: Graph = {
+      nodes: [makeGraphNode({ id: 'a', name: 'alpha', ready: 'True' })],
+      edges: [],
+    };
+    const after: Graph = {
+      nodes: [makeGraphNode({ id: 'a', name: 'alpha', ready: 'False' })],
+      edges: [],
+    };
+    const laid = toFlow(before);
+
+    const restyled = restyle(laid, after);
+
+    expect(restyled.nodes[0].position).toEqual(laid.nodes[0].position);
+    expect(restyled.edges).toBe(laid.edges);
+    expect(restyled.nodes[0].className).not.toBe(laid.nodes[0].className);
+    expect(restyled.nodes[0].data.node.ready).toBe('False');
   });
 });

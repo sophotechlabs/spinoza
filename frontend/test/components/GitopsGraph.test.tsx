@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Graph } from '../../src/lib/types';
+import dagre from '@dagrejs/dagre';
+import type { Graph, ReadyState } from '../../src/lib/types';
 import type { GitopsFlowNode } from '../../src/lib/graphLayout';
 import { makeGraphEdge, makeGraphNode } from '../helpers';
 
@@ -269,5 +270,97 @@ describe('the graph legend', () => {
     expect(screen.getByText('Source')).toBeInTheDocument();
     expect(screen.getByText('Depends on')).toBeInTheDocument();
     expect(screen.getByText('Manages')).toBeInTheDocument();
+  });
+});
+
+describe('a poll that brings back the same graph', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not lay the nodes out again', async () => {
+    vi.useFakeTimers();
+    const graph: Graph = { nodes: [makeGraphNode({ id: 'a', name: 'alpha' })], edges: [] };
+    const mock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(graph) }));
+    vi.stubGlobal('fetch', mock);
+    const layout = vi.spyOn(dagre, 'layout');
+
+    render(<GitopsGraph />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(layout).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+
+    expect(mock.mock.calls.length).toBeGreaterThan(1);
+    expect(layout).toHaveBeenCalledTimes(1);
+    layout.mockRestore();
+  });
+
+  it('recolours without laying out again when only readiness moved', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        let ready: ReadyState = 'True';
+        if (call > 1) {
+          ready = 'False';
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              nodes: [makeGraphNode({ id: 'a', name: 'alpha', ready })],
+              edges: [],
+            }),
+        });
+      }),
+    );
+    const layout = vi.spyOn(dagre, 'layout');
+
+    render(<GitopsGraph />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(layout).toHaveBeenCalledTimes(1);
+    layout.mockRestore();
+  });
+
+  it('lays out again once a node appears', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        const nodes = [makeGraphNode({ id: 'a', name: 'alpha' })];
+        if (call > 1) {
+          nodes.push(makeGraphNode({ id: 'b', name: 'bravo' }));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ nodes, edges: [] }) });
+      }),
+    );
+    const layout = vi.spyOn(dagre, 'layout');
+
+    render(<GitopsGraph />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(layout).toHaveBeenCalledTimes(2);
+    layout.mockRestore();
   });
 });
