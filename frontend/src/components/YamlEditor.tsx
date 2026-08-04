@@ -1,4 +1,5 @@
 import Editor from '@monaco-editor/react';
+import { useResolvedTheme } from '../store/theme';
 
 interface YamlEditorProps {
   value: string;
@@ -8,6 +9,8 @@ interface YamlEditorProps {
 }
 
 export default function YamlEditor({ value, path, readOnly, onChange }: YamlEditorProps) {
+  const theme = `spinoza-${useResolvedTheme()}`;
+
   function handleChange(next: string | undefined) {
     if (next === undefined) {
       return;
@@ -18,7 +21,7 @@ export default function YamlEditor({ value, path, readOnly, onChange }: YamlEdit
   return (
     <Editor
       language="yaml"
-      theme="spinoza-dark"
+      theme={theme}
       path={path}
       value={value}
       onChange={handleChange}

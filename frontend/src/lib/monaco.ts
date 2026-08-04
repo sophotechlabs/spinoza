@@ -42,4 +42,11 @@ monaco.editor.defineTheme('spinoza-dark', {
   colors: { 'editor.background': '#0a0a0a' },
 });
 
+monaco.editor.defineTheme('spinoza-light', {
+  base: 'vs',
+  inherit: true,
+  rules: [],
+  colors: { 'editor.background': '#ffffff' },
+});
+
 loader.config({ monaco });

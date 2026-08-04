@@ -1,18 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useThemeStore } from '../../src/store/theme';
 
 interface EditorStubProps {
   value: string;
   language: string;
+  theme: string;
   onChange: (value: string | undefined) => void;
   options: { readOnly: boolean };
 }
 
 vi.mock('@monaco-editor/react', () => ({
-  default: ({ value, language, onChange, options }: EditorStubProps) => (
+  default: ({ value, language, theme, onChange, options }: EditorStubProps) => (
     <div>
       <span data-testid="language">{language}</span>
+      <span data-testid="theme">{theme}</span>
       <span data-testid="read-only">{String(options.readOnly)}</span>
       <textarea
         aria-label="yaml"
@@ -81,5 +84,23 @@ describe('YamlEditor', () => {
     await user.click(screen.getByRole('button', { name: 'emit-undefined' }));
 
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('follows the app theme so the editor does not sit lighter than the panel', () => {
+    render(
+      <YamlEditor value="" path="spinoza/core/v1/Pod.yaml" readOnly={false} onChange={vi.fn()} />,
+    );
+
+    expect(screen.getByTestId('theme')).toHaveTextContent('spinoza-dark');
+
+    act(() => {
+      useThemeStore.getState().setPreference('light');
+    });
+
+    expect(screen.getByTestId('theme')).toHaveTextContent('spinoza-light');
+
+    act(() => {
+      useThemeStore.getState().setPreference('dark');
+    });
   });
 });
