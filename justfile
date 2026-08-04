@@ -55,6 +55,7 @@ lint-fe:
     cd frontend && npm run lint
     cd frontend && npm run typecheck
     cd frontend && npm run format:check
+    cd frontend && npm run contrast
 
 lint: lint-be lint-fe
 

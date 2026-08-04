@@ -92,7 +92,7 @@
   --fg: oklch(92.2% 0 none);
   --fg-soft: oklch(87% 0 none);
   --fg-muted: oklch(70.8% 0 none);
-  --fg-subtle: oklch(55.6% 0 none);
+  --fg-subtle: oklch(59% 0 none);
   --fg-faint: oklch(43.9% 0 none);
 
   --edge: oklch(26.9% 0 none);
@@ -133,7 +133,7 @@
   --info-tint: oklch(29.3% 0.066 243.157);
   --info-line: oklch(50% 0.134 242.749);
 
-  --ansi-black: oklch(43.9% 0 none);
+  --ansi-black: oklch(58% 0 none);
   --ansi-red: oklch(70.4% 0.191 22.216);
   --ansi-green: oklch(79.2% 0.209 151.711);
   --ansi-yellow: oklch(82.8% 0.189 84.429);
@@ -141,7 +141,7 @@
   --ansi-magenta: oklch(74% 0.238 322.16);
   --ansi-cyan: oklch(78.9% 0.154 211.53);
   --ansi-white: oklch(92.2% 0 none);
-  --ansi-bright-black: oklch(55.6% 0 none);
+  --ansi-bright-black: oklch(62% 0 none);
   --ansi-bright-red: oklch(80.8% 0.114 19.571);
   --ansi-bright-green: oklch(87.1% 0.15 154.449);
   --ansi-bright-yellow: oklch(87.9% 0.169 91.605);
