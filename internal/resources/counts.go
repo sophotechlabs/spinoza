@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const (
@@ -32,7 +33,7 @@ func Count(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescr
 
 	for _, desc := range descs {
 		wg.Add(1)
-		go func(desc api.ResourceDescriptor) {
+		go safe.Run("counting "+keyOf(desc), func() {
 			defer wg.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()
@@ -43,7 +44,7 @@ func Count(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescr
 				reasons[keyOf(desc)] = reason
 			}
 			mu.Unlock()
-		}(desc)
+		})
 	}
 	wg.Wait()
 	return api.ResourceCounts{Counts: counts, Errors: reasons}

@@ -2,8 +2,11 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
+
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const ShellPath = "/bin/sh"
@@ -48,18 +51,26 @@ func start(ctx context.Context, streamer Streamer, req Request, stdout io.Writer
 		done:   make(chan error, 1),
 		cancel: cancel,
 	}
-	go func() {
-		err := streamer.Stream(streamCtx, req, Options{
+	safe.Go("exec into "+req.Namespace+"/"+req.Pod, func() {
+		var err error
+		completed := false
+		defer func() {
+			cancel()
+			_ = reader.Close()
+			if !completed {
+				err = errors.New("the exec session ended unexpectedly")
+			}
+			onDone(err)
+			sess.done <- err
+		}()
+		err = streamer.Stream(streamCtx, req, Options{
 			Command: []string{ShellPath},
 			Stdin:   reader,
 			Stdout:  stdout,
 			Resize:  sess.resize,
 		})
-		cancel()
-		_ = reader.Close()
-		onDone(err)
-		sess.done <- err
-	}()
+		completed = true
+	})
 	return sess
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const execWriteTimeout = 10 * time.Second
@@ -103,11 +104,11 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 	defer session.Close()
 
-	go func() {
+	safe.Go("watching the terminal in "+req.Namespace+"/"+req.Pod, func() {
 		streamErr := <-session.Done()
 		_ = conn.send(ctx, api.ExecChannelError, endMessage(streamErr))
 		cancel()
-	}()
+	})
 
 	conn.pump(ctx, socket, session)
 }
@@ -177,10 +178,10 @@ func route(session *exec.Session, channel byte, payload []byte) bool {
 
 func writeStdin(session *exec.Session, payload []byte) bool {
 	done := make(chan struct{})
-	go func() {
+	safe.Go("writing to the terminal", func() {
 		defer close(done)
 		_, _ = session.Write(payload)
-	}()
+	})
 	timer := time.NewTimer(execStdinTimeout)
 	defer timer.Stop()
 	select {

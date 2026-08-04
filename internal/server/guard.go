@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const desktopScheme = "wails"
@@ -46,22 +48,42 @@ func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "spinoza needs the token it printed at startup")
 			return
 		}
-		if !mutating(r.Method) {
+		if upgrading(r) {
+			defer safe.Recover("the socket on " + r.URL.Path)
 			handler(w, r)
 			return
 		}
 		recorded := &recorder{ResponseWriter: w, status: http.StatusOK}
 		started := time.Now()
+		defer func() {
+			finish(recorded, r, started, recover())
+		}()
 		handler(recorded, r)
-		slog.Info(
-			"acted on the cluster",
-			"method", strconv.Quote(r.Method),
-			"path", strconv.Quote(r.URL.Path),
-			"query", strconv.Quote(loggableQuery(r)),
-			"status", recorded.status,
-			"took", time.Since(started).Round(time.Millisecond),
-		)
 	}
+}
+
+func finish(recorded *recorder, r *http.Request, started time.Time, caught any) {
+	if caught != nil {
+		safe.Log("the handler for "+r.URL.Path, caught)
+		if !recorded.wrote {
+			writeError(recorded, http.StatusInternalServerError, "spinoza broke handling that request; the terminal has the details")
+		}
+	}
+	if !mutating(r.Method) {
+		return
+	}
+	slog.Info(
+		"acted on the cluster",
+		"method", strconv.Quote(r.Method),
+		"path", strconv.Quote(r.URL.Path),
+		"query", strconv.Quote(loggableQuery(r)),
+		"status", recorded.status,
+		"took", time.Since(started).Round(time.Millisecond),
+	)
+}
+
+func upgrading(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }
 
 func mutating(method string) bool {
@@ -83,11 +105,18 @@ type recorder struct {
 	http.ResponseWriter
 
 	status int
+	wrote  bool
 }
 
 func (rec *recorder) WriteHeader(status int) {
 	rec.status = status
+	rec.wrote = true
 	rec.ResponseWriter.WriteHeader(status)
+}
+
+func (rec *recorder) Write(p []byte) (int, error) {
+	rec.wrote = true
+	return rec.ResponseWriter.Write(p)
 }
 
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request) bool {

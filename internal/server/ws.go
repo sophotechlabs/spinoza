@@ -13,6 +13,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const maxLogBatch = 200
@@ -88,7 +89,7 @@ func (sess *wsSession) handle(msg api.ClientMsg) {
 
 func (sess *wsSession) subscribe(msg api.ClientMsg) {
 	gen := sess.claim(msg.SubID)
-	go sess.buildSub(msg, gen)
+	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(msg, gen) })
 }
 
 func (sess *wsSession) claim(subID string) uint64 {
@@ -239,7 +240,7 @@ func (sess *wsSession) unsubscribe(subID string) {
 
 func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 	gen := sess.claimLogs(msg.SubID)
-	go sess.buildLogs(msg, gen)
+	safe.Go("opening the log stream "+msg.SubID, func() { sess.buildLogs(msg, gen) })
 }
 
 func (sess *wsSession) claimLogs(subID string) uint64 {

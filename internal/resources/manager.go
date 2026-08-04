@@ -34,6 +34,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/metrics"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const (
@@ -448,14 +449,14 @@ func (m *Manager) Warm(descs []api.ResourceDescriptor) {
 	slots := make(chan struct{}, warmConcurrency)
 	for _, desc := range descs {
 		group.Add(1)
-		go func(target api.ResourceDescriptor) {
+		go safe.Run("warming "+desc.Kind, func() {
 			defer group.Done()
 			slots <- struct{}{}
 			defer func() {
 				<-slots
 			}()
-			_, _ = m.pinnedLister(target)
-		}(desc)
+			_, _ = m.pinnedLister(desc)
+		})
 	}
 	group.Wait()
 }
@@ -648,13 +649,13 @@ func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream
 
 	_, handlerErr := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			st.publish("added", obj)
+			safe.Run("an added "+desc.Kind, func() { st.publish("added", obj) })
 		},
 		UpdateFunc: func(_, obj any) {
-			st.publish("modified", obj)
+			safe.Run("a changed "+desc.Kind, func() { st.publish("modified", obj) })
 		},
 		DeleteFunc: func(obj any) {
-			st.publishDelete(obj)
+			safe.Run("a deleted "+desc.Kind, func() { st.publishDelete(obj) })
 		},
 	})
 	if handlerErr != nil {

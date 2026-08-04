@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const (
@@ -157,16 +158,16 @@ func (s *Service) evictAll(ctx context.Context, plans []podPlan) []api.PodOutcom
 			continue
 		}
 		group.Add(1)
-		go func(index int) {
+		go safe.Run("evicting "+plans[i].pod.Namespace+"/"+plans[i].pod.Name, func() {
 			defer group.Done()
 			slots <- struct{}{}
 			defer func() {
 				<-slots
 			}()
-			outcome, reason := s.evictOne(ctx, plans[index].pod)
-			outcomes[index].Outcome = outcome
-			outcomes[index].Reason = reason
-		}(i)
+			outcome, reason := s.evictOne(ctx, plans[i].pod)
+			outcomes[i].Outcome = outcome
+			outcomes[i].Reason = reason
+		})
 	}
 	group.Wait()
 	return outcomes

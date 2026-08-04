@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const (
@@ -115,8 +116,8 @@ func newRegistry(
 		starting:     map[startKey]chan struct{}{},
 	}
 	registry.nextID = registry.sequentialID
-	go registry.stopOnShutdown()
-	go registry.reapLoop()
+	safe.Go("stopping forwards on shutdown", registry.stopOnShutdown)
+	safe.Go("reaping dead forwards", registry.reapLoop)
 	return registry
 }
 
@@ -206,9 +207,9 @@ func (r *Registry) restart(forward api.PortForward, pod string, podPort int32) {
 	active := newRun()
 	ready := make(chan int32, 1)
 	failed := make(chan error, 1)
-	go func() {
+	safe.Go("moving the forward to "+forward.Namespace+"/"+pod, func() {
 		failed <- r.runner.Run(r.root, forward.Namespace, pod, forward.LocalPort, podPort, ready, active.stop)
-	}()
+	})
 
 	select {
 	case local := <-ready:
@@ -245,7 +246,7 @@ func (r *Registry) adopt(id, pod string, local int32, active *run, failed <-chan
 	entry.forward.Error = ""
 	r.mu.Unlock()
 
-	go r.watch(id, active, failed)
+	safe.Go("watching the forward "+id, func() { r.watch(id, active, failed) })
 }
 
 func (r *Registry) aliveWithin(ctx context.Context, namespace, pod string) bool {
@@ -297,9 +298,9 @@ func (r *Registry) Start(ctx context.Context, target Target, port int32) (api.Po
 	active := newRun()
 	ready := make(chan int32, 1)
 	failed := make(chan error, 1)
-	go func() {
+	safe.Go("forwarding to "+target.Namespace+"/"+pod, func() {
 		failed <- r.runner.Run(r.root, target.Namespace, pod, 0, podPort, ready, active.stop)
-	}()
+	})
 
 	select {
 	case local := <-ready:
@@ -337,7 +338,7 @@ func (r *Registry) register(target Target, port int32, pod string, local int32, 
 	r.forwards[forward.ID] = &record{forward: forward, current: active}
 	r.mu.Unlock()
 
-	go r.watch(forward.ID, active, failed)
+	safe.Go("watching the forward "+forward.ID, func() { r.watch(forward.ID, active, failed) })
 	return forward, nil
 }
 

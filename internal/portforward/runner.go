@@ -12,6 +12,8 @@ import (
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 	streamhttp "k8s.io/streaming/pkg/httpstream"
+
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 type dialerFactory func(namespace, pod string) (streamhttp.Dialer, error)
@@ -68,7 +70,7 @@ func (s *streamRunner) Run(ctx context.Context, namespace, pod string, localPort
 	done := make(chan struct{})
 	defer close(done)
 	halt := make(chan struct{})
-	go relayStop(ctx, stop, done, halt)
+	safe.Go("relaying the stop signal", func() { relayStop(ctx, stop, done, halt) })
 
 	forwarderReady := make(chan struct{})
 	forwarder, err := portforward.NewForStreaming(
@@ -83,7 +85,7 @@ func (s *streamRunner) Run(ctx context.Context, namespace, pod string, localPort
 		return err
 	}
 
-	go announce(ctx, forwarder, forwarderReady, done, ready)
+	safe.Go("announcing the local port", func() { announce(ctx, forwarder, forwarderReady, done, ready) })
 	return forwarder.ForwardPorts()
 }
 

@@ -8,6 +8,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const (
@@ -64,7 +66,7 @@ func Open(ctx context.Context, cs kubernetes.Interface, req Request) (*Stream, e
 
 	lines := make(chan string, lineBuffer)
 	stream := &Stream{Lines: lines, cancel: shut}
-	go func() {
+	safe.Go("streaming logs for "+req.Namespace+"/"+req.Name, func() {
 		defer close(lines)
 		defer shut()
 		readErr := pump(streamCtx, rc, lines)
@@ -72,7 +74,7 @@ func Open(ctx context.Context, cs kubernetes.Interface, req Request) (*Stream, e
 			return
 		}
 		stream.fail(readErr)
-	}()
+	})
 
 	return stream, nil
 }
