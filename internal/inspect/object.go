@@ -17,8 +17,14 @@ import (
 
 const lastAppliedAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
 
+const readTimeout = 15 * time.Second
+
+const writeTimeout = 30 * time.Second
+
 func Get(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef) (api.ObjectDetail, error) {
-	u, err := resourceFor(dyn, ref).Get(ctx, ref.Name, metav1.GetOptions{})
+	bounded, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
+	u, err := resourceFor(dyn, ref).Get(bounded, ref.Name, metav1.GetOptions{})
 	if err != nil {
 		return api.ObjectDetail{}, err
 	}
@@ -31,12 +37,14 @@ func Apply(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, kind s
 	if unmarshalErr != nil {
 		return api.ObjectDetail{}, fmt.Errorf("parse yaml: %w", unmarshalErr)
 	}
-	u := &unstructured.Unstructured{Object: obj}
-	matchErr := matchesRef(u, ref, kind)
+	desired := &unstructured.Unstructured{Object: obj}
+	matchErr := matchesRef(desired, ref, kind)
 	if matchErr != nil {
 		return api.ObjectDetail{}, matchErr
 	}
-	updated, err := resourceFor(dyn, ref).Update(ctx, u, metav1.UpdateOptions{FieldManager: fieldManager})
+	bounded, cancel := context.WithTimeout(ctx, writeTimeout)
+	defer cancel()
+	updated, err := resourceFor(dyn, ref).Update(bounded, desired, metav1.UpdateOptions{FieldManager: fieldManager})
 	if err != nil {
 		return api.ObjectDetail{}, err
 	}

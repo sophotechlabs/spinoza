@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,7 +21,12 @@ var (
 	nodeGVR        = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
 )
 
+const buildTimeout = 20 * time.Second
+
 func Build(ctx context.Context, dyn dynamic.Interface) api.Metrics {
+	bounded, cancel := context.WithTimeout(ctx, buildTimeout)
+	defer cancel()
+	ctx = bounded
 	failures := listerr.New()
 	return api.Metrics{
 		Pods:  podUsage(ctx, dyn, failures),

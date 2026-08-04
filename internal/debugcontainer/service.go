@@ -25,6 +25,7 @@ const (
 	namePrefix     = "spinoza-debug-"
 	mirrorPodKey   = "kubernetes.io/config.mirror"
 	defaultTimeout = 90 * time.Second
+	patchTimeout   = 30 * time.Second
 	defaultPoll    = 500 * time.Millisecond
 )
 
@@ -172,7 +173,9 @@ func (s *Service) Ensure(ctx context.Context, req Request) (api.DebugSession, er
 	}
 
 	name := nextName(pod)
-	runErr := s.runner.Run(ctx, s.args(req, name, profile))
+	patchCtx, cancelPatch := context.WithTimeout(ctx, patchTimeout)
+	defer cancelPatch()
+	runErr := s.runner.Run(patchCtx, s.args(req, name, profile))
 	if runErr != nil {
 		return api.DebugSession{}, runErr
 	}

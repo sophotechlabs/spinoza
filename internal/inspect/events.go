@@ -23,6 +23,8 @@ var objectUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4
 
 var ErrInvalidUID = errors.New("uid must be a kubernetes object uid")
 
+const listTimeout = 15 * time.Second
+
 func Events(ctx context.Context, dyn dynamic.Interface, namespace, uid string) ([]api.Event, error) {
 	if uid == "" {
 		return []api.Event{}, nil
@@ -31,7 +33,9 @@ func Events(ctx context.Context, dyn dynamic.Interface, namespace, uid string) (
 		return nil, fmt.Errorf("%w, got %q", ErrInvalidUID, uid)
 	}
 	opts := metav1.ListOptions{FieldSelector: "involvedObject.uid=" + uid}
-	list, err := eventsFor(dyn, namespace).List(ctx, opts)
+	bounded, cancel := context.WithTimeout(ctx, listTimeout)
+	defer cancel()
+	list, err := eventsFor(dyn, namespace).List(bounded, opts)
 	if err != nil {
 		return nil, fmt.Errorf("listing events: %w", err)
 	}
