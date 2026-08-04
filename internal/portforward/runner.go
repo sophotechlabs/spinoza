@@ -59,17 +59,22 @@ func shouldFallback(err error) bool {
 	return streamhttp.IsHTTPSProxyError(err)
 }
 
-func (s *streamRunner) Run(ctx context.Context, namespace, pod string, remotePort int32, ready chan<- int32, stop <-chan struct{}) error {
+func (s *streamRunner) Run(ctx context.Context, namespace, pod string, localPort, remotePort int32, ready chan<- int32, stop <-chan struct{}) error {
 	dialer, err := s.dialerFor(namespace, pod)
 	if err != nil {
 		return err
 	}
 
+	done := make(chan struct{})
+	defer close(done)
+	halt := make(chan struct{})
+	go relayStop(ctx, stop, done, halt)
+
 	forwarderReady := make(chan struct{})
 	forwarder, err := portforward.NewForStreaming(
 		dialer,
-		[]string{fmt.Sprintf("0:%d", remotePort)},
-		stop,
+		[]string{fmt.Sprintf("%d:%d", localPort, remotePort)},
+		halt,
 		forwarderReady,
 		io.Discard,
 		io.Discard,
@@ -78,10 +83,18 @@ func (s *streamRunner) Run(ctx context.Context, namespace, pod string, remotePor
 		return err
 	}
 
-	done := make(chan struct{})
-	defer close(done)
 	go announce(ctx, forwarder, forwarderReady, done, ready)
 	return forwarder.ForwardPorts()
+}
+
+func relayStop(ctx context.Context, stop, done <-chan struct{}, halt chan<- struct{}) {
+	select {
+	case <-ctx.Done():
+		close(halt)
+	case <-stop:
+		close(halt)
+	case <-done:
+	}
 }
 
 func announce(

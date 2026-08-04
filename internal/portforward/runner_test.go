@@ -119,7 +119,7 @@ func TestRunForwardsTrafficThroughALocalListener(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		done <- runner.Run(context.Background(), "flux-system", "web", 8080, ready, stop)
+		done <- runner.Run(context.Background(), "flux-system", "web", 0, 8080, ready, stop)
 	}()
 
 	var local int32
@@ -182,7 +182,7 @@ func TestRunStopsWithoutAnyTraffic(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		done <- runner.Run(context.Background(), "flux-system", "web", 9090, ready, stop)
+		done <- runner.Run(context.Background(), "flux-system", "web", 0, 9090, ready, stop)
 	}()
 
 	<-ready
@@ -198,10 +198,70 @@ func TestRunStopsWithoutAnyTraffic(t *testing.T) {
 	}
 }
 
+func TestRunEndsWhenTheClusterContextIsCancelled(t *testing.T) {
+	runner := runnerWith(&fakeDialer{conn: &fakeConnection{closed: make(chan bool)}}, nil)
+	ready := make(chan int32, 1)
+	stop := make(chan struct{})
+	defer close(stop)
+	done := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		done <- runner.Run(ctx, "flux-system", "web", 0, 9090, ready, stop)
+	}()
+	<-ready
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run returned %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("a canceled cluster context left the forward tunneling into the old cluster")
+	}
+}
+
+func TestRunAsksForTheLocalPortItWasGiven(t *testing.T) {
+	runner := runnerWith(&fakeDialer{conn: &fakeConnection{closed: make(chan bool)}}, nil)
+	ready := make(chan int32, 1)
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("addr = %T, want a tcp address", listener.Addr())
+	}
+	wanted := int32(addr.Port)
+	if closeErr := listener.Close(); closeErr != nil {
+		t.Fatalf("close: %v", closeErr)
+	}
+
+	go func() {
+		done <- runner.Run(context.Background(), "flux-system", "web", wanted, 9090, ready, stop)
+	}()
+
+	select {
+	case local := <-ready:
+		if local != wanted {
+			t.Fatalf("local = %d, want the port the caller kept: %d", local, wanted)
+		}
+	case err := <-done:
+		t.Fatalf("run ended before ready: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for the forward to become ready")
+	}
+	close(stop)
+	<-done
+}
+
 func TestRunSurfacesADialerBuildFailure(t *testing.T) {
 	runner := runnerWith(nil, errors.New("no kubeconfig"))
 
-	err := runner.Run(context.Background(), "flux-system", "web", 8080, make(chan int32, 1), make(chan struct{}))
+	err := runner.Run(context.Background(), "flux-system", "web", 0, 8080, make(chan int32, 1), make(chan struct{}))
 
 	if err == nil {
 		t.Fatalf("expected the dialer failure to surface")
@@ -213,7 +273,7 @@ func TestRunSurfacesADialFailure(t *testing.T) {
 	stop := make(chan struct{})
 	defer close(stop)
 
-	err := runner.Run(context.Background(), "flux-system", "web", 8080, make(chan int32, 1), stop)
+	err := runner.Run(context.Background(), "flux-system", "web", 0, 8080, make(chan int32, 1), stop)
 
 	if err == nil {
 		t.Fatalf("expected the dial failure to surface")

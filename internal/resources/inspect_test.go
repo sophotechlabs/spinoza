@@ -222,7 +222,7 @@ func TestManagerFluxAction(t *testing.T) {
 
 type stubForwardRunner struct{ local int32 }
 
-func (s *stubForwardRunner) Run(_ context.Context, _, _ string, _ int32, ready chan<- int32, stop <-chan struct{}) error {
+func (s *stubForwardRunner) Run(_ context.Context, _, _ string, _, _ int32, ready chan<- int32, stop <-chan struct{}) error {
 	ready <- s.local
 	<-stop
 	return nil

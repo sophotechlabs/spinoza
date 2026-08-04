@@ -3,6 +3,8 @@ package portforward
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,15 +14,24 @@ type stubRunner struct {
 	mu         sync.Mutex
 	calls      int
 	local      int32
+	asked      []int32
+	pods       []string
 	startErr   error
 	lateErr    chan error
 	entered    chan struct{}
+	finished   chan struct{}
+	gate       chan struct{}
 	hang       bool
 	neverReady bool
 }
 
 func newStubRunner(local int32) *stubRunner {
-	return &stubRunner{local: local, lateErr: make(chan error, 1), entered: make(chan struct{}, 8)}
+	return &stubRunner{
+		local:    local,
+		lateErr:  make(chan error, 1),
+		entered:  make(chan struct{}, 8),
+		finished: make(chan struct{}, 8),
+	}
 }
 
 func (s *stubRunner) count() int {
@@ -29,14 +40,34 @@ func (s *stubRunner) count() int {
 	return s.calls
 }
 
-func (s *stubRunner) Run(_ context.Context, _, _ string, _ int32, ready chan<- int32, stop <-chan struct{}) error {
+func (s *stubRunner) requested() []int32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]int32{}, s.asked...)
+}
+
+func (s *stubRunner) forwarded() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.pods...)
+}
+
+func (s *stubRunner) Run(_ context.Context, _, pod string, localPort, _ int32, ready chan<- int32, stop <-chan struct{}) error {
 	s.mu.Lock()
 	s.calls++
+	s.asked = append(s.asked, localPort)
+	s.pods = append(s.pods, pod)
 	s.mu.Unlock()
 	select {
 	case s.entered <- struct{}{}:
 	default:
 	}
+	defer func() {
+		select {
+		case s.finished <- struct{}{}:
+		default:
+		}
+	}()
 
 	if s.startErr != nil {
 		return s.startErr
@@ -48,6 +79,9 @@ func (s *stubRunner) Run(_ context.Context, _, _ string, _ int32, ready chan<- i
 		<-stop
 		return nil
 	}
+	if s.gate != nil {
+		<-s.gate
+	}
 	ready <- s.local
 	select {
 	case err := <-s.lateErr:
@@ -58,16 +92,26 @@ func (s *stubRunner) Run(_ context.Context, _, _ string, _ int32, ready chan<- i
 }
 
 type stubResolver struct {
+	mu      sync.Mutex
 	pod     string
 	podPort int32
 	err     error
 }
 
 func (s *stubResolver) Resolve(context.Context, Target, int32) (string, int32, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.err != nil {
 		return "", 0, s.err
 	}
 	return s.pod, s.podPort, nil
+}
+
+func (s *stubResolver) moveTo(pod string, err error) {
+	s.mu.Lock()
+	s.pod = pod
+	s.err = err
+	s.mu.Unlock()
 }
 
 func podTarget() Target {
@@ -468,6 +512,132 @@ func TestReapMarksAForwardWhosePodIsGone(t *testing.T) {
 	}
 	if list[0].ID != forward.ID {
 		t.Fatalf("id changed during reaping")
+	}
+}
+
+func replaceableRegistry(t *testing.T, runner Runner, resolver Resolver, prober Prober) *Registry {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	registry := newRegistry(ctx, runner, resolver, prober, 2*time.Second, time.Hour, time.Second)
+	t.Cleanup(registry.StopAll)
+	return registry
+}
+
+func webService() Target {
+	return Target{Kind: KindService, Namespace: "flux-system", Name: "web"}
+}
+
+func TestAForwardFollowsItsServiceOntoAReplacementPod(t *testing.T) {
+	runner := newStubRunner(45123)
+	resolver := &stubResolver{pod: "web-abc", podPort: 8080}
+	prober := &stubProber{alive: true}
+	registry := replaceableRegistry(t, runner, resolver, prober)
+
+	forward, err := registry.Start(context.Background(), webService(), 8080)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	prober.kill()
+	resolver.moveTo("web-def", nil)
+	registry.Reap()
+
+	list := registry.List()
+	if len(list) != 1 {
+		t.Fatalf("list = %v", list)
+	}
+	if list[0].State != StateRunning {
+		t.Fatalf("state = %q (%s), want the forward moved rather than failed", list[0].State, list[0].Error)
+	}
+	if list[0].Pod != "web-def" {
+		t.Fatalf("pod = %q, want the replacement", list[0].Pod)
+	}
+	if list[0].ID != forward.ID || list[0].LocalPort != forward.LocalPort {
+		t.Fatalf("forward = %+v, want the same id and local port kept", list[0])
+	}
+	if want := []int32{0, 45123}; !slices.Equal(runner.requested(), want) {
+		t.Fatalf("local ports asked for = %v, want %v", runner.requested(), want)
+	}
+	if want := []string{"web-abc", "web-def"}; !slices.Equal(runner.forwarded(), want) {
+		t.Fatalf("pods forwarded = %v, want %v", runner.forwarded(), want)
+	}
+}
+
+func TestAForwardThatCannotBeResolvedAgainFails(t *testing.T) {
+	resolver := &stubResolver{pod: "web-abc", podPort: 8080}
+	prober := &stubProber{alive: true}
+	registry := replaceableRegistry(t, newStubRunner(45123), resolver, prober)
+
+	if _, err := registry.Start(context.Background(), webService(), 8080); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	prober.kill()
+	resolver.moveTo("", errors.New("no ready pod backs the service"))
+	registry.Reap()
+
+	list := registry.List()
+	if list[0].State != StateFailed {
+		t.Fatalf("state = %q, want failed", list[0].State)
+	}
+	if !strings.Contains(list[0].Error, "no ready pod") {
+		t.Fatalf("error = %q, want the resolver reason", list[0].Error)
+	}
+}
+
+func TestAReplacementThatWillNotStartFails(t *testing.T) {
+	runner := newStubRunner(45123)
+	resolver := &stubResolver{pod: "web-abc", podPort: 8080}
+	prober := &stubProber{alive: true}
+	registry := replaceableRegistry(t, runner, resolver, prober)
+
+	if _, err := registry.Start(context.Background(), webService(), 8080); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	prober.kill()
+	resolver.moveTo("web-def", nil)
+	runner.mu.Lock()
+	runner.startErr = errors.New("pods/portforward is forbidden")
+	runner.mu.Unlock()
+	registry.Reap()
+
+	list := registry.List()
+	if list[0].State != StateFailed {
+		t.Fatalf("state = %q, want failed", list[0].State)
+	}
+	if !strings.Contains(list[0].Error, "forbidden") {
+		t.Fatalf("error = %q, want the run failure", list[0].Error)
+	}
+}
+
+func TestAForwardThatArrivesAfterShutdownIsRefused(t *testing.T) {
+	runner := newStubRunner(45123)
+	runner.gate = make(chan struct{})
+	registry := replaceableRegistry(t, runner, &stubResolver{pod: "web", podPort: 8080}, nil)
+
+	failed := make(chan error, 1)
+	go func() {
+		_, err := registry.Start(context.Background(), podTarget(), 8080)
+		failed <- err
+	}()
+	<-runner.entered
+	registry.StopAll()
+	close(runner.gate)
+
+	select {
+	case err := <-failed:
+		if err == nil {
+			t.Fatal("a forward registered into a registry that had already shut down")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("start never returned")
+	}
+	if len(registry.List()) != 0 {
+		t.Fatalf("list = %v, want the late forward left out", registry.List())
+	}
+	select {
+	case <-runner.finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the orphaned forwarder was never halted")
 	}
 }
 

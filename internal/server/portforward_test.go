@@ -23,7 +23,7 @@ type fakeForwardRunner struct {
 	err   error
 }
 
-func (f *fakeForwardRunner) Run(_ context.Context, _, _ string, _ int32, ready chan<- int32, stop <-chan struct{}) error {
+func (f *fakeForwardRunner) Run(_ context.Context, _, _ string, _, _ int32, ready chan<- int32, stop <-chan struct{}) error {
 	if f.err != nil {
 		return f.err
 	}

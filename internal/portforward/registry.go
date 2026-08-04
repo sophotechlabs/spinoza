@@ -38,7 +38,7 @@ type Target struct {
 }
 
 type Runner interface {
-	Run(ctx context.Context, namespace, pod string, remotePort int32, ready chan<- int32, stop <-chan struct{}) error
+	Run(ctx context.Context, namespace, pod string, localPort, remotePort int32, ready chan<- int32, stop <-chan struct{}) error
 }
 
 type Resolver interface {
@@ -49,16 +49,26 @@ type Prober interface {
 	Alive(ctx context.Context, namespace, pod string) bool
 }
 
-type record struct {
-	forward api.PortForward
-	stop    chan struct{}
-	once    sync.Once
+type run struct {
+	stop  chan struct{}
+	ended chan struct{}
+	once  sync.Once
 }
 
-func (r *record) halt() {
+func newRun() *run {
+	return &run{stop: make(chan struct{}), ended: make(chan struct{})}
+}
+
+func (r *run) halt() {
 	r.once.Do(func() {
 		close(r.stop)
 	})
+}
+
+type record struct {
+	forward   api.PortForward
+	current   *run
+	replacing bool
 }
 
 type Registry struct {
@@ -76,6 +86,7 @@ type Registry struct {
 	forwards map[string]*record
 	starting map[startKey]chan struct{}
 	sequence int
+	stopped  bool
 }
 
 func NewRegistry(root context.Context, runner Runner, resolver Resolver, prober Prober) *Registry {
@@ -140,8 +151,101 @@ func (r *Registry) reap(ctx context.Context) {
 		if r.aliveWithin(ctx, forward.Namespace, forward.Pod) {
 			continue
 		}
-		r.fail(forward.ID, fmt.Sprintf("pod %s/%s is gone", forward.Namespace, forward.Pod))
+		r.replace(ctx, forward)
 	}
+}
+
+func (r *Registry) replace(ctx context.Context, forward api.PortForward) {
+	target := Target{Kind: forward.Kind, Namespace: forward.Namespace, Name: forward.Name}
+	pod, podPort, err := r.resolver.Resolve(ctx, target, forward.RemotePort)
+	if err != nil {
+		r.fail(forward.ID, fmt.Sprintf("pod %s/%s is gone and %s/%s no longer resolves: %v",
+			forward.Namespace, forward.Pod, forward.Namespace, forward.Name, err))
+		return
+	}
+	if pod == forward.Pod {
+		r.fail(forward.ID, fmt.Sprintf("pod %s/%s is gone", forward.Namespace, forward.Pod))
+		return
+	}
+	previous, taken := r.beginReplace(forward.ID)
+	if !taken {
+		return
+	}
+	previous.halt()
+	r.awaitEnd(previous)
+	r.restart(forward, pod, podPort)
+}
+
+func (r *Registry) beginReplace(id string) (*run, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.stopped {
+		return nil, false
+	}
+	entry, present := r.forwards[id]
+	if !present {
+		return nil, false
+	}
+	if entry.replacing {
+		return nil, false
+	}
+	entry.replacing = true
+	return entry.current, true
+}
+
+func (r *Registry) awaitEnd(previous *run) {
+	timer := time.NewTimer(r.timeout)
+	defer timer.Stop()
+	select {
+	case <-previous.ended:
+	case <-timer.C:
+	}
+}
+
+func (r *Registry) restart(forward api.PortForward, pod string, podPort int32) {
+	active := newRun()
+	ready := make(chan int32, 1)
+	failed := make(chan error, 1)
+	go func() {
+		failed <- r.runner.Run(r.root, forward.Namespace, pod, forward.LocalPort, podPort, ready, active.stop)
+	}()
+
+	select {
+	case local := <-ready:
+		r.adopt(forward.ID, pod, local, active, failed)
+	case runErr := <-failed:
+		active.halt()
+		r.fail(forward.ID, restartFailure(forward, pod, runErr))
+	case <-time.After(r.timeout):
+		active.halt()
+		r.fail(forward.ID, fmt.Sprintf("timed out moving the port forward to %s/%s", forward.Namespace, pod))
+	}
+}
+
+func restartFailure(forward api.PortForward, pod string, err error) string {
+	if err == nil {
+		return fmt.Sprintf("the port forward to %s/%s ended before it was ready", forward.Namespace, pod)
+	}
+	return fmt.Sprintf("could not move the port forward to %s/%s: %v", forward.Namespace, pod, err)
+}
+
+func (r *Registry) adopt(id, pod string, local int32, active *run, failed <-chan error) {
+	r.mu.Lock()
+	entry, present := r.forwards[id]
+	if !present || r.stopped {
+		r.mu.Unlock()
+		active.halt()
+		return
+	}
+	entry.current = active
+	entry.replacing = false
+	entry.forward.Pod = pod
+	entry.forward.LocalPort = local
+	entry.forward.State = StateRunning
+	entry.forward.Error = ""
+	r.mu.Unlock()
+
+	go r.watch(id, active, failed)
 }
 
 func (r *Registry) aliveWithin(ctx context.Context, namespace, pod string) bool {
@@ -156,10 +260,11 @@ func (r *Registry) fail(id, message string) {
 	if present {
 		entry.forward.State = StateFailed
 		entry.forward.Error = message
+		entry.replacing = false
 	}
 	r.mu.Unlock()
 	if present {
-		entry.halt()
+		entry.current.halt()
 	}
 }
 
@@ -189,30 +294,35 @@ func (r *Registry) Start(ctx context.Context, target Target, port int32) (api.Po
 		return api.PortForward{}, err
 	}
 
-	stop := make(chan struct{})
+	active := newRun()
 	ready := make(chan int32, 1)
 	failed := make(chan error, 1)
 	go func() {
-		failed <- r.runner.Run(r.root, target.Namespace, pod, podPort, ready, stop)
+		failed <- r.runner.Run(r.root, target.Namespace, pod, 0, podPort, ready, active.stop)
 	}()
 
 	select {
 	case local := <-ready:
-		return r.register(target, port, pod, local, stop, failed), nil
+		return r.register(target, port, pod, local, active, failed)
 	case runErr := <-failed:
-		close(stop)
+		active.halt()
 		if runErr == nil {
 			runErr = errors.New("the port forward ended before it was ready")
 		}
 		return api.PortForward{}, runErr
 	case <-time.After(r.timeout):
-		close(stop)
+		active.halt()
 		return api.PortForward{}, fmt.Errorf("timed out starting a port forward to %s/%s", target.Namespace, target.Name)
 	}
 }
 
-func (r *Registry) register(target Target, port int32, pod string, local int32, stop chan struct{}, failed <-chan error) api.PortForward {
+func (r *Registry) register(target Target, port int32, pod string, local int32, active *run, failed <-chan error) (api.PortForward, error) {
 	r.mu.Lock()
+	if r.stopped {
+		r.mu.Unlock()
+		active.halt()
+		return api.PortForward{}, fmt.Errorf("the connection to %s closed while the port forward was starting", target.Namespace)
+	}
 	forward := api.PortForward{
 		ID:         r.nextID(),
 		Kind:       target.Kind,
@@ -224,20 +334,27 @@ func (r *Registry) register(target Target, port int32, pod string, local int32, 
 		State:      StateRunning,
 		StartedAt:  r.now().UTC().Format(time.RFC3339),
 	}
-	r.forwards[forward.ID] = &record{forward: forward, stop: stop}
+	r.forwards[forward.ID] = &record{forward: forward, current: active}
 	r.mu.Unlock()
 
-	go r.watch(forward.ID, failed)
-	return forward
+	go r.watch(forward.ID, active, failed)
+	return forward, nil
 }
 
-func (r *Registry) watch(id string, failed <-chan error) {
+func (r *Registry) watch(id string, active *run, failed <-chan error) {
 	err := <-failed
+	close(active.ended)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	entry, present := r.forwards[id]
 	if !present {
+		return
+	}
+	if entry.current != active {
+		return
+	}
+	if entry.replacing {
 		return
 	}
 	if entry.forward.State == StateFailed {
@@ -324,12 +441,13 @@ func (r *Registry) Stop(id string) error {
 	if !present {
 		return fmt.Errorf("no port forward with id %q", id)
 	}
-	entry.halt()
+	entry.current.halt()
 	return nil
 }
 
 func (r *Registry) StopAll() {
 	r.mu.Lock()
+	r.stopped = true
 	entries := make([]*record, 0, len(r.forwards))
 	for _, entry := range r.forwards {
 		entries = append(entries, entry)
@@ -338,6 +456,6 @@ func (r *Registry) StopAll() {
 	r.mu.Unlock()
 
 	for _, entry := range entries {
-		entry.halt()
+		entry.current.halt()
 	}
 }
