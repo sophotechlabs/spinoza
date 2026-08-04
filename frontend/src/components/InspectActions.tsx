@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ObjectRef } from '../lib/types';
 import { pollReconcile, runFluxAction } from '../lib/fluxActions';
 import type { FluxAction, ReconcileProgress, ReconcileState } from '../lib/fluxActions';
+import Announce from './Announce';
 
 interface InspectActionsProps {
   target: ObjectRef;
@@ -134,8 +135,8 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
         {suspended === true && <span className="text-warn-muted">suspended</span>}
         {busy !== null && <span className="text-fg-muted">working…</span>}
       </div>
-      {error !== null && <p className="mt-1.5 break-words text-error">{error}</p>}
-      {notice !== null && <p className={noticeClass(state)}>{notice}</p>}
+      <Announce message={error} urgent className="mt-1.5 break-words text-error" />
+      <Announce message={notice} className={noticeClass(state)} />
     </div>
   );
 }

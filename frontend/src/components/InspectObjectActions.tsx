@@ -12,6 +12,7 @@ import {
 import type { ObjectAction } from '../lib/objectActions';
 import { refQuery } from '../lib/object';
 import { notifyError, notifyOk } from '../store/toasts';
+import Announce from './Announce';
 
 interface InspectObjectActionsProps {
   target: ObjectRef;
@@ -285,8 +286,8 @@ export default function InspectObjectActions({
         </div>
       )}
 
-      {error !== null && <p className="mt-1.5 break-words text-error">{error}</p>}
-      {notice !== null && <p className="mt-1.5 break-words text-ok">{notice}</p>}
+      <Announce message={error} urgent className="mt-1.5 break-words text-error" />
+      <Announce message={notice} className="mt-1.5 break-words text-ok" />
     </div>
   );
 }

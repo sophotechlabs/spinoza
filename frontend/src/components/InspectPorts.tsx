@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ObjectPort, ObjectRef } from '../lib/types';
 import { refreshForwards, startForward } from '../lib/portForward';
 import { notifyError, notifyOk } from '../store/toasts';
+import Announce from './Announce';
 
 interface InspectPortsProps {
   target: ObjectRef;
@@ -67,8 +68,8 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
           </div>
         ))}
       </div>
-      {error !== null && <p className="mt-1.5 break-words text-error">{error}</p>}
-      {notice !== null && <p className="mt-1.5 text-ok">{notice}</p>}
+      <Announce message={error} urgent className="mt-1.5 break-words text-error" />
+      <Announce message={notice} className="mt-1.5 text-ok" />
     </section>
   );
 }

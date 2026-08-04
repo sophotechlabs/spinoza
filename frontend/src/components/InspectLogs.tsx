@@ -287,8 +287,16 @@ export default function InspectLogs({
             {visible.length} of {lines.length}
           </span>
         )}
-        {error !== null && <span className="truncate text-error">{error}</span>}
-        {error === null && ended && <span className="text-fg-muted">stream ended</span>}
+        {error !== null && (
+          <span role="alert" className="truncate text-error">
+            {error}
+          </span>
+        )}
+        {error === null && ended && (
+          <span role="status" className="text-fg-muted">
+            stream ended
+          </span>
+        )}
       </div>
       <div
         ref={scrollRef}

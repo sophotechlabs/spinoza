@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import type { ObjectDetail, ObjectRef } from '../lib/types';
 import { applyObject, deleteObject } from '../lib/object';
 import { notifyOk } from '../store/toasts';
@@ -6,6 +6,7 @@ import { fetchSchema, gvkOf, registerSchema, schemaPath } from '../lib/schema';
 import { setUnsaved } from '../lib/unsaved';
 import Loading from './Loading';
 import CopyButton from './CopyButton';
+import Announce from './Announce';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 
@@ -36,6 +37,9 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   const [base, setBase] = useState(yaml);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const deleteRef = useRef<HTMLButtonElement | null>(null);
+  const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const [wasConfirming, setWasConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -94,6 +98,18 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     };
   }, [dirty]);
 
+  useEffect(() => {
+    if (confirming === wasConfirming) {
+      return;
+    }
+    setWasConfirming(confirming);
+    if (confirming) {
+      confirmRef.current?.focus();
+      return;
+    }
+    deleteRef.current?.focus();
+  }, [confirming, wasConfirming]);
+
   async function handleApply() {
     setBusy(true);
     setError(null);
@@ -148,14 +164,12 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
           <YamlEditor value={draft} path={path} readOnly={busy} onChange={setDraft} />
         </Suspense>
       </div>
-      {error !== null && (
-        <p className="border-t border-edge bg-error-tint/40 px-3 py-1.5 text-xs break-words text-error-strong">
-          {error}
-        </p>
-      )}
-      {notice !== null && (
-        <p className="border-t border-edge px-3 py-1.5 text-xs text-ok">{notice}</p>
-      )}
+      <Announce
+        message={error}
+        urgent
+        className="border-t border-edge bg-error-tint/40 px-3 py-1.5 text-xs break-words text-error-strong"
+      />
+      <Announce message={notice} className="border-t border-edge px-3 py-1.5 text-xs text-ok" />
       <div className="flex items-center gap-2 border-t border-edge px-3 py-2 text-xs">
         <button
           type="button"
@@ -180,6 +194,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         )}
         {!confirming && (
           <button
+            ref={deleteRef}
             type="button"
             onClick={askDelete}
             disabled={busy}
@@ -192,6 +207,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
           <div className="ml-auto flex items-center gap-2">
             <span className="text-fg-muted">Delete {target.name}?</span>
             <button
+              ref={confirmRef}
               type="button"
               onClick={() => void handleDelete()}
               disabled={busy}

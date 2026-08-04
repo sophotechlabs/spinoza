@@ -7,6 +7,7 @@ import { createChart } from '../lib/chart';
 import type { ChartHandle } from '../lib/chart';
 import { canvasColors } from '../lib/themeColors';
 import { useResolvedTheme } from '../store/theme';
+import Announce from './Announce';
 
 interface InspectMetricsProps {
   namespace: string;
@@ -141,7 +142,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
         )}
       </div>
 
-      {error !== null && <p className="mt-3 break-words text-error">{error}</p>}
+      <Announce message={error} urgent className="mt-3 break-words text-error" />
       {empty && (
         <p className="mt-3 text-fg-muted">
           Prometheus has no samples for this pod over the last {span}.

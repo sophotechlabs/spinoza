@@ -380,3 +380,57 @@ describe('copying the manifest', () => {
     expect(writeText).toHaveBeenCalledWith(`${YAML}x`);
   });
 });
+
+describe('announcing what an action did', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okResponse({})));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('puts the apply result in a live region', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Applied.');
+  });
+
+  it('puts an apply failure in an assertive one', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500, 'the api server said no')));
+    renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('the api server said no');
+  });
+});
+
+describe('the inline delete confirm', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okResponse({})));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('moves focus onto Confirm and back to Delete on cancel', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+    await screen.findByLabelText('yaml');
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Confirm' }));
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Delete' }));
+  });
+});
