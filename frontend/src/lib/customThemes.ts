@@ -1,5 +1,6 @@
 import type { Theme, ThemeBase } from './theme';
 import { BUILT_IN_THEMES, CANVAS_NAMES, TOKEN_NAMES } from './theme';
+import { contrastWarnings } from './contrast';
 
 export const CUSTOM_THEMES_KEY = 'spinoza.themes.v1';
 
@@ -89,6 +90,9 @@ export function validateTheme(raw: unknown): ThemeCheck {
 
   if (tokens !== undefined && Object.keys(tokens).length > 0 && !Object.hasOwn(tokens, 'surface')) {
     warnings.push('this theme does not set surface, so it inherits the background of its base');
+  }
+  if (tokens !== undefined) {
+    warnings.push(...contrastWarnings(tokens));
   }
 
   if (errors.length > 0) {

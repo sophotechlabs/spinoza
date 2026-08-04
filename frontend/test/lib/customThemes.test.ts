@@ -157,3 +157,28 @@ describe('the themes a person has installed', () => {
     }).not.toThrow();
   });
 });
+
+describe('a theme that would be hard to read', () => {
+  it('imports but says which colours fall below AA', () => {
+    const { theme, warnings } = validateTheme({
+      id: 'faint',
+      name: 'Faint',
+      base: 'light',
+      tokens: { surface: '#ffffff', fg: '#eeeeee' },
+    });
+
+    expect(theme).not.toBeNull();
+    expect(warnings.some((line) => line.startsWith('fg is'))).toBe(true);
+  });
+
+  it('stays quiet for a theme that is legible', () => {
+    const { warnings } = validateTheme({
+      id: 'fine',
+      name: 'Fine',
+      base: 'light',
+      tokens: { surface: '#ffffff', fg: '#111111' },
+    });
+
+    expect(warnings).toEqual([]);
+  });
+});

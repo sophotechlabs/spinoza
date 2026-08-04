@@ -2,38 +2,16 @@ import { readFileSync } from 'node:fs';
 
 const AA = 4.5;
 
-const CONTENT_TOKENS = [
-  'fg-strong',
-  'fg',
-  'fg-soft',
-  'fg-muted',
-  'fg-subtle',
-  'ok',
-  'ok-contrast',
-  'error',
-  'error-strong',
-  'error-contrast',
-  'warn',
-  'warn-strong',
-  'warn-muted',
-  'info-contrast',
-  'ansi-black',
-  'ansi-red',
-  'ansi-green',
-  'ansi-yellow',
-  'ansi-blue',
-  'ansi-magenta',
-  'ansi-cyan',
-  'ansi-white',
-  'ansi-bright-black',
-  'ansi-bright-red',
-  'ansi-bright-green',
-  'ansi-bright-yellow',
-  'ansi-bright-blue',
-  'ansi-bright-magenta',
-  'ansi-bright-cyan',
-  'ansi-bright-white',
-];
+function namesFromSource(constName) {
+  const source = readFileSync(new URL('../src/lib/theme.ts', import.meta.url), 'utf8');
+  const block = new RegExp(`export const ${constName} = \\[([\\s\\S]*?)\\];`).exec(source);
+  if (block === null) {
+    throw new Error(`${constName} not found in src/lib/theme.ts`);
+  }
+  return [...block[1].matchAll(/'([a-z0-9-]+)'/g)].map((entry) => entry[1]);
+}
+
+const CONTENT_TOKENS = namesFromSource('CONTENT_TOKENS');
 
 const THEMES = [
   { name: 'dark', selector: ':root {' },
@@ -130,17 +108,8 @@ function tokenNamesFromCss() {
   return names;
 }
 
-function tokenNamesFromSource() {
-  const source = readFileSync(new URL('../src/lib/theme.ts', import.meta.url), 'utf8');
-  const block = /export const TOKEN_NAMES = \[([\s\S]*?)\];/.exec(source);
-  if (block === null) {
-    throw new Error('TOKEN_NAMES not found in src/lib/theme.ts');
-  }
-  return [...block[1].matchAll(/'([a-z0-9-]+)'/g)].map((entry) => entry[1]);
-}
-
 const fromCss = tokenNamesFromCss();
-const fromSource = tokenNamesFromSource();
+const fromSource = namesFromSource('TOKEN_NAMES');
 const missing = fromCss.filter((name) => !fromSource.includes(name));
 const extra = fromSource.filter((name) => !fromCss.includes(name));
 
