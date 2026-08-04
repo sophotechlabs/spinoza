@@ -201,7 +201,7 @@
 
   --warn: oklch(55.5% 0.163 48.998);
   --warn-strong: oklch(47.3% 0.137 46.201);
-  --warn-muted: oklch(66.6% 0.179 58.318);
+  --warn-muted: oklch(55.5% 0.163 48.998);
   --warn-solid: oklch(76.9% 0.188 70.08);
   --warn-tint: oklch(98.7% 0.022 95.277);
   --warn-line: oklch(92.4% 0.12 95.746);
@@ -218,15 +218,15 @@
   --ansi-blue: oklch(50% 0.134 242.749);
   --ansi-magenta: oklch(51.8% 0.253 323.949);
   --ansi-cyan: oklch(52% 0.105 223.128);
-  --ansi-white: oklch(55.6% 0 none);
-  --ansi-bright-black: oklch(43.9% 0 none);
-  --ansi-bright-red: oklch(63.7% 0.237 25.331);
-  --ansi-bright-green: oklch(62.7% 0.194 149.214);
-  --ansi-bright-yellow: oklch(66.6% 0.179 58.318);
-  --ansi-bright-blue: oklch(58.8% 0.158 241.966);
-  --ansi-bright-magenta: oklch(59.1% 0.293 322.896);
-  --ansi-bright-cyan: oklch(60.9% 0.126 221.723);
-  --ansi-bright-white: oklch(70.8% 0 none);
+  --ansi-white: oklch(43.9% 0 none);
+  --ansi-bright-black: oklch(37.1% 0 none);
+  --ansi-bright-red: oklch(44.4% 0.177 26.899);
+  --ansi-bright-green: oklch(44.8% 0.119 151.328);
+  --ansi-bright-yellow: oklch(47.3% 0.137 46.201);
+  --ansi-bright-blue: oklch(44.3% 0.11 240.79);
+  --ansi-bright-magenta: oklch(45.2% 0.211 324.591);
+  --ansi-bright-cyan: oklch(45% 0.085 224.283);
+  --ansi-bright-white: oklch(55.6% 0 none);
 
   --graph-edge-source: #0284c7;
   --graph-edge-depends: #d97706;
