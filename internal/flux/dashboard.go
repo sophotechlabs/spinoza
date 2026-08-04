@@ -50,22 +50,22 @@ type Charts interface {
 const helmGroup = "helm.toolkit.fluxcd.io"
 
 type Lister interface {
-	List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
-	Warm(descs []api.ResourceDescriptor)
+	List(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
+	Warm(ctx context.Context, descs []api.ResourceDescriptor)
 }
 
 func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor, index Charts) api.FluxDashboard {
 	byGroup := map[string][]api.FluxResource{}
 	items := map[string][]*unstructured.Unstructured{}
 	failures := listerr.New()
-	lister.Warm(needed(descs, index))
+	lister.Warm(ctx, needed(descs, index))
 	for _, desc := range descs {
 		group := categoryOf(desc)
 		if group == "" {
 			continue
 		}
 		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
-		found, err := lister.List(desc)
+		found, err := lister.List(ctx, desc)
 		failures.Record(gvr.GroupResource().String(), err)
 		if err != nil {
 			continue
@@ -75,7 +75,7 @@ func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDesc
 			items[group] = append(items[group], item)
 		}
 	}
-	applyLatest(byGroup, items, repos(lister, descs, index), index)
+	applyLatest(byGroup, items, repos(ctx, lister, descs, index), index)
 	dashboard := assemble(byGroup)
 	dashboard.Error = failures.Message()
 	return dashboard
@@ -102,20 +102,20 @@ func isHelmRepository(desc api.ResourceDescriptor) bool {
 	return desc.Resource == "helmrepositories"
 }
 
-func repos(lister Lister, descs map[string]api.ResourceDescriptor, index Charts) map[string]charts.Repo {
+func repos(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor, index Charts) map[string]charts.Repo {
 	if index == nil {
 		return nil
 	}
-	return repoIndex(lister, descs)
+	return repoIndex(ctx, lister, descs)
 }
 
-func repoIndex(lister Lister, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {
+func repoIndex(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor) map[string]charts.Repo {
 	out := map[string]charts.Repo{}
 	for _, desc := range descs {
 		if !isHelmRepository(desc) {
 			continue
 		}
-		found, err := lister.List(desc)
+		found, err := lister.List(ctx, desc)
 		if err != nil {
 			continue
 		}

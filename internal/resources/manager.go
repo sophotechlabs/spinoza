@@ -375,7 +375,7 @@ type stream struct {
 	broken   bool
 }
 
-func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscription, error) {
+func (m *Manager) Subscribe(ctx context.Context, group, version, resource, namespace string) (*Subscription, error) {
 	desc, ok := m.descriptors()[discovery.Key(group, version, resource)]
 	if !ok {
 		return nil, fmt.Errorf("unknown resource %s/%s/%s", group, version, resource)
@@ -387,7 +387,7 @@ func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscr
 	}
 	key := streamKey{gvr: gvr, ns: effNs}
 
-	st, entry, err := m.attach(key, desc)
+	st, entry, err := m.attach(ctx, key, desc)
 	if err != nil {
 		return nil, err
 	}
@@ -410,9 +410,9 @@ func (m *Manager) Subscribe(group, version, resource, namespace string) (*Subscr
 	}, nil
 }
 
-func (m *Manager) attach(key streamKey, desc api.ResourceDescriptor) (*stream, *subscriber, error) {
+func (m *Manager) attach(ctx context.Context, key streamKey, desc api.ResourceDescriptor) (*stream, *subscriber, error) {
 	for range attachAttempts {
-		st, err := m.streamFor(key, desc)
+		st, err := m.streamFor(ctx, key, desc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -424,8 +424,8 @@ func (m *Manager) attach(key streamKey, desc api.ResourceDescriptor) (*stream, *
 	return nil, nil, fmt.Errorf("%w: %s kept being torn down while subscribing", api.ErrInternal, key.gvr.String())
 }
 
-func (m *Manager) List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
-	lister, err := m.pinnedLister(desc)
+func (m *Manager) List(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	lister, err := m.pinnedLister(ctx, desc)
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +444,7 @@ func (m *Manager) List(desc api.ResourceDescriptor) ([]*unstructured.Unstructure
 	return out, nil
 }
 
-func (m *Manager) Warm(descs []api.ResourceDescriptor) {
+func (m *Manager) Warm(ctx context.Context, descs []api.ResourceDescriptor) {
 	var group sync.WaitGroup
 	slots := make(chan struct{}, warmConcurrency)
 	for _, desc := range descs {
@@ -455,17 +455,17 @@ func (m *Manager) Warm(descs []api.ResourceDescriptor) {
 			defer func() {
 				<-slots
 			}()
-			_, _ = m.pinnedLister(desc)
+			_, _ = m.pinnedLister(ctx, desc)
 		})
 	}
 	group.Wait()
 }
 
-func (m *Manager) pinnedLister(desc api.ResourceDescriptor) (cache.GenericLister, error) {
+func (m *Manager) pinnedLister(ctx context.Context, desc api.ResourceDescriptor) (cache.GenericLister, error) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	key := streamKey{gvr: gvr}
 	for range attachAttempts {
-		st, err := m.streamFor(key, desc)
+		st, err := m.streamFor(ctx, key, desc)
 		if err != nil {
 			return nil, err
 		}
@@ -486,6 +486,36 @@ func (m *Manager) pin(key streamKey, st *stream) bool {
 	defer st.mu.Unlock()
 	st.pinned = true
 	return true
+}
+
+func (m *Manager) Unpin(descs []api.ResourceDescriptor) {
+	for _, desc := range descs {
+		m.unpin(streamKey{gvr: schema.GroupVersionResource{
+			Group:    desc.Group,
+			Version:  desc.Version,
+			Resource: desc.Resource,
+		}})
+	}
+}
+
+func (m *Manager) unpin(key streamKey) {
+	m.mu.Lock()
+	st, present := m.streams[key]
+	if !present {
+		m.mu.Unlock()
+		return
+	}
+	st.mu.Lock()
+	st.pinned = false
+	idle := st.refs == 0
+	st.mu.Unlock()
+	if idle {
+		delete(m.streams, key)
+	}
+	m.mu.Unlock()
+	if idle {
+		st.cancel()
+	}
 }
 
 func (m *Manager) register(key streamKey, st *stream) (*subscriber, bool) {
@@ -525,7 +555,7 @@ func (m *Manager) detach(key streamKey, st *stream, entry *subscriber) {
 	st.cancel()
 }
 
-func (m *Manager) streamFor(key streamKey, desc api.ResourceDescriptor) (*stream, error) {
+func (m *Manager) streamFor(ctx context.Context, key streamKey, desc api.ResourceDescriptor) (*stream, error) {
 	existing, gate := m.acquireGate(key)
 	if existing != nil {
 		return existing, nil
@@ -544,9 +574,11 @@ func (m *Manager) streamFor(key streamKey, desc api.ResourceDescriptor) (*stream
 		return nil, recent
 	}
 
-	created, err := m.newStream(key, desc)
+	created, err := m.newStream(ctx, key, desc)
 	if err != nil {
-		m.recordFailure(key, err)
+		if ctx.Err() == nil {
+			m.recordFailure(key, err)
+		}
 		return nil, err
 	}
 
@@ -615,8 +647,8 @@ func (m *Manager) releaseGate(key streamKey) {
 	}
 }
 
-func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream, error) {
-	ctx, cancel := context.WithCancel(m.rootCtx)
+func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.ResourceDescriptor) (*stream, error) {
+	streamCtx, cancel := context.WithCancel(m.rootCtx)
 	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dyn, 0, key.ns, nil)
 	gi := factory.ForResource(key.gvr)
 	informer := gi.Informer()
@@ -663,11 +695,14 @@ func (m *Manager) newStream(key streamKey, desc api.ResourceDescriptor) (*stream
 		return nil, fmt.Errorf("add event handler: %w", handlerErr)
 	}
 
-	factory.Start(ctx.Done())
+	factory.Start(streamCtx.Done())
 	syncCtx, cancelSync := context.WithTimeout(ctx, m.syncTimeout)
 	defer cancelSync()
 	if !cache.WaitForCacheSync(syncCtx.Done(), informer.HasSynced) {
 		cancel()
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("%s was still syncing when the request went away: %w", key.gvr.String(), ctx.Err())
+		}
 		return nil, syncFailure(key, m.syncTimeout, watchFailure(&lastWatchErr))
 	}
 	return st, nil

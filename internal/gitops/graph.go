@@ -30,7 +30,6 @@ var fluxSourceResources = map[string]bool{
 
 func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor) api.Graph {
 	build := &builder{
-		ctx:      ctx,
 		lister:   lister,
 		byKind:   indexByKind(descs),
 		nodes:    map[string]api.GraphNode{},
@@ -44,9 +43,9 @@ func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDesc
 		}
 		needed = append(needed, d)
 	}
-	lister.Warm(needed)
+	lister.Warm(ctx, needed)
 	for _, d := range needed {
-		build.collect(d, graphCategory(d))
+		build.collect(ctx, d, graphCategory(d))
 	}
 	return build.graph()
 }
@@ -76,12 +75,11 @@ func graphCategory(desc api.ResourceDescriptor) string {
 }
 
 type Lister interface {
-	List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
-	Warm(descs []api.ResourceDescriptor)
+	List(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
+	Warm(ctx context.Context, descs []api.ResourceDescriptor)
 }
 
 type builder struct {
-	ctx      context.Context
 	lister   Lister
 	byKind   map[string]api.ResourceDescriptor
 	nodes    map[string]api.GraphNode
@@ -89,9 +87,9 @@ type builder struct {
 	failures *listerr.Collector
 }
 
-func (b *builder) collect(desc api.ResourceDescriptor, category string) {
+func (b *builder) collect(ctx context.Context, desc api.ResourceDescriptor, category string) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
-	items, err := b.lister.List(desc)
+	items, err := b.lister.List(ctx, desc)
 	b.failures.Record(gvr.GroupResource().String(), err)
 	if err != nil {
 		return

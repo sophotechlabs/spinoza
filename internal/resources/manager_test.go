@@ -270,7 +270,7 @@ func TestSubscribeSnapshot(t *testing.T) {
 	mgr, cancel := newManager(t, dyn)
 	defer cancel()
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestSubscribeSnapshot(t *testing.T) {
 func TestSubscribeUnknownResource(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
-	_, err := mgr.Subscribe("apps", "v1", "statefulsets", "default")
+	_, err := mgr.Subscribe(context.Background(), "apps", "v1", "statefulsets", "default")
 	if err == nil {
 		t.Fatal("Subscribe returned nil error for unknown resource")
 	}
@@ -316,7 +316,7 @@ func TestSubscribeCacheSyncFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	mgr := NewManager(ctx, Deps{Dynamic: newClient(t), Clientset: k8sfake.NewClientset(), Descriptors: testDescs()})
-	_, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	_, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err == nil {
 		t.Fatal("Subscribe returned nil error when cache sync could not complete")
 	}
@@ -328,7 +328,7 @@ func TestSubscribeDeliversEvents(t *testing.T) {
 	mgr, cancel := newManager(t, dyn)
 	defer cancel()
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}
@@ -388,11 +388,11 @@ func TestSubscribeSharedStream(t *testing.T) {
 	mgr, cancel := newManager(t, dyn)
 	defer cancel()
 
-	sub1, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub1, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("Subscribe 1: %v", err)
 	}
-	sub2, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub2, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("Subscribe 2: %v", err)
 	}
@@ -435,7 +435,7 @@ func TestCloseIsIdempotent(t *testing.T) {
 	mgr, cancel := newManager(t, dyn)
 	defer cancel()
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}
@@ -452,7 +452,7 @@ func TestSubscribeClusterScoped(t *testing.T) {
 	mgr, cancel := newManager(t, dyn)
 	defer cancel()
 
-	sub, err := mgr.Subscribe("", "v1", "nodes", "ignored-namespace")
+	sub, err := mgr.Subscribe(context.Background(), "", "v1", "nodes", "ignored-namespace")
 	if err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}
@@ -487,7 +487,7 @@ func TestSubscribeNamespaceIsolation(t *testing.T) {
 	mgr, cancel := newManager(t, dyn)
 	defer cancel()
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "team-a")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "team-a")
 	if err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}
@@ -702,7 +702,7 @@ func TestRefreshKeepsAGoodCatalogThroughABlip(t *testing.T) {
 	if !strings.Contains(catalog.Error, "connection refused") {
 		t.Fatalf("error = %q, want the blip reported alongside the kept catalog", catalog.Error)
 	}
-	if _, err := mgr.Subscribe("apps", "v1", "deployments", "default"); err != nil {
+	if _, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default"); err != nil {
 		t.Fatalf("subscribe: %v, want the kept catalog still usable", err)
 	}
 }
@@ -738,7 +738,7 @@ func TestSubscribeGivesUpWhenTheCacheNeverSyncs(t *testing.T) {
 	mgr, _ := stuckManager(t, "deployments")
 
 	start := time.Now()
-	_, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	_, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	elapsed := time.Since(start)
 
 	if err == nil {
@@ -755,7 +755,7 @@ func TestSubscribeGivesUpWhenTheCacheNeverSyncs(t *testing.T) {
 func TestSubscribeReportsWhyTheWatchFailed(t *testing.T) {
 	mgr, _ := stuckManager(t, "deployments")
 
-	_, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	_, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 
 	if err == nil {
 		t.Fatal("expected an error")
@@ -773,13 +773,13 @@ func TestASecondSubscribeWaitsOutTheFailureInsteadOfRelisting(t *testing.T) {
 		return false, nil, nil
 	})
 
-	first, firstErr := mgr.Subscribe("apps", "v1", "deployments", "default")
+	first, firstErr := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if firstErr == nil {
 		first.Close()
 		t.Fatal("expected the stuck resource to fail")
 	}
 	after := lists
-	_, secondErr := mgr.Subscribe("apps", "v1", "deployments", "default")
+	_, secondErr := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 
 	if secondErr == nil {
 		t.Fatal("expected the cached failure to be handed back")
@@ -794,7 +794,7 @@ func TestASecondSubscribeWaitsOutTheFailureInsteadOfRelisting(t *testing.T) {
 
 func TestTheBackoffLetsARecoveredResourceThrough(t *testing.T) {
 	mgr, client := stuckManager(t, "deployments")
-	if _, err := mgr.Subscribe("apps", "v1", "deployments", "default"); err == nil {
+	if _, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default"); err == nil {
 		t.Fatal("expected the stuck resource to fail")
 	}
 
@@ -803,7 +803,7 @@ func TestTheBackoffLetsARecoveredResourceThrough(t *testing.T) {
 		return time.Now().Add(2 * buildBackoff)
 	}
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v, want the retry allowed once the backoff elapsed", err)
 	}
@@ -830,7 +830,7 @@ func TestABackoffGrowsWithRepeatedFailures(t *testing.T) {
 func TestAWatchThatBreaksAfterSyncReachesTheSubscriber(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -857,7 +857,7 @@ func TestAWatchThatBreaksAfterSyncReachesTheSubscriber(t *testing.T) {
 func TestABrokenWatchIsReportedOnlyOnce(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -877,7 +877,7 @@ func TestABrokenWatchIsReportedOnlyOnce(t *testing.T) {
 func TestAWatchThatComesBackAsksForAFreshSnapshot(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -901,7 +901,7 @@ func TestAWatchThatComesBackAsksForAFreshSnapshot(t *testing.T) {
 func TestARefreshStopsAStreamWhoseResourceTypeIsGone(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -927,6 +927,80 @@ func TestARefreshStopsAStreamWhoseResourceTypeIsGone(t *testing.T) {
 	}
 }
 
+func TestUnpinLetsAWarmedInformerGo(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	mgr.Warm(context.Background(), []api.ResourceDescriptor{desc})
+	if streamCount(mgr) != 1 {
+		t.Fatalf("streams = %d, want the warmed one", streamCount(mgr))
+	}
+
+	mgr.Unpin([]api.ResourceDescriptor{desc})
+
+	if streamCount(mgr) != 0 {
+		t.Fatalf("streams = %d, want the informer released once nothing needs it", streamCount(mgr))
+	}
+}
+
+func TestUnpinKeepsAnInformerASubscriberStillNeeds(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+	mgr.Warm(context.Background(), []api.ResourceDescriptor{desc})
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	mgr.Unpin([]api.ResourceDescriptor{desc})
+
+	if streamCount(mgr) != 1 {
+		t.Fatalf("streams = %d, want the subscriber's informer kept", streamCount(mgr))
+	}
+}
+
+func TestUnpinIgnoresAResourceItNeverWarmed(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	mgr.Unpin([]api.ResourceDescriptor{testDescs()[discovery.Key("apps", "v1", "deployments")]})
+
+	if streamCount(mgr) != 0 {
+		t.Fatalf("streams = %d", streamCount(mgr))
+	}
+}
+
+func TestACancelledRequestStopsWaitingForTheCache(t *testing.T) {
+	mgr, _ := stuckManager(t, "deployments")
+	mgr.syncTimeout = 30 * time.Second
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	_, err := mgr.Subscribe(ctx, "apps", "v1", "deployments", "default")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected the abandoned subscribe to fail")
+	}
+	if elapsed > 10*time.Second {
+		t.Fatalf("subscribe took %s, want it to stop when the request went away", elapsed)
+	}
+	cooling, _ := mgr.coolingOff(streamKey{
+		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+		ns:  "default",
+	})
+	if cooling {
+		t.Fatal("a caller giving up put the resource into backoff for everyone else")
+	}
+}
+
 func TestAStuckSubscribeDoesNotBlockOtherResources(t *testing.T) {
 	mgr, _ := stuckManager(t, "deployments")
 	mgr.syncTimeout = 20 * time.Second
@@ -934,14 +1008,14 @@ func TestAStuckSubscribeDoesNotBlockOtherResources(t *testing.T) {
 	started := make(chan struct{})
 	go func() {
 		close(started)
-		_, _ = mgr.Subscribe("apps", "v1", "deployments", "default")
+		_, _ = mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	}()
 	<-started
 	time.Sleep(200 * time.Millisecond)
 
 	done := make(chan error, 1)
 	go func() {
-		sub, err := mgr.Subscribe("", "v1", "nodes", "")
+		sub, err := mgr.Subscribe(context.Background(), "", "v1", "nodes", "")
 		if sub != nil {
 			sub.Close()
 		}
@@ -962,7 +1036,7 @@ func TestCloseIsNotBlockedByAStuckSubscribe(t *testing.T) {
 	mgr, _ := stuckManager(t, "deployments")
 	mgr.syncTimeout = 20 * time.Second
 
-	sub, err := mgr.Subscribe("", "v1", "nodes", "")
+	sub, err := mgr.Subscribe(context.Background(), "", "v1", "nodes", "")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -970,7 +1044,7 @@ func TestCloseIsNotBlockedByAStuckSubscribe(t *testing.T) {
 	started := make(chan struct{})
 	go func() {
 		close(started)
-		_, _ = mgr.Subscribe("apps", "v1", "deployments", "default")
+		_, _ = mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	}()
 	<-started
 	time.Sleep(200 * time.Millisecond)
@@ -998,7 +1072,7 @@ func TestConcurrentSubscribersShareOneStream(t *testing.T) {
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()
-			sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+			sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 			if err != nil {
 				return
 			}
@@ -1025,7 +1099,7 @@ func TestTheBuildGateIsReleased(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	t.Cleanup(cancel)
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -1051,7 +1125,7 @@ func TestRegisterRefusesAStreamThatWasAlreadyDropped(t *testing.T) {
 	key := deploymentKey()
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	st, err := mgr.streamFor(key, desc)
+	st, err := mgr.streamFor(context.Background(), key, desc)
 	if err != nil {
 		t.Fatalf("streamFor: %v", err)
 	}
@@ -1074,7 +1148,7 @@ func TestAttachRebuildsAfterTheStreamIsDropped(t *testing.T) {
 	key := deploymentKey()
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	first, err := mgr.streamFor(key, desc)
+	first, err := mgr.streamFor(context.Background(), key, desc)
 	if err != nil {
 		t.Fatalf("streamFor: %v", err)
 	}
@@ -1083,7 +1157,7 @@ func TestAttachRebuildsAfterTheStreamIsDropped(t *testing.T) {
 	mgr.mu.Unlock()
 	first.cancel()
 
-	st, entry, attachErr := mgr.attach(key, desc)
+	st, entry, attachErr := mgr.attach(context.Background(), key, desc)
 	if attachErr != nil {
 		t.Fatalf("attach: %v", attachErr)
 	}
@@ -1105,7 +1179,7 @@ func TestDetachLeavesAStreamThatWasAlreadyReplaced(t *testing.T) {
 	key := deploymentKey()
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	old, entry, err := mgr.attach(key, desc)
+	old, entry, err := mgr.attach(context.Background(), key, desc)
 	if err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -1113,7 +1187,7 @@ func TestDetachLeavesAStreamThatWasAlreadyReplaced(t *testing.T) {
 	delete(mgr.streams, key)
 	mgr.mu.Unlock()
 
-	replacement, replacementErr := mgr.streamFor(key, desc)
+	replacement, replacementErr := mgr.streamFor(context.Background(), key, desc)
 	if replacementErr != nil {
 		t.Fatalf("streamFor: %v", replacementErr)
 	}
@@ -1134,7 +1208,7 @@ func TestASubscribeRacingTheLastCloseGetsALiveStream(t *testing.T) {
 	t.Cleanup(cancel)
 
 	for round := range raceRounds {
-		first, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+		first, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 		if err != nil {
 			t.Fatalf("round %d: subscribe: %v", round, err)
 		}
@@ -1149,7 +1223,7 @@ func TestASubscribeRacingTheLastCloseGetsALiveStream(t *testing.T) {
 		}()
 		go func() {
 			defer group.Done()
-			second, secondErr = mgr.Subscribe("apps", "v1", "deployments", "default")
+			second, secondErr = mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 		}()
 		group.Wait()
 
@@ -1183,7 +1257,7 @@ func TestAFullBufferAsksForAResync(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	t.Cleanup(cancel)
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -1205,7 +1279,7 @@ func TestAResyncIsOnlySignalledOnce(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	t.Cleanup(cancel)
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -1227,7 +1301,7 @@ func TestAHealthySubscriberIsNotAskedToResync(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	t.Cleanup(cancel)
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -1249,7 +1323,7 @@ func TestSnapshotReReadsTheCache(t *testing.T) {
 	mgr, cancel := newManager(t, client)
 	t.Cleanup(cancel)
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -1278,7 +1352,7 @@ func TestResyncChannelClosesWithTheSubscription(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	t.Cleanup(cancel)
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -1309,7 +1383,7 @@ func TestListReadsTheInformerCacheNotTheApiserver(t *testing.T) {
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
 	for range 5 {
-		items, err := mgr.List(desc)
+		items, err := mgr.List(context.Background(), desc)
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -1331,7 +1405,7 @@ func TestListSeesObjectsTheInformerPicksUp(t *testing.T) {
 	t.Cleanup(cancel)
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	before, err := mgr.List(desc)
+	before, err := mgr.List(context.Background(), desc)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -1347,7 +1421,7 @@ func TestListSeesObjectsTheInformerPicksUp(t *testing.T) {
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		items, listErr := mgr.List(desc)
+		items, listErr := mgr.List(context.Background(), desc)
 		if listErr != nil {
 			t.Fatalf("list: %v", listErr)
 		}
@@ -1364,11 +1438,11 @@ func TestAPinnedStreamOutlivesItsSubscribers(t *testing.T) {
 	t.Cleanup(cancel)
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	sub, err := mgr.Subscribe("apps", "v1", "deployments", "")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "")
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
-	_, listErr := mgr.List(desc)
+	_, listErr := mgr.List(context.Background(), desc)
 	if listErr != nil {
 		t.Fatalf("list: %v", listErr)
 	}
@@ -1380,7 +1454,7 @@ func TestAPinnedStreamOutlivesItsSubscribers(t *testing.T) {
 	if live != 1 {
 		t.Fatalf("streams = %d; closing the last subscriber tore down a stream a reader still needs", live)
 	}
-	items, afterErr := mgr.List(desc)
+	items, afterErr := mgr.List(context.Background(), desc)
 	if afterErr != nil {
 		t.Fatalf("list after close: %v", afterErr)
 	}
@@ -1393,7 +1467,7 @@ func TestListReportsAResourceThatNeverSyncs(t *testing.T) {
 	mgr, _ := stuckManager(t, "deployments")
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	_, err := mgr.List(desc)
+	_, err := mgr.List(context.Background(), desc)
 
 	if err == nil {
 		t.Fatal("a forbidden resource was reported as an empty list")
@@ -1405,9 +1479,9 @@ func TestWarmLeavesTheListersUsable(t *testing.T) {
 	t.Cleanup(cancel)
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	mgr.Warm([]api.ResourceDescriptor{desc})
+	mgr.Warm(context.Background(), []api.ResourceDescriptor{desc})
 
-	items, err := mgr.List(desc)
+	items, err := mgr.List(context.Background(), desc)
 	if err != nil {
 		t.Fatalf("list after warm: %v", err)
 	}
@@ -1426,7 +1500,7 @@ func TestWarmSurvivesAResourceThatNeverSyncs(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		mgr.Warm(descs)
+		mgr.Warm(context.Background(), descs)
 	}()
 
 	select {
@@ -1435,7 +1509,7 @@ func TestWarmSurvivesAResourceThatNeverSyncs(t *testing.T) {
 		t.Fatal("one unsyncable resource stalled the whole warm")
 	}
 
-	_, err := mgr.List(testDescs()[discovery.Key("", "v1", "nodes")])
+	_, err := mgr.List(context.Background(), testDescs()[discovery.Key("", "v1", "nodes")])
 	if err != nil {
 		t.Fatalf("a healthy resource was unusable after a failed sibling: %v", err)
 	}

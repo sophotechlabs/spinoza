@@ -113,7 +113,7 @@ func closeSub(entry *subEntry) {
 }
 
 func (sess *wsSession) buildSub(msg api.ClientMsg, gen uint64) {
-	sub, err := sess.mgr.Subscribe(msg.Group, msg.Version, msg.Resource, msg.Namespace)
+	sub, err := sess.mgr.Subscribe(sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace)
 	if err != nil {
 		sess.failCurrent(msg.SubID, gen, err)
 		return

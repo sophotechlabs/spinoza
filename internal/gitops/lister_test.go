@@ -19,7 +19,7 @@ func listerFor(dyn dynamic.Interface) *dynLister {
 	return &dynLister{dyn: dyn}
 }
 
-func (d *dynLister) List(desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+func (d *dynLister) List(_ context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	list, err := d.dyn.Resource(gvr).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
@@ -32,4 +32,4 @@ func (d *dynLister) List(desc api.ResourceDescriptor) ([]*unstructured.Unstructu
 	return out, nil
 }
 
-func (d *dynLister) Warm([]api.ResourceDescriptor) {}
+func (d *dynLister) Warm(context.Context, []api.ResourceDescriptor) {}
