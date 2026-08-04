@@ -2,20 +2,26 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { TAIL_LINES, useLogStream } from '../../src/lib/useLogStream';
 
-function setup(container: string) {
+interface StreamProps {
+  container: string;
+  enabled: boolean;
+}
+
+function setup(container: string, enabled = true) {
   const subscribeLogs = vi.fn<(subId: string, request: unknown) => void>();
   const unsubscribeLogs = vi.fn<(subId: string) => void>();
   const view = renderHook(
-    (props: { container: string }) =>
+    (props: StreamProps) =>
       useLogStream({
         prefix: 'logs',
         namespace: 'flux-system',
         name: 'web',
         container: props.container,
+        enabled: props.enabled,
         subscribeLogs,
         unsubscribeLogs,
       }),
-    { initialProps: { container } },
+    { initialProps: { container, enabled } },
   );
   return { subscribeLogs, unsubscribeLogs, view };
 }
@@ -50,7 +56,7 @@ describe('useLogStream', () => {
     const { subscribeLogs, unsubscribeLogs, view } = setup('app');
     const first = subIdOf(subscribeLogs, 0);
 
-    view.rerender({ container: 'sidecar' });
+    view.rerender({ container: 'sidecar', enabled: true });
 
     const second = subIdOf(subscribeLogs, 1);
     expect(unsubscribeLogs).toHaveBeenCalledWith(first);
@@ -66,10 +72,33 @@ describe('useLogStream', () => {
     const { subscribeLogs, unsubscribeLogs, view } = setup('app');
     const first = subIdOf(subscribeLogs, 0);
 
-    view.rerender({ container: '' });
+    view.rerender({ container: '', enabled: true });
 
     expect(unsubscribeLogs).toHaveBeenCalledWith(first);
     expect(view.result.current).toBe('');
+  });
+
+  it('does not open a stream for a panel nobody is looking at', () => {
+    const { subscribeLogs, view } = setup('app', false);
+
+    expect(subscribeLogs).not.toHaveBeenCalled();
+    expect(view.result.current).toBe('');
+  });
+
+  it('drops the stream when its panel is hidden and opens a fresh one when it comes back', () => {
+    const { subscribeLogs, unsubscribeLogs, view } = setup('app');
+    const first = subIdOf(subscribeLogs, 0);
+
+    view.rerender({ container: 'app', enabled: false });
+
+    expect(unsubscribeLogs).toHaveBeenCalledWith(first);
+    expect(view.result.current).toBe('');
+
+    view.rerender({ container: 'app', enabled: true });
+
+    const second = subIdOf(subscribeLogs, 1);
+    expect(second).not.toBe(first);
+    expect(view.result.current).toBe(second);
   });
 
   it('stops the stream when it goes away', () => {

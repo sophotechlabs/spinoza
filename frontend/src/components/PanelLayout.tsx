@@ -156,7 +156,7 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
     )),
   events: (ctx) =>
     objectPanel(ctx, (_selection, detail) => (
-      <InspectEvents namespace={detail.namespace} uid={detail.uid} />
+      <InspectEvents namespace={detail.namespace} uid={detail.uid} active={ctx.open} />
     )),
   logs: (ctx) =>
     objectPanel(ctx, (selection, detail) => (
@@ -164,6 +164,7 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
         namespace={detail.namespace}
         pod={detail.name}
         containers={logContainers(liveContainers(selection), detail)}
+        active={ctx.open}
         subscribeLogs={ctx.subscribeLogs}
         unsubscribeLogs={ctx.unsubscribeLogs}
       />

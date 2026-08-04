@@ -9,6 +9,7 @@ const EVENTS_POLL_MS = 10000;
 interface InspectEventsProps {
   namespace: string;
   uid: string;
+  active?: boolean;
 }
 
 function eventColor(type: string): string {
@@ -18,13 +19,17 @@ function eventColor(type: string): string {
   return 'text-fg-muted';
 }
 
-export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
+export default function InspectEvents({ namespace, uid, active = true }: InspectEventsProps) {
   const load = useCallback(() => fetchEvents(namespace, uid), [namespace, uid]);
   const {
     data: events,
     error,
     reload,
-  } = usePoll(load, { intervalMs: EVENTS_POLL_MS, fallback: 'events request failed' });
+  } = usePoll(load, {
+    intervalMs: EVENTS_POLL_MS,
+    enabled: active,
+    fallback: 'events request failed',
+  });
 
   if (events === null) {
     if (error !== null) {

@@ -15,15 +15,20 @@ interface LogStream {
   namespace: string;
   name: string;
   container: string;
+  enabled: boolean;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
 }
 
 export function useLogStream(stream: LogStream): string {
-  const { prefix, namespace, name, container, subscribeLogs, unsubscribeLogs } = stream;
+  const { prefix, namespace, name, container, enabled, subscribeLogs, unsubscribeLogs } = stream;
   const [subId, setSubId] = useState('');
 
   useEffect(() => {
+    if (!enabled) {
+      setSubId('');
+      return;
+    }
     if (container === '') {
       setSubId('');
       return;
@@ -40,7 +45,7 @@ export function useLogStream(stream: LogStream): string {
     return () => {
       unsubscribeLogs(id);
     };
-  }, [prefix, namespace, name, container, subscribeLogs, unsubscribeLogs]);
+  }, [prefix, namespace, name, container, enabled, subscribeLogs, unsubscribeLogs]);
 
   return subId;
 }

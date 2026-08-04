@@ -187,3 +187,37 @@ describe('a slow events poll', () => {
     vi.useRealTimers();
   });
 });
+
+describe('an events panel behind another tab', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not poll at all while it is hidden', async () => {
+    vi.useFakeTimers();
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+    vi.stubGlobal('fetch', mock);
+
+    render(<InspectEvents namespace="flux-system" uid="pod-uid" active={false} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000);
+    });
+
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it('picks the poll back up when its tab comes forward', async () => {
+    vi.useFakeTimers();
+    const mock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+    vi.stubGlobal('fetch', mock);
+    const view = render(<InspectEvents namespace="flux-system" uid="pod-uid" active={false} />);
+
+    view.rerender(<InspectEvents namespace="flux-system" uid="pod-uid" active />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
