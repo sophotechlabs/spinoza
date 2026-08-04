@@ -25,6 +25,7 @@ const (
 	buildPath   = "api/v1/status/buildinfo"
 	promNameKey = "app.kubernetes.io/name"
 	promNameVal = "prometheus"
+	maxNamed    = 3
 )
 
 var selectors = []string{
@@ -154,7 +155,7 @@ func (c *Client) discover(ctx context.Context) (Target, error) {
 		return c.override, nil
 	}
 	for _, selector := range selectors {
-		found, err := c.firstMatching(ctx, selector)
+		found, err := c.onlyMatch(ctx, selector)
 		if err != nil {
 			return Target{}, err
 		}
@@ -165,20 +166,41 @@ func (c *Client) discover(ctx context.Context) (Target, error) {
 	return Target{}, fmt.Errorf("%w: no service matched %s; set --prometheus to namespace/service:port", ErrUnavailable, strings.Join(selectors, " or "))
 }
 
-func (c *Client) firstMatching(ctx context.Context, selector string) (Target, error) {
+func (c *Client) onlyMatch(ctx context.Context, selector string) (Target, error) {
 	list, err := c.cs.CoreV1().Services("").List(ctx, metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
 		return Target{}, err
 	}
+	found := make([]Target, 0, len(list.Items))
 	for i := range list.Items {
 		service := &list.Items[i]
 		port := webPort(service.Spec.Ports)
 		if port == "" {
 			continue
 		}
-		return Target{Namespace: service.Namespace, Service: service.Name, Port: port}, nil
+		found = append(found, Target{Namespace: service.Namespace, Service: service.Name, Port: port})
 	}
-	return Target{}, nil
+	if len(found) == 0 {
+		return Target{}, nil
+	}
+	if len(found) > 1 {
+		return Target{}, fmt.Errorf("%w: %s matches %d services (%s); set --prometheus to the one to read", ErrUnavailable, selector, len(found), nameList(found))
+	}
+	return found[0], nil
+}
+
+func nameList(found []Target) string {
+	shown := found
+	suffix := ""
+	if len(shown) > maxNamed {
+		shown = shown[:maxNamed]
+		suffix = ", ..."
+	}
+	names := make([]string, 0, len(shown))
+	for _, target := range shown {
+		names = append(names, target.Namespace+"/"+target.Service)
+	}
+	return strings.Join(names, ", ") + suffix
 }
 
 func webPort(ports []corev1.ServicePort) string {

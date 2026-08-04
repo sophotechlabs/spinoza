@@ -3,12 +3,14 @@ package prom
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 )
 
@@ -124,6 +126,65 @@ func TestDiscoverSkipsAServiceWithoutAWebPort(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--prometheus") {
 		t.Fatalf("message = %q, want it to name the flag", err.Error())
+	}
+}
+
+func TestDiscoverRefusesToPickBetweenTwoCandidates(t *testing.T) {
+	cs := k8sfake.NewClientset(
+		service("monitoring", "prometheus-operated", map[string]string{"operated-prometheus": "true"},
+			corev1.ServicePort{Name: "http-web", Port: 9090}),
+		service("tenant-a", "prometheus-operated", map[string]string{"operated-prometheus": "true"},
+			corev1.ServicePort{Name: "http-web", Port: 9090}),
+	)
+	client := NewClient(cs, Target{})
+
+	_, err := client.discover(context.Background())
+
+	if err == nil {
+		t.Fatal("a second labeled service was picked up silently")
+	}
+	if !strings.Contains(err.Error(), "tenant-a/prometheus-operated") {
+		t.Fatalf("message = %q, want both candidates named", err.Error())
+	}
+	if !strings.Contains(err.Error(), "--prometheus") {
+		t.Fatalf("message = %q, want it to name the flag", err.Error())
+	}
+}
+
+func TestDiscoverNamesOnlyTheFirstFewCandidates(t *testing.T) {
+	objs := make([]runtime.Object, 0, maxNamed+2)
+	for i := range maxNamed + 2 {
+		objs = append(objs, service(fmt.Sprintf("tenant-%d", i), "prom", map[string]string{"operated-prometheus": "true"},
+			corev1.ServicePort{Name: "http-web", Port: 9090}))
+	}
+	client := NewClient(k8sfake.NewClientset(objs...), Target{})
+
+	_, err := client.discover(context.Background())
+
+	if err == nil {
+		t.Fatal("expected a refusal")
+	}
+	if !strings.Contains(err.Error(), "...") {
+		t.Fatalf("message = %q, want the list cut short", err.Error())
+	}
+}
+
+func TestDiscoverStillTakesASingleMatchWithAnUnusableSibling(t *testing.T) {
+	cs := k8sfake.NewClientset(
+		service("monitoring", "prometheus-operated", map[string]string{"operated-prometheus": "true"},
+			corev1.ServicePort{Name: "http-web", Port: 9090}),
+		service("monitoring", "prometheus-grpc", map[string]string{"operated-prometheus": "true"},
+			corev1.ServicePort{Name: "grpc", Port: 1234}),
+	)
+	client := NewClient(cs, Target{})
+
+	got, err := client.discover(context.Background())
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+
+	if got.Service != "prometheus-operated" {
+		t.Fatalf("service = %q", got.Service)
 	}
 }
 

@@ -2,7 +2,9 @@ package inspect
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"time"
 
@@ -16,9 +18,16 @@ import (
 
 var eventGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}
 
+var objectUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+var ErrInvalidUID = errors.New("uid must be a kubernetes object uid")
+
 func Events(ctx context.Context, dyn dynamic.Interface, namespace, uid string) ([]api.Event, error) {
 	if uid == "" {
 		return []api.Event{}, nil
+	}
+	if !objectUID.MatchString(uid) {
+		return nil, fmt.Errorf("%w, got %q", ErrInvalidUID, uid)
 	}
 	opts := metav1.ListOptions{FieldSelector: "involvedObject.uid=" + uid}
 	list, err := eventsFor(dyn, namespace).List(ctx, opts)

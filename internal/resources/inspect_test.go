@@ -39,7 +39,7 @@ func newDeploymentEvent() *unstructured.Unstructured {
 			"name":      "web.1",
 			"namespace": "flux-system",
 		},
-		"involvedObject": map[string]any{"uid": "uid-web"},
+		"involvedObject": map[string]any{"uid": "8a2d1f60-3b4c-4d5e-8f90-1a2b3c4d5e6f"},
 		"reason":         "ScalingReplicaSet",
 		"lastTimestamp":  "2026-07-27T09:30:00Z",
 	}}
@@ -97,7 +97,7 @@ func TestManagerDeleteObject(t *testing.T) {
 func TestManagerEvents(t *testing.T) {
 	mgr := inspectManager(t, newDeployment("flux-system", "web"), newDeploymentEvent())
 
-	events, eventsErr := mgr.Events(context.Background(), "flux-system", "uid-web")
+	events, eventsErr := mgr.Events(context.Background(), "flux-system", "8a2d1f60-3b4c-4d5e-8f90-1a2b3c4d5e6f")
 	if eventsErr != nil {
 		t.Fatalf("events: %v", eventsErr)
 	}

@@ -96,7 +96,7 @@ func TestEventsSurfaceAListFailure(t *testing.T) {
 		schema.GroupResource{Resource: "events"}, "", errors.New("no access"),
 	))
 
-	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/events?namespace=default&uid=pod-uid", nil)
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/events?namespace=default&uid=6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84", nil)
 
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403 rather than an empty event list: %s", resp.StatusCode, body)

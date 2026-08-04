@@ -18,6 +18,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/flux"
+	"github.com/sophotechlabs/spinoza/internal/inspect"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
@@ -160,6 +161,8 @@ func writeAPIError(w http.ResponseWriter, err error) {
 
 func statusFor(err error) int {
 	switch {
+	case errors.Is(err, inspect.ErrInvalidUID):
+		return http.StatusBadRequest
 	case cannotReachCluster(err):
 		return http.StatusServiceUnavailable
 	case apierrors.IsNotFound(err):

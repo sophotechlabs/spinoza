@@ -20,7 +20,7 @@ func newEvent(name string, fields map[string]any) *unstructured.Unstructured {
 			"name":      name,
 			"namespace": "flux-system",
 		},
-		"involvedObject": map[string]any{"uid": "pod-uid"},
+		"involvedObject": map[string]any{"uid": "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84"},
 	}
 	maps.Copy(obj, fields)
 	return &unstructured.Unstructured{Object: obj}
@@ -46,7 +46,7 @@ func TestEventsMapsAndSortsNewestFirst(t *testing.T) {
 		"source":         map[string]any{"component": "kubelet"},
 	})
 
-	events, _ := Events(context.Background(), newClient(older, newer), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(older, newer), "flux-system", "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84")
 
 	if len(events) != 2 {
 		t.Fatalf("events = %d, want 2", len(events))
@@ -85,10 +85,10 @@ func TestEventsSendsUIDFieldSelector(t *testing.T) {
 		return false, nil, nil
 	})
 
-	_, _ = Events(context.Background(), client, "flux-system", "pod-uid")
+	_, _ = Events(context.Background(), client, "flux-system", "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84")
 
-	if selector != "involvedObject.uid=pod-uid" {
-		t.Fatalf("field selector = %q, want involvedObject.uid=pod-uid", selector)
+	if selector != "involvedObject.uid=6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84" {
+		t.Fatalf("field selector = %q, want involvedObject.uid=6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84", selector)
 	}
 }
 
@@ -100,10 +100,38 @@ func TestEventsWithoutNamespaceListsClusterWide(t *testing.T) {
 		return false, nil, nil
 	})
 
-	_, _ = Events(context.Background(), client, "", "node-uid")
+	_, _ = Events(context.Background(), client, "", "1c3a5e70-9b8d-4f21-a3c6-7e5d4b2a1908")
 
 	if namespace != "" {
 		t.Fatalf("namespace = %q, want empty for a cluster-wide list", namespace)
+	}
+}
+
+func TestEventsRefusesAUIDThatIsNotOne(t *testing.T) {
+	cases := map[string]string{
+		"an injected second clause": "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84,involvedObject.namespace=kube-system",
+		"a name rather than a uid":  "web-59d8f",
+		"a truncated uid":           "6f1c0d3e-4a2b-4c8d-9e10",
+		"trailing whitespace":       "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84 ",
+	}
+	for name, uid := range cases {
+		t.Run(name, func(t *testing.T) {
+			listed := false
+			client := newClient()
+			client.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+				listed = true
+				return false, nil, nil
+			})
+
+			_, err := Events(context.Background(), client, "flux-system", uid)
+
+			if !errors.Is(err, ErrInvalidUID) {
+				t.Fatalf("err = %v, want it refused before the selector is built", err)
+			}
+			if listed {
+				t.Fatal("the apiserver was asked with an unvalidated field selector")
+			}
+		})
 	}
 }
 
@@ -120,7 +148,7 @@ func TestEventsReportsAListFailure(t *testing.T) {
 		return true, nil, errors.New("events is forbidden")
 	})
 
-	events, err := Events(context.Background(), client, "flux-system", "pod-uid")
+	events, err := Events(context.Background(), client, "flux-system", "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84")
 
 	if err == nil {
 		t.Fatal("a list failure was reported as an empty event list")
@@ -139,7 +167,7 @@ func TestEventCountFallsBackToSeries(t *testing.T) {
 		"eventTime": "2026-07-27T10:00:00Z",
 	})
 
-	events, _ := Events(context.Background(), newClient(event), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(event), "flux-system", "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84")
 
 	if len(events) != 1 {
 		t.Fatalf("events = %d, want 1", len(events))
@@ -158,7 +186,7 @@ func TestEventCountDefaultsToOne(t *testing.T) {
 		"reportingComponent": "kustomize-controller",
 	})
 
-	events, _ := Events(context.Background(), newClient(event), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(event), "flux-system", "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84")
 
 	if len(events) != 1 {
 		t.Fatalf("events = %d, want 1", len(events))
@@ -175,7 +203,7 @@ func TestEventCountDefaultsToOne(t *testing.T) {
 }
 
 func TestEventLastSeenEmptyWhenNoTimestamps(t *testing.T) {
-	events, _ := Events(context.Background(), newClient(newEvent("bare", nil)), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(newEvent("bare", nil)), "flux-system", "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84")
 
 	if len(events) != 1 {
 		t.Fatalf("events = %d, want 1", len(events))
@@ -195,7 +223,7 @@ func TestEventsSortMixesTimestampPrecision(t *testing.T) {
 		"eventTime": "2026-07-27T09:34:00.546384Z",
 	})
 
-	events, _ := Events(context.Background(), newClient(secondPrecision, subSecond), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(secondPrecision, subSecond), "flux-system", "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84")
 
 	if len(events) != 2 {
 		t.Fatalf("events = %d, want 2", len(events))
@@ -212,7 +240,7 @@ func TestEventsSortKeepsUnparseableStampsLast(t *testing.T) {
 	})
 	bad := newEvent("bad", map[string]any{"reason": "Broken"})
 
-	events, _ := Events(context.Background(), newClient(good, bad), "flux-system", "pod-uid")
+	events, _ := Events(context.Background(), newClient(good, bad), "flux-system", "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84")
 
 	if len(events) != 2 {
 		t.Fatalf("events = %d, want 2", len(events))

@@ -50,7 +50,7 @@ func newPod() *unstructured.Unstructured {
 		"metadata": map[string]any{
 			"name":      "web",
 			"namespace": "flux-system",
-			"uid":       "pod-uid",
+			"uid":       "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84",
 		},
 		"spec": map[string]any{
 			"containers": []any{map[string]any{"name": "app"}},
@@ -66,7 +66,7 @@ func newPodEvent() *unstructured.Unstructured {
 			"name":      "web.1",
 			"namespace": "flux-system",
 		},
-		"involvedObject": map[string]any{"uid": "pod-uid"},
+		"involvedObject": map[string]any{"uid": "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84"},
 		"type":           "Warning",
 		"reason":         "BackOff",
 		"message":        "restarting",
@@ -246,7 +246,7 @@ func TestObjectRejectsUnsupportedMethod(t *testing.T) {
 func TestEventsEndpoint(t *testing.T) {
 	ts := inspectServer(t, newPod(), newPodEvent())
 
-	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/events?namespace=flux-system&uid=pod-uid", nil)
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/events?namespace=flux-system&uid=6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84", nil)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
@@ -260,6 +260,17 @@ func TestEventsEndpoint(t *testing.T) {
 	}
 	if events[0].Reason != "BackOff" {
 		t.Fatalf("reason = %q", events[0].Reason)
+	}
+}
+
+func TestEventsRefusesAnInjectedUID(t *testing.T) {
+	ts := inspectServer(t, newPod(), newPodEvent())
+	uid := "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84%2CinvolvedObject.namespace%3Dkube-system"
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/events?namespace=flux-system&uid="+uid, nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
 	}
 }
 
