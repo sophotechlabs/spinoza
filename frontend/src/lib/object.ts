@@ -1,4 +1,5 @@
 import type { K8sEvent, ObjectDetail, ObjectRef } from './types';
+import { request } from './http';
 
 export function refQuery(ref: ObjectRef): string {
   const params = new URLSearchParams({
@@ -31,7 +32,7 @@ export async function failure(response: Response, fallback: string): Promise<Err
 }
 
 export async function fetchObject(ref: ObjectRef): Promise<ObjectDetail> {
-  const response = await fetch(`/api/object?${refQuery(ref)}`);
+  const response = await request(`/api/object?${refQuery(ref)}`);
   if (!response.ok) {
     throw await failure(response, `object request failed with status ${response.status}`);
   }
@@ -39,7 +40,7 @@ export async function fetchObject(ref: ObjectRef): Promise<ObjectDetail> {
 }
 
 export async function applyObject(ref: ObjectRef, doc: string): Promise<ObjectDetail> {
-  const response = await fetch(`/api/object?${refQuery(ref)}`, {
+  const response = await request(`/api/object?${refQuery(ref)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/yaml' },
     body: doc,
@@ -51,7 +52,7 @@ export async function applyObject(ref: ObjectRef, doc: string): Promise<ObjectDe
 }
 
 export async function deleteObject(ref: ObjectRef): Promise<void> {
-  const response = await fetch(`/api/object?${refQuery(ref)}`, { method: 'DELETE' });
+  const response = await request(`/api/object?${refQuery(ref)}`, { method: 'DELETE' });
   if (!response.ok) {
     throw await failure(response, `delete failed with status ${response.status}`);
   }
@@ -59,7 +60,7 @@ export async function deleteObject(ref: ObjectRef): Promise<void> {
 
 export async function fetchEvents(namespace: string, uid: string): Promise<K8sEvent[]> {
   const params = new URLSearchParams({ namespace, uid });
-  const response = await fetch(`/api/events?${params.toString()}`);
+  const response = await request(`/api/events?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `events request failed with status ${response.status}`);
   }

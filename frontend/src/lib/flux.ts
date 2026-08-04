@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { FluxDashboard } from './types';
+import { request } from './http';
 
 const FLUX_POLL_MS = 5000;
 
 export async function fetchFlux(): Promise<FluxDashboard> {
-  const response = await fetch('/api/flux');
+  const response = await request('/api/flux');
   if (!response.ok) {
     throw new Error(`flux request failed with status ${response.status}`);
   }

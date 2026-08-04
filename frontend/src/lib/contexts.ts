@@ -1,5 +1,6 @@
 import type { ContextList } from './types';
 import { failure } from './object';
+import { request } from './http';
 
 interface WireContexts {
   contexts?: string[];
@@ -16,7 +17,7 @@ function normalize(body: WireContexts): ContextList {
 }
 
 export async function fetchContexts(): Promise<ContextList> {
-  const response = await fetch('/api/contexts');
+  const response = await request('/api/contexts');
   if (!response.ok) {
     throw await failure(response, `contexts request failed with status ${response.status}`);
   }
@@ -25,7 +26,7 @@ export async function fetchContexts(): Promise<ContextList> {
 
 export async function switchContext(name: string): Promise<ContextList> {
   const params = new URLSearchParams({ name });
-  const response = await fetch(`/api/contexts?${params.toString()}`, { method: 'POST' });
+  const response = await request(`/api/contexts?${params.toString()}`, { method: 'POST' });
   if (!response.ok) {
     throw await failure(response, `switching context failed with status ${response.status}`);
   }

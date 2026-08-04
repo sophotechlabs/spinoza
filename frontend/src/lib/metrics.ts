@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { Metrics } from './types';
+import { request } from './http';
 
 const METRICS_POLL_MS = 10000;
 
 export async function fetchMetrics(): Promise<Metrics> {
-  const response = await fetch('/api/metrics');
+  const response = await request('/api/metrics');
   if (!response.ok) {
     throw new Error(`metrics request failed with status ${response.status}`);
   }

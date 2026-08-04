@@ -8,6 +8,7 @@ import {
   sameRef,
 } from '../../src/lib/object';
 import type { K8sEvent, ObjectDetail, ObjectRef } from '../../src/lib/types';
+import { anySignal } from '../helpers';
 
 const ref: ObjectRef = {
   group: 'apps',
@@ -76,7 +77,9 @@ describe('object client', () => {
     const mock = stubFetch(() => ok(detail));
 
     await expect(fetchObject(ref)).resolves.toEqual(detail);
-    expect(mock).toHaveBeenCalledWith(`/api/object?${refQuery(ref)}`);
+    expect(mock).toHaveBeenCalledWith(`/api/object?${refQuery(ref)}`, {
+      signal: anySignal(),
+    });
   });
 
   it('surfaces the server message on a failed fetch', async () => {
@@ -111,6 +114,7 @@ describe('object client', () => {
       method: 'PUT',
       headers: { 'Content-Type': 'application/yaml' },
       body: 'kind: Deployment\n',
+      signal: anySignal(),
     });
   });
 
@@ -130,7 +134,10 @@ describe('object client', () => {
     const mock = stubFetch(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
 
     await expect(deleteObject(ref)).resolves.toBeUndefined();
-    expect(mock).toHaveBeenCalledWith(`/api/object?${refQuery(ref)}`, { method: 'DELETE' });
+    expect(mock).toHaveBeenCalledWith(`/api/object?${refQuery(ref)}`, {
+      method: 'DELETE',
+      signal: anySignal(),
+    });
   });
 
   it('reports a delete failure', async () => {
@@ -154,7 +161,9 @@ describe('object client', () => {
     const mock = stubFetch(() => ok(events));
 
     await expect(fetchEvents('flux-system', 'uid-web')).resolves.toEqual(events);
-    expect(mock).toHaveBeenCalledWith('/api/events?namespace=flux-system&uid=uid-web');
+    expect(mock).toHaveBeenCalledWith('/api/events?namespace=flux-system&uid=uid-web', {
+      signal: anySignal(),
+    });
   });
 
   it('reports an events failure', async () => {

@@ -10,6 +10,7 @@ import {
   runAction,
 } from '../../src/lib/objectActions';
 import type { ActionResult, ObjectDetail, ObjectRef } from '../../src/lib/types';
+import { anySignal } from '../helpers';
 
 function ref(group: string, resource: string): ObjectRef {
   return { group, version: 'v1', resource, namespace: 'shop', name: 'web' };
@@ -76,7 +77,10 @@ describe('runAction', () => {
     expect(String(call[0])).toContain('action=scale');
     expect(String(call[0])).toContain('replicas=3');
     expect(String(call[0])).toContain('resource=deployments');
-    expect(call[1]).toEqual({ method: 'POST' });
+    expect(call[1]).toEqual({
+      method: 'POST',
+      signal: anySignal(),
+    });
   });
 
   it('sends replicas=0 rather than dropping it', async () => {

@@ -85,11 +85,11 @@ function collapsedKeys(categories: Category[]): Set<string> {
   return keys;
 }
 
-function errorMessage(err: unknown): string {
+function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) {
     return err.message;
   }
-  return 'discovery request failed';
+  return fallback;
 }
 
 function retryLabel(retrying: boolean): string {
@@ -116,34 +116,50 @@ export default function Sidebar({
   const [categories, setCategories] = useState<Category[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [countsError, setCountsError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let mounted = true;
+    setCounts({});
+    setCountsError(null);
     const load = async () => {
       try {
         const catalog = await fetchResources();
-        if (mounted) {
-          setCategories(catalog.categories);
-          setCollapsed(collapsedKeys(catalog.categories));
-          setError(catalog.error ?? null);
+        if (!mounted) {
+          return;
         }
-        const tally = await fetchResourceCounts();
-        if (mounted) {
-          setCounts(tally);
-        }
+        setCategories(catalog.categories);
+        setCollapsed(collapsedKeys(catalog.categories));
+        setError(catalog.error ?? null);
       } catch (err: unknown) {
         if (mounted) {
-          setError(errorMessage(err));
+          setError(errorMessage(err, 'discovery request failed'));
         }
+        return;
       }
+      await loadCounts(() => mounted);
     };
     void load();
     return () => {
       mounted = false;
     };
   }, [epoch]);
+
+  async function loadCounts(live: () => boolean) {
+    try {
+      const tally = await fetchResourceCounts();
+      if (live()) {
+        setCounts(tally);
+        setCountsError(null);
+      }
+    } catch (err: unknown) {
+      if (live()) {
+        setCountsError(errorMessage(err, 'resource counts request failed'));
+      }
+    }
+  }
 
   async function retry() {
     setRetrying(true);
@@ -152,13 +168,13 @@ export default function Sidebar({
       setCategories(catalog.categories);
       setCollapsed(collapsedKeys(catalog.categories));
       setError(catalog.error ?? null);
-      const tally = await fetchResourceCounts();
-      setCounts(tally);
     } catch (err: unknown) {
-      setError(errorMessage(err));
-    } finally {
+      setError(errorMessage(err, 'discovery request failed'));
       setRetrying(false);
+      return;
     }
+    await loadCounts(() => true);
+    setRetrying(false);
   }
 
   function toggle(name: string) {
@@ -253,6 +269,15 @@ export default function Sidebar({
             >
               {retryLabel(retrying)}
             </button>
+          </div>
+        )}
+        {countsError !== null && (
+          <div
+            role="status"
+            title={countsError}
+            className="mx-2 mb-1 truncate text-[11px] text-warn-muted"
+          >
+            Object counts unavailable — {countsError}
           </div>
         )}
         {error === null && categories.length === 0 && (

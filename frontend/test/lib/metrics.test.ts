@@ -9,6 +9,7 @@ import {
   isUsable,
   useMetrics,
 } from '../../src/lib/metrics';
+import { anySignal } from '../helpers';
 
 const sample: Metrics = {
   pods: { 'prod/web': { cpuMilli: 150, memoryMi: 192, cpuPercent: 0, memPercent: 0 } },
@@ -53,7 +54,7 @@ describe('fetchMetrics', () => {
   it('requests /api/metrics and returns the parsed metrics', async () => {
     const fetchMock = stubOk(sample);
     const result = await fetchMetrics();
-    expect(fetchMock).toHaveBeenCalledWith('/api/metrics');
+    expect(fetchMock).toHaveBeenCalledWith('/api/metrics', { signal: anySignal() });
     expect(result).toEqual(sample);
   });
 

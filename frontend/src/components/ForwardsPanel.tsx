@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { refreshForwards, stopForward, useForwardPolling } from '../lib/portForward';
 import { useForwardsStore } from '../store/forwards';
+import { notifyError, notifyOk } from '../store/toasts';
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return 'could not stop the forward';
+}
 
 function stateColor(state: string): string {
   if (state === 'failed') {
@@ -22,9 +30,12 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
     setError(null);
     try {
       await stopForward(id);
+      notifyOk('Forward stopped');
       await refreshForwards();
-    } catch {
-      setError('could not stop the forward');
+    } catch (err: unknown) {
+      const message = errorMessage(err);
+      setError(message);
+      notifyError(`Stopping the forward: ${message}`);
     }
   }
 

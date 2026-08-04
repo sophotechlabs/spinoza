@@ -1,5 +1,6 @@
 import type { Condition, FluxActionResult, ObjectDetail, ObjectRef } from './types';
 import { failure, fetchObject, refQuery } from './object';
+import { request } from './http';
 
 export type FluxAction = 'reconcile' | 'suspend' | 'resume';
 
@@ -21,7 +22,7 @@ export function isFluxObject(apiVersion: string): boolean {
 }
 
 export async function runFluxAction(ref: ObjectRef, action: FluxAction): Promise<FluxActionResult> {
-  const response = await fetch(`/api/flux/action?${refQuery(ref)}&action=${action}`, {
+  const response = await request(`/api/flux/action?${refQuery(ref)}&action=${action}`, {
     method: 'POST',
   });
   if (!response.ok) {

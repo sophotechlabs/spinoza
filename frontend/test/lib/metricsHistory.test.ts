@@ -7,6 +7,7 @@ import {
   formatMemory,
   peak,
 } from '../../src/lib/metricsHistory';
+import { anySignal } from '../helpers';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -21,6 +22,7 @@ describe('fetchMetricHistory', () => {
     await expect(fetchMetricHistory('monitoring', 'loki-0', '6h')).resolves.toEqual(history);
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/metrics/history?namespace=monitoring&pod=loki-0&range=6h',
+      { signal: anySignal() },
     );
   });
 

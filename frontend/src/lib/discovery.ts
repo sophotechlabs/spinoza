@@ -1,7 +1,8 @@
 import type { ResourceCatalog, ResourceCounts } from './types';
+import { request } from './http';
 
-async function request(method: string): Promise<ResourceCatalog> {
-  const response = await fetch('/api/resources', { method });
+async function catalog(method: string): Promise<ResourceCatalog> {
+  const response = await request('/api/resources', { method });
   if (!response.ok) {
     throw new Error(`discovery request failed with status ${response.status}`);
   }
@@ -9,15 +10,15 @@ async function request(method: string): Promise<ResourceCatalog> {
 }
 
 export async function fetchResources(): Promise<ResourceCatalog> {
-  return request('GET');
+  return catalog('GET');
 }
 
 export async function refreshResources(): Promise<ResourceCatalog> {
-  return request('POST');
+  return catalog('POST');
 }
 
 export async function fetchResourceCounts(): Promise<Record<string, number>> {
-  const response = await fetch('/api/resources/counts');
+  const response = await request('/api/resources/counts');
   if (!response.ok) {
     throw new Error(`resource counts request failed with status ${response.status}`);
   }

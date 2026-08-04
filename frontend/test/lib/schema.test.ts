@@ -9,6 +9,7 @@ import {
 } from '../../src/lib/schema';
 import type { JsonSchema, SchemaEntry } from '../../src/lib/schema';
 import type { ObjectDetail } from '../../src/lib/types';
+import { anySignal } from '../helpers';
 
 function detail(apiVersion: string, kind: string): ObjectDetail {
   return {
@@ -58,7 +59,9 @@ describe('schema', () => {
     await expect(
       fetchSchema({ group: 'apps', version: 'v1', kind: 'Deployment' }),
     ).resolves.toEqual({ a: 1 });
-    expect(mock).toHaveBeenCalledWith('/api/schema?group=apps&version=v1&kind=Deployment');
+    expect(mock).toHaveBeenCalledWith('/api/schema?group=apps&version=v1&kind=Deployment', {
+      signal: anySignal(),
+    });
   });
 
   it('reports a schema request failure', async () => {

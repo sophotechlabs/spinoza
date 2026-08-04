@@ -1,5 +1,6 @@
 import type { MetricHistory } from './types';
 import { failure } from './object';
+import { request } from './http';
 
 export const RANGES = ['15m', '1h', '6h', '24h'] as const;
 
@@ -13,7 +14,7 @@ export async function fetchMetricHistory(
   span: MetricRange,
 ): Promise<MetricHistory> {
   const params = new URLSearchParams({ namespace, pod, range: span });
-  const response = await fetch(`/api/metrics/history?${params.toString()}`);
+  const response = await request(`/api/metrics/history?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `metric history failed with status ${response.status}`);
   }

@@ -1,5 +1,6 @@
 import type { ActionResult, ObjectDetail, ObjectRef } from './types';
 import { failure, refQuery } from './object';
+import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 
 export type ObjectAction = 'scale' | 'restart' | 'cordon' | 'uncordon' | 'drain';
 
@@ -64,7 +65,10 @@ export async function runAction(
   action: ObjectAction,
   options: ActionOptions = {},
 ): Promise<ActionResult> {
-  const response = await fetch(`/api/action?${query(ref, action, options)}`, { method: 'POST' });
+  const response = await request(`/api/action?${query(ref, action, options)}`, {
+    method: 'POST',
+    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+  });
   if (!response.ok) {
     throw await failure(response, `${action} failed with status ${response.status}`);
   }

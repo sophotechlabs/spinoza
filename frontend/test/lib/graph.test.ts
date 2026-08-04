@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Graph } from '../../src/lib/types';
 import { fetchGraph } from '../../src/lib/graph';
-import { makeGraphEdge, makeGraphNode } from '../helpers';
+import { anySignal, makeGraphEdge, makeGraphNode } from '../helpers';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -19,7 +19,9 @@ describe('fetchGraph', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const result = await fetchGraph();
-    expect(fetchMock).toHaveBeenCalledWith('/api/gitops/graph');
+    expect(fetchMock).toHaveBeenCalledWith('/api/gitops/graph', {
+      signal: anySignal(),
+    });
     expect(result).toEqual(graph);
   });
 

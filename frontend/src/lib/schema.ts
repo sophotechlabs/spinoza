@@ -1,4 +1,5 @@
 import type { ObjectDetail } from './types';
+import { request } from './http';
 
 export interface SchemaGVK {
   group: string;
@@ -38,7 +39,7 @@ export async function fetchSchema(gvk: SchemaGVK): Promise<JsonSchema> {
     version: gvk.version,
     kind: gvk.kind,
   });
-  const response = await fetch(`/api/schema?${params.toString()}`);
+  const response = await request(`/api/schema?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`schema request failed with status ${response.status}`);
   }

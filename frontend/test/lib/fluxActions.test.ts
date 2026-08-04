@@ -11,6 +11,7 @@ import {
   runFluxAction,
 } from '../../src/lib/fluxActions';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
+import { anySignal } from '../helpers';
 
 const ref: ObjectRef = {
   group: 'kustomize.toolkit.fluxcd.io',
@@ -53,7 +54,7 @@ describe('fluxActions', () => {
     await expect(runFluxAction(ref, 'reconcile')).resolves.toEqual(result);
     expect(mock).toHaveBeenCalledWith(
       '/api/flux/action?group=kustomize.toolkit.fluxcd.io&version=v1&resource=kustomizations&namespace=flux-system&name=apps&action=reconcile',
-      { method: 'POST' },
+      { method: 'POST', signal: anySignal() },
     );
   });
 

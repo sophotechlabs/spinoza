@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchResourceCounts, fetchResources, refreshResources } from '../../src/lib/discovery';
-import { makeCategory, makeDescriptor } from '../helpers';
+import { anySignal, makeCategory, makeDescriptor } from '../helpers';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -18,7 +18,10 @@ describe('fetchResources', () => {
 
     const result = await fetchResources();
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/resources', { method: 'GET' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/resources', {
+      method: 'GET',
+      signal: anySignal(),
+    });
     expect(result).toEqual(body);
   });
 
@@ -52,7 +55,10 @@ describe('refreshResources', () => {
 
     const result = await refreshResources();
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/resources', { method: 'POST' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/resources', {
+      method: 'POST',
+      signal: anySignal(),
+    });
     expect(result).toEqual(body);
   });
 

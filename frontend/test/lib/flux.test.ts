@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type { FluxDashboard } from '../../src/lib/types';
 import { fetchFlux, useFlux } from '../../src/lib/flux';
+import { anySignal } from '../helpers';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -41,7 +42,7 @@ describe('fetchFlux', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const result = await fetchFlux();
-    expect(fetchMock).toHaveBeenCalledWith('/api/flux');
+    expect(fetchMock).toHaveBeenCalledWith('/api/flux', { signal: anySignal() });
     expect(result).toEqual(dashboard);
   });
 

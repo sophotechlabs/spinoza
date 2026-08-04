@@ -3,7 +3,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ForwardsPanel from '../../src/components/ForwardsPanel';
 import { useForwardsStore } from '../../src/store/forwards';
+import { useToastsStore } from '../../src/store/toasts';
 import type { PortForward } from '../../src/lib/types';
+import { anySignal, rejectsWith } from '../helpers';
 
 function forward(overrides: Partial<PortForward> = {}): PortForward {
   return {
@@ -29,6 +31,7 @@ function stubList(forwards: PortForward[]) {
 describe('ForwardsPanel', () => {
   beforeEach(() => {
     useForwardsStore.setState({ forwards: [] });
+    useToastsStore.getState().clear();
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }),
@@ -77,7 +80,13 @@ describe('ForwardsPanel', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Stop' }));
 
-    expect(mock).toHaveBeenCalledWith('/api/portforward?id=pf-1', { method: 'DELETE' });
+    expect(mock).toHaveBeenCalledWith('/api/portforward?id=pf-1', {
+      method: 'DELETE',
+      signal: anySignal(),
+    });
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({ tone: 'ok', message: 'Forward stopped' }),
+    ]);
   });
 
   it('reports a failure to stop', async () => {
@@ -95,6 +104,55 @@ describe('ForwardsPanel', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Stop' }));
 
+    expect(
+      await screen.findByText('stopping the forward failed with status 404'),
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to a generic message for a non-Error rejection', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return rejectsWith('nope')();
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([forward()]) });
+      }),
+    );
+    render(<ForwardsPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Stop' }));
+
     expect(await screen.findByText('could not stop the forward')).toBeInTheDocument();
+  });
+
+  it('keeps the server message instead of a fixed string', async () => {
+    const user = userEvent.setup();
+    useToastsStore.getState().clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            json: () => Promise.resolve({ message: 'forward pf-1 is already gone' }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([forward()]) });
+      }),
+    );
+    render(<ForwardsPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Stop' }));
+
+    expect(await screen.findByText('forward pf-1 is already gone')).toBeInTheDocument();
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        message: 'Stopping the forward: forward pf-1 is already gone',
+      }),
+    ]);
   });
 });

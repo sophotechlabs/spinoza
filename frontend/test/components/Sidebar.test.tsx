@@ -3,9 +3,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Category, ResourceDescriptor, View } from '../../src/lib/types';
 import Sidebar from '../../src/components/Sidebar';
-import { makeCategory, makeDescriptor } from '../helpers';
+import { anySignal, makeCategory, makeDescriptor, rejectsWith } from '../helpers';
 
 interface RenderOverrides {
+  epoch?: number;
   view?: View;
   activeResource?: ResourceDescriptor | null;
   onSelect?: (descriptor: ResourceDescriptor) => void;
@@ -15,9 +16,11 @@ interface RenderOverrides {
   onSelectRoles?: () => void;
 }
 
-function renderSidebar(overrides: RenderOverrides = {}) {
-  const props = {
-    view: overrides.view ?? 'resources',
+function sidebarProps(overrides: RenderOverrides = {}) {
+  const view: View = overrides.view ?? 'resources';
+  return {
+    epoch: overrides.epoch ?? 0,
+    view,
     activeResource: overrides.activeResource ?? null,
     onSelect: overrides.onSelect ?? vi.fn(),
     onSelectGraph: overrides.onSelectGraph ?? vi.fn(),
@@ -25,7 +28,10 @@ function renderSidebar(overrides: RenderOverrides = {}) {
     onSelectOverview: overrides.onSelectOverview ?? vi.fn(),
     onSelectRoles: overrides.onSelectRoles ?? vi.fn(),
   };
-  return render(<Sidebar {...props} />);
+}
+
+function renderSidebar(overrides: RenderOverrides = {}) {
+  return render(<Sidebar {...sidebarProps(overrides)} />);
 }
 
 function stubCatalog(categories: Category[], error?: string): void {
@@ -227,7 +233,7 @@ describe('Sidebar', () => {
     const panel = handle.parentElement;
 
     fireEvent.mouseDown(handle, { clientX: 224 });
-    fireEvent.mouseMove(window, { clientX: 324 });
+    fireEvent.mouseMove(window, { clientX: 324, buttons: 1 });
     fireEvent.mouseUp(window);
 
     expect(panel).toHaveStyle({ width: '324px' });
@@ -273,7 +279,7 @@ describe('Sidebar', () => {
     expect(await screen.findByText(/Workloads/)).toBeInTheDocument();
     expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
     const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call).toEqual(['/api/resources', { method: 'POST' }]);
+    expect(call).toEqual(['/api/resources', { method: 'POST', signal: anySignal() }]);
   });
 
   it('reports a failed retry', async () => {
@@ -289,6 +295,35 @@ describe('Sidebar', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByText('discovery request failed with status 503')).toBeInTheDocument();
+  });
+
+  it('drops a catalog that lands after unmount', async () => {
+    const deferred = {
+      settle: () => {
+        return undefined;
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            deferred.settle = () => {
+              resolve({
+                ok: true,
+                json: () => Promise.resolve({ categories, error: 'too late' }),
+              });
+            };
+          }),
+      ),
+    );
+    const view = renderSidebar({});
+
+    view.unmount();
+    deferred.settle();
+    await Promise.resolve();
+
+    expect(screen.queryByText('too late')).not.toBeInTheDocument();
   });
 
   it('says so when discovery succeeded but found nothing', async () => {
@@ -376,6 +411,48 @@ describe('resource counts', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
 
     expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
+    expect(screen.getByText(/Object counts unavailable/)).toBeInTheDocument();
+    expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
+  });
+
+  it('names a counts refusal without a message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/resources/counts')) {
+          return rejectsWith('nope')();
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    renderSidebar();
+
+    expect(
+      await screen.findByText(/Object counts unavailable — resource counts request failed/),
+    ).toBeInTheDocument();
+  });
+
+  it('drops the previous cluster counts when the context changes', async () => {
+    stubFetch(categories, { '/v1/pods': 57 });
+    const view = renderSidebar({ epoch: 0 });
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+    await screen.findByRole('button', { name: 'Pod 57' });
+
+    const pending = new Promise(() => undefined);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/resources/counts')) {
+          return pending;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    view.rerender(<Sidebar {...sidebarProps({ epoch: 1 })} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pod 57' })).not.toBeInTheDocument();
   });
 
   it('carries on when the counts payload has no counts', async () => {

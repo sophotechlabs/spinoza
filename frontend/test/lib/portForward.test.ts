@@ -10,6 +10,7 @@ import {
 } from '../../src/lib/portForward';
 import { useForwardsStore } from '../../src/store/forwards';
 import type { ObjectRef, PortForward } from '../../src/lib/types';
+import { anySignal } from '../helpers';
 
 const ref: ObjectRef = {
   group: '',
@@ -83,7 +84,7 @@ describe('portForward', () => {
     await expect(startForward('Pod', ref, 8080)).resolves.toEqual(forward());
     expect(mock).toHaveBeenCalledWith(
       '/api/portforward?kind=Pod&namespace=flux-system&name=web&port=8080',
-      { method: 'POST' },
+      { method: 'POST', signal: anySignal() },
     );
   });
 
@@ -107,7 +108,10 @@ describe('portForward', () => {
     vi.stubGlobal('fetch', mock);
 
     await expect(stopForward('pf-1')).resolves.toBeUndefined();
-    expect(mock).toHaveBeenCalledWith('/api/portforward?id=pf-1', { method: 'DELETE' });
+    expect(mock).toHaveBeenCalledWith('/api/portforward?id=pf-1', {
+      method: 'DELETE',
+      signal: anySignal(),
+    });
   });
 
   it('reports a stop failure', async () => {
