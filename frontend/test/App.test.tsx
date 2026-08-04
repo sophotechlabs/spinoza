@@ -145,7 +145,6 @@ vi.mock('../src/components/InspectLogs', () => ({
   default: ({ containers }: { containers: string[] }) => (
     <span data-testid="inspect-log-feed">{containers.join(',')}</span>
   ),
-  INSPECT_LOGS_SUB_ID: 'inspect-logs',
 }));
 
 import App from '../src/App';

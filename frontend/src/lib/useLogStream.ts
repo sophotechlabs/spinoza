@@ -1,10 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { LogRequest } from './types';
 
 export const TAIL_LINES = 500;
 
+let streamSeq = 0;
+
+function nextLogSubId(prefix: string): string {
+  streamSeq += 1;
+  return `${prefix}#${String(streamSeq)}`;
+}
+
 interface LogStream {
-  subId: string;
+  prefix: string;
   namespace: string;
   name: string;
   container: string;
@@ -12,14 +19,18 @@ interface LogStream {
   unsubscribeLogs: (subId: string) => void;
 }
 
-export function useLogStream(stream: LogStream) {
-  const { subId, namespace, name, container, subscribeLogs, unsubscribeLogs } = stream;
+export function useLogStream(stream: LogStream): string {
+  const { prefix, namespace, name, container, subscribeLogs, unsubscribeLogs } = stream;
+  const [subId, setSubId] = useState('');
 
   useEffect(() => {
     if (container === '') {
+      setSubId('');
       return;
     }
-    subscribeLogs(subId, {
+    const id = nextLogSubId(prefix);
+    setSubId(id);
+    subscribeLogs(id, {
       namespace,
       name,
       container,
@@ -27,7 +38,9 @@ export function useLogStream(stream: LogStream) {
       follow: true,
     });
     return () => {
-      unsubscribeLogs(subId);
+      unsubscribeLogs(id);
     };
-  }, [subId, namespace, name, container, subscribeLogs, unsubscribeLogs]);
+  }, [prefix, namespace, name, container, subscribeLogs, unsubscribeLogs]);
+
+  return subId;
 }

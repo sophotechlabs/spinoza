@@ -6,7 +6,7 @@ import { prettySegments, rawSegments } from '../lib/logColor';
 import { scrollToBottom } from '../lib/scroll';
 import { useLogView } from '../store/settings';
 
-export const INSPECT_LOGS_SUB_ID = 'inspect-logs';
+const INSPECT_LOGS_PREFIX = 'inspect-logs';
 
 interface InspectLogsProps {
   namespace: string;
@@ -41,10 +41,6 @@ export default function InspectLogs({
   const [follow, setFollow] = useState(true);
   const logView = useLogView();
   const [pretty, setPretty] = useState(() => logView === 'pretty');
-  const lines = useLogLines(INSPECT_LOGS_SUB_ID);
-  const offset = useLogOffset(INSPECT_LOGS_SUB_ID);
-  const ended = useLogEnded(INSPECT_LOGS_SUB_ID);
-  const error = useLogError(INSPECT_LOGS_SUB_ID);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const podKey = `${namespace}/${pod}`;
@@ -54,14 +50,19 @@ export default function InspectLogs({
     setContainer(containers[0] ?? '');
   }
 
-  useLogStream({
-    subId: INSPECT_LOGS_SUB_ID,
+  const subId = useLogStream({
+    prefix: INSPECT_LOGS_PREFIX,
     namespace,
     name: pod,
     container,
     subscribeLogs,
     unsubscribeLogs,
   });
+
+  const lines = useLogLines(subId);
+  const offset = useLogOffset(subId);
+  const ended = useLogEnded(subId);
+  const error = useLogError(subId);
 
   useEffect(() => {
     if (!follow) {

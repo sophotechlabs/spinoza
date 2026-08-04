@@ -56,6 +56,22 @@ describe('logs store', () => {
     expect(useLogsStore.getState().streams.size).toBe(0);
   });
 
+  it('records why a stream failed', () => {
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().failStream('logs', 'pods/log is forbidden');
+
+    expect(useLogsStore.getState().streams.get('logs')).toMatchObject({
+      ended: true,
+      error: 'pods/log is forbidden',
+    });
+  });
+
+  it('ignores failing an unknown stream', () => {
+    useLogsStore.getState().failStream('missing', 'too late');
+
+    expect(useLogsStore.getState().streams.size).toBe(0);
+  });
+
   it('clears a stream', () => {
     useLogsStore.getState().startStream('logs');
     useLogsStore.getState().clearStream('logs');

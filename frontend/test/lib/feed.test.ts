@@ -298,7 +298,45 @@ describe('useResourceFeed', () => {
       );
     });
 
-    expect(useLogsStore.getState().streams.get('logs#1')?.lines).toEqual([]);
+    expect(useLogsStore.getState().streams.has('logs#1')).toBe(false);
+  });
+
+  it('drops an error for a subscription nobody holds any more', () => {
+    const hook = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    act(() => {
+      hook.result.current.subscribe('main#3', makeDescriptor({}), '');
+    });
+    act(() => {
+      hook.result.current.unsubscribe('main#3');
+    });
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'error', subId: 'main#3', message: 'too late' }),
+        }),
+      );
+    });
+
+    expect(useResourcesStore.getState().errors.has('main#3')).toBe(false);
+  });
+
+  it('keeps a table error out of the log store', () => {
+    const socket = openFeedFor('main');
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'error', subId: 'main', message: 'watch failed' }),
+        }),
+      );
+    });
+
+    expect(useResourcesStore.getState().errors.get('main')).toBe('watch failed');
+    expect(useLogsStore.getState().streams.has('main')).toBe(false);
   });
 
   it('shows a failed subscription instead of an empty table', () => {
@@ -369,6 +407,7 @@ describe('useResourceFeed', () => {
     });
 
     expect(useLogsStore.getState().streams.get('logs#1')?.error).toBe('pods/log is forbidden');
+    expect(useResourcesStore.getState().errors.has('logs#1')).toBe(false);
   });
 
   it('routes an added delta message to the store', () => {
@@ -797,7 +836,7 @@ describe('useResourceFeed', () => {
     expect(useLogsStore.getState().streams.get('logs')?.ended).toBe(true);
   });
 
-  it('sends a logs-unsubscribe frame and keeps what was already streamed', () => {
+  it('sends a logs-unsubscribe frame and frees the buffer', () => {
     const { result } = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
@@ -805,11 +844,18 @@ describe('useResourceFeed', () => {
       result.current.subscribeLogs('logs', logRequest);
     });
     act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log', subId: 'logs', lines: ['first'] }),
+        }),
+      );
+    });
+    act(() => {
       result.current.unsubscribeLogs('logs');
     });
 
     expect(sentMessages(socket)).toContainEqual({ type: 'logs-unsubscribe', subId: 'logs' });
-    expect(useLogsStore.getState().streams.get('logs')?.ended).toBe(true);
+    expect(useLogsStore.getState().streams.has('logs')).toBe(false);
   });
 
   it('re-sends an active log subscription after a reconnect', () => {

@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import InspectLogs, { INSPECT_LOGS_SUB_ID } from '../../src/components/InspectLogs';
+import InspectLogs from '../../src/components/InspectLogs';
 import { scrollToBottom } from '../../src/lib/scroll';
 import { useLogsStore } from '../../src/store/logs';
 
+type SubscribeLogs = ReturnType<typeof vi.fn<(subId: string, request: unknown) => void>>;
+
 function renderLogs(props: { namespace?: string; pod?: string; containers?: string[] } = {}) {
-  const subscribeLogs = vi.fn();
-  const unsubscribeLogs = vi.fn();
+  const subscribeLogs = vi.fn<(subId: string, request: unknown) => void>();
+  const unsubscribeLogs = vi.fn<(subId: string) => void>();
   const view = render(
     <InspectLogs
       namespace={props.namespace ?? 'flux-system'}
@@ -18,6 +20,11 @@ function renderLogs(props: { namespace?: string; pod?: string; containers?: stri
     />,
   );
   return { subscribeLogs, unsubscribeLogs, view };
+}
+
+function liveSubId(subscribeLogs: SubscribeLogs): string {
+  const calls = subscribeLogs.mock.calls;
+  return calls[calls.length - 1][0];
 }
 
 describe('InspectLogs', () => {
@@ -49,7 +56,7 @@ describe('InspectLogs', () => {
     );
 
     expect(subscribeLogs).toHaveBeenLastCalledWith(
-      INSPECT_LOGS_SUB_ID,
+      liveSubId(subscribeLogs),
       expect.objectContaining({ name: 'api', container: 'server' }),
     );
   });
@@ -74,19 +81,41 @@ describe('InspectLogs', () => {
     await user.selectOptions(screen.getByLabelText('Log container'), 'sidecar');
 
     expect(subscribeLogs).toHaveBeenLastCalledWith(
-      INSPECT_LOGS_SUB_ID,
+      liveSubId(subscribeLogs),
       expect.objectContaining({ container: 'sidecar' }),
     );
   });
 
+  it('reads the new stream only, so the previous container cannot bleed in', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs();
+    const first = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(first);
+      useLogsStore.getState().appendLines(first, ['from-app']);
+    });
+    expect(screen.getByText('from-app')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Log container'), 'sidecar');
+    const second = liveSubId(subscribeLogs);
+
+    expect(second).not.toBe(first);
+    act(() => {
+      useLogsStore.getState().appendLines(first, ['late-from-app']);
+    });
+    expect(screen.queryByText('late-from-app')).not.toBeInTheDocument();
+    expect(screen.getByText('Waiting for output…')).toBeInTheDocument();
+  });
+
   it('scrolls to the newest line while following', () => {
-    renderLogs();
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
     const body = screen.getByText('Waiting for output…').parentElement as HTMLDivElement;
     vi.spyOn(body, 'scrollHeight', 'get').mockReturnValue(900);
 
     act(() => {
-      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
-      useLogsStore.getState().appendLines(INSPECT_LOGS_SUB_ID, ['one']);
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, ['one']);
     });
 
     expect(body.scrollTop).toBe(900);
@@ -94,14 +123,15 @@ describe('InspectLogs', () => {
 
   it('leaves the scroll position alone once paused', async () => {
     const user = userEvent.setup();
-    renderLogs();
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
     const body = screen.getByText('Waiting for output…').parentElement as HTMLDivElement;
     vi.spyOn(body, 'scrollHeight', 'get').mockReturnValue(900);
     await user.click(screen.getByRole('button', { name: 'Following' }));
 
     act(() => {
-      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
-      useLogsStore.getState().appendLines(INSPECT_LOGS_SUB_ID, ['one']);
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, ['one']);
     });
 
     expect(body.scrollTop).toBe(0);
@@ -124,11 +154,12 @@ describe('InspectLogs stream state', () => {
 
   it('shows why the stream failed', () => {
     useLogsStore.setState({ streams: new Map() });
-    renderLogs();
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
 
     act(() => {
-      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
-      useLogsStore.getState().failStream(INSPECT_LOGS_SUB_ID, 'pods/log is forbidden');
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().failStream(subId, 'pods/log is forbidden');
     });
 
     expect(screen.getByText('pods/log is forbidden')).toBeInTheDocument();
@@ -136,11 +167,12 @@ describe('InspectLogs stream state', () => {
 
   it('marks a stream that ended', () => {
     useLogsStore.setState({ streams: new Map() });
-    renderLogs();
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
 
     act(() => {
-      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
-      useLogsStore.getState().endStream(INSPECT_LOGS_SUB_ID);
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().endStream(subId);
     });
 
     expect(screen.getByText('stream ended')).toBeInTheDocument();
@@ -151,10 +183,11 @@ describe('reading a structured log line', () => {
   const jsonLine =
     '{"level":"info","ts":"2026-08-04T11:56:53.059Z","caller":"http/server.go:273","msg":"Starting HTTP Server.","addr":":9898"}';
 
-  function pushLine() {
+  function pushLine(subscribeLogs: SubscribeLogs) {
+    const subId = liveSubId(subscribeLogs);
     act(() => {
-      useLogsStore.getState().startStream(INSPECT_LOGS_SUB_ID);
-      useLogsStore.getState().appendLines(INSPECT_LOGS_SUB_ID, [jsonLine]);
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, [jsonLine]);
     });
   }
 
@@ -163,8 +196,8 @@ describe('reading a structured log line', () => {
   });
 
   it('formats it for reading by default', () => {
-    renderLogs();
-    pushLine();
+    const { subscribeLogs } = renderLogs();
+    pushLine(subscribeLogs);
 
     expect(screen.getByRole('button', { name: 'Pretty' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Starting HTTP Server.')).toBeInTheDocument();
@@ -173,8 +206,8 @@ describe('reading a structured log line', () => {
 
   it('hands back the untouched line when asked for raw', async () => {
     const user = userEvent.setup();
-    renderLogs();
-    pushLine();
+    const { subscribeLogs } = renderLogs();
+    pushLine(subscribeLogs);
 
     await user.click(screen.getByRole('button', { name: 'Pretty' }));
 

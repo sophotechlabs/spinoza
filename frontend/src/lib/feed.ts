@@ -114,7 +114,10 @@ export function useResourceFeed(): ResourceFeed {
         return logSubsRef.current.has(msg.subId);
       }
       if (msg.type === 'error') {
-        return true;
+        if (subsRef.current.has(msg.subId)) {
+          return true;
+        }
+        return logSubsRef.current.has(msg.subId);
       }
       return subsRef.current.has(msg.subId);
     }
@@ -153,8 +156,12 @@ export function useResourceFeed(): ResourceFeed {
           logs.endStream(msg.subId);
           break;
         case 'error':
-          store.failSub(msg.subId, msg.message);
-          logs.failStream(msg.subId, msg.message);
+          if (subsRef.current.has(msg.subId)) {
+            store.failSub(msg.subId, msg.message);
+          }
+          if (logSubsRef.current.has(msg.subId)) {
+            logs.failStream(msg.subId, msg.message);
+          }
           break;
       }
     }
@@ -264,7 +271,7 @@ export function useResourceFeed(): ResourceFeed {
     if (canSend(socket)) {
       send(socket, { type: 'logs-unsubscribe', subId });
     }
-    useLogsStore.getState().endStream(subId);
+    useLogsStore.getState().clearStream(subId);
   }, []);
 
   const reconnect = useCallback(() => {
