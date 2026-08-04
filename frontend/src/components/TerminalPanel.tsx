@@ -4,6 +4,8 @@ import { openExec } from '../lib/exec';
 import { createTerminal } from '../lib/terminal';
 import type { ExecSession } from '../lib/exec';
 import type { TerminalHandle } from '../lib/terminal';
+import { terminalTheme } from '../lib/themeColors';
+import { useResolvedTheme, useThemeStore } from '../store/theme';
 
 interface TerminalPanelProps {
   target: ExecTarget;
@@ -22,6 +24,8 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
   const [ended, setEnded] = useState('');
   const shellMissingRef = useRef(onShellMissing);
   shellMissingRef.current = onShellMissing;
+  const termRef = useRef<TerminalHandle | null>(null);
+  const resolvedTheme = useResolvedTheme();
 
   const { namespace, pod, container } = target;
 
@@ -32,6 +36,8 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
     setEnded('');
 
     const term: TerminalHandle = createTerminal(host);
+    termRef.current = term;
+    term.setTheme(terminalTheme(useThemeStore.getState().resolved));
     const session: ExecSession = openExec(
       { namespace, pod, container },
       {
@@ -67,8 +73,13 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
       observer.disconnect();
       session.close();
       term.dispose();
+      termRef.current = null;
     };
   }, [host, namespace, pod, container]);
+
+  useEffect(() => {
+    termRef.current?.setTheme(terminalTheme(resolvedTheme));
+  }, [host, resolvedTheme]);
 
   return (
     <div className="flex h-56 flex-col border-t border-edge bg-surface">

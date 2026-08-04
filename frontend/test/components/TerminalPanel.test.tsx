@@ -3,6 +3,8 @@ import { act, render, screen } from '@testing-library/react';
 import TerminalPanel from '../../src/components/TerminalPanel';
 import type { ExecHandlers, ExecSession } from '../../src/lib/exec';
 import type { TerminalHandle } from '../../src/lib/terminal';
+import { terminalTheme } from '../../src/lib/themeColors';
+import { useThemeStore } from '../../src/store/theme';
 
 const openExec = vi.fn<(target: unknown, handlers: ExecHandlers) => ExecSession>();
 const createTerminal = vi.fn<(node: HTMLElement) => TerminalHandle>();
@@ -204,5 +206,34 @@ describe('a re-render that only changes the callback', () => {
 
     expect(stubs.session.close).toHaveBeenCalled();
     expect(openExec).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('a live shell when the theme changes', () => {
+  beforeEach(() => {
+    openExec.mockReset();
+    createTerminal.mockReset();
+  });
+
+  afterEach(() => {
+    act(() => {
+      useThemeStore.getState().setPreference('dark');
+    });
+  });
+
+  it('is recoloured without dropping the session', () => {
+    const stubs = harness();
+    renderPanel();
+
+    expect(stubs.term.setTheme).toHaveBeenCalledWith(terminalTheme('dark'));
+
+    act(() => {
+      useThemeStore.getState().setPreference('light');
+    });
+
+    expect(stubs.term.setTheme).toHaveBeenCalledWith(terminalTheme('light'));
+    expect(stubs.session.close).not.toHaveBeenCalled();
+    expect(openExec).toHaveBeenCalledTimes(1);
+    expect(createTerminal).toHaveBeenCalledTimes(1);
   });
 });
