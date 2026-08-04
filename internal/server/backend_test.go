@@ -56,6 +56,49 @@ func stubbedServer(t *testing.T, backend Backend) *httptest.Server {
 	return ts
 }
 
+func TestThePickerStaysReachableWithoutACluster(t *testing.T) {
+	ts := stubbedServer(t, nil)
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/contexts", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want the picker served so a dead default context can be escaped: %s", resp.StatusCode, body)
+	}
+	var list api.ContextList
+	if err := json.Unmarshal(body, &list); err != nil {
+		t.Fatalf("decode %s: %v", body, err)
+	}
+	if len(list.Contexts) == 0 {
+		t.Fatal("the picker offered no contexts")
+	}
+}
+
+func TestTheUIIsStillServedWithoutACluster(t *testing.T) {
+	ts := stubbedServer(t, nil)
+
+	for _, path := range []string{"/", "/healthz", "/api/version"} {
+		t.Run(path, func(t *testing.T) {
+			resp, body := doRequest(t, http.MethodGet, ts.URL+path, nil)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d: %s", resp.StatusCode, body)
+			}
+		})
+	}
+}
+
+func TestClusterWorkSaysThereIsNoClusterYet(t *testing.T) {
+	ts := stubbedServer(t, nil)
+
+	for _, path := range []string{"/api/resources", "/api/flux", "/api/metrics", "/api/resources/counts"} {
+		t.Run(path, func(t *testing.T) {
+			resp, body := doRequest(t, http.MethodGet, ts.URL+path, nil)
+			if resp.StatusCode != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want 503 rather than a panic: %s", resp.StatusCode, body)
+			}
+		})
+	}
+}
+
 func TestTheCatalogEndpointNeedsNoClusterAtAll(t *testing.T) {
 	backend := &stubCatalog{catalog: api.ResourceCatalog{
 		Categories: []api.Category{{Name: "Workloads"}},

@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,11 +38,7 @@ func newTestCluster(t *testing.T, rec *recorder) *Cluster {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster, err := newCluster(ctx, rec.build, stubList)
-	if err != nil {
-		t.Fatalf("new: %v", err)
-	}
-	return cluster
+	return newCluster(ctx, rec.build, stubList)
 }
 
 func TestNewBuildsTheDefaultContext(t *testing.T) {
@@ -122,13 +119,40 @@ func TestAFailedUseKeepsTheWorkingManager(t *testing.T) {
 	}
 }
 
-func TestNewSurfacesABuildFailure(t *testing.T) {
+func TestAnUnreachableClusterStillStarts(t *testing.T) {
 	rec := &recorder{failOn: "", failErr: errors.New("kubeconfig is unreadable")}
 
-	_, err := newCluster(context.Background(), rec.build, stubList)
+	cluster := newCluster(context.Background(), rec.build, stubList)
 
-	if err == nil {
-		t.Fatal("expected the build failure to surface")
+	if cluster == nil {
+		t.Fatal("spinoza refused to start without a cluster, so the context picker is unreachable")
+	}
+	if cluster.Manager() != nil {
+		t.Fatal("a cluster that never connected handed out a manager")
+	}
+	list := cluster.Contexts()
+	if !strings.Contains(list.Error, "kubeconfig is unreadable") {
+		t.Fatalf("error = %q, want the startup failure carried to the picker", list.Error)
+	}
+	if len(list.Contexts) == 0 {
+		t.Fatal("the picker has no contexts to offer")
+	}
+}
+
+func TestPickingAWorkingContextClearsTheStartupFailure(t *testing.T) {
+	rec := &recorder{failOn: "", failErr: errors.New("kubeconfig is unreadable")}
+	cluster := newCluster(context.Background(), rec.build, stubList)
+	rec.failErr = nil
+
+	if err := cluster.Use("p-mk2"); err != nil {
+		t.Fatalf("use: %v", err)
+	}
+
+	if cluster.Manager() == nil {
+		t.Fatal("the recovered context handed out no manager")
+	}
+	if cluster.Contexts().Error != "" {
+		t.Fatalf("error = %q, want it cleared once a context answered", cluster.Contexts().Error)
 	}
 }
 
@@ -146,12 +170,9 @@ func TestContextsReportsTheCurrentSelection(t *testing.T) {
 func TestContextsSurfacesAKubeconfigFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster, err := newCluster(ctx, (&recorder{}).build, func() ([]string, string, error) {
+	cluster := newCluster(ctx, (&recorder{}).build, func() ([]string, string, error) {
 		return nil, "", errors.New("kubeconfig is unreadable")
 	})
-	if err != nil {
-		t.Fatalf("new: %v", err)
-	}
 
 	list := cluster.Contexts()
 
@@ -202,10 +223,7 @@ func TestTheLastRequestedContextWinsEvenIfItBuildsFirst(t *testing.T) {
 	gated := newGatedBuilder("slow")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster, err := newCluster(ctx, gated.build, stubList)
-	if err != nil {
-		t.Fatalf("new: %v", err)
-	}
+	cluster := newCluster(ctx, gated.build, stubList)
 
 	done := make(chan error, 1)
 	go func() {
@@ -233,10 +251,7 @@ func TestASupersededSwitchDoesNotStrandItsManager(t *testing.T) {
 	gated := newGatedBuilder("slow")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster, err := newCluster(ctx, gated.build, stubList)
-	if err != nil {
-		t.Fatalf("new: %v", err)
-	}
+	cluster := newCluster(ctx, gated.build, stubList)
 
 	done := make(chan error, 1)
 	go func() {

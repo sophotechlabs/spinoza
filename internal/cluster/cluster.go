@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -29,23 +30,37 @@ type Cluster struct {
 	manager   *resources.Manager
 	cancel    context.CancelFunc
 	current   string
+	startErr  string
 	nextSeq   uint64
 	installed uint64
 }
 
-func newCluster(ctx context.Context, build builder, list lister) (*Cluster, error) {
+func newCluster(ctx context.Context, build builder, list lister) *Cluster {
 	cluster := &Cluster{root: ctx, build: build, list: list}
 	err := cluster.use(ctx, "")
-	if err != nil {
-		return nil, err
+	if err == nil {
+		return cluster
 	}
-	return cluster, nil
+	slog.Error("starting without a cluster; pick a context from the app", "error", err)
+	cluster.mu.Lock()
+	cluster.startErr = err.Error()
+	cluster.mu.Unlock()
+	return cluster
 }
 
 func (c *Cluster) Manager() server.Backend {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.manager == nil {
+		return nil
+	}
 	return c.manager
+}
+
+func (c *Cluster) unreached() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.startErr
 }
 
 func (c *Cluster) Current() string {
@@ -64,6 +79,7 @@ func (c *Cluster) Contexts() api.ContextList {
 	if list.Current == "" {
 		list.Current = current
 	}
+	list.Error = c.unreached()
 	return list
 }
 
@@ -91,6 +107,7 @@ func (c *Cluster) use(root context.Context, name string) error {
 	c.manager = manager
 	c.cancel = cancel
 	c.current = current
+	c.startErr = ""
 	c.mu.Unlock()
 
 	if previous != nil {

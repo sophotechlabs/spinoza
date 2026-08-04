@@ -16,13 +16,17 @@ import (
 )
 
 func New(ctx context.Context, options Options) (*Cluster, error) {
+	promTarget, targetErr := prom.ParseTarget(options.PromSpec)
+	if targetErr != nil {
+		return nil, targetErr
+	}
 	return newCluster(ctx, func(buildCtx context.Context, name string) (*resources.Manager, string, error) {
-		manager, bundle, err := build(buildCtx, name, options)
+		manager, bundle, err := build(buildCtx, name, options, promTarget)
 		if err != nil {
 			return nil, "", err
 		}
 		return manager, bundle.Context, nil
-	}, kube.Contexts)
+	}, kube.Contexts), nil
 }
 
 func unreachable(name string, discErr error) error {
@@ -32,7 +36,7 @@ func unreachable(name string, discErr error) error {
 	return fmt.Errorf("context %q lists no resource types", name)
 }
 
-func build(ctx context.Context, name string, options Options) (*resources.Manager, *kube.Bundle, error) {
+func build(ctx context.Context, name string, options Options, promTarget prom.Target) (*resources.Manager, *kube.Bundle, error) {
 	bundle, err := kube.LoadContext(name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("kube: %w", err)
@@ -62,10 +66,6 @@ func build(ctx context.Context, name string, options Options) (*resources.Manage
 		options.DebugImage,
 		bundle.Context,
 	)
-	promTarget, targetErr := prom.ParseTarget(options.PromSpec)
-	if targetErr != nil {
-		return nil, nil, targetErr
-	}
 	promClient := prom.NewClient(bundle.Clientset, promTarget)
 	mgr := resources.NewManager(ctx, resources.Deps{
 		Dynamic:     bundle.Dynamic,

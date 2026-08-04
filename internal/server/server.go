@@ -65,36 +65,37 @@ type endpoint struct {
 	method  string
 	path    string
 	handler http.HandlerFunc
+	offline bool
 }
 
 func (s *Server) routes() []endpoint {
 	return []endpoint{
-		{http.MethodGet, "/healthz", s.handleHealth},
-		{http.MethodGet, "/api/version", handleVersion},
-		{http.MethodGet, "/api/contexts", s.listContexts},
-		{http.MethodPost, "/api/contexts", s.switchContext},
-		{http.MethodGet, "/api/resources/counts", s.handleCounts},
-		{http.MethodGet, "/api/resources", s.listResources},
-		{http.MethodPost, "/api/resources", s.refreshResources},
-		{http.MethodGet, "/api/gitops/graph", s.handleGraph},
-		{http.MethodGet, "/api/flux", s.handleFlux},
-		{http.MethodPost, "/api/flux/action", withRef(s.fluxAction)},
-		{http.MethodPost, "/api/action", s.handleAction},
-		{http.MethodGet, "/api/metrics/history", s.handleMetricHistory},
-		{http.MethodGet, "/api/metrics", s.handleMetrics},
-		{http.MethodGet, "/api/object", withRef(s.getObject)},
-		{http.MethodPut, "/api/object", withRef(s.applyObject)},
-		{http.MethodDelete, "/api/object", withRef(s.deleteObject)},
-		{http.MethodGet, "/api/events", s.handleEvents},
-		{http.MethodGet, "/api/schema", s.handleSchema},
-		{http.MethodGet, "/api/portforward", s.listForwards},
-		{http.MethodPost, "/api/portforward", s.startForward},
-		{http.MethodDelete, "/api/portforward", s.stopForward},
-		{http.MethodGet, "/api/exec/support", s.handleExecSupport},
-		{http.MethodGet, "/api/debug/support", s.handleDebugSupport},
-		{http.MethodPost, "/api/debug", s.handleDebug},
-		{http.MethodGet, "/api/exec", s.handleExec},
-		{http.MethodGet, "/ws", s.handleWS},
+		{http.MethodGet, "/healthz", s.handleHealth, true},
+		{http.MethodGet, "/api/version", handleVersion, true},
+		{http.MethodGet, "/api/contexts", s.listContexts, true},
+		{http.MethodPost, "/api/contexts", s.switchContext, true},
+		{http.MethodGet, "/api/resources/counts", s.handleCounts, false},
+		{http.MethodGet, "/api/resources", s.listResources, false},
+		{http.MethodPost, "/api/resources", s.refreshResources, false},
+		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
+		{http.MethodGet, "/api/flux", s.handleFlux, false},
+		{http.MethodPost, "/api/flux/action", withRef(s.fluxAction), false},
+		{http.MethodPost, "/api/action", s.handleAction, false},
+		{http.MethodGet, "/api/metrics/history", s.handleMetricHistory, false},
+		{http.MethodGet, "/api/metrics", s.handleMetrics, false},
+		{http.MethodGet, "/api/object", withRef(s.getObject), false},
+		{http.MethodPut, "/api/object", withRef(s.applyObject), false},
+		{http.MethodDelete, "/api/object", withRef(s.deleteObject), false},
+		{http.MethodGet, "/api/events", s.handleEvents, false},
+		{http.MethodGet, "/api/schema", s.handleSchema, false},
+		{http.MethodGet, "/api/portforward", s.listForwards, false},
+		{http.MethodPost, "/api/portforward", s.startForward, false},
+		{http.MethodDelete, "/api/portforward", s.stopForward, false},
+		{http.MethodGet, "/api/exec/support", s.handleExecSupport, false},
+		{http.MethodGet, "/api/debug/support", s.handleDebugSupport, false},
+		{http.MethodPost, "/api/debug", s.handleDebug, false},
+		{http.MethodGet, "/api/exec", s.handleExec, false},
+		{http.MethodGet, "/ws", s.handleWS, false},
 	}
 }
 
@@ -102,7 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	known := map[string]bool{}
 	for _, entry := range s.routes() {
-		mux.HandleFunc(entry.method+" "+entry.path, entry.handler)
+		mux.HandleFunc(entry.method+" "+entry.path, s.reachable(entry))
 		known[entry.path] = true
 	}
 	for path := range known {
@@ -110,6 +111,19 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("/", s.handleAssets)
 	return s.guard(mux.ServeHTTP)
+}
+
+func (s *Server) reachable(entry endpoint) http.HandlerFunc {
+	if entry.offline {
+		return entry.handler
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.manager() == nil {
+			writeError(w, http.StatusServiceUnavailable, "spinoza has no cluster; pick a context that answers")
+			return
+		}
+		entry.handler(w, r)
+	}
 }
 
 func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
