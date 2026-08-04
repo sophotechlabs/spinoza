@@ -200,6 +200,7 @@ export interface ContextList {
 
 export interface ResourceCounts {
   counts: Record<string, number>;
+  errors?: Record<string, string>;
 }
 
 export interface ResourceCatalog {
