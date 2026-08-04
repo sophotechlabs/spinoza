@@ -1,6 +1,10 @@
 @import 'tailwindcss';
 @import '@xyflow/react/dist/style.css' layer(base);
 
+@theme {
+  --color-*: initial;
+}
+
 @theme inline {
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
