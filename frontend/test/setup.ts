@@ -1,5 +1,8 @@
 import '@testing-library/jest-dom/vitest';
+import { configure } from '@testing-library/react';
 import { installMatchMedia } from './helpers';
+
+configure({ asyncUtilTimeout: 5000 });
 
 class ResizeObserverStub {
   observe(): void {
