@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SettingsDialog from '../../src/components/SettingsDialog';
 import { useThemeStore } from '../../src/store/theme';
@@ -45,7 +45,9 @@ describe('the settings dialog', () => {
       'aria-current',
       'true',
     );
-    expect(screen.getByLabelText('Theme preference')).toBeInTheDocument();
+    expect(screen.getByLabelText('Theme preference')).toHaveValue('dark');
+    expect(screen.getByRole('option', { name: 'Light' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'System' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Logs' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Panels' })).toBeInTheDocument();
   });
@@ -174,6 +176,49 @@ describe('importing a theme', () => {
     await user.click(screen.getByRole('button', { name: 'Remove Solarized Light' }));
 
     expect(useThemeStore.getState().custom).toHaveLength(0);
+  });
+
+  it('installs one picked from a file', async () => {
+    const user = userEvent.setup();
+    open();
+    const file = new File([SOLARIZED], 'solarized.json', { type: 'application/json' });
+
+    await user.upload(screen.getByLabelText('Theme file'), file);
+
+    expect(await screen.findByRole('option', { name: 'Solarized Light' })).toBeInTheDocument();
+    expect(useThemeStore.getState().preference).toBe('solarized');
+    expect(document.documentElement.style.getPropertyValue('--surface')).toBe('#fdf6e3');
+  });
+
+  it('leaves a rejected file in the box so it can be fixed', async () => {
+    const user = userEvent.setup();
+    open();
+    const file = new File(['nonsense'], 'broken.json', { type: 'application/json' });
+
+    await user.upload(screen.getByLabelText('Theme file'), file);
+
+    expect(await screen.findByText('that is not valid JSON')).toBeInTheDocument();
+    expect(screen.getByLabelText('Import a theme')).toHaveValue('nonsense');
+  });
+
+  it('does nothing when the file dialog is dismissed', () => {
+    open();
+
+    fireEvent.change(screen.getByLabelText('Theme file'), { target: { files: [] } });
+
+    expect(useThemeStore.getState().custom).toHaveLength(0);
+    expect(screen.getByLabelText('Import a theme')).toHaveValue('');
+  });
+
+  it('reaches the file dialog from the button', async () => {
+    const user = userEvent.setup();
+    const opened = vi.fn();
+    open();
+    screen.getByLabelText('Theme file').addEventListener('click', opened);
+
+    await user.click(screen.getByRole('button', { name: 'Choose file…' }));
+
+    expect(opened).toHaveBeenCalled();
   });
 
   it('copies the current theme out as json', async () => {

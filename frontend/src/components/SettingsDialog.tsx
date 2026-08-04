@@ -46,6 +46,7 @@ function Row({
 
 export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [section, setSection] = useState<Section>('Appearance');
   const preference = useThemePreference();
   const setPreference = useThemeStore((state) => state.setPreference);
@@ -63,10 +64,10 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     warnings: [],
   });
 
-  function handleImport() {
+  function importText(text: string) {
     let parsed: unknown = null;
     try {
-      parsed = JSON.parse(draft);
+      parsed = JSON.parse(text);
     } catch {
       setReport({ errors: ['that is not valid JSON'], warnings: [] });
       return;
@@ -79,6 +80,27 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     addTheme(checked.theme);
     setPreference(checked.theme.id);
     setDraft('');
+  }
+
+  function handleImport() {
+    importText(draft);
+  }
+
+  function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file === undefined) {
+      return;
+    }
+    void file.text().then((text) => {
+      setDraft(text);
+      importText(text);
+    });
+  }
+
+  function chooseFile() {
+    fileRef.current?.click();
   }
 
   function handleExport() {
@@ -179,9 +201,26 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 </ul>
               )}
               <div className="mt-3">
-                <label htmlFor="theme-import" className="text-fg">
-                  Import a theme
-                </label>
+                <div className="flex items-center justify-between gap-4">
+                  <label htmlFor="theme-import" className="text-fg">
+                    Import a theme
+                  </label>
+                  <button
+                    type="button"
+                    onClick={chooseFile}
+                    className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
+                  >
+                    Choose file…
+                  </button>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="application/json,.json"
+                    aria-label="Theme file"
+                    onChange={handleFile}
+                    className="hidden"
+                  />
+                </div>
                 <textarea
                   id="theme-import"
                   value={draft}
