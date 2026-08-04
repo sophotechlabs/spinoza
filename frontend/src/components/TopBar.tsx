@@ -1,6 +1,9 @@
 import type { ConnectionStatus } from '../lib/feed';
 import type { View } from '../lib/types';
 import ContextPicker from './ContextPicker';
+import { THEMES } from '../lib/theme';
+import type { ThemePreference } from '../lib/theme';
+import { useThemePreference, useThemeStore } from '../store/theme';
 
 interface TopBarProps {
   status: ConnectionStatus;
@@ -20,6 +23,9 @@ function statusColor(status: ConnectionStatus): string {
 }
 
 export default function TopBar({ status, view, onReconnect, onContextChanged }: TopBarProps) {
+  const preference = useThemePreference();
+  const setPreference = useThemeStore((state) => state.setPreference);
+
   function handleReconnect() {
     if (onReconnect) {
       onReconnect();
@@ -43,8 +49,25 @@ export default function TopBar({ status, view, onReconnect, onContextChanged }: 
         <span className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft">{view}</span>
       )}
       <div className="ml-auto flex items-center gap-3">
+        <select
+          aria-label="Theme"
+          value={preference}
+          onChange={(event) => {
+            setPreference(event.target.value as ThemePreference);
+          }}
+          className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
+        >
+          {THEMES.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
         <span className="flex items-center gap-1.5 text-fg-muted">
-          <span className={`h-2 w-2 rounded-full ${statusColor(status)}`} />
+          <span
+            data-testid="connection-dot"
+            className={`h-2 w-2 rounded-full ${statusColor(status)}`}
+          />
           {status}
         </span>
         <button

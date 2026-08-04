@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
+import { useThemeStore } from '../../src/store/theme';
+import { emitSystemDark } from '../helpers';
 
 vi.mock('../../src/components/ContextPicker', () => ({
   default: ({ onSwitched }: { onSwitched: () => void }) => (
@@ -12,7 +14,7 @@ vi.mock('../../src/components/ContextPicker', () => ({
 }));
 
 function dotFor(container: HTMLElement): Element {
-  const dot = container.querySelector('span.rounded-full');
+  const dot = container.querySelector('[data-testid="connection-dot"]');
   if (!dot) {
     throw new Error('status dot not found');
   }
@@ -82,5 +84,47 @@ describe('TopBar context switch', () => {
     await user.click(screen.getByRole('button', { name: 'switch context' }));
 
     expect(onReconnect).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the theme picker', () => {
+  afterEach(() => {
+    act(() => {
+      useThemeStore.getState().setPreference('dark');
+    });
+  });
+
+  it('offers every theme and starts on the stored one', () => {
+    render(<TopBar status="connected" />);
+    const picker = screen.getByLabelText('Theme');
+
+    expect(picker).toHaveValue('dark');
+    expect(screen.getByRole('option', { name: 'light' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'system' })).toBeInTheDocument();
+  });
+
+  it('repaints the document when a theme is chosen', async () => {
+    const user = userEvent.setup();
+    render(<TopBar status="connected" />);
+
+    await user.selectOptions(screen.getByLabelText('Theme'), 'light');
+
+    expect(useThemeStore.getState().preference).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+  });
+
+  it('hands the choice to the operating system when asked', async () => {
+    const user = userEvent.setup();
+    render(<TopBar status="connected" />);
+    act(() => {
+      emitSystemDark(true);
+    });
+
+    await user.selectOptions(screen.getByLabelText('Theme'), 'system');
+
+    expect(useThemeStore.getState().resolved).toBe('dark');
+    act(() => {
+      emitSystemDark(false);
+    });
   });
 });
