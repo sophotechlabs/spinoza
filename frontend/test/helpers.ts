@@ -81,3 +81,46 @@ export function makeGraphEdge(overrides: Partial<GraphEdge>): GraphEdge {
   };
   return { ...base, ...overrides };
 }
+
+type MediaListener = (event: MediaQueryListEvent) => void;
+
+const mediaListeners = new Set<MediaListener>();
+let systemDark = false;
+
+export function installMatchMedia(): void {
+  systemDark = false;
+  mediaListeners.clear();
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string): MediaQueryList =>
+      ({
+        get matches() {
+          return systemDark;
+        },
+        media: query,
+        onchange: null,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        addEventListener: (_type: string, listener: MediaListener) => {
+          mediaListeners.add(listener);
+        },
+        removeEventListener: (_type: string, listener: MediaListener) => {
+          mediaListeners.delete(listener);
+        },
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
+  });
+}
+
+export function setSystemDark(matches: boolean): void {
+  systemDark = matches;
+}
+
+export function emitSystemDark(matches: boolean): void {
+  systemDark = matches;
+  const event = { matches } as MediaQueryListEvent;
+  for (const listener of mediaListeners) {
+    listener(event);
+  }
+}

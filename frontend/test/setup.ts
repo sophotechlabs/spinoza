@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { installMatchMedia } from './helpers';
 
 class ResizeObserverStub {
   observe(): void {
@@ -50,20 +51,7 @@ Object.defineProperty(window, 'localStorage', {
   value: new MemoryStorage(),
 });
 
-Object.defineProperty(window, 'matchMedia', {
-  configurable: true,
-  writable: true,
-  value: (query: string): MediaQueryList => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    dispatchEvent: () => false,
-  }),
-});
+installMatchMedia();
 
 Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
   configurable: true,

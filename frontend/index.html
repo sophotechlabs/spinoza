@@ -4,6 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spinoza</title>
+    <script>
+      (function () {
+        var theme = 'dark';
+        try {
+          var stored = localStorage.getItem('spinoza.theme.v1');
+          if (stored === 'light' || stored === 'system') {
+            theme = stored;
+          }
+        } catch (err) {
+          theme = 'dark';
+        }
+        if (theme === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          theme = 'light';
+        }
+        if (theme === 'system') {
+          theme = 'dark';
+        }
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
