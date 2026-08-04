@@ -11,13 +11,13 @@ export default function PanelChrome({ target, onClose, children }: PanelChromePr
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {target !== null && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 px-3 py-1.5">
-          <span className="shrink-0 text-[11px] text-neutral-400">{target.resource}</span>
-          <span className="truncate text-xs font-semibold text-neutral-100">{target.name}</span>
+        <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-1.5">
+          <span className="shrink-0 text-[11px] text-fg-muted">{target.resource}</span>
+          <span className="truncate text-xs font-semibold text-fg-strong">{target.name}</span>
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto shrink-0 rounded border border-neutral-700 px-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+            className="ml-auto shrink-0 rounded border border-edge-strong px-1.5 text-xs text-fg-soft hover:bg-surface-active"
           >
             Close
           </button>

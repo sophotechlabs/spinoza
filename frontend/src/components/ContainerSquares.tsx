@@ -10,7 +10,7 @@ interface ContainerSquaresProps {
 export default function ContainerSquares({ row, fallback }: ContainerSquaresProps) {
   const containers = (row.containers ?? []).filter((container) => !isDebugContainer(container));
   if (containers.length === 0) {
-    return <span className="text-neutral-400">{fallback}</span>;
+    return <span className="text-fg-muted">{fallback}</span>;
   }
   return (
     <span className="flex flex-wrap items-center gap-0.5">

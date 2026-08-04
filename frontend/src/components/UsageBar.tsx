@@ -9,10 +9,10 @@ export default function UsageBar({ percent, label }: UsageBarProps) {
   const width = Math.min(100, Math.max(0, percent));
   return (
     <span className="flex items-center gap-1.5" title={label}>
-      <span className="h-1.5 w-10 shrink-0 overflow-hidden rounded-sm bg-neutral-800">
+      <span className="h-1.5 w-10 shrink-0 overflow-hidden rounded-sm bg-surface-active">
         <span className={`block h-full ${barColor(percent)}`} style={{ width: `${width}%` }} />
       </span>
-      <span className="text-neutral-400">{percent}%</span>
+      <span className="text-fg-muted">{percent}%</span>
     </span>
   );
 }
