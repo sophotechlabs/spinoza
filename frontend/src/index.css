@@ -1,9 +1,158 @@
 @import 'tailwindcss';
 @import '@xyflow/react/dist/style.css' layer(base);
 
-html {
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-active: var(--surface-active);
+
+  --color-handle: var(--handle);
+  --color-handle-active: var(--handle-active);
+  --color-grip: var(--grip);
+
+  --color-fg-strong: var(--fg-strong);
+  --color-fg: var(--fg);
+  --color-fg-soft: var(--fg-soft);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-faint: var(--fg-faint);
+
+  --color-edge: var(--edge);
+  --color-edge-strong: var(--edge-strong);
+  --color-edge-emphasis: var(--edge-emphasis);
+  --color-edge-active: var(--edge-active);
+
+  --color-idle-solid: var(--idle-solid);
+
+  --color-ok: var(--ok);
+  --color-ok-contrast: var(--ok-contrast);
+  --color-ok-solid: var(--ok-solid);
+  --color-ok-tint: var(--ok-tint);
+  --color-ok-emphasis: var(--ok-emphasis);
+  --color-ok-line: var(--ok-line);
+  --color-ok-line-strong: var(--ok-line-strong);
+
+  --color-error: var(--error);
+  --color-error-strong: var(--error-strong);
+  --color-error-contrast: var(--error-contrast);
+  --color-error-muted: var(--error-muted);
+  --color-error-solid: var(--error-solid);
+  --color-error-tint: var(--error-tint);
+  --color-error-tint-strong: var(--error-tint-strong);
+  --color-error-emphasis: var(--error-emphasis);
+  --color-error-line: var(--error-line);
+  --color-error-line-strong: var(--error-line-strong);
+
+  --color-warn: var(--warn);
+  --color-warn-strong: var(--warn-strong);
+  --color-warn-muted: var(--warn-muted);
+  --color-warn-solid: var(--warn-solid);
+  --color-warn-tint: var(--warn-tint);
+  --color-warn-line: var(--warn-line);
+  --color-warn-line-strong: var(--warn-line-strong);
+
+  --color-info-contrast: var(--info-contrast);
+  --color-info-tint: var(--info-tint);
+  --color-info-line: var(--info-line);
+
+  --color-ansi-black: var(--ansi-black);
+  --color-ansi-red: var(--ansi-red);
+  --color-ansi-green: var(--ansi-green);
+  --color-ansi-yellow: var(--ansi-yellow);
+  --color-ansi-blue: var(--ansi-blue);
+  --color-ansi-magenta: var(--ansi-magenta);
+  --color-ansi-cyan: var(--ansi-cyan);
+  --color-ansi-white: var(--ansi-white);
+  --color-ansi-bright-black: var(--ansi-bright-black);
+  --color-ansi-bright-red: var(--ansi-bright-red);
+  --color-ansi-bright-green: var(--ansi-bright-green);
+  --color-ansi-bright-yellow: var(--ansi-bright-yellow);
+  --color-ansi-bright-blue: var(--ansi-bright-blue);
+  --color-ansi-bright-magenta: var(--ansi-bright-magenta);
+  --color-ansi-bright-cyan: var(--ansi-bright-cyan);
+  --color-ansi-bright-white: var(--ansi-bright-white);
+}
+
+:root {
   color-scheme: dark;
-  background-color: var(--color-neutral-950);
+
+  --surface: oklch(14.5% 0 none);
+  --surface-raised: oklch(20.5% 0 none);
+  --surface-active: oklch(26.9% 0 none);
+
+  --handle: oklch(55.6% 0 none);
+  --handle-active: oklch(87% 0 none);
+  --grip: oklch(43.9% 0 none);
+
+  --fg-strong: oklch(97% 0 none);
+  --fg: oklch(92.2% 0 none);
+  --fg-soft: oklch(87% 0 none);
+  --fg-muted: oklch(70.8% 0 none);
+  --fg-subtle: oklch(55.6% 0 none);
+  --fg-faint: oklch(43.9% 0 none);
+
+  --edge: oklch(26.9% 0 none);
+  --edge-strong: oklch(37.1% 0 none);
+  --edge-emphasis: oklch(43.9% 0 none);
+  --edge-active: oklch(87% 0 none);
+
+  --idle-solid: oklch(55.6% 0 none);
+
+  --ok: oklch(79.2% 0.209 151.711);
+  --ok-contrast: oklch(92.5% 0.084 155.995);
+  --ok-solid: oklch(72.3% 0.219 149.579);
+  --ok-tint: oklch(26.6% 0.065 152.934);
+  --ok-emphasis: oklch(62.7% 0.194 149.214);
+  --ok-line: oklch(39.3% 0.095 152.535);
+  --ok-line-strong: oklch(44.8% 0.119 151.328);
+
+  --error: oklch(70.4% 0.191 22.216);
+  --error-strong: oklch(80.8% 0.114 19.571);
+  --error-contrast: oklch(88.5% 0.062 18.334);
+  --error-muted: oklch(63.7% 0.237 25.331);
+  --error-solid: oklch(63.7% 0.237 25.331);
+  --error-tint: oklch(25.8% 0.092 26.042);
+  --error-tint-strong: oklch(39.6% 0.141 25.723);
+  --error-emphasis: oklch(57.7% 0.245 27.325);
+  --error-line: oklch(39.6% 0.141 25.723);
+  --error-line-strong: oklch(44.4% 0.177 26.899);
+
+  --warn: oklch(82.8% 0.189 84.429);
+  --warn-strong: oklch(87.9% 0.169 91.605);
+  --warn-muted: oklch(76.9% 0.188 70.08);
+  --warn-solid: oklch(76.9% 0.188 70.08);
+  --warn-tint: oklch(27.9% 0.077 45.635);
+  --warn-line: oklch(41.4% 0.112 45.904);
+  --warn-line-strong: oklch(47.3% 0.137 46.201);
+
+  --info-contrast: oklch(90.1% 0.058 230.902);
+  --info-tint: oklch(29.3% 0.066 243.157);
+  --info-line: oklch(50% 0.134 242.749);
+
+  --ansi-black: oklch(43.9% 0 none);
+  --ansi-red: oklch(70.4% 0.191 22.216);
+  --ansi-green: oklch(79.2% 0.209 151.711);
+  --ansi-yellow: oklch(82.8% 0.189 84.429);
+  --ansi-blue: oklch(74.6% 0.16 232.661);
+  --ansi-magenta: oklch(74% 0.238 322.16);
+  --ansi-cyan: oklch(78.9% 0.154 211.53);
+  --ansi-white: oklch(92.2% 0 none);
+  --ansi-bright-black: oklch(55.6% 0 none);
+  --ansi-bright-red: oklch(80.8% 0.114 19.571);
+  --ansi-bright-green: oklch(87.1% 0.15 154.449);
+  --ansi-bright-yellow: oklch(87.9% 0.169 91.605);
+  --ansi-bright-blue: oklch(82.8% 0.111 230.318);
+  --ansi-bright-magenta: oklch(83.3% 0.145 321.434);
+  --ansi-bright-cyan: oklch(86.5% 0.127 207.078);
+  --ansi-bright-white: oklch(97% 0 none);
+
+  --graph-edge-source: #0ea5e9;
+  --graph-edge-depends: #f59e0b;
+  --graph-edge-manages: #525252;
+}
+
+html {
+  background-color: var(--surface);
 }
 
 .react-flow.dark {
