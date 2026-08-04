@@ -11,6 +11,8 @@ import {
 import type { MetricRange } from '../lib/metricsHistory';
 import { createChart } from '../lib/chart';
 import type { ChartHandle } from '../lib/chart';
+import { canvasColors } from '../lib/themeColors';
+import { useResolvedTheme } from '../store/theme';
 
 interface InspectMetricsProps {
   namespace: string;
@@ -21,6 +23,8 @@ export interface ChartProps {
   points: MetricPoint[];
   stroke: string;
   fill: string;
+  axis: string;
+  grid: string;
   format: (value: number) => string;
   metric: 'cpu' | 'memory';
 }
@@ -32,21 +36,20 @@ function errorMessage(err: unknown): string {
   return 'loading metrics failed';
 }
 
-export function Chart({ points, stroke, fill, format, metric }: ChartProps) {
+export function Chart({ points, stroke, fill, axis, grid, format, metric }: ChartProps) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const chartRef = useRef<ChartHandle | null>(null);
   const pointsRef = useRef(points);
   pointsRef.current = points;
-  const colorsRef = useRef({ stroke, fill });
-  colorsRef.current = { stroke, fill };
+  const colorsRef = useRef({ stroke, fill, axis, grid });
+  colorsRef.current = { stroke, fill, axis, grid };
 
   useEffect(() => {
     if (host === null) {
       return;
     }
     const chart = createChart(host, {
-      stroke: colorsRef.current.stroke,
-      fill: colorsRef.current.fill,
+      colors: colorsRef.current,
       format,
       metric,
     });
@@ -66,8 +69,8 @@ export function Chart({ points, stroke, fill, format, metric }: ChartProps) {
   }, [host, format, metric]);
 
   useEffect(() => {
-    chartRef.current?.setColors(stroke, fill);
-  }, [stroke, fill]);
+    chartRef.current?.setColors({ stroke, fill, axis, grid });
+  }, [stroke, fill, axis, grid]);
 
   useEffect(() => {
     chartRef.current?.update(points);
@@ -79,6 +82,7 @@ export function Chart({ points, stroke, fill, format, metric }: ChartProps) {
 }
 
 export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) {
+  const colors = canvasColors(useResolvedTheme());
   const [span, setSpan] = useState<MetricRange>(DEFAULT_RANGE);
   const [history, setHistory] = useState<MetricHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -158,8 +162,10 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           </div>
           <Chart
             points={cpu}
-            stroke="#4ade80"
-            fill="rgba(74,222,128,0.12)"
+            stroke={colors.cpuStroke}
+            fill={colors.cpuFill}
+            axis={colors.chartAxis}
+            grid={colors.chartGrid}
             format={formatCpu}
             metric="cpu"
           />
@@ -170,8 +176,10 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           </div>
           <Chart
             points={memory}
-            stroke="#60a5fa"
-            fill="rgba(96,165,250,0.12)"
+            stroke={colors.memoryStroke}
+            fill={colors.memoryFill}
+            axis={colors.chartAxis}
+            grid={colors.chartGrid}
             format={formatMemory}
             metric="memory"
           />

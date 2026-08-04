@@ -2,16 +2,22 @@ import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import type { MetricPoint } from './types';
 
+export interface ChartColors {
+  stroke: string;
+  fill: string;
+  axis: string;
+  grid: string;
+}
+
 export interface ChartHandle {
   update: (points: MetricPoint[]) => void;
-  setColors: (stroke: string, fill: string) => void;
+  setColors: (colors: ChartColors) => void;
   resize: (width: number) => void;
   destroy: () => void;
 }
 
 interface ChartOptions {
-  stroke: string;
-  fill: string;
+  colors: ChartColors;
   format: (value: number) => string;
   metric: 'cpu' | 'memory';
 }
@@ -55,11 +61,15 @@ export function createChart(node: HTMLElement, options: ChartOptions): ChartHand
       cursor: { y: false, drag: { x: false, y: false } },
       legend: { show: false },
       axes: [
-        { stroke: '#737373', grid: { stroke: '#262626', width: 1 }, ticks: { stroke: '#262626' } },
         {
-          stroke: '#737373',
-          grid: { stroke: '#262626', width: 1 },
-          ticks: { stroke: '#262626' },
+          stroke: options.colors.axis,
+          grid: { stroke: options.colors.grid, width: 1 },
+          ticks: { stroke: options.colors.grid },
+        },
+        {
+          stroke: options.colors.axis,
+          grid: { stroke: options.colors.grid, width: 1 },
+          ticks: { stroke: options.colors.grid },
           size: 58,
           incrs: ticksFor(options.metric),
           values: (_self, splits) => splits.map((split) => options.format(split)),
@@ -68,8 +78,8 @@ export function createChart(node: HTMLElement, options: ChartOptions): ChartHand
       series: [
         { value: (_self, raw) => new Date(raw * 1000).toLocaleTimeString() },
         {
-          stroke: options.stroke,
-          fill: options.fill,
+          stroke: options.colors.stroke,
+          fill: options.colors.fill,
           width: 1.5,
           value: (_self, raw) => options.format(raw),
         },
@@ -83,10 +93,15 @@ export function createChart(node: HTMLElement, options: ChartOptions): ChartHand
     update: (next: MetricPoint[]) => {
       chart.setData(series(next));
     },
-    setColors: (stroke: string, fill: string) => {
+    setColors: (colors: ChartColors) => {
       const line = chart.series[1];
-      line.stroke = stroke;
-      line.fill = fill;
+      line.stroke = colors.stroke;
+      line.fill = colors.fill;
+      for (const axis of chart.axes) {
+        axis.stroke = colors.axis;
+        axis.grid = { stroke: colors.grid, width: 1 };
+        axis.ticks = { stroke: colors.grid };
+      }
       chart.redraw(false, false);
     },
     resize: (width: number) => {

@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectMetrics, { Chart } from '../../src/components/InspectMetrics';
-import type { ChartHandle } from '../../src/lib/chart';
+import type { ChartColors, ChartHandle } from '../../src/lib/chart';
 import type { MetricPoint } from '../../src/lib/types';
+import { canvasColors } from '../../src/lib/themeColors';
+import { useThemeStore } from '../../src/store/theme';
 
 const createChart = vi.fn<(node: HTMLElement, options: unknown) => ChartHandle>();
 const updates: MetricPoint[][] = [];
 const resizes: number[] = [];
-const colorChanges: { stroke: string; fill: string }[] = [];
+const colorChanges: ChartColors[] = [];
 
 vi.mock('../../src/lib/chart', () => ({
   createChart: (node: HTMLElement, options: unknown) => createChart(node, options),
@@ -19,8 +21,8 @@ function chartStub(): ChartHandle {
     update: (points: MetricPoint[]) => {
       updates.push(points);
     },
-    setColors: (stroke: string, fill: string) => {
-      colorChanges.push({ stroke, fill });
+    setColors: (colors: ChartColors) => {
+      colorChanges.push(colors);
     },
     resize: (width: number) => {
       resizes.push(width);
@@ -211,6 +213,8 @@ describe('a chart whose colours change', () => {
         points={[{ at: 100, value: 1 }]}
         stroke="#0ea5e9"
         fill="#082f49"
+        axis="#737373"
+        grid="#262626"
         format={String}
         metric="cpu"
       />,
@@ -221,13 +225,45 @@ describe('a chart whose colours change', () => {
         points={[{ at: 100, value: 1 }]}
         stroke="#22c55e"
         fill="#052e16"
+        axis="#737373"
+        grid="#262626"
         format={String}
         metric="cpu"
       />,
     );
 
     expect(createChart).toHaveBeenCalledTimes(1);
-    expect(colorChanges.at(-1)).toEqual({ stroke: '#22c55e', fill: '#052e16' });
+    expect(colorChanges.at(-1)).toEqual({
+      stroke: '#22c55e',
+      fill: '#052e16',
+      axis: '#737373',
+      grid: '#262626',
+    });
+  });
+
+  it('recolours the whole chart when the app theme changes', async () => {
+    stub(history());
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+    await screen.findAllByTestId('metric-chart');
+    const built = createChart.mock.calls.length;
+    colorChanges.length = 0;
+
+    act(() => {
+      useThemeStore.getState().setPreference('light');
+    });
+
+    const light = canvasColors('light');
+    expect(createChart).toHaveBeenCalledTimes(built);
+    expect(colorChanges.at(-1)).toEqual({
+      stroke: light.memoryStroke,
+      fill: light.memoryFill,
+      axis: light.chartAxis,
+      grid: light.chartGrid,
+    });
+
+    act(() => {
+      useThemeStore.getState().setPreference('dark');
+    });
   });
 
   it('never leaves a rebuilt chart empty waiting for the next poll', () => {
@@ -236,12 +272,28 @@ describe('a chart whose colours change', () => {
       { at: 160, value: 2 },
     ];
     const view = render(
-      <Chart points={points} stroke="#0ea5e9" fill="#082f49" format={String} metric="cpu" />,
+      <Chart
+        points={points}
+        stroke="#0ea5e9"
+        fill="#082f49"
+        axis="#737373"
+        grid="#262626"
+        format={String}
+        metric="cpu"
+      />,
     );
     updates.length = 0;
 
     view.rerender(
-      <Chart points={points} stroke="#0ea5e9" fill="#082f49" format={String} metric="memory" />,
+      <Chart
+        points={points}
+        stroke="#0ea5e9"
+        fill="#082f49"
+        axis="#737373"
+        grid="#262626"
+        format={String}
+        metric="memory"
+      />,
     );
 
     expect(createChart).toHaveBeenCalledTimes(2);
