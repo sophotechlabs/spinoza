@@ -20,6 +20,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
+const shutdownGrace = 3 * time.Second
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatalf("spinoza: %v", err)
@@ -75,14 +77,24 @@ func run() error {
 		openURL(ctx, url)
 	}
 
+	ended := make(chan struct{})
+	drained := make(chan struct{})
 	go func() {
-		<-ctx.Done()
-		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer close(drained)
+		select {
+		case <-ended:
+			return
+		case <-ctx.Done():
+		}
+		srv.Close()
+		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 		defer cancel()
 		_ = httpServer.Shutdown(shutCtx)
 	}()
 
 	err = httpServer.ListenAndServe()
+	close(ended)
+	<-drained
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server: %w", err)
 	}
@@ -103,5 +115,11 @@ func openURL(ctx context.Context, url string) {
 		name = "xdg-open"
 		args = []string{url}
 	}
-	_ = exec.CommandContext(ctx, name, args...).Start()
+	opener := exec.CommandContext(ctx, name, args...)
+	if opener.Start() != nil {
+		return
+	}
+	go func() {
+		_ = opener.Wait()
+	}()
 }

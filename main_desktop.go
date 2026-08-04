@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -12,6 +13,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -22,6 +25,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
+const shutdownGrace = 3 * time.Second
+
 func main() {
 	err := runDesktop()
 	if err != nil {
@@ -31,11 +36,14 @@ func main() {
 
 func runDesktop() error {
 	opts, flagErr := settingsFromArgs()
+	if errors.Is(flagErr, errHelp) {
+		return nil
+	}
 	if flagErr != nil {
 		return flagErr
 	}
 
-	ctx, stop := context.WithCancel(context.Background())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	clusters, err := cluster.New(ctx, opts.cluster)
@@ -77,7 +85,8 @@ func runDesktop() error {
 	}()
 
 	defer func() {
-		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		srv.Close()
+		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 		defer cancel()
 		_ = httpServer.Shutdown(shutCtx)
 	}()
