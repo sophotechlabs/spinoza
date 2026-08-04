@@ -115,6 +115,10 @@ function usePanelSize(limits: Limits): PanelSize {
       if (start === null) {
         return;
       }
+      if (event.buttons === 0) {
+        startRef.current = null;
+        return;
+      }
       setSize(clamp(limits, start.size + limits.sign * (pointOf(limits, event) - start.at)));
     }
 
@@ -139,7 +143,7 @@ function usePanelSize(limits: Limits): PanelSize {
 
   const nudge = useCallback(
     (delta: number) => {
-      setSize((current) => clamp(limits, current + delta));
+      setSize((current) => clamp(limits, current + limits.sign * delta));
     },
     [limits],
   );

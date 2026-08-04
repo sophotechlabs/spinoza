@@ -152,6 +152,31 @@ describe('PanelHost', () => {
     expect(strip.className).not.toContain('bg-surface-active');
   });
 
+  it('holds the drop highlight while the drag crosses a tab inside the strip', () => {
+    renderHost();
+    const strip = parentOf(screen.getByRole('tab', { name: 'Overview' }));
+    const transfer = dataTransfer({ [PANEL_TYPE]: 'metrics' });
+
+    fireEvent.dragEnter(strip, { dataTransfer: transfer });
+    fireEvent.dragEnter(screen.getByRole('tab', { name: 'YAML' }), { dataTransfer: transfer });
+    fireEvent.dragLeave(strip);
+
+    expect(strip.className).toContain('bg-surface-active');
+
+    fireEvent.dragLeave(strip);
+
+    expect(strip.className).not.toContain('bg-surface-active');
+  });
+
+  it('ignores a dragenter carrying something else', () => {
+    renderHost();
+    const strip = parentOf(screen.getByRole('tab', { name: 'Overview' }));
+
+    fireEvent.dragEnter(strip, { dataTransfer: dataTransfer({ 'text/plain': 'hello' }) });
+
+    expect(strip.className).not.toContain('bg-surface-active');
+  });
+
   it('collapses and reopens', async () => {
     const user = userEvent.setup();
     renderHost();
@@ -200,7 +225,7 @@ describe('PanelHost', () => {
     const handle = screen.getByRole('button', { name: 'Resize the right dock' });
 
     fireEvent.mouseDown(handle, { clientX: 900 });
-    fireEvent.mouseMove(window, { clientX: 800 });
+    fireEvent.mouseMove(window, { clientX: 800, buttons: 1 });
 
     const frame = parentOf(handle);
     expect(frame.style.width).toBe('660px');
@@ -211,15 +236,27 @@ describe('PanelHost', () => {
     const handle = screen.getByRole('button', { name: 'Resize the bottom dock' });
 
     fireEvent.mouseDown(handle, { clientY: 600 });
-    fireEvent.mouseMove(window, { clientY: 500 });
+    fireEvent.mouseMove(window, { clientY: 500, buttons: 1 });
 
     const frame = parentOf(handle);
     expect(frame.style.height).toBe('340px');
   });
 
-  it('nudges a side dock with the arrow keys', () => {
+  it('moves the right dock divider the way the arrow key points', () => {
     renderHost();
     const handle = screen.getByRole('button', { name: 'Resize the right dock' });
+    const frame = parentOf(handle);
+
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(frame.style.width).toBe('528px');
+
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+    expect(frame.style.width).toBe('560px');
+  });
+
+  it('moves the left dock divider the way the arrow key points', () => {
+    renderHost({ side: 'left' });
+    const handle = screen.getByRole('button', { name: 'Resize the left dock' });
     const frame = parentOf(handle);
 
     fireEvent.keyDown(handle, { key: 'ArrowRight' });

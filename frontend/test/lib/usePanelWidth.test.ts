@@ -18,11 +18,15 @@ import {
 } from '../../src/lib/usePanelWidth';
 
 function drag(clientX: number): void {
-  window.dispatchEvent(new MouseEvent('mousemove', { clientX }));
+  window.dispatchEvent(new MouseEvent('mousemove', { clientX, buttons: 1 }));
 }
 
 function dragY(clientY: number): void {
-  window.dispatchEvent(new MouseEvent('mousemove', { clientY }));
+  window.dispatchEvent(new MouseEvent('mousemove', { clientY, buttons: 1 }));
+}
+
+function dragWithNoButton(clientX: number): void {
+  window.dispatchEvent(new MouseEvent('mousemove', { clientX, buttons: 0 }));
 }
 
 describe('the right dock size', () => {
@@ -72,6 +76,25 @@ describe('the right dock size', () => {
     });
 
     expect(result.current.size).toBe(MIN_DRAWER_WIDTH);
+  });
+
+  it('ends a drag whose mouseup never reached the window', () => {
+    const { result } = renderHook(() => useDockSize('right'));
+
+    act(() => {
+      result.current.startResize(800);
+    });
+    act(() => {
+      drag(700);
+    });
+    act(() => {
+      dragWithNoButton(600);
+    });
+    act(() => {
+      drag(100);
+    });
+
+    expect(result.current.size).toBe(DEFAULT_DRAWER_WIDTH + 100);
   });
 
   it('stops tracking after mouseup', () => {
@@ -141,6 +164,38 @@ describe('useSidebarWidth', () => {
     });
 
     expect(result.current.size).toBe(DEFAULT_SIDEBAR_WIDTH + 32);
+  });
+});
+
+describe('a nudge in screen coordinates', () => {
+  it('shrinks the right dock when the divider is pushed right', () => {
+    const { result } = renderHook(() => useDockSize('right'));
+
+    act(() => {
+      result.current.nudge(32);
+    });
+
+    expect(result.current.size).toBe(DEFAULT_DRAWER_WIDTH - 32);
+  });
+
+  it('widens the left dock when the divider is pushed right', () => {
+    const { result } = renderHook(() => useDockSize('left'));
+
+    act(() => {
+      result.current.nudge(32);
+    });
+
+    expect(result.current.size).toBe(DEFAULT_DRAWER_WIDTH + 32);
+  });
+
+  it('grows the bottom dock when the divider is pushed up', () => {
+    const { result } = renderHook(() => useDockSize('bottom'));
+
+    act(() => {
+      result.current.nudge(-32);
+    });
+
+    expect(result.current.size).toBe(DEFAULT_DOCK_HEIGHT + 32);
   });
 });
 

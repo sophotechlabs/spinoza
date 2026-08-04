@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { DockSide, PanelId } from '../lib/panels';
 import { DOCK_SIDES, PANEL_LABELS, SIDE_GLYPHS, SIDE_LABELS } from '../lib/panels';
 import { NUDGE_STEP, useDockSize } from '../lib/usePanelWidth';
@@ -107,6 +107,7 @@ export default function PanelHost({
 }: PanelHostProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [over, setOver] = useState(false);
+  const insideRef = useRef(0);
   const { size, startResize, nudge } = useDockSize(side);
 
   function handleDragOver(event: React.DragEvent) {
@@ -117,12 +118,26 @@ export default function PanelHost({
     setOver(true);
   }
 
+  function handleDragEnter(event: React.DragEvent) {
+    if (!event.dataTransfer.types.includes(DRAG_TYPE)) {
+      return;
+    }
+    insideRef.current += 1;
+    setOver(true);
+  }
+
   function handleDragLeave() {
+    insideRef.current -= 1;
+    if (insideRef.current > 0) {
+      return;
+    }
+    insideRef.current = 0;
     setOver(false);
   }
 
   function handleDrop(event: React.DragEvent) {
     event.preventDefault();
+    insideRef.current = 0;
     setOver(false);
     const id = panelFrom(event);
     if (id === null) {
@@ -153,12 +168,12 @@ export default function PanelHost({
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      nudge(NUDGE_STEP);
+      nudge(-NUDGE_STEP);
       return;
     }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      nudge(-NUDGE_STEP);
+      nudge(NUDGE_STEP);
     }
   }
 
@@ -171,6 +186,7 @@ export default function PanelHost({
         tabIndex={-1}
         aria-label={`Empty ${SIDE_LABELS[side]} dock`}
         onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={emptyClass(side) + dropClass}
@@ -185,6 +201,7 @@ export default function PanelHost({
         tabIndex={-1}
         aria-label={`Collapsed ${SIDE_LABELS[side]} dock`}
         onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={collapsedClass(side) + dropClass}
@@ -209,6 +226,7 @@ export default function PanelHost({
       tabIndex={-1}
       aria-label={`${SIDE_LABELS[side]} dock`}
       onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={`flex shrink-0 flex-wrap items-center gap-1 border-b border-edge px-1 text-xs${dropClass}`}
