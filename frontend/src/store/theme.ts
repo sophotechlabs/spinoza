@@ -42,3 +42,11 @@ applyTheme(useThemeStore.getState().resolved);
 watchSystemTheme((next) => {
   useThemeStore.getState().setSystem(next);
 });
+
+export function useResolvedTheme(): ResolvedTheme {
+  return useThemeStore((state) => state.resolved);
+}
+
+export function useThemePreference(): ThemePreference {
+  return useThemeStore((state) => state.preference);
+}

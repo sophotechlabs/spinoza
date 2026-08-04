@@ -12,6 +12,7 @@ import {
 import type { GitopsFlow, GitopsFlowNode } from '../lib/graphLayout';
 import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
+import { useResolvedTheme } from '../store/theme';
 
 const POLL_INTERVAL_MS = 5000;
 const MAX_NODES = 400;
@@ -51,6 +52,7 @@ function errorMessage(err: unknown): string {
 }
 
 export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
+  const resolvedTheme = useResolvedTheme();
   const [flow, setFlow] = useState<GitopsFlow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [partial, setPartial] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
           nodes={flow.nodes}
           edges={flow.edges}
           onNodeClick={handleNodeClick}
-          colorMode="dark"
+          colorMode={resolvedTheme}
           onlyRenderVisibleElements
           fitView
         >

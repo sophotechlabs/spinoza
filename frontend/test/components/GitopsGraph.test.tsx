@@ -11,14 +11,16 @@ vi.mock('@xyflow/react', () => {
     nodes,
     edges,
     onNodeClick,
+    colorMode,
     children,
   }: {
     nodes: GitopsFlowNode[];
     edges: { id: string }[];
     onNodeClick?: (event: unknown, node: GitopsFlowNode) => void;
+    colorMode?: string;
     children?: ReactNode;
   }) => (
-    <div data-testid="react-flow" data-edges={edges.length}>
+    <div data-testid="react-flow" data-edges={edges.length} data-color-mode={colorMode}>
       {nodes.map((node) => (
         <button
           key={node.id}
@@ -41,6 +43,7 @@ vi.mock('@xyflow/react', () => {
 });
 
 import GitopsGraph from '../../src/components/GitopsGraph';
+import { useThemeStore } from '../../src/store/theme';
 
 function stubGraph(graph: Graph): void {
   vi.stubGlobal(
@@ -52,6 +55,9 @@ function stubGraph(graph: Graph): void {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  act(() => {
+    useThemeStore.getState().setPreference('dark');
+  });
 });
 
 describe('GitopsGraph', () => {
@@ -202,6 +208,22 @@ describe('GitopsGraph partial failures', () => {
     render(<GitopsGraph />);
 
     expect(await screen.findByText('No GitOps resources found.')).toBeInTheDocument();
+  });
+});
+
+describe('the flow canvas chrome', () => {
+  it('follows the app theme instead of rendering light over dark', async () => {
+    stubGraph({ nodes: [makeGraphNode({ id: 'a', name: 'alpha' })], edges: [] });
+    render(<GitopsGraph />);
+    await screen.findByText('alpha');
+
+    expect(screen.getByTestId('react-flow')).toHaveAttribute('data-color-mode', 'dark');
+
+    act(() => {
+      useThemeStore.getState().setPreference('light');
+    });
+
+    expect(screen.getByTestId('react-flow')).toHaveAttribute('data-color-mode', 'light');
   });
 });
 
