@@ -5,6 +5,8 @@ import { fetchContexts } from './lib/contexts';
 import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
 import type { Selection } from './lib/refs';
 import { refFromFlux, refFromNode, refFromRow, useRowForRef } from './lib/refs';
+import { bumpClusterEpoch, useClusterEpoch } from './store/cluster';
+import { clearForwards } from './lib/portForward';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -21,7 +23,7 @@ const FIRST_SUB_ID = 'main#0';
 export default function App() {
   const feed = useResourceFeed();
   const { route, navigate, replace } = useRouter();
-  const [contextEpoch, setContextEpoch] = useState(0);
+  const contextEpoch = useClusterEpoch();
   const [contextName, setContextName] = useState('');
   const subSeq = useRef(0);
   const [subId, setSubId] = useState(FIRST_SUB_ID);
@@ -113,7 +115,8 @@ export default function App() {
   function handleContextChanged() {
     navigate({ context: '', view: route.view, resource: null, selection: null });
     setContextName('');
-    setContextEpoch((epoch) => epoch + 1);
+    clearForwards();
+    bumpClusterEpoch();
     feed.reconnect();
   }
 
@@ -164,7 +167,6 @@ export default function App() {
       />
       <div className="flex min-h-0 flex-1">
         <Sidebar
-          epoch={contextEpoch}
           view={route.view}
           activeResource={active}
           onSelect={handleSelectResource}

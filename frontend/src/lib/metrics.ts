@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { Metrics } from './types';
 import { request } from './http';
+import { usePoll } from './usePoll';
+import type { Polled } from './usePoll';
 
 const METRICS_POLL_MS = 10000;
+export const METRICS_CUTOFF_MS = 60000;
 
 export async function fetchMetrics(): Promise<Metrics> {
   const response = await request('/api/metrics');
@@ -26,45 +29,54 @@ export function isUsable(data: Metrics): boolean {
   return Object.keys(data.nodes).length > 0;
 }
 
-export function useMetrics(enabled: boolean): Metrics | null {
-  const [metrics, setMetrics] = useState<Metrics | null>(null);
+export async function loadMetrics(): Promise<Metrics> {
+  const data = await fetchMetrics();
+  const problem = data.error;
+  if (problem === undefined) {
+    return data;
+  }
+  if (isUsable(data)) {
+    return data;
+  }
+  throw new Error(problem);
+}
+
+function useExpiry(polled: Polled<Metrics>, cutoffMs: number): boolean {
+  const [expired, setExpired] = useState(false);
+  const { data, error } = polled;
+
   useEffect(() => {
-    if (!enabled) {
-      setMetrics(null);
+    if (data === null) {
+      setExpired(false);
       return;
     }
-    let mounted = true;
-    let inFlight = false;
-    const load = async () => {
-      if (inFlight) {
-        return;
-      }
-      inFlight = true;
-      try {
-        const data = await fetchMetrics();
-        if (!mounted) {
-          return;
-        }
-        if (!isUsable(data)) {
-          return;
-        }
-        setMetrics(data);
-      } catch {
-        return;
-      } finally {
-        inFlight = false;
-      }
-    };
-    void load();
-    const timer = setInterval(() => {
-      void load();
-    }, METRICS_POLL_MS);
+    if (error === null) {
+      setExpired(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setExpired(true);
+    }, cutoffMs);
     return () => {
-      mounted = false;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
-  }, [enabled]);
-  return metrics;
+  }, [data, error, cutoffMs]);
+
+  return expired;
+}
+
+export function useMetrics(enabled: boolean): Polled<Metrics> {
+  const polled = usePoll(loadMetrics, {
+    intervalMs: METRICS_POLL_MS,
+    enabled,
+    fallback: 'metrics request failed',
+  });
+  const expired = useExpiry(polled, METRICS_CUTOFF_MS);
+
+  if (!expired) {
+    return polled;
+  }
+  return { data: null, error: polled.error, stale: true, reload: polled.reload };
 }
 
 export function formatCpu(milli: number): string {

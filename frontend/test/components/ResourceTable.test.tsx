@@ -443,6 +443,43 @@ describe('ResourceTable', () => {
     expect(screen.getByText('25%')).toBeInTheDocument();
     expect(screen.getAllByText('0%').length).toBeGreaterThan(0);
   });
+
+  it('says the metrics columns stopped updating without blanking them', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                pods: {
+                  'prod/pod-a': { cpuMilli: 150, memoryMi: 192, cpuPercent: 0, memPercent: 0 },
+                },
+                nodes: {},
+              }),
+          });
+        }
+        return Promise.reject(new Error('metrics-server is down'));
+      }),
+    );
+    seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('150m')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('metrics-server is down');
+    expect(screen.getByText('150m')).toBeInTheDocument();
+  });
   it('filters rows by name as you type', async () => {
     const user = userEvent.setup();
     seed(makeColumns([]), true, [

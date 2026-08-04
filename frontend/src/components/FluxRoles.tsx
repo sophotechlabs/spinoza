@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useFlux } from '../lib/flux';
 import { allReady, readyOf, readySummary, reportingOf } from '../lib/readiness';
 import type { FluxResource } from '../lib/types';
 import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
+import StaleBanner from './StaleBanner';
 
 interface Section {
   name: string;
@@ -113,7 +115,7 @@ function KindList({
   onSelect: (resource: FluxResource) => void;
 }) {
   return (
-    <div className="h-full overflow-auto p-3">
+    <div className="min-h-0 flex-1 overflow-auto p-3">
       <button type="button" onClick={onBack} className="mb-2 text-xs text-fg-muted hover:text-fg">
         ← Flux Resources
       </button>
@@ -155,7 +157,7 @@ interface FluxRolesProps {
 }
 
 export default function FluxRoles({ onSelect }: FluxRolesProps) {
-  const { data, error } = useFlux();
+  const { data, error, reload } = useFlux();
   const [kind, setKind] = useState<string | null>(null);
 
   if (data === null) {
@@ -171,42 +173,53 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
     );
   }
 
+  let notice: ReactNode = null;
+  if (error !== null) {
+    notice = <StaleBanner what="Flux resources" message={error} onRetry={reload} />;
+  }
+
   const map = byKind(data.groups.flatMap((group) => group.resources));
 
   if (kind !== null) {
     return (
-      <KindList
-        kind={kind}
-        resources={kindResources(map, kind)}
-        onBack={() => {
-          setKind(null);
-        }}
-        onSelect={onSelect}
-      />
+      <div className="flex h-full min-h-0 flex-col">
+        {notice}
+        <KindList
+          kind={kind}
+          resources={kindResources(map, kind)}
+          onBack={() => {
+            setKind(null);
+          }}
+          onSelect={onSelect}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="h-full overflow-auto p-3">
-      {SECTIONS.map((section) => (
-        <section key={section.name} className="mb-5">
-          <h2 className="mb-2 px-1 text-xs font-semibold tracking-wide text-fg-soft uppercase">
-            {section.name}
-          </h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {section.kinds.map((sectionKind) => (
-              <KindTile
-                key={sectionKind}
-                kind={sectionKind}
-                resources={kindResources(map, sectionKind)}
-                onSelect={() => {
-                  setKind(sectionKind);
-                }}
-              />
-            ))}
-          </div>
-        </section>
-      ))}
+    <div className="flex h-full min-h-0 flex-col">
+      {notice}
+      <div className="min-h-0 flex-1 overflow-auto p-3">
+        {SECTIONS.map((section) => (
+          <section key={section.name} className="mb-5">
+            <h2 className="mb-2 px-1 text-xs font-semibold tracking-wide text-fg-soft uppercase">
+              {section.name}
+            </h2>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {section.kinds.map((sectionKind) => (
+                <KindTile
+                  key={sectionKind}
+                  kind={sectionKind}
+                  resources={kindResources(map, sectionKind)}
+                  onSelect={() => {
+                    setKind(sectionKind);
+                  }}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

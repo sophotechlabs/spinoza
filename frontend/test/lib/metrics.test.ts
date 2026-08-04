@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Metrics } from '../../src/lib/types';
 import {
+  METRICS_CUTOFF_MS,
   barColor,
   fetchMetrics,
   formatCpu,
   formatMem,
   isUsable,
+  loadMetrics,
   useMetrics,
 } from '../../src/lib/metrics';
 import { anySignal } from '../helpers';
@@ -72,7 +74,7 @@ describe('useMetrics', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const { result } = renderHook(() => useMetrics(false));
-    expect(result.current).toBeNull();
+    expect(result.current.data).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -80,7 +82,7 @@ describe('useMetrics', () => {
     stubOk(sample);
     const { result } = renderHook(() => useMetrics(true));
     await waitFor(() => {
-      expect(result.current).toEqual(sample);
+      expect(result.current.data).toEqual(sample);
     });
   });
 
@@ -91,7 +93,7 @@ describe('useMetrics', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
-    expect(result.current).toBeNull();
+    expect(result.current.data).toBeNull();
   });
 
   it('re-fetches on the poll interval', async () => {
@@ -128,14 +130,16 @@ describe('a failed metrics poll', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
     });
-    expect(result.current).toEqual(sample);
+    expect(result.current.data).toEqual(sample);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(11000);
     });
 
     expect(call).toBeGreaterThan(1);
-    expect(result.current).toEqual(sample);
+    expect(result.current.data).toEqual(sample);
+    expect(result.current.stale).toBe(true);
+    expect(result.current.error).toBe('metrics-server is down');
     vi.useRealTimers();
   });
 });
@@ -171,7 +175,26 @@ describe('a metrics payload that reports a list failure', () => {
       await vi.advanceTimersByTimeAsync(10000);
     });
 
-    expect(result.current).toEqual(sample);
+    expect(result.current.data).toEqual(sample);
+    expect(result.current.stale).toBe(true);
+    expect(result.current.error).toBe('2 of 3 resource types could not be listed');
+  });
+
+  it('throws the payload error when nothing usable came back', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ pods: {}, nodes: {}, error: 'metrics API is gone' }),
+      }),
+    );
+
+    await expect(loadMetrics()).rejects.toThrow('metrics API is gone');
+  });
+
+  it('returns a payload that carries no error field at all', async () => {
+    stubOk(sample);
+    await expect(loadMetrics()).resolves.toEqual(sample);
   });
 
   it('accepts a partial payload that still carries data', async () => {
@@ -185,8 +208,12 @@ describe('a metrics payload that reports a list failure', () => {
     const { result } = renderHook(() => useMetrics(true));
 
     await waitFor(() => {
-      expect(result.current).toEqual(partial);
+      expect(result.current.data).toEqual(partial);
     });
+  });
+
+  it('accepts a payload with no error field at all', () => {
+    expect(isUsable({ pods: {}, nodes: {} })).toBe(true);
   });
 
   it('accepts a payload whose error field is empty', () => {
@@ -195,6 +222,73 @@ describe('a metrics payload that reports a list failure', () => {
 
   it('accepts a node-only payload after a pod list failure', () => {
     expect(isUsable({ pods: {}, nodes: sample.nodes, error: 'pods failed' })).toBe(true);
+  });
+});
+
+describe('a metrics-server that stays down', () => {
+  it('stops rendering the last sample once it is older than the cutoff', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(sample) });
+        }
+        return Promise.reject(new Error('metrics-server is down'));
+      }),
+    );
+
+    const { result } = renderHook(() => useMetrics(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(result.current.data).toEqual(sample);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11000);
+    });
+    expect(result.current.data).toEqual(sample);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(METRICS_CUTOFF_MS);
+    });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.stale).toBe(true);
+    expect(result.current.error).toBe('metrics-server is down');
+  });
+
+  it('brings the numbers back when the server recovers before the cutoff', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 2) {
+          return Promise.reject(new Error('metrics-server is down'));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(sample) });
+      }),
+    );
+
+    const { result } = renderHook(() => useMetrics(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11000);
+    });
+    expect(result.current.stale).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11000);
+    });
+
+    expect(result.current.data).toEqual(sample);
+    expect(result.current.stale).toBe(false);
   });
 });
 

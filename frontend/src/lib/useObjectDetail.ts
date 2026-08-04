@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { ObjectDetail, ObjectRef } from './types';
+import type { ObjectDetail, ObjectRef, Row } from './types';
 import { fetchObject, refQuery } from './object';
 
 export interface ObjectDetailState {
   detail: ObjectDetail | null;
   error: string | null;
+  gone: boolean;
   reload: () => void;
 }
 
@@ -22,10 +23,12 @@ function errorMessage(err: unknown): string {
   return 'object request failed';
 }
 
-export function useObjectDetail(target: ObjectRef | null): ObjectDetailState {
+export function useObjectDetail(target: ObjectRef | null, live: Row | null): ObjectDetailState {
   const [detail, setDetail] = useState<ObjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gone, setGone] = useState(false);
   const [reloads, setReloads] = useState(0);
+  const [watched, setWatched] = useState(live);
 
   const targetKey = keyOf(target);
   const [lastKey, setLastKey] = useState(targetKey);
@@ -33,6 +36,18 @@ export function useObjectDetail(target: ObjectRef | null): ObjectDetailState {
     setLastKey(targetKey);
     setDetail(null);
     setError(null);
+    setGone(false);
+    setWatched(live);
+  } else if (live !== watched) {
+    setWatched(live);
+    if (live === null) {
+      setDetail(null);
+      setError(null);
+      setGone(true);
+    } else {
+      setGone(false);
+      setReloads((value) => value + 1);
+    }
   }
 
   useEffect(() => {
@@ -66,5 +81,5 @@ export function useObjectDetail(target: ObjectRef | null): ObjectDetailState {
     setReloads((value) => value + 1);
   }
 
-  return { detail, error, reload };
+  return { detail, error, gone, reload };
 }

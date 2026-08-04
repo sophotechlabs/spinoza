@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
 import type { FluxDashboard } from './types';
 import { request } from './http';
+import { usePoll } from './usePoll';
+import type { Polled } from './usePoll';
 
 const FLUX_POLL_MS = 5000;
 
@@ -13,46 +14,6 @@ export async function fetchFlux(): Promise<FluxDashboard> {
   return data;
 }
 
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'flux request failed';
-}
-
-export function useFlux(): { data: FluxDashboard | null; error: string | null } {
-  const [data, setData] = useState<FluxDashboard | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let mounted = true;
-    let inFlight = false;
-    const load = async () => {
-      if (inFlight) {
-        return;
-      }
-      inFlight = true;
-      try {
-        const dash = await fetchFlux();
-        if (mounted) {
-          setData(dash);
-          setError(null);
-        }
-      } catch (err: unknown) {
-        if (mounted) {
-          setError(errorMessage(err));
-        }
-      } finally {
-        inFlight = false;
-      }
-    };
-    void load();
-    const timer = setInterval(() => {
-      void load();
-    }, FLUX_POLL_MS);
-    return () => {
-      mounted = false;
-      clearInterval(timer);
-    };
-  }, []);
-  return { data, error };
+export function useFlux(): Polled<FluxDashboard> {
+  return usePoll(fetchFlux, { intervalMs: FLUX_POLL_MS, fallback: 'flux request failed' });
 }

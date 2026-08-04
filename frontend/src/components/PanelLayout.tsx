@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { ContainerState, LogRequest, ObjectDetail, ObjectRef } from '../lib/types';
+import type { ContainerState, LogRequest, ObjectDetail, ObjectRef, Row } from '../lib/types';
 import type { DockSide, PanelContext, PanelId } from '../lib/panels';
 import type { Selection } from '../lib/refs';
 import { DOCK_SIDES, panelById, panelsOn } from '../lib/panels';
@@ -41,6 +41,7 @@ const NO_HOSTS: Hosts = { left: null, right: null, bottom: null };
 
 interface RenderContext extends PanelContext {
   error: string | null;
+  gone: boolean;
   open: boolean;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
@@ -61,6 +62,13 @@ function refOf(selection: Selection | null): ObjectRef | null {
     return null;
   }
   return selection.ref;
+}
+
+function rowOf(selection: Selection | null): Row | null {
+  if (selection === null) {
+    return null;
+  }
+  return selection.row;
 }
 
 function logContainers(states: ContainerState[] | undefined, detail: ObjectDetail): string[] {
@@ -91,6 +99,11 @@ function objectPanel(ctx: RenderContext, body: ObjectBody): ReactNode {
 }
 
 function objectBody(ctx: RenderContext, body: ObjectBody): ReactNode {
+  if (ctx.gone) {
+    return (
+      <div className="p-4 text-xs text-fg-muted">This object is no longer in the cluster.</div>
+    );
+  }
   if (ctx.error !== null) {
     return <div className="p-4 text-xs break-words text-error">{ctx.error}</div>;
   }
@@ -169,7 +182,7 @@ export default function PanelLayout({
   const activate = usePanelsStore((state) => state.activate);
   const [hosts, setHosts] = useState<Hosts>(NO_HOSTS);
   const [opened, setOpened] = useState<PanelId[]>([]);
-  const { detail, error, reload } = useObjectDetail(refOf(selection));
+  const { detail, error, gone, reload } = useObjectDetail(refOf(selection), rowOf(selection));
 
   const ctx: PanelContext = { selection, detail, pod: podFor(selection, detail) };
 
@@ -261,6 +274,7 @@ export default function PanelLayout({
         const render: RenderContext = {
           ...ctx,
           error,
+          gone,
           open,
           subscribeLogs,
           unsubscribeLogs,

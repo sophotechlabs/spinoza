@@ -209,6 +209,38 @@ describe('GitopsGraph partial failures', () => {
 
     expect(await screen.findByText('No GitOps resources found.')).toBeInTheDocument();
   });
+
+  it('says the graph stopped updating once a later poll fails', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ nodes: [makeGraphNode({ id: 'a', name: 'apps' })], edges: [] }),
+          });
+        }
+        return Promise.reject(new Error('graph endpoint is down'));
+      }),
+    );
+
+    render(<GitopsGraph />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('graph endpoint is down');
+    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+  });
 });
 
 describe('the flow canvas chrome', () => {

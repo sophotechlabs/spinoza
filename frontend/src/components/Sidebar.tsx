@@ -3,9 +3,9 @@ import type { Category, ResourceDescriptor, View } from '../lib/types';
 import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/discovery';
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
+import { useClusterEpoch } from '../store/cluster';
 
 interface SidebarProps {
-  epoch?: number;
   view: View;
   activeResource: ResourceDescriptor | null;
   onSelect: (descriptor: ResourceDescriptor) => void;
@@ -111,13 +111,8 @@ function retryLabel(retrying: boolean): string {
 const sectionClass =
   'flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-fg-muted uppercase hover:text-fg';
 
-export default function Sidebar({
-  epoch,
-  view,
-  activeResource,
-  onSelect,
-  onSelectView,
-}: SidebarProps) {
+export default function Sidebar({ view, activeResource, onSelect, onSelectView }: SidebarProps) {
+  const epoch = useClusterEpoch();
   const { size: width, startResize, nudge } = useSidebarWidth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());

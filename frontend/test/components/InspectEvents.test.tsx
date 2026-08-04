@@ -105,6 +105,58 @@ describe('InspectEvents polling', () => {
 
     expect(mock).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps the events it has and says they stopped updating', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([event()]) });
+        }
+        return Promise.reject(new Error('events endpoint is down'));
+      }),
+    );
+    render(<InspectEvents namespace="flux-system" uid="pod-uid" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('Pulled')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('events endpoint is down');
+    expect(screen.getByText('Pulled')).toBeInTheDocument();
+  });
+
+  it('says an empty list stopped updating too', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        return Promise.reject(new Error('events endpoint is down'));
+      }),
+    );
+    render(<InspectEvents namespace="flux-system" uid="pod-uid" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('events endpoint is down');
+    expect(screen.getByText('No events for this object.')).toBeInTheDocument();
+  });
 });
 
 describe('a slow events poll', () => {

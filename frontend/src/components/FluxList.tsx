@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   createColumnHelper,
   flexRender,
@@ -19,6 +20,7 @@ import {
 import { useElementWidth } from '../lib/useElementWidth';
 import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
+import StaleBanner from './StaleBanner';
 
 const EMPTY: FluxResource[] = [];
 const FLEX_COLUMN_IDS = new Set(['name', 'revision']);
@@ -94,7 +96,7 @@ interface FluxListProps {
 }
 
 export default function FluxList({ onSelect }: FluxListProps) {
-  const { data, error } = useFlux();
+  const { data, error, reload } = useFlux();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const containerWidth = useElementWidth(scrollEl);
 
@@ -119,13 +121,21 @@ export default function FluxList({ onSelect }: FluxListProps) {
     );
   }
 
+  let notice: ReactNode = null;
+  if (error !== null) {
+    notice = <StaleBanner what="Flux resources" message={error} onRetry={reload} />;
+  }
+
   if (data.groups.length === 0) {
     if (data.error !== undefined) {
       return <LoadFailure what="Flux resources" message={data.error} />;
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        No Flux resources found.
+      <div className="flex h-full min-h-0 flex-col">
+        {notice}
+        <div className="flex flex-1 items-center justify-center text-xs text-fg-muted">
+          No Flux resources found.
+        </div>
       </div>
     );
   }
@@ -140,6 +150,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {notice}
       {data.error !== undefined && <LoadWarning message={data.error} />}
       <div ref={setScrollEl} className="min-h-0 flex-1 overflow-auto">
         <table

@@ -24,6 +24,7 @@ import { useNow } from '../lib/useNow';
 import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
+import StaleBanner from './StaleBanner';
 
 interface ResourceTableProps {
   active: ResourceDescriptor | null;
@@ -185,7 +186,12 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     activeKind = active.kind;
   }
   const wantMetrics = METRIC_KINDS.has(activeKind);
-  const metrics = useMetrics(wantMetrics);
+  const {
+    data: metrics,
+    error: metricsError,
+    stale: metricsStale,
+    reload: reloadMetrics,
+  } = useMetrics(wantMetrics);
 
   const columns = useMemo<ColumnDef<Row, string>[]>(() => {
     const defs: ColumnDef<Row, string>[] = [];
@@ -331,6 +337,9 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {metricsStale && metricsError !== null && (
+        <StaleBanner what="Metrics" message={metricsError} onRetry={reloadMetrics} />
+      )}
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface px-2 py-1.5 text-xs">
         <input
           type="search"

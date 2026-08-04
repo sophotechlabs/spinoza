@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import {
+  clearForwards,
   forwardKind,
   listForwards,
+  loadForwards,
   refreshForwards,
   startForward,
   stopForward,
@@ -144,14 +146,26 @@ describe('portForward', () => {
     expect(useForwardsStore.getState().forwards).toHaveLength(1);
   });
 
+  it('surfaces a list failure to the poller instead of swallowing it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+
+    await expect(loadForwards()).rejects.toThrow('offline');
+  });
+
+  it('empties the store when the cluster changes underneath it', () => {
+    useForwardsStore.setState({ forwards: [forward()] });
+
+    clearForwards();
+
+    expect(useForwardsStore.getState().forwards).toHaveLength(0);
+  });
+
   it('polls while enabled and stops on unmount', async () => {
     vi.useFakeTimers();
     const mock = vi.fn().mockResolvedValue(ok([]));
     vi.stubGlobal('fetch', mock);
 
-    const view = renderHook(() => {
-      useForwardPolling(true);
-    });
+    const view = renderHook(() => useForwardPolling(true));
     expect(mock).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(5000);
@@ -167,9 +181,7 @@ describe('portForward', () => {
     const mock = vi.fn().mockResolvedValue(ok([]));
     vi.stubGlobal('fetch', mock);
 
-    renderHook(() => {
-      useForwardPolling(false);
-    });
+    renderHook(() => useForwardPolling(false));
     await vi.advanceTimersByTimeAsync(20000);
 
     expect(mock).not.toHaveBeenCalled();

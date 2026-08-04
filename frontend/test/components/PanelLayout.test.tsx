@@ -403,3 +403,33 @@ describe('PanelLayout width', () => {
     expect(root.className).toContain('overflow-hidden');
   });
 });
+
+describe('an object deleted out from under the panels', () => {
+  beforeEach(() => {
+    stubApi();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('replaces the overview with a plain statement instead of a ghost object', async () => {
+    const { view } = renderLayout();
+    await screen.findByText('Metadata');
+
+    view.rerender(
+      <PanelLayout
+        selection={{ ref: podRef, row: null }}
+        subscribeLogs={vi.fn()}
+        unsubscribeLogs={vi.fn()}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      >
+        <div data-testid="main-area" />
+      </PanelLayout>,
+    );
+
+    expect(screen.getByText('This object is no longer in the cluster.')).toBeInTheDocument();
+    expect(screen.queryByText('Metadata')).not.toBeInTheDocument();
+  });
+});

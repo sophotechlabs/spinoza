@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
-import type { K8sEvent } from '../lib/types';
+import { useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { fetchEvents } from '../lib/object';
+import { usePoll } from '../lib/usePoll';
+import StaleBanner from './StaleBanner';
 
 const EVENTS_POLL_MS = 10000;
 
@@ -16,63 +18,38 @@ function eventColor(type: string): string {
   return 'text-fg-muted';
 }
 
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'events request failed';
-}
-
 export default function InspectEvents({ namespace, uid }: InspectEventsProps) {
-  const [events, setEvents] = useState<K8sEvent[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let inFlight = false;
-    const load = async () => {
-      if (inFlight) {
-        return;
-      }
-      inFlight = true;
-      try {
-        const data = await fetchEvents(namespace, uid);
-        if (mounted) {
-          setEvents(data);
-          setError(null);
-        }
-      } catch (err: unknown) {
-        if (mounted) {
-          setError(errorMessage(err));
-        }
-      } finally {
-        inFlight = false;
-      }
-    };
-    void load();
-    const timer = setInterval(() => {
-      void load();
-    }, EVENTS_POLL_MS);
-    return () => {
-      mounted = false;
-      clearInterval(timer);
-    };
-  }, [namespace, uid]);
-
-  if (error !== null) {
-    return <div className="p-4 text-xs text-error">{error}</div>;
-  }
+  const load = useCallback(() => fetchEvents(namespace, uid), [namespace, uid]);
+  const {
+    data: events,
+    error,
+    reload,
+  } = usePoll(load, { intervalMs: EVENTS_POLL_MS, fallback: 'events request failed' });
 
   if (events === null) {
+    if (error !== null) {
+      return <div className="p-4 text-xs text-error">{error}</div>;
+    }
     return <div className="p-4 text-xs text-fg-muted">Loading events…</div>;
   }
 
+  let notice: ReactNode = null;
+  if (error !== null) {
+    notice = <StaleBanner what="Events" message={error} onRetry={reload} />;
+  }
+
   if (events.length === 0) {
-    return <div className="p-4 text-xs text-fg-muted">No events for this object.</div>;
+    return (
+      <div className="flex min-h-0 flex-col">
+        {notice}
+        <div className="p-4 text-xs text-fg-muted">No events for this object.</div>
+      </div>
+    );
   }
 
   return (
-    <div className="overflow-y-auto text-xs">
+    <div className="flex min-h-0 flex-col overflow-y-auto text-xs">
+      {notice}
       {events.map((event, index) => (
         <article
           key={`${event.reason}-${event.lastSeen}-${index}`}

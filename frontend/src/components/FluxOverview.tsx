@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react';
 import { useFlux } from '../lib/flux';
 import { groupSummary } from '../lib/readiness';
 import type { FluxGroup, FluxResource } from '../lib/types';
 import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
+import StaleBanner from './StaleBanner';
 import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
 
 function Tile({
@@ -71,7 +73,7 @@ interface FluxOverviewProps {
 }
 
 export default function FluxOverview({ onSelect }: FluxOverviewProps) {
-  const { data, error } = useFlux();
+  const { data, error, reload } = useFlux();
 
   if (data === null) {
     if (error !== null) {
@@ -86,19 +88,28 @@ export default function FluxOverview({ onSelect }: FluxOverviewProps) {
     );
   }
 
+  let notice: ReactNode = null;
+  if (error !== null) {
+    notice = <StaleBanner what="Flux resources" message={error} onRetry={reload} />;
+  }
+
   if (data.groups.length === 0) {
     if (data.error !== undefined) {
       return <LoadFailure what="Flux resources" message={data.error} />;
     }
     return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        No Flux resources found.
+      <div className="flex h-full min-h-0 flex-col">
+        {notice}
+        <div className="flex flex-1 items-center justify-center text-xs text-fg-muted">
+          No Flux resources found.
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {notice}
       {data.error !== undefined && <LoadWarning message={data.error} />}
       <div className="min-h-0 flex-1 overflow-auto p-3">
         {data.groups.map((group) => (

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import type { GraphNode } from '../lib/types';
 import { fetchGraph } from '../lib/graph';
+import { usePoll } from '../lib/usePoll';
 import {
   EDGE_DEPENDS_STROKE,
   EDGE_MANAGES_STROKE,
@@ -12,6 +13,7 @@ import {
 import type { GitopsFlow, GitopsFlowNode } from '../lib/graphLayout';
 import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
+import StaleBanner from './StaleBanner';
 import { useResolvedTheme } from '../store/theme';
 
 const POLL_INTERVAL_MS = 5000;
@@ -44,58 +46,31 @@ const EDGE_LEGEND: EdgeLegendItem[] = [
   { stroke: EDGE_MANAGES_STROKE, label: 'Manages' },
 ];
 
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'gitops graph request failed';
-}
-
 export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
   const resolvedTheme = useResolvedTheme();
-  const [flow, setFlow] = useState<GitopsFlow | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [partial, setPartial] = useState<string | null>(null);
-  const [overLimit, setOverLimit] = useState<number | null>(null);
+  const { data, error, reload } = usePoll(fetchGraph, {
+    intervalMs: POLL_INTERVAL_MS,
+    fallback: 'gitops graph request failed',
+  });
 
-  useEffect(() => {
-    let mounted = true;
-    let inFlight = false;
-    const load = async () => {
-      if (inFlight) {
-        return;
-      }
-      inFlight = true;
-      try {
-        const graph = await fetchGraph();
-        if (mounted) {
-          setPartial(graph.error ?? null);
-          if (graph.nodes.length > MAX_NODES) {
-            setOverLimit(graph.nodes.length);
-            setFlow(null);
-          } else {
-            setOverLimit(null);
-            setFlow(toFlow(graph));
-          }
-          setError(null);
-        }
-      } catch (err: unknown) {
-        if (mounted) {
-          setError(errorMessage(err));
-        }
-      } finally {
-        inFlight = false;
-      }
-    };
-    void load();
-    const timer = setInterval(() => {
-      void load();
-    }, POLL_INTERVAL_MS);
-    return () => {
-      mounted = false;
-      clearInterval(timer);
-    };
-  }, []);
+  const flow = useMemo<GitopsFlow | null>(() => {
+    if (data === null) {
+      return null;
+    }
+    if (data.nodes.length > MAX_NODES) {
+      return null;
+    }
+    return toFlow(data);
+  }, [data]);
+
+  let partial: string | null = null;
+  let overLimit: number | null = null;
+  if (data !== null) {
+    partial = data.error ?? null;
+    if (data.nodes.length > MAX_NODES) {
+      overLimit = data.nodes.length;
+    }
+  }
 
   const handleNodeClick = useCallback<NodeMouseHandler<GitopsFlowNode>>(
     (_event, node) => {
@@ -140,6 +115,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
+      {error !== null && <StaleBanner what="The GitOps graph" message={error} onRetry={reload} />}
       {partial !== null && <LoadWarning message={partial} />}
       <div className="relative min-h-0 w-full flex-1">
         <ReactFlow

@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Category, ResourceDescriptor, View } from '../../src/lib/types';
 import Sidebar from '../../src/components/Sidebar';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 import { anySignal, makeCategory, makeDescriptor, rejectsWith } from '../helpers';
 
 interface RenderOverrides {
-  epoch?: number;
   view?: View;
   activeResource?: ResourceDescriptor | null;
   onSelect?: (descriptor: ResourceDescriptor) => void;
@@ -16,7 +16,6 @@ interface RenderOverrides {
 function sidebarProps(overrides: RenderOverrides = {}) {
   const view: View = overrides.view ?? 'resources';
   return {
-    epoch: overrides.epoch ?? 0,
     view,
     activeResource: overrides.activeResource ?? null,
     onSelect: overrides.onSelect ?? vi.fn(),
@@ -423,7 +422,7 @@ describe('resource counts', () => {
 
   it('drops the previous cluster counts when the context changes', async () => {
     stubFetch(categories, { '/v1/pods': 57 });
-    const view = renderSidebar({ epoch: 0 });
+    const view = renderSidebar();
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
     await screen.findByRole('button', { name: 'Pod 57' });
 
@@ -437,7 +436,10 @@ describe('resource counts', () => {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
       }),
     );
-    view.rerender(<Sidebar {...sidebarProps({ epoch: 1 })} />);
+    act(() => {
+      bumpClusterEpoch();
+    });
+    view.rerender(<Sidebar {...sidebarProps()} />);
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
 
     expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();

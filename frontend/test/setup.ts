@@ -3,12 +3,16 @@ import { beforeEach } from 'vitest';
 import { configure } from '@testing-library/react';
 import { installMatchMedia } from './helpers';
 import { usePanelsStore } from '../src/store/panels';
+import { useClusterStore } from '../src/store/cluster';
+import { useForwardsStore } from '../src/store/forwards';
 
 configure({ asyncUtilTimeout: 5000 });
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/');
   usePanelsStore.getState().reset();
+  useClusterStore.getState().reset();
+  useForwardsStore.getState().setForwards([]);
 });
 
 class ResizeObserverStub {

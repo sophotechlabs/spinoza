@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FluxDashboard } from '../../src/lib/types';
 import FluxRoles from '../../src/components/FluxRoles';
@@ -9,6 +9,20 @@ function stubFlux(dashboard: FluxDashboard): void {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(dashboard) }),
+  );
+}
+
+function stubThenFail(dashboard: FluxDashboard, message: string): void {
+  let call = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => {
+      call += 1;
+      if (call === 1) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(dashboard) });
+      }
+      return Promise.reject(new Error(message));
+    }),
   );
 }
 
@@ -72,6 +86,7 @@ const dashboard: FluxDashboard = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('FluxRoles', () => {
@@ -123,5 +138,42 @@ describe('FluxRoles', () => {
     await userEvent.click(await screen.findByRole('button', { name: /apps/ }));
 
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'apps' }));
+  });
+
+  it('says the tiles stopped updating once a later poll fails', async () => {
+    vi.useFakeTimers();
+    stubThenFail(dashboard, 'flux endpoint is down');
+
+    render(<FluxRoles onSelect={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('Appliers')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('flux endpoint is down');
+    expect(screen.getByText('Appliers')).toBeInTheDocument();
+  });
+
+  it('carries the staleness notice into a kind list', async () => {
+    vi.useFakeTimers();
+    stubThenFail(dashboard, 'flux endpoint is down');
+
+    render(<FluxRoles onSelect={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    act(() => {
+      screen.getAllByRole('button', { name: /Kustomization/ })[0].click();
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('flux endpoint is down');
+    expect(screen.getByText(/2 resources/)).toBeInTheDocument();
   });
 });

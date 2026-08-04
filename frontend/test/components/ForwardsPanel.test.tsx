@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ForwardsPanel from '../../src/components/ForwardsPanel';
 import { useForwardsStore } from '../../src/store/forwards';
@@ -40,6 +40,7 @@ describe('ForwardsPanel', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     useForwardsStore.setState({ forwards: [] });
   });
 
@@ -154,5 +155,45 @@ describe('ForwardsPanel', () => {
         message: 'Stopping the forward: forward pf-1 is already gone',
       }),
     ]);
+  });
+
+  it('says the list stopped updating while keeping the forwards on screen', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([forward()]) });
+        }
+        return Promise.reject(new Error('portforward endpoint is down'));
+      }),
+    );
+    render(<ForwardsPanel />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('pod/flux-system/web')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('portforward endpoint is down');
+    expect(screen.getByText('pod/flux-system/web')).toBeInTheDocument();
+  });
+
+  it('says an empty list stopped updating too', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('portforward endpoint is down')));
+    render(<ForwardsPanel />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('portforward endpoint is down');
+    expect(screen.getByText(/No active forwards/)).toBeInTheDocument();
   });
 });

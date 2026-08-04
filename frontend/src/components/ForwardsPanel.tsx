@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { refreshForwards, stopForward, useForwardPolling } from '../lib/portForward';
 import { useForwardsStore } from '../store/forwards';
 import { notifyError, notifyOk } from '../store/toasts';
+import StaleBanner from './StaleBanner';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -24,7 +26,7 @@ interface ForwardsPanelProps {
 export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
   const forwards = useForwardsStore((state) => state.forwards);
   const [error, setError] = useState<string | null>(null);
-  useForwardPolling(active);
+  const poll = useForwardPolling(active);
 
   async function stop(id: string) {
     setError(null);
@@ -39,48 +41,59 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
     }
   }
 
+  let notice: ReactNode = null;
+  if (poll.error !== null) {
+    notice = <StaleBanner what="The forward list" message={poll.error} onRetry={poll.reload} />;
+  }
+
   if (forwards.length === 0) {
     return (
-      <div className="p-3 text-fg-muted">
-        No active forwards. Open a Pod or Service and forward a port.
+      <div className="flex min-h-0 flex-col">
+        {notice}
+        <div className="p-3 text-fg-muted">
+          No active forwards. Open a Pod or Service and forward a port.
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-2">
-      {error !== null && <p className="mb-1.5 text-error">{error}</p>}
-      {forwards.map((forward) => (
-        <div key={forward.id} className="flex items-center gap-2 border-b border-edge py-1">
-          <span className={stateColor(forward.state)}>●</span>
-          <span className="truncate text-fg-soft">
-            {forward.kind.toLowerCase()}/{forward.namespace}/{forward.name}
-          </span>
-          {forward.state === 'failed' && (
-            <span className="truncate text-error" title={forward.error}>
-              {forward.error}
+    <div className="flex min-h-0 flex-col">
+      {notice}
+      <div className="p-2">
+        {error !== null && <p className="mb-1.5 text-error">{error}</p>}
+        {forwards.map((forward) => (
+          <div key={forward.id} className="flex items-center gap-2 border-b border-edge py-1">
+            <span className={stateColor(forward.state)}>●</span>
+            <span className="truncate text-fg-soft">
+              {forward.kind.toLowerCase()}/{forward.namespace}/{forward.name}
             </span>
-          )}
-          {forward.state !== 'failed' && (
-            <a
-              href={`http://127.0.0.1:${forward.localPort}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-fg-strong hover:underline"
+            {forward.state === 'failed' && (
+              <span className="truncate text-error" title={forward.error}>
+                {forward.error}
+              </span>
+            )}
+            {forward.state !== 'failed' && (
+              <a
+                href={`http://127.0.0.1:${forward.localPort}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-fg-strong hover:underline"
+              >
+                127.0.0.1:{forward.localPort}
+              </a>
+            )}
+            <span className="text-fg-muted">→ {forward.remotePort}</span>
+            <button
+              type="button"
+              onClick={() => void stop(forward.id)}
+              className="ml-auto rounded border border-edge-strong px-1.5 text-fg-soft hover:bg-surface-active"
             >
-              127.0.0.1:{forward.localPort}
-            </a>
-          )}
-          <span className="text-fg-muted">→ {forward.remotePort}</span>
-          <button
-            type="button"
-            onClick={() => void stop(forward.id)}
-            className="ml-auto rounded border border-edge-strong px-1.5 text-fg-soft hover:bg-surface-active"
-          >
-            Stop
-          </button>
-        </div>
-      ))}
+              Stop
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
