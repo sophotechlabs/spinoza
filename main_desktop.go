@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -23,6 +23,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/server"
+	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
 const shutdownGrace = 3 * time.Second
@@ -30,7 +31,8 @@ const shutdownGrace = 3 * time.Second
 func main() {
 	err := runDesktop()
 	if err != nil {
-		log.Fatalf("spinoza: %v", err)
+		slog.Error("spinoza stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -42,6 +44,11 @@ func runDesktop() error {
 	if flagErr != nil {
 		return flagErr
 	}
+	if opts.showVersion {
+		_, _ = os.Stdout.WriteString(version.String() + "\n")
+		return nil
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: opts.logLevel})))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -80,7 +87,7 @@ func runDesktop() error {
 	go func() {
 		serveErr := httpServer.Serve(listener)
 		if serveErr != nil && serveErr != http.ErrServerClosed {
-			log.Printf("server: %v", serveErr)
+			slog.Error("the desktop backend stopped serving", "error", serveErr)
 		}
 	}()
 

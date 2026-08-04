@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -84,6 +85,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 	socket, err := accept(w, r)
 	if err != nil {
+		slog.Warn("a terminal upgrade was refused", "namespace", req.Namespace, "pod", req.Pod, "error", err)
 		return
 	}
 	defer func() { _ = socket.CloseNow() }()

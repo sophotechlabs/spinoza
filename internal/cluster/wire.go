@@ -3,7 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -42,9 +42,9 @@ func build(ctx context.Context, name string, options Options) (*resources.Manage
 		return nil, nil, unreachable(bundle.Context, discErr)
 	}
 	if discErr != nil {
-		log.Printf("discovery (partial): %v", discErr)
+		slog.Warn("discovery came back incomplete", "error", discErr)
 	}
-	log.Printf("spinoza connected to context %q — %d resource types, %d categories", bundle.Context, len(descs), len(cats))
+	slog.Info("connected to a cluster", "context", bundle.Context, "resourceTypes", len(descs), "categories", len(cats))
 	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3)
 	forwards := portforward.NewRegistry(
 		ctx,

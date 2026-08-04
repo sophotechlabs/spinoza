@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ const msgError = "error"
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := accept(w, r)
 	if err != nil {
+		slog.Warn("a websocket upgrade was refused", "path", r.URL.Path, "error", err)
 		return
 	}
 	defer func() { _ = conn.CloseNow() }()
@@ -42,6 +44,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		var msg api.ClientMsg
 		if readErr := wsjson.Read(ctx, conn, &msg); readErr != nil {
+			slog.Debug("a feed stopped reading", "error", readErr)
 			return
 		}
 		sess.handle(msg)
@@ -128,6 +131,7 @@ func (sess *wsSession) failCurrent(subID string, gen uint64, err error) {
 	if !sess.isCurrent(subID, gen) {
 		return
 	}
+	slog.Warn("a subscription could not be built", "subId", subID, "error", err)
 	sess.writeLocked(sess.ctx, api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()})
 }
 
@@ -278,6 +282,7 @@ func (sess *wsSession) failCurrentLogs(subID string, gen uint64, err error) {
 	if !sess.isCurrentLogs(subID, gen) {
 		return
 	}
+	slog.Warn("a log stream could not be opened", "subId", subID, "error", err)
 	sess.writeLocked(sess.ctx, api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()})
 }
 
@@ -399,7 +404,10 @@ func (sess *wsSession) write(ctx context.Context, msg any) {
 func (sess *wsSession) writeLocked(ctx context.Context, msg any) {
 	writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	_ = wsjson.Write(writeCtx, sess.conn, msg)
+	err := wsjson.Write(writeCtx, sess.conn, msg)
+	if err != nil {
+		slog.Warn("a feed frame could not be delivered", "error", err)
+	}
 }
 
 func columnsOrEmpty(columns []api.Column) []api.Column {

@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,13 +18,15 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/server"
+	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
 const shutdownGrace = 3 * time.Second
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatalf("spinoza: %v", err)
+		slog.Error("spinoza stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -36,6 +38,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if opts.showVersion {
+		_, _ = os.Stdout.WriteString(version.String() + "\n")
+		return nil
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: opts.logLevel})))
 
 	addrErr := server.CheckLoopback(opts.addr)
 	if addrErr != nil {
@@ -72,7 +79,7 @@ func run() error {
 	}
 
 	url := server.BrowserURL(opts.addr, token)
-	log.Printf("spinoza listening on %s  (open it in a browser)", url)
+	slog.Info("spinoza is listening, open this in a browser", "url", url, "version", version.String())
 	if opts.openBrowser {
 		openURL(ctx, url)
 	}

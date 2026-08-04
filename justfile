@@ -190,7 +190,7 @@ release-dist: deps
         if [ "$goos" = "windows" ]; then
             binary="spinoza.exe"
         fi
-        GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -o "$out/$binary" .
+        GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -ldflags "-X github.com/sophotechlabs/spinoza/internal/version.value=$version" -o "$out/$binary" .
         tar -czf "dist/release/spinoza_${version}_${goos}_${goarch}.tar.gz" -C "$out" "$binary"
     done
     cd dist/release && sha256sum *.tar.gz > checksums.txt
