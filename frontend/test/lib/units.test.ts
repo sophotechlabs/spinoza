@@ -33,7 +33,7 @@ describe('memFromBytes', () => {
 });
 
 describe('the two unit families', () => {
-  it('no longer share a name, so a mis-import cannot silently rescale', () => {
+  it('no longer share a name, so importing the wrong one cannot silently rescale', () => {
     expect(cpuFromMilli(1500)).toBe('1500m');
     expect(cpuFromCores(1500)).toBe('1500000m');
     expect(memFromMi(1024)).toBe('1.0Gi');

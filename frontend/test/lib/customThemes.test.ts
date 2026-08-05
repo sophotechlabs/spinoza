@@ -70,11 +70,11 @@ describe('a theme someone hands us', () => {
   it('rejects a token name it does not know, rather than ignoring it', () => {
     const { theme, errors } = validateTheme({
       ...SOLARIZED,
-      tokens: { surfce: '#fdf6e3' },
+      tokens: { 'not-a-token': '#fdf6e3' },
     });
 
     expect(theme).toBeNull();
-    expect(errors).toContain('tokens: "surfce" is not a known name');
+    expect(errors).toContain('tokens: "not-a-token" is not a known name');
   });
 
   it('rejects a value that is not a colour', () => {
