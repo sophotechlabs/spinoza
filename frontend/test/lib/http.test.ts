@@ -22,7 +22,7 @@ function clearToken(): void {
 }
 
 function headersOf(mock: ReturnType<typeof stubFetch>): Headers {
-  return new Headers((mock.mock.calls[0][1] as RequestInit).headers);
+  return new Headers(mock.mock.calls[0][1].headers);
 }
 
 function reasonOf(signal: AbortSignal | null | undefined): Error {

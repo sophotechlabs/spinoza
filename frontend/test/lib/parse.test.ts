@@ -212,11 +212,19 @@ describe('parseCatalog', () => {
 
 describe('parseCounts', () => {
   it('keeps numeric counts only', () => {
-    expect(parseCounts({ counts: { '/v1/pods': 3, '/v1/nodes': 'x' } })).toEqual({ '/v1/pods': 3 });
+    expect(parseCounts({ counts: { '/v1/pods': 3, '/v1/nodes': 'x' } }).counts).toEqual({
+      '/v1/pods': 3,
+    });
   });
 
   it('is empty when the payload has no counts', () => {
-    expect(parseCounts({})).toEqual({});
+    expect(parseCounts({})).toEqual({ counts: {}, errors: undefined });
+  });
+
+  it('keeps the per-resource errors the server reports', () => {
+    expect(parseCounts({ errors: { '/v1/secrets': 'forbidden' } }).errors).toEqual({
+      '/v1/secrets': 'forbidden',
+    });
   });
 });
 

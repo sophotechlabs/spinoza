@@ -159,7 +159,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     try {
       const tally = await fetchResourceCounts();
       if (live()) {
-        setCounts(tally);
+        setCounts(tally.counts);
         setCountsError(null);
       }
     } catch (err: unknown) {

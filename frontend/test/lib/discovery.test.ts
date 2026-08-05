@@ -82,7 +82,10 @@ describe('fetchResourceCounts', () => {
       }),
     );
 
-    await expect(fetchResourceCounts()).resolves.toEqual({ '/v1/pods': 4 });
+    await expect(fetchResourceCounts()).resolves.toEqual({
+      counts: { '/v1/pods': 4 },
+      errors: undefined,
+    });
   });
 
   it('throws when the server refuses', async () => {
@@ -97,6 +100,22 @@ describe('fetchResourceCounts', () => {
       vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }),
     );
 
-    await expect(fetchResourceCounts()).resolves.toEqual({});
+    await expect(fetchResourceCounts()).resolves.toEqual({ counts: {}, errors: undefined });
+  });
+
+  it('carries the per-resource errors the server reports', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ counts: { '/v1/pods': 4 }, errors: { '/v1/secrets': 'forbidden' } }),
+      }),
+    );
+
+    await expect(fetchResourceCounts()).resolves.toEqual({
+      counts: { '/v1/pods': 4 },
+      errors: { '/v1/secrets': 'forbidden' },
+    });
   });
 });

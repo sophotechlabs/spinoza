@@ -24,6 +24,7 @@ import type {
   PodOutcome,
   PortForward,
   ResourceCatalog,
+  ResourceCounts,
   ResourceDescriptor,
   ResourceUsage,
   Row,
@@ -57,7 +58,7 @@ export function parseColumn(item: Record<string, unknown>): Column {
   return { name: asString(item.name), render: optionalString(item.render) };
 }
 
-export function parseContainerState(item: Record<string, unknown>): ContainerState {
+function parseContainerState(item: Record<string, unknown>): ContainerState {
   return {
     name: asString(item.name),
     state: oneOf(item.state, CONTAINER_PHASES, 'waiting'),
@@ -80,7 +81,7 @@ export function parseRow(item: Record<string, unknown>): Row {
   };
 }
 
-export function parseDescriptor(item: Record<string, unknown>): ResourceDescriptor {
+function parseDescriptor(item: Record<string, unknown>): ResourceDescriptor {
   return {
     group: asString(item.group),
     version: asString(item.version),
@@ -311,8 +312,9 @@ export function parseMetricHistory(body: unknown): MetricHistory {
   };
 }
 
-export function parseCounts(body: unknown): Record<string, number> {
-  return numberMap(asRecord(body).counts);
+export function parseCounts(body: unknown): ResourceCounts {
+  const item = asRecord(body);
+  return { counts: numberMap(item.counts), errors: stringMap(item.errors) };
 }
 
 export function parseExecSupport(body: unknown): ExecSupport {
