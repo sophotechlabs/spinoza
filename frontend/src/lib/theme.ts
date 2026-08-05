@@ -100,6 +100,28 @@ export const CONTENT_TOKENS = [
   'ansi-bright-white',
 ];
 
+export const SURFACE_TOKENS = ['surface', 'surface-raised', 'surface-active'];
+
+export const TINT_BACKGROUNDS: Partial<Record<string, string>> = {
+  'ok-contrast': 'ok-tint',
+  'error-strong': 'error-tint',
+  'error-contrast': 'error-tint',
+  'error-muted': 'error-tint',
+  'warn-strong': 'warn-tint',
+  'info-contrast': 'info-tint',
+};
+
+export function backgroundsFor(token: string): string[] {
+  const tint = TINT_BACKGROUNDS[token];
+  if (tint !== undefined) {
+    return [tint];
+  }
+  if (token.startsWith('ansi-')) {
+    return ['surface'];
+  }
+  return SURFACE_TOKENS;
+}
+
 export const CANVAS_NAMES = [
   'chartAxis',
   'chartGrid',

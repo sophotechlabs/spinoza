@@ -10,6 +10,8 @@ import {
   watchSystemTheme,
   writeTheme,
   THEME_KEY,
+  SURFACE_TOKENS,
+  backgroundsFor,
 } from '../../src/lib/theme';
 import { emitSystemDark, setSystemDark } from '../helpers';
 
@@ -128,5 +130,24 @@ describe('applyTheme', () => {
     applyTheme(themeById(BUILT_IN_THEMES, 'dark'));
 
     expect(document.documentElement.style.getPropertyValue('--surface')).toBe('');
+  });
+});
+
+describe('which backgrounds a token has to clear', () => {
+  it('holds ordinary text to every surface it can land on', () => {
+    expect(backgroundsFor('fg-subtle')).toEqual(SURFACE_TOKENS);
+    expect(backgroundsFor('ok')).toEqual(SURFACE_TOKENS);
+  });
+
+  it('holds tint-only text to its own tint', () => {
+    expect(backgroundsFor('ok-contrast')).toEqual(['ok-tint']);
+    expect(backgroundsFor('error-strong')).toEqual(['error-tint']);
+    expect(backgroundsFor('warn-strong')).toEqual(['warn-tint']);
+    expect(backgroundsFor('info-contrast')).toEqual(['info-tint']);
+  });
+
+  it('holds terminal colours to the terminal background', () => {
+    expect(backgroundsFor('ansi-red')).toEqual(['surface']);
+    expect(backgroundsFor('ansi-bright-white')).toEqual(['surface']);
   });
 });

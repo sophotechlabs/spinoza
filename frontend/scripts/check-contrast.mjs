@@ -12,6 +12,33 @@ function namesFromSource(constName) {
 }
 
 const CONTENT_TOKENS = namesFromSource('CONTENT_TOKENS');
+const SURFACE_TOKENS = namesFromSource('SURFACE_TOKENS');
+
+function tintMap() {
+  const source = readFileSync(new URL('../src/lib/theme.ts', import.meta.url), 'utf8');
+  const block = /export const TINT_BACKGROUNDS[^=]*= \{([\s\S]*?)\};/.exec(source);
+  if (block === null) {
+    throw new Error('TINT_BACKGROUNDS not found in src/lib/theme.ts');
+  }
+  const map = new Map();
+  for (const entry of block[1].matchAll(/'([a-z0-9-]+)':\s*'([a-z0-9-]+)'/g)) {
+    map.set(entry[1], entry[2]);
+  }
+  return map;
+}
+
+const TINTS = tintMap();
+
+function backgroundsFor(token) {
+  const tint = TINTS.get(token);
+  if (tint !== undefined) {
+    return [tint];
+  }
+  if (token.startsWith('ansi-')) {
+    return ['surface'];
+  }
+  return SURFACE_TOKENS;
+}
 
 const THEMES = [
   { name: 'dark', selector: ':root {' },
@@ -125,17 +152,24 @@ if (missing.length > 0 || extra.length > 0) {
 }
 
 const failures = [];
+let pairs = 0;
 for (const theme of THEMES) {
   const values = tokens(theme.selector);
-  const surface = oklchToRgb(values.get('surface'));
   for (const token of CONTENT_TOKENS) {
     const raw = values.get(token);
     if (raw === undefined) {
       throw new Error(`no --${token} in the ${theme.name} theme`);
     }
-    const ratio = contrast(oklchToRgb(raw), surface);
-    if (ratio < AA) {
-      failures.push(`${theme.name}: --${token} is ${ratio.toFixed(2)}:1 against the surface`);
+    for (const name of backgroundsFor(token)) {
+      const behind = values.get(name);
+      if (behind === undefined) {
+        throw new Error(`no --${name} in the ${theme.name} theme`);
+      }
+      pairs += 1;
+      const ratio = contrast(oklchToRgb(raw), oklchToRgb(behind));
+      if (ratio < AA) {
+        failures.push(`${theme.name}: --${token} is ${ratio.toFixed(2)}:1 on --${name}`);
+      }
     }
   }
 }
@@ -150,5 +184,5 @@ if (failures.length > 0) {
 
 console.log(
   `theme: ${String(fromCss.length)} tokens in step with the css, ` +
-    `${String(CONTENT_TOKENS.length * THEMES.length)} token/theme pairs clear AA`,
+    `${String(pairs)} token/background pairs clear AA`,
 );

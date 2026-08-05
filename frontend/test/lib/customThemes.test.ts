@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CONTENT_TOKENS, SURFACE_TOKENS } from '../../src/lib/theme';
 import {
   CUSTOM_THEMES_KEY,
   isColor,
@@ -180,5 +181,47 @@ describe('a theme that would be hard to read', () => {
     });
 
     expect(warnings).toEqual([]);
+  });
+});
+
+describe('an imported theme measured against the base it sits on', () => {
+  beforeEach(() => {
+    const root = document.documentElement;
+    for (const name of SURFACE_TOKENS) {
+      root.style.setProperty(`--${name}`, '#ffffff');
+    }
+    for (const token of CONTENT_TOKENS) {
+      root.style.setProperty(`--${token}`, '#111111');
+    }
+    for (const tint of ['ok-tint', 'error-tint', 'warn-tint', 'info-tint']) {
+      root.style.setProperty(`--${tint}`, '#ffffff');
+    }
+  });
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('style');
+  });
+
+  it('warns when an override is unreadable on a background it never set', () => {
+    const check = validateTheme({
+      id: 'washed',
+      name: 'Washed',
+      base: 'light',
+      tokens: { fg: '#f2f2f2' },
+    });
+
+    expect(check.theme).not.toBeNull();
+    expect(check.warnings.some((line) => line.startsWith('fg is'))).toBe(true);
+  });
+
+  it('warns when a background override makes the base text unreadable', () => {
+    const check = validateTheme({
+      id: 'muddy',
+      name: 'Muddy',
+      base: 'light',
+      tokens: { 'surface-active': '#3a3a3a' },
+    });
+
+    expect(check.warnings.some((line) => line.includes('on surface-active'))).toBe(true);
   });
 });
