@@ -125,6 +125,9 @@ func TestTheQueryTokenIsAcceptedAndKeptInACookie(t *testing.T) {
 	if !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
 		t.Fatalf("cookie = %v, want it locked to same-site scripts", cookies[0])
 	}
+	if !cookies[0].Secure {
+		t.Fatalf("cookie = %v, want it refused over a plain channel", cookies[0])
+	}
 }
 
 func TestTheCookieTokenIsAccepted(t *testing.T) {

@@ -158,7 +158,6 @@ linters:
     gosec:
       excludes:
         - G115
-        - G124
       config:
         G306: "0600"
     govet:
@@ -309,6 +308,10 @@ linters:
         linters:
           - revive
         text: 'unnecessary-format|unused-parameter|unused-receiver'
+      - path: _test\.go$
+        linters:
+          - gosec
+        text: 'G124'
     paths:
       - frontend
       - web
