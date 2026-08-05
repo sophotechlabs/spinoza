@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"strconv"
 	"sync"
 
@@ -109,8 +110,17 @@ func (s *Server) Handler() http.Handler {
 	for path := range known {
 		mux.HandleFunc(path, methodNotAllowed)
 	}
+	mountProfiler(mux)
 	mux.HandleFunc("/", s.handleAssets)
 	return s.guard(mux.ServeHTTP)
+}
+
+func mountProfiler(mux *http.ServeMux) {
+	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
+	mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
 }
 
 func (s *Server) reachable(entry endpoint) http.HandlerFunc {

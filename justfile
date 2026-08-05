@@ -37,6 +37,18 @@ test-be:
     go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out {{ go_pkgs }}
     go tool cover -func=coverage.out
 
+test-integration:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! kind get clusters | grep -qx spinoza; then
+        kind create cluster --name spinoza
+    fi
+    kubectl --context kind-spinoza cluster-info
+    SPINOZA_TEST_CONTEXT=kind-spinoza go test -tags integration -count=1 -timeout 15m ./test/integration/...
+
+test-integration-down:
+    kind delete cluster --name spinoza
+
 test-fe:
     cd frontend && npm run test:coverage
 
