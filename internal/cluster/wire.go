@@ -26,7 +26,9 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 			return nil, "", err
 		}
 		return manager, bundle.Context, nil
-	}, kube.Contexts), nil
+	}, func() ([]string, string, error) {
+		return kube.Contexts(options.Kubeconfig)
+	}), nil
 }
 
 func unreachable(name string, discErr error) error {
@@ -37,7 +39,11 @@ func unreachable(name string, discErr error) error {
 }
 
 func build(ctx context.Context, name string, options Options, promTarget prom.Target) (*resources.Manager, *kube.Bundle, error) {
-	bundle, err := kube.LoadContext(name)
+	bundle, err := kube.LoadContext(name, kube.Options{
+		Kubeconfig: options.Kubeconfig,
+		QPS:        options.ClientQPS,
+		Burst:      options.ClientBurst,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("kube: %w", err)
 	}
@@ -68,6 +74,15 @@ func build(ctx context.Context, name string, options Options, promTarget prom.Ta
 	)
 	promClient := prom.NewClient(bundle.Clientset, promTarget)
 	mgr := resources.NewManager(ctx, resources.Deps{
+		Limits: resources.Limits{
+			SyncTimeout:     options.SyncTimeout,
+			WarmConcurrency: options.WarmConcurrency,
+			Counts: resources.CountLimits{
+				Budget:      options.CountBudget,
+				PerType:     options.CountPerType,
+				Concurrency: options.CountConcurrency,
+			},
+		},
 		Dynamic:     bundle.Dynamic,
 		Clientset:   bundle.Clientset,
 		Schemas:     schemas,

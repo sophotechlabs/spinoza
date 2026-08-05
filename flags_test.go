@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 )
@@ -219,6 +220,129 @@ func TestAnUnreadableBooleanInTheEnvironmentIsIgnored(t *testing.T) {
 				t.Fatalf("open = %v for %q, want %v", opts.openBrowser, value, want)
 			}
 		})
+	}
+}
+
+func TestTheBigClusterKnobsKeepTodaysValuesByDefault(t *testing.T) {
+	opts, err := parseFlags(nil)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if opts.cluster.Kubeconfig != "" {
+		t.Fatalf("kubeconfig = %q, want the usual lookup rules", opts.cluster.Kubeconfig)
+	}
+	if opts.cluster.ClientQPS != defaultQPS {
+		t.Fatalf("qps = %v, want %v", opts.cluster.ClientQPS, float32(defaultQPS))
+	}
+	if opts.cluster.ClientBurst != defaultBurst {
+		t.Fatalf("burst = %d, want %d", opts.cluster.ClientBurst, defaultBurst)
+	}
+	if opts.cluster.SyncTimeout != defaultSync {
+		t.Fatalf("sync timeout = %s, want %s", opts.cluster.SyncTimeout, defaultSync)
+	}
+	if opts.cluster.WarmConcurrency != defaultWarm {
+		t.Fatalf("warm concurrency = %d, want %d", opts.cluster.WarmConcurrency, defaultWarm)
+	}
+	if opts.cluster.CountBudget != defaultCountBudget {
+		t.Fatalf("count budget = %s, want %s", opts.cluster.CountBudget, defaultCountBudget)
+	}
+	if opts.cluster.CountPerType != defaultCountPerType {
+		t.Fatalf("count timeout = %s, want %s", opts.cluster.CountPerType, defaultCountPerType)
+	}
+	if opts.cluster.CountConcurrency != defaultCountConcurrency {
+		t.Fatalf("count concurrency = %d, want %d", opts.cluster.CountConcurrency, defaultCountConcurrency)
+	}
+}
+
+func TestABigClusterCanRaiseEveryLimit(t *testing.T) {
+	opts, err := parseFlags([]string{
+		"-kubeconfig", "/etc/spinoza/kubeconfig",
+		"-qps", "200",
+		"-burst", "400",
+		"-sync-timeout", "3m",
+		"-warm-concurrency", "24",
+		"-count-budget", "90s",
+		"-count-timeout", "20s",
+		"-count-concurrency", "48",
+	})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if opts.cluster.Kubeconfig != "/etc/spinoza/kubeconfig" {
+		t.Fatalf("kubeconfig = %q", opts.cluster.Kubeconfig)
+	}
+	if opts.cluster.ClientQPS != 200 {
+		t.Fatalf("qps = %v", opts.cluster.ClientQPS)
+	}
+	if opts.cluster.ClientBurst != 400 {
+		t.Fatalf("burst = %d", opts.cluster.ClientBurst)
+	}
+	if opts.cluster.SyncTimeout != 3*time.Minute {
+		t.Fatalf("sync timeout = %s", opts.cluster.SyncTimeout)
+	}
+	if opts.cluster.WarmConcurrency != 24 {
+		t.Fatalf("warm concurrency = %d", opts.cluster.WarmConcurrency)
+	}
+	if opts.cluster.CountBudget != 90*time.Second {
+		t.Fatalf("count budget = %s", opts.cluster.CountBudget)
+	}
+	if opts.cluster.CountPerType != 20*time.Second {
+		t.Fatalf("count timeout = %s", opts.cluster.CountPerType)
+	}
+	if opts.cluster.CountConcurrency != 48 {
+		t.Fatalf("count concurrency = %d", opts.cluster.CountConcurrency)
+	}
+}
+
+func TestTheEnvironmentCanRaiseTheLimitsToo(t *testing.T) {
+	t.Setenv("SPINOZA_KUBECONFIG", "/tmp/kubeconfig")
+	t.Setenv("SPINOZA_QPS", "150")
+	t.Setenv("SPINOZA_BURST", "300")
+	t.Setenv("SPINOZA_SYNC_TIMEOUT", "2m")
+	t.Setenv("SPINOZA_COUNT_CONCURRENCY", "36")
+
+	opts, err := parseFlags(nil)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if opts.cluster.Kubeconfig != "/tmp/kubeconfig" {
+		t.Fatalf("kubeconfig = %q", opts.cluster.Kubeconfig)
+	}
+	if opts.cluster.ClientQPS != 150 {
+		t.Fatalf("qps = %v", opts.cluster.ClientQPS)
+	}
+	if opts.cluster.ClientBurst != 300 {
+		t.Fatalf("burst = %d", opts.cluster.ClientBurst)
+	}
+	if opts.cluster.SyncTimeout != 2*time.Minute {
+		t.Fatalf("sync timeout = %s", opts.cluster.SyncTimeout)
+	}
+	if opts.cluster.CountConcurrency != 36 {
+		t.Fatalf("count concurrency = %d", opts.cluster.CountConcurrency)
+	}
+}
+
+func TestUnreadableLimitsInTheEnvironmentFallBack(t *testing.T) {
+	t.Setenv("SPINOZA_QPS", "fast")
+	t.Setenv("SPINOZA_BURST", "lots")
+	t.Setenv("SPINOZA_SYNC_TIMEOUT", "ages")
+
+	opts, err := parseFlags(nil)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if opts.cluster.ClientQPS != defaultQPS {
+		t.Fatalf("qps = %v, want the default", opts.cluster.ClientQPS)
+	}
+	if opts.cluster.ClientBurst != defaultBurst {
+		t.Fatalf("burst = %d, want the default", opts.cluster.ClientBurst)
+	}
+	if opts.cluster.SyncTimeout != defaultSync {
+		t.Fatalf("sync timeout = %s, want the default", opts.cluster.SyncTimeout)
 	}
 }
 

@@ -83,6 +83,7 @@ type Manager struct {
 	debugger    *debugcontainer.Service
 	prom        *prom.Client
 	disco       kubediscovery.CachedDiscoveryInterface
+	limits      Limits
 	catalog     sync.RWMutex
 	cats        []api.Category
 	descs       map[string]api.ResourceDescriptor
@@ -106,7 +107,25 @@ type buildFailure struct {
 	wait time.Duration
 }
 
+type Limits struct {
+	SyncTimeout     time.Duration
+	WarmConcurrency int
+	Counts          CountLimits
+}
+
+func (l Limits) orDefaults() Limits {
+	if l.SyncTimeout == 0 {
+		l.SyncTimeout = defaultSyncTimeout
+	}
+	if l.WarmConcurrency == 0 {
+		l.WarmConcurrency = warmConcurrency
+	}
+	l.Counts = l.Counts.orDefaults()
+	return l
+}
+
 type Deps struct {
+	Limits      Limits
 	Dynamic     dynamic.Interface
 	Clientset   kubernetes.Interface
 	Schemas     *jsonschema.Client
@@ -120,7 +139,9 @@ type Deps struct {
 }
 
 func NewManager(ctx context.Context, deps Deps) *Manager {
+	limits := deps.Limits.orDefaults()
 	return &Manager{
+		limits:   limits,
 		rootCtx:  ctx,
 		dyn:      deps.Dynamic,
 		cs:       deps.Clientset,
@@ -137,7 +158,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		building: map[streamKey]*buildGate{},
 		failures: map[streamKey]buildFailure{},
 
-		syncTimeout: defaultSyncTimeout,
+		syncTimeout: limits.SyncTimeout,
 	}
 }
 
@@ -338,7 +359,7 @@ func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
 	for _, desc := range descs {
 		flat = append(flat, desc)
 	}
-	return Count(ctx, m.dyn, flat)
+	return Count(ctx, m.dyn, flat, m.limits.Counts)
 }
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
@@ -446,7 +467,7 @@ func (m *Manager) List(ctx context.Context, desc api.ResourceDescriptor) ([]*uns
 
 func (m *Manager) Warm(ctx context.Context, descs []api.ResourceDescriptor) {
 	var group sync.WaitGroup
-	slots := make(chan struct{}, warmConcurrency)
+	slots := make(chan struct{}, m.limits.WarmConcurrency)
 	for _, desc := range descs {
 		group.Add(1)
 		go safe.Run("warming "+desc.Kind, func() {

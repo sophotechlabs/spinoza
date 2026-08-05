@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 
@@ -12,9 +13,17 @@ import (
 )
 
 type Options struct {
-	DebugImage    string
-	KubectlBinary string
-	PromSpec      string
+	DebugImage       string
+	KubectlBinary    string
+	PromSpec         string
+	Kubeconfig       string
+	ClientQPS        float32
+	ClientBurst      int
+	SyncTimeout      time.Duration
+	WarmConcurrency  int
+	CountBudget      time.Duration
+	CountPerType     time.Duration
+	CountConcurrency int
 }
 
 type builder func(ctx context.Context, name string) (*resources.Manager, string, error)

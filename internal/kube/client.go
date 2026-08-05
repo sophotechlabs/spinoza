@@ -24,18 +24,33 @@ type Bundle struct {
 	Namespace string
 }
 
-func Load() (*Bundle, error) {
-	return LoadContext("")
+type Options struct {
+	Kubeconfig string
+	QPS        float32
+	Burst      int
 }
 
-func configFor(contextName string) clientcmd.ClientConfig {
+func (o Options) orDefaults() Options {
+	if o.QPS == 0 {
+		o.QPS = clientQPS
+	}
+	if o.Burst == 0 {
+		o.Burst = clientBurst
+	}
+	return o
+}
+
+func configFor(contextName, kubeconfig string) clientcmd.ClientConfig {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if kubeconfig != "" {
+		loadingRules.ExplicitPath = kubeconfig
+	}
 	overrides := &clientcmd.ConfigOverrides{CurrentContext: contextName}
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
 }
 
-func Contexts() ([]string, string, error) {
-	raw, err := configFor("").RawConfig()
+func Contexts(kubeconfig string) ([]string, string, error) {
+	raw, err := configFor("", kubeconfig).RawConfig()
 	if err != nil {
 		return nil, "", fmt.Errorf("kubeconfig: %w", err)
 	}
@@ -63,15 +78,16 @@ func boundedDiscovery(restConfig *restclient.Config) (discovery.DiscoveryInterfa
 	return client, nil
 }
 
-func LoadContext(contextName string) (*Bundle, error) {
-	clientConfig := configFor(contextName)
+func LoadContext(contextName string, options Options) (*Bundle, error) {
+	options = options.orDefaults()
+	clientConfig := configFor(contextName, options.Kubeconfig)
 
 	restConfig, err := clientConfig.ClientConfig()
 	if err != nil {
 		return nil, fmt.Errorf("kube client config: %w", err)
 	}
-	restConfig.QPS = clientQPS
-	restConfig.Burst = clientBurst
+	restConfig.QPS = options.QPS
+	restConfig.Burst = options.Burst
 
 	cs, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {

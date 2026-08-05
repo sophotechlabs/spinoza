@@ -40,7 +40,7 @@ func TestLoadReturnsBundle(t *testing.T) {
 	path := writeKubeconfig(t, validKubeconfig)
 	t.Setenv("KUBECONFIG", path)
 
-	bundle, err := Load()
+	bundle, err := LoadContext("", Options{})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestLoadReturnsErrorForEmptyKubeconfig(t *testing.T) {
 	path := writeKubeconfig(t, "")
 	t.Setenv("KUBECONFIG", path)
 
-	_, err := Load()
+	_, err := LoadContext("", Options{})
 	if err == nil {
 		t.Fatal("Load returned nil error for empty kubeconfig")
 	}
@@ -78,7 +78,7 @@ func TestLoadReturnsErrorForInvalidKubeconfig(t *testing.T) {
 	path := writeKubeconfig(t, "not: [valid: yaml")
 	t.Setenv("KUBECONFIG", path)
 
-	_, err := Load()
+	_, err := LoadContext("", Options{})
 	if err == nil {
 		t.Fatal("Load returned nil error for invalid kubeconfig")
 	}
@@ -112,7 +112,7 @@ users:
 func TestContextsListsEveryContextSorted(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
 
-	names, current, err := Contexts()
+	names, current, err := Contexts("")
 	if err != nil {
 		t.Fatalf("Contexts: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestContextsListsEveryContextSorted(t *testing.T) {
 func TestContextsReportsAnUnreadableKubeconfig(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, "not: [valid: yaml"))
 
-	_, _, err := Contexts()
+	_, _, err := Contexts("")
 
 	if err == nil {
 		t.Fatal("an unreadable kubeconfig was reported as having no contexts")
@@ -138,7 +138,7 @@ func TestContextsReportsAnUnreadableKubeconfig(t *testing.T) {
 func TestLoadContextTargetsTheNamedContext(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
 
-	bundle, err := LoadContext("alpha")
+	bundle, err := LoadContext("alpha", Options{})
 	if err != nil {
 		t.Fatalf("LoadContext: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestLoadContextTargetsTheNamedContext(t *testing.T) {
 func TestLoadContextRejectsAContextThatIsNotThere(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
 
-	_, err := LoadContext("gone")
+	_, err := LoadContext("gone", Options{})
 
 	if err == nil {
 		t.Fatal("switching to a context that does not exist reported success")
@@ -164,7 +164,7 @@ func TestLoadContextRejectsAContextThatIsNotThere(t *testing.T) {
 func TestLoadContextWithNoNameKeepsTheDefault(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
 
-	bundle, err := LoadContext("")
+	bundle, err := LoadContext("", Options{})
 	if err != nil {
 		t.Fatalf("LoadContext: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestLoadContextRaisesTheClientRateLimit(t *testing.T) {
 	path := writeKubeconfig(t, validKubeconfig)
 	t.Setenv("KUBECONFIG", path)
 
-	bundle, err := LoadContext("")
+	bundle, err := LoadContext("", Options{})
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}

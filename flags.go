@@ -7,12 +7,23 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 )
 
 var errHelp = errors.New("help requested")
+
+const (
+	defaultQPS              = 50
+	defaultBurst            = 100
+	defaultSync             = 30 * time.Second
+	defaultWarm             = 8
+	defaultCountBudget      = 20 * time.Second
+	defaultCountPerType     = 5 * time.Second
+	defaultCountConcurrency = 24
+)
 
 type settings struct {
 	addr        string
@@ -33,6 +44,14 @@ func parseFlags(args []string) (settings, error) {
 	debugImage := flags.String("debug-image", envOr("SPINOZA_DEBUG_IMAGE", debugcontainer.DefaultImage), "image used for debug containers")
 	kubectlBinary := flags.String("kubectl", envOr("SPINOZA_KUBECTL", debugcontainer.DefaultBinary), "kubectl binary used to create debug containers")
 	promSpec := flags.String("prometheus", envOr("SPINOZA_PROMETHEUS", ""), "prometheus service as namespace/service:port; discovered when empty")
+	kubeconfig := flags.String("kubeconfig", envOr("SPINOZA_KUBECONFIG", ""), "kubeconfig to read; the usual lookup rules when empty")
+	clientQPS := flags.Float64("qps", envFloat("SPINOZA_QPS", defaultQPS), "apiserver requests per second this client allows itself")
+	clientBurst := flags.Int("burst", envInt("SPINOZA_BURST", defaultBurst), "apiserver requests this client may burst to")
+	syncTimeout := flags.Duration("sync-timeout", envDuration("SPINOZA_SYNC_TIMEOUT", defaultSync), "how long one resource type may take to fill its cache")
+	warmConcurrency := flags.Int("warm-concurrency", envInt("SPINOZA_WARM_CONCURRENCY", defaultWarm), "resource types warmed at once for the gitops and flux views")
+	countBudget := flags.Duration("count-budget", envDuration("SPINOZA_COUNT_BUDGET", defaultCountBudget), "total time the sidebar counts may take")
+	countPerType := flags.Duration("count-timeout", envDuration("SPINOZA_COUNT_TIMEOUT", defaultCountPerType), "time one resource type may take to be counted")
+	countConcurrency := flags.Int("count-concurrency", envInt("SPINOZA_COUNT_CONCURRENCY", defaultCountConcurrency), "resource types counted at once")
 	err := flags.Parse(args)
 	if errors.Is(err, flag.ErrHelp) {
 		return settings{}, errHelp
@@ -51,9 +70,17 @@ func parseFlags(args []string) (settings, error) {
 		logLevel:    level,
 		showVersion: *showVersion,
 		cluster: cluster.Options{
-			DebugImage:    *debugImage,
-			KubectlBinary: *kubectlBinary,
-			PromSpec:      *promSpec,
+			DebugImage:       *debugImage,
+			KubectlBinary:    *kubectlBinary,
+			PromSpec:         *promSpec,
+			Kubeconfig:       *kubeconfig,
+			ClientQPS:        float32(*clientQPS),
+			ClientBurst:      *clientBurst,
+			SyncTimeout:      *syncTimeout,
+			WarmConcurrency:  *warmConcurrency,
+			CountBudget:      *countBudget,
+			CountPerType:     *countPerType,
+			CountConcurrency: *countConcurrency,
 		},
 	}, nil
 }
@@ -79,6 +106,42 @@ func envOr(name, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func envInt(name string, fallback int) int {
+	value, present := os.LookupEnv(name)
+	if !present {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func envFloat(name string, fallback float64) float64 {
+	value, present := os.LookupEnv(name)
+	if !present {
+		return fallback
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func envDuration(name string, fallback time.Duration) time.Duration {
+	value, present := os.LookupEnv(name)
+	if !present {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func envBool(name string) bool {
