@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { refreshForwards, stopForward, useForwardPolling } from '../lib/portForward';
+import { forwardURL, openExternal } from '../lib/openExternal';
 import { useForwardsStore } from '../store/forwards';
 import { notifyError, notifyOk } from '../store/toasts';
 import StaleBanner from './StaleBanner';
@@ -79,9 +80,13 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
             )}
             {forward.state !== 'failed' && (
               <a
-                href={`http://127.0.0.1:${forward.localPort}`}
+                href={forwardURL(forward.localPort)}
                 target="_blank"
                 rel="noreferrer"
+                onClick={(event) => {
+                  event.preventDefault();
+                  openExternal(forwardURL(forward.localPort));
+                }}
                 className="text-fg-strong hover:underline"
               >
                 127.0.0.1:{forward.localPort}
@@ -90,7 +95,7 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
             {forward.state !== 'failed' && (
               <CopyButton
                 what={`${forward.name} forward url`}
-                text={`http://127.0.0.1:${String(forward.localPort)}`}
+                text={forwardURL(forward.localPort)}
               />
             )}
             <span className="text-fg-muted">→ {forward.remotePort}</span>

@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import type { ObjectPort, ObjectRef } from '../lib/types';
-import { refreshForwards, startForward } from '../lib/portForward';
+import { useEffect, useState } from 'react';
+import type { ObjectPort, ObjectRef, PortForward } from '../lib/types';
+import { refreshForwards, startForward, stopForward } from '../lib/portForward';
+import { forwardURL, openExternal } from '../lib/openExternal';
 import { notifyError, notifyOk } from '../store/toasts';
+import { useForwardsStore } from '../store/forwards';
 import Announce from './Announce';
 
 interface InspectPortsProps {
@@ -24,25 +26,62 @@ function portLabel(port: ObjectPort): string {
   return `${port.port} · ${port.name}`;
 }
 
+function forwardFor(
+  forwards: PortForward[],
+  kind: string,
+  target: ObjectRef,
+  port: number,
+): PortForward | null {
+  for (const forward of forwards) {
+    if (forward.kind !== kind) {
+      continue;
+    }
+    if (forward.namespace !== target.namespace || forward.name !== target.name) {
+      continue;
+    }
+    if (forward.remotePort === port) {
+      return forward;
+    }
+  }
+  return null;
+}
+
 export default function InspectPorts({ target, kind, ports }: InspectPortsProps) {
+  const forwards = useForwardsStore((state) => state.forwards);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshForwards();
+  }, [target.namespace, target.name]);
 
   async function forward(port: number) {
     setBusy(port);
     setError(null);
-    setNotice(null);
     try {
       const started = await startForward(kind, target, port);
-      const route = `127.0.0.1:${started.localPort} → ${port}`;
-      setNotice(route);
-      notifyOk(`Forwarding ${target.name} ${route}`);
+      notifyOk(`Forwarding ${target.name} 127.0.0.1:${started.localPort} → ${port}`);
       await refreshForwards();
     } catch (err: unknown) {
       const message = errorMessage(err);
       setError(message);
       notifyError(`Forwarding ${target.name} port ${port}: ${message}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function stop(running: PortForward) {
+    setBusy(running.remotePort);
+    setError(null);
+    try {
+      await stopForward(running.id);
+      notifyOk(`Stopped forwarding ${target.name} port ${running.remotePort}`);
+      await refreshForwards();
+    } catch (err: unknown) {
+      const message = errorMessage(err);
+      setError(message);
+      notifyError(`Stopping the forward: ${message}`);
     } finally {
       setBusy(null);
     }
@@ -54,22 +93,52 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
         Ports
       </h3>
       <div className="flex flex-col gap-1">
-        {ports.map((port) => (
-          <div key={`${port.port}-${port.name ?? ''}`} className="flex items-center gap-2">
-            <span className="text-fg">{portLabel(port)}</span>
-            <button
-              type="button"
-              onClick={() => void forward(port.port)}
-              disabled={busy !== null}
-              className="ml-auto rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
-            >
-              Forward
-            </button>
-          </div>
-        ))}
+        {ports.map((port) => {
+          const running = forwardFor(forwards, kind, target, port.port);
+          return (
+            <div key={`${port.port}-${port.name ?? ''}`} className="flex items-center gap-2">
+              <span className="text-fg">{portLabel(port)}</span>
+              {running === null ? (
+                <button
+                  type="button"
+                  onClick={() => void forward(port.port)}
+                  disabled={busy !== null}
+                  className="ml-auto rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+                >
+                  Forward
+                </button>
+              ) : (
+                <>
+                  <span className="ml-auto text-ok">
+                    127.0.0.1:{running.localPort} → {port.port}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openExternal(forwardURL(running.localPort));
+                    }}
+                    title={`Open ${forwardURL(running.localPort)}`}
+                    aria-label={`Open 127.0.0.1:${running.localPort} in a browser`}
+                    className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+                  >
+                    Open ↗
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void stop(running)}
+                    disabled={busy !== null}
+                    aria-label={`Stop forwarding port ${port.port}`}
+                    className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+                  >
+                    Stop
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
       <Announce message={error} urgent className="mt-1.5 break-words text-error" />
-      <Announce message={notice} className="mt-1.5 text-ok" />
     </section>
   );
 }
