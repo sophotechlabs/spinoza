@@ -237,6 +237,35 @@ type Snapshot struct {
 	Rows       []Row    `json:"rows"`
 }
 
+type RowChanged struct {
+	Type  string `json:"type"`
+	SubID string `json:"subId"`
+	Row   Row    `json:"row"`
+}
+
+type RowDeleted struct {
+	Type  string `json:"type"`
+	SubID string `json:"subId"`
+	UID   string `json:"uid"`
+}
+
+type LogLines struct {
+	Type  string   `json:"type"`
+	SubID string   `json:"subId"`
+	Lines []string `json:"lines"`
+}
+
+type LogEnd struct {
+	Type  string `json:"type"`
+	SubID string `json:"subId"`
+}
+
+type FeedError struct {
+	Type    string `json:"type"`
+	SubID   string `json:"subId"`
+	Message string `json:"message"`
+}
+
 type GraphNode struct {
 	ID        string `json:"id"`
 	Kind      string `json:"kind"`

@@ -54,6 +54,9 @@ ExecSupport.Image image,omitempty
 ExecSupport.Namespace namespace
 ExecSupport.Pod pod
 ExecSupport.Shell shell
+FeedError.Message message
+FeedError.SubID subId
+FeedError.Type type
 FluxActionResult.Action action
 FluxActionResult.RequestedAt requestedAt,omitempty
 FluxDashboard.Error error,omitempty
@@ -96,6 +99,11 @@ GraphNode.Version version
 Health.Context context
 Health.Status status
 Health.Version version
+LogEnd.SubID subId
+LogEnd.Type type
+LogLines.Lines lines
+LogLines.SubID subId
+LogLines.Type type
 MetricHistory.CPU cpu
 MetricHistory.Memory memory
 MetricHistory.Namespace namespace
@@ -168,6 +176,12 @@ Row.CreatedAt createdAt
 Row.Name name
 Row.Namespace namespace
 Row.UID uid
+RowChanged.Row row
+RowChanged.SubID subId
+RowChanged.Type type
+RowDeleted.SubID subId
+RowDeleted.Type type
+RowDeleted.UID uid
 ServerMsg.Columns columns,omitempty
 ServerMsg.Lines lines,omitempty
 ServerMsg.Message message,omitempty

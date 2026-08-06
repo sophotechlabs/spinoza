@@ -169,7 +169,7 @@ func (sess *wsSession) failCurrent(which feed, subID string, gen uint64, err err
 		return
 	}
 	slog.Warn("a feed could not be opened", "subId", subID, "error", err)
-	sess.writeLocked(sess.ctx, api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()})
+	sess.writeLocked(sess.ctx, api.FeedError{Type: msgError, SubID: subID, Message: err.Error()})
 }
 
 func (sess *wsSession) drop(which feed, subID string) {
@@ -266,7 +266,7 @@ func (sess *wsSession) sendResync(subID string, gen uint64, sub *resources.Subsc
 	rows, err := sub.Snapshot()
 	if err != nil {
 		slog.Warn("a resync could not read the cache", "subId", subID, "error", err)
-		return sess.writeCurrent(tables, subID, gen, api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()})
+		return sess.writeCurrent(tables, subID, gen, api.FeedError{Type: msgError, SubID: subID, Message: err.Error()})
 	}
 	return sess.writeCurrent(tables, subID, gen, snapshotOf(subID, sub, rows))
 }
@@ -318,7 +318,7 @@ func (sess *wsSession) relayLogs(subID string, gen uint64, stream *logs.Stream) 
 				sess.writeCurrent(streams, subID, gen, endOfLogs(subID, stream))
 				return
 			}
-			batch := api.ServerMsg{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)}
+			batch := api.LogLines{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)}
 			if !sess.writeCurrent(streams, subID, gen, batch) {
 				return
 			}
@@ -326,12 +326,12 @@ func (sess *wsSession) relayLogs(subID string, gen uint64, stream *logs.Stream) 
 	}
 }
 
-func endOfLogs(subID string, stream *logs.Stream) api.ServerMsg {
+func endOfLogs(subID string, stream *logs.Stream) any {
 	err := stream.Err()
 	if err == nil {
-		return api.ServerMsg{Type: "log-end", SubID: subID}
+		return api.LogEnd{Type: "log-end", SubID: subID}
 	}
-	return api.ServerMsg{Type: msgError, SubID: subID, Message: err.Error()}
+	return api.FeedError{Type: msgError, SubID: subID, Message: err.Error()}
 }
 
 func batchLines(lines <-chan string, first string) []string {
@@ -396,15 +396,14 @@ func rowsOrEmpty(rows []api.Row) []api.Row {
 	return rows
 }
 
-func eventToMsg(subID string, ev resources.Event) api.ServerMsg {
+func eventToMsg(subID string, ev resources.Event) any {
 	if ev.Kind == "deleted" {
-		return api.ServerMsg{Type: "deleted", SubID: subID, UID: ev.UID}
+		return api.RowDeleted{Type: "deleted", SubID: subID, UID: ev.UID}
 	}
 	if ev.Kind == msgError {
-		return api.ServerMsg{Type: msgError, SubID: subID, Message: ev.Message}
+		return api.FeedError{Type: msgError, SubID: subID, Message: ev.Message}
 	}
-	row := ev.Row
-	return api.ServerMsg{Type: ev.Kind, SubID: subID, Row: &row}
+	return api.RowChanged{Type: ev.Kind, SubID: subID, Row: ev.Row}
 }
 
 func (s *Server) track(sess *wsSession) {

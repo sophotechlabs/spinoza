@@ -427,7 +427,11 @@ func TestMetricsEndpoint(t *testing.T) {
 }
 
 func TestEventToMsgDeleted(t *testing.T) {
-	msg := eventToMsg("sub-1", resources.Event{Kind: "deleted", UID: "uid-1"})
+	msg, ok := eventToMsg("sub-1", resources.Event{Kind: "deleted", UID: "uid-1"}).(api.RowDeleted)
+
+	if !ok {
+		t.Fatalf("frame = %T, want a deletion that cannot carry a row", msg)
+	}
 	if msg.Type != "deleted" {
 		t.Fatalf("Type = %q, want deleted", msg.Type)
 	}
@@ -437,22 +441,21 @@ func TestEventToMsgDeleted(t *testing.T) {
 	if msg.UID != "uid-1" {
 		t.Fatalf("UID = %q, want uid-1", msg.UID)
 	}
-	if msg.Row != nil {
-		t.Fatalf("Row = %v, want nil", msg.Row)
-	}
 }
 
 func TestEventToMsgAdded(t *testing.T) {
 	row := api.Row{UID: "uid-2", Name: "dep-b"}
-	msg := eventToMsg("sub-2", resources.Event{Kind: "added", Row: row})
+
+	msg, ok := eventToMsg("sub-2", resources.Event{Kind: "added", Row: row}).(api.RowChanged)
+
+	if !ok {
+		t.Fatalf("frame = %T, want a row change", msg)
+	}
 	if msg.Type != "added" {
 		t.Fatalf("Type = %q, want added", msg.Type)
 	}
 	if msg.SubID != "sub-2" {
 		t.Fatalf("SubID = %q, want sub-2", msg.SubID)
-	}
-	if msg.Row == nil {
-		t.Fatal("Row = nil, want row")
 	}
 	if msg.Row.UID != "uid-2" {
 		t.Fatalf("Row.UID = %q, want uid-2", msg.Row.UID)
@@ -461,12 +464,31 @@ func TestEventToMsgAdded(t *testing.T) {
 
 func TestEventToMsgModified(t *testing.T) {
 	row := api.Row{UID: "uid-3", Name: "dep-c"}
-	msg := eventToMsg("sub-3", resources.Event{Kind: "modified", Row: row})
+
+	msg, ok := eventToMsg("sub-3", resources.Event{Kind: "modified", Row: row}).(api.RowChanged)
+
+	if !ok {
+		t.Fatalf("frame = %T, want a row change", msg)
+	}
 	if msg.Type != "modified" {
 		t.Fatalf("Type = %q, want modified", msg.Type)
 	}
-	if msg.Row == nil || msg.Row.Name != "dep-c" {
+	if msg.Row.Name != "dep-c" {
 		t.Fatalf("Row = %v, want dep-c", msg.Row)
+	}
+}
+
+func TestEventToMsgWatchError(t *testing.T) {
+	msg, ok := eventToMsg("sub-4", resources.Event{Kind: "error", Message: "the watch broke"}).(api.FeedError)
+
+	if !ok {
+		t.Fatalf("frame = %T, want a feed error", msg)
+	}
+	if msg.Type != "error" {
+		t.Fatalf("Type = %q, want error", msg.Type)
+	}
+	if msg.Message != "the watch broke" {
+		t.Fatalf("Message = %q", msg.Message)
 	}
 }
 
