@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "RFC 6455 example Sec-WebSocket-Key (base64 of \"the sample nonce\") used in handshake tests"
+regexTarget = "match"
+regexes = ['''dGhlIHNhbXBsZSBub25jZQ==''']
