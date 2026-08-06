@@ -41,10 +41,20 @@ func accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isLocal(r) {
+			slog.Warn("refused a request that did not look local",
+				"path", strconv.Quote(r.URL.Path),
+				"host", strconv.Quote(r.Host),
+				"origin", strconv.Quote(r.Header.Get("Origin")),
+				"fetchSite", strconv.Quote(r.Header.Get("Sec-Fetch-Site")),
+			)
 			writeError(w, http.StatusForbidden, "spinoza answers local requests only")
 			return
 		}
 		if !s.authorize(w, r) {
+			slog.Warn("refused a request without this run's token",
+				"path", strconv.Quote(r.URL.Path),
+				"origin", strconv.Quote(r.Header.Get("Origin")),
+			)
 			writeError(w, http.StatusUnauthorized, "spinoza needs the token it printed at startup")
 			return
 		}
@@ -164,10 +174,11 @@ func isLocal(r *http.Request) bool {
 	if !loopbackAuthority(r.Host) {
 		return false
 	}
-	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
-		return false
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return r.Header.Get("Sec-Fetch-Site") != "cross-site"
 	}
-	return allowedOrigin(r.Header.Get("Origin"), r.Host)
+	return allowedOrigin(origin, r.Host)
 }
 
 func loopbackAuthority(authority string) bool {
