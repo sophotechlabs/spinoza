@@ -1215,3 +1215,49 @@ describe('navigating away from an unsaved draft', () => {
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
   });
 });
+
+describe('finding your way in by keyboard', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetStore();
+  });
+
+  it('names the app with a heading a screen reader can find', () => {
+    render(<App />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Spinoza' })).toBeInTheDocument();
+  });
+
+  it('puts the content in a main landmark', () => {
+    render(<App />);
+
+    expect(screen.getByRole('main')).toBeInTheDocument();
+  });
+
+  it('offers a skip link that points at that landmark', () => {
+    render(<App />);
+
+    const skip = screen.getByRole('link', { name: 'Skip to the content' });
+    expect(skip).toHaveAttribute('href', '#content');
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'content');
+  });
+
+  it('makes the landmark focusable so the skip link lands somewhere', () => {
+    render(<App />);
+
+    expect(screen.getByRole('main')).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('keeps the skip link out of the way until it is focused', () => {
+    render(<App />);
+
+    expect(screen.getByRole('link', { name: 'Skip to the content' }).className).toContain(
+      'sr-only',
+    );
+  });
+});

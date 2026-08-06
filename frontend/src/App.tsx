@@ -36,6 +36,7 @@ import type { Section } from './components/SettingsDialog';
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 
 const FIRST_SUB_ID = 'main#0';
+const MAIN_ID = 'content';
 
 function staleClass(stale: boolean): string {
   if (stale) {
@@ -258,6 +259,13 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col bg-surface font-mono text-sm text-fg">
+      <a
+        href={`#${MAIN_ID}`}
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded focus:border focus:border-edge-strong focus:bg-surface-raised focus:px-3 focus:py-2 focus:text-fg"
+      >
+        Skip to the content
+      </a>
+      <h1 className="sr-only">Spinoza</h1>
       <TopBar
         status={feed.status}
         view={route.view}
@@ -278,7 +286,12 @@ export default function App() {
           onSelect={handleSelectResource}
           onSelectView={handleSelectView}
         />
-        <div aria-busy={stale} className={`flex min-h-0 min-w-0 flex-1 ${staleClass(stale)}`}>
+        <main
+          id={MAIN_ID}
+          tabIndex={-1}
+          aria-busy={stale}
+          className={`flex min-h-0 min-w-0 flex-1 ${staleClass(stale)}`}
+        >
           <PanelLayout
             selection={selection}
             subscribeLogs={subscribeLogs}
@@ -288,7 +301,7 @@ export default function App() {
           >
             <ErrorBoundary label={route.view}>{mainArea}</ErrorBoundary>
           </PanelLayout>
-        </div>
+        </main>
       </div>
       <Toasts />
       <CommandPalette

@@ -4,6 +4,8 @@ import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/di
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 import { useClusterEpoch } from '../store/cluster';
+import { GITOPS_SECTION, readSections, sectionOpen, writeSections } from '../lib/sidebarState';
+import type { SidebarSections } from '../lib/sidebarState';
 
 interface SidebarProps {
   view: View;
@@ -87,20 +89,6 @@ function byPopulated(
   return [...populated, ...empty];
 }
 
-function collapsedKeys(categories: Category[]): Set<string> {
-  const keys = new Set<string>();
-  for (const category of categories) {
-    keys.add(category.name);
-    if (!isNested(category.name)) {
-      continue;
-    }
-    for (const group of groupByApiGroup(category.resources)) {
-      keys.add(`${category.name}/${group.name}`);
-    }
-  }
-  return keys;
-}
-
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) {
     return err.message;
@@ -122,7 +110,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   const epoch = useClusterEpoch();
   const { size: width, startResize, nudge } = useSidebarWidth();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [sections, setSections] = useState<SidebarSections>(() => readSections());
   const [error, setError] = useState<string | null>(null);
   const [countsError, setCountsError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
@@ -139,7 +127,6 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           return;
         }
         setCategories(catalog.categories);
-        setCollapsed(collapsedKeys(catalog.categories));
         setError(catalog.error ?? null);
       } catch (err: unknown) {
         if (mounted) {
@@ -174,7 +161,6 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     try {
       const catalog = await refreshResources();
       setCategories(catalog.categories);
-      setCollapsed(collapsedKeys(catalog.categories));
       setError(catalog.error ?? null);
     } catch (err: unknown) {
       setError(errorMessage(err, 'discovery request failed'));
@@ -186,15 +172,9 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   }
 
   function toggle(name: string) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) {
-        next.delete(name);
-      } else {
-        next.add(name);
-      }
-      return next;
-    });
+    const next = { ...sections, [name]: !sectionOpen(sections, name) };
+    setSections(next);
+    writeSections(next);
   }
 
   function handleResize(event: React.MouseEvent<HTMLButtonElement>) {
@@ -214,7 +194,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     }
   }
 
-  const gitopsCollapsed = collapsed.has('GitOps');
+  const gitopsCollapsed = !sectionOpen(sections, GITOPS_SECTION);
 
   return (
     <div
@@ -227,7 +207,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
             type="button"
             aria-expanded={!gitopsCollapsed}
             onClick={() => {
-              toggle('GitOps');
+              toggle(GITOPS_SECTION);
             }}
             className={sectionClass}
           >
@@ -283,7 +263,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           <div className="px-3 py-1 text-[11px] text-fg-muted">No resource types discovered.</div>
         )}
         {categories.map((category) => {
-          const isCollapsed = collapsed.has(category.name);
+          const isCollapsed = !sectionOpen(sections, category.name);
           return (
             <div key={category.name} className="mb-1">
               <button
@@ -328,7 +308,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                 <div>
                   {groupByApiGroup(category.resources).map((group) => {
                     const key = `${category.name}/${group.name}`;
-                    const groupCollapsed = collapsed.has(key);
+                    const groupCollapsed = !sectionOpen(sections, key);
                     return (
                       <div key={key}>
                         <button

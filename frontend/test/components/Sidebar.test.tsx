@@ -440,7 +440,6 @@ describe('resource counts', () => {
       bumpClusterEpoch();
     });
     view.rerender(<Sidebar {...sidebarProps()} />);
-    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
 
     expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pod 57' })).not.toBeInTheDocument();
@@ -506,5 +505,67 @@ describe('what the sidebar tells assistive technology', () => {
     const header = await screen.findByRole('button', { name: /Workloads/ });
     expect(header.textContent).toContain('▸');
     expect(header).toHaveAccessibleName('Workloads2');
+  });
+});
+
+describe('a sidebar that survives a reload', () => {
+  it('keeps a category open across a remount', async () => {
+    const user = userEvent.setup();
+    stubFetch(categories, {});
+    const first = renderSidebar();
+    await user.click(await screen.findByRole('button', { name: /Workloads/ }));
+    expect(screen.getByRole('button', { name: 'Pod' })).toBeInTheDocument();
+    first.unmount();
+
+    renderSidebar();
+
+    expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
+  });
+
+  it('keeps the GitOps section shut across a remount', async () => {
+    const user = userEvent.setup();
+    stubFetch(categories, {});
+    const first = renderSidebar();
+    await user.click(screen.getByRole('button', { name: /GitOps/ }));
+    expect(screen.queryByRole('button', { name: 'Graph' })).not.toBeInTheDocument();
+    first.unmount();
+
+    renderSidebar();
+
+    expect(screen.queryByRole('button', { name: 'Graph' })).not.toBeInTheDocument();
+  });
+
+  it('leaves a category the user never touched shut', async () => {
+    const user = userEvent.setup();
+    stubFetch(categories, {});
+    const first = renderSidebar();
+    await user.click(await screen.findByRole('button', { name: /Workloads/ }));
+    first.unmount();
+
+    renderSidebar();
+
+    expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ConfigMap' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a nested api group open across a remount', async () => {
+    const user = userEvent.setup();
+    stubFetch(
+      [
+        makeCategory('Custom Resources', [
+          makeDescriptor({ group: 'cilium.io', resource: 'ciliumnodes', kind: 'CiliumNode' }),
+        ]),
+      ],
+      {},
+    );
+    const first = renderSidebar();
+    await user.click(await screen.findByRole('button', { name: /Custom Resources/ }));
+    await user.click(screen.getByRole('button', { name: /cilium\.io/ }));
+    expect(screen.getByRole('button', { name: 'CiliumNode' })).toBeInTheDocument();
+    first.unmount();
+
+    renderSidebar();
+
+    expect(await screen.findByRole('button', { name: 'CiliumNode' })).toBeInTheDocument();
   });
 });

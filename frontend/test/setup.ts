@@ -9,6 +9,7 @@ import { useForwardsStore } from '../src/store/forwards';
 configure({ asyncUtilTimeout: 5000 });
 
 beforeEach(() => {
+  window.localStorage.clear();
   window.history.replaceState(null, '', '/');
   usePanelsStore.getState().reset();
   useClusterStore.getState().reset();
