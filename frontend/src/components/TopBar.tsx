@@ -89,6 +89,7 @@ export default function TopBar({
         <button
           type="button"
           aria-label="Settings"
+          title="Settings"
           onClick={handleSettings}
           className="rounded border border-edge-strong px-1.5 py-0.5 text-base leading-none text-fg hover:bg-surface-active"
         >

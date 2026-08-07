@@ -101,6 +101,12 @@ describe('the top bar entry points', () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
+  it('names the gear on hover', () => {
+    render(<TopBar status="connected" />);
+
+    expect(screen.getByRole('button', { name: 'Settings' })).toHaveAttribute('title', 'Settings');
+  });
+
   it('asks the app to open the palette from the search button', async () => {
     const user = userEvent.setup();
     const onOpenPalette = vi.fn();
