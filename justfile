@@ -1,6 +1,7 @@
 export PATH := env_var('HOME') + '/go/bin:' + env_var('PATH')
 
 go_pkgs := './internal/... .'
+ldflags := '-s -w'
 
 default:
     @just --list
@@ -13,13 +14,13 @@ tidy:
 
 build:
     cd frontend && npm run build
-    go build -o spinoza .
+    go build -trimpath -ldflags '{{ ldflags }}' -o spinoza .
 
 run: build
     ./spinoza
 
 build-desktop:
-    wails build -tags desktop -skipbindings
+    wails build -tags desktop -skipbindings -trimpath -ldflags '{{ ldflags }}'
 
 rund: build-desktop
     open build/bin/spinoza.app
@@ -202,7 +203,7 @@ release-dist: deps
         if [ "$goos" = "windows" ]; then
             binary="spinoza.exe"
         fi
-        GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -ldflags "-X github.com/sophotechlabs/spinoza/internal/version.value=$version" -o "$out/$binary" .
+        GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags "{{ ldflags }} -X github.com/sophotechlabs/spinoza/internal/version.value=$version" -o "$out/$binary" .
         tar -czf "dist/release/spinoza_${version}_${goos}_${goarch}.tar.gz" -C "$out" "$binary"
     done
     cd dist/release && sha256sum *.tar.gz > checksums.txt
