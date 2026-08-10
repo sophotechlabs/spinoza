@@ -60,6 +60,18 @@ describe('ForwardsPanel', () => {
     expect(screen.getByText('→ 8080')).toBeInTheDocument();
   });
 
+  it('opens the local address in a browser instead of the panel', async () => {
+    const user = userEvent.setup();
+    stubList([forward()]);
+    const opened = vi.fn();
+    vi.stubGlobal('open', opened);
+    render(<ForwardsPanel />);
+
+    await user.click(await screen.findByRole('link', { name: '127.0.0.1:45123' }));
+
+    expect(opened).toHaveBeenCalledWith('http://127.0.0.1:45123', '_blank', 'noreferrer');
+  });
+
   it('shows the error for a failed forward instead of a link', async () => {
     stubList([forward({ state: 'failed', error: 'pod deleted' })]);
     render(<ForwardsPanel />);

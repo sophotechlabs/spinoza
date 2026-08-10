@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectPorts from '../../src/components/InspectPorts';
 import { useForwardsStore } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
-import type { ObjectPort, ObjectRef } from '../../src/lib/types';
+import type { ObjectPort, ObjectRef, PortForward } from '../../src/lib/types';
 
 const target: ObjectRef = {
   group: '',
@@ -16,7 +16,7 @@ const target: ObjectRef = {
 
 const ports: ObjectPort[] = [{ name: 'http', port: 8080, protocol: 'TCP' }, { port: 9090 }];
 
-function running(localPort: number, remotePort: number) {
+function running(localPort: number, remotePort: number, overrides: Partial<PortForward> = {}) {
   return {
     id: 'pf-1',
     kind: 'Pod',
@@ -27,22 +27,24 @@ function running(localPort: number, remotePort: number) {
     localPort,
     state: 'running',
     startedAt: '2026-08-06T09:00:00Z',
+    ...overrides,
   };
 }
 
-function stubExisting(localPort: number) {
+function stubListed(forwards: ReturnType<typeof running>[]) {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (url.startsWith('/api/portforward') && init?.method === undefined) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([running(localPort, 8080)]),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(forwards) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     }),
   );
+}
+
+function stubExisting(localPort: number) {
+  stubListed([running(localPort, 8080)]);
 }
 
 function stubStart(localPort: number) {
@@ -169,6 +171,64 @@ describe('InspectPorts', () => {
     await user.click(screen.getByRole('button', { name: 'Open 127.0.0.1:45123 in a browser' }));
 
     expect(opened).toHaveBeenCalledWith('http://127.0.0.1:45123', '_blank', 'noreferrer');
+  });
+
+  it('reports a failure to stop', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            json: () => Promise.resolve({ message: 'forward pf-1 is already gone' }),
+          });
+        }
+        if (url.startsWith('/api/portforward') && init?.method === undefined) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([running(45123, 8080)]) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }),
+    );
+    render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Stop forwarding port 8080' }));
+
+    expect(await screen.findByText('forward pf-1 is already gone')).toBeInTheDocument();
+    expect(useToastsStore.getState().toasts).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        message: 'Stopping the forward: forward pf-1 is already gone',
+      }),
+    ]);
+  });
+
+  it('ignores a forward of another kind on the same port', async () => {
+    stubListed([running(45123, 8080, { kind: 'Service' })]);
+    render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+
+    await waitFor(() => {
+      expect(useForwardsStore.getState().forwards).toHaveLength(1);
+    });
+
+    expect(screen.getAllByRole('button', { name: 'Forward' })).toHaveLength(2);
+    expect(screen.queryByText('127.0.0.1:45123 → 8080')).not.toBeInTheDocument();
+  });
+
+  it('ignores a forward of another object on the same port', async () => {
+    stubListed([
+      running(45123, 8080, { namespace: 'default' }),
+      running(45124, 8080, { id: 'pf-2', name: 'api' }),
+    ]);
+    render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+
+    await waitFor(() => {
+      expect(useForwardsStore.getState().forwards).toHaveLength(2);
+    });
+
+    expect(screen.getAllByRole('button', { name: 'Forward' })).toHaveLength(2);
+    expect(screen.queryByText(/127\.0\.0\.1:4512/)).not.toBeInTheDocument();
   });
 
   it('leaves a port with no forward alone', async () => {
