@@ -55,4 +55,8 @@ Discovery builds a resource catalog; each subscribed GVR gets a dynamic informer
 
 The React SPA is embedded with `embed.FS`. The same HTTP+WS server backs both the browser tab and the Wails window.
 
-Contributions under DCO sign-off.
+## License
+
+Copyright 2026 Sophotech s.r.o. Source-available under the [Functional Source License](LICENSE) (FSL-1.1-ALv2), not open source.
+
+Run it, modify it, redistribute it — internally, for professional services, for non-commercial education and research. You may not offer it to others as a commercial product or service that competes with it. Each release becomes Apache-2.0 two years after it ships.

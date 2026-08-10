@@ -204,7 +204,8 @@ release-dist: deps
             binary="spinoza.exe"
         fi
         GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags "{{ ldflags }} -X github.com/sophotechlabs/spinoza/internal/version.value=$version" -o "$out/$binary" .
-        tar -czf "dist/release/spinoza_${version}_${goos}_${goarch}.tar.gz" -C "$out" "$binary"
+        cp LICENSE "$out/LICENSE"
+        tar -czf "dist/release/spinoza_${version}_${goos}_${goarch}.tar.gz" -C "$out" "$binary" LICENSE
     done
     cd dist/release && sha256sum *.tar.gz > checksums.txt
 
