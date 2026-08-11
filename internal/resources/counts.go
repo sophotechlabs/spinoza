@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/podcount"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
@@ -70,8 +71,6 @@ func Count(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescr
 	return api.ResourceCounts{Counts: counts, Failing: failingPods(bounded, dyn, descs, limits), Errors: reasons}
 }
 
-var podsGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-
 const podsKey = "/v1/pods"
 
 const unhealthyPods = "status.phase!=Running,status.phase!=Succeeded"
@@ -82,15 +81,14 @@ func failingPods(ctx context.Context, dyn dynamic.Interface, descs []api.Resourc
 	}
 	bounded, cancel := context.WithTimeout(ctx, limits.PerType)
 	defer cancel()
-	list, err := dyn.Resource(podsGVR).List(bounded, metav1.ListOptions{Limit: 1, FieldSelector: unhealthyPods})
+	got, err := podcount.Count(bounded, dyn, unhealthyPods)
 	if err != nil {
 		return nil
 	}
-	total := len(list.Items) + int(remainingOf(list.GetRemainingItemCount()))
-	if total == 0 {
+	if got.Total == 0 {
 		return nil
 	}
-	return map[string]int{podsKey: total}
+	return map[string]int{podsKey: got.Total}
 }
 
 func counted(descs []api.ResourceDescriptor, key string) bool {
