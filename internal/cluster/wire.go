@@ -8,6 +8,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
@@ -72,6 +73,13 @@ func build(ctx context.Context, name string, options Options, promTarget prom.Ta
 		options.DebugImage,
 		bundle.Context,
 	)
+	releases := helm.NewService(
+		bundle.Clientset,
+		helm.NewRunner(options.HelmBinary),
+		nil,
+		helm.Repositories(helm.RepositoryConfig()),
+		bundle.Context,
+	)
 	promClient := prom.NewClient(bundle.Clientset, promTarget)
 	mgr := resources.NewManager(ctx, resources.Deps{
 		Limits: resources.Limits{
@@ -89,6 +97,7 @@ func build(ctx context.Context, name string, options Options, promTarget prom.Ta
 		Forwards:    forwards,
 		Shells:      shells,
 		Debugger:    debugger,
+		Helm:        releases,
 		Prometheus:  promClient,
 		Categories:  cats,
 		Descriptors: descs,

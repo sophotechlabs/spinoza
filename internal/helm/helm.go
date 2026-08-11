@@ -10,12 +10,9 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -28,7 +25,7 @@ const (
 	releaseKey   = "release"
 	listTimeout  = 15 * time.Second
 	pageSize     = 200
-	maxSecrets   = 5000
+	maxObjects   = 5000
 	maxPayload   = 32 << 20
 	nameLabel    = "name"
 	versionLabel = "version"
@@ -42,30 +39,38 @@ type Charts interface {
 	Warm(repo charts.Repo, chart string)
 }
 
-func List(ctx context.Context, cs kubernetes.Interface, index Charts, repos []charts.Repo) (api.HelmReleases, error) {
+type Service struct {
+	cs      kubernetes.Interface
+	runner  Runner
+	index   Charts
+	repos   []charts.Repo
+	kubeCtx string
+}
+
+func NewService(cs kubernetes.Interface, runner Runner, index Charts, repos []charts.Repo, kubeCtx string) *Service {
+	return &Service{cs: cs, runner: runner, index: index, repos: repos, kubeCtx: kubeCtx}
+}
+
+func (s *Service) List(ctx context.Context) (api.HelmReleases, error) {
 	bounded, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 
-	secrets, truncated, err := allSecrets(bounded, cs)
+	found, err := loadAll(bounded, s.cs)
 	if err != nil {
 		return api.HelmReleases{Releases: []api.HelmRelease{}}, err
 	}
 
 	latest := map[string]api.HelmRelease{}
 	undecodable := 0
-	for i := range secrets {
-		secret := &secrets[i]
-		if secret.Type != storageType {
-			continue
-		}
-		release, decodeErr := releaseOf(secret)
+	for _, item := range found.items {
+		release, decodeErr := item.release()
 		if decodeErr != nil {
 			undecodable++
 		}
-		key := release.Namespace + "/" + release.Name
 		if release.Name == "" {
 			continue
 		}
+		key := release.Namespace + "/" + release.Name
 		previous, seen := latest[key]
 		if seen && previous.Revision >= release.Revision {
 			continue
@@ -77,18 +82,20 @@ func List(ctx context.Context, cs kubernetes.Interface, index Charts, repos []ch
 	for _, release := range latest {
 		out = append(out, release)
 	}
-	addLatest(out, index, repos)
-	slices.SortFunc(out, func(left, right api.HelmRelease) int {
-		if left.Namespace != right.Namespace {
-			return strings.Compare(left.Namespace, right.Namespace)
-		}
-		return strings.Compare(left.Name, right.Name)
-	})
-	return api.HelmReleases{Releases: out, Error: partialMessage(undecodable, truncated)}, nil
+	slices.SortFunc(out, byNamespaceThenName)
+	s.addLatest(out)
+	return api.HelmReleases{Releases: out, Error: partialMessage(undecodable, found.truncated)}, nil
 }
 
-func addLatest(releases []api.HelmRelease, index Charts, repos []charts.Repo) {
-	if index == nil {
+func byNamespaceThenName(left, right api.HelmRelease) int {
+	if left.Namespace != right.Namespace {
+		return strings.Compare(left.Namespace, right.Namespace)
+	}
+	return strings.Compare(left.Name, right.Name)
+}
+
+func (s *Service) addLatest(releases []api.HelmRelease) {
+	if s.index == nil {
 		return
 	}
 	for i := range releases {
@@ -97,9 +104,9 @@ func addLatest(releases []api.HelmRelease, index Charts, repos []charts.Repo) {
 			continue
 		}
 		newest := ""
-		for _, repo := range repos {
-			index.Warm(repo, release.Chart)
-			newest = pick(newest, index.Latest(repo, release.Chart))
+		for _, repo := range s.repos {
+			s.index.Warm(repo, release.Chart)
+			newest = pick(newest, s.index.Latest(repo, release.Chart))
 		}
 		release.Latest = newest
 		release.Outdated = charts.Newer(release.ChartVersion, newest)
@@ -123,36 +130,17 @@ func partialMessage(undecodable int, truncated bool) string {
 	notes := []string{}
 	if undecodable > 0 {
 		notes = append(notes, fmt.Sprintf(
-			"%d release payloads could not be read; their name and status come from the storage secret's labels",
+			"%d release payloads could not be read; their name and status come from the storage object's labels",
 			undecodable,
 		))
 	}
 	if truncated {
 		notes = append(notes, fmt.Sprintf(
-			"only the first %d helm storage secrets were read, so some releases may be missing",
-			maxSecrets,
+			"only the first %d helm storage objects were read, so some releases may be missing",
+			maxObjects,
 		))
 	}
 	return strings.Join(notes, "; ")
-}
-
-func allSecrets(ctx context.Context, cs kubernetes.Interface) (secrets []corev1.Secret, truncated bool, err error) {
-	out := []corev1.Secret{}
-	opts := metav1.ListOptions{LabelSelector: ownerLabel, Limit: pageSize}
-	for {
-		page, listErr := cs.CoreV1().Secrets("").List(ctx, opts)
-		if listErr != nil {
-			return nil, false, listErr
-		}
-		out = append(out, page.Items...)
-		if page.Continue == "" {
-			return out, false, nil
-		}
-		if len(out) >= maxSecrets {
-			return out, true, nil
-		}
-		opts.Continue = page.Continue
-	}
 }
 
 type payload struct {
@@ -160,9 +148,11 @@ type payload struct {
 	Namespace string `json:"namespace"`
 	Version   int64  `json:"version"`
 	Info      struct {
-		Status       string `json:"status"`
-		LastDeployed string `json:"last_deployed"`
-		Description  string `json:"description"`
+		Status        string `json:"status"`
+		FirstDeployed string `json:"first_deployed"`
+		LastDeployed  string `json:"last_deployed"`
+		Description   string `json:"description"`
+		Notes         string `json:"notes"`
 	} `json:"info"`
 	Chart struct {
 		Metadata struct {
@@ -171,55 +161,8 @@ type payload struct {
 			AppVersion string `json:"appVersion"`
 		} `json:"metadata"`
 	} `json:"chart"`
-}
-
-func releaseOf(secret *corev1.Secret) (api.HelmRelease, error) {
-	fallback := fromLabels(secret)
-	decoded, err := decode(secret.Data[releaseKey])
-	if err != nil {
-		return fallback, err
-	}
-	release := api.HelmRelease{
-		Name:         decoded.Name,
-		Namespace:    decoded.Namespace,
-		Chart:        decoded.Chart.Metadata.Name,
-		ChartVersion: decoded.Chart.Metadata.Version,
-		AppVersion:   decoded.Chart.Metadata.AppVersion,
-		Revision:     decoded.Version,
-		Status:       decoded.Info.Status,
-		Updated:      decoded.Info.LastDeployed,
-		Description:  decoded.Info.Description,
-	}
-	if release.Name == "" {
-		release.Name = fallback.Name
-	}
-	if release.Namespace == "" {
-		release.Namespace = fallback.Namespace
-	}
-	if release.Revision == 0 {
-		release.Revision = fallback.Revision
-	}
-	if release.Status == "" {
-		release.Status = fallback.Status
-	}
-	if release.Updated == "" {
-		release.Updated = fallback.Updated
-	}
-	return release, nil
-}
-
-func fromLabels(secret *corev1.Secret) api.HelmRelease {
-	revision, err := strconv.ParseInt(secret.Labels[versionLabel], 10, 64)
-	if err != nil {
-		revision = 0
-	}
-	return api.HelmRelease{
-		Name:      secret.Labels[nameLabel],
-		Namespace: secret.Namespace,
-		Revision:  revision,
-		Status:    secret.Labels[statusLabel],
-		Updated:   secret.CreationTimestamp.UTC().Format(time.RFC3339),
-	}
+	Config   map[string]any `json:"config"`
+	Manifest string         `json:"manifest"`
 }
 
 func decode(raw []byte) (payload, error) {

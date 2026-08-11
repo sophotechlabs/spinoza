@@ -11,6 +11,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 )
 
 var errHelp = errors.New("help requested")
@@ -43,6 +44,7 @@ func parseFlags(args []string) (settings, error) {
 	showVersion := flags.Bool("version", false, "print the version and exit")
 	debugImage := flags.String("debug-image", envOr("SPINOZA_DEBUG_IMAGE", debugcontainer.DefaultImage), "image used for debug containers")
 	kubectlBinary := flags.String("kubectl", envOr("SPINOZA_KUBECTL", debugcontainer.DefaultBinary), "kubectl binary used to create debug containers")
+	helmBinary := flags.String("helm", envOr("SPINOZA_HELM", helm.DefaultBinary), "helm binary used to roll back and uninstall releases")
 	promSpec := flags.String("prometheus", envOr("SPINOZA_PROMETHEUS", ""), "prometheus service as namespace/service:port; discovered when empty")
 	kubeconfig := flags.String("kubeconfig", envOr("SPINOZA_KUBECONFIG", ""), "kubeconfig to read; the usual lookup rules when empty")
 	clientQPS := flags.Float64("qps", envFloat("SPINOZA_QPS", defaultQPS), "apiserver requests per second this client allows itself")
@@ -72,6 +74,7 @@ func parseFlags(args []string) (settings, error) {
 		cluster: cluster.Options{
 			DebugImage:       *debugImage,
 			KubectlBinary:    *kubectlBinary,
+			HelmBinary:       *helmBinary,
 			PromSpec:         *promSpec,
 			Kubeconfig:       *kubeconfig,
 			ClientQPS:        float32(*clientQPS),

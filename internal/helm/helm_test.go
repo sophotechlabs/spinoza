@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
@@ -22,6 +23,10 @@ import (
 )
 
 const deployedAt = "2026-08-11T09:30:00Z"
+
+func newService(cs kubernetes.Interface, index Charts, repos []charts.Repo) *Service {
+	return NewService(cs, nil, index, repos, "kind-spinoza")
+}
 
 type release struct {
 	name       string
@@ -58,7 +63,7 @@ func gzipped(body string) []byte {
 	return buf.Bytes()
 }
 
-func stored(spec release, data []byte) *corev1.Secret {
+func storedSecret(spec release, data []byte) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              fmt.Sprintf("sh.helm.release.v1.%s.v%d", spec.name, spec.revision),
@@ -78,7 +83,7 @@ func stored(spec release, data []byte) *corev1.Secret {
 
 func helmSecret(spec release) *corev1.Secret {
 	body := []byte(base64.StdEncoding.EncodeToString(gzipped(payloadJSON(spec))))
-	return stored(spec, body)
+	return storedSecret(spec, body)
 }
 
 func sampleRelease() release {
@@ -96,7 +101,7 @@ func sampleRelease() release {
 func TestListReadsAGzippedBase64Release(t *testing.T) {
 	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -140,9 +145,9 @@ func TestListReadsAGzippedBase64Release(t *testing.T) {
 func TestListReadsAReleaseThatWasNeverGzipped(t *testing.T) {
 	spec := sampleRelease()
 	body := []byte(base64.StdEncoding.EncodeToString([]byte(payloadJSON(spec))))
-	cs := k8sfake.NewClientset(stored(spec, body))
+	cs := k8sfake.NewClientset(storedSecret(spec, body))
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -157,9 +162,9 @@ func TestListReadsAReleaseThatWasNeverGzipped(t *testing.T) {
 
 func TestListReadsAReleaseThatWasNeverBase64Encoded(t *testing.T) {
 	spec := sampleRelease()
-	cs := k8sfake.NewClientset(stored(spec, gzipped(payloadJSON(spec))))
+	cs := k8sfake.NewClientset(storedSecret(spec, gzipped(payloadJSON(spec))))
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -184,7 +189,7 @@ func TestListKeepsOnlyTheNewestRevision(t *testing.T) {
 	third := sampleRelease()
 	cs := k8sfake.NewClientset(helmSecret(third), helmSecret(first), helmSecret(second))
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -212,7 +217,7 @@ func TestListSortsByNamespaceThenName(t *testing.T) {
 	}
 	cs := k8sfake.NewClientset(objs...)
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -238,7 +243,7 @@ func TestListIgnoresSecretsThatAreNotHelmStorage(t *testing.T) {
 	}
 	cs := k8sfake.NewClientset(helmSecret(sampleRelease()), other)
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -250,9 +255,9 @@ func TestListIgnoresSecretsThatAreNotHelmStorage(t *testing.T) {
 
 func TestListFallsBackToTheLabelsWhenThePayloadIsUnreadable(t *testing.T) {
 	spec := sampleRelease()
-	cs := k8sfake.NewClientset(stored(spec, []byte("not a release at all")))
+	cs := k8sfake.NewClientset(storedSecret(spec, []byte("not a release at all")))
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -293,7 +298,7 @@ func TestListSkipsASecretWithNothingToIdentifyIt(t *testing.T) {
 	}
 	cs := k8sfake.NewClientset(nameless)
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -309,7 +314,7 @@ func TestListReportsARefusedSecretList(t *testing.T) {
 		return true, nil, errors.New("secrets is forbidden")
 	})
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 
 	if err == nil {
 		t.Fatal("a refused list reported success")
@@ -333,7 +338,7 @@ func TestListAsksOnlyForHelmOwnedSecrets(t *testing.T) {
 		return false, nil, nil
 	})
 
-	_, err := List(context.Background(), cs, nil, nil)
+	_, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -363,7 +368,7 @@ func TestListFollowsThePagesTheApiserverHandsBack(t *testing.T) {
 		return true, &corev1.SecretList{Items: []corev1.Secret{*helmSecret(second)}}, nil
 	})
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -381,8 +386,8 @@ func TestListSaysWhenItStoppedReadingPages(t *testing.T) {
 	page := 0
 	cs.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
 		page++
-		items := make([]corev1.Secret, 0, maxSecrets)
-		for i := range maxSecrets {
+		items := make([]corev1.Secret, 0, maxObjects)
+		for i := range maxObjects {
 			spec := sampleRelease()
 			spec.name = fmt.Sprintf("release-%d-%d", page, i)
 			items = append(items, *helmSecret(spec))
@@ -393,7 +398,7 @@ func TestListSaysWhenItStoppedReadingPages(t *testing.T) {
 		}, nil
 	})
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -407,7 +412,7 @@ func TestListSaysWhenItStoppedReadingPages(t *testing.T) {
 }
 
 func TestListReportsNothingForAClusterWithoutHelm(t *testing.T) {
-	got, err := List(context.Background(), k8sfake.NewClientset(), nil, nil)
+	got, err := newService(k8sfake.NewClientset(), nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -447,19 +452,19 @@ func TestALabelWithANonNumericRevisionReadsAsZero(t *testing.T) {
 		},
 	}
 
-	got := fromLabels(secret)
+	got := storedOf(DriverSecret, &secret.ObjectMeta, nil)
 
-	if got.Revision != 0 {
-		t.Fatalf("revision = %d, want 0", got.Revision)
+	if got.revision != 0 {
+		t.Fatalf("revision = %d, want 0", got.revision)
 	}
 }
 
 func TestAPartialPayloadIsCompletedFromTheLabels(t *testing.T) {
 	spec := sampleRelease()
 	body := []byte(base64.StdEncoding.EncodeToString(gzipped(`{"chart":{"metadata":{"name":"podinfo","version":"6.9.2"}}}`)))
-	cs := k8sfake.NewClientset(stored(spec, body))
+	cs := k8sfake.NewClientset(storedSecret(spec, body))
 
-	got, err := List(context.Background(), cs, nil, nil)
+	got, err := newService(cs, nil, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -511,7 +516,7 @@ func TestListMarksAReleaseThatHasANewerChart(t *testing.T) {
 	}}
 	repos := []charts.Repo{{URL: "https://charts.example.com"}}
 
-	got, err := List(context.Background(), cs, index, repos)
+	got, err := newService(cs, index, repos).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -533,8 +538,7 @@ func TestListLeavesAnUpToDateReleaseAlone(t *testing.T) {
 		"https://charts.example.com|podinfo": "6.9.2",
 	}}
 
-	got, err := List(context.Background(), cs, index,
-		[]charts.Repo{{URL: "https://charts.example.com"}})
+	got, err := newService(cs, index, []charts.Repo{{URL: "https://charts.example.com"}}).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -560,7 +564,7 @@ func TestListTakesTheHighestVersionAcrossRepositories(t *testing.T) {
 		{URL: "https://three.example.com"},
 	}
 
-	got, err := List(context.Background(), cs, index, repos)
+	got, err := newService(cs, index, repos).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -573,7 +577,7 @@ func TestListTakesTheHighestVersionAcrossRepositories(t *testing.T) {
 func TestListSaysNothingAboutLatestWithoutAnIndex(t *testing.T) {
 	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
 
-	got, err := List(context.Background(), cs, nil, []charts.Repo{{URL: "https://one.example.com"}})
+	got, err := newService(cs, nil, []charts.Repo{{URL: "https://one.example.com"}}).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -588,10 +592,10 @@ func TestListSaysNothingAboutLatestWithoutAnIndex(t *testing.T) {
 
 func TestListSkipsTheLookupForAChartItCouldNotName(t *testing.T) {
 	spec := sampleRelease()
-	cs := k8sfake.NewClientset(stored(spec, []byte("unreadable")))
+	cs := k8sfake.NewClientset(storedSecret(spec, []byte("unreadable")))
 	index := &stubCharts{versions: map[string]string{}}
 
-	got, err := List(context.Background(), cs, index, []charts.Repo{{URL: "https://one.example.com"}})
+	got, err := newService(cs, index, []charts.Repo{{URL: "https://one.example.com"}}).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -611,7 +615,7 @@ func TestListIgnoresARepositoryWithNothingForThatChart(t *testing.T) {
 	}}
 	repos := []charts.Repo{{URL: "https://one.example.com"}, {URL: "https://two.example.com"}}
 
-	got, err := List(context.Background(), cs, index, repos)
+	got, err := newService(cs, index, repos).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

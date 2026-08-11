@@ -15,6 +15,7 @@ import (
 type Options struct {
 	DebugImage       string
 	KubectlBinary    string
+	HelmBinary       string
 	PromSpec         string
 	Kubeconfig       string
 	ClientQPS        float32

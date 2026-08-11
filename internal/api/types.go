@@ -101,6 +101,49 @@ type HelmReleases struct {
 	Error    string        `json:"error,omitempty"`
 }
 
+type HelmRevision struct {
+	Revision     int64  `json:"revision"`
+	Status       string `json:"status"`
+	ChartVersion string `json:"chartVersion"`
+	AppVersion   string `json:"appVersion"`
+	Updated      string `json:"updated"`
+	Description  string `json:"description,omitempty"`
+}
+
+type HelmResource struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Namespace  string `json:"namespace,omitempty"`
+	Group      string `json:"group,omitempty"`
+	Version    string `json:"version,omitempty"`
+	Resource   string `json:"resource,omitempty"`
+}
+
+type HelmReleaseDetail struct {
+	Release       HelmRelease    `json:"release"`
+	Driver        string         `json:"driver"`
+	FirstDeployed string         `json:"firstDeployed,omitempty"`
+	Values        string         `json:"values"`
+	Notes         string         `json:"notes"`
+	Manifest      string         `json:"manifest"`
+	Resources     []HelmResource `json:"resources"`
+	History       []HelmRevision `json:"history"`
+	Error         string         `json:"error,omitempty"`
+}
+
+type HelmSupport struct {
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+	Binary    string `json:"binary"`
+}
+
+type HelmActionResult struct {
+	Action   string `json:"action"`
+	Message  string `json:"message"`
+	Revision int64  `json:"revision,omitempty"`
+}
+
 type Column struct {
 	Name   string `json:"name"`
 	Render string `json:"render,omitempty"`

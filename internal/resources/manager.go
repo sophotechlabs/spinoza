@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -83,6 +84,7 @@ type Manager struct {
 	forwards    *portforward.Registry
 	shells      *exec.Service
 	debugger    *debugcontainer.Service
+	helm        *helm.Service
 	prom        *prom.Client
 	disco       kubediscovery.CachedDiscoveryInterface
 	limits      Limits
@@ -134,6 +136,7 @@ type Deps struct {
 	Forwards    *portforward.Registry
 	Shells      *exec.Service
 	Debugger    *debugcontainer.Service
+	Helm        *helm.Service
 	Prometheus  *prom.Client
 	Charts      *charts.Cache
 	Categories  []api.Category
@@ -152,6 +155,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		forwards: deps.Forwards,
 		shells:   deps.Shells,
 		debugger: deps.Debugger,
+		helm:     deps.Helm,
 		prom:     deps.Prometheus,
 		cats:     deps.Categories,
 		descs:    deps.Descriptors,
@@ -380,10 +384,68 @@ func (m *Manager) versions() overview.Versions {
 }
 
 func (m *Manager) HelmReleases(ctx context.Context) (api.HelmReleases, error) {
-	if m.cs == nil {
-		return api.HelmReleases{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
+	if m.helm == nil {
+		return api.HelmReleases{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
 	}
-	return helm.List(ctx, m.cs, m.charts, helm.Repositories(helm.RepositoryConfig()))
+	return m.helm.List(ctx)
+}
+
+func (m *Manager) HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error) {
+	if m.helm == nil {
+		return api.HelmReleaseDetail{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
+	}
+	return m.helm.Detail(ctx, namespace, name, m.resolveKind)
+}
+
+func (m *Manager) HelmSupport() api.HelmSupport {
+	if m.helm == nil {
+		return api.HelmSupport{Reason: "helm is not wired up"}
+	}
+	return m.helm.Support()
+}
+
+func (m *Manager) HelmRollback(ctx context.Context, namespace, name string, revision int64) (api.HelmActionResult, error) {
+	if m.helm == nil {
+		return api.HelmActionResult{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
+	}
+	return m.helm.Rollback(ctx, namespace, name, revision)
+}
+
+func (m *Manager) HelmUninstall(ctx context.Context, namespace, name string) (api.HelmActionResult, error) {
+	if m.helm == nil {
+		return api.HelmActionResult{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
+	}
+	return m.helm.Uninstall(ctx, namespace, name)
+}
+
+func (m *Manager) resolveKind(apiVersion, kind string) (helm.Kind, bool) {
+	wantGroup, wantVersion := splitAPIVersion(apiVersion)
+	for _, desc := range m.descriptors() {
+		if desc.Kind != kind {
+			continue
+		}
+		if desc.Group != wantGroup {
+			continue
+		}
+		if wantVersion != "" && desc.Version != wantVersion {
+			continue
+		}
+		return helm.Kind{
+			Group:      desc.Group,
+			Version:    desc.Version,
+			Resource:   desc.Resource,
+			Namespaced: desc.Namespaced,
+		}, true
+	}
+	return helm.Kind{}, false
+}
+
+func splitAPIVersion(apiVersion string) (group, version string) {
+	parts := strings.SplitN(apiVersion, "/", 2)
+	if len(parts) == 1 {
+		return "", parts[0]
+	}
+	return parts[0], parts[1]
 }
 
 type streamKey struct {
