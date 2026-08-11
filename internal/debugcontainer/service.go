@@ -25,9 +25,10 @@ const (
 	namePrefix     = "spinoza-debug-"
 	mirrorPodKey   = "kubernetes.io/config.mirror"
 	defaultTimeout = 90 * time.Second
-	patchTimeout   = 30 * time.Second
 	defaultPoll    = 500 * time.Millisecond
 )
+
+var patchTimeout = 30 * time.Second
 
 var ErrUnavailable = errors.New("debug containers are unavailable")
 

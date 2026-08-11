@@ -17,9 +17,9 @@ import (
 
 const lastAppliedAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
 
-const readTimeout = 15 * time.Second
+var readTimeout = 15 * time.Second
 
-const writeTimeout = 30 * time.Second
+var writeTimeout = 30 * time.Second
 
 func Get(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef) (api.ObjectDetail, error) {
 	bounded, cancel := context.WithTimeout(ctx, readTimeout)

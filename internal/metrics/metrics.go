@@ -21,7 +21,7 @@ var (
 	nodeGVR        = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
 )
 
-const buildTimeout = 20 * time.Second
+var buildTimeout = 20 * time.Second
 
 func Build(ctx context.Context, dyn dynamic.Interface) api.Metrics {
 	bounded, cancel := context.WithTimeout(ctx, buildTimeout)

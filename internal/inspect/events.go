@@ -23,7 +23,7 @@ var objectUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4
 
 var ErrInvalidUID = errors.New("uid must be a kubernetes object uid")
 
-const listTimeout = 15 * time.Second
+var listTimeout = 15 * time.Second
 
 func Events(ctx context.Context, dyn dynamic.Interface, namespace, uid string) ([]api.Event, error) {
 	if uid == "" {

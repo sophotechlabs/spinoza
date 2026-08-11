@@ -694,3 +694,57 @@ func TestAllowedReportsTheImageItWouldUse(t *testing.T) {
 		t.Fatalf("pod = %q", support.Pod)
 	}
 }
+
+type blockingRunner struct {
+	saw chan error
+}
+
+func (b *blockingRunner) Run(ctx context.Context, _ []string) error {
+	<-ctx.Done()
+	b.saw <- ctx.Err()
+	return ctx.Err()
+}
+
+func TestEnsureBoundsTheKubectlPatchPhase(t *testing.T) {
+	previous := patchTimeout
+	patchTimeout = 150 * time.Millisecond
+	t.Cleanup(func() {
+		patchTimeout = previous
+	})
+	runner := &blockingRunner{saw: make(chan error, 1)}
+	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", "p-mk1")
+
+	started := time.Now()
+	_, err := service.Ensure(context.Background(), request())
+	elapsed := time.Since(started)
+
+	if err == nil {
+		t.Fatal("a kubectl that never returns produced no error")
+	}
+	if elapsed > time.Second {
+		t.Fatalf("Ensure took %s, so it was not the cap that ended it", elapsed)
+	}
+	if !errors.Is(<-runner.saw, context.DeadlineExceeded) {
+		t.Fatal("kubectl was ended by something other than the patch deadline")
+	}
+}
+
+func TestEnsureLeavesTheKubectlDeadlineAloneWhenTheCallerIsShorter(t *testing.T) {
+	runner := &blockingRunner{saw: make(chan error, 1)}
+	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", "p-mk1")
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	started := time.Now()
+	_, err := service.Ensure(ctx, request())
+
+	if err == nil {
+		t.Fatal("a caller whose deadline passed produced no error")
+	}
+	if time.Since(started) > time.Second {
+		t.Fatalf("Ensure outlived its caller by %s", time.Since(started))
+	}
+	if !errors.Is(<-runner.saw, context.DeadlineExceeded) {
+		t.Fatal("kubectl did not see the caller's deadline")
+	}
+}
