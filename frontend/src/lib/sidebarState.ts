@@ -1,6 +1,12 @@
 export const SIDEBAR_STATE_KEY = 'spinoza.sidebar.v1';
 
+export const CLUSTER_SECTION = 'Cluster';
+
+export const HELM_SECTION = 'Helm';
+
 export const GITOPS_SECTION = 'GitOps';
+
+const OPEN_BY_DEFAULT = new Set([CLUSTER_SECTION, HELM_SECTION, GITOPS_SECTION]);
 
 export type SidebarSections = Partial<Record<string, boolean>>;
 
@@ -9,7 +15,7 @@ export function sectionOpen(sections: SidebarSections, key: string): boolean {
   if (stored !== undefined) {
     return stored;
   }
-  return key === GITOPS_SECTION;
+  return OPEN_BY_DEFAULT.has(key);
 }
 
 export function parseSections(raw: string | null): SidebarSections {

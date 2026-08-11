@@ -2,13 +2,23 @@ import type { Category, ObjectRef, ResourceDescriptor, View } from './types';
 
 export const VIEW_LABELS: Record<View, string> = {
   resources: 'Resources',
+  cluster: 'Cluster · Overview',
+  helm: 'Helm · Releases',
   'flux-roles': 'GitOps · Overview',
   gitops: 'GitOps · Graph',
   'flux-list': 'GitOps · Resource list',
   'flux-overview': 'GitOps · Status tiles',
 };
 
-const VIEW_ORDER: View[] = ['resources', 'flux-roles', 'gitops', 'flux-list', 'flux-overview'];
+const VIEW_ORDER: View[] = [
+  'cluster',
+  'resources',
+  'helm',
+  'flux-roles',
+  'gitops',
+  'flux-list',
+  'flux-overview',
+];
 
 export type PaletteItem =
   | { id: string; label: string; hint: string; kind: 'view'; view: View }

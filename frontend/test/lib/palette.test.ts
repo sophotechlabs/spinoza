@@ -24,7 +24,10 @@ describe('paletteItems', () => {
     const items = paletteItems(categories, [recent]);
 
     expect(items[0]).toMatchObject({ kind: 'object', label: 'prod/web-0', hint: 'recent · pods' });
-    expect(items[1]).toMatchObject({ kind: 'view', label: VIEW_LABELS.resources });
+    expect(items[1]).toMatchObject({ kind: 'view', label: VIEW_LABELS.cluster });
+    expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).toContain(
+      VIEW_LABELS.helm,
+    );
     expect(items.filter((item) => item.kind === 'resource').map((item) => item.label)).toEqual([
       'Pod',
       'Deployment',

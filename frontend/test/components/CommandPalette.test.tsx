@@ -111,7 +111,7 @@ describe('CommandPalette', () => {
     await user.click(screen.getByLabelText(/Search resources/));
     await user.keyboard('{Enter}');
 
-    expect(onSelectView).toHaveBeenCalledWith('resources');
+    expect(onSelectView).toHaveBeenCalledWith('cluster');
   });
 
   it('walks the list with the arrow keys', async () => {
@@ -122,7 +122,7 @@ describe('CommandPalette', () => {
     await user.click(screen.getByLabelText(/Search resources/));
     await user.keyboard('{ArrowDown}{Enter}');
 
-    expect(onSelectView).toHaveBeenCalledWith('flux-roles');
+    expect(onSelectView).toHaveBeenCalledWith('resources');
   });
 
   it('stops at the ends of the list', async () => {
@@ -133,7 +133,7 @@ describe('CommandPalette', () => {
     await user.click(screen.getByLabelText(/Search resources/));
     await user.keyboard('{ArrowUp}{ArrowUp}{Enter}');
 
-    expect(onSelectView).toHaveBeenCalledWith('resources');
+    expect(onSelectView).toHaveBeenCalledWith('cluster');
   });
 
   it('opens a recent object straight from the top of the list', async () => {

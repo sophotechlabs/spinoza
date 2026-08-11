@@ -24,6 +24,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Toasts from './components/Toasts';
 import ResourceTable from './components/ResourceTable';
 import PanelLayout from './components/PanelLayout';
+import ClusterOverview from './components/ClusterOverview';
+import HelmReleases from './components/HelmReleases';
 import FluxList from './components/FluxList';
 import FluxOverview from './components/FluxOverview';
 import FluxRoles from './components/FluxRoles';
@@ -240,6 +242,12 @@ export default function App() {
       onSelect={handleSelectRow}
     />
   );
+  if (route.view === 'cluster') {
+    mainArea = <ClusterOverview />;
+  }
+  if (route.view === 'helm') {
+    mainArea = <HelmReleases />;
+  }
   if (route.view === 'gitops') {
     mainArea = (
       <Suspense fallback={<Loading what="graph" />}>

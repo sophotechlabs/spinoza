@@ -66,10 +66,10 @@ describe('Sidebar', () => {
   it('renders the GitOps section with all four entries', () => {
     stubFetch(categories);
     renderSidebar();
-    expect(screen.getByRole('button', { name: 'Graph' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Resource list' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Status tiles' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'GitOps Graph' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'GitOps Resource list' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'GitOps Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'GitOps Status tiles' })).toBeInTheDocument();
   });
 
   it('starts with resource categories collapsed and expands one on click', async () => {
@@ -138,10 +138,10 @@ describe('Sidebar', () => {
     stubFetch(categories);
     const onSelectView = vi.fn<(view: View) => void>();
     renderSidebar({ onSelectView });
-    await userEvent.click(screen.getByRole('button', { name: 'Graph' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Resource list' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Status tiles' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Overview' }));
+    await userEvent.click(screen.getByRole('button', { name: 'GitOps Graph' }));
+    await userEvent.click(screen.getByRole('button', { name: 'GitOps Resource list' }));
+    await userEvent.click(screen.getByRole('button', { name: 'GitOps Status tiles' }));
+    await userEvent.click(screen.getByRole('button', { name: 'GitOps Overview' }));
     const seen = onSelectView.mock.calls.map((call) => call[0]);
     expect(seen).toEqual(['gitops', 'flux-list', 'flux-overview', 'flux-roles']);
   });
@@ -149,10 +149,10 @@ describe('Sidebar', () => {
   it('highlights the GitOps entry that matches the active view', () => {
     stubFetch(categories);
     renderSidebar({ view: 'flux-overview' });
-    expect(screen.getByRole('button', { name: 'Status tiles' }).className).toContain(
+    expect(screen.getByRole('button', { name: 'GitOps Status tiles' }).className).toContain(
       'bg-surface-active',
     );
-    expect(screen.getByRole('button', { name: 'Graph' }).className).not.toContain(
+    expect(screen.getByRole('button', { name: 'GitOps Graph' }).className).not.toContain(
       'bg-surface-active',
     );
   });
@@ -160,9 +160,9 @@ describe('Sidebar', () => {
   it('collapses the GitOps section when its header is clicked', async () => {
     stubFetch(categories);
     renderSidebar();
-    expect(screen.getByRole('button', { name: 'Graph' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /GitOps/ }));
-    expect(screen.queryByRole('button', { name: 'Graph' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'GitOps Graph' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'GitOps' }));
+    expect(screen.queryByRole('button', { name: 'GitOps Graph' })).not.toBeInTheDocument();
   });
   it('nests custom resources under their api group', async () => {
     const user = userEvent.setup();
@@ -331,7 +331,7 @@ describe('the active sidebar entry', () => {
   it('keeps its highlight under the cursor', () => {
     stubFetch(categories);
     renderSidebar({ view: 'flux-roles' });
-    const active = screen.getByRole('button', { name: 'Overview' });
+    const active = screen.getByRole('button', { name: 'GitOps Overview' });
 
     expect(active.className).toContain('bg-surface-active');
     expect(active.className).not.toContain('hover:bg-surface-raised');
@@ -340,7 +340,7 @@ describe('the active sidebar entry', () => {
   it('does not carry a text colour that a later rule overrides', () => {
     stubFetch(categories);
     renderSidebar({ view: 'flux-roles' });
-    const active = screen.getByRole('button', { name: 'Overview' });
+    const active = screen.getByRole('button', { name: 'GitOps Overview' });
 
     expect(active.className).toContain('text-fg-strong');
     expect(active.className).not.toContain('text-fg-soft');
@@ -486,8 +486,13 @@ describe('what the sidebar tells assistive technology', () => {
     stubFetch(categories, {});
     renderSidebar({ view: 'gitops' });
 
-    expect(screen.getByRole('button', { name: 'Graph' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'GitOps Graph' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('button', { name: 'GitOps Overview' })).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 
   it('says which resource is the current one', async () => {
@@ -530,13 +535,13 @@ describe('a sidebar that survives a reload', () => {
     const user = userEvent.setup();
     stubFetch(categories, {});
     const first = renderSidebar();
-    await user.click(screen.getByRole('button', { name: /GitOps/ }));
-    expect(screen.queryByRole('button', { name: 'Graph' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'GitOps' }));
+    expect(screen.queryByRole('button', { name: 'GitOps Graph' })).not.toBeInTheDocument();
     first.unmount();
 
     renderSidebar();
 
-    expect(screen.queryByRole('button', { name: 'Graph' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'GitOps Graph' })).not.toBeInTheDocument();
   });
 
   it('leaves a category the user never touched shut', async () => {
