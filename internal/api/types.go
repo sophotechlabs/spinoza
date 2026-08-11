@@ -88,6 +88,8 @@ type HelmRelease struct {
 	Chart        string `json:"chart"`
 	ChartVersion string `json:"chartVersion"`
 	AppVersion   string `json:"appVersion"`
+	Latest       string `json:"latest,omitempty"`
+	Outdated     bool   `json:"outdated,omitempty"`
 	Revision     int64  `json:"revision"`
 	Status       string `json:"status"`
 	Updated      string `json:"updated"`

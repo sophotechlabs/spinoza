@@ -108,8 +108,10 @@ HelmRelease.AppVersion appVersion
 HelmRelease.Chart chart
 HelmRelease.ChartVersion chartVersion
 HelmRelease.Description description,omitempty
+HelmRelease.Latest latest,omitempty
 HelmRelease.Name name
 HelmRelease.Namespace namespace
+HelmRelease.Outdated outdated,omitempty
 HelmRelease.Revision revision
 HelmRelease.Status status
 HelmRelease.Updated updated

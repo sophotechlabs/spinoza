@@ -383,7 +383,7 @@ func (m *Manager) HelmReleases(ctx context.Context) (api.HelmReleases, error) {
 	if m.cs == nil {
 		return api.HelmReleases{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
 	}
-	return helm.List(ctx, m.cs)
+	return helm.List(ctx, m.cs, m.charts, helm.Repositories(helm.RepositoryConfig()))
 }
 
 type streamKey struct {
