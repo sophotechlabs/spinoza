@@ -602,7 +602,7 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'Cluster Overview' }));
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
 
     expect(screen.getByTestId('cluster-overview')).toBeInTheDocument();
     expect(window.location.hash).toContain('view=cluster');
@@ -612,7 +612,7 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'Helm Releases' }));
+    await user.click(screen.getByRole('button', { name: 'Helm releases' }));
 
     expect(screen.getByTestId('helm-releases')).toBeInTheDocument();
     expect(window.location.hash).toContain('view=helm');

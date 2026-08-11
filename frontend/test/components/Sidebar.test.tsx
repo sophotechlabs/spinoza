@@ -63,6 +63,37 @@ afterEach(() => {
 });
 
 describe('Sidebar', () => {
+  it('offers the cluster overview and helm releases at the top', () => {
+    stubFetch(categories);
+    renderSidebar();
+
+    expect(screen.getByRole('button', { name: 'Cluster' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Helm releases' })).toBeInTheDocument();
+  });
+
+  it('keeps the top views apart from a discovered category of the same name', async () => {
+    stubFetch([makeCategory('Cluster', [makeDescriptor({ resource: 'nodes', kind: 'Node' })])]);
+    renderSidebar();
+
+    const category = await screen.findByRole('button', { name: /^Cluster\s*1$/ });
+    const view = screen.getByRole('button', { name: 'Cluster' });
+
+    expect(category).not.toBe(view);
+    expect(category.className).toContain('uppercase');
+    expect(view.className).not.toContain('uppercase');
+  });
+
+  it('marks the open top view for assistive technology', () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'helm' });
+
+    expect(screen.getByRole('button', { name: 'Helm releases' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('button', { name: 'Cluster' })).not.toHaveAttribute('aria-current');
+  });
+
   it('renders the GitOps section with all four entries', () => {
     stubFetch(categories);
     renderSidebar();

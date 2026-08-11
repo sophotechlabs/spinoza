@@ -4,14 +4,7 @@ import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/di
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 import { useClusterEpoch } from '../store/cluster';
-import {
-  CLUSTER_SECTION,
-  GITOPS_SECTION,
-  HELM_SECTION,
-  readSections,
-  sectionOpen,
-  writeSections,
-} from '../lib/sidebarState';
+import { GITOPS_SECTION, readSections, sectionOpen, writeSections } from '../lib/sidebarState';
 import type { SidebarSections } from '../lib/sidebarState';
 
 interface SidebarProps {
@@ -26,23 +19,16 @@ interface GitopsEntry {
   label: string;
 }
 
-interface ViewSection {
-  name: string;
-  entries: GitopsEntry[];
-}
+const TOP_VIEWS: GitopsEntry[] = [
+  { view: 'cluster', label: 'Cluster' },
+  { view: 'helm', label: 'Helm releases' },
+];
 
-const VIEW_SECTIONS: ViewSection[] = [
-  { name: CLUSTER_SECTION, entries: [{ view: 'cluster', label: 'Overview' }] },
-  { name: HELM_SECTION, entries: [{ view: 'helm', label: 'Releases' }] },
-  {
-    name: GITOPS_SECTION,
-    entries: [
-      { view: 'flux-roles', label: 'Overview' },
-      { view: 'gitops', label: 'Graph' },
-      { view: 'flux-list', label: 'Resource list' },
-      { view: 'flux-overview', label: 'Status tiles' },
-    ],
-  },
+const GITOPS_VIEWS: GitopsEntry[] = [
+  { view: 'flux-roles', label: 'Overview' },
+  { view: 'gitops', label: 'Graph' },
+  { view: 'flux-list', label: 'Resource list' },
+  { view: 'flux-overview', label: 'Status tiles' },
 ];
 
 function descriptorKey(descriptor: ResourceDescriptor): string {
@@ -243,43 +229,54 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
       className="flex min-h-0 shrink-0 border-r border-edge bg-surface"
     >
       <nav className="min-w-0 flex-1 overflow-y-auto py-2">
-        {VIEW_SECTIONS.map((section) => {
-          const collapsed = !sectionOpen(sections, section.name);
-          return (
-            <div key={section.name} className="mb-1">
-              <button
-                type="button"
-                aria-expanded={!collapsed}
-                onClick={() => {
-                  toggle(section.name);
-                }}
-                className={sectionClass}
-              >
-                <span>
-                  <span aria-hidden="true">{chevron(collapsed)}</span> {section.name}
-                </span>
-              </button>
-              {!collapsed && (
-                <div aria-label={`${section.name} views`}>
-                  {section.entries.map((entry) => (
-                    <button
-                      key={entry.view}
-                      type="button"
-                      aria-label={`${section.name} ${entry.label}`}
-                      aria-current={current(view === entry.view)}
-                      onClick={() => {
-                        onSelectView(entry.view);
-                      }}
-                      className={resourceClass(view === entry.view)}
-                    >
-                      {entry.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+        <div className="mb-1" aria-label="Cluster views">
+          {TOP_VIEWS.map((entry) => (
+            <button
+              key={entry.view}
+              type="button"
+              aria-current={current(view === entry.view)}
+              onClick={() => {
+                onSelectView(entry.view);
+              }}
+              className={resourceClass(view === entry.view)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+        <div className="mb-1">
+          <button
+            type="button"
+            aria-expanded={sectionOpen(sections, GITOPS_SECTION)}
+            onClick={() => {
+              toggle(GITOPS_SECTION);
+            }}
+            className={sectionClass}
+          >
+            <span>
+              <span aria-hidden="true">{chevron(!sectionOpen(sections, GITOPS_SECTION))}</span>{' '}
+              {GITOPS_SECTION}
+            </span>
+          </button>
+          {sectionOpen(sections, GITOPS_SECTION) && (
+            <div aria-label="GitOps views">
+              {GITOPS_VIEWS.map((entry) => (
+                <button
+                  key={entry.view}
+                  type="button"
+                  aria-label={`GitOps ${entry.label}`}
+                  aria-current={current(view === entry.view)}
+                  onClick={() => {
+                    onSelectView(entry.view);
+                  }}
+                  className={resourceClass(view === entry.view)}
+                >
+                  {entry.label}
+                </button>
+              ))}
             </div>
-          );
-        })}
+          )}
+        </div>
         {error !== null && (
           <div
             role="alert"
