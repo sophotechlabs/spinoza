@@ -7,6 +7,7 @@ import {
   asString,
   listOf,
   numberMap,
+  optionalNumberMap,
   oneOf,
   optionalBoolean,
   optionalListOf,
@@ -125,5 +126,24 @@ describe('recordMap', () => {
       a: 1,
       b: 0,
     });
+  });
+});
+
+describe('optionalNumberMap', () => {
+  it('reads a map of numbers', () => {
+    expect(optionalNumberMap({ '/v1/pods': 3 })).toEqual({ '/v1/pods': 3 });
+  });
+
+  it('is absent rather than empty when the field is missing', () => {
+    expect(optionalNumberMap(undefined)).toBeUndefined();
+  });
+
+  it('refuses null and arrays', () => {
+    expect(optionalNumberMap(null)).toBeUndefined();
+    expect(optionalNumberMap([1, 2])).toBeUndefined();
+  });
+
+  it('drops entries that are not finite numbers', () => {
+    expect(optionalNumberMap({ a: 1, b: 'two', c: Number.NaN })).toEqual({ a: 1 });
   });
 });

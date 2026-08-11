@@ -117,6 +117,19 @@ export function numberMap(value: unknown): Record<string, number> {
   return out;
 }
 
+export function optionalNumberMap(value: unknown): Record<string, number> | undefined {
+  if (typeof value !== 'object') {
+    return undefined;
+  }
+  if (value === null) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return undefined;
+  }
+  return numberMap(value);
+}
+
 export function recordMap<T>(
   value: unknown,
   parse: (item: Record<string, unknown>) => T,

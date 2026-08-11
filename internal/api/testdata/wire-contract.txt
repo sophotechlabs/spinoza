@@ -160,6 +160,7 @@ ResourceCatalog.Categories categories
 ResourceCatalog.Error error,omitempty
 ResourceCounts.Counts counts
 ResourceCounts.Errors errors,omitempty
+ResourceCounts.Failing failing,omitempty
 ResourceDescriptor.Category category
 ResourceDescriptor.Group group
 ResourceDescriptor.Kind kind

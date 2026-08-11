@@ -35,8 +35,9 @@ type ContextList struct {
 }
 
 type ResourceCounts struct {
-	Counts map[string]int    `json:"counts"`
-	Errors map[string]string `json:"errors,omitempty"`
+	Counts  map[string]int    `json:"counts"`
+	Failing map[string]int    `json:"failing,omitempty"`
+	Errors  map[string]string `json:"errors,omitempty"`
 }
 
 type ResourceCatalog struct {

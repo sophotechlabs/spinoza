@@ -146,3 +146,101 @@ func TestRemainingOfIgnoresANegativeOrAbsentCount(t *testing.T) {
 		t.Fatal("an absent remainder was not treated as zero")
 	}
 }
+
+func podDesc() api.ResourceDescriptor {
+	return api.ResourceDescriptor{Version: "v1", Resource: "pods", Kind: "Pod"}
+}
+
+func podClient(t *testing.T) *fake.FakeDynamicClient {
+	t.Helper()
+	kinds := map[schema.GroupVersionResource]string{
+		{Version: "v1", Resource: "pods"}: "PodList",
+	}
+	return fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds)
+}
+
+func podObject(name string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata":   map[string]any{"name": name, "namespace": "default"},
+	}}
+}
+
+func answerUnhealthy(dyn *fake.FakeDynamicClient, items []runtime.Object, err error) {
+	dyn.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		list, ok := action.(k8stesting.ListAction)
+		if !ok {
+			return false, nil, nil
+		}
+		if list.GetListRestrictions().Fields.String() != unhealthyPods {
+			return false, nil, nil
+		}
+		if err != nil {
+			return true, nil, err
+		}
+		out := &unstructured.UnstructuredList{}
+		for _, item := range items {
+			u, isUnstructured := item.(*unstructured.Unstructured)
+			if !isUnstructured {
+				continue
+			}
+			out.Items = append(out.Items, *u)
+		}
+		return true, out, nil
+	})
+}
+
+func TestCountReportsPodsThatAreNeitherRunningNorDone(t *testing.T) {
+	dyn := podClient(t)
+	answerUnhealthy(dyn, []runtime.Object{podObject("crashing"), podObject("pending")}, nil)
+
+	counts := Count(context.Background(), dyn, []api.ResourceDescriptor{podDesc()}, CountLimits{})
+
+	if counts.Failing["/v1/pods"] != 2 {
+		t.Fatalf("failing = %d, want 2", counts.Failing["/v1/pods"])
+	}
+}
+
+func TestCountSaysNothingAboutFailingPodsWhenNoneAre(t *testing.T) {
+	dyn := podClient(t)
+	answerUnhealthy(dyn, nil, nil)
+
+	counts := Count(context.Background(), dyn, []api.ResourceDescriptor{podDesc()}, CountLimits{})
+
+	if counts.Failing != nil {
+		t.Fatalf("failing = %v, want nothing to report", counts.Failing)
+	}
+}
+
+func TestCountKeepsCountingWhenTheFailingPodProbeIsRefused(t *testing.T) {
+	dyn := podClient(t)
+	answerUnhealthy(dyn, nil, errors.New("pods is forbidden"))
+
+	counts := Count(context.Background(), dyn, []api.ResourceDescriptor{podDesc()}, CountLimits{})
+
+	if counts.Failing != nil {
+		t.Fatalf("failing = %v, want the refused probe to report nothing", counts.Failing)
+	}
+	if _, ok := counts.Counts["/v1/pods"]; !ok {
+		t.Fatal("the plain count went missing with the probe")
+	}
+}
+
+func TestCountDoesNotProbeForPodsThatWereNotAskedAbout(t *testing.T) {
+	dyn := countClient(t)
+	listed := 0
+	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		listed++
+		return false, nil, nil
+	})
+
+	counts := Count(context.Background(), dyn, []api.ResourceDescriptor{countDesc("deployments")}, CountLimits{})
+
+	if listed != 0 {
+		t.Fatalf("pods were listed %d times for a catalog without pods", listed)
+	}
+	if counts.Failing != nil {
+		t.Fatalf("failing = %v, want nothing", counts.Failing)
+	}
+}

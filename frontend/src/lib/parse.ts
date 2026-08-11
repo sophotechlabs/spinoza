@@ -45,6 +45,7 @@ import {
   asString,
   listOf,
   numberMap,
+  optionalNumberMap,
   oneOf,
   optionalBoolean,
   optionalListOf,
@@ -314,7 +315,11 @@ export function parseMetricHistory(body: unknown): MetricHistory {
 
 export function parseCounts(body: unknown): ResourceCounts {
   const item = asRecord(body);
-  return { counts: numberMap(item.counts), errors: stringMap(item.errors) };
+  return {
+    counts: numberMap(item.counts),
+    failing: optionalNumberMap(item.failing),
+    errors: stringMap(item.errors),
+  };
 }
 
 export function parseExecSupport(body: unknown): ExecSupport {

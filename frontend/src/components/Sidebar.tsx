@@ -89,6 +89,27 @@ function byPopulated(
   return [...populated, ...empty];
 }
 
+function kindClass(failing: number | undefined): string {
+  if (failing === undefined) {
+    return 'truncate';
+  }
+  return 'truncate text-error';
+}
+
+function kindTitle(kind: string, failing: number | undefined): string {
+  if (failing === undefined) {
+    return kind;
+  }
+  return `${kind} — ${String(failing)} not running or succeeded`;
+}
+
+function failingNote(failing: number | undefined): string {
+  if (failing === undefined) {
+    return '';
+  }
+  return `, ${String(failing)} not running`;
+}
+
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) {
     return err.message;
@@ -115,10 +136,12 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   const [countsError, setCountsError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [failing, setFailing] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let mounted = true;
     setCounts({});
+    setFailing({});
     setCountsError(null);
     const load = async () => {
       try {
@@ -147,6 +170,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
       const tally = await fetchResourceCounts();
       if (live()) {
         setCounts(tally.counts);
+        setFailing(tally.failing ?? {});
         setCountsError(null);
       }
     } catch (err: unknown) {
@@ -289,16 +313,21 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                       onClick={() => {
                         onSelect(resource);
                       }}
-                      title={resource.kind}
+                      title={kindTitle(resource.kind, failing[descriptorKey(resource)])}
                       className={resourceClass(
                         isActive(activeResource, resource),
                         false,
                         isEmpty(counts[descriptorKey(resource)]),
                       )}
                     >
-                      <span className="truncate">{resource.kind}</span>{' '}
+                      <span className={kindClass(failing[descriptorKey(resource)])}>
+                        {resource.kind}
+                      </span>{' '}
                       <span className="shrink-0 text-fg-subtle">
                         {countLabel(counts[descriptorKey(resource)])}
+                        <span className="sr-only">
+                          {failingNote(failing[descriptorKey(resource)])}
+                        </span>
                       </span>
                     </button>
                   ))}
@@ -335,16 +364,21 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                 onClick={() => {
                                   onSelect(resource);
                                 }}
-                                title={resource.kind}
+                                title={kindTitle(resource.kind, failing[descriptorKey(resource)])}
                                 className={resourceClass(
                                   isActive(activeResource, resource),
                                   true,
                                   isEmpty(counts[descriptorKey(resource)]),
                                 )}
                               >
-                                <span className="truncate">{resource.kind}</span>{' '}
+                                <span className={kindClass(failing[descriptorKey(resource)])}>
+                                  {resource.kind}
+                                </span>{' '}
                                 <span className="shrink-0 text-fg-subtle">
                                   {countLabel(counts[descriptorKey(resource)])}
+                                  <span className="sr-only">
+                                    {failingNote(failing[descriptorKey(resource)])}
+                                  </span>
                                 </span>
                               </button>
                             ))}

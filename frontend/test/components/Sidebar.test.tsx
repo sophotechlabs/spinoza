@@ -34,10 +34,14 @@ function stubCatalog(categories: Category[], error?: string): void {
   );
 }
 
-function stubFetch(categories: Category[], counts: Record<string, number> = {}): void {
+function stubFetch(
+  categories: Category[],
+  counts: Record<string, number> = {},
+  failing?: Record<string, number>,
+): void {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url.startsWith('/api/resources/counts')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts, failing }) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
   });
@@ -567,5 +571,41 @@ describe('a sidebar that survives a reload', () => {
     renderSidebar();
 
     expect(await screen.findByRole('button', { name: 'CiliumNode' })).toBeInTheDocument();
+  });
+});
+
+describe('pods that are not running', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('turns the kind red and says how many', async () => {
+    stubFetch(categories, { '/v1/pods': 12, 'apps/v1/deployments': 4 }, { '/v1/pods': 3 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const pods = await screen.findByRole('button', { name: /^Pod/ });
+    expect(pods.querySelector('span')?.className).toContain('text-error');
+    expect(pods).toHaveAttribute('title', 'Pod — 3 not running or succeeded');
+    expect(pods).toHaveTextContent('3 not running');
+  });
+
+  it('leaves a healthy kind alone', async () => {
+    stubFetch(categories, { '/v1/pods': 12, 'apps/v1/deployments': 4 }, { '/v1/pods': 3 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const deployments = await screen.findByRole('button', { name: /^Deployment/ });
+    expect(deployments.querySelector('span')?.className).not.toContain('text-error');
+    expect(deployments).toHaveAttribute('title', 'Deployment');
+  });
+
+  it('says nothing when the server reports no failures at all', async () => {
+    stubFetch(categories, { '/v1/pods': 12 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const pods = await screen.findByRole('button', { name: /^Pod/ });
+    expect(pods.querySelector('span')?.className).not.toContain('text-error');
   });
 });

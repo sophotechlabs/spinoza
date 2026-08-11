@@ -67,7 +67,39 @@ func Count(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescr
 		})
 	}
 	wg.Wait()
-	return api.ResourceCounts{Counts: counts, Errors: reasons}
+	return api.ResourceCounts{Counts: counts, Failing: failingPods(bounded, dyn, descs, limits), Errors: reasons}
+}
+
+var podsGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+
+const podsKey = "/v1/pods"
+
+const unhealthyPods = "status.phase!=Running,status.phase!=Succeeded"
+
+func failingPods(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescriptor, limits CountLimits) map[string]int {
+	if !counted(descs, podsKey) {
+		return nil
+	}
+	bounded, cancel := context.WithTimeout(ctx, limits.PerType)
+	defer cancel()
+	list, err := dyn.Resource(podsGVR).List(bounded, metav1.ListOptions{Limit: 1, FieldSelector: unhealthyPods})
+	if err != nil {
+		return nil
+	}
+	total := len(list.Items) + int(remainingOf(list.GetRemainingItemCount()))
+	if total == 0 {
+		return nil
+	}
+	return map[string]int{podsKey: total}
+}
+
+func counted(descs []api.ResourceDescriptor, key string) bool {
+	for _, desc := range descs {
+		if keyOf(desc) == key {
+			return true
+		}
+	}
+	return false
 }
 
 func keyOf(desc api.ResourceDescriptor) string {
