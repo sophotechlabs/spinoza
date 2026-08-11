@@ -266,6 +266,49 @@ export interface HelmReleases {
   error?: string;
 }
 
+export interface HelmRevision {
+  revision: number;
+  status: string;
+  chartVersion: string;
+  appVersion: string;
+  updated: string;
+  description?: string;
+}
+
+export interface HelmResource {
+  apiVersion: string;
+  kind: string;
+  name: string;
+  namespace?: string;
+  group?: string;
+  version?: string;
+  resource?: string;
+}
+
+export interface HelmReleaseDetail {
+  release: HelmRelease;
+  driver: string;
+  firstDeployed?: string;
+  values: string;
+  notes: string;
+  manifest: string;
+  resources: HelmResource[];
+  history: HelmRevision[];
+  error?: string;
+}
+
+export interface HelmSupport {
+  available: boolean;
+  reason?: string;
+  binary: string;
+}
+
+export interface HelmActionResult {
+  action: string;
+  message: string;
+  revision?: number;
+}
+
 export interface FluxGroup {
   name: string;
   ready: number;

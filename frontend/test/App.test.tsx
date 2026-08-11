@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Category, FluxResource, GraphNode } from '../src/lib/types';
+import type { Category, FluxResource, GraphNode, ObjectRef } from '../src/lib/types';
 
 const feedMocks = vi.hoisted(
   (): {
@@ -119,7 +119,24 @@ vi.mock('../src/components/ClusterOverview', () => ({
   default: () => <div data-testid="cluster-overview" />,
 }));
 vi.mock('../src/components/HelmReleases', () => ({
-  default: () => <div data-testid="helm-releases" />,
+  default: ({ onSelectResource }: { onSelectResource: (ref: ObjectRef) => void }) => (
+    <div data-testid="helm-releases">
+      <button
+        type="button"
+        onClick={() => {
+          onSelectResource({
+            group: '',
+            version: 'v1',
+            resource: 'configmaps',
+            namespace: 'demo',
+            name: 'live-check',
+          });
+        }}
+      >
+        select-helm-resource
+      </button>
+    </div>
+  ),
 }));
 vi.mock('../src/components/FluxList', () => ({ default: fluxStub('flux-dashboard') }));
 vi.mock('../src/components/FluxOverview', () => ({ default: fluxStub('flux-overview') }));

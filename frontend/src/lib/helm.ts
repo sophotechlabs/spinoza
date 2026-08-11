@@ -1,7 +1,20 @@
-import type { HelmReleases } from './types';
-import { request } from './http';
+import { useCallback, useEffect, useState } from 'react';
+import type {
+  HelmActionResult,
+  HelmReleaseDetail,
+  HelmReleases,
+  HelmResource,
+  HelmSupport,
+  ObjectRef,
+} from './types';
+import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { failure } from './object';
-import { parseHelmReleases } from './parse';
+import {
+  parseHelmActionResult,
+  parseHelmReleaseDetail,
+  parseHelmReleases,
+  parseHelmSupport,
+} from './parse';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 
@@ -102,4 +115,143 @@ export function latestNote(release: { latest?: string; outdated?: boolean }): st
     return 'a newer chart version is available';
   }
   return 'up to date';
+}
+
+export async function fetchHelmRelease(
+  namespace: string,
+  name: string,
+): Promise<HelmReleaseDetail> {
+  const params = new URLSearchParams({ namespace, name });
+  const response = await request(`/api/helm/release?${params.toString()}`);
+  if (!response.ok) {
+    throw await failure(response, `helm release request failed with status ${response.status}`);
+  }
+  return parseHelmReleaseDetail(await response.json());
+}
+
+export async function fetchHelmSupport(): Promise<HelmSupport> {
+  const response = await request('/api/helm/support');
+  if (!response.ok) {
+    throw await failure(response, `helm support request failed with status ${response.status}`);
+  }
+  return parseHelmSupport(await response.json());
+}
+
+export async function rollbackRelease(
+  namespace: string,
+  name: string,
+  revision: number,
+): Promise<HelmActionResult> {
+  return runAction({ namespace, name, action: 'rollback', revision: String(revision) });
+}
+
+export async function uninstallRelease(namespace: string, name: string): Promise<HelmActionResult> {
+  return runAction({ namespace, name, action: 'uninstall' });
+}
+
+async function runAction(params: Record<string, string>): Promise<HelmActionResult> {
+  const query = new URLSearchParams(params);
+  const response = await request(`/api/helm/action?${query.toString()}`, {
+    method: 'POST',
+    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw await failure(response, `the release action failed with status ${response.status}`);
+  }
+  return parseHelmActionResult(await response.json());
+}
+
+export function refOf(resource: HelmResource): ObjectRef | null {
+  if (resource.resource === undefined || resource.resource === '') {
+    return null;
+  }
+  return {
+    group: resource.group ?? '',
+    version: resource.version ?? '',
+    resource: resource.resource,
+    namespace: resource.namespace ?? '',
+    name: resource.name,
+  };
+}
+
+export interface ReleaseDetail {
+  data: HelmReleaseDetail | null;
+  error: string | null;
+  loading: boolean;
+  reload: () => void;
+}
+
+export function useHelmRelease(namespace: string, name: string): ReleaseDetail {
+  const [data, setData] = useState<HelmReleaseDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [reloads, setReloads] = useState(0);
+
+  useEffect(() => {
+    if (namespace === '' || name === '') {
+      setData(null);
+      setError(null);
+      return;
+    }
+    let live = true;
+    setLoading(true);
+    fetchHelmRelease(namespace, name)
+      .then((detail) => {
+        if (live) {
+          setData(detail);
+          setError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (live) {
+          setData(null);
+          setError(messageOf(err));
+        }
+      })
+      .finally(() => {
+        if (live) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [namespace, name, reloads]);
+
+  const reload = useCallback(() => {
+    setReloads((count) => count + 1);
+  }, []);
+
+  return { data, error, loading, reload };
+}
+
+export function useHelmSupport(): HelmSupport | null {
+  const [support, setSupport] = useState<HelmSupport | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    fetchHelmSupport()
+      .then((found) => {
+        if (live) {
+          setSupport(found);
+        }
+      })
+      .catch((err: unknown) => {
+        if (live) {
+          setSupport({ available: false, reason: messageOf(err), binary: 'helm' });
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return support;
+}
+
+function messageOf(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return 'the request failed';
 }

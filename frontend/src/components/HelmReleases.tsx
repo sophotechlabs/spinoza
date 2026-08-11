@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import type { HelmRelease } from '../lib/types';
+import type { HelmRelease, ObjectRef } from '../lib/types';
 import {
   latestColor,
   latestLabel,
@@ -15,13 +15,30 @@ import { useNow } from '../lib/useNow';
 import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
+import HelmReleaseDetail from './HelmReleaseDetail';
 
 interface HelmReleasesProps {
   active?: boolean;
+  onSelectResource: (ref: ObjectRef) => void;
 }
 
 function releaseKey(release: HelmRelease): string {
   return `${release.namespace}/${release.name}`;
+}
+
+function sameRelease(left: HelmRelease | null, right: HelmRelease): boolean {
+  if (left === null) {
+    return false;
+  }
+  return releaseKey(left) === releaseKey(right);
+}
+
+function rowClass(selected: boolean): string {
+  const base = 'border-b border-edge';
+  if (selected) {
+    return `${base} bg-surface-active`;
+  }
+  return `${base} hover:bg-surface-raised`;
 }
 
 function orDash(value: string): string {
@@ -42,9 +59,10 @@ function matching(releases: HelmRelease[], query: string): HelmRelease[] {
   });
 }
 
-export default function HelmReleases({ active = true }: HelmReleasesProps) {
+export default function HelmReleases({ active = true, onSelectResource }: HelmReleasesProps) {
   const { data, error, reload } = useHelmReleases(active);
   const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<HelmRelease | null>(null);
   const now = useNow();
 
   if (data === null) {
@@ -95,7 +113,7 @@ export default function HelmReleases({ active = true }: HelmReleasesProps) {
         </div>
       )}
       {visible.length > 0 && (
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className={tableClass(selected !== null)}>
           <table className="w-full border-collapse text-left whitespace-nowrap">
             <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">
               <tr className="border-b border-edge">
@@ -111,12 +129,17 @@ export default function HelmReleases({ active = true }: HelmReleasesProps) {
             </thead>
             <tbody>
               {visible.map((release) => (
-                <tr
-                  key={releaseKey(release)}
-                  className="border-b border-edge hover:bg-surface-raised"
-                >
+                <tr key={releaseKey(release)} className={rowClass(sameRelease(selected, release))}>
                   <td className="truncate px-2 py-1 text-fg-strong" title={release.description}>
-                    {release.name}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelected(release);
+                      }}
+                      className="max-w-full truncate hover:underline"
+                    >
+                      {release.name}
+                    </button>
                   </td>
                   <td className="truncate px-2 py-1 text-fg-muted">{release.namespace}</td>
                   <td className="truncate px-2 py-1 text-fg-soft">{chartLabel(release)}</td>
@@ -143,8 +166,26 @@ export default function HelmReleases({ active = true }: HelmReleasesProps) {
           </table>
         </div>
       )}
+      {selected !== null && (
+        <HelmReleaseDetail
+          key={releaseKey(selected)}
+          release={selected}
+          onSelectResource={onSelectResource}
+          onChanged={reload}
+          onClose={() => {
+            setSelected(null);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+function tableClass(split: boolean): string {
+  if (split) {
+    return 'min-h-0 shrink-0 basis-2/5 overflow-auto';
+  }
+  return 'min-h-0 flex-1 overflow-auto';
 }
 
 function chartLabel(release: HelmRelease): string {

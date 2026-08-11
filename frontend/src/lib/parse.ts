@@ -15,8 +15,13 @@ import type {
   Graph,
   GraphEdge,
   GraphNode,
+  HelmActionResult,
   HelmRelease,
+  HelmReleaseDetail,
   HelmReleases,
+  HelmResource,
+  HelmRevision,
+  HelmSupport,
   K8sEvent,
   MetricHistory,
   MetricPoint,
@@ -420,6 +425,62 @@ function parseHelmRelease(item: Record<string, unknown>): HelmRelease {
     status: asString(item.status),
     updated: asString(item.updated),
     description: optionalString(item.description),
+  };
+}
+
+function parseHelmRevision(item: Record<string, unknown>): HelmRevision {
+  return {
+    revision: asNumber(item.revision),
+    status: asString(item.status),
+    chartVersion: asString(item.chartVersion),
+    appVersion: asString(item.appVersion),
+    updated: asString(item.updated),
+    description: optionalString(item.description),
+  };
+}
+
+function parseHelmResource(item: Record<string, unknown>): HelmResource {
+  return {
+    apiVersion: asString(item.apiVersion),
+    kind: asString(item.kind),
+    name: asString(item.name),
+    namespace: optionalString(item.namespace),
+    group: optionalString(item.group),
+    version: optionalString(item.version),
+    resource: optionalString(item.resource),
+  };
+}
+
+export function parseHelmReleaseDetail(body: unknown): HelmReleaseDetail {
+  const item = asRecord(body);
+  return {
+    release: parseHelmRelease(asRecord(item.release)),
+    driver: asString(item.driver),
+    firstDeployed: optionalString(item.firstDeployed),
+    values: asString(item.values),
+    notes: asString(item.notes),
+    manifest: asString(item.manifest),
+    resources: listOf(item.resources, parseHelmResource),
+    history: listOf(item.history, parseHelmRevision),
+    error: optionalString(item.error),
+  };
+}
+
+export function parseHelmSupport(body: unknown): HelmSupport {
+  const item = asRecord(body);
+  return {
+    available: asBoolean(item.available),
+    reason: optionalString(item.reason),
+    binary: asString(item.binary),
+  };
+}
+
+export function parseHelmActionResult(body: unknown): HelmActionResult {
+  const item = asRecord(body);
+  return {
+    action: asString(item.action),
+    message: asString(item.message),
+    revision: optionalNumber(item.revision),
   };
 }
 

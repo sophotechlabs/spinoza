@@ -246,7 +246,7 @@ export default function App() {
     mainArea = <ClusterOverview />;
   }
   if (route.view === 'helm') {
-    mainArea = <HelmReleases />;
+    mainArea = <HelmReleases onSelectResource={remember} />;
   }
   if (route.view === 'gitops') {
     mainArea = (

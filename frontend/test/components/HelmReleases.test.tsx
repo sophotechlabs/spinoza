@@ -4,6 +4,17 @@ import userEvent from '@testing-library/user-event';
 import type { HelmRelease, HelmReleases as Releases } from '../../src/lib/types';
 import HelmReleases from '../../src/components/HelmReleases';
 
+vi.mock('../../src/components/HelmReleaseDetail', () => ({
+  default: ({ release, onClose }: { release: HelmRelease; onClose: () => void }) => (
+    <div data-testid="release-detail">
+      detail for {release.name}
+      <button type="button" onClick={onClose}>
+        close-detail
+      </button>
+    </div>
+  ),
+}));
+
 function release(patch: Partial<HelmRelease> = {}): HelmRelease {
   return {
     name: 'podinfo',
@@ -37,14 +48,14 @@ describe('HelmReleases', () => {
       'fetch',
       vi.fn(() => new Promise(() => undefined)),
     );
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     expect(screen.getByText('Loading Helm releases…')).toBeInTheDocument();
   });
 
   it('lists a release with its chart, revision and age', async () => {
     stub({ releases: [release()] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     expect(await screen.findByText('podinfo-6.9.2')).toBeInTheDocument();
     expect(screen.getByText('demo')).toBeInTheDocument();
@@ -55,7 +66,7 @@ describe('HelmReleases', () => {
 
   it('names the chart alone when its version is unknown', async () => {
     stub({ releases: [release({ chartVersion: '' })] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     await screen.findByText('demo');
     expect(screen.getAllByText('podinfo')).toHaveLength(2);
@@ -63,7 +74,7 @@ describe('HelmReleases', () => {
 
   it('marks a chart it could not read at all', async () => {
     stub({ releases: [release({ chart: '', chartVersion: '', appVersion: '' })] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     await screen.findByText('demo');
     expect(screen.getAllByText('—')).toHaveLength(3);
@@ -71,7 +82,7 @@ describe('HelmReleases', () => {
 
   it('shows the newest chart version the repositories offer', async () => {
     stub({ releases: [release({ latest: '7.1.0', outdated: true })] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     const latest = await screen.findByText('7.1.0');
     expect(latest).toHaveClass('text-warn');
@@ -80,7 +91,7 @@ describe('HelmReleases', () => {
 
   it('marks a release that already runs the newest chart', async () => {
     stub({ releases: [release({ latest: '6.9.2', outdated: false })] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     await screen.findByText('podinfo-6.9.2');
     const latest = screen.getByText(/up to date/).closest('td');
@@ -90,7 +101,7 @@ describe('HelmReleases', () => {
 
   it('says nothing about a chart no repository knows', async () => {
     stub({ releases: [release()] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     await screen.findByText('podinfo-6.9.2');
     expect(screen.getByText(/no chart repository knows this chart/)).toBeInTheDocument();
@@ -105,7 +116,7 @@ describe('HelmReleases', () => {
         release({ name: 'old', status: 'superseded' }),
       ],
     });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     expect(await screen.findByText('failed')).toHaveClass('text-error');
     expect(screen.getByText('deployed')).toHaveClass('text-ok');
@@ -115,7 +126,7 @@ describe('HelmReleases', () => {
 
   it('says an empty status is unknown', async () => {
     stub({ releases: [release({ status: '' })] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     expect(await screen.findByText('unknown')).toBeInTheDocument();
   });
@@ -128,7 +139,7 @@ describe('HelmReleases', () => {
         release({ name: 'grafana', namespace: 'monitoring', chart: 'grafana' }),
       ],
     });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
     await screen.findByText('grafana-6.9.2');
 
     await user.type(screen.getByLabelText('Filter releases'), 'monitor');
@@ -141,7 +152,7 @@ describe('HelmReleases', () => {
   it('says when the filter matches nothing', async () => {
     const user = userEvent.setup();
     stub({ releases: [release()] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
     await screen.findByText('podinfo-6.9.2');
 
     await user.type(screen.getByLabelText('Filter releases'), 'nothing-like-this');
@@ -151,7 +162,7 @@ describe('HelmReleases', () => {
 
   it('says when the cluster has no releases at all', async () => {
     stub({ releases: [] });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     expect(await screen.findByText('No Helm releases in this cluster.')).toBeInTheDocument();
   });
@@ -161,7 +172,7 @@ describe('HelmReleases', () => {
       releases: [release()],
       error: '1 release payloads could not be read; their name and status come from the labels',
     });
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     expect(await screen.findByText(/could not be read/)).toBeInTheDocument();
     expect(screen.getByText('Partial data.')).toBeInTheDocument();
@@ -169,10 +180,45 @@ describe('HelmReleases', () => {
 
   it('shows the failure when nothing loaded at all', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('secrets is forbidden')));
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
 
     expect(await screen.findByText('secrets is forbidden')).toBeInTheDocument();
     expect(screen.getByText('Helm releases could not be loaded')).toBeInTheDocument();
+  });
+
+  it('opens the detail for the release whose name was clicked', async () => {
+    const user = userEvent.setup();
+    stub({ releases: [release({ name: 'podinfo' }), release({ name: 'grafana' })] });
+    render(<HelmReleases onSelectResource={vi.fn()} />);
+    await screen.findByText('podinfo');
+
+    await user.click(screen.getByRole('button', { name: 'grafana' }));
+
+    expect(screen.getByTestId('release-detail')).toHaveTextContent('detail for grafana');
+  });
+
+  it('highlights the row whose detail is open', async () => {
+    const user = userEvent.setup();
+    stub({ releases: [release({ name: 'podinfo' })] });
+    render(<HelmReleases onSelectResource={vi.fn()} />);
+    await screen.findByText('podinfo');
+
+    await user.click(screen.getByRole('button', { name: 'podinfo' }));
+
+    const row = screen.getByRole('button', { name: 'podinfo' }).closest('tr');
+    expect(row?.className).toContain('bg-surface-active');
+  });
+
+  it('closes the detail again', async () => {
+    const user = userEvent.setup();
+    stub({ releases: [release()] });
+    render(<HelmReleases onSelectResource={vi.fn()} />);
+    await screen.findByText('podinfo');
+    await user.click(screen.getByRole('button', { name: 'podinfo' }));
+
+    await user.click(screen.getByRole('button', { name: 'close-detail' }));
+
+    expect(screen.queryByTestId('release-detail')).not.toBeInTheDocument();
   });
 
   it('keeps the last good answer and offers a retry when a later poll fails', async () => {
@@ -182,7 +228,7 @@ describe('HelmReleases', () => {
       .mockRejectedValue(new Error('helm is down'));
     vi.stubGlobal('fetch', fetchMock);
     vi.useFakeTimers();
-    render(<HelmReleases />);
+    render(<HelmReleases onSelectResource={vi.fn()} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });

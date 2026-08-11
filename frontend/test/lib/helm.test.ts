@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import {
+  fetchHelmRelease,
   fetchHelmReleases,
+  fetchHelmSupport,
+  refOf,
+  rollbackRelease,
+  uninstallRelease,
+  useHelmRelease,
+  useHelmSupport,
   latestColor,
   latestLabel,
   latestNote,
@@ -163,5 +170,268 @@ describe('the newest chart version a repository offers', () => {
     );
     expect(latestNote({ latest: '6.9.2', outdated: false })).toBe('up to date');
     expect(latestNote({})).toBe('no chart repository knows this chart');
+  });
+});
+
+describe('reading one release', () => {
+  it('asks for the release by namespace and name', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          release: payload.releases[0],
+          driver: 'secret',
+          values: 'replicaCount: 2\n',
+          notes: 'hello',
+          manifest: 'kind: ConfigMap\n',
+          resources: [{ apiVersion: 'v1', kind: 'ConfigMap', name: 'cm', resource: 'configmaps' }],
+          history: [
+            {
+              revision: 3,
+              status: 'deployed',
+              chartVersion: '6.9.2',
+              appVersion: '6.9.2',
+              updated: '',
+            },
+          ],
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await fetchHelmRelease('demo', 'podinfo');
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/helm/release?namespace=demo&name=podinfo');
+    expect(got.driver).toBe('secret');
+    expect(got.resources).toHaveLength(1);
+    expect(got.history[0].revision).toBe(3);
+  });
+
+  it('carries the server message when the release is gone', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ message: 'no such helm release: demo/ghost' }),
+      }),
+    );
+
+    await expect(fetchHelmRelease('demo', 'ghost')).rejects.toThrow('no such helm release');
+  });
+
+  it('reads a payload with nothing in it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }),
+    );
+
+    const got = await fetchHelmRelease('demo', 'podinfo');
+
+    expect(got.values).toBe('');
+    expect(got.resources).toEqual([]);
+    expect(got.history).toEqual([]);
+  });
+});
+
+describe('whether helm can act', () => {
+  it('reports what the server says', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ available: false, reason: 'not on PATH', binary: 'helm' }),
+      }),
+    );
+
+    const got = await fetchHelmSupport();
+
+    expect(got.available).toBe(false);
+    expect(got.reason).toBe('not on PATH');
+  });
+
+  it('reports a failed check', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+    await expect(fetchHelmSupport()).rejects.toThrow('helm support request failed with status 503');
+  });
+});
+
+describe('acting on a release', () => {
+  it('posts a rollback with its revision', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'rollback', message: 'done', revision: 2 }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await rollbackRelease('demo', 'podinfo', 2);
+
+    const call = fetchMock.mock.calls[0] as [string, { method: string }];
+    expect(call[0]).toContain('action=rollback');
+    expect(call[0]).toContain('revision=2');
+    expect(call[1].method).toBe('POST');
+    expect(got.revision).toBe(2);
+  });
+
+  it('posts an uninstall', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'uninstall', message: 'gone' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await uninstallRelease('demo', 'podinfo');
+
+    expect(fetchMock.mock.calls[0][0]).toContain('action=uninstall');
+    expect(got.message).toBe('gone');
+    expect(got.revision).toBeUndefined();
+  });
+
+  it('carries the failure the server reports', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ message: 'release: not found' }),
+      }),
+    );
+
+    await expect(uninstallRelease('demo', 'podinfo')).rejects.toThrow('release: not found');
+  });
+
+  it('falls back to the status when the body says nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 502, json: () => Promise.reject(new Error()) }),
+    );
+
+    await expect(rollbackRelease('demo', 'podinfo', 1)).rejects.toThrow(
+      'the release action failed with status 502',
+    );
+  });
+});
+
+describe('turning a rendered resource into an object reference', () => {
+  it('builds a reference discovery could resolve', () => {
+    expect(
+      refOf({
+        apiVersion: 'apps/v1',
+        kind: 'Deployment',
+        name: 'web',
+        namespace: 'demo',
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+      }),
+    ).toEqual({
+      group: 'apps',
+      version: 'v1',
+      resource: 'deployments',
+      namespace: 'demo',
+      name: 'web',
+    });
+  });
+
+  it('refuses one discovery could not', () => {
+    expect(refOf({ apiVersion: 'acme.io/v1', kind: 'Widget', name: 'thing' })).toBeNull();
+    expect(
+      refOf({ apiVersion: 'acme.io/v1', kind: 'Widget', name: 'thing', resource: '' }),
+    ).toBeNull();
+  });
+
+  it('reads a cluster-scoped resource with no namespace', () => {
+    expect(
+      refOf({
+        apiVersion: 'v1',
+        kind: 'Namespace',
+        name: 'demo',
+        version: 'v1',
+        resource: 'namespaces',
+      }),
+    ).toEqual({ group: '', version: 'v1', resource: 'namespaces', namespace: '', name: 'demo' });
+  });
+});
+
+describe('the release detail hook', () => {
+  it('waits for both coordinates before asking', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useHelmRelease('', ''));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('reloads on demand', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ release: payload.releases[0], driver: 'secret' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useHelmRelease('demo', 'podinfo'));
+    await waitFor(() => {
+      expect(result.current.data).not.toBeNull();
+    });
+
+    act(() => {
+      result.current.reload();
+    });
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.length).toBe(2);
+    });
+  });
+
+  it('reports a failure and drops any stale detail', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('helm is down')));
+    const { result } = renderHook(() => useHelmRelease('demo', 'podinfo'));
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('helm is down');
+    });
+    expect(result.current.data).toBeNull();
+  });
+
+  it('reports a non-Error rejection plainly', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('nope'));
+    const { result } = renderHook(() => useHelmRelease('demo', 'podinfo'));
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('the request failed');
+    });
+  });
+});
+
+describe('the helm support hook', () => {
+  it('reports what the server says', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ available: true, binary: 'helm' }),
+      }),
+    );
+
+    const { result } = renderHook(() => useHelmSupport());
+
+    await waitFor(() => {
+      expect(result.current?.available).toBe(true);
+    });
+  });
+
+  it('treats a failed check as helm being unusable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+
+    const { result } = renderHook(() => useHelmSupport());
+
+    await waitFor(() => {
+      expect(result.current?.available).toBe(false);
+    });
+    expect(result.current?.reason).toBe('offline');
   });
 });
