@@ -20,6 +20,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
@@ -131,9 +132,16 @@ func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
 		t.Fatal("the cluster listed no resource types")
 	}
 	mgr := resources.NewManager(ctx, resources.Deps{
-		Dynamic:     loaded.Dynamic,
-		Clientset:   loaded.Clientset,
-		Categories:  cats,
+		Dynamic:    loaded.Dynamic,
+		Clientset:  loaded.Clientset,
+		Categories: cats,
+		Helm: helm.NewService(
+			loaded.Clientset,
+			helm.NewRunner(""),
+			nil,
+			nil,
+			os.Getenv("SPINOZA_TEST_CONTEXT"),
+		),
 		Descriptors: descs,
 	})
 	mgr.UseDiscovery(loaded.Discovery, err)
@@ -414,6 +422,90 @@ func TestOverviewReadsARealCluster(t *testing.T) {
 	}
 	if got.Pods.Running == 0 {
 		t.Fatalf("running pods = 0 with a pod we just started (%s)", got.Error)
+	}
+}
+
+func TestHelmDetailAndActionsAgainstRealHelm(t *testing.T) {
+	loaded := bundle(t)
+	mgr := manager(t, loaded)
+	installRelease(t, loaded)
+	upgradeRelease(t)
+
+	detail, err := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+	if detail.Release.Revision != 2 {
+		t.Fatalf("revision = %d, want the upgrade", detail.Release.Revision)
+	}
+	if len(detail.History) != 2 {
+		t.Fatalf("history = %d, want both revisions", len(detail.History))
+	}
+	if detail.History[0].Revision != 2 {
+		t.Fatalf("history = %v, want newest first", detail.History)
+	}
+	if !strings.Contains(detail.Manifest, "kind: ConfigMap") {
+		t.Fatalf("manifest = %q, want the rendered configmap", detail.Manifest)
+	}
+	if len(detail.Resources) != 1 {
+		t.Fatalf("resources = %v, want the one configmap", detail.Resources)
+	}
+	if detail.Resources[0].Resource != "configmaps" {
+		t.Fatalf("resource = %q, want discovery to resolve it", detail.Resources[0].Resource)
+	}
+	if !strings.Contains(detail.Values, "extra") {
+		t.Fatalf("values = %q, want the upgrade's supplied values", detail.Values)
+	}
+	if detail.Driver != "secret" {
+		t.Fatalf("driver = %q, want secret", detail.Driver)
+	}
+
+	support := mgr.HelmSupport()
+	if !support.Available {
+		t.Fatalf("helm reported unavailable: %s", support.Reason)
+	}
+
+	rolled, rollErr := mgr.HelmRollback(context.Background(), namespace, "smoke-release", 1)
+	if rollErr != nil {
+		t.Fatalf("rollback: %v", rollErr)
+	}
+	if rolled.Revision != 1 {
+		t.Fatalf("rollback revision = %d, want 1", rolled.Revision)
+	}
+	after, afterErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	if afterErr != nil {
+		t.Fatalf("detail after rollback: %v", afterErr)
+	}
+	if after.Release.Revision != 3 {
+		t.Fatalf("revision = %d, want the rollback to have made revision 3", after.Release.Revision)
+	}
+	if strings.Contains(after.Values, "extra") {
+		t.Fatalf("values = %q, want revision 1's values back", after.Values)
+	}
+
+	_, removeErr := mgr.HelmUninstall(context.Background(), namespace, "smoke-release")
+	if removeErr != nil {
+		t.Fatalf("uninstall: %v", removeErr)
+	}
+	_, goneErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	if goneErr == nil {
+		t.Fatal("the release still reads back after an uninstall")
+	}
+}
+
+func upgradeRelease(t *testing.T) {
+	t.Helper()
+	chart := writeChart(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := osexec.CommandContext(ctx, "helm", "upgrade", "smoke-release", chart,
+		"--namespace", namespace,
+		"--kube-context", os.Getenv("SPINOZA_TEST_CONTEXT"),
+		"--set", "extra=value",
+		"--wait")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm upgrade: %v\n%s", err, out)
 	}
 }
 
