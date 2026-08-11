@@ -12,15 +12,53 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 )
 
 type stubViews struct {
 	Backend
 
-	overview api.ClusterOverview
-	releases api.HelmReleases
-	helmErr  error
-	calls    int
+	overview   api.ClusterOverview
+	releases   api.HelmReleases
+	detail     api.HelmReleaseDetail
+	support    api.HelmSupport
+	helmErr    error
+	detailErr  error
+	actionErr  error
+	action     api.HelmActionResult
+	rollbacks  []int64
+	uninstalls []string
+	calls      int
+}
+
+func (s *stubViews) HelmRelease(_ context.Context, namespace, name string) (api.HelmReleaseDetail, error) {
+	s.calls++
+	if s.detailErr != nil {
+		return api.HelmReleaseDetail{}, s.detailErr
+	}
+	s.detail.Release.Namespace = namespace
+	s.detail.Release.Name = name
+	return s.detail, nil
+}
+
+func (s *stubViews) HelmSupport() api.HelmSupport {
+	return s.support
+}
+
+func (s *stubViews) HelmRollback(_ context.Context, _, _ string, revision int64) (api.HelmActionResult, error) {
+	s.rollbacks = append(s.rollbacks, revision)
+	if s.actionErr != nil {
+		return api.HelmActionResult{}, s.actionErr
+	}
+	return s.action, nil
+}
+
+func (s *stubViews) HelmUninstall(_ context.Context, _, name string) (api.HelmActionResult, error) {
+	s.uninstalls = append(s.uninstalls, name)
+	if s.actionErr != nil {
+		return api.HelmActionResult{}, s.actionErr
+	}
+	return s.action, nil
 }
 
 func (s *stubViews) Overview(context.Context) api.ClusterOverview {
@@ -170,5 +208,152 @@ func TestBothViewEndpointsRefuseAnythingButGet(t *testing.T) {
 		if resp.StatusCode != http.StatusMethodNotAllowed {
 			t.Fatalf("POST %s = %d, want 405", path, resp.StatusCode)
 		}
+	}
+}
+
+func post(t *testing.T, url string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, http.NoBody)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp, doErr := http.DefaultClient.Do(req)
+	if doErr != nil {
+		t.Fatalf("POST %s: %v", url, doErr)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp
+}
+
+func TestTheReleaseEndpointServesTheDetail(t *testing.T) {
+	backend := &stubViews{detail: api.HelmReleaseDetail{
+		Driver:   "secret",
+		Values:   "replicaCount: 2\n",
+		Notes:    "thanks",
+		Manifest: "kind: ConfigMap\n",
+		Resources: []api.HelmResource{
+			{APIVersion: "v1", Kind: "ConfigMap", Name: "cm", Resource: "configmaps", Version: "v1"},
+		},
+		History: []api.HelmRevision{{Revision: 2, Status: "deployed"}},
+	}}
+	ts := stubbedServer(t, backend)
+
+	var got api.HelmReleaseDetail
+	resp := getJSON(t, ts.URL+"/api/helm/release?namespace=demo&name=podinfo", &got)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got.Release.Name != "podinfo" || got.Release.Namespace != "demo" {
+		t.Fatalf("release = %+v, want the one asked for", got.Release)
+	}
+	if got.Values != "replicaCount: 2\n" {
+		t.Fatalf("values = %q", got.Values)
+	}
+	if len(got.Resources) != 1 || got.Resources[0].Resource != "configmaps" {
+		t.Fatalf("resources = %+v", got.Resources)
+	}
+	if len(got.History) != 1 {
+		t.Fatalf("history = %+v", got.History)
+	}
+}
+
+func TestTheReleaseEndpointNeedsBothCoordinates(t *testing.T) {
+	ts := stubbedServer(t, &stubViews{})
+
+	for _, query := range []string{"", "?namespace=demo", "?name=podinfo"} {
+		resp := getJSON(t, ts.URL+"/api/helm/release"+query, nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status for %q = %d, want 400", query, resp.StatusCode)
+		}
+	}
+}
+
+func TestTheReleaseEndpointReportsAMissingRelease(t *testing.T) {
+	backend := &stubViews{detailErr: fmt.Errorf("%w: demo/ghost", helm.ErrNoRelease)}
+	ts := stubbedServer(t, backend)
+
+	resp := getJSON(t, ts.URL+"/api/helm/release?namespace=demo&name=ghost", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a missing release answered 200")
+	}
+}
+
+func TestTheSupportEndpointSaysWhetherHelmIsThere(t *testing.T) {
+	backend := &stubViews{support: api.HelmSupport{Available: false, Reason: "helm was not found on PATH", Binary: "helm"}}
+	ts := stubbedServer(t, backend)
+
+	var got api.HelmSupport
+	resp := getJSON(t, ts.URL+"/api/helm/support", &got)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got.Available {
+		t.Fatal("support said helm is available")
+	}
+	if got.Reason == "" {
+		t.Fatal("support gave no reason")
+	}
+}
+
+func TestTheActionEndpointRollsBackToTheGivenRevision(t *testing.T) {
+	backend := &stubViews{action: api.HelmActionResult{Action: "rollback", Message: "done", Revision: 2}}
+	ts := stubbedServer(t, backend)
+
+	resp := post(t, ts.URL+"/api/helm/action?namespace=demo&name=podinfo&action=rollback&revision=2")
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if len(backend.rollbacks) != 1 || backend.rollbacks[0] != 2 {
+		t.Fatalf("rollbacks = %v, want revision 2", backend.rollbacks)
+	}
+}
+
+func TestTheActionEndpointUninstalls(t *testing.T) {
+	backend := &stubViews{action: api.HelmActionResult{Action: "uninstall", Message: "gone"}}
+	ts := stubbedServer(t, backend)
+
+	resp := post(t, ts.URL+"/api/helm/action?namespace=demo&name=podinfo&action=uninstall")
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if len(backend.uninstalls) != 1 || backend.uninstalls[0] != "podinfo" {
+		t.Fatalf("uninstalls = %v", backend.uninstalls)
+	}
+}
+
+func TestTheActionEndpointRefusesAnythingElse(t *testing.T) {
+	backend := &stubViews{}
+	ts := stubbedServer(t, backend)
+
+	cases := []string{
+		"?namespace=demo&name=podinfo&action=install",
+		"?namespace=demo&name=podinfo&action=rollback",
+		"?namespace=demo&name=podinfo&action=rollback&revision=latest",
+		"?name=podinfo&action=uninstall",
+	}
+	for _, query := range cases {
+		resp := post(t, ts.URL+"/api/helm/action"+query)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status for %q = %d, want 400", query, resp.StatusCode)
+		}
+	}
+	if len(backend.rollbacks) != 0 || len(backend.uninstalls) != 0 {
+		t.Fatal("a refused request still reached the backend")
+	}
+}
+
+func TestTheActionEndpointReportsAFailedRun(t *testing.T) {
+	backend := &stubViews{actionErr: errors.New("release: not found")}
+	ts := stubbedServer(t, backend)
+
+	resp := post(t, ts.URL+"/api/helm/action?namespace=demo&name=podinfo&action=uninstall")
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a failed action answered 200")
 	}
 }

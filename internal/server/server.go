@@ -21,6 +21,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/flux"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
@@ -79,6 +80,9 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/resources", s.listResources, false},
 		{http.MethodPost, "/api/resources", s.refreshResources, false},
 		{http.MethodGet, "/api/overview", s.handleOverview, false},
+		{http.MethodGet, "/api/helm/support", s.handleHelmSupport, true},
+		{http.MethodGet, "/api/helm/release", s.handleHelmRelease, false},
+		{http.MethodPost, "/api/helm/action", s.handleHelmAction, false},
 		{http.MethodGet, "/api/helm", s.handleHelm, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false},
@@ -301,6 +305,61 @@ func (s *Server) listResources(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) refreshResources(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().RefreshResources())
+}
+
+func (s *Server) handleHelmSupport(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.manager().HelmSupport())
+}
+
+func (s *Server) handleHelmRelease(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	namespace := query.Get("namespace")
+	name := query.Get("name")
+	if namespace == "" || name == "" {
+		writeError(w, http.StatusBadRequest, "namespace and name are required")
+		return
+	}
+	detail, err := s.manager().HelmRelease(r.Context(), namespace, name)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, detail)
+}
+
+func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	namespace := query.Get("namespace")
+	name := query.Get("name")
+	if namespace == "" || name == "" {
+		writeError(w, http.StatusBadRequest, "namespace and name are required")
+		return
+	}
+	action := query.Get("action")
+	if action == helm.ActionUninstal {
+		removed, removeErr := s.manager().HelmUninstall(r.Context(), namespace, name)
+		s.finishHelmAction(w, removed, removeErr)
+		return
+	}
+	if action != helm.ActionRollback {
+		writeError(w, http.StatusBadRequest, "action must be rollback or uninstall")
+		return
+	}
+	revision, err := strconv.ParseInt(query.Get("revision"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "revision must be a number")
+		return
+	}
+	rolled, rollErr := s.manager().HelmRollback(r.Context(), namespace, name, revision)
+	s.finishHelmAction(w, rolled, rollErr)
+}
+
+func (s *Server) finishHelmAction(w http.ResponseWriter, result api.HelmActionResult, err error) {
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, result)
 }
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {

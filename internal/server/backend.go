@@ -43,11 +43,15 @@ type Views interface {
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)
 	Overview(ctx context.Context) api.ClusterOverview
 	HelmReleases(ctx context.Context) (api.HelmReleases, error)
+	HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error)
+	HelmSupport() api.HelmSupport
 }
 
 type Changes interface {
 	Action(ctx context.Context, req actions.Request) (api.ActionResult, error)
 	FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error)
+	HelmRollback(ctx context.Context, namespace, name string, revision int64) (api.HelmActionResult, error)
+	HelmUninstall(ctx context.Context, namespace, name string) (api.HelmActionResult, error)
 }
 
 type Forwarding interface {
