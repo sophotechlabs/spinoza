@@ -26,7 +26,11 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
     setDebugContainer(null);
   }
 
-  const { shell, markMissing } = useShellSupport(podNamespace, podName, container);
+  const {
+    shell,
+    error: probeError,
+    markMissing,
+  } = useShellSupport(podNamespace, podName, container);
 
   let terminalContainer = container;
   if (debugContainer !== null) {
@@ -66,6 +70,11 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
           </select>
         )}
       </div>
+      {probeError !== null && (
+        <p role="status" className="shrink-0 border-b border-edge px-3 py-1 text-[11px] text-warn">
+          Could not check whether {container} has a shell: {probeError}. Opening a session anyway.
+        </p>
+      )}
       {needsDebugContainer && (
         <DebugPrompt
           key={`${podNamespace}/${podName}/${container}`}

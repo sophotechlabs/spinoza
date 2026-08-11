@@ -8,6 +8,9 @@ function toneClass(tone: ToastTone): string {
   if (tone === 'error') {
     return 'rounded border border-error-line bg-error-tint px-2 py-1.5 text-error-strong';
   }
+  if (tone === 'warn') {
+    return 'rounded border border-warn-line bg-warn-tint px-2 py-1.5 text-warn-strong';
+  }
   return 'rounded border border-ok-line bg-ok-tint px-2 py-1.5 text-fg';
 }
 

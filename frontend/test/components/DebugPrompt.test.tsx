@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DebugPrompt from '../../src/components/DebugPrompt';
+import { useToastsStore } from '../../src/store/toasts';
 
 const target = { namespace: 'monitoring', pod: 'loki-0', container: 'loki' };
 
@@ -228,6 +229,160 @@ describe('DebugPrompt', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Attach debug container' })).not.toBeDisabled();
     });
+  });
+
+  it('says the support check failed instead of swallowing it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    renderPrompt();
+
+    expect(
+      await screen.findByText(/Could not check whether debug containers are allowed/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/offline/)).toBeInTheDocument();
+  });
+
+  it('drops a support failure that lands after the prompt is gone', async () => {
+    const deferred = {
+      reject: () => {
+        return undefined;
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            deferred.reject = () => {
+              reject(new Error('too late'));
+            };
+          }),
+      ),
+    );
+    const view = render(<DebugPrompt target={target} onAttached={vi.fn()} />);
+    view.unmount();
+
+    deferred.reject();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/too late/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('names no cause when the support check rejects with a non-Error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('nope'));
+    renderPrompt();
+
+    expect(
+      await screen.findByText(/Could not check whether debug containers are allowed here\./),
+    ).toBeInTheDocument();
+  });
+
+  it('says when it reused a container running under another profile', async () => {
+    const user = userEvent.setup();
+    useToastsStore.getState().clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/debug/support')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ namespace: 'monitoring', allowed: true, image: 'busybox:1.37' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              container: 'spinoza-debug-1',
+              created: false,
+              image: 'busybox:1.37',
+              profile: 'general',
+            }),
+        });
+      }),
+    );
+    const { onAttached } = renderPrompt();
+
+    await user.selectOptions(screen.getByLabelText('Debug profile'), 'netadmin');
+    await user.click(screen.getByRole('button', { name: 'Attach debug container' }));
+
+    await waitFor(() => {
+      expect(onAttached).toHaveBeenCalledWith('spinoza-debug-1');
+    });
+    const toast = useToastsStore.getState().toasts.at(-1);
+    expect(toast?.tone).toBe('warn');
+    expect(toast?.message).toContain('runs under the general profile, not netadmin');
+  });
+
+  it('stays quiet when the container it reused matches the profile asked for', async () => {
+    const user = userEvent.setup();
+    useToastsStore.getState().clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/debug/support')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ namespace: 'monitoring', allowed: true, image: 'busybox:1.37' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              container: 'spinoza-debug-1',
+              created: false,
+              image: 'busybox:1.37',
+              profile: 'general',
+            }),
+        });
+      }),
+    );
+    const { onAttached } = renderPrompt();
+
+    await user.click(screen.getByRole('button', { name: 'Attach debug container' }));
+
+    await waitFor(() => {
+      expect(onAttached).toHaveBeenCalledWith('spinoza-debug-1');
+    });
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('stays quiet when the server reports no profile at all', async () => {
+    const user = userEvent.setup();
+    useToastsStore.getState().clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/debug/support')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ namespace: 'monitoring', allowed: true, image: 'busybox:1.37' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              container: 'spinoza-debug-1',
+              created: false,
+              image: 'busybox:1.37',
+              profile: '',
+            }),
+        });
+      }),
+    );
+    const { onAttached } = renderPrompt();
+
+    await user.click(screen.getByRole('button', { name: 'Attach debug container' }));
+
+    await waitFor(() => {
+      expect(onAttached).toHaveBeenCalledWith('spinoza-debug-1');
+    });
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 
   it('drops a debug container that finishes starting after the pod changed', async () => {

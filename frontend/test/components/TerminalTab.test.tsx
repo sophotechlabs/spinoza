@@ -137,6 +137,29 @@ describe('TerminalTab', () => {
     expect(await screen.findByTestId('terminal-panel')).toBeInTheDocument();
   });
 
+  it('says the shell probe failed instead of swallowing it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    render(<TerminalTab pod={pod()} />);
+
+    expect(await screen.findByText(/Could not check whether app has a shell/)).toHaveTextContent(
+      'offline',
+    );
+  });
+
+  it('names no cause when the probe rejects with a non-Error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('nope'));
+    render(<TerminalTab pod={pod()} />);
+
+    expect(await screen.findByText(/the shell probe failed/)).toBeInTheDocument();
+  });
+
+  it('says nothing about the probe once it answers', async () => {
+    render(<TerminalTab pod={pod()} />);
+    await screen.findByTestId('terminal-panel');
+
+    expect(screen.queryByText(/Could not check whether/)).not.toBeInTheDocument();
+  });
+
   it('explains why the terminal is unavailable', () => {
     expect(terminalTitle('absent')).toContain('debug container');
     expect(terminalTitle('present')).toContain('Shell into');

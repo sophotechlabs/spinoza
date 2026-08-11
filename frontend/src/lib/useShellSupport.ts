@@ -4,14 +4,24 @@ import { fetchExecSupport } from './exec';
 
 export interface ShellSupport {
   shell: ShellState;
+  error: string | null;
   markMissing: () => void;
+}
+
+function probeMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return 'the shell probe failed';
 }
 
 export function useShellSupport(namespace: string, pod: string, container: string): ShellSupport {
   const [shell, setShell] = useState<ShellState>('unknown');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setShell('unknown');
+    setError(null);
     if (pod === '') {
       return;
     }
@@ -25,7 +35,11 @@ export function useShellSupport(namespace: string, pod: string, container: strin
           setShell(support.shell);
         }
       })
-      .catch(() => undefined);
+      .catch((err: unknown) => {
+        if (live) {
+          setError(probeMessage(err));
+        }
+      });
     return () => {
       live = false;
     };
@@ -35,5 +49,5 @@ export function useShellSupport(namespace: string, pod: string, container: strin
     setShell('absent');
   }, []);
 
-  return { shell, markMissing };
+  return { shell, error, markMissing };
 }

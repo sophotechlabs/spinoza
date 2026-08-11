@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Toasts, { TOAST_TTL_MS } from '../../src/components/Toasts';
-import { MAX_TOASTS, notifyError, notifyOk, useToastsStore } from '../../src/store/toasts';
+import {
+  MAX_TOASTS,
+  notifyError,
+  notifyOk,
+  notifyWarn,
+  useToastsStore,
+} from '../../src/store/toasts';
 import { parentOf } from '../helpers';
 
 describe('Toasts', () => {
@@ -49,6 +55,18 @@ describe('Toasts', () => {
 
     expect(ok.className).toContain('border-ok-line');
     expect(failed.className).toContain('border-error-line');
+  });
+
+  it('colours a warning apart from both', () => {
+    render(<Toasts />);
+
+    act(() => {
+      notifyWarn('attached to an existing debug container');
+    });
+    const warned = parentOf(screen.getByText('attached to an existing debug container'));
+
+    expect(warned.className).toContain('border-warn-line');
+    expect(warned.className).not.toContain('border-error-line');
   });
 
   it('dismisses one from its close button', async () => {

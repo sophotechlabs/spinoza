@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export const MAX_TOASTS = 4;
 
-export type ToastTone = 'ok' | 'error';
+export type ToastTone = 'ok' | 'warn' | 'error';
 
 export interface Toast {
   id: number;
@@ -43,6 +43,10 @@ export const useToastsStore = create<ToastsState>((set) => ({
 
 export function notifyOk(message: string): void {
   useToastsStore.getState().push('ok', message);
+}
+
+export function notifyWarn(message: string): void {
+  useToastsStore.getState().push('warn', message);
 }
 
 export function notifyError(message: string): void {
