@@ -111,6 +111,23 @@ describe('FluxList', () => {
     expect(container.querySelectorAll('.cursor-col-resize').length).toBeGreaterThan(0);
   });
 
+  it('resizes a column from the keyboard', async () => {
+    const user = userEvent.setup();
+    stubFlux(dashboard);
+    render(<FluxList onSelect={vi.fn()} />);
+    await screen.findByText('res-a');
+    const width = () => screen.getAllByRole('columnheader')[1].style.width;
+    const before = width();
+
+    screen.getByRole('button', { name: 'Resize the Name column' }).focus();
+    await user.keyboard('{ArrowRight}');
+    const widened = width();
+    await user.keyboard('{Home}');
+
+    expect(widened).not.toBe(before);
+    expect(width()).toBe(before);
+  });
+
   it('shows the error message when the fetch rejects with an error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('flux down')));
     render(<FluxList onSelect={vi.fn()} />);

@@ -19,9 +19,11 @@ import {
   statusText,
 } from '../lib/fluxStatus';
 import { useElementWidth } from '../lib/useElementWidth';
+import { columnLabel } from '../lib/tableState';
 import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
 import StaleBanner from './StaleBanner';
+import ColumnResizeHandle from './ColumnResizeHandle';
 
 const EMPTY: FluxResource[] = [];
 const FLEX_COLUMN_IDS = new Set(['name', 'revision']);
@@ -176,11 +178,18 @@ export default function FluxList({ onSelect }: FluxListProps) {
                   style={{ width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px` }}
                 >
                   {flexRender(header.column.columnDef.header, header.getContext())}
-                  <div
-                    aria-hidden="true"
+                  <ColumnResizeHandle
+                    column={columnLabel(header.column.columnDef.header, header.column.id)}
+                    size={header.getSize()}
+                    min={header.column.columnDef.minSize ?? 0}
+                    onSize={(next) => {
+                      table.setColumnSizing((old) => ({ ...old, [header.column.id]: next }));
+                    }}
+                    onReset={() => {
+                      header.column.resetSize();
+                    }}
                     onMouseDown={header.getResizeHandler()}
                     onTouchStart={header.getResizeHandler()}
-                    className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-grip opacity-0 select-none hover:opacity-100"
                   />
                 </th>
               ))}

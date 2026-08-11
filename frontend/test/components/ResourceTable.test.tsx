@@ -374,7 +374,7 @@ describe('ResourceTable', () => {
     renderTable(descriptor, null);
     const header = screen.getAllByRole('columnheader')[1];
     expect(header).toHaveAttribute('aria-sort', 'none');
-    const headerButton = within(header).getByRole('button');
+    const headerButton = within(header).getByRole('button', { name: /^Name/ });
     await user.click(headerButton);
     expect(header).toHaveAttribute('aria-sort', 'ascending');
     await user.click(headerButton);
@@ -749,10 +749,7 @@ describe('a column the user resized', () => {
   it('keeps its width across a remount', () => {
     seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
     const first = renderTable(descriptor, null);
-    const grip = screen.getAllByRole('columnheader')[1].querySelector('div[aria-hidden]');
-    if (grip === null) {
-      throw new Error('resize grip not found');
-    }
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
 
     const before = screen.getAllByRole('columnheader')[1].style.width;
     fireEvent.mouseDown(grip, { clientX: 0 });
@@ -765,6 +762,51 @@ describe('a column the user resized', () => {
     renderTable(descriptor, null);
 
     expect(screen.getAllByRole('columnheader')[1].style.width).toBe(widened);
+  });
+
+  it('resizes from the keyboard like the docks do', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+    const width = () => screen.getAllByRole('columnheader')[1].style.width;
+    const before = width();
+
+    grip.focus();
+    await user.keyboard('{ArrowRight}');
+    const widened = width();
+    await user.keyboard('{ArrowLeft}');
+
+    expect(widened).not.toBe(before);
+    expect(width()).toBe(before);
+  });
+
+  it('goes back to the default width on Home', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+    const width = () => screen.getAllByRole('columnheader')[1].style.width;
+    const before = width();
+
+    grip.focus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(width()).not.toBe(before);
+    await user.keyboard('{Home}');
+
+    expect(width()).toBe(before);
+  });
+
+  it('will not shrink a column past its minimum', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+
+    grip.focus();
+    await user.keyboard('{ArrowLeft}'.repeat(20));
+
+    expect(screen.getAllByRole('columnheader')[1].style.width).toBe('100px');
   });
 });
 

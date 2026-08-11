@@ -38,6 +38,7 @@ import UsageBar from './UsageBar';
 import StaleBanner from './StaleBanner';
 import BulkBar from './BulkBar';
 import CopyButton from './CopyButton';
+import ColumnResizeHandle from './ColumnResizeHandle';
 
 interface ResourceTableProps {
   active: ResourceDescriptor | null;
@@ -527,11 +528,18 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                     {!header.column.getCanSort() &&
                       flexRender(header.column.columnDef.header, header.getContext())}
                     {header.column.getCanResize() && (
-                      <div
-                        aria-hidden="true"
+                      <ColumnResizeHandle
+                        column={columnLabel(header.column.columnDef.header, header.column.id)}
+                        size={header.getSize()}
+                        min={header.column.columnDef.minSize ?? 0}
+                        onSize={(next) => {
+                          table.setColumnSizing((old) => ({ ...old, [header.column.id]: next }));
+                        }}
+                        onReset={() => {
+                          header.column.resetSize();
+                        }}
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}
-                        className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-grip opacity-0 select-none hover:opacity-100"
                       />
                     )}
                   </th>
