@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -25,13 +26,95 @@ import (
 
 const namespace = "spinoza-smoke"
 
-func bundle(t *testing.T) *kube.Bundle {
-	t.Helper()
+const (
+	namespaceTimeout = 2 * time.Minute
+	podTimeout       = 2 * time.Minute
+	pollInterval     = time.Second
+)
+
+var (
+	loadedBundle *kube.Bundle
+	errCluster   error
+)
+
+func TestMain(m *testing.M) {
+	loadedBundle, errCluster = openCluster()
+	m.Run()
+	if loadedBundle != nil {
+		closeNamespace(loadedBundle)
+	}
+}
+
+func openCluster() (*kube.Bundle, error) {
 	loaded, err := kube.LoadContext(os.Getenv("SPINOZA_TEST_CONTEXT"), kube.Options{})
 	if err != nil {
-		t.Fatalf("load kubeconfig: %v", err)
+		return nil, fmt.Errorf("load kubeconfig: %w", err)
 	}
-	return loaded
+	err = openNamespace(loaded)
+	if err != nil {
+		return loaded, fmt.Errorf("prepare namespace %s: %w", namespace, err)
+	}
+	return loaded, nil
+}
+
+func openNamespace(loaded *kube.Bundle) error {
+	ctx := context.Background()
+	err := awaitNamespaceGone(ctx, loaded)
+	if err != nil {
+		return err
+	}
+	_, err = loaded.Clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespace},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+	return awaitNamespaceActive(ctx, loaded)
+}
+
+func closeNamespace(loaded *kube.Bundle) {
+	_ = loaded.Clientset.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+}
+
+func awaitNamespaceGone(ctx context.Context, loaded *kube.Bundle) error {
+	deadline := time.Now().Add(namespaceTimeout)
+	for {
+		_, err := loaded.Clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		closeNamespace(loaded)
+		if time.Now().After(deadline) {
+			return fmt.Errorf("namespace %s did not go away within %s", namespace, namespaceTimeout)
+		}
+		time.Sleep(pollInterval)
+	}
+}
+
+func awaitNamespaceActive(ctx context.Context, loaded *kube.Bundle) error {
+	deadline := time.Now().Add(namespaceTimeout)
+	for time.Now().Before(deadline) {
+		found, err := loaded.Clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if found.Status.Phase == corev1.NamespaceActive {
+			return nil
+		}
+		time.Sleep(pollInterval)
+	}
+	return fmt.Errorf("namespace %s never became active within %s", namespace, namespaceTimeout)
+}
+
+func bundle(t *testing.T) *kube.Bundle {
+	t.Helper()
+	if errCluster != nil {
+		t.Fatalf("the cluster was never ready: %v", errCluster)
+	}
+	return loadedBundle
 }
 
 func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
@@ -53,24 +136,10 @@ func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
 	})
 }
 
-func ensureNamespace(t *testing.T, loaded *kube.Bundle) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := loaded.Clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespace},
-	}, metav1.CreateOptions{})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		t.Fatalf("create namespace: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = loaded.Clientset.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
-	})
-}
-
 func runningPod(t *testing.T, loaded *kube.Bundle, name string) *corev1.Pod {
 	t.Helper()
 	ctx := context.Background()
-	created, err := loaded.Clientset.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
+	_, err := loaded.Clientset.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{"app": name}},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
@@ -84,29 +153,32 @@ func runningPod(t *testing.T, loaded *kube.Bundle, name string) *corev1.Pod {
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("create pod: %v", err)
 	}
-	if err == nil {
-		created = waitRunning(t, loaded, created.Name)
-	}
-	return created
+	return waitRunning(t, loaded, name)
 }
 
 func waitRunning(t *testing.T, loaded *kube.Bundle, name string) *corev1.Pod {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(podTimeout)
+	var last string
 	for time.Now().Before(deadline) {
 		pod, err := loaded.Clientset.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
-		if err == nil && pod.Status.Phase == corev1.PodRunning {
-			return pod
+		if err != nil {
+			last = err.Error()
 		}
-		time.Sleep(time.Second)
+		if err == nil {
+			last = string(pod.Status.Phase)
+			if pod.Status.Phase == corev1.PodRunning {
+				return pod
+			}
+		}
+		time.Sleep(pollInterval)
 	}
-	t.Fatalf("pod %s never reached Running", name)
+	t.Fatalf("pod %s never reached Running (last seen: %s)", name, last)
 	return nil
 }
 
 func TestSubscribeSeesARealInformerFill(t *testing.T) {
 	loaded := bundle(t)
-	ensureNamespace(t, loaded)
 	mgr := manager(t, loaded)
 	runningPod(t, loaded, "smoke-subscribe")
 
@@ -130,7 +202,6 @@ func TestSubscribeSeesARealInformerFill(t *testing.T) {
 
 func TestApplyReportsARealConflict(t *testing.T) {
 	loaded := bundle(t)
-	ensureNamespace(t, loaded)
 	runningPod(t, loaded, "smoke-conflict")
 	ref := api.ObjectRef{Version: "v1", Resource: "pods", Namespace: namespace, Name: "smoke-conflict"}
 
@@ -174,11 +245,11 @@ func TestCountsReachEveryDiscoveredType(t *testing.T) {
 
 func TestPortForwardReachesARealPod(t *testing.T) {
 	loaded := bundle(t)
-	ensureNamespace(t, loaded)
 	runningPod(t, loaded, "smoke-forward")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	registry := portforward.NewRegistry(ctx,
+	registry := portforward.NewRegistry(
+		ctx,
 		portforward.NewRunner(loaded.Clientset, loaded.Config),
 		portforward.NewResolver(loaded.Clientset),
 		portforward.NewProber(loaded.Clientset),
@@ -219,7 +290,6 @@ func (c *collected) String() string {
 
 func TestExecRunsAShellInARealPod(t *testing.T) {
 	loaded := bundle(t)
-	ensureNamespace(t, loaded)
 	runningPod(t, loaded, "smoke-exec")
 	service := exec.NewService(
 		exec.NewStreamer(loaded.Clientset, loaded.Config),
