@@ -116,7 +116,7 @@ sast:
 
 vulns:
     trivy fs --exit-code 1 --scanners secret,misconfig .
-    osv-scanner scan source --recursive --config osv-scanner.toml .
+    osv-scanner scan source --recursive .
 
 workflows:
     yamllint .forgejo
