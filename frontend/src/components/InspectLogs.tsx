@@ -6,6 +6,7 @@ import {
   useLogError,
   useLogLines,
   useLogOffset,
+  useLogResumed,
   useLogRevision,
   useLogsStore,
 } from '../store/logs';
@@ -129,6 +130,7 @@ export default function InspectLogs({
   const revision = useLogRevision(subId);
   const ended = useLogEnded(subId);
   const error = useLogError(subId);
+  const resumed = useLogResumed(subId);
 
   const visible = matching(lines, query);
 
@@ -295,6 +297,11 @@ export default function InspectLogs({
         {error === null && ended && (
           <span role="status" className="text-fg-muted">
             stream ended
+          </span>
+        )}
+        {resumed && (
+          <span role="status" className="text-warn">
+            reconnected — output above is what was here before, and may repeat
           </span>
         )}
       </div>

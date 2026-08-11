@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { MAX_LOG_LINES, useLogEnded, useLogLines, useLogsStore } from '../../src/store/logs';
+import {
+  MAX_LOG_LINES,
+  useLogEnded,
+  useLogLines,
+  useLogResumed,
+  useLogsStore,
+} from '../../src/store/logs';
 
 function reset(): void {
   useLogsStore.setState({ streams: new Map() });
@@ -17,6 +23,7 @@ describe('logs store', () => {
       dropped: 0,
       revision: 0,
       ended: false,
+      resumed: false,
     });
   });
 
@@ -133,5 +140,94 @@ describe('clearing a buffer without dropping the stream', () => {
     useLogsStore.getState().clearLines('missing');
 
     expect(useLogsStore.getState().streams).toBe(before);
+  });
+
+  it('drops the reconnect notice with the lines it referred to', () => {
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().appendLines('logs', ['one']);
+    useLogsStore.getState().resumeStream('logs');
+
+    useLogsStore.getState().clearLines('logs');
+
+    expect(useLogsStore.getState().streams.get('logs')?.resumed).toBe(false);
+  });
+});
+
+describe('resuming a stream after a reconnect', () => {
+  beforeEach(reset);
+
+  it('keeps the buffer the user was reading', () => {
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().appendLines('logs', ['one', 'two']);
+
+    useLogsStore.getState().resumeStream('logs');
+
+    const stream = useLogsStore.getState().streams.get('logs');
+    expect(stream?.lines).toEqual(['one', 'two']);
+    expect(stream?.resumed).toBe(true);
+  });
+
+  it('appends the fresh tail after what was already there', () => {
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().appendLines('logs', ['one']);
+    useLogsStore.getState().resumeStream('logs');
+
+    useLogsStore.getState().appendLines('logs', ['two']);
+
+    expect(useLogsStore.getState().streams.get('logs')?.lines).toEqual(['one', 'two']);
+  });
+
+  it('lifts an ended stream and its error back to live', () => {
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().appendLines('logs', ['one']);
+    useLogsStore.getState().failStream('logs', 'connection reset');
+
+    useLogsStore.getState().resumeStream('logs');
+
+    const stream = useLogsStore.getState().streams.get('logs');
+    expect(stream?.ended).toBe(false);
+    expect(stream?.error).toBeUndefined();
+  });
+
+  it('says nothing about a resume when there was no output to keep', () => {
+    useLogsStore.getState().startStream('logs');
+
+    useLogsStore.getState().resumeStream('logs');
+
+    expect(useLogsStore.getState().streams.get('logs')?.resumed).toBe(false);
+  });
+
+  it('starts a stream the reconnect knows about but the store does not', () => {
+    useLogsStore.getState().resumeStream('logs');
+
+    expect(useLogsStore.getState().streams.get('logs')).toEqual({
+      lines: [],
+      dropped: 0,
+      revision: 0,
+      ended: false,
+      resumed: false,
+    });
+  });
+
+  it('redraws the view on resume', () => {
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().appendLines('logs', ['one']);
+    const before = useLogsStore.getState().streams.get('logs')?.revision ?? 0;
+
+    useLogsStore.getState().resumeStream('logs');
+
+    expect(useLogsStore.getState().streams.get('logs')?.revision).toBe(before + 1);
+  });
+
+  it('exposes the resumed flag through a hook', () => {
+    const resumed = renderHook(() => useLogResumed('logs'));
+    expect(resumed.result.current).toBe(false);
+
+    useLogsStore.getState().startStream('logs');
+    useLogsStore.getState().appendLines('logs', ['one']);
+    useLogsStore.getState().resumeStream('logs');
+    resumed.rerender();
+
+    expect(resumed.result.current).toBe(true);
   });
 });

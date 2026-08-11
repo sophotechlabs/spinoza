@@ -7,12 +7,14 @@ interface StreamState {
   dropped: number;
   revision: number;
   ended: boolean;
+  resumed: boolean;
   error?: string;
 }
 
 interface LogsState {
   streams: Map<string, StreamState>;
   startStream: (subId: string) => void;
+  resumeStream: (subId: string) => void;
   appendLines: (subId: string, lines: string[]) => void;
   clearLines: (subId: string) => void;
   endStream: (subId: string) => void;
@@ -39,7 +41,25 @@ export const useLogsStore = create<LogsState>((set) => ({
   startStream: (subId) => {
     set((state) => {
       const streams = new Map(state.streams);
-      streams.set(subId, { lines: [], dropped: 0, revision: 0, ended: false });
+      streams.set(subId, { lines: [], dropped: 0, revision: 0, ended: false, resumed: false });
+      return { streams };
+    });
+  },
+  resumeStream: (subId) => {
+    set((state) => {
+      const existing = state.streams.get(subId);
+      const streams = new Map(state.streams);
+      if (existing === undefined) {
+        streams.set(subId, { lines: [], dropped: 0, revision: 0, ended: false, resumed: false });
+        return { streams };
+      }
+      streams.set(subId, {
+        ...existing,
+        ended: false,
+        error: undefined,
+        resumed: existing.lines.length > 0,
+        revision: existing.revision + 1,
+      });
       return { streams };
     });
   },
@@ -67,7 +87,7 @@ export const useLogsStore = create<LogsState>((set) => ({
       }
       existing.lines.length = 0;
       const streams = new Map(state.streams);
-      streams.set(subId, { ...existing, revision: existing.revision + 1 });
+      streams.set(subId, { ...existing, resumed: false, revision: existing.revision + 1 });
       return { streams };
     });
   },
@@ -135,6 +155,14 @@ export function useLogError(subId: string): string | null {
     return null;
   }
   return message;
+}
+
+export function useLogResumed(subId: string): boolean {
+  const resumed = useLogsStore((state) => state.streams.get(subId)?.resumed);
+  if (resumed === undefined) {
+    return false;
+  }
+  return resumed;
 }
 
 export function useLogEnded(subId: string): boolean {

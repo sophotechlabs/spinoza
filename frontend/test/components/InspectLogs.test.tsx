@@ -177,6 +177,36 @@ describe('InspectLogs stream state', () => {
 
     expect(screen.getByText('stream ended')).toBeInTheDocument();
   });
+
+  it('says the stream resumed after a reconnect and keeps the lines', () => {
+    useLogsStore.setState({ streams: new Map() });
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
+
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, ['before the drop']);
+      useLogsStore.getState().resumeStream(subId);
+    });
+
+    expect(
+      screen.getByText('reconnected — output above is what was here before, and may repeat'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('before the drop')).toBeInTheDocument();
+  });
+
+  it('says nothing about a resume on a stream that had no output', () => {
+    useLogsStore.setState({ streams: new Map() });
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
+
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().resumeStream(subId);
+    });
+
+    expect(screen.queryByText(/reconnected/)).not.toBeInTheDocument();
+  });
 });
 
 describe('reading a structured log line', () => {

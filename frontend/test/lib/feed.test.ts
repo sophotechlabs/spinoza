@@ -841,6 +841,7 @@ describe('useResourceFeed', () => {
       dropped: 0,
       revision: 0,
       ended: false,
+      resumed: false,
     });
   });
 
@@ -947,6 +948,37 @@ describe('useResourceFeed', () => {
       subId: 'logs',
       ...logRequest,
     });
+  });
+
+  it('keeps the lines already on screen through a reconnect', async () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+      result.current.subscribeLogs('logs', logRequest);
+    });
+    act(() => {
+      first.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log', subId: 'logs', lines: ['before the drop'] }),
+        }),
+      );
+    });
+    await flushDeltas();
+    act(() => {
+      first.onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      result.current.reconnect();
+    });
+    const second = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    act(() => {
+      openSocket(second);
+    });
+
+    const stream = useLogsStore.getState().streams.get('logs');
+    expect(stream?.lines).toEqual(['before the drop']);
+    expect(stream?.resumed).toBe(true);
   });
 
   it('does not re-send an unsubscribed log stream after a reconnect', () => {

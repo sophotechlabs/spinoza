@@ -190,7 +190,7 @@ export function useResourceFeed(): ResourceFeed {
         send(socket, subscribeMsg(subId, sub));
       }
       for (const [subId, request] of logSubsRef.current) {
-        logs.startStream(subId);
+        logs.resumeStream(subId);
         send(socket, logsMsg(subId, request));
       }
     }
