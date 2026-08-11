@@ -30,6 +30,7 @@ import { useMetrics } from '../lib/metrics';
 import { cpuFromMilli, memFromMi } from '../lib/units';
 import { useElementWidth } from '../lib/useElementWidth';
 import { useNow } from '../lib/useNow';
+import { ago } from '../lib/time';
 import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
 import { FILTER_INPUT_ID } from '../lib/hotkeys';
 import { columnLabel, readTableState, tableKey, writeTableState } from '../lib/tableState';
@@ -56,30 +57,6 @@ function columnWidth(id: string, base: number, perFlex: number): number {
     return base + perFlex;
   }
   return base;
-}
-
-function age(createdAt: string, now: number): string {
-  const created = new Date(createdAt).getTime();
-  if (Number.isNaN(created)) {
-    return '';
-  }
-  let seconds = Math.floor((now - created) / 1000);
-  if (seconds < 0) {
-    seconds = 0;
-  }
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours}h`;
-  }
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
 }
 
 function cellAt(row: Row, index: number): string {
@@ -321,7 +298,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
         header: 'Age',
         size: 72,
         minSize: 50,
-        cell: (info) => age(info.getValue(), now),
+        cell: (info) => ago(info.getValue(), now),
       }),
     );
     return defs;
