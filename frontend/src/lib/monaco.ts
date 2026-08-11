@@ -7,6 +7,10 @@ import { configureMonacoYaml } from 'monaco-yaml';
 import yamlWorker from 'monaco-yaml/yaml.worker?worker';
 
 import { setSchemaApplier } from './schema';
+import { BUILT_IN_THEMES } from './theme';
+import type { ThemeBase } from './theme';
+import { editorTheme } from './themeColors';
+import type { EditorTheme } from './themeColors';
 
 declare global {
   interface Window {
@@ -35,18 +39,27 @@ setSchemaApplier((schemas) => {
   void monacoYaml.update({ schemas });
 });
 
-monaco.editor.defineTheme('spinoza-dark', {
-  base: 'vs-dark',
-  inherit: true,
-  rules: [],
-  colors: { 'editor.background': '#0a0a0a' },
-});
+function monacoBase(base: ThemeBase): 'vs' | 'vs-dark' {
+  if (base === 'dark') {
+    return 'vs-dark';
+  }
+  return 'vs';
+}
 
-monaco.editor.defineTheme('spinoza-light', {
-  base: 'vs',
-  inherit: true,
-  rules: [],
-  colors: { 'editor.background': '#ffffff' },
-});
+export function defineEditorTheme(spec: EditorTheme): void {
+  monaco.editor.defineTheme(spec.name, {
+    base: monacoBase(spec.base),
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': spec.background,
+      'editor.foreground': spec.foreground,
+    },
+  });
+}
+
+for (const theme of BUILT_IN_THEMES) {
+  defineEditorTheme(editorTheme(theme));
+}
 
 loader.config({ monaco });

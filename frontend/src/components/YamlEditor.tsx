@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import '../lib/monaco';
+import { defineEditorTheme } from '../lib/monaco';
+import { editorTheme } from '../lib/themeColors';
 import { useResolvedTheme } from '../store/theme';
 
 interface YamlEditorProps {
@@ -10,7 +12,11 @@ interface YamlEditorProps {
 }
 
 export default function YamlEditor({ value, path, readOnly, onChange }: YamlEditorProps) {
-  const theme = `spinoza-${useResolvedTheme().base}`;
+  const spec = editorTheme(useResolvedTheme());
+
+  useEffect(() => {
+    defineEditorTheme(spec);
+  }, [spec.name, spec.base, spec.background, spec.foreground, spec]);
 
   function handleChange(next: string | undefined) {
     if (next === undefined) {
@@ -22,7 +28,7 @@ export default function YamlEditor({ value, path, readOnly, onChange }: YamlEdit
   return (
     <Editor
       language="yaml"
-      theme={theme}
+      theme={spec.name}
       path={path}
       value={value}
       onChange={handleChange}

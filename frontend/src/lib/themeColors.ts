@@ -28,6 +28,36 @@ export function canvasColors(theme: Theme): CanvasColors {
   return { ...CANVAS_COLORS[theme.base], ...theme.canvas };
 }
 
+export interface EditorTheme {
+  name: string;
+  base: ThemeBase;
+  background: string;
+  foreground: string;
+}
+
+function tokenHex(theme: Theme, token: string): string | null {
+  const value = theme.tokens?.[token];
+  if (value === undefined) {
+    return null;
+  }
+  return toHex(value);
+}
+
+export function editorTheme(theme: Theme): EditorTheme {
+  const colors = canvasColors(theme);
+  let background = colors.terminalBackground;
+  const surface = tokenHex(theme, 'surface');
+  if (surface !== null) {
+    background = surface;
+  }
+  let foreground = colors.terminalForeground;
+  const fg = tokenHex(theme, 'fg');
+  if (fg !== null) {
+    foreground = fg;
+  }
+  return { name: `spinoza-${theme.id}`, base: theme.base, background, foreground };
+}
+
 export const ANSI_SLOTS = [
   'black',
   'red',

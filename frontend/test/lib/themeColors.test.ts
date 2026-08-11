@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANSI_SLOTS, ansiPalette, terminalTheme } from '../../src/lib/themeColors';
+import { ANSI_SLOTS, ansiPalette, editorTheme, terminalTheme } from '../../src/lib/themeColors';
 
 describe('the ansi palette handed to xterm', () => {
   function reader(values: Record<string, string>) {
@@ -52,5 +52,66 @@ describe('terminalTheme', () => {
     expect(theme.background).toBe('#0a0a0a');
     expect(theme.foreground).toBe('#d4d4d4');
     expect(theme.red).toBe('#ff0000');
+  });
+});
+
+describe('the colours monaco gets for a theme', () => {
+  it('names the theme after its id and follows its base', () => {
+    const spec = editorTheme({ id: 'dark', name: 'Dark', base: 'dark' });
+
+    expect(spec.name).toBe('spinoza-dark');
+    expect(spec.base).toBe('dark');
+  });
+
+  it('inherits the base colours when the theme overrides nothing', () => {
+    const spec = editorTheme({ id: 'light', name: 'Light', base: 'light' });
+
+    expect(spec.background).toBe('#ffffff');
+    expect(spec.foreground).toBe('#404040');
+  });
+
+  it('takes the surface and fg the theme sets', () => {
+    const spec = editorTheme({
+      id: 'solarized',
+      name: 'Solarized',
+      base: 'light',
+      tokens: { surface: '#fdf6e3', fg: '#657b83' },
+    });
+
+    expect(spec.background).toBe('#fdf6e3');
+    expect(spec.foreground).toBe('#657b83');
+  });
+
+  it('converts an oklch token to something monaco can parse', () => {
+    const spec = editorTheme({
+      id: 'oklch',
+      name: 'Oklch',
+      base: 'dark',
+      tokens: { surface: 'oklch(0% 0 0)' },
+    });
+
+    expect(spec.background).toBe('#000000');
+  });
+
+  it('keeps the base colour when a token is not a colour at all', () => {
+    const spec = editorTheme({
+      id: 'broken',
+      name: 'Broken',
+      base: 'dark',
+      tokens: { surface: 'not-a-colour' },
+    });
+
+    expect(spec.background).toBe('#0a0a0a');
+  });
+
+  it('follows a canvas override when the theme sets no surface token', () => {
+    const spec = editorTheme({
+      id: 'canvas',
+      name: 'Canvas',
+      base: 'dark',
+      canvas: { terminalBackground: '#101010' },
+    });
+
+    expect(spec.background).toBe('#101010');
   });
 });

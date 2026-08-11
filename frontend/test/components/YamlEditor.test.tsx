@@ -11,7 +11,13 @@ interface EditorStubProps {
   options: { readOnly: boolean };
 }
 
-vi.mock('../../src/lib/monaco', () => ({}));
+const defineEditorTheme = vi.fn<(spec: unknown) => void>();
+
+vi.mock('../../src/lib/monaco', () => ({
+  defineEditorTheme: (spec: unknown) => {
+    defineEditorTheme(spec);
+  },
+}));
 
 vi.mock('@monaco-editor/react', () => ({
   default: ({ value, language, theme, onChange, options }: EditorStubProps) => (
@@ -103,6 +109,52 @@ describe('YamlEditor', () => {
 
     act(() => {
       useThemeStore.getState().setPreference('dark');
+    });
+  });
+
+  it('gives a custom theme its own editor colours', () => {
+    defineEditorTheme.mockClear();
+    act(() => {
+      useThemeStore.getState().addTheme({
+        id: 'solarized',
+        name: 'Solarized',
+        base: 'light',
+        tokens: { surface: '#fdf6e3', fg: '#657b83' },
+      });
+      useThemeStore.getState().setPreference('solarized');
+    });
+
+    expect(screen.queryByTestId('theme')).toBeNull();
+
+    render(
+      <YamlEditor value="" path="spinoza/core/v1/Pod.yaml" readOnly={false} onChange={vi.fn()} />,
+    );
+
+    expect(screen.getByTestId('theme')).toHaveTextContent('spinoza-solarized');
+    expect(defineEditorTheme).toHaveBeenCalledWith({
+      name: 'spinoza-solarized',
+      base: 'light',
+      background: '#fdf6e3',
+      foreground: '#657b83',
+    });
+
+    act(() => {
+      useThemeStore.getState().removeTheme('solarized');
+      useThemeStore.getState().setPreference('dark');
+    });
+  });
+
+  it('falls back to the base colours for a theme that overrides no tokens', () => {
+    defineEditorTheme.mockClear();
+    render(
+      <YamlEditor value="" path="spinoza/core/v1/Pod.yaml" readOnly={false} onChange={vi.fn()} />,
+    );
+
+    expect(defineEditorTheme).toHaveBeenCalledWith({
+      name: 'spinoza-dark',
+      base: 'dark',
+      background: '#0a0a0a',
+      foreground: '#d4d4d4',
     });
   });
 });
