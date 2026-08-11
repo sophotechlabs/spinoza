@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	osexec "os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -128,12 +130,14 @@ func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
 	if len(descs) == 0 {
 		t.Fatal("the cluster listed no resource types")
 	}
-	return resources.NewManager(ctx, resources.Deps{
+	mgr := resources.NewManager(ctx, resources.Deps{
 		Dynamic:     loaded.Dynamic,
 		Clientset:   loaded.Clientset,
 		Categories:  cats,
 		Descriptors: descs,
 	})
+	mgr.UseDiscovery(loaded.Discovery, err)
+	return mgr
 }
 
 func runningPod(t *testing.T, loaded *kube.Bundle, name string) *corev1.Pod {
@@ -334,4 +338,117 @@ func TestListWarmsAPinnedInformerAgainstARealCluster(t *testing.T) {
 		t.Fatalf("item carried no metadata: %v", items[0])
 	}
 	mgr.Unpin([]api.ResourceDescriptor{desc})
+}
+
+func installRelease(t *testing.T, loaded *kube.Bundle) {
+	t.Helper()
+	_, err := osexec.LookPath("helm")
+	if err != nil {
+		t.Skip("helm is not on PATH, so a real release cannot be installed")
+	}
+	chart := writeChart(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := osexec.CommandContext(ctx, "helm", "install", "smoke-release", chart,
+		"--namespace", namespace,
+		"--kube-context", os.Getenv("SPINOZA_TEST_CONTEXT"),
+		"--wait")
+	out, runErr := cmd.CombinedOutput()
+	if runErr != nil {
+		t.Fatalf("helm install: %v\n%s", runErr, out)
+	}
+	t.Cleanup(func() {
+		done, cancelDone := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelDone()
+		_ = osexec.CommandContext(done, "helm", "uninstall", "smoke-release",
+			"--namespace", namespace,
+			"--kube-context", os.Getenv("SPINOZA_TEST_CONTEXT")).Run()
+	})
+	_ = loaded
+}
+
+func writeChart(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	files := map[string]string{
+		"Chart.yaml": "apiVersion: v2\nname: spinoza-smoke\nversion: 0.1.0\nappVersion: \"1.2.3\"\n",
+		"templates/configmap.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n" +
+			"  name: {{ .Release.Name }}\ndata:\n  hello: world\n",
+	}
+	for name, body := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	return dir
+}
+
+func TestOverviewReadsARealCluster(t *testing.T) {
+	loaded := bundle(t)
+	mgr := manager(t, loaded)
+	runningPod(t, loaded, "smoke-overview")
+
+	got := mgr.Overview(context.Background())
+
+	if got.Version == "" {
+		t.Fatalf("the overview reported no server version (%s)", got.Error)
+	}
+	if got.Nodes.Total == 0 {
+		t.Fatalf("nodes = 0 against a real cluster (%s)", got.Error)
+	}
+	if got.Nodes.Ready == 0 {
+		t.Fatalf("ready nodes = 0 (%s)", got.Error)
+	}
+	if got.Nodes.CPUAllocatableMilli == 0 {
+		t.Fatalf("cpu allocatable = 0 (%s)", got.Error)
+	}
+	if !got.Pods.Known {
+		t.Fatalf("the pod tally could not be taken: %s", got.Error)
+	}
+	if got.Pods.Total < got.Pods.Running {
+		t.Fatalf("total %d is below running %d", got.Pods.Total, got.Pods.Running)
+	}
+	if got.Pods.Running == 0 {
+		t.Fatalf("running pods = 0 with a pod we just started (%s)", got.Error)
+	}
+}
+
+func TestHelmReleasesReadsRealStorageSecrets(t *testing.T) {
+	loaded := bundle(t)
+	mgr := manager(t, loaded)
+	installRelease(t, loaded)
+
+	got, err := mgr.HelmReleases(context.Background())
+	if err != nil {
+		t.Fatalf("helm releases: %v", err)
+	}
+
+	found := api.HelmRelease{}
+	for _, release := range got.Releases {
+		if release.Name == "smoke-release" {
+			found = release
+		}
+	}
+	if found.Name == "" {
+		t.Fatalf("the release we installed is missing from %v (%s)", got.Releases, got.Error)
+	}
+	if found.Namespace != namespace {
+		t.Fatalf("namespace = %q, want %s", found.Namespace, namespace)
+	}
+	if found.Chart == "" {
+		t.Fatalf("chart = %q, want the chart name out of the payload", found.Chart)
+	}
+	if found.Revision != 1 {
+		t.Fatalf("revision = %d, want 1", found.Revision)
+	}
+	if found.Status != "deployed" {
+		t.Fatalf("status = %q, want deployed", found.Status)
+	}
+	if found.Updated == "" {
+		t.Fatal("the release carried no last-deployed time")
+	}
 }

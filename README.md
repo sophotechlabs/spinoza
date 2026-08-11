@@ -17,7 +17,9 @@ Spinoza uses your current kubeconfig context, switchable from the dropdown in th
 
 ## What it does
 
+- **Cluster overview**: server version, node readiness, allocatable CPU and memory against live usage, pods by phase, and the most recent warning events.
 - **Browse every resource type** discovery reports, grouped into a Lens-style tree. One generic informer-backed view per GVR, so CRDs show up without any per-type code.
+- **Helm releases** read straight out of Helm's own storage secrets — chart, app version, revision, status and age, newest revision per release. No Helm binary needed.
 - **GitOps view** for Flux and Argo: an overview grouped by role, a dependency graph, per-kind lists and a status-tile board. Reconcile, suspend and resume Flux objects.
 - **Inspect drawer**: metadata, conditions, events, live YAML with schema-aware editing (Monaco + `monaco-yaml`), server-side apply and delete. Collapsible, and an edited YAML draft survives a background reload.
 - **Write actions**: scale, rollout restart, cordon, uncordon, and drain — drain plans first and shows what it would evict, skip and refuse before you confirm it.
