@@ -17,6 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/sophotechlabs/spinoza/internal/charts"
 )
 
 const deployedAt = "2026-08-11T09:30:00Z"
@@ -94,7 +96,7 @@ func sampleRelease() release {
 func TestListReadsAGzippedBase64Release(t *testing.T) {
 	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -140,7 +142,7 @@ func TestListReadsAReleaseThatWasNeverGzipped(t *testing.T) {
 	body := []byte(base64.StdEncoding.EncodeToString([]byte(payloadJSON(spec))))
 	cs := k8sfake.NewClientset(stored(spec, body))
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -157,7 +159,7 @@ func TestListReadsAReleaseThatWasNeverBase64Encoded(t *testing.T) {
 	spec := sampleRelease()
 	cs := k8sfake.NewClientset(stored(spec, gzipped(payloadJSON(spec))))
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -182,7 +184,7 @@ func TestListKeepsOnlyTheNewestRevision(t *testing.T) {
 	third := sampleRelease()
 	cs := k8sfake.NewClientset(helmSecret(third), helmSecret(first), helmSecret(second))
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -210,7 +212,7 @@ func TestListSortsByNamespaceThenName(t *testing.T) {
 	}
 	cs := k8sfake.NewClientset(objs...)
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -236,7 +238,7 @@ func TestListIgnoresSecretsThatAreNotHelmStorage(t *testing.T) {
 	}
 	cs := k8sfake.NewClientset(helmSecret(sampleRelease()), other)
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -250,7 +252,7 @@ func TestListFallsBackToTheLabelsWhenThePayloadIsUnreadable(t *testing.T) {
 	spec := sampleRelease()
 	cs := k8sfake.NewClientset(stored(spec, []byte("not a release at all")))
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -291,7 +293,7 @@ func TestListSkipsASecretWithNothingToIdentifyIt(t *testing.T) {
 	}
 	cs := k8sfake.NewClientset(nameless)
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -307,7 +309,7 @@ func TestListReportsARefusedSecretList(t *testing.T) {
 		return true, nil, errors.New("secrets is forbidden")
 	})
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 
 	if err == nil {
 		t.Fatal("a refused list reported success")
@@ -331,7 +333,7 @@ func TestListAsksOnlyForHelmOwnedSecrets(t *testing.T) {
 		return false, nil, nil
 	})
 
-	_, err := List(context.Background(), cs)
+	_, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -361,7 +363,7 @@ func TestListFollowsThePagesTheApiserverHandsBack(t *testing.T) {
 		return true, &corev1.SecretList{Items: []corev1.Secret{*helmSecret(second)}}, nil
 	})
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -391,7 +393,7 @@ func TestListSaysWhenItStoppedReadingPages(t *testing.T) {
 		}, nil
 	})
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -405,7 +407,7 @@ func TestListSaysWhenItStoppedReadingPages(t *testing.T) {
 }
 
 func TestListReportsNothingForAClusterWithoutHelm(t *testing.T) {
-	got, err := List(context.Background(), k8sfake.NewClientset())
+	got, err := List(context.Background(), k8sfake.NewClientset(), nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -457,7 +459,7 @@ func TestAPartialPayloadIsCompletedFromTheLabels(t *testing.T) {
 	body := []byte(base64.StdEncoding.EncodeToString(gzipped(`{"chart":{"metadata":{"name":"podinfo","version":"6.9.2"}}}`)))
 	cs := k8sfake.NewClientset(stored(spec, body))
 
-	got, err := List(context.Background(), cs)
+	got, err := List(context.Background(), cs, nil, nil)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -486,5 +488,135 @@ func TestAPartialPayloadIsCompletedFromTheLabels(t *testing.T) {
 	}
 	if got.Error != "" {
 		t.Fatalf("error = %q, want none — the payload parsed fine", got.Error)
+	}
+}
+
+type stubCharts struct {
+	versions map[string]string
+	warmed   []string
+}
+
+func (s *stubCharts) Latest(repo charts.Repo, chart string) string {
+	return s.versions[repo.URL+"|"+chart]
+}
+
+func (s *stubCharts) Warm(repo charts.Repo, chart string) {
+	s.warmed = append(s.warmed, repo.URL+"|"+chart)
+}
+
+func TestListMarksAReleaseThatHasANewerChart(t *testing.T) {
+	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
+	index := &stubCharts{versions: map[string]string{
+		"https://charts.example.com|podinfo": "6.9.5",
+	}}
+	repos := []charts.Repo{{URL: "https://charts.example.com"}}
+
+	got, err := List(context.Background(), cs, index, repos)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if got.Releases[0].Latest != "6.9.5" {
+		t.Fatalf("latest = %q, want 6.9.5", got.Releases[0].Latest)
+	}
+	if !got.Releases[0].Outdated {
+		t.Fatal("a release behind its repo was not marked outdated")
+	}
+	if len(index.warmed) != 1 {
+		t.Fatalf("warmed %v, want the one repo asked once", index.warmed)
+	}
+}
+
+func TestListLeavesAnUpToDateReleaseAlone(t *testing.T) {
+	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
+	index := &stubCharts{versions: map[string]string{
+		"https://charts.example.com|podinfo": "6.9.2",
+	}}
+
+	got, err := List(context.Background(), cs, index,
+		[]charts.Repo{{URL: "https://charts.example.com"}})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if got.Releases[0].Latest != "6.9.2" {
+		t.Fatalf("latest = %q, want the same version", got.Releases[0].Latest)
+	}
+	if got.Releases[0].Outdated {
+		t.Fatal("a current release was marked outdated")
+	}
+}
+
+func TestListTakesTheHighestVersionAcrossRepositories(t *testing.T) {
+	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
+	index := &stubCharts{versions: map[string]string{
+		"https://one.example.com|podinfo":   "6.9.3",
+		"https://two.example.com|podinfo":   "7.1.0",
+		"https://three.example.com|podinfo": "6.0.0",
+	}}
+	repos := []charts.Repo{
+		{URL: "https://one.example.com"},
+		{URL: "https://two.example.com"},
+		{URL: "https://three.example.com"},
+	}
+
+	got, err := List(context.Background(), cs, index, repos)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if got.Releases[0].Latest != "7.1.0" {
+		t.Fatalf("latest = %q, want the highest across repos", got.Releases[0].Latest)
+	}
+}
+
+func TestListSaysNothingAboutLatestWithoutAnIndex(t *testing.T) {
+	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
+
+	got, err := List(context.Background(), cs, nil, []charts.Repo{{URL: "https://one.example.com"}})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if got.Releases[0].Latest != "" {
+		t.Fatalf("latest = %q, want it unknown", got.Releases[0].Latest)
+	}
+	if got.Releases[0].Outdated {
+		t.Fatal("a release with no index to compare against was marked outdated")
+	}
+}
+
+func TestListSkipsTheLookupForAChartItCouldNotName(t *testing.T) {
+	spec := sampleRelease()
+	cs := k8sfake.NewClientset(stored(spec, []byte("unreadable")))
+	index := &stubCharts{versions: map[string]string{}}
+
+	got, err := List(context.Background(), cs, index, []charts.Repo{{URL: "https://one.example.com"}})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if len(index.warmed) != 0 {
+		t.Fatalf("warmed %v, want no lookup for a nameless chart", index.warmed)
+	}
+	if got.Releases[0].Latest != "" {
+		t.Fatalf("latest = %q, want it unknown", got.Releases[0].Latest)
+	}
+}
+
+func TestListIgnoresARepositoryWithNothingForThatChart(t *testing.T) {
+	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
+	index := &stubCharts{versions: map[string]string{
+		"https://two.example.com|podinfo": "7.0.0",
+	}}
+	repos := []charts.Repo{{URL: "https://one.example.com"}, {URL: "https://two.example.com"}}
+
+	got, err := List(context.Background(), cs, index, repos)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if got.Releases[0].Latest != "7.0.0" {
+		t.Fatalf("latest = %q, want the repo that has it", got.Releases[0].Latest)
 	}
 }

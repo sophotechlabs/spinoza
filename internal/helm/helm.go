@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/charts"
 )
 
 const (
@@ -36,7 +37,12 @@ const (
 
 var errNotGzip = errors.New("release payload is not gzipped json")
 
-func List(ctx context.Context, cs kubernetes.Interface) (api.HelmReleases, error) {
+type Charts interface {
+	Latest(repo charts.Repo, chart string) string
+	Warm(repo charts.Repo, chart string)
+}
+
+func List(ctx context.Context, cs kubernetes.Interface, index Charts, repos []charts.Repo) (api.HelmReleases, error) {
 	bounded, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 
@@ -71,6 +77,7 @@ func List(ctx context.Context, cs kubernetes.Interface) (api.HelmReleases, error
 	for _, release := range latest {
 		out = append(out, release)
 	}
+	addLatest(out, index, repos)
 	slices.SortFunc(out, func(left, right api.HelmRelease) int {
 		if left.Namespace != right.Namespace {
 			return strings.Compare(left.Namespace, right.Namespace)
@@ -78,6 +85,38 @@ func List(ctx context.Context, cs kubernetes.Interface) (api.HelmReleases, error
 		return strings.Compare(left.Name, right.Name)
 	})
 	return api.HelmReleases{Releases: out, Error: partialMessage(undecodable, truncated)}, nil
+}
+
+func addLatest(releases []api.HelmRelease, index Charts, repos []charts.Repo) {
+	if index == nil {
+		return
+	}
+	for i := range releases {
+		release := &releases[i]
+		if release.Chart == "" {
+			continue
+		}
+		newest := ""
+		for _, repo := range repos {
+			index.Warm(repo, release.Chart)
+			newest = pick(newest, index.Latest(repo, release.Chart))
+		}
+		release.Latest = newest
+		release.Outdated = charts.Newer(release.ChartVersion, newest)
+	}
+}
+
+func pick(current, found string) string {
+	if found == "" {
+		return current
+	}
+	if current == "" {
+		return found
+	}
+	if charts.Newer(current, found) {
+		return found
+	}
+	return current
 }
 
 func partialMessage(undecodable int, truncated bool) string {
