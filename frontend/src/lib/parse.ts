@@ -1,6 +1,7 @@
 import type {
   ActionResult,
   Category,
+  ClusterOverview,
   Column,
   Condition,
   ContainerState,
@@ -14,14 +15,19 @@ import type {
   Graph,
   GraphEdge,
   GraphNode,
+  HelmRelease,
+  HelmReleases,
   K8sEvent,
   MetricHistory,
   MetricPoint,
   Metrics,
+  NodeSummary,
   ObjectDetail,
   ObjectPort,
+  OverviewEvent,
   OwnerRef,
   PodOutcome,
+  PodSummary,
   PortForward,
   ResourceCatalog,
   ResourceCounts,
@@ -352,5 +358,73 @@ export function parseDebugSupport(body: unknown): DebugSupport {
     allowed: asBoolean(item.allowed),
     reason: optionalString(item.reason),
     image: asString(item.image),
+  };
+}
+
+function parseNodeSummary(item: Record<string, unknown>): NodeSummary {
+  return {
+    total: asNumber(item.total),
+    ready: asNumber(item.ready),
+    unschedulable: asNumber(item.unschedulable),
+    cpuAllocatableMilli: asNumber(item.cpuAllocatableMilli),
+    cpuUsedMilli: asNumber(item.cpuUsedMilli),
+    memAllocatableMi: asNumber(item.memAllocatableMi),
+    memUsedMi: asNumber(item.memUsedMi),
+    usageKnown: asBoolean(item.usageKnown),
+  };
+}
+
+function parsePodSummary(item: Record<string, unknown>): PodSummary {
+  return {
+    total: asNumber(item.total),
+    running: asNumber(item.running),
+    pending: asNumber(item.pending),
+    failed: asNumber(item.failed),
+    succeeded: asNumber(item.succeeded),
+    known: asBoolean(item.known),
+  };
+}
+
+function parseOverviewEvent(item: Record<string, unknown>): OverviewEvent {
+  return {
+    namespace: asString(item.namespace),
+    object: asString(item.object),
+    reason: asString(item.reason),
+    message: asString(item.message),
+    count: asNumber(item.count),
+    lastSeen: asString(item.lastSeen),
+  };
+}
+
+export function parseClusterOverview(body: unknown): ClusterOverview {
+  const item = asRecord(body);
+  return {
+    version: asString(item.version),
+    nodes: parseNodeSummary(asRecord(item.nodes)),
+    pods: parsePodSummary(asRecord(item.pods)),
+    warnings: listOf(item.warnings, parseOverviewEvent),
+    error: optionalString(item.error),
+  };
+}
+
+function parseHelmRelease(item: Record<string, unknown>): HelmRelease {
+  return {
+    name: asString(item.name),
+    namespace: asString(item.namespace),
+    chart: asString(item.chart),
+    chartVersion: asString(item.chartVersion),
+    appVersion: asString(item.appVersion),
+    revision: asNumber(item.revision),
+    status: asString(item.status),
+    updated: asString(item.updated),
+    description: optionalString(item.description),
+  };
+}
+
+export function parseHelmReleases(body: unknown): HelmReleases {
+  const item = asRecord(body);
+  return {
+    releases: listOf(item.releases, parseHelmRelease),
+    error: optionalString(item.error),
   };
 }

@@ -173,7 +173,8 @@ export type ServerMsg =
   | { type: 'log-end'; subId: string }
   | { type: 'error'; subId: string; message: string };
 
-export type View = 'resources' | 'gitops' | 'flux-list' | 'flux-overview' | 'flux-roles';
+export type View =
+  'resources' | 'cluster' | 'helm' | 'gitops' | 'flux-list' | 'flux-overview' | 'flux-roles';
 
 export interface FluxResource {
   kind: string;
@@ -206,6 +207,60 @@ export interface ResourceCounts {
 
 export interface ResourceCatalog {
   categories: Category[];
+  error?: string;
+}
+
+export interface NodeSummary {
+  total: number;
+  ready: number;
+  unschedulable: number;
+  cpuAllocatableMilli: number;
+  cpuUsedMilli: number;
+  memAllocatableMi: number;
+  memUsedMi: number;
+  usageKnown: boolean;
+}
+
+export interface PodSummary {
+  total: number;
+  running: number;
+  pending: number;
+  failed: number;
+  succeeded: number;
+  known: boolean;
+}
+
+export interface OverviewEvent {
+  namespace: string;
+  object: string;
+  reason: string;
+  message: string;
+  count: number;
+  lastSeen: string;
+}
+
+export interface ClusterOverview {
+  version: string;
+  nodes: NodeSummary;
+  pods: PodSummary;
+  warnings: OverviewEvent[];
+  error?: string;
+}
+
+export interface HelmRelease {
+  name: string;
+  namespace: string;
+  chart: string;
+  chartVersion: string;
+  appVersion: string;
+  revision: number;
+  status: string;
+  updated: string;
+  description?: string;
+}
+
+export interface HelmReleases {
+  releases: HelmRelease[];
   error?: string;
 }
 
