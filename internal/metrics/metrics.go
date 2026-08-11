@@ -66,29 +66,38 @@ func containerTotals(u *unstructured.Unstructured) (cpuMilli, memMi int64) {
 	return cpuMilli, memMi
 }
 
-func nodeUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Collector) map[string]api.ResourceUsage {
-	out := map[string]api.ResourceUsage{}
+func NodeUsage(ctx context.Context, dyn dynamic.Interface) (map[string]api.ResourceUsage, error) {
 	list, err := dyn.Resource(nodeMetricsGVR).List(ctx, metav1.ListOptions{})
-	failures.Record("nodes.metrics.k8s.io", err)
 	if err != nil {
-		return out
+		return nil, err
 	}
-	allocatable := nodeAllocatable(ctx, dyn, failures)
+	out := map[string]api.ResourceUsage{}
 	for i := range list.Items {
 		obj := &list.Items[i]
 		usage, ok := unstr.Map(obj, "usage")
 		if !ok {
 			continue
 		}
-		cpu := milli(usage)
-		mem := mebi(usage)
-		use := api.ResourceUsage{CPUMilli: cpu, MemoryMi: mem}
-		alloc, ok := allocatable[obj.GetName()]
+		out[obj.GetName()] = api.ResourceUsage{CPUMilli: milli(usage), MemoryMi: mebi(usage)}
+	}
+	return out, nil
+}
+
+func nodeUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Collector) map[string]api.ResourceUsage {
+	usage, err := NodeUsage(ctx, dyn)
+	failures.Record("nodes.metrics.k8s.io", err)
+	if err != nil {
+		return map[string]api.ResourceUsage{}
+	}
+	allocatable := nodeAllocatable(ctx, dyn, failures)
+	out := map[string]api.ResourceUsage{}
+	for name, use := range usage {
+		alloc, ok := allocatable[name]
 		if ok {
-			use.CPUPercent = percent(cpu, alloc.CPUMilli)
-			use.MemPercent = percent(mem, alloc.MemoryMi)
+			use.CPUPercent = percent(use.CPUMilli, alloc.CPUMilli)
+			use.MemPercent = percent(use.MemoryMi, alloc.MemoryMi)
 		}
-		out[obj.GetName()] = use
+		out[name] = use
 	}
 	return out
 }

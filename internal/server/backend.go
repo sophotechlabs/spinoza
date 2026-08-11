@@ -41,6 +41,8 @@ type Views interface {
 	Flux(ctx context.Context) api.FluxDashboard
 	Metrics(ctx context.Context) api.Metrics
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)
+	Overview(ctx context.Context) api.ClusterOverview
+	HelmReleases(ctx context.Context) (api.HelmReleases, error)
 }
 
 type Changes interface {

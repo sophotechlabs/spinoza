@@ -28,10 +28,12 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
+	"github.com/sophotechlabs/spinoza/internal/overview"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/safe"
@@ -364,6 +366,24 @@ func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
 	return metrics.Build(ctx, m.dyn)
+}
+
+func (m *Manager) Overview(ctx context.Context) api.ClusterOverview {
+	return overview.Build(ctx, m.dyn, m, m.versions(), m.descriptors())
+}
+
+func (m *Manager) versions() overview.Versions {
+	if m.disco == nil {
+		return nil
+	}
+	return m.disco
+}
+
+func (m *Manager) HelmReleases(ctx context.Context) (api.HelmReleases, error) {
+	if m.cs == nil {
+		return api.HelmReleases{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
+	}
+	return helm.List(ctx, m.cs)
 }
 
 type streamKey struct {

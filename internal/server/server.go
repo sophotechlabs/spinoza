@@ -78,6 +78,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/resources/counts", s.handleCounts, false},
 		{http.MethodGet, "/api/resources", s.listResources, false},
 		{http.MethodPost, "/api/resources", s.refreshResources, false},
+		{http.MethodGet, "/api/overview", s.handleOverview, false},
+		{http.MethodGet, "/api/helm", s.handleHelm, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false},
 		{http.MethodPost, "/api/flux/action", withRef(s.fluxAction), false},
@@ -332,6 +334,19 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCounts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Counts(r.Context()))
+}
+
+func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Overview(r.Context()))
+}
+
+func (s *Server) handleHelm(w http.ResponseWriter, r *http.Request) {
+	releases, err := s.manager().HelmReleases(r.Context())
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, releases)
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {

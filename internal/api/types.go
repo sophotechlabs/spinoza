@@ -45,6 +45,60 @@ type ResourceCatalog struct {
 	Error      string     `json:"error,omitempty"`
 }
 
+type NodeSummary struct {
+	Total               int   `json:"total"`
+	Ready               int   `json:"ready"`
+	Unschedulable       int   `json:"unschedulable"`
+	CPUAllocatableMilli int64 `json:"cpuAllocatableMilli"`
+	CPUUsedMilli        int64 `json:"cpuUsedMilli"`
+	MemAllocatableMi    int64 `json:"memAllocatableMi"`
+	MemUsedMi           int64 `json:"memUsedMi"`
+	UsageKnown          bool  `json:"usageKnown"`
+}
+
+type PodSummary struct {
+	Total     int  `json:"total"`
+	Running   int  `json:"running"`
+	Pending   int  `json:"pending"`
+	Failed    int  `json:"failed"`
+	Succeeded int  `json:"succeeded"`
+	Known     bool `json:"known"`
+}
+
+type OverviewEvent struct {
+	Namespace string `json:"namespace"`
+	Object    string `json:"object"`
+	Reason    string `json:"reason"`
+	Message   string `json:"message"`
+	Count     int64  `json:"count"`
+	LastSeen  string `json:"lastSeen"`
+}
+
+type ClusterOverview struct {
+	Version  string          `json:"version"`
+	Nodes    NodeSummary     `json:"nodes"`
+	Pods     PodSummary      `json:"pods"`
+	Warnings []OverviewEvent `json:"warnings"`
+	Error    string          `json:"error,omitempty"`
+}
+
+type HelmRelease struct {
+	Name         string `json:"name"`
+	Namespace    string `json:"namespace"`
+	Chart        string `json:"chart"`
+	ChartVersion string `json:"chartVersion"`
+	AppVersion   string `json:"appVersion"`
+	Revision     int64  `json:"revision"`
+	Status       string `json:"status"`
+	Updated      string `json:"updated"`
+	Description  string `json:"description,omitempty"`
+}
+
+type HelmReleases struct {
+	Releases []HelmRelease `json:"releases"`
+	Error    string        `json:"error,omitempty"`
+}
+
 type Column struct {
 	Name   string `json:"name"`
 	Render string `json:"render,omitempty"`
