@@ -79,3 +79,27 @@ export function statusLabel(status: string): string {
   }
   return status;
 }
+
+export function latestLabel(release: { latest?: string }): string {
+  if (release.latest === undefined || release.latest === '') {
+    return '—';
+  }
+  return release.latest;
+}
+
+export function latestColor(release: { outdated?: boolean }): string {
+  if (release.outdated === true) {
+    return 'text-warn';
+  }
+  return 'text-fg-muted';
+}
+
+export function latestNote(release: { latest?: string; outdated?: boolean }): string {
+  if (release.latest === undefined || release.latest === '') {
+    return 'no chart repository knows this chart';
+  }
+  if (release.outdated === true) {
+    return 'a newer chart version is available';
+  }
+  return 'up to date';
+}

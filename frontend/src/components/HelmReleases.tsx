@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { HelmRelease } from '../lib/types';
-import { statusDot, statusLabel, statusText, useHelmReleases } from '../lib/helm';
+import {
+  latestColor,
+  latestLabel,
+  latestNote,
+  statusDot,
+  statusLabel,
+  statusText,
+  useHelmReleases,
+} from '../lib/helm';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
 import LoadFailure from './LoadFailure';
@@ -95,6 +103,7 @@ export default function HelmReleases({ active = true }: HelmReleasesProps) {
                 <th className="px-2 py-1 font-medium">Namespace</th>
                 <th className="px-2 py-1 font-medium">Chart</th>
                 <th className="px-2 py-1 font-medium">App version</th>
+                <th className="px-2 py-1 font-medium">Latest</th>
                 <th className="px-2 py-1 text-right font-medium">Rev</th>
                 <th className="px-2 py-1 font-medium">Status</th>
                 <th className="px-2 py-1 text-right font-medium">Updated</th>
@@ -112,6 +121,10 @@ export default function HelmReleases({ active = true }: HelmReleasesProps) {
                   <td className="truncate px-2 py-1 text-fg-muted">{release.namespace}</td>
                   <td className="truncate px-2 py-1 text-fg-soft">{chartLabel(release)}</td>
                   <td className="truncate px-2 py-1 text-fg-muted">{orDash(release.appVersion)}</td>
+                  <td className={`truncate px-2 py-1 ${latestColor(release)}`}>
+                    {latestLabel(release)}
+                    <span className="sr-only"> {latestNote(release)}</span>
+                  </td>
                   <td className="px-2 py-1 text-right text-fg-muted">{release.revision}</td>
                   <td className="truncate px-2 py-1">
                     <span

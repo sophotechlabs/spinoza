@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import {
   fetchHelmReleases,
+  latestColor,
+  latestLabel,
+  latestNote,
   statusDot,
   statusLabel,
   statusText,
@@ -135,5 +138,30 @@ describe('what a release status looks like', () => {
   it('names an empty status rather than showing a gap', () => {
     expect(statusLabel('')).toBe('unknown');
     expect(statusLabel('deployed')).toBe('deployed');
+  });
+});
+
+describe('the newest chart version a repository offers', () => {
+  it('names the version when there is one', () => {
+    expect(latestLabel({ latest: '7.1.0' })).toBe('7.1.0');
+  });
+
+  it('shows a dash when no repository knows the chart', () => {
+    expect(latestLabel({})).toBe('—');
+    expect(latestLabel({ latest: '' })).toBe('—');
+  });
+
+  it('colours an outdated release apart from a current one', () => {
+    expect(latestColor({ outdated: true })).toBe('text-warn');
+    expect(latestColor({ outdated: false })).toBe('text-fg-muted');
+    expect(latestColor({})).toBe('text-fg-muted');
+  });
+
+  it('spells the state out for a screen reader', () => {
+    expect(latestNote({ latest: '7.1.0', outdated: true })).toBe(
+      'a newer chart version is available',
+    );
+    expect(latestNote({ latest: '6.9.2', outdated: false })).toBe('up to date');
+    expect(latestNote({})).toBe('no chart repository knows this chart');
   });
 });

@@ -253,6 +253,8 @@ export interface HelmRelease {
   chart: string;
   chartVersion: string;
   appVersion: string;
+  latest?: string;
+  outdated?: boolean;
   revision: number;
   status: string;
   updated: string;

@@ -66,7 +66,34 @@ describe('HelmReleases', () => {
     render(<HelmReleases />);
 
     await screen.findByText('demo');
-    expect(screen.getAllByText('—')).toHaveLength(2);
+    expect(screen.getAllByText('—')).toHaveLength(3);
+  });
+
+  it('shows the newest chart version the repositories offer', async () => {
+    stub({ releases: [release({ latest: '7.1.0', outdated: true })] });
+    render(<HelmReleases />);
+
+    const latest = await screen.findByText('7.1.0');
+    expect(latest).toHaveClass('text-warn');
+    expect(latest).toHaveTextContent('a newer chart version is available');
+  });
+
+  it('marks a release that already runs the newest chart', async () => {
+    stub({ releases: [release({ latest: '6.9.2', outdated: false })] });
+    render(<HelmReleases />);
+
+    await screen.findByText('podinfo-6.9.2');
+    const latest = screen.getByText(/up to date/).closest('td');
+    expect(latest).toHaveClass('text-fg-muted');
+    expect(latest).toHaveTextContent('6.9.2');
+  });
+
+  it('says nothing about a chart no repository knows', async () => {
+    stub({ releases: [release()] });
+    render(<HelmReleases />);
+
+    await screen.findByText('podinfo-6.9.2');
+    expect(screen.getByText(/no chart repository knows this chart/)).toBeInTheDocument();
   });
 
   it('colours a failed release apart from a deployed one', async () => {

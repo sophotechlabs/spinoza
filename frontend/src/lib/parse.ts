@@ -414,6 +414,8 @@ function parseHelmRelease(item: Record<string, unknown>): HelmRelease {
     chart: asString(item.chart),
     chartVersion: asString(item.chartVersion),
     appVersion: asString(item.appVersion),
+    latest: optionalString(item.latest),
+    outdated: optionalBoolean(item.outdated),
     revision: asNumber(item.revision),
     status: asString(item.status),
     updated: asString(item.updated),
