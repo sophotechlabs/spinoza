@@ -19,13 +19,14 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 )
 
 const deployedAt = "2026-08-11T09:30:00Z"
 
 func newService(cs kubernetes.Interface, index Charts, repos []charts.Repo) *Service {
-	return NewService(cs, nil, index, repos, "kind-spinoza")
+	return NewService(cs, nil, index, repos, api.ContextRef{Name: "kind-spinoza"})
 }
 
 type release struct {

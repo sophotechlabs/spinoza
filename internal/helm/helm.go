@@ -44,11 +44,11 @@ type Service struct {
 	runner  Runner
 	index   Charts
 	repos   []charts.Repo
-	kubeCtx string
+	kubeRef api.ContextRef
 }
 
-func NewService(cs kubernetes.Interface, runner Runner, index Charts, repos []charts.Repo, kubeCtx string) *Service {
-	return &Service{cs: cs, runner: runner, index: index, repos: repos, kubeCtx: kubeCtx}
+func NewService(cs kubernetes.Interface, runner Runner, index Charts, repos []charts.Repo, kubeRef api.ContextRef) *Service {
+	return &Service{cs: cs, runner: runner, index: index, repos: repos, kubeRef: kubeRef}
 }
 
 func (s *Service) List(ctx context.Context) (api.HelmReleases, error) {

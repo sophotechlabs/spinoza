@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -27,27 +28,32 @@ type Options struct {
 	CountConcurrency int
 }
 
-type builder func(ctx context.Context, name string) (*resources.Manager, string, error)
+type builder func(ctx context.Context, ref api.ContextRef) (*resources.Manager, api.ContextRef, error)
 
-type lister func() ([]string, string, error)
+type Kubeconfigs interface {
+	List() []api.Kubeconfig
+	Add(path string) error
+	Remove(path string) error
+	Resolve(path string) (string, error)
+}
 
 type Cluster struct {
-	root  context.Context
-	build builder
-	list  lister
+	root    context.Context
+	build   builder
+	sources Kubeconfigs
 
 	mu        sync.Mutex
 	manager   *resources.Manager
 	cancel    context.CancelFunc
-	current   string
+	current   api.ContextRef
 	startErr  string
 	nextSeq   uint64
 	installed uint64
 }
 
-func newCluster(ctx context.Context, build builder, list lister) *Cluster {
-	cluster := &Cluster{root: ctx, build: build, list: list}
-	err := cluster.use(ctx, "")
+func newCluster(ctx context.Context, build builder, sources Kubeconfigs) *Cluster {
+	cluster := &Cluster{root: ctx, build: build, sources: sources}
+	err := cluster.use(ctx, api.ContextRef{})
 	if err == nil {
 		return cluster
 	}
@@ -73,34 +79,43 @@ func (c *Cluster) unreached() string {
 	return c.startErr
 }
 
-func (c *Cluster) Current() string {
+func (c *Cluster) Current() api.ContextRef {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.current
 }
 
 func (c *Cluster) Contexts() api.ContextList {
-	names, current, err := c.list()
-	list := api.ContextList{Contexts: names, Current: c.Current()}
+	return api.ContextList{
+		Current:     c.Current(),
+		Error:       c.unreached(),
+		Kubeconfigs: c.sources.List(),
+	}
+}
+
+func (c *Cluster) AddKubeconfig(path string) error {
+	return c.sources.Add(path)
+}
+
+func (c *Cluster) RemoveKubeconfig(path string) error {
+	resolved, err := c.sources.Resolve(path)
 	if err != nil {
-		list.Error = err.Error()
-		return list
+		return err
 	}
-	if list.Current == "" {
-		list.Current = current
+	if c.Current().Kubeconfig == resolved {
+		return fmt.Errorf("spinoza is connected through %s; switch to a context from another kubeconfig first", resolved)
 	}
-	list.Error = c.unreached()
-	return list
+	return c.sources.Remove(resolved)
 }
 
-func (c *Cluster) Use(name string) error {
-	return c.use(c.root, name)
+func (c *Cluster) Use(ref api.ContextRef) error {
+	return c.use(c.root, ref)
 }
 
-func (c *Cluster) use(root context.Context, name string) error {
+func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 	seq := c.claim()
 	ctx, cancel := context.WithCancel(root)
-	manager, current, err := c.build(ctx, name)
+	manager, current, err := c.build(ctx, ref)
 	if err != nil {
 		cancel()
 		return err

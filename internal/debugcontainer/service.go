@@ -93,12 +93,12 @@ type Service struct {
 	runner  Runner
 	cs      kubernetes.Interface
 	image   string
-	kubeCtx string
+	kubeRef api.ContextRef
 	timeout time.Duration
 	poll    time.Duration
 }
 
-func NewService(runner Runner, cs kubernetes.Interface, image, kubeCtx string) *Service {
+func NewService(runner Runner, cs kubernetes.Interface, image string, kubeRef api.ContextRef) *Service {
 	if image == "" {
 		image = DefaultImage
 	}
@@ -106,7 +106,7 @@ func NewService(runner Runner, cs kubernetes.Interface, image, kubeCtx string) *
 		runner:  runner,
 		cs:      cs,
 		image:   image,
-		kubeCtx: kubeCtx,
+		kubeRef: kubeRef,
 		timeout: defaultTimeout,
 		poll:    defaultPoll,
 	}
@@ -207,8 +207,11 @@ func (s *Service) args(req Request, name, profile string) []string {
 	if req.Container != "" {
 		args = append(args, "--target", req.Container)
 	}
-	if s.kubeCtx != "" {
-		args = append(args, "--context", s.kubeCtx)
+	if s.kubeRef.Name != "" {
+		args = append(args, "--context", s.kubeRef.Name)
+	}
+	if s.kubeRef.Kubeconfig != "" {
+		args = append(args, "--kubeconfig", s.kubeRef.Kubeconfig)
 	}
 	return args
 }

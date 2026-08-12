@@ -19,16 +19,29 @@ import (
 )
 
 type stubCluster struct {
-	mu       sync.Mutex
-	mgr      *resources.Manager
-	names    []string
-	current  string
-	useErr   error
-	switched []string
+	mu          sync.Mutex
+	mgr         *resources.Manager
+	kubeconfigs []api.Kubeconfig
+	current     api.ContextRef
+	useErr      error
+	changeErr   error
+	switched    []api.ContextRef
+	added       []string
+	removed     []string
 }
 
 func fixed(mgr *resources.Manager) *stubCluster {
-	return &stubCluster{mgr: mgr, names: []string{"p-mk1", "p-mk2"}, current: "p-mk2"}
+	return &stubCluster{
+		mgr: mgr,
+		kubeconfigs: []api.Kubeconfig{{
+			Label: "/home/arch/.kube/config",
+			Contexts: []api.KubeContext{
+				{Name: "p-mk1", Cluster: "p-mk1"},
+				{Name: "p-mk2", Cluster: "p-mk2"},
+			},
+		}},
+		current: api.ContextRef{Name: "p-mk2"},
+	}
 }
 
 func (s *stubCluster) Manager() Backend {
@@ -40,24 +53,57 @@ func (s *stubCluster) Manager() Backend {
 func (s *stubCluster) Contexts() api.ContextList {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return api.ContextList{Contexts: s.names, Current: s.current}
+	return api.ContextList{Current: s.current, Kubeconfigs: s.kubeconfigs}
 }
 
-func (s *stubCluster) Use(name string) error {
+func (s *stubCluster) Use(ref api.ContextRef) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.useErr != nil {
 		return s.useErr
 	}
-	s.switched = append(s.switched, name)
-	s.current = name
+	s.switched = append(s.switched, ref)
+	s.current = ref
 	return nil
 }
 
-func (s *stubCluster) calls() []string {
+func (s *stubCluster) AddKubeconfig(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]string{}, s.switched...)
+	if s.changeErr != nil {
+		return s.changeErr
+	}
+	s.added = append(s.added, path)
+	s.kubeconfigs = append(s.kubeconfigs, api.Kubeconfig{Label: path, Path: path, Removable: true})
+	return nil
+}
+
+func (s *stubCluster) RemoveKubeconfig(path string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.changeErr != nil {
+		return s.changeErr
+	}
+	s.removed = append(s.removed, path)
+	return nil
+}
+
+func (s *stubCluster) calls() []api.ContextRef {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]api.ContextRef{}, s.switched...)
+}
+
+func (s *stubCluster) addCalls() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.added...)
+}
+
+func (s *stubCluster) removeCalls() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.removed...)
 }
 
 func contextServer(t *testing.T, cluster Cluster) *httptest.Server {
@@ -77,11 +123,11 @@ func TestContextsAreListedWithTheCurrentOne(t *testing.T) {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
 	}
 	list := decodeContexts(t, body)
-	if len(list.Contexts) != 2 {
-		t.Fatalf("contexts = %v", list.Contexts)
+	if len(list.Kubeconfigs) != 1 || len(list.Kubeconfigs[0].Contexts) != 2 {
+		t.Fatalf("kubeconfigs = %v", list.Kubeconfigs)
 	}
-	if list.Current != "p-mk2" {
-		t.Fatalf("current = %q", list.Current)
+	if list.Current.Name != "p-mk2" {
+		t.Fatalf("current = %q", list.Current.Name)
 	}
 }
 
@@ -95,12 +141,28 @@ func TestSwitchingContextsAsksTheCluster(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
 	}
-	if len(cluster.calls()) != 1 || cluster.calls()[0] != "p-mk1" {
+	if len(cluster.calls()) != 1 || cluster.calls()[0].Name != "p-mk1" {
 		t.Fatalf("switched = %v", cluster.calls())
 	}
 	list := decodeContexts(t, body)
-	if list.Current != "p-mk1" {
-		t.Fatalf("current = %q, want the new context echoed back", list.Current)
+	if list.Current.Name != "p-mk1" {
+		t.Fatalf("current = %q, want the new context echoed back", list.Current.Name)
+	}
+}
+
+func TestSwitchingCarriesTheKubeconfigTheContextCameFrom(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	ts := contextServer(t, cluster)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=beta&kubeconfig=%2Ftmp%2Fother.yaml", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	want := api.ContextRef{Kubeconfig: "/tmp/other.yaml", Name: "beta"}
+	if len(cluster.calls()) != 1 || cluster.calls()[0] != want {
+		t.Fatalf("switched = %v, want %v; two kubeconfigs may hold the same context name", cluster.calls(), want)
 	}
 }
 
@@ -133,8 +195,8 @@ func TestAFailedSwitchKeepsTheOldContext(t *testing.T) {
 	if !strings.Contains(string(body), "does not exist") {
 		t.Fatalf("body = %s, want the reason", body)
 	}
-	if cluster.Contexts().Current != "p-mk2" {
-		t.Fatalf("current = %q, want the old context kept", cluster.Contexts().Current)
+	if cluster.Contexts().Current.Name != "p-mk2" {
+		t.Fatalf("current = %q, want the old context kept", cluster.Contexts().Current.Name)
 	}
 }
 
@@ -149,6 +211,191 @@ func TestContextsRejectsADelete(t *testing.T) {
 	}
 }
 
+func TestAddingAKubeconfigListsItBack(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	ts := contextServer(t, cluster)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/kubeconfigs?path=%2Ftmp%2Fother.yaml", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if len(cluster.addCalls()) != 1 || cluster.addCalls()[0] != "/tmp/other.yaml" {
+		t.Fatalf("added = %v", cluster.addCalls())
+	}
+	list := decodeContexts(t, body)
+	if len(list.Kubeconfigs) != 2 {
+		t.Fatalf("kubeconfigs = %v, want the added one in the answer", list.Kubeconfigs)
+	}
+}
+
+func TestAddingAKubeconfigNeedsAPath(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	ts := contextServer(t, cluster)
+
+	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/kubeconfigs", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if len(cluster.addCalls()) != 0 {
+		t.Fatalf("added = %v on a bad request", cluster.addCalls())
+	}
+}
+
+func TestAKubeconfigTheClusterRefusesIsReported(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	cluster.changeErr = errors.New("that file is not a kubeconfig")
+	ts := contextServer(t, cluster)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/kubeconfigs?path=%2Ftmp%2Fnotes.txt", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a file that is not a kubeconfig was accepted")
+	}
+	if !strings.Contains(string(body), "not a kubeconfig") {
+		t.Fatalf("body = %s, want the reason", body)
+	}
+}
+
+func TestRemovingAKubeconfigReachesTheCluster(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	ts := contextServer(t, cluster)
+
+	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/kubeconfigs?path=%2Ftmp%2Fother.yaml", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if len(cluster.removeCalls()) != 1 || cluster.removeCalls()[0] != "/tmp/other.yaml" {
+		t.Fatalf("removed = %v", cluster.removeCalls())
+	}
+}
+
+func TestRemovingAKubeconfigNeedsAPath(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	ts := contextServer(t, cluster)
+
+	resp, _ := doRequest(t, http.MethodDelete, ts.URL+"/api/kubeconfigs", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if len(cluster.removeCalls()) != 0 {
+		t.Fatalf("removed = %v on a bad request", cluster.removeCalls())
+	}
+}
+
+func TestARemovalTheClusterRefusesIsReported(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	cluster.changeErr = errors.New("spinoza is connected through that kubeconfig")
+	ts := contextServer(t, cluster)
+
+	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/kubeconfigs?path=%2Ftmp%2Fother.yaml", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("the kubeconfig in use was removed under the running cluster")
+	}
+	if !strings.Contains(string(body), "connected through") {
+		t.Fatalf("body = %s, want the reason", body)
+	}
+}
+
+func TestKubeconfigsRejectAGet(t *testing.T) {
+	mgr, _ := testManager(t)
+	ts := contextServer(t, fixed(mgr))
+
+	resp, _ := doRequest(t, http.MethodGet, ts.URL+"/api/kubeconfigs", nil)
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", resp.StatusCode)
+	}
+}
+
+func TestTheBrowserBuildOffersNoFileDialog(t *testing.T) {
+	mgr, _ := testManager(t)
+	ts := contextServer(t, fixed(mgr))
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/kubeconfigs/picker", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	support := decodePicker(t, body)
+	if support.Available {
+		t.Fatal("a browser tab was offered a native file dialog it cannot open")
+	}
+	if support.Reason == "" {
+		t.Fatal("the picker was refused without saying why")
+	}
+}
+
+func TestPickingAFileWithoutADialogIsRefused(t *testing.T) {
+	mgr, _ := testManager(t)
+	ts := contextServer(t, fixed(mgr))
+
+	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/kubeconfigs/picker", nil)
+
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want 501", resp.StatusCode)
+	}
+}
+
+func pickerServer(t *testing.T, picker FilePicker) *httptest.Server {
+	t.Helper()
+	mgr, _ := testManager(t)
+	srv := New(fixed(mgr), testAssets(), testToken)
+	srv.UseFilePicker(picker)
+	ts := httptest.NewServer(authed(srv.Handler()))
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func TestTheDesktopWindowOpensAFileDialog(t *testing.T) {
+	ts := pickerServer(t, func(context.Context) (string, error) {
+		return "/home/arch/.kube/other.yaml", nil
+	})
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/kubeconfigs/picker", nil)
+	if !decodePicker(t, body).Available {
+		t.Fatalf("status = %d, support = %s, want the dialog offered", resp.StatusCode, body)
+	}
+
+	chosen, chosenBody := doRequest(t, http.MethodPost, ts.URL+"/api/kubeconfigs/picker", nil)
+
+	if chosen.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", chosen.StatusCode, chosenBody)
+	}
+	var picked api.PickedFile
+	if err := json.Unmarshal(chosenBody, &picked); err != nil {
+		t.Fatalf("decode %s: %v", chosenBody, err)
+	}
+	if picked.Path != "/home/arch/.kube/other.yaml" {
+		t.Fatalf("path = %q", picked.Path)
+	}
+}
+
+func TestAFileDialogThatFailsIsReported(t *testing.T) {
+	ts := pickerServer(t, func(context.Context) (string, error) {
+		return "", errors.New("the spinoza window is not ready yet")
+	})
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/kubeconfigs/picker", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a dialog that never opened reported a path")
+	}
+	if !strings.Contains(string(body), "not ready") {
+		t.Fatalf("body = %s, want the reason", body)
+	}
+}
+
 func decodeContexts(t *testing.T, body []byte) api.ContextList {
 	t.Helper()
 	var list api.ContextList
@@ -157,6 +404,16 @@ func decodeContexts(t *testing.T, body []byte) api.ContextList {
 		t.Fatalf("decode %s: %v", body, err)
 	}
 	return list
+}
+
+func decodePicker(t *testing.T, body []byte) api.FilePicker {
+	t.Helper()
+	var support api.FilePicker
+	err := json.Unmarshal(body, &support)
+	if err != nil {
+		t.Fatalf("decode %s: %v", body, err)
+	}
+	return support
 }
 
 func TestSwitchingClosesOpenSessions(t *testing.T) {

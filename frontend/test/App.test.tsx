@@ -270,7 +270,18 @@ function stubFetch(): void {
       if (url.startsWith('/api/contexts')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ contexts: ['kind-dev'], current: 'kind-dev' }),
+          json: () =>
+            Promise.resolve({
+              current: { kubeconfig: '', name: 'kind-dev' },
+              kubeconfigs: [
+                {
+                  label: '/home/arch/.kube/config',
+                  path: '',
+                  removable: false,
+                  contexts: [{ name: 'kind-dev', cluster: 'kind-dev' }],
+                },
+              ],
+            }),
         });
       }
       if (url === '/api/metrics') {

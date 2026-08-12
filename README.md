@@ -13,7 +13,9 @@ just run     # build frontend + binary, start the server
 
 Open the URL it prints on start — it carries a token generated for that run, and the page keeps it in a cookie so a reload still works. `just rund` builds and opens the desktop app instead.
 
-Spinoza uses your current kubeconfig context, switchable from the dropdown in the top bar. It refuses to start on a non-loopback address, and refuses requests whose Host or Origin is not local, because the process holds full cluster credentials. Loopback is not a permission boundary, so every route and both WebSockets also require this run's token, as the `X-Spinoza-Token` header, a `token` query parameter or the cookie. `--token-file PATH` writes it out (mode 0600) for scripts.
+Spinoza starts on your current kubeconfig context and the top bar switches between every context it can see. **Kubeconfigs** next to that dropdown adds another file by path — the desktop app opens a file dialog for it. An added file is only ever referenced: spinoza re-reads it on every listing and every switch, never copies it, and never merges it with your default one, so contexts stay grouped under the file they came from. The list of files lives in `kubeconfigs.json` under your user config directory; `--kubeconfig PATH` still replaces the default lookup for the run.
+
+It refuses to start on a non-loopback address, and refuses requests whose Host or Origin is not local, because the process holds full cluster credentials. Loopback is not a permission boundary, so every route and both WebSockets also require this run's token, as the `X-Spinoza-Token` header, a `token` query parameter or the cookie. `--token-file PATH` writes it out (mode 0600) for scripts.
 
 ## What it does
 

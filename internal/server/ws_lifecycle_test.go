@@ -604,6 +604,14 @@ func (c *swappableCluster) Contexts() api.ContextList {
 	return api.ContextList{}
 }
 
-func (c *swappableCluster) Use(string) error {
+func (c *swappableCluster) Use(api.ContextRef) error {
+	return nil
+}
+
+func (c *swappableCluster) AddKubeconfig(string) error {
+	return nil
+}
+
+func (c *swappableCluster) RemoveKubeconfig(string) error {
 	return nil
 }

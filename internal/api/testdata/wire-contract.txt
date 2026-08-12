@@ -34,9 +34,11 @@ ContainerState.Ready ready
 ContainerState.Reason reason,omitempty
 ContainerState.Restarts restarts
 ContainerState.State state
-ContextList.Contexts contexts
 ContextList.Current current
 ContextList.Error error,omitempty
+ContextList.Kubeconfigs kubeconfigs
+ContextRef.Kubeconfig kubeconfig
+ContextRef.Name name
 DebugSession.Container container
 DebugSession.Created created
 DebugSession.Image image
@@ -62,6 +64,8 @@ ExecSupport.Shell shell
 FeedError.Message message
 FeedError.SubID subId
 FeedError.Type type
+FilePicker.Available available
+FilePicker.Reason reason,omitempty
 FluxActionResult.Action action
 FluxActionResult.RequestedAt requestedAt,omitempty
 FluxDashboard.Error error,omitempty
@@ -145,6 +149,14 @@ HelmRevision.Updated updated
 HelmSupport.Available available
 HelmSupport.Binary binary
 HelmSupport.Reason reason,omitempty
+KubeContext.Cluster cluster
+KubeContext.Name name
+KubeContext.Namespace namespace,omitempty
+Kubeconfig.Contexts contexts
+Kubeconfig.Error error,omitempty
+Kubeconfig.Label label
+Kubeconfig.Path path
+Kubeconfig.Removable removable
 LogEnd.SubID subId
 LogEnd.Type type
 LogLines.Lines lines
@@ -202,6 +214,7 @@ OverviewEvent.Reason reason
 OwnerRef.Kind kind
 OwnerRef.Name name
 OwnerRef.UID uid
+PickedFile.Path path
 PodOutcome.Name name
 PodOutcome.Namespace namespace
 PodOutcome.Outcome outcome

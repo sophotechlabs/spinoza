@@ -97,7 +97,7 @@ export default function App() {
     fetchContexts()
       .then((list) => {
         if (live) {
-          setContextName(list.current);
+          setContextName(list.current.name);
         }
       })
       .catch(() => undefined);

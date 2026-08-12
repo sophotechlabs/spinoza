@@ -14,12 +14,15 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/server"
@@ -79,7 +82,16 @@ func runDesktop() error {
 		defer func() { _ = os.Remove(opts.tokenFile) }()
 	}
 
+	var window atomic.Pointer[context.Context]
 	srv := server.New(clusters, assets, token)
+	srv.UseFilePicker(func(context.Context) (string, error) {
+		ready := window.Load()
+		if ready == nil {
+			return "", errors.New("the spinoza window is not ready yet")
+		}
+		//nolint:contextcheck // the dialog belongs to the window, not to the request that asked for it
+		return chooseKubeconfig(*ready)
+	})
 	httpServer := &http.Server{
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -106,11 +118,36 @@ func runDesktop() error {
 		AssetServer: &assetserver.Options{
 			Handler: desktopAssets(assets, addr, token),
 		},
+		OnStartup: func(windowCtx context.Context) {
+			window.Store(&windowCtx)
+		},
 	})
 	if runErr != nil {
 		return fmt.Errorf("wails: %w", runErr)
 	}
 	return nil
+}
+
+func chooseKubeconfig(window context.Context) (string, error) {
+	path, err := wailsruntime.OpenFileDialog(window, wailsruntime.OpenDialogOptions{
+		Title:                      "Choose a kubeconfig",
+		DefaultDirectory:           kubeDirectory(),
+		ShowHiddenFiles:            true,
+		ResolvesAliases:            true,
+		TreatPackagesAsDirectories: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("file dialog: %w", err)
+	}
+	return path, nil
+}
+
+func kubeDirectory() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".kube")
 }
 
 func desktopAssets(assets fs.FS, addr, token string) http.Handler {

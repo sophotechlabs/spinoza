@@ -41,11 +41,22 @@ func (s *stubBackendCluster) Manager() Backend {
 }
 
 func (s *stubBackendCluster) Contexts() api.ContextList {
-	return api.ContextList{Contexts: []string{"p-mk1"}, Current: "p-mk1"}
+	return api.ContextList{
+		Current:     api.ContextRef{Name: "p-mk1"},
+		Kubeconfigs: []api.Kubeconfig{{Label: "default", Contexts: []api.KubeContext{{Name: "p-mk1", Cluster: "p-mk1"}}}},
+	}
 }
 
-func (s *stubBackendCluster) Use(string) error {
+func (s *stubBackendCluster) Use(api.ContextRef) error {
 	return errors.New("this stub has one context")
+}
+
+func (s *stubBackendCluster) AddKubeconfig(string) error {
+	return errors.New("this stub reads one kubeconfig")
+}
+
+func (s *stubBackendCluster) RemoveKubeconfig(string) error {
+	return errors.New("this stub reads one kubeconfig")
 }
 
 func stubbedServer(t *testing.T, backend Backend) *httptest.Server {
@@ -68,7 +79,7 @@ func TestThePickerStaysReachableWithoutACluster(t *testing.T) {
 	if err := json.Unmarshal(body, &list); err != nil {
 		t.Fatalf("decode %s: %v", body, err)
 	}
-	if len(list.Contexts) == 0 {
+	if len(list.Kubeconfigs) == 0 || len(list.Kubeconfigs[0].Contexts) == 0 {
 		t.Fatal("the picker offered no contexts")
 	}
 }

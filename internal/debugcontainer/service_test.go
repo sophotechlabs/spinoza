@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 type stubRunner struct {
@@ -75,7 +77,7 @@ func newService(t *testing.T, pod *corev1.Pod, runner *stubRunner) *Service {
 			_, _ = client.CoreV1().Pods(pod.Namespace).Update(context.Background(), current, metav1.UpdateOptions{})
 		}
 	}
-	service := NewService(runner, client, "", "p-mk1")
+	service := NewService(runner, client, "", api.ContextRef{Name: "p-mk1"})
 	service.poll = time.Millisecond
 	service.timeout = 2 * time.Second
 	return service
@@ -260,7 +262,7 @@ func TestEnsureRejectsNamesThatCouldBeReadAsFlags(t *testing.T) {
 }
 
 func TestEnsureReportsAMissingPod(t *testing.T) {
-	service := NewService(&stubRunner{}, k8sfake.NewClientset(), "", "")
+	service := NewService(&stubRunner{}, k8sfake.NewClientset(), "", api.ContextRef{})
 	_, err := service.Ensure(context.Background(), request())
 	if err == nil {
 		t.Fatal("expected an error")
@@ -295,7 +297,7 @@ func TestEnsureFailsFastOnAPullFailure(t *testing.T) {
 		}}
 		_, _ = client.CoreV1().Pods(pod.Namespace).UpdateStatus(context.Background(), current, metav1.UpdateOptions{})
 	}
-	service := NewService(runner, client, "", "")
+	service := NewService(runner, client, "", api.ContextRef{})
 	service.poll = time.Millisecond
 	service.timeout = 30 * time.Second
 
@@ -324,7 +326,7 @@ func TestEnsureReportsAContainerThatExitsImmediately(t *testing.T) {
 		}}
 		_, _ = client.CoreV1().Pods(pod.Namespace).UpdateStatus(context.Background(), current, metav1.UpdateOptions{})
 	}
-	service := NewService(runner, client, "", "")
+	service := NewService(runner, client, "", api.ContextRef{})
 	service.poll = time.Millisecond
 	service.timeout = 2 * time.Second
 
@@ -430,7 +432,7 @@ func TestEnsureReportsAPodThatVanishesWhileWaiting(t *testing.T) {
 	runner.onRun = func() {
 		_ = client.CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
 	}
-	service := NewService(runner, client, "", "")
+	service := NewService(runner, client, "", api.ContextRef{})
 	service.poll = time.Millisecond
 	service.timeout = 2 * time.Second
 
@@ -460,7 +462,7 @@ func allowingClient(t *testing.T, allowed bool, reason string) *k8sfake.Clientse
 }
 
 func TestAllowedReportsAPermittedNamespace(t *testing.T) {
-	service := NewService(&stubRunner{}, allowingClient(t, true, ""), "", "")
+	service := NewService(&stubRunner{}, allowingClient(t, true, ""), "", api.ContextRef{})
 
 	support := service.Allowed(context.Background(), "monitoring", "loki-0")
 	if !support.Allowed {
@@ -472,7 +474,7 @@ func TestAllowedReportsAPermittedNamespace(t *testing.T) {
 }
 
 func TestAllowedReportsARefusalWithItsReason(t *testing.T) {
-	service := NewService(&stubRunner{}, allowingClient(t, false, "no RBAC policy matched"), "", "")
+	service := NewService(&stubRunner{}, allowingClient(t, false, "no RBAC policy matched"), "", api.ContextRef{})
 
 	support := service.Allowed(context.Background(), "kube-system", "loki-0")
 	if support.Allowed {
@@ -489,7 +491,7 @@ func TestAllowedDefaultsToPermittedWhenTheReviewItselfFails(t *testing.T) {
 		func(k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, errors.New("cannot create selfsubjectaccessreviews")
 		})
-	service := NewService(&stubRunner{}, client, "", "")
+	service := NewService(&stubRunner{}, client, "", api.ContextRef{})
 
 	support := service.Allowed(context.Background(), "monitoring", "loki-0")
 	if !support.Allowed {
@@ -512,7 +514,7 @@ func TestWaitReportsTheLastWaitingReasonOnTimeout(t *testing.T) {
 		}}
 		_, _ = client.CoreV1().Pods(pod.Namespace).UpdateStatus(context.Background(), current, metav1.UpdateOptions{})
 	}
-	service := NewService(runner, client, "", "")
+	service := NewService(runner, client, "", api.ContextRef{})
 	service.poll = time.Millisecond
 	service.timeout = 40 * time.Millisecond
 
@@ -712,7 +714,7 @@ func TestEnsureBoundsTheKubectlPatchPhase(t *testing.T) {
 		patchTimeout = previous
 	})
 	runner := &blockingRunner{saw: make(chan error, 1)}
-	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", "p-mk1")
+	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", api.ContextRef{Name: "p-mk1"})
 
 	started := time.Now()
 	_, err := service.Ensure(context.Background(), request())
@@ -731,7 +733,7 @@ func TestEnsureBoundsTheKubectlPatchPhase(t *testing.T) {
 
 func TestEnsureLeavesTheKubectlDeadlineAloneWhenTheCallerIsShorter(t *testing.T) {
 	runner := &blockingRunner{saw: make(chan error, 1)}
-	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", "p-mk1")
+	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", api.ContextRef{Name: "p-mk1"})
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 

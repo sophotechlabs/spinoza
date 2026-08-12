@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 }
 
 func openCluster() (*kube.Bundle, error) {
-	loaded, err := kube.LoadContext(os.Getenv("SPINOZA_TEST_CONTEXT"), kube.Options{})
+	loaded, err := kube.LoadContext(api.ContextRef{Name: os.Getenv("SPINOZA_TEST_CONTEXT")}, kube.Options{})
 	if err != nil {
 		return nil, fmt.Errorf("load kubeconfig: %w", err)
 	}
@@ -140,7 +140,7 @@ func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
 			helm.NewRunner(""),
 			nil,
 			nil,
-			os.Getenv("SPINOZA_TEST_CONTEXT"),
+			api.ContextRef{Name: os.Getenv("SPINOZA_TEST_CONTEXT")},
 		),
 		Descriptors: descs,
 	})

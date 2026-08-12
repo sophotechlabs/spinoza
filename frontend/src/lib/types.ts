@@ -193,10 +193,38 @@ export interface FluxResource {
   createdAt: string;
 }
 
-export interface ContextList {
-  contexts: string[];
-  current: string;
+export interface ContextRef {
+  kubeconfig: string;
+  name: string;
+}
+
+export interface KubeContext {
+  cluster: string;
+  name: string;
+  namespace?: string;
+}
+
+export interface Kubeconfig {
+  contexts: KubeContext[];
   error?: string;
+  label: string;
+  path: string;
+  removable: boolean;
+}
+
+export interface ContextList {
+  current: ContextRef;
+  error?: string;
+  kubeconfigs: Kubeconfig[];
+}
+
+export interface FilePicker {
+  available: boolean;
+  reason?: string;
+}
+
+export interface PickedFile {
+  path: string;
 }
 
 export interface ResourceCounts {

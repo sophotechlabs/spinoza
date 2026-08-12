@@ -28,10 +28,38 @@ type Category struct {
 	Resources []ResourceDescriptor `json:"resources"`
 }
 
+type ContextRef struct {
+	Kubeconfig string `json:"kubeconfig"`
+	Name       string `json:"name"`
+}
+
+type KubeContext struct {
+	Cluster   string `json:"cluster"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
+type Kubeconfig struct {
+	Contexts  []KubeContext `json:"contexts"`
+	Error     string        `json:"error,omitempty"`
+	Label     string        `json:"label"`
+	Path      string        `json:"path"`
+	Removable bool          `json:"removable"`
+}
+
 type ContextList struct {
-	Contexts []string `json:"contexts"`
-	Current  string   `json:"current"`
-	Error    string   `json:"error,omitempty"`
+	Current     ContextRef   `json:"current"`
+	Error       string       `json:"error,omitempty"`
+	Kubeconfigs []Kubeconfig `json:"kubeconfigs"`
+}
+
+type FilePicker struct {
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+type PickedFile struct {
+	Path string `json:"path"`
 }
 
 type ResourceCounts struct {

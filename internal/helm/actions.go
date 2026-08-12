@@ -163,8 +163,11 @@ func (s *Service) admits(namespace, name string) error {
 
 func (s *Service) args(rest ...string) []string {
 	args := append([]string{}, rest...)
-	if s.kubeCtx != "" {
-		args = append(args, "--kube-context", s.kubeCtx)
+	if s.kubeRef.Name != "" {
+		args = append(args, "--kube-context", s.kubeRef.Name)
+	}
+	if s.kubeRef.Kubeconfig != "" {
+		args = append(args, "--kubeconfig", s.kubeRef.Kubeconfig)
 	}
 	return args
 }

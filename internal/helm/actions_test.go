@@ -11,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 type stubRunner struct {
@@ -43,7 +45,7 @@ func acting(t *testing.T, runner Runner, objs ...*corev1.Secret) *Service {
 			t.Fatalf("seed secret: %v", err)
 		}
 	}
-	return NewService(client, runner, nil, nil, "kind-spinoza")
+	return NewService(client, runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 }
 
 func TestRollbackRunsHelmWithThePinnedContext(t *testing.T) {
@@ -99,7 +101,7 @@ func TestActionsTellHelmWhichDriverHoldsTheRelease(t *testing.T) {
 		Data: map[string]string{releaseKey: "rubbish"},
 	}
 	client := k8sfake.NewClientset(entry)
-	service := NewService(client, runner, nil, nil, "kind-spinoza")
+	service := NewService(client, runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 
 	_, err := service.Uninstall(context.Background(), "demo", "podinfo")
 	if err != nil {
@@ -210,7 +212,7 @@ func TestSupportReportsAHelmItCanRun(t *testing.T) {
 }
 
 func TestAServiceWithNoRunnerRefusesToAct(t *testing.T) {
-	service := NewService(k8sfake.NewClientset(), nil, nil, nil, "kind-spinoza")
+	service := NewService(k8sfake.NewClientset(), nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 
 	support := service.Support()
 	_, err := service.Uninstall(context.Background(), "demo", "podinfo")
@@ -304,7 +306,7 @@ func TestActionsReportARefusedStorageRead(t *testing.T) {
 	client.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("secrets is forbidden")
 	})
-	service := NewService(client, &stubRunner{}, nil, nil, "kind-spinoza")
+	service := NewService(client, &stubRunner{}, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 
 	_, rollbackErr := service.Rollback(context.Background(), "demo", "podinfo", 1)
 	_, uninstallErr := service.Uninstall(context.Background(), "demo", "podinfo")
@@ -319,7 +321,7 @@ func TestAConfigMapListFailureIsReported(t *testing.T) {
 	client.PrependReactor("list", "configmaps", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("configmaps is forbidden")
 	})
-	service := NewService(client, nil, nil, nil, "kind-spinoza")
+	service := NewService(client, nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 
 	_, err := service.List(context.Background())
 
@@ -337,7 +339,7 @@ func TestAConfigMapWithNoReleaseKeyIsSkipped(t *testing.T) {
 		},
 		Data: map[string]string{"other": "value"},
 	}
-	service := NewService(k8sfake.NewClientset(entry), nil, nil, nil, "kind-spinoza")
+	service := NewService(k8sfake.NewClientset(entry), nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 
 	got, err := service.List(context.Background())
 	if err != nil {

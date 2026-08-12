@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/kube"
+	"github.com/sophotechlabs/spinoza/internal/kubeconfig"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/resources"
@@ -21,15 +23,26 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 	if targetErr != nil {
 		return nil, targetErr
 	}
-	return newCluster(ctx, func(buildCtx context.Context, name string) (*resources.Manager, string, error) {
-		manager, bundle, err := build(buildCtx, name, options, promTarget)
+	sources := kubeconfig.NewSources(options.Kubeconfig, openStore())
+	return newCluster(ctx, func(buildCtx context.Context, ref api.ContextRef) (*resources.Manager, api.ContextRef, error) {
+		manager, bundle, err := build(buildCtx, ref, options, promTarget)
 		if err != nil {
-			return nil, "", err
+			return nil, api.ContextRef{}, err
 		}
-		return manager, bundle.Context, nil
-	}, func() ([]string, string, error) {
-		return kube.Contexts(options.Kubeconfig)
-	}), nil
+		return manager, bundle.Ref, nil
+	}, sources), nil
+}
+
+func openStore() *kubeconfig.Store {
+	path, pathErr := kubeconfig.DefaultPath()
+	if pathErr != nil {
+		slog.Warn("kubeconfigs you add will not be remembered", "error", pathErr)
+	}
+	store, openErr := kubeconfig.Open(path)
+	if openErr != nil {
+		slog.Warn("the remembered kubeconfig list could not be read", "error", openErr)
+	}
+	return store
 }
 
 func unreachable(name string, discErr error) error {
@@ -39,8 +52,8 @@ func unreachable(name string, discErr error) error {
 	return fmt.Errorf("context %q lists no resource types", name)
 }
 
-func build(ctx context.Context, name string, options Options, promTarget prom.Target) (*resources.Manager, *kube.Bundle, error) {
-	bundle, err := kube.LoadContext(name, kube.Options{
+func build(ctx context.Context, ref api.ContextRef, options Options, promTarget prom.Target) (*resources.Manager, *kube.Bundle, error) {
+	bundle, err := kube.LoadContext(ref, kube.Options{
 		Kubeconfig: options.Kubeconfig,
 		QPS:        options.ClientQPS,
 		Burst:      options.ClientBurst,
@@ -50,12 +63,12 @@ func build(ctx context.Context, name string, options Options, promTarget prom.Ta
 	}
 	cats, descs, discErr := discovery.List(bundle.Discovery)
 	if len(descs) == 0 {
-		return nil, nil, unreachable(bundle.Context, discErr)
+		return nil, nil, unreachable(bundle.Ref.Name, discErr)
 	}
 	if discErr != nil {
 		slog.Warn("discovery came back incomplete", "error", discErr)
 	}
-	slog.Info("connected to a cluster", "context", bundle.Context, "resourceTypes", len(descs), "categories", len(cats))
+	slog.Info("connected to a cluster", "context", bundle.Ref.Name, "resourceTypes", len(descs), "categories", len(cats))
 	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3)
 	forwards := portforward.NewRegistry(
 		ctx,
@@ -71,14 +84,14 @@ func build(ctx context.Context, name string, options Options, promTarget prom.Ta
 		debugcontainer.NewRunner(options.KubectlBinary),
 		bundle.Clientset,
 		options.DebugImage,
-		bundle.Context,
+		bundle.Ref,
 	)
 	releases := helm.NewService(
 		bundle.Clientset,
 		helm.NewRunner(options.HelmBinary),
 		nil,
 		helm.Repositories(helm.RepositoryConfig()),
-		bundle.Context,
+		bundle.Ref,
 	)
 	promClient := prom.NewClient(bundle.Clientset, promTarget)
 	mgr := resources.NewManager(ctx, resources.Deps{

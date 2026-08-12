@@ -35,8 +35,14 @@ const maxDocBytes = 4 << 20
 type Cluster interface {
 	Manager() Backend
 	Contexts() api.ContextList
-	Use(name string) error
+	Use(ref api.ContextRef) error
+	AddKubeconfig(path string) error
+	RemoveKubeconfig(path string) error
 }
+
+type FilePicker func(ctx context.Context) (string, error)
+
+const noFilePicker = "only the desktop window can open a file dialog; type the path instead"
 
 type Server struct {
 	cluster   Cluster
@@ -44,6 +50,7 @@ type Server struct {
 	files     http.Handler
 	token     string
 	mu        sync.Mutex
+	picker    FilePicker
 	sessions  map[*wsSession]struct{}
 	terminals map[*websocket.Conn]struct{}
 }
@@ -63,6 +70,18 @@ func (s *Server) manager() Backend {
 	return s.cluster.Manager()
 }
 
+func (s *Server) UseFilePicker(picker FilePicker) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.picker = picker
+}
+
+func (s *Server) filePicker() FilePicker {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.picker
+}
+
 type endpoint struct {
 	method  string
 	path    string
@@ -76,6 +95,10 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/version", handleVersion, true},
 		{http.MethodGet, "/api/contexts", s.listContexts, true},
 		{http.MethodPost, "/api/contexts", s.switchContext, true},
+		{http.MethodPost, "/api/kubeconfigs", s.addKubeconfig, true},
+		{http.MethodDelete, "/api/kubeconfigs", s.removeKubeconfig, true},
+		{http.MethodGet, "/api/kubeconfigs/picker", s.filePickerSupport, true},
+		{http.MethodPost, "/api/kubeconfigs/picker", s.pickFile, true},
 		{http.MethodGet, "/api/resources/counts", s.handleCounts, false},
 		{http.MethodGet, "/api/resources", s.listResources, false},
 		{http.MethodPost, "/api/resources", s.refreshResources, false},
@@ -161,7 +184,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, api.Health{
 		Status:  "ok",
 		Version: version.String(),
-		Context: s.cluster.Contexts().Current,
+		Context: s.cluster.Contexts().Current.Name,
 	})
 }
 
@@ -285,18 +308,63 @@ func (s *Server) listContexts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
-	name := r.URL.Query().Get("name")
+	query := r.URL.Query()
+	name := query.Get("name")
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	err := s.cluster.Use(name)
+	err := s.cluster.Use(api.ContextRef{Kubeconfig: query.Get("kubeconfig"), Name: name})
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
 	s.dropSessions()
 	writeJSON(w, s.cluster.Contexts())
+}
+
+func (s *Server) addKubeconfig(w http.ResponseWriter, r *http.Request) {
+	s.changeKubeconfigs(w, r, s.cluster.AddKubeconfig)
+}
+
+func (s *Server) removeKubeconfig(w http.ResponseWriter, r *http.Request) {
+	s.changeKubeconfigs(w, r, s.cluster.RemoveKubeconfig)
+}
+
+func (s *Server) changeKubeconfigs(w http.ResponseWriter, r *http.Request, change func(string) error) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		writeError(w, http.StatusBadRequest, "path is required")
+		return
+	}
+	err := change(path)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, s.cluster.Contexts())
+}
+
+func (s *Server) filePickerSupport(w http.ResponseWriter, r *http.Request) {
+	if s.filePicker() == nil {
+		writeJSON(w, api.FilePicker{Reason: noFilePicker})
+		return
+	}
+	writeJSON(w, api.FilePicker{Available: true})
+}
+
+func (s *Server) pickFile(w http.ResponseWriter, r *http.Request) {
+	picker := s.filePicker()
+	if picker == nil {
+		writeError(w, http.StatusNotImplemented, noFilePicker)
+		return
+	}
+	path, err := picker(r.Context())
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, api.PickedFile{Path: path})
 }
 
 func (s *Server) listResources(w http.ResponseWriter, r *http.Request) {

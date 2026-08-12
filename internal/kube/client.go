@@ -2,7 +2,9 @@ package kube
 
 import (
 	"fmt"
+	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/discovery"
@@ -12,6 +14,8 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 type Bundle struct {
@@ -20,7 +24,7 @@ type Bundle struct {
 	Dynamic   dynamic.Interface
 	Discovery discovery.CachedDiscoveryInterface
 	Mapper    *restmapper.DeferredDiscoveryRESTMapper
-	Context   string
+	Ref       api.ContextRef
 	Namespace string
 }
 
@@ -40,26 +44,46 @@ func (o Options) orDefaults() Options {
 	return o
 }
 
-func configFor(contextName, kubeconfig string) clientcmd.ClientConfig {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfig != "" {
-		loadingRules.ExplicitPath = kubeconfig
+func rulesFor(path string) *clientcmd.ClientConfigLoadingRules {
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if path == "" {
+		return rules
 	}
-	overrides := &clientcmd.ConfigOverrides{CurrentContext: contextName}
-	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
+	rules.ExplicitPath = path
+	return rules
 }
 
-func Contexts(kubeconfig string) ([]string, string, error) {
-	raw, err := configFor("", kubeconfig).RawConfig()
+func configFor(ref api.ContextRef, fallback string) clientcmd.ClientConfig {
+	path := ref.Kubeconfig
+	if path == "" {
+		path = fallback
+	}
+	overrides := &clientcmd.ConfigOverrides{CurrentContext: ref.Name}
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rulesFor(path), overrides)
+}
+
+func Read(path string) ([]api.KubeContext, error) {
+	raw, err := configFor(api.ContextRef{Kubeconfig: path}, "").RawConfig()
 	if err != nil {
-		return nil, "", fmt.Errorf("kubeconfig: %w", err)
+		return nil, fmt.Errorf("kubeconfig: %w", err)
 	}
-	names := make([]string, 0, len(raw.Contexts))
-	for name := range raw.Contexts {
-		names = append(names, name)
+	out := make([]api.KubeContext, 0, len(raw.Contexts))
+	for _, name := range slices.Sorted(maps.Keys(raw.Contexts)) {
+		entry := raw.Contexts[name]
+		out = append(out, api.KubeContext{
+			Cluster:   entry.Cluster,
+			Name:      name,
+			Namespace: entry.Namespace,
+		})
 	}
-	slices.Sort(names)
-	return names, raw.CurrentContext, nil
+	return out, nil
+}
+
+func Label(path string) string {
+	if path != "" {
+		return path
+	}
+	return strings.Join(clientcmd.NewDefaultClientConfigLoadingRules().Precedence, ", ")
 }
 
 const (
@@ -78,9 +102,9 @@ func boundedDiscovery(restConfig *restclient.Config) (discovery.DiscoveryInterfa
 	return client, nil
 }
 
-func LoadContext(contextName string, options Options) (*Bundle, error) {
+func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	options = options.orDefaults()
-	clientConfig := configFor(contextName, options.Kubeconfig)
+	clientConfig := configFor(ref, options.Kubeconfig)
 
 	restConfig, err := clientConfig.ClientConfig()
 	if err != nil {
@@ -106,11 +130,11 @@ func LoadContext(contextName string, options Options) (*Bundle, error) {
 	cached := memory.NewMemCacheClient(bounded)
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(cached)
 
-	resolved := contextName
-	if resolved == "" {
+	resolved := ref
+	if resolved.Name == "" {
 		rawConfig, rawErr := clientConfig.RawConfig()
 		if rawErr == nil {
-			resolved = rawConfig.CurrentContext
+			resolved.Name = rawConfig.CurrentContext
 		}
 	}
 
@@ -126,7 +150,7 @@ func LoadContext(contextName string, options Options) (*Bundle, error) {
 		Dynamic:   dyn,
 		Discovery: cached,
 		Mapper:    mapper,
-		Context:   resolved,
+		Ref:       resolved,
 		Namespace: namespace,
 	}, nil
 }
