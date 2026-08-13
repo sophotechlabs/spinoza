@@ -177,9 +177,9 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
           <Tile label="Nodes" value={String(data.nodes.total)} hint={nodeHint(data.nodes)} />
           <Tile label="Pods" value={podTotal(data.pods)} hint={podHint(data.pods)} />
           <Tile
-            label="Warnings"
+            label="Recent warnings"
             value={String(data.warnings.length)}
-            hint="most recent events first"
+            hint="the newest events shown"
           />
         </div>
 
