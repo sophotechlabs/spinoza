@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BLADE_RUNNER,
+  BORG,
   BUILT_IN_THEMES,
   CANVAS_NAMES,
   CYBERPUNK,
   MATRIX,
   NORD,
   PAINTED_KEY,
+  SKYWALKER,
   STARTREKTOR,
   TOKEN_NAMES,
   applyTheme,
@@ -168,13 +170,15 @@ describe('the themes that ship with spinoza', () => {
       'light',
       'nord',
       'blade-runner',
+      'borg',
       'cyberpunk',
       'matrix',
+      'skywalker',
       'startrektor',
     ]);
   });
 
-  for (const theme of [NORD, BLADE_RUNNER, CYBERPUNK, MATRIX, STARTREKTOR]) {
+  for (const theme of [NORD, BLADE_RUNNER, BORG, CYBERPUNK, MATRIX, SKYWALKER, STARTREKTOR]) {
     it(`${theme.name} sets every token and every canvas colour, so nothing falls back to dark`, () => {
       expect(Object.keys(theme.tokens ?? {}).sort()).toEqual([...TOKEN_NAMES].sort());
       expect(Object.keys(theme.canvas ?? {}).sort()).toEqual([...CANVAS_NAMES].sort());

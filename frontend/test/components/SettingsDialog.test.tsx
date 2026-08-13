@@ -59,11 +59,13 @@ describe('the settings dialog', () => {
     const names = Array.from(select.querySelectorAll('option')).map((option) => option.textContent);
     expect(names).toEqual([
       'Blade Runner',
+      'Borg',
       'Cyberpunk',
       'Dark',
       'Light',
       'Matrix',
       'Nord',
+      'Skywalker',
       'Startrektor',
       'System',
     ]);
