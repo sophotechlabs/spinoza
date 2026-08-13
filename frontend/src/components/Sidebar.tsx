@@ -94,13 +94,6 @@ function byPopulated(
   return [...populated, ...empty];
 }
 
-function kindClass(failing: number | undefined): string {
-  if (failing === undefined) {
-    return 'truncate';
-  }
-  return 'truncate text-error';
-}
-
 function kindTitle(kind: string, failing: number | undefined): string {
   if (failing === undefined) {
     return kind;
@@ -113,6 +106,13 @@ function failingNote(failing: number | undefined): string {
     return '';
   }
   return `, ${String(failing)} not running`;
+}
+
+function failingBadge(failing: number | undefined): string {
+  if (failing === undefined) {
+    return '';
+  }
+  return `(${String(failing)})`;
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -340,11 +340,12 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                         isEmpty(counts[descriptorKey(resource)]),
                       )}
                     >
-                      <span className={kindClass(failing[descriptorKey(resource)])}>
-                        {resource.kind}
-                      </span>{' '}
+                      <span className="truncate">{resource.kind}</span>{' '}
                       <span className="shrink-0 text-fg-subtle">
                         {countLabel(counts[descriptorKey(resource)])}
+                        <span aria-hidden="true" className="text-error">
+                          {failingBadge(failing[descriptorKey(resource)])}
+                        </span>
                         <span className="sr-only">
                           {failingNote(failing[descriptorKey(resource)])}
                         </span>
@@ -391,11 +392,12 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                   isEmpty(counts[descriptorKey(resource)]),
                                 )}
                               >
-                                <span className={kindClass(failing[descriptorKey(resource)])}>
-                                  {resource.kind}
-                                </span>{' '}
+                                <span className="truncate">{resource.kind}</span>{' '}
                                 <span className="shrink-0 text-fg-subtle">
                                   {countLabel(counts[descriptorKey(resource)])}
+                                  <span aria-hidden="true" className="text-error">
+                                    {failingBadge(failing[descriptorKey(resource)])}
+                                  </span>
                                   <span className="sr-only">
                                     {failingNote(failing[descriptorKey(resource)])}
                                   </span>

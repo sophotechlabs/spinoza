@@ -615,13 +615,15 @@ describe('pods that are not running', () => {
     vi.unstubAllGlobals();
   });
 
-  it('turns the kind red and says how many', async () => {
+  it('keeps the kind plain and shows the count in a red badge', async () => {
     stubFetch(categories, { '/v1/pods': 12, 'apps/v1/deployments': 4 }, { '/v1/pods': 3 });
     renderSidebar();
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
 
     const pods = await screen.findByRole('button', { name: /^Pod/ });
-    expect(pods.querySelector('span')?.className).toContain('text-error');
+    expect(pods.querySelector('span')?.className).not.toContain('text-error');
+    expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
+    expect(pods).toHaveTextContent('12(3)');
     expect(pods).toHaveAttribute('title', 'Pod — 3 not running or succeeded');
     expect(pods).toHaveTextContent('3 not running');
   });
@@ -643,5 +645,6 @@ describe('pods that are not running', () => {
 
     const pods = await screen.findByRole('button', { name: /^Pod/ });
     expect(pods.querySelector('span')?.className).not.toContain('text-error');
+    expect(pods.querySelector('.text-error')?.textContent).toBe('');
   });
 });
