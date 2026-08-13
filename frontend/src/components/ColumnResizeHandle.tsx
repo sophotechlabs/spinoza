@@ -1,4 +1,5 @@
-import type { KeyboardEvent, MouseEvent, TouchEvent } from 'react';
+import { useRef } from 'react';
+import type { KeyboardEvent, PointerEvent } from 'react';
 
 const COLUMN_NUDGE_STEP = 16;
 
@@ -8,8 +9,12 @@ interface ColumnResizeHandleProps {
   min: number;
   onSize: (size: number) => void;
   onReset: () => void;
-  onMouseDown: (event: MouseEvent) => void;
-  onTouchStart: (event: TouchEvent) => void;
+}
+
+interface Drag {
+  pointer: number;
+  startX: number;
+  startSize: number;
 }
 
 export default function ColumnResizeHandle({
@@ -18,9 +23,9 @@ export default function ColumnResizeHandle({
   min,
   onSize,
   onReset,
-  onMouseDown,
-  onTouchStart,
 }: ColumnResizeHandleProps) {
+  const drag = useRef<Drag | null>(null);
+
   function handleKey(event: KeyboardEvent<HTMLButtonElement>) {
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
@@ -38,14 +43,50 @@ export default function ColumnResizeHandle({
     }
   }
 
+  function handlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    drag.current = { pointer: event.pointerId, startX: event.clientX, startSize: size };
+    if (typeof event.currentTarget.setPointerCapture === 'function') {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  }
+
+  function handlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    const started = drag.current;
+    if (started?.pointer !== event.pointerId) {
+      return;
+    }
+    onSize(Math.max(min, started.startSize + event.clientX - started.startX));
+  }
+
+  function handleLostCapture() {
+    drag.current = null;
+  }
+
+  function handlePointerUp(event: PointerEvent<HTMLButtonElement>) {
+    if (drag.current === null) {
+      return;
+    }
+    drag.current = null;
+    if (typeof event.currentTarget.releasePointerCapture === 'function') {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
   return (
     <button
       type="button"
       aria-label={`Resize the ${column} column`}
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onLostPointerCapture={handleLostCapture}
       onKeyDown={handleKey}
-      className="absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none bg-grip opacity-0 select-none hover:opacity-100 focus-visible:opacity-100"
+      className="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none bg-grip opacity-0 select-none hover:opacity-100 focus-visible:opacity-100"
     />
   );
 }

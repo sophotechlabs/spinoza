@@ -279,18 +279,21 @@ describe('column widths', () => {
     expect(cols[0]).toBe('120px');
   });
 
-  it('leaves a column the user sized out of the spare-width share', async () => {
+  it('resizes from the width on screen, not the width behind the flex share', async () => {
     const user = userEvent.setup();
     stubFlux(dashboard);
     wideContainer(2000);
     render(<FluxList onSelect={vi.fn()} />);
     await screen.findByText('res-a');
 
+    const nameWidth = () =>
+      Number.parseInt([...document.querySelectorAll('col')][1].style.width, 10);
+    const flexed = nameWidth();
     const grip = screen.getByRole('button', { name: 'Resize the Name column' });
     grip.focus();
     await user.keyboard('{ArrowRight}');
 
-    const cols = [...document.querySelectorAll('col')].map((col) => col.style.width);
-    expect(cols[1]).toBe('196px');
+    expect(flexed).toBeGreaterThan(180);
+    expect(nameWidth()).toBe(flexed + 16);
   });
 });

@@ -165,7 +165,10 @@ export default function FluxList({ onSelect }: FluxListProps) {
     .getVisibleLeafColumns()
     .filter((column) => flexes(column.id, sizing)).length;
   const perFlex = Math.max(0, containerWidth - totalSize) / Math.max(1, flexCount);
-  const tableWidth = Math.max(containerWidth, totalSize);
+  let tableWidth = totalSize;
+  if (flexCount > 0) {
+    tableWidth = Math.max(containerWidth, totalSize);
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -197,7 +200,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
                   {flexRender(header.column.columnDef.header, header.getContext())}
                   <ColumnResizeHandle
                     column={columnLabel(header.column.columnDef.header, header.column.id)}
-                    size={header.getSize()}
+                    size={columnWidth(header.column.id, header.getSize(), perFlex, sizing)}
                     min={header.column.columnDef.minSize ?? 0}
                     onSize={(next) => {
                       table.setColumnSizing((old) => ({ ...old, [header.column.id]: next }));
@@ -205,8 +208,6 @@ export default function FluxList({ onSelect }: FluxListProps) {
                     onReset={() => {
                       header.column.resetSize();
                     }}
-                    onMouseDown={header.getResizeHandler()}
-                    onTouchStart={header.getResizeHandler()}
                   />
                 </th>
               ))}

@@ -10,6 +10,19 @@ import { readTableState, tableKey } from '../../src/lib/tableState';
 const SUB = 's1';
 const descriptor = makeDescriptor({ resource: 'pods', kind: 'Pod' });
 
+function drag(grip: HTMLElement, moves: number[], read?: () => string): string[] {
+  const seen: string[] = [];
+  fireEvent.pointerDown(grip, { clientX: 0, pointerId: 1, button: 0 });
+  for (const clientX of moves) {
+    fireEvent.pointerMove(grip, { clientX, pointerId: 1 });
+    if (read) {
+      seen.push(read());
+    }
+  }
+  fireEvent.pointerUp(grip, { clientX: moves[moves.length - 1], pointerId: 1 });
+  return seen;
+}
+
 function seed(columns: Column[], namespaced: boolean, rows: Row[]): void {
   useResourcesStore.getState().applySnapshot(SUB, columns, namespaced, rows);
 }
@@ -745,6 +758,7 @@ describe('a column the user resized', () => {
 
   afterEach(() => {
     resetStore();
+    vi.restoreAllMocks();
   });
 
   it('keeps its width across a remount', () => {
@@ -753,9 +767,7 @@ describe('a column the user resized', () => {
     const grip = screen.getByRole('button', { name: 'Resize the Name column' });
 
     const before = screen.getAllByRole('columnheader')[1].style.width;
-    fireEvent.mouseDown(grip, { clientX: 0 });
-    fireEvent.mouseMove(document, { clientX: 60 });
-    fireEvent.mouseUp(document, { clientX: 60 });
+    drag(grip, [60]);
     const widened = screen.getAllByRole('columnheader')[1].style.width;
     expect(widened).not.toBe(before);
     first.unmount();
@@ -771,11 +783,9 @@ describe('a column the user resized', () => {
     const grip = screen.getByRole('button', { name: 'Resize the Name column' });
     const width = () => screen.getAllByRole('columnheader')[1].style.width;
 
-    fireEvent.mouseDown(grip, { clientX: 0 });
-    fireEvent.mouseMove(document, { clientX: 60 });
+    drag(grip, [60]);
 
     expect(width()).toBe('300px');
-    fireEvent.mouseUp(document, { clientX: 60 });
   });
 
   it('tracks every step of a drag rather than lagging behind it', () => {
@@ -784,13 +794,7 @@ describe('a column the user resized', () => {
     const grip = screen.getByRole('button', { name: 'Resize the Name column' });
     const width = () => screen.getAllByRole('columnheader')[1].style.width;
 
-    fireEvent.mouseDown(grip, { clientX: 0 });
-    const seen: string[] = [];
-    for (const clientX of [20, 40, 60]) {
-      fireEvent.mouseMove(document, { clientX });
-      seen.push(width());
-    }
-    fireEvent.mouseUp(document, { clientX: 60 });
+    const seen = drag(grip, [20, 40, 60], width);
 
     expect(seen).toEqual(['260px', '280px', '300px']);
     expect(width()).toBe('300px');
@@ -801,29 +805,26 @@ describe('a column the user resized', () => {
     renderTable(descriptor, null);
     const grip = screen.getByRole('button', { name: 'Resize the Name column' });
 
-    fireEvent.mouseDown(grip, { clientX: 0 });
-    fireEvent.mouseMove(document, { clientX: 30 });
-    fireEvent.mouseUp(document, { clientX: 30 });
+    drag(grip, [30]);
 
     expect(screen.getAllByRole('columnheader')[1].style.width).toBe('270px');
     expect(readTableState(tableKey(descriptor)).sizing).toEqual({ name: 270 });
   });
 
-  it('keeps a user-sized column out of the spare-width share', async () => {
+  it('resizes from the width on screen, not the width behind the flex share', async () => {
     const user = userEvent.setup();
-    const wide = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(2000);
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(2000);
     seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
     renderTable(descriptor, null);
-    const width = () => screen.getAllByRole('columnheader')[1].style.width;
+    const width = () => Number.parseInt(screen.getAllByRole('columnheader')[1].style.width, 10);
     const flexed = width();
 
     const grip = screen.getByRole('button', { name: 'Resize the Name column' });
     grip.focus();
     await user.keyboard('{ArrowRight}');
 
-    expect(flexed).not.toBe('240px');
-    expect(width()).toBe('256px');
-    wide.mockRestore();
+    expect(flexed).toBeGreaterThan(240);
+    expect(width()).toBe(flexed + 16);
   });
 
   it('resizes from the keyboard like the docks do', async () => {
@@ -886,5 +887,105 @@ describe('copying a row name', () => {
     renderTable(descriptor, null);
 
     expect(screen.getByRole('button', { name: 'Copy pod-a' })).toBeInTheDocument();
+  });
+});
+
+describe('the resize grip itself', () => {
+  beforeEach(() => {
+    resetStore();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    resetStore();
+    vi.restoreAllMocks();
+  });
+
+  it('ignores a right-button press', () => {
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+    const width = () => screen.getAllByRole('columnheader')[1].style.width;
+    const before = width();
+
+    fireEvent.pointerDown(grip, { clientX: 0, pointerId: 1, button: 2 });
+    fireEvent.pointerMove(grip, { clientX: 60, pointerId: 1 });
+
+    expect(width()).toBe(before);
+  });
+
+  it('ignores moves from a pointer that never pressed it', () => {
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+    const width = () => screen.getAllByRole('columnheader')[1].style.width;
+
+    fireEvent.pointerMove(grip, { clientX: 60, pointerId: 1 });
+
+    expect(width()).toBe('240px');
+  });
+
+  it('stops resizing when the pointer capture is taken away', () => {
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+    const width = () => screen.getAllByRole('columnheader')[1].style.width;
+
+    fireEvent.pointerDown(grip, { clientX: 0, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(grip, { clientX: 40, pointerId: 1 });
+    fireEvent.lostPointerCapture(grip, { pointerId: 1 });
+    fireEvent.pointerMove(grip, { clientX: 200, pointerId: 1 });
+
+    expect(width()).toBe('280px');
+  });
+
+  it('will not drag a column below its minimum', () => {
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+
+    drag(grip, [-400]);
+
+    expect(screen.getAllByRole('columnheader')[1].style.width).toBe('100px');
+  });
+});
+
+describe('pointer capture during a drag', () => {
+  beforeEach(() => {
+    resetStore();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    resetStore();
+    vi.restoreAllMocks();
+  });
+
+  it('captures the pointer so moves keep arriving off the 8px grip', () => {
+    const capture = vi.fn();
+    const release = vi.fn();
+    Object.assign(HTMLElement.prototype, {
+      setPointerCapture: capture,
+      releasePointerCapture: release,
+    });
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+
+    drag(grip, [60]);
+
+    expect(capture).toHaveBeenCalledWith(1);
+    expect(release).toHaveBeenCalledWith(1);
+    expect(screen.getAllByRole('columnheader')[1].style.width).toBe('300px');
+  });
+
+  it('ignores a release from a pointer that never pressed it', () => {
+    seed(makeColumns([]), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+
+    fireEvent.pointerUp(grip, { clientX: 60, pointerId: 1 });
+
+    expect(screen.getAllByRole('columnheader')[1].style.width).toBe('240px');
   });
 });

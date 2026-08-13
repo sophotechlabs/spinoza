@@ -10,7 +10,6 @@ import {
 } from '@tanstack/react-table';
 import type {
   ColumnDef,
-  ColumnSizingInfoState,
   ColumnSizingState,
   RowSelectionState,
   SortDirection,
@@ -51,14 +50,6 @@ interface ResourceTableProps {
 
 const ROW_HEIGHT = 28;
 
-const IDLE_SIZING: ColumnSizingInfoState = {
-  startOffset: null,
-  startSize: null,
-  deltaOffset: null,
-  deltaPercentage: null,
-  isResizingColumn: false,
-  columnSizingStart: [],
-};
 const FLEX_COLUMN_IDS = new Set(['name']);
 const SELECT_COLUMN_ID = 'select';
 
@@ -179,7 +170,6 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     () => readTableState(stateKey).visibility,
   );
   const [sizing, setSizing] = useState<ColumnSizingState>(() => readTableState(stateKey).sizing);
-  const [sizingInfo, setSizingInfo] = useState<ColumnSizingInfoState>(IDLE_SIZING);
   const [selection, setSelection] = useState<RowSelectionState>({});
   const [query, setQuery] = useState('');
   const [namespace, setNamespace] = useState(ALL_NAMESPACES);
@@ -344,7 +334,6 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
       sorting,
       columnVisibility: visibility,
       columnSizing: sizing,
-      columnSizingInfo: sizingInfo,
       rowSelection: selection,
     },
     getRowId: (row) => row.uid,
@@ -361,9 +350,6 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     onColumnSizingChange: (updater) => {
       changeSizing(functionalUpdate(updater, sizing));
     },
-    onColumnSizingInfoChange: (updater) => {
-      setSizingInfo(functionalUpdate(updater, sizingInfo));
-    },
     columnResizeMode: 'onChange',
     defaultColumn: { minSize: 60 },
     getCoreRowModel: getCoreRowModel(),
@@ -378,7 +364,10 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     .getVisibleLeafColumns()
     .filter((column) => flexes(column.id, sizing)).length;
   const perFlex = Math.max(0, containerWidth - totalSize) / Math.max(1, flexCount);
-  const tableWidth = Math.max(containerWidth, totalSize);
+  let tableWidth = totalSize;
+  if (flexCount > 0) {
+    tableWidth = Math.max(containerWidth, totalSize);
+  }
 
   const virtualizer = useVirtualizer({
     count: tableRows.length,
@@ -534,7 +523,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                     {header.column.getCanResize() && (
                       <ColumnResizeHandle
                         column={columnLabel(header.column.columnDef.header, header.column.id)}
-                        size={header.getSize()}
+                        size={columnWidth(header.column.id, header.getSize(), perFlex, sizing)}
                         min={header.column.columnDef.minSize ?? 0}
                         onSize={(next) => {
                           table.setColumnSizing((old) => ({ ...old, [header.column.id]: next }));
@@ -542,8 +531,6 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                         onReset={() => {
                           header.column.resetSize();
                         }}
-                        onMouseDown={header.getResizeHandler()}
-                        onTouchStart={header.getResizeHandler()}
                       />
                     )}
                   </th>
