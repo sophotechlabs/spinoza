@@ -11,6 +11,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -225,6 +226,9 @@ func (c *Client) probe(ctx context.Context, target Target) (string, error) {
 		_, err := c.proxy.Get(ctx, probed, buildPath, nil)
 		if err == nil {
 			return scheme, nil
+		}
+		if apierrors.IsForbidden(err) {
+			return "", fmt.Errorf("%w: this account may not proxy services (verb get on services/proxy): %w", ErrUnavailable, err)
 		}
 		lastErr = err
 	}

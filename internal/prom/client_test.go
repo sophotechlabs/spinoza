@@ -9,8 +9,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 )
 
@@ -291,18 +293,26 @@ func TestStepForKeepsThePointCountBounded(t *testing.T) {
 }
 
 type stubProxy struct {
-	calls    []Target
-	paths    []string
-	params   []map[string]string
-	failFor  map[string]bool
-	body     string
-	rangeErr error
+	calls     []Target
+	paths     []string
+	params    []map[string]string
+	failFor   map[string]bool
+	forbidden bool
+	body      string
+	rangeErr  error
 }
 
 func (s *stubProxy) Get(_ context.Context, target Target, path string, params map[string]string) ([]byte, error) {
 	s.calls = append(s.calls, target)
 	s.paths = append(s.paths, path)
 	s.params = append(s.params, params)
+	if s.forbidden {
+		return nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "services"},
+			target.Service,
+			errors.New("requires container.services.proxy"),
+		)
+	}
 	if s.failFor[target.Scheme] {
 		return nil, errors.New("connection refused over " + target.Scheme)
 	}
@@ -367,6 +377,28 @@ func TestTargetFallsBackToHTTP(t *testing.T) {
 	}
 	if target.Scheme != "http" {
 		t.Fatalf("scheme = %q, want the http fallback", target.Scheme)
+	}
+}
+
+func TestTargetReportsAForbiddenProxyOnce(t *testing.T) {
+	proxy := &stubProxy{forbidden: true}
+	client := operatedClient(t, proxy)
+
+	_, err := client.Target(context.Background())
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("err = %v, want ErrUnavailable", err)
+	}
+	if !strings.Contains(err.Error(), "services/proxy") {
+		t.Fatalf("message = %q, want the missing permission named", err.Error())
+	}
+	if strings.Contains(err.Error(), "did not answer") {
+		t.Fatalf("message = %q, a denial is not a connectivity failure", err.Error())
+	}
+	if len(proxy.calls) != 1 {
+		t.Fatalf("probed %d times, want no second scheme after a denial", len(proxy.calls))
 	}
 }
 
