@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-table';
 import type {
   ColumnDef,
+  ColumnSizingInfoState,
   ColumnSizingState,
   RowSelectionState,
   SortDirection,
@@ -49,11 +50,27 @@ interface ResourceTableProps {
 }
 
 const ROW_HEIGHT = 28;
+
+const IDLE_SIZING: ColumnSizingInfoState = {
+  startOffset: null,
+  startSize: null,
+  deltaOffset: null,
+  deltaPercentage: null,
+  isResizingColumn: false,
+  columnSizingStart: [],
+};
 const FLEX_COLUMN_IDS = new Set(['name']);
 const SELECT_COLUMN_ID = 'select';
 
-function columnWidth(id: string, base: number, perFlex: number): number {
-  if (FLEX_COLUMN_IDS.has(id)) {
+function flexes(id: string, sizing: ColumnSizingState): boolean {
+  if (!FLEX_COLUMN_IDS.has(id)) {
+    return false;
+  }
+  return !Object.hasOwn(sizing, id);
+}
+
+function columnWidth(id: string, base: number, perFlex: number, sizing: ColumnSizingState): number {
+  if (flexes(id, sizing)) {
     return base + perFlex;
   }
   return base;
@@ -162,6 +179,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     () => readTableState(stateKey).visibility,
   );
   const [sizing, setSizing] = useState<ColumnSizingState>(() => readTableState(stateKey).sizing);
+  const [sizingInfo, setSizingInfo] = useState<ColumnSizingInfoState>(IDLE_SIZING);
   const [selection, setSelection] = useState<RowSelectionState>({});
   const [query, setQuery] = useState('');
   const [namespace, setNamespace] = useState(ALL_NAMESPACES);
@@ -322,7 +340,13 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const table = useReactTable({
     data: visibleRows,
     columns,
-    state: { sorting, columnVisibility: visibility, columnSizing: sizing, rowSelection: selection },
+    state: {
+      sorting,
+      columnVisibility: visibility,
+      columnSizing: sizing,
+      columnSizingInfo: sizingInfo,
+      rowSelection: selection,
+    },
     getRowId: (row) => row.uid,
     enableRowSelection: true,
     onRowSelectionChange: (updater) => {
@@ -337,6 +361,9 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     onColumnSizingChange: (updater) => {
       changeSizing(functionalUpdate(updater, sizing));
     },
+    onColumnSizingInfoChange: (updater) => {
+      setSizingInfo(functionalUpdate(updater, sizingInfo));
+    },
     columnResizeMode: 'onChange',
     defaultColumn: { minSize: 60 },
     getCoreRowModel: getCoreRowModel(),
@@ -349,7 +376,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const totalSize = table.getTotalSize();
   const flexCount = table
     .getVisibleLeafColumns()
-    .filter((column) => FLEX_COLUMN_IDS.has(column.id)).length;
+    .filter((column) => flexes(column.id, sizing)).length;
   const perFlex = Math.max(0, containerWidth - totalSize) / Math.max(1, flexCount);
   const tableWidth = Math.max(containerWidth, totalSize);
 
@@ -489,7 +516,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                     aria-sort={ariaSort(header.column.getIsSorted())}
                     className="relative px-2 py-1 font-medium"
                     style={{
-                      width: `${columnWidth(header.column.id, header.getSize(), perFlex)}px`,
+                      width: `${columnWidth(header.column.id, header.getSize(), perFlex, sizing)}px`,
                     }}
                   >
                     {header.column.getCanSort() && (
@@ -543,7 +570,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                       key={cell.id}
                       className="truncate px-2 py-1 text-fg"
                       style={{
-                        width: `${columnWidth(cell.column.id, cell.column.getSize(), perFlex)}px`,
+                        width: `${columnWidth(cell.column.id, cell.column.getSize(), perFlex, sizing)}px`,
                       }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

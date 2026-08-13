@@ -255,3 +255,42 @@ describe('FluxList partial failures', () => {
     expect(screen.getByText('No Flux resources found.')).toBeInTheDocument();
   });
 });
+
+describe('column widths', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function wideContainer(width: number): void {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
+  }
+
+  it('spreads the spare width across the flexible columns', async () => {
+    stubFlux(dashboard);
+    wideContainer(2000);
+
+    render(<FluxList onSelect={vi.fn()} />);
+    await screen.findByText('res-a');
+
+    const cols = [...document.querySelectorAll('col')].map((col) => col.style.width);
+    expect(cols[1]).not.toBe('180px');
+    expect(cols[4]).not.toBe('260px');
+    expect(cols[0]).toBe('120px');
+  });
+
+  it('leaves a column the user sized out of the spare-width share', async () => {
+    const user = userEvent.setup();
+    stubFlux(dashboard);
+    wideContainer(2000);
+    render(<FluxList onSelect={vi.fn()} />);
+    await screen.findByText('res-a');
+
+    const grip = screen.getByRole('button', { name: 'Resize the Name column' });
+    grip.focus();
+    await user.keyboard('{ArrowRight}');
+
+    const cols = [...document.querySelectorAll('col')].map((col) => col.style.width);
+    expect(cols[1]).toBe('196px');
+  });
+});
