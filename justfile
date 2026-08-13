@@ -1,6 +1,7 @@
 export PATH := env_var('HOME') + '/go/bin:' + env_var('PATH')
 
 go_pkgs := './internal/... .'
+addr := env_var_or_default('SPINOZA_ADDR', '127.0.0.1:34115')
 ldflags := '-s -w'
 version_pkg := 'github.com/sophotechlabs/spinoza/internal/version.value'
 
@@ -48,8 +49,44 @@ stub-assets:
     </html>
     HTML
 
-run: build
+run: build stop
     ./spinoza
+
+stop:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    listen='{{ addr }}'
+    port="${listen##*:}"
+    if ! command -v lsof > /dev/null; then
+        echo "stop: lsof is missing, so nothing was checked on port $port"
+        exit 0
+    fi
+    holders=$(lsof -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null || true)
+    if [ -z "$holders" ]; then
+        exit 0
+    fi
+    for pid in $holders; do
+        command=$(ps -p "$pid" -o args= 2>/dev/null || true)
+        case "$command" in
+            *spinoza*)
+                echo "stop: port $port was held by pid $pid, stopping it"
+                kill "$pid" 2>/dev/null || true
+                ;;
+            *)
+                echo "stop: port $port is held by pid $pid, which is not spinoza:"
+                echo "  $command"
+                exit 1
+                ;;
+        esac
+    done
+    for _ in $(seq 1 50); do
+        if [ -z "$(lsof -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null || true)" ]; then
+            exit 0
+        fi
+        sleep 0.1
+    done
+    echo "stop: port $port is still held after 5s"
+    exit 1
 
 build-desktop:
     #!/usr/bin/env bash
