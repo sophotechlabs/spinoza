@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -772,9 +773,16 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 	}
 
 	var lastWatchErr atomic.Pointer[string]
+	denied := make(chan error, 1)
 	watchErr := informer.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
 		reason := err.Error()
 		lastWatchErr.Store(&reason)
+		if apierrors.IsForbidden(err) {
+			select {
+			case denied <- err:
+			default:
+			}
+		}
 		st.watchBroke(reason)
 	})
 	if watchErr != nil {
@@ -801,14 +809,24 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 	factory.Start(streamCtx.Done())
 	syncCtx, cancelSync := context.WithTimeout(ctx, m.syncTimeout)
 	defer cancelSync()
-	if !cache.WaitForCacheSync(syncCtx.Done(), informer.HasSynced) {
+	synced := make(chan bool, 1)
+	go func() {
+		synced <- cache.WaitForCacheSync(syncCtx.Done(), informer.HasSynced)
+	}()
+	select {
+	case ok := <-synced:
+		if ok {
+			return st, nil
+		}
 		cancel()
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("%s was still syncing when the request went away: %w", key.gvr.String(), ctx.Err())
 		}
 		return nil, syncFailure(key, m.syncTimeout, watchFailure(&lastWatchErr))
+	case err := <-denied:
+		cancel()
+		return nil, err
 	}
-	return st, nil
 }
 
 func watchFailure(holder *atomic.Pointer[string]) string {

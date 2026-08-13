@@ -721,11 +721,7 @@ func stuckManager(t *testing.T, stuck string) (*Manager, *fake.FakeDynamicClient
 	t.Helper()
 	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
 	client.PrependReactor("list", stuck, func(k8stesting.Action) (bool, runtime.Object, error) {
-		return true, nil, apierrors.NewForbidden(
-			schema.GroupResource{Resource: stuck},
-			"",
-			errors.New(`User "spinoza" cannot list resource "`+stuck+`"`),
-		)
+		return true, nil, errors.New("the apiserver went away")
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -760,8 +756,40 @@ func TestSubscribeReportsWhyTheWatchFailed(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
+	if !strings.Contains(err.Error(), "went away") {
+		t.Fatalf("err = %v, want the reason from the reflector", err)
+	}
+}
+
+func TestSubscribeFailsFastOnAForbiddenList(t *testing.T) {
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+	client.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "deployments"},
+			"",
+			errors.New(`User "spinoza" cannot list resource "deployments"`),
+		)
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, Deps{Dynamic: client, Clientset: k8sfake.NewClientset(), Descriptors: testDescs()})
+	mgr.syncTimeout = 20 * time.Second
+
+	start := time.Now()
+	_, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected the forbidden list to fail the subscribe")
+	}
 	if !strings.Contains(err.Error(), "cannot list resource") {
-		t.Fatalf("err = %v, want the forbidden reason from the reflector", err)
+		t.Fatalf("err = %v, want the denial surfaced", err)
+	}
+	if strings.Contains(err.Error(), "did not sync") {
+		t.Fatalf("err = %v, a denial is not a sync timeout", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("subscribe took %s, want it to fail without waiting out the sync window", elapsed)
 	}
 }
 
