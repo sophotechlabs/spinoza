@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/server"
 	"github.com/sophotechlabs/spinoza/internal/version"
@@ -43,6 +45,7 @@ func run() error {
 		return nil
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: opts.logLevel})))
+	klog.SetSlogLogger(slog.Default())
 
 	addrErr := server.CheckLoopback(opts.addr)
 	if addrErr != nil {
