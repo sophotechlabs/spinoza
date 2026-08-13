@@ -16,6 +16,22 @@ build:
     cd frontend && npm run build
     go build -trimpath -ldflags '{{ ldflags }}' -o spinoza .
 
+stub-assets:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f web/dist/index.html ]; then
+        exit 0
+    fi
+    mkdir -p web/dist
+    echo "stub-assets: writing a placeholder index.html so the go-only recipes can compile"
+    cat > web/dist/index.html <<'HTML'
+    <!doctype html>
+    <html lang="en">
+      <head><meta charset="utf-8" /><title>Spinoza</title></head>
+      <body>This binary was built without its frontend. Run <code>just build</code>.</body>
+    </html>
+    HTML
+
 run: build
     ./spinoza
 
@@ -28,13 +44,13 @@ rund: build-desktop
 dev-desktop:
     wails dev -tags desktop -skipbindings
 
-dev-api:
+dev-api: stub-assets
     go run . --addr 127.0.0.1:34115
 
 dev-web:
     cd frontend && npm run dev
 
-test-be:
+test-be: stub-assets
     go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out {{ go_pkgs }}
     go tool cover -func=coverage.out
 
@@ -58,7 +74,7 @@ test: test-be test-fe
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml
 
-lint-be:
+lint-be: stub-assets
     golangci-lint run {{ go_pkgs }}
     golangci-lint run --build-tags desktop {{ go_pkgs }}
     go vet {{ go_pkgs }}
@@ -152,7 +168,7 @@ fmt:
     golangci-lint fmt
     cd frontend && npm run format
 
-ci-go-build: cross
+ci-go-build: stub-assets cross
     go build ./...
     go build -tags desktop ./...
 
@@ -160,7 +176,7 @@ ci-go-test: cover-gate
 
 ci-go-lint: lint-be fmt-check mod-check
 
-ci-go-audit: audit-be dead
+ci-go-audit: stub-assets audit-be dead
 
 ci-fe-lint: deps lint-fe
 

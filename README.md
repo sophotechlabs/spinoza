@@ -40,6 +40,8 @@ just dev-web   # Vite dev server, proxies to the API
 
 Vite serves its own `index.html`, so it cannot inject the token: open `http://localhost:5173/?token=<the token dev-api printed>` and the app picks it up from the URL.
 
+The binary embeds the built frontend, so `go build` on its own fails with `pattern web/dist/index.html: no matching files found` until there is one. `just build` produces the real thing; `just stub-assets` drops in a placeholder page, which is what the Go-only recipes and `just dev-api` use so they need no Node.
+
 ## CI
 
 CI runs on a self-hosted Forgejo forge. Workflows live in `.forgejo/workflows/`.
