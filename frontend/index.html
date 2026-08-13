@@ -9,22 +9,17 @@
       (function () {
         var root = document.documentElement;
         var stored = 'dark';
-        var custom = null;
+        var last = null;
         try {
           stored = localStorage.getItem('spinoza.theme.v1') || 'dark';
           if (stored !== 'dark' && stored !== 'light' && stored !== 'system') {
-            var installed = JSON.parse(localStorage.getItem('spinoza.themes.v1') || '[]');
-            for (var i = 0; i < installed.length; i++) {
-              if (installed[i] && installed[i].id === stored) {
-                custom = installed[i];
-              }
-            }
+            last = JSON.parse(localStorage.getItem('spinoza.painted.v1') || 'null');
           }
         } catch (err) {
           stored = 'dark';
         }
         var base = 'dark';
-        if (custom && custom.base === 'light') {
+        if (last && last.base === 'light') {
           base = 'light';
         } else if (stored === 'light') {
           base = 'light';
@@ -35,10 +30,10 @@
         }
         root.dataset.theme = base;
         root.style.colorScheme = base;
-        if (custom && custom.tokens) {
-          for (var token in custom.tokens) {
-            if (Object.prototype.hasOwnProperty.call(custom.tokens, token)) {
-              root.style.setProperty('--' + token, custom.tokens[token]);
+        if (last && last.tokens) {
+          for (var token in last.tokens) {
+            if (Object.prototype.hasOwnProperty.call(last.tokens, token)) {
+              root.style.setProperty('--' + token, last.tokens[token]);
             }
           }
         }

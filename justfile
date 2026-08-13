@@ -2,9 +2,25 @@ export PATH := env_var('HOME') + '/go/bin:' + env_var('PATH')
 
 go_pkgs := './internal/... .'
 ldflags := '-s -w'
+version_pkg := 'github.com/sophotechlabs/spinoza/internal/version.value'
 
 default:
     @just --list
+
+[private]
+app-version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "${GITHUB_REF_NAME:-}" ]; then
+        echo "${GITHUB_REF_NAME}"
+        exit 0
+    fi
+    described=$(git describe --tags --always --dirty 2>/dev/null || true)
+    if [ -n "$described" ]; then
+        echo "$described"
+        exit 0
+    fi
+    echo dev
 
 deps:
     cd frontend && npm ci
@@ -14,7 +30,7 @@ tidy:
 
 build:
     cd frontend && npm run build
-    go build -trimpath -ldflags '{{ ldflags }}' -o spinoza .
+    go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$(just app-version)" -o spinoza .
 
 stub-assets:
     #!/usr/bin/env bash
@@ -36,7 +52,22 @@ run: build
     ./spinoza
 
 build-desktop:
-    wails build -tags desktop -skipbindings -trimpath -ldflags '{{ ldflags }}'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    numeric=""
+    if printf '%s' "$version" | grep -Eq '^v[0-9]+(\.[0-9]+){0,2}([-+].*)?$'; then
+        numeric="${version#v}"
+        numeric="${numeric%%[-+]*}"
+    fi
+    backup=$(mktemp)
+    cp wails.json "$backup"
+    trap 'mv "$backup" wails.json' EXIT
+    if [ -n "$numeric" ]; then
+        export PRODUCT_VERSION="$numeric"
+        yq -i -o=json '.info.productVersion = strenv(PRODUCT_VERSION)' wails.json
+    fi
+    wails build -tags desktop -skipbindings -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version"
 
 rund: build-desktop
     open build/bin/spinoza.app
@@ -207,7 +238,7 @@ release-notes:
 release-dist: deps
     #!/usr/bin/env bash
     set -euo pipefail
-    version="${GITHUB_REF_NAME:-dev}"
+    version=$(just app-version)
     mkdir -p dist/release
     cd frontend && npm run build && cd ..
     for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
@@ -219,7 +250,7 @@ release-dist: deps
         if [ "$goos" = "windows" ]; then
             binary="spinoza.exe"
         fi
-        GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags "{{ ldflags }} -X github.com/sophotechlabs/spinoza/internal/version.value=$version" -o "$out/$binary" .
+        GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version" -o "$out/$binary" .
         cp LICENSE "$out/LICENSE"
         tar -czf "dist/release/spinoza_${version}_${goos}_${goarch}.tar.gz" -C "$out" "$binary" LICENSE
     done

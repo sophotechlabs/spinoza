@@ -6,5 +6,12 @@
   "frontend:build": "npm run build",
   "author": {
     "name": "Sophotech"
+  },
+  "info": {
+    "companyName": "Sophotech s.r.o.",
+    "productName": "Spinoza",
+    "productVersion": "0.7.0",
+    "copyright": "Copyright © 2026 Sophotech s.r.o.",
+    "comments": "Single-binary, non-Electron Kubernetes IDE"
   }
 }

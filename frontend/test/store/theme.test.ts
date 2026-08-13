@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { THEME_KEY } from '../../src/lib/theme';
+import { BUILT_IN_THEMES, THEME_KEY } from '../../src/lib/theme';
 import { emitSystemDark, setSystemDark } from '../helpers';
 
 async function freshStore() {
@@ -110,7 +110,7 @@ describe('installing a theme someone imported', () => {
 
     expect(useThemeStore.getState().custom).toHaveLength(1);
     expect(useThemeStore.getState().custom[0].name).toBe('Solarized Light');
-    expect(useThemeStore.getState().themes).toHaveLength(3);
+    expect(useThemeStore.getState().themes).toHaveLength(BUILT_IN_THEMES.length + 1);
   });
 
   it('drops back to a built-in when the selected theme is removed', async () => {

@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BUILT_IN_THEMES,
+  CANVAS_NAMES,
+  NORD,
+  PAINTED_KEY,
+  TOKEN_NAMES,
   applyTheme,
+  painted,
   parseTheme,
   readTheme,
   resolveTheme,
@@ -149,5 +154,53 @@ describe('which backgrounds a token has to clear', () => {
   it('holds terminal colours to the terminal background', () => {
     expect(backgroundsFor('ansi-red')).toEqual(['surface']);
     expect(backgroundsFor('ansi-bright-white')).toEqual(['surface']);
+  });
+});
+
+describe('the Nord theme that ships with spinoza', () => {
+  it('is offered next to the two plain ones', () => {
+    expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(['dark', 'light', 'nord']);
+  });
+
+  it('sets every token and every canvas colour, so nothing falls back to dark', () => {
+    expect(Object.keys(NORD.tokens ?? {}).sort()).toEqual([...TOKEN_NAMES].sort());
+    expect(Object.keys(NORD.canvas ?? {}).sort()).toEqual([...CANVAS_NAMES].sort());
+  });
+
+  it('builds on the dark base, so the editor and graph follow it', () => {
+    expect(NORD.base).toBe('dark');
+  });
+
+  it('reaches the DOM as inline custom properties', () => {
+    applyTheme(NORD);
+
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.style.getPropertyValue('--surface')).toBe('#2e3440');
+  });
+});
+
+describe('what the pre-paint script replays', () => {
+  it('records the base and tokens actually applied', () => {
+    applyTheme(NORD);
+
+    const stored: unknown = JSON.parse(window.localStorage.getItem(PAINTED_KEY) ?? 'null');
+    expect(stored).toEqual({ base: 'dark', tokens: NORD.tokens });
+  });
+
+  it('records an empty token map for a theme whose colours live in the CSS', () => {
+    applyTheme(BUILT_IN_THEMES[1]);
+
+    expect(painted(BUILT_IN_THEMES[1])).toEqual({ base: 'light', tokens: {} });
+  });
+
+  it('survives storage it cannot write to', () => {
+    const setItem = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+
+    expect(() => {
+      applyTheme(NORD);
+    }).not.toThrow();
+    setItem.mockRestore();
   });
 });

@@ -5,3 +5,8 @@ useDefault = true
 description = "RFC 6455 example Sec-WebSocket-Key (base64 of \"the sample nonce\") used in handshake tests"
 regexTarget = "match"
 regexes = ['''dGhlIHNhbXBsZSBub25jZQ==''']
+
+[[allowlists]]
+description = "Browser localStorage key names in the frontend — spinoza.<area>.v<n>, not credentials"
+regexTarget = "secret"
+regexes = ['''^spinoza\.[a-z]+\.v\d+$''']
