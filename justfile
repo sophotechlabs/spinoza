@@ -96,7 +96,8 @@ test-integration:
         kind create cluster --name spinoza
     fi
     kubectl --context kind-spinoza cluster-info
-    SPINOZA_TEST_CONTEXT=kind-spinoza go test -tags integration -count=1 -timeout 15m ./test/integration/...
+    SPINOZA_TEST_CONTEXT=kind-spinoza go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
+    go tool cover -func=coverage.integration.out | tail -1
 
 test-integration-down:
     kind delete cluster --name spinoza
