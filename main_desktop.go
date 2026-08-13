@@ -22,6 +22,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
@@ -153,6 +154,7 @@ func runDesktop() error {
 		AssetServer: &assetserver.Options{
 			Handler: desktopAssets(assets, addr, token),
 		},
+		Mac: &mac.Options{},
 		OnStartup: func(windowCtx context.Context) {
 			window.Store(&windowCtx)
 		},
