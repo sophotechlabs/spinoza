@@ -33,10 +33,45 @@ const shutdownGrace = 3 * time.Second
 
 func main() {
 	err := runDesktop()
-	if err != nil {
-		slog.Error("spinoza stopped", "error", err)
-		os.Exit(1)
+	if err == nil {
+		return
 	}
+	slog.Error("spinoza stopped", "error", err)
+	reportStartupFailure(err)
+	os.Exit(1)
+}
+
+func reportStartupFailure(cause error) {
+	runErr := wails.Run(&options.App{
+		Title:       "Spinoza",
+		Width:       1,
+		Height:      1,
+		StartHidden: true,
+		AssetServer: &assetserver.Options{Handler: blankPage()},
+		OnStartup: func(ctx context.Context) {
+			go func() {
+				_, dialogErr := wailsruntime.MessageDialog(ctx, wailsruntime.MessageDialogOptions{
+					Type:    wailsruntime.ErrorDialog,
+					Title:   "Spinoza could not start",
+					Message: cause.Error(),
+				})
+				if dialogErr != nil {
+					slog.Error("the reason could not be shown on screen", "error", dialogErr)
+				}
+				wailsruntime.Quit(ctx)
+			}()
+		},
+	})
+	if runErr != nil {
+		slog.Error("the reason could not be shown on screen", "error", runErr)
+	}
+}
+
+func blankPage() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<!doctype html><title>Spinoza</title>"))
+	})
 }
 
 func runDesktop() error {
