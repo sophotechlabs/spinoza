@@ -615,7 +615,7 @@ describe('pods that are not running', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps the kind plain and shows the count in a red badge', async () => {
+  it('keeps the kind plain and shows the failing count in a red badge', async () => {
     stubFetch(categories, { '/v1/pods': 12, 'apps/v1/deployments': 4 }, { '/v1/pods': 3 });
     renderSidebar();
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
@@ -623,9 +623,18 @@ describe('pods that are not running', () => {
     const pods = await screen.findByRole('button', { name: /^Pod/ });
     expect(pods.querySelector('span')?.className).not.toContain('text-error');
     expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
-    expect(pods).toHaveTextContent('12(3)');
-    expect(pods).toHaveAttribute('title', 'Pod — 3 not running or succeeded');
+    expect(pods).toHaveAttribute('title', 'Pod — 3 of 12 not running or succeeded');
     expect(pods).toHaveTextContent('3 not running');
+  });
+
+  it('explains the failing count without a total when the tally is missing', async () => {
+    stubFetch(categories, { 'apps/v1/deployments': 4 }, { '/v1/pods': 3 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const pods = await screen.findByRole('button', { name: /^Pod/ });
+    expect(pods).toHaveAttribute('title', 'Pod — 3 not running or succeeded');
+    expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
   });
 
   it('leaves a healthy kind alone', async () => {
@@ -645,6 +654,36 @@ describe('pods that are not running', () => {
 
     const pods = await screen.findByRole('button', { name: /^Pod/ });
     expect(pods.querySelector('span')?.className).not.toContain('text-error');
-    expect(pods.querySelector('.text-error')?.textContent).toBe('');
+    expect(pods.querySelector('.text-error')).toBeNull();
+  });
+});
+
+describe('count alignment', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('gives the section tally and the resource counts the same right edge', async () => {
+    stubFetch(categories, { '/v1/pods': 12 });
+    renderSidebar();
+    const section = await screen.findByRole('button', { name: /Workloads/ });
+    await userEvent.click(section);
+
+    const pods = await screen.findByRole('button', { name: /^Pod/ });
+    expect(section.className).toContain('px-3');
+    expect(pods.className).toContain('pr-3');
+    expect(pods.className).not.toContain('px-6');
+  });
+
+  it('keeps the total flush right when the failing badge appears', async () => {
+    stubFetch(categories, { '/v1/pods': 12 }, { '/v1/pods': 3 });
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const pods = await screen.findByRole('button', { name: /^Pod/ });
+    expect(pods.className).toContain('pr-3');
+    const text = pods.textContent;
+    expect(text.indexOf('(3)')).toBeGreaterThan(-1);
+    expect(text.indexOf('(3)')).toBeLessThan(text.indexOf('12'));
   });
 });

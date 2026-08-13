@@ -57,11 +57,11 @@ function current(active: boolean): 'page' | undefined {
 }
 
 function resourceClass(active: boolean, nested = false, empty = false): string {
-  let indent = 'px-6';
+  let indent = 'pl-6';
   if (nested) {
-    indent = 'px-9';
+    indent = 'pl-9';
   }
-  const base = `flex w-full items-center justify-between gap-1 ${indent} py-1 text-left`;
+  const base = `flex w-full items-center justify-between gap-1 ${indent} pr-3 py-1 text-left`;
   if (active) {
     return `${base} bg-surface-active text-fg-strong`;
   }
@@ -94,11 +94,15 @@ function byPopulated(
   return [...populated, ...empty];
 }
 
-function kindTitle(kind: string, failing: number | undefined): string {
+function kindTitle(kind: string, total: number | undefined, failing: number | undefined): string {
   if (failing === undefined) {
     return kind;
   }
-  return `${kind} — ${String(failing)} not running or succeeded`;
+  const totalLabel = countLabel(total);
+  if (totalLabel === '' || totalLabel === '—') {
+    return `${kind} — ${String(failing)} not running or succeeded`;
+  }
+  return `${kind} — ${String(failing)} of ${totalLabel} not running or succeeded`;
 }
 
 function failingNote(failing: number | undefined): string {
@@ -333,7 +337,11 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                       onClick={() => {
                         onSelect(resource);
                       }}
-                      title={kindTitle(resource.kind, failing[descriptorKey(resource)])}
+                      title={kindTitle(
+                        resource.kind,
+                        counts[descriptorKey(resource)],
+                        failing[descriptorKey(resource)],
+                      )}
                       className={resourceClass(
                         isActive(activeResource, resource),
                         false,
@@ -341,11 +349,13 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                       )}
                     >
                       <span className="truncate">{resource.kind}</span>{' '}
-                      <span className="shrink-0 text-fg-subtle">
-                        {countLabel(counts[descriptorKey(resource)])}
-                        <span aria-hidden="true" className="text-error">
-                          {failingBadge(failing[descriptorKey(resource)])}
-                        </span>
+                      <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
+                        {failingBadge(failing[descriptorKey(resource)]) !== '' && (
+                          <span aria-hidden="true" className="text-error">
+                            {failingBadge(failing[descriptorKey(resource)])}
+                          </span>
+                        )}
+                        <span>{countLabel(counts[descriptorKey(resource)])}</span>
                         <span className="sr-only">
                           {failingNote(failing[descriptorKey(resource)])}
                         </span>
@@ -368,7 +378,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                             toggle(key);
                           }}
                           title={group.name}
-                          className="flex w-full items-center justify-between gap-1 px-5 py-1 text-left text-fg-muted hover:bg-surface-raised hover:text-fg"
+                          className="flex w-full items-center justify-between gap-1 py-1 pr-3 pl-5 text-left text-fg-muted hover:bg-surface-raised hover:text-fg"
                         >
                           <span className="truncate">
                             <span aria-hidden="true">{chevron(groupCollapsed)}</span> {group.name}
@@ -385,7 +395,11 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                 onClick={() => {
                                   onSelect(resource);
                                 }}
-                                title={kindTitle(resource.kind, failing[descriptorKey(resource)])}
+                                title={kindTitle(
+                                  resource.kind,
+                                  counts[descriptorKey(resource)],
+                                  failing[descriptorKey(resource)],
+                                )}
                                 className={resourceClass(
                                   isActive(activeResource, resource),
                                   true,
@@ -393,11 +407,13 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                 )}
                               >
                                 <span className="truncate">{resource.kind}</span>{' '}
-                                <span className="shrink-0 text-fg-subtle">
-                                  {countLabel(counts[descriptorKey(resource)])}
-                                  <span aria-hidden="true" className="text-error">
-                                    {failingBadge(failing[descriptorKey(resource)])}
-                                  </span>
+                                <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
+                                  {failingBadge(failing[descriptorKey(resource)]) !== '' && (
+                                    <span aria-hidden="true" className="text-error">
+                                      {failingBadge(failing[descriptorKey(resource)])}
+                                    </span>
+                                  )}
+                                  <span>{countLabel(counts[descriptorKey(resource)])}</span>
                                   <span className="sr-only">
                                     {failingNote(failing[descriptorKey(resource)])}
                                   </span>
