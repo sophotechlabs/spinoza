@@ -5,7 +5,7 @@
   "tokens": {
     "surface": "#2e3440",
     "surface-raised": "#3b4252",
-    "surface-active": "#4c566a",
+    "surface-active": "#3e4859",
     "handle": "#4c566a",
     "handle-active": "#88c0d0",
     "grip": "#434c5e",
@@ -14,7 +14,7 @@
     "fg": "#e5e9f0",
     "fg-soft": "#d8dee9",
     "fg-muted": "#b8c3d4",
-    "fg-subtle": "#9aa6bd",
+    "fg-subtle": "#adb9ca",
     "fg-faint": "#6d7a91",
 
     "edge": "#3b4252",
@@ -24,7 +24,7 @@
 
     "idle-solid": "#6d7a91",
 
-    "ok": "#a3be8c",
+    "ok": "#a9c393",
     "ok-contrast": "#d5e3c6",
     "ok-solid": "#a3be8c",
     "ok-tint": "#3a4536",
@@ -32,10 +32,10 @@
     "ok-line": "#4f6047",
     "ok-line-strong": "#6b8060",
 
-    "error": "#d08c92",
+    "error": "#e2a9ae",
     "error-strong": "#d28c76",
     "error-contrast": "#e8c3c6",
-    "error-muted": "#a54e56",
+    "error-muted": "#d8848b",
     "error-solid": "#bf616a",
     "error-tint": "#432c30",
     "error-tint-strong": "#5a3a3f",
@@ -45,7 +45,7 @@
 
     "warn": "#ebcb8b",
     "warn-strong": "#f0d9a8",
-    "warn-muted": "#d0b06a",
+    "warn-muted": "#d3b471",
     "warn-solid": "#ebcb8b",
     "warn-tint": "#463c26",
     "warn-line": "#5e5133",

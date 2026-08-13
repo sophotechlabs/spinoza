@@ -1,15 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  BLADE_RUNNER,
-  BORG,
   BUILT_IN_THEMES,
   CANVAS_NAMES,
-  CYBERPUNK,
-  MATRIX,
-  NORD,
   PAINTED_KEY,
-  SKYWALKER,
-  STARTREKTOR,
   TOKEN_NAMES,
   applyTheme,
   painted,
@@ -24,7 +17,15 @@ import {
   SURFACE_TOKENS,
   backgroundsFor,
 } from '../../src/lib/theme';
+import type { Theme } from '../../src/lib/theme';
+import { contrastWarnings } from '../../src/lib/contrast';
 import { emitSystemDark, setSystemDark } from '../helpers';
+
+const SHIPPED = Object.values(
+  import.meta.glob<Theme>('../../themes/*.json', { eager: true, import: 'default' }),
+).sort((a, b) => a.name.localeCompare(b.name));
+
+const NORD = themeById(BUILT_IN_THEMES, 'nord');
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -164,21 +165,16 @@ describe('which backgrounds a token has to clear', () => {
 });
 
 describe('the themes that ship with spinoza', () => {
-  it('are offered next to the two plain ones', () => {
+  it('are the theme files, sorted by name, after the two plain ones', () => {
+    expect(SHIPPED.length).toBeGreaterThan(0);
     expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual([
       'dark',
       'light',
-      'nord',
-      'blade-runner',
-      'borg',
-      'cyberpunk',
-      'matrix',
-      'skywalker',
-      'startrektor',
+      ...SHIPPED.map((theme) => theme.id),
     ]);
   });
 
-  for (const theme of [NORD, BLADE_RUNNER, BORG, CYBERPUNK, MATRIX, SKYWALKER, STARTREKTOR]) {
+  for (const theme of SHIPPED) {
     it(`${theme.name} sets every token and every canvas colour, so nothing falls back to dark`, () => {
       expect(Object.keys(theme.tokens ?? {}).sort()).toEqual([...TOKEN_NAMES].sort());
       expect(Object.keys(theme.canvas ?? {}).sort()).toEqual([...CANVAS_NAMES].sort());
@@ -186,6 +182,10 @@ describe('the themes that ship with spinoza', () => {
 
     it(`${theme.name} builds on the dark base, so the editor and graph follow it`, () => {
       expect(theme.base).toBe('dark');
+    });
+
+    it(`${theme.name} keeps every checked token pair above AA contrast`, () => {
+      expect(contrastWarnings(theme.tokens ?? {}, () => '')).toEqual([]);
     });
   }
 
