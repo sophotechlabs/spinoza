@@ -84,7 +84,7 @@ func (s *Service) List(ctx context.Context) (api.HelmReleases, error) {
 	}
 	slices.SortFunc(out, byNamespaceThenName)
 	s.addLatest(out)
-	return api.HelmReleases{Releases: out, Error: partialMessage(undecodable, found.truncated)}, nil
+	return api.HelmReleases{Releases: out, Error: partialMessage(undecodable, found.truncated, found.denied)}, nil
 }
 
 func byNamespaceThenName(left, right api.HelmRelease) int {
@@ -126,8 +126,11 @@ func pick(current, found string) string {
 	return current
 }
 
-func partialMessage(undecodable int, truncated bool) string {
+func partialMessage(undecodable int, truncated bool, denied string) string {
 	notes := []string{}
+	if denied != "" {
+		notes = append(notes, denied)
+	}
 	if undecodable > 0 {
 		notes = append(notes, fmt.Sprintf(
 			"%d release payloads could not be read; their name and status come from the storage object's labels",

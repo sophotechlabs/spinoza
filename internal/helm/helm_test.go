@@ -13,8 +13,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -322,6 +324,89 @@ func TestListReportsARefusedSecretList(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "secrets is forbidden") {
 		t.Fatalf("err = %v, want the refusal", err)
+	}
+	if got.Releases == nil {
+		t.Fatal("the empty result should still carry a list, not nil")
+	}
+}
+
+func forbiddenSecrets(reason string) error {
+	return apierrors.NewForbidden(
+		schema.GroupResource{Resource: "secrets"},
+		"",
+		errors.New(reason),
+	)
+}
+
+func TestListFallsBackPerNamespaceWhenClusterWideSecretsAreForbidden(t *testing.T) {
+	readable := sampleRelease()
+	hidden := release{name: "hidden", namespace: "locked", revision: 1, status: "deployed", chart: "hidden", version: "1.0.0", appVersion: "1.0.0"}
+	fromMaps := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sh.helm.release.v1.tillered.v2",
+			Namespace: "locked",
+			Labels:    map[string]string{"owner": "helm", "name": "tillered", "version": "2", "status": "deployed"},
+		},
+		Data: map[string]string{releaseKey: payloadJSON(release{name: "tillered", namespace: "locked", revision: 2, status: "deployed", chart: "tillered", version: "0.1.0", appVersion: "0.1.0"})},
+	}
+	cs := k8sfake.NewClientset(
+		helmSecret(readable),
+		helmSecret(hidden),
+		fromMaps,
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo"}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "locked"}},
+	)
+	cs.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetNamespace() == "" {
+			return true, nil, forbiddenSecrets("no cluster-wide secrets")
+		}
+		if action.GetNamespace() == "locked" {
+			return true, nil, forbiddenSecrets("locked is off limits")
+		}
+		return false, nil, nil
+	})
+
+	got, err := newService(cs, nil, nil).List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	names := make([]string, 0, len(got.Releases))
+	for _, found := range got.Releases {
+		names = append(names, found.Namespace+"/"+found.Name)
+	}
+	want := []string{"demo/podinfo", "locked/tillered"}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Fatalf("releases = %v, want the readable secret and the cluster-wide config map", names)
+	}
+	if !strings.Contains(got.Error, "secrets could not be listed cluster-wide") {
+		t.Fatalf("error = %q, want the fallback named", got.Error)
+	}
+	if !strings.Contains(got.Error, "1 of 2 namespaces allowed it") {
+		t.Fatalf("error = %q, want the namespace tally", got.Error)
+	}
+}
+
+func TestListSurfacesTheDenialWhenNamespacesAreHiddenToo(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, forbiddenSecrets("no secrets for you")
+	})
+	cs.PrependReactor("list", "namespaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "namespaces"},
+			"",
+			errors.New("no namespaces either"),
+		)
+	})
+
+	got, err := newService(cs, nil, nil).List(context.Background())
+
+	if err == nil {
+		t.Fatal("expected the original denial when no fallback is possible")
+	}
+	if !strings.Contains(err.Error(), "no secrets for you") {
+		t.Fatalf("err = %v, want the secrets denial, not the namespace one", err)
 	}
 	if got.Releases == nil {
 		t.Fatal("the empty result should still carry a list, not nil")
