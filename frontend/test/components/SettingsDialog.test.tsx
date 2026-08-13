@@ -66,7 +66,7 @@ describe('the settings dialog', () => {
       'Matrix',
       'Nord',
       'Skywalker',
-      'Startrektor',
+      'Startrekker',
       'System',
     ]);
   });

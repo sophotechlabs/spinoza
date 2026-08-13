@@ -113,7 +113,7 @@
   --error: oklch(70.4% 0.191 22.216);
   --error-strong: oklch(80.8% 0.114 19.571);
   --error-contrast: oklch(88.5% 0.062 18.334);
-  --error-muted: oklch(63.7% 0.237 25.331);
+  --error-muted: oklch(70.4% 0.191 22.216);
   --error-solid: oklch(63.7% 0.237 25.331);
   --error-tint: oklch(25.8% 0.092 26.042);
   --error-tint-strong: oklch(39.6% 0.141 25.723);
@@ -191,7 +191,7 @@
   --error: oklch(51% 0.245 27.325);
   --error-strong: oklch(50.5% 0.213 27.518);
   --error-contrast: oklch(39.6% 0.141 25.723);
-  --error-muted: oklch(70.4% 0.191 22.216);
+  --error-muted: oklch(50.5% 0.213 27.518);
   --error-solid: oklch(63.7% 0.237 25.331);
   --error-tint: oklch(97.1% 0.013 17.38);
   --error-tint-strong: oklch(93.6% 0.032 17.717);

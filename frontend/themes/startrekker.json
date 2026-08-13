@@ -1,6 +1,6 @@
 {
-  "id": "startrektor",
-  "name": "Startrektor",
+  "id": "startrekker",
+  "name": "Startrekker",
   "base": "dark",
   "tokens": {
     "surface": "#060a12",
