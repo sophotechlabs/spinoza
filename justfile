@@ -68,6 +68,10 @@ build-desktop:
         yq -i -o=json '.info.productVersion = strenv(PRODUCT_VERSION)' wails.json
     fi
     wails build -tags desktop -skipbindings -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version"
+    plist=build/bin/spinoza.app/Contents/Info.plist
+    if [ -f "$plist" ]; then
+        plutil -lint "$plist"
+    fi
 
 rund: build-desktop
     open build/bin/spinoza.app

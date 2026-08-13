@@ -4,9 +4,9 @@
         <key>CFBundlePackageType</key>
         <string>APPL</string>
         <key>CFBundleName</key>
-        <string>{{.Info.ProductName}}</string>
+        <string>{{xml .Info.ProductName}}</string>
         <key>CFBundleDisplayName</key>
-        <string>{{.Info.ProductName}}</string>
+        <string>{{xml .Info.ProductName}}</string>
         <key>CFBundleExecutable</key>
         <string>{{.OutputFilename}}</string>
         <key>CFBundleIdentifier</key>
@@ -14,7 +14,7 @@
         <key>CFBundleVersion</key>
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleGetInfoString</key>
-        <string>{{.Info.Comments}}</string>
+        <string>{{xml .Info.Comments}}</string>
         <key>CFBundleShortVersionString</key>
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleIconFile</key>
@@ -26,7 +26,7 @@
         <key>NSHighResolutionCapable</key>
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
-        <string>{{.Info.Copyright}}</string>
+        <string>{{xml .Info.Copyright}}</string>
         {{if .Info.FileAssociations}}
         <key>CFBundleDocumentTypes</key>
         <array>

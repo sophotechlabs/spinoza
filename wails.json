@@ -5,13 +5,14 @@
   "frontend:install": "npm ci",
   "frontend:build": "npm run build",
   "author": {
-    "name": "Sophotech"
+    "name": "Artem Muterko",
+    "email": "spinoza@sopho.tech"
   },
   "info": {
     "companyName": "Sophotech s.r.o.",
     "productName": "Spinoza",
     "productVersion": "0.7.0",
-    "copyright": "Copyright © 2026 Sophotech s.r.o.",
+    "copyright": "Copyright © 2026 Sophotech s.r.o. <spinoza@sopho.tech>",
     "comments": "Single-binary, non-Electron Kubernetes IDE"
   }
 }

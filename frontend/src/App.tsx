@@ -275,26 +275,30 @@ export default function App() {
         Skip to the content
       </a>
       <h1 className="sr-only">Spinoza</h1>
-      <TopBar
-        status={feed.status}
-        view={route.view}
-        onReconnect={feed.reconnect}
-        onContextChanged={handleContextChanged}
-        onOpenPalette={() => {
-          setPaletteOpen(true);
-        }}
-        onOpenSettings={() => {
-          openSettings('Appearance');
-        }}
-      />
+      <ErrorBoundary label="The top bar">
+        <TopBar
+          status={feed.status}
+          view={route.view}
+          onReconnect={feed.reconnect}
+          onContextChanged={handleContextChanged}
+          onOpenPalette={() => {
+            setPaletteOpen(true);
+          }}
+          onOpenSettings={() => {
+            openSettings('Appearance');
+          }}
+        />
+      </ErrorBoundary>
       <ConnectionBanner status={feed.status} attempt={feed.attempt} onReconnect={feed.reconnect} />
       <div className="flex min-h-0 flex-1">
-        <Sidebar
-          view={route.view}
-          activeResource={active}
-          onSelect={handleSelectResource}
-          onSelectView={handleSelectView}
-        />
+        <ErrorBoundary label="The sidebar">
+          <Sidebar
+            view={route.view}
+            activeResource={active}
+            onSelect={handleSelectResource}
+            onSelectView={handleSelectView}
+          />
+        </ErrorBoundary>
         <main
           id={MAIN_ID}
           tabIndex={-1}
@@ -314,22 +318,26 @@ export default function App() {
       </div>
       <Toasts />
       <TooltipHost />
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => {
-          setPaletteOpen(false);
-        }}
-        onSelectView={handleSelectView}
-        onSelectResource={handleSelectResource}
-        onSelectObject={remember}
-      />
-      <SettingsDialog
-        open={settingsOpen}
-        section={settingsSection}
-        onClose={() => {
-          setSettingsOpen(false);
-        }}
-      />
+      <ErrorBoundary label="The command palette">
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => {
+            setPaletteOpen(false);
+          }}
+          onSelectView={handleSelectView}
+          onSelectResource={handleSelectResource}
+          onSelectObject={remember}
+        />
+      </ErrorBoundary>
+      <ErrorBoundary label="Settings">
+        <SettingsDialog
+          open={settingsOpen}
+          section={settingsSection}
+          onClose={() => {
+            setSettingsOpen(false);
+          }}
+        />
+      </ErrorBoundary>
     </div>
   );
 }
