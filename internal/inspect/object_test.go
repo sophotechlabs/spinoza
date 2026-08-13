@@ -340,309 +340,266 @@ func TestContainerNamesEmptyWhenNoneNamed(t *testing.T) {
 
 var _ dynamic.Interface = (*fake.FakeDynamicClient)(nil)
 
-func TestSuspendedReportsTheSpecField(t *testing.T) {
-	pod := newPod()
-	if err := unstructured.SetNestedField(pod.Object, true, "spec", "suspend"); err != nil {
-		t.Fatalf("set suspend: %v", err)
+func matchBoolPtr(t *testing.T, field string, got, want *bool) {
+	t.Helper()
+	if (got == nil) != (want == nil) {
+		t.Fatalf("%s = %v, want %v", field, got, want)
 	}
-
-	detail, err := Get(context.Background(), newClient(pod), podRef())
-	if err != nil {
-		t.Fatalf("get: %v", err)
+	if want == nil {
+		return
 	}
-	if detail.Suspended == nil {
-		t.Fatalf("suspended = nil, want true")
-	}
-	if !*detail.Suspended {
-		t.Fatalf("suspended = false, want true")
+	if *got != *want {
+		t.Fatalf("%s = %v, want %v", field, *got, *want)
 	}
 }
 
-func TestSuspendedDistinguishesFalseFromAbsent(t *testing.T) {
-	pod := newPod()
-	if err := unstructured.SetNestedField(pod.Object, false, "spec", "suspend"); err != nil {
-		t.Fatalf("set suspend: %v", err)
+func TestSuspended(t *testing.T) {
+	cases := []struct {
+		name    string
+		suspend any
+		want    *bool
+	}{
+		{"true in the spec", true, new(true)},
+		{"an explicit false", false, new(false)},
+		{"absent", nil, nil},
+		{"a non-bool field", "yes", nil},
 	}
-
-	detail, err := Get(context.Background(), newClient(pod), podRef())
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Suspended == nil {
-		t.Fatalf("suspended = nil, want an explicit false")
-	}
-	if *detail.Suspended {
-		t.Fatalf("suspended = true, want false")
-	}
-
-	absent, absentErr := Get(context.Background(), newClient(newPod()), podRef())
-	if absentErr != nil {
-		t.Fatalf("get: %v", absentErr)
-	}
-	if absent.Suspended != nil {
-		t.Fatalf("suspended = %v, want nil when the field is absent", *absent.Suspended)
-	}
-}
-
-func TestSuspendedIgnoresNonBool(t *testing.T) {
-	pod := newPod()
-	if err := unstructured.SetNestedField(pod.Object, "yes", "spec", "suspend"); err != nil {
-		t.Fatalf("set suspend: %v", err)
-	}
-
-	detail, err := Get(context.Background(), newClient(pod), podRef())
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Suspended != nil {
-		t.Fatalf("suspended = %v, want nil for a non-bool field", *detail.Suspended)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := newPod()
+			if tc.suspend != nil {
+				if err := unstructured.SetNestedField(pod.Object, tc.suspend, "spec", "suspend"); err != nil {
+					t.Fatalf("set suspend: %v", err)
+				}
+			}
+			detail, err := Get(context.Background(), newClient(pod), podRef())
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			matchBoolPtr(t, "suspended", detail.Suspended, tc.want)
+		})
 	}
 }
 
-func TestPortsForAPod(t *testing.T) {
+func podWithContainers(t *testing.T, containers []any) *unstructured.Unstructured {
+	t.Helper()
 	pod := newPod()
-	containers := []any{
-		map[string]any{
-			"name": "app",
-			"ports": []any{
-				map[string]any{"name": "http", "containerPort": int64(8080), "protocol": "TCP"},
-				map[string]any{"name": "metrics", "containerPort": int64(9090)},
-				map[string]any{"name": "dns", "containerPort": int64(53), "protocol": "UDP"},
-				map[string]any{"name": "broken"},
-				"not-a-map",
-			},
-		},
-		map[string]any{
-			"name":  "sidecar",
-			"ports": []any{map[string]any{"containerPort": float64(15000)}},
-		},
-		"not-a-map",
-	}
 	if err := unstructured.SetNestedSlice(pod.Object, containers, "spec", "containers"); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-
-	detail, err := Get(context.Background(), newClient(pod), podRef())
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-
-	if len(detail.Ports) != 3 {
-		t.Fatalf("ports = %+v, want http, metrics and the sidecar port", detail.Ports)
-	}
-	if detail.Ports[0].Name != "http" || detail.Ports[0].Port != 8080 || detail.Ports[0].Protocol != "TCP" {
-		t.Fatalf("first port = %+v", detail.Ports[0])
-	}
-	if detail.Ports[2].Port != 15000 {
-		t.Fatalf("sidecar port = %+v", detail.Ports[2])
-	}
-	for _, port := range detail.Ports {
-		if port.Protocol == "UDP" {
-			t.Fatalf("a udp port was offered for forwarding: %+v", port)
-		}
-	}
+	return pod
 }
 
-func TestPortsForAPodWithoutAny(t *testing.T) {
-	detail, err := Get(context.Background(), newClient(newPod()), podRef())
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Ports != nil {
-		t.Fatalf("ports = %+v, want nil", detail.Ports)
-	}
-}
-
-func TestPortsForAService(t *testing.T) {
-	svc := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       "Service",
-		"metadata":   map[string]any{"name": "prometheus", "namespace": "flux-system"},
-		"spec": map[string]any{
-			"ports": []any{
-				map[string]any{"name": "http", "port": int64(9090), "protocol": "TCP"},
-				map[string]any{"name": "gossip", "port": int64(7946), "protocol": "UDP"},
+func TestPorts(t *testing.T) {
+	serviceRef := api.ObjectRef{Version: "v1", Resource: "services", Namespace: "flux-system", Name: "prometheus"}
+	nodeRef := api.ObjectRef{Version: "v1", Resource: "nodes", Name: "p-mk1"}
+	cases := []struct {
+		name string
+		obj  func(t *testing.T) *unstructured.Unstructured
+		ref  api.ObjectRef
+		want []api.ObjectPort
+	}{
+		{
+			"a pod skips udp and malformed entries",
+			func(t *testing.T) *unstructured.Unstructured {
+				t.Helper()
+				return podWithContainers(t, []any{
+					map[string]any{
+						"name": "app",
+						"ports": []any{
+							map[string]any{"name": "http", "containerPort": int64(8080), "protocol": "TCP"},
+							map[string]any{"name": "metrics", "containerPort": int64(9090)},
+							map[string]any{"name": "dns", "containerPort": int64(53), "protocol": "UDP"},
+							map[string]any{"name": "broken"},
+							"not-a-map",
+						},
+					},
+					map[string]any{
+						"name":  "sidecar",
+						"ports": []any{map[string]any{"containerPort": float64(15000)}},
+					},
+					"not-a-map",
+				})
+			},
+			podRef(),
+			[]api.ObjectPort{
+				{Name: "http", Port: 8080, Protocol: "TCP"},
+				{Name: "metrics", Port: 9090},
+				{Port: 15000},
 			},
 		},
-	}}
-	ref := api.ObjectRef{Version: "v1", Resource: "services", Namespace: "flux-system", Name: "prometheus"}
-
-	detail, err := Get(context.Background(), newClient(svc), ref)
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-
-	if len(detail.Ports) != 1 {
-		t.Fatalf("ports = %+v, want only the tcp port", detail.Ports)
-	}
-	if detail.Ports[0].Port != 9090 {
-		t.Fatalf("port = %+v", detail.Ports[0])
-	}
-}
-
-func TestPortsForAServiceWithoutAny(t *testing.T) {
-	svc := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       "Service",
-		"metadata":   map[string]any{"name": "headless", "namespace": "flux-system"},
-		"spec":       map[string]any{},
-	}}
-	ref := api.ObjectRef{Version: "v1", Resource: "services", Namespace: "flux-system", Name: "headless"}
-
-	detail, err := Get(context.Background(), newClient(svc), ref)
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Ports != nil {
-		t.Fatalf("ports = %+v, want nil", detail.Ports)
-	}
-}
-
-func TestPortsIgnoredForOtherKinds(t *testing.T) {
-	node := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       "Node",
-		"metadata":   map[string]any{"name": "p-mk1"},
-		"spec":       map[string]any{"ports": []any{map[string]any{"port": int64(10250)}}},
-	}}
-	ref := api.ObjectRef{Version: "v1", Resource: "nodes", Name: "p-mk1"}
-
-	detail, err := Get(context.Background(), newClient(node), ref)
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Ports != nil {
-		t.Fatalf("ports = %+v, want nil for a node", detail.Ports)
-	}
-}
-
-func TestPortsRejectOutOfRangeNumbers(t *testing.T) {
-	pod := newPod()
-	containers := []any{
-		map[string]any{
-			"name": "app",
-			"ports": []any{
-				map[string]any{"containerPort": int64(70000)},
-				map[string]any{"containerPort": int64(-1)},
-				map[string]any{"containerPort": int64(8080)},
+		{
+			"a pod without any",
+			func(*testing.T) *unstructured.Unstructured { return newPod() },
+			podRef(),
+			nil,
+		},
+		{
+			"a pod drops out-of-range numbers",
+			func(t *testing.T) *unstructured.Unstructured {
+				t.Helper()
+				return podWithContainers(t, []any{
+					map[string]any{
+						"name": "app",
+						"ports": []any{
+							map[string]any{"containerPort": int64(70000)},
+							map[string]any{"containerPort": int64(-1)},
+							map[string]any{"containerPort": int64(8080)},
+						},
+					},
+				})
 			},
+			podRef(),
+			[]api.ObjectPort{{Port: 8080}},
+		},
+		{
+			"a service keeps only tcp",
+			func(*testing.T) *unstructured.Unstructured {
+				return &unstructured.Unstructured{Object: map[string]any{
+					"apiVersion": "v1",
+					"kind":       "Service",
+					"metadata":   map[string]any{"name": "prometheus", "namespace": "flux-system"},
+					"spec": map[string]any{
+						"ports": []any{
+							map[string]any{"name": "http", "port": int64(9090), "protocol": "TCP"},
+							map[string]any{"name": "gossip", "port": int64(7946), "protocol": "UDP"},
+						},
+					},
+				}}
+			},
+			serviceRef,
+			[]api.ObjectPort{{Name: "http", Port: 9090, Protocol: "TCP"}},
+		},
+		{
+			"a service without any",
+			func(*testing.T) *unstructured.Unstructured {
+				return &unstructured.Unstructured{Object: map[string]any{
+					"apiVersion": "v1",
+					"kind":       "Service",
+					"metadata":   map[string]any{"name": "prometheus", "namespace": "flux-system"},
+					"spec":       map[string]any{},
+				}}
+			},
+			serviceRef,
+			nil,
+		},
+		{
+			"a node is never offered",
+			func(*testing.T) *unstructured.Unstructured {
+				return &unstructured.Unstructured{Object: map[string]any{
+					"apiVersion": "v1",
+					"kind":       "Node",
+					"metadata":   map[string]any{"name": "p-mk1"},
+					"spec":       map[string]any{"ports": []any{map[string]any{"port": int64(10250)}}},
+				}}
+			},
+			nodeRef,
+			nil,
 		},
 	}
-	if err := unstructured.SetNestedSlice(pod.Object, containers, "spec", "containers"); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
-	detail, err := Get(context.Background(), newClient(pod), podRef())
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-
-	if len(detail.Ports) != 1 {
-		t.Fatalf("ports = %+v, want only the in-range port", detail.Ports)
-	}
-	if detail.Ports[0].Port != 8080 {
-		t.Fatalf("port = %+v", detail.Ports[0])
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			detail, err := Get(context.Background(), newClient(tc.obj(t)), tc.ref)
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			if len(detail.Ports) != len(tc.want) {
+				t.Fatalf("ports = %+v, want %+v", detail.Ports, tc.want)
+			}
+			for i := range tc.want {
+				if detail.Ports[i] != tc.want[i] {
+					t.Fatalf("port[%d] = %+v, want %+v", i, detail.Ports[i], tc.want[i])
+				}
+			}
+		})
 	}
 }
 
-func TestReplicasReportsTheSpecField(t *testing.T) {
+func TestReplicas(t *testing.T) {
 	deployment := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
 		"metadata":   map[string]any{"name": "web", "namespace": "flux-system"},
 		"spec":       map[string]any{"replicas": int64(3)},
 	}}
-	client := fake.NewSimpleDynamicClientWithCustomListKinds(
+	deploymentClient := fake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
 			{Group: "apps", Version: "v1", Resource: "deployments"}: "DeploymentList",
 		},
 		deployment,
 	)
-	ref := api.ObjectRef{Group: "apps", Version: "v1", Resource: "deployments", Namespace: "flux-system", Name: "web"}
-
-	detail, err := Get(context.Background(), client, ref)
-	if err != nil {
-		t.Fatalf("get: %v", err)
+	three := int64(3)
+	cases := []struct {
+		name   string
+		client dynamic.Interface
+		ref    api.ObjectRef
+		want   *int64
+	}{
+		{
+			"a deployment reports the spec field",
+			deploymentClient,
+			api.ObjectRef{Group: "apps", Version: "v1", Resource: "deployments", Namespace: "flux-system", Name: "web"},
+			&three,
+		},
+		{
+			"a pod has none",
+			newClient(newPod()),
+			podRef(),
+			nil,
+		},
 	}
-	if detail.Replicas == nil {
-		t.Fatal("replicas = nil, want 3")
-	}
-	if *detail.Replicas != 3 {
-		t.Fatalf("replicas = %d, want 3", *detail.Replicas)
-	}
-}
-
-func TestReplicasIsAbsentForAPod(t *testing.T) {
-	detail, err := Get(context.Background(), newClient(newPod()), podRef())
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Replicas != nil {
-		t.Fatalf("replicas = %d, want nil", *detail.Replicas)
-	}
-}
-
-func TestSchedulableIsTrueForAPlainNode(t *testing.T) {
-	node := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       "Node",
-		"metadata":   map[string]any{"name": "worker-1"},
-	}}
-
-	detail, err := Get(context.Background(), newClient(node), api.ObjectRef{Version: "v1", Resource: "nodes", Name: "worker-1"})
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Schedulable == nil {
-		t.Fatal("schedulable = nil, want true")
-	}
-	if !*detail.Schedulable {
-		t.Fatal("schedulable = false, want true")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			detail, err := Get(context.Background(), tc.client, tc.ref)
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			if (detail.Replicas == nil) != (tc.want == nil) {
+				t.Fatalf("replicas = %v, want %v", detail.Replicas, tc.want)
+			}
+			if tc.want == nil {
+				return
+			}
+			if *detail.Replicas != *tc.want {
+				t.Fatalf("replicas = %d, want %d", *detail.Replicas, *tc.want)
+			}
+		})
 	}
 }
 
-func TestSchedulableIsFalseForACordonedNode(t *testing.T) {
-	node := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       "Node",
-		"metadata":   map[string]any{"name": "worker-1"},
-		"spec":       map[string]any{"unschedulable": true},
-	}}
-
-	detail, err := Get(context.Background(), newClient(node), api.ObjectRef{Version: "v1", Resource: "nodes", Name: "worker-1"})
-	if err != nil {
-		t.Fatalf("get: %v", err)
+func TestSchedulable(t *testing.T) {
+	workerRef := api.ObjectRef{Version: "v1", Resource: "nodes", Name: "worker-1"}
+	node := func(spec map[string]any) *unstructured.Unstructured {
+		obj := map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Node",
+			"metadata":   map[string]any{"name": "worker-1"},
+		}
+		if spec != nil {
+			obj["spec"] = spec
+		}
+		return &unstructured.Unstructured{Object: obj}
 	}
-	if detail.Schedulable == nil || *detail.Schedulable {
-		t.Fatalf("schedulable = %v, want false", detail.Schedulable)
+	cases := []struct {
+		name string
+		obj  *unstructured.Unstructured
+		ref  api.ObjectRef
+		want *bool
+	}{
+		{"a plain node", node(nil), workerRef, new(true)},
+		{"a cordoned node", node(map[string]any{"unschedulable": true}), workerRef, new(false)},
+		{"a non-bool field", node(map[string]any{"unschedulable": "yes"}), workerRef, nil},
+		{"a pod", newPod(), podRef(), nil},
 	}
-}
-
-func TestSchedulableIsAbsentForANonNode(t *testing.T) {
-	detail, err := Get(context.Background(), newClient(newPod()), podRef())
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Schedulable != nil {
-		t.Fatalf("schedulable = %v, want nil for a pod", *detail.Schedulable)
-	}
-}
-
-func TestSchedulableIgnoresANonBoolField(t *testing.T) {
-	node := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       "Node",
-		"metadata":   map[string]any{"name": "worker-1"},
-		"spec":       map[string]any{"unschedulable": "yes"},
-	}}
-
-	detail, err := Get(context.Background(), newClient(node), api.ObjectRef{Version: "v1", Resource: "nodes", Name: "worker-1"})
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if detail.Schedulable != nil {
-		t.Fatalf("schedulable = %v, want nil", *detail.Schedulable)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			detail, err := Get(context.Background(), newClient(tc.obj), tc.ref)
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			matchBoolPtr(t, "schedulable", detail.Schedulable, tc.want)
+		})
 	}
 }
 
