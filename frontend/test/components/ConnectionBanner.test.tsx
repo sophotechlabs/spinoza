@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConnectionBanner from '../../src/components/ConnectionBanner';
+import { expireSession } from '../../src/store/session';
 import { offline } from '../../src/lib/feed';
 
 describe('offline', () => {
@@ -61,5 +62,32 @@ describe('ConnectionBanner', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Reconnect now' }));
 
     expect(onReconnect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a page whose token is from an earlier run', () => {
+  it('says so instead of pretending the network dropped', () => {
+    expireSession();
+
+    render(<ConnectionBanner status="disconnected" attempt={4} onReconnect={vi.fn()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('belongs to an earlier run');
+    expect(screen.getByRole('status')).toHaveTextContent('Open the URL the running one printed');
+  });
+
+  it('offers no reconnect button, because reconnecting cannot help', () => {
+    expireSession();
+
+    render(<ConnectionBanner status="disconnected" attempt={4} onReconnect={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Reconnect now' })).not.toBeInTheDocument();
+  });
+
+  it('takes over even while the socket still looks healthy', () => {
+    expireSession();
+
+    render(<ConnectionBanner status="connected" attempt={0} onReconnect={vi.fn()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('belongs to an earlier run');
   });
 });

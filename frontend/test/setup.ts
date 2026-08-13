@@ -4,6 +4,7 @@ import { configure } from '@testing-library/react';
 import { installMatchMedia } from './helpers';
 import { usePanelsStore } from '../src/store/panels';
 import { useClusterStore } from '../src/store/cluster';
+import { useSessionStore } from '../src/store/session';
 import { useForwardsStore } from '../src/store/forwards';
 
 configure({ asyncUtilTimeout: 5000 });
@@ -13,6 +14,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/');
   usePanelsStore.getState().reset();
   useClusterStore.getState().reset();
+  useSessionStore.getState().reset();
   useForwardsStore.getState().setForwards([]);
 });
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { sessionExpired } from '../store/session';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { parseColumn, parseRow } from './parse';
 import { asBoolean, asList, asRecord, asString, listOf } from './wire';
@@ -179,6 +180,9 @@ export function useResourceFeed(): ResourceFeed {
     }
 
     function scheduleReconnect() {
+      if (sessionExpired()) {
+        return;
+      }
       const delay = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** attempt);
       attempt += 1;
       setAttempt(attempt);

@@ -1,7 +1,11 @@
+import { expireSession } from '../store/session';
+
 export const REQUEST_TIMEOUT_MS = 15000;
 export const SLOW_REQUEST_TIMEOUT_MS = 120000;
 
 export const TIMEOUT_MESSAGE = 'the backend did not answer in time';
+
+export const UNAUTHORIZED = 401;
 
 export const TOKEN_HEADER = 'X-Spinoza-Token';
 export const TOKEN_PARAM = 'token';
@@ -54,7 +58,11 @@ export async function request(url: string, options: RequestOptions = {}): Promis
     limit = timeoutMs;
   }
   try {
-    return await fetch(url, { ...withToken(init), signal: AbortSignal.timeout(limit) });
+    const response = await fetch(url, { ...withToken(init), signal: AbortSignal.timeout(limit) });
+    if (response.status === UNAUTHORIZED) {
+      expireSession();
+    }
+    return response;
   } catch (err: unknown) {
     if (timedOut(err)) {
       throw new Error(TIMEOUT_MESSAGE);

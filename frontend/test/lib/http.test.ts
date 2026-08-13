@@ -8,6 +8,7 @@ import {
   request,
 } from '../../src/lib/http';
 import { anySignal, rejectsWith } from '../helpers';
+import { sessionExpired } from '../../src/store/session';
 
 interface TokenWindow {
   __SPINOZA_TOKEN__?: string;
@@ -192,5 +193,31 @@ describe('request', () => {
     stubFetch(rejectsWith('nope'));
 
     await expect(request('/api/flux')).rejects.toBe('nope');
+  });
+});
+
+describe('a token the server no longer accepts', () => {
+  it('marks the session expired so the app can say so', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+
+    await request('/api/contexts');
+
+    expect(sessionExpired()).toBe(true);
+  });
+
+  it('leaves a working session alone', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+
+    await request('/api/contexts');
+
+    expect(sessionExpired()).toBe(false);
+  });
+
+  it('leaves the session alone for other failures', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    await request('/api/contexts');
+
+    expect(sessionExpired()).toBe(false);
   });
 });

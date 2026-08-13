@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { Row } from '../../src/lib/types';
+import { expireSession } from '../../src/store/session';
 import { DELTA_FLUSH_MS, useResourceFeed } from '../../src/lib/feed';
 import { useResourcesStore } from '../../src/store/resources';
 import { useLogsStore } from '../../src/store/logs';
@@ -1260,5 +1261,24 @@ describe('a chatty log stream', () => {
     const stream = useLogsStore.getState().streams.get('logs');
     expect(stream?.lines).toEqual(['before the error']);
     expect(stream?.error).toBe('forbidden');
+  });
+});
+
+describe('the socket on a page whose token died', () => {
+  it('gives up reconnecting, because a new socket would be refused too', async () => {
+    vi.useFakeTimers();
+    renderHook(() => useResourceFeed());
+    const opened = FakeWebSocket.instances.length;
+
+    expireSession();
+    act(() => {
+      FakeWebSocket.instances[opened - 1].onclose?.(new CloseEvent('close'));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+
+    expect(FakeWebSocket.instances).toHaveLength(opened);
+    vi.useRealTimers();
   });
 });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { usePoll } from '../../src/lib/usePoll';
+import { expireSession } from '../../src/store/session';
 import { bumpClusterEpoch } from '../../src/store/cluster';
 
 afterEach(() => {
@@ -209,5 +210,25 @@ describe('usePoll', () => {
       reject(new Error('late'));
       await Promise.resolve();
     });
+  });
+});
+
+describe('polling on a page whose token died', () => {
+  it('stops asking, so the server log is not filled with refusals', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn().mockResolvedValue('one');
+    renderHook(() => usePoll(fetcher, options()));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    expireSession();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });

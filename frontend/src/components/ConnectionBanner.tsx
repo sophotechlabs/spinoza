@@ -1,5 +1,6 @@
 import type { ConnectionStatus } from '../lib/feed';
 import { offline } from '../lib/feed';
+import { useSessionExpired } from '../store/session';
 
 interface ConnectionBannerProps {
   status: ConnectionStatus;
@@ -15,6 +16,25 @@ function detail(attempt: number): string {
 }
 
 export default function ConnectionBanner({ status, attempt, onReconnect }: ConnectionBannerProps) {
+  const expired = useSessionExpired();
+
+  if (expired) {
+    return (
+      <div
+        role="status"
+        className="flex shrink-0 items-baseline gap-2 border-b border-warn-line bg-warn-tint/40 px-3 py-1.5 text-xs text-warn-strong"
+      >
+        <span className="shrink-0 font-semibold text-warn">
+          This page belongs to an earlier run of spinoza.
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          Every run prints a new token. Open the URL the running one printed, and this page will
+          work again.
+        </span>
+      </div>
+    );
+  }
+
   if (!offline(status, attempt)) {
     return null;
   }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useClusterEpoch } from '../store/cluster';
+import { sessionExpired } from '../store/session';
 
 export interface Polled<T> {
   data: T | null;
@@ -44,7 +45,7 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
     let mounted = true;
     let inFlight = false;
     const load = async () => {
-      if (inFlight) {
+      if (inFlight || sessionExpired()) {
         return;
       }
       inFlight = true;
