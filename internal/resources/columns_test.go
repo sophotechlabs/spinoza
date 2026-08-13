@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -59,33 +60,27 @@ func TestColumnsFor(t *testing.T) {
 }
 
 func TestColumnRenders(t *testing.T) {
-	pod := columnsFor("Pod")
-	if pod[0].Render != "containers" {
-		t.Fatalf("pod[0] render = %q, want containers", pod[0].Render)
+	cases := []struct {
+		kind  string
+		index int
+		want  string
+	}{
+		{"Pod", 0, "containers"},
+		{"Pod", 1, "status"},
+		{"Pod", 2, "restarts"},
+		{"Deployment", 0, "ratio"},
+		{"Job", 0, "ratio"},
+		{"ConfigMap", 0, "status"},
+		{"Node", 0, "status"},
+		{"Node", 1, ""},
+		{"Namespace", 0, "status"},
 	}
-	if pod[2].Render != "restarts" {
-		t.Fatalf("pod[2] render = %q, want restarts", pod[2].Render)
-	}
-	if columnsFor("Deployment")[0].Render != "ratio" {
-		t.Fatalf("deployment[0] render, want ratio")
-	}
-	if columnsFor("Job")[0].Render != "ratio" {
-		t.Fatalf("job[0] render, want ratio")
-	}
-	if columnsFor("ConfigMap")[0].Render != "status" {
-		t.Fatalf("configmap[0] render, want status")
-	}
-	if columnsFor("Node")[0].Render != "status" {
-		t.Fatalf("node[0] render, want status")
-	}
-	if columnsFor("Node")[1].Render != "" {
-		t.Fatalf("node[1] render, want empty")
-	}
-	if columnsFor("Namespace")[0].Render != "status" {
-		t.Fatalf("namespace[0] render, want status")
-	}
-	if columnsFor("Pod")[1].Render != "status" {
-		t.Fatalf("pod[1] render, want status")
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s[%d]", tc.kind, tc.index), func(t *testing.T) {
+			if got := columnsFor(tc.kind)[tc.index].Render; got != tc.want {
+				t.Fatalf("render = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -313,51 +308,37 @@ func TestJobCells(t *testing.T) {
 	eq(t, jobCells(job), []string{"3/5"})
 }
 
-func TestConditionSummaryReady(t *testing.T) {
-	obj := u(map[string]any{
-		"status": map[string]any{
-			"conditions": []any{
-				map[string]any{"type": "Ready", "status": "True"},
-			},
-		},
-	})
-	if got := unstr.ReadySummary(obj); got != "Ready" {
-		t.Fatalf("conditionSummary = %q, want Ready", got)
+func TestConditionSummary(t *testing.T) {
+	cases := []struct {
+		name       string
+		conditions []any
+		want       string
+	}{
+		{"ready", []any{
+			map[string]any{"type": "Ready", "status": "True"},
+		}, "Ready"},
+		{"reason of the not-ready condition", []any{
+			map[string]any{"type": "Available", "status": "False"},
+			map[string]any{"type": "Ready", "status": "False", "reason": "MinimumReplicasUnavailable"},
+		}, "MinimumReplicasUnavailable"},
+		{"not ready without a reason", []any{
+			"not-a-map",
+			map[string]any{"type": "Ready", "status": "False"},
+		}, "NotReady"},
+		{"no conditions at all", nil, ""},
 	}
-}
-
-func TestConditionSummaryReason(t *testing.T) {
-	obj := u(map[string]any{
-		"status": map[string]any{
-			"conditions": []any{
-				map[string]any{"type": "Available", "status": "False"},
-				map[string]any{"type": "Ready", "status": "False", "reason": "MinimumReplicasUnavailable"},
-			},
-		},
-	})
-	if got := unstr.ReadySummary(obj); got != "MinimumReplicasUnavailable" {
-		t.Fatalf("conditionSummary = %q, want MinimumReplicasUnavailable", got)
-	}
-}
-
-func TestConditionSummaryNotReady(t *testing.T) {
-	obj := u(map[string]any{
-		"status": map[string]any{
-			"conditions": []any{
-				"not-a-map",
-				map[string]any{"type": "Ready", "status": "False"},
-			},
-		},
-	})
-	if got := unstr.ReadySummary(obj); got != "NotReady" {
-		t.Fatalf("conditionSummary = %q, want NotReady", got)
-	}
-}
-
-func TestConditionSummaryEmpty(t *testing.T) {
-	obj := u(map[string]any{})
-	if got := unstr.ReadySummary(obj); got != "" {
-		t.Fatalf("conditionSummary = %q, want empty", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			obj := u(map[string]any{})
+			if tc.conditions != nil {
+				obj = u(map[string]any{
+					"status": map[string]any{"conditions": tc.conditions},
+				})
+			}
+			if got := unstr.ReadySummary(obj); got != tc.want {
+				t.Fatalf("conditionSummary = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
