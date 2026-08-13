@@ -22,6 +22,7 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ErrorBoundary from './components/ErrorBoundary';
 import Toasts from './components/Toasts';
+import TooltipHost from './components/TooltipHost';
 import ResourceTable from './components/ResourceTable';
 import PanelLayout from './components/PanelLayout';
 import ClusterOverview from './components/ClusterOverview';
@@ -312,6 +313,7 @@ export default function App() {
         </main>
       </div>
       <Toasts />
+      <TooltipHost />
       <CommandPalette
         open={paletteOpen}
         onClose={() => {

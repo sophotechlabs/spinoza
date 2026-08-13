@@ -121,7 +121,11 @@ export default function HelmReleases({ active = true, onSelectResource }: HelmRe
                 <th className="px-2 py-1 font-medium">Namespace</th>
                 <th className="px-2 py-1 font-medium">Chart</th>
                 <th className="px-2 py-1 font-medium">App version</th>
-                <th className="px-2 py-1 font-medium">Latest</th>
+                <th className="px-2 py-1 font-medium">
+                  <span title="The latest chart version your configured Helm repositories offer">
+                    Latest
+                  </span>
+                </th>
                 <th className="px-2 py-1 text-right font-medium">Rev</th>
                 <th className="px-2 py-1 font-medium">Status</th>
                 <th className="px-2 py-1 text-right font-medium">Updated</th>
