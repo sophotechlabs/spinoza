@@ -76,6 +76,7 @@ export default function SettingsDialog({
   const setScreenReader = useSettingsStore((state) => state.setScreenReader);
   const resetPanels = usePanelsStore((state) => state.reset);
   const themes = useThemes();
+  const sortedThemes = [...themes].sort((a, b) => a.name.localeCompare(b.name));
   const custom = useThemeStore((state) => state.custom);
   const addTheme = useThemeStore((state) => state.addTheme);
   const removeTheme = useThemeStore((state) => state.removeTheme);
@@ -202,7 +203,7 @@ export default function SettingsDialog({
                   }}
                   className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
                 >
-                  {themes.map((theme) => (
+                  {sortedThemes.map((theme) => (
                     <option key={theme.id} value={theme.id}>
                       {theme.name}
                     </option>

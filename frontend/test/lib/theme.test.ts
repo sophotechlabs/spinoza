@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  BLADE_RUNNER,
   BUILT_IN_THEMES,
   CANVAS_NAMES,
+  CYBERPUNK,
+  MATRIX,
   NORD,
   PAINTED_KEY,
+  STARTREKTOR,
   TOKEN_NAMES,
   applyTheme,
   painted,
@@ -157,19 +161,29 @@ describe('which backgrounds a token has to clear', () => {
   });
 });
 
-describe('the Nord theme that ships with spinoza', () => {
-  it('is offered next to the two plain ones', () => {
-    expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(['dark', 'light', 'nord']);
+describe('the themes that ship with spinoza', () => {
+  it('are offered next to the two plain ones', () => {
+    expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual([
+      'dark',
+      'light',
+      'nord',
+      'blade-runner',
+      'cyberpunk',
+      'matrix',
+      'startrektor',
+    ]);
   });
 
-  it('sets every token and every canvas colour, so nothing falls back to dark', () => {
-    expect(Object.keys(NORD.tokens ?? {}).sort()).toEqual([...TOKEN_NAMES].sort());
-    expect(Object.keys(NORD.canvas ?? {}).sort()).toEqual([...CANVAS_NAMES].sort());
-  });
+  for (const theme of [NORD, BLADE_RUNNER, CYBERPUNK, MATRIX, STARTREKTOR]) {
+    it(`${theme.name} sets every token and every canvas colour, so nothing falls back to dark`, () => {
+      expect(Object.keys(theme.tokens ?? {}).sort()).toEqual([...TOKEN_NAMES].sort());
+      expect(Object.keys(theme.canvas ?? {}).sort()).toEqual([...CANVAS_NAMES].sort());
+    });
 
-  it('builds on the dark base, so the editor and graph follow it', () => {
-    expect(NORD.base).toBe('dark');
-  });
+    it(`${theme.name} builds on the dark base, so the editor and graph follow it`, () => {
+      expect(theme.base).toBe('dark');
+    });
+  }
 
   it('reaches the DOM as inline custom properties', () => {
     applyTheme(NORD);

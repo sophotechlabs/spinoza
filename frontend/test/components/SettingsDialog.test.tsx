@@ -52,6 +52,23 @@ describe('the settings dialog', () => {
     expect(screen.getByRole('button', { name: 'Panels' })).toBeInTheDocument();
   });
 
+  it('lists the themes alphabetically, with System last', () => {
+    open();
+
+    const select = screen.getByLabelText('Theme preference');
+    const names = Array.from(select.querySelectorAll('option')).map((option) => option.textContent);
+    expect(names).toEqual([
+      'Blade Runner',
+      'Cyberpunk',
+      'Dark',
+      'Light',
+      'Matrix',
+      'Nord',
+      'Startrektor',
+      'System',
+    ]);
+  });
+
   it('changes the theme from Appearance', async () => {
     const user = userEvent.setup();
     open();
