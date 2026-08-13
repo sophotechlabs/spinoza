@@ -193,6 +193,75 @@ func TestGuardRefusesCrossOriginAssets(t *testing.T) {
 	}
 }
 
+func TestGuardAdmitsACrossSiteTopLevelNavigation(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/?token="+testToken, http.NoBody)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200; a link click carrying the token opens the app", res.StatusCode)
+	}
+}
+
+func TestGuardRefusesACrossSiteNavigationWithoutTheToken(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/", http.NoBody)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", res.StatusCode)
+	}
+}
+
+func TestGuardRefusesACrossSiteFramedNavigation(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/?token="+testToken, http.NoBody)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Dest", "iframe")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; a framed load is not a top-level navigation", res.StatusCode)
+	}
+}
+
 func TestGuardServesAssetChunksWithoutAToken(t *testing.T) {
 	mgr, _ := testManager(t)
 	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())

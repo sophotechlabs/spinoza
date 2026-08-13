@@ -191,9 +191,19 @@ func isLocal(r *http.Request) bool {
 	}
 	origin := r.Header.Get("Origin")
 	if origin == "" {
+		if topLevelNavigation(r) {
+			return true
+		}
 		return r.Header.Get("Sec-Fetch-Site") != "cross-site"
 	}
 	return allowedOrigin(origin, r.Host)
+}
+
+func topLevelNavigation(r *http.Request) bool {
+	if r.Header.Get("Sec-Fetch-Mode") != "navigate" {
+		return false
+	}
+	return r.Header.Get("Sec-Fetch-Dest") == "document"
 }
 
 func loopbackAuthority(authority string) bool {
