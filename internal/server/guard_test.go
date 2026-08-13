@@ -45,27 +45,6 @@ func TestAllowedOrigin(t *testing.T) {
 	}
 }
 
-func TestGuardRefusesACrossSiteFetch(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Sec-Fetch-Site", "cross-site")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403; a page on another site may not reach the api", res.StatusCode)
-	}
-}
-
 func TestLoopbackAuthority(t *testing.T) {
 	cases := []struct {
 		authority string
@@ -94,53 +73,185 @@ func TestLoopbackAuthority(t *testing.T) {
 	}
 }
 
-func TestGuardRefusesACrossOriginRead(t *testing.T) {
+func guardServer(t *testing.T) *httptest.Server {
+	t.Helper()
 	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
 	t.Cleanup(srv.Close)
+	return srv
+}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Origin", "https://evil.example")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d", res.StatusCode)
+func crossSiteNavigation(dest string) map[string]string {
+	return map[string]string{
+		"Sec-Fetch-Site": "cross-site",
+		"Sec-Fetch-Mode": "navigate",
+		"Sec-Fetch-Dest": dest,
 	}
 }
 
-func TestGuardRefusesARebottledHost(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
+func TestGuardAdmissionMatrix(t *testing.T) {
+	cases := []struct {
+		name    string
+		method  string
+		path    string
+		token   string
+		host    string
+		headers map[string]string
+		want    int
+	}{
+		{
+			name:    "an api fetch from another site",
+			path:    "/api/resources",
+			token:   "header",
+			headers: map[string]string{"Sec-Fetch-Site": "cross-site"},
+			want:    http.StatusForbidden,
+		},
+		{
+			name:    "an api read from a foreign origin",
+			path:    "/api/resources",
+			token:   "header",
+			headers: map[string]string{"Origin": "https://evil.example"},
+			want:    http.StatusForbidden,
+		},
+		{
+			name:    "a rebottled host",
+			path:    "/api/resources",
+			token:   "header",
+			host:    "evil.example:34115",
+			headers: map[string]string{"Origin": "http://evil.example:34115"},
+			want:    http.StatusForbidden,
+		},
+		{
+			name:    "the desktop webview",
+			path:    "/api/resources",
+			token:   "header",
+			headers: map[string]string{"Origin": "wails://wails"},
+			want:    http.StatusOK,
+		},
+		{
+			name:    "the windows desktop webview",
+			path:    "/api/resources",
+			token:   "header",
+			host:    "wails.localhost",
+			headers: map[string]string{"Origin": "http://wails.localhost"},
+			want:    http.StatusOK,
+		},
+		{
+			name:    "the index from a foreign origin",
+			path:    "/index.html",
+			token:   "header",
+			headers: map[string]string{"Origin": "https://evil.example"},
+			want:    http.StatusForbidden,
+		},
+		{
+			name:  "healthz with no origin",
+			path:  "/healthz",
+			token: "header",
+			want:  http.StatusOK,
+		},
+		{
+			name:    "healthz from a foreign origin",
+			path:    "/healthz",
+			token:   "header",
+			headers: map[string]string{"Origin": "https://evil.example"},
+			want:    http.StatusForbidden,
+		},
+		{
+			name:    "a cross-site top-level navigation carrying the token",
+			path:    "/",
+			token:   "query",
+			headers: crossSiteNavigation("document"),
+			want:    http.StatusOK,
+		},
+		{
+			name:    "a cross-site navigation without the token",
+			path:    "/",
+			headers: crossSiteNavigation("document"),
+			want:    http.StatusUnauthorized,
+		},
+		{
+			name:    "a framed cross-site navigation",
+			path:    "/",
+			token:   "query",
+			headers: crossSiteNavigation("iframe"),
+			want:    http.StatusForbidden,
+		},
+		{
+			name: "an asset chunk without a token",
+			path: "/assets/chunk.js",
+			want: http.StatusOK,
+		},
+		{
+			name:   "a head probe of an asset chunk",
+			method: http.MethodHead,
+			path:   "/assets/chunk.js",
+			want:   http.StatusOK,
+		},
+		{
+			name: "the assets directory without a token",
+			path: "/assets/",
+			want: http.StatusUnauthorized,
+		},
+		{
+			name: "the favicon without a token",
+			path: "/favicon.svg",
+			want: http.StatusOK,
+		},
+		{
+			name: "the index without a token",
+			path: "/",
+			want: http.StatusUnauthorized,
+		},
+		{
+			name: "a root file without a token",
+			path: "/app.js",
+			want: http.StatusUnauthorized,
+		},
+		{
+			name:    "a cross-site pull of an asset chunk",
+			path:    "/assets/chunk.js",
+			headers: map[string]string{"Origin": "https://evil.example"},
+			want:    http.StatusForbidden,
+		},
 	}
-	req.Host = "evil.example:34115"
-	req.Header.Set("Origin", "http://evil.example:34115")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d", res.StatusCode)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := guardServer(t)
+			method := tc.method
+			if method == "" {
+				method = http.MethodGet
+			}
+			target := srv.URL + tc.path
+			if tc.token == "query" {
+				target += "?token=" + testToken
+			}
+			req, err := http.NewRequest(method, target, http.NoBody)
+			if err != nil {
+				t.Fatalf("request: %v", err)
+			}
+			if tc.token == "header" {
+				req.Header.Set(AuthHeader, testToken)
+			}
+			if tc.host != "" {
+				req.Host = tc.host
+			}
+			for name, value := range tc.headers {
+				req.Header.Set(name, value)
+			}
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("do: %v", err)
+			}
+			defer func() { _ = res.Body.Close() }()
+			if res.StatusCode != tc.want {
+				t.Fatalf("status = %d, want %d", res.StatusCode, tc.want)
+			}
+		})
 	}
 }
 
 func TestGuardRefusesACrossOriginWebsocket(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
-	t.Cleanup(srv.Close)
+	srv := guardServer(t)
 
 	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 	_, _, err := websocket.Dial(context.Background(), url, &websocket.DialOptions{
@@ -148,255 +259,5 @@ func TestGuardRefusesACrossOriginWebsocket(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("a cross-origin page reached the socket")
-	}
-}
-
-func TestGuardAdmitsTheDesktopWebview(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Origin", "wails://wails")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", res.StatusCode)
-	}
-}
-
-func TestGuardRefusesCrossOriginAssets(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/index.html", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Origin", "https://evil.example")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d", res.StatusCode)
-	}
-}
-
-func TestGuardAdmitsACrossSiteTopLevelNavigation(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/?token="+testToken, http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Sec-Fetch-Site", "cross-site")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200; a link click carrying the token opens the app", res.StatusCode)
-	}
-}
-
-func TestGuardRefusesACrossSiteNavigationWithoutTheToken(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Sec-Fetch-Site", "cross-site")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401", res.StatusCode)
-	}
-}
-
-func TestGuardRefusesACrossSiteFramedNavigation(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/?token="+testToken, http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Sec-Fetch-Site", "cross-site")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Dest", "iframe")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403; a framed load is not a top-level navigation", res.StatusCode)
-	}
-}
-
-func TestGuardServesAssetChunksWithoutAToken(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
-	t.Cleanup(srv.Close)
-
-	res, err := http.Get(srv.URL + "/assets/chunk.js")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200; lazy chunks load without the token cookie", res.StatusCode)
-	}
-}
-
-func TestGuardServesTheFaviconWithoutAToken(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
-	t.Cleanup(srv.Close)
-
-	res, err := http.Get(srv.URL + "/favicon.svg")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", res.StatusCode)
-	}
-}
-
-func TestGuardStillRefusesTheIndexWithoutAToken(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
-	t.Cleanup(srv.Close)
-
-	res, err := http.Get(srv.URL + "/")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401; the index embeds the token", res.StatusCode)
-	}
-}
-
-func TestGuardStillRefusesRootFilesWithoutAToken(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
-	t.Cleanup(srv.Close)
-
-	res, err := http.Get(srv.URL + "/app.js")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401", res.StatusCode)
-	}
-}
-
-func TestGuardRefusesCrossSiteAssetChunks(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/assets/chunk.js", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Origin", "https://evil.example")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403; a foreign page may not pull chunks", res.StatusCode)
-	}
-}
-
-func TestHealthzAnswersALocalProbe(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
-	t.Cleanup(srv.Close)
-
-	res, err := http.Get(srv.URL + "/healthz")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want a probe with no Origin to pass", res.StatusCode)
-	}
-}
-
-func TestHealthzRefusesAForeignOrigin(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/healthz", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Header.Set("Origin", "https://evil.example")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403; no route should answer a foreign page", res.StatusCode)
-	}
-}
-
-func TestGuardAdmitsTheWindowsDesktopWebview(t *testing.T) {
-	mgr, _ := testManager(t)
-	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/resources", http.NoBody)
-	if err != nil {
-		t.Fatalf("request: %v", err)
-	}
-	req.Host = "wails.localhost"
-	req.Header.Set("Origin", "http://wails.localhost")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("do: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d; wails on Windows serves the app from http://wails.localhost", res.StatusCode)
 	}
 }

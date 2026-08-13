@@ -18,12 +18,43 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/inspect"
+	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
 func podsResource() schema.GroupResource {
 	return schema.GroupResource{Resource: "pods"}
+}
+
+func TestStatusForMapsEachOutcome(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"internal sentinel", fmt.Errorf("action: %w", api.ErrInternal), http.StatusInternalServerError},
+		{"oversized body", &http.MaxBytesError{Limit: 1}, http.StatusRequestEntityTooLarge},
+		{"invalid uid", inspect.ErrInvalidUID, http.StatusBadRequest},
+		{"no schema", jsonschema.ErrNoSchema, http.StatusNotFound},
+		{"deadline exceeded", context.DeadlineExceeded, http.StatusGatewayTimeout},
+		{"canceled", context.Canceled, http.StatusServiceUnavailable},
+		{"not found", apierrors.NewNotFound(podsResource(), "web"), http.StatusNotFound},
+		{"conflict", apierrors.NewConflict(podsResource(), "web", errors.New("newer")), http.StatusConflict},
+		{"unauthorized", apierrors.NewUnauthorized("who is this"), http.StatusUnauthorized},
+		{"forbidden", apierrors.NewForbidden(podsResource(), "web", errors.New("no")), http.StatusForbidden},
+		{"bad request", apierrors.NewBadRequest("no such field"), http.StatusUnprocessableEntity},
+		{"anything else", errors.New("unknown resource apps/v1/widgets"), http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := statusFor(tc.err); got != tc.want {
+				t.Fatalf("statusFor = %d, want %d", got, tc.want)
+			}
+		})
+	}
 }
 
 func TestStatusForUpstreamFailures(t *testing.T) {
