@@ -193,6 +193,87 @@ func TestGuardRefusesCrossOriginAssets(t *testing.T) {
 	}
 }
 
+func TestGuardServesAssetChunksWithoutAToken(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
+	t.Cleanup(srv.Close)
+
+	res, err := http.Get(srv.URL + "/assets/chunk.js")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200; lazy chunks load without the token cookie", res.StatusCode)
+	}
+}
+
+func TestGuardServesTheFaviconWithoutAToken(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
+	t.Cleanup(srv.Close)
+
+	res, err := http.Get(srv.URL + "/favicon.svg")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
+}
+
+func TestGuardStillRefusesTheIndexWithoutAToken(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
+	t.Cleanup(srv.Close)
+
+	res, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401; the index embeds the token", res.StatusCode)
+	}
+}
+
+func TestGuardStillRefusesRootFilesWithoutAToken(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
+	t.Cleanup(srv.Close)
+
+	res, err := http.Get(srv.URL + "/app.js")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", res.StatusCode)
+	}
+}
+
+func TestGuardRefusesCrossSiteAssetChunks(t *testing.T) {
+	mgr, _ := testManager(t)
+	srv := httptest.NewServer(New(fixed(mgr), testAssets(), testToken).Handler())
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/assets/chunk.js", http.NoBody)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	req.Header.Set("Origin", "https://evil.example")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; a foreign page may not pull chunks", res.StatusCode)
+	}
+}
+
 func TestHealthzAnswersALocalProbe(t *testing.T) {
 	mgr, _ := testManager(t)
 	srv := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))

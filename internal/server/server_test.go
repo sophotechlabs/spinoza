@@ -79,8 +79,10 @@ const testToken = "SPINOZATESTTOKEN0000000000"
 
 func testAssets() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html": &fstest.MapFile{Data: []byte("<html><head></head><body>spinoza-index</body></html>")},
-		"app.js":     &fstest.MapFile{Data: []byte("spinoza-bundle")},
+		"index.html":      &fstest.MapFile{Data: []byte("<html><head></head><body>spinoza-index</body></html>")},
+		"app.js":          &fstest.MapFile{Data: []byte("spinoza-bundle")},
+		"assets/chunk.js": &fstest.MapFile{Data: []byte("spinoza-chunk")},
+		"favicon.svg":     &fstest.MapFile{Data: []byte("<svg></svg>")},
 	}
 }
 

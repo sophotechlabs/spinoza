@@ -41,7 +41,8 @@ func accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isLocal(r) {
-			slog.Warn("refused a request that did not look local",
+			slog.Warn(
+				"refused a request that did not look local",
 				"path", strconv.Quote(r.URL.Path),
 				"host", strconv.Quote(r.Host),
 				"origin", strconv.Quote(r.Header.Get("Origin")),
@@ -50,8 +51,9 @@ func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusForbidden, "spinoza answers local requests only")
 			return
 		}
-		if !s.authorize(w, r) {
-			slog.Warn("refused a request without this run's token",
+		if !publicAsset(r) && !s.authorize(w, r) {
+			slog.Warn(
+				"refused a request without this run's token",
 				"path", strconv.Quote(r.URL.Path),
 				"origin", strconv.Quote(r.Header.Get("Origin")),
 			)
@@ -145,6 +147,19 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) bool {
 		})
 	}
 	return true
+}
+
+func publicAsset(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	if r.URL.Path == "/favicon.svg" {
+		return true
+	}
+	if r.URL.Path == "/assets/" {
+		return false
+	}
+	return strings.HasPrefix(r.URL.Path, "/assets/")
 }
 
 func presentedToken(r *http.Request) (string, bool) {
