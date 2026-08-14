@@ -212,10 +212,13 @@ export interface Kubeconfig {
   removable: boolean;
 }
 
+export type Protection = 'protected' | 'open' | 'unknown';
+
 export interface ContextList {
   current: ContextRef;
   error?: string;
   kubeconfigs: Kubeconfig[];
+  protection: Protection;
 }
 
 export interface FilePicker {

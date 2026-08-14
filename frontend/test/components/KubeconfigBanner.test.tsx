@@ -6,6 +6,7 @@ import { useContextsStore } from '../../src/store/contexts';
 function connectedThrough(path: string, error?: string): void {
   useContextsStore.getState().setList({
     current: { kubeconfig: path, name: 'p-mk1' },
+    protection: 'unknown',
     kubeconfigs: [
       { label: '/tmp/work.yaml', path: '/tmp/work.yaml', removable: true, contexts: [], error },
     ],

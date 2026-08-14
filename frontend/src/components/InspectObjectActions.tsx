@@ -13,6 +13,8 @@ import type { ObjectAction } from '../lib/objectActions';
 import { refQuery } from '../lib/object';
 import { notifyError, notifyOk } from '../store/toasts';
 import Announce from './Announce';
+import ConfirmByName from './ConfirmByName';
+import { useProtectedCluster } from '../store/contexts';
 
 interface InspectObjectActionsProps {
   target: ObjectRef;
@@ -37,6 +39,7 @@ interface Pending {
   action: ObjectAction;
   options: Record<string, unknown>;
   question: string;
+  typed: boolean;
 }
 
 function outcomeClass(outcome: string): string {
@@ -78,6 +81,7 @@ export default function InspectObjectActions({
   const [plan, setPlan] = useState<ActionResult | null>(null);
   const [force, setForce] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
+  const protectedCluster = useProtectedCluster();
 
   const refKey = refQuery(target);
 
@@ -124,11 +128,21 @@ export default function InspectObjectActions({
   function ask(action: ObjectAction, options: Record<string, unknown>, question: string) {
     setError(null);
     setNotice(null);
-    setPending({ action, options, question });
+    setPending({ action, options, question, typed: false });
+  }
+
+  function askTyped(action: ObjectAction, options: Record<string, unknown>, question: string) {
+    setError(null);
+    setNotice(null);
+    setPending({ action, options, question, typed: true });
   }
 
   function confirmPending(chosen: Pending) {
     setPending(null);
+    if (chosen.typed) {
+      void run(chosen.action, { ...chosen.options, confirm: target.name });
+      return;
+    }
     void run(chosen.action, chosen.options);
   }
 
@@ -147,10 +161,23 @@ export default function InspectObjectActions({
       return;
     }
     if (count === 0) {
-      ask('scale', { replicas: 0 }, `Scale ${target.name} to zero? Every pod is removed.`);
+      const question = `Scale ${target.name} to zero? Every pod is removed.`;
+      if (protectedCluster) {
+        askTyped('scale', { replicas: 0 }, question);
+        return;
+      }
+      ask('scale', { replicas: 0 }, question);
       return;
     }
     void run('scale', { replicas: count });
+  }
+
+  function drainNow() {
+    if (protectedCluster) {
+      askTyped('drain', { force }, `Draining node ${target.name} evicts its pods.`);
+      return;
+    }
+    void run('drain', { force });
   }
 
   const blocked = plan === null ? 0 : countBy(plan, 'blocked');
@@ -228,7 +255,18 @@ export default function InspectObjectActions({
         {busy && <span className="text-fg-muted">working…</span>}
       </div>
 
-      {pending !== null && (
+      {pending !== null && pending.typed && (
+        <ConfirmByName
+          open
+          name={target.name}
+          what={pending.question}
+          onConfirm={() => {
+            confirmPending(pending);
+          }}
+          onCancel={cancelPending}
+        />
+      )}
+      {pending !== null && !pending.typed && (
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-warn-line bg-warn-tint/40 p-2">
           <span className="text-warn-strong">{pending.question}</span>
           <button
@@ -266,7 +304,9 @@ export default function InspectObjectActions({
           <div className="mt-2 flex gap-2">
             <button
               type="button"
-              onClick={() => void run('drain', { force })}
+              onClick={() => {
+                drainNow();
+              }}
               disabled={confirmDisabled}
               className={dangerClass}
             >

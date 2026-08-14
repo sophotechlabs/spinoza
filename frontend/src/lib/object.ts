@@ -52,8 +52,12 @@ export async function applyObject(ref: ObjectRef, doc: string): Promise<ObjectDe
   return parseObjectDetail(await response.json());
 }
 
-export async function deleteObject(ref: ObjectRef): Promise<void> {
-  const response = await request(`/api/object?${refQuery(ref)}`, { method: 'DELETE' });
+export async function deleteObject(ref: ObjectRef, confirm?: string): Promise<void> {
+  const params = new URLSearchParams(refQuery(ref));
+  if (confirm !== undefined) {
+    params.set('confirm', confirm);
+  }
+  const response = await request(`/api/object?${params.toString()}`, { method: 'DELETE' });
   if (!response.ok) {
     throw await failure(response, `delete failed with status ${response.status}`);
   }

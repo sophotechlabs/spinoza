@@ -15,6 +15,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/kubeconfig"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
+	"github.com/sophotechlabs/spinoza/internal/protect"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
@@ -24,13 +25,25 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 		return nil, targetErr
 	}
 	sources := kubeconfig.NewSources(options.Kubeconfig, openStore())
-	return newCluster(ctx, func(buildCtx context.Context, ref api.ContextRef) (*resources.Manager, api.ContextRef, error) {
+	return newCluster(ctx, func(buildCtx context.Context, ref api.ContextRef) (*connection, error) {
 		manager, bundle, err := build(buildCtx, ref, options, promTarget)
 		if err != nil {
-			return nil, api.ContextRef{}, err
+			return nil, err
 		}
-		return manager, bundle.Ref, nil
-	}, sources), nil
+		return &connection{manager: manager, ref: bundle.Ref, host: bundle.Config.Host}, nil
+	}, sources, openProtection()), nil
+}
+
+func openProtection() *protect.Store {
+	path, pathErr := protect.DefaultPath()
+	if pathErr != nil {
+		slog.Warn("protected clusters will not be remembered", "error", pathErr)
+	}
+	store, openErr := protect.Open(path)
+	if openErr != nil {
+		slog.Warn("the protected cluster list could not be read", "error", openErr)
+	}
+	return store
 }
 
 func openStore() *kubeconfig.Store {

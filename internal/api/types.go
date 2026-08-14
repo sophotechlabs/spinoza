@@ -47,10 +47,19 @@ type Kubeconfig struct {
 	Removable bool          `json:"removable"`
 }
 
+const notKnown = "unknown"
+
+const (
+	ProtectionProtected = "protected"
+	ProtectionOpen      = "open"
+	ProtectionUnknown   = notKnown
+)
+
 type ContextList struct {
 	Current     ContextRef   `json:"current"`
 	Error       string       `json:"error,omitempty"`
 	Kubeconfigs []Kubeconfig `json:"kubeconfigs"`
+	Protection  string       `json:"protection"`
 }
 
 type FilePicker struct {
@@ -266,7 +275,7 @@ const (
 )
 
 const (
-	ShellUnknown = "unknown"
+	ShellUnknown = notKnown
 	ShellPresent = "present"
 	ShellAbsent  = "absent"
 )

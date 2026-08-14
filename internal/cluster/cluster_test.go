@@ -15,6 +15,32 @@ import (
 
 const resolvedRoot = "/resolved"
 
+type stubProtection struct {
+	verdicts map[string]string
+	set      map[string]bool
+	setErr   error
+}
+
+func newStubProtection() *stubProtection {
+	return &stubProtection{verdicts: map[string]string{}, set: map[string]bool{}}
+}
+
+func (s *stubProtection) Verdict(server string) string {
+	verdict, found := s.verdicts[server]
+	if !found {
+		return api.ProtectionUnknown
+	}
+	return verdict
+}
+
+func (s *stubProtection) Set(server string, protected bool) error {
+	if s.setErr != nil {
+		return s.setErr
+	}
+	s.set[server] = protected
+	return nil
+}
+
 type stubSources struct {
 	entries   []api.Kubeconfig
 	added     []string
@@ -71,9 +97,9 @@ type recorder struct {
 	failErr error
 }
 
-func (r *recorder) build(ctx context.Context, ref api.ContextRef) (*resources.Manager, api.ContextRef, error) {
+func (r *recorder) build(ctx context.Context, ref api.ContextRef) (*connection, error) {
 	if r.failErr != nil && ref.Name == r.failOn {
-		return nil, api.ContextRef{}, r.failErr
+		return nil, r.failErr
 	}
 	r.refs = append(r.refs, ref)
 	r.live = append(r.live, ctx)
@@ -81,14 +107,18 @@ func (r *recorder) build(ctx context.Context, ref api.ContextRef) (*resources.Ma
 	if resolved.Name == "" {
 		resolved.Name = "default-context"
 	}
-	return resources.NewManager(ctx, resources.Deps{}), resolved, nil
+	return &connection{
+		manager: resources.NewManager(ctx, resources.Deps{}),
+		ref:     resolved,
+		host:    "https://" + resolved.Name + ":6443",
+	}, nil
 }
 
 func newTestCluster(t *testing.T, rec *recorder) *Cluster {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	return newCluster(ctx, rec.build, newStubSources())
+	return newCluster(ctx, rec.build, newStubSources(), newStubProtection())
 }
 
 func TestNewBuildsTheDefaultContext(t *testing.T) {
@@ -189,7 +219,7 @@ func TestAFailedUseKeepsTheWorkingManager(t *testing.T) {
 func TestAnUnreachableClusterStillStarts(t *testing.T) {
 	rec := &recorder{failOn: "", failErr: errors.New("kubeconfig is unreadable")}
 
-	cluster := newCluster(context.Background(), rec.build, newStubSources())
+	cluster := newCluster(context.Background(), rec.build, newStubSources(), newStubProtection())
 
 	if cluster == nil {
 		t.Fatal("spinoza refused to start without a cluster, so the context picker is unreachable")
@@ -208,7 +238,7 @@ func TestAnUnreachableClusterStillStarts(t *testing.T) {
 
 func TestPickingAWorkingContextClearsTheStartupFailure(t *testing.T) {
 	rec := &recorder{failOn: "", failErr: errors.New("kubeconfig is unreadable")}
-	cluster := newCluster(context.Background(), rec.build, newStubSources())
+	cluster := newCluster(context.Background(), rec.build, newStubSources(), newStubProtection())
 	rec.failErr = nil
 
 	if err := cluster.Use(api.ContextRef{Name: "p-mk2"}); err != nil {
@@ -241,7 +271,7 @@ func TestAddingAKubeconfigReachesTheSources(t *testing.T) {
 	sources := newStubSources()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, newStubProtection())
 
 	err := cluster.AddKubeconfig("/tmp/other.yaml")
 	if err != nil {
@@ -261,7 +291,7 @@ func TestAKubeconfigThatIsRefusedIsNotAdded(t *testing.T) {
 	sources.addErr = errors.New("that file is not a kubeconfig")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, newStubProtection())
 
 	err := cluster.AddKubeconfig("/tmp/notes.txt")
 
@@ -277,7 +307,7 @@ func TestRemovingAKubeconfigResolvesThePathFirst(t *testing.T) {
 	sources := newStubSources()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, newStubProtection())
 
 	err := cluster.RemoveKubeconfig("other.yaml")
 	if err != nil {
@@ -293,7 +323,7 @@ func TestAPathThatCannotBeResolvedIsNotRemoved(t *testing.T) {
 	sources := newStubSources()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, newStubProtection())
 
 	err := cluster.RemoveKubeconfig("")
 
@@ -315,7 +345,7 @@ func TestTheKubeconfigInUseIsNotRemoved(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, newStubProtection())
 	if err := cluster.Use(api.ContextRef{Kubeconfig: "/tmp/other.yaml", Name: "beta"}); err != nil {
 		t.Fatalf("use: %v", err)
 	}
@@ -340,7 +370,7 @@ func TestAKubeconfigThatWentMissingCanBeRemovedEvenWhileInUse(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, newStubProtection())
 	if err := cluster.Use(api.ContextRef{Kubeconfig: "/tmp/other.yaml", Name: "beta"}); err != nil {
 		t.Fatalf("use: %v", err)
 	}
@@ -358,7 +388,7 @@ func TestAKubeconfigSpinozaNeverHeardOfIsNotProtected(t *testing.T) {
 	sources := newStubSources()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, newStubProtection())
 	if err := cluster.Use(api.ContextRef{Kubeconfig: "/tmp/gone.yaml", Name: "beta"}); err != nil {
 		t.Fatalf("use: %v", err)
 	}
@@ -374,7 +404,7 @@ func TestContextsSurfacesAKubeconfigFailure(t *testing.T) {
 	t.Cleanup(cancel)
 	sources := newStubSources()
 	sources.entries = []api.Kubeconfig{{Label: "default", Error: "kubeconfig is unreadable"}}
-	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, newStubProtection())
 
 	list := cluster.Contexts()
 
@@ -398,13 +428,13 @@ func newGatedBuilder(slow string) *gatedBuilder {
 	}
 }
 
-func (g *gatedBuilder) build(ctx context.Context, ref api.ContextRef) (*resources.Manager, api.ContextRef, error) {
+func (g *gatedBuilder) build(ctx context.Context, ref api.ContextRef) (*connection, error) {
 	g.entered <- ref.Name
 	gate, ok := g.gates[ref.Name]
 	if ok {
 		<-gate
 	}
-	return resources.NewManager(ctx, resources.Deps{}), ref, nil
+	return &connection{manager: resources.NewManager(ctx, resources.Deps{}), ref: ref}, nil
 }
 
 func (g *gatedBuilder) waitFor(t *testing.T, name string) {
@@ -425,7 +455,7 @@ func TestTheLastRequestedContextWinsEvenIfItBuildsFirst(t *testing.T) {
 	gated := newGatedBuilder("slow")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, gated.build, newStubSources())
+	cluster := newCluster(ctx, gated.build, newStubSources(), newStubProtection())
 
 	done := make(chan error, 1)
 	go func() {
@@ -453,7 +483,7 @@ func TestASupersededSwitchDoesNotStrandItsManager(t *testing.T) {
 	gated := newGatedBuilder("slow")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	cluster := newCluster(ctx, gated.build, newStubSources())
+	cluster := newCluster(ctx, gated.build, newStubSources(), newStubProtection())
 
 	done := make(chan error, 1)
 	go func() {
@@ -509,5 +539,81 @@ func TestAFailedSwitchLeavesTheWorkingInformersRunning(t *testing.T) {
 	case <-live.Done():
 		t.Fatal("the working cluster's context was canceled by a switch that never took effect")
 	default:
+	}
+}
+
+func TestTheProtectionOfTheClusterInUseIsReported(t *testing.T) {
+	protection := newStubProtection()
+	protection.verdicts["https://default-context:6443"] = api.ProtectionProtected
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster := newCluster(ctx, (&recorder{}).build, newStubSources(), protection)
+
+	if cluster.Contexts().Protection != api.ProtectionProtected {
+		t.Fatalf("protection = %q, want the verdict for the cluster spinoza connected to", cluster.Contexts().Protection)
+	}
+	if !cluster.Protected() {
+		t.Fatal("the gate on destructive actions would be open")
+	}
+}
+
+func TestProtectionFollowsTheClusterNotTheContextName(t *testing.T) {
+	protection := newStubProtection()
+	protection.verdicts["https://p-mk1:6443"] = api.ProtectionProtected
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster := newCluster(ctx, (&recorder{}).build, newStubSources(), protection)
+
+	if cluster.Protected() {
+		t.Fatal("the default context was protected by another cluster's answer")
+	}
+	if err := cluster.Use(api.ContextRef{Kubeconfig: "/tmp/other.yaml", Name: "p-mk1"}); err != nil {
+		t.Fatalf("use: %v", err)
+	}
+
+	if !cluster.Protected() {
+		t.Fatal("the same cluster reached through another kubeconfig lost its protection")
+	}
+}
+
+func TestProtectingRemembersTheClusterInUse(t *testing.T) {
+	protection := newStubProtection()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster := newCluster(ctx, (&recorder{}).build, newStubSources(), protection)
+
+	err := cluster.Protect(true)
+	if err != nil {
+		t.Fatalf("protect: %v", err)
+	}
+
+	if !protection.set["https://default-context:6443"] {
+		t.Fatalf("set = %v, want the server spinoza is connected to", protection.set)
+	}
+}
+
+func TestProtectionThatCannotBeSavedSurfaces(t *testing.T) {
+	protection := newStubProtection()
+	protection.setErr = errors.New("read-only file system")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster := newCluster(ctx, (&recorder{}).build, newStubSources(), protection)
+
+	err := cluster.Protect(true)
+
+	if err == nil {
+		t.Fatal("a protection that was never written reported success")
+	}
+}
+
+func TestAClusterThatNeverConnectedIsNotProtected(t *testing.T) {
+	rec := &recorder{failOn: "", failErr: errors.New("kubeconfig is unreadable")}
+	cluster := newCluster(context.Background(), rec.build, newStubSources(), newStubProtection())
+
+	if cluster.Protected() {
+		t.Fatal("an unconnected cluster reported itself protected")
+	}
+	if cluster.Contexts().Protection != api.ProtectionUnknown {
+		t.Fatalf("protection = %q", cluster.Contexts().Protection)
 	}
 }

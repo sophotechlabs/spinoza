@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectObjectActions from '../../src/components/InspectObjectActions';
 import { useToastsStore } from '../../src/store/toasts';
+import { useContextsStore } from '../../src/store/contexts';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const deployment: ObjectRef = {
@@ -583,5 +584,149 @@ describe('the actions that cannot be undone', () => {
     );
 
     expect(screen.queryByText(/Every pod is replaced/)).not.toBeInTheDocument();
+  });
+});
+
+describe('on a protected cluster', () => {
+  const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  });
+  const close = vi.fn(function close(this: HTMLDialogElement) {
+    this.open = false;
+  });
+
+  beforeEach(() => {
+    showModal.mockClear();
+    close.mockClear();
+    HTMLDialogElement.prototype.showModal = showModal;
+    HTMLDialogElement.prototype.close = close;
+    useContextsStore.getState().setList({
+      current: { kubeconfig: '', name: 'p-mk1' },
+      kubeconfigs: [],
+      protection: 'protected',
+    });
+  });
+
+  it('asks for the name before scaling to zero', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'scale', message: 'Scaled web to 0 replicas.' });
+    render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 3 } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText('replicas'));
+    await user.type(screen.getByLabelText('replicas'), '0');
+    await user.click(screen.getByRole('button', { name: 'Scale' }));
+
+    expect(screen.getByText('Scale web to zero? Every pod is removed.')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Name'), 'web');
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('replicas=0');
+    expect(url).toContain('confirm=web');
+  });
+
+  it('scales up without a word', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'scale', message: 'Scaled web to 5 replicas.' });
+    render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 3 } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText('replicas'));
+    await user.type(screen.getByLabelText('replicas'), '5');
+    await user.click(screen.getByRole('button', { name: 'Scale' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm');
+  });
+
+  it('asks for the name between the drain plan and the drain', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub(
+      { action: 'drain', message: '1 pod would be evicted.', dryRun: true, pods: [] },
+      { action: 'drain', message: 'Cordoned. Eviction requested for 1 pod.' },
+    );
+    render(
+      <InspectObjectActions
+        target={node}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Drain' }));
+    await user.click(await screen.findByRole('button', { name: 'Drain now' }));
+
+    expect(screen.getByText('Draining node worker-1 evicts its pods.')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.type(screen.getByLabelText('Name'), 'worker-1');
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByText('Cordoned. Eviction requested for 1 pod.')).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[1][0])).toContain('confirm=worker-1');
+  });
+
+  it('leaves the drain alone when the question is cancelled', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({
+      action: 'drain',
+      message: '1 pod would be evicted.',
+      dryRun: true,
+      pods: [],
+    });
+    render(
+      <InspectObjectActions
+        target={node}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Drain' }));
+    await user.click(await screen.findByRole('button', { name: 'Drain now' }));
+    const dialog = screen.getByRole('dialog', { hidden: true });
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still cordons and restarts with one click', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'cordon', message: 'Cordoned worker-1.' });
+    render(
+      <InspectObjectActions
+        target={node}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Cordon' }));
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm');
   });
 });

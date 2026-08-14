@@ -3,6 +3,8 @@ import type { ObjectRef } from '../lib/types';
 import { deleteObject } from '../lib/object';
 import { canRestart, runAction } from '../lib/objectActions';
 import { notifyError, notifyOk } from '../store/toasts';
+import { useContextList } from '../store/contexts';
+import ConfirmByName from './ConfirmByName';
 
 interface BulkBarProps {
   kind: string;
@@ -37,6 +39,8 @@ function outcome(done: number, failed: string[], verb: string): string {
 export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<Pending>(null);
+  const list = useContextList();
+  const protectedCluster = list.protection === 'protected';
 
   async function runAll(each: (ref: ObjectRef) => Promise<unknown>, verb: string) {
     setBusy(true);
@@ -61,6 +65,10 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
   }
 
   function confirmDelete() {
+    if (protectedCluster) {
+      void runAll((ref) => deleteObject(ref, ref.name), 'Deleted');
+      return;
+    }
     void runAll((ref) => deleteObject(ref), 'Deleted');
   }
 
@@ -73,6 +81,7 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
   }
 
   const restartable = canRestart(targets[0]);
+  const typedGate = protectedCluster && confirming === 'delete';
 
   return (
     <div
@@ -106,7 +115,18 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
           </button>
         </>
       )}
-      {confirming !== null && (
+      {typedGate && (
+        <ConfirmByName
+          open
+          name={list.current.name}
+          what={`Deleting ${String(targets.length)} object(s) on ${list.current.name}.`}
+          onConfirm={confirmDelete}
+          onCancel={() => {
+            setConfirming(null);
+          }}
+        />
+      )}
+      {confirming !== null && !typedGate && (
         <>
           <span className="text-fg-muted">
             {verbFor(confirming)} {targets.length} object(s)?

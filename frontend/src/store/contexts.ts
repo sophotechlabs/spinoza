@@ -4,6 +4,7 @@ import type { ContextList, Kubeconfig } from '../lib/types';
 export const EMPTY_CONTEXTS: ContextList = {
   current: { kubeconfig: '', name: '' },
   kubeconfigs: [],
+  protection: 'unknown',
 };
 
 interface ContextsState {
@@ -40,4 +41,8 @@ export function unreadableCurrent(list: ContextList): Kubeconfig | null {
 
 export function useUnreadableCurrent(): Kubeconfig | null {
   return useContextsStore((state) => unreadableCurrent(state.list));
+}
+
+export function useProtectedCluster(): boolean {
+  return useContextsStore((state) => state.list.protection === 'protected');
 }

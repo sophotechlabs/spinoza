@@ -273,6 +273,30 @@ describe('acting on a release', () => {
     expect(got.revision).toBe(2);
   });
 
+  it('carries the typed confirmation into a rollback', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'rollback', message: 'done', revision: 2 }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await rollbackRelease('demo', 'podinfo', 2, 'podinfo');
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('confirm=podinfo');
+  });
+
+  it('carries the typed confirmation into an uninstall', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'uninstall', message: 'gone' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await uninstallRelease('demo', 'podinfo', 'podinfo');
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('confirm=podinfo');
+  });
+
   it('posts an uninstall', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

@@ -28,7 +28,18 @@ type Options struct {
 	CountConcurrency int
 }
 
-type builder func(ctx context.Context, ref api.ContextRef) (*resources.Manager, api.ContextRef, error)
+type connection struct {
+	manager *resources.Manager
+	ref     api.ContextRef
+	host    string
+}
+
+type builder func(ctx context.Context, ref api.ContextRef) (*connection, error)
+
+type Protection interface {
+	Verdict(server string) string
+	Set(server string, protected bool) error
+}
 
 type Kubeconfigs interface {
 	List() []api.Kubeconfig
@@ -38,21 +49,23 @@ type Kubeconfigs interface {
 }
 
 type Cluster struct {
-	root    context.Context
-	build   builder
-	sources Kubeconfigs
+	root       context.Context
+	build      builder
+	sources    Kubeconfigs
+	protection Protection
 
 	mu        sync.Mutex
 	manager   *resources.Manager
 	cancel    context.CancelFunc
 	current   api.ContextRef
+	host      string
 	startErr  string
 	nextSeq   uint64
 	installed uint64
 }
 
-func newCluster(ctx context.Context, build builder, sources Kubeconfigs) *Cluster {
-	cluster := &Cluster{root: ctx, build: build, sources: sources}
+func newCluster(ctx context.Context, build builder, sources Kubeconfigs, protection Protection) *Cluster {
+	cluster := &Cluster{root: ctx, build: build, sources: sources, protection: protection}
 	err := cluster.use(ctx, api.ContextRef{})
 	if err == nil {
 		return cluster
@@ -90,7 +103,22 @@ func (c *Cluster) Contexts() api.ContextList {
 		Current:     c.Current(),
 		Error:       c.unreached(),
 		Kubeconfigs: c.sources.List(),
+		Protection:  c.protection.Verdict(c.server()),
 	}
+}
+
+func (c *Cluster) server() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.host
+}
+
+func (c *Cluster) Protect(protected bool) error {
+	return c.protection.Set(c.server(), protected)
+}
+
+func (c *Cluster) Protected() bool {
+	return c.protection.Verdict(c.server()) == api.ProtectionProtected
 }
 
 func (c *Cluster) AddKubeconfig(path string) error {
@@ -124,7 +152,7 @@ func (c *Cluster) Use(ref api.ContextRef) error {
 func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 	seq := c.claim()
 	ctx, cancel := context.WithCancel(root)
-	manager, current, err := c.build(ctx, ref)
+	opened, err := c.build(ctx, ref)
 	if err != nil {
 		cancel()
 		return err
@@ -138,9 +166,10 @@ func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 	}
 	previous := c.cancel
 	c.installed = seq
-	c.manager = manager
+	c.manager = opened.manager
 	c.cancel = cancel
-	c.current = current
+	c.current = opened.ref
+	c.host = opened.host
 	c.startErr = ""
 	c.mu.Unlock()
 

@@ -37,6 +37,7 @@ ContainerState.State state
 ContextList.Current current
 ContextList.Error error,omitempty
 ContextList.Kubeconfigs kubeconfigs
+ContextList.Protection protection
 ContextRef.Kubeconfig kubeconfig
 ContextRef.Name name
 DebugSession.Container container

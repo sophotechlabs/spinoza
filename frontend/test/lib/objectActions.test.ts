@@ -123,6 +123,30 @@ describe('runAction', () => {
     expect(url).toContain('force=true');
   });
 
+  it('carries the typed confirmation on a protected cluster', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'drain', message: 'ok' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runAction(ref('', 'nodes'), 'drain', { confirm: 'node-1' });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('confirm=node-1');
+  });
+
+  it('leaves the confirmation off an open cluster', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'drain', message: 'ok' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runAction(ref('', 'nodes'), 'drain');
+
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm');
+  });
+
   it('surfaces the server message', async () => {
     vi.stubGlobal(
       'fetch',

@@ -11,7 +11,9 @@ import {
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
 import { notifyError, notifyOk } from '../store/toasts';
+import { useProtectedCluster } from '../store/contexts';
 import Announce from './Announce';
+import ConfirmByName from './ConfirmByName';
 import CopyButton from './CopyButton';
 
 const TABS = ['Overview', 'Values', 'Notes', 'Manifest', 'Resources', 'History'] as const;
@@ -53,6 +55,19 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+interface TypedConfirm {
+  what: 'rollback' | 'uninstall';
+  revision: number;
+  question: string;
+}
+
+function confirmName(protectedCluster: boolean, name: string): string | undefined {
+  if (!protectedCluster) {
+    return undefined;
+  }
+  return name;
+}
+
 function orDash(value: string): string {
   if (value === '') {
     return '—';
@@ -71,6 +86,8 @@ export default function HelmReleaseDetail({
   const [tab, setTab] = useState<Tab>('Overview');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<'uninstall' | null>(null);
+  const [typed, setTyped] = useState<TypedConfirm | null>(null);
+  const protectedCluster = useProtectedCluster();
   const [failure, setFailure] = useState<string | null>(null);
   const now = useNow();
 
@@ -80,11 +97,13 @@ export default function HelmReleaseDetail({
   async function act(what: 'rollback' | 'uninstall', revision: number) {
     setBusy(true);
     setFailure(null);
+    setTyped(null);
+    const confirm = confirmName(protectedCluster, release.name);
     try {
       const result =
         what === 'uninstall'
-          ? await uninstallRelease(release.namespace, release.name)
-          : await rollbackRelease(release.namespace, release.name, revision);
+          ? await uninstallRelease(release.namespace, release.name, confirm)
+          : await rollbackRelease(release.namespace, release.name, revision, confirm);
       notifyOk(result.message);
       onChanged();
       if (what === 'uninstall') {
@@ -102,8 +121,43 @@ export default function HelmReleaseDetail({
     }
   }
 
+  function askUninstall() {
+    if (protectedCluster) {
+      setTyped({
+        what: 'uninstall',
+        revision: 0,
+        question: `Uninstalling ${release.name}. This cannot be undone.`,
+      });
+      return;
+    }
+    setConfirming('uninstall');
+  }
+
+  function askRollback(revision: number) {
+    if (protectedCluster) {
+      setTyped({
+        what: 'rollback',
+        revision,
+        question: `Rolling ${release.name} back to revision ${String(revision)}.`,
+      });
+      return;
+    }
+    void act('rollback', revision);
+  }
+
   return (
     <div className="flex min-h-0 flex-col border-t border-edge">
+      {typed !== null && (
+        <ConfirmByName
+          open
+          name={release.name}
+          what={typed.question}
+          onConfirm={() => void act(typed.what, typed.revision)}
+          onCancel={() => {
+            setTyped(null);
+          }}
+        />
+      )}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge px-3 py-1.5">
         <span className="font-semibold text-fg-strong">{release.name}</span>
         <span className="text-fg-muted">{release.namespace}</span>
@@ -127,7 +181,7 @@ export default function HelmReleaseDetail({
               disabled={busy || !helmReady}
               title={helmReady ? 'Uninstall this release' : helmReason}
               onClick={() => {
-                setConfirming('uninstall');
+                askUninstall();
               }}
               className="rounded border border-error-line-strong px-1.5 py-0.5 text-error hover:bg-error-tint disabled:cursor-not-allowed disabled:border-edge disabled:text-fg-faint"
             >
@@ -233,7 +287,9 @@ export default function HelmReleaseDetail({
               busy={busy}
               helmReady={helmReady}
               helmReason={helmReason}
-              onRollback={(revision) => void act('rollback', revision)}
+              onRollback={(revision) => {
+                askRollback(revision);
+              }}
             />
           )}
         </div>

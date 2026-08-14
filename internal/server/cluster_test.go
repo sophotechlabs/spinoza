@@ -25,6 +25,8 @@ type stubCluster struct {
 	current     api.ContextRef
 	useErr      error
 	changeErr   error
+	protectErr  error
+	protection  string
 	switched    []api.ContextRef
 	added       []string
 	removed     []string
@@ -53,7 +55,7 @@ func (s *stubCluster) Manager() Backend {
 func (s *stubCluster) Contexts() api.ContextList {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return api.ContextList{Current: s.current, Kubeconfigs: s.kubeconfigs}
+	return api.ContextList{Current: s.current, Kubeconfigs: s.kubeconfigs, Protection: s.protection}
 }
 
 func (s *stubCluster) Use(ref api.ContextRef) error {
@@ -86,6 +88,25 @@ func (s *stubCluster) RemoveKubeconfig(path string) error {
 	}
 	s.removed = append(s.removed, path)
 	return nil
+}
+
+func (s *stubCluster) Protect(protected bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.protectErr != nil {
+		return s.protectErr
+	}
+	s.protection = api.ProtectionOpen
+	if protected {
+		s.protection = api.ProtectionProtected
+	}
+	return nil
+}
+
+func (s *stubCluster) Protected() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.protection == api.ProtectionProtected
 }
 
 func (s *stubCluster) calls() []api.ContextRef {
@@ -449,5 +470,67 @@ func TestSwitchingClosesOpenSessions(t *testing.T) {
 	_, _, readErr := conn.Read(ctx)
 	if readErr == nil {
 		t.Fatal("the session survived a context switch; it would stream the old cluster's objects")
+	}
+}
+
+func TestProtectingTheClusterInUse(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	ts := contextServer(t, cluster)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/protection?protected=true", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if decodeContexts(t, body).Protection != api.ProtectionProtected {
+		t.Fatalf("protection = %q, want it echoed back", decodeContexts(t, body).Protection)
+	}
+	if !cluster.Protected() {
+		t.Fatal("the cluster did not come back protected")
+	}
+}
+
+func TestOpeningTheClusterUpAgain(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	ts := contextServer(t, cluster)
+	doRequest(t, http.MethodPost, ts.URL+"/api/protection?protected=true", nil)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/protection?protected=false", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if cluster.Protected() {
+		t.Fatal("the cluster stayed protected")
+	}
+}
+
+func TestProtectionNeedsAVerdict(t *testing.T) {
+	mgr, _ := testManager(t)
+	ts := contextServer(t, fixed(mgr))
+
+	for _, query := range []string{"", "?protected=", "?protected=maybe"} {
+		resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/protection"+query, nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status for %q = %d, want 400", query, resp.StatusCode)
+		}
+	}
+}
+
+func TestProtectionThatCannotBeSavedIsReported(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	cluster.protectErr = errors.New("read-only file system")
+	ts := contextServer(t, cluster)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/protection?protected=true", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a protection that was never written reported success")
+	}
+	if !strings.Contains(string(body), "read-only") {
+		t.Fatalf("body = %s, want the reason", body)
 	}
 }

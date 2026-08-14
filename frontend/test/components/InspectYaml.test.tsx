@@ -25,6 +25,7 @@ vi.mock('@monaco-editor/react', () => ({
 
 import InspectYaml from '../../src/components/InspectYaml';
 import { useToastsStore } from '../../src/store/toasts';
+import { useContextsStore } from '../../src/store/contexts';
 import { hasUnsaved, setUnsaved } from '../../src/lib/unsaved';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
@@ -432,5 +433,69 @@ describe('the inline delete confirm', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Delete' }));
+  });
+});
+
+describe('InspectYaml on a protected cluster', () => {
+  const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  });
+  const close = vi.fn(function close(this: HTMLDialogElement) {
+    this.open = false;
+  });
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okResponse({})));
+    showModal.mockClear();
+    close.mockClear();
+    HTMLDialogElement.prototype.showModal = showModal;
+    HTMLDialogElement.prototype.close = close;
+    useContextsStore.getState().setList({
+      current: { kubeconfig: '', name: 'p-mk1' },
+      kubeconfigs: [],
+      protection: 'protected',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useToastsStore.getState().clear();
+  });
+
+  it('asks for the object name instead of a single click', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(screen.getByText('Deleting Deployment web.')).toBeInTheDocument();
+    expect(screen.queryByText('Delete web?')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+  });
+
+  it('deletes with the typed confirmation once the name matches', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue(okResponse({}));
+    vi.stubGlobal('fetch', fetchMock);
+    const { onDeleted } = renderYaml();
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.type(screen.getByLabelText('Name'), 'web');
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(onDeleted).toHaveBeenCalled();
+    const url = String(fetchMock.mock.calls.at(-1)?.[0]);
+    expect(url).toContain('confirm=web');
+  });
+
+  it('drops the question when it is cancelled', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
   });
 });

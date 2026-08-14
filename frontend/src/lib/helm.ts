@@ -141,16 +141,27 @@ export async function rollbackRelease(
   namespace: string,
   name: string,
   revision: number,
+  confirm?: string,
 ): Promise<HelmActionResult> {
-  return runAction({ namespace, name, action: 'rollback', revision: String(revision) });
+  return runAction({ namespace, name, action: 'rollback', revision: String(revision) }, confirm);
 }
 
-export async function uninstallRelease(namespace: string, name: string): Promise<HelmActionResult> {
-  return runAction({ namespace, name, action: 'uninstall' });
+export async function uninstallRelease(
+  namespace: string,
+  name: string,
+  confirm?: string,
+): Promise<HelmActionResult> {
+  return runAction({ namespace, name, action: 'uninstall' }, confirm);
 }
 
-async function runAction(params: Record<string, string>): Promise<HelmActionResult> {
+async function runAction(
+  params: Record<string, string>,
+  confirm?: string,
+): Promise<HelmActionResult> {
   const query = new URLSearchParams(params);
+  if (confirm !== undefined) {
+    query.set('confirm', confirm);
+  }
   const response = await request(`/api/helm/action?${query.toString()}`, {
     method: 'POST',
     timeoutMs: SLOW_REQUEST_TIMEOUT_MS,

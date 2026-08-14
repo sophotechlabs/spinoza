@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { HelmRelease, HelmReleaseDetail as Detail } from '../../src/lib/types';
 import HelmReleaseDetail from '../../src/components/HelmReleaseDetail';
 import { useToastsStore } from '../../src/store/toasts';
+import { useContextsStore } from '../../src/store/contexts';
 
 const release: HelmRelease = {
   name: 'podinfo',
@@ -324,5 +325,86 @@ describe('HelmReleaseDetail', () => {
 
     await user.click(screen.getByRole('button', { name: 'History' }));
     expect(screen.getByText('This release has no stored revisions.')).toBeInTheDocument();
+  });
+});
+
+describe('HelmReleaseDetail on a protected cluster', () => {
+  const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  });
+  const close = vi.fn(function close(this: HTMLDialogElement) {
+    this.open = false;
+  });
+
+  beforeEach(() => {
+    useToastsStore.getState().clear();
+    showModal.mockClear();
+    close.mockClear();
+    HTMLDialogElement.prototype.showModal = showModal;
+    HTMLDialogElement.prototype.close = close;
+    useContextsStore.getState().setList({
+      current: { kubeconfig: '', name: 'p-mk1' },
+      kubeconfigs: [],
+      protection: 'protected',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useToastsStore.getState().clear();
+  });
+
+  it('asks for the release name before uninstalling', async () => {
+    const user = userEvent.setup();
+    const calls = stub({ actionBody: { action: 'uninstall', message: 'gone' } });
+    const { onClose } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'Uninstall' }));
+    expect(screen.getByText('Uninstalling podinfo. This cannot be undone.')).toBeInTheDocument();
+    expect(calls.some((call) => call.url.startsWith('/api/helm/action'))).toBe(false);
+
+    await user.type(screen.getByLabelText('Name'), 'podinfo');
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
+    const action = calls.find((call) => call.url.startsWith('/api/helm/action'));
+    expect(action?.url).toContain('confirm=podinfo');
+  });
+
+  it('asks for the release name before rolling back', async () => {
+    const user = userEvent.setup();
+    const calls = stub();
+    const { onChanged } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(screen.getByRole('button', { name: 'Roll back' }));
+    expect(screen.getByText('Rolling podinfo back to revision 2.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Name'), 'podinfo');
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(onChanged).toHaveBeenCalled();
+    });
+    const action = calls.find((call) => call.url.startsWith('/api/helm/action'));
+    expect(action?.url).toContain('revision=2');
+    expect(action?.url).toContain('confirm=podinfo');
+  });
+
+  it('drops the question when it is cancelled', async () => {
+    const user = userEvent.setup();
+    const calls = stub();
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'Uninstall' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(calls.some((call) => call.url.startsWith('/api/helm/action'))).toBe(false);
   });
 });

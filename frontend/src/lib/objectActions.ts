@@ -44,6 +44,7 @@ export interface ActionOptions {
   replicas?: number;
   force?: boolean;
   dryRun?: boolean;
+  confirm?: string;
 }
 
 function query(ref: ObjectRef, action: ObjectAction, options: ActionOptions): string {
@@ -57,6 +58,9 @@ function query(ref: ObjectRef, action: ObjectAction, options: ActionOptions): st
   }
   if (options.dryRun === true) {
     params.set('dryRun', 'true');
+  }
+  if (options.confirm !== undefined) {
+    params.set('confirm', options.confirm);
   }
   return params.toString();
 }

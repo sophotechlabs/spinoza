@@ -33,7 +33,8 @@ func (s *stubCatalog) Counts(context.Context) api.ResourceCounts {
 }
 
 type stubBackendCluster struct {
-	backend Backend
+	backend   Backend
+	protected bool
 }
 
 func (s *stubBackendCluster) Manager() Backend {
@@ -59,9 +60,27 @@ func (s *stubBackendCluster) RemoveKubeconfig(string) error {
 	return errors.New("this stub reads one kubeconfig")
 }
 
+func (s *stubBackendCluster) Protect(bool) error {
+	return errors.New("this stub protects nothing")
+}
+
+func (s *stubBackendCluster) Protected() bool {
+	return s.protected
+}
+
 func stubbedServer(t *testing.T, backend Backend) *httptest.Server {
 	t.Helper()
-	srv := New(&stubBackendCluster{backend: backend}, testAssets(), testToken)
+	return clusterServer(t, &stubBackendCluster{backend: backend})
+}
+
+func protectedServer(t *testing.T, backend Backend) *httptest.Server {
+	t.Helper()
+	return clusterServer(t, &stubBackendCluster{backend: backend, protected: true})
+}
+
+func clusterServer(t *testing.T, cluster Cluster) *httptest.Server {
+	t.Helper()
+	srv := New(cluster, testAssets(), testToken)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts

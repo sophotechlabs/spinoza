@@ -9,6 +9,7 @@ import {
   pickKubeconfigFile,
   removeKubeconfig,
   sameContext,
+  setProtection,
   switchContext,
 } from '../../src/lib/contexts';
 import type { ContextList } from '../../src/lib/types';
@@ -25,6 +26,7 @@ function stub(body: unknown, ok = true, status = 200) {
 
 const list: ContextList = {
   current: { kubeconfig: '', name: 'p-mk1' },
+  protection: 'unknown',
   kubeconfigs: [
     {
       label: '/home/arch/.kube/config',
@@ -77,6 +79,7 @@ describe('contextGroups', () => {
   it('leaves out a namespace the context does not set', () => {
     const groups = contextGroups({
       current: { kubeconfig: '', name: 'x' },
+      protection: 'unknown',
       kubeconfigs: [
         {
           label: 'l',
@@ -121,6 +124,7 @@ describe('fetchContexts', () => {
     const found = await fetchContexts();
 
     expect(found.current).toEqual({ kubeconfig: '', name: '' });
+    expect(found.protection).toBe('unknown');
     expect(found.kubeconfigs).toEqual([
       { contexts: [], error: undefined, label: '', path: '', removable: false },
     ]);
@@ -184,6 +188,37 @@ describe('removeKubeconfig', () => {
     await expect(removeKubeconfig('/home/arch/.kube/work.yaml')).rejects.toThrow(
       'connected through',
     );
+  });
+});
+
+describe('setProtection', () => {
+  it('says whether the cluster is protected', async () => {
+    const fetchMock = stub({ ...list, protection: 'protected' });
+
+    const got = await setProtection(true);
+
+    expect(fetchMock.mock.calls[0][0]).toContain('protected=true');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+    expect(got.protection).toBe('protected');
+  });
+
+  it('lifts the protection again', async () => {
+    const fetchMock = stub({ ...list, protection: 'open' });
+
+    expect((await setProtection(false)).protection).toBe('open');
+    expect(fetchMock.mock.calls[0][0]).toContain('protected=false');
+  });
+
+  it('treats a verdict it does not know as unknown', async () => {
+    stub({ ...list, protection: 'maybe' });
+
+    expect((await setProtection(true)).protection).toBe('unknown');
+  });
+
+  it('reports a change the backend refused', async () => {
+    stub({ message: 'the file spinoza keeps this in is read-only' }, false, 500);
+
+    await expect(setProtection(true)).rejects.toThrow('read-only');
   });
 });
 

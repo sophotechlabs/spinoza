@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { ContextList } from '../../src/lib/types';
-import { EMPTY_CONTEXTS, unreadableCurrent, useContextsStore } from '../../src/store/contexts';
+import { renderHook } from '@testing-library/react';
+import type { ContextList, Protection } from '../../src/lib/types';
+import {
+  EMPTY_CONTEXTS,
+  unreadableCurrent,
+  useContextsStore,
+  useProtectedCluster,
+} from '../../src/store/contexts';
 
 function listWith(error: string | undefined, path: string): ContextList {
   return {
     current: { kubeconfig: path, name: 'p-mk1' },
+    protection: 'unknown',
     kubeconfigs: [
       { label: '/home/arch/.kube/config', path: '', removable: false, contexts: [] },
       { label: '/tmp/work.yaml', path: '/tmp/work.yaml', removable: true, contexts: [], error },
@@ -35,6 +42,7 @@ describe('the kubeconfig behind the current context', () => {
   it('covers the default kubeconfig too, which carries no path', () => {
     const list: ContextList = {
       current: { kubeconfig: '', name: 'p-mk1' },
+      protection: 'unknown',
       kubeconfigs: [
         {
           label: '/home/arch/.kube/config',
@@ -57,5 +65,19 @@ describe('the kubeconfig behind the current context', () => {
     useContextsStore.getState().reset();
 
     expect(useContextsStore.getState().list).toEqual(EMPTY_CONTEXTS);
+  });
+});
+
+describe('whether the current cluster is protected', () => {
+  function withProtection(protection: Protection): boolean {
+    const list = listWith(undefined, '');
+    useContextsStore.getState().setList({ ...list, protection });
+    return renderHook(() => useProtectedCluster()).result.current;
+  }
+
+  it('is true only once the cluster has been marked', () => {
+    expect(withProtection('protected')).toBe(true);
+    expect(withProtection('open')).toBe(false);
+    expect(withProtection('unknown')).toBe(false);
   });
 });

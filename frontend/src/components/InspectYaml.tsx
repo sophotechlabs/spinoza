@@ -7,6 +7,8 @@ import { setUnsaved } from '../lib/unsaved';
 import Loading from './Loading';
 import CopyButton from './CopyButton';
 import Announce from './Announce';
+import ConfirmByName from './ConfirmByName';
+import { useProtectedCluster } from '../store/contexts';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 
@@ -19,6 +21,13 @@ interface InspectYamlProps {
 
 function refKey(ref: ObjectRef): string {
   return `${ref.group}/${ref.version}/${ref.resource}/${ref.namespace}/${ref.name}`;
+}
+
+function confirmName(protectedCluster: boolean, name: string): string | undefined {
+  if (!protectedCluster) {
+    return undefined;
+  }
+  return name;
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -42,6 +51,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   const [wasConfirming, setWasConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const protectedCluster = useProtectedCluster();
 
   const targetKey = refKey(target);
   const [lastTarget, setLastTarget] = useState(targetKey);
@@ -131,7 +141,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     setError(null);
     setNotice(null);
     try {
-      await deleteObject(target);
+      await deleteObject(target, confirmName(protectedCluster, target.name));
       notifyOk(`Deleted ${detail.kind} ${target.name}`);
       onDeleted();
     } catch (err: unknown) {
@@ -192,6 +202,15 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         {stale && (
           <span className="text-warn">changed on the server — Revert to load the new version</span>
         )}
+        {confirming && protectedCluster && (
+          <ConfirmByName
+            open
+            name={target.name}
+            what={`Deleting ${detail.kind} ${target.name}.`}
+            onConfirm={() => void handleDelete()}
+            onCancel={cancelDelete}
+          />
+        )}
         {!confirming && (
           <button
             ref={deleteRef}
@@ -203,7 +222,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
             Delete
           </button>
         )}
-        {confirming && (
+        {confirming && !protectedCluster && (
           <div className="ml-auto flex items-center gap-2">
             <span className="text-fg-muted">Delete {target.name}?</span>
             <button

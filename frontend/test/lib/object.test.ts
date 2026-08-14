@@ -140,6 +140,14 @@ describe('object client', () => {
     });
   });
 
+  it('carries the typed confirmation on a protected cluster', async () => {
+    const mock = stubFetch(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+
+    await deleteObject(ref, 'web');
+
+    expect(String(mock.mock.calls[0][0])).toContain('confirm=web');
+  });
+
   it('reports a delete failure', async () => {
     stubFetch(() => failWithoutBody(403));
 

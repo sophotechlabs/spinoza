@@ -38,6 +38,8 @@ type Cluster interface {
 	Use(ref api.ContextRef) error
 	AddKubeconfig(path string) error
 	RemoveKubeconfig(path string) error
+	Protect(protected bool) error
+	Protected() bool
 }
 
 type FilePicker func(ctx context.Context) (string, error)
@@ -95,6 +97,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/version", handleVersion, true},
 		{http.MethodGet, "/api/contexts", s.listContexts, true},
 		{http.MethodPost, "/api/contexts", s.switchContext, true},
+		{http.MethodPost, "/api/protection", s.setProtection, true},
 		{http.MethodPost, "/api/kubeconfigs", s.addKubeconfig, true},
 		{http.MethodDelete, "/api/kubeconfigs", s.removeKubeconfig, true},
 		{http.MethodGet, "/api/kubeconfigs/picker", s.filePickerSupport, true},
@@ -323,6 +326,32 @@ func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.cluster.Contexts())
 }
 
+func (s *Server) setProtection(w http.ResponseWriter, r *http.Request) {
+	wanted := r.URL.Query().Get("protected")
+	if wanted != "true" && wanted != "false" {
+		writeError(w, http.StatusBadRequest, "protected must be true or false")
+		return
+	}
+	err := s.cluster.Protect(wanted == "true")
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, s.cluster.Contexts())
+}
+
+func (s *Server) unconfirmed(r *http.Request, name string) bool {
+	if !s.cluster.Protected() {
+		return false
+	}
+	return r.URL.Query().Get("confirm") != name
+}
+
+func refuseUnconfirmed(w http.ResponseWriter, name string) {
+	writeError(w, http.StatusPreconditionFailed,
+		"this cluster is protected; type "+strconv.Quote(name)+" to confirm")
+}
+
 func (s *Server) addKubeconfig(w http.ResponseWriter, r *http.Request) {
 	s.changeKubeconfigs(w, r, s.cluster.AddKubeconfig)
 }
@@ -404,6 +433,10 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	action := query.Get("action")
+	if s.unconfirmed(r, name) {
+		refuseUnconfirmed(w, name)
+		return
+	}
 	if action == helm.ActionUninstal {
 		removed, removeErr := s.manager().HelmUninstall(r.Context(), namespace, name)
 		s.finishHelmAction(w, removed, removeErr)
@@ -505,12 +538,26 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if guarded(req) && s.unconfirmed(r, req.Ref.Name) {
+		refuseUnconfirmed(w, req.Ref.Name)
+		return
+	}
 	result, actionErr := s.manager().Action(r.Context(), req)
 	if actionErr != nil {
 		writeAPIError(w, actionErr)
 		return
 	}
 	writeJSON(w, result)
+}
+
+func guarded(req actions.Request) bool {
+	if req.DryRun {
+		return false
+	}
+	if req.Action == actions.Drain {
+		return true
+	}
+	return req.Action == actions.Scale && req.Replicas == 0
 }
 
 func actionRequest(r *http.Request) (actions.Request, error) {
@@ -623,6 +670,10 @@ func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.Obj
 }
 
 func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
+	if s.unconfirmed(r, ref.Name) {
+		refuseUnconfirmed(w, ref.Name)
+		return
+	}
 	err := s.manager().DeleteObject(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)

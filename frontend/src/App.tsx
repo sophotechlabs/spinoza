@@ -34,6 +34,7 @@ import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
 import KubeconfigBanner from './components/KubeconfigBanner';
+import ProtectionPrompt from './components/ProtectionPrompt';
 import CommandPalette from './components/CommandPalette';
 import type { Section } from './components/SettingsDialog';
 
@@ -320,6 +321,7 @@ export default function App() {
       </div>
       <Toasts />
       <TooltipHost />
+      <ProtectionPrompt />
       <ErrorBoundary label="The command palette">
         <CommandPalette
           open={paletteOpen}

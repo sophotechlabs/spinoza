@@ -615,3 +615,11 @@ func (c *swappableCluster) AddKubeconfig(string) error {
 func (c *swappableCluster) RemoveKubeconfig(string) error {
 	return nil
 }
+
+func (c *swappableCluster) Protect(bool) error {
+	return nil
+}
+
+func (c *swappableCluster) Protected() bool {
+	return false
+}

@@ -5,6 +5,7 @@ import type {
   KubeContext,
   Kubeconfig,
   PickedFile,
+  Protection,
 } from './types';
 import { failure } from './object';
 import { SLOW_REQUEST_TIMEOUT_MS, request } from './http';
@@ -35,6 +36,7 @@ interface WireContexts {
   current?: ContextRef;
   error?: string;
   kubeconfigs?: WireKubeconfig[];
+  protection?: string;
 }
 
 interface WirePicker {
@@ -52,12 +54,29 @@ function normalizeKubeconfig(entry: WireKubeconfig): Kubeconfig {
   };
 }
 
+function protectionOf(raw: string | undefined): Protection {
+  if (raw === 'protected' || raw === 'open') {
+    return raw;
+  }
+  return 'unknown';
+}
+
 function normalize(body: WireContexts): ContextList {
   return {
     current: body.current ?? { kubeconfig: '', name: '' },
     error: body.error,
     kubeconfigs: (body.kubeconfigs ?? []).map(normalizeKubeconfig),
+    protection: protectionOf(body.protection),
   };
+}
+
+export async function setProtection(protected_: boolean): Promise<ContextList> {
+  const params = new URLSearchParams({ protected: String(protected_) });
+  const response = await request(`/api/protection?${params.toString()}`, { method: 'POST' });
+  if (!response.ok) {
+    throw await failure(response, `protecting the cluster failed with status ${response.status}`);
+  }
+  return normalize((await response.json()) as WireContexts);
 }
 
 function describe(entry: KubeContext): string {
