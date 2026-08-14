@@ -1,13 +1,12 @@
 import { useState } from 'react';
+import { CONTROL } from '../lib/controls';
 import { setProtection } from '../lib/contexts';
 import { useContextList, useContextsStore } from '../store/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
 
-const PROTECTED_CLASS =
-  'rounded border border-warn-line-strong bg-warn-tint px-1.5 py-0.5 font-semibold tracking-wide text-warn-strong uppercase disabled:text-fg-subtle';
+const PROTECTED_CLASS = `${CONTROL} border-warn-line-strong bg-warn-tint font-semibold tracking-wide text-warn-strong uppercase disabled:text-fg-subtle`;
 
-const OPEN_CLASS =
-  'rounded border border-edge-strong px-1.5 py-0.5 tracking-wide text-fg-muted uppercase hover:bg-surface-active disabled:text-fg-subtle';
+const OPEN_CLASS = `${CONTROL} border-edge-strong tracking-wide text-fg-muted uppercase hover:bg-surface-active disabled:text-fg-subtle`;
 
 function reason(err: unknown): string {
   if (err instanceof Error && err.message !== '') {

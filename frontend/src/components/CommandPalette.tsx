@@ -30,6 +30,8 @@ export default function CommandPalette({
 }: CommandPaletteProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
   const recents = useRecents();
   const [categories, setCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState('');
@@ -45,6 +47,18 @@ export default function CommandPalette({
       dialog.close();
     }
   }, [open]);
+
+  useEffect(() => {
+    function outside(event: MouseEvent) {
+      if (event.target === ref.current) {
+        close.current();
+      }
+    }
+    document.addEventListener('click', outside);
+    return () => {
+      document.removeEventListener('click', outside);
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) {

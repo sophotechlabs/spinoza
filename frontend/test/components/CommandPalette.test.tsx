@@ -201,4 +201,22 @@ describe('CommandPalette', () => {
 
     expect(onSelectView).not.toHaveBeenCalled();
   });
+
+  it('closes when the click lands outside it', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderPalette();
+
+    await user.click(screen.getByRole('dialog', { hidden: true }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays open while the click lands inside it', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderPalette();
+
+    await user.click(screen.getByLabelText('Search resources, views and recent objects'));
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

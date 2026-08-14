@@ -11,6 +11,7 @@ import {
 import { notifyError, notifyOk } from '../store/toasts';
 import { useContextList, useContextsStore } from '../store/contexts';
 import { sessionExpired } from '../store/session';
+import { CONTROL } from '../lib/controls';
 import KubeconfigDialog from './KubeconfigDialog';
 
 interface ContextPickerProps {
@@ -136,7 +137,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
         onClick={() => {
           setManaging(true);
         }}
-        className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+        className={`${CONTROL} border-edge-strong text-fg-soft hover:bg-surface-active`}
       >
         Kubeconfigs
       </button>
@@ -165,7 +166,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
         <button
           type="button"
           onClick={retryLoad}
-          className="rounded border border-edge-strong px-1.5 py-0.5 text-fg hover:bg-surface-active"
+          className={`${CONTROL} border-edge-strong text-fg hover:bg-surface-active`}
         >
           Retry
         </button>
@@ -192,7 +193,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
         value={selected?.value ?? UNLISTED}
         onChange={(event) => void handleChange(event)}
         disabled={busy}
-        className="max-w-64 rounded border border-edge-strong bg-surface-raised px-1.5 py-0.5 font-semibold text-fg-strong disabled:text-fg-subtle"
+        className={`${CONTROL} max-w-64 border-edge-strong bg-surface-raised font-semibold text-fg-strong disabled:text-fg-subtle`}
       >
         {selected === undefined && (
           <option value={UNLISTED} disabled>

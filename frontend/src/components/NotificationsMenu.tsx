@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type { ObjectRef } from '../lib/types';
+import { ICON_CONTROL } from '../lib/controls';
 import NotificationsPanel from './NotificationsPanel';
 
 interface NotificationsMenuProps {
@@ -41,7 +42,7 @@ export default function NotificationsMenu({ onSelectObject }: NotificationsMenuP
       <summary
         aria-label="Notifications"
         title="What has happened on this cluster"
-        className="flex cursor-pointer list-none items-center rounded border border-edge-strong px-1.5 py-1 text-fg hover:bg-surface-active [&::-webkit-details-marker]:hidden"
+        className={`${ICON_CONTROL} cursor-pointer list-none border-edge-strong text-fg hover:bg-surface-active [&::-webkit-details-marker]:hidden`}
       >
         <Bell />
       </summary>

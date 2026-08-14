@@ -1,5 +1,6 @@
 import type { ConnectionStatus } from '../lib/feed';
 import type { ObjectRef, View } from '../lib/types';
+import { CONTROL, ICON_CONTROL } from '../lib/controls';
 import { paletteChordLabel } from '../lib/hotkeys';
 import ContextPicker from './ContextPicker';
 import NotificationsMenu from './NotificationsMenu';
@@ -75,14 +76,14 @@ export default function TopBar({
       <span className="text-fg-muted">/</span>
       <span className="text-fg-soft">all namespaces</span>
       {view !== undefined && (
-        <span className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft">{view}</span>
+        <span className={`${CONTROL} border-edge-strong text-fg-soft`}>{view}</span>
       )}
       <div className="ml-auto flex items-center gap-3">
         <button
           type="button"
           onClick={handlePalette}
           title="Search resources, views and recent objects"
-          className="rounded border border-edge-strong px-2 py-0.5 text-fg-soft hover:bg-surface-active"
+          className={`${CONTROL} border-edge-strong text-fg-soft hover:bg-surface-active`}
         >
           Search <span className="text-fg-muted">{paletteChordLabel()}</span>
         </button>
@@ -96,7 +97,7 @@ export default function TopBar({
         <button
           type="button"
           onClick={handleReconnect}
-          className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
+          className={`${CONTROL} border-edge-strong text-fg hover:bg-surface-active`}
         >
           Reconnect
         </button>
@@ -106,7 +107,7 @@ export default function TopBar({
           aria-label="Settings"
           title="Settings"
           onClick={handleSettings}
-          className="rounded border border-edge-strong px-1.5 py-0.5 text-base leading-none text-fg hover:bg-surface-active"
+          className={`${ICON_CONTROL} border-edge-strong text-base leading-none text-fg hover:bg-surface-active`}
         >
           ⚙
         </button>
