@@ -191,6 +191,7 @@ describe('PanelLayout', () => {
     const user = userEvent.setup();
     renderLayout();
     await user.click(screen.getByRole('tab', { name: 'Terminal' }));
+    await user.click(await screen.findByRole('button', { name: 'Shell in web' }));
     const before = await screen.findByTestId('terminal-panel');
 
     await user.click(screen.getByRole('button', { name: 'Move Terminal to the left' }));
@@ -212,7 +213,6 @@ describe('PanelLayout', () => {
 
     expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('tab', { name: 'Metrics' })).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('greys out every object panel with nothing selected', () => {

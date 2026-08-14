@@ -152,8 +152,8 @@ describe('the panel registry', () => {
     ).toBe(false);
   });
 
-  it('opens the terminal only for a pod with containers', () => {
-    expect(panelById('terminal').enabled(ctx())).toBe(false);
+  it('keeps the terminal open at all times, pod selected or not', () => {
+    expect(panelById('terminal').enabled(ctx())).toBe(true);
     expect(
       panelById('terminal').enabled(
         ctx({ pod: { namespace: 'prod', name: 'web', containers: ['app'] } }),

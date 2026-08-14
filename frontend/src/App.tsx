@@ -18,6 +18,7 @@ import { focusFilter, useHotkeys } from './lib/hotkeys';
 import { mayDiscard } from './lib/unsaved';
 import { clearRecents, rememberObject } from './store/recents';
 import { clearHistory } from './store/toasts';
+import { clearTerminals } from './store/terminals';
 import { notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -203,6 +204,7 @@ export default function App() {
     setContextName('');
     clearRecents();
     clearHistory();
+    clearTerminals();
     clearForwards();
     bumpClusterEpoch();
     feed.reconnect();

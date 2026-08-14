@@ -63,8 +63,8 @@ export const PANELS: PanelDescriptor[] = [
     id: 'terminal',
     label: 'Terminal',
     defaultSide: 'bottom',
-    hint: 'Select a pod to open a shell in it',
-    enabled: (ctx) => ctx.pod !== null,
+    hint: 'Nothing docked here yet',
+    enabled: () => true,
   },
 ];
 

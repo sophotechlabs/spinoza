@@ -2,41 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('../../src/components/DebugPrompt', () => ({
-  default: ({
-    target,
-    onAttached,
-  }: {
-    target: { container: string };
-    onAttached: (name: string) => void;
-  }) => (
-    <div data-testid="debug-prompt">
-      no shell in {target.container}
-      <button
-        type="button"
-        onClick={() => {
-          onAttached('spinoza-debug-1');
-        }}
-      >
-        Attach debug container
-      </button>
-    </div>
-  ),
-}));
-
-vi.mock('../../src/components/TerminalPanel', () => ({
-  default: ({
-    target,
-    onShellMissing,
-  }: {
-    target: { pod: string; container: string };
-    onShellMissing: () => void;
-  }) => (
-    <div data-testid="terminal-panel">
-      {target.pod}/{target.container}
-      <button type="button" onClick={onShellMissing}>
-        Report missing shell
-      </button>
+vi.mock('../../src/components/TerminalSession', () => ({
+  default: ({ pod, container }: { pod: string; container: string }) => (
+    <div data-testid="terminal-session">
+      {pod}/{container}
     </div>
   ),
 }));
@@ -44,58 +13,79 @@ vi.mock('../../src/components/TerminalPanel', () => ({
 import TerminalTab from '../../src/components/TerminalTab';
 import { terminalTitle } from '../../src/lib/shell';
 import type { PodTarget } from '../../src/lib/pods';
-
-function stubShell(shell: string): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ shell }) }),
-  );
-}
+import { useTerminalsStore } from '../../src/store/terminals';
 
 function pod(overrides: Partial<PodTarget> = {}): PodTarget {
   return { namespace: 'prod', name: 'web', containers: ['app'], ...overrides };
 }
 
+function sessions(): HTMLElement[] {
+  return screen.getAllByTestId('terminal-session');
+}
+
+function visible(): HTMLElement[] {
+  return sessions().filter((session) => session.closest('[hidden]') === null);
+}
+
+beforeEach(() => {
+  useTerminalsStore.getState().reset();
+});
+
+afterEach(() => {
+  useTerminalsStore.getState().reset();
+});
+
 describe('TerminalTab', () => {
-  beforeEach(() => {
-    stubShell('present');
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('prompts for a pod when nothing is selected', () => {
+  it('says nothing is open before a shell is asked for', () => {
     render(<TerminalTab pod={null} />);
 
-    expect(screen.getByText('Select a pod to open a shell in it.')).toBeInTheDocument();
+    expect(screen.getByText(/No shells open/)).toBeInTheDocument();
+    expect(screen.queryAllByTestId('terminal-session')).toHaveLength(0);
   });
 
-  it('prompts for a pod that reports no containers', () => {
+  it('offers no shell button without a pod to open one in', () => {
+    render(<TerminalTab pod={null} />);
+
+    expect(screen.queryByRole('button', { name: /Shell in/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no shell button for a pod that reports no containers', () => {
     render(<TerminalTab pod={pod({ containers: [] })} />);
 
-    expect(screen.getByText('Select a pod to open a shell in it.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Shell in/ })).not.toBeInTheDocument();
   });
 
-  it('opens a shell into the first container', async () => {
+  it('leaves the selected pod alone until the button is pressed', () => {
     render(<TerminalTab pod={pod()} />);
 
-    expect(await screen.findByTestId('terminal-panel')).toHaveTextContent('web/app');
+    expect(screen.getByRole('button', { name: 'Shell in web' })).toBeInTheDocument();
+    expect(screen.queryAllByTestId('terminal-session')).toHaveLength(0);
   });
 
-  it('hides the picker for a single-container pod', () => {
+  it('opens a shell into the first container on request', async () => {
+    const user = userEvent.setup();
+    render(<TerminalTab pod={pod()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
+
+    expect(visible()[0]).toHaveTextContent('web/app');
+    expect(screen.getByRole('button', { name: 'web/app' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('hides the container picker for a single-container pod', () => {
     render(<TerminalTab pod={pod()} />);
 
     expect(screen.queryByLabelText('Container')).not.toBeInTheDocument();
   });
 
-  it('switches container from the picker', async () => {
+  it('opens the container the picker names', async () => {
     const user = userEvent.setup();
     render(<TerminalTab pod={pod({ containers: ['app', 'sidecar'] })} />);
 
     await user.selectOptions(screen.getByLabelText('Container'), 'sidecar');
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
 
-    expect(await screen.findByTestId('terminal-panel')).toHaveTextContent('web/sidecar');
+    expect(visible()[0]).toHaveTextContent('web/sidecar');
   });
 
   it('goes back to the first container for the next pod', () => {
@@ -106,58 +96,60 @@ describe('TerminalTab', () => {
     expect(screen.getByLabelText('Container')).toHaveValue('app');
   });
 
-  it('offers a debug container for an image with no shell', async () => {
-    stubShell('absent');
-    render(<TerminalTab pod={pod()} />);
-
-    expect(await screen.findByTestId('debug-prompt')).toHaveTextContent('no shell in app');
-  });
-
-  it('opens a shell into the debug container once it is attached', async () => {
+  it('keeps an open shell alive while another pod is selected', async () => {
     const user = userEvent.setup();
-    stubShell('absent');
-    render(<TerminalTab pod={pod()} />);
-    await user.click(await screen.findByRole('button', { name: 'Attach debug container' }));
+    const view = render(<TerminalTab pod={pod()} />);
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
 
-    expect(await screen.findByTestId('terminal-panel')).toHaveTextContent('web/spinoza-debug-1');
+    view.rerender(<TerminalTab pod={pod({ name: 'db' })} />);
+
+    expect(sessions()[0]).toHaveTextContent('web/app');
+    expect(screen.getByRole('button', { name: 'Shell in db' })).toBeInTheDocument();
   });
 
-  it('offers a debug container when the session reports no shell', async () => {
+  it('gives each pod its own tab and shows only the newest', async () => {
+    const user = userEvent.setup();
+    const view = render(<TerminalTab pod={pod()} />);
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
+    view.rerender(<TerminalTab pod={pod({ name: 'db' })} />);
+    await user.click(screen.getByRole('button', { name: 'Shell in db' }));
+
+    expect(sessions()).toHaveLength(2);
+    expect(visible()).toHaveLength(1);
+    expect(visible()[0]).toHaveTextContent('db/app');
+  });
+
+  it('brings a tab back to the front', async () => {
+    const user = userEvent.setup();
+    const view = render(<TerminalTab pod={pod()} />);
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
+    view.rerender(<TerminalTab pod={pod({ name: 'db' })} />);
+    await user.click(screen.getByRole('button', { name: 'Shell in db' }));
+
+    await user.click(screen.getByRole('button', { name: 'web/app' }));
+
+    expect(visible()[0]).toHaveTextContent('web/app');
+  });
+
+  it('goes to the shell that is already open instead of a second one', async () => {
     const user = userEvent.setup();
     render(<TerminalTab pod={pod()} />);
-    await user.click(await screen.findByRole('button', { name: 'Report missing shell' }));
 
-    expect(await screen.findByTestId('debug-prompt')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
+
+    expect(sessions()).toHaveLength(1);
   });
 
-  it('survives a failed support lookup', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+  it('closes a shell from its tab', async () => {
+    const user = userEvent.setup();
     render(<TerminalTab pod={pod()} />);
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
 
-    expect(await screen.findByTestId('terminal-panel')).toBeInTheDocument();
-  });
+    await user.click(screen.getByRole('button', { name: 'Close the shell in web' }));
 
-  it('says the shell probe failed instead of swallowing it', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
-    render(<TerminalTab pod={pod()} />);
-
-    expect(await screen.findByText(/Could not check whether app has a shell/)).toHaveTextContent(
-      'offline',
-    );
-  });
-
-  it('names no cause when the probe rejects with a non-Error', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('nope'));
-    render(<TerminalTab pod={pod()} />);
-
-    expect(await screen.findByText(/the shell probe failed/)).toBeInTheDocument();
-  });
-
-  it('says nothing about the probe once it answers', async () => {
-    render(<TerminalTab pod={pod()} />);
-    await screen.findByTestId('terminal-panel');
-
-    expect(screen.queryByText(/Could not check whether/)).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId('terminal-session')).toHaveLength(0);
+    expect(screen.getByText(/No shells open/)).toBeInTheDocument();
   });
 
   it('explains why the terminal is unavailable', () => {

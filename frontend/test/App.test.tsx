@@ -513,7 +513,7 @@ describe('App', () => {
     expect(screen.getByTestId('inspect-log-feed')).toHaveTextContent('app');
   });
 
-  it('leaves the terminal shut for an object that is not a pod', async () => {
+  it('offers no shell for an object that is not a pod', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main#1', makeColumns([]), true, [
@@ -524,12 +524,12 @@ describe('App', () => {
     await selectDeployment(user);
     await user.click(await screen.findByRole('button', { name: 'dep-a' }));
 
+    await user.click(screen.getByRole('tab', { name: 'Terminal' }));
+
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute(
-        'aria-disabled',
-        'true',
-      );
+      expect(screen.getByText(/No shells open/)).toBeInTheDocument();
     });
+    expect(screen.queryByRole('button', { name: /Shell in/ })).not.toBeInTheDocument();
   });
 
   it('offers regular containers before init containers in the picker', async () => {
@@ -897,7 +897,7 @@ describe('a selection that outlives its row', () => {
     await user.click(screen.getByRole('button', { name: 'select-node' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('helmreleases:apps/podinfo');
-    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-disabled', 'false');
   });
 });
 
