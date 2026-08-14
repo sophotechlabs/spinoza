@@ -307,6 +307,12 @@ func TestAPathThatCannotBeResolvedIsNotRemoved(t *testing.T) {
 
 func TestTheKubeconfigInUseIsNotRemoved(t *testing.T) {
 	sources := newStubSources()
+	sources.entries = append(sources.entries, api.Kubeconfig{
+		Label:     "/tmp/other.yaml",
+		Path:      "/tmp/other.yaml",
+		Removable: true,
+		Contexts:  []api.KubeContext{{Name: "beta", Cluster: "c2"}},
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	cluster := newCluster(ctx, (&recorder{}).build, sources)
@@ -321,6 +327,45 @@ func TestTheKubeconfigInUseIsNotRemoved(t *testing.T) {
 	}
 	if len(sources.removed) != 0 {
 		t.Fatalf("removed = %v", sources.removed)
+	}
+}
+
+func TestAKubeconfigThatWentMissingCanBeRemovedEvenWhileInUse(t *testing.T) {
+	sources := newStubSources()
+	sources.entries = append(sources.entries, api.Kubeconfig{
+		Label:     "/tmp/other.yaml",
+		Path:      "/tmp/other.yaml",
+		Removable: true,
+		Error:     "kubeconfig: stat /tmp/other.yaml: no such file or directory",
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	if err := cluster.Use(api.ContextRef{Kubeconfig: "/tmp/other.yaml", Name: "beta"}); err != nil {
+		t.Fatalf("use: %v", err)
+	}
+
+	err := cluster.RemoveKubeconfig("/tmp/other.yaml")
+	if err != nil {
+		t.Fatalf("remove: %v; a file that no longer reads cannot be switched away from either", err)
+	}
+	if !slices.Equal(sources.removed, []string{"/tmp/other.yaml"}) {
+		t.Fatalf("removed = %v", sources.removed)
+	}
+}
+
+func TestAKubeconfigSpinozaNeverHeardOfIsNotProtected(t *testing.T) {
+	sources := newStubSources()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster := newCluster(ctx, (&recorder{}).build, sources)
+	if err := cluster.Use(api.ContextRef{Kubeconfig: "/tmp/gone.yaml", Name: "beta"}); err != nil {
+		t.Fatalf("use: %v", err)
+	}
+
+	err := cluster.RemoveKubeconfig("/tmp/gone.yaml")
+	if err != nil {
+		t.Fatalf("remove: %v", err)
 	}
 }
 

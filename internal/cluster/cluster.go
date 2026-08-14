@@ -102,10 +102,19 @@ func (c *Cluster) RemoveKubeconfig(path string) error {
 	if err != nil {
 		return err
 	}
-	if c.Current().Kubeconfig == resolved {
+	if c.Current().Kubeconfig == resolved && c.readable(resolved) {
 		return fmt.Errorf("spinoza is connected through %s; switch to a context from another kubeconfig first", resolved)
 	}
 	return c.sources.Remove(resolved)
+}
+
+func (c *Cluster) readable(path string) bool {
+	for _, entry := range c.sources.List() {
+		if entry.Path == path {
+			return entry.Error == ""
+		}
+	}
+	return false
 }
 
 func (c *Cluster) Use(ref api.ContextRef) error {

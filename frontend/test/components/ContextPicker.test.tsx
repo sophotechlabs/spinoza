@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ContextPicker from '../../src/components/ContextPicker';
 import { useToastsStore } from '../../src/store/toasts';
+import { useContextsStore } from '../../src/store/contexts';
+import { expireSession } from '../../src/store/session';
 
 function selectedOption(scope: HTMLElement, name: string): HTMLOptionElement {
   const option = within(scope).getByRole('option', { name });
@@ -456,5 +458,79 @@ describe('ContextPicker', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(await screen.findByRole('option', { name: 'staging' })).toBeInTheDocument();
+  });
+
+  it('notices on its own that a kubeconfig stopped reading', async () => {
+    vi.useFakeTimers();
+    const healthy = listOf(['p-mk1'], 'p-mk1');
+    const broken = {
+      current: { kubeconfig: '', name: 'p-mk1' },
+      kubeconfigs: [{ ...defaultKubeconfig([]), error: 'no such file or directory' }],
+    };
+    let answer: unknown = healthy;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(answer) })),
+    );
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(useContextsStore.getState().list.kubeconfigs[0].error).toBeUndefined();
+
+    answer = broken;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+
+    expect(useContextsStore.getState().list.kubeconfigs[0].error).toBe('no such file or directory');
+    vi.useRealTimers();
+  });
+
+  it('stops refreshing once the token is from an earlier run', async () => {
+    vi.useFakeTimers();
+    const calls = stubContexts(listOf(['p-mk1'], 'p-mk1'));
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const before = calls.length;
+
+    expireSession();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120000);
+    });
+
+    expect(calls).toHaveLength(before);
+    vi.useRealTimers();
+  });
+
+  it('leaves a refresh alone that fails while the cluster is unreachable', async () => {
+    vi.useFakeTimers();
+    let failing = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        if (failing) {
+          return Promise.reject(new Error('offline'));
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(listOf(['p-mk1'], 'p-mk1')),
+        });
+      }),
+    );
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    failing = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+
+    expect(useContextsStore.getState().list.kubeconfigs).toHaveLength(1);
+    vi.useRealTimers();
   });
 });

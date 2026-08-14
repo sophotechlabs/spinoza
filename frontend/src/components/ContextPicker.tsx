@@ -9,16 +9,18 @@ import {
   switchContext,
 } from '../lib/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
+import { useContextList, useContextsStore } from '../store/contexts';
+import { sessionExpired } from '../store/session';
 import KubeconfigDialog from './KubeconfigDialog';
 
 interface ContextPickerProps {
   onSwitched: () => void;
 }
 
+const REFRESH_MS = 30000;
+
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 15000;
-
-const EMPTY: ContextList = { current: { kubeconfig: '', name: '' }, kubeconfigs: [] };
 
 const UNLISTED = 'unlisted';
 
@@ -41,7 +43,8 @@ function currentLabel(list: ContextList): string {
 }
 
 export default function ContextPicker({ onSwitched }: ContextPickerProps) {
-  const [list, setList] = useState<ContextList>(EMPTY);
+  const list = useContextList();
+  const setList = useContextsStore((state) => state.setList);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -77,7 +80,23 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
         clearTimeout(timer);
       }
     };
-  }, [attempt]);
+  }, [attempt, setList]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (busy || sessionExpired()) {
+        return;
+      }
+      fetchContexts()
+        .then((found) => {
+          setList(found);
+        })
+        .catch(() => undefined);
+    }, REFRESH_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [busy, setList]);
 
   async function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
     const entry = entryFor(groups, event.target.value);

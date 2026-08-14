@@ -5,6 +5,7 @@ import { installMatchMedia } from './helpers';
 import { usePanelsStore } from '../src/store/panels';
 import { useClusterStore } from '../src/store/cluster';
 import { useSessionStore } from '../src/store/session';
+import { useContextsStore } from '../src/store/contexts';
 import { useForwardsStore } from '../src/store/forwards';
 
 configure({ asyncUtilTimeout: 5000 });
@@ -15,6 +16,7 @@ beforeEach(() => {
   usePanelsStore.getState().reset();
   useClusterStore.getState().reset();
   useSessionStore.getState().reset();
+  useContextsStore.getState().reset();
   useForwardsStore.getState().setForwards([]);
 });
 

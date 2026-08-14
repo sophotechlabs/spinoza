@@ -33,6 +33,7 @@ import FluxRoles from './components/FluxRoles';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
+import KubeconfigBanner from './components/KubeconfigBanner';
 import CommandPalette from './components/CommandPalette';
 import type { Section } from './components/SettingsDialog';
 
@@ -290,6 +291,7 @@ export default function App() {
         />
       </ErrorBoundary>
       <ConnectionBanner status={feed.status} attempt={feed.attempt} onReconnect={feed.reconnect} />
+      <KubeconfigBanner />
       <div className="flex min-h-0 flex-1">
         <ErrorBoundary label="The sidebar">
           <Sidebar
