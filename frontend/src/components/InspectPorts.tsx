@@ -60,12 +60,12 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
     setError(null);
     try {
       const started = await startForward(kind, target, port);
-      notifyOk(`Forwarding ${target.name} 127.0.0.1:${started.localPort} → ${port}`);
+      notifyOk(`Forwarding ${target.name} 127.0.0.1:${started.localPort} → ${port}`, target);
       await refreshForwards();
     } catch (err: unknown) {
       const message = errorMessage(err);
       setError(message);
-      notifyError(`Forwarding ${target.name} port ${port}: ${message}`);
+      notifyError(`Forwarding ${target.name} port ${port}: ${message}`, target);
     } finally {
       setBusy(null);
     }
@@ -76,7 +76,7 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
     setError(null);
     try {
       await stopForward(running.id);
-      notifyOk(`Stopped forwarding ${target.name} port ${running.remotePort}`);
+      notifyOk(`Stopped forwarding ${target.name} port ${running.remotePort}`, target);
       await refreshForwards();
     } catch (err: unknown) {
       const message = errorMessage(err);

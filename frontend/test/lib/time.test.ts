@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ago, since } from '../../src/lib/time';
+import { ago, clock, since } from '../../src/lib/time';
 
 const NOW = Date.parse('2026-08-11T12:00:00Z');
 
@@ -44,5 +44,17 @@ describe('the units the elapsed time rolls into', () => {
 
   it('turns exactly a day into days', () => {
     expect(since(86400)).toBe('1d');
+  });
+});
+
+describe('clock', () => {
+  it('reads a stamp as the local wall time', () => {
+    const at = new Date(2026, 7, 14, 9, 4, 7);
+
+    expect(clock(at.toISOString())).toBe('09:04:07');
+  });
+
+  it('says nothing for a stamp it cannot read', () => {
+    expect(clock('not a time')).toBe('');
   });
 });

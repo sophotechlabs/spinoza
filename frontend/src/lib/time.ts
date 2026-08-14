@@ -28,3 +28,15 @@ export function since(seconds: number): string {
   const days = Math.floor(hours / 24);
   return `${String(days)}d`;
 }
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+export function clock(stamp: string): string {
+  const at = new Date(stamp);
+  if (Number.isNaN(at.getTime())) {
+    return '';
+  }
+  return `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
+}

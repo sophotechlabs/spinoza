@@ -2,7 +2,8 @@ import type { ObjectDetail } from './types';
 import type { Selection } from './refs';
 import type { PodTarget } from './pods';
 
-export type PanelId = 'overview' | 'yaml' | 'events' | 'logs' | 'metrics' | 'forwards' | 'terminal';
+export type PanelId =
+  'overview' | 'yaml' | 'events' | 'logs' | 'metrics' | 'forwards' | 'notifications' | 'terminal';
 
 export type DockSide = 'left' | 'right' | 'bottom';
 
@@ -55,6 +56,13 @@ export const PANELS: PanelDescriptor[] = [
   {
     id: 'forwards',
     label: 'Forwards',
+    defaultSide: 'bottom',
+    hint: 'Nothing docked here yet',
+    enabled: () => true,
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
     defaultSide: 'bottom',
     hint: 'Nothing docked here yet',
     enabled: () => true,

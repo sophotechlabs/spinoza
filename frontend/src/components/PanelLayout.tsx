@@ -23,6 +23,7 @@ import InspectYaml from './InspectYaml';
 import InspectEvents from './InspectEvents';
 import InspectLogs from './InspectLogs';
 import ForwardsPanel from './ForwardsPanel';
+import NotificationsPanel from './NotificationsPanel';
 import TerminalTab from './TerminalTab';
 import Loading from './Loading';
 
@@ -30,6 +31,7 @@ const InspectMetrics = lazy(() => import('./InspectMetrics'));
 
 interface PanelLayoutProps {
   selection: Selection | null;
+  onSelectObject: (ref: ObjectRef) => void;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
   onClose: () => void;
@@ -50,6 +52,7 @@ interface RenderContext extends PanelContext {
   reload: () => void;
   onClose: () => void;
   onDeleted: () => void;
+  onSelectObject: (ref: ObjectRef) => void;
 }
 
 function liveContainers(selection: Selection): ContainerState[] | undefined {
@@ -121,6 +124,11 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
       <ForwardsPanel active={ctx.open} />
     </div>
   ),
+  notifications: (ctx) => (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden text-[11px]">
+      <NotificationsPanel onSelectObject={ctx.onSelectObject} />
+    </div>
+  ),
   terminal: (ctx) => <TerminalTab pod={ctx.pod} />,
   overview: (ctx) =>
     objectPanel(ctx, (selection, detail) => (
@@ -179,6 +187,7 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
 
 export default function PanelLayout({
   selection,
+  onSelectObject,
   subscribeLogs,
   unsubscribeLogs,
   onClose,
@@ -290,6 +299,7 @@ export default function PanelLayout({
           reload,
           onClose,
           onDeleted,
+          onSelectObject,
         };
         return (
           <PanelMount

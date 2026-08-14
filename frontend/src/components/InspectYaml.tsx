@@ -142,7 +142,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     setNotice(null);
     try {
       await deleteObject(target, confirmName(protectedCluster, target.name));
-      notifyOk(`Deleted ${detail.kind} ${target.name}`);
+      notifyOk(`Deleted ${detail.kind} ${target.name}`, target);
       onDeleted();
     } catch (err: unknown) {
       setError(errorMessage(err, 'delete failed'));

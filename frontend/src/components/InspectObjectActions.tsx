@@ -110,14 +110,14 @@ export default function InspectObjectActions({
       } else {
         setPlan(null);
         setNotice(result.message);
-        notifyOk(`${target.name}: ${result.message}`);
+        notifyOk(`${target.name}: ${result.message}`, target);
       }
       onDone();
       return result;
     } catch (err: unknown) {
       const message = errorMessage(err);
       setError(message);
-      notifyError(`${action} ${target.name}: ${message}`);
+      notifyError(`${action} ${target.name}: ${message}`, target);
       setPlan(null);
       return null;
     } finally {

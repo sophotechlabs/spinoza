@@ -17,6 +17,7 @@ import { clearForwards } from './lib/portForward';
 import { focusFilter, useHotkeys } from './lib/hotkeys';
 import { mayDiscard } from './lib/unsaved';
 import { clearRecents, rememberObject } from './store/recents';
+import { clearHistory } from './store/toasts';
 import { notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -201,6 +202,7 @@ export default function App() {
     navigate({ context: '', view: route.view, resource: null, selection: null });
     setContextName('');
     clearRecents();
+    clearHistory();
     clearForwards();
     bumpClusterEpoch();
     feed.reconnect();
@@ -310,6 +312,7 @@ export default function App() {
         >
           <PanelLayout
             selection={selection}
+            onSelectObject={remember}
             subscribeLogs={subscribeLogs}
             unsubscribeLogs={unsubscribeLogs}
             onClose={clearSelection}
