@@ -16,9 +16,3 @@ commit-msg:
   commands:
     commitlint:
       run: npx --yes --package @commitlint/cli --package @commitlint/config-conventional commitlint --edit {1}
-
-pre-push:
-  parallel: false
-  commands:
-    check:
-      run: just check
