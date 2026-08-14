@@ -1,35 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <filter id="ga" x="-60%" y="-60%" width="220%" height="220%">
-      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#3FE0FF" flood-opacity="0.9"></feDropShadow>
-      <feDropShadow dx="0" dy="0" stdDeviation="11" flood-color="#3FE0FF" flood-opacity="0.6"></feDropShadow>
-    </filter>
-    <filter id="gb" x="-60%" y="-60%" width="220%" height="220%">
-      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#8B5CFF" flood-opacity="0.9"></feDropShadow>
-      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#8B5CFF" flood-opacity="0.6"></feDropShadow>
-    </filter>
-  </defs>
-  <defs><linearGradient id="bg" x1="0.33" y1="0" x2="0.67" y2="1">
-    <stop offset="0" stop-color="#131A2E"></stop><stop offset="1" stop-color="#080B15"></stop>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <defs><linearGradient id="paper" x1="0.1" y1="0" x2="0.9" y2="1">
+    <stop offset="0" stop-color="#4FE6FF"></stop><stop offset="1" stop-color="#8B5CFF"></stop>
+  </linearGradient>
+  <linearGradient id="plate" x1="0.3" y1="0" x2="0.7" y2="1">
+    <stop offset="0" stop-color="#202B4D"></stop><stop offset="1" stop-color="#141C33"></stop>
   </linearGradient></defs>
-  <rect width="512" height="512" rx="116" fill="url(#bg)"></rect>
-  <rect x="2" y="2" width="508" height="508" rx="114" fill="none" stroke="#1E294A" stroke-width="4"></rect>
-  <g transform="translate(62.0,94.3) scale(1.6171)"><g filter="url(#ga)">
-      <rect x="29" y="44" width="182" height="112" rx="4" fill="rgba(63,224,255,0.06)"></rect>
-      <g fill="none" stroke="#3FE0FF" stroke-width="7" stroke-linecap="round">
-        <line x1="29" y1="44" x2="211" y2="44"></line><line x1="29" y1="156" x2="211" y2="156"></line>
-      </g>
-    </g>
-    <g filter="url(#gb)"><g stroke="#8B5CFF" fill="none" stroke-linecap="round">
-      <circle cx="120" cy="100" r="36" stroke-width="8"></circle>
-      <g stroke-width="7"><line x1="120" y1="91" x2="120" y2="64" transform="rotate(0.00 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(51.43 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(102.86 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(154.29 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(205.71 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(257.14 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(308.57 120 100)"></line></g>
-      <g stroke-width="9"><line x1="120" y1="61" x2="120" y2="51" transform="rotate(0.00 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(51.43 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(102.86 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(154.29 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(205.71 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(257.14 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(308.57 120 100)"></line></g>
-      <circle cx="120" cy="100" r="5.5" fill="#8B5CFF" stroke="none"></circle>
-    </g></g>
-    <g filter="url(#ga)" fill="none" stroke="#3FE0FF" stroke-width="7" stroke-linecap="round">
-      <rect x="14" y="26" width="30" height="148" rx="15"></rect>
-      <rect x="196" y="26" width="30" height="148" rx="15"></rect>
-      <circle cx="29" cy="41" r="6"></circle><circle cx="29" cy="159" r="6"></circle>
-      <circle cx="211" cy="41" r="6"></circle><circle cx="211" cy="159" r="6"></circle>
+  <rect x="49.9" y="49.9" width="412.2" height="412.2" rx="92.2" fill="url(#plate)"></rect>
+  <g transform="translate(79.4,79.4) scale(0.69)"><path d="M 54 74 C 152 102 360 102 458 74 L 458 438 C 360 410 152 410 54 438 Z" fill="url(#paper)"></path>
+    <rect x="0" y="0" width="104" height="512" rx="52" fill="#5FE9FF"></rect>
+    <rect x="408" y="0" width="104" height="512" rx="52" fill="#5FE9FF"></rect>
+    <g fill="#1B2440"><rect x="92" y="8" width="15" height="496"></rect><rect x="405" y="8" width="15" height="496"></rect></g>
+    <g stroke="#1B2440" fill="none" stroke-linecap="round">
+      <circle cx="256" cy="256" r="94" stroke-width="22"></circle>
+      <g stroke-width="19"><line x1="256" y1="234" x2="256" y2="164" transform="rotate(0.00 256 256)"></line><line x1="256" y1="234" x2="256" y2="164" transform="rotate(51.43 256 256)"></line><line x1="256" y1="234" x2="256" y2="164" transform="rotate(102.86 256 256)"></line><line x1="256" y1="234" x2="256" y2="164" transform="rotate(154.29 256 256)"></line><line x1="256" y1="234" x2="256" y2="164" transform="rotate(205.71 256 256)"></line><line x1="256" y1="234" x2="256" y2="164" transform="rotate(257.14 256 256)"></line><line x1="256" y1="234" x2="256" y2="164" transform="rotate(308.57 256 256)"></line></g>
+      <g stroke-width="23"><line x1="256" y1="160" x2="256" y2="132" transform="rotate(0.00 256 256)"></line><line x1="256" y1="160" x2="256" y2="132" transform="rotate(51.43 256 256)"></line><line x1="256" y1="160" x2="256" y2="132" transform="rotate(102.86 256 256)"></line><line x1="256" y1="160" x2="256" y2="132" transform="rotate(154.29 256 256)"></line><line x1="256" y1="160" x2="256" y2="132" transform="rotate(205.71 256 256)"></line><line x1="256" y1="160" x2="256" y2="132" transform="rotate(257.14 256 256)"></line><line x1="256" y1="160" x2="256" y2="132" transform="rotate(308.57 256 256)"></line></g>
+      <circle cx="256" cy="256" r="14" fill="#1B2440" stroke="none"></circle>
     </g></g>
 </svg>

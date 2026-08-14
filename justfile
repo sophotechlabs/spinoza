@@ -109,6 +109,28 @@ build-desktop:
     if [ -f "$plist" ]; then
         plutil -lint "$plist"
     fi
+    just icns
+
+# Wails writes an icns with the retina sizes only; macOS wants the plain ones too
+icns:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bundle=build/bin/spinoza.app
+    if [ ! -d "$bundle" ]; then
+        echo "icns: $bundle is not built yet"
+        exit 1
+    fi
+    work=$(mktemp -d)
+    trap 'rm -rf "$work"' EXIT
+    iconset="$work/spinoza.iconset"
+    mkdir -p "$iconset"
+    for size in 16 32 128 256 512; do
+        sips -z "$size" "$size" build/appicon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
+        retina=$((size * 2))
+        sips -z "$retina" "$retina" build/appicon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+    done
+    iconutil -c icns "$iconset" -o "$bundle/Contents/Resources/iconfile.icns"
+    touch "$bundle"
 
 rund: build-desktop
     open build/bin/spinoza.app
