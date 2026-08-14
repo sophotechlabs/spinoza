@@ -290,6 +290,7 @@ export interface HelmRelease {
   status: string;
   updated: string;
   description?: string;
+  fluxRef?: ObjectRef;
 }
 
 export interface HelmReleases {
@@ -338,6 +339,21 @@ export interface HelmActionResult {
   action: string;
   message: string;
   revision?: number;
+  dryRun?: boolean;
+  manifest?: string;
+}
+
+export interface HelmRepoVersions {
+  name?: string;
+  url: string;
+  oci?: boolean;
+  versions: string[];
+}
+
+export interface HelmChartVersions {
+  chart: string;
+  repos: HelmRepoVersions[];
+  error?: string;
 }
 
 export interface FluxGroup {

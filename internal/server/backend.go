@@ -11,6 +11,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
@@ -42,16 +43,21 @@ type Views interface {
 	Metrics(ctx context.Context) api.Metrics
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)
 	Overview(ctx context.Context) api.ClusterOverview
+}
+
+type Releases interface {
 	HelmReleases(ctx context.Context) (api.HelmReleases, error)
 	HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error)
 	HelmSupport() api.HelmSupport
+	HelmVersions(ctx context.Context, chart string) (api.HelmChartVersions, error)
+	HelmRollback(ctx context.Context, namespace, name string, revision int64) (api.HelmActionResult, error)
+	HelmUninstall(ctx context.Context, namespace, name string) (api.HelmActionResult, error)
+	HelmUpgrade(ctx context.Context, req helm.UpgradeRequest) (api.HelmActionResult, error)
 }
 
 type Changes interface {
 	Action(ctx context.Context, req actions.Request) (api.ActionResult, error)
 	FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error)
-	HelmRollback(ctx context.Context, namespace, name string, revision int64) (api.HelmActionResult, error)
-	HelmUninstall(ctx context.Context, namespace, name string) (api.HelmActionResult, error)
 }
 
 type Forwarding interface {
@@ -72,6 +78,7 @@ type Backend interface {
 	Objects
 	Feeds
 	Views
+	Releases
 	Changes
 	Forwarding
 	Terminals

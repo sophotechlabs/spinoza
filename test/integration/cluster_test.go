@@ -5,6 +5,8 @@ package integration
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
@@ -377,9 +379,14 @@ func installRelease(t *testing.T, loaded *kube.Bundle) {
 
 func writeChart(t *testing.T) string {
 	t.Helper()
+	return writeChartVersion(t, "0.1.0")
+}
+
+func writeChartVersion(t *testing.T, version string) string {
+	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		"Chart.yaml": "apiVersion: v2\nname: spinoza-smoke\nversion: 0.1.0\nappVersion: \"1.2.3\"\n",
+		"Chart.yaml": "apiVersion: v2\nname: spinoza-smoke\nversion: " + version + "\nappVersion: \"1.2.3\"\n",
 		"templates/configmap.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n" +
 			"  name: {{ .Release.Name }}\ndata:\n  hello: world\n",
 	}
@@ -393,6 +400,24 @@ func writeChart(t *testing.T) string {
 		}
 	}
 	return dir
+}
+
+func packageChart(t *testing.T, chartDir string) string {
+	t.Helper()
+	repoDir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	pack := osexec.CommandContext(ctx, "helm", "package", chartDir, "-d", repoDir)
+	out, err := pack.CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm package: %v\n%s", err, out)
+	}
+	index := osexec.CommandContext(ctx, "helm", "repo", "index", repoDir)
+	out, err = index.CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm repo index: %v\n%s", err, out)
+	}
+	return repoDir
 }
 
 func TestOverviewReadsARealCluster(t *testing.T) {
@@ -490,6 +515,84 @@ func TestHelmDetailAndActionsAgainstRealHelm(t *testing.T) {
 	_, goneErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
 	if goneErr == nil {
 		t.Fatal("the release still reads back after an uninstall")
+	}
+}
+
+func TestHelmUpgradeThroughAChartRepo(t *testing.T) {
+	loaded := bundle(t)
+	mgr := manager(t, loaded)
+	installRelease(t, loaded)
+
+	repoDir := packageChart(t, writeChartVersion(t, "0.2.0"))
+	server := httptest.NewServer(http.FileServer(http.Dir(repoDir)))
+	t.Cleanup(server.Close)
+
+	req := helm.UpgradeRequest{
+		Namespace: namespace,
+		Name:      "smoke-release",
+		Chart:     "spinoza-smoke",
+		Version:   "0.2.0",
+		RepoURL:   server.URL,
+		Values:    "extra: upgraded\n",
+	}
+
+	dry := req
+	dry.DryRun = true
+	rendered, dryErr := mgr.HelmUpgrade(context.Background(), dry)
+	if dryErr != nil {
+		t.Fatalf("dry run: %v", dryErr)
+	}
+	if !rendered.DryRun {
+		t.Fatal("the dry run was not marked as one")
+	}
+	if !strings.Contains(rendered.Manifest, "kind: ConfigMap") {
+		t.Fatalf("manifest = %q, want the rendered configmap", rendered.Manifest)
+	}
+	before, beforeErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	if beforeErr != nil {
+		t.Fatalf("detail after the dry run: %v", beforeErr)
+	}
+	if before.Release.Revision != 1 {
+		t.Fatalf("revision = %d, want the dry run to have changed nothing", before.Release.Revision)
+	}
+
+	result, upErr := mgr.HelmUpgrade(context.Background(), req)
+	if upErr != nil {
+		t.Fatalf("upgrade: %v", upErr)
+	}
+	if result.Action != helm.ActionUpgrade {
+		t.Fatalf("action = %q, want upgrade", result.Action)
+	}
+	after, afterErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	if afterErr != nil {
+		t.Fatalf("detail after the upgrade: %v", afterErr)
+	}
+	if after.Release.Revision != 2 {
+		t.Fatalf("revision = %d, want 2", after.Release.Revision)
+	}
+	if after.Release.ChartVersion != "0.2.0" {
+		t.Fatalf("chart version = %q, want 0.2.0", after.Release.ChartVersion)
+	}
+	if !strings.Contains(after.Values, "upgraded") {
+		t.Fatalf("values = %q, want the supplied values applied", after.Values)
+	}
+
+	rolled, rollErr := mgr.HelmRollback(context.Background(), namespace, "smoke-release", 1)
+	if rollErr != nil {
+		t.Fatalf("rollback: %v", rollErr)
+	}
+	if rolled.Revision != 1 {
+		t.Fatalf("rollback revision = %d, want 1", rolled.Revision)
+	}
+	undone, undoneErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	if undoneErr != nil {
+		t.Fatalf("detail after the rollback: %v", undoneErr)
+	}
+	if undone.Release.Revision != 3 {
+		t.Fatalf("revision = %d, want the rollback to have made revision 3", undone.Release.Revision)
+	}
+	if undone.Release.ChartVersion != "0.1.0" {
+		t.Fatalf("chart version = %q, want the rollback back on 0.1.0", undone.Release.ChartVersion)
 	}
 }
 

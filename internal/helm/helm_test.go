@@ -27,8 +27,17 @@ import (
 
 const deployedAt = "2026-08-11T09:30:00Z"
 
-func newService(cs kubernetes.Interface, index Charts, repos []charts.Repo) *Service {
+func newService(cs kubernetes.Interface, index Charts, repos []RepoEntry) *Service {
 	return NewService(cs, nil, index, repos, api.ContextRef{Name: "kind-spinoza"})
+}
+
+func entriesOf(urls ...string) []RepoEntry {
+	out := make([]RepoEntry, 0, len(urls))
+	for _, url := range urls {
+		repo := charts.Repo{URL: url, OCI: strings.HasPrefix(url, "oci://")}
+		out = append(out, RepoEntry{Repo: repo})
+	}
+	return out
 }
 
 type release struct {
@@ -584,7 +593,10 @@ func TestAPartialPayloadIsCompletedFromTheLabels(t *testing.T) {
 
 type stubCharts struct {
 	versions map[string]string
+	lists    map[string][]string
+	failures map[string]error
 	warmed   []string
+	asked    []string
 }
 
 func (s *stubCharts) Latest(repo charts.Repo, chart string) string {
@@ -595,12 +607,22 @@ func (s *stubCharts) Warm(repo charts.Repo, chart string) {
 	s.warmed = append(s.warmed, repo.URL+"|"+chart)
 }
 
+func (s *stubCharts) Versions(ctx context.Context, repo charts.Repo, chart string) ([]string, error) {
+	unit := repo.URL + "|" + chart
+	s.asked = append(s.asked, unit)
+	err := s.failures[unit]
+	if err != nil {
+		return nil, err
+	}
+	return s.lists[unit], nil
+}
+
 func TestListMarksAReleaseThatHasANewerChart(t *testing.T) {
 	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
 	index := &stubCharts{versions: map[string]string{
 		"https://charts.example.com|podinfo": "6.9.5",
 	}}
-	repos := []charts.Repo{{URL: "https://charts.example.com"}}
+	repos := entriesOf("https://charts.example.com")
 
 	got, err := newService(cs, index, repos).List(context.Background())
 	if err != nil {
@@ -624,7 +646,7 @@ func TestListLeavesAnUpToDateReleaseAlone(t *testing.T) {
 		"https://charts.example.com|podinfo": "6.9.2",
 	}}
 
-	got, err := newService(cs, index, []charts.Repo{{URL: "https://charts.example.com"}}).List(context.Background())
+	got, err := newService(cs, index, entriesOf("https://charts.example.com")).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -644,11 +666,7 @@ func TestListTakesTheHighestVersionAcrossRepositories(t *testing.T) {
 		"https://two.example.com|podinfo":   "7.1.0",
 		"https://three.example.com|podinfo": "6.0.0",
 	}}
-	repos := []charts.Repo{
-		{URL: "https://one.example.com"},
-		{URL: "https://two.example.com"},
-		{URL: "https://three.example.com"},
-	}
+	repos := entriesOf("https://one.example.com", "https://two.example.com", "https://three.example.com")
 
 	got, err := newService(cs, index, repos).List(context.Background())
 	if err != nil {
@@ -663,7 +681,7 @@ func TestListTakesTheHighestVersionAcrossRepositories(t *testing.T) {
 func TestListSaysNothingAboutLatestWithoutAnIndex(t *testing.T) {
 	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
 
-	got, err := newService(cs, nil, []charts.Repo{{URL: "https://one.example.com"}}).List(context.Background())
+	got, err := newService(cs, nil, entriesOf("https://one.example.com")).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -681,7 +699,7 @@ func TestListSkipsTheLookupForAChartItCouldNotName(t *testing.T) {
 	cs := k8sfake.NewClientset(storedSecret(spec, []byte("unreadable")))
 	index := &stubCharts{versions: map[string]string{}}
 
-	got, err := newService(cs, index, []charts.Repo{{URL: "https://one.example.com"}}).List(context.Background())
+	got, err := newService(cs, index, entriesOf("https://one.example.com")).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -699,7 +717,7 @@ func TestListIgnoresARepositoryWithNothingForThatChart(t *testing.T) {
 	index := &stubCharts{versions: map[string]string{
 		"https://two.example.com|podinfo": "7.0.0",
 	}}
-	repos := []charts.Repo{{URL: "https://one.example.com"}, {URL: "https://two.example.com"}}
+	repos := entriesOf("https://one.example.com", "https://two.example.com")
 
 	got, err := newService(cs, index, repos).List(context.Background())
 	if err != nil {

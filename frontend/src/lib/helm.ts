@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type {
   HelmActionResult,
+  HelmChartVersions,
   HelmReleaseDetail,
   HelmReleases,
   HelmResource,
@@ -11,6 +12,7 @@ import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { failure } from './object';
 import {
   parseHelmActionResult,
+  parseHelmChartVersions,
   parseHelmReleaseDetail,
   parseHelmReleases,
   parseHelmSupport,
@@ -168,6 +170,53 @@ async function runAction(
   });
   if (!response.ok) {
     throw await failure(response, `the release action failed with status ${response.status}`);
+  }
+  return parseHelmActionResult(await response.json());
+}
+
+export async function fetchHelmVersions(chart: string): Promise<HelmChartVersions> {
+  const params = new URLSearchParams({ chart });
+  const response = await request(`/api/helm/versions?${params.toString()}`, {
+    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw await failure(response, `the version lookup failed with status ${response.status}`);
+  }
+  return parseHelmChartVersions(await response.json());
+}
+
+export interface UpgradeArgs {
+  namespace: string;
+  name: string;
+  chart: string;
+  repo: string;
+  version: string;
+  values: string;
+}
+
+export async function upgradeRelease(
+  args: UpgradeArgs,
+  dryRun: boolean,
+  confirm?: string,
+): Promise<HelmActionResult> {
+  const query = new URLSearchParams();
+  if (dryRun) {
+    query.set('dryRun', 'true');
+  }
+  if (confirm !== undefined) {
+    query.set('confirm', confirm);
+  }
+  let suffix = '';
+  if (query.size > 0) {
+    suffix = `?${query.toString()}`;
+  }
+  const response = await request(`/api/helm/upgrade${suffix}`, {
+    method: 'POST',
+    body: JSON.stringify(args),
+    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw await failure(response, `the upgrade failed with status ${response.status}`);
   }
   return parseHelmActionResult(await response.json());
 }

@@ -15,6 +15,7 @@ import { useProtectedCluster } from '../store/contexts';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import CopyButton from './CopyButton';
+import HelmUpgradeDialog from './HelmUpgradeDialog';
 
 const TABS = ['Overview', 'Values', 'Notes', 'Manifest', 'Resources', 'History'] as const;
 
@@ -87,12 +88,14 @@ export default function HelmReleaseDetail({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<'uninstall' | null>(null);
   const [typed, setTyped] = useState<TypedConfirm | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
   const protectedCluster = useProtectedCluster();
   const [failure, setFailure] = useState<string | null>(null);
   const now = useNow();
 
   const helmReady = support?.available === true;
   const helmReason = support?.reason ?? 'checking whether helm is available…';
+  const fluxRef = data?.release.fluxRef ?? release.fluxRef;
 
   async function act(what: 'rollback' | 'uninstall', revision: number) {
     setBusy(true);
@@ -158,6 +161,20 @@ export default function HelmReleaseDetail({
           }}
         />
       )}
+      {upgrading && data !== null && (
+        <HelmUpgradeDialog
+          release={data.release}
+          currentValues={data.values}
+          currentManifest={data.manifest}
+          onClose={() => {
+            setUpgrading(false);
+          }}
+          onUpgraded={() => {
+            onChanged();
+            reload();
+          }}
+        />
+      )}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge px-3 py-1.5">
         <span className="font-semibold text-fg-strong">{release.name}</span>
         <span className="text-fg-muted">{release.namespace}</span>
@@ -175,6 +192,31 @@ export default function HelmReleaseDetail({
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2">
+          {fluxRef !== undefined && (
+            <button
+              type="button"
+              title="Flux manages this release; open its HelmRelease object to change it"
+              onClick={() => {
+                onSelectResource(fluxRef);
+              }}
+              className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+            >
+              Managed by Flux
+            </button>
+          )}
+          {fluxRef === undefined && confirming === null && (
+            <button
+              type="button"
+              disabled={busy || !helmReady || data === null}
+              title={helmReady ? 'Upgrade this release' : helmReason}
+              onClick={() => {
+                setUpgrading(true);
+              }}
+              className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:border-edge disabled:text-fg-faint"
+            >
+              Upgrade
+            </button>
+          )}
           {confirming === null && (
             <button
               type="button"
@@ -224,7 +266,7 @@ export default function HelmReleaseDetail({
       <Announce message={failure} urgent className="px-3 py-1 text-error" />
       {!helmReady && support !== null && (
         <p role="status" className="px-3 py-1 text-warn">
-          Rollback and uninstall need the helm binary: {helmReason}
+          Upgrade, rollback and uninstall need the helm binary: {helmReason}
         </p>
       )}
 
@@ -244,6 +286,12 @@ export default function HelmReleaseDetail({
         <div className="min-h-0 flex-1 overflow-auto">
           {tab === 'Overview' && (
             <div className="space-y-1 p-3">
+              {data.release.fluxRef !== undefined && (
+                <Field
+                  label="Managed by"
+                  value={`Flux · ${data.release.fluxRef.namespace}/${data.release.fluxRef.name}`}
+                />
+              )}
               <Field label="Chart" value={orDash(data.release.chart)} />
               <Field label="Chart version" value={orDash(data.release.chartVersion)} />
               <Field label="App version" value={orDash(data.release.appVersion)} />

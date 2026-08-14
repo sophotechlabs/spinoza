@@ -16,9 +16,11 @@ import type {
   GraphEdge,
   GraphNode,
   HelmActionResult,
+  HelmChartVersions,
   HelmRelease,
   HelmReleaseDetail,
   HelmReleases,
+  HelmRepoVersions,
   HelmResource,
   HelmRevision,
   HelmSupport,
@@ -29,6 +31,7 @@ import type {
   NodeSummary,
   ObjectDetail,
   ObjectPort,
+  ObjectRef,
   OverviewEvent,
   OwnerRef,
   PodOutcome,
@@ -63,6 +66,7 @@ import {
   optionalNumber,
   optionalString,
   recordMap,
+  stringList,
   stringMap,
 } from './wire';
 
@@ -412,6 +416,26 @@ export function parseClusterOverview(body: unknown): ClusterOverview {
   };
 }
 
+function parseObjectRef(item: Record<string, unknown>): ObjectRef {
+  return {
+    group: asString(item.group),
+    version: asString(item.version),
+    resource: asString(item.resource),
+    namespace: asString(item.namespace),
+    name: asString(item.name),
+  };
+}
+
+function optionalObjectRef(value: unknown): ObjectRef | undefined {
+  if (value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'object') {
+    return undefined;
+  }
+  return parseObjectRef(asRecord(value));
+}
+
 function parseHelmRelease(item: Record<string, unknown>): HelmRelease {
   return {
     name: asString(item.name),
@@ -425,6 +449,7 @@ function parseHelmRelease(item: Record<string, unknown>): HelmRelease {
     status: asString(item.status),
     updated: asString(item.updated),
     description: optionalString(item.description),
+    fluxRef: optionalObjectRef(item.fluxRef),
   };
 }
 
@@ -481,6 +506,26 @@ export function parseHelmActionResult(body: unknown): HelmActionResult {
     action: asString(item.action),
     message: asString(item.message),
     revision: optionalNumber(item.revision),
+    dryRun: optionalBoolean(item.dryRun),
+    manifest: optionalString(item.manifest),
+  };
+}
+
+function parseHelmRepoVersions(item: Record<string, unknown>): HelmRepoVersions {
+  return {
+    name: optionalString(item.name),
+    url: asString(item.url),
+    oci: optionalBoolean(item.oci),
+    versions: stringList(item.versions),
+  };
+}
+
+export function parseHelmChartVersions(body: unknown): HelmChartVersions {
+  const item = asRecord(body);
+  return {
+    chart: asString(item.chart),
+    repos: listOf(item.repos, parseHelmRepoVersions),
+    error: optionalString(item.error),
   };
 }
 

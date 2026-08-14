@@ -29,6 +29,10 @@ type stubViews struct {
 	rollbacks  []int64
 	uninstalls []string
 	calls      int
+
+	versions      api.HelmChartVersions
+	versionsAsked []string
+	upgrades      []helm.UpgradeRequest
 }
 
 func (s *stubViews) HelmRelease(_ context.Context, namespace, name string) (api.HelmReleaseDetail, error) {
@@ -59,6 +63,22 @@ func (s *stubViews) HelmUninstall(_ context.Context, _, name string) (api.HelmAc
 		return api.HelmActionResult{}, s.actionErr
 	}
 	return s.action, nil
+}
+
+func (s *stubViews) HelmUpgrade(_ context.Context, req helm.UpgradeRequest) (api.HelmActionResult, error) {
+	s.upgrades = append(s.upgrades, req)
+	if s.actionErr != nil {
+		return api.HelmActionResult{}, s.actionErr
+	}
+	return s.action, nil
+}
+
+func (s *stubViews) HelmVersions(_ context.Context, chart string) (api.HelmChartVersions, error) {
+	s.versionsAsked = append(s.versionsAsked, chart)
+	if s.helmErr != nil {
+		return api.HelmChartVersions{}, s.helmErr
+	}
+	return s.versions, nil
 }
 
 func (s *stubViews) Overview(context.Context) api.ClusterOverview {

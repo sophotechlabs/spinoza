@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +44,7 @@ type Cache struct {
 	wg     sync.WaitGroup
 
 	mu       sync.Mutex
-	versions map[key]string
+	lists    map[key][]string
 	fetched  map[key]time.Time
 	inflight map[key]bool
 }
@@ -54,7 +55,7 @@ func New(ctx context.Context, client *http.Client, ttl time.Duration) *Cache {
 		client:   publicOnly(client),
 		ttl:      ttl,
 		now:      time.Now,
-		versions: map[key]string{},
+		lists:    map[key][]string{},
 		fetched:  map[key]time.Time{},
 		inflight: map[key]bool{},
 	}
@@ -72,14 +73,35 @@ func publicOnly(client *http.Client) *http.Client {
 }
 
 func CheckRepoURL(raw string) error {
-	parsed, err := url.Parse(raw)
+	parsed, err := fetchableURL(raw)
 	if err != nil {
-		return fmt.Errorf("repository url %q: %w", raw, err)
-	}
-	if !fetchableScheme(parsed.Scheme) {
-		return fmt.Errorf("repository url %q: spinoza fetches http, https and oci only", raw)
+		return err
 	}
 	return checkHost(parsed.Hostname())
+}
+
+func CheckFetchable(raw string) error {
+	_, err := fetchableURL(raw)
+	return err
+}
+
+func fetchableURL(raw string) (*url.URL, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("repository url %q: %w", raw, err)
+	}
+	if !fetchableScheme(parsed.Scheme) {
+		return nil, fmt.Errorf("repository url %q: spinoza fetches http, https and oci only", raw)
+	}
+	if parsed.Host == "" {
+		return nil, errors.New("repository url has no host")
+	}
+	return parsed, nil
+}
+
+func ValidVersion(version string) bool {
+	_, err := semver.NewVersion(ociTagToSemver(version))
+	return err == nil
 }
 
 func fetchableScheme(scheme string) bool {
@@ -129,7 +151,38 @@ func routableIP(ip net.IP) bool {
 func (c *Cache) Latest(repo Repo, chart string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.versions[key{repo: repo, chart: chart}]
+	list := c.lists[key{repo: repo, chart: chart}]
+	if len(list) == 0 {
+		return ""
+	}
+	return list[0]
+}
+
+func (c *Cache) Versions(ctx context.Context, repo Repo, chart string) ([]string, error) {
+	unit := fetchUnit(repo, chart)
+	entry := key{repo: repo, chart: chart}
+
+	c.mu.Lock()
+	last, seen := c.fetched[unit]
+	if seen && c.now().Sub(last) < c.ttl {
+		cached := slices.Clone(c.lists[entry])
+		c.mu.Unlock()
+		return cached, nil
+	}
+	c.mu.Unlock()
+
+	found, err := c.Resolve(ctx, repo, chart)
+	if err != nil {
+		return nil, err
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.fetched[unit] = c.now()
+	for name, list := range found {
+		c.lists[key{repo: repo, chart: name}] = list
+	}
+	return slices.Clone(c.lists[entry]), nil
 }
 
 func (c *Cache) Warm(repo Repo, chart string) {
@@ -176,19 +229,19 @@ func (c *Cache) refresh(unit key, repo Repo, chart string) {
 	if err != nil {
 		return
 	}
-	for name, version := range found {
-		c.versions[key{repo: repo, chart: name}] = version
+	for name, list := range found {
+		c.lists[key{repo: repo, chart: name}] = list
 	}
 }
 
-func (c *Cache) Resolve(ctx context.Context, repo Repo, chart string) (map[string]string, error) {
+func (c *Cache) Resolve(ctx context.Context, repo Repo, chart string) (map[string][]string, error) {
 	if repo.OCI {
 		return c.resolveOCI(ctx, repo, chart)
 	}
 	return c.resolveIndex(ctx, repo)
 }
 
-func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (map[string]string, error) {
+func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (map[string][]string, error) {
 	endpoint := strings.TrimSuffix(repo.URL, "/") + "/" + indexFilename
 	body, err := c.get(ctx, endpoint, "")
 	if err != nil {
@@ -206,21 +259,21 @@ func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (map[string]string,
 		return nil, fmt.Errorf("parse %s: %w", endpoint, decodeErr)
 	}
 
-	out := map[string]string{}
+	out := map[string][]string{}
 	for name, releases := range doc.Entries {
 		raw := make([]string, 0, len(releases))
 		for _, release := range releases {
 			raw = append(raw, release.Version)
 		}
-		latest := maxVersion(raw)
-		if latest != "" {
-			out[name] = latest
+		sorted := sortVersions(raw)
+		if len(sorted) > 0 {
+			out[name] = sorted
 		}
 	}
 	return out, nil
 }
 
-func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[string]string, error) {
+func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[string][]string, error) {
 	host, path, err := splitOCI(repo.URL)
 	if err != nil {
 		return nil, err
@@ -241,11 +294,11 @@ func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[st
 		return nil, fmt.Errorf("parse tags for %s: %w", endpoint, decodeErr)
 	}
 
-	latest := maxVersion(doc.Tags)
-	if latest == "" {
-		return map[string]string{}, nil
+	sorted := sortVersions(doc.Tags)
+	if len(sorted) == 0 {
+		return map[string][]string{}, nil
 	}
-	return map[string]string{chart: latest}, nil
+	return map[string][]string{chart: sorted}, nil
 }
 
 func (c *Cache) get(ctx context.Context, endpoint, token string) (io.ReadCloser, error) {
@@ -399,9 +452,13 @@ func fetchUnit(repo Repo, chart string) key {
 	return key{repo: repo}
 }
 
-func maxVersion(raw []string) string {
-	best := ""
-	var bestParsed *semver.Version
+type sortable struct {
+	original string
+	parsed   *semver.Version
+}
+
+func sortVersions(raw []string) []string {
+	entries := make([]sortable, 0, len(raw))
 	for _, candidate := range raw {
 		parsed, err := semver.NewVersion(ociTagToSemver(candidate))
 		if err != nil {
@@ -410,13 +467,16 @@ func maxVersion(raw []string) string {
 		if parsed.Prerelease() != "" {
 			continue
 		}
-		if bestParsed != nil && !parsed.GreaterThan(bestParsed) {
-			continue
-		}
-		bestParsed = parsed
-		best = candidate
+		entries = append(entries, sortable{original: candidate, parsed: parsed})
 	}
-	return best
+	slices.SortStableFunc(entries, func(a, b sortable) int {
+		return b.parsed.Compare(a.parsed)
+	})
+	out := make([]string, 0, len(entries))
+	for _, item := range entries {
+		out = append(out, item.original)
+	}
+	return out
 }
 
 func ociTagToSemver(tag string) string {

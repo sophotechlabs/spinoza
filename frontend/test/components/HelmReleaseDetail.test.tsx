@@ -6,6 +6,29 @@ import HelmReleaseDetail from '../../src/components/HelmReleaseDetail';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 
+vi.mock('../../src/components/HelmUpgradeDialog', () => ({
+  default: ({
+    release: releaseProp,
+    currentValues,
+    onClose,
+    onUpgraded,
+  }: {
+    release: HelmRelease;
+    currentValues: string;
+    onClose: () => void;
+    onUpgraded: () => void;
+  }) => (
+    <div data-testid="upgrade-dialog" data-release={releaseProp.name} data-values={currentValues}>
+      <button type="button" onClick={onUpgraded}>
+        finish-upgrade
+      </button>
+      <button type="button" onClick={onClose}>
+        close-upgrade
+      </button>
+    </div>
+  ),
+}));
+
 const release: HelmRelease = {
   name: 'podinfo',
   namespace: 'demo',
@@ -262,12 +285,59 @@ describe('HelmReleaseDetail', () => {
     expect(calls.some((call) => call.url.startsWith('/api/helm/action'))).toBe(false);
   });
 
-  it('disables both actions when helm is missing and says why', async () => {
+  it('disables the actions when helm is missing and says why', async () => {
     stub({ support: { available: false, reason: 'helm was not found on PATH', binary: 'helm' } });
     renderDetail();
 
     expect(await screen.findByText(/helm was not found on PATH/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Uninstall' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Upgrade' })).toBeDisabled();
+  });
+
+  it('opens the upgrade dialog seeded with the loaded release', async () => {
+    const user = userEvent.setup();
+    const calls = stub();
+    const { onChanged } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'Upgrade' }));
+
+    const dialog = screen.getByTestId('upgrade-dialog');
+    expect(dialog.dataset.release).toBe('podinfo');
+    expect(dialog.dataset.values).toBe('replicaCount: 2\n');
+
+    const before = calls.filter((call) => call.url.startsWith('/api/helm/release')).length;
+    await user.click(screen.getByRole('button', { name: 'finish-upgrade' }));
+
+    expect(onChanged).toHaveBeenCalled();
+    await waitFor(() => {
+      const after = calls.filter((call) => call.url.startsWith('/api/helm/release')).length;
+      expect(after).toBe(before + 1);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'close-upgrade' }));
+    expect(screen.queryByTestId('upgrade-dialog')).not.toBeInTheDocument();
+  });
+
+  it('swaps the upgrade button for the flux owner', async () => {
+    const user = userEvent.setup();
+    const fluxRef = {
+      group: 'helm.toolkit.fluxcd.io',
+      version: 'v2',
+      resource: 'helmreleases',
+      namespace: 'demo',
+      name: 'podinfo',
+    };
+    stub({ detail: detail({ release: { ...release, fluxRef } }) });
+    const { onSelectResource } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    expect(screen.queryByRole('button', { name: 'Upgrade' })).not.toBeInTheDocument();
+    expect(screen.getByText('Flux · demo/podinfo')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Managed by Flux' }));
+
+    expect(onSelectResource).toHaveBeenCalledWith(fluxRef);
   });
 
   it('surfaces a failed action without closing', async () => {

@@ -14,6 +14,7 @@ import {
   optionalNumber,
   optionalString,
   recordMap,
+  stringList,
   stringMap,
 } from '../../src/lib/wire';
 
@@ -145,5 +146,20 @@ describe('optionalNumberMap', () => {
 
   it('drops entries that are not finite numbers', () => {
     expect(optionalNumberMap({ a: 1, b: 'two', c: Number.NaN })).toEqual({ a: 1 });
+  });
+});
+
+describe('stringList', () => {
+  it('keeps the strings in order', () => {
+    expect(stringList(['6.15.1', '6.14.0'])).toEqual(['6.15.1', '6.14.0']);
+  });
+
+  it('drops entries that are not strings', () => {
+    expect(stringList(['a', 1, null, 'b'])).toEqual(['a', 'b']);
+  });
+
+  it('reads anything that is not a list as empty', () => {
+    expect(stringList(undefined)).toEqual([]);
+    expect(stringList('6.15.1')).toEqual([]);
   });
 });

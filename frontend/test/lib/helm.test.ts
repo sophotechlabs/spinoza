@@ -4,9 +4,11 @@ import {
   fetchHelmRelease,
   fetchHelmReleases,
   fetchHelmSupport,
+  fetchHelmVersions,
   refOf,
   rollbackRelease,
   uninstallRelease,
+  upgradeRelease,
   useHelmRelease,
   useHelmSupport,
   latestColor,
@@ -335,6 +337,116 @@ describe('acting on a release', () => {
     await expect(rollbackRelease('demo', 'podinfo', 1)).rejects.toThrow(
       'the release action failed with status 502',
     );
+  });
+});
+
+describe('looking up chart versions', () => {
+  it('asks for the chart and parses the grouped versions', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          chart: 'podinfo',
+          repos: [{ name: 'podinfo', url: 'https://example.com', versions: ['6.15.1', '6.14.0'] }],
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await fetchHelmVersions('podinfo');
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/api/helm/versions?chart=podinfo');
+    expect(got.repos[0].versions).toEqual(['6.15.1', '6.14.0']);
+  });
+
+  it('carries the failure the server reports', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ message: 'chart is required' }),
+      }),
+    );
+
+    await expect(fetchHelmVersions('podinfo')).rejects.toThrow('chart is required');
+  });
+});
+
+describe('upgrading a release', () => {
+  const args = {
+    namespace: 'demo',
+    name: 'podinfo',
+    chart: 'podinfo',
+    repo: 'https://example.com',
+    version: '6.15.1',
+    values: 'replicaCount: 2\n',
+  };
+
+  it('posts the upgrade as a json body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'upgrade', message: 'upgraded' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await upgradeRelease(args, false);
+
+    const call = fetchMock.mock.calls[0] as [string, { method: string; body: string }];
+    expect(call[0]).toBe('/api/helm/upgrade');
+    expect(call[1].method).toBe('POST');
+    expect(JSON.parse(call[1].body)).toEqual(args);
+    expect(got.message).toBe('upgraded');
+  });
+
+  it('asks for a dry run in the query', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ action: 'upgrade', dryRun: true, manifest: 'kind: ConfigMap\n' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await upgradeRelease(args, true);
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/api/helm/upgrade?dryRun=true');
+    expect(got.dryRun).toBe(true);
+    expect(got.manifest).toBe('kind: ConfigMap\n');
+  });
+
+  it('carries the typed confirmation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'upgrade', message: 'upgraded' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await upgradeRelease(args, false, 'podinfo');
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/api/helm/upgrade?confirm=podinfo');
+  });
+
+  it('carries the failure the server reports', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ message: 'managed by flux' }),
+      }),
+    );
+
+    await expect(upgradeRelease(args, false)).rejects.toThrow('managed by flux');
+  });
+
+  it('falls back to the status when the body says nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 502, json: () => Promise.reject(new Error()) }),
+    );
+
+    await expect(upgradeRelease(args, false)).rejects.toThrow('the upgrade failed with status 502');
   });
 });
 

@@ -47,7 +47,12 @@ func configHome() string {
 	return filepath.Join(home, ".config")
 }
 
-func Repositories(path string) []charts.Repo {
+type RepoEntry struct {
+	Name string
+	Repo charts.Repo
+}
+
+func Repositories(path string) []RepoEntry {
 	if path == "" {
 		return nil
 	}
@@ -60,12 +65,13 @@ func Repositories(path string) []charts.Repo {
 	if unmarshalErr != nil {
 		return nil
 	}
-	out := make([]charts.Repo, 0, len(parsed.Repositories))
+	out := make([]RepoEntry, 0, len(parsed.Repositories))
 	for _, entry := range parsed.Repositories {
 		if entry.URL == "" {
 			continue
 		}
-		out = append(out, charts.Repo{URL: entry.URL, OCI: strings.HasPrefix(entry.URL, "oci://")})
+		repo := charts.Repo{URL: entry.URL, OCI: strings.HasPrefix(entry.URL, "oci://")}
+		out = append(out, RepoEntry{Name: entry.Name, Repo: repo})
 	}
 	return out
 }

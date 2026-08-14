@@ -12,6 +12,9 @@ import {
   parseForward,
   parseForwards,
   parseGraph,
+  parseHelmActionResult,
+  parseHelmChartVersions,
+  parseHelmReleases,
   parseMetricHistory,
   parseMetrics,
   parseObjectDetail,
@@ -260,5 +263,80 @@ describe('the remaining action payloads', () => {
       true,
     );
     expect(parseDebugSupport({ allowed: true, image: 'busybox' }).allowed).toBe(true);
+  });
+});
+
+describe('the helm upgrade payloads', () => {
+  it('parses a release with its flux owner', () => {
+    const got = parseHelmReleases({
+      releases: [
+        {
+          name: 'podinfo',
+          namespace: 'demo',
+          chart: 'podinfo',
+          chartVersion: '6.9.2',
+          appVersion: '6.9.2',
+          revision: 1,
+          status: 'deployed',
+          updated: '2026-08-11T09:30:00Z',
+          fluxRef: {
+            group: 'helm.toolkit.fluxcd.io',
+            version: 'v2',
+            resource: 'helmreleases',
+            namespace: 'demo',
+            name: 'podinfo',
+          },
+        },
+      ],
+    });
+
+    expect(got.releases[0].fluxRef).toEqual({
+      group: 'helm.toolkit.fluxcd.io',
+      version: 'v2',
+      resource: 'helmreleases',
+      namespace: 'demo',
+      name: 'podinfo',
+    });
+  });
+
+  it('leaves the owner absent for a hand-installed release', () => {
+    const got = parseHelmReleases({
+      releases: [{ name: 'podinfo', namespace: 'demo', fluxRef: null }],
+    });
+
+    expect(got.releases[0].fluxRef).toBeUndefined();
+  });
+
+  it('parses a dry-run result with its manifest', () => {
+    const got = parseHelmActionResult({
+      action: 'upgrade',
+      message: 'server render of podinfo 6.15.1',
+      dryRun: true,
+      manifest: 'kind: ConfigMap\n',
+    });
+
+    expect(got.dryRun).toBe(true);
+    expect(got.manifest).toBe('kind: ConfigMap\n');
+  });
+
+  it('parses the grouped chart versions', () => {
+    const got = parseHelmChartVersions({
+      chart: 'podinfo',
+      repos: [
+        { name: 'podinfo', url: 'https://example.com', versions: ['6.15.1', '6.14.0'] },
+        { url: 'oci://ghcr.io/acme/charts', oci: true, versions: ['1.0.0'] },
+      ],
+      error: 'one repo failed',
+    });
+
+    expect(got.chart).toBe('podinfo');
+    expect(got.repos[0].name).toBe('podinfo');
+    expect(got.repos[0].versions).toEqual(['6.15.1', '6.14.0']);
+    expect(got.repos[1].oci).toBe(true);
+    expect(got.error).toBe('one repo failed');
+  });
+
+  it('reads an empty versions payload', () => {
+    expect(parseHelmChartVersions({})).toEqual({ chart: '', repos: [], error: undefined });
   });
 });

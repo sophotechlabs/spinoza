@@ -37,17 +37,18 @@ var errNotGzip = errors.New("release payload is not gzipped json")
 type Charts interface {
 	Latest(repo charts.Repo, chart string) string
 	Warm(repo charts.Repo, chart string)
+	Versions(ctx context.Context, repo charts.Repo, chart string) ([]string, error)
 }
 
 type Service struct {
 	cs      kubernetes.Interface
 	runner  Runner
 	index   Charts
-	repos   []charts.Repo
+	repos   []RepoEntry
 	kubeRef api.ContextRef
 }
 
-func NewService(cs kubernetes.Interface, runner Runner, index Charts, repos []charts.Repo, kubeRef api.ContextRef) *Service {
+func NewService(cs kubernetes.Interface, runner Runner, index Charts, repos []RepoEntry, kubeRef api.ContextRef) *Service {
 	return &Service{cs: cs, runner: runner, index: index, repos: repos, kubeRef: kubeRef}
 }
 
@@ -104,9 +105,9 @@ func (s *Service) addLatest(releases []api.HelmRelease) {
 			continue
 		}
 		newest := ""
-		for _, repo := range s.repos {
-			s.index.Warm(repo, release.Chart)
-			newest = pick(newest, s.index.Latest(repo, release.Chart))
+		for _, entry := range s.repos {
+			s.index.Warm(entry.Repo, release.Chart)
+			newest = pick(newest, s.index.Latest(entry.Repo, release.Chart))
 		}
 		release.Latest = newest
 		release.Outdated = charts.Newer(release.ChartVersion, newest)

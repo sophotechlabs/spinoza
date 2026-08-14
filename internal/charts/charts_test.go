@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -61,12 +62,20 @@ func TestResolveIndexPicksTheHighestStableVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if found["podinfo"] != "6.15.1" {
-		t.Fatalf("podinfo = %q, want 6.15.1 (prerelease 6.16.0-rc.1 must be skipped)", found["podinfo"])
+	if newest(found, "podinfo") != "6.15.1" {
+		t.Fatalf("podinfo = %q, want 6.15.1 (prerelease 6.16.0-rc.1 must be skipped)", newest(found, "podinfo"))
 	}
-	if found["other"] != "1.2.3" {
-		t.Fatalf("other = %q, want 1.2.3", found["other"])
+	if newest(found, "other") != "1.2.3" {
+		t.Fatalf("other = %q, want 1.2.3", newest(found, "other"))
 	}
+}
+
+func newest(found map[string][]string, chart string) string {
+	list := found[chart]
+	if len(list) == 0 {
+		return ""
+	}
+	return list[0]
 }
 
 func TestResolveIndexTrimsTrailingSlash(t *testing.T) {
@@ -206,8 +215,8 @@ func TestResolveOCIFollowsTheBearerChallenge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if found["keycloak"] != "0.22.0" {
-		t.Fatalf("keycloak = %q, want 0.22.0", found["keycloak"])
+	if newest(found, "keycloak") != "0.22.0" {
+		t.Fatalf("keycloak = %q, want 0.22.0", newest(found, "keycloak"))
 	}
 	if tokens != 1 {
 		t.Fatalf("token requests = %d, want 1", tokens)
@@ -305,8 +314,8 @@ func TestResolveOCIAcceptsAccessToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if found["keycloak"] != "1.0.0" {
-		t.Fatalf("keycloak = %q", found["keycloak"])
+	if newest(found, "keycloak") != "1.0.0" {
+		t.Fatalf("keycloak = %q", newest(found, "keycloak"))
 	}
 }
 
@@ -471,8 +480,8 @@ func TestARedirectToAPublicHostIsFollowed(t *testing.T) {
 		t.Fatalf("resolve: %v", err)
 	}
 
-	if found["podinfo"] != "6.15.1" {
-		t.Fatalf("podinfo = %q", found["podinfo"])
+	if newest(found, "podinfo") != "6.15.1" {
+		t.Fatalf("podinfo = %q", newest(found, "podinfo"))
 	}
 }
 
@@ -525,8 +534,8 @@ func TestABearerRealmOnASiblingOfTheRegistryIsAllowed(t *testing.T) {
 		t.Fatalf("resolve: %v", err)
 	}
 
-	if found["keycloak"] != "1.0.0" {
-		t.Fatalf("keycloak = %q", found["keycloak"])
+	if newest(found, "keycloak") != "1.0.0" {
+		t.Fatalf("keycloak = %q", newest(found, "keycloak"))
 	}
 }
 
@@ -618,51 +627,181 @@ func TestParseChallengeIgnoresJunk(t *testing.T) {
 	}
 }
 
-func TestMaxVersionAcceptsAnOCIBuildMetadataTag(t *testing.T) {
-	got := maxVersion([]string{"1.2.0", "1.3.0_20260101", "1.1.0"})
+func TestSortVersionsAcceptsAnOCIBuildMetadataTag(t *testing.T) {
+	got := sortVersions([]string{"1.2.0", "1.3.0_20260101", "1.1.0"})
 
-	if got != "1.3.0_20260101" {
-		t.Fatalf("latest = %q; Helm writes + as _ in an OCI tag, so this one was being dropped", got)
+	want := []string{"1.3.0_20260101", "1.2.0", "1.1.0"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("sorted = %v, want %v; Helm writes + as _ in an OCI tag, so that one was being dropped", got, want)
 	}
 }
 
-func TestMaxVersionKeepsTheTagItWasGiven(t *testing.T) {
-	got := maxVersion([]string{"2.0.0_abc"})
+func TestSortVersionsKeepsTheTagItWasGiven(t *testing.T) {
+	got := sortVersions([]string{"2.0.0_abc"})
 
-	if got != "2.0.0_abc" {
-		t.Fatalf("latest = %q, want the tag as published rather than a rewritten one", got)
+	if !slices.Equal(got, []string{"2.0.0_abc"}) {
+		t.Fatalf("sorted = %v, want the tag as published rather than a rewritten one", got)
 	}
 }
 
-func TestMaxVersionStillSkipsPrereleases(t *testing.T) {
-	got := maxVersion([]string{"1.0.0", "2.0.0-rc.1"})
+func TestSortVersionsStillSkipsPrereleases(t *testing.T) {
+	got := sortVersions([]string{"1.0.0", "2.0.0-rc.1"})
 
-	if got != "1.0.0" {
-		t.Fatalf("latest = %q, want a prerelease left out the way Helm leaves it out", got)
+	if !slices.Equal(got, []string{"1.0.0"}) {
+		t.Fatalf("sorted = %v, want a prerelease left out the way Helm leaves it out", got)
 	}
 }
 
-func TestMaxVersionReportsNothingForAnAllPrereleaseRepo(t *testing.T) {
-	got := maxVersion([]string{"2.0.0-rc.1", "2.0.0-rc.2"})
+func TestSortVersionsReportsNothingForAnAllPrereleaseRepo(t *testing.T) {
+	got := sortVersions([]string{"2.0.0-rc.1", "2.0.0-rc.2"})
 
-	if got != "" {
-		t.Fatalf("latest = %q, want none; suggesting an upgrade to a release candidate is worse than saying nothing", got)
+	if len(got) != 0 {
+		t.Fatalf("sorted = %v, want none; suggesting an upgrade to a release candidate is worse than saying nothing", got)
 	}
 }
 
-func TestMaxVersionSkipsATagThatIsNotSemverEvenAfterTranslation(t *testing.T) {
-	got := maxVersion([]string{"1.0.0_build_2"})
+func TestSortVersionsSkipsATagThatIsNotSemverEvenAfterTranslation(t *testing.T) {
+	got := sortVersions([]string{"1.0.0_build_2"})
 
-	if got != "" {
-		t.Fatalf("latest = %q; underscores are not legal in build metadata, so this is not a version", got)
+	if len(got) != 0 {
+		t.Fatalf("sorted = %v; underscores are not legal in build metadata, so this is not a version", got)
 	}
 }
 
-func TestMaxVersionComparesTranslatedTagsByVersionNotText(t *testing.T) {
-	got := maxVersion([]string{"1.10.0_20260101", "1.9.0_20260102"})
+func TestSortVersionsComparesTranslatedTagsByVersionNotText(t *testing.T) {
+	got := sortVersions([]string{"1.10.0_20260101", "1.9.0_20260102"})
 
-	if got != "1.10.0_20260101" {
-		t.Fatalf("latest = %q, want the higher version rather than the later build stamp", got)
+	want := []string{"1.10.0_20260101", "1.9.0_20260102"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("sorted = %v, want the higher version first rather than the later build stamp", got)
+	}
+}
+
+func TestVersionsReturnsTheSortedListAndCaches(t *testing.T) {
+	hits := 0
+	cache, ts := cacheFor(t, indexHandler(&hits))
+	repo := Repo{URL: ts.URL}
+
+	got, err := cache.Versions(context.Background(), repo, "podinfo")
+	if err != nil {
+		t.Fatalf("versions: %v", err)
+	}
+	want := []string{"6.15.1", "6.14.0", "6.9.0"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("versions = %v, want %v", got, want)
+	}
+
+	again, err := cache.Versions(context.Background(), repo, "podinfo")
+	if err != nil {
+		t.Fatalf("versions again: %v", err)
+	}
+	if !slices.Equal(again, want) {
+		t.Fatalf("versions again = %v, want %v", again, want)
+	}
+	if hits != 1 {
+		t.Fatalf("hits = %d, want the second read served from the cache", hits)
+	}
+}
+
+func TestVersionsRefetchesAfterTheTTL(t *testing.T) {
+	hits := 0
+	cache, ts := cacheFor(t, indexHandler(&hits))
+	repo := Repo{URL: ts.URL}
+
+	_, err := cache.Versions(context.Background(), repo, "podinfo")
+	if err != nil {
+		t.Fatalf("versions: %v", err)
+	}
+	cache.now = func() time.Time { return time.Now().Add(2 * DefaultTTL) }
+	_, err = cache.Versions(context.Background(), repo, "podinfo")
+	if err != nil {
+		t.Fatalf("versions after ttl: %v", err)
+	}
+	if hits != 2 {
+		t.Fatalf("hits = %d, want a refetch once the ttl passed", hits)
+	}
+}
+
+func TestVersionsReportsAFetchFailure(t *testing.T) {
+	cache, _ := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	_, err := cache.Versions(context.Background(), Repo{URL: "https://example.com"}, "podinfo")
+
+	if err == nil {
+		t.Fatal("expected the failed index fetch to surface")
+	}
+}
+
+func TestVersionsForAChartTheRepoDoesNotCarry(t *testing.T) {
+	hits := 0
+	cache, ts := cacheFor(t, indexHandler(&hits))
+
+	got, err := cache.Versions(context.Background(), Repo{URL: ts.URL}, "absent")
+	if err != nil {
+		t.Fatalf("versions: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("versions = %v, want none for a chart the index does not list", got)
+	}
+}
+
+func TestLatestReadsTheFirstCachedVersion(t *testing.T) {
+	hits := 0
+	cache, ts := cacheFor(t, indexHandler(&hits))
+	repo := Repo{URL: ts.URL}
+
+	cache.Warm(repo, "podinfo")
+	cache.Wait()
+
+	if cache.Latest(repo, "podinfo") != "6.15.1" {
+		t.Fatalf("latest = %q, want the newest of the sorted list", cache.Latest(repo, "podinfo"))
+	}
+	if cache.Latest(repo, "absent") != "" {
+		t.Fatalf("latest = %q, want nothing for an unknown chart", cache.Latest(repo, "absent"))
+	}
+}
+
+func TestCheckFetchable(t *testing.T) {
+	cases := []struct {
+		raw string
+		ok  bool
+	}{
+		{"https://charts.example.com", true},
+		{"http://127.0.0.1:8879", true},
+		{"oci://registry.example.com/team", true},
+		{"ftp://charts.example.com", false},
+		{"https://", false},
+		{"://bad", false},
+	}
+	for _, tc := range cases {
+		err := CheckFetchable(tc.raw)
+		if tc.ok && err != nil {
+			t.Fatalf("CheckFetchable(%q) = %v, want it allowed", tc.raw, err)
+		}
+		if !tc.ok && err == nil {
+			t.Fatalf("CheckFetchable(%q) allowed, want it refused", tc.raw)
+		}
+	}
+}
+
+func TestValidVersion(t *testing.T) {
+	cases := []struct {
+		version string
+		ok      bool
+	}{
+		{"6.15.1", true},
+		{"v1.2.3", true},
+		{"1.3.0_20260101", true},
+		{"not-semver", false},
+		{"--repo", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if ValidVersion(tc.version) != tc.ok {
+			t.Fatalf("ValidVersion(%q) = %v, want %v", tc.version, !tc.ok, tc.ok)
+		}
 	}
 }
 

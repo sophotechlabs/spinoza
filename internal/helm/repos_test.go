@@ -31,13 +31,16 @@ repositories:
 	if len(got) != 2 {
 		t.Fatalf("repositories = %d, want 2", len(got))
 	}
-	if got[0].URL != "https://charts.bitnami.com/bitnami" {
-		t.Fatalf("url = %q, want the bitnami index", got[0].URL)
+	if got[0].Repo.URL != "https://charts.bitnami.com/bitnami" {
+		t.Fatalf("url = %q, want the bitnami index", got[0].Repo.URL)
 	}
-	if got[0].OCI {
+	if got[0].Name != "bitnami" {
+		t.Fatalf("name = %q, want the alias helm keeps", got[0].Name)
+	}
+	if got[0].Repo.OCI {
 		t.Fatal("an https repo was marked as oci")
 	}
-	if !got[1].OCI {
+	if !got[1].Repo.OCI {
 		t.Fatal("an oci:// repo was not marked as oci")
 	}
 }

@@ -93,6 +93,16 @@ export function stringMap(value: unknown): Record<string, string> | undefined {
   return out;
 }
 
+export function stringList(value: unknown): string[] {
+  const out: string[] = [];
+  for (const entry of asList(value)) {
+    if (typeof entry === 'string') {
+      out.push(entry);
+    }
+  }
+  return out;
+}
+
 export function listOf<T>(value: unknown, parse: (item: Record<string, unknown>) => T): T[] {
   return asList(value).map((item) => parse(asRecord(item)));
 }

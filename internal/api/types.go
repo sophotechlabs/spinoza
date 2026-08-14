@@ -120,17 +120,18 @@ type ClusterOverview struct {
 }
 
 type HelmRelease struct {
-	Name         string `json:"name"`
-	Namespace    string `json:"namespace"`
-	Chart        string `json:"chart"`
-	ChartVersion string `json:"chartVersion"`
-	AppVersion   string `json:"appVersion"`
-	Latest       string `json:"latest,omitempty"`
-	Outdated     bool   `json:"outdated,omitempty"`
-	Revision     int64  `json:"revision"`
-	Status       string `json:"status"`
-	Updated      string `json:"updated"`
-	Description  string `json:"description,omitempty"`
+	Name         string     `json:"name"`
+	Namespace    string     `json:"namespace"`
+	Chart        string     `json:"chart"`
+	ChartVersion string     `json:"chartVersion"`
+	AppVersion   string     `json:"appVersion"`
+	Latest       string     `json:"latest,omitempty"`
+	Outdated     bool       `json:"outdated,omitempty"`
+	Revision     int64      `json:"revision"`
+	Status       string     `json:"status"`
+	Updated      string     `json:"updated"`
+	Description  string     `json:"description,omitempty"`
+	FluxRef      *ObjectRef `json:"fluxRef,omitempty"`
 }
 
 type HelmReleases struct {
@@ -179,6 +180,21 @@ type HelmActionResult struct {
 	Action   string `json:"action"`
 	Message  string `json:"message"`
 	Revision int64  `json:"revision,omitempty"`
+	DryRun   bool   `json:"dryRun,omitempty"`
+	Manifest string `json:"manifest,omitempty"`
+}
+
+type HelmRepoVersions struct {
+	Name     string   `json:"name,omitempty"`
+	URL      string   `json:"url"`
+	OCI      bool     `json:"oci,omitempty"`
+	Versions []string `json:"versions"`
+}
+
+type HelmChartVersions struct {
+	Chart string             `json:"chart"`
+	Repos []HelmRepoVersions `json:"repos"`
+	Error string             `json:"error,omitempty"`
 }
 
 type Column struct {

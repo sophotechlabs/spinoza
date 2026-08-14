@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/coder/websocket"
@@ -30,7 +31,10 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
-const maxDocBytes = 4 << 20
+const (
+	maxDocBytes = 4 << 20
+	queryTrue   = "true"
+)
 
 type Cluster interface {
 	Manager() Backend
@@ -108,7 +112,9 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/overview", s.handleOverview, false},
 		{http.MethodGet, "/api/helm/support", s.handleHelmSupport, true},
 		{http.MethodGet, "/api/helm/release", s.handleHelmRelease, false},
+		{http.MethodGet, "/api/helm/versions", s.handleHelmVersions, false},
 		{http.MethodPost, "/api/helm/action", s.handleHelmAction, false},
+		{http.MethodPost, "/api/helm/upgrade", s.handleHelmUpgrade, false},
 		{http.MethodGet, "/api/helm", s.handleHelm, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false},
@@ -283,12 +289,23 @@ func statusFor(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, jsonschema.ErrNoSchema):
 		return http.StatusNotFound
+	case errors.Is(err, helm.ErrNoRelease):
+		return http.StatusNotFound
+	case errors.Is(err, helm.ErrFluxManaged):
+		return http.StatusConflict
 	case cannotReachCluster(err):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, context.DeadlineExceeded):
 		return http.StatusGatewayTimeout
 	case errors.Is(err, context.Canceled):
 		return http.StatusServiceUnavailable
+	default:
+		return kubeStatusFor(err)
+	}
+}
+
+func kubeStatusFor(err error) int {
+	switch {
 	case apierrors.IsNotFound(err):
 		return http.StatusNotFound
 	case apierrors.IsConflict(err):
@@ -328,11 +345,11 @@ func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) setProtection(w http.ResponseWriter, r *http.Request) {
 	wanted := r.URL.Query().Get("protected")
-	if wanted != "true" && wanted != "false" {
+	if wanted != queryTrue && wanted != "false" {
 		writeError(w, http.StatusBadRequest, "protected must be true or false")
 		return
 	}
-	err := s.cluster.Protect(wanted == "true")
+	err := s.cluster.Protect(wanted == queryTrue)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -455,6 +472,64 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 	s.finishHelmAction(w, rolled, rollErr)
 }
 
+func (s *Server) handleHelmVersions(w http.ResponseWriter, r *http.Request) {
+	chart := r.URL.Query().Get("chart")
+	if chart == "" {
+		writeError(w, http.StatusBadRequest, "chart is required")
+		return
+	}
+	found, err := s.manager().HelmVersions(r.Context(), chart)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, found)
+}
+
+type helmUpgradeBody struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Chart     string `json:"chart"`
+	Repo      string `json:"repo"`
+	Version   string `json:"version"`
+	Values    string `json:"values"`
+}
+
+func (s *Server) handleHelmUpgrade(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxDocBytes))
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	var dto helmUpgradeBody
+	unmarshalErr := json.Unmarshal(body, &dto)
+	if unmarshalErr != nil {
+		writeError(w, http.StatusBadRequest, "the upgrade request must be json: "+unmarshalErr.Error())
+		return
+	}
+	if dto.Namespace == "" || dto.Name == "" || dto.Chart == "" || dto.Repo == "" || dto.Version == "" {
+		writeError(w, http.StatusBadRequest, "namespace, name, chart, repo and version are required")
+		return
+	}
+	dryRun := r.URL.Query().Get("dryRun") == queryTrue
+	if !dryRun && s.unconfirmed(r, dto.Name) {
+		refuseUnconfirmed(w, dto.Name)
+		return
+	}
+	req := helm.UpgradeRequest{
+		Namespace: dto.Namespace,
+		Name:      dto.Name,
+		Chart:     dto.Chart,
+		Version:   dto.Version,
+		RepoURL:   dto.Repo,
+		OCI:       strings.HasPrefix(dto.Repo, "oci://"),
+		Values:    dto.Values,
+		DryRun:    dryRun,
+	}
+	result, upgradeErr := s.manager().HelmUpgrade(r.Context(), req)
+	s.finishHelmAction(w, result, upgradeErr)
+}
+
 func (s *Server) finishHelmAction(w http.ResponseWriter, result api.HelmActionResult, err error) {
 	if err != nil {
 		writeAPIError(w, err)
@@ -569,8 +644,8 @@ func actionRequest(r *http.Request) (actions.Request, error) {
 	req := actions.Request{
 		Ref:    ref,
 		Action: actions.Action(query.Get("action")),
-		Force:  query.Get("force") == "true",
-		DryRun: query.Get("dryRun") == "true",
+		Force:  query.Get("force") == queryTrue,
+		DryRun: query.Get("dryRun") == queryTrue,
 	}
 	replicas := query.Get("replicas")
 	if req.Action != actions.Scale {
