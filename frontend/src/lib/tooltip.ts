@@ -44,7 +44,9 @@ export function releaseTitle(host: HTMLElement | null): void {
   if (title === null) {
     return;
   }
-  host.setAttribute('title', title);
+  if (host.getAttribute('title') === null) {
+    host.setAttribute('title', title);
+  }
   host.removeAttribute(TOOLTIP_ATTRIBUTE);
   host.removeAttribute('aria-describedby');
 }

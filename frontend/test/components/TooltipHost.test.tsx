@@ -198,4 +198,79 @@ describe('TooltipHost', () => {
 
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
+
+  it('follows a title the app rewrites while the tooltip is open', async () => {
+    render(<TooltipHost />);
+    const host = withTitle('Click to lift that.');
+
+    fireEvent.mouseOver(host);
+    settle(TOOLTIP_DELAY_MS);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Click to lift that.');
+
+    host.setAttribute('title', 'Click to ask for its name first.');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Click to ask for its name first.');
+  });
+
+  it('opens with the title the app rewrote during the delay', async () => {
+    render(<TooltipHost />);
+    const host = withTitle('Click to lift that.');
+
+    fireEvent.mouseOver(host);
+    host.setAttribute('title', 'Click to ask for its name first.');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    settle(TOOLTIP_DELAY_MS);
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Click to ask for its name first.');
+  });
+
+  it('leaves a rewritten title in place when the pointer leaves', async () => {
+    render(<TooltipHost />);
+    const host = withTitle('Click to lift that.');
+
+    fireEvent.mouseOver(host);
+    settle(TOOLTIP_DELAY_MS);
+    host.setAttribute('title', 'Click to ask for its name first.');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.mouseOut(host);
+
+    expect(host.getAttribute('title')).toBe('Click to ask for its name first.');
+  });
+
+  it('stops watching a host once the pointer has left it', async () => {
+    render(<TooltipHost />);
+    const host = withTitle('Click to lift that.');
+
+    fireEvent.mouseOver(host);
+    settle(TOOLTIP_DELAY_MS);
+    fireEvent.mouseOut(host);
+    host.setAttribute('title', 'Click to ask for its name first.');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(host.getAttribute('data-tooltip')).toBeNull();
+  });
+
+  it('keeps the last words when the app empties the title', async () => {
+    render(<TooltipHost />);
+    const host = withTitle('Click to lift that.');
+
+    fireEvent.mouseOver(host);
+    settle(TOOLTIP_DELAY_MS);
+    host.setAttribute('title', '');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Click to lift that.');
+  });
 });

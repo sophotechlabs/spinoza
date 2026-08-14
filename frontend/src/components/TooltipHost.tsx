@@ -6,21 +6,49 @@ export default function TooltipHost() {
   const [target, setTarget] = useState<TooltipTarget | null>(null);
   const [placement, setPlacement] = useState<TooltipPlacement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
+  const shown = useRef(false);
   const tipId = useId();
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let held: HTMLElement | null = null;
+    let watcher: MutationObserver | null = null;
+    let label = '';
 
     function cancel() {
       if (timer !== null) {
         clearTimeout(timer);
         timer = null;
       }
+      if (watcher !== null) {
+        watcher.disconnect();
+        watcher = null;
+      }
       releaseTitle(held);
       held = null;
+      label = '';
+      shown.current = false;
       setTarget(null);
       setPlacement(null);
+    }
+
+    function show(host: HTMLElement) {
+      shown.current = true;
+      setTarget({ label, rect: host.getBoundingClientRect() });
+    }
+
+    function watch(host: HTMLElement) {
+      watcher = new MutationObserver(() => {
+        const next = claimTitle(host, tipId);
+        if (next === '') {
+          return;
+        }
+        label = next;
+        if (shown.current) {
+          show(host);
+        }
+      });
+      watcher.observe(host, { attributes: true, attributeFilter: ['title'] });
     }
 
     function open(node: EventTarget | null, delay: number) {
@@ -29,13 +57,14 @@ export default function TooltipHost() {
         return;
       }
       cancel();
-      const label = claimTitle(host, tipId);
+      label = claimTitle(host, tipId);
       if (label === '') {
         return;
       }
       held = host;
+      watch(host);
       timer = setTimeout(() => {
-        setTarget({ label, rect: host.getBoundingClientRect() });
+        show(host);
       }, delay);
     }
 
