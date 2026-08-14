@@ -1,6 +1,7 @@
 import type { ConnectionStatus } from '../lib/feed';
-import type { View } from '../lib/types';
+import type { ObjectRef, View } from '../lib/types';
 import ContextPicker from './ContextPicker';
+import NotificationsMenu from './NotificationsMenu';
 import ProtectionToggle from './ProtectionToggle';
 import Wordmark from './Wordmark';
 
@@ -11,6 +12,7 @@ interface TopBarProps {
   onContextChanged?: () => void;
   onOpenPalette?: () => void;
   onOpenSettings?: () => void;
+  onSelectObject?: (ref: ObjectRef) => void;
 }
 
 function statusColor(status: ConnectionStatus): string {
@@ -30,6 +32,7 @@ export default function TopBar({
   onContextChanged,
   onOpenPalette,
   onOpenSettings,
+  onSelectObject,
 }: TopBarProps) {
   function handlePalette() {
     if (onOpenPalette) {
@@ -40,6 +43,12 @@ export default function TopBar({
   function handleSettings() {
     if (onOpenSettings) {
       onOpenSettings();
+    }
+  }
+
+  function handleSelectObject(target: ObjectRef) {
+    if (onSelectObject) {
+      onSelectObject(target);
     }
   }
 
@@ -90,6 +99,7 @@ export default function TopBar({
         >
           Reconnect
         </button>
+        <NotificationsMenu onSelectObject={handleSelectObject} />
         <button
           type="button"
           aria-label="Settings"

@@ -33,6 +33,7 @@ import { useNow } from '../lib/useNow';
 import { ago } from '../lib/time';
 import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
 import { FILTER_INPUT_ID } from '../lib/hotkeys';
+import { opensRow } from '../lib/rowClick';
 import { columnLabel, readTableState, tableKey, writeTableState } from '../lib/tableState';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
@@ -148,7 +149,7 @@ function ariaSort(dir: false | SortDirection): 'ascending' | 'descending' | 'non
 }
 
 function rowClass(selected: boolean): string {
-  const base = 'border-b border-edge';
+  const base = 'cursor-pointer border-b border-edge';
   if (selected) {
     return `${base} bg-surface-active`;
   }
@@ -376,6 +377,13 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     overscan: 12,
   });
 
+  function openRow(row: Row, target: EventTarget | null) {
+    if (!opensRow(target)) {
+      return;
+    }
+    onSelect(row);
+  }
+
   const virtualItems = virtualizer.getVirtualItems();
   let paddingTop = 0;
   let paddingBottom = 0;
@@ -551,6 +559,15 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
                   key={row.id}
                   className={rowClass(row.original.uid === selectedUid)}
                   style={{ height: `${ROW_HEIGHT}px` }}
+                  onClick={(event) => {
+                    openRow(row.original, event.target);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') {
+                      return;
+                    }
+                    openRow(row.original, event.target);
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td

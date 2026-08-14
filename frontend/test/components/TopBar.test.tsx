@@ -2,6 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
+import type { ObjectRef } from '../../src/lib/types';
+import { notifyOk, useToastsStore } from '../../src/store/toasts';
+
+const podRef: ObjectRef = {
+  group: '',
+  version: 'v1',
+  resource: 'pods',
+  namespace: 'prod',
+  name: 'web-0',
+};
 
 vi.mock('../../src/components/ContextPicker', () => ({
   default: ({ onSwitched }: { onSwitched: () => void }) => (
@@ -125,5 +135,30 @@ describe('the top bar entry points', () => {
     await user.click(screen.getByRole('button', { name: /Search/ }));
 
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  it('opens the object behind a notification the bell lists', async () => {
+    const user = userEvent.setup();
+    const onSelectObject = vi.fn();
+    useToastsStore.getState().clear();
+    notifyOk('Deleted Pod web-0', podRef);
+    render(<TopBar status="connected" onSelectObject={onSelectObject} />);
+
+    await user.click(screen.getByLabelText('Notifications'));
+    await user.click(screen.getByRole('button', { name: 'pods/prod/web-0' }));
+
+    expect(onSelectObject).toHaveBeenCalledWith(podRef);
+  });
+
+  it('takes a notification click quietly when nothing is wired to it', async () => {
+    const user = userEvent.setup();
+    useToastsStore.getState().clear();
+    notifyOk('Deleted Pod web-0', podRef);
+    render(<TopBar status="connected" />);
+
+    await user.click(screen.getByLabelText('Notifications'));
+    await user.click(screen.getByRole('button', { name: 'pods/prod/web-0' }));
+
+    expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
   });
 });

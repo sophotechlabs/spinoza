@@ -291,6 +291,7 @@ export default function App() {
           onOpenSettings={() => {
             openSettings('Appearance');
           }}
+          onSelectObject={remember}
         />
       </ErrorBoundary>
       <ConnectionBanner status={feed.status} attempt={feed.attempt} onReconnect={feed.reconnect} />
@@ -312,7 +313,6 @@ export default function App() {
         >
           <PanelLayout
             selection={selection}
-            onSelectObject={remember}
             subscribeLogs={subscribeLogs}
             unsubscribeLogs={unsubscribeLogs}
             onClose={clearSelection}

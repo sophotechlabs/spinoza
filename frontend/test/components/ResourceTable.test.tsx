@@ -33,6 +33,15 @@ function renderTable(active: ResourceDescriptor | null, selected: Row | null, on
   );
 }
 
+async function namespaceCell(): Promise<HTMLElement> {
+  const cells = await screen.findAllByText('prod');
+  const cell = cells.find((one) => one.tagName === 'TD');
+  if (cell === undefined) {
+    throw new Error('namespace cell not found');
+  }
+  return cell;
+}
+
 function resetStore(): void {
   useResourcesStore.setState({ subs: new Map(), errors: new Map() });
 }
@@ -404,6 +413,75 @@ describe('ResourceTable', () => {
     seed(makeColumns([]), true, [row]);
     renderTable(descriptor, null, onSelect);
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    expect(onSelect).toHaveBeenCalledWith(row);
+  });
+
+  it('opens the row from anywhere in it, not only the name', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const row = makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: [] });
+    seed(makeColumns([]), true, [row]);
+    renderTable(descriptor, null, onSelect);
+
+    await user.click(await namespaceCell());
+
+    expect(onSelect).toHaveBeenCalledWith(row);
+  });
+
+  it('opens the row from the keyboard', async () => {
+    const onSelect = vi.fn();
+    const row = makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: [] });
+    seed(makeColumns([]), true, [row]);
+    renderTable(descriptor, null, onSelect);
+    const cell = await namespaceCell();
+
+    fireEvent.keyDown(cell, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledWith(row);
+
+    onSelect.mockClear();
+    fireEvent.keyDown(cell, { key: 'a' });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('leaves the row shut when a control inside it was clicked', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const row = makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: [] });
+    seed(makeColumns([]), true, [row]);
+    renderTable(descriptor, null, onSelect);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Select pod-a' }));
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('leaves the row shut while text is being selected', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const row = makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: [] });
+    seed(makeColumns([]), true, [row]);
+    renderTable(descriptor, null, onSelect);
+    const cell = await namespaceCell();
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'prod',
+    } as unknown as Selection);
+
+    await user.click(cell);
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('opens the row when nothing is selected at all', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const row = makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: [] });
+    seed(makeColumns([]), true, [row]);
+    renderTable(descriptor, null, onSelect);
+    const cell = await namespaceCell();
+    vi.spyOn(window, 'getSelection').mockReturnValue(null);
+
+    await user.click(cell);
+
     expect(onSelect).toHaveBeenCalledWith(row);
   });
 

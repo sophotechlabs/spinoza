@@ -27,7 +27,7 @@ vi.mock('../../src/components/InspectMetrics', () => ({
 import PanelLayout from '../../src/components/PanelLayout';
 import { PLACEMENT_KEY } from '../../src/lib/panels';
 import { usePanelsStore } from '../../src/store/panels';
-import { notifyOk, useToastsStore } from '../../src/store/toasts';
+import { useToastsStore } from '../../src/store/toasts';
 import type { ObjectRef } from '../../src/lib/types';
 import { makeRow, parentOf } from '../helpers';
 
@@ -68,10 +68,8 @@ function stubApi(): void {
 function renderLayout(overrides: Partial<Parameters<typeof PanelLayout>[0]> = {}) {
   const onClose = vi.fn();
   const onDeleted = vi.fn();
-  const onSelectObject = vi.fn();
   const view = render(
     <PanelLayout
-      onSelectObject={onSelectObject}
       selection={{
         ref: podRef,
         row: makeRow({
@@ -93,7 +91,7 @@ function renderLayout(overrides: Partial<Parameters<typeof PanelLayout>[0]> = {}
       <div data-testid="main-area" />
     </PanelLayout>,
   );
-  return { onClose, onDeleted, onSelectObject, view };
+  return { onClose, onDeleted, view };
 }
 
 function dockStrip(side: 'left' | 'right' | 'bottom'): HTMLElement {
@@ -248,20 +246,6 @@ describe('PanelLayout', () => {
     await user.click(screen.getByRole('tab', { name: 'Terminal' }));
 
     expect(screen.getByTestId('forwards-panel')).toHaveTextContent('idle');
-  });
-
-  it('opens the notification history and jumps back to the object an entry names', async () => {
-    const user = userEvent.setup();
-    notifyOk('Deleted Pod web', podRef);
-    const { onSelectObject } = renderLayout();
-
-    await user.click(screen.getByRole('tab', { name: 'Notifications' }));
-
-    expect(screen.getByText('Deleted Pod web')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'pods/prod/web' }));
-
-    expect(onSelectObject).toHaveBeenCalledWith(podRef);
   });
 
   it('opens the events panel', async () => {
@@ -439,7 +423,6 @@ describe('an object deleted out from under the panels', () => {
     view.rerender(
       <PanelLayout
         selection={{ ref: podRef, row: null }}
-        onSelectObject={vi.fn()}
         subscribeLogs={vi.fn()}
         unsubscribeLogs={vi.fn()}
         onClose={vi.fn()}
