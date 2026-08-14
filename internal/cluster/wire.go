@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
@@ -99,10 +102,11 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		options.DebugImage,
 		bundle.Ref,
 	)
+	index := charts.New(ctx, &http.Client{Timeout: 30 * time.Second}, charts.DefaultTTL)
 	releases := helm.NewService(
 		bundle.Clientset,
 		helm.NewRunner(options.HelmBinary),
-		nil,
+		index,
 		helm.Repositories(helm.RepositoryConfig()),
 		bundle.Ref,
 	)
@@ -124,6 +128,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		Shells:      shells,
 		Debugger:    debugger,
 		Helm:        releases,
+		Charts:      index,
 		Prometheus:  promClient,
 		Categories:  cats,
 		Descriptors: descs,
