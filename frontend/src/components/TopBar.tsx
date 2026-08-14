@@ -1,7 +1,7 @@
 import type { ConnectionStatus } from '../lib/feed';
 import type { View } from '../lib/types';
 import ContextPicker from './ContextPicker';
-import ProtectedBadge from './ProtectedBadge';
+import ProtectionToggle from './ProtectionToggle';
 
 interface TopBarProps {
   status: ConnectionStatus;
@@ -59,7 +59,7 @@ export default function TopBar({
   return (
     <header className="flex h-10 shrink-0 items-center gap-4 border-b border-edge bg-surface-raised px-3 text-xs">
       <ContextPicker onSwitched={handleContextChanged} />
-      <ProtectedBadge />
+      <ProtectionToggle />
       <span className="text-fg-muted">/</span>
       <span className="text-fg-soft">all namespaces</span>
       {view !== undefined && (
