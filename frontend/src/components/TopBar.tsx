@@ -107,7 +107,7 @@ export default function TopBar({
           aria-label="Settings"
           title="Settings"
           onClick={handleSettings}
-          className={`${ICON_CONTROL} border-edge-strong text-base leading-none text-fg hover:bg-surface-active`}
+          className={`${ICON_CONTROL} border-edge-strong text-xl leading-none text-fg hover:bg-surface-active`}
         >
           ⚙
         </button>
