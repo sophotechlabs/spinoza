@@ -207,7 +207,7 @@ vi.mock('../src/components/InspectLogs', () => ({
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { clearRecents } from '../src/store/recents';
-import { useToastsStore } from '../src/store/toasts';
+import { notifyOk, useToastsStore } from '../src/store/toasts';
 import { setUnsaved } from '../src/lib/unsaved';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
 
@@ -462,6 +462,17 @@ describe('App', () => {
 
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
     expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+  });
+
+  it('starts the notification history over when the cluster changes', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    notifyOk('Deleted Pod web-0');
+    expect(useToastsStore.getState().history).toHaveLength(1);
+
+    await user.click(screen.getByTestId('context-changed'));
+
+    expect(useToastsStore.getState().history).toHaveLength(0);
   });
 
   it('unsubscribes the old cluster resource when the cluster changes', async () => {
