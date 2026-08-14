@@ -1,13 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Spinoza">
-  <rect width="32" height="32" rx="7" fill="#111827" />
-  <circle cx="16" cy="16" r="4.2" fill="none" stroke="#7dd3fc" stroke-width="2.2" />
-  <circle cx="16" cy="5.6" r="2.6" fill="#7dd3fc" />
-  <circle cx="25" cy="21" r="2.6" fill="#7dd3fc" />
-  <circle cx="7" cy="21" r="2.6" fill="#7dd3fc" />
-  <path
-    d="M16 8.2v3.6M19.6 18.1l3.1 1.6M12.4 18.1l-3.1 1.6"
-    stroke="#7dd3fc"
-    stroke-width="2.2"
-    stroke-linecap="round"
-  />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <filter id="ga" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#3FE0FF" flood-opacity="0.9"></feDropShadow>
+      <feDropShadow dx="0" dy="0" stdDeviation="11" flood-color="#3FE0FF" flood-opacity="0.6"></feDropShadow>
+    </filter>
+    <filter id="gb" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#8B5CFF" flood-opacity="0.9"></feDropShadow>
+      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#8B5CFF" flood-opacity="0.6"></feDropShadow>
+    </filter>
+  </defs>
+  <defs><linearGradient id="bg" x1="0.33" y1="0" x2="0.67" y2="1">
+    <stop offset="0" stop-color="#131A2E"></stop><stop offset="1" stop-color="#080B15"></stop>
+  </linearGradient></defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"></rect>
+  <rect x="2" y="2" width="508" height="508" rx="114" fill="none" stroke="#1E294A" stroke-width="4"></rect>
+  <g transform="translate(62.0,94.3) scale(1.6171)"><g filter="url(#ga)">
+      <rect x="29" y="44" width="182" height="112" rx="4" fill="rgba(63,224,255,0.06)"></rect>
+      <g fill="none" stroke="#3FE0FF" stroke-width="7" stroke-linecap="round">
+        <line x1="29" y1="44" x2="211" y2="44"></line><line x1="29" y1="156" x2="211" y2="156"></line>
+      </g>
+    </g>
+    <g filter="url(#gb)"><g stroke="#8B5CFF" fill="none" stroke-linecap="round">
+      <circle cx="120" cy="100" r="36" stroke-width="8"></circle>
+      <g stroke-width="7"><line x1="120" y1="91" x2="120" y2="64" transform="rotate(0.00 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(51.43 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(102.86 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(154.29 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(205.71 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(257.14 120 100)"></line><line x1="120" y1="91" x2="120" y2="64" transform="rotate(308.57 120 100)"></line></g>
+      <g stroke-width="9"><line x1="120" y1="61" x2="120" y2="51" transform="rotate(0.00 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(51.43 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(102.86 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(154.29 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(205.71 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(257.14 120 100)"></line><line x1="120" y1="61" x2="120" y2="51" transform="rotate(308.57 120 100)"></line></g>
+      <circle cx="120" cy="100" r="5.5" fill="#8B5CFF" stroke="none"></circle>
+    </g></g>
+    <g filter="url(#ga)" fill="none" stroke="#3FE0FF" stroke-width="7" stroke-linecap="round">
+      <rect x="14" y="26" width="30" height="148" rx="15"></rect>
+      <rect x="196" y="26" width="30" height="148" rx="15"></rect>
+      <circle cx="29" cy="41" r="6"></circle><circle cx="29" cy="159" r="6"></circle>
+      <circle cx="211" cy="41" r="6"></circle><circle cx="211" cy="159" r="6"></circle>
+    </g></g>
 </svg>
