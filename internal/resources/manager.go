@@ -366,7 +366,21 @@ func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
 	for _, desc := range descs {
 		flat = append(flat, desc)
 	}
-	return Count(ctx, m.dyn, flat, m.limits.Counts)
+	out := Count(ctx, m.dyn, flat, m.limits.Counts)
+	watched := m.failingFromCaches()
+	if len(watched) == 0 {
+		return out
+	}
+	if out.Failing == nil {
+		out.Failing = map[string]int{}
+	}
+	for key, count := range watched {
+		if _, taken := out.Failing[key]; taken {
+			continue
+		}
+		out.Failing[key] = count
+	}
+	return out
 }
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
