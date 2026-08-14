@@ -17,7 +17,9 @@
     "@testing-library/dom",
     "@types/react",
     "@types/react-dom",
-    "tailwindcss"
+    "tailwindcss",
+    "@fontsource/ibm-plex-mono",
+    "@fontsource/space-grotesk"
   ],
   "ignorePatterns": ["dist", "coverage", "html"]
 }

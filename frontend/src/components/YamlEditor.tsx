@@ -37,6 +37,7 @@ export default function YamlEditor({ value, path, readOnly, onChange }: YamlEdit
         readOnly,
         minimap: { enabled: false },
         fontSize: 12,
+        fontFamily: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
         lineNumbers: 'on',
         scrollBeyondLastLine: false,
         tabSize: 2,

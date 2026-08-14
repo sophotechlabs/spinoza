@@ -1,8 +1,19 @@
 @import 'tailwindcss';
 @import '@xyflow/react/dist/style.css' layer(base);
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
+@import '@fontsource/ibm-plex-mono/cyrillic-400.css';
+@import '@fontsource/ibm-plex-mono/cyrillic-500.css';
+@import '@fontsource/ibm-plex-mono/cyrillic-600.css';
+@import '@fontsource/space-grotesk/latin-500.css';
 
 @theme {
   --color-*: initial;
+
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme inline {

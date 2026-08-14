@@ -37,7 +37,7 @@ export function createTerminal(node: HTMLElement, options: TerminalOptions = {})
   const term = new Terminal({
     convertEol: true,
     fontSize: 12,
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontFamily: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
     cursorBlink: !prefersReducedMotion(),
     screenReaderMode: options.screenReader === true,
   });

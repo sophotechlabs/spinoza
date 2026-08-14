@@ -2,6 +2,7 @@ import type { ConnectionStatus } from '../lib/feed';
 import type { View } from '../lib/types';
 import ContextPicker from './ContextPicker';
 import ProtectionToggle from './ProtectionToggle';
+import Wordmark from './Wordmark';
 
 interface TopBarProps {
   status: ConnectionStatus;
@@ -58,6 +59,7 @@ export default function TopBar({
 
   return (
     <header className="flex h-10 shrink-0 items-center gap-4 border-b border-edge bg-surface-raised px-3 text-xs">
+      <Wordmark />
       <ContextPicker onSwitched={handleContextChanged} />
       <ProtectionToggle />
       <span className="text-fg-muted">/</span>
