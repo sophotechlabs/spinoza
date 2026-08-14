@@ -98,9 +98,6 @@ export default function NotificationsPanel({ onSelectObject }: NotificationsPane
             {one.label}
           </button>
         ))}
-        <span className="text-fg-muted">
-          {history.length} since this cluster was opened, newest first
-        </span>
         <button
           type="button"
           disabled={history.length === 0}
@@ -110,6 +107,11 @@ export default function NotificationsPanel({ onSelectObject }: NotificationsPane
           Clear
         </button>
       </div>
+      {history.length > 0 && (
+        <p className="shrink-0 border-b border-edge px-2 py-1 text-fg-muted">
+          {history.length} since this cluster was opened, newest first
+        </p>
+      )}
       {shown.length === 0 && <p className="p-3 text-fg-muted">Nothing to show here yet.</p>}
       <ul className="min-h-0 flex-1 overflow-y-auto">
         {shown.map((note) => (

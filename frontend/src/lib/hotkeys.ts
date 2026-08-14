@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { isMac } from './platform';
 
 export const FILTER_INPUT_ID = 'resource-filter';
 
@@ -7,12 +8,28 @@ export interface Hotkey {
   description: string;
 }
 
-export const HOTKEYS: Hotkey[] = [
-  { keys: 'Ctrl K', description: 'Open the command palette' },
-  { keys: '/', description: 'Jump to the resource filter' },
-  { keys: '?', description: 'Show this list' },
-  { keys: 'Esc', description: 'Close the palette or dialog, then the inspector' },
-];
+export function modLabel(): string {
+  if (isMac()) {
+    return '⌘';
+  }
+  return 'Ctrl';
+}
+
+export function paletteChordLabel(): string {
+  if (isMac()) {
+    return '⌘K';
+  }
+  return 'Ctrl K';
+}
+
+export function shortcuts(): Hotkey[] {
+  return [
+    { keys: paletteChordLabel(), description: 'Open the command palette' },
+    { keys: '/', description: 'Jump to the resource filter' },
+    { keys: '?', description: 'Show this list' },
+    { keys: 'Esc', description: 'Close the palette or dialog, then the inspector' },
+  ];
+}
 
 export interface HotkeyActions {
   palette: () => void;

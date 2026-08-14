@@ -1,5 +1,6 @@
 import type { ConnectionStatus } from '../lib/feed';
 import type { ObjectRef, View } from '../lib/types';
+import { paletteChordLabel } from '../lib/hotkeys';
 import ContextPicker from './ContextPicker';
 import NotificationsMenu from './NotificationsMenu';
 import ProtectionToggle from './ProtectionToggle';
@@ -83,7 +84,7 @@ export default function TopBar({
           title="Search resources, views and recent objects"
           className="rounded border border-edge-strong px-2 py-0.5 text-fg-soft hover:bg-surface-active"
         >
-          Search <span className="text-fg-muted">Ctrl K</span>
+          Search <span className="text-fg-muted">{paletteChordLabel()}</span>
         </button>
         <span className="flex items-center gap-1.5 text-fg-muted">
           <span

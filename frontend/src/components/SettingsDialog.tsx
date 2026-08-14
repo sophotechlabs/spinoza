@@ -6,7 +6,7 @@ import type { LogView } from '../lib/settings';
 import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '../store/theme';
 import { useLogView, useScreenReader, useSettingsStore } from '../store/settings';
 import { usePanelsStore } from '../store/panels';
-import { HOTKEYS } from '../lib/hotkeys';
+import { shortcuts } from '../lib/hotkeys';
 import { copyText } from '../lib/clipboard';
 import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
 
@@ -175,7 +175,7 @@ export default function SettingsDialog({
           Close
         </button>
       </div>
-      <div className="flex min-h-[16rem] text-xs">
+      <div className="flex h-[24rem] text-xs">
         <nav aria-label="Settings sections" className="w-32 shrink-0 border-r border-edge p-2">
           {SECTIONS.map((name) => (
             <button
@@ -191,7 +191,7 @@ export default function SettingsDialog({
             </button>
           ))}
         </nav>
-        <div className="min-w-0 flex-1 p-3">
+        <div className="min-w-0 flex-1 overflow-y-auto p-3">
           {section === 'Appearance' && (
             <>
               <Row label="Theme" hint="Follow the system, or pick one and keep it.">
@@ -326,14 +326,14 @@ export default function SettingsDialog({
             <table className="w-full text-left">
               <caption className="sr-only">Keyboard shortcuts</caption>
               <tbody>
-                {HOTKEYS.map((hotkey) => (
+                {shortcuts().map((hotkey) => (
                   <tr key={hotkey.keys} className="border-b border-edge last:border-b-0">
-                    <th scope="row" className="py-2 pr-4 font-normal text-fg-muted">
-                      <kbd className="rounded border border-edge-strong px-1.5 py-0.5 text-fg">
+                    <th scope="row" className="w-24 py-2 pr-4 align-top font-normal text-fg-muted">
+                      <kbd className="inline-block rounded border border-edge-strong px-1.5 py-0.5 whitespace-nowrap text-fg">
                         {hotkey.keys}
                       </kbd>
                     </th>
-                    <td className="py-2 text-fg">{hotkey.description}</td>
+                    <td className="py-2 align-top text-fg">{hotkey.description}</td>
                   </tr>
                 ))}
               </tbody>

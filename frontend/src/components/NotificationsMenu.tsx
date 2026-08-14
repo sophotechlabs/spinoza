@@ -6,6 +6,25 @@ interface NotificationsMenuProps {
   onSelectObject: (ref: ObjectRef) => void;
 }
 
+function Bell() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 8.5a6 6 0 1 0-12 0c0 4.5-1.5 6-2 6.8h16c-.5-.8-2-2.3-2-6.8Z" />
+      <path d="M10 18.5a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}
+
 export default function NotificationsMenu({ onSelectObject }: NotificationsMenuProps) {
   const ref = useRef<HTMLDetailsElement | null>(null);
 
@@ -22,9 +41,9 @@ export default function NotificationsMenu({ onSelectObject }: NotificationsMenuP
       <summary
         aria-label="Notifications"
         title="What has happened on this cluster"
-        className="cursor-pointer rounded border border-edge-strong px-1.5 py-0.5 text-base leading-none text-fg hover:bg-surface-active"
+        className="flex cursor-pointer list-none items-center rounded border border-edge-strong px-1.5 py-1 text-fg hover:bg-surface-active [&::-webkit-details-marker]:hidden"
       >
-        🔔
+        <Bell />
       </summary>
       <div className="absolute right-0 z-30 mt-1 flex max-h-[60vh] w-[28rem] flex-col overflow-hidden rounded border border-edge-strong bg-surface-raised shadow">
         <NotificationsPanel onSelectObject={handleSelectObject} />

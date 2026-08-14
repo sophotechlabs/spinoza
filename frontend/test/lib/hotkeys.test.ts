@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { FILTER_INPUT_ID, HOTKEYS, focusFilter, useHotkeys } from '../../src/lib/hotkeys';
+import {
+  FILTER_INPUT_ID,
+  focusFilter,
+  modLabel,
+  paletteChordLabel,
+  shortcuts,
+  useHotkeys,
+} from '../../src/lib/hotkeys';
 
 function actions() {
   return {
@@ -199,7 +206,32 @@ describe('focusFilter', () => {
 });
 
 describe('the shortcut list', () => {
+  function onPlatform(agent: string) {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(agent);
+  }
+
+  const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)';
+  const windows = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+
   it('names every binding the hook implements', () => {
-    expect(HOTKEYS.map((hotkey) => hotkey.keys)).toEqual(['Ctrl K', '/', '?', 'Esc']);
+    onPlatform(mac);
+
+    expect(shortcuts().map((hotkey) => hotkey.keys)).toEqual(['⌘K', '/', '?', 'Esc']);
+  });
+
+  it('spells the palette chord the way the keyboard does', () => {
+    onPlatform(mac);
+    expect(paletteChordLabel()).toBe('⌘K');
+    expect(modLabel()).toBe('⌘');
+
+    onPlatform(windows);
+    expect(paletteChordLabel()).toBe('Ctrl K');
+    expect(modLabel()).toBe('Ctrl');
+  });
+
+  it('describes each binding', () => {
+    onPlatform(windows);
+    expect(shortcuts()[0].description).toBe('Open the command palette');
+    expect(shortcuts()[0].keys).toBe('Ctrl K');
   });
 });
