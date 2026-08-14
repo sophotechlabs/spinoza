@@ -2,6 +2,7 @@ package kube
 
 import (
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -112,6 +113,7 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	}
 	restConfig.QPS = options.QPS
 	restConfig.Burst = options.Burst
+	restConfig.WarningHandler = newWarningLogger(slog.Default())
 
 	cs, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
