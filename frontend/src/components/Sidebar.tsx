@@ -100,16 +100,16 @@ function kindTitle(kind: string, total: number | undefined, failing: number | un
   }
   const totalLabel = countLabel(total);
   if (totalLabel === '' || totalLabel === '—') {
-    return `${kind} — ${String(failing)} not running or succeeded`;
+    return `${kind} — ${String(failing)} not ready`;
   }
-  return `${kind} — ${String(failing)} of ${totalLabel} not running or succeeded`;
+  return `${kind} — ${String(failing)} of ${totalLabel} not ready`;
 }
 
 function failingNote(failing: number | undefined): string {
   if (failing === undefined) {
     return '';
   }
-  return `, ${String(failing)} not running`;
+  return `, ${String(failing)} not ready`;
 }
 
 function failingBadge(failing: number | undefined): string {

@@ -623,8 +623,8 @@ describe('pods that are not running', () => {
     const pods = await screen.findByRole('button', { name: /^Pod/ });
     expect(pods.querySelector('span')?.className).not.toContain('text-error');
     expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
-    expect(pods).toHaveAttribute('title', 'Pod — 3 of 12 not running or succeeded');
-    expect(pods).toHaveTextContent('3 not running');
+    expect(pods).toHaveAttribute('title', 'Pod — 3 of 12 not ready');
+    expect(pods).toHaveTextContent('3 not ready');
   });
 
   it('explains the failing count without a total when the tally is missing', async () => {
@@ -633,7 +633,7 @@ describe('pods that are not running', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
 
     const pods = await screen.findByRole('button', { name: /^Pod/ });
-    expect(pods).toHaveAttribute('title', 'Pod — 3 not running or succeeded');
+    expect(pods).toHaveAttribute('title', 'Pod — 3 not ready');
     expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
   });
 
