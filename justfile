@@ -12,6 +12,10 @@ default:
 app-version:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [ -n "${SPINOZA_VERSION:-}" ]; then
+        echo "${SPINOZA_VERSION}"
+        exit 0
+    fi
     if [ -n "${GITHUB_REF_NAME:-}" ]; then
         echo "${GITHUB_REF_NAME}"
         exit 0
