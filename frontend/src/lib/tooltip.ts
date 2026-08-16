@@ -1,6 +1,6 @@
 export const TOOLTIP_DELAY_MS = 120;
 
-export const TOOLTIP_GAP = 6;
+const TOOLTIP_GAP = 6;
 
 export const TOOLTIP_ATTRIBUTE = 'data-tooltip';
 

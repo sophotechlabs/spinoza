@@ -5,7 +5,7 @@ export const SLOW_REQUEST_TIMEOUT_MS = 120000;
 
 export const TIMEOUT_MESSAGE = 'the backend did not answer in time';
 
-export const UNAUTHORIZED = 401;
+const UNAUTHORIZED = 401;
 
 export const TOKEN_HEADER = 'X-Spinoza-Token';
 export const TOKEN_PARAM = 'token';

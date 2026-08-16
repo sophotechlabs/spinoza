@@ -78,7 +78,7 @@ export function openLocalShell(handlers: ExecHandlers): ExecSession {
   return openStream('/api/shell', handlers);
 }
 
-export function openStream(path: string, handlers: ExecHandlers): ExecSession {
+function openStream(path: string, handlers: ExecHandlers): ExecSession {
   const socket = new WebSocket(wsURL(path));
   socket.binaryType = 'arraybuffer';
   let ended = false;
