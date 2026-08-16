@@ -8,6 +8,7 @@ import type {
   DebugSession,
   DebugSupport,
   ExecSupport,
+  LocalShell,
   FluxActionResult,
   FluxDashboard,
   FluxGroup,
@@ -345,6 +346,14 @@ export function parseExecSupport(body: unknown): ExecSupport {
     container: asString(item.container),
     image: optionalString(item.image),
     shell: oneOf(item.shell, ['unknown', 'present', 'absent'] as const, 'unknown'),
+  };
+}
+
+export function parseLocalShell(body: unknown): LocalShell {
+  const item = asRecord(body);
+  return {
+    available: item.available === true,
+    reason: optionalString(item.reason),
   };
 }
 

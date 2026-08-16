@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { PodTarget } from '../lib/pods';
 import { firstContainer } from '../lib/pods';
+import { useLocalShellSupport } from '../lib/useLocalShell';
 import { useTerminalsStore } from '../store/terminals';
-import TerminalSession from './TerminalSession';
+import type { TerminalSession as Session } from '../store/terminals';
+import TerminalSession, { LocalTerminalSession } from './TerminalSession';
 
 interface TerminalTabProps {
   pod: PodTarget | null;
@@ -16,13 +18,29 @@ function tabClass(active: boolean): string {
   return `${base} border-edge text-fg-muted hover:bg-surface-raised`;
 }
 
+function tabLabel(session: Session): string {
+  if (session.kind === 'local') {
+    return 'local';
+  }
+  return `${session.pod}/${session.container}`;
+}
+
+function closeLabel(session: Session): string {
+  if (session.kind === 'local') {
+    return 'Close the local shell';
+  }
+  return `Close the shell in ${session.pod}`;
+}
+
 export default function TerminalTab({ pod }: TerminalTabProps) {
   const sessions = useTerminalsStore((state) => state.sessions);
   const active = useTerminalsStore((state) => state.active);
   const open = useTerminalsStore((state) => state.open);
+  const openLocal = useTerminalsStore((state) => state.openLocal);
   const focus = useTerminalsStore((state) => state.focus);
   const close = useTerminalsStore((state) => state.close);
   const [container, setContainer] = useState(() => firstContainer(pod));
+  const support = useLocalShellSupport();
 
   const podKey = pod === null ? '' : `${pod.namespace}/${pod.name}`;
   const [lastPodKey, setLastPodKey] = useState(podKey);
@@ -30,6 +48,17 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
     setLastPodKey(podKey);
     setContainer(firstContainer(pod));
   }
+
+  const local = support?.available === true;
+  const [greeted, setGreeted] = useState(false);
+
+  useEffect(() => {
+    if (!local || greeted) {
+      return;
+    }
+    setGreeted(true);
+    openLocal();
+  }, [local, greeted, openLocal]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -44,11 +73,11 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
               }}
               className="max-w-52 cursor-pointer truncate"
             >
-              {session.pod}/{session.container}
+              {tabLabel(session)}
             </button>
             <button
               type="button"
-              aria-label={`Close the shell in ${session.pod}`}
+              aria-label={closeLabel(session)}
               onClick={() => {
                 close(session.id);
               }}
@@ -58,24 +87,33 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
             </button>
           </span>
         ))}
-        {pod !== null && container !== '' && (
-          <span className="ml-auto flex items-center gap-1.5">
-            {pod.containers.length > 1 && (
-              <select
-                aria-label="Container"
-                value={container}
-                onChange={(event) => {
-                  setContainer(event.target.value);
-                }}
-                className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
-              >
-                {pod.containers.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            )}
+        <span className="ml-auto flex items-center gap-1.5">
+          {local && (
+            <button
+              type="button"
+              onClick={openLocal}
+              className="rounded border border-edge-strong px-1.5 py-0.5 text-fg hover:bg-surface-active"
+            >
+              Local shell
+            </button>
+          )}
+          {pod !== null && container !== '' && pod.containers.length > 1 && (
+            <select
+              aria-label="Container"
+              value={container}
+              onChange={(event) => {
+                setContainer(event.target.value);
+              }}
+              className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
+            >
+              {pod.containers.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
+          {pod !== null && container !== '' && (
             <button
               type="button"
               onClick={() => {
@@ -85,12 +123,13 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
             >
               Shell in {pod.name}
             </button>
-          </span>
-        )}
+          )}
+        </span>
       </div>
       {sessions.length === 0 && (
         <div className="p-3 text-[11px] text-fg-muted">
-          No shells open. Select a pod and open one from the button above.
+          {support?.available === false && <p>{support.reason}</p>}
+          <p>No shells open. Select a pod and open one from the button above.</p>
         </div>
       )}
       {sessions.map((session) => (
@@ -99,11 +138,14 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
           hidden={session.id !== active}
           className={session.id === active ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'hidden'}
         >
-          <TerminalSession
-            namespace={session.namespace}
-            pod={session.pod}
-            container={session.container}
-          />
+          {session.kind === 'local' && <LocalTerminalSession />}
+          {session.kind === 'pod' && (
+            <TerminalSession
+              namespace={session.namespace}
+              pod={session.pod}
+              container={session.container}
+            />
+          )}
         </div>
       ))}
     </div>

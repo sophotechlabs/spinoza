@@ -226,6 +226,16 @@ export interface FilePicker {
   reason?: string;
 }
 
+export interface LocalShell {
+  available: boolean;
+  reason?: string;
+}
+
+export interface TerminalSize {
+  cols: number;
+  rows: number;
+}
+
 export interface PickedFile {
   path: string;
 }

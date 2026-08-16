@@ -24,24 +24,50 @@ vi.mock('../../src/components/DebugPrompt', () => ({
   ),
 }));
 
+interface Opened {
+  pod: string;
+  container: string;
+}
+
+const opened: Opened[] = [];
+
+vi.mock('../../src/lib/exec', async () => {
+  const actual = await vi.importActual<typeof import('../../src/lib/exec')>('../../src/lib/exec');
+  return {
+    ...actual,
+    openExec: (target: Opened) => {
+      opened.push(target);
+      return { send: vi.fn(), resize: vi.fn(), close: vi.fn() };
+    },
+    openLocalShell: () => {
+      opened.push({ pod: 'this machine', container: 'shell' });
+      return { send: vi.fn(), resize: vi.fn(), close: vi.fn() };
+    },
+  };
+});
+
 vi.mock('../../src/components/TerminalPanel', () => ({
   default: ({
-    target,
+    openSession,
     onShellMissing,
   }: {
-    target: { pod: string; container: string };
+    openSession: (handlers: { onOutput: () => void; onEnd: () => void }) => unknown;
     onShellMissing: () => void;
-  }) => (
-    <div data-testid="terminal-panel">
-      {target.pod}/{target.container}
-      <button type="button" onClick={onShellMissing}>
-        Report missing shell
-      </button>
-    </div>
-  ),
+  }) => {
+    openSession({ onOutput: () => undefined, onEnd: () => undefined });
+    const last = opened[opened.length - 1];
+    return (
+      <div data-testid="terminal-panel">
+        {last.pod}/{last.container}
+        <button type="button" onClick={onShellMissing}>
+          Report missing shell
+        </button>
+      </div>
+    );
+  },
 }));
 
-import TerminalSession from '../../src/components/TerminalSession';
+import TerminalSession, { LocalTerminalSession } from '../../src/components/TerminalSession';
 
 function stubShell(shell: string): void {
   vi.stubGlobal(
@@ -121,5 +147,19 @@ describe('TerminalSession', () => {
     await screen.findByTestId('terminal-panel');
 
     expect(screen.queryByText(/Could not check whether/)).not.toBeInTheDocument();
+  });
+});
+
+describe('LocalTerminalSession', () => {
+  it('opens a shell on this machine without probing a pod', async () => {
+    const user = userEvent.setup();
+    opened.length = 0;
+    render(<LocalTerminalSession />);
+
+    expect(await screen.findByTestId('terminal-panel')).toHaveTextContent('this machine/shell');
+
+    await user.click(screen.getByRole('button', { name: 'Report missing shell' }));
+
+    expect(screen.getByTestId('terminal-panel')).toBeInTheDocument();
   });
 });

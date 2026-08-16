@@ -1,7 +1,7 @@
-import type { ExecSupport, ExecTarget } from './types';
+import type { ExecSupport, ExecTarget, LocalShell } from './types';
 import { failure } from './object';
 import { request } from './http';
-import { parseExecSupport } from './parse';
+import { parseExecSupport, parseLocalShell } from './parse';
 import { wsURL } from './wsBase';
 
 export const CHANNEL_STDIN = 0x00;
@@ -51,6 +51,14 @@ export async function fetchExecSupport(target: ExecTarget): Promise<ExecSupport>
   return parseExecSupport(await response.json());
 }
 
+export async function fetchLocalShellSupport(): Promise<LocalShell> {
+  const response = await request('/api/shell/support');
+  if (!response.ok) {
+    throw await failure(response, `local shell support failed with status ${response.status}`);
+  }
+  return parseLocalShell(await response.json());
+}
+
 export function frame(channel: number, payload: Uint8Array): Uint8Array {
   const out = new Uint8Array(payload.length + 1);
   out[0] = channel;
@@ -63,7 +71,15 @@ export function textFrame(channel: number, text: string): Uint8Array {
 }
 
 export function openExec(target: ExecTarget, handlers: ExecHandlers): ExecSession {
-  const socket = new WebSocket(wsURL(`/api/exec?${execQuery(target)}`));
+  return openStream(`/api/exec?${execQuery(target)}`, handlers);
+}
+
+export function openLocalShell(handlers: ExecHandlers): ExecSession {
+  return openStream('/api/shell', handlers);
+}
+
+export function openStream(path: string, handlers: ExecHandlers): ExecSession {
+  const socket = new WebSocket(wsURL(path));
   socket.binaryType = 'arraybuffer';
   let ended = false;
   let opened = false;

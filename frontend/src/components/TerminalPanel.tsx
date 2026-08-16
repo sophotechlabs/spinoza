@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ExecTarget } from '../lib/types';
-import { openExec } from '../lib/exec';
 import { createTerminal } from '../lib/terminal';
-import type { ExecEnd, ExecSession } from '../lib/exec';
+import type { ExecEnd, ExecHandlers, ExecSession } from '../lib/exec';
 import type { TerminalHandle } from '../lib/terminal';
 import { terminalTheme } from '../lib/themeColors';
 import { useResolvedTheme, useThemeStore } from '../store/theme';
 import { useScreenReader } from '../store/settings';
 
 interface TerminalPanelProps {
-  target: ExecTarget;
+  openSession: (handlers: ExecHandlers) => ExecSession;
   onShellMissing: () => void;
 }
 
@@ -20,19 +18,19 @@ function endNotice(message: string): string {
   return `\r\n\x1b[33m${message}\x1b[0m\r\n`;
 }
 
-export default function TerminalPanel({ target, onShellMissing }: TerminalPanelProps) {
+export default function TerminalPanel({ openSession, onShellMissing }: TerminalPanelProps) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const [ended, setEnded] = useState<ExecEnd | null>(null);
   const [attempt, setAttempt] = useState(0);
   const shellMissingRef = useRef(onShellMissing);
   shellMissingRef.current = onShellMissing;
+  const openRef = useRef(openSession);
+  openRef.current = openSession;
   const termRef = useRef<TerminalHandle | null>(null);
   const resolvedTheme = useResolvedTheme();
   const screenReader = useScreenReader();
   const screenReaderRef = useRef(screenReader);
   screenReaderRef.current = screenReader;
-
-  const { namespace, pod, container } = target;
 
   useEffect(() => {
     if (host === null) {
@@ -45,21 +43,18 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
     });
     termRef.current = term;
     term.setTheme(terminalTheme(useThemeStore.getState().resolved));
-    const session: ExecSession = openExec(
-      { namespace, pod, container },
-      {
-        onOutput: (text) => {
-          term.write(text);
-        },
-        onEnd: (end) => {
-          term.write(endNotice(end.message));
-          setEnded(end);
-          if (end.message.includes('/bin/sh')) {
-            shellMissingRef.current();
-          }
-        },
+    const session: ExecSession = openRef.current({
+      onOutput: (text) => {
+        term.write(text);
       },
-    );
+      onEnd: (end) => {
+        term.write(endNotice(end.message));
+        setEnded(end);
+        if (end.message.includes('/bin/sh')) {
+          shellMissingRef.current();
+        }
+      },
+    });
 
     term.onData((data) => {
       session.send(data);
@@ -82,7 +77,7 @@ export default function TerminalPanel({ target, onShellMissing }: TerminalPanelP
       term.dispose();
       termRef.current = null;
     };
-  }, [host, namespace, pod, container, attempt]);
+  }, [host, attempt]);
 
   useEffect(() => {
     termRef.current?.setTheme(terminalTheme(resolvedTheme));

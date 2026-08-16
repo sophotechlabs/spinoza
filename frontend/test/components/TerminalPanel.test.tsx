@@ -60,10 +60,12 @@ function harness(cols = 120, rows = 40): Harness {
   };
 }
 
+const podTarget = { namespace: 'monitoring', pod: 'loki-0', container: 'loki' };
+
 function renderPanel(onShellMissing = vi.fn()) {
   const view = render(
     <TerminalPanel
-      target={{ namespace: 'monitoring', pod: 'loki-0', container: 'loki' }}
+      openSession={(handlers) => openExec(podTarget, handlers)}
       onShellMissing={onShellMissing}
     />,
   );
@@ -203,7 +205,7 @@ describe('a re-render that only changes the callback', () => {
 
     view.rerender(
       <TerminalPanel
-        target={{ namespace: 'monitoring', pod: 'loki-0', container: 'loki' }}
+        openSession={(handlers) => openExec(podTarget, handlers)}
         onShellMissing={vi.fn()}
       />,
     );
@@ -219,7 +221,7 @@ describe('a re-render that only changes the callback', () => {
 
     view.rerender(
       <TerminalPanel
-        target={{ namespace: 'monitoring', pod: 'loki-0', container: 'loki' }}
+        openSession={(handlers) => openExec(podTarget, handlers)}
         onShellMissing={later}
       />,
     );
@@ -232,19 +234,21 @@ describe('a re-render that only changes the callback', () => {
     expect(later).toHaveBeenCalled();
   });
 
-  it('still reconnects when the container changes', () => {
+  it('opens a fresh session when the panel is mounted again', () => {
     const stubs = harness();
     const { view } = renderPanel();
 
     view.rerender(
       <TerminalPanel
-        target={{ namespace: 'monitoring', pod: 'loki-0', container: 'sidecar' }}
+        key="sidecar"
+        openSession={(handlers) => openExec({ ...podTarget, container: 'sidecar' }, handlers)}
         onShellMissing={vi.fn()}
       />,
     );
 
     expect(stubs.session.close).toHaveBeenCalled();
     expect(openExec).toHaveBeenCalledTimes(2);
+    expect(openExec.mock.calls[1][0]).toMatchObject({ container: 'sidecar' });
   });
 });
 

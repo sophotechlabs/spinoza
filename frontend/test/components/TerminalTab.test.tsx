@@ -8,6 +8,7 @@ vi.mock('../../src/components/TerminalSession', () => ({
       {pod}/{container}
     </div>
   ),
+  LocalTerminalSession: () => <div data-testid="terminal-session">local shell</div>,
 }));
 
 import TerminalTab from '../../src/components/TerminalTab';
@@ -27,11 +28,20 @@ function visible(): HTMLElement[] {
   return sessions().filter((session) => session.closest('[hidden]') === null);
 }
 
+function stubSupport(available: boolean, reason?: string) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ available, reason }) })),
+  );
+}
+
 beforeEach(() => {
   useTerminalsStore.getState().reset();
+  stubSupport(false, 'A shell on this machine is only available in the desktop app.');
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   useTerminalsStore.getState().reset();
 });
 
@@ -155,5 +165,71 @@ describe('TerminalTab', () => {
   it('explains why the terminal is unavailable', () => {
     expect(terminalTitle('absent')).toContain('debug container');
     expect(terminalTitle('present')).toContain('Shell into');
+  });
+
+  it('says the local shell is desktop-only in a browser tab', async () => {
+    render(<TerminalTab pod={null} />);
+
+    expect(
+      await screen.findByText('A shell on this machine is only available in the desktop app.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Local shell' })).not.toBeInTheDocument();
+  });
+
+  it('opens a shell on this machine by itself in the desktop app', async () => {
+    stubSupport(true);
+
+    render(<TerminalTab pod={null} />);
+
+    expect(await screen.findByText('local shell')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'local' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('opens only one shell on this machine, however often it is asked', async () => {
+    const user = userEvent.setup();
+    stubSupport(true);
+    render(<TerminalTab pod={null} />);
+    await screen.findByText('local shell');
+
+    await user.click(screen.getByRole('button', { name: 'Local shell' }));
+
+    expect(sessions()).toHaveLength(1);
+  });
+
+  it('closes the shell on this machine without opening it again', async () => {
+    const user = userEvent.setup();
+    stubSupport(true);
+    render(<TerminalTab pod={null} />);
+    await screen.findByText('local shell');
+
+    await user.click(screen.getByRole('button', { name: 'Close the local shell' }));
+
+    expect(screen.queryAllByTestId('terminal-session')).toHaveLength(0);
+    expect(screen.getByText(/No shells open/)).toBeInTheDocument();
+  });
+
+  it('keeps pod shells beside the one on this machine', async () => {
+    const user = userEvent.setup();
+    stubSupport(true);
+    render(<TerminalTab pod={pod()} />);
+    await screen.findByText('local shell');
+
+    await user.click(screen.getByRole('button', { name: 'Shell in web' }));
+
+    expect(sessions()).toHaveLength(2);
+    expect(visible()[0]).toHaveTextContent('web/app');
+  });
+
+  it('carries on when the support lookup fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('offline'))),
+    );
+
+    render(<TerminalTab pod={null} />);
+
+    expect(
+      await screen.findByText('A shell on this machine is only available in the desktop app.'),
+    ).toBeInTheDocument();
   });
 });

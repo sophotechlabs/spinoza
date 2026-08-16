@@ -9,11 +9,7 @@ vi.mock('../../src/components/ForwardsPanel', () => ({
 }));
 
 vi.mock('../../src/components/TerminalPanel', () => ({
-  default: ({ target }: { target: { pod: string; container: string } }) => (
-    <div data-testid="terminal-panel">
-      {target.pod}/{target.container}
-    </div>
-  ),
+  default: () => <div data-testid="terminal-panel">shell</div>,
 }));
 
 vi.mock('../../src/components/InspectYaml', () => ({

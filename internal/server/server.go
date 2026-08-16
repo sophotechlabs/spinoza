@@ -51,14 +51,15 @@ type FilePicker func(ctx context.Context) (string, error)
 const noFilePicker = "only the desktop window can open a file dialog; type the path instead"
 
 type Server struct {
-	cluster   Cluster
-	assets    fs.FS
-	files     http.Handler
-	token     string
-	mu        sync.Mutex
-	picker    FilePicker
-	sessions  map[*wsSession]struct{}
-	terminals map[*websocket.Conn]struct{}
+	cluster    Cluster
+	assets     fs.FS
+	files      http.Handler
+	token      string
+	mu         sync.Mutex
+	picker     FilePicker
+	localShell LocalShellOpener
+	sessions   map[*wsSession]struct{}
+	terminals  map[*websocket.Conn]struct{}
 }
 
 func New(cluster Cluster, assets fs.FS, token string) *Server {
@@ -134,6 +135,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/debug/support", s.handleDebugSupport, false},
 		{http.MethodPost, "/api/debug", s.handleDebug, false},
 		{http.MethodGet, "/api/exec", s.handleExec, false},
+		{http.MethodGet, "/api/shell/support", s.handleLocalShellSupport, true},
+		{http.MethodGet, "/api/shell", s.handleLocalShell, true},
 		{http.MethodGet, "/ws", s.handleWS, false},
 	}
 }

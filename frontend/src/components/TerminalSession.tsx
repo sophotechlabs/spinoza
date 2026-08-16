@@ -1,4 +1,6 @@
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useCallback, useState } from 'react';
+import { openExec, openLocalShell } from '../lib/exec';
+import type { ExecHandlers } from '../lib/exec';
 import { useShellSupport } from '../lib/useShellSupport';
 import DebugPrompt from './DebugPrompt';
 import Loading from './Loading';
@@ -9,6 +11,18 @@ interface TerminalSessionProps {
   namespace: string;
   pod: string;
   container: string;
+}
+
+export function LocalTerminalSession() {
+  const open = useCallback((handlers: ExecHandlers) => openLocalShell(handlers), []);
+  const missing = useCallback(() => undefined, []);
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <Suspense fallback={<Loading what="terminal" />}>
+        <TerminalPanel openSession={open} onShellMissing={missing} />
+      </Suspense>
+    </div>
+  );
 }
 
 export default function TerminalSession({ namespace, pod, container }: TerminalSessionProps) {
@@ -43,7 +57,7 @@ export default function TerminalSession({ namespace, pod, container }: TerminalS
         <Suspense fallback={<Loading what="terminal" />}>
           <TerminalPanel
             key={`${namespace}/${pod}/${target}`}
-            target={{ namespace, pod, container: target }}
+            openSession={(handlers) => openExec({ namespace, pod, container: target }, handlers)}
             onShellMissing={markMissing}
           />
         </Suspense>

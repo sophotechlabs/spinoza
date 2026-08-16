@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
+	"github.com/sophotechlabs/spinoza/internal/localshell"
 	"github.com/sophotechlabs/spinoza/internal/server"
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
@@ -122,6 +123,15 @@ func runDesktop() error {
 
 	var window atomic.Pointer[context.Context]
 	srv := server.New(clusters, assets, token)
+	srv.UseLocalShell(func(cols, rows uint16) (server.LocalShell, error) {
+		session, err := localshell.Start(context.Background(), localshell.Options{
+			Size: localshell.Size{Cols: cols, Rows: rows},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return shellAdapter{session: session}, nil
+	})
 	srv.UseFilePicker(func(context.Context) (string, error) {
 		ready := window.Load()
 		if ready == nil {
@@ -216,4 +226,28 @@ func desktopAssets(assets fs.FS, addr, token string) http.Handler {
 		}
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+type shellAdapter struct {
+	session *localshell.Session
+}
+
+func (a shellAdapter) Read(p []byte) (int, error) {
+	return a.session.Read(p)
+}
+
+func (a shellAdapter) Write(p []byte) (int, error) {
+	return a.session.Write(p)
+}
+
+func (a shellAdapter) Resize(cols, rows uint16) {
+	a.session.Resize(localshell.Size{Cols: cols, Rows: rows})
+}
+
+func (a shellAdapter) Done() <-chan error {
+	return a.session.Done()
+}
+
+func (a shellAdapter) Close() {
+	a.session.Close()
 }

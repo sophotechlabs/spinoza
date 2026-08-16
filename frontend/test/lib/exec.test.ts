@@ -9,8 +9,10 @@ import {
   CHANNEL_STDOUT,
   execQuery,
   fetchExecSupport,
+  fetchLocalShellSupport,
   frame,
   openExec,
+  openLocalShell,
   textFrame,
 } from '../../src/lib/exec';
 import type { ExecEnd } from '../../src/lib/exec';
@@ -345,5 +347,73 @@ describe('openExec frames sent before the socket opens', () => {
     session.send('late');
 
     expect(socket.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('the shell on this machine', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens its own endpoint', () => {
+    openLocalShell(handlers());
+
+    expect(latest().url).toContain('/api/shell');
+    expect(latest().url).not.toContain('/api/exec');
+  });
+
+  it('carries what is typed like any other session', () => {
+    const session = openLocalShell(handlers());
+    const socket = latest();
+    socket.readyState = 1;
+
+    session.send('ls\n');
+
+    expect(socket.send).toHaveBeenCalledWith(textFrame(CHANNEL_STDIN, 'ls\n'));
+  });
+
+  it('reports whether the desktop app offers one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ available: true }) })),
+    );
+
+    await expect(fetchLocalShellSupport()).resolves.toEqual({
+      available: true,
+      reason: undefined,
+    });
+  });
+
+  it('passes on the reason a browser tab cannot have one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ available: false, reason: 'desktop only' }),
+        }),
+      ),
+    );
+
+    await expect(fetchLocalShellSupport()).resolves.toEqual({
+      available: false,
+      reason: 'desktop only',
+    });
+  });
+
+  it('throws when the lookup fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ message: 'no' }) }),
+      ),
+    );
+
+    await expect(fetchLocalShellSupport()).rejects.toThrow('no');
   });
 });

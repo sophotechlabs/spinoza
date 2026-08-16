@@ -67,6 +67,16 @@ type FilePicker struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+type LocalShell struct {
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+type TerminalSize struct {
+	Cols uint16 `json:"cols"`
+	Rows uint16 `json:"rows"`
+}
+
 type PickedFile struct {
 	Path string `json:"path"`
 }

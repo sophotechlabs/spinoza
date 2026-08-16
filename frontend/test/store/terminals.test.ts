@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { clearTerminals, sessionId, useTerminalsStore } from '../../src/store/terminals';
+import {
+  LOCAL_SESSION,
+  clearTerminals,
+  sessionId,
+  useTerminalsStore,
+} from '../../src/store/terminals';
 
 function state() {
   return useTerminalsStore.getState();
@@ -88,5 +93,31 @@ describe('terminal sessions', () => {
 
     expect(state().sessions).toHaveLength(0);
     expect(state().active).toBeNull();
+  });
+
+  it('opens a shell on this machine and puts it first', () => {
+    state().open('prod', 'web', 'app');
+
+    state().openLocal();
+
+    expect(ids()).toEqual([LOCAL_SESSION, sessionId('prod', 'web', 'app')]);
+    expect(state().active).toBe(LOCAL_SESSION);
+    expect(state().sessions[0].kind).toBe('local');
+  });
+
+  it('keeps one shell on this machine, not several', () => {
+    state().openLocal();
+    state().open('prod', 'web', 'app');
+
+    state().openLocal();
+
+    expect(ids()).toHaveLength(2);
+    expect(state().active).toBe(LOCAL_SESSION);
+  });
+
+  it('marks pod shells as such', () => {
+    state().open('prod', 'web', 'app');
+
+    expect(state().sessions[0].kind).toBe('pod');
   });
 });
