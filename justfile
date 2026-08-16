@@ -230,9 +230,11 @@ vulns:
     osv-scanner scan source --recursive .
 
 workflows:
-    yamllint .forgejo
+    yamllint .forgejo .github
     actionlint -config-file .forgejo/actionlint.yaml .forgejo/workflows/*.yaml
+    actionlint .github/workflows/*.yaml
     zizmor --no-online-audits --config .forgejo/zizmor.yml .forgejo/workflows/*.yaml
+    zizmor --no-online-audits .github/workflows/*.yaml
 
 hygiene:
     typos
@@ -253,7 +255,7 @@ sbom:
 commits:
     #!/usr/bin/env bash
     set -euo pipefail
-    from=$(node -p "try { require(process.env.GITHUB_EVENT_PATH).before || '' } catch (e) { '' }")
+    from=$(node -p "try { const e = require(process.env.GITHUB_EVENT_PATH); (e.pull_request ? e.pull_request.base.sha : e.before) || '' } catch (e) { '' }")
     if [ -z "$from" ] || ! git cat-file -e "$from^{commit}" 2>/dev/null; then
         from=HEAD~1
     fi
