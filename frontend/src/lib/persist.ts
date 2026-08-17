@@ -1,3 +1,4 @@
+import type { Settings } from './types';
 import { request } from './http';
 
 export const SETTINGS_PATH = '/api/settings';
@@ -138,10 +139,11 @@ export function save(): void {
   if (!saving) {
     return;
   }
+  const settings: Settings = { values: Object.fromEntries(cache()) };
   void request(SETTINGS_PATH, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values: Object.fromEntries(cache()) }),
+    body: JSON.stringify(settings),
   }).catch(() => undefined);
 }
 

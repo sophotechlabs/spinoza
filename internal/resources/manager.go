@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
@@ -79,6 +80,7 @@ func (s *Subscription) Snapshot() ([]api.Row, error) {
 type Manager struct {
 	rootCtx     context.Context
 	dyn         dynamic.Interface
+	meta        metadata.Interface
 	cs          kubernetes.Interface
 	schemas     *jsonschema.Client
 	charts      *charts.Cache
@@ -116,6 +118,7 @@ type Limits struct {
 	SyncTimeout     time.Duration
 	WarmConcurrency int
 	Counts          CountLimits
+	Search          CountLimits
 }
 
 func (l Limits) orDefaults() Limits {
@@ -126,12 +129,14 @@ func (l Limits) orDefaults() Limits {
 		l.WarmConcurrency = warmConcurrency
 	}
 	l.Counts = l.Counts.orDefaults()
+	l.Search = searchLimits(l.Search)
 	return l
 }
 
 type Deps struct {
 	Limits      Limits
 	Dynamic     dynamic.Interface
+	Metadata    metadata.Interface
 	Clientset   kubernetes.Interface
 	Schemas     *jsonschema.Client
 	Forwards    *portforward.Registry
@@ -150,6 +155,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		limits:   limits,
 		rootCtx:  ctx,
 		dyn:      deps.Dynamic,
+		meta:     deps.Metadata,
 		cs:       deps.Clientset,
 		schemas:  deps.Schemas,
 		charts:   chartCache(ctx, deps.Charts),

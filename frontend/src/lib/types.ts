@@ -226,6 +226,21 @@ export interface FilePicker {
   reason?: string;
 }
 
+export interface SearchHit {
+  group: string;
+  version: string;
+  resource: string;
+  kind: string;
+  namespace: string;
+  name: string;
+}
+
+export interface SearchResults {
+  hits: SearchHit[];
+  truncated: boolean;
+  errors?: Record<string, string>;
+}
+
 export interface ViewState {
   window: boolean;
   hidden: boolean;

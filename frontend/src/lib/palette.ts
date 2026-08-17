@@ -1,4 +1,5 @@
-import type { Category, ObjectRef, ResourceDescriptor, View } from './types';
+import type { Category, ObjectRef, ResourceDescriptor, SearchHit, View } from './types';
+import { refOf } from './search';
 
 export const VIEW_LABELS: Record<View, string> = {
   resources: 'Resources',
@@ -37,6 +38,16 @@ function refLabel(ref: ObjectRef): string {
     return ref.name;
   }
   return `${ref.namespace}/${ref.name}`;
+}
+
+export function clusterItems(hits: SearchHit[]): PaletteItem[] {
+  return hits.map((hit) => ({
+    id: `found:${hit.group}/${hit.version}/${hit.resource}/${hit.namespace}/${hit.name}`,
+    label: refLabel(refOf(hit)),
+    hint: hit.kind.toLowerCase(),
+    kind: 'object' as const,
+    ref: refOf(hit),
+  }));
 }
 
 export function paletteItems(categories: Category[], recents: ObjectRef[]): PaletteItem[] {

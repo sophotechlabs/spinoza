@@ -67,6 +67,21 @@ type FilePicker struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+type SearchHit struct {
+	Group     string `json:"group"`
+	Version   string `json:"version"`
+	Resource  string `json:"resource"`
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+type SearchResults struct {
+	Hits      []SearchHit       `json:"hits"`
+	Truncated bool              `json:"truncated"`
+	Errors    map[string]string `json:"errors,omitempty"`
+}
+
 type ViewState struct {
 	Window bool `json:"window"`
 	Hidden bool `json:"hidden"`

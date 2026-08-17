@@ -275,6 +275,15 @@ RowChanged.Type type
 RowDeleted.SubID subId
 RowDeleted.Type type
 RowDeleted.UID uid
+SearchHit.Group group
+SearchHit.Kind kind
+SearchHit.Name name
+SearchHit.Namespace namespace
+SearchHit.Resource resource
+SearchHit.Version version
+SearchResults.Errors errors,omitempty
+SearchResults.Hits hits
+SearchResults.Truncated truncated
 ServerMsg.Columns columns,omitempty
 ServerMsg.Lines lines,omitempty
 ServerMsg.Message message,omitempty

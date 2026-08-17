@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Category, ObjectRef, ResourceDescriptor, View } from '../lib/types';
 import { fetchResources } from '../lib/discovery';
-import { matchItems, paletteItems } from '../lib/palette';
+import { clusterItems, matchItems, paletteItems } from '../lib/palette';
 import type { PaletteItem } from '../lib/palette';
+import { SEARCH_DELAY_MS, searchObjects, worthSearching } from '../lib/search';
+import type { SearchHit } from '../lib/types';
 import { useRecents } from '../store/recents';
 
 interface CommandPaletteProps {
@@ -36,6 +38,9 @@ export default function CommandPalette({
   const [categories, setCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [partial, setPartial] = useState(false);
+  const asked = useRef(0);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -79,7 +84,35 @@ export default function CommandPalette({
     };
   }, [open]);
 
-  const matches = matchItems(paletteItems(categories, recents), query);
+  useEffect(() => {
+    if (!open || !worthSearching(query)) {
+      setHits([]);
+      setPartial(false);
+      return;
+    }
+    asked.current += 1;
+    const mine = asked.current;
+    const timer = setTimeout(() => {
+      searchObjects(query)
+        .then((found) => {
+          if (asked.current !== mine) {
+            return;
+          }
+          setHits(found.hits);
+          setPartial(found.truncated || Object.keys(found.errors ?? {}).length > 0);
+        })
+        .catch(() => {
+          if (asked.current === mine) {
+            setHits([]);
+          }
+        });
+    }, SEARCH_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [open, query]);
+
+  const matches = [...matchItems(paletteItems(categories, recents), query), ...clusterItems(hits)];
   let active = cursor;
   if (active >= matches.length) {
     active = 0;
@@ -141,6 +174,11 @@ export default function CommandPalette({
           className="w-full border-b border-edge bg-surface px-3 py-2 text-fg placeholder:text-fg-muted focus:outline-none"
         />
         {matches.length === 0 && <p className="px-3 py-3 text-fg-muted">Nothing matches that.</p>}
+        {partial && (
+          <p className="border-b border-edge px-3 py-1 text-fg-muted">
+            Some of the cluster could not be searched.
+          </p>
+        )}
         <ul className="max-h-80 overflow-y-auto py-1">
           {matches.slice(0, 60).map((item, index) => (
             <li key={item.id}>

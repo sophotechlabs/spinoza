@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/metadata"
+
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
@@ -122,6 +124,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 			},
 		},
 		Dynamic:     bundle.Dynamic,
+		Metadata:    metaClient(bundle),
 		Clientset:   bundle.Clientset,
 		Schemas:     schemas,
 		Forwards:    forwards,
@@ -135,4 +138,13 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 	})
 	mgr.UseDiscovery(bundle.Discovery, discErr)
 	return mgr, bundle, nil
+}
+
+func metaClient(bundle *kube.Bundle) metadata.Interface {
+	client, err := metadata.NewForConfig(bundle.Config)
+	if err != nil {
+		slog.Warn("searching by name is unavailable", "error", err)
+		return nil
+	}
+	return client
 }
