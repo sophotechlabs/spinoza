@@ -151,6 +151,16 @@ describe('Sidebar', () => {
     expect(header).toHaveAttribute('title', 'Argo CD is not found in this cluster');
   });
 
+  it('drops the missing-engine tooltip once Argo CD is found', async () => {
+    stubFetch(withArgo);
+    renderSidebar();
+
+    const header = await screen.findByRole('button', { name: 'Argo CD' });
+
+    expect(header).toBeEnabled();
+    expect(header.hasAttribute('title')).toBe(false);
+  });
+
   it('lists the Argo CD kinds when Argo CD is found', async () => {
     stubFetch(withArgo);
     renderSidebar();

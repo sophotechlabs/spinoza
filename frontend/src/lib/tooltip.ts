@@ -25,14 +25,29 @@ export function tooltipHost(node: EventTarget | null): HTMLElement | null {
   return found;
 }
 
+export const HELD_TITLE = '';
+
+export function heldTitle(host: HTMLElement): boolean {
+  return host.getAttribute('title') === HELD_TITLE;
+}
+
+export function droppedTitle(host: HTMLElement): boolean {
+  return host.getAttribute('title') === null;
+}
+
 export function claimTitle(host: HTMLElement, describedBy: string): string {
-  const title = host.getAttribute('title') ?? host.getAttribute(TOOLTIP_ATTRIBUTE);
-  if (title === null || title === '') {
-    return '';
+  const title = host.getAttribute('title');
+  if (title === null || title === HELD_TITLE) {
+    const kept = host.getAttribute(TOOLTIP_ATTRIBUTE);
+    if (kept === null || kept === '') {
+      return '';
+    }
+    host.setAttribute('aria-describedby', describedBy);
+    return kept;
   }
   host.setAttribute(TOOLTIP_ATTRIBUTE, title);
   host.setAttribute('aria-describedby', describedBy);
-  host.removeAttribute('title');
+  host.setAttribute('title', HELD_TITLE);
   return title;
 }
 
@@ -44,7 +59,7 @@ export function releaseTitle(host: HTMLElement | null): void {
   if (title === null) {
     return;
   }
-  if (host.getAttribute('title') === null) {
+  if (heldTitle(host)) {
     host.setAttribute('title', title);
   }
   host.removeAttribute(TOOLTIP_ATTRIBUTE);

@@ -6,6 +6,7 @@ import ResourceTable from '../../src/components/ResourceTable';
 import { useResourcesStore } from '../../src/store/resources';
 import { makeColumns, makeDescriptor, makeRow } from '../helpers';
 import { readTableState, tableKey } from '../../src/lib/tableState';
+import { NO_FILTER, imposeFilter } from '../../src/lib/tableFilter';
 
 const SUB = 's1';
 const descriptor = makeDescriptor({ resource: 'pods', kind: 'Pod' });
@@ -27,9 +28,20 @@ function seed(columns: Column[], namespaced: boolean, rows: Row[]): void {
   useResourcesStore.getState().applySnapshot(SUB, columns, namespaced, rows);
 }
 
-function renderTable(active: ResourceDescriptor | null, selected: Row | null, onSelect = vi.fn()) {
+function renderTable(
+  active: ResourceDescriptor | null,
+  selected: Row | null,
+  onSelect = vi.fn(),
+  imposed = NO_FILTER,
+) {
   return render(
-    <ResourceTable active={active} subId={SUB} selected={selected} onSelect={onSelect} />,
+    <ResourceTable
+      active={active}
+      subId={SUB}
+      selected={selected}
+      imposed={imposed}
+      onSelect={onSelect}
+    />,
   );
 }
 
@@ -503,6 +515,67 @@ describe('ResourceTable', () => {
   });
 });
 
+describe('a filter imposed from outside', () => {
+  it('fills the filter box and narrows the rows', async () => {
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'coredns-1', namespace: 'kube-system' }),
+      makeRow({ uid: 'b', name: 'metrics-server', namespace: 'kube-system' }),
+    ]);
+    renderTable(descriptor, null, vi.fn(), imposeFilter(NO_FILTER, 'coredns'));
+
+    expect(await screen.findByRole('searchbox', { name: 'Filter by name' })).toHaveValue('coredns');
+    expect(screen.queryByRole('button', { name: 'metrics-server' })).not.toBeInTheDocument();
+  });
+
+  it('lands again when the same text is imposed a second time', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'coredns-1', namespace: 'kube-system' }),
+    ]);
+    const once = imposeFilter(NO_FILTER, 'coredns');
+    const view = renderTable(descriptor, null, vi.fn(), once);
+    const box = await screen.findByRole('searchbox', { name: 'Filter by name' });
+    await user.clear(box);
+    expect(box).toHaveValue('');
+
+    view.rerender(
+      <ResourceTable
+        active={descriptor}
+        subId={SUB}
+        selected={null}
+        imposed={imposeFilter(once, 'coredns')}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(box).toHaveValue('coredns');
+  });
+
+  it('is dropped when the list moves to another resource', async () => {
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'coredns-1', namespace: 'kube-system' }),
+    ]);
+    const imposed = imposeFilter(NO_FILTER, 'coredns');
+    const view = renderTable(descriptor, null, vi.fn(), imposed);
+    await screen.findByRole('searchbox', { name: 'Filter by name' });
+
+    useResourcesStore
+      .getState()
+      .applySnapshot('s2', makeColumns([]), true, [makeRow({ uid: 'c', name: 'node-1' })]);
+    view.rerender(
+      <ResourceTable
+        active={descriptor}
+        subId="s2"
+        selected={null}
+        imposed={imposed}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('searchbox', { name: 'Filter by name' })).toHaveValue('');
+  });
+});
+
 describe('the selected row', () => {
   it('keeps its highlight under the cursor', async () => {
     const row = makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' });
@@ -590,7 +663,13 @@ describe('selecting several rows at once', () => {
       .getState()
       .applySnapshot('s2', makeColumns([]), true, [makeRow({ uid: 'c', name: 'node-1' })]);
     view.rerender(
-      <ResourceTable active={descriptor} subId="s2" selected={null} onSelect={vi.fn()} />,
+      <ResourceTable
+        active={descriptor}
+        subId="s2"
+        selected={null}
+        imposed={NO_FILTER}
+        onSelect={vi.fn()}
+      />,
     );
 
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
@@ -680,7 +759,15 @@ describe('a sort the user chose', () => {
     useResourcesStore
       .getState()
       .applySnapshot('s2', makeColumns([]), false, [makeRow({ uid: 'c', name: 'node-1' })]);
-    view.rerender(<ResourceTable active={other} subId="s2" selected={null} onSelect={vi.fn()} />);
+    view.rerender(
+      <ResourceTable
+        active={other}
+        subId="s2"
+        selected={null}
+        imposed={NO_FILTER}
+        onSelect={vi.fn()}
+      />,
+    );
 
     expect(screen.getAllByRole('columnheader')[1].textContent).not.toContain('▲');
   });

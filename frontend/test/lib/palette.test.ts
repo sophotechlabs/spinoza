@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import type { ObjectRef } from '../../src/lib/types';
-import { VIEW_LABELS, matchItems, paletteItems } from '../../src/lib/palette';
+import {
+  VIEW_LABELS,
+  clusterItems,
+  matchItems,
+  paletteItems,
+  typeFor,
+} from '../../src/lib/palette';
 import { makeCategory, makeDescriptor } from '../helpers';
 
+const podType = makeDescriptor({ resource: 'pods', kind: 'Pod' });
+const deploymentType = makeDescriptor({
+  group: 'apps',
+  resource: 'deployments',
+  kind: 'Deployment',
+});
+
 const categories = [
-  makeCategory('Workloads', [
-    makeDescriptor({ resource: 'pods', kind: 'Pod' }),
-    makeDescriptor({ group: 'apps', resource: 'deployments', kind: 'Deployment' }),
-  ]),
+  makeCategory('Workloads', [podType, deploymentType]),
   makeCategory('Config', [makeDescriptor({ resource: 'configmaps', kind: 'ConfigMap' })]),
 ];
 
@@ -48,6 +58,51 @@ describe('paletteItems', () => {
     const items = paletteItems([], [{ ...recent, namespace: '', name: 'node-1' }]);
 
     expect(items[0].label).toBe('node-1');
+  });
+
+  it('carries the kind a recent object belongs to, so its list can be opened', () => {
+    const items = paletteItems(categories, [recent]);
+
+    expect(items[0]).toMatchObject({ type: { kind: 'Pod', resource: 'pods' } });
+  });
+
+  it('carries no kind for a recent object discovery no longer knows', () => {
+    const items = paletteItems(categories, [{ ...recent, resource: 'widgets' }]);
+
+    expect(items[0]).toMatchObject({ type: null });
+  });
+});
+
+describe('typeFor', () => {
+  it('finds the discovered kind behind a group, version and resource', () => {
+    expect(typeFor(categories, { group: 'apps', version: 'v1', resource: 'deployments' })).toEqual(
+      deploymentType,
+    );
+  });
+
+  it('has nothing for a resource that is not in the catalog', () => {
+    expect(typeFor(categories, { group: '', version: 'v1', resource: 'widgets' })).toBeNull();
+  });
+});
+
+describe('clusterItems', () => {
+  const hit = {
+    group: 'apps',
+    version: 'v1',
+    resource: 'deployments',
+    kind: 'Deployment',
+    namespace: 'airbyte',
+    name: 'airbyte-server',
+  };
+
+  it('labels a hit with its namespace and names its kind', () => {
+    const items = clusterItems([hit], categories);
+
+    expect(items[0]).toMatchObject({
+      label: 'airbyte/airbyte-server',
+      hint: 'deployment',
+      type: deploymentType,
+    });
   });
 });
 

@@ -1,13 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ContextList } from '../lib/types';
-import {
-  contextGroups,
-  entryFor,
-  everyContext,
-  fetchContexts,
-  sameContext,
-  switchContext,
-} from '../lib/contexts';
+import { contextGroups, fetchContexts, sameContext, switchContext } from '../lib/contexts';
+import type { ContextEntry } from '../lib/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useContextList, useContextsStore } from '../store/contexts';
 import { sessionExpired } from '../store/session';
@@ -18,14 +12,12 @@ interface ContextPickerProps {
   onSwitched: () => void;
 }
 
-const MANAGE = '__manage__';
+const MENU_ROW = 'px-3 py-1.5 text-left whitespace-nowrap hover:bg-surface-active';
 
 const REFRESH_MS = 30000;
 
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 15000;
-
-const UNLISTED = 'unlisted';
 
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) {
@@ -36,6 +28,20 @@ function errorMessage(err: unknown, fallback: string): string {
 
 function retryDelay(attempt: number): number {
   return Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** attempt);
+}
+
+function rowClass(active: boolean): string {
+  if (active) {
+    return `${MENU_ROW} bg-surface-active text-fg-strong`;
+  }
+  return `${MENU_ROW} text-fg-soft`;
+}
+
+function current(active: boolean): 'true' | undefined {
+  if (active) {
+    return 'true';
+  }
+  return undefined;
 }
 
 function currentLabel(list: ContextList): string {
@@ -53,9 +59,9 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [managing, setManaging] = useState(false);
+  const menuRef = useRef<HTMLDetailsElement | null>(null);
 
   const groups = useMemo(() => contextGroups(list), [list]);
-  const selected = everyContext(groups).find((entry) => sameContext(entry, list.current));
 
   useEffect(() => {
     let live = true;
@@ -101,13 +107,21 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
     };
   }, [busy, setList]);
 
-  async function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    if (event.target.value === MANAGE) {
-      setManaging(true);
-      return;
+  function closeMenu() {
+    const menu = menuRef.current;
+    if (menu !== null) {
+      menu.open = false;
     }
-    const entry = entryFor(groups, event.target.value);
-    if (entry === undefined || sameContext(entry, list.current)) {
+  }
+
+  function handleManage() {
+    closeMenu();
+    setManaging(true);
+  }
+
+  async function handleChoose(entry: ContextEntry) {
+    closeMenu();
+    if (busy || sameContext(entry, list.current)) {
       return;
     }
     setBusy(true);
@@ -150,11 +164,11 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
     );
   }
 
-  function manageOption() {
+  function manageEntry() {
     return (
-      <optgroup label="Kubeconfigs">
-        <option value={MANAGE}>Manage kubeconfigs</option>
-      </optgroup>
+      <button type="button" onClick={handleManage} className={`${MENU_ROW} border-t border-edge`}>
+        Manage kubeconfigs
+      </button>
     );
   }
 
@@ -202,34 +216,46 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
 
   return (
     <span className="flex items-center gap-2">
-      <select
-        aria-label="Kubernetes context"
-        value={selected?.value ?? UNLISTED}
-        onChange={(event) => void handleChange(event)}
-        disabled={busy}
-        className={`${CONTROL} max-w-64 border-edge-strong bg-surface-raised font-semibold text-fg-strong disabled:text-fg-subtle`}
-      >
-        {selected === undefined && (
-          <option value={UNLISTED} disabled>
-            {currentLabel(list)}
-          </option>
-        )}
-        {groups.map((group) => (
-          <optgroup key={group.path} label={group.label}>
-            {group.error !== undefined && (
-              <option value={`${group.path}-error`} disabled>
-                {group.error}
-              </option>
-            )}
-            {group.entries.map((entry) => (
-              <option key={entry.value} value={entry.value} title={entry.cluster}>
-                {entry.name}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-        {manageOption()}
-      </select>
+      <details ref={menuRef} className="relative">
+        <summary
+          aria-label="Kubernetes context"
+          title={currentLabel(list)}
+          className={`${CONTROL} max-w-64 cursor-pointer list-none border-edge-strong bg-surface-raised font-semibold text-fg-strong hover:bg-surface-active [&::-webkit-details-marker]:hidden`}
+        >
+          <span className="truncate">{currentLabel(list)}</span>
+          <span aria-hidden="true" className="ml-auto pl-2 text-fg-muted">
+            ▾
+          </span>
+        </summary>
+        <div className="absolute left-0 z-30 mt-1 flex max-h-[70vh] w-max max-w-[36rem] min-w-full flex-col overflow-y-auto rounded border border-edge-strong bg-surface-raised shadow">
+          {groups.map((group) => (
+            <div key={group.path} className="flex flex-col">
+              <div
+                title={group.path}
+                className="truncate px-3 py-1 text-[11px] font-semibold tracking-wide text-fg-muted uppercase"
+              >
+                {group.label}
+              </div>
+              {group.error !== undefined && (
+                <div className="px-3 py-1 text-warn-muted">{group.error}</div>
+              )}
+              {group.entries.map((entry) => (
+                <button
+                  key={entry.value}
+                  type="button"
+                  aria-current={current(sameContext(entry, list.current))}
+                  title={entry.cluster}
+                  onClick={() => void handleChoose(entry)}
+                  className={rowClass(sameContext(entry, list.current))}
+                >
+                  {entry.name}
+                </button>
+              ))}
+            </div>
+          ))}
+          {manageEntry()}
+        </div>
+      </details>
       {busy && <span className="text-fg-muted">switching</span>}
       {error !== null && (
         <span role="status" className="max-w-md truncate text-error">

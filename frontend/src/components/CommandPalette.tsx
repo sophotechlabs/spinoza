@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Category, ObjectRef, ResourceDescriptor, View } from '../lib/types';
+import type { Category, ResourceDescriptor, View } from '../lib/types';
 import { fetchResources } from '../lib/discovery';
 import { clusterItems, matchItems, paletteItems } from '../lib/palette';
-import type { PaletteItem } from '../lib/palette';
+import type { PaletteItem, PaletteOpen } from '../lib/palette';
 import { SEARCH_DELAY_MS, searchObjects, worthSearching } from '../lib/search';
 import type { SearchHit } from '../lib/types';
 import { useRecents } from '../store/recents';
@@ -12,7 +12,7 @@ interface CommandPaletteProps {
   onClose: () => void;
   onSelectView: (view: View) => void;
   onSelectResource: (descriptor: ResourceDescriptor) => void;
-  onSelectObject: (ref: ObjectRef) => void;
+  onOpenObject: (found: PaletteOpen) => void;
 }
 
 function rowClass(active: boolean): string {
@@ -28,7 +28,7 @@ export default function CommandPalette({
   onClose,
   onSelectView,
   onSelectResource,
-  onSelectObject,
+  onOpenObject,
 }: CommandPaletteProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -112,7 +112,10 @@ export default function CommandPalette({
     };
   }, [open, query]);
 
-  const matches = [...matchItems(paletteItems(categories, recents), query), ...clusterItems(hits)];
+  const matches = [
+    ...matchItems(paletteItems(categories, recents), query),
+    ...clusterItems(hits, categories),
+  ];
   let active = cursor;
   if (active >= matches.length) {
     active = 0;
@@ -128,7 +131,7 @@ export default function CommandPalette({
       onSelectResource(item.descriptor);
       return;
     }
-    onSelectObject(item.ref);
+    onOpenObject({ ref: item.ref, type: item.type, filter: query.trim() });
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {

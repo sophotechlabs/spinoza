@@ -232,7 +232,8 @@ vi.mock('../src/components/InspectLogs', () => ({
 
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
-import { clearRecents } from '../src/store/recents';
+import { clearRecents, rememberObject } from '../src/store/recents';
+import { DEFAULT_NAMESPACE, useNamespaceStore } from '../src/store/namespace';
 import { notifyOk, useToastsStore } from '../src/store/toasts';
 import { setUnsaved } from '../src/lib/unsaved';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
@@ -271,6 +272,15 @@ const categories: Category[] = [
   makeCategory('Workloads', [podDescriptor, deploymentDescriptor]),
   makeCategory('Custom resources', [kustomizationDescriptor, argoDescriptor]),
 ];
+
+const clusterHit = {
+  group: 'apps',
+  version: 'v1',
+  resource: 'deployments',
+  kind: 'Deployment',
+  namespace: 'airbyte',
+  name: 'airbyte-server',
+};
 
 const objectDetail = {
   apiVersion: 'v1',
@@ -338,6 +348,18 @@ function stubFetch(): void {
       }
       if (url.startsWith('/api/portforward')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url.startsWith('/api/namespaces')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ names: ['airbyte', 'default', 'prod'] }),
+        });
+      }
+      if (url.startsWith('/api/search')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ hits: [clusterHit], truncated: false }),
+        });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
     }),
@@ -949,6 +971,7 @@ describe('the command palette and shortcuts', () => {
     vi.unstubAllGlobals();
     clearRecents();
     resetStore();
+    useNamespaceStore.getState().choose(DEFAULT_NAMESPACE);
   });
 
   function press(key: string, init: KeyboardEventInit = {}): void {
@@ -971,6 +994,45 @@ describe('the command palette and shortcuts', () => {
       expect.objectContaining({ resource: 'deployments' }),
       'default',
     );
+  });
+
+  it('opens the list, namespace and filter behind an object found in the cluster', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    press('k', { ctrlKey: true });
+    await user.type(await screen.findByLabelText(/Search resources/), 'airbyte');
+    await user.click(await screen.findByRole('button', { name: /airbyte\/airbyte-server/ }));
+
+    expect(await screen.findByLabelText('Filter by name')).toHaveValue('airbyte');
+    expect(screen.getByLabelText('Namespace')).toHaveValue('airbyte');
+    expect(feedMocks.subscribe).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ resource: 'deployments' }),
+      'airbyte',
+    );
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent(
+      'deployments:airbyte/airbyte-server',
+    );
+  });
+
+  it('only inspects an object whose kind discovery no longer knows', async () => {
+    const user = userEvent.setup();
+    rememberObject({
+      group: 'old.example.com',
+      version: 'v1',
+      resource: 'widgets',
+      namespace: 'prod',
+      name: 'w-1',
+    });
+    render(<App />);
+
+    press('k', { ctrlKey: true });
+    await user.click(await screen.findByRole('button', { name: /prod\/w-1/ }));
+
+    expect(await screen.findByTestId('inspect-target')).toHaveTextContent('widgets:prod/w-1');
+    expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Namespace')).toHaveValue('default');
   });
 
   it('switches view from the palette', async () => {
@@ -1293,6 +1355,27 @@ describe('navigating away from an unsaved draft', () => {
     await user.click(await screen.findByRole('button', { name: 'Flux Graph' }));
 
     expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+  });
+
+  it('guards a jump to an object found in the cluster', async () => {
+    const user = userEvent.setup();
+    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+      this.open = false;
+    };
+    render(<App />);
+    await selectPodA(user);
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    await user.click(screen.getByRole('button', { name: /Search/ }));
+    await user.type(await screen.findByLabelText(/Search resources/), 'airbyte');
+
+    await user.click(await screen.findByRole('button', { name: /airbyte\/airbyte-server/ }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+    expect(within(screen.getByRole('banner')).getByLabelText('Namespace')).toHaveValue('default');
   });
 
   it('guards a jump to another object', async () => {

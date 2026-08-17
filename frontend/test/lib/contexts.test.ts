@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addKubeconfig,
   contextGroups,
-  entryFor,
-  everyContext,
   fetchContexts,
   fetchFilePicker,
   pickKubeconfigFile,
@@ -62,7 +60,8 @@ describe('contextGroups', () => {
   });
 
   it('gives a context in two kubeconfigs two values', () => {
-    const values = everyContext(contextGroups(list))
+    const values = contextGroups(list)
+      .flatMap((group) => group.entries)
       .filter((entry) => entry.name === 'p-mk1')
       .map((entry) => entry.value);
 
@@ -96,24 +95,12 @@ describe('contextGroups', () => {
 
 describe('sameContext', () => {
   it('tells apart the same context name in two kubeconfigs', () => {
-    const [fallback, work] = everyContext(contextGroups(list)).filter(
-      (entry) => entry.name === 'p-mk1',
-    );
+    const [fallback, work] = contextGroups(list)
+      .flatMap((group) => group.entries)
+      .filter((entry) => entry.name === 'p-mk1');
 
     expect(sameContext(fallback, { kubeconfig: '', name: 'p-mk1' })).toBe(true);
     expect(sameContext(work, { kubeconfig: '', name: 'p-mk1' })).toBe(false);
-  });
-});
-
-describe('entryFor', () => {
-  it('finds the entry the picker selected', () => {
-    const groups = contextGroups(list);
-
-    expect(entryFor(groups, '1.0')?.kubeconfig).toBe('/home/arch/.kube/work.yaml');
-  });
-
-  it('has nothing for a value no option carries', () => {
-    expect(entryFor(contextGroups(list), 'unlisted')).toBeUndefined();
   });
 });
 

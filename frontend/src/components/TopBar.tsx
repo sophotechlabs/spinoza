@@ -87,27 +87,29 @@ export default function TopBar({
     <header className="flex h-10 shrink-0 items-center gap-4 border-b border-edge bg-surface-raised px-3 text-xs">
       <Wordmark />
       <ContextPicker onSwitched={handleContextChanged} />
-      <ProtectionToggle />
-      <span
-        role="status"
-        aria-label={`The cluster feed is ${status}`}
-        title={`The cluster feed is ${status}`}
-        className={`${ICON_CONTROL} border-transparent`}
-      >
+      <div className="flex items-center gap-1.5">
+        <ProtectionToggle />
         <span
-          data-testid="connection-dot"
-          className={`h-2 w-2 rounded-full ${statusColor(status)}`}
-        />
-      </span>
-      <button
-        type="button"
-        aria-label="Reconnect"
-        title="Reconnect to the cluster"
-        onClick={handleReconnect}
-        className={`${ICON_CONTROL} border-edge-strong text-fg hover:bg-surface-active`}
-      >
-        <ReconnectIcon />
-      </button>
+          role="status"
+          aria-label={`The cluster feed is ${status}`}
+          title={`The cluster feed is ${status}`}
+          className={`${ICON_CONTROL} border-edge-strong`}
+        >
+          <span
+            data-testid="connection-dot"
+            className={`h-2 w-2 rounded-full ${statusColor(status)}`}
+          />
+        </span>
+        <button
+          type="button"
+          aria-label="Reconnect"
+          title="Reconnect to the cluster"
+          onClick={handleReconnect}
+          className={`${ICON_CONTROL} border-edge-strong text-fg hover:bg-surface-active`}
+        >
+          <ReconnectIcon />
+        </button>
+      </div>
       <select
         aria-label="Namespace"
         title="The namespace the resource list shows"

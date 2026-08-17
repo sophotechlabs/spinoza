@@ -1,6 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { TooltipPlacement, TooltipTarget } from '../lib/tooltip';
-import { TOOLTIP_DELAY_MS, claimTitle, place, releaseTitle, tooltipHost } from '../lib/tooltip';
+import {
+  TOOLTIP_DELAY_MS,
+  claimTitle,
+  droppedTitle,
+  place,
+  releaseTitle,
+  tooltipHost,
+} from '../lib/tooltip';
 
 export default function TooltipHost() {
   const [target, setTarget] = useState<TooltipTarget | null>(null);
@@ -39,8 +46,12 @@ export default function TooltipHost() {
 
     function watch(host: HTMLElement) {
       watcher = new MutationObserver(() => {
+        if (droppedTitle(host)) {
+          cancel();
+          return;
+        }
         const next = claimTitle(host, tipId);
-        if (next === '') {
+        if (next === '' || next === label) {
           return;
         }
         label = next;

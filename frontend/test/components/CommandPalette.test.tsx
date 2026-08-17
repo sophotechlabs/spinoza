@@ -5,11 +5,15 @@ import CommandPalette from '../../src/components/CommandPalette';
 import { clearRecents, rememberObject } from '../../src/store/recents';
 import { makeCategory, makeDescriptor } from '../helpers';
 
+const podType = makeDescriptor({ resource: 'pods', kind: 'Pod' });
+const deploymentType = makeDescriptor({
+  group: 'apps',
+  resource: 'deployments',
+  kind: 'Deployment',
+});
+
 const categories = [
-  makeCategory('Workloads', [
-    makeDescriptor({ resource: 'pods', kind: 'Pod' }),
-    makeDescriptor({ group: 'apps', resource: 'deployments', kind: 'Deployment' }),
-  ]),
+  makeCategory('Workloads', [podType, deploymentType]),
   makeCategory('Custom resources', [
     makeDescriptor({
       group: 'kustomize.toolkit.fluxcd.io',
@@ -75,17 +79,17 @@ function renderPalette(open = true) {
   const onClose = vi.fn();
   const onSelectView = vi.fn();
   const onSelectResource = vi.fn();
-  const onSelectObject = vi.fn();
+  const onOpenObject = vi.fn();
   const view = render(
     <CommandPalette
       open={open}
       onClose={onClose}
       onSelectView={onSelectView}
       onSelectResource={onSelectResource}
-      onSelectObject={onSelectObject}
+      onOpenObject={onOpenObject}
     />,
   );
-  return { onClose, onSelectView, onSelectResource, onSelectObject, view };
+  return { onClose, onSelectView, onSelectResource, onOpenObject, view };
 }
 
 beforeEach(() => {
@@ -197,11 +201,15 @@ describe('CommandPalette', () => {
       namespace: 'prod',
       name: 'web-0',
     });
-    const { onSelectObject } = renderPalette();
+    const { onOpenObject } = renderPalette();
 
     await user.click(await screen.findByRole('button', { name: /prod\/web-0/ }));
 
-    expect(onSelectObject).toHaveBeenCalledWith(expect.objectContaining({ name: 'web-0' }));
+    expect(onOpenObject).toHaveBeenCalledWith({
+      ref: { group: '', version: 'v1', resource: 'pods', namespace: 'prod', name: 'web-0' },
+      type: podType,
+      filter: '',
+    });
   });
 
   it('carries on with just views when discovery fails', async () => {
@@ -213,7 +221,7 @@ describe('CommandPalette', () => {
 
   it('forgets the query between openings', async () => {
     const user = userEvent.setup();
-    const { view, onClose, onSelectView, onSelectResource, onSelectObject } = renderPalette();
+    const { view, onClose, onSelectView, onSelectResource, onOpenObject } = renderPalette();
     await screen.findByRole('button', { name: /Pod/ });
     await user.type(screen.getByLabelText(/Search resources/), 'deploy');
 
@@ -223,7 +231,7 @@ describe('CommandPalette', () => {
         onClose={onClose}
         onSelectView={onSelectView}
         onSelectResource={onSelectResource}
-        onSelectObject={onSelectObject}
+        onOpenObject={onOpenObject}
       />,
     );
 
@@ -285,17 +293,21 @@ describe('CommandPalette', () => {
   it('opens the object a cluster hit points at', async () => {
     const user = userEvent.setup();
     stubSearch({ hits: [clusterHit] });
-    const { onSelectObject, onClose } = renderPalette();
+    const { onOpenObject, onClose } = renderPalette();
 
     await user.type(screen.getByLabelText(/Search resources/), 'airbyte');
     await user.click(await screen.findByRole('button', { name: /airbyte\/airbyte-server/ }));
 
-    expect(onSelectObject).toHaveBeenCalledWith({
-      group: 'apps',
-      version: 'v1',
-      resource: 'deployments',
-      namespace: 'airbyte',
-      name: 'airbyte-server',
+    expect(onOpenObject).toHaveBeenCalledWith({
+      ref: {
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+        namespace: 'airbyte',
+        name: 'airbyte-server',
+      },
+      type: deploymentType,
+      filter: 'airbyte',
     });
     expect(onClose).toHaveBeenCalled();
   });

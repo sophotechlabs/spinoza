@@ -18,7 +18,9 @@ import { focusFilter, useHotkeys } from './lib/hotkeys';
 import { mayDiscard } from './lib/unsaved';
 import { clearRecents, rememberObject } from './store/recents';
 import { clearHistory } from './store/toasts';
-import { useNamespace } from './store/namespace';
+import { useNamespace, useNamespaceStore } from './store/namespace';
+import { NO_FILTER, imposeFilter } from './lib/tableFilter';
+import type { PaletteOpen } from './lib/palette';
 import { clearTerminals } from './store/terminals';
 import { notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
@@ -65,6 +67,7 @@ export default function App() {
   const [moved, setMoved] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
+  const [imposed, setImposed] = useState(NO_FILTER);
 
   const key = resourceKey(route.resource);
   const [lastKey, setLastKey] = useState(key);
@@ -83,6 +86,7 @@ export default function App() {
 
   const { subscribe, unsubscribe, subscribeLogs, unsubscribeLogs } = feed;
   const namespace = useNamespace();
+  const chooseNamespace = useNamespaceStore((state) => state.choose);
   const selectedRow = useRowForRef(subId, active, route.selection);
   const selection = useMemo<Selection | null>(() => {
     if (route.selection === null) {
@@ -231,6 +235,32 @@ export default function App() {
     navigate({ ...route, selection: ref });
   }
 
+  function openFound(found: PaletteOpen) {
+    if (!mayDiscard()) {
+      return;
+    }
+    rememberObject(found.ref);
+    if (found.type === null) {
+      navigate({ ...route, selection: found.ref });
+      return;
+    }
+    if (found.ref.namespace !== '') {
+      chooseNamespace(found.ref.namespace);
+    }
+    setImposed((current) => imposeFilter(current, found.filter));
+    navigate({
+      context: route.context,
+      view: 'resources',
+      resource: {
+        group: found.type.group,
+        version: found.type.version,
+        resource: found.type.resource,
+        kind: found.type.kind,
+      },
+      selection: found.ref,
+    });
+  }
+
   function handleSelectRow(row: Row) {
     remember(refFromRow(active, row));
   }
@@ -250,6 +280,7 @@ export default function App() {
       active={active}
       subId={subId}
       selected={selectedRow}
+      imposed={imposed}
       onSelect={handleSelectRow}
     />
   );
@@ -347,7 +378,7 @@ export default function App() {
           }}
           onSelectView={handleSelectView}
           onSelectResource={handleSelectResource}
-          onSelectObject={remember}
+          onOpenObject={openFound}
         />
       </ErrorBoundary>
       <ErrorBoundary label="Settings">

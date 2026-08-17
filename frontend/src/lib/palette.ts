@@ -17,7 +17,39 @@ const VIEW_ORDER: View[] = ['cluster', 'resources', 'helm', 'flux-roles', 'gitop
 export type PaletteItem =
   | { id: string; label: string; hint: string; kind: 'view'; view: View }
   | { id: string; label: string; hint: string; kind: 'resource'; descriptor: ResourceDescriptor }
-  | { id: string; label: string; hint: string; kind: 'object'; ref: ObjectRef };
+  | {
+      id: string;
+      label: string;
+      hint: string;
+      kind: 'object';
+      ref: ObjectRef;
+      type: ResourceDescriptor | null;
+    };
+
+export interface PaletteOpen {
+  ref: ObjectRef;
+  type: ResourceDescriptor | null;
+  filter: string;
+}
+
+function gvrKey(gvr: { group: string; version: string; resource: string }): string {
+  return `${gvr.group}/${gvr.version}/${gvr.resource}`;
+}
+
+export function typeFor(
+  categories: Category[],
+  gvr: { group: string; version: string; resource: string },
+): ResourceDescriptor | null {
+  const wanted = gvrKey(gvr);
+  for (const category of categories) {
+    for (const descriptor of category.resources) {
+      if (gvrKey(descriptor) === wanted) {
+        return descriptor;
+      }
+    }
+  }
+  return null;
+}
 
 function groupLabel(descriptor: ResourceDescriptor): string {
   if (descriptor.group === '') {
@@ -33,13 +65,14 @@ function refLabel(ref: ObjectRef): string {
   return `${ref.namespace}/${ref.name}`;
 }
 
-export function clusterItems(hits: SearchHit[]): PaletteItem[] {
+export function clusterItems(hits: SearchHit[], categories: Category[]): PaletteItem[] {
   return hits.map((hit) => ({
     id: `found:${hit.group}/${hit.version}/${hit.resource}/${hit.namespace}/${hit.name}`,
     label: refLabel(refOf(hit)),
     hint: hit.kind.toLowerCase(),
     kind: 'object' as const,
     ref: refOf(hit),
+    type: typeFor(categories, hit),
   }));
 }
 
@@ -65,6 +98,7 @@ export function paletteItems(categories: Category[], recents: ObjectRef[]): Pale
       hint: `recent ${ref.resource}`,
       kind: 'object',
       ref,
+      type: typeFor(categories, ref),
     });
   }
   for (const view of offered(categories)) {

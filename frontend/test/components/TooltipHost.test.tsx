@@ -47,14 +47,14 @@ describe('TooltipHost', () => {
     );
   });
 
-  it('takes the title off the element so the browser does not draw its own', () => {
+  it('empties the title so the browser does not draw its own', () => {
     render(<TooltipHost />);
     const host = withTitle('Reconnect');
 
     fireEvent.mouseOver(host);
     settle(TOOLTIP_DELAY_MS);
 
-    expect(host.hasAttribute('title')).toBe(false);
+    expect(host.getAttribute('title')).toBe('');
     expect(host).toHaveAttribute('data-tooltip', 'Reconnect');
     expect(host).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id);
   });
@@ -258,6 +258,40 @@ describe('TooltipHost', () => {
 
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     expect(host.getAttribute('data-tooltip')).toBeNull();
+  });
+
+  it('closes when the app takes the title away while the tooltip is open', async () => {
+    render(<TooltipHost />);
+    const host = withTitle('Argo CD is not found in this cluster');
+
+    fireEvent.mouseOver(host);
+    settle(TOOLTIP_DELAY_MS);
+    host.removeAttribute('title');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(host.hasAttribute('title')).toBe(false);
+    expect(host.hasAttribute('data-tooltip')).toBe(false);
+  });
+
+  it('does not put a withdrawn title back when the pointer leaves', async () => {
+    render(<TooltipHost />);
+    const host = withTitle('Argo CD is not found in this cluster');
+
+    fireEvent.mouseOver(host);
+    settle(TOOLTIP_DELAY_MS);
+    host.removeAttribute('title');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.mouseOut(host);
+    fireEvent.mouseOver(host);
+    settle(TOOLTIP_DELAY_MS);
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(host.hasAttribute('title')).toBe(false);
   });
 
   it('keeps the last words when the app empties the title', async () => {

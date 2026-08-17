@@ -43,12 +43,19 @@ describe('tooltipHost', () => {
 });
 
 describe('claimTitle', () => {
-  it('takes the title off the element so the slow native tooltip cannot fire', () => {
+  it('empties the title so the slow native tooltip cannot fire', () => {
     const host = element('<button title="Reconnect">go</button>');
 
     expect(claimTitle(host, 'tip-1')).toBe('Reconnect');
-    expect(host.hasAttribute('title')).toBe(false);
+    expect(host.getAttribute('title')).toBe('');
     expect(host.getAttribute(TOOLTIP_ATTRIBUTE)).toBe('Reconnect');
+  });
+
+  it('keeps speaking for an element it is already holding', () => {
+    const host = element('<button title="Reconnect">go</button>');
+    claimTitle(host, 'tip-1');
+
+    expect(claimTitle(host, 'tip-1')).toBe('Reconnect');
   });
 
   it('points a screen reader at the tooltip that replaced the title', () => {
@@ -64,6 +71,12 @@ describe('claimTitle', () => {
 
     expect(claimTitle(host, 'tip-1')).toBe('');
     expect(host.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('reports nothing for an element with no title at all', () => {
+    const host = element('<button>go</button>');
+
+    expect(claimTitle(host, 'tip-1')).toBe('');
   });
 
   it('still speaks for an element left claimed by an earlier hover', () => {
@@ -85,6 +98,27 @@ describe('releaseTitle', () => {
     expect(host).toHaveAttribute('title', 'Reconnect');
     expect(host.hasAttribute(TOOLTIP_ATTRIBUTE)).toBe(false);
     expect(host.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('leaves the title off when the app dropped it while the tooltip was open', () => {
+    const host = element('<button title="Argo CD is not found in this cluster">go</button>');
+    claimTitle(host, 'tip-1');
+    host.removeAttribute('title');
+
+    releaseTitle(host);
+
+    expect(host.hasAttribute('title')).toBe(false);
+    expect(host.hasAttribute(TOOLTIP_ATTRIBUTE)).toBe(false);
+  });
+
+  it('leaves a title the app rewrote while the tooltip was open', () => {
+    const host = element('<button title="first">go</button>');
+    claimTitle(host, 'tip-1');
+    host.setAttribute('title', 'second');
+
+    releaseTitle(host);
+
+    expect(host).toHaveAttribute('title', 'second');
   });
 
   it('leaves an element it never claimed alone', () => {

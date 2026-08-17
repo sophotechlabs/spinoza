@@ -6,12 +6,19 @@ import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { expireSession } from '../../src/store/session';
 
-function selectedOption(scope: HTMLElement, name: string): HTMLOptionElement {
-  const option = within(scope).getByRole('option', { name });
-  if (!(option instanceof HTMLOptionElement)) {
-    throw new Error(`${name} is not an option`);
+async function openMenu(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+  const summary = await screen.findByLabelText('Kubernetes context');
+  await user.click(summary);
+  const menu = summary.parentElement;
+  if (menu === null) {
+    throw new Error('the context menu has no parent');
   }
-  return option;
+  return menu;
+}
+
+async function pick(user: ReturnType<typeof userEvent.setup>, name: string, at = 0): Promise<void> {
+  await openMenu(user);
+  await user.click(screen.getAllByRole('button', { name })[at]);
 }
 
 function defaultKubeconfig(names: string[]) {
@@ -66,14 +73,31 @@ afterEach(() => {
 });
 
 describe('ContextPicker', () => {
-  it('lists every context with the current one selected', async () => {
+  it('lists every context and marks the one in use', async () => {
+    const user = userEvent.setup();
     stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
 
     render(<ContextPicker onSwitched={vi.fn()} />);
+    await openMenu(user);
 
-    const picker = await screen.findByLabelText('Kubernetes context');
-    expect(selectedOption(picker, 'p-mk2').selected).toBe(true);
-    expect(screen.getByRole('option', { name: 'p-mk1' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Kubernetes context')).toHaveTextContent('p-mk2');
+    expect(screen.getByRole('button', { name: 'p-mk1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'p-mk2' })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('opens with the whole list in view, not scrolled to the context in use', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2', 'p-mk3'], 'p-mk3'));
+
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    const menu = await openMenu(user);
+
+    expect(menu).toHaveAttribute('open');
+    expect(
+      within(menu)
+        .getAllByRole('button')
+        .map((one) => one.textContent),
+    ).toEqual(['p-mk1', 'p-mk2', 'p-mk3', 'Manage kubeconfigs']);
   });
 
   it('groups the contexts under the kubeconfig they came from', async () => {
@@ -90,16 +114,14 @@ describe('ContextPicker', () => {
       ],
     });
 
+    const user = userEvent.setup();
     render(<ContextPicker onSwitched={vi.fn()} />);
 
-    const picker = await screen.findByLabelText('Kubernetes context');
-    const groups = within(picker).getAllByRole('group');
-    expect(groups.map((group) => group.getAttribute('label'))).toEqual([
-      '/home/arch/.kube/config',
-      '/home/arch/.kube/work.yaml',
-      'Kubeconfigs',
-    ]);
-    expect(screen.getByRole('option', { name: 'staging' })).toHaveAttribute(
+    const menu = await openMenu(user);
+
+    expect(within(menu).getByText('/home/arch/.kube/config')).toBeInTheDocument();
+    expect(within(menu).getByText('/home/arch/.kube/work.yaml')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'staging' })).toHaveAttribute(
       'title',
       'cluster work, namespace apps',
     );
@@ -113,9 +135,8 @@ describe('ContextPicker', () => {
     );
     const onSwitched = vi.fn();
     render(<ContextPicker onSwitched={onSwitched} />);
-    await screen.findByLabelText('Kubernetes context');
 
-    await user.selectOptions(screen.getByLabelText('Kubernetes context'), '0.0');
+    await pick(user, 'p-mk1');
 
     await waitFor(() => {
       expect(onSwitched).toHaveBeenCalled();
@@ -144,9 +165,8 @@ describe('ContextPicker', () => {
       kubeconfigs: [defaultKubeconfig(['p-mk1']), second],
     });
     render(<ContextPicker onSwitched={vi.fn()} />);
-    await screen.findByLabelText('Kubernetes context');
 
-    await user.selectOptions(screen.getByLabelText('Kubernetes context'), '1.0');
+    await pick(user, 'p-mk1', 1);
 
     await waitFor(() => {
       expect(calls.some((call) => call.method === 'POST')).toBe(true);
@@ -160,9 +180,8 @@ describe('ContextPicker', () => {
     stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
     const onSwitched = vi.fn();
     render(<ContextPicker onSwitched={onSwitched} />);
-    await screen.findByLabelText('Kubernetes context');
 
-    await user.selectOptions(screen.getByLabelText('Kubernetes context'), '0.0');
+    await pick(user, 'p-mk1');
 
     expect(await screen.findByText('context "gone" does not exist')).toBeInTheDocument();
     expect(onSwitched).not.toHaveBeenCalled();
@@ -199,8 +218,7 @@ describe('ContextPicker', () => {
 
     render(<ContextPicker onSwitched={vi.fn()} />);
 
-    const picker = await screen.findByLabelText('Kubernetes context');
-    expect(selectedOption(picker, 'orphan').selected).toBe(true);
+    expect(await screen.findByLabelText('Kubernetes context')).toHaveTextContent('orphan');
   });
 
   it('shows why a kubeconfig produced no contexts next to the ones that did', async () => {
@@ -218,11 +236,13 @@ describe('ContextPicker', () => {
       ],
     });
 
+    const user = userEvent.setup();
     render(<ContextPicker onSwitched={vi.fn()} />);
 
-    const picker = await screen.findByLabelText('Kubernetes context');
-    expect(within(picker).getByText(/no such file or directory/)).toBeInTheDocument();
-    expect(within(picker).getByRole('option', { name: 'p-mk1' })).toBeInTheDocument();
+    const menu = await openMenu(user);
+
+    expect(within(menu).getByText(/no such file or directory/)).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: 'p-mk1' })).toBeInTheDocument();
   });
 
   it('reports a listing the server refused instead of an empty header slot', async () => {
@@ -257,8 +277,7 @@ describe('ContextPicker', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
-    const picker = await screen.findByLabelText('Kubernetes context');
-    expect(selectedOption(picker, 'p-mk1').selected).toBe(true);
+    expect(await screen.findByLabelText('Kubernetes context')).toHaveTextContent('p-mk1');
   });
 
   it('keeps retrying on its own until the backend comes back', async () => {
@@ -302,9 +321,8 @@ describe('ContextPicker', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     render(<ContextPicker onSwitched={vi.fn()} />);
-    await screen.findByLabelText('Kubernetes context');
 
-    await user.selectOptions(screen.getByLabelText('Kubernetes context'), '0.0');
+    await pick(user, 'p-mk1');
 
     expect(await screen.findByText('switching context failed')).toBeInTheDocument();
   });
@@ -367,9 +385,8 @@ describe('ContextPicker', () => {
     const user = userEvent.setup();
     const calls = stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
     render(<ContextPicker onSwitched={vi.fn()} />);
-    await screen.findByLabelText('Kubernetes context');
 
-    await user.selectOptions(screen.getByLabelText('Kubernetes context'), '0.1');
+    await pick(user, 'p-mk2');
 
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0);
   });
@@ -404,19 +421,17 @@ describe('ContextPicker', () => {
     const user = userEvent.setup();
     stubContexts(listOf(['p-mk1'], 'p-mk1'));
     render(<ContextPicker onSwitched={vi.fn()} />);
-    await screen.findByLabelText('Kubernetes context');
 
-    await user.selectOptions(screen.getByLabelText('Kubernetes context'), 'Manage kubeconfigs');
+    await pick(user, 'Manage kubeconfigs');
 
-    expect(await screen.findByText('/home/arch/.kube/config')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Add a kubeconfig')).toBeInTheDocument();
   });
 
   it('closes the kubeconfig list again', async () => {
     const user = userEvent.setup();
     stubContexts(listOf(['p-mk1'], 'p-mk1'));
     render(<ContextPicker onSwitched={vi.fn()} />);
-    await screen.findByLabelText('Kubernetes context');
-    await user.selectOptions(screen.getByLabelText('Kubernetes context'), 'Manage kubeconfigs');
+    await pick(user, 'Manage kubeconfigs');
 
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
@@ -452,13 +467,12 @@ describe('ContextPicker', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     render(<ContextPicker onSwitched={vi.fn()} />);
-    await screen.findByLabelText('Kubernetes context');
-    await user.selectOptions(screen.getByLabelText('Kubernetes context'), 'Manage kubeconfigs');
+    await pick(user, 'Manage kubeconfigs');
 
     await user.type(screen.getByLabelText('Add a kubeconfig'), '/home/arch/.kube/work.yaml');
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    expect(await screen.findByRole('option', { name: 'staging' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'staging' })).toBeInTheDocument();
   });
 
   it('notices on its own that a kubeconfig stopped reading', async () => {
@@ -536,12 +550,13 @@ describe('ContextPicker', () => {
   });
 
   it('offers kubeconfig management inside the dropdown, not beside it', async () => {
+    const user = userEvent.setup();
     stubContexts(listOf(['p-mk1'], 'p-mk1'));
     render(<ContextPicker onSwitched={vi.fn()} />);
 
-    await screen.findByLabelText('Kubernetes context');
+    await openMenu(user);
 
-    expect(screen.getByRole('option', { name: 'Manage kubeconfigs' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage kubeconfigs' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Kubeconfigs' })).not.toBeInTheDocument();
   });
 
@@ -549,12 +564,11 @@ describe('ContextPicker', () => {
     const user = userEvent.setup();
     const calls = stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
     render(<ContextPicker onSwitched={vi.fn()} />);
-    const picker = await screen.findByLabelText('Kubernetes context');
 
-    await user.selectOptions(picker, 'Manage kubeconfigs');
+    await pick(user, 'Manage kubeconfigs');
 
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0);
-    expect(await screen.findByText('/home/arch/.kube/config')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Kubernetes context')).toHaveTextContent('p-mk1');
   });
 
   it('still reaches the kubeconfigs when there is no context to pick', async () => {

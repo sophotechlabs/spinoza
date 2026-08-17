@@ -1,15 +1,14 @@
 import type { Row } from './types';
 
-export const ALL_NAMESPACES = '';
+export interface ImposedFilter {
+  text: string;
+  at: number;
+}
 
-export function namespacesOf(rows: Row[]): string[] {
-  const seen = new Set<string>();
-  for (const row of rows) {
-    if (row.namespace !== '') {
-      seen.add(row.namespace);
-    }
-  }
-  return [...seen].sort((a, b) => a.localeCompare(b));
+export const NO_FILTER: ImposedFilter = { text: '', at: 0 };
+
+export function imposeFilter(current: ImposedFilter, text: string): ImposedFilter {
+  return { text, at: current.at + 1 };
 }
 
 export function filterRows(rows: Row[], query: string): Row[] {

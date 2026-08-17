@@ -32,6 +32,7 @@ import { useElementWidth } from '../lib/useElementWidth';
 import { useNow } from '../lib/useNow';
 import { ago } from '../lib/time';
 import { filterRows } from '../lib/tableFilter';
+import type { ImposedFilter } from '../lib/tableFilter';
 import { FILTER_INPUT_ID } from '../lib/hotkeys';
 import { opensRow } from '../lib/rowClick';
 import { columnLabel, readTableState, tableKey, writeTableState } from '../lib/tableState';
@@ -46,6 +47,7 @@ interface ResourceTableProps {
   active: ResourceDescriptor | null;
   subId: string;
   selected: Row | null;
+  imposed: ImposedFilter;
   onSelect: (row: Row) => void;
 }
 
@@ -158,7 +160,13 @@ function rowClass(selected: boolean): string {
 
 const columnHelper = createColumnHelper<Row>();
 
-export default function ResourceTable({ active, subId, selected, onSelect }: ResourceTableProps) {
+export default function ResourceTable({
+  active,
+  subId,
+  selected,
+  imposed,
+  onSelect,
+}: ResourceTableProps) {
   const dataColumns = useSubColumns(subId);
   const namespaced = useSubNamespaced(subId);
   const rows = useSubRows(subId);
@@ -172,7 +180,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   );
   const [sizing, setSizing] = useState<ColumnSizingState>(() => readTableState(stateKey).sizing);
   const [selection, setSelection] = useState<RowSelectionState>({});
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(imposed.text);
   const [lastResource, setLastResource] = useState(subId);
   if (subId !== lastResource) {
     setLastResource(subId);
@@ -182,6 +190,11 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     setSizing(next.sizing);
     setSelection({});
     setQuery('');
+  }
+  const [lastImposed, setLastImposed] = useState(imposed.at);
+  if (imposed.at !== lastImposed) {
+    setLastImposed(imposed.at);
+    setQuery(imposed.text);
   }
 
   function changeSorting(next: SortingState) {

@@ -100,16 +100,8 @@ export function contextGroups(list: ContextList): ContextGroup[] {
   }));
 }
 
-export function everyContext(groups: ContextGroup[]): ContextEntry[] {
-  return groups.flatMap((group) => group.entries);
-}
-
 export function sameContext(entry: ContextEntry, current: ContextRef): boolean {
   return entry.kubeconfig === current.kubeconfig && entry.name === current.name;
-}
-
-export function entryFor(groups: ContextGroup[], value: string): ContextEntry | undefined {
-  return everyContext(groups).find((entry) => entry.value === value);
 }
 
 export async function fetchContexts(): Promise<ContextList> {

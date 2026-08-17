@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterRows, namespacesOf } from '../../src/lib/tableFilter';
+import { NO_FILTER, filterRows, imposeFilter } from '../../src/lib/tableFilter';
 import { makeRow } from '../helpers';
 
 const rows = [
@@ -10,8 +10,12 @@ const rows = [
 ];
 
 describe('tableFilter', () => {
-  it('lists sorted, unique, non-empty namespaces', () => {
-    expect(namespacesOf(rows)).toEqual(['prod', 'staging']);
+  it('counts every imposed filter, so the same text lands twice', () => {
+    const once = imposeFilter(NO_FILTER, 'coredns');
+    const twice = imposeFilter(once, 'coredns');
+
+    expect(once).toEqual({ text: 'coredns', at: 1 });
+    expect(twice).toEqual({ text: 'coredns', at: 2 });
   });
 
   it('returns everything with no query', () => {
