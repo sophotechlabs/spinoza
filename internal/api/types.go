@@ -67,6 +67,10 @@ type FilePicker struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+type Settings struct {
+	Values map[string]string `json:"values"`
+}
+
 type LocalShell struct {
 	Available bool   `json:"available"`
 	Reason    string `json:"reason,omitempty"`

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readStored } from '../../src/lib/persist';
 import {
   BUILT_IN_THEMES,
   CANVAS_NAMES,
@@ -54,7 +55,7 @@ describe('parseTheme', () => {
 describe('a preference that outlives the tab', () => {
   it('round-trips through storage', () => {
     writeTheme('light');
-    expect(window.localStorage.getItem(THEME_KEY)).toBe('light');
+    expect(readStored(THEME_KEY)).toBe('light');
     expect(readTheme()).toBe('light');
   });
 
@@ -201,7 +202,7 @@ describe('what the pre-paint script replays', () => {
   it('records the base and tokens actually applied', () => {
     applyTheme(NORD);
 
-    const stored: unknown = JSON.parse(window.localStorage.getItem(PAINTED_KEY) ?? 'null');
+    const stored: unknown = JSON.parse(readStored(PAINTED_KEY) ?? 'null');
     expect(stored).toEqual({ base: 'dark', tokens: NORD.tokens });
   });
 

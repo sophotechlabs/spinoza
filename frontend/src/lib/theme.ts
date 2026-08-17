@@ -1,3 +1,4 @@
+import { readStored, writeStored } from './persist';
 export const SYSTEM = 'system';
 
 export type ThemePreference = string;
@@ -178,19 +179,11 @@ export function parseTheme(raw: string | null): ThemePreference {
 }
 
 export function readTheme(): ThemePreference {
-  try {
-    return parseTheme(window.localStorage.getItem(THEME_KEY));
-  } catch {
-    return 'dark';
-  }
+  return parseTheme(readStored(THEME_KEY));
 }
 
 export function writeTheme(preference: ThemePreference): void {
-  try {
-    window.localStorage.setItem(THEME_KEY, preference);
-  } catch {
-    return;
-  }
+  writeStored(THEME_KEY, preference);
 }
 
 export function systemTheme(): ThemeBase {
@@ -244,11 +237,7 @@ export function painted(theme: Theme): PaintedTheme {
 }
 
 function recordPainted(theme: Theme): void {
-  try {
-    window.localStorage.setItem(PAINTED_KEY, JSON.stringify(painted(theme)));
-  } catch {
-    return;
-  }
+  writeStored(PAINTED_KEY, JSON.stringify(painted(theme)));
 }
 
 export function applyTheme(theme: Theme): void {

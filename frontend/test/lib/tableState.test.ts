@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readStored } from '../../src/lib/persist';
 import {
   TABLE_STATE_KEY,
   columnLabel,
@@ -144,7 +145,7 @@ describe('reading and writing a table', () => {
   it('stores nothing without a resource', () => {
     writeTableState('', { sorting: [{ id: 'name', desc: true }], visibility: {}, sizing: {} });
 
-    expect(window.localStorage.getItem(TABLE_STATE_KEY)).toBeNull();
+    expect(readStored(TABLE_STATE_KEY)).toBeNull();
     expect(readTableState('')).toEqual(emptyTableState());
   });
 });

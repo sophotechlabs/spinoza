@@ -1,13 +1,9 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import type { TerminalSize } from './types';
 import type { XtermTheme } from './themeColors';
 import { prefersReducedMotion } from './motion';
-
-interface TerminalSize {
-  cols: number;
-  rows: number;
-}
 
 export interface TerminalTheme {
   background: string;

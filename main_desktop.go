@@ -29,6 +29,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/localshell"
 	"github.com/sophotechlabs/spinoza/internal/server"
+	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
@@ -123,6 +124,7 @@ func runDesktop() error {
 
 	var window atomic.Pointer[context.Context]
 	srv := server.New(clusters, assets, token)
+	keepSettings(srv)
 	srv.UseLocalShell(func(cols, rows uint16) (server.LocalShell, error) {
 		session, err := localshell.Start(context.Background(), localshell.Options{
 			Size: localshell.Size{Cols: cols, Rows: rows},
@@ -250,4 +252,17 @@ func (a shellAdapter) Done() <-chan error {
 
 func (a shellAdapter) Close() {
 	a.session.Close()
+}
+
+func keepSettings(srv *server.Server) {
+	path, err := settingsstore.DefaultPath()
+	if err != nil {
+		slog.Warn("settings will not be kept", "error", err)
+		return
+	}
+	store, openErr := settingsstore.Open(path)
+	if openErr != nil {
+		slog.Warn("the stored settings could not be read", "error", openErr)
+	}
+	srv.UseSettings(store)
 }

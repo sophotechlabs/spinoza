@@ -226,6 +226,10 @@ export interface FilePicker {
   reason?: string;
 }
 
+export interface Settings {
+  values: Record<string, string>;
+}
+
 export interface LocalShell {
   available: boolean;
   reason?: string;

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readStored, resetStored, writeStored } from '../../src/lib/persist';
 import { BUILT_IN_THEMES, THEME_KEY } from '../../src/lib/theme';
 import { emitSystemDark, setSystemDark } from '../helpers';
 
@@ -8,13 +9,13 @@ async function freshStore() {
 }
 
 beforeEach(() => {
-  window.localStorage.clear();
+  resetStored();
   setSystemDark(false);
   delete document.documentElement.dataset.theme;
 });
 
 afterEach(() => {
-  window.localStorage.clear();
+  resetStored();
   setSystemDark(false);
 });
 
@@ -28,7 +29,7 @@ describe('the theme a returning user gets', () => {
   });
 
   it('is whatever they picked last time', async () => {
-    window.localStorage.setItem(THEME_KEY, 'light');
+    writeStored(THEME_KEY, 'light');
     const { useThemeStore } = await freshStore();
 
     expect(useThemeStore.getState().preference).toBe('light');
@@ -37,7 +38,7 @@ describe('the theme a returning user gets', () => {
   });
 
   it('follows the operating system when they asked it to', async () => {
-    window.localStorage.setItem(THEME_KEY, 'system');
+    writeStored(THEME_KEY, 'system');
     setSystemDark(true);
     const { useThemeStore } = await freshStore();
 
@@ -53,7 +54,7 @@ describe('choosing a theme', () => {
     useThemeStore.getState().setPreference('light');
 
     expect(useThemeStore.getState().resolved.id).toBe('light');
-    expect(window.localStorage.getItem(THEME_KEY)).toBe('light');
+    expect(readStored(THEME_KEY)).toBe('light');
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
@@ -69,7 +70,7 @@ describe('choosing a theme', () => {
 
 describe('the operating system changing under us', () => {
   it('repaints while the preference is system', async () => {
-    window.localStorage.setItem(THEME_KEY, 'system');
+    writeStored(THEME_KEY, 'system');
     const { useThemeStore } = await freshStore();
 
     expect(useThemeStore.getState().resolved.id).toBe('light');
@@ -83,7 +84,7 @@ describe('the operating system changing under us', () => {
   });
 
   it('is remembered but ignored while an explicit theme is set', async () => {
-    window.localStorage.setItem(THEME_KEY, 'light');
+    writeStored(THEME_KEY, 'light');
     const { useThemeStore } = await freshStore();
 
     emitSystemDark(true);

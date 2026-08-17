@@ -28,6 +28,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/settings"
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
@@ -58,6 +59,7 @@ type Server struct {
 	mu         sync.Mutex
 	picker     FilePicker
 	localShell LocalShellOpener
+	settings   Settings
 	sessions   map[*wsSession]struct{}
 	terminals  map[*websocket.Conn]struct{}
 }
@@ -68,6 +70,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		assets:    assets,
 		files:     http.FileServerFS(assets),
 		token:     token,
+		settings:  settings.Memory(),
 		sessions:  map[*wsSession]struct{}{},
 		terminals: map[*websocket.Conn]struct{}{},
 	}
@@ -135,6 +138,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/debug/support", s.handleDebugSupport, false},
 		{http.MethodPost, "/api/debug", s.handleDebug, false},
 		{http.MethodGet, "/api/exec", s.handleExec, false},
+		{http.MethodGet, "/api/settings", s.readSettings, true},
+		{http.MethodPut, "/api/settings", s.writeSettings, true},
 		{http.MethodGet, "/api/shell/support", s.handleLocalShellSupport, true},
 		{http.MethodGet, "/api/shell", s.handleLocalShell, true},
 		{http.MethodGet, "/ws", s.handleWS, false},
@@ -221,7 +226,7 @@ func (s *Server) serveIndex(w http.ResponseWriter) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(InjectHead(doc, TokenScript(s.token)))
+	_, _ = w.Write(InjectHead(doc, TokenScript(s.token)+SettingsScript(s.stored().All())))
 }
 
 func TokenScript(token string) string {

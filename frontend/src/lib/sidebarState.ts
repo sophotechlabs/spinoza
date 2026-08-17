@@ -1,3 +1,4 @@
+import { readStored, writeStored } from './persist';
 export const SIDEBAR_STATE_KEY = 'spinoza.sidebar.v1';
 
 export const GITOPS_SECTION = 'GitOps';
@@ -41,17 +42,9 @@ export function parseSections(raw: string | null): SidebarSections {
 }
 
 export function readSections(): SidebarSections {
-  try {
-    return parseSections(window.localStorage.getItem(SIDEBAR_STATE_KEY));
-  } catch {
-    return {};
-  }
+  return parseSections(readStored(SIDEBAR_STATE_KEY));
 }
 
 export function writeSections(sections: SidebarSections): void {
-  try {
-    window.localStorage.setItem(SIDEBAR_STATE_KEY, JSON.stringify(sections));
-  } catch {
-    return;
-  }
+  writeStored(SIDEBAR_STATE_KEY, JSON.stringify(sections));
 }

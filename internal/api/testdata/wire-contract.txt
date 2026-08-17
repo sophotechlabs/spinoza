@@ -284,6 +284,7 @@ ServerMsg.Rows rows,omitempty
 ServerMsg.SubID subId,omitempty
 ServerMsg.Type type
 ServerMsg.UID uid,omitempty
+Settings.Values values
 Snapshot.Columns columns
 Snapshot.Namespaced namespaced
 Snapshot.Rows rows

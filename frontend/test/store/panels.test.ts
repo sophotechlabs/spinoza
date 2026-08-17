@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readStored, resetStored, writeStored } from '../../src/lib/persist';
 import { DEFAULT_PLACEMENT, PLACEMENT_KEY } from '../../src/lib/panels';
 
 async function freshStore() {
@@ -7,11 +8,11 @@ async function freshStore() {
 }
 
 beforeEach(() => {
-  window.localStorage.clear();
+  resetStored();
 });
 
 afterEach(() => {
-  window.localStorage.clear();
+  resetStored();
 });
 
 describe('where each panel is docked', () => {
@@ -22,7 +23,7 @@ describe('where each panel is docked', () => {
   });
 
   it('starts from what the last session stored', async () => {
-    window.localStorage.setItem(PLACEMENT_KEY, JSON.stringify({ terminal: 'left' }));
+    writeStored(PLACEMENT_KEY, JSON.stringify({ terminal: 'left' }));
     const { usePanelsStore } = await freshStore();
 
     expect(usePanelsStore.getState().placement.terminal).toBe('left');
@@ -34,7 +35,7 @@ describe('where each panel is docked', () => {
     usePanelsStore.getState().move('logs', 'left');
 
     expect(usePanelsStore.getState().placement.logs).toBe('left');
-    expect(window.localStorage.getItem(PLACEMENT_KEY)).toContain('"logs":"left"');
+    expect(readStored(PLACEMENT_KEY)).toContain('"logs":"left"');
   });
 
   it('does nothing when the panel is already on that side', async () => {
@@ -44,7 +45,7 @@ describe('where each panel is docked', () => {
     usePanelsStore.getState().move('logs', DEFAULT_PLACEMENT.logs);
 
     expect(usePanelsStore.getState().placement).toBe(before);
-    expect(window.localStorage.getItem(PLACEMENT_KEY)).toBeNull();
+    expect(readStored(PLACEMENT_KEY)).toBeNull();
   });
 
   it('puts everything back where it started on reset', async () => {
@@ -54,9 +55,7 @@ describe('where each panel is docked', () => {
     usePanelsStore.getState().reset();
 
     expect(usePanelsStore.getState().placement).toEqual(DEFAULT_PLACEMENT);
-    expect(window.localStorage.getItem(PLACEMENT_KEY)).toContain(
-      `"logs":"${DEFAULT_PLACEMENT.logs}"`,
-    );
+    expect(readStored(PLACEMENT_KEY)).toContain(`"logs":"${DEFAULT_PLACEMENT.logs}"`);
   });
 });
 

@@ -20,6 +20,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/server"
+	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
@@ -75,6 +76,7 @@ func run() error {
 	}
 
 	srv := server.New(clusters, assets, token)
+	keepSettings(srv)
 	httpServer := &http.Server{
 		Addr:              opts.addr,
 		Handler:           srv.Handler(),
@@ -132,4 +134,17 @@ func openURL(ctx context.Context, url string) {
 	go func() {
 		_ = opener.Wait()
 	}()
+}
+
+func keepSettings(srv *server.Server) {
+	path, err := settingsstore.DefaultPath()
+	if err != nil {
+		slog.Warn("settings will not be kept", "error", err)
+		return
+	}
+	store, openErr := settingsstore.Open(path)
+	if openErr != nil {
+		slog.Warn("the stored settings could not be read", "error", openErr)
+	}
+	srv.UseSettings(store)
 }

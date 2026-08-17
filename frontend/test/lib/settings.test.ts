@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readStored } from '../../src/lib/persist';
 import { SETTINGS_KEY, parseSettings, readSettings, writeSettings } from '../../src/lib/settings';
 
 afterEach(() => {
@@ -25,7 +26,7 @@ describe('settings that outlive the tab', () => {
   it('round-trip through storage', () => {
     writeSettings({ logView: 'raw', screenReader: false });
 
-    expect(window.localStorage.getItem(SETTINGS_KEY)).toContain('"logView":"raw"');
+    expect(readStored(SETTINGS_KEY)).toContain('"logView":"raw"');
     expect(readSettings().logView).toBe('raw');
   });
 

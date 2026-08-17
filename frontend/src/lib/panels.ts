@@ -1,6 +1,7 @@
 import type { ObjectDetail } from './types';
 import type { Selection } from './refs';
 import type { PodTarget } from './pods';
+import { readStored, writeStored } from './persist';
 
 export type PanelId = 'overview' | 'yaml' | 'events' | 'logs' | 'metrics' | 'forwards' | 'terminal';
 
@@ -226,19 +227,11 @@ export function parseLayout(raw: string | null): Layout {
 }
 
 function read<T>(key: string, parse: (raw: string | null) => T): T {
-  try {
-    return parse(window.localStorage.getItem(key));
-  } catch {
-    return parse(null);
-  }
+  return parse(readStored(key));
 }
 
 function write(key: string, value: unknown): void {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    return;
-  }
+  writeStored(key, JSON.stringify(value));
 }
 
 export function readPlacement(): Placement {

@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+
 import { beforeEach } from 'vitest';
 import { configure } from '@testing-library/react';
 import { installMatchMedia } from './helpers';
@@ -7,11 +8,15 @@ import { useClusterStore } from '../src/store/cluster';
 import { useSessionStore } from '../src/store/session';
 import { useContextsStore } from '../src/store/contexts';
 import { useForwardsStore } from '../src/store/forwards';
+import { hydrate, resetStored } from '../src/lib/persist';
 
 configure({ asyncUtilTimeout: 5000 });
 
 beforeEach(() => {
   window.localStorage.clear();
+  delete window.__SPINOZA_SETTINGS__;
+  resetStored();
+  hydrate();
   window.history.replaceState(null, '', '/');
   usePanelsStore.getState().reset();
   useClusterStore.getState().reset();

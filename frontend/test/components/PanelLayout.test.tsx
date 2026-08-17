@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readStored } from '../../src/lib/persist';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -167,7 +168,7 @@ describe('PanelLayout', () => {
 
     await user.click(screen.getByRole('button', { name: 'Move Overview to the bottom' }));
 
-    expect(window.localStorage.getItem(PLACEMENT_KEY)).toContain('"overview":"bottom"');
+    expect(readStored(PLACEMENT_KEY)).toContain('"overview":"bottom"');
   });
 
   it('opens the panel it was asked to move', async () => {

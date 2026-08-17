@@ -10,10 +10,31 @@
         var root = document.documentElement;
         var stored = 'dark';
         var last = null;
+        function settings() {
+          try {
+            if (typeof window.__SPINOZA_SETTINGS__ === 'string') {
+              return JSON.parse(window.__SPINOZA_SETTINGS__);
+            }
+          } catch (err) {
+            return null;
+          }
+          return null;
+        }
+        function value(key) {
+          var served = settings();
+          if (served && typeof served[key] === 'string') {
+            return served[key];
+          }
+          try {
+            return localStorage.getItem(key);
+          } catch (err) {
+            return null;
+          }
+        }
         try {
-          stored = localStorage.getItem('spinoza.theme.v1') || 'dark';
+          stored = value('spinoza.theme.v1') || 'dark';
           if (stored !== 'dark' && stored !== 'light' && stored !== 'system') {
-            last = JSON.parse(localStorage.getItem('spinoza.painted.v1') || 'null');
+            last = JSON.parse(value('spinoza.painted.v1') || 'null');
           }
         } catch (err) {
           stored = 'dark';

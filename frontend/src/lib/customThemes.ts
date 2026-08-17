@@ -1,6 +1,7 @@
 import type { Theme, ThemeBase } from './theme';
 import { BUILT_IN_THEMES, CANVAS_NAMES, TOKEN_NAMES } from './theme';
 import { contrastWarnings } from './contrast';
+import { readStored, writeStored } from './persist';
 
 export const CUSTOM_THEMES_KEY = 'spinoza.themes.v1';
 
@@ -137,17 +138,9 @@ export function parseCustomThemes(raw: string | null): Theme[] {
 }
 
 export function readCustomThemes(): Theme[] {
-  try {
-    return parseCustomThemes(window.localStorage.getItem(CUSTOM_THEMES_KEY));
-  } catch {
-    return [];
-  }
+  return parseCustomThemes(readStored(CUSTOM_THEMES_KEY));
 }
 
 export function writeCustomThemes(themes: Theme[]): void {
-  try {
-    window.localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(themes));
-  } catch {
-    return;
-  }
+  writeStored(CUSTOM_THEMES_KEY, JSON.stringify(themes));
 }

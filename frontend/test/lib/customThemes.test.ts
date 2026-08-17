@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { writeStored } from '../../src/lib/persist';
 import { CONTENT_TOKENS, SURFACE_TOKENS } from '../../src/lib/theme';
 import {
   CUSTOM_THEMES_KEY,
@@ -133,7 +134,7 @@ describe('the themes a person has installed', () => {
   });
 
   it('drop an entry that no longer validates instead of failing to load', () => {
-    window.localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify([SOLARIZED, { id: 'broken' }]));
+    writeStored(CUSTOM_THEMES_KEY, JSON.stringify([SOLARIZED, { id: 'broken' }]));
 
     expect(readCustomThemes()).toHaveLength(1);
   });

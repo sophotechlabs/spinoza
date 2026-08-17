@@ -1,3 +1,4 @@
+import { readStored, writeStored } from './persist';
 export const LOG_VIEWS = ['pretty', 'raw'] as const;
 
 export type LogView = (typeof LOG_VIEWS)[number];
@@ -38,17 +39,9 @@ export function parseSettings(raw: string | null): Settings {
 }
 
 export function readSettings(): Settings {
-  try {
-    return parseSettings(window.localStorage.getItem(SETTINGS_KEY));
-  } catch {
-    return { ...DEFAULTS };
-  }
+  return parseSettings(readStored(SETTINGS_KEY));
 }
 
 export function writeSettings(settings: Settings): void {
-  try {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch {
-    return;
-  }
+  writeStored(SETTINGS_KEY, JSON.stringify(settings));
 }

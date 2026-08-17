@@ -1,3 +1,4 @@
+import { resetStored } from '../../src/lib/persist';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PanelContext } from '../../src/lib/panels';
 import {
@@ -17,7 +18,7 @@ import {
 import type { ObjectDetail } from '../../src/lib/types';
 
 afterEach(() => {
-  window.localStorage.clear();
+  resetStored();
   vi.restoreAllMocks();
 });
 

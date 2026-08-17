@@ -1,6 +1,7 @@
 import type { ColumnSizingState, SortingState, VisibilityState } from '@tanstack/react-table';
 import type { ResourceDescriptor } from './types';
 import { asList, asNumber, asRecord, asString, optionalBoolean } from './wire';
+import { readStored, writeStored } from './persist';
 
 export const TABLE_STATE_KEY = 'spinoza.tables.v1';
 
@@ -87,11 +88,7 @@ export function parseTables(raw: string | null): Record<string, TableState> {
 }
 
 function readAll(): Record<string, TableState> {
-  try {
-    return parseTables(window.localStorage.getItem(TABLE_STATE_KEY));
-  } catch {
-    return {};
-  }
+  return parseTables(readStored(TABLE_STATE_KEY));
 }
 
 export function readTableState(key: string): TableState {
@@ -112,9 +109,5 @@ export function writeTableState(key: string, state: TableState): void {
   }
   const all = readAll();
   all[key] = state;
-  try {
-    window.localStorage.setItem(TABLE_STATE_KEY, JSON.stringify(all));
-  } catch {
-    return;
-  }
+  writeStored(TABLE_STATE_KEY, JSON.stringify(all));
 }

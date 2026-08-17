@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readStored } from '../../src/lib/persist';
 import {
   GITOPS_SECTION,
   SIDEBAR_STATE_KEY,
@@ -56,7 +57,7 @@ describe('reading and writing the sidebar', () => {
     writeSections({ Workloads: true });
 
     expect(readSections()).toEqual({ Workloads: true });
-    expect(window.localStorage.getItem(SIDEBAR_STATE_KEY)).toBe('{"Workloads":true}');
+    expect(readStored(SIDEBAR_STATE_KEY)).toBe('{"Workloads":true}');
   });
 
   it('shrugs off storage that refuses to read', () => {
