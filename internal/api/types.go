@@ -67,6 +67,16 @@ type FilePicker struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+type ViewState struct {
+	Window bool `json:"window"`
+	Hidden bool `json:"hidden"`
+}
+
+type ViewSwitch struct {
+	Switched bool   `json:"switched"`
+	Reason   string `json:"reason,omitempty"`
+}
+
 type Settings struct {
 	Values map[string]string `json:"values"`
 }

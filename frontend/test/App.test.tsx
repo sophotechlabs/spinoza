@@ -162,6 +162,14 @@ vi.mock('../src/components/ContextPicker', () => ({
   ),
 }));
 
+vi.mock('../src/components/ViewSwitch', () => ({
+  default: ({ onLeft }: { onLeft: () => void }) => (
+    <button type="button" data-testid="left-for-desktop" onClick={onLeft}>
+      desktop
+    </button>
+  ),
+}));
+
 vi.mock('../src/components/PanelChrome', () => ({
   default: ({
     target,
@@ -1324,5 +1332,18 @@ describe('finding your way in by keyboard', () => {
     expect(screen.getByRole('link', { name: 'Skip to the content' }).className).toContain(
       'sr-only',
     );
+  });
+
+  it('tells the tab it can be closed once the window has spinoza back', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByTestId('left-for-desktop'));
+
+    expect(screen.getByText('Spinoza is back in its window')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Keep using this tab' }));
+
+    expect(screen.queryByText('Spinoza is back in its window')).not.toBeInTheDocument();
   });
 });

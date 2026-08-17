@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -89,6 +90,15 @@ func run() error {
 		openURL(ctx, url)
 	}
 
+	idle := make(chan struct{})
+	var once sync.Once
+	srv.UseIdleExit(func() {
+		once.Do(func() {
+			slog.Info("every spinoza view is gone, stopping")
+			close(idle)
+		})
+	})
+
 	ended := make(chan struct{})
 	drained := make(chan struct{})
 	go func() {
@@ -96,6 +106,7 @@ func run() error {
 		select {
 		case <-ended:
 			return
+		case <-idle:
 		case <-ctx.Done():
 		}
 		srv.Close()

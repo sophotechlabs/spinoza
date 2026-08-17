@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
 import type { ObjectRef } from '../../src/lib/types';
@@ -160,5 +160,62 @@ describe('the top bar entry points', () => {
     await user.click(screen.getByRole('button', { name: 'pods/prod/web-0' }));
 
     expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+  });
+
+  it('tells the app when the window took spinoza back', async () => {
+    const user = userEvent.setup();
+    const onLeftForDesktop = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/view/')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ switched: true }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ window: true, hidden: true }),
+        });
+      }),
+    );
+    render(<TopBar status="connected" onLeftForDesktop={onLeftForDesktop} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Desktop' }));
+
+    await waitFor(() => {
+      expect(onLeftForDesktop).toHaveBeenCalledTimes(1);
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('takes the switch back quietly when nothing is wired to it', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/view/')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ switched: true }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ window: true, hidden: true }),
+        });
+      }),
+    );
+    render(<TopBar status="connected" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Desktop' }));
+
+    expect(await screen.findByRole('button', { name: 'Desktop' })).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 });

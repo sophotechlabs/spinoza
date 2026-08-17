@@ -60,6 +60,9 @@ type Server struct {
 	picker     FilePicker
 	localShell LocalShellOpener
 	settings   Settings
+	window     Window
+	browser    BrowserOpener
+	views      views
 	sessions   map[*wsSession]struct{}
 	terminals  map[*websocket.Conn]struct{}
 }
@@ -73,6 +76,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		settings:  settings.Memory(),
 		sessions:  map[*wsSession]struct{}{},
 		terminals: map[*websocket.Conn]struct{}{},
+		views:     views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}
 }
 
@@ -138,6 +142,9 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/debug/support", s.handleDebugSupport, false},
 		{http.MethodPost, "/api/debug", s.handleDebug, false},
 		{http.MethodGet, "/api/exec", s.handleExec, false},
+		{http.MethodGet, "/api/view", s.readView, true},
+		{http.MethodPost, "/api/view/browser", s.toBrowser, true},
+		{http.MethodPost, "/api/view/desktop", s.toDesktop, true},
 		{http.MethodGet, "/api/settings", s.readSettings, true},
 		{http.MethodPut, "/api/settings", s.writeSettings, true},
 		{http.MethodGet, "/api/shell/support", s.handleLocalShellSupport, true},
@@ -226,7 +233,11 @@ func (s *Server) serveIndex(w http.ResponseWriter) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(InjectHead(doc, TokenScript(s.token)+SettingsScript(s.stored().All())))
+	_, _ = w.Write(InjectHead(doc, s.IndexHead(ViewBrowser)))
+}
+
+func (s *Server) IndexHead(view string) string {
+	return TokenScript(s.token) + SettingsScript(s.stored().All()) + ViewScript(view)
 }
 
 func TokenScript(token string) string {

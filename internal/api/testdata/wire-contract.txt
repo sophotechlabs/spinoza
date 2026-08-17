@@ -292,3 +292,7 @@ Snapshot.SubID subId
 Snapshot.Type type
 TerminalSize.Cols cols
 TerminalSize.Rows rows
+ViewState.Hidden hidden
+ViewState.Window window
+ViewSwitch.Reason reason,omitempty
+ViewSwitch.Switched switched

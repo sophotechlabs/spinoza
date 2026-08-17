@@ -83,7 +83,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		logs:   map[string]*entry{},
 	}
 	defer sess.closeAll()
+	kind := viewOf(r)
 	s.track(sess)
+	s.views.opened(kind)
+	defer s.views.closed(kind)
 	defer s.forget(sess)
 	sess.mgr = s.manager()
 

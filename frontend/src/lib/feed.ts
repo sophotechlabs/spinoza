@@ -6,6 +6,7 @@ import { asBoolean, asList, asRecord, asString, listOf } from './wire';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
 import { wsURL } from './wsBase';
+import { viewKind } from './view';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -270,7 +271,7 @@ export function useResourceFeed(): ResourceFeed {
         return;
       }
       setStatus('connecting');
-      const ws = new WebSocket(wsURL('/ws'));
+      const ws = new WebSocket(wsURL(`/ws?view=${viewKind()}`));
       socketRef.current = ws;
 
       ws.onopen = () => {

@@ -134,6 +134,7 @@ func runDesktop() error {
 		}
 		return shellAdapter{session: session}, nil
 	})
+	useViews(srv, &window, addr, token)
 	srv.UseFilePicker(func(context.Context) (string, error) {
 		ready := window.Load()
 		if ready == nil {
@@ -166,7 +167,7 @@ func runDesktop() error {
 		Height:           800,
 		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0a, A: 255},
 		AssetServer: &assetserver.Options{
-			Handler: desktopAssets(assets, addr, token),
+			Handler: desktopAssets(srv, assets, addr, token),
 		},
 		Mac: &mac.Options{},
 		OnStartup: func(windowCtx context.Context) {
@@ -201,7 +202,7 @@ func kubeDirectory() string {
 	return filepath.Join(home, ".kube")
 }
 
-func desktopAssets(assets fs.FS, addr, token string) http.Handler {
+func desktopAssets(srv *server.Server, assets fs.FS, addr, token string) http.Handler {
 	fileServer := http.FileServerFS(assets)
 	target := &url.URL{Scheme: "http", Host: addr}
 	proxy := &httputil.ReverseProxy{
@@ -210,7 +211,7 @@ func desktopAssets(assets fs.FS, addr, token string) http.Handler {
 			r.Out.Header.Set(server.AuthHeader, token)
 		},
 	}
-	injected := `<script>window.__SPINOZA_WS_BASE__="ws://` + addr + `";</script>` + server.TokenScript(token)
+	injected := `<script>window.__SPINOZA_WS_BASE__="ws://` + addr + `";</script>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if server.IsBackendPath(r.URL.Path) {
 			proxy.ServeHTTP(w, r)
@@ -223,7 +224,7 @@ func desktopAssets(assets fs.FS, addr, token string) http.Handler {
 				return
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write(server.InjectHead(data, injected))
+			_, _ = w.Write(server.InjectHead(data, injected+srv.IndexHead(server.ViewDesktop)))
 			return
 		}
 		fileServer.ServeHTTP(w, r)
@@ -265,4 +266,44 @@ func keepSettings(srv *server.Server) {
 		slog.Warn("the stored settings could not be read", "error", openErr)
 	}
 	srv.UseSettings(store)
+}
+
+type desktopWindow struct {
+	window *atomic.Pointer[context.Context]
+}
+
+func (d desktopWindow) Show() {
+	ready := d.window.Load()
+	if ready == nil {
+		return
+	}
+	wailsruntime.WindowShow(*ready)
+}
+
+func (d desktopWindow) Hide() {
+	ready := d.window.Load()
+	if ready == nil {
+		return
+	}
+	wailsruntime.WindowHide(*ready)
+}
+
+func useViews(srv *server.Server, window *atomic.Pointer[context.Context], addr, token string) {
+	srv.UseWindow(desktopWindow{window: window})
+	srv.UseBrowser(func() error {
+		ready := window.Load()
+		if ready == nil {
+			return errors.New("the spinoza window is not ready yet")
+		}
+		wailsruntime.BrowserOpenURL(*ready, server.BrowserURL(addr, token))
+		return nil
+	})
+	srv.UseIdleExit(func() {
+		ready := window.Load()
+		if ready == nil {
+			return
+		}
+		slog.Info("every spinoza view is gone, stopping")
+		wailsruntime.Quit(*ready)
+	})
 }

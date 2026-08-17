@@ -37,6 +37,7 @@ import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
 import KubeconfigBanner from './components/KubeconfigBanner';
 import ProtectionPrompt from './components/ProtectionPrompt';
+import MovedToDesktop from './components/MovedToDesktop';
 import CommandPalette from './components/CommandPalette';
 import type { Section } from './components/SettingsDialog';
 
@@ -60,6 +61,7 @@ export default function App() {
   const subSeq = useRef(0);
   const [subId, setSubId] = useState(FIRST_SUB_ID);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [moved, setMoved] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
 
@@ -294,6 +296,9 @@ export default function App() {
             openSettings('Appearance');
           }}
           onSelectObject={remember}
+          onLeftForDesktop={() => {
+            setMoved(true);
+          }}
         />
       </ErrorBoundary>
       <ConnectionBanner status={feed.status} attempt={feed.attempt} onReconnect={feed.reconnect} />
@@ -327,6 +332,12 @@ export default function App() {
       <Toasts />
       <TooltipHost />
       <ProtectionPrompt />
+      <MovedToDesktop
+        open={moved}
+        onStay={() => {
+          setMoved(false);
+        }}
+      />
       <ErrorBoundary label="The command palette">
         <CommandPalette
           open={paletteOpen}

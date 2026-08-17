@@ -226,6 +226,16 @@ export interface FilePicker {
   reason?: string;
 }
 
+export interface ViewState {
+  window: boolean;
+  hidden: boolean;
+}
+
+export interface ViewSwitch {
+  switched: boolean;
+  reason?: string;
+}
+
 export interface Settings {
   values: Record<string, string>;
 }

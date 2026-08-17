@@ -5,6 +5,7 @@ import { paletteChordLabel } from '../lib/hotkeys';
 import ContextPicker from './ContextPicker';
 import NotificationsMenu from './NotificationsMenu';
 import ProtectionToggle from './ProtectionToggle';
+import ViewSwitch from './ViewSwitch';
 import Wordmark from './Wordmark';
 
 interface TopBarProps {
@@ -15,6 +16,7 @@ interface TopBarProps {
   onOpenPalette?: () => void;
   onOpenSettings?: () => void;
   onSelectObject?: (ref: ObjectRef) => void;
+  onLeftForDesktop?: () => void;
 }
 
 function statusColor(status: ConnectionStatus): string {
@@ -35,6 +37,7 @@ export default function TopBar({
   onOpenPalette,
   onOpenSettings,
   onSelectObject,
+  onLeftForDesktop,
 }: TopBarProps) {
   function handlePalette() {
     if (onOpenPalette) {
@@ -51,6 +54,12 @@ export default function TopBar({
   function handleSelectObject(target: ObjectRef) {
     if (onSelectObject) {
       onSelectObject(target);
+    }
+  }
+
+  function handleLeftForDesktop() {
+    if (onLeftForDesktop) {
+      onLeftForDesktop();
     }
   }
 
@@ -101,6 +110,7 @@ export default function TopBar({
         >
           Reconnect
         </button>
+        <ViewSwitch onLeft={handleLeftForDesktop} />
         <NotificationsMenu onSelectObject={handleSelectObject} />
         <button
           type="button"

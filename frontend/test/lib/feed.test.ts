@@ -98,19 +98,19 @@ describe('useResourceFeed', () => {
   it('connects to the same-origin /ws endpoint by default', () => {
     renderHook(() => useResourceFeed());
     expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(FakeWebSocket.instances[0].url).toBe(`ws://${location.host}/ws`);
+    expect(FakeWebSocket.instances[0].url).toBe(`ws://${location.host}/ws?view=browser`);
   });
 
   it('uses the window override base when present', () => {
     overrideBase('ws://custom-host:9999');
     renderHook(() => useResourceFeed());
-    expect(FakeWebSocket.instances[0].url).toBe('ws://custom-host:9999/ws');
+    expect(FakeWebSocket.instances[0].url).toBe('ws://custom-host:9999/ws?view=browser');
   });
 
   it('upgrades to wss when the page is served over https', () => {
     vi.stubGlobal('location', { protocol: 'https:', host: 'secure.example' });
     renderHook(() => useResourceFeed());
-    expect(FakeWebSocket.instances[0].url).toBe('wss://secure.example/ws');
+    expect(FakeWebSocket.instances[0].url).toBe('wss://secure.example/ws?view=browser');
   });
 
   it('starts in the connecting state', () => {
