@@ -4,7 +4,14 @@ import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/di
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 import { useClusterEpoch } from '../store/cluster';
-import { GITOPS_SECTION, readSections, sectionOpen, writeSections } from '../lib/sidebarState';
+import {
+  ARGO_SECTION,
+  FLUX_SECTION,
+  readSections,
+  sectionOpen,
+  writeSections,
+} from '../lib/sidebarState';
+import { argoInstalled, argoTypes, fluxInstalled } from '../lib/gitops';
 import type { SidebarSections } from '../lib/sidebarState';
 
 interface SidebarProps {
@@ -24,12 +31,13 @@ const TOP_VIEWS: GitopsEntry[] = [
   { view: 'helm', label: 'Helm releases' },
 ];
 
-const GITOPS_VIEWS: GitopsEntry[] = [
+const FLUX_VIEWS: GitopsEntry[] = [
   { view: 'flux-roles', label: 'Overview' },
   { view: 'gitops', label: 'Graph' },
   { view: 'flux-list', label: 'Resource list' },
-  { view: 'flux-overview', label: 'Status tiles' },
 ];
+
+const NOT_INSTALLED = 'not found in this cluster';
 
 function descriptorKey(descriptor: ResourceDescriptor): string {
   return `${descriptor.group}/${descriptor.version}/${descriptor.resource}`;
@@ -136,10 +144,29 @@ function retryLabel(retrying: boolean): string {
 const sectionClass =
   'flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-fg-muted uppercase hover:text-fg';
 
+const missingClass =
+  'flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold tracking-wide text-fg-faint uppercase';
+
+function engineClass(found: boolean): string {
+  if (found) {
+    return sectionClass;
+  }
+  return missingClass;
+}
+
+function engineMark(found: boolean, open: boolean): string {
+  if (!found) {
+    return '';
+  }
+  return chevron(!open);
+}
+
 export default function Sidebar({ view, activeResource, onSelect, onSelectView }: SidebarProps) {
   const epoch = useClusterEpoch();
   const { size: width, startResize, nudge } = useSidebarWidth();
   const [categories, setCategories] = useState<Category[]>([]);
+  const flux = fluxInstalled(categories);
+  const argo = argoInstalled(categories);
   const [sections, setSections] = useState<SidebarSections>(() => readSections());
   const [error, setError] = useState<string | null>(null);
   const [countsError, setCountsError] = useState<string | null>(null);
@@ -251,24 +278,28 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
         <div className="mb-1">
           <button
             type="button"
-            aria-expanded={sectionOpen(sections, GITOPS_SECTION)}
+            disabled={!flux}
+            title={flux ? undefined : `Flux is ${NOT_INSTALLED}`}
+            aria-expanded={flux && sectionOpen(sections, FLUX_SECTION)}
             onClick={() => {
-              toggle(GITOPS_SECTION);
+              toggle(FLUX_SECTION);
             }}
-            className={sectionClass}
+            className={engineClass(flux)}
           >
             <span>
-              <span aria-hidden="true">{chevron(!sectionOpen(sections, GITOPS_SECTION))}</span>{' '}
-              {GITOPS_SECTION}
+              <span aria-hidden="true">
+                {engineMark(flux, sectionOpen(sections, FLUX_SECTION))}
+              </span>{' '}
+              {FLUX_SECTION}
             </span>
           </button>
-          {sectionOpen(sections, GITOPS_SECTION) && (
-            <div aria-label="GitOps views">
-              {GITOPS_VIEWS.map((entry) => (
+          {flux && sectionOpen(sections, FLUX_SECTION) && (
+            <div aria-label="Flux views">
+              {FLUX_VIEWS.map((entry) => (
                 <button
                   key={entry.view}
                   type="button"
-                  aria-label={`GitOps ${entry.label}`}
+                  aria-label={`Flux ${entry.label}`}
                   aria-current={current(view === entry.view)}
                   onClick={() => {
                     onSelectView(entry.view);
@@ -276,6 +307,42 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                   className={resourceClass(view === entry.view)}
                 >
                   {entry.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="mb-1">
+          <button
+            type="button"
+            disabled={!argo}
+            title={argo ? undefined : `Argo CD is ${NOT_INSTALLED}`}
+            aria-expanded={argo && sectionOpen(sections, ARGO_SECTION)}
+            onClick={() => {
+              toggle(ARGO_SECTION);
+            }}
+            className={engineClass(argo)}
+          >
+            <span>
+              <span aria-hidden="true">
+                {engineMark(argo, sectionOpen(sections, ARGO_SECTION))}
+              </span>{' '}
+              {ARGO_SECTION}
+            </span>
+          </button>
+          {argo && sectionOpen(sections, ARGO_SECTION) && (
+            <div aria-label="Argo CD resources">
+              {argoTypes(categories).map((descriptor) => (
+                <button
+                  key={descriptorKey(descriptor)}
+                  type="button"
+                  aria-current={current(isActive(activeResource, descriptor))}
+                  onClick={() => {
+                    onSelect(descriptor);
+                  }}
+                  className={resourceClass(isActive(activeResource, descriptor))}
+                >
+                  {descriptor.kind}
                 </button>
               ))}
             </div>

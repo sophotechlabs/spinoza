@@ -30,7 +30,6 @@ import PanelLayout from './components/PanelLayout';
 import ClusterOverview from './components/ClusterOverview';
 import HelmReleases from './components/HelmReleases';
 import FluxList from './components/FluxList';
-import FluxOverview from './components/FluxOverview';
 import FluxRoles from './components/FluxRoles';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
@@ -266,9 +265,6 @@ export default function App() {
   }
   if (route.view === 'flux-list') {
     mainArea = <FluxList onSelect={handleSelectFlux} />;
-  }
-  if (route.view === 'flux-overview') {
-    mainArea = <FluxOverview onSelect={handleSelectFlux} />;
   }
   if (route.view === 'flux-roles') {
     mainArea = <FluxRoles onSelect={handleSelectFlux} />;

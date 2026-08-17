@@ -173,8 +173,7 @@ export type ServerMsg =
   | { type: 'log-end'; subId: string }
   | { type: 'error'; subId: string; message: string };
 
-export type View =
-  'resources' | 'cluster' | 'helm' | 'gitops' | 'flux-list' | 'flux-overview' | 'flux-roles';
+export type View = 'resources' | 'cluster' | 'helm' | 'gitops' | 'flux-list' | 'flux-roles';
 
 export interface FluxResource {
   kind: string;

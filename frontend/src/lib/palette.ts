@@ -1,25 +1,17 @@
 import type { Category, ObjectRef, ResourceDescriptor, SearchHit, View } from './types';
 import { refOf } from './search';
+import { fluxInstalled } from './gitops';
 
 export const VIEW_LABELS: Record<View, string> = {
   resources: 'Resources',
   cluster: 'Cluster overview',
   helm: 'Helm releases',
-  'flux-roles': 'GitOps overview',
-  gitops: 'GitOps graph',
-  'flux-list': 'GitOps resource list',
-  'flux-overview': 'GitOps status tiles',
+  'flux-roles': 'Flux overview',
+  gitops: 'Flux graph',
+  'flux-list': 'Flux resources',
 };
 
-const VIEW_ORDER: View[] = [
-  'cluster',
-  'resources',
-  'helm',
-  'flux-roles',
-  'gitops',
-  'flux-list',
-  'flux-overview',
-];
+const VIEW_ORDER: View[] = ['cluster', 'resources', 'helm', 'flux-roles', 'gitops', 'flux-list'];
 
 export type PaletteItem =
   | { id: string; label: string; hint: string; kind: 'view'; view: View }
@@ -50,6 +42,15 @@ export function clusterItems(hits: SearchHit[]): PaletteItem[] {
   }));
 }
 
+const FLUX_VIEWS: View[] = ['flux-roles', 'gitops', 'flux-list'];
+
+function offered(categories: Category[]): View[] {
+  if (fluxInstalled(categories)) {
+    return VIEW_ORDER;
+  }
+  return VIEW_ORDER.filter((view) => !FLUX_VIEWS.includes(view));
+}
+
 export function paletteItems(categories: Category[], recents: ObjectRef[]): PaletteItem[] {
   const items: PaletteItem[] = [];
   for (const ref of recents) {
@@ -61,7 +62,7 @@ export function paletteItems(categories: Category[], recents: ObjectRef[]): Pale
       ref,
     });
   }
-  for (const view of VIEW_ORDER) {
+  for (const view of offered(categories)) {
     items.push({ id: `view:${view}`, label: VIEW_LABELS[view], hint: 'view', kind: 'view', view });
   }
   for (const category of categories) {

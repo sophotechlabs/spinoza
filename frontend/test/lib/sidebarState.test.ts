@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { readStored } from '../../src/lib/persist';
 import {
-  GITOPS_SECTION,
+  FLUX_SECTION,
   SIDEBAR_STATE_KEY,
   parseSections,
   readSections,
@@ -15,12 +15,12 @@ describe('sectionOpen', () => {
   });
 
   it('keeps the GitOps section open until the user shuts it', () => {
-    expect(sectionOpen({}, GITOPS_SECTION)).toBe(true);
+    expect(sectionOpen({}, FLUX_SECTION)).toBe(true);
   });
 
   it('follows what was stored, whichever way it goes', () => {
     expect(sectionOpen({ Workloads: true }, 'Workloads')).toBe(true);
-    expect(sectionOpen({ [GITOPS_SECTION]: false }, GITOPS_SECTION)).toBe(false);
+    expect(sectionOpen({ [FLUX_SECTION]: false }, FLUX_SECTION)).toBe(false);
   });
 });
 

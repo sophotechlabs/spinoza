@@ -10,6 +10,14 @@ const categories = [
     makeDescriptor({ resource: 'pods', kind: 'Pod' }),
     makeDescriptor({ group: 'apps', resource: 'deployments', kind: 'Deployment' }),
   ]),
+  makeCategory('Custom resources', [
+    makeDescriptor({
+      group: 'kustomize.toolkit.fluxcd.io',
+      version: 'v1',
+      resource: 'kustomizations',
+      kind: 'Kustomization',
+    }),
+  ]),
 ];
 
 function stubCatalog(): void {
@@ -104,10 +112,10 @@ describe('CommandPalette', () => {
     expect(screen.getByRole('button', { name: /Deployment/ })).toBeInTheDocument();
   });
 
-  it('offers every view', async () => {
+  it('offers every view the cluster can serve', async () => {
     renderPalette();
 
-    expect(await screen.findByRole('button', { name: /GitOps graph/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Flux graph/ })).toBeInTheDocument();
   });
 
   it('does not fetch the catalog while it is closed', () => {

@@ -1,7 +1,9 @@
 import { readStored, writeStored } from './persist';
 export const SIDEBAR_STATE_KEY = 'spinoza.sidebar.v1';
 
-export const GITOPS_SECTION = 'GitOps';
+export const FLUX_SECTION = 'Flux';
+
+export const ARGO_SECTION = 'Argo CD';
 
 export type SidebarSections = Partial<Record<string, boolean>>;
 
@@ -10,7 +12,7 @@ export function sectionOpen(sections: SidebarSections, key: string): boolean {
   if (stored !== undefined) {
     return stored;
   }
-  return key === GITOPS_SECTION;
+  return key === FLUX_SECTION || key === ARGO_SECTION;
 }
 
 export function parseSections(raw: string | null): SidebarSections {

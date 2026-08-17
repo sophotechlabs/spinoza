@@ -178,7 +178,7 @@ export function restyle(flow: GitopsFlow, graph: Graph): GitopsFlow {
 
 export function toFlow(graph: Graph): GitopsFlow {
   const g: LayoutGraph = new dagre.graphlib.Graph<GraphLabel, NodeLabel, EdgeLabel>();
-  g.setGraph({ rankdir: 'LR', ranksep: RANK_SEPARATION, nodesep: NODE_SEPARATION });
+  g.setGraph({ rankdir: 'TB', ranksep: RANK_SEPARATION, nodesep: NODE_SEPARATION });
   g.setDefaultEdgeLabel(() => ({}));
   for (const node of graph.nodes) {
     g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });

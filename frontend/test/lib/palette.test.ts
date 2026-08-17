@@ -108,4 +108,32 @@ describe('matchItems', () => {
   it('returns nothing when nothing matches', () => {
     expect(matchItems(items, 'zzzz')).toEqual([]);
   });
+
+  it('leaves the flux views out of a cluster without flux', () => {
+    const items = paletteItems([makeCategory('Workloads', [makeDescriptor({})])], []);
+
+    expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).not.toContain(
+      'Flux graph',
+    );
+  });
+
+  it('offers the flux views once flux is there', () => {
+    const items = paletteItems(
+      [
+        makeCategory('Custom resources', [
+          makeDescriptor({
+            group: 'helm.toolkit.fluxcd.io',
+            version: 'v2',
+            resource: 'helmreleases',
+            kind: 'HelmRelease',
+          }),
+        ]),
+      ],
+      [],
+    );
+
+    expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).toContain(
+      'Flux graph',
+    );
+  });
 });

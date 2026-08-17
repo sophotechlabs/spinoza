@@ -58,6 +58,36 @@ const categories: Category[] = [
   ]),
 ];
 
+const withFlux: Category[] = [
+  ...categories,
+  makeCategory('Custom resources', [
+    makeDescriptor({
+      group: 'kustomize.toolkit.fluxcd.io',
+      version: 'v1',
+      resource: 'kustomizations',
+      kind: 'Kustomization',
+    }),
+  ]),
+];
+
+const withArgo: Category[] = [
+  ...categories,
+  makeCategory('Custom resources', [
+    makeDescriptor({
+      group: 'argoproj.io',
+      version: 'v1alpha1',
+      resource: 'applications',
+      kind: 'Application',
+    }),
+    makeDescriptor({
+      group: 'argoproj.io',
+      version: 'v1alpha1',
+      resource: 'appprojects',
+      kind: 'AppProject',
+    }),
+  ]),
+];
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -94,13 +124,63 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: 'Cluster' })).not.toHaveAttribute('aria-current');
   });
 
-  it('renders the GitOps section with all four entries', () => {
+  it('renders the Flux section once Flux is found in the cluster', async () => {
+    stubFetch(withFlux);
+    renderSidebar();
+    expect(await screen.findByRole('button', { name: 'Flux Graph' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Flux Resource list' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Flux Overview' })).toBeInTheDocument();
+  });
+
+  it('says why the Flux section is shut on a cluster without it', async () => {
     stubFetch(categories);
     renderSidebar();
-    expect(screen.getByRole('button', { name: 'GitOps Graph' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'GitOps Resource list' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'GitOps Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'GitOps Status tiles' })).toBeInTheDocument();
+
+    const header = await screen.findByRole('button', { name: 'Flux' });
+    expect(header).toBeDisabled();
+    expect(header).toHaveAttribute('title', 'Flux is not found in this cluster');
+    expect(screen.queryByRole('button', { name: 'Flux Graph' })).not.toBeInTheDocument();
+  });
+
+  it('says why the Argo CD section is shut on a cluster without it', async () => {
+    stubFetch(categories);
+    renderSidebar();
+
+    const header = await screen.findByRole('button', { name: 'Argo CD' });
+    expect(header).toBeDisabled();
+    expect(header).toHaveAttribute('title', 'Argo CD is not found in this cluster');
+  });
+
+  it('lists the Argo CD kinds when Argo CD is found', async () => {
+    stubFetch(withArgo);
+    renderSidebar();
+
+    expect(await screen.findByRole('button', { name: 'Application' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'AppProject' })).toBeInTheDocument();
+  });
+
+  it('collapses the Argo CD section when its header is clicked', async () => {
+    stubFetch(withArgo);
+    renderSidebar();
+    expect(await screen.findByRole('button', { name: 'Application' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Argo CD' }));
+
+    expect(screen.queryByRole('button', { name: 'Application' })).not.toBeInTheDocument();
+  });
+
+  it('opens an Argo CD kind like any other resource', async () => {
+    const seen: string[] = [];
+    stubFetch(withArgo);
+    renderSidebar({
+      onSelect: (descriptor) => {
+        seen.push(descriptor.kind);
+      },
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Application' }));
+
+    expect(seen).toEqual(['Application']);
   });
 
   it('starts with resource categories collapsed and expands one on click', async () => {
@@ -165,35 +245,35 @@ describe('Sidebar', () => {
     expect(await screen.findByText('discovery request failed')).toBeInTheDocument();
   });
 
-  it('names the view behind every GitOps entry', async () => {
-    stubFetch(categories);
+  it('names the view behind every Flux entry', async () => {
+    stubFetch(withFlux);
     const onSelectView = vi.fn<(view: View) => void>();
     renderSidebar({ onSelectView });
-    await userEvent.click(screen.getByRole('button', { name: 'GitOps Graph' }));
-    await userEvent.click(screen.getByRole('button', { name: 'GitOps Resource list' }));
-    await userEvent.click(screen.getByRole('button', { name: 'GitOps Status tiles' }));
-    await userEvent.click(screen.getByRole('button', { name: 'GitOps Overview' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Flux Graph' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Flux Resource list' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Flux Overview' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Flux Overview' }));
     const seen = onSelectView.mock.calls.map((call) => call[0]);
-    expect(seen).toEqual(['gitops', 'flux-list', 'flux-overview', 'flux-roles']);
+    expect(seen).toEqual(['gitops', 'flux-list', 'flux-roles', 'flux-roles']);
   });
 
-  it('highlights the GitOps entry that matches the active view', () => {
-    stubFetch(categories);
-    renderSidebar({ view: 'flux-overview' });
-    expect(screen.getByRole('button', { name: 'GitOps Status tiles' }).className).toContain(
+  it('highlights the Flux entry that matches the active view', async () => {
+    stubFetch(withFlux);
+    renderSidebar({ view: 'flux-roles' });
+    expect((await screen.findByRole('button', { name: 'Flux Overview' })).className).toContain(
       'bg-surface-active',
     );
-    expect(screen.getByRole('button', { name: 'GitOps Graph' }).className).not.toContain(
+    expect(screen.getByRole('button', { name: 'Flux Graph' }).className).not.toContain(
       'bg-surface-active',
     );
   });
 
-  it('collapses the GitOps section when its header is clicked', async () => {
-    stubFetch(categories);
+  it('collapses the Flux section when its header is clicked', async () => {
+    stubFetch(withFlux);
     renderSidebar();
-    expect(screen.getByRole('button', { name: 'GitOps Graph' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'GitOps' }));
-    expect(screen.queryByRole('button', { name: 'GitOps Graph' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Flux Graph' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Flux' }));
+    expect(screen.queryByRole('button', { name: 'Flux Graph' })).not.toBeInTheDocument();
   });
   it('nests custom resources under their api group', async () => {
     const user = userEvent.setup();
@@ -359,19 +439,19 @@ describe('Sidebar', () => {
 });
 
 describe('the active sidebar entry', () => {
-  it('keeps its highlight under the cursor', () => {
-    stubFetch(categories);
+  it('keeps its highlight under the cursor', async () => {
+    stubFetch(withFlux);
     renderSidebar({ view: 'flux-roles' });
-    const active = screen.getByRole('button', { name: 'GitOps Overview' });
+    const active = await screen.findByRole('button', { name: 'Flux Overview' });
 
     expect(active.className).toContain('bg-surface-active');
     expect(active.className).not.toContain('hover:bg-surface-raised');
   });
 
-  it('does not carry a text colour that a later rule overrides', () => {
-    stubFetch(categories);
+  it('does not carry a text colour that a later rule overrides', async () => {
+    stubFetch(withFlux);
     renderSidebar({ view: 'flux-roles' });
-    const active = screen.getByRole('button', { name: 'GitOps Overview' });
+    const active = await screen.findByRole('button', { name: 'Flux Overview' });
 
     expect(active.className).toContain('text-fg-strong');
     expect(active.className).not.toContain('text-fg-soft');
@@ -513,15 +593,15 @@ describe('what the sidebar tells assistive technology', () => {
     );
   });
 
-  it('says which view is the current one', () => {
-    stubFetch(categories, {});
+  it('says which view is the current one', async () => {
+    stubFetch(withFlux, {});
     renderSidebar({ view: 'gitops' });
 
-    expect(screen.getByRole('button', { name: 'GitOps Graph' })).toHaveAttribute(
+    expect(await screen.findByRole('button', { name: 'Flux Graph' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('button', { name: 'GitOps Overview' })).not.toHaveAttribute(
+    expect(await screen.findByRole('button', { name: 'Flux Overview' })).not.toHaveAttribute(
       'aria-current',
     );
   });
@@ -562,17 +642,17 @@ describe('a sidebar that survives a reload', () => {
     expect(await screen.findByRole('button', { name: 'Pod' })).toBeInTheDocument();
   });
 
-  it('keeps the GitOps section shut across a remount', async () => {
+  it('keeps the Flux section shut across a remount', async () => {
     const user = userEvent.setup();
-    stubFetch(categories, {});
+    stubFetch(withFlux, {});
     const first = renderSidebar();
-    await user.click(screen.getByRole('button', { name: 'GitOps' }));
-    expect(screen.queryByRole('button', { name: 'GitOps Graph' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Flux' }));
+    expect(screen.queryByRole('button', { name: 'Flux Graph' })).not.toBeInTheDocument();
     first.unmount();
 
     renderSidebar();
 
-    expect(screen.queryByRole('button', { name: 'GitOps Graph' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Flux Graph' })).not.toBeInTheDocument();
   });
 
   it('leaves a category the user never touched shut', async () => {

@@ -139,7 +139,6 @@ vi.mock('../src/components/HelmReleases', () => ({
   ),
 }));
 vi.mock('../src/components/FluxList', () => ({ default: fluxStub('flux-dashboard') }));
-vi.mock('../src/components/FluxOverview', () => ({ default: fluxStub('flux-overview') }));
 vi.mock('../src/components/FluxRoles', () => ({ default: fluxStub('flux-roles') }));
 
 vi.mock('../src/components/ForwardsPanel', () => ({
@@ -235,7 +234,17 @@ const deploymentDescriptor = makeDescriptor({
   namespaced: true,
 });
 
-const categories: Category[] = [makeCategory('Workloads', [podDescriptor, deploymentDescriptor])];
+const kustomizationDescriptor = makeDescriptor({
+  group: 'kustomize.toolkit.fluxcd.io',
+  version: 'v1',
+  resource: 'kustomizations',
+  kind: 'Kustomization',
+});
+
+const categories: Category[] = [
+  makeCategory('Workloads', [podDescriptor, deploymentDescriptor]),
+  makeCategory('Custom resources', [kustomizationDescriptor]),
+];
 
 const objectDetail = {
   apiVersion: 'v1',
@@ -587,7 +596,7 @@ describe('App', () => {
   it('targets the inspector at a selected graph node', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps Graph' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Graph' }));
     expect(screen.getByTestId('gitops-graph')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'select-node' }));
@@ -598,21 +607,9 @@ describe('App', () => {
   it('targets the inspector from the flux table', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps Resource list' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Resource list' }));
 
     await user.click(screen.getByRole('button', { name: 'select-flux-dashboard' }));
-
-    expect(screen.getByTestId('inspect-target')).toHaveTextContent(
-      'kustomizations:flux-system/apps',
-    );
-  });
-
-  it('targets the inspector from the flux overview', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps Status tiles' }));
-
-    await user.click(screen.getByRole('button', { name: 'select-flux-overview' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent(
       'kustomizations:flux-system/apps',
@@ -622,8 +619,8 @@ describe('App', () => {
   it('targets the inspector from the by-role view', async () => {
     const user = userEvent.setup();
     render(<App />);
-    const gitops = screen.getByLabelText('GitOps views');
-    await user.click(within(gitops).getByRole('button', { name: 'GitOps Overview' }));
+    const gitops = await screen.findByLabelText('Flux views');
+    await user.click(within(gitops).getByRole('button', { name: 'Flux Overview' }));
 
     await user.click(screen.getByRole('button', { name: 'select-flux-roles' }));
 
@@ -635,11 +632,11 @@ describe('App', () => {
   it('clears the target when switching views', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps Graph' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Graph' }));
     await user.click(screen.getByRole('button', { name: 'select-node' }));
     expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'GitOps Resource list' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Resource list' }));
 
     expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
@@ -668,7 +665,7 @@ describe('App', () => {
   it('returns to the resources view when a resource is selected', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps Graph' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Graph' }));
     expect(screen.getByTestId('gitops-graph')).toBeInTheDocument();
     await selectPod(user);
     expect(screen.queryByTestId('gitops-graph')).not.toBeInTheDocument();
@@ -718,7 +715,7 @@ describe('the address bar', () => {
   it('spells out an object picked from a view with no table behind it', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps Graph' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Graph' }));
 
     await user.click(screen.getByRole('button', { name: 'select-node' }));
 
@@ -878,7 +875,7 @@ describe('a selection that outlives its row', () => {
   it('opens the terminal for a pod picked out of the graph', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'GitOps Graph' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Graph' }));
 
     await user.click(screen.getByRole('button', { name: 'select-pod-node' }));
 
@@ -900,7 +897,7 @@ describe('a selection that outlives its row', () => {
     const user = userEvent.setup();
     render(<App />);
     await selectPod(user);
-    await user.click(screen.getByRole('button', { name: 'GitOps Graph' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Graph' }));
 
     await user.click(screen.getByRole('button', { name: 'select-node' }));
 
@@ -955,9 +952,9 @@ describe('the command palette and shortcuts', () => {
     render(<App />);
 
     press('k', { ctrlKey: true });
-    await user.click(await screen.findByRole('button', { name: /GitOps status tiles/ }));
+    await user.click(await screen.findByRole('button', { name: /Flux resources/ }));
 
-    expect(await screen.findByTestId('flux-overview')).toBeInTheDocument();
+    expect(await screen.findByTestId('flux-dashboard')).toBeInTheDocument();
   });
 
   it('opens the search button in the top bar', async () => {
@@ -1265,7 +1262,7 @@ describe('navigating away from an unsaved draft', () => {
     setUnsaved(true);
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
 
-    await user.click(screen.getByRole('button', { name: 'GitOps Graph' }));
+    await user.click(await screen.findByRole('button', { name: 'Flux Graph' }));
 
     expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
   });

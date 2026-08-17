@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ObjectRef, ResourceDescriptor, View } from './types';
 
-export const VIEWS: View[] = [
-  'resources',
-  'cluster',
-  'helm',
-  'gitops',
-  'flux-list',
-  'flux-overview',
-  'flux-roles',
-];
+export const VIEWS: View[] = ['resources', 'cluster', 'helm', 'gitops', 'flux-list', 'flux-roles'];
 
 export interface RouteResource {
   group: string;
