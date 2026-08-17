@@ -218,4 +218,28 @@ describe('the top bar entry points', () => {
     expect(await screen.findByRole('button', { name: 'Desktop' })).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
+
+  it('offers reconnect as an icon with a tooltip', async () => {
+    const user = userEvent.setup();
+    const onReconnect = vi.fn();
+    render(<TopBar status="disconnected" onReconnect={onReconnect} />);
+
+    const button = screen.getByRole('button', { name: 'Reconnect' });
+    expect(button).toHaveAttribute('title', 'Reconnect to the cluster');
+    expect(button.textContent).toBe('');
+
+    await user.click(button);
+
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the connection state beside the cluster, not off to the right', () => {
+    const { container } = render(<TopBar status="connected" />);
+
+    const bar = container.querySelector('header');
+    const dot = dotFor(container);
+    const search = screen.getByRole('button', { name: /Search/ });
+    expect(bar).not.toBeNull();
+    expect(dot.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

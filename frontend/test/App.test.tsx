@@ -140,6 +140,25 @@ vi.mock('../src/components/HelmReleases', () => ({
 }));
 vi.mock('../src/components/FluxList', () => ({ default: fluxStub('flux-dashboard') }));
 vi.mock('../src/components/FluxRoles', () => ({ default: fluxStub('flux-roles') }));
+vi.mock('../src/components/ArgoApps', () => ({
+  default: ({ onSelect }: { onSelect: (ref: unknown) => void }) => (
+    <button
+      type="button"
+      data-testid="argo-apps"
+      onClick={() => {
+        onSelect({
+          group: 'argoproj.io',
+          version: 'v1alpha1',
+          resource: 'applications',
+          namespace: 'argocd',
+          name: 'root',
+        });
+      }}
+    >
+      select-argo
+    </button>
+  ),
+}));
 
 vi.mock('../src/components/ForwardsPanel', () => ({
   default: () => <div data-testid="forwards-panel" />,
@@ -234,6 +253,13 @@ const deploymentDescriptor = makeDescriptor({
   namespaced: true,
 });
 
+const argoDescriptor = makeDescriptor({
+  group: 'argoproj.io',
+  version: 'v1alpha1',
+  resource: 'applications',
+  kind: 'Application',
+});
+
 const kustomizationDescriptor = makeDescriptor({
   group: 'kustomize.toolkit.fluxcd.io',
   version: 'v1',
@@ -243,7 +269,7 @@ const kustomizationDescriptor = makeDescriptor({
 
 const categories: Category[] = [
   makeCategory('Workloads', [podDescriptor, deploymentDescriptor]),
-  makeCategory('Custom resources', [kustomizationDescriptor]),
+  makeCategory('Custom resources', [kustomizationDescriptor, argoDescriptor]),
 ];
 
 const objectDetail = {
@@ -1342,5 +1368,17 @@ describe('finding your way in by keyboard', () => {
     await user.click(screen.getByRole('button', { name: 'Stay here' }));
 
     expect(screen.queryByText('Spinoza is back in its window')).not.toBeInTheDocument();
+  });
+
+  it('opens the argo applications view and targets the inspector from it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Argo CD Applications' }));
+    expect(await screen.findByTestId('argo-apps')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'select-argo' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('applications:argocd/root');
   });
 });

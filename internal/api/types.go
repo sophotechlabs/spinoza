@@ -483,6 +483,31 @@ type Graph struct {
 	Error string      `json:"error,omitempty"`
 }
 
+type ArgoApp struct {
+	Kind        string `json:"kind"`
+	Group       string `json:"group"`
+	Version     string `json:"version"`
+	Resource    string `json:"resource"`
+	Name        string `json:"name"`
+	Namespace   string `json:"namespace"`
+	Project     string `json:"project"`
+	Sync        string `json:"sync"`
+	Health      string `json:"health"`
+	Revision    string `json:"revision"`
+	Repo        string `json:"repo"`
+	Path        string `json:"path"`
+	Destination string `json:"destination"`
+	Message     string `json:"message"`
+	Owner       string `json:"owner,omitempty"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+type ArgoDashboard struct {
+	Apps            []ArgoApp `json:"apps"`
+	ApplicationSets []ArgoApp `json:"applicationSets"`
+	Error           string    `json:"error,omitempty"`
+}
+
 type FluxResource struct {
 	Kind      string `json:"kind"`
 	Group     string `json:"group"`

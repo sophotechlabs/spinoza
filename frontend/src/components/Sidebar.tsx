@@ -331,7 +331,18 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
             </span>
           </button>
           {argo && sectionOpen(sections, ARGO_SECTION) && (
-            <div aria-label="Argo CD resources">
+            <div aria-label="Argo CD views">
+              <button
+                type="button"
+                aria-label="Argo CD Applications"
+                aria-current={current(view === 'argo-apps')}
+                onClick={() => {
+                  onSelectView('argo-apps');
+                }}
+                className={resourceClass(view === 'argo-apps')}
+              >
+                Applications
+              </button>
               {argoTypes(categories).map((descriptor) => (
                 <button
                   key={descriptorKey(descriptor)}

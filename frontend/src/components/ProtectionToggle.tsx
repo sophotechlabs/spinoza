@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { CONTROL } from '../lib/controls';
+import { ICON_CONTROL } from '../lib/controls';
 import { setProtection } from '../lib/contexts';
 import { useContextList, useContextsStore } from '../store/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
+import { LockedIcon, UnlockedIcon } from './icons';
 
-const PROTECTED_CLASS = `${CONTROL} border-warn-line-strong bg-warn-tint font-semibold tracking-wide text-warn-strong uppercase disabled:text-fg-subtle`;
+const PROTECTED_CLASS = `${ICON_CONTROL} border-warn-line-strong bg-warn-tint text-warn-strong disabled:text-fg-subtle`;
 
-const OPEN_CLASS = `${CONTROL} border-edge-strong tracking-wide text-fg-muted uppercase hover:bg-surface-active disabled:text-fg-subtle`;
+const OPEN_CLASS = `${ICON_CONTROL} border-edge-strong text-fg-muted hover:bg-surface-active disabled:text-fg-subtle`;
 
 function reason(err: unknown): string {
   if (err instanceof Error && err.message !== '') {
@@ -31,9 +32,9 @@ function hintFor(protectedCluster: boolean): string {
 
 function labelFor(protectedCluster: boolean): string {
   if (protectedCluster) {
-    return 'protected';
+    return 'Protected cluster';
   }
-  return 'open';
+  return 'Open cluster';
 }
 
 export default function ProtectionToggle() {
@@ -71,11 +72,13 @@ export default function ProtectionToggle() {
       type="button"
       disabled={busy}
       aria-pressed={protectedCluster}
+      aria-label={labelFor(protectedCluster)}
       onClick={() => void flip()}
       title={hintFor(protectedCluster)}
       className={classFor(protectedCluster)}
     >
-      {labelFor(protectedCluster)}
+      {protectedCluster && <LockedIcon />}
+      {!protectedCluster && <UnlockedIcon />}
     </button>
   );
 }

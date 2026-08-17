@@ -6,6 +6,7 @@ import ContextPicker from './ContextPicker';
 import NotificationsMenu from './NotificationsMenu';
 import ProtectionToggle from './ProtectionToggle';
 import ViewSwitch from './ViewSwitch';
+import { ReconnectIcon } from './icons';
 import Wordmark from './Wordmark';
 
 interface TopBarProps {
@@ -82,6 +83,22 @@ export default function TopBar({
       <Wordmark />
       <ContextPicker onSwitched={handleContextChanged} />
       <ProtectionToggle />
+      <span className="flex items-center gap-1.5 text-fg-muted">
+        <span
+          data-testid="connection-dot"
+          className={`h-2 w-2 rounded-full ${statusColor(status)}`}
+        />
+        {status}
+      </span>
+      <button
+        type="button"
+        aria-label="Reconnect"
+        title="Reconnect to the cluster"
+        onClick={handleReconnect}
+        className={`${ICON_CONTROL} border-edge-strong text-fg hover:bg-surface-active`}
+      >
+        <ReconnectIcon />
+      </button>
       <span className="text-fg-muted">/</span>
       <span className="text-fg-soft">all namespaces</span>
       {view !== undefined && (
@@ -95,20 +112,6 @@ export default function TopBar({
           className={`${CONTROL} border-edge-strong text-fg-soft hover:bg-surface-active`}
         >
           Search <span className="text-fg-muted">{paletteChordLabel()}</span>
-        </button>
-        <span className="flex items-center gap-1.5 text-fg-muted">
-          <span
-            data-testid="connection-dot"
-            className={`h-2 w-2 rounded-full ${statusColor(status)}`}
-          />
-          {status}
-        </span>
-        <button
-          type="button"
-          onClick={handleReconnect}
-          className={`${CONTROL} border-edge-strong text-fg hover:bg-surface-active`}
-        >
-          Reconnect
         </button>
         <ViewSwitch onLeft={handleLeftForDesktop} />
         <NotificationsMenu onSelectObject={handleSelectObject} />

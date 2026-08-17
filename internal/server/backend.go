@@ -41,6 +41,7 @@ type Feeds interface {
 type Views interface {
 	Graph(ctx context.Context) api.Graph
 	Flux(ctx context.Context) api.FluxDashboard
+	Argo(ctx context.Context) api.ArgoDashboard
 	Metrics(ctx context.Context) api.Metrics
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)
 	Overview(ctx context.Context) api.ClusterOverview

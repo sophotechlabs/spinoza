@@ -173,7 +173,33 @@ export type ServerMsg =
   | { type: 'log-end'; subId: string }
   | { type: 'error'; subId: string; message: string };
 
-export type View = 'resources' | 'cluster' | 'helm' | 'gitops' | 'flux-list' | 'flux-roles';
+export type View =
+  'resources' | 'cluster' | 'helm' | 'gitops' | 'flux-list' | 'flux-roles' | 'argo-apps';
+
+export interface ArgoApp {
+  kind: string;
+  group: string;
+  version: string;
+  resource: string;
+  name: string;
+  namespace: string;
+  project: string;
+  sync: string;
+  health: string;
+  revision: string;
+  repo: string;
+  path: string;
+  destination: string;
+  message: string;
+  owner?: string;
+  createdAt: string;
+}
+
+export interface ArgoDashboard {
+  apps: ArgoApp[];
+  applicationSets: ArgoApp[];
+  error?: string;
+}
 
 export interface FluxResource {
   kind: string;

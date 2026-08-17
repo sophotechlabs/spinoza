@@ -299,4 +299,9 @@ describe('useRouter', () => {
 
     expect(result.current.route.view).toBe('resources');
   });
+
+  it('restores the argo applications view from the address bar', () => {
+    expect(decodeRoute('view=argo-apps').view).toBe('argo-apps');
+    expect(VIEWS).toContain('argo-apps');
+  });
 });

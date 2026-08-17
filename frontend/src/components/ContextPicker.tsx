@@ -18,6 +18,8 @@ interface ContextPickerProps {
   onSwitched: () => void;
 }
 
+const MANAGE = '__manage__';
+
 const REFRESH_MS = 30000;
 
 const RETRY_BASE_MS = 1000;
@@ -100,6 +102,10 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   }, [busy, setList]);
 
   async function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    if (event.target.value === MANAGE) {
+      setManaging(true);
+      return;
+    }
     const entry = entryFor(groups, event.target.value);
     if (entry === undefined || sameContext(entry, list.current)) {
       return;
@@ -141,6 +147,14 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
       >
         Kubeconfigs
       </button>
+    );
+  }
+
+  function manageOption() {
+    return (
+      <optgroup label="Kubeconfigs">
+        <option value={MANAGE}>Manage kubeconfigs</option>
+      </optgroup>
     );
   }
 
@@ -214,8 +228,8 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
             ))}
           </optgroup>
         ))}
+        {manageOption()}
       </select>
-      {manageButton()}
       {busy && <span className="text-fg-muted">switching</span>}
       {error !== null && (
         <span role="status" className="max-w-md truncate text-error">

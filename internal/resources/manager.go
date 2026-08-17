@@ -25,6 +25,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -364,6 +365,10 @@ func (m *Manager) Graph(ctx context.Context) api.Graph {
 
 func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
 	return flux.Build(ctx, m, m.descriptors(), m.charts)
+}
+
+func (m *Manager) Argo(ctx context.Context) api.ArgoDashboard {
+	return argocd.Build(ctx, m, m.descriptors())
 }
 
 func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {

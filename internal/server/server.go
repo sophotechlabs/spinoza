@@ -127,6 +127,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/helm", s.handleHelm, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false},
+		{http.MethodGet, "/api/argocd", s.handleArgo, false},
 		{http.MethodPost, "/api/flux/action", withRef(s.fluxAction), false},
 		{http.MethodPost, "/api/action", s.handleAction, false},
 		{http.MethodGet, "/api/metrics/history", s.handleMetricHistory, false},
@@ -585,6 +586,10 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, history)
+}
+
+func (s *Server) handleArgo(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Argo(r.Context()))
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {

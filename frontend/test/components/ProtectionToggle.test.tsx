@@ -50,7 +50,7 @@ describe('ProtectionToggle', () => {
 
     show('protected');
 
-    expect(screen.getByRole('button', { name: 'protected' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Protected cluster' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -61,7 +61,10 @@ describe('ProtectionToggle', () => {
 
     show('open');
 
-    expect(screen.getByRole('button', { name: 'open' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Open cluster' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('leaves the question to the prompt while the cluster is new', () => {
@@ -85,7 +88,7 @@ describe('ProtectionToggle', () => {
     const calls = stubFetch('open');
 
     show('protected');
-    await user.click(screen.getByRole('button', { name: 'protected' }));
+    await user.click(screen.getByRole('button', { name: 'Protected cluster' }));
 
     await waitFor(() => {
       expect(useContextsStore.getState().list.protection).toBe('open');
@@ -99,7 +102,7 @@ describe('ProtectionToggle', () => {
     const calls = stubFetch('protected');
 
     show('open');
-    await user.click(screen.getByRole('button', { name: 'open' }));
+    await user.click(screen.getByRole('button', { name: 'Open cluster' }));
 
     await waitFor(() => {
       expect(useContextsStore.getState().list.protection).toBe('protected');
@@ -113,7 +116,7 @@ describe('ProtectionToggle', () => {
     stubFetch('open', false);
 
     show('protected');
-    await user.click(screen.getByRole('button', { name: 'protected' }));
+    await user.click(screen.getByRole('button', { name: 'Protected cluster' }));
 
     await waitFor(() => {
       expect(useToastsStore.getState().toasts[0].message).toContain('read-only');
@@ -129,10 +132,31 @@ describe('ProtectionToggle', () => {
     );
 
     show('protected');
-    await user.click(screen.getByRole('button', { name: 'protected' }));
+    await user.click(screen.getByRole('button', { name: 'Protected cluster' }));
 
     await waitFor(() => {
       expect(useToastsStore.getState().toasts[0].message).toBe('the answer could not be saved');
     });
+  });
+
+  it('shows a lock rather than a word', () => {
+    stubFetch('open');
+
+    show('protected');
+
+    const button = screen.getByRole('button', { name: 'Protected cluster' });
+    expect(button.textContent).toBe('');
+    expect(button.querySelector('svg')).not.toBeNull();
+    expect(button).toHaveAttribute('title', expect.stringContaining('Click to lift'));
+  });
+
+  it('shows an open lock on an open cluster', () => {
+    stubFetch('protected');
+
+    show('open');
+
+    const button = screen.getByRole('button', { name: 'Open cluster' });
+    expect(button.querySelector('svg')).not.toBeNull();
+    expect(button).toHaveAttribute('title', expect.stringContaining('Click to protect'));
   });
 });

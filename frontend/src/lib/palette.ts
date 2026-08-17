@@ -1,6 +1,6 @@
 import type { Category, ObjectRef, ResourceDescriptor, SearchHit, View } from './types';
 import { refOf } from './search';
-import { fluxInstalled } from './gitops';
+import { argoInstalled, fluxInstalled } from './gitops';
 
 export const VIEW_LABELS: Record<View, string> = {
   resources: 'Resources',
@@ -9,6 +9,7 @@ export const VIEW_LABELS: Record<View, string> = {
   'flux-roles': 'Flux overview',
   gitops: 'Flux graph',
   'flux-list': 'Flux resources',
+  'argo-apps': 'Argo CD applications',
 };
 
 const VIEW_ORDER: View[] = ['cluster', 'resources', 'helm', 'flux-roles', 'gitops', 'flux-list'];
@@ -45,10 +46,14 @@ export function clusterItems(hits: SearchHit[]): PaletteItem[] {
 const FLUX_VIEWS: View[] = ['flux-roles', 'gitops', 'flux-list'];
 
 function offered(categories: Category[]): View[] {
-  if (fluxInstalled(categories)) {
-    return VIEW_ORDER;
+  const hidden: View[] = [];
+  if (!fluxInstalled(categories)) {
+    hidden.push(...FLUX_VIEWS);
   }
-  return VIEW_ORDER.filter((view) => !FLUX_VIEWS.includes(view));
+  if (!argoInstalled(categories)) {
+    hidden.push('argo-apps');
+  }
+  return VIEW_ORDER.filter((view) => !hidden.includes(view));
 }
 
 export function paletteItems(categories: Category[], recents: ObjectRef[]): PaletteItem[] {

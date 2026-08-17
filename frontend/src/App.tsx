@@ -31,6 +31,7 @@ import ClusterOverview from './components/ClusterOverview';
 import HelmReleases from './components/HelmReleases';
 import FluxList from './components/FluxList';
 import FluxRoles from './components/FluxRoles';
+import ArgoApps from './components/ArgoApps';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
@@ -268,6 +269,9 @@ export default function App() {
   }
   if (route.view === 'flux-roles') {
     mainArea = <FluxRoles onSelect={handleSelectFlux} />;
+  }
+  if (route.view === 'argo-apps') {
+    mainArea = <ArgoApps onSelect={remember} />;
   }
 
   return (
