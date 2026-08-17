@@ -1,5 +1,5 @@
 import type { ConnectionStatus } from '../lib/feed';
-import type { ObjectRef, View } from '../lib/types';
+import type { ObjectRef } from '../lib/types';
 import { CONTROL, ICON_CONTROL } from '../lib/controls';
 import { paletteChordLabel } from '../lib/hotkeys';
 import ContextPicker from './ContextPicker';
@@ -7,11 +7,12 @@ import NotificationsMenu from './NotificationsMenu';
 import ProtectionToggle from './ProtectionToggle';
 import ViewSwitch from './ViewSwitch';
 import { ReconnectIcon } from './icons';
+import { useNamespaces } from '../lib/namespaces';
+import { ALL, useNamespaceStore } from '../store/namespace';
 import Wordmark from './Wordmark';
 
 interface TopBarProps {
   status: ConnectionStatus;
-  view?: View;
   onReconnect?: () => void;
   onContextChanged?: () => void;
   onOpenPalette?: () => void;
@@ -32,7 +33,6 @@ function statusColor(status: ConnectionStatus): string {
 
 export default function TopBar({
   status,
-  view,
   onReconnect,
   onContextChanged,
   onOpenPalette,
@@ -40,6 +40,11 @@ export default function TopBar({
   onSelectObject,
   onLeftForDesktop,
 }: TopBarProps) {
+  const namespace = useNamespaceStore((state) => state.namespace);
+  const names = useNamespaceStore((state) => state.names);
+  const choose = useNamespaceStore((state) => state.choose);
+  useNamespaces();
+
   function handlePalette() {
     if (onOpenPalette) {
       onOpenPalette();
@@ -83,12 +88,16 @@ export default function TopBar({
       <Wordmark />
       <ContextPicker onSwitched={handleContextChanged} />
       <ProtectionToggle />
-      <span className="flex items-center gap-1.5 text-fg-muted">
+      <span
+        role="status"
+        aria-label={`The cluster feed is ${status}`}
+        title={`The cluster feed is ${status}`}
+        className={`${ICON_CONTROL} border-transparent`}
+      >
         <span
           data-testid="connection-dot"
           className={`h-2 w-2 rounded-full ${statusColor(status)}`}
         />
-        {status}
       </span>
       <button
         type="button"
@@ -99,11 +108,22 @@ export default function TopBar({
       >
         <ReconnectIcon />
       </button>
-      <span className="text-fg-muted">/</span>
-      <span className="text-fg-soft">all namespaces</span>
-      {view !== undefined && (
-        <span className={`${CONTROL} border-edge-strong text-fg-soft`}>{view}</span>
-      )}
+      <select
+        aria-label="Namespace"
+        title="The namespace the resource list shows"
+        value={namespace}
+        onChange={(event) => {
+          choose(event.target.value);
+        }}
+        className={`${CONTROL} max-w-48 border-edge-strong bg-surface-raised text-fg-soft`}
+      >
+        <option value={ALL}>All namespaces</option>
+        {names.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
       <div className="ml-auto flex items-center gap-3">
         <button
           type="button"

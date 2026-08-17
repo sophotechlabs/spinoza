@@ -18,6 +18,7 @@ import { focusFilter, useHotkeys } from './lib/hotkeys';
 import { mayDiscard } from './lib/unsaved';
 import { clearRecents, rememberObject } from './store/recents';
 import { clearHistory } from './store/toasts';
+import { useNamespace } from './store/namespace';
 import { clearTerminals } from './store/terminals';
 import { notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
@@ -81,6 +82,7 @@ export default function App() {
   }, [route.resource]);
 
   const { subscribe, unsubscribe, subscribeLogs, unsubscribeLogs } = feed;
+  const namespace = useNamespace();
   const selectedRow = useRowForRef(subId, active, route.selection);
   const selection = useMemo<Selection | null>(() => {
     if (route.selection === null) {
@@ -93,11 +95,11 @@ export default function App() {
     if (active === null) {
       return;
     }
-    subscribe(subId, active, '');
+    subscribe(subId, active, namespace);
     return () => {
       unsubscribe(subId);
     };
-  }, [active, subId, subscribe, unsubscribe]);
+  }, [active, namespace, subId, subscribe, unsubscribe]);
 
   useEffect(() => {
     let live = true;
@@ -286,7 +288,6 @@ export default function App() {
       <ErrorBoundary label="The top bar">
         <TopBar
           status={feed.status}
-          view={route.view}
           onReconnect={feed.reconnect}
           onContextChanged={handleContextChanged}
           onOpenPalette={() => {

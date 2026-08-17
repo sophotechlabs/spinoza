@@ -5,9 +5,9 @@ import { useContextList, useContextsStore } from '../store/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
 import { LockedIcon, UnlockedIcon } from './icons';
 
-const PROTECTED_CLASS = `${ICON_CONTROL} border-warn-line-strong bg-warn-tint text-warn-strong disabled:text-fg-subtle`;
+const PROTECTED_CLASS = `${ICON_CONTROL} border-ok-line bg-ok-tint text-ok hover:bg-ok-emphasis disabled:text-fg-subtle`;
 
-const OPEN_CLASS = `${ICON_CONTROL} border-edge-strong text-fg-muted hover:bg-surface-active disabled:text-fg-subtle`;
+const OPEN_CLASS = `${ICON_CONTROL} border-warn-line text-warn-muted hover:bg-warn-tint disabled:text-fg-subtle`;
 
 function reason(err: unknown): string {
   if (err instanceof Error && err.message !== '') {

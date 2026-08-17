@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_NAMESPACES, filterRows, namespacesOf } from '../../src/lib/tableFilter';
+import { filterRows, namespacesOf } from '../../src/lib/tableFilter';
 import { makeRow } from '../helpers';
 
 const rows = [
@@ -14,29 +14,19 @@ describe('tableFilter', () => {
     expect(namespacesOf(rows)).toEqual(['prod', 'staging']);
   });
 
-  it('returns everything with no filters', () => {
-    expect(filterRows(rows, '', ALL_NAMESPACES)).toHaveLength(4);
+  it('returns everything with no query', () => {
+    expect(filterRows(rows, '')).toHaveLength(4);
   });
 
   it('filters by name substring, case-insensitively', () => {
-    const got = filterRows(rows, 'WEB', ALL_NAMESPACES).map((row) => row.name);
-    expect(got).toEqual(['web-1', 'web-2']);
+    expect(filterRows(rows, 'WEB').map((row) => row.name)).toEqual(['web-1', 'web-2']);
   });
 
   it('ignores surrounding whitespace in the query', () => {
-    expect(filterRows(rows, '  api  ', ALL_NAMESPACES).map((row) => row.name)).toEqual(['api-1']);
-  });
-
-  it('filters by namespace', () => {
-    const got = filterRows(rows, '', 'prod').map((row) => row.name);
-    expect(got).toEqual(['web-1', 'api-1']);
-  });
-
-  it('combines both filters', () => {
-    expect(filterRows(rows, 'web', 'prod').map((row) => row.name)).toEqual(['web-1']);
+    expect(filterRows(rows, '  api  ').map((row) => row.name)).toEqual(['api-1']);
   });
 
   it('returns nothing when nothing matches', () => {
-    expect(filterRows(rows, 'nope', ALL_NAMESPACES)).toEqual([]);
+    expect(filterRows(rows, 'nope')).toEqual([]);
   });
 });

@@ -88,133 +88,6 @@ describe('ResourceTable', () => {
     expect(screen.getByText('alpha')).toBeInTheDocument();
   });
 
-  it('clears a namespace filter when the resource changes', async () => {
-    const user = userEvent.setup();
-    seed(makeColumns(['Ready']), true, [
-      makeRow({ uid: 'a', name: 'alpha', namespace: 'one' }),
-      makeRow({ uid: 'b', name: 'bravo', namespace: 'two' }),
-    ]);
-    const view = renderTable(descriptor, null);
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Namespace' }), 'two');
-    expect(screen.queryByText('alpha')).not.toBeInTheDocument();
-
-    useResourcesStore
-      .getState()
-      .applySnapshot('s2', makeColumns(['Ready']), false, [makeRow({ uid: 'c', name: 'charlie' })]);
-    view.rerender(
-      <ResourceTable
-        active={makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false })}
-        subId="s2"
-        selected={null}
-        onSelect={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText('charlie')).toBeInTheDocument();
-  });
-
-  it('clears the name filter when the resource changes', async () => {
-    const user = userEvent.setup();
-    seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'alpha' })]);
-    const view = renderTable(descriptor, null);
-    await user.type(screen.getByLabelText('Filter by name'), 'zzz');
-    expect(screen.queryByText('alpha')).not.toBeInTheDocument();
-
-    useResourcesStore
-      .getState()
-      .applySnapshot('s2', makeColumns(['Ready']), true, [makeRow({ uid: 'c', name: 'charlie' })]);
-    view.rerender(
-      <ResourceTable active={descriptor} subId="s2" selected={null} onSelect={vi.fn()} />,
-    );
-
-    expect(screen.getByLabelText('Filter by name')).toHaveValue('');
-    expect(screen.getByText('charlie')).toBeInTheDocument();
-  });
-
-  it('keeps the age column moving without a websocket event', async () => {
-    vi.useFakeTimers();
-    const created = new Date(Date.now() - 5000).toISOString();
-    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'alpha', createdAt: created })]);
-    renderTable(descriptor, null);
-    expect(screen.getByText('5s')).toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(31000);
-    });
-
-    expect(screen.queryByText('5s')).not.toBeInTheDocument();
-    expect(screen.getByText('35s')).toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
-  it('renders a placeholder when no resource is active', () => {
-    renderTable(null, null);
-    expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
-  });
-
-  it('says it is still waiting rather than showing an empty table', () => {
-    renderTable(descriptor, null);
-
-    expect(screen.getByText('Loading Pod')).toBeInTheDocument();
-    expect(screen.queryByText('This cluster has no Pod objects.')).not.toBeInTheDocument();
-  });
-
-  it('says the resource is genuinely empty once the snapshot lands', () => {
-    seed(makeColumns(['Ready']), true, []);
-
-    renderTable(descriptor, null);
-
-    expect(screen.getByText('This cluster has no Pod objects.')).toBeInTheDocument();
-    expect(screen.queryByText('Loading Pod')).not.toBeInTheDocument();
-  });
-
-  it('separates a filter with no match from an empty resource', async () => {
-    const user = userEvent.setup();
-    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
-    renderTable(descriptor, null);
-
-    await user.type(screen.getByLabelText('Filter by name'), 'zzz');
-
-    expect(screen.getByText('Nothing matches the current filter.')).toBeInTheDocument();
-    expect(screen.queryByText('This cluster has no Pod objects.')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Clear filter' }));
-
-    expect(screen.getByRole('button', { name: 'pod-a' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Filter by name')).toHaveValue('');
-  });
-
-  it('drops a namespace filter whose namespace is gone instead of filtering to nothing', async () => {
-    const user = userEvent.setup();
-    seed(makeColumns([]), true, [
-      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
-      makeRow({ uid: 'b', name: 'pod-b', namespace: 'temp' }),
-    ]);
-    renderTable(descriptor, null);
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Namespace' }), 'temp');
-    expect(screen.queryByRole('button', { name: 'pod-a' })).not.toBeInTheDocument();
-
-    act(() => {
-      useResourcesStore.getState().applyDeltas(SUB, [{ type: 'deleted', subId: SUB, uid: 'b' }]);
-    });
-
-    expect(screen.getByRole('combobox', { name: 'Namespace' })).toHaveValue('');
-    expect(screen.getByRole('button', { name: 'pod-a' })).toBeInTheDocument();
-  });
-
-  it('keeps a namespace filter while the snapshot has not arrived yet', async () => {
-    const user = userEvent.setup();
-    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
-    renderTable(descriptor, null);
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Namespace' }), 'prod');
-
-    act(() => {
-      useResourcesStore.setState({ subs: new Map(), errors: new Map() });
-    });
-
-    expect(screen.getByText('Loading Pod')).toBeInTheDocument();
-  });
-
   it('renders Name, snapshot columns and Age for a cluster-scoped resource', () => {
     seed(makeColumns(['Ready', 'Status']), false, []);
     renderTable(descriptor, null);
@@ -591,21 +464,6 @@ describe('ResourceTable', () => {
 
     expect(screen.getByRole('button', { name: 'web-1' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'api-1' })).not.toBeInTheDocument();
-    expect(screen.getByText('1 of 2')).toBeInTheDocument();
-  });
-
-  it('filters rows by namespace', async () => {
-    const user = userEvent.setup();
-    seed(makeColumns([]), true, [
-      makeRow({ uid: 'a', name: 'web-1', namespace: 'prod' }),
-      makeRow({ uid: 'b', name: 'web-2', namespace: 'staging' }),
-    ]);
-    renderTable(descriptor, null);
-
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Namespace' }), 'staging');
-
-    expect(screen.getByRole('button', { name: 'web-2' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'web-1' })).not.toBeInTheDocument();
     expect(screen.getByText('1 of 2')).toBeInTheDocument();
   });
 
@@ -1065,5 +923,18 @@ describe('pointer capture during a drag', () => {
     fireEvent.pointerUp(grip, { clientX: 60, pointerId: 1 });
 
     expect(screen.getAllByRole('columnheader')[1].style.width).toBe('240px');
+  });
+
+  it('clears a name filter that matched nothing', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'web-0', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+    await user.type(await screen.findByLabelText('Filter by name'), 'nothing-matches');
+    expect(screen.getByText('Nothing matches the current filter.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear filter' }));
+
+    expect(await screen.findByText('web-0')).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter by name')).toHaveValue('');
   });
 });

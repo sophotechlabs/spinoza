@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
+import { NAMESPACE_KEY, useNamespaceStore } from '../../src/store/namespace';
+import { readStored } from '../../src/lib/persist';
 import type { ObjectRef } from '../../src/lib/types';
 import { notifyOk, useToastsStore } from '../../src/store/toasts';
 
@@ -32,25 +34,27 @@ function dotFor(container: HTMLElement): Element {
 describe('TopBar', () => {
   it('shows a green dot when connected', () => {
     const { container } = render(<TopBar status="connected" />);
-    expect(screen.getByText('connected')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'The cluster feed is connected' })).toBeVisible();
     expect(dotFor(container).className).toContain('bg-ok-solid');
   });
 
   it('shows a yellow dot when connecting', () => {
     const { container } = render(<TopBar status="connecting" />);
-    expect(screen.getByText('connecting')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'The cluster feed is connecting' })).toBeVisible();
     expect(dotFor(container).className).toContain('bg-warn-solid');
   });
 
   it('shows a red dot when disconnected', () => {
     const { container } = render(<TopBar status="disconnected" />);
-    expect(screen.getByText('disconnected')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'The cluster feed is disconnected' })).toBeVisible();
     expect(dotFor(container).className).toContain('bg-error-solid');
   });
 
-  it('shows the active view when one is provided', () => {
-    render(<TopBar status="connected" view="gitops" />);
-    expect(screen.getByText('gitops')).toBeInTheDocument();
+  it('says the connection state in a tooltip rather than in words', () => {
+    render(<TopBar status="connected" />);
+
+    expect(screen.queryByText('connected')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveAttribute('title', 'The cluster feed is connected');
   });
 
   it('calls onReconnect when the reconnect button is clicked', async () => {
@@ -241,5 +245,53 @@ describe('the top bar entry points', () => {
     const search = screen.getByRole('button', { name: /Search/ });
     expect(bar).not.toBeNull();
     expect(dot.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('offers the namespaces the cluster reported', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ names: ['argocd', 'default', 'kube-system'] }),
+        }),
+      ),
+    );
+
+    render(<TopBar status="connected" />);
+
+    const picker = await screen.findByRole('combobox', { name: 'Namespace' });
+    expect(within(picker).getByRole('option', { name: 'All namespaces' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(picker).getByRole('option', { name: 'kube-system' })).toBeInTheDocument();
+    });
+    expect(picker).toHaveValue('default');
+    vi.unstubAllGlobals();
+  });
+
+  it('remembers the namespace that was chosen', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ names: ['default', 'shop'] }),
+        }),
+      ),
+    );
+    render(<TopBar status="connected" />);
+    const picker = await screen.findByRole('combobox', { name: 'Namespace' });
+    await waitFor(() => {
+      expect(within(picker).getByRole('option', { name: 'shop' })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(picker, 'shop');
+
+    expect(useNamespaceStore.getState().namespace).toBe('shop');
+    expect(readStored(NAMESPACE_KEY)).toBe('shop');
+    vi.unstubAllGlobals();
   });
 });

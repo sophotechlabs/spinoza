@@ -67,6 +67,11 @@ type FilePicker struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+type Namespaces struct {
+	Names []string `json:"names"`
+	Error string   `json:"error,omitempty"`
+}
+
 type SearchHit struct {
 	Group     string `json:"group"`
 	Version   string `json:"version"`

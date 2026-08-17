@@ -116,6 +116,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPost, "/api/kubeconfigs/picker", s.pickFile, true},
 		{http.MethodGet, "/api/resources/counts", s.handleCounts, false},
 		{http.MethodGet, "/api/search", s.handleSearch, false},
+		{http.MethodGet, "/api/namespaces", s.handleNamespaces, false},
 		{http.MethodGet, "/api/resources", s.listResources, false},
 		{http.MethodPost, "/api/resources", s.refreshResources, false},
 		{http.MethodGet, "/api/overview", s.handleOverview, false},
@@ -586,6 +587,10 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, history)
+}
+
+func (s *Server) handleNamespaces(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Namespaces(r.Context()))
 }
 
 func (s *Server) handleArgo(w http.ResponseWriter, r *http.Request) {

@@ -159,4 +159,22 @@ describe('ProtectionToggle', () => {
     expect(button.querySelector('svg')).not.toBeNull();
     expect(button).toHaveAttribute('title', expect.stringContaining('Click to protect'));
   });
+
+  it('reads green when locked', () => {
+    stubFetch('open');
+
+    show('protected');
+
+    expect(screen.getByRole('button', { name: 'Protected cluster' }).className).toContain(
+      'text-ok',
+    );
+  });
+
+  it('reads amber when open', () => {
+    stubFetch('protected');
+
+    show('open');
+
+    expect(screen.getByRole('button', { name: 'Open cluster' }).className).toContain('text-warn');
+  });
 });

@@ -31,7 +31,7 @@ import { cpuFromMilli, memFromMi } from '../lib/units';
 import { useElementWidth } from '../lib/useElementWidth';
 import { useNow } from '../lib/useNow';
 import { ago } from '../lib/time';
-import { ALL_NAMESPACES, filterRows, namespacesOf } from '../lib/tableFilter';
+import { filterRows } from '../lib/tableFilter';
 import { FILTER_INPUT_ID } from '../lib/hotkeys';
 import { opensRow } from '../lib/rowClick';
 import { columnLabel, readTableState, tableKey, writeTableState } from '../lib/tableState';
@@ -173,7 +173,6 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   const [sizing, setSizing] = useState<ColumnSizingState>(() => readTableState(stateKey).sizing);
   const [selection, setSelection] = useState<RowSelectionState>({});
   const [query, setQuery] = useState('');
-  const [namespace, setNamespace] = useState(ALL_NAMESPACES);
   const [lastResource, setLastResource] = useState(subId);
   if (subId !== lastResource) {
     setLastResource(subId);
@@ -183,7 +182,6 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     setSizing(next.sizing);
     setSelection({});
     setQuery('');
-    setNamespace(ALL_NAMESPACES);
   }
 
   function changeSorting(next: SortingState) {
@@ -313,20 +311,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
     return defs;
   }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics, now]);
 
-  const namespaces = useMemo(() => namespacesOf(rows), [rows]);
-
-  let activeNamespace = namespace;
-  if (loaded && namespace !== ALL_NAMESPACES && !namespaces.includes(namespace)) {
-    activeNamespace = ALL_NAMESPACES;
-  }
-  if (activeNamespace !== namespace) {
-    setNamespace(activeNamespace);
-  }
-
-  const visibleRows = useMemo(
-    () => filterRows(rows, query, activeNamespace),
-    [rows, query, activeNamespace],
-  );
+  const visibleRows = useMemo(() => filterRows(rows, query), [rows, query]);
 
   const table = useReactTable({
     data: visibleRows,
@@ -399,7 +384,6 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
 
   function clearFilter() {
     setQuery('');
-    setNamespace(ALL_NAMESPACES);
   }
 
   function clearSelection() {
@@ -455,23 +439,6 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
           }}
           className="w-56 rounded border border-edge bg-surface-raised px-2 py-1 text-fg placeholder:text-fg-muted focus:border-edge-emphasis"
         />
-        {namespaced && namespaces.length > 0 && (
-          <select
-            aria-label="Namespace"
-            value={activeNamespace}
-            onChange={(event) => {
-              setNamespace(event.target.value);
-            }}
-            className="rounded border border-edge bg-surface-raised px-1.5 py-1 text-fg focus:border-edge-emphasis"
-          >
-            <option value={ALL_NAMESPACES}>All namespaces</option>
-            {namespaces.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        )}
         <details className="relative">
           <summary className="cursor-pointer rounded border border-edge px-2 py-1 text-fg-soft hover:bg-surface-raised">
             Columns

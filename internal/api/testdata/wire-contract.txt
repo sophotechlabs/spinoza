@@ -204,6 +204,8 @@ MetricPoint.Value value
 Metrics.Error error,omitempty
 Metrics.Nodes nodes
 Metrics.Pods pods
+Namespaces.Error error,omitempty
+Namespaces.Names names
 NodeSummary.CPUAllocatableMilli cpuAllocatableMilli
 NodeSummary.CPUUsedMilli cpuUsedMilli
 NodeSummary.MemAllocatableMi memAllocatableMi

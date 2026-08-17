@@ -251,6 +251,11 @@ export interface FilePicker {
   reason?: string;
 }
 
+export interface Namespaces {
+  names: string[];
+  error?: string;
+}
+
 export interface SearchHit {
   group: string;
   version: string;

@@ -41,6 +41,7 @@ export default function ConnectionBanner({ status, attempt, onReconnect }: Conne
   return (
     <div
       role="status"
+      aria-label="The cluster feed dropped"
       className="flex shrink-0 items-baseline gap-2 border-b border-error-line bg-error-tint/40 px-3 py-1.5 text-xs text-error-strong"
     >
       <span className="shrink-0 font-semibold text-error">

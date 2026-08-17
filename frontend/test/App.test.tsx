@@ -391,7 +391,7 @@ describe('App', () => {
 
   it('renders the connection status and placeholders before a resource is chosen', () => {
     render(<App />);
-    expect(screen.getByText('connected')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'The cluster feed is connected' })).toBeVisible();
     expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
   });
@@ -408,7 +408,7 @@ describe('App', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       'main#1',
       expect.objectContaining({ group: '', version: 'v1', resource: 'pods', kind: 'Pod' }),
-      '',
+      'default',
     );
     expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
     expect(screen.getByText('1/1')).toBeInTheDocument();
@@ -485,7 +485,7 @@ describe('App', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       'main#2',
       expect.objectContaining({ group: 'apps', version: 'v1', resource: 'deployments' }),
-      '',
+      'default',
     );
   });
 
@@ -762,7 +762,7 @@ describe('the address bar', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       'main#0',
       expect.objectContaining({ resource: 'pods' }),
-      '',
+      'default',
     );
     expect(await screen.findByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
   });
@@ -969,7 +969,7 @@ describe('the command palette and shortcuts', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ resource: 'deployments' }),
-      '',
+      'default',
     );
   });
 
@@ -1114,7 +1114,7 @@ describe('the command palette and shortcuts', () => {
 
     press('Escape');
 
-    expect(screen.getByText('connected')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'The cluster feed is connected' })).toBeVisible();
   });
 
   it('forgets recent objects when the cluster changes', async () => {
@@ -1159,7 +1159,7 @@ describe('a feed that dropped', () => {
     feedMocks.attempt = 2;
     render(<App />);
 
-    const banner = screen.getByRole('status');
+    const banner = screen.getByRole('status', { name: 'The cluster feed dropped' });
     expect(banner).toHaveTextContent('The live connection dropped');
     expect(banner).toHaveTextContent('attempt 2');
   });
@@ -1216,7 +1216,9 @@ describe('a feed that dropped', () => {
     view.rerender(<App />);
 
     expect(useToastsStore.getState().toasts).toHaveLength(0);
-    expect(screen.getByRole('status')).toHaveTextContent('attempt 1');
+    expect(screen.getByRole('status', { name: 'The cluster feed dropped' })).toHaveTextContent(
+      'attempt 1',
+    );
   });
 });
 

@@ -23,6 +23,7 @@ type Catalog interface {
 	RefreshResources() api.ResourceCatalog
 	Counts(ctx context.Context) api.ResourceCounts
 	Search(ctx context.Context, query string) api.SearchResults
+	Namespaces(ctx context.Context) api.Namespaces
 }
 
 type Objects interface {

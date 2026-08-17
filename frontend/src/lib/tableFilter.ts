@@ -12,15 +12,10 @@ export function namespacesOf(rows: Row[]): string[] {
   return [...seen].sort((a, b) => a.localeCompare(b));
 }
 
-export function filterRows(rows: Row[], query: string, namespace: string): Row[] {
+export function filterRows(rows: Row[], query: string): Row[] {
   const needle = query.trim().toLowerCase();
-  return rows.filter((row) => {
-    if (namespace !== ALL_NAMESPACES && row.namespace !== namespace) {
-      return false;
-    }
-    if (needle === '') {
-      return true;
-    }
-    return row.name.toLowerCase().includes(needle);
-  });
+  if (needle === '') {
+    return rows;
+  }
+  return rows.filter((row) => row.name.toLowerCase().includes(needle));
 }

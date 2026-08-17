@@ -170,3 +170,25 @@ func (m *Manager) Search(ctx context.Context, query string) api.SearchResults {
 	}
 	return Search(ctx, m.meta, flat, query, m.limits.Search)
 }
+
+const namespaceResource = "namespaces"
+
+var namespaceGVR = schema.GroupVersionResource{Version: "v1", Resource: namespaceResource}
+
+func (m *Manager) Namespaces(ctx context.Context) api.Namespaces {
+	if m.meta == nil {
+		return api.Namespaces{}
+	}
+	bounded, cancel := context.WithTimeout(ctx, m.limits.Search.PerType)
+	defer cancel()
+	list, err := m.meta.Resource(namespaceGVR).List(bounded, metav1.ListOptions{})
+	if err != nil {
+		return api.Namespaces{Error: err.Error()}
+	}
+	names := make([]string, 0, len(list.Items))
+	for _, item := range list.Items {
+		names = append(names, item.GetName())
+	}
+	slices.Sort(names)
+	return api.Namespaces{Names: names}
+}
