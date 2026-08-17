@@ -1,5 +1,12 @@
 # Spinoza
 
+[![go](https://img.shields.io/github/actions/workflow/status/sophotechlabs/spinoza/go.yaml?branch=main&label=go)](https://github.com/sophotechlabs/spinoza/actions/workflows/go.yaml)
+[![frontend](https://img.shields.io/github/actions/workflow/status/sophotechlabs/spinoza/frontend.yaml?branch=main&label=frontend)](https://github.com/sophotechlabs/spinoza/actions/workflows/frontend.yaml)
+[![repo](https://img.shields.io/github/actions/workflow/status/sophotechlabs/spinoza/repo.yaml?branch=main&label=repo)](https://github.com/sophotechlabs/spinoza/actions/workflows/repo.yaml)
+[![go coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/sophotechlabs/spinoza/badges/coverage-go.json)](https://github.com/sophotechlabs/spinoza/actions/workflows/go.yaml)
+[![web coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/sophotechlabs/spinoza/badges/coverage-web.json)](https://github.com/sophotechlabs/spinoza/actions/workflows/frontend.yaml)
+[![license](https://img.shields.io/badge/license-FSL--1.1--ALv2-blue)](LICENSE)
+
 A self-hosted Kubernetes GUI. Go backend with client-go informers, React frontend, one binary. Runs as a browser tab or a Wails desktop window.
 
 ## Run
@@ -44,7 +51,7 @@ The binary embeds the built frontend, so `go build` on its own fails with `patte
 
 ## CI
 
-CI runs on a self-hosted Forgejo forge. Workflows live in `.forgejo/workflows/`.
+CI runs on GitHub Actions (`.forgejo/workflows/` mirrors the same jobs onto a self-hosted Forgejo forge).
 
 ```sh
 git remote add ci ssh://git@git.c.p-mk1.sopho.tech:2222/arch/spinoza.git
@@ -53,7 +60,9 @@ git push ci main
 
 Every check is a `just` recipe, so the same command runs on a laptop and in CI. `just ci` runs everything; `just check` is the pre-push subset that `lefthook` calls. CI adds cross-compilation, the coverage gate, `govulncheck`, dead-code and unused-dependency checks, a bundle-size budget, secret scanning and SAST.
 
-Runs: `https://git.c.p-mk1.sopho.tech/arch/spinoza/actions`
+The coverage badges above are not a third-party service: `just badges` turns the two coverage runs into shields endpoint files, and `.github/workflows/badges.yaml` publishes them to the orphan `badges` branch on every push to `main`.
+
+Forgejo runs: `https://git.c.p-mk1.sopho.tech/arch/spinoza/actions`
 
 ## Architecture
 

@@ -173,6 +173,52 @@ test: test-be test-fe
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml
 
+badges: cover-gate test-fe
+    #!/usr/bin/env bash
+    set -euo pipefail
+    color() {
+        if [ "$1" -ge 90 ]; then
+            echo '#97ca00'
+            return
+        fi
+        if [ "$1" -ge 75 ]; then
+            echo '#dfb317'
+            return
+        fi
+        echo '#e05d44'
+    }
+    endpoint() {
+        printf '{"schemaVersion":1,"label":"%s","message":"%s%%","color":"%s"}\n' "$2" "$3" "$(color "$3")" > "dist/badges/$1"
+    }
+    mkdir -p dist/badges
+    out=$(mktemp)
+    trap 'rm -f "$out"' EXIT
+    GITHUB_OUTPUT="$out" go-test-coverage --config .testcoverage.yml -o > /dev/null
+    go_pct=$(grep '^total-coverage=' "$out" | cut -d = -f 2)
+    web_pct=$(node -p "Math.floor(require('./frontend/coverage/coverage-summary.json').total.lines.pct)")
+    endpoint coverage-go.json 'go coverage' "$go_pct"
+    endpoint coverage-web.json 'web coverage' "$web_pct"
+    echo "badges: go ${go_pct}%, web ${web_pct}%"
+
+publish-badges: badges
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "${GITHUB_REPOSITORY:-}" ]; then
+        echo "publish-badges: GITHUB_REPOSITORY is unset"
+        exit 1
+    fi
+    if [ -z "${GH_TOKEN:-}" ]; then
+        echo "publish-badges: GH_TOKEN is unset"
+        exit 1
+    fi
+    work=$(mktemp -d)
+    trap 'rm -rf "$work"' EXIT
+    cp dist/badges/coverage-go.json dist/badges/coverage-web.json "$work/"
+    git -C "$work" init -q -b badges
+    git -C "$work" add coverage-go.json coverage-web.json
+    git -C "$work" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -q -m 'chore(badges): publish coverage'
+    git -C "$work" push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges:badges
+
 lint-be: stub-assets
     golangci-lint run {{ go_pkgs }}
     golangci-lint run --build-tags desktop {{ go_pkgs }}
