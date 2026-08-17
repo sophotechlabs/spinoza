@@ -155,7 +155,7 @@ func TestTheOverviewEndpointPassesAPartialAnswerThrough(t *testing.T) {
 	resp := getJSON(t, ts.URL+"/api/overview", &got)
 
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200 — a partial overview is still an answer", resp.StatusCode)
+		t.Fatalf("status = %d, want 200, a partial overview is still an answer", resp.StatusCode)
 	}
 	if got.Error != "nodes is forbidden" {
 		t.Fatalf("error = %q, want the failure carried through", got.Error)

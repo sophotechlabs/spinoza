@@ -63,7 +63,7 @@ describe('CommandPalette', () => {
   it('offers every view', async () => {
     renderPalette();
 
-    expect(await screen.findByRole('button', { name: /GitOps · Graph/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /GitOps graph/ })).toBeInTheDocument();
   });
 
   it('does not fetch the catalog while it is closed', () => {

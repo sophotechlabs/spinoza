@@ -98,7 +98,7 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
                 text={forwardURL(forward.localPort)}
               />
             )}
-            <span className="text-fg-muted">→ {forward.remotePort}</span>
+            <span className="text-fg-muted">to {forward.remotePort}</span>
             <button
               type="button"
               onClick={() => void stop(forward.id)}

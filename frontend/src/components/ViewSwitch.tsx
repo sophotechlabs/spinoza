@@ -68,7 +68,7 @@ export default function ViewSwitch({ onLeft }: ViewSwitchProps) {
       <button
         type="button"
         disabled={busy}
-        title="Move spinoza into your browser and hide this window"
+        title="Open in the browser, hide this window"
         onClick={() => void toBrowser()}
         className={`${CONTROL} border-edge-strong text-fg-soft hover:bg-surface-active disabled:text-fg-subtle`}
       >
@@ -81,7 +81,7 @@ export default function ViewSwitch({ onLeft }: ViewSwitchProps) {
     <button
       type="button"
       disabled={busy}
-      title="Move spinoza back into the desktop window"
+      title="Back to the desktop window"
       onClick={() => void toDesktop()}
       className={`${CONTROL} border-edge-strong text-fg-soft hover:bg-surface-active disabled:text-fg-subtle`}
     >

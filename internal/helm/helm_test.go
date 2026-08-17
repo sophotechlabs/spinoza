@@ -587,7 +587,7 @@ func TestAPartialPayloadIsCompletedFromTheLabels(t *testing.T) {
 		t.Fatalf("chart version = %q, want what the payload did carry", release.ChartVersion)
 	}
 	if got.Error != "" {
-		t.Fatalf("error = %q, want none — the payload parsed fine", got.Error)
+		t.Fatalf("error = %q, want none, the payload parsed fine", got.Error)
 	}
 }
 

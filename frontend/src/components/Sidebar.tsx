@@ -76,7 +76,7 @@ function countLabel(count: number | undefined): string {
     return '';
   }
   if (count < 0) {
-    return '—';
+    return '-';
   }
   return String(count);
 }
@@ -99,10 +99,10 @@ function kindTitle(kind: string, total: number | undefined, failing: number | un
     return kind;
   }
   const totalLabel = countLabel(total);
-  if (totalLabel === '' || totalLabel === '—') {
-    return `${kind} — ${String(failing)} not ready`;
+  if (totalLabel === '' || totalLabel === '-') {
+    return `${kind}: ${String(failing)} not ready`;
   }
-  return `${kind} — ${String(failing)} of ${totalLabel} not ready`;
+  return `${kind}: ${String(failing)} of ${totalLabel} not ready`;
 }
 
 function failingNote(failing: number | undefined): string {
@@ -128,7 +128,7 @@ function errorMessage(err: unknown, fallback: string): string {
 
 function retryLabel(retrying: boolean): string {
   if (retrying) {
-    return 'Retrying…';
+    return 'Retrying';
   }
   return 'Retry';
 }
@@ -304,7 +304,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
             title={countsError}
             className="mx-2 mb-1 truncate text-[11px] text-warn-muted"
           >
-            Object counts unavailable — {countsError}
+            Object counts unavailable: {countsError}
           </div>
         )}
         {error === null && categories.length === 0 && (

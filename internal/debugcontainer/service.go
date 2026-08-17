@@ -259,7 +259,7 @@ func progressOf(pod *corev1.Pod, name string) (running bool, waiting string, err
 	}
 	reason := status.State.Waiting.Reason
 	if startFailures[reason] {
-		return false, reason, fmt.Errorf("debug container %s could not start: %s — %s", name, reason, status.State.Waiting.Message)
+		return false, reason, fmt.Errorf("debug container %s could not start: %s, %s", name, reason, status.State.Waiting.Message)
 	}
 	return false, reason, nil
 }

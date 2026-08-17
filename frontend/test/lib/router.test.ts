@@ -169,7 +169,7 @@ describe('the document title', () => {
 
   it('names the resource and the cluster', () => {
     expect(documentTitle(route({ context: 'kind-dev', resource: pods }))).toBe(
-      'pods · kind-dev — Spinoza',
+      'pods kind-dev - Spinoza',
     );
   });
 
@@ -177,12 +177,12 @@ describe('the document title', () => {
     const selection = { group: '', version: 'v1', resource: 'pods', namespace: 'p', name: 'web-0' };
 
     expect(documentTitle(route({ context: 'kind-dev', resource: pods, selection }))).toBe(
-      'web-0 · pods · kind-dev — Spinoza',
+      'web-0 pods kind-dev - Spinoza',
     );
   });
 
   it('names the view instead of the resource outside the table', () => {
-    expect(documentTitle(route({ view: 'gitops', resource: pods }))).toBe('gitops — Spinoza');
+    expect(documentTitle(route({ view: 'gitops', resource: pods }))).toBe('gitops - Spinoza');
   });
 });
 

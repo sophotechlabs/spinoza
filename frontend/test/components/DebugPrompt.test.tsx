@@ -65,7 +65,7 @@ describe('DebugPrompt', () => {
     renderPrompt();
 
     expect(screen.getByText(/loki has no shell/)).toBeInTheDocument();
-    expect(screen.getByText(/cannot be removed afterwards/)).toBeInTheDocument();
+    expect(screen.getByText(/stays on the pod/)).toBeInTheDocument();
   });
 
   it('names the image the server would actually run', async () => {
@@ -194,7 +194,7 @@ describe('DebugPrompt', () => {
 
     await user.click(screen.getByRole('button', { name: 'Attach debug container' }));
 
-    expect(await screen.findByRole('button', { name: 'Starting…' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Starting' })).toBeDisabled();
     deferred.release();
   });
 

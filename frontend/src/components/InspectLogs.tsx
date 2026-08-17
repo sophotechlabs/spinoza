@@ -247,7 +247,7 @@ export default function InspectLogs({
         <input
           type="search"
           aria-label="Filter log lines"
-          placeholder="Filter…"
+          placeholder="Filter"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -301,7 +301,7 @@ export default function InspectLogs({
         )}
         {resumed && (
           <span role="status" className="text-warn">
-            reconnected — output above is what was here before, and may repeat
+            reconnected, output above may repeat
           </span>
         )}
       </div>
@@ -309,7 +309,7 @@ export default function InspectLogs({
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[11px] text-fg-soft"
       >
-        {lines.length === 0 && <span className="text-fg-muted">Waiting for output…</span>}
+        {lines.length === 0 && <span className="text-fg-muted">Waiting for output</span>}
         {lines.length > 0 && visible.length === 0 && (
           <span className="text-fg-muted">No line matches that filter.</span>
         )}

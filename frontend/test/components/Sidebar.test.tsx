@@ -417,7 +417,7 @@ describe('resource counts', () => {
     renderSidebar();
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
 
-    expect(await screen.findByRole('button', { name: 'Pod —' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Pod -' })).toBeInTheDocument();
   });
 
   it('carries on when the counts request fails', async () => {
@@ -451,7 +451,7 @@ describe('resource counts', () => {
     renderSidebar();
 
     expect(
-      await screen.findByText(/Object counts unavailable — resource counts request failed/),
+      await screen.findByText(/Object counts unavailable: resource counts request failed/),
     ).toBeInTheDocument();
   });
 
@@ -623,7 +623,7 @@ describe('pods that are not running', () => {
     const pods = await screen.findByRole('button', { name: /^Pod/ });
     expect(pods.querySelector('span')?.className).not.toContain('text-error');
     expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
-    expect(pods).toHaveAttribute('title', 'Pod — 3 of 12 not ready');
+    expect(pods).toHaveAttribute('title', 'Pod: 3 of 12 not ready');
     expect(pods).toHaveTextContent('3 not ready');
   });
 
@@ -633,7 +633,7 @@ describe('pods that are not running', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
 
     const pods = await screen.findByRole('button', { name: /^Pod/ });
-    expect(pods).toHaveAttribute('title', 'Pod — 3 not ready');
+    expect(pods).toHaveAttribute('title', 'Pod: 3 not ready');
     expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
   });
 

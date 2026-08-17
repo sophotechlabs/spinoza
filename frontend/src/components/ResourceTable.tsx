@@ -112,7 +112,7 @@ function nodeUsageCell(usage: ResourceUsage | undefined, memory: boolean): React
 
 function podUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
   if (usage === undefined) {
-    return <span className="text-fg-muted">—</span>;
+    return <span className="text-fg-muted">-</span>;
   }
   if (memory) {
     return <span className="text-fg-muted">{memFromMi(usage.memoryMi)}</span>;
@@ -448,7 +448,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
           id={FILTER_INPUT_ID}
           type="search"
           aria-label="Filter by name"
-          placeholder="Filter by name…"
+          placeholder="Filter by name"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -590,7 +590,7 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
             )}
           </tbody>
         </table>
-        {!loaded && <p className="p-6 text-center text-xs text-fg-muted">Loading {active.kind}…</p>}
+        {!loaded && <p className="p-6 text-center text-xs text-fg-muted">Loading {active.kind}</p>}
         {loaded && rows.length === 0 && (
           <p className="p-6 text-center text-xs text-fg-muted">
             This cluster has no {active.kind} objects.

@@ -37,7 +37,7 @@ func (k *kubectlRunner) Run(ctx context.Context, args []string) error {
 
 	var missing *exec.Error
 	if errors.As(err, &missing) {
-		return errors.New("kubectl was not found on PATH — spinoza shells out to it to create debug containers")
+		return errors.New("kubectl was not found on PATH; spinoza shells out to it to create debug containers")
 	}
 	message := meaningful(stderr.String())
 	if message == "" {

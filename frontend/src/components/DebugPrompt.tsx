@@ -48,7 +48,7 @@ function refusalMessage(namespace: string, reason?: string): string {
 
 function buttonLabel(busy: boolean): string {
   if (busy) {
-    return 'Starting…';
+    return 'Starting';
   }
   return 'Attach debug container';
 }
@@ -133,7 +133,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
       </p>
       <p className="mt-1 text-fg-muted">
         Kubernetes can add a temporary container beside it, sharing its processes, network and
-        filesystem. It cannot be removed afterwards — it stays on the pod until the pod is replaced.
+        filesystem. It stays on the pod until the pod is replaced.
       </p>
       <div className="mt-2.5 flex items-center gap-2">
         <button
@@ -170,7 +170,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
       )}
       {unchecked !== null && (
         <p role="status" className="mt-1.5 break-words text-warn">
-          {unchecked} Attaching may still work — the failure will say why if it does not.
+          {unchecked} Attaching may still work; the failure will say why if it does not.
         </p>
       )}
       {refused !== null && <p className="mt-1.5 break-words text-error">{refused}</p>}

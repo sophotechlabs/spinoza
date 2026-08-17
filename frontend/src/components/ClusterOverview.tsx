@@ -32,7 +32,7 @@ function nodeHint(nodes: NodeSummary): string {
   if (notReady > 0) {
     parts.push(`${String(notReady)} not ready`);
   }
-  return parts.join(' · ');
+  return parts.join(', ');
 }
 
 function podHint(pods: PodSummary): string {
@@ -44,12 +44,12 @@ function podHint(pods: PodSummary): string {
     `${String(pods.pending)} pending`,
     `${String(pods.failed)} failed`,
     `${String(pods.succeeded)} succeeded`,
-  ].join(' · ');
+  ].join(', ');
 }
 
 function podTotal(pods: PodSummary): string {
   if (!pods.known) {
-    return '—';
+    return '-';
   }
   return String(pods.total);
 }
@@ -92,7 +92,7 @@ function Usage({
 
 function usedLabel(used: number, known: boolean, format: (value: number) => string): string {
   if (!known) {
-    return '—';
+    return '-';
   }
   if (used <= 0) {
     return '0';
@@ -102,7 +102,7 @@ function usedLabel(used: number, known: boolean, format: (value: number) => stri
 
 function capacityLabel(total: number, format: (value: number) => string): string {
   if (total <= 0) {
-    return '—';
+    return '-';
   }
   return format(total);
 }
@@ -156,7 +156,7 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
     }
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading the cluster overview…
+        Loading the cluster overview
       </div>
     );
   }

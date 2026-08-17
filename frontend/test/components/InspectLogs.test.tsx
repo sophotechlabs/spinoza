@@ -39,7 +39,7 @@ describe('InspectLogs', () => {
   it('waits for output before any line arrives', () => {
     renderLogs();
 
-    expect(screen.getByText('Waiting for output…')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for output')).toBeInTheDocument();
   });
 
   it('resets the container when the pod changes', () => {
@@ -104,13 +104,13 @@ describe('InspectLogs', () => {
       useLogsStore.getState().appendLines(first, ['late-from-app']);
     });
     expect(screen.queryByText('late-from-app')).not.toBeInTheDocument();
-    expect(screen.getByText('Waiting for output…')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for output')).toBeInTheDocument();
   });
 
   it('scrolls to the newest line while following', () => {
     const { subscribeLogs } = renderLogs();
     const subId = liveSubId(subscribeLogs);
-    const body = screen.getByText('Waiting for output…').parentElement as HTMLDivElement;
+    const body = screen.getByText('Waiting for output').parentElement as HTMLDivElement;
     vi.spyOn(body, 'scrollHeight', 'get').mockReturnValue(900);
 
     act(() => {
@@ -125,7 +125,7 @@ describe('InspectLogs', () => {
     const user = userEvent.setup();
     const { subscribeLogs } = renderLogs();
     const subId = liveSubId(subscribeLogs);
-    const body = screen.getByText('Waiting for output…').parentElement as HTMLDivElement;
+    const body = screen.getByText('Waiting for output').parentElement as HTMLDivElement;
     vi.spyOn(body, 'scrollHeight', 'get').mockReturnValue(900);
     await user.click(screen.getByRole('button', { name: 'Following' }));
 
@@ -189,9 +189,7 @@ describe('InspectLogs stream state', () => {
       useLogsStore.getState().resumeStream(subId);
     });
 
-    expect(
-      screen.getByText('reconnected — output above is what was here before, and may repeat'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('reconnected, output above may repeat')).toBeInTheDocument();
     expect(screen.getByText('before the drop')).toBeInTheDocument();
   });
 
@@ -400,7 +398,7 @@ describe('working through a log buffer', () => {
 
     await user.click(screen.getByRole('button', { name: 'Clear' }));
 
-    expect(screen.getByText('Waiting for output…')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for output')).toBeInTheDocument();
   });
 
   it('downloads what is on screen, named after the pod', async () => {

@@ -67,7 +67,7 @@ describe('containerTitle', () => {
       containerTitle(
         container({ name: 'app', state: 'waiting', reason: 'CrashLoopBackOff', restarts: 4 }),
       ),
-    ).toBe('app: waiting (CrashLoopBackOff) · 4 restarts');
+    ).toBe('app: waiting (CrashLoopBackOff), 4 restarts');
   });
 });
 

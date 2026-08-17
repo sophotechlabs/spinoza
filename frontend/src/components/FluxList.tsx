@@ -134,7 +134,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
     }
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading Flux resources…
+        Loading Flux resources
       </div>
     );
   }

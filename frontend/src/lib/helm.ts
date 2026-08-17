@@ -97,7 +97,7 @@ export function statusLabel(status: string): string {
 
 export function latestLabel(release: { latest?: string }): string {
   if (release.latest === undefined || release.latest === '') {
-    return '—';
+    return '-';
   }
   return release.latest;
 }

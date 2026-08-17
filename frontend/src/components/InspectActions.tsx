@@ -19,7 +19,7 @@ function errorMessage(err: unknown): string {
 
 function noticeFor(action: FluxAction): string {
   if (action === 'reconcile') {
-    return 'Reconciliation requested…';
+    return 'Reconciliation requested';
   }
   if (action === 'suspend') {
     return 'Suspended.';
@@ -133,7 +133,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
           </button>
         )}
         {suspended === true && <span className="text-warn-muted">suspended</span>}
-        {busy !== null && <span className="text-fg-muted">working…</span>}
+        {busy !== null && <span className="text-fg-muted">working</span>}
       </div>
       <Announce message={error} urgent className="mt-1.5 break-words text-error" />
       <Announce message={notice} className={noticeClass(state)} />

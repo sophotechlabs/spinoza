@@ -39,7 +39,7 @@ describe('NotificationsPanel', () => {
   it('says so while nothing has happened', () => {
     panel();
 
-    expect(screen.getByText('Nothing to show here yet.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing yet.')).toBeInTheDocument();
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
   });
 
@@ -71,7 +71,7 @@ describe('NotificationsPanel', () => {
     notifyOk('two');
     panel();
 
-    expect(screen.getByText('2 since this cluster was opened, newest first')).toBeInTheDocument();
+    expect(screen.getByText('2 on this cluster, newest first')).toBeInTheDocument();
   });
 
   it('narrows to one tone when asked', async () => {
@@ -97,7 +97,7 @@ describe('NotificationsPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Warnings' }));
 
-    expect(screen.getByText('Nothing to show here yet.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing yet.')).toBeInTheDocument();
   });
 
   it('goes back to everything', async () => {
@@ -143,7 +143,7 @@ describe('NotificationsPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Clear' }));
 
-    expect(screen.getByText('Nothing to show here yet.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing yet.')).toBeInTheDocument();
     expect(useToastsStore.getState().history).toHaveLength(0);
   });
 

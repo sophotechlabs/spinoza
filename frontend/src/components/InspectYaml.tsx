@@ -199,9 +199,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         </button>
         <CopyButton what="YAML" text={draft} />
         {dirty && !stale && <span className="text-fg-muted">unsaved changes</span>}
-        {stale && (
-          <span className="text-warn">changed on the server — Revert to load the new version</span>
-        )}
+        {stale && <span className="text-warn">changed on the server, Revert to load it</span>}
         {confirming && protectedCluster && (
           <ConfirmByName
             open

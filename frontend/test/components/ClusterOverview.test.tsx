@@ -42,7 +42,7 @@ describe('ClusterOverview', () => {
     );
     render(<ClusterOverview />);
 
-    expect(screen.getByText('Loading the cluster overview…')).toBeInTheDocument();
+    expect(screen.getByText('Loading the cluster overview')).toBeInTheDocument();
   });
 
   it('names the kubernetes version and the node tally', async () => {
@@ -77,8 +77,8 @@ describe('ClusterOverview', () => {
     );
     render(<ClusterOverview />);
 
-    expect(await screen.findByText('3 ready · 1 cordoned · 2 not ready')).toBeInTheDocument();
-    expect(screen.getAllByText('— / —')).toHaveLength(2);
+    expect(await screen.findByText('3 ready, 1 cordoned, 2 not ready')).toBeInTheDocument();
+    expect(screen.getAllByText('- / -')).toHaveLength(2);
   });
 
   it('breaks the pod tally down by phase', async () => {
@@ -86,7 +86,7 @@ describe('ClusterOverview', () => {
     render(<ClusterOverview />);
 
     expect(
-      await screen.findByText('38 running · 1 pending · 1 failed · 0 succeeded'),
+      await screen.findByText('38 running, 1 pending, 1 failed, 0 succeeded'),
     ).toBeInTheDocument();
     expect(screen.getByText('40')).toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe('ClusterOverview', () => {
     render(<ClusterOverview />);
 
     expect(await screen.findByText('the tally could not be taken')).toBeInTheDocument();
-    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
 
   it('shows usage against allocatable capacity', async () => {
@@ -130,8 +130,8 @@ describe('ClusterOverview', () => {
     render(<ClusterOverview />);
 
     expect(await screen.findByText(/Live usage needs metrics-server/)).toBeInTheDocument();
-    expect(screen.getByText('— / 4000m')).toBeInTheDocument();
-    expect(screen.getByText('— / 8.0Gi')).toBeInTheDocument();
+    expect(screen.getByText('- / 4000m')).toBeInTheDocument();
+    expect(screen.getByText('- / 8.0Gi')).toBeInTheDocument();
   });
 
   it('shows a zero rather than a blank when nothing is in use yet', async () => {

@@ -252,7 +252,7 @@ export default function InspectObjectActions({
           </button>
         )}
         {cordoned && <span className="text-warn-muted">cordoned</span>}
-        {busy && <span className="text-fg-muted">working…</span>}
+        {busy && <span className="text-fg-muted">working</span>}
       </div>
 
       {pending !== null && pending.typed && (

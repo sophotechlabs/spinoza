@@ -100,7 +100,7 @@ describe('ContextPicker', () => {
     ]);
     expect(screen.getByRole('option', { name: 'staging' })).toHaveAttribute(
       'title',
-      'cluster work · namespace apps',
+      'cluster work, namespace apps',
     );
   });
 

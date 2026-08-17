@@ -89,7 +89,7 @@ describe('InspectPorts', () => {
     stubStart(45123);
     render(<InspectPorts target={target} kind="Pod" ports={ports} />);
 
-    expect(screen.getByText('8080 · http')).toBeInTheDocument();
+    expect(screen.getByText('8080 http')).toBeInTheDocument();
     expect(screen.getByText('9090')).toBeInTheDocument();
   });
 
@@ -100,9 +100,9 @@ describe('InspectPorts', () => {
 
     await user.click(screen.getAllByRole('button', { name: 'Forward' })[0]);
 
-    expect(await screen.findByText('127.0.0.1:45123 → 8080')).toBeInTheDocument();
+    expect(await screen.findByText('127.0.0.1:45123 to 8080')).toBeInTheDocument();
     expect(useToastsStore.getState().toasts).toEqual([
-      expect.objectContaining({ tone: 'ok', message: 'Forwarding web 127.0.0.1:45123 → 8080' }),
+      expect.objectContaining({ tone: 'ok', message: 'Forwarding web 127.0.0.1:45123 to 8080' }),
     ]);
   });
 
@@ -144,19 +144,19 @@ describe('InspectPorts', () => {
     stubStart(45123);
     render(<InspectPorts target={target} kind="Pod" ports={ports} />);
     await user.click(screen.getAllByRole('button', { name: 'Forward' })[0]);
-    expect(await screen.findByText('127.0.0.1:45123 → 8080')).toBeInTheDocument();
+    expect(await screen.findByText('127.0.0.1:45123 to 8080')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Stop forwarding port 8080' }));
 
     expect(await screen.findAllByRole('button', { name: 'Forward' })).toHaveLength(2);
-    expect(screen.queryByText('127.0.0.1:45123 → 8080')).not.toBeInTheDocument();
+    expect(screen.queryByText('127.0.0.1:45123 to 8080')).not.toBeInTheDocument();
   });
 
   it('shows what another view already started', async () => {
     stubExisting(45123);
     render(<InspectPorts target={target} kind="Pod" ports={ports} />);
 
-    expect(await screen.findByText('127.0.0.1:45123 → 8080')).toBeInTheDocument();
+    expect(await screen.findByText('127.0.0.1:45123 to 8080')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Forward' })).toHaveLength(1);
   });
 
@@ -166,7 +166,7 @@ describe('InspectPorts', () => {
     const opened = vi.fn();
     vi.stubGlobal('open', opened);
     render(<InspectPorts target={target} kind="Pod" ports={ports} />);
-    await screen.findByText('127.0.0.1:45123 → 8080');
+    await screen.findByText('127.0.0.1:45123 to 8080');
 
     await user.click(screen.getByRole('button', { name: 'Open 127.0.0.1:45123 in a browser' }));
 
@@ -213,7 +213,7 @@ describe('InspectPorts', () => {
     });
 
     expect(screen.getAllByRole('button', { name: 'Forward' })).toHaveLength(2);
-    expect(screen.queryByText('127.0.0.1:45123 → 8080')).not.toBeInTheDocument();
+    expect(screen.queryByText('127.0.0.1:45123 to 8080')).not.toBeInTheDocument();
   });
 
   it('ignores a forward of another object on the same port', async () => {
@@ -234,7 +234,7 @@ describe('InspectPorts', () => {
   it('leaves a port with no forward alone', async () => {
     stubExisting(45123);
     render(<InspectPorts target={target} kind="Pod" ports={ports} />);
-    await screen.findByText('127.0.0.1:45123 → 8080');
+    await screen.findByText('127.0.0.1:45123 to 8080');
 
     expect(screen.queryByRole('button', { name: 'Stop forwarding port 9090' })).toBeNull();
   });

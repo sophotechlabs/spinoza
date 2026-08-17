@@ -15,7 +15,7 @@ export function readySummary(ready: number, reporting: number, total: number): s
   if (reporting === total) {
     return `${ready}/${total} ready`;
   }
-  return `${ready}/${reporting} ready · ${total - reporting} no status`;
+  return `${ready}/${reporting} ready, ${total - reporting} no status`;
 }
 
 export function groupSummary(group: FluxGroup): string {

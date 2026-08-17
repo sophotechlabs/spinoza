@@ -50,7 +50,7 @@ describe('HelmReleases', () => {
     );
     render(<HelmReleases onSelectResource={vi.fn()} />);
 
-    expect(screen.getByText('Loading Helm releases…')).toBeInTheDocument();
+    expect(screen.getByText('Loading Helm releases')).toBeInTheDocument();
   });
 
   it('lists a release with its chart, revision and age', async () => {
@@ -77,7 +77,7 @@ describe('HelmReleases', () => {
     render(<HelmReleases onSelectResource={vi.fn()} />);
 
     await screen.findByText('demo');
-    expect(screen.getAllByText('—')).toHaveLength(3);
+    expect(screen.getAllByText('-')).toHaveLength(3);
   });
 
   it('shows the newest chart version the repositories offer', async () => {

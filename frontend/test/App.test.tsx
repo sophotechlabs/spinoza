@@ -790,7 +790,7 @@ describe('the address bar', () => {
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
 
     await waitFor(() => {
-      expect(document.title).toBe('pod-a · pods · kind-dev — Spinoza');
+      expect(document.title).toBe('pod-a pods kind-dev - Spinoza');
     });
   });
 
@@ -810,7 +810,7 @@ describe('the address bar', () => {
     await selectPod(user);
 
     await waitFor(() => {
-      expect(document.title).toBe('pods — Spinoza');
+      expect(document.title).toBe('pods - Spinoza');
     });
     expect(window.location.hash).not.toContain('context=');
   });
@@ -955,7 +955,7 @@ describe('the command palette and shortcuts', () => {
     render(<App />);
 
     press('k', { ctrlKey: true });
-    await user.click(await screen.findByRole('button', { name: /GitOps · Status tiles/ }));
+    await user.click(await screen.findByRole('button', { name: /GitOps status tiles/ }));
 
     expect(await screen.findByTestId('flux-overview')).toBeInTheDocument();
   });
@@ -1342,7 +1342,7 @@ describe('finding your way in by keyboard', () => {
 
     expect(screen.getByText('Spinoza is back in its window')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Keep using this tab' }));
+    await user.click(screen.getByRole('button', { name: 'Stay here' }));
 
     expect(screen.queryByText('Spinoza is back in its window')).not.toBeInTheDocument();
   });

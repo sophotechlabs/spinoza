@@ -51,11 +51,11 @@ export interface ReconcileProgress {
 
 export function reconcileProgress(detail: ObjectDetail, requestedAt: string): ReconcileProgress {
   if (detail.flux?.handledAt !== requestedAt) {
-    return { state: 'requested', message: 'Reconciliation requested…' };
+    return { state: 'requested', message: 'Reconciliation requested' };
   }
   const ready = readyCondition(detail);
   if (ready === null) {
-    return { state: 'running', message: 'Reconciliation running…' };
+    return { state: 'running', message: 'Reconciliation running' };
   }
   if (ready.status === 'True') {
     return { state: 'succeeded', message: readyMessage('Reconciliation succeeded', ready) };

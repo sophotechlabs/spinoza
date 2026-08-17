@@ -33,7 +33,7 @@ export function containerTitle(container: ContainerState): string {
     title = `${title} (${container.reason})`;
   }
   if (container.restarts > 0) {
-    title = `${title} · ${container.restarts} restarts`;
+    title = `${title}, ${container.restarts} restarts`;
   }
   return title;
 }

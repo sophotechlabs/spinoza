@@ -161,7 +161,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
     return (
       <span className="flex items-center gap-2">
         <span role="status" className="max-w-md truncate text-error">
-          no cluster context — {loadError}
+          no cluster context: {loadError}
         </span>
         <button
           type="button"
@@ -216,7 +216,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
         ))}
       </select>
       {manageButton()}
-      {busy && <span className="text-fg-muted">switching…</span>}
+      {busy && <span className="text-fg-muted">switching</span>}
       {error !== null && (
         <span role="status" className="max-w-md truncate text-error">
           {error}

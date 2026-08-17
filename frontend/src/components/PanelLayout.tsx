@@ -110,7 +110,7 @@ function objectBody(ctx: RenderContext, body: ObjectBody): ReactNode {
     return <div className="p-4 text-xs break-words text-error">{ctx.error}</div>;
   }
   if (ctx.selection === null || ctx.detail === null) {
-    return <div className="p-4 text-xs text-fg-muted">Loading…</div>;
+    return <div className="p-4 text-xs text-fg-muted">Loading</div>;
   }
   return body(ctx.selection, ctx.detail);
 }
@@ -228,7 +228,7 @@ export default function PanelLayout({
   function titleOf(id: PanelId): string {
     const panel = panelById(id);
     if (enabledOf(id)) {
-      return `${panel.label} — drag to another dock to move it`;
+      return `${panel.label}, drag to move`;
     }
     return panel.hint;
   }

@@ -143,7 +143,7 @@ export default function KubeconfigDialog({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-fg">{entry.label}</span>
                 <span className="text-fg-muted">
-                  {entry.path === '' && <span>read by default · </span>}
+                  {entry.path === '' && <span>read by default, </span>}
                   {contextCount(entry)}
                 </span>
                 {entry.error !== undefined && (
@@ -186,7 +186,7 @@ export default function KubeconfigDialog({
                 onClick={() => void handleBrowse()}
                 className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
               >
-                Browse…
+                Browse
               </button>
             )}
             <button

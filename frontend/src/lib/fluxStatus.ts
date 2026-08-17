@@ -83,7 +83,7 @@ export function latestTitle(resource: FluxResource): string {
     return '';
   }
   if (resource.outdated === true) {
-    return `${resource.revision} → ${resource.latest} available`;
+    return `${resource.latest} available, running ${resource.revision}`;
   }
   return 'up to date';
 }

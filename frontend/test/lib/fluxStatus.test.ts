@@ -61,7 +61,7 @@ describe('latest version presentation', () => {
   it('highlights an outdated release', () => {
     const resource = makeFluxResource({ revision: '6.14.0', latest: '6.15.1', outdated: true });
     expect(latestColor(resource)).toBe('text-warn');
-    expect(latestTitle(resource)).toBe('6.14.0 → 6.15.1 available');
+    expect(latestTitle(resource)).toBe('6.15.1 available, running 6.14.0');
   });
 
   it('dims a current release', () => {

@@ -39,12 +39,12 @@ export default function ConfirmByName({
       className="backdrop:bg-black/50 m-auto w-[28rem] rounded border border-warn-line bg-surface p-0 text-fg"
     >
       <div className="border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-warn uppercase">
-        This cluster is protected
+        Protected cluster
       </div>
       <div className="p-3 text-xs">
         <p className="text-fg-soft">{what}</p>
         <p className="mt-2 text-fg-soft">
-          Type <span className="font-semibold text-fg-strong">{name}</span> to go ahead.
+          Type <span className="font-semibold text-fg-strong">{name}</span> to confirm.
         </p>
         <label htmlFor="confirm-name" className="mt-3 block text-fg">
           Name

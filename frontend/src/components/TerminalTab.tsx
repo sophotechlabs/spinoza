@@ -129,7 +129,7 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
       {sessions.length === 0 && (
         <div className="p-3 text-[11px] text-fg-muted">
           {support?.available === false && <p>{support.reason}</p>}
-          <p>No shells open. Select a pod and open one from the button above.</p>
+          <p>No shells open. Pick a pod and open one above.</p>
         </div>
       )}
       {sessions.map((session) => (

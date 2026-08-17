@@ -19,12 +19,12 @@ describe('what a container square tells assistive technology', () => {
             },
           ],
         })}
-        fallback="—"
+        fallback="-"
       />,
     );
 
     expect(
-      screen.getByRole('img', { name: 'app: waiting (CrashLoopBackOff) · 3 restarts' }),
+      screen.getByRole('img', { name: 'app: waiting (CrashLoopBackOff), 3 restarts' }),
     ).toBeInTheDocument();
   });
 });

@@ -73,7 +73,7 @@ describe('contextGroups', () => {
     const groups = contextGroups(list);
 
     expect(groups[0].entries[0].cluster).toBe('cluster p-mk1');
-    expect(groups[0].entries[1].cluster).toBe('cluster p-mk2 · namespace flux-system');
+    expect(groups[0].entries[1].cluster).toBe('cluster p-mk2, namespace flux-system');
   });
 
   it('leaves out a namespace the context does not set', () => {

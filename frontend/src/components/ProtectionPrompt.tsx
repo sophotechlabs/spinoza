@@ -49,13 +49,13 @@ export default function ProtectionPrompt() {
       className="backdrop:bg-black/50 m-auto w-[30rem] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
       <div className="border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
-        A cluster spinoza has not seen before
+        A cluster spinoza has not seen
       </div>
       <div className="p-3 text-xs">
         <p className="text-fg-soft">
           <span className="font-semibold text-fg-strong">{list.current.name}</span> is new here. On
-          a protected cluster, deleting an object, draining a node, scaling to zero and uninstalling
-          a release all need its name typed first.
+          a protected cluster, deleting, draining, scaling to zero and uninstalling need the object
+          name typed first.
         </p>
         <div className="mt-3 flex items-center justify-end gap-2">
           <button

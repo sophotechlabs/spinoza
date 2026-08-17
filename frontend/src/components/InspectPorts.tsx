@@ -23,7 +23,7 @@ function portLabel(port: ObjectPort): string {
   if (port.name === undefined || port.name === '') {
     return String(port.port);
   }
-  return `${port.port} · ${port.name}`;
+  return `${port.port} ${port.name}`;
 }
 
 function forwardFor(
@@ -60,7 +60,7 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
     setError(null);
     try {
       const started = await startForward(kind, target, port);
-      notifyOk(`Forwarding ${target.name} 127.0.0.1:${started.localPort} → ${port}`, target);
+      notifyOk(`Forwarding ${target.name} 127.0.0.1:${started.localPort} to ${port}`, target);
       await refreshForwards();
     } catch (err: unknown) {
       const message = errorMessage(err);
@@ -110,7 +110,7 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
               ) : (
                 <>
                   <span className="ml-auto text-ok">
-                    127.0.0.1:{running.localPort} → {port.port}
+                    127.0.0.1:{running.localPort} to {port.port}
                   </span>
                   <button
                     type="button"

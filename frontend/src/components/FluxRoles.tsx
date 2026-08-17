@@ -120,7 +120,7 @@ function KindList({
         ← Flux Resources
       </button>
       <div className="mb-2 text-xs text-fg-muted">
-        {kind} · {resources.length} resources
+        {kind}, {resources.length} resources
       </div>
       <div className="border-t border-edge">
         {resources.map((resource) => (
@@ -168,7 +168,7 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
     }
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading Flux resources…
+        Loading Flux resources
       </div>
     );
   }

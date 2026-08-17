@@ -64,7 +64,7 @@ describe('InspectActions', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
 
-    expect(await screen.findByText('Reconciliation requested…')).toBeInTheDocument();
+    expect(await screen.findByText('Reconciliation requested')).toBeInTheDocument();
     expect(lastCallUrl()).toContain('action=reconcile');
     expect(onDone).toHaveBeenCalledTimes(1);
   });
@@ -123,13 +123,13 @@ describe('InspectActions', () => {
     const user = userEvent.setup();
     const { view } = renderActions(false);
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
-    await screen.findByText('Reconciliation requested…');
+    await screen.findByText('Reconciliation requested');
 
     view.rerender(
       <InspectActions target={{ ...target, name: 'infra' }} suspended={false} onDone={vi.fn()} />,
     );
 
-    expect(screen.queryByText('Reconciliation requested…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reconciliation requested')).not.toBeInTheDocument();
   });
 
   it('disables the buttons while an action is in flight', async () => {
@@ -154,12 +154,12 @@ describe('InspectActions', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
 
-    expect(await screen.findByText('working…')).toBeInTheDocument();
+    expect(await screen.findByText('working')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reconcile' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Suspend' })).toBeDisabled();
 
     deferred.release();
-    expect(await screen.findByText('Reconciliation requested…')).toBeInTheDocument();
+    expect(await screen.findByText('Reconciliation requested')).toBeInTheDocument();
   });
 
   function stubReconcile(ready: { status: string; message?: string }) {
@@ -227,7 +227,7 @@ describe('InspectActions', () => {
     stubReconcile({ status: 'True', message: 'Applied revision main@sha1:abc' });
     const { view } = renderActions(false);
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
-    await screen.findByText('Reconciliation requested…');
+    await screen.findByText('Reconciliation requested');
 
     view.rerender(
       <InspectActions target={{ ...target, name: 'infra' }} suspended={false} onDone={vi.fn()} />,
@@ -262,7 +262,7 @@ describe('InspectActions', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { view, onDone } = renderActions(false);
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
-    await screen.findByText('working…');
+    await screen.findByText('working');
 
     view.unmount();
     deferred.release();
@@ -292,7 +292,7 @@ describe('InspectActions', () => {
     );
     const { view } = renderActions(false);
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
-    await screen.findByText('working…');
+    await screen.findByText('working');
 
     view.rerender(
       <InspectActions target={{ ...target, name: 'infra' }} suspended={false} onDone={vi.fn()} />,
@@ -316,6 +316,6 @@ describe('InspectActions', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
 
-    expect(await screen.findByText('Reconciliation requested…')).toBeInTheDocument();
+    expect(await screen.findByText('Reconciliation requested')).toBeInTheDocument();
   });
 });

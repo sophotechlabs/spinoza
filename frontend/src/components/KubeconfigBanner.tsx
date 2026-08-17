@@ -16,7 +16,7 @@ export default function KubeconfigBanner() {
         The kubeconfig this cluster came from cannot be read.
       </span>
       <span className="min-w-0 flex-1 truncate" title={gone.error}>
-        {gone.label} — {gone.error}
+        {gone.label}: {gone.error}
       </span>
       <span className="shrink-0 text-warn-muted">
         The live connection still works; reopening this context will not.

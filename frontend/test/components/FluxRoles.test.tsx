@@ -110,7 +110,7 @@ describe('FluxRoles', () => {
     await screen.findByText('Kustomization');
 
     expect(screen.getByText('HelmChart')).toBeInTheDocument();
-    expect(screen.getByText('0/0 ready · 2 no status')).toBeInTheDocument();
+    expect(screen.getByText('0/0 ready, 2 no status')).toBeInTheDocument();
   });
 
   it('shows the error message when the fetch fails', async () => {

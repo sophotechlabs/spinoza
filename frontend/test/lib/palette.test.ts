@@ -23,7 +23,7 @@ describe('paletteItems', () => {
   it('puts recent objects first, then views, then every discovered kind', () => {
     const items = paletteItems(categories, [recent]);
 
-    expect(items[0]).toMatchObject({ kind: 'object', label: 'prod/web-0', hint: 'recent · pods' });
+    expect(items[0]).toMatchObject({ kind: 'object', label: 'prod/web-0', hint: 'recent pods' });
     expect(items[1]).toMatchObject({ kind: 'view', label: VIEW_LABELS.cluster });
     expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).toContain(
       VIEW_LABELS.helm,
@@ -40,8 +40,8 @@ describe('paletteItems', () => {
     const pod = items.find((item) => item.label === 'Pod');
     const deployment = items.find((item) => item.label === 'Deployment');
 
-    expect(pod?.hint).toBe('Workloads · v1');
-    expect(deployment?.hint).toBe('Workloads · apps/v1');
+    expect(pod?.hint).toBe('Workloads v1');
+    expect(deployment?.hint).toBe('Workloads apps/v1');
   });
 
   it('drops the namespace from a cluster-scoped recent object', () => {

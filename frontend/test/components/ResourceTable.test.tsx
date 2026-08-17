@@ -155,7 +155,7 @@ describe('ResourceTable', () => {
   it('says it is still waiting rather than showing an empty table', () => {
     renderTable(descriptor, null);
 
-    expect(screen.getByText('Loading Pod…')).toBeInTheDocument();
+    expect(screen.getByText('Loading Pod')).toBeInTheDocument();
     expect(screen.queryByText('This cluster has no Pod objects.')).not.toBeInTheDocument();
   });
 
@@ -165,7 +165,7 @@ describe('ResourceTable', () => {
     renderTable(descriptor, null);
 
     expect(screen.getByText('This cluster has no Pod objects.')).toBeInTheDocument();
-    expect(screen.queryByText('Loading Pod…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading Pod')).not.toBeInTheDocument();
   });
 
   it('separates a filter with no match from an empty resource', async () => {
@@ -212,7 +212,7 @@ describe('ResourceTable', () => {
       useResourcesStore.setState({ subs: new Map(), errors: new Map() });
     });
 
-    expect(screen.getByText('Loading Pod…')).toBeInTheDocument();
+    expect(screen.getByText('Loading Pod')).toBeInTheDocument();
   });
 
   it('renders Name, snapshot columns and Age for a cluster-scoped resource', () => {
@@ -280,7 +280,7 @@ describe('ResourceTable', () => {
     await screen.findByRole('button', { name: 'pod-a' });
     expect(screen.getByTitle('app: running')).toBeInTheDocument();
     expect(
-      screen.getByTitle('sidecar: waiting (CrashLoopBackOff) · 7 restarts'),
+      screen.getByTitle('sidecar: waiting (CrashLoopBackOff), 7 restarts'),
     ).toBeInTheDocument();
     const ratio = screen.getByText('1/2');
     expect(ratio.className).toContain('text-warn');
@@ -516,7 +516,7 @@ describe('ResourceTable', () => {
     renderTable(descriptor, null);
     expect(await screen.findByText('150m')).toBeInTheDocument();
     expect(screen.getByText('192Mi')).toBeInTheDocument();
-    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
 
   it('shows node CPU and memory usage bars from metrics', async () => {

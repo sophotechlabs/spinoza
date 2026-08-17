@@ -166,7 +166,7 @@ export function documentTitle(route: Route): string {
   if (parts.length === 0) {
     return 'Spinoza';
   }
-  return `${parts.join(' · ')} — Spinoza`;
+  return `${parts.join(' ')} - Spinoza`;
 }
 
 export interface Router {

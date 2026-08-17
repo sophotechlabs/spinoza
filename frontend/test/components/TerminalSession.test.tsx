@@ -130,9 +130,7 @@ describe('TerminalSession', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     open();
 
-    expect(await screen.findByText(/Could not check whether app has a shell/)).toHaveTextContent(
-      'offline',
-    );
+    expect(await screen.findByText(/Could not check app for a shell/)).toHaveTextContent('offline');
   });
 
   it('names no cause when the probe rejects with a non-Error', async () => {

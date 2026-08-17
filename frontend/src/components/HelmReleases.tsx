@@ -43,7 +43,7 @@ function rowClass(selected: boolean): string {
 
 function orDash(value: string): string {
   if (value === '') {
-    return '—';
+    return '-';
   }
   return value;
 }
@@ -71,7 +71,7 @@ export default function HelmReleases({ active = true, onSelectResource }: HelmRe
     }
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading Helm releases…
+        Loading Helm releases
       </div>
     );
   }
@@ -91,7 +91,7 @@ export default function HelmReleases({ active = true, onSelectResource }: HelmRe
         <input
           type="search"
           aria-label="Filter releases"
-          placeholder="Filter…"
+          placeholder="Filter"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -122,9 +122,7 @@ export default function HelmReleases({ active = true, onSelectResource }: HelmRe
                 <th className="px-2 py-1 font-medium">Chart</th>
                 <th className="px-2 py-1 font-medium">App version</th>
                 <th className="px-2 py-1 font-medium">
-                  <span title="The latest chart version your configured Helm repositories offer">
-                    Latest
-                  </span>
+                  <span title="Latest version your Helm repos offer">Latest</span>
                 </th>
                 <th className="px-2 py-1 text-right font-medium">Rev</th>
                 <th className="px-2 py-1 font-medium">Status</th>
@@ -194,7 +192,7 @@ function tableClass(split: boolean): string {
 
 function chartLabel(release: HelmRelease): string {
   if (release.chart === '') {
-    return '—';
+    return '-';
   }
   if (release.chartVersion === '') {
     return release.chart;

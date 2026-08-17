@@ -83,7 +83,7 @@ function describe(entry: KubeContext): string {
   if (entry.namespace === undefined || entry.namespace === '') {
     return `cluster ${entry.cluster}`;
   }
-  return `cluster ${entry.cluster} · namespace ${entry.namespace}`;
+  return `cluster ${entry.cluster}, namespace ${entry.namespace}`;
 }
 
 export function contextGroups(list: ContextList): ContextGroup[] {

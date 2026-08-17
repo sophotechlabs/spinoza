@@ -2,12 +2,12 @@ import type { Category, ObjectRef, ResourceDescriptor, View } from './types';
 
 export const VIEW_LABELS: Record<View, string> = {
   resources: 'Resources',
-  cluster: 'Cluster · Overview',
-  helm: 'Helm · Releases',
-  'flux-roles': 'GitOps · Overview',
-  gitops: 'GitOps · Graph',
-  'flux-list': 'GitOps · Resource list',
-  'flux-overview': 'GitOps · Status tiles',
+  cluster: 'Cluster overview',
+  helm: 'Helm releases',
+  'flux-roles': 'GitOps overview',
+  gitops: 'GitOps graph',
+  'flux-list': 'GitOps resource list',
+  'flux-overview': 'GitOps status tiles',
 };
 
 const VIEW_ORDER: View[] = [
@@ -45,7 +45,7 @@ export function paletteItems(categories: Category[], recents: ObjectRef[]): Pale
     items.push({
       id: `object:${ref.group}/${ref.version}/${ref.resource}/${ref.namespace}/${ref.name}`,
       label: refLabel(ref),
-      hint: `recent · ${ref.resource}`,
+      hint: `recent ${ref.resource}`,
       kind: 'object',
       ref,
     });
@@ -58,7 +58,7 @@ export function paletteItems(categories: Category[], recents: ObjectRef[]): Pale
       items.push({
         id: `resource:${descriptor.group}/${descriptor.version}/${descriptor.resource}`,
         label: descriptor.kind,
-        hint: `${category.name} · ${groupLabel(descriptor)}`,
+        hint: `${category.name} ${groupLabel(descriptor)}`,
         kind: 'resource',
         descriptor,
       });

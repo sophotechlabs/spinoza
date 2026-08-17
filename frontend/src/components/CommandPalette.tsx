@@ -132,7 +132,7 @@ export default function CommandPalette({
           type="text"
           onKeyDown={handleKeyDown}
           aria-label="Search resources, views and recent objects"
-          placeholder="Search resources, views and recent objects…"
+          placeholder="Search"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);

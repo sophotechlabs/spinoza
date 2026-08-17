@@ -43,7 +43,7 @@ export default function TerminalSession({ namespace, pod, container }: TerminalS
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {probeError !== null && (
         <p role="status" className="shrink-0 border-b border-edge px-3 py-1 text-[11px] text-warn">
-          Could not check whether {container} has a shell: {probeError}. Opening a session anyway.
+          Could not check {container} for a shell: {probeError}. Opening one anyway.
         </p>
       )}
       {needsDebugContainer && (

@@ -30,7 +30,7 @@ function Tile({
         <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot(resource)}`} />
       </div>
       <div className="mt-0.5 truncate text-[11px] text-fg-muted">
-        {resource.kind} · {resource.namespace}
+        {resource.kind} {resource.namespace}
       </div>
       <div className={`mt-2 text-[11px] ${statusText(resource)}`}>{statusLabel(resource)}</div>
       <div className="mt-1 truncate text-[11px] text-fg-muted" title={resource.revision}>
@@ -83,7 +83,7 @@ export default function FluxOverview({ onSelect }: FluxOverviewProps) {
     }
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading Flux resources…
+        Loading Flux resources
       </div>
     );
   }

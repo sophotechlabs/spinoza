@@ -156,8 +156,8 @@ describe('the newest chart version a repository offers', () => {
   });
 
   it('shows a dash when no repository knows the chart', () => {
-    expect(latestLabel({})).toBe('—');
-    expect(latestLabel({ latest: '' })).toBe('—');
+    expect(latestLabel({})).toBe('-');
+    expect(latestLabel({ latest: '' })).toBe('-');
   });
 
   it('colours an outdated release apart from a current one', () => {

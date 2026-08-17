@@ -80,7 +80,7 @@ describe('FluxList', () => {
   it('shows a loading state before the dashboard resolves', async () => {
     stubFlux({ groups: [] });
     render(<FluxList onSelect={vi.fn()} />);
-    expect(screen.getByText('Loading Flux resources…')).toBeInTheDocument();
+    expect(screen.getByText('Loading Flux resources')).toBeInTheDocument();
     expect(await screen.findByText('No Flux resources found.')).toBeInTheDocument();
   });
 
@@ -92,7 +92,7 @@ describe('FluxList', () => {
     expect(screen.getByText('res-c')).toBeInTheDocument();
     expect(screen.getByText('res-d')).toBeInTheDocument();
     expect(screen.getByText('Sources')).toBeInTheDocument();
-    expect(screen.getByText('1/3 ready · 1 no status')).toBeInTheDocument();
+    expect(screen.getByText('1/3 ready, 1 no status')).toBeInTheDocument();
     expect(screen.getByText('Ready', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByText('Not ready')).toBeInTheDocument();
     expect(screen.getByText('No status')).toBeInTheDocument();

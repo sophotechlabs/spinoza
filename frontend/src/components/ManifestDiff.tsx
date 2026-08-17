@@ -22,7 +22,7 @@ export default function ManifestDiff({ original, modified }: ManifestDiffProps) 
       theme={spec.name}
       original={original}
       modified={modified}
-      loading={<div className="p-3 text-xs text-fg-muted">Loading the diff…</div>}
+      loading={<div className="p-3 text-xs text-fg-muted">Loading the diff</div>}
       options={{
         readOnly: true,
         renderSideBySide: false,

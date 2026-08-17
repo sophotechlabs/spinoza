@@ -1,6 +1,6 @@
 {
-  "id": "blade-runner",
-  "name": "Blade Runner",
+  "id": "azimov",
+  "name": "Azimov",
   "base": "dark",
   "tokens": {
     "surface": "#050b0d",

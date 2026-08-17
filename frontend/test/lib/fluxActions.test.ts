@@ -108,7 +108,7 @@ describe('reconcileProgress', () => {
     );
 
     expect(progress.state).toBe('requested');
-    expect(progress.message).toBe('Reconciliation requested…');
+    expect(progress.message).toBe('Reconciliation requested');
   });
 
   it('reports running once handled but with no Ready condition yet', () => {

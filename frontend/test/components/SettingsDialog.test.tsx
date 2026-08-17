@@ -58,7 +58,7 @@ describe('the settings dialog', () => {
     const select = screen.getByLabelText('Theme preference');
     const names = Array.from(select.querySelectorAll('option')).map((option) => option.textContent);
     expect(names).toEqual([
-      'Blade Runner',
+      'Azimov',
       'Borg',
       'Cyberpunk',
       'Dark',
@@ -235,7 +235,7 @@ describe('importing a theme', () => {
     open();
     screen.getByLabelText('Theme file').addEventListener('click', opened);
 
-    await user.click(screen.getByRole('button', { name: 'Choose file…' }));
+    await user.click(screen.getByRole('button', { name: 'Choose file' }));
 
     expect(opened).toHaveBeenCalled();
   });
@@ -295,7 +295,7 @@ describe('the about section', () => {
 
     expect(screen.getByText('test')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText('—')).toBeInTheDocument();
+      expect(screen.getByText('-')).toBeInTheDocument();
     });
   });
 

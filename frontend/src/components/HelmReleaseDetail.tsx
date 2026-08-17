@@ -71,7 +71,7 @@ function confirmName(protectedCluster: boolean, name: string): string | undefine
 
 function orDash(value: string): string {
   if (value === '') {
-    return '—';
+    return '-';
   }
   return value;
 }
@@ -94,7 +94,7 @@ export default function HelmReleaseDetail({
   const now = useNow();
 
   const helmReady = support?.available === true;
-  const helmReason = support?.reason ?? 'checking whether helm is available…';
+  const helmReason = support?.reason ?? 'checking whether helm is available';
   const fluxRef = data?.release.fluxRef ?? release.fluxRef;
 
   async function act(what: 'rollback' | 'uninstall', revision: number) {
@@ -195,7 +195,7 @@ export default function HelmReleaseDetail({
           {fluxRef !== undefined && (
             <button
               type="button"
-              title="Flux manages this release; open its HelmRelease object to change it"
+              title="Flux manages this release, change it there"
               onClick={() => {
                 onSelectResource(fluxRef);
               }}
@@ -270,7 +270,7 @@ export default function HelmReleaseDetail({
         </p>
       )}
 
-      {loading && data === null && <p className="p-3 text-fg-muted">Loading the release…</p>}
+      {loading && data === null && <p className="p-3 text-fg-muted">Loading the release</p>}
       {error !== null && (
         <p role="alert" className="p-3 text-error">
           {error}
@@ -289,7 +289,7 @@ export default function HelmReleaseDetail({
               {data.release.fluxRef !== undefined && (
                 <Field
                   label="Managed by"
-                  value={`Flux · ${data.release.fluxRef.namespace}/${data.release.fluxRef.name}`}
+                  value={`Flux ${data.release.fluxRef.namespace}/${data.release.fluxRef.name}`}
                 />
               )}
               <Field label="Chart" value={orDash(data.release.chart)} />
@@ -392,11 +392,7 @@ function ResourceName({
 }) {
   const ref = refOf(resource);
   if (ref === null) {
-    return (
-      <span title="this cluster does not report that kind, so it cannot be opened">
-        {resource.name}
-      </span>
-    );
+    return <span title="this cluster does not report that kind">{resource.name}</span>;
   }
   return (
     <button

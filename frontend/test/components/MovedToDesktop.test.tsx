@@ -22,7 +22,7 @@ describe('MovedToDesktop', () => {
     const onStay = vi.fn();
     render(<MovedToDesktop open onStay={onStay} />);
 
-    await user.click(screen.getByRole('button', { name: 'Keep using this tab' }));
+    await user.click(screen.getByRole('button', { name: 'Stay here' }));
 
     expect(onStay).toHaveBeenCalledTimes(1);
   });

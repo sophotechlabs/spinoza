@@ -274,7 +274,7 @@ describe('KubeconfigDialog', () => {
     open();
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Browse…' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Browse' })).not.toBeInTheDocument();
     });
   });
 
@@ -286,7 +286,7 @@ describe('KubeconfigDialog', () => {
     });
     open([fallback]);
 
-    await user.click(await screen.findByRole('button', { name: 'Browse…' }));
+    await user.click(await screen.findByRole('button', { name: 'Browse' }));
 
     await waitFor(() => {
       expect(screen.getByLabelText('Add a kubeconfig')).toHaveValue('/home/arch/.kube/work.yaml');
@@ -302,7 +302,7 @@ describe('KubeconfigDialog', () => {
     open([fallback]);
     await user.type(screen.getByLabelText('Add a kubeconfig'), '/tmp/typed.yaml');
 
-    await user.click(await screen.findByRole('button', { name: 'Browse…' }));
+    await user.click(await screen.findByRole('button', { name: 'Browse' }));
 
     await waitFor(() => {
       expect(screen.getByLabelText('Add a kubeconfig')).toHaveValue('/tmp/typed.yaml');
@@ -317,7 +317,7 @@ describe('KubeconfigDialog', () => {
     });
     open([fallback]);
 
-    await user.click(await screen.findByRole('button', { name: 'Browse…' }));
+    await user.click(await screen.findByRole('button', { name: 'Browse' }));
 
     expect(await screen.findByText('the spinoza window is not ready yet')).toBeInTheDocument();
   });
@@ -328,7 +328,7 @@ describe('KubeconfigDialog', () => {
     open([fallback]);
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Browse…' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Browse' })).not.toBeInTheDocument();
     });
   });
 
@@ -372,7 +372,7 @@ describe('KubeconfigDialog', () => {
     deferred.settle();
     await Promise.resolve();
 
-    expect(screen.queryByRole('button', { name: 'Browse…' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Browse' })).not.toBeInTheDocument();
   });
 
   it('closes on the close button', async () => {

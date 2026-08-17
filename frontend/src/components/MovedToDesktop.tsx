@@ -15,16 +15,13 @@ export default function MovedToDesktop({ open, onStay }: MovedToDesktopProps) {
     >
       <div className="w-96 rounded border border-edge-strong bg-surface-raised p-4">
         <p className="font-semibold text-fg-strong">Spinoza is back in its window</p>
-        <p className="mt-2 text-fg-soft">
-          The desktop window has it now. You can close this tab — closing it will not stop spinoza
-          while the window is open.
-        </p>
+        <p className="mt-2 text-fg-soft">You can close this tab.</p>
         <button
           type="button"
           onClick={onStay}
           className="mt-3 rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
         >
-          Keep using this tab
+          Stay here
         </button>
       </div>
     </div>

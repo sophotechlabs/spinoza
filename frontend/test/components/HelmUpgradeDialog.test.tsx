@@ -129,7 +129,7 @@ describe('HelmUpgradeDialog', () => {
     stub();
     renderDialog();
 
-    expect(screen.getByText('Loading versions…')).toBeInTheDocument();
+    expect(screen.getByText('Loading versions')).toBeInTheDocument();
 
     const select = await screen.findByLabelText('Chart version');
     const groups = select.querySelectorAll('optgroup');

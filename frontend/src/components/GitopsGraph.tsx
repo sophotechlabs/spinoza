@@ -109,7 +109,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
   if (overLimit !== null) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-xs text-fg-muted">
-        GitOps control plane has {overLimit} nodes — too many to render.
+        GitOps control plane has {overLimit} nodes, too many to render.
       </div>
     );
   }
@@ -122,7 +122,7 @@ export default function GitopsGraph({ onSelect }: GitopsGraphProps) {
     }
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading graph…
+        Loading graph
       </div>
     );
   }

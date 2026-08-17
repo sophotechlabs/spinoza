@@ -46,13 +46,13 @@ describe('ConnectionBanner', () => {
 
     const banner = screen.getByRole('status');
     expect(banner).toHaveTextContent('The live connection dropped');
-    expect(banner).toHaveTextContent('Reconnecting…');
+    expect(banner).toHaveTextContent('Reconnecting');
   });
 
   it('counts the retries out loud', () => {
     render(<ConnectionBanner status="connecting" attempt={3} onReconnect={vi.fn()} />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting — attempt 3.');
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting, attempt 3.');
   });
 
   it('reconnects on demand', async () => {

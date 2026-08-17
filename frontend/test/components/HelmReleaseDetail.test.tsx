@@ -333,7 +333,7 @@ describe('HelmReleaseDetail', () => {
     await screen.findByText('Upgrade complete');
 
     expect(screen.queryByRole('button', { name: 'Upgrade' })).not.toBeInTheDocument();
-    expect(screen.getByText('Flux · demo/podinfo')).toBeInTheDocument();
+    expect(screen.getByText('Flux demo/podinfo')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Managed by Flux' }));
 

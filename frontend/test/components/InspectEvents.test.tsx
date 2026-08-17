@@ -32,7 +32,7 @@ describe('InspectEvents', () => {
     stubEvents([]);
     render(<InspectEvents namespace="flux-system" uid="pod-uid" />);
 
-    expect(screen.getByText('Loading events…')).toBeInTheDocument();
+    expect(screen.getByText('Loading events')).toBeInTheDocument();
   });
 
   it('reports when there are no events', async () => {

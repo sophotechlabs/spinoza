@@ -57,7 +57,7 @@ describe('ForwardsPanel', () => {
     const link = await screen.findByRole('link', { name: '127.0.0.1:45123' });
     expect(link).toHaveAttribute('href', 'http://127.0.0.1:45123');
     expect(screen.getByText('pod/flux-system/web')).toBeInTheDocument();
-    expect(screen.getByText('→ 8080')).toBeInTheDocument();
+    expect(screen.getByText('to 8080')).toBeInTheDocument();
   });
 
   it('opens the local address in a browser instead of the panel', async () => {

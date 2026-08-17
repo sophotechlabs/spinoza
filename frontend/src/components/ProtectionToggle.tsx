@@ -24,9 +24,9 @@ function classFor(protectedCluster: boolean): string {
 
 function hintFor(protectedCluster: boolean): string {
   if (protectedCluster) {
-    return 'Destructive actions on this cluster need its name typed. Click to lift that.';
+    return 'Destructive actions need the name typed. Click to lift.';
   }
-  return 'Destructive actions on this cluster run on one click. Click to ask for its name first.';
+  return 'Destructive actions run on one click. Click to protect.';
 }
 
 function labelFor(protectedCluster: boolean): string {

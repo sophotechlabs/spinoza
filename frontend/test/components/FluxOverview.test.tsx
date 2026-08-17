@@ -64,7 +64,7 @@ describe('FluxOverview', () => {
   it('shows a loading state then the resource tiles', async () => {
     stubFlux(dashboard);
     render(<FluxOverview onSelect={vi.fn()} />);
-    expect(screen.getByText('Loading Flux resources…')).toBeInTheDocument();
+    expect(screen.getByText('Loading Flux resources')).toBeInTheDocument();
     expect(await screen.findByText('repo-a')).toBeInTheDocument();
     expect(screen.getByText('rel-b')).toBeInTheDocument();
     expect(screen.getByText('Sources')).toBeInTheDocument();

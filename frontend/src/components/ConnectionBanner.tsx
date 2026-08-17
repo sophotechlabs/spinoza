@@ -10,9 +10,9 @@ interface ConnectionBannerProps {
 
 function detail(attempt: number): string {
   if (attempt === 0) {
-    return 'Reconnecting…';
+    return 'Reconnecting';
   }
-  return `Reconnecting — attempt ${String(attempt)}.`;
+  return `Reconnecting, attempt ${String(attempt)}.`;
 }
 
 export default function ConnectionBanner({ status, attempt, onReconnect }: ConnectionBannerProps) {
@@ -44,7 +44,7 @@ export default function ConnectionBanner({ status, attempt, onReconnect }: Conne
       className="flex shrink-0 items-baseline gap-2 border-b border-error-line bg-error-tint/40 px-3 py-1.5 text-xs text-error-strong"
     >
       <span className="shrink-0 font-semibold text-error">
-        The live connection dropped. Everything below is the last thing the cluster sent.
+        The live connection dropped. What follows is the last the cluster sent.
       </span>
       <span className="min-w-0 flex-1 truncate">{detail(attempt)}</span>
       <button

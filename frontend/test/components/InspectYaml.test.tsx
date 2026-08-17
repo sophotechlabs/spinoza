@@ -241,9 +241,7 @@ describe('InspectYaml', () => {
     );
 
     expect(screen.getByLabelText('yaml')).toHaveValue(mine);
-    expect(
-      screen.getByText('changed on the server — Revert to load the new version'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('changed on the server, Revert to load it')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
   });
 
@@ -264,9 +262,7 @@ describe('InspectYaml', () => {
     await user.click(screen.getByRole('button', { name: 'Revert' }));
 
     expect(screen.getByLabelText('yaml')).toHaveValue(next);
-    expect(
-      screen.queryByText('changed on the server — Revert to load the new version'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('changed on the server, Revert to load it')).not.toBeInTheDocument();
   });
 
   it('drops an edited draft when a different object is selected', async () => {
@@ -306,9 +302,7 @@ describe('InspectYaml', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
-    expect(
-      screen.queryByText('changed on the server — Revert to load the new version'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('changed on the server, Revert to load it')).not.toBeInTheDocument();
   });
 });
 

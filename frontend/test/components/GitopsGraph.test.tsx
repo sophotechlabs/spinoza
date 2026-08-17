@@ -65,7 +65,7 @@ describe('GitopsGraph', () => {
   it('shows a loading state before the graph resolves', async () => {
     stubGraph({ nodes: [], edges: [] });
     render(<GitopsGraph />);
-    expect(screen.getByText('Loading graph…')).toBeInTheDocument();
+    expect(screen.getByText('Loading graph')).toBeInTheDocument();
     expect(await screen.findByText('No GitOps resources found.')).toBeInTheDocument();
   });
 

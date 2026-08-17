@@ -22,7 +22,7 @@ interface SettingsDialogProps {
 
 function versionLabel(version: string): string {
   if (version === '') {
-    return '—';
+    return '-';
   }
   return version;
 }
@@ -251,7 +251,7 @@ export default function SettingsDialog({
                     onClick={chooseFile}
                     className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
                   >
-                    Choose file…
+                    Choose file
                   </button>
                   <input
                     ref={fileRef}
@@ -342,7 +342,7 @@ export default function SettingsDialog({
           {section === 'Terminal' && (
             <Row
               label="Screen reader mode"
-              hint="Let a screen reader read the terminal buffer. Costs some rendering speed."
+              hint="Let a screen reader read the terminal. Slower to draw."
             >
               <input
                 type="checkbox"
@@ -355,10 +355,7 @@ export default function SettingsDialog({
             </Row>
           )}
           {section === 'Panels' && (
-            <Row
-              label="Dock layout"
-              hint="Put every panel, dock size and collapsed dock back where it started."
-            >
+            <Row label="Dock layout" hint="Put every panel and dock back where it started.">
               <button
                 type="button"
                 onClick={resetPanels}

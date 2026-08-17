@@ -36,7 +36,7 @@ describe('readySummary', () => {
   });
 
   it('separates out resources that carry no status', () => {
-    expect(readySummary(11, 11, 13)).toBe('11/11 ready · 2 no status');
+    expect(readySummary(11, 11, 13)).toBe('11/11 ready, 2 no status');
   });
 
   it('says so when there is nothing to report on', () => {
@@ -46,7 +46,7 @@ describe('readySummary', () => {
   it('summarises a group', () => {
     expect(
       groupSummary({ name: 'Sources', ready: 11, reporting: 11, total: 13, resources: [] }),
-    ).toBe('11/11 ready · 2 no status');
+    ).toBe('11/11 ready, 2 no status');
   });
 });
 

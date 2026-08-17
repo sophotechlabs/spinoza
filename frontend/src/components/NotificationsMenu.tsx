@@ -41,7 +41,7 @@ export default function NotificationsMenu({ onSelectObject }: NotificationsMenuP
     <details ref={ref} className="relative">
       <summary
         aria-label="Notifications"
-        title="What has happened on this cluster"
+        title="What happened on this cluster"
         className={`${ICON_CONTROL} cursor-pointer list-none border-edge-strong text-fg hover:bg-surface-active [&::-webkit-details-marker]:hidden`}
       >
         <Bell />
