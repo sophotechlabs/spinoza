@@ -203,12 +203,12 @@ export default function ResourceTable({
 }: ResourceTableProps) {
   const dataColumns = useSubColumns(subId);
   const namespaced = useSubNamespaced(subId);
-  const rows = useSubRows(subId);
   const error = useSubError(subId);
   const loaded = useSubLoaded(subId);
   const now = useNow();
   const stateKey = tableKey(active);
   const [sorting, setSorting] = useState<SortingState>(() => readTableState(stateKey).sorting);
+  const rows = useSubRows(subId, sorting.length === 0);
   const [visibility, setVisibility] = useState<VisibilityState>(
     () => readTableState(stateKey).visibility,
   );

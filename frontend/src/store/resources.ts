@@ -131,12 +131,15 @@ export function useSubError(subId: string): string | null {
   return message;
 }
 
-export function useSubRows(subId: string): Row[] {
+export function useSubRows(subId: string, sorted = true): Row[] {
   const sub = useResourcesStore((state) => state.subs.get(subId));
   return useMemo(() => {
     if (sub === undefined) {
       return EMPTY_ROWS;
     }
+    if (!sorted) {
+      return [...sub.rows.values()];
+    }
     return sortRows(sub.rows);
-  }, [sub]);
+  }, [sub, sorted]);
 }
