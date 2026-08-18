@@ -64,10 +64,15 @@ func openStore() *kubeconfig.Store {
 }
 
 func unreachable(name string, discErr error) error {
-	if discErr != nil {
-		return fmt.Errorf("context %q lists no resource types: %w", name, discErr)
+	if discErr == nil {
+		return fmt.Errorf("context %q lists no resource types", name)
 	}
-	return fmt.Errorf("context %q lists no resource types", name)
+	plugin := credentialPlugin(discErr)
+	if plugin != "" {
+		slog.Warn("a credential plugin failed", "context", name, "plugin", plugin, "error", discErr)
+		return fmt.Errorf("context %q could not get credentials: %s failed. Check that it runs in your shell", name, plugin)
+	}
+	return fmt.Errorf("context %q lists no resource types: %w", name, discErr)
 }
 
 func build(ctx context.Context, ref api.ContextRef, options Options, promTarget prom.Target) (*resources.Manager, *kube.Bundle, error) {

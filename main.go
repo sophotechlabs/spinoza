@@ -20,8 +20,10 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/sophotechlabs/spinoza/internal/cluster"
+	"github.com/sophotechlabs/spinoza/internal/localshell"
 	"github.com/sophotechlabs/spinoza/internal/server"
 	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
+	"github.com/sophotechlabs/spinoza/internal/toolpath"
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
@@ -56,6 +58,8 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	toolpath.Ensure(ctx, localshell.ShellPath())
 
 	clusters, err := cluster.New(ctx, opts.cluster)
 	if err != nil {
