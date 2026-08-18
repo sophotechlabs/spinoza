@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	metadatafake "k8s.io/client-go/metadata/fake"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -27,8 +28,64 @@ import (
 
 const deployedAt = "2026-08-11T09:30:00Z"
 
+func metaScheme() *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	err := metav1.AddMetaToScheme(scheme)
+	if err != nil {
+		panic(err)
+	}
+	return scheme
+}
+
+func mirrorMeta(cs kubernetes.Interface) *metadatafake.FakeMetadataClient {
+	objs := []runtime.Object{}
+	secrets, err := cs.CoreV1().Secrets("").List(context.Background(), metav1.ListOptions{})
+	if err == nil {
+		for i := range secrets.Items {
+			objs = append(objs, &metav1.PartialObjectMetadata{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+				ObjectMeta: secrets.Items[i].ObjectMeta,
+			})
+		}
+	}
+	maps, mapErr := cs.CoreV1().ConfigMaps("").List(context.Background(), metav1.ListOptions{})
+	if mapErr == nil {
+		for i := range maps.Items {
+			objs = append(objs, &metav1.PartialObjectMetadata{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				ObjectMeta: maps.Items[i].ObjectMeta,
+			})
+		}
+	}
+	spaces, nsErr := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+	if nsErr == nil {
+		for i := range spaces.Items {
+			objs = append(objs, &metav1.PartialObjectMetadata{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Namespace"},
+				ObjectMeta: spaces.Items[i].ObjectMeta,
+			})
+		}
+	}
+	return metadatafake.NewSimpleMetadataClient(metaScheme(), objs...)
+}
+
+func metaOf(secret *corev1.Secret) *metav1.PartialObjectMetadata {
+	return &metav1.PartialObjectMetadata{
+		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+		ObjectMeta: secret.ObjectMeta,
+	}
+}
+
 func newService(cs kubernetes.Interface, index Charts, repos []RepoEntry) *Service {
-	return NewService(cs, nil, index, repos, api.ContextRef{Name: "kind-spinoza"})
+	return NewService(cs, mirrorMeta(cs), nil, index, repos, api.ContextRef{Name: "kind-spinoza"})
+}
+
+func serviceWithMeta(
+	cs kubernetes.Interface,
+	meta *metadatafake.FakeMetadataClient,
+	index Charts,
+) *Service {
+	return NewService(cs, meta, nil, index, nil, api.ContextRef{Name: "kind-spinoza"})
 }
 
 func entriesOf(urls ...string) []RepoEntry {
@@ -322,11 +379,12 @@ func TestListSkipsASecretWithNothingToIdentifyIt(t *testing.T) {
 
 func TestListReportsARefusedSecretList(t *testing.T) {
 	cs := k8sfake.NewClientset()
-	cs.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+	meta := mirrorMeta(cs)
+	meta.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("secrets is forbidden")
 	})
 
-	got, err := newService(cs, nil, nil).List(context.Background())
+	got, err := serviceWithMeta(cs, meta, nil).List(context.Background())
 
 	if err == nil {
 		t.Fatal("a refused list reported success")
@@ -365,7 +423,8 @@ func TestListFallsBackPerNamespaceWhenClusterWideSecretsAreForbidden(t *testing.
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo"}},
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "locked"}},
 	)
-	cs.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+	meta := mirrorMeta(cs)
+	meta.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		if action.GetNamespace() == "" {
 			return true, nil, forbiddenSecrets("no cluster-wide secrets")
 		}
@@ -375,7 +434,7 @@ func TestListFallsBackPerNamespaceWhenClusterWideSecretsAreForbidden(t *testing.
 		return false, nil, nil
 	})
 
-	got, err := newService(cs, nil, nil).List(context.Background())
+	got, err := serviceWithMeta(cs, meta, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -398,10 +457,11 @@ func TestListFallsBackPerNamespaceWhenClusterWideSecretsAreForbidden(t *testing.
 
 func TestListSurfacesTheDenialWhenNamespacesAreHiddenToo(t *testing.T) {
 	cs := k8sfake.NewClientset()
-	cs.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+	meta := mirrorMeta(cs)
+	meta.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, forbiddenSecrets("no secrets for you")
 	})
-	cs.PrependReactor("list", "namespaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+	meta.PrependReactor("list", "namespaces", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, apierrors.NewForbidden(
 			schema.GroupResource{Resource: "namespaces"},
 			"",
@@ -409,7 +469,7 @@ func TestListSurfacesTheDenialWhenNamespacesAreHiddenToo(t *testing.T) {
 		)
 	})
 
-	got, err := newService(cs, nil, nil).List(context.Background())
+	got, err := serviceWithMeta(cs, meta, nil).List(context.Background())
 
 	if err == nil {
 		t.Fatal("expected the original denial when no fallback is possible")
@@ -424,8 +484,9 @@ func TestListSurfacesTheDenialWhenNamespacesAreHiddenToo(t *testing.T) {
 
 func TestListAsksOnlyForHelmOwnedSecrets(t *testing.T) {
 	cs := k8sfake.NewClientset()
+	meta := mirrorMeta(cs)
 	selectors := []string{}
-	cs.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+	meta.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		list, ok := action.(k8stesting.ListAction)
 		if ok {
 			selectors = append(selectors, list.GetListRestrictions().Labels.String())
@@ -433,7 +494,7 @@ func TestListAsksOnlyForHelmOwnedSecrets(t *testing.T) {
 		return false, nil, nil
 	})
 
-	_, err := newService(cs, nil, nil).List(context.Background())
+	_, err := serviceWithMeta(cs, meta, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -450,20 +511,23 @@ func TestListFollowsThePagesTheApiserverHandsBack(t *testing.T) {
 	first := sampleRelease()
 	second := sampleRelease()
 	second.name = "other"
-	cs := k8sfake.NewClientset()
+	cs := k8sfake.NewClientset(helmSecret(first), helmSecret(second))
+	meta := mirrorMeta(cs)
 	page := 0
-	cs.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+	meta.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
 		page++
 		if page == 1 {
-			return true, &corev1.SecretList{
+			return true, &metav1.List{
 				ListMeta: metav1.ListMeta{Continue: "next-page"},
-				Items:    []corev1.Secret{*helmSecret(first)},
+				Items:    []runtime.RawExtension{{Object: metaOf(helmSecret(first))}},
 			}, nil
 		}
-		return true, &corev1.SecretList{Items: []corev1.Secret{*helmSecret(second)}}, nil
+		return true, &metav1.List{
+			Items: []runtime.RawExtension{{Object: metaOf(helmSecret(second))}},
+		}, nil
 	})
 
-	got, err := newService(cs, nil, nil).List(context.Background())
+	got, err := serviceWithMeta(cs, meta, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -478,22 +542,23 @@ func TestListFollowsThePagesTheApiserverHandsBack(t *testing.T) {
 
 func TestListSaysWhenItStoppedReadingPages(t *testing.T) {
 	cs := k8sfake.NewClientset()
+	meta := mirrorMeta(cs)
 	page := 0
-	cs.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+	meta.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
 		page++
-		items := make([]corev1.Secret, 0, maxObjects)
+		items := make([]runtime.RawExtension, 0, maxObjects)
 		for i := range maxObjects {
 			spec := sampleRelease()
 			spec.name = fmt.Sprintf("release-%d-%d", page, i)
-			items = append(items, *helmSecret(spec))
+			items = append(items, runtime.RawExtension{Object: metaOf(helmSecret(spec))})
 		}
-		return true, &corev1.SecretList{
+		return true, &metav1.List{
 			ListMeta: metav1.ListMeta{Continue: "next-page"},
 			Items:    items,
 		}, nil
 	})
 
-	got, err := newService(cs, nil, nil).List(context.Background())
+	got, err := serviceWithMeta(cs, meta, nil).List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -726,5 +791,113 @@ func TestListIgnoresARepositoryWithNothingForThatChart(t *testing.T) {
 
 	if got.Releases[0].Latest != "7.0.0" {
 		t.Fatalf("latest = %q, want the repo that has it", got.Releases[0].Latest)
+	}
+}
+
+func TestListReadsOnlyTheNewestRevisionsBody(t *testing.T) {
+	first := sampleRelease()
+	first.revision = 1
+	first.status = "superseded"
+	second := sampleRelease()
+	second.revision = 2
+	second.status = "superseded"
+	third := sampleRelease()
+	cs := k8sfake.NewClientset(helmSecret(first), helmSecret(second), helmSecret(third))
+	read := []string{}
+	cs.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		get, ok := action.(k8stesting.GetAction)
+		if ok {
+			read = append(read, get.GetName())
+		}
+		return false, nil, nil
+	})
+
+	got, err := newService(cs, nil, nil).List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if len(got.Releases) != 1 || got.Releases[0].Revision != 3 {
+		t.Fatalf("releases = %+v, want revision 3 only", got.Releases)
+	}
+	if len(read) != 1 {
+		t.Fatalf("bodies read = %v, want only the newest revision", read)
+	}
+}
+
+func TestASecondListReusesTheDecodedRelease(t *testing.T) {
+	cs := k8sfake.NewClientset(helmSecret(sampleRelease()))
+	reads := 0
+	cs.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		reads++
+		return false, nil, nil
+	})
+	service := newService(cs, nil, nil)
+
+	_, err := service.List(context.Background())
+	if err != nil {
+		t.Fatalf("first list: %v", err)
+	}
+	_, err = service.List(context.Background())
+	if err != nil {
+		t.Fatalf("second list: %v", err)
+	}
+
+	if reads != 1 {
+		t.Fatalf("bodies read = %d, want the decoded release kept", reads)
+	}
+}
+
+func TestAChangedRevisionIsReadAgain(t *testing.T) {
+	spec := sampleRelease()
+	secret := helmSecret(spec)
+	secret.ResourceVersion = "1"
+	cs := k8sfake.NewClientset(secret)
+	reads := 0
+	cs.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		reads++
+		return false, nil, nil
+	})
+	meta := mirrorMeta(cs)
+	service := serviceWithMeta(cs, meta, nil)
+	_, err := service.List(context.Background())
+	if err != nil {
+		t.Fatalf("first list: %v", err)
+	}
+
+	moved := metaOf(secret)
+	moved.ResourceVersion = "2"
+	meta.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &metav1.List{Items: []runtime.RawExtension{{Object: moved}}}, nil
+	})
+	_, err = service.List(context.Background())
+	if err != nil {
+		t.Fatalf("second list: %v", err)
+	}
+
+	if reads != 2 {
+		t.Fatalf("bodies read = %d, want the changed revision read again", reads)
+	}
+}
+
+func TestASecretThatIsNotReleaseStorageIsReportedAsUnreadable(t *testing.T) {
+	spec := sampleRelease()
+	secret := helmSecret(spec)
+	secret.Type = corev1.SecretTypeOpaque
+	cs := k8sfake.NewClientset(secret)
+
+	got, err := newService(cs, nil, nil).List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if len(got.Releases) != 1 {
+		t.Fatalf("releases = %+v, want the labeled release with what the labels say", got.Releases)
+	}
+	if got.Releases[0].Chart != "" {
+		t.Fatalf("chart = %q, want nothing decoded", got.Releases[0].Chart)
+	}
+	if !strings.Contains(got.Error, "could not be read") {
+		t.Fatalf("error = %q, want the unreadable payload named", got.Error)
 	}
 }

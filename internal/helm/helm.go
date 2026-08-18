@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
@@ -34,6 +35,10 @@ const (
 
 var errNotGzip = errors.New("release payload is not gzipped json")
 
+var errNotRelease = errors.New("the object does not hold a helm release")
+
+var errNoMetadata = errors.New("this cluster connection has no metadata client, so releases cannot be listed")
+
 type Charts interface {
 	Latest(repo charts.Repo, chart string) string
 	Warm(repo charts.Repo, chart string)
@@ -42,47 +47,48 @@ type Charts interface {
 
 type Service struct {
 	cs      kubernetes.Interface
+	meta    metadata.Interface
 	runner  Runner
 	index   Charts
 	repos   []RepoEntry
 	kubeRef api.ContextRef
+	cache   *releaseCache
 }
 
-func NewService(cs kubernetes.Interface, runner Runner, index Charts, repos []RepoEntry, kubeRef api.ContextRef) *Service {
-	return &Service{cs: cs, runner: runner, index: index, repos: repos, kubeRef: kubeRef}
+func NewService(
+	cs kubernetes.Interface,
+	meta metadata.Interface,
+	runner Runner,
+	index Charts,
+	repos []RepoEntry,
+	kubeRef api.ContextRef,
+) *Service {
+	return &Service{
+		cs:      cs,
+		meta:    meta,
+		runner:  runner,
+		index:   index,
+		repos:   repos,
+		kubeRef: kubeRef,
+		cache:   newReleaseCache(),
+	}
 }
 
 func (s *Service) List(ctx context.Context) (api.HelmReleases, error) {
 	bounded, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 
-	found, err := loadAll(bounded, s.cs)
+	if s.meta == nil {
+		return api.HelmReleases{Releases: []api.HelmRelease{}}, errNoMetadata
+	}
+	found, err := allRefs(bounded, s.meta)
 	if err != nil {
 		return api.HelmReleases{Releases: []api.HelmRelease{}}, err
 	}
 
-	latest := map[string]api.HelmRelease{}
-	undecodable := 0
-	for _, item := range found.items {
-		release, decodeErr := item.release()
-		if decodeErr != nil {
-			undecodable++
-		}
-		if release.Name == "" {
-			continue
-		}
-		key := release.Namespace + "/" + release.Name
-		previous, seen := latest[key]
-		if seen && previous.Revision >= release.Revision {
-			continue
-		}
-		latest[key] = release
-	}
-
-	out := make([]api.HelmRelease, 0, len(latest))
-	for _, release := range latest {
-		out = append(out, release)
-	}
+	current := newestPerRelease(found.items)
+	s.cache.keep(current)
+	out, undecodable := s.read(bounded, current)
 	slices.SortFunc(out, byNamespaceThenName)
 	s.addLatest(out)
 	return api.HelmReleases{Releases: out, Error: partialMessage(undecodable, found.truncated, found.denied)}, nil

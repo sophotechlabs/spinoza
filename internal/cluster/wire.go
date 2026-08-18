@@ -105,8 +105,10 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		bundle.Ref,
 	)
 	index := charts.New(ctx, &http.Client{Timeout: 30 * time.Second}, charts.DefaultTTL)
+	meta := metaClient(bundle)
 	releases := helm.NewService(
 		bundle.Clientset,
+		meta,
 		helm.NewRunner(options.HelmBinary),
 		index,
 		helm.Repositories(helm.RepositoryConfig()),
@@ -124,7 +126,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 			},
 		},
 		Dynamic:     bundle.Dynamic,
-		Metadata:    metaClient(bundle),
+		Metadata:    meta,
 		Clientset:   bundle.Clientset,
 		Schemas:     schemas,
 		Forwards:    forwards,

@@ -166,7 +166,8 @@ func TestHelmMethodsSayWhenHelmIsNotWiredUp(t *testing.T) {
 }
 
 func TestHelmMethodsReachTheService(t *testing.T) {
-	releases := helm.NewService(k8sfake.NewClientset(), nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	cs := k8sfake.NewClientset()
+	releases := helm.NewService(cs, helmMeta(t, cs), nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 	mgr := viewManager(t, releases)
 
 	list, err := mgr.HelmReleases(context.Background())

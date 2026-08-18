@@ -185,14 +185,12 @@ func (s *Service) run(ctx context.Context, args []string, driver string) (string
 func (s *Service) driverFor(ctx context.Context, namespace, name string) (string, error) {
 	bounded, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
-	found, err := loadAll(bounded, s.cs)
+	revisions, err := revisionsIn(bounded, s.cs, namespace, name)
 	if err != nil {
 		return "", err
 	}
-	for _, item := range found.items {
-		if item.namespace == namespace && item.name == name {
-			return item.driver, nil
-		}
+	for _, item := range revisions {
+		return item.driver, nil
 	}
 	return "", fmt.Errorf("%w: %s/%s", ErrNoRelease, namespace, name)
 }

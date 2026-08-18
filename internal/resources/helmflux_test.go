@@ -12,7 +12,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/metadata"
+	metadatafake "k8s.io/client-go/metadata/fake"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -62,7 +65,7 @@ func fluxManager(t *testing.T, secrets []*corev1.Secret, crs ...*unstructured.Un
 		seeds = append(seeds, secret)
 	}
 	cs := k8sfake.NewClientset(seeds...)
-	releases := helm.NewService(cs, nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	releases := helm.NewService(cs, helmMeta(t, cs), nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 	descs := map[string]api.ResourceDescriptor{
 		discovery.Key("helm.toolkit.fluxcd.io", "v2", "helmreleases"): {
 			Group:      "helm.toolkit.fluxcd.io",
@@ -220,4 +223,24 @@ func TestHelmVersionsReachTheService(t *testing.T) {
 	if got.Error == "" {
 		t.Fatal("a service with no repositories reported nothing to say")
 	}
+}
+
+func helmMeta(t *testing.T, cs kubernetes.Interface) metadata.Interface {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	err := metav1.AddMetaToScheme(scheme)
+	if err != nil {
+		t.Fatalf("scheme: %v", err)
+	}
+	objs := []runtime.Object{}
+	secrets, listErr := cs.CoreV1().Secrets("").List(context.Background(), metav1.ListOptions{})
+	if listErr == nil {
+		for i := range secrets.Items {
+			objs = append(objs, &metav1.PartialObjectMetadata{
+				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+				ObjectMeta: secrets.Items[i].ObjectMeta,
+			})
+		}
+	}
+	return metadatafake.NewSimpleMetadataClient(scheme, objs...)
 }

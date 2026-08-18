@@ -30,20 +30,9 @@ func (s *Service) Detail(ctx context.Context, namespace, name string, resolve Re
 	bounded, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 
-	found, err := loadAll(bounded, s.cs)
+	revisions, err := revisionsIn(bounded, s.cs, namespace, name)
 	if err != nil {
 		return api.HelmReleaseDetail{}, err
-	}
-
-	revisions := []stored{}
-	for _, item := range found.items {
-		if item.namespace != namespace {
-			continue
-		}
-		if item.name != name {
-			continue
-		}
-		revisions = append(revisions, item)
 	}
 	if len(revisions) == 0 {
 		return api.HelmReleaseDetail{}, fmt.Errorf("%w: %s/%s", ErrNoRelease, namespace, name)
