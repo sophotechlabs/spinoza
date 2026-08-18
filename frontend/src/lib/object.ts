@@ -40,8 +40,16 @@ export async function fetchObject(ref: ObjectRef): Promise<ObjectDetail> {
   return parseObjectDetail(await response.json());
 }
 
-export async function applyObject(ref: ObjectRef, doc: string): Promise<ObjectDetail> {
-  const response = await request(`/api/object?${refQuery(ref)}`, {
+export async function applyObject(
+  ref: ObjectRef,
+  doc: string,
+  confirm?: string,
+): Promise<ObjectDetail> {
+  const params = new URLSearchParams(refQuery(ref));
+  if (confirm !== undefined) {
+    params.set('confirm', confirm);
+  }
+  const response = await request(`/api/object?${params.toString()}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/yaml' },
     body: doc,

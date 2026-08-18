@@ -24,6 +24,8 @@ function refKey(ref: ObjectRef): string {
   return `${ref.group}/${ref.version}/${ref.resource}/${ref.namespace}/${ref.name}`;
 }
 
+type Ask = 'apply' | 'delete' | null;
+
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) {
     return err.message;
@@ -39,10 +41,10 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   const [draft, setDraft] = useState(yaml);
   const [base, setBase] = useState(yaml);
   const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [asking, setAsking] = useState<Ask>(null);
   const deleteRef = useRef<HTMLButtonElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
-  const [wasConfirming, setWasConfirming] = useState(false);
+  const [wasAsking, setWasAsking] = useState<Ask>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const protectedCluster = useProtectedCluster();
@@ -55,7 +57,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     setDraft(yaml);
     setError(null);
     setNotice(null);
-    setConfirming(false);
+    setAsking(null);
   } else if (yaml !== base && draft === base) {
     setBase(yaml);
     setDraft(yaml);
@@ -103,23 +105,31 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   }, [dirty]);
 
   useEffect(() => {
-    if (confirming === wasConfirming) {
+    if (asking === wasAsking) {
       return;
     }
-    setWasConfirming(confirming);
-    if (confirming) {
+    setWasAsking(asking);
+    if (asking !== null) {
       confirmRef.current?.focus();
       return;
     }
     deleteRef.current?.focus();
-  }, [confirming, wasConfirming]);
+  }, [asking, wasAsking]);
+
+  function askApply() {
+    if (!protectedCluster) {
+      void handleApply();
+      return;
+    }
+    setAsking('apply');
+  }
 
   async function handleApply() {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      await applyObject(target, draft);
+      await applyObject(target, draft, confirmName(protectedCluster, target.name));
       setBase(draft);
       setNotice('Applied.');
       onApplied();
@@ -127,6 +137,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
       setError(errorMessage(err, 'apply failed'));
     } finally {
       setBusy(false);
+      setAsking(null);
     }
   }
 
@@ -142,7 +153,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
       setError(errorMessage(err, 'delete failed'));
     } finally {
       setBusy(false);
-      setConfirming(false);
+      setAsking(null);
     }
   }
 
@@ -154,11 +165,11 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   }
 
   function askDelete() {
-    setConfirming(true);
+    setAsking('delete');
   }
 
-  function cancelDelete() {
-    setConfirming(false);
+  function cancelAsking() {
+    setAsking(null);
   }
 
   return (
@@ -177,7 +188,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
       <div className="flex items-center gap-2 border-t border-edge px-3 py-2 text-xs">
         <button
           type="button"
-          onClick={() => void handleApply()}
+          onClick={askApply}
           disabled={busy || !dirty}
           className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
@@ -194,16 +205,25 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         <CopyButton what="YAML" text={draft} />
         {dirty && !stale && <span className="text-fg-muted">unsaved changes</span>}
         {stale && <span className="text-warn">changed on the server, Revert to load it</span>}
-        {confirming && protectedCluster && (
+        {asking === 'apply' && (
+          <ConfirmByName
+            open
+            name={target.name}
+            what={`Applying your changes to ${detail.kind} ${target.name}.`}
+            onConfirm={() => void handleApply()}
+            onCancel={cancelAsking}
+          />
+        )}
+        {asking === 'delete' && protectedCluster && (
           <ConfirmByName
             open
             name={target.name}
             what={`Deleting ${detail.kind} ${target.name}.`}
             onConfirm={() => void handleDelete()}
-            onCancel={cancelDelete}
+            onCancel={cancelAsking}
           />
         )}
-        {!confirming && (
+        {asking !== 'delete' && (
           <button
             ref={deleteRef}
             type="button"
@@ -214,7 +234,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
             Delete
           </button>
         )}
-        {confirming && !protectedCluster && (
+        {asking === 'delete' && !protectedCluster && (
           <div className="ml-auto flex items-center gap-2">
             <span className="text-fg-muted">Delete {target.name}?</span>
             <button
@@ -228,7 +248,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
             </button>
             <button
               type="button"
-              onClick={cancelDelete}
+              onClick={cancelAsking}
               disabled={busy}
               className="rounded border border-edge px-2 py-1 text-fg-muted hover:bg-surface-active disabled:cursor-not-allowed"
             >

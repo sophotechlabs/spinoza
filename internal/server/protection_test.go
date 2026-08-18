@@ -161,3 +161,49 @@ func TestRollingBackAReleaseOnAProtectedClusterNeedsTheNameTyped(t *testing.T) {
 		t.Fatalf("rollbacks = %v, want none", backend.rollbacks)
 	}
 }
+
+func TestApplyingOnAProtectedClusterNeedsTheNameTyped(t *testing.T) {
+	ts := inspectServer(t, newPod())
+	protect(t, ts)
+	doc := strings.NewReader("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+
+	resp, body := doRequest(t, http.MethodPut, ts.URL+"/api/object"+objectQuery, doc)
+
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("status = %d, want 412; apply can take a workload down as thoroughly as delete", resp.StatusCode)
+	}
+	if !strings.Contains(string(body), "protected") || !strings.Contains(string(body), "web") {
+		t.Fatalf("body = %s, want the rule and the name to type", body)
+	}
+}
+
+func TestApplyingGoesAheadOnceTheNameMatches(t *testing.T) {
+	ts := inspectServer(t, newPod())
+	protect(t, ts)
+	doc := strings.NewReader("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+
+	resp, body := doRequest(t, http.MethodPut, ts.URL+"/api/object"+objectQuery+"&confirm=web", doc)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+}
+
+// interactive access is deliberately outside the protection gate: it is not a
+// one-click irreversible act, and typing the object name before every shell
+// would make the feature unusable. This test records that decision.
+
+func TestInteractiveAccessIsNotGatedByProtection(t *testing.T) {
+	ts := inspectServer(t, newPod())
+	protect(t, ts)
+
+	support, _ := doRequest(t, http.MethodGet, ts.URL+"/api/exec/support?namespace=flux-system&pod=web", nil)
+	if support.StatusCode == http.StatusPreconditionFailed {
+		t.Fatal("exec support asked for a typed name; interactive access is meant to stay open")
+	}
+
+	debug, _ := doRequest(t, http.MethodGet, ts.URL+"/api/debug/support?namespace=flux-system&pod=web", nil)
+	if debug.StatusCode == http.StatusPreconditionFailed {
+		t.Fatal("debug support asked for a typed name; interactive access is meant to stay open")
+	}
+}

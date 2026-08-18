@@ -770,6 +770,10 @@ func (s *Server) getObject(w http.ResponseWriter, r *http.Request, ref api.Objec
 }
 
 func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
+	if s.unconfirmed(r, ref.Name) {
+		refuseUnconfirmed(w, ref.Name)
+		return
+	}
 	doc, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, maxDocBytes))
 	if readErr != nil {
 		writeAPIError(w, readErr)

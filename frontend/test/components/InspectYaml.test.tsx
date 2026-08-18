@@ -492,4 +492,49 @@ describe('InspectYaml on a protected cluster', () => {
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
   });
+
+  it('asks for the object name before applying, as it does before deleting', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(screen.getByText('Applying your changes to Deployment web.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+  });
+
+  it('applies with the typed confirmation once the name matches', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue(okResponse({}));
+    vi.stubGlobal('fetch', fetchMock);
+    const { onApplied } = renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.type(screen.getByLabelText('Name'), 'web');
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(onApplied).toHaveBeenCalled();
+    const url = String(fetchMock.mock.calls.at(-1)?.[0]);
+    expect(url).toContain('confirm=web');
+  });
+
+  it('drops the apply question when it is cancelled', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue(okResponse({}));
+    vi.stubGlobal('fetch', fetchMock);
+    renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    const applied = fetchMock.mock.calls.some((call) => {
+      const options = call[1] as RequestInit | undefined;
+      return options?.method === 'PUT';
+    });
+    expect(applied).toBe(false);
+  });
 });
