@@ -21,7 +21,7 @@ import { clearHistory } from './store/toasts';
 import { DEFAULT_NAMESPACE, useNamespace, useNamespaceStore } from './store/namespace';
 import { EVERY_NAMESPACE, ONLY_DEFAULT } from './lib/settings';
 import { namespaceAnswered, useSettingsStore } from './store/settings';
-import { PODS_WORTH_ASKING, worthAsking } from './lib/namespaceOffer';
+import { podsIn, worthAsking } from './lib/namespaceOffer';
 import { nameChips } from './lib/filterChips';
 import { kindScope } from './lib/catalog';
 import { clearCatalog, useCategories, useCounts } from './store/catalog';
@@ -172,7 +172,7 @@ export default function App() {
     }
     useSettingsStore.getState().setNamespaceStart(contextName, EVERY_NAMESPACE);
     askToast(
-      `Spinoza is reading every namespace on ${contextName}, and it has over ${String(PODS_WORTH_ASKING)} pods. Read only the default namespace here instead?`,
+      `Watching every namespace on ${contextName} holds all ${String(podsIn(counts))} pods in memory here.`,
       {
         label: 'Open on default',
         run: () => {

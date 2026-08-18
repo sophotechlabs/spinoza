@@ -498,8 +498,8 @@ describe('the namespace offer, once per cluster', () => {
     const strip = within(await screen.findByLabelText('Latest notifications'));
 
     expect(await strip.findByRole('button', { name: 'Open on default' })).toBeInTheDocument();
-    expect(strip.getByText(/reading every namespace on kind-dev/i)).toBeInTheDocument();
-    expect(strip.getByText(/over 1000 pods/i)).toBeInTheDocument();
+    expect(strip.getByText(/watching every namespace on kind-dev/i)).toBeInTheDocument();
+    expect(strip.getByText(/holds all 1200 pods in memory here/i)).toBeInTheDocument();
   });
 
   it('takes the offer and remembers it against that cluster', async () => {

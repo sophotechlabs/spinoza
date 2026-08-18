@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { PODS_WORTH_ASKING, bigCluster, worthAsking } from '../../src/lib/namespaceOffer';
+import { PODS_WORTH_ASKING, bigCluster, podsIn, worthAsking } from '../../src/lib/namespaceOffer';
+
+describe('how many pods a cluster reported', () => {
+  it('reads none when the count never arrived', () => {
+    expect(podsIn({})).toBe(0);
+  });
+
+  it('reads what discovery counted', () => {
+    expect(podsIn({ '/v1/pods': 2993 })).toBe(2993);
+  });
+});
 
 describe('whether a cluster is big enough to ask about', () => {
   it('needs a pod count to judge by', () => {
