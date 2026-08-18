@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.4.0](https://github.com/sophotechlabs/spinoza/compare/v1.3.1...v1.4.0) (2026-08-18)
+
+
+### Features
+
+* **namespace:** keep the opening namespace per cluster and only offer it on big ones ([cb0c245](https://github.com/sophotechlabs/spinoza/commit/cb0c24521e84a4ad0283750367f075a299c7bccf))
+* **protect:** ask for the typed name before applying, as before deleting ([9165be5](https://github.com/sophotechlabs/spinoza/commit/9165be508859ab3dd2961b69a3159376d18fccb8))
+
+
+### Bug Fixes
+
+* **bulk:** say that the typed confirmation is the cluster name ([aca4daf](https://github.com/sophotechlabs/spinoza/commit/aca4daf93b144183b966945203262ebfb87c027b))
+* **install:** report the directory the binary was installed to ([3fc3a19](https://github.com/sophotechlabs/spinoza/commit/3fc3a19d2b439fa73714049a6fb1a2e21504ed65))
+* **release:** publish as draft until the artifacts are attached ([0c7ff8a](https://github.com/sophotechlabs/spinoza/commit/0c7ff8ae5bce6e754e7cca7861dd6eae6062d57b))
+* **test:** make the integration tree compile and keep it that way ([47e2709](https://github.com/sophotechlabs/spinoza/commit/47e27093defeb58924d524f7d8ee539fb11957d7))
+
+
+### Miscellaneous
+
+* add codeowners ([3ff8d24](https://github.com/sophotechlabs/spinoza/commit/3ff8d240a4339f3473d690d24edcd57385bd10c2))
+
+
+### CI
+
+* ignore hashes by shape and name every workflow ([62b2f3c](https://github.com/sophotechlabs/spinoza/commit/62b2f3cde53cd00b88f35d85062a1fcc358b5007))
+* teach typos about generated changelogs and kubernetes event names ([bee8843](https://github.com/sophotechlabs/spinoza/commit/bee8843e916003f8a8db26d3a467f3197d05ee0e))
+
+
+### Refactoring
+
+* **frontend:** stop exporting what nothing outside the module uses ([6f488ff](https://github.com/sophotechlabs/spinoza/commit/6f488ff04219587f0cdc5749f5b52c9ae11bf8d8))
+
 ## [1.3.1](https://github.com/sophotechlabs/spinoza/compare/v1.3.0...v1.3.1) (2026-08-18)
 
 
