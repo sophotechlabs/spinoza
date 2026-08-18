@@ -32,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -60,6 +62,14 @@ jobs:
         env:
           SPINOZA_VERSION: ${{ needs.version.outputs.tag }}
 
+      - run: just smoke
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: |
+            dist/release/*.tar.gz
+            dist/release/*_sbom.cdx.json
+
       - run: gh release upload "$TAG" dist/release/* --clobber
         env:
           TAG: ${{ needs.version.outputs.tag }}
@@ -73,6 +83,8 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -83,6 +95,9 @@ jobs:
       - run: just package-desktop
         env:
           SPINOZA_VERSION: ${{ needs.version.outputs.tag }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: dist/release/*_darwin_app.zip
       - run: just publish-desktop
         env:
           TAG: ${{ needs.version.outputs.tag }}
