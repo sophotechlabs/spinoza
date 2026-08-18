@@ -44,3 +44,9 @@ jobs:
         env:
           TAG: ${{ steps.release.outputs.tag_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: gh release edit "$TAG" --draft=false --latest
+        if: steps.release.outputs.release_created
+        env:
+          TAG: ${{ steps.release.outputs.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
