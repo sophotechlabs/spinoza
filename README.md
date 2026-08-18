@@ -9,8 +9,6 @@
 
 A self-hosted Kubernetes GUI: Go backend with client-go informers, React frontend, one binary. Runs as a browser tab or a desktop window. [spinoza.tech](https://spinoza.tech)
 
-**Source-available, not open source.** [FSL-1.1-ALv2](LICENSE): run it, modify it and redistribute it internally, for professional services, and for non-commercial education and research. You may not offer it as a commercial product or service that competes with it. Each release becomes Apache-2.0 two years after it ships.
-
 ## Install
 
 ```sh
@@ -93,7 +91,3 @@ Every check is a `just` recipe, so the same command runs on a laptop and in CI: 
 Discovery builds a resource catalog. Each subscribed GVR gets a dynamic informer whose cache is projected into table rows; a WebSocket sends one snapshot and then deltas keyed by uid. Exec and port-forwarding do not fit that pipe, being long-lived and bidirectional, so they get their own transports: a binary WebSocket carrying the Kubernetes exec channel protocol, and a process-global forward registry independent of any request.
 
 The React app is embedded with `embed.FS`. The same HTTP and WebSocket server backs both the browser tab and the desktop window.
-
-## License
-
-Copyright 2026 Sophotech s.r.o. Source-available under the [Functional Source License](LICENSE), FSL-1.1-ALv2. Run it, modify it, redistribute it internally, for professional services, and for non-commercial education and research. You may not offer it to others as a commercial product or service that competes with it. Each release becomes Apache-2.0 two years after it ships.
