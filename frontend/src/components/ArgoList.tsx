@@ -5,6 +5,7 @@ import { healthClass, orDash, syncClass } from '../lib/argoStatus';
 import { created } from '../lib/fluxStatus';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
+import Loading from './Loading';
 
 interface ArgoListProps {
   onSelect: (ref: ReturnType<typeof refOf>) => void;
@@ -73,11 +74,7 @@ export default function ArgoList({ onSelect }: ArgoListProps) {
         <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading Argo CD resources
-      </div>
-    );
+    return <Loading what="Argo CD resources" />;
   }
 
   const groups: KindGroup[] = [

@@ -16,6 +16,7 @@ import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import CopyButton from './CopyButton';
 import HelmUpgradeDialog from './HelmUpgradeDialog';
+import Loading from './Loading';
 
 const TABS = ['Overview', 'Values', 'Notes', 'Manifest', 'Resources', 'History'] as const;
 
@@ -270,7 +271,7 @@ export default function HelmReleaseDetail({
         </p>
       )}
 
-      {loading && data === null && <p className="p-3 text-fg-muted">Loading the release</p>}
+      {loading && data === null && <Loading what="the release" />}
       {error !== null && (
         <p role="alert" className="p-3 text-error">
           {error}

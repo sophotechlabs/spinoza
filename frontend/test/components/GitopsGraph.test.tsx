@@ -190,7 +190,7 @@ describe('GitopsGraph partial failures', () => {
 
     render(<GitopsGraph />);
 
-    expect(await screen.findByRole('status')).toHaveTextContent('buckets: is forbidden');
+    expect(await screen.findByText(/buckets: is forbidden/)).toBeInTheDocument();
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
   });
 

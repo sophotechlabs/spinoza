@@ -43,6 +43,7 @@ import StaleBanner from './StaleBanner';
 import BulkBar from './BulkBar';
 import CopyButton from './CopyButton';
 import ColumnResizeHandle from './ColumnResizeHandle';
+import Loading from './Loading';
 
 interface ResourceTableProps {
   active: ResourceDescriptor | null;
@@ -610,7 +611,7 @@ export default function ResourceTable({
             )}
           </tbody>
         </table>
-        {!loaded && <p className="p-6 text-center text-xs text-fg-muted">Loading {active.kind}</p>}
+        {!loaded && <Loading what={active.kind} />}
         {loaded && rows.length === 0 && (
           <p className="p-6 text-center text-xs text-fg-muted">
             This cluster has no {active.kind} objects.

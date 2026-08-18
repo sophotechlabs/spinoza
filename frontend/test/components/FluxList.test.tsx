@@ -209,7 +209,7 @@ describe('FluxList partial failures', () => {
 
     render(<FluxList onSelect={vi.fn()} />);
 
-    expect(await screen.findByRole('status')).toHaveTextContent('buckets: nope');
+    expect(await screen.findByText(/buckets: nope/)).toBeInTheDocument();
   });
 
   it('shows no warning when every list worked', async () => {

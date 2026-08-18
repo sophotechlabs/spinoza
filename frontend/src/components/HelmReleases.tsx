@@ -16,6 +16,7 @@ import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import HelmReleaseDetail from './HelmReleaseDetail';
+import Loading from './Loading';
 
 interface HelmReleasesProps {
   active?: boolean;
@@ -69,11 +70,7 @@ export default function HelmReleases({ active = true, onSelectResource }: HelmRe
     if (error !== null) {
       return <LoadFailure what="Helm releases" message={error} />;
     }
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading Helm releases
-      </div>
-    );
+    return <Loading what="Helm releases" />;
   }
 
   let notice: ReactNode = null;

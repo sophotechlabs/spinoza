@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { fetchEvents } from '../lib/object';
 import { usePoll } from '../lib/usePoll';
 import StaleBanner from './StaleBanner';
+import Loading from './Loading';
 
 const EVENTS_POLL_MS = 10000;
 
@@ -35,7 +36,7 @@ export default function InspectEvents({ namespace, uid, active = true }: Inspect
     if (error !== null) {
       return <div className="p-4 text-xs text-error">{error}</div>;
     }
-    return <div className="p-4 text-xs text-fg-muted">Loading events</div>;
+    return <Loading what="events" />;
   }
 
   let notice: ReactNode = null;

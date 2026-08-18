@@ -1,6 +1,7 @@
 import { useArgo, refOf, tree } from '../lib/argocd';
 import { healthClass, orDash, syncClass } from '../lib/argoStatus';
 import type { ArgoApp } from '../lib/types';
+import Loading from './Loading';
 
 interface ArgoAppsProps {
   onSelect: (ref: ReturnType<typeof refOf>) => void;
@@ -55,7 +56,7 @@ export default function ArgoApps({ onSelect }: ArgoAppsProps) {
   }
 
   if (data === null) {
-    return <div className="p-4 text-xs text-fg-muted">Loading Argo CD applications</div>;
+    return <Loading what="Argo CD applications" />;
   }
 
   const rows = tree(data.apps);

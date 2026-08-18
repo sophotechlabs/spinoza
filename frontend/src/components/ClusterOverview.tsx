@@ -8,6 +8,7 @@ import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import UsageBar from './UsageBar';
+import Loading from './Loading';
 
 interface ClusterOverviewProps {
   active?: boolean;
@@ -154,11 +155,7 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
     if (error !== null) {
       return <LoadFailure what="The cluster overview" message={error} />;
     }
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading the cluster overview
-      </div>
-    );
+    return <Loading what="the cluster overview" />;
   }
 
   let notice: ReactNode = null;

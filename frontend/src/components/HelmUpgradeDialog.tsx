@@ -182,9 +182,7 @@ export default function HelmUpgradeDialog({
         </button>
       </div>
       <div className="p-3 text-xs">
-        {versions === null && versionsError === null && (
-          <p className="text-fg-muted">Loading versions</p>
-        )}
+        {versions === null && versionsError === null && <Loading what="versions" />}
         {versionsError !== null && (
           <p role="alert" className="text-error">
             {versionsError}

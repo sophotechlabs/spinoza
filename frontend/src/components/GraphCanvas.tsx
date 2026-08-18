@@ -16,6 +16,7 @@ import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
 import StaleBanner from './StaleBanner';
 import { useResolvedTheme } from '../store/theme';
+import Loading from './Loading';
 
 const MAX_NODES = 400;
 
@@ -142,11 +143,7 @@ export default function GraphCanvas({
         <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading graph
-      </div>
-    );
+    return <Loading what="graph" />;
   }
 
   if (flow.nodes.length === 0) {
