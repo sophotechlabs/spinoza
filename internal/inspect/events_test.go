@@ -249,3 +249,102 @@ func TestEventsSortKeepsUnparseableStampsLast(t *testing.T) {
 		t.Fatalf("first reason = %q, want Pulled", events[0].Reason)
 	}
 }
+
+// the pieces an event row is assembled from
+
+func TestEventObjectReadsEitherApiShape(t *testing.T) {
+	cases := []struct {
+		name  string
+		event map[string]any
+		want  string
+	}{
+		{
+			name:  "the core involvedObject",
+			event: map[string]any{"involvedObject": map[string]any{"kind": "Pod", "name": "web-0", "namespace": "prod"}},
+			want:  "Pod prod/web-0",
+		},
+		{
+			name:  "the events.k8s.io regarding",
+			event: map[string]any{"regarding": map[string]any{"kind": "Pod", "name": "web-0", "namespace": "prod"}},
+			want:  "Pod prod/web-0",
+		},
+		{
+			name:  "a cluster-scoped object",
+			event: map[string]any{"involvedObject": map[string]any{"kind": "Node", "name": "node-1"}},
+			want:  "Node/node-1",
+		},
+		{
+			name: "an empty involvedObject alongside a filled regarding",
+			event: map[string]any{
+				"involvedObject": map[string]any{},
+				"regarding":      map[string]any{"kind": "Pod", "name": "web-0"},
+			},
+			want: "Pod/web-0",
+		},
+		{name: "neither", event: map[string]any{}, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			item := &unstructured.Unstructured{Object: tc.event}
+
+			if got := eventObjectOf(item); got != tc.want {
+				t.Fatalf("object = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEventSourceJoinsWhatItKnows(t *testing.T) {
+	cases := []struct {
+		name  string
+		event map[string]any
+		want  string
+	}{
+		{
+			name:  "component and host",
+			event: map[string]any{"source": map[string]any{"component": "kubelet", "host": "node-1"}},
+			want:  "kubelet on node-1",
+		},
+		{
+			name:  "component alone",
+			event: map[string]any{"source": map[string]any{"component": "kubelet"}},
+			want:  "kubelet",
+		},
+		{
+			name:  "host alone",
+			event: map[string]any{"source": map[string]any{"host": "node-1"}},
+			want:  "node-1",
+		},
+		{
+			name:  "the events.k8s.io reporting fields",
+			event: map[string]any{"reportingComponent": "kustomize-controller", "reportingInstance": "flux-system"},
+			want:  "kustomize-controller on flux-system",
+		},
+		{name: "nothing at all", event: map[string]any{}, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			item := &unstructured.Unstructured{Object: tc.event}
+
+			if got := eventSourceOf(item); got != tc.want {
+				t.Fatalf("source = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEventCountReadsTheDeprecatedField(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{"deprecatedCount": int64(7)}}
+
+	if got := eventCountOf(item); got != 7 {
+		t.Fatalf("count = %d, want 7", got)
+	}
+}
+
+func TestFirstOfHasNothingToReturn(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{}}
+
+	if got := firstOf(item, []string{"missing"}, []string{"absent"}); got != "" {
+		t.Fatalf("found = %q, want empty", got)
+	}
+}

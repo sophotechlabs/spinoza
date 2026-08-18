@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +15,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func service(namespace, name string, labels map[string]string, ports ...corev1.ServicePort) *corev1.Service {
@@ -597,5 +602,53 @@ func TestForgetIsSafeWithNothingCached(t *testing.T) {
 
 	if client.resolved != nil {
 		t.Fatal("forget invented a target")
+	}
+}
+
+func TestServiceProxyAsksTheApiserverToProxy(t *testing.T) {
+	var asked string
+	apiserver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	}))
+	t.Cleanup(apiserver.Close)
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: apiserver.URL})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	proxy := &serviceProxy{cs: cs}
+	target := Target{Namespace: "monitoring", Service: "prometheus", Port: "9090", Scheme: "http"}
+
+	body, getErr := proxy.Get(context.Background(), target, "/api/v1/query", map[string]string{"query": "up"})
+
+	if getErr != nil {
+		t.Fatalf("Get: %v", getErr)
+	}
+	if string(body) != `{"status":"success"}` {
+		t.Fatalf("body = %q, want what the service answered", string(body))
+	}
+	if !strings.Contains(asked, "/namespaces/monitoring/services/http:prometheus:9090/proxy/api/v1/query") {
+		t.Fatalf("path = %q, want the service proxy path", asked)
+	}
+	if !strings.Contains(asked, "query=up") {
+		t.Fatalf("path = %q, want the query parameter passed through", asked)
+	}
+}
+
+func TestOnlyMatchReportsAFailedServiceList(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("list", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("services are forbidden")
+	})
+	client := NewClient(cs, Target{})
+
+	_, err := client.onlyMatch(context.Background(), "app=prometheus")
+
+	if err == nil {
+		t.Fatal("onlyMatch returned nil error")
+	}
+	if !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("error = %q, want the list failure", err.Error())
 	}
 }

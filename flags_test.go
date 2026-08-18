@@ -372,3 +372,32 @@ func TestABadFlagIsStillAFailure(t *testing.T) {
 		t.Fatal("an unknown flag was treated as a help request")
 	}
 }
+
+func TestSettingsComeFromTheProcessArguments(t *testing.T) {
+	original := os.Args
+	t.Cleanup(func() { os.Args = original })
+	os.Args = []string{"spinoza", "--addr", "127.0.0.1:9999", "--log-level", "debug"}
+
+	result, err := settingsFromArgs()
+	if err != nil {
+		t.Fatalf("settingsFromArgs: %v", err)
+	}
+	if result.addr != "127.0.0.1:9999" {
+		t.Fatalf("addr = %q, want the one the arguments named", result.addr)
+	}
+	if result.logLevel != slog.LevelDebug {
+		t.Fatalf("log level = %v, want debug", result.logLevel)
+	}
+}
+
+func TestSettingsRefuseAnArgumentTheyDoNotKnow(t *testing.T) {
+	original := os.Args
+	t.Cleanup(func() { os.Args = original })
+	os.Args = []string{"spinoza", "--nonsense"}
+
+	_, err := settingsFromArgs()
+
+	if err == nil {
+		t.Fatal("settingsFromArgs returned nil error for an unknown flag")
+	}
+}

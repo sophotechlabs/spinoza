@@ -822,3 +822,90 @@ func TestNewerStillRefusesGarbage(t *testing.T) {
 		t.Fatal("a tag that is not a version was compared anyway")
 	}
 }
+
+// the host arithmetic behind a bearer challenge
+
+func TestSameRegistryAcceptsWhatBelongsToTheSameSite(t *testing.T) {
+	cases := []struct {
+		name     string
+		realm    string
+		registry string
+		want     bool
+	}{
+		{name: "the very same authority", realm: "ghcr.io", registry: "ghcr.io", want: true},
+		{name: "the same host on another port", realm: "ghcr.io:443", registry: "ghcr.io", want: true},
+		{name: "a sibling under one domain", realm: "auth.ghcr.io", registry: "registry.ghcr.io", want: true},
+		{name: "a different site", realm: "auth.example.com", registry: "ghcr.io", want: false},
+		{name: "an ip against a name", realm: "127.0.0.1", registry: "ghcr.io", want: false},
+		{name: "the same ip twice", realm: "127.0.0.1:5000", registry: "127.0.0.1", want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sameRegistry(tc.realm, tc.registry); got != tc.want {
+				t.Fatalf("sameRegistry(%q, %q) = %v, want %v", tc.realm, tc.registry, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHostOnlyDropsThePortWhenThereIsOne(t *testing.T) {
+	if got := hostOnly("ghcr.io:443"); got != "ghcr.io" {
+		t.Fatalf("host = %q, want ghcr.io", got)
+	}
+	if got := hostOnly("ghcr.io"); got != "ghcr.io" {
+		t.Fatalf("host = %q, want the authority unchanged", got)
+	}
+}
+
+func TestParentDomainKeepsTheLastTwoLabels(t *testing.T) {
+	if got := parentDomain("auth.docker.example.com"); got != "example.com" {
+		t.Fatalf("parent = %q, want example.com", got)
+	}
+	if got := parentDomain("localhost"); got != "localhost" {
+		t.Fatalf("parent = %q, want the single label unchanged", got)
+	}
+}
+
+func TestTokenEndpointRefusesAChallengeItCannotUse(t *testing.T) {
+	registry, err := url.Parse("https://ghcr.io")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	cases := []struct {
+		name   string
+		params map[string]string
+		want   string
+	}{
+		{name: "no realm at all", params: map[string]string{}, want: "no bearer realm"},
+		{name: "a realm that is not a url", params: map[string]string{"realm": "://"}, want: "bearer realm"},
+		{name: "a realm that is not http", params: map[string]string{"realm": "ftp://ghcr.io/token"}, want: "not an http url"},
+		{
+			name:   "a realm on another site",
+			params: map[string]string{"realm": "https://auth.elsewhere.com/token"},
+			want:   "does not belong to ghcr.io",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tokenEndpoint(tc.params, registry)
+
+			if err == nil {
+				t.Fatal("tokenEndpoint returned nil error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %q, want it to mention %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
+func TestCheckHostRefusesAnEmptyHost(t *testing.T) {
+	err := checkHost("")
+
+	if err == nil {
+		t.Fatal("checkHost returned nil error for an empty host")
+	}
+	if err.Error() != "repository url has no host" {
+		t.Fatalf("error = %q", err.Error())
+	}
+}

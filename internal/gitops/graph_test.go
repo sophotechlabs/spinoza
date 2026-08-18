@@ -3,6 +3,7 @@ package gitops
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -702,5 +703,68 @@ func TestAnObjectWithNoConditionsIsMarkedUnknown(t *testing.T) {
 
 	if node.Ready != "Unknown" {
 		t.Fatalf("ready = %q, want Unknown", node.Ready)
+	}
+}
+
+func TestArgoHealthBecomesReadiness(t *testing.T) {
+	cases := []struct {
+		name   string
+		health string
+		want   string
+	}{
+		{name: "healthy", health: "Healthy", want: readyTrue},
+		{name: "degraded", health: "Degraded", want: readyFalse},
+		{name: "missing", health: "Missing", want: readyFalse},
+		{name: "progressing", health: "Progressing", want: readyUnknown},
+		{name: "nothing reported", health: "", want: readyUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			obj := &unstructured.Unstructured{Object: map[string]any{
+				"status": map[string]any{"health": map[string]any{"status": tc.health}},
+			}}
+
+			if got := argoReady(obj); got != tc.want {
+				t.Fatalf("ready = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEdgesAreSortedBySourceThenTarget(t *testing.T) {
+	second := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "GitRepository",
+		"metadata":   map[string]any{"name": "another-repo", "namespace": "flux-system"},
+	}}
+	dependent := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"name": "infra", "namespace": "flux-system"},
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "GitRepository", "name": "another-repo", "namespace": "flux-system"},
+		},
+	}}
+	scheme := runtime.NewScheme()
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		scheme,
+		graphListKinds(),
+		gitRepository(),
+		kustomizationApps(),
+		second,
+		dependent,
+	)
+
+	graph := Build(context.Background(), listerFor(dyn), graphDescs())
+
+	sources := make([]string, 0, len(graph.Edges))
+	for _, edge := range graph.Edges {
+		sources = append(sources, edge.From)
+	}
+	if len(sources) < 2 {
+		t.Fatalf("edges = %v, want at least two so the order can be seen", sources)
+	}
+	if !slices.IsSorted(sources) {
+		t.Fatalf("edge sources = %v, want them sorted", sources)
 	}
 }

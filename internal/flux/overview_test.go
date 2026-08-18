@@ -365,3 +365,182 @@ func TestOverviewReportsARefusedControllerList(t *testing.T) {
 		t.Fatal("a refused list came back clean")
 	}
 }
+
+type emptyLister struct{}
+
+func (emptyLister) List(context.Context, api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	return nil, nil
+}
+
+func (emptyLister) Warm(context.Context, []api.ResourceDescriptor) {}
+
+type failingLister struct{}
+
+func (failingLister) List(context.Context, api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	return nil, errors.New("the cache could not be read")
+}
+
+func (failingLister) Warm(context.Context, []api.ResourceDescriptor) {}
+
+// the small decisions the overview is assembled from
+
+func TestWantedReplicasFallsBackToOne(t *testing.T) {
+	if got := wantedReplicas(nil); got != 1 {
+		t.Fatalf("wanted = %d, want 1 when the deployment names no replica count", got)
+	}
+	three := int32(3)
+	if got := wantedReplicas(&three); got != 3 {
+		t.Fatalf("wanted = %d, want 3", got)
+	}
+}
+
+func TestSharedVersionOnlyAnswersWhenEveryControllerAgrees(t *testing.T) {
+	cases := []struct {
+		name        string
+		controllers []api.FluxController
+		want        string
+	}{
+		{name: "none at all", controllers: nil, want: ""},
+		{
+			name:        "one that never said",
+			controllers: []api.FluxController{{Name: "source-controller"}},
+			want:        "",
+		},
+		{
+			name: "an unversioned one alongside a versioned one",
+			controllers: []api.FluxController{
+				{Name: "source-controller"},
+				{Name: "kustomize-controller", Version: "v2.7.1"},
+			},
+			want: "v2.7.1",
+		},
+		{
+			name: "two that disagree",
+			controllers: []api.FluxController{
+				{Name: "source-controller", Version: "v2.7.1"},
+				{Name: "kustomize-controller", Version: "v2.6.0"},
+			},
+			want: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sharedVersion(tc.controllers); got != tc.want {
+				t.Fatalf("version = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFluxInstanceIsNilWhenTheKindWasNeverDiscovered(t *testing.T) {
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("apps", "v1", "deployments"): {Group: "apps", Version: "v1", Resource: "deployments"},
+	}
+
+	if got := fluxInstance(context.Background(), emptyLister{}, descs); got != nil {
+		t.Fatalf("instance = %+v, want nil without the instance kind", got)
+	}
+}
+
+func TestSyncIsEmptyWithoutTheKustomizationKind(t *testing.T) {
+	descs := map[string]api.ResourceDescriptor{}
+
+	sync := syncOf(context.Background(), emptyLister{}, descs, "flux-system", "flux-system")
+
+	if sync.Kind != "" {
+		t.Fatalf("kind = %q, want empty without the kustomization kind", sync.Kind)
+	}
+	if sync.Namespace != "flux-system" || sync.Name != "flux-system" {
+		t.Fatalf("sync = %+v, want it to still name what it looked for", sync)
+	}
+}
+
+func TestSyncSourceNeedsBothAKindAndAName(t *testing.T) {
+	entry := &unstructured.Unstructured{Object: map[string]any{
+		"spec": map[string]any{"sourceRef": map[string]any{"kind": "GitRepository"}},
+	}}
+
+	kind, url, ref := syncSource(context.Background(), emptyLister{}, nil, entry, "flux-system")
+
+	if kind != "" || url != "" || ref != "" {
+		t.Fatalf("source = %q %q %q, want nothing without a source name", kind, url, ref)
+	}
+}
+
+func TestSyncSourceKeepsTheKindWhenTheSourceCannotBeRead(t *testing.T) {
+	entry := &unstructured.Unstructured{Object: map[string]any{
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "GitRepository", "name": "flux-system"},
+		},
+	}}
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("source.toolkit.fluxcd.io", "v1", "gitrepositories"): {
+			Group:    "source.toolkit.fluxcd.io",
+			Version:  "v1",
+			Resource: "gitrepositories",
+		},
+	}
+
+	kind, url, ref := syncSource(context.Background(), failingLister{}, descs, entry, "flux-system")
+
+	if kind != "GitRepository" {
+		t.Fatalf("kind = %q, want the kind the sync named", kind)
+	}
+	if url != "" || ref != "" {
+		t.Fatalf("url/ref = %q %q, want nothing when the source could not be read", url, ref)
+	}
+}
+
+func TestRefOfHasNothingToSayWithoutARef(t *testing.T) {
+	source := &unstructured.Unstructured{Object: map[string]any{"spec": map[string]any{}}}
+
+	if got := refOf(source); got != "" {
+		t.Fatalf("ref = %q, want empty", got)
+	}
+}
+
+func TestReadyConditionIgnoresWhatIsNotACondition(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{
+		"status": map[string]any{
+			"conditions": []any{
+				"not a condition",
+				map[string]any{"type": "Reconciling", "status": "True"},
+				map[string]any{"type": "Ready", "status": "True"},
+			},
+		},
+	}}
+
+	if !readyCondition(item) {
+		t.Fatal("ready = false, want the Ready condition to be found past the noise")
+	}
+}
+
+func TestUsageStaysUnknownWhenTheControllerPodsCannotBeListed(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("pods are forbidden")
+	})
+	usage := map[string]api.ResourceUsage{"flux-system/source-controller-0": {CPUMilli: 5}}
+
+	result := usageOf(context.Background(), cs, "flux-system", usage)
+
+	if result.Known {
+		t.Fatalf("usage = %+v, want it unknown when the pods could not be listed", result)
+	}
+}
+
+func TestVerdictNamesAnUnreadySync(t *testing.T) {
+	overview := api.FluxOverview{
+		Controllers: []api.FluxController{{Name: "source-controller", Ready: true}},
+		Sync:        api.FluxSync{Kind: "Kustomization", Ready: false},
+	}
+
+	ready, summary := verdict(overview)
+
+	if ready {
+		t.Fatal("ready = true, want false while the sync is not ready")
+	}
+	if summary != "the cluster sync is not ready" {
+		t.Fatalf("summary = %q", summary)
+	}
+}
