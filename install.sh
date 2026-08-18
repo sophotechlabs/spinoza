@@ -43,7 +43,67 @@ main() {
         echo "Installed spinoza $version in $dir"
     fi
 
+    app_dir=""
+    if [ "$os" = "darwin" ]; then
+        install_app
+    fi
+
     report_path "$dir"
+    report_app
+}
+
+install_app() {
+    app_asset="spinoza_${version}_darwin_app.zip"
+    if ! listed "$app_asset"; then
+        return 0
+    fi
+    if ! command -v unzip >/dev/null 2>&1; then
+        echo "Skipped the desktop app: unzip is not on PATH"
+        return 0
+    fi
+    download "$releases/download/$version/$app_asset" "$temp/$app_asset"
+    verify "$temp/$app_asset" "$app_asset"
+    unzip -q -o "$temp/$app_asset" -d "$temp/app"
+    if [ ! -d "$temp/app/Spinoza.app" ]; then
+        die "the app archive did not contain Spinoza.app"
+    fi
+    for candidate in /Applications "$HOME/Applications"; do
+        if try_app_dir "$candidate"; then
+            app_dir="$candidate"
+            echo "Installed the Spinoza app in $candidate"
+            return 0
+        fi
+    done
+    echo "Could not write the app to /Applications or ~/Applications"
+}
+
+try_app_dir() {
+    target="$1"
+    if ! mkdir -p "$target" 2>/dev/null; then
+        return 1
+    fi
+    if ! rm -rf "$target/Spinoza.app" 2>/dev/null; then
+        return 1
+    fi
+    if ! cp -R "$temp/app/Spinoza.app" "$target/Spinoza.app" 2>/dev/null; then
+        return 1
+    fi
+    return 0
+}
+
+listed() {
+    found="$(awk -v name="$1" '$2 == name { print $1 }' "$temp/checksums.txt")"
+    if [ -z "$found" ]; then
+        return 1
+    fi
+    return 0
+}
+
+report_app() {
+    if [ -z "$app_dir" ]; then
+        return 0
+    fi
+    echo "Open the desktop app with 'open -a Spinoza', or find it in Spotlight"
 }
 
 detect_downloader() {
@@ -161,7 +221,7 @@ cleanup() {
 
 report_path() {
     if [ "$(command -v spinoza || true)" = "$1/spinoza" ]; then
-        echo "Run it with 'spinoza --open'"
+        echo "Run it in your browser with 'spinoza --open'"
         return 0
     fi
     hint="$1"
