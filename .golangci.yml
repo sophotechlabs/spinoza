@@ -144,6 +144,8 @@ linters:
         - diagnostic
         - style
         - performance
+        - experimental
+        - opinionated
       disabled-checks:
         - hugeParam
         - rangeValCopy
