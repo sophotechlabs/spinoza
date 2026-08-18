@@ -244,3 +244,19 @@ func TestTheDefaultsFillThemselvesIn(t *testing.T) {
 		t.Fatalf("the terminal has no size: %+v", opts.Size)
 	}
 }
+
+func TestHomeFallsBackToTheRootWhenThereIsNoHome(t *testing.T) {
+	t.Setenv("HOME", "")
+
+	if got := homeDir(); got != "/" {
+		t.Fatalf("home = %q, want / when the environment names none", got)
+	}
+}
+
+func TestHomeIsWhatTheEnvironmentSays(t *testing.T) {
+	t.Setenv("HOME", "/tmp/spinoza-home")
+
+	if got := homeDir(); got != "/tmp/spinoza-home" {
+		t.Fatalf("home = %q, want what the environment says", got)
+	}
+}

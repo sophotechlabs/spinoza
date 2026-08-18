@@ -750,3 +750,77 @@ func TestEnsureLeavesTheKubectlDeadlineAloneWhenTheCallerIsShorter(t *testing.T)
 		t.Fatal("kubectl did not see the caller's deadline")
 	}
 }
+
+// the small readings the service makes of a pod
+
+func TestTheKubectlArgsCarryTheContextAndKubeconfig(t *testing.T) {
+	service := NewService(&stubRunner{}, k8sfake.NewClientset(runningPod()), "", api.ContextRef{
+		Name:       "kind-spinoza",
+		Kubeconfig: "/home/arch/.kube/config",
+	})
+
+	args := service.args(request(), "spinoza-debug-1", "general")
+
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--context kind-spinoza") {
+		t.Fatalf("args = %v, want the context named", args)
+	}
+	if !strings.Contains(joined, "--kubeconfig /home/arch/.kube/config") {
+		t.Fatalf("args = %v, want the kubeconfig named", args)
+	}
+}
+
+func TestAContainerThatIsNeitherRunningNorWaitingIsStillSettling(t *testing.T) {
+	pod := runningPod()
+	pod.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{{Name: "spinoza-debug-1"}}
+
+	running, waiting, err := progressOf(pod, "spinoza-debug-1")
+
+	if running || waiting != "" || err != nil {
+		t.Fatalf("progress = %v %q %v, want it read as still settling", running, waiting, err)
+	}
+}
+
+func TestAContainerSpecIsOnlyFoundByItsOwnName(t *testing.T) {
+	pod := runningPod()
+	pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "spinoza-debug-1"},
+	}}
+
+	if specFor(pod, "spinoza-debug-1") == nil {
+		t.Fatal("the container it does have was not found")
+	}
+	if specFor(pod, "spinoza-debug-2") != nil {
+		t.Fatal("a container it does not have was found")
+	}
+}
+
+func TestPrivilegeIsOnlyClaimedWhenItIsAskedFor(t *testing.T) {
+	bare := &corev1.EphemeralContainer{}
+	if privileged(bare) {
+		t.Fatal("a container with no security context read as privileged")
+	}
+	empty := &corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{SecurityContext: &corev1.SecurityContext{}},
+	}
+	if privileged(empty) {
+		t.Fatal("a container that never set privileged read as privileged")
+	}
+	yes := true
+	asked := &corev1.EphemeralContainer{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+			SecurityContext: &corev1.SecurityContext{Privileged: &yes},
+		},
+	}
+	if !privileged(asked) {
+		t.Fatal("a privileged container did not read as privileged")
+	}
+}
+
+func TestAPodNameThatIsNotOneIsRefused(t *testing.T) {
+	err := admits(runningPod(), Request{Namespace: "monitoring", Pod: "Loki_0"})
+
+	if err == nil {
+		t.Fatal("admits accepted a pod name kubernetes would not")
+	}
+}

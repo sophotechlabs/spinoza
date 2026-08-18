@@ -720,3 +720,29 @@ func TestAnOrdinaryObjectHasNoEventFacts(t *testing.T) {
 		t.Fatalf("event = %+v, want none", got.Event)
 	}
 }
+
+func TestAKindlessDocumentIsAccepted(t *testing.T) {
+	ref := api.ObjectRef{Version: "v1", Resource: "pods", Namespace: "prod", Name: "web-0"}
+	doc := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"metadata":   map[string]any{"name": "web-0", "namespace": "prod"},
+	}}
+
+	if err := matchesRef(doc, ref, ""); err != nil {
+		t.Fatalf("matchesRef: %v, want a document with no kind to be let through", err)
+	}
+}
+
+func TestPortsAreOnlyReadFromAMap(t *testing.T) {
+	if got := readPorts("not a map", "ports", "containerPort"); got != nil {
+		t.Fatalf("ports = %v, want nothing read from something that is not a map", got)
+	}
+}
+
+func TestACountWithNoNumbersAnywhereIsZero(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{}}
+
+	if got := eventCountOf(item); got != 0 {
+		t.Fatalf("count = %d, want 0", got)
+	}
+}

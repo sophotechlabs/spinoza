@@ -162,3 +162,23 @@ func TestDebugSupportEndpointNeedsANamespace(t *testing.T) {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 }
+
+func TestATerminalNeedsAWebsocketUpgrade(t *testing.T) {
+	ts := dashboardServer(t)
+
+	resp := getJSON(t, ts.URL+"/api/exec?namespace=prod&pod=web-0", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a plain GET was accepted as a terminal")
+	}
+}
+
+func TestATerminalNeedsANamespaceAndPod(t *testing.T) {
+	ts := dashboardServer(t)
+
+	resp := getJSON(t, ts.URL+"/api/exec?pod=web-0", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}

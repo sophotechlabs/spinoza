@@ -422,3 +422,59 @@ func TestInstalledFollowsTheApplicationType(t *testing.T) {
 		t.Fatal("argo was not reported on a cluster with applications")
 	}
 }
+
+func TestOnlyTheThreeArgoKindsAreWanted(t *testing.T) {
+	if listed("rollouts") {
+		t.Fatal("rollouts is listed; only applications, sets and projects are")
+	}
+	if !listed(applications) || !listed(applicationSets) || !listed(appProjects) {
+		t.Fatal("one of the three argo kinds went missing")
+	}
+}
+
+func TestASourceIsReadFromTheListWhenThereIsNoSingleOne(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{
+		"spec": map[string]any{
+			"sources": []any{
+				"not a source",
+				map[string]any{"repoURL": ""},
+				map[string]any{"repoURL": "https://example.com/apps.git"},
+			},
+		},
+	}}
+
+	if got := sourceOf(item, "repoURL"); got != "https://example.com/apps.git" {
+		t.Fatalf("source = %q, want the first usable one in the list", got)
+	}
+}
+
+func TestASourceIsEmptyWhenNoneOfTheListHasIt(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{
+		"spec": map[string]any{"sources": []any{map[string]any{"path": "apps"}}},
+	}}
+
+	if got := sourceOf(item, "repoURL"); got != "" {
+		t.Fatalf("source = %q, want empty", got)
+	}
+}
+
+func TestATrackingIDOnlyNamesSomebodyElse(t *testing.T) {
+	cases := []struct {
+		name string
+		id   string
+		self string
+		want string
+	}{
+		{name: "nothing tracked", id: "", self: "guestbook", want: ""},
+		{name: "no owner in the id", id: "guestbook", self: "guestbook", want: ""},
+		{name: "tracked by itself", id: "guestbook:apps/Deployment", self: "guestbook", want: ""},
+		{name: "tracked by another app", id: "root:apps/Deployment", self: "guestbook", want: "root"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fromTrackingID(tc.id, tc.self); got != tc.want {
+				t.Fatalf("owner = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"maps"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
+	"github.com/sophotechlabs/spinoza/internal/jsonschema"
+	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
@@ -433,5 +436,132 @@ func TestPodStreamsAreLeftToThePodCounter(t *testing.T) {
 
 	if _, held := watched["apps/v1/deployments"]; !held {
 		t.Fatalf("watched = %v, want the deployment stream", watched)
+	}
+}
+
+// refreshing a catalog when there is no discovery to refresh
+
+func TestRefreshingWithoutDiscoveryHandsBackWhatIsKnown(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	catalog := mgr.RefreshResources()
+
+	if len(catalog.Categories) != 1 {
+		t.Fatalf("categories = %d, want the ones already known", len(catalog.Categories))
+	}
+}
+
+func TestAnEmptyDiscoveryCarriesTheReasonWhenThereIsOne(t *testing.T) {
+	withReason := emptyDiscovery(errors.New("the apiserver refused"))
+	if !strings.Contains(withReason.Error(), "refused") {
+		t.Fatalf("error = %q, want the reason kept", withReason.Error())
+	}
+	bare := emptyDiscovery(nil)
+	if strings.Contains(bare.Error(), "refused") {
+		t.Fatalf("error = %q, want no reason invented", bare.Error())
+	}
+}
+
+// merging the failing counts the caches know about
+
+func TestWatchedFailuresDoNotOverwriteCountedOnes(t *testing.T) {
+	counted := api.ResourceCounts{
+		Counts:  map[string]int{"/v1/pods": 3},
+		Failing: map[string]int{"/v1/pods": 1},
+	}
+
+	merged := withWatched(counted, map[string]int{
+		"/v1/pods": 9,
+		"kustomize.toolkit.fluxcd.io/v1/kustomizations": 2,
+	})
+
+	if merged.Failing["/v1/pods"] != 1 {
+		t.Fatalf("pods = %d, want the counted answer kept", merged.Failing["/v1/pods"])
+	}
+	if merged.Failing["kustomize.toolkit.fluxcd.io/v1/kustomizations"] != 2 {
+		t.Fatalf("kustomizations = %d, want the watched answer added", merged.Failing["kustomize.toolkit.fluxcd.io/v1/kustomizations"])
+	}
+}
+
+func TestCountsComeBackEmptyOnceTheCallerHasGoneAway(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+	ctx, stop := context.WithCancel(context.Background())
+	stop()
+
+	counts := mgr.Counts(ctx)
+
+	if len(counts.Counts) != 0 {
+		t.Fatalf("counts = %v, want nothing once the caller has gone", counts.Counts)
+	}
+}
+
+// what the manager reports with nothing wired behind it
+
+func TestVersionsAreUnknownWithoutDiscovery(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	if got := mgr.versions(); got != nil {
+		t.Fatalf("versions = %v, want nothing without discovery", got)
+	}
+}
+
+func TestASchemaSaysItIsNotWiredUp(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	_, err := mgr.Schema(context.Background(), jsonschema.GVK{Group: "apps", Version: "v1", Kind: "Deployment"})
+
+	want := "spinoza could not do that: schemas are not wired up"
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+func TestForwardingSaysItIsNotWiredUp(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	_, startErr := mgr.StartForward(context.Background(), portforward.Target{Namespace: "prod", Name: "web"}, 8080)
+	if startErr == nil {
+		t.Fatal("StartForward returned nil error with no registry")
+	}
+	if len(mgr.Forwards()) != 0 {
+		t.Fatal("Forwards listed something with no registry")
+	}
+	if stopErr := mgr.StopForward("pf-1"); stopErr == nil {
+		t.Fatal("StopForward returned nil error with no registry")
+	}
+}
+
+// event columns for an object that only names itself
+
+func TestAnEventObjectWithNoKindIsJustTheName(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{
+		"involvedObject": map[string]any{"name": "web-0"},
+	}}
+
+	if got := eventObject(item); got != "web-0" {
+		t.Fatalf("object = %q, want just the name", got)
+	}
+}
+
+// the flux helm releases the manager looks for
+
+func TestHelmReleasesAreOnlyLookedForInTheFluxKind(t *testing.T) {
+	ctx := t.Context()
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     newClient(t),
+		Clientset:   k8sfake.NewClientset(),
+		Descriptors: testDescs(),
+		Limits:      Limits{SyncTimeout: 50 * time.Millisecond, IdleGrace: time.Millisecond},
+	})
+
+	owners := mgr.fluxOwners(ctx)
+
+	if len(owners) != 0 {
+		t.Fatalf("owners = %v, want none when the flux kind was never discovered", owners)
 	}
 }
