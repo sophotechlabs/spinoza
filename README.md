@@ -22,7 +22,7 @@ spinoza --open          # browser
 open -a Spinoza         # desktop window, macOS
 ```
 
-Tarballs for Linux, macOS and Windows are on the [releases page](https://github.com/sophotechlabs/spinoza/releases). `SPINOZA_VERSION=v1.5.0` pins the installer.
+Archives are on the [releases page](https://github.com/sophotechlabs/spinoza/releases): tarballs for Linux and macOS, zips for Windows. `SPINOZA_VERSION=v1.7.0` pins the installer.
 
 Spinoza needs a kubeconfig. Helm releases are read straight from the cluster; upgrades, rollbacks and debug containers call `helm` and `kubectl`.
 

@@ -383,6 +383,12 @@ release-dist: deps
         fi
         GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version" -o "$out/$binary" .
         cp LICENSE "$out/LICENSE"
+        if [ "$goos" = "windows" ]; then
+            archive="$PWD/dist/release/spinoza_${version}_${goos}_${goarch}.zip"
+            rm -f "$archive"
+            (cd "$out" && zip -q -X "$archive" "$binary" LICENSE)
+            continue
+        fi
         archive="dist/release/spinoza_${version}_${goos}_${goarch}.tar.gz"
         if [ "$tar_sorts" = yes ]; then
             tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -cf - -C "$out" "$binary" LICENSE | gzip -n > "$archive"
@@ -391,7 +397,7 @@ release-dist: deps
         fi
     done
     syft scan dir:dist/build --source-name spinoza --source-version "$version" --output "cyclonedx-json=dist/release/spinoza_${version}_sbom.cdx.json"
-    cd dist/release && sha256sum -- *.tar.gz > checksums.txt
+    cd dist/release && sha256sum -- *.tar.gz *.zip > checksums.txt
     cd ../..
     just verify-checksums dist/release
 
