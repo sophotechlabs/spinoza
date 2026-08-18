@@ -224,6 +224,7 @@ lint-be: stub-assets
     golangci-lint run --build-tags desktop {{ go_pkgs }}
     go vet {{ go_pkgs }}
     go vet -tags desktop {{ go_pkgs }}
+    go vet -tags integration ./test/...
 
 lint-fe:
     cd frontend && npm run lint

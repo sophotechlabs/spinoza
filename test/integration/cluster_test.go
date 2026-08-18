@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -122,6 +123,15 @@ func bundle(t *testing.T) *kube.Bundle {
 	return loadedBundle
 }
 
+func metaFor(t *testing.T, loaded *kube.Bundle) metadata.Interface {
+	t.Helper()
+	client, err := metadata.NewForConfig(loaded.Config)
+	if err != nil {
+		t.Fatalf("metadata client: %v", err)
+	}
+	return client
+}
+
 func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -136,9 +146,11 @@ func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
 	mgr := resources.NewManager(ctx, resources.Deps{
 		Dynamic:    loaded.Dynamic,
 		Clientset:  loaded.Clientset,
+		Metadata:   metaFor(t, loaded),
 		Categories: cats,
 		Helm: helm.NewService(
 			loaded.Clientset,
+			metaFor(t, loaded),
 			helm.NewRunner(""),
 			nil,
 			nil,
@@ -196,13 +208,13 @@ func TestSubscribeSeesARealInformerFill(t *testing.T) {
 	mgr := manager(t, loaded)
 	runningPod(t, loaded, "smoke-subscribe")
 
-	sub, err := mgr.Subscribe(context.Background(), "", "v1", "pods", namespace)
+	sub, err := mgr.Subscribe(context.Background(), "", "v1", "pods", namespace, 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
 	t.Cleanup(sub.Close)
 
-	rows, snapErr := sub.Snapshot()
+	rows, _, snapErr := sub.Snapshot()
 	if snapErr != nil {
 		t.Fatalf("snapshot: %v", snapErr)
 	}
