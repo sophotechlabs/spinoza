@@ -14,10 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  measure:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -36,6 +34,27 @@ jobs:
           key: npm-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
           restore-keys: npm-${{ runner.os }}-
       - run: just deps
+      - run: just badges
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: badges
+          path: dist/badges
+          retention-days: 1
+
+  publish:
+    needs: measure
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: badges
+          path: dist/badges
       - run: just publish-badges
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
