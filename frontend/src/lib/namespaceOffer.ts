@@ -1,6 +1,6 @@
 export const PODS_WORTH_ASKING = 1000;
 
-export const PODS_KEY = '/v1/pods';
+const PODS_KEY = '/v1/pods';
 
 export function bigCluster(counts: Partial<Record<string, number>>): boolean {
   const pods = counts[PODS_KEY];

@@ -11,7 +11,7 @@ export interface FilterField {
   cell: number;
 }
 
-export const NAME_FIELD = 'name';
+const NAME_FIELD = 'name';
 
 export const NAMESPACE_FIELD = 'namespace';
 

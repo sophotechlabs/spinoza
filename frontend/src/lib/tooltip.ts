@@ -25,9 +25,9 @@ export function tooltipHost(node: EventTarget | null): HTMLElement | null {
   return found;
 }
 
-export const HELD_TITLE = '';
+const HELD_TITLE = '';
 
-export function heldTitle(host: HTMLElement): boolean {
+function heldTitle(host: HTMLElement): boolean {
   return host.getAttribute('title') === HELD_TITLE;
 }
 

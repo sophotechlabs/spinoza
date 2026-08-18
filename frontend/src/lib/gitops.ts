@@ -1,8 +1,8 @@
 import type { Category, ResourceDescriptor } from './types';
 
-export const FLUX_SUFFIX = '.toolkit.fluxcd.io';
+const FLUX_SUFFIX = '.toolkit.fluxcd.io';
 
-export const ARGO_GROUP = 'argoproj.io';
+const ARGO_GROUP = 'argoproj.io';
 
 function descriptors(categories: Category[]): ResourceDescriptor[] {
   return categories.flatMap((category) => category.resources);
