@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0](https://github.com/sophotechlabs/spinoza/compare/v1.7.2...v1.8.0) (2026-08-18)
+
+
+### Features
+
+* **ui:** open on the cluster overview instead of an empty table ([d736f4a](https://github.com/sophotechlabs/spinoza/commit/d736f4a0069ca51cb5cfec8913e46f540db41278))
+
+
+### CI
+
+* verify the checksums and install the release the way users do ([76ad897](https://github.com/sophotechlabs/spinoza/commit/76ad897440f02516fb63b4d3090a36d2ceb66a97))
+
 ## [1.7.2](https://github.com/sophotechlabs/spinoza/compare/v1.7.1...v1.7.2) (2026-08-18)
 
 
