@@ -391,7 +391,7 @@ release-dist: deps
         fi
     done
     syft scan dir:dist/build --source-name spinoza --source-version "$version" --output "cyclonedx-json=dist/release/spinoza_${version}_sbom.cdx.json"
-    cd dist/release && sha256sum ./*.tar.gz > checksums.txt
+    cd dist/release && sha256sum -- *.tar.gz > checksums.txt
 
 smoke:
     #!/usr/bin/env bash
