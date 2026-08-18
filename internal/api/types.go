@@ -510,6 +510,7 @@ type ArgoApp struct {
 type ArgoDashboard struct {
 	Apps            []ArgoApp `json:"apps"`
 	ApplicationSets []ArgoApp `json:"applicationSets"`
+	Projects        []ArgoApp `json:"projects"`
 	Error           string    `json:"error,omitempty"`
 }
 

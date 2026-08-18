@@ -35,6 +35,7 @@ import HelmReleases from './components/HelmReleases';
 import FluxList from './components/FluxList';
 import FluxRoles from './components/FluxRoles';
 import ArgoApps from './components/ArgoApps';
+import ArgoList from './components/ArgoList';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
@@ -45,6 +46,7 @@ import CommandPalette from './components/CommandPalette';
 import type { Section } from './components/SettingsDialog';
 
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
+const ArgoGraph = lazy(() => import('./components/ArgoGraph'));
 
 const FIRST_SUB_ID = 'main#0';
 const MAIN_ID = 'content';
@@ -305,6 +307,16 @@ export default function App() {
   }
   if (route.view === 'argo-apps') {
     mainArea = <ArgoApps onSelect={remember} />;
+  }
+  if (route.view === 'argo-graph') {
+    mainArea = (
+      <Suspense fallback={<Loading what="graph" />}>
+        <ArgoGraph onSelect={handleSelectNode} />
+      </Suspense>
+    );
+  }
+  if (route.view === 'argo-list') {
+    mainArea = <ArgoList onSelect={remember} />;
   }
 
   return (

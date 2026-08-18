@@ -9,10 +9,22 @@ export const VIEW_LABELS: Record<View, string> = {
   'flux-roles': 'Flux overview',
   gitops: 'Flux graph',
   'flux-list': 'Flux resources',
-  'argo-apps': 'Argo CD applications',
+  'argo-apps': 'Argo CD overview',
+  'argo-graph': 'Argo CD graph',
+  'argo-list': 'Argo CD resources',
 };
 
-const VIEW_ORDER: View[] = ['cluster', 'resources', 'helm', 'flux-roles', 'gitops', 'flux-list'];
+const VIEW_ORDER: View[] = [
+  'cluster',
+  'resources',
+  'helm',
+  'flux-roles',
+  'gitops',
+  'flux-list',
+  'argo-apps',
+  'argo-graph',
+  'argo-list',
+];
 
 export type PaletteItem =
   | { id: string; label: string; hint: string; kind: 'view'; view: View }
@@ -78,13 +90,15 @@ export function clusterItems(hits: SearchHit[], categories: Category[]): Palette
 
 const FLUX_VIEWS: View[] = ['flux-roles', 'gitops', 'flux-list'];
 
+const ARGO_VIEWS: View[] = ['argo-apps', 'argo-graph', 'argo-list'];
+
 function offered(categories: Category[]): View[] {
   const hidden: View[] = [];
   if (!fluxInstalled(categories)) {
     hidden.push(...FLUX_VIEWS);
   }
   if (!argoInstalled(categories)) {
-    hidden.push('argo-apps');
+    hidden.push(...ARGO_VIEWS);
   }
   return VIEW_ORDER.filter((view) => !hidden.includes(view));
 }

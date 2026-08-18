@@ -9,6 +9,8 @@ export const VIEWS: View[] = [
   'flux-list',
   'flux-roles',
   'argo-apps',
+  'argo-graph',
+  'argo-list',
 ];
 
 export interface RouteResource {

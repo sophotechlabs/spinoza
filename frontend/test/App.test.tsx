@@ -36,46 +36,60 @@ vi.mock('../src/lib/feed', async (importOriginal) => ({
   }),
 }));
 
-const stubs = vi.hoisted((): { node: GraphNode; podNode: GraphNode; flux: FluxResource } => ({
-  podNode: {
-    id: 'gn-2',
-    kind: 'Pod',
-    group: '',
-    version: 'v1',
-    resource: 'pods',
-    name: 'pod-a',
-    namespace: 'prod',
-    status: 'Running',
-    ready: 'True',
-    category: 'managed',
-  },
-  node: {
-    id: 'gn-1',
-    kind: 'HelmRelease',
-    group: 'helm.toolkit.fluxcd.io',
-    version: 'v2',
-    resource: 'helmreleases',
-    name: 'podinfo',
-    namespace: 'apps',
-    status: 'Ready',
-    ready: 'True',
-    category: 'app',
-  },
-  flux: {
-    kind: 'Kustomization',
-    group: 'kustomize.toolkit.fluxcd.io',
-    version: 'v1',
-    resource: 'kustomizations',
-    name: 'apps',
-    namespace: 'flux-system',
-    ready: 'True',
-    suspended: false,
-    revision: 'main@sha1:abc',
-    source: '',
-    message: '',
-    createdAt: '2026-07-24T00:00:00Z',
-  },
-}));
+const stubs = vi.hoisted(
+  (): { node: GraphNode; podNode: GraphNode; argoNode: GraphNode; flux: FluxResource } => ({
+    argoNode: {
+      id: 'applications/argocd/root',
+      kind: 'Application',
+      group: 'argoproj.io',
+      version: 'v1alpha1',
+      resource: 'applications',
+      name: 'root',
+      namespace: 'argocd',
+      status: 'Synced Healthy',
+      ready: 'True',
+      category: 'app',
+    },
+    podNode: {
+      id: 'gn-2',
+      kind: 'Pod',
+      group: '',
+      version: 'v1',
+      resource: 'pods',
+      name: 'pod-a',
+      namespace: 'prod',
+      status: 'Running',
+      ready: 'True',
+      category: 'managed',
+    },
+    node: {
+      id: 'gn-1',
+      kind: 'HelmRelease',
+      group: 'helm.toolkit.fluxcd.io',
+      version: 'v2',
+      resource: 'helmreleases',
+      name: 'podinfo',
+      namespace: 'apps',
+      status: 'Ready',
+      ready: 'True',
+      category: 'app',
+    },
+    flux: {
+      kind: 'Kustomization',
+      group: 'kustomize.toolkit.fluxcd.io',
+      version: 'v1',
+      resource: 'kustomizations',
+      name: 'apps',
+      namespace: 'flux-system',
+      ready: 'True',
+      suspended: false,
+      revision: 'main@sha1:abc',
+      source: '',
+      message: '',
+      createdAt: '2026-07-24T00:00:00Z',
+    },
+  }),
+);
 
 vi.mock('../src/components/GitopsGraph', () => ({
   default: ({ onSelect }: { onSelect: (node: GraphNode) => void }) => (
@@ -156,6 +170,40 @@ vi.mock('../src/components/ArgoApps', () => ({
       }}
     >
       select-argo
+    </button>
+  ),
+}));
+
+vi.mock('../src/components/ArgoGraph', () => ({
+  default: ({ onSelect }: { onSelect: (node: GraphNode) => void }) => (
+    <button
+      type="button"
+      data-testid="argo-graph"
+      onClick={() => {
+        onSelect(stubs.argoNode);
+      }}
+    >
+      select-argo-node
+    </button>
+  ),
+}));
+
+vi.mock('../src/components/ArgoList', () => ({
+  default: ({ onSelect }: { onSelect: (ref: ObjectRef) => void }) => (
+    <button
+      type="button"
+      data-testid="argo-list"
+      onClick={() => {
+        onSelect({
+          group: 'argoproj.io',
+          version: 'v1alpha1',
+          resource: 'appprojects',
+          namespace: 'argocd',
+          name: 'default',
+        });
+      }}
+    >
+      select-argo-project
     </button>
   ),
 }));
@@ -1455,11 +1503,35 @@ describe('finding your way in by keyboard', () => {
     expect(screen.queryByText('Spinoza is back in its window')).not.toBeInTheDocument();
   });
 
-  it('opens the argo applications view and targets the inspector from it', async () => {
+  it('opens the argo graph and targets the inspector from it', async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'Argo CD Applications' }));
+    await user.click(await screen.findByRole('button', { name: 'Argo CD Graph' }));
+    expect(await screen.findByTestId('argo-graph')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'select-argo-node' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('applications:argocd/root');
+  });
+
+  it('opens the argo resource list and targets the inspector from it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Argo CD Resource list' }));
+    expect(await screen.findByTestId('argo-list')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'select-argo-project' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('appprojects:argocd/default');
+  });
+
+  it('opens the argo overview and targets the inspector from it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Argo CD Overview' }));
     expect(await screen.findByTestId('argo-apps')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'select-argo' }));

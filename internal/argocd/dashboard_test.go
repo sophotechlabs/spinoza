@@ -53,6 +53,16 @@ func setDescriptor() api.ResourceDescriptor {
 	}
 }
 
+func projectDescriptor() api.ResourceDescriptor {
+	return api.ResourceDescriptor{
+		Group:      Group,
+		Version:    "v1alpha1",
+		Resource:   appProjects,
+		Kind:       "AppProject",
+		Namespaced: true,
+	}
+}
+
 func catalog(descs ...api.ResourceDescriptor) map[string]api.ResourceDescriptor {
 	out := map[string]api.ResourceDescriptor{}
 	for _, desc := range descs {
@@ -349,6 +359,43 @@ func TestApplicationsStillArriveWhenTheSetsAreRefused(t *testing.T) {
 	}
 	if found.Error == "" {
 		t.Fatal("the refusal was swallowed")
+	}
+}
+
+func TestProjectsComeBackOnTheirOwn(t *testing.T) {
+	lister := &stubLister{items: map[string][]*unstructured.Unstructured{
+		applications: {healthy("web", "a")},
+		appProjects:  {app("default", nil), app("infra", nil)},
+	}}
+
+	found := build(t, lister, catalog(appDescriptor(), projectDescriptor()))
+
+	if len(found.Projects) != 2 {
+		t.Fatalf("projects = %+v, want two", found.Projects)
+	}
+	if found.Projects[0].Name != "default" || found.Projects[1].Name != "infra" {
+		t.Fatalf("projects came back out of order: %+v", found.Projects)
+	}
+	if found.Projects[0].Kind != "AppProject" {
+		t.Fatalf("kind = %q", found.Projects[0].Kind)
+	}
+	if len(found.Apps) != 1 {
+		t.Fatalf("apps = %+v, want the application", found.Apps)
+	}
+}
+
+func TestProjectsAreNotParentsOfApplications(t *testing.T) {
+	child := healthy("web", "a")
+	child.SetLabels(map[string]string{trackingLabel: "default"})
+	lister := &stubLister{items: map[string][]*unstructured.Unstructured{
+		applications: {child},
+		appProjects:  {app("default", nil)},
+	}}
+
+	found := build(t, lister, catalog(appDescriptor(), projectDescriptor()))
+
+	if found.Apps[0].Owner != "" {
+		t.Fatalf("owner = %q, want the project ignored", found.Apps[0].Owner)
 	}
 }
 

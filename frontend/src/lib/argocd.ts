@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { ArgoApp, ArgoDashboard, ObjectRef } from './types';
+import type {
+  ArgoApp,
+  ArgoDashboard,
+  Graph,
+  GraphEdge,
+  GraphNode,
+  ObjectRef,
+  ReadyState,
+} from './types';
 import { failure } from './object';
 import { request } from './http';
 import { useClusterEpoch } from '../store/cluster';
@@ -52,8 +60,63 @@ export async function fetchArgo(): Promise<ArgoDashboard> {
   return {
     apps: (body.apps ?? []).map(appOf),
     applicationSets: (body.applicationSets ?? []).map(appOf),
+    projects: (body.projects ?? []).map(appOf),
     error: body.error,
   };
+}
+
+export function idOf(app: ArgoApp): string {
+  return `${app.resource}/${app.namespace}/${app.name}`;
+}
+
+export function readyOf(app: ArgoApp): ReadyState {
+  if (app.health === 'Degraded' || app.health === 'Missing') {
+    return 'False';
+  }
+  if (app.health === 'Healthy' && app.sync === 'Synced') {
+    return 'True';
+  }
+  return 'Unknown';
+}
+
+export function statusOf(app: ArgoApp): string {
+  return [app.sync, app.health].filter((part) => part !== '').join(' ');
+}
+
+function nodeOf(app: ArgoApp): GraphNode {
+  let category: GraphNode['category'] = 'app';
+  if (app.kind === 'ApplicationSet') {
+    category = 'applier';
+  }
+  return {
+    id: idOf(app),
+    kind: app.kind,
+    group: app.group,
+    version: app.version,
+    resource: app.resource,
+    name: app.name,
+    namespace: app.namespace,
+    status: statusOf(app),
+    ready: readyOf(app),
+    category,
+  };
+}
+
+export function graphOf(data: ArgoDashboard): Graph {
+  const owners = new Map<string, ArgoApp>();
+  for (const app of [...data.applicationSets, ...data.apps]) {
+    owners.set(app.name, app);
+  }
+  const nodes = [...data.applicationSets, ...data.apps].map(nodeOf);
+  const edges: GraphEdge[] = [];
+  for (const app of data.apps) {
+    const owner = owners.get(app.owner ?? '');
+    if (owner === undefined) {
+      continue;
+    }
+    edges.push({ from: idOf(owner), to: idOf(app), kind: 'manages' as const });
+  }
+  return { nodes, edges, error: data.error };
 }
 
 export function tree(apps: ArgoApp[]): ArgoTree[] {
@@ -92,10 +155,17 @@ export function tree(apps: ArgoApp[]): ArgoTree[] {
   return out;
 }
 
-export function useArgo(): { data: ArgoDashboard | null; error: string | null } {
+export interface ArgoState {
+  data: ArgoDashboard | null;
+  error: string | null;
+  reload: () => void;
+}
+
+export function useArgo(): ArgoState {
   const epoch = useClusterEpoch();
   const [data, setData] = useState<ArgoDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -119,7 +189,13 @@ export function useArgo(): { data: ArgoDashboard | null; error: string | null } 
       live = false;
       clearInterval(timer);
     };
-  }, [epoch]);
+  }, [epoch, reloads]);
 
-  return { data, error };
+  return {
+    data,
+    error,
+    reload: () => {
+      setReloads((value) => value + 1);
+    },
+  };
 }

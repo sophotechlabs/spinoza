@@ -57,19 +57,38 @@ describe('HelmReleases', () => {
     stub({ releases: [release()] });
     render(<HelmReleases onSelectResource={vi.fn()} />);
 
-    expect(await screen.findByText('podinfo-6.9.2')).toBeInTheDocument();
+    expect(await screen.findAllByText('podinfo')).toHaveLength(2);
     expect(screen.getByText('demo')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('deployed')).toBeInTheDocument();
     expect(screen.getByText('1h')).toBeInTheDocument();
   });
 
-  it('names the chart alone when its version is unknown', async () => {
+  it('keeps the chart version in its own column, apart from the app version', async () => {
+    stub({ releases: [release({ latest: '6.9.3', outdated: true, appVersion: '1.2.3' })] });
+    render(<HelmReleases onSelectResource={vi.fn()} />);
+
+    await screen.findByText('demo');
+    const cells = screen.getAllByRole('cell').map((cell) => cell.textContent);
+
+    expect(cells.slice(0, 6)).toEqual([
+      'podinfo',
+      'demo',
+      'podinfo',
+      '6.9.2',
+      '6.9.3 a newer chart version is available',
+      '1.2.3',
+    ]);
+  });
+
+  it('dashes out a chart version the release does not carry', async () => {
     stub({ releases: [release({ chartVersion: '' })] });
     render(<HelmReleases onSelectResource={vi.fn()} />);
 
     await screen.findByText('demo');
-    expect(screen.getAllByText('podinfo')).toHaveLength(2);
+    const cells = screen.getAllByRole('cell').map((cell) => cell.textContent);
+
+    expect(cells.slice(2, 4)).toEqual(['podinfo', '-']);
   });
 
   it('marks a chart it could not read at all', async () => {
@@ -77,7 +96,7 @@ describe('HelmReleases', () => {
     render(<HelmReleases onSelectResource={vi.fn()} />);
 
     await screen.findByText('demo');
-    expect(screen.getAllByText('-')).toHaveLength(3);
+    expect(screen.getAllByText('-')).toHaveLength(4);
   });
 
   it('shows the newest chart version the repositories offer', async () => {
@@ -93,7 +112,7 @@ describe('HelmReleases', () => {
     stub({ releases: [release({ latest: '6.9.2', outdated: false })] });
     render(<HelmReleases onSelectResource={vi.fn()} />);
 
-    await screen.findByText('podinfo-6.9.2');
+    await screen.findAllByText('podinfo');
     const latest = screen.getByText(/up to date/).closest('td');
     expect(latest).toHaveClass('text-fg-muted');
     expect(latest).toHaveTextContent('6.9.2');
@@ -103,7 +122,7 @@ describe('HelmReleases', () => {
     stub({ releases: [release()] });
     render(<HelmReleases onSelectResource={vi.fn()} />);
 
-    await screen.findByText('podinfo-6.9.2');
+    await screen.findAllByText('podinfo');
     expect(screen.getByText(/no chart repository knows this chart/)).toBeInTheDocument();
   });
 
@@ -140,12 +159,12 @@ describe('HelmReleases', () => {
       ],
     });
     render(<HelmReleases onSelectResource={vi.fn()} />);
-    await screen.findByText('grafana-6.9.2');
+    await screen.findAllByText('grafana');
 
     await user.type(screen.getByLabelText('Filter releases'), 'monitor');
 
-    expect(screen.getByText('grafana-6.9.2')).toBeInTheDocument();
-    expect(screen.queryByText('podinfo-6.9.2')).not.toBeInTheDocument();
+    expect(screen.getAllByText('grafana')).toHaveLength(2);
+    expect(screen.queryByText('podinfo')).not.toBeInTheDocument();
     expect(screen.getByText('1 of 2')).toBeInTheDocument();
   });
 
@@ -153,7 +172,7 @@ describe('HelmReleases', () => {
     const user = userEvent.setup();
     stub({ releases: [release()] });
     render(<HelmReleases onSelectResource={vi.fn()} />);
-    await screen.findByText('podinfo-6.9.2');
+    await screen.findAllByText('podinfo');
 
     await user.type(screen.getByLabelText('Filter releases'), 'nothing-like-this');
 
@@ -190,7 +209,7 @@ describe('HelmReleases', () => {
     const user = userEvent.setup();
     stub({ releases: [release({ name: 'podinfo' }), release({ name: 'grafana' })] });
     render(<HelmReleases onSelectResource={vi.fn()} />);
-    await screen.findByText('podinfo');
+    await screen.findAllByText('podinfo');
 
     await user.click(screen.getByRole('button', { name: 'grafana' }));
 
@@ -201,7 +220,7 @@ describe('HelmReleases', () => {
     const user = userEvent.setup();
     stub({ releases: [release({ name: 'podinfo' })] });
     render(<HelmReleases onSelectResource={vi.fn()} />);
-    await screen.findByText('podinfo');
+    await screen.findAllByText('podinfo');
 
     await user.click(screen.getByRole('button', { name: 'podinfo' }));
 
@@ -213,7 +232,7 @@ describe('HelmReleases', () => {
     const user = userEvent.setup();
     stub({ releases: [release()] });
     render(<HelmReleases onSelectResource={vi.fn()} />);
-    await screen.findByText('podinfo');
+    await screen.findAllByText('podinfo');
     await user.click(screen.getByRole('button', { name: 'podinfo' }));
 
     await user.click(screen.getByRole('button', { name: 'close-detail' }));
@@ -232,13 +251,13 @@ describe('HelmReleases', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(screen.getByText('podinfo-6.9.2')).toBeInTheDocument();
+    expect(screen.getAllByText('podinfo').length).toBeGreaterThan(0);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(15000);
     });
 
-    expect(screen.getByText('podinfo-6.9.2')).toBeInTheDocument();
+    expect(screen.getAllByText('podinfo').length).toBeGreaterThan(0);
     expect(screen.getByText('Helm releases stopped updating.')).toBeInTheDocument();
     const before = fetchMock.mock.calls.length;
     await act(async () => {

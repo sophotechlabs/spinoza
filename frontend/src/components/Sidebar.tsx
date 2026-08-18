@@ -11,7 +11,7 @@ import {
   sectionOpen,
   writeSections,
 } from '../lib/sidebarState';
-import { argoInstalled, argoTypes, fluxInstalled } from '../lib/gitops';
+import { argoInstalled, fluxInstalled } from '../lib/gitops';
 import type { SidebarSections } from '../lib/sidebarState';
 
 interface SidebarProps {
@@ -35,6 +35,12 @@ const FLUX_VIEWS: GitopsEntry[] = [
   { view: 'flux-roles', label: 'Overview' },
   { view: 'gitops', label: 'Graph' },
   { view: 'flux-list', label: 'Resource list' },
+];
+
+const ARGO_VIEWS: GitopsEntry[] = [
+  { view: 'argo-apps', label: 'Overview' },
+  { view: 'argo-graph', label: 'Graph' },
+  { view: 'argo-list', label: 'Resource list' },
 ];
 
 const NOT_INSTALLED = 'not found in this cluster';
@@ -332,28 +338,18 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           </button>
           {argo && sectionOpen(sections, ARGO_SECTION) && (
             <div aria-label="Argo CD views">
-              <button
-                type="button"
-                aria-label="Argo CD Applications"
-                aria-current={current(view === 'argo-apps')}
-                onClick={() => {
-                  onSelectView('argo-apps');
-                }}
-                className={resourceClass(view === 'argo-apps')}
-              >
-                Applications
-              </button>
-              {argoTypes(categories).map((descriptor) => (
+              {ARGO_VIEWS.map((entry) => (
                 <button
-                  key={descriptorKey(descriptor)}
+                  key={entry.view}
                   type="button"
-                  aria-current={current(isActive(activeResource, descriptor))}
+                  aria-label={`Argo CD ${entry.label}`}
+                  aria-current={current(view === entry.view)}
                   onClick={() => {
-                    onSelect(descriptor);
+                    onSelectView(entry.view);
                   }}
-                  className={resourceClass(isActive(activeResource, descriptor))}
+                  className={resourceClass(view === entry.view)}
                 >
-                  {descriptor.kind}
+                  {entry.label}
                 </button>
               ))}
             </div>

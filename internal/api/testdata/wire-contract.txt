@@ -21,6 +21,7 @@ ArgoApp.Version version
 ArgoDashboard.ApplicationSets applicationSets
 ArgoDashboard.Apps apps
 ArgoDashboard.Error error,omitempty
+ArgoDashboard.Projects projects
 Build.Version version
 Category.Name name
 Category.Resources resources

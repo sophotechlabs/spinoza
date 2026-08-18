@@ -120,9 +120,16 @@ export default function HelmReleases({ active = true, onSelectResource }: HelmRe
                 <th className="px-2 py-1 font-medium">Name</th>
                 <th className="px-2 py-1 font-medium">Namespace</th>
                 <th className="px-2 py-1 font-medium">Chart</th>
-                <th className="px-2 py-1 font-medium">App version</th>
                 <th className="px-2 py-1 font-medium">
-                  <span title="Latest version your Helm repos offer">Latest</span>
+                  <span title="The chart version this release runs">Chart version</span>
+                </th>
+                <th className="px-2 py-1 font-medium">
+                  <span title="The newest chart version your Helm repos offer">Latest chart</span>
+                </th>
+                <th className="px-2 py-1 font-medium">
+                  <span title="The version of the app the chart ships, which the chart versions its own way">
+                    App version
+                  </span>
                 </th>
                 <th className="px-2 py-1 text-right font-medium">Rev</th>
                 <th className="px-2 py-1 font-medium">Status</th>
@@ -145,11 +152,14 @@ export default function HelmReleases({ active = true, onSelectResource }: HelmRe
                   </td>
                   <td className="truncate px-2 py-1 text-fg-muted">{release.namespace}</td>
                   <td className="truncate px-2 py-1 text-fg-soft">{chartLabel(release)}</td>
-                  <td className="truncate px-2 py-1 text-fg-muted">{orDash(release.appVersion)}</td>
+                  <td className="truncate px-2 py-1 text-fg-muted">
+                    {orDash(release.chartVersion)}
+                  </td>
                   <td className={`truncate px-2 py-1 ${latestColor(release)}`}>
                     {latestLabel(release)}
                     <span className="sr-only"> {latestNote(release)}</span>
                   </td>
+                  <td className="truncate px-2 py-1 text-fg-muted">{orDash(release.appVersion)}</td>
                   <td className="px-2 py-1 text-right text-fg-muted">{release.revision}</td>
                   <td className="truncate px-2 py-1">
                     <span
@@ -194,8 +204,5 @@ function chartLabel(release: HelmRelease): string {
   if (release.chart === '') {
     return '-';
   }
-  if (release.chartVersion === '') {
-    return release.chart;
-  }
-  return `${release.chart}-${release.chartVersion}`;
+  return release.chart;
 }

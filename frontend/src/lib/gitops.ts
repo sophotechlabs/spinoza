@@ -4,8 +4,6 @@ export const FLUX_SUFFIX = '.toolkit.fluxcd.io';
 
 export const ARGO_GROUP = 'argoproj.io';
 
-const ARGO_KINDS = ['Application', 'ApplicationSet', 'AppProject'];
-
 function descriptors(categories: Category[]): ResourceDescriptor[] {
   return categories.flatMap((category) => category.resources);
 }
@@ -15,17 +13,10 @@ export function fluxInstalled(categories: Category[]): boolean {
 }
 
 export function argoInstalled(categories: Category[]): boolean {
-  return argoTypes(categories).length > 0;
-}
-
-export function argoTypes(categories: Category[]): ResourceDescriptor[] {
-  const found = descriptors(categories).filter((descriptor) => {
+  return descriptors(categories).some((descriptor) => {
     if (descriptor.group !== ARGO_GROUP) {
       return false;
     }
-    return ARGO_KINDS.includes(descriptor.kind);
+    return descriptor.kind === 'Application';
   });
-  return found.sort(
-    (left, right) => ARGO_KINDS.indexOf(left.kind) - ARGO_KINDS.indexOf(right.kind),
-  );
 }

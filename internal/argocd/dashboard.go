@@ -19,6 +19,8 @@ const applications = "applications"
 
 const applicationSets = "applicationsets"
 
+const appProjects = "appprojects"
+
 const trackingLabel = "app.kubernetes.io/instance"
 
 const trackingAnnotation = "argocd.argoproj.io/tracking-id"
@@ -43,12 +45,20 @@ func wanted(descs map[string]api.ResourceDescriptor) []api.ResourceDescriptor {
 		if desc.Group != Group {
 			continue
 		}
-		if desc.Resource != applications && desc.Resource != applicationSets {
+		if !listed(desc.Resource) {
 			continue
 		}
 		out = append(out, desc)
 	}
 	return out
+}
+
+func listed(resource string) bool {
+	switch resource {
+	case applications, applicationSets, appProjects:
+		return true
+	}
+	return false
 }
 
 func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor) api.ArgoDashboard {
@@ -60,6 +70,7 @@ func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDesc
 	failures := listerr.New()
 	apps := []api.ArgoApp{}
 	sets := []api.ArgoApp{}
+	projects := []api.ArgoApp{}
 	for _, desc := range types {
 		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 		found, err := lister.List(ctx, desc)
@@ -68,18 +79,23 @@ func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDesc
 			continue
 		}
 		for _, item := range found {
-			if desc.Resource == applications {
+			switch desc.Resource {
+			case applications:
 				apps = append(apps, appOf(item, desc))
-				continue
+			case applicationSets:
+				sets = append(sets, appOf(item, desc))
+			default:
+				projects = append(projects, appOf(item, desc))
 			}
-			sets = append(sets, appOf(item, desc))
 		}
 	}
 	slices.SortFunc(apps, byName)
 	slices.SortFunc(sets, byName)
+	slices.SortFunc(projects, byName)
 	return api.ArgoDashboard{
 		Apps:            withParents(apps, sets),
 		ApplicationSets: sets,
+		Projects:        projects,
 		Error:           failures.Message(),
 	}
 }

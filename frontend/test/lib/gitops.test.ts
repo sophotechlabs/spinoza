@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { argoInstalled, argoTypes, fluxInstalled } from '../../src/lib/gitops';
+import { argoInstalled, fluxInstalled } from '../../src/lib/gitops';
 import { makeCategory, makeDescriptor } from '../helpers';
 
 const plain = [
@@ -62,18 +62,5 @@ describe('argoInstalled', () => {
 
   it('is true once argo types are discovered', () => {
     expect(argoInstalled(argo)).toBe(true);
-  });
-});
-
-describe('argoTypes', () => {
-  it('keeps the kinds worth a shortcut, in a fixed order', () => {
-    expect(argoTypes(argo).map((descriptor) => descriptor.kind)).toEqual([
-      'Application',
-      'AppProject',
-    ]);
-  });
-
-  it('has nothing to offer on a cluster without argo', () => {
-    expect(argoTypes(plain)).toEqual([]);
   });
 });

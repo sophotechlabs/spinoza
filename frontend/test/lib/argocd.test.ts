@@ -1,6 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchArgo, refOf, tree } from '../../src/lib/argocd';
-import type { ArgoApp } from '../../src/lib/types';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import {
+  fetchArgo,
+  graphOf,
+  idOf,
+  readyOf,
+  refOf,
+  statusOf,
+  tree,
+  useArgo,
+} from '../../src/lib/argocd';
+import type { ArgoApp, ArgoDashboard } from '../../src/lib/types';
+
+function dashboard(extra: Partial<ArgoDashboard> = {}): ArgoDashboard {
+  return { apps: [], applicationSets: [], projects: [], ...extra };
+}
 
 function makeApp(name: string, extra: Partial<ArgoApp> = {}): ArgoApp {
   return {
@@ -62,6 +76,20 @@ describe('fetchArgo', () => {
 
     expect(found.apps[0]).toMatchObject({ name: 'bare', sync: '', health: '', project: '' });
     expect(found.applicationSets).toEqual([]);
+    expect(found.projects).toEqual([]);
+  });
+
+  it('reads the projects alongside the applications', async () => {
+    stub({
+      apps: [],
+      applicationSets: [],
+      projects: [{ name: 'default', kind: 'AppProject', resource: 'appprojects' }],
+    });
+
+    expect((await fetchArgo()).projects[0]).toMatchObject({
+      name: 'default',
+      kind: 'AppProject',
+    });
   });
 
   it('carries a partial failure', async () => {
@@ -125,5 +153,114 @@ describe('tree', () => {
 
   it('has nothing to show for no apps', () => {
     expect(tree([])).toEqual([]);
+  });
+});
+
+describe('idOf', () => {
+  it('names a node by its resource, namespace and name', () => {
+    expect(idOf(makeApp('web'))).toBe('applications/argocd/web');
+  });
+});
+
+describe('readyOf', () => {
+  it('is ready only when the app is both synced and healthy', () => {
+    expect(readyOf(makeApp('web'))).toBe('True');
+    expect(readyOf(makeApp('web', { sync: 'OutOfSync' }))).toBe('Unknown');
+  });
+
+  it('is not ready when the health is degraded or missing', () => {
+    expect(readyOf(makeApp('web', { health: 'Degraded' }))).toBe('False');
+    expect(readyOf(makeApp('web', { health: 'Missing' }))).toBe('False');
+  });
+
+  it('knows nothing about a resource that reports no health', () => {
+    expect(readyOf(makeApp('web', { health: '', sync: '' }))).toBe('Unknown');
+  });
+});
+
+describe('statusOf', () => {
+  it('joins the sync and health words', () => {
+    expect(statusOf(makeApp('web'))).toBe('Synced Healthy');
+  });
+
+  it('leaves out the half a resource does not report', () => {
+    expect(statusOf(makeApp('web', { sync: '' }))).toBe('Healthy');
+    expect(statusOf(makeApp('web', { sync: '', health: '' }))).toBe('');
+  });
+});
+
+describe('graphOf', () => {
+  it('draws an edge from a parent app to its child', () => {
+    const graph = graphOf(
+      dashboard({ apps: [makeApp('root'), makeApp('web', { owner: 'root' })] }),
+    );
+
+    expect(graph.nodes.map((node) => node.id)).toEqual([
+      'applications/argocd/root',
+      'applications/argocd/web',
+    ]);
+    expect(graph.edges).toEqual([
+      {
+        from: 'applications/argocd/root',
+        to: 'applications/argocd/web',
+        kind: 'manages',
+      },
+    ]);
+  });
+
+  it('puts an application set before the apps it generates', () => {
+    const set = makeApp('shops', { kind: 'ApplicationSet', resource: 'applicationsets' });
+    const graph = graphOf(
+      dashboard({ apps: [makeApp('web', { owner: 'shops' })], applicationSets: [set] }),
+    );
+
+    expect(graph.nodes[0]).toMatchObject({ name: 'shops', category: 'applier' });
+    expect(graph.nodes[1]).toMatchObject({ name: 'web', category: 'app' });
+    expect(graph.edges[0].from).toBe('applicationsets/argocd/shops');
+  });
+
+  it('drops an edge to a parent that is not in the dashboard', () => {
+    const graph = graphOf(dashboard({ apps: [makeApp('web', { owner: 'gone' })] }));
+
+    expect(graph.edges).toEqual([]);
+  });
+
+  it('leaves an app with no parent alone', () => {
+    const graph = graphOf(dashboard({ apps: [makeApp('web')] }));
+
+    expect(graph.edges).toEqual([]);
+  });
+
+  it('carries the partial failure through to the canvas', () => {
+    const graph = graphOf(dashboard({ error: 'applications is forbidden' }));
+
+    expect(graph.error).toBe('applications is forbidden');
+  });
+});
+
+describe('useArgo', () => {
+  it('asks again when the caller reloads it', async () => {
+    const asked = stub(dashboard());
+    const { result } = renderHook(() => useArgo());
+    await waitFor(() => {
+      expect(result.current.data).not.toBeNull();
+    });
+
+    act(() => {
+      result.current.reload();
+    });
+
+    await waitFor(() => {
+      expect(asked).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('reports a sweep that failed', async () => {
+    stub({ message: 'argo is unreachable' }, false, 503);
+    const { result } = renderHook(() => useArgo());
+
+    await waitFor(() => {
+      expect(result.current.error).toContain('argo is unreachable');
+    });
   });
 });

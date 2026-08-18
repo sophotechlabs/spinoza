@@ -161,36 +161,45 @@ describe('Sidebar', () => {
     expect(header.hasAttribute('title')).toBe(false);
   });
 
-  it('lists the Argo CD kinds when Argo CD is found', async () => {
+  it('gives Argo CD the same three views Flux has', async () => {
     stubFetch(withArgo);
     renderSidebar();
 
-    expect(await screen.findByRole('button', { name: 'Application' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'AppProject' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Argo CD Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Argo CD Graph' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Argo CD Resource list' })).toBeInTheDocument();
+  });
+
+  it('leaves the Argo CD kinds to the resource categories', async () => {
+    stubFetch(withArgo);
+    renderSidebar();
+    await screen.findByRole('button', { name: 'Argo CD Overview' });
+
+    expect(screen.queryByRole('button', { name: 'AppProject' })).not.toBeInTheDocument();
   });
 
   it('collapses the Argo CD section when its header is clicked', async () => {
     stubFetch(withArgo);
     renderSidebar();
-    expect(await screen.findByRole('button', { name: 'Application' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Argo CD Overview' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Argo CD' }));
 
-    expect(screen.queryByRole('button', { name: 'Application' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Argo CD Overview' })).not.toBeInTheDocument();
   });
 
-  it('opens an Argo CD kind like any other resource', async () => {
+  it('opens an Argo CD view from its entry', async () => {
     const seen: string[] = [];
     stubFetch(withArgo);
     renderSidebar({
-      onSelect: (descriptor) => {
-        seen.push(descriptor.kind);
+      onSelectView: (view) => {
+        seen.push(view);
       },
     });
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Application' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Argo CD Graph' }));
 
-    expect(seen).toEqual(['Application']);
+    expect(seen).toEqual(['argo-graph']);
   });
 
   it('starts with resource categories collapsed and expands one on click', async () => {

@@ -174,7 +174,15 @@ export type ServerMsg =
   | { type: 'error'; subId: string; message: string };
 
 export type View =
-  'resources' | 'cluster' | 'helm' | 'gitops' | 'flux-list' | 'flux-roles' | 'argo-apps';
+  | 'resources'
+  | 'cluster'
+  | 'helm'
+  | 'gitops'
+  | 'flux-list'
+  | 'flux-roles'
+  | 'argo-apps'
+  | 'argo-graph'
+  | 'argo-list';
 
 export interface ArgoApp {
   kind: string;
@@ -198,6 +206,7 @@ export interface ArgoApp {
 export interface ArgoDashboard {
   apps: ArgoApp[];
   applicationSets: ArgoApp[];
+  projects: ArgoApp[];
   error?: string;
 }
 
