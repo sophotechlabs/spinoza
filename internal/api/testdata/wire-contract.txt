@@ -83,6 +83,7 @@ ExecSupport.Image image,omitempty
 ExecSupport.Namespace namespace
 ExecSupport.Pod pod
 ExecSupport.Shell shell
+Failure.Message message
 FeedError.Message message
 FeedError.SubID subId
 FeedError.Type type

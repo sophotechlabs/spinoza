@@ -269,7 +269,7 @@ func writeJSONStatus(w http.ResponseWriter, status int, payload any) {
 func writeError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	err := json.NewEncoder(w).Encode(map[string]string{"message": message})
+	err := json.NewEncoder(w).Encode(api.Failure{Message: message})
 	if err != nil {
 		slog.Warn("an error response could not be encoded", "error", err)
 	}

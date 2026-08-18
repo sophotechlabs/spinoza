@@ -413,6 +413,10 @@ type Event struct {
 	LastSeen  string `json:"lastSeen"`
 }
 
+type Failure struct {
+	Message string `json:"message"`
+}
+
 type ClientMsg struct {
 	Type      string `json:"type"`
 	SubID     string `json:"subId"`

@@ -1,4 +1,4 @@
-import type { K8sEvent, ObjectDetail, ObjectRef } from './types';
+import type { Failure, K8sEvent, ObjectDetail, ObjectRef } from './types';
 import { request } from './http';
 import { parseEvents, parseObjectDetail } from './parse';
 
@@ -22,7 +22,7 @@ export function sameRef(a: ObjectRef | null, b: ObjectRef | null): boolean {
 
 export async function failure(response: Response, fallback: string): Promise<Error> {
   try {
-    const body = (await response.json()) as { message?: string };
+    const body = (await response.json()) as Partial<Failure>;
     if (typeof body.message === 'string' && body.message !== '') {
       return new Error(body.message);
     }
