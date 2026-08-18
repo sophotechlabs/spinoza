@@ -347,7 +347,12 @@ func TestSubscribeUnknownResource(t *testing.T) {
 func TestSubscribeCacheSyncFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	mgr := NewManager(ctx, Deps{Dynamic: newClient(t), Clientset: k8sfake.NewClientset(), Descriptors: testDescs()})
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     newClient(t),
+		Clientset:   k8sfake.NewClientset(),
+		Descriptors: testDescs(),
+		Limits:      Limits{SyncTimeout: 50 * time.Millisecond},
+	})
 	_, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
 	if err == nil {
 		t.Fatal("Subscribe returned nil error when cache sync could not complete")
