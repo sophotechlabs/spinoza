@@ -12,6 +12,7 @@ import {
   writeSections,
 } from '../lib/sidebarState';
 import { argoInstalled, fluxInstalled } from '../lib/gitops';
+import { kindLabels } from '../lib/kindLabels';
 import type { SidebarSections } from '../lib/sidebarState';
 
 interface SidebarProps {
@@ -386,6 +387,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
         )}
         {categories.map((category) => {
           const isCollapsed = !sectionOpen(sections, category.name);
+          const labels = kindLabels(category.resources);
           return (
             <div key={category.name} className="mb-1">
               <button
@@ -412,7 +414,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                         onSelect(resource);
                       }}
                       title={kindTitle(
-                        resource.kind,
+                        labels[descriptorKey(resource)],
                         counts[descriptorKey(resource)],
                         failing[descriptorKey(resource)],
                       )}
@@ -422,7 +424,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                         isEmpty(counts[descriptorKey(resource)]),
                       )}
                     >
-                      <span className="truncate">{resource.kind}</span>{' '}
+                      <span className="truncate">{labels[descriptorKey(resource)]}</span>{' '}
                       <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
                         {failingBadge(failing[descriptorKey(resource)]) !== '' && (
                           <span aria-hidden="true" className="text-error">
@@ -470,7 +472,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                   onSelect(resource);
                                 }}
                                 title={kindTitle(
-                                  resource.kind,
+                                  labels[descriptorKey(resource)],
                                   counts[descriptorKey(resource)],
                                   failing[descriptorKey(resource)],
                                 )}
@@ -480,7 +482,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                   isEmpty(counts[descriptorKey(resource)]),
                                 )}
                               >
-                                <span className="truncate">{resource.kind}</span>{' '}
+                                <span className="truncate">{labels[descriptorKey(resource)]}</span>{' '}
                                 <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
                                   {failingBadge(failing[descriptorKey(resource)]) !== '' && (
                                     <span aria-hidden="true" className="text-error">

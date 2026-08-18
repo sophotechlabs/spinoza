@@ -202,6 +202,28 @@ describe('Sidebar', () => {
     expect(seen).toEqual(['argo-graph']);
   });
 
+  it('tells two kinds with the same name apart by their api group', async () => {
+    stubFetch([
+      makeCategory('Cluster', [
+        makeDescriptor({ group: '', version: 'v1', resource: 'events', kind: 'Event' }),
+        makeDescriptor({
+          group: 'events.k8s.io',
+          version: 'v1',
+          resource: 'events',
+          kind: 'Event',
+        }),
+        makeDescriptor({ group: '', version: 'v1', resource: 'nodes', kind: 'Node' }),
+      ]),
+    ]);
+    renderSidebar();
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Cluster\s*3$/ }));
+
+    expect(screen.getByRole('button', { name: /Event \(core\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Event \(events.k8s.io\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Node/ })).toBeInTheDocument();
+  });
+
   it('starts with resource categories collapsed and expands one on click', async () => {
     stubFetch(categories);
     renderSidebar();
