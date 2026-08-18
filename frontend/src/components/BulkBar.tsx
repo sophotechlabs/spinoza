@@ -22,6 +22,17 @@ function label(count: number, kind: string): string {
   return `${String(count)} ${kind} objects selected`;
 }
 
+function objects(count: number): string {
+  if (count === 1) {
+    return '1 object';
+  }
+  return `${String(count)} objects`;
+}
+
+function typedQuestion(count: number, cluster: string): string {
+  return `Deleting ${objects(count)} on ${cluster} in one go — this asks for the cluster name, not an object name.`;
+}
+
 function verbFor(pending: Exclude<Pending, null>): string {
   if (pending === 'delete') {
     return 'Delete';
@@ -119,7 +130,7 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
         <ConfirmByName
           open
           name={list.current.name}
-          what={`Deleting ${String(targets.length)} object(s) on ${list.current.name}.`}
+          what={typedQuestion(targets.length, list.current.name)}
           onConfirm={confirmDelete}
           onCancel={() => {
             setConfirming(null);
@@ -129,7 +140,7 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
       {confirming !== null && !typedGate && (
         <>
           <span className="text-fg-muted">
-            {verbFor(confirming)} {targets.length} object(s)?
+            {verbFor(confirming)} {objects(targets.length)}?
           </span>
           <button
             type="button"

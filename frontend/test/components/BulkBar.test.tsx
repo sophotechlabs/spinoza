@@ -84,7 +84,7 @@ describe('BulkBar', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
-    expect(screen.getByText('Delete 1 object(s)?')).toBeInTheDocument();
+    expect(screen.getByText('Delete 1 object?')).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -174,7 +174,11 @@ describe('BulkBar on a protected cluster', () => {
     renderBar([podRef('web-0'), podRef('web-1')]);
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
-    expect(screen.getByText('Deleting 2 object(s) on p-mk1.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Deleting 2 objects on p-mk1 in one go — this asks for the cluster name, not an object name.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
   });
 
