@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.6.0](https://github.com/sophotechlabs/spinoza/compare/v1.5.0...v1.6.0) (2026-08-18)
+
+
+### Features
+
+* **install:** install the desktop app and say how to run both ([f37b62e](https://github.com/sophotechlabs/spinoza/commit/f37b62eefb19a498267a99e0e9ce9231d8ac1429))
+
+
+### CI
+
+* tag the draft release so the next run starts from it ([5af3282](https://github.com/sophotechlabs/spinoza/commit/5af328273d170017e655a47763354af1f89d5b63))
+
+
+### Documentation
+
+* lead with install and cut what a public reader does not need ([0c2189b](https://github.com/sophotechlabs/spinoza/commit/0c2189b06155c1f286e57697d4b099a0a3dc0a14))
+* lead with the source-available terms and add screenshots ([3f65177](https://github.com/sophotechlabs/spinoza/commit/3f65177c4f2e058a65f5d1e521c97f0f6f64ff99))
+
+
+### Tests
+
+* cover the store faults, helm storage paths and remaining guards ([aae8b7d](https://github.com/sophotechlabs/spinoza/commit/aae8b7ddd0eb81ff6e6a15abb6dd0834fd5067b7))
+
+
+### Build
+
+* **desktop:** ship the macos app bundle with every release ([24eda86](https://github.com/sophotechlabs/spinoza/commit/24eda8634b843ef0333957ae7713fcdc522d6526))
+
 ## [1.5.0](https://github.com/sophotechlabs/spinoza/compare/v1.4.0...v1.5.0) (2026-08-18)
 
 
