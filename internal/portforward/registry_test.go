@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 type stubRunner struct {
@@ -847,4 +849,72 @@ func (d *deadlineProber) Alive(ctx context.Context, _, _ string) bool {
 	}
 	<-ctx.Done()
 	return true
+}
+
+// the guards around replacing a forward that is already on the move
+
+func TestReplaceIsRefusedOnceTheRegistryIsStopped(t *testing.T) {
+	registry := newTestRegistry(t, newStubRunner(1), &stubResolver{pod: "web", podPort: 8080})
+	registry.StopAll()
+
+	previous, taken := registry.beginReplace("pf-1")
+
+	if taken || previous != nil {
+		t.Fatalf("taken = %v, previous = %v; want a stopped registry to refuse", taken, previous)
+	}
+}
+
+func TestReplaceIsRefusedForAForwardThatIsNotThere(t *testing.T) {
+	registry := newTestRegistry(t, newStubRunner(1), &stubResolver{pod: "web", podPort: 8080})
+
+	previous, taken := registry.beginReplace("pf-missing")
+
+	if taken || previous != nil {
+		t.Fatalf("taken = %v; want an unknown forward to be refused", taken)
+	}
+}
+
+func TestReplaceIsRefusedWhileOneIsAlreadyInFlight(t *testing.T) {
+	registry := newTestRegistry(t, newStubRunner(1), &stubResolver{pod: "web", podPort: 8080})
+	registry.mu.Lock()
+	registry.forwards["pf-1"] = &record{
+		forward:   api.PortForward{ID: "pf-1"},
+		current:   newRun(),
+		replacing: true,
+	}
+	registry.mu.Unlock()
+
+	_, taken := registry.beginReplace("pf-1")
+
+	if taken {
+		t.Fatal("taken = true; want the second replace to stand down")
+	}
+}
+
+func TestRestartFailureNamesWhatWentWrong(t *testing.T) {
+	forward := api.PortForward{Namespace: "prod", Name: "web"}
+
+	silent := restartFailure(forward, "web-0", nil)
+	if silent != "the port forward to prod/web-0 ended before it was ready" {
+		t.Fatalf("message = %q", silent)
+	}
+
+	loud := restartFailure(forward, "web-0", errors.New("pod deleted"))
+	if !strings.Contains(loud, "pod deleted") {
+		t.Fatalf("message = %q, want it to carry the reason", loud)
+	}
+}
+
+func TestAdoptingIsDroppedForAForwardThatIsGone(t *testing.T) {
+	registry := newTestRegistry(t, newStubRunner(1), &stubResolver{pod: "web", podPort: 8080})
+	failed := make(chan error)
+
+	registry.adopt("pf-missing", "web-0", 45123, newRun(), failed)
+
+	registry.mu.Lock()
+	held := len(registry.forwards)
+	registry.mu.Unlock()
+	if held != 0 {
+		t.Fatalf("forwards = %d, want nothing adopted for a forward that is gone", held)
+	}
 }

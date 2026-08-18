@@ -10,6 +10,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/version"
 	kubediscovery "k8s.io/client-go/discovery"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -353,5 +355,83 @@ func TestHelmReleasesSayTheyAreNotWiredUp(t *testing.T) {
 	want := "spinoza could not do that: helm is not wired up"
 	if err == nil || err.Error() != want {
 		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+// which watched kinds are counted as failing
+
+type stubCacheLister struct {
+	objects []runtime.Object
+	err     error
+}
+
+func (s stubCacheLister) List(labels.Selector) ([]runtime.Object, error) {
+	return s.objects, s.err
+}
+
+func (s stubCacheLister) Get(string) (runtime.Object, error) {
+	return nil, errors.New("not used")
+}
+
+func (s stubCacheLister) ByNamespace(string) cache.GenericNamespaceLister {
+	return nil
+}
+
+func TestAnUnreadableCacheCountsNothingAsFailing(t *testing.T) {
+	entry := watchedType{kind: "Kustomization", lister: stubCacheLister{err: errors.New("cache is gone")}}
+
+	if got := failingInCache(entry); got != 0 {
+		t.Fatalf("failing = %d, want 0 when the cache could not be read", got)
+	}
+}
+
+func TestOnlyRealObjectsInTheCacheAreJudged(t *testing.T) {
+	notReady := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"name": "apps", "namespace": "flux-system"},
+		"status": map[string]any{
+			"conditions": []any{map[string]any{"type": "Ready", "status": "False"}},
+		},
+	}}
+	entry := watchedType{
+		kind:   "Kustomization",
+		lister: stubCacheLister{objects: []runtime.Object{notReady, &metav1.Status{}}},
+	}
+
+	if got := failingInCache(entry); got != 1 {
+		t.Fatalf("failing = %d, want the one unready object", got)
+	}
+}
+
+func TestAConditionThatIsNotAMapIsSkipped(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{
+		"status": map[string]any{
+			"conditions": []any{
+				"not a condition",
+				map[string]any{"type": "Reconciling", "status": "True"},
+				map[string]any{"type": "Ready", "status": "True"},
+			},
+		},
+	}}
+
+	if !conditionTrue(item, "Ready") {
+		t.Fatal("ready = false, want the Ready condition found past the noise")
+	}
+}
+
+func TestPodStreamsAreLeftToThePodCounter(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	sub, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "default", 0)
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	watched := mgr.watchedTypes()
+
+	if _, held := watched["apps/v1/deployments"]; !held {
+		t.Fatalf("watched = %v, want the deployment stream", watched)
 	}
 }
