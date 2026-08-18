@@ -41,6 +41,9 @@ frontend/dist/
 # Built binary
 /spinoza
 
+# Release archives, SBOM and badge output
+/dist/
+
 # Wails (generated bindings + build output)
 /frontend/wailsjs/
 /build/bin/
