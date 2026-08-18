@@ -99,6 +99,18 @@ func wsURL(httpURL string) string {
 	return "ws" + strings.TrimPrefix(httpURL, "http") + "/ws"
 }
 
+func readChange(ctx context.Context, t *testing.T, c *websocket.Conn) api.RowChange {
+	t.Helper()
+	msg := readMsg(ctx, t, c)
+	if msg.Type != "batch" {
+		t.Fatalf("Type = %q, want batch", msg.Type)
+	}
+	if len(msg.Changes) != 1 {
+		t.Fatalf("changes = %d, want one", len(msg.Changes))
+	}
+	return msg.Changes[0]
+}
+
 func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg {
 	t.Helper()
 	var msg api.ServerMsg
@@ -536,11 +548,11 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	added := readMsg(ctx, t, conn)
+	added := readChange(ctx, t, conn)
 	if added.Type != "added" {
 		t.Fatalf("Type = %q, want added", added.Type)
 	}
-	if added.Row == nil || added.Row.Name != "api" {
+	if added.Row.Name != "api" {
 		t.Fatalf("Row = %v, want api", added.Row)
 	}
 
@@ -556,7 +568,7 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	modified := readMsg(ctx, t, conn)
+	modified := readChange(ctx, t, conn)
 	if modified.Type != "modified" {
 		t.Fatalf("Type = %q, want modified", modified.Type)
 	}
@@ -565,7 +577,7 @@ func TestWSSnapshotAndDeltas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	deleted := readMsg(ctx, t, conn)
+	deleted := readChange(ctx, t, conn)
 	if deleted.Type != "deleted" {
 		t.Fatalf("Type = %q, want deleted", deleted.Type)
 	}

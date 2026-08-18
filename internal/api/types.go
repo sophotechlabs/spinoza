@@ -415,15 +415,16 @@ type ClientMsg struct {
 }
 
 type ServerMsg struct {
-	Type       string   `json:"type"`
-	SubID      string   `json:"subId,omitempty"`
-	Columns    []Column `json:"columns,omitempty"`
-	Namespaced bool     `json:"namespaced,omitempty"`
-	Rows       []Row    `json:"rows,omitempty"`
-	Row        *Row     `json:"row,omitempty"`
-	UID        string   `json:"uid,omitempty"`
-	Lines      []string `json:"lines,omitempty"`
-	Message    string   `json:"message,omitempty"`
+	Type       string      `json:"type"`
+	SubID      string      `json:"subId,omitempty"`
+	Columns    []Column    `json:"columns,omitempty"`
+	Namespaced bool        `json:"namespaced,omitempty"`
+	Rows       []Row       `json:"rows,omitempty"`
+	Row        *Row        `json:"row,omitempty"`
+	UID        string      `json:"uid,omitempty"`
+	Lines      []string    `json:"lines,omitempty"`
+	Message    string      `json:"message,omitempty"`
+	Changes    []RowChange `json:"changes,omitempty"`
 }
 
 type Snapshot struct {
@@ -444,6 +445,18 @@ type RowDeleted struct {
 	Type  string `json:"type"`
 	SubID string `json:"subId"`
 	UID   string `json:"uid"`
+}
+
+type RowChange struct {
+	Type string `json:"type"`
+	Row  Row    `json:"row,omitzero"`
+	UID  string `json:"uid,omitempty"`
+}
+
+type RowBatch struct {
+	Type    string      `json:"type"`
+	SubID   string      `json:"subId"`
+	Changes []RowChange `json:"changes"`
 }
 
 type LogLines struct {

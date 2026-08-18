@@ -74,6 +74,30 @@ function canSend(socket: WebSocket | null): socket is WebSocket {
   return socket.readyState === OPEN_STATE;
 }
 
+function changesOf(subId: string, raw: unknown): ServerMsg[] {
+  const out: ServerMsg[] = [];
+  for (const change of asList(raw)) {
+    const msg = changeMsg(subId, asRecord(change));
+    if (msg !== null) {
+      out.push(msg);
+    }
+  }
+  return out;
+}
+
+function changeMsg(subId: string, item: Record<string, unknown>): ServerMsg | null {
+  switch (item.type) {
+    case 'added':
+      return { type: 'added', subId, row: parseRow(asRecord(item.row)) };
+    case 'modified':
+      return { type: 'modified', subId, row: parseRow(asRecord(item.row)) };
+    case 'deleted':
+      return { type: 'deleted', subId, uid: asString(item.uid) };
+    default:
+      return null;
+  }
+}
+
 function serverMsg(raw: unknown): ServerMsg | null {
   const item = asRecord(raw);
   const subId = asString(item.subId);
@@ -86,6 +110,8 @@ function serverMsg(raw: unknown): ServerMsg | null {
         namespaced: asBoolean(item.namespaced),
         rows: listOf(item.rows, parseRow),
       };
+    case 'batch':
+      return { type: 'batch', subId, changes: changesOf(subId, item.changes) };
     case 'added':
       return { type: 'added', subId, row: parseRow(asRecord(item.row)) };
     case 'modified':
@@ -224,9 +250,12 @@ export function useResourceFeed(): ResourceFeed {
         return;
       }
       const msg = serverMsg(raw);
-      if (msg === null) {
-        return;
+      if (msg !== null) {
+        apply(msg);
       }
+    }
+
+    function apply(msg: ServerMsg) {
       if (!knownSub(msg)) {
         return;
       }
@@ -239,6 +268,11 @@ export function useResourceFeed(): ResourceFeed {
         case 'modified':
         case 'deleted':
           queue(msg);
+          break;
+        case 'batch':
+          for (const change of msg.changes) {
+            queue(change);
+          }
           break;
         case 'log':
           queueLines(msg.subId, msg.lines);

@@ -20,6 +20,8 @@ var sentAsADiscriminatedUnion = map[string]string{
 	"Snapshot":   "ServerMsg",
 	"RowChanged": "ServerMsg",
 	"RowDeleted": "ServerMsg",
+	"RowChange":  "ServerMsg",
+	"RowBatch":   "ServerMsg",
 	"LogLines":   "ServerMsg",
 	"LogEnd":     "ServerMsg",
 	"FeedError":  "ServerMsg",

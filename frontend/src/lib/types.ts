@@ -169,6 +169,7 @@ export type ServerMsg =
   | { type: 'added'; subId: string; row: Row }
   | { type: 'modified'; subId: string; row: Row }
   | { type: 'deleted'; subId: string; uid: string }
+  | { type: 'batch'; subId: string; changes: ServerMsg[] }
   | { type: 'log'; subId: string; lines: string[] }
   | { type: 'log-end'; subId: string }
   | { type: 'error'; subId: string; message: string };

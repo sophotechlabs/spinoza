@@ -74,8 +74,8 @@ func TestResubscribingDropsTheOldSubscriptionsEvents(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	first := readMsg(ctx, t, conn)
-	if first.Type != "added" || first.Row == nil || first.Row.Name != "api" {
+	first := readChange(ctx, t, conn)
+	if first.Type != "added" || first.Row.Name != "api" {
 		t.Fatalf("first delta = %+v", first)
 	}
 
@@ -110,11 +110,17 @@ func TestEventsStopAfterUnsubscribe(t *testing.T) {
 		}
 	}
 
-	for range churn {
+	seen := 0
+	for seen < churn {
 		msg := readMsg(ctx, t, conn)
 		if msg.SubID != "fence" {
 			t.Fatalf("message for %q arrived after it was unsubscribed: %+v", msg.SubID, msg)
 		}
+		if msg.Type == "batch" {
+			seen += len(msg.Changes)
+			continue
+		}
+		seen++
 	}
 }
 

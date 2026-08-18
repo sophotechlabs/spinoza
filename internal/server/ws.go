@@ -257,7 +257,7 @@ func (sess *wsSession) relay(subID string, gen uint64, sub *resources.Subscripti
 			if !ok {
 				return
 			}
-			if !sess.writeCurrent(tables, subID, gen, eventToMsg(subID, ev)) {
+			if !sess.writeBatch(subID, gen, ev, sub.Events) {
 				return
 			}
 		}
@@ -272,6 +272,49 @@ func (sess *wsSession) sendResync(subID string, gen uint64, sub *resources.Subsc
 		return sess.writeCurrent(tables, subID, gen, api.FeedError{Type: msgError, SubID: subID, Message: err.Error()})
 	}
 	return sess.writeCurrent(tables, subID, gen, snapshotOf(subID, sub, rows))
+}
+
+const maxBatch = 200
+
+func (sess *wsSession) writeBatch(
+	subID string,
+	gen uint64,
+	first resources.Event,
+	more <-chan resources.Event,
+) bool {
+	if first.Kind == msgError {
+		return sess.writeCurrent(tables, subID, gen, eventToMsg(subID, first))
+	}
+	changes := []api.RowChange{changeOf(first)}
+	for len(changes) < maxBatch {
+		select {
+		case next, ok := <-more:
+			if !ok {
+				return sess.writeCurrent(tables, subID, gen, batchOf(subID, changes))
+			}
+			if next.Kind == msgError {
+				if !sess.writeCurrent(tables, subID, gen, batchOf(subID, changes)) {
+					return false
+				}
+				return sess.writeCurrent(tables, subID, gen, eventToMsg(subID, next))
+			}
+			changes = append(changes, changeOf(next))
+		default:
+			return sess.writeCurrent(tables, subID, gen, batchOf(subID, changes))
+		}
+	}
+	return sess.writeCurrent(tables, subID, gen, batchOf(subID, changes))
+}
+
+func batchOf(subID string, changes []api.RowChange) api.RowBatch {
+	return api.RowBatch{Type: "batch", SubID: subID, Changes: changes}
+}
+
+func changeOf(ev resources.Event) api.RowChange {
+	if ev.Kind == "deleted" {
+		return api.RowChange{Type: "deleted", UID: ev.UID}
+	}
+	return api.RowChange{Type: ev.Kind, Row: ev.Row}
 }
 
 func drainEvents(events <-chan resources.Event) {

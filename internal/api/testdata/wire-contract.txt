@@ -291,6 +291,12 @@ Row.CreatedAt createdAt
 Row.Name name
 Row.Namespace namespace
 Row.UID uid
+RowBatch.Changes changes
+RowBatch.SubID subId
+RowBatch.Type type
+RowChange.Row row,omitzero
+RowChange.Type type
+RowChange.UID uid,omitempty
 RowChanged.Row row
 RowChanged.SubID subId
 RowChanged.Type type
@@ -306,6 +312,7 @@ SearchHit.Version version
 SearchResults.Errors errors,omitempty
 SearchResults.Hits hits
 SearchResults.Truncated truncated
+ServerMsg.Changes changes,omitempty
 ServerMsg.Columns columns,omitempty
 ServerMsg.Lines lines,omitempty
 ServerMsg.Message message,omitempty

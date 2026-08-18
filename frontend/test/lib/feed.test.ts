@@ -1282,3 +1282,83 @@ describe('the socket on a page whose token died', () => {
     vi.useRealTimers();
   });
 });
+
+describe('a batch of row changes', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    resetStore();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetStore();
+  });
+
+  function sendBatch(socket: FakeWebSocket, changes: unknown[]): void {
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'batch', subId: 'main', changes }),
+        }),
+      );
+    });
+  }
+
+  function openWithSnapshot(): FakeWebSocket {
+    const socket = openFeedFor('main');
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'snapshot', subId: 'main', columns: makeColumns([]) }),
+        }),
+      );
+    });
+    return socket;
+  }
+
+  it('applies every change it carries', async () => {
+    const socket = openWithSnapshot();
+
+    sendBatch(socket, [
+      { type: 'added', row: makeRow({ uid: 'a', name: 'pod-a' }) },
+      { type: 'added', row: makeRow({ uid: 'b', name: 'pod-b' }) },
+      { type: 'modified', row: makeRow({ uid: 'b', name: 'pod-b2' }) },
+      { type: 'deleted', uid: 'a' },
+    ]);
+    await flushDeltas();
+
+    const rows = useResourcesStore.getState().subs.get('main')?.rows;
+    expect([...(rows?.keys() ?? [])]).toEqual(['b']);
+    expect(rows?.get('b')?.name).toBe('pod-b2');
+  });
+
+  it('ignores a change it cannot read', async () => {
+    const socket = openWithSnapshot();
+
+    sendBatch(socket, [{ type: 'nonsense' }, { type: 'added', row: makeRow({ uid: 'c' }) }]);
+    await flushDeltas();
+
+    const rows = useResourcesStore.getState().subs.get('main')?.rows;
+    expect([...(rows?.keys() ?? [])]).toEqual(['c']);
+  });
+
+  it('leaves a batch for a subscription nobody asked for alone', async () => {
+    const socket = openWithSnapshot();
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'batch',
+            subId: 'other',
+            changes: [{ type: 'added', row: makeRow({ uid: 'x' }) }],
+          }),
+        }),
+      );
+    });
+    await flushDeltas();
+
+    expect(useResourcesStore.getState().subs.get('other')).toBeUndefined();
+  });
+});
