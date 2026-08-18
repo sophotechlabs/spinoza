@@ -8,6 +8,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
@@ -62,6 +63,7 @@ type Releases interface {
 type Changes interface {
 	Action(ctx context.Context, req actions.Request) (api.ActionResult, error)
 	FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error)
+	ArgoAction(ctx context.Context, ref api.ObjectRef, action argocd.Action) (api.ArgoActionResult, error)
 }
 
 type Forwarding interface {

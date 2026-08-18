@@ -1,5 +1,6 @@
 import type {
   ActionResult,
+  ArgoActionResult,
   Category,
   ClusterOverview,
   Column,
@@ -316,6 +317,10 @@ export function parseFluxOverview(body: unknown): FluxOverview {
 export function parseFluxActionResult(body: unknown): FluxActionResult {
   const item = asRecord(body);
   return { action: asString(item.action), requestedAt: optionalString(item.requestedAt) };
+}
+
+export function parseArgoActionResult(body: unknown): ArgoActionResult {
+  return { action: asString(asRecord(body).action) };
 }
 
 function parsePodOutcome(item: Record<string, unknown>): PodOutcome {

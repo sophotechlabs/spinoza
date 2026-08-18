@@ -2,6 +2,7 @@ ActionResult.Action action
 ActionResult.DryRun dryRun,omitempty
 ActionResult.Message message
 ActionResult.Pods pods,omitempty
+ArgoActionResult.Action action
 ArgoApp.CreatedAt createdAt
 ArgoApp.Destination destination
 ArgoApp.Group group

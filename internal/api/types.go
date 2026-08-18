@@ -357,6 +357,10 @@ type FluxActionResult struct {
 	RequestedAt string `json:"requestedAt,omitempty"`
 }
 
+type ArgoActionResult struct {
+	Action string `json:"action"`
+}
+
 const (
 	OutcomeEvict   = "evict"
 	OutcomeEvicted = "evicted"

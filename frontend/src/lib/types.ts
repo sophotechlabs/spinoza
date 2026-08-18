@@ -597,6 +597,10 @@ export interface FluxActionResult {
   requestedAt?: string;
 }
 
+export interface ArgoActionResult {
+  action: string;
+}
+
 export interface PodOutcome {
   namespace: string;
   name: string;

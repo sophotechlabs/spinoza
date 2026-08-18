@@ -9,6 +9,7 @@ import { usePanelsStore } from '../store/panels';
 import { containerNames } from '../lib/containers';
 import { forwardKind } from '../lib/portForward';
 import { isFluxObject } from '../lib/fluxActions';
+import { isArgoApplication } from '../lib/argoActions';
 import { hasActions } from '../lib/objectActions';
 import { useObjectDetail } from '../lib/useObjectDetail';
 import PanelHost from './PanelHost';
@@ -16,6 +17,7 @@ import type { PanelTab } from './PanelHost';
 import PanelMount from './PanelMount';
 import PanelChrome from './PanelChrome';
 import InspectActions from './InspectActions';
+import ArgoActions from './ArgoActions';
 import InspectObjectActions from './InspectObjectActions';
 import InspectPorts from './InspectPorts';
 import InspectOverview from './InspectOverview';
@@ -131,6 +133,9 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
             suspended={detail.flux?.suspended}
             onDone={ctx.reload}
           />
+        )}
+        {isArgoApplication(detail.apiVersion, detail.kind) && (
+          <ArgoActions target={selection.ref} onDone={ctx.reload} />
         )}
         {hasActions(selection.ref) && (
           <InspectObjectActions target={selection.ref} detail={detail} onDone={ctx.reload} />

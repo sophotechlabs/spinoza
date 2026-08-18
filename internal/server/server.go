@@ -21,6 +21,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
@@ -131,6 +132,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/flux/overview", s.handleFluxOverview, false},
 		{http.MethodGet, "/api/argocd", s.handleArgo, false},
 		{http.MethodPost, "/api/flux/action", withRef(s.fluxAction), false},
+		{http.MethodPost, "/api/argocd/action", withRef(s.argoAction), false},
 		{http.MethodPost, "/api/action", s.handleAction, false},
 		{http.MethodGet, "/api/metrics/history", s.handleMetricHistory, false},
 		{http.MethodGet, "/api/metrics", s.handleMetrics, false},
@@ -639,6 +641,20 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) fluxAction(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
 	result, err := s.manager().FluxAction(r.Context(), ref, flux.Action(r.URL.Query().Get("action")))
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, result)
+}
+
+func (s *Server) argoAction(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
+	action := argocd.Action(r.URL.Query().Get("action"))
+	if action == argocd.Sync && s.unconfirmed(r, ref.Name) {
+		refuseUnconfirmed(w, ref.Name)
+		return
+	}
+	result, err := s.manager().ArgoAction(r.Context(), ref, action)
 	if err != nil {
 		writeAPIError(w, err)
 		return

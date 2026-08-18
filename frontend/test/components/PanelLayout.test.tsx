@@ -433,3 +433,59 @@ describe('an object deleted out from under the panels', () => {
     expect(screen.queryByText('Metadata')).not.toBeInTheDocument();
   });
 });
+
+describe('gitops actions above the overview', () => {
+  const argoRef: ObjectRef = {
+    group: 'argoproj.io',
+    version: 'v1alpha1',
+    resource: 'applications',
+    namespace: 'argocd',
+    name: 'podinfo',
+  };
+
+  const argoDetail = {
+    apiVersion: 'argoproj.io/v1alpha1',
+    kind: 'Application',
+    name: 'podinfo',
+    namespace: 'argocd',
+    uid: 'uid-app',
+    createdAt: '2026-08-18T09:00:00Z',
+    yaml: 'kind: Application\n',
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('offers sync and refresh on an argo application', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/events')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(argoDetail) });
+      }),
+    );
+
+    renderLayout({
+      selection: {
+        ref: argoRef,
+        row: makeRow({ uid: 'uid-app', name: 'podinfo', namespace: 'argocd' }),
+      },
+    });
+
+    expect(await screen.findByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+  });
+
+  it('leaves them off anything else', async () => {
+    stubApi();
+
+    renderLayout();
+    await screen.findByText('Metadata');
+
+    expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
+  });
+});

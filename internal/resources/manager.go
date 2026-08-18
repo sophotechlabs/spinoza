@@ -325,6 +325,10 @@ func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux
 	return flux.Do(ctx, m.dyn, ref, action, time.Now())
 }
 
+func (m *Manager) ArgoAction(ctx context.Context, ref api.ObjectRef, action argocd.Action) (api.ArgoActionResult, error) {
+	return argocd.Do(ctx, m.dyn, ref, action)
+}
+
 func (m *Manager) Action(ctx context.Context, req actions.Request) (api.ActionResult, error) {
 	return actions.New(m.dyn, m.cs).Do(ctx, req, time.Now())
 }
