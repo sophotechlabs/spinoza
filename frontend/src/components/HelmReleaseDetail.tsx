@@ -12,6 +12,7 @@ import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useProtectedCluster } from '../store/contexts';
+import { confirmName } from '../lib/contexts';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import CopyButton from './CopyButton';
@@ -61,13 +62,6 @@ interface TypedConfirm {
   what: 'rollback' | 'uninstall';
   revision: number;
   question: string;
-}
-
-function confirmName(protectedCluster: boolean, name: string): string | undefined {
-  if (!protectedCluster) {
-    return undefined;
-  }
-  return name;
 }
 
 function orDash(value: string): string {

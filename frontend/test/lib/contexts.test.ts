@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addKubeconfig,
+  confirmName,
   contextGroups,
   fetchContexts,
   fetchFilePicker,
@@ -249,5 +250,15 @@ describe('pickKubeconfigFile', () => {
     stub({ message: 'only the desktop window can open a file dialog' }, false, 501);
 
     await expect(pickKubeconfigFile()).rejects.toThrow('desktop window');
+  });
+});
+
+describe('the name a protected cluster asks you to type', () => {
+  it('is the object name while the cluster is protected', () => {
+    expect(confirmName(true, 'web-0')).toBe('web-0');
+  });
+
+  it('is nothing at all while it is not', () => {
+    expect(confirmName(false, 'web-0')).toBeUndefined();
   });
 });

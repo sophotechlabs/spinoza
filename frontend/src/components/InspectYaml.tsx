@@ -9,6 +9,7 @@ import CopyButton from './CopyButton';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import { useProtectedCluster } from '../store/contexts';
+import { confirmName } from '../lib/contexts';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 
@@ -21,13 +22,6 @@ interface InspectYamlProps {
 
 function refKey(ref: ObjectRef): string {
   return `${ref.group}/${ref.version}/${ref.resource}/${ref.namespace}/${ref.name}`;
-}
-
-function confirmName(protectedCluster: boolean, name: string): string | undefined {
-  if (!protectedCluster) {
-    return undefined;
-  }
-  return name;
 }
 
 function errorMessage(err: unknown, fallback: string): string {

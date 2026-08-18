@@ -100,6 +100,13 @@ export function contextGroups(list: ContextList): ContextGroup[] {
   }));
 }
 
+export function confirmName(protectedCluster: boolean, name: string): string | undefined {
+  if (!protectedCluster) {
+    return undefined;
+  }
+  return name;
+}
+
 export function sameContext(entry: ContextEntry, current: ContextRef): boolean {
   return entry.kubeconfig === current.kubeconfig && entry.name === current.name;
 }
