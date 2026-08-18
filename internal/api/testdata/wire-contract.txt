@@ -1,385 +1,385 @@
-ActionResult.Action action
-ActionResult.DryRun dryRun,omitempty
-ActionResult.Message message
-ActionResult.Pods pods,omitempty
-ArgoActionResult.Action action
-ArgoApp.CreatedAt createdAt
-ArgoApp.Destination destination
-ArgoApp.Group group
-ArgoApp.Health health
-ArgoApp.Kind kind
-ArgoApp.Message message
-ArgoApp.Name name
-ArgoApp.Namespace namespace
-ArgoApp.Owner owner,omitempty
-ArgoApp.Path path
-ArgoApp.Project project
-ArgoApp.Repo repo
-ArgoApp.Resource resource
-ArgoApp.Revision revision
-ArgoApp.Sync sync
-ArgoApp.Version version
-ArgoDashboard.ApplicationSets applicationSets
-ArgoDashboard.Apps apps
-ArgoDashboard.Error error,omitempty
-ArgoDashboard.Projects projects
-Build.Version version
-Category.Name name
-Category.Resources resources
-ClientMsg.Container container
-ClientMsg.Follow follow
-ClientMsg.Group group
-ClientMsg.Limit limit
-ClientMsg.Name name
-ClientMsg.Namespace namespace
-ClientMsg.Resource resource
-ClientMsg.SubID subId
-ClientMsg.TailLines tailLines
-ClientMsg.Type type
-ClientMsg.Version version
-ClusterOverview.Error error,omitempty
-ClusterOverview.Nodes nodes
-ClusterOverview.Pods pods
-ClusterOverview.Version version
-ClusterOverview.Warnings warnings
-Column.Name name
-Column.Render render,omitempty
-Condition.Message message,omitempty
-Condition.Reason reason,omitempty
-Condition.Status status
-Condition.Type type
-Condition.Updated updated,omitempty
-ContainerState.Ephemeral ephemeral,omitempty
-ContainerState.Init init
-ContainerState.Name name
-ContainerState.Ready ready
-ContainerState.Reason reason,omitempty
-ContainerState.Restarts restarts
-ContainerState.State state
-ContextList.Current current
-ContextList.Error error,omitempty
-ContextList.Kubeconfigs kubeconfigs
-ContextList.Protection protection
-ContextRef.Kubeconfig kubeconfig
-ContextRef.Name name
-DebugSession.Container container
-DebugSession.Created created
-DebugSession.Image image
-DebugSession.Profile profile
-DebugSession.Target target,omitempty
-DebugSupport.Allowed allowed
-DebugSupport.Image image
-DebugSupport.Namespace namespace
-DebugSupport.Pod pod,omitempty
-DebugSupport.Reason reason,omitempty
-Event.Count count
-Event.FirstSeen firstSeen
-Event.LastSeen lastSeen
-Event.Message message
-Event.Reason reason
-Event.Source source
-Event.Type type
-ExecSupport.Container container
-ExecSupport.Image image,omitempty
-ExecSupport.Namespace namespace
-ExecSupport.Pod pod
-ExecSupport.Shell shell
-Failure.Message message
-FeedError.Message message
-FeedError.SubID subId
-FeedError.Type type
-FilePicker.Available available
-FilePicker.Reason reason,omitempty
-FluxActionResult.Action action
-FluxActionResult.RequestedAt requestedAt,omitempty
-FluxController.Name name
-FluxController.Namespace namespace
-FluxController.Ready ready
-FluxController.Replicas replicas
-FluxController.Version version
-FluxController.Wanted wanted
-FluxDashboard.Error error,omitempty
-FluxDashboard.Groups groups
-FluxGroup.Name name
-FluxGroup.Ready ready
-FluxGroup.Reporting reporting
-FluxGroup.Resources resources
-FluxGroup.Total total
-FluxOverview.Controllers controllers
-FluxOverview.Distribution distribution,omitempty
-FluxOverview.Error error,omitempty
-FluxOverview.Kubernetes kubernetes
-FluxOverview.Namespace namespace
-FluxOverview.Nodes nodes
-FluxOverview.Operator operator,omitempty
-FluxOverview.Ready ready
-FluxOverview.Summary summary
-FluxOverview.Sync sync
-FluxOverview.Usage usage
-FluxResource.CreatedAt createdAt
-FluxResource.Group group
-FluxResource.Kind kind
-FluxResource.Latest latest,omitempty
-FluxResource.Message message
-FluxResource.Name name
-FluxResource.Namespace namespace
-FluxResource.Outdated outdated,omitempty
-FluxResource.Ready ready
-FluxResource.Resource resource
-FluxResource.Revision revision
-FluxResource.Source source
-FluxResource.Suspended suspended
-FluxResource.Version version
-FluxSync.Kind kind
-FluxSync.Name name
-FluxSync.Namespace namespace
-FluxSync.Path path
-FluxSync.Ready ready
-FluxSync.Ref ref
-FluxSync.Revision revision
-FluxSync.Source source
-FluxSync.URL url
-FluxUsage.CPULimitMilli cpuLimitMilli
-FluxUsage.CPUMilli cpuMilli
-FluxUsage.CPURequestMilli cpuRequestMilli
-FluxUsage.Known known
-FluxUsage.MemLimitMi memLimitMi
-FluxUsage.MemRequestMi memRequestMi
-FluxUsage.MemoryMi memoryMi
-Graph.Edges edges
-Graph.Error error,omitempty
-Graph.Nodes nodes
-GraphEdge.From from
-GraphEdge.Kind kind
-GraphEdge.To to
-GraphNode.Category category
-GraphNode.Group group
-GraphNode.ID id
-GraphNode.Kind kind
-GraphNode.Name name
-GraphNode.Namespace namespace
-GraphNode.Ready ready
-GraphNode.Resource resource
-GraphNode.Status status
-GraphNode.Version version
-Health.Context context
-Health.Status status
-Health.Version version
-HelmActionResult.Action action
-HelmActionResult.DryRun dryRun,omitempty
-HelmActionResult.Manifest manifest,omitempty
-HelmActionResult.Message message
-HelmActionResult.Revision revision,omitempty
-HelmChartVersions.Chart chart
-HelmChartVersions.Error error,omitempty
-HelmChartVersions.Repos repos
-HelmRelease.AppVersion appVersion
-HelmRelease.Chart chart
-HelmRelease.ChartVersion chartVersion
-HelmRelease.Description description,omitempty
-HelmRelease.FluxRef fluxRef,omitempty
-HelmRelease.Latest latest,omitempty
-HelmRelease.Name name
-HelmRelease.Namespace namespace
-HelmRelease.Outdated outdated,omitempty
-HelmRelease.Revision revision
-HelmRelease.Status status
-HelmRelease.Updated updated
-HelmReleaseDetail.Driver driver
-HelmReleaseDetail.Error error,omitempty
-HelmReleaseDetail.FirstDeployed firstDeployed,omitempty
-HelmReleaseDetail.History history
-HelmReleaseDetail.Manifest manifest
-HelmReleaseDetail.Notes notes
-HelmReleaseDetail.Release release
-HelmReleaseDetail.Resources resources
-HelmReleaseDetail.Values values
-HelmReleases.Error error,omitempty
-HelmReleases.Releases releases
-HelmRepoVersions.Name name,omitempty
-HelmRepoVersions.OCI oci,omitempty
-HelmRepoVersions.URL url
-HelmRepoVersions.Versions versions
-HelmResource.APIVersion apiVersion
-HelmResource.Group group,omitempty
-HelmResource.Kind kind
-HelmResource.Name name
-HelmResource.Namespace namespace,omitempty
-HelmResource.Resource resource,omitempty
-HelmResource.Version version,omitempty
-HelmRevision.AppVersion appVersion
-HelmRevision.ChartVersion chartVersion
-HelmRevision.Description description,omitempty
-HelmRevision.Revision revision
-HelmRevision.Status status
-HelmRevision.Updated updated
-HelmSupport.Available available
-HelmSupport.Binary binary
-HelmSupport.Reason reason,omitempty
-KubeContext.Cluster cluster
-KubeContext.Name name
-KubeContext.Namespace namespace,omitempty
-Kubeconfig.Contexts contexts
-Kubeconfig.Error error,omitempty
-Kubeconfig.Label label
-Kubeconfig.Path path
-Kubeconfig.Removable removable
-LocalShell.Available available
-LocalShell.Reason reason,omitempty
-LogEnd.SubID subId
-LogEnd.Type type
-LogLines.Lines lines
-LogLines.SubID subId
-LogLines.Type type
-MetricHistory.CPU cpu
-MetricHistory.Memory memory
-MetricHistory.Namespace namespace
-MetricHistory.Pod pod
-MetricHistory.Source source,omitempty
-MetricPoint.At at
-MetricPoint.Value value
-Metrics.Error error,omitempty
-Metrics.Nodes nodes
-Metrics.Pods pods
-Namespaces.Error error,omitempty
-Namespaces.Names names
-NodeSummary.CPUAllocatableMilli cpuAllocatableMilli
-NodeSummary.CPUUsedMilli cpuUsedMilli
-NodeSummary.MemAllocatableMi memAllocatableMi
-NodeSummary.MemUsedMi memUsedMi
-NodeSummary.Ready ready
-NodeSummary.Total total
-NodeSummary.Unschedulable unschedulable
-NodeSummary.UsageKnown usageKnown
-ObjectDetail.APIVersion apiVersion
-ObjectDetail.Annotations annotations,omitempty
-ObjectDetail.Conditions conditions,omitempty
-ObjectDetail.Containers containers,omitempty
-ObjectDetail.CreatedAt createdAt
-ObjectDetail.Event event,omitempty
-ObjectDetail.HandledAt handledAt,omitempty
-ObjectDetail.Kind kind
-ObjectDetail.Labels labels,omitempty
-ObjectDetail.Name name
-ObjectDetail.Namespace namespace
-ObjectDetail.Owners owners,omitempty
-ObjectDetail.Ports ports,omitempty
-ObjectDetail.Replicas replicas,omitempty
-ObjectDetail.Schedulable schedulable,omitempty
-ObjectDetail.Suspended suspended,omitempty
-ObjectDetail.UID uid
-ObjectDetail.YAML yaml
-ObjectEvent.Count count,omitempty
-ObjectEvent.FirstSeen firstSeen,omitempty
-ObjectEvent.LastSeen lastSeen,omitempty
-ObjectEvent.Message message,omitempty
-ObjectEvent.Object object,omitempty
-ObjectEvent.Reason reason,omitempty
-ObjectEvent.Source source,omitempty
-ObjectEvent.Type type,omitempty
-ObjectPort.Name name,omitempty
-ObjectPort.Port port
-ObjectPort.Protocol protocol,omitempty
-ObjectRef.Group group
-ObjectRef.Name name
-ObjectRef.Namespace namespace
-ObjectRef.Resource resource
-ObjectRef.Version version
-OverviewEvent.Count count
-OverviewEvent.LastSeen lastSeen
-OverviewEvent.Message message
-OverviewEvent.Namespace namespace
-OverviewEvent.Object object
-OverviewEvent.Reason reason
-OwnerRef.Kind kind
-OwnerRef.Name name
-OwnerRef.UID uid
-PickedFile.Path path
-PodOutcome.Name name
-PodOutcome.Namespace namespace
-PodOutcome.Outcome outcome
-PodOutcome.Reason reason,omitempty
-PodSummary.Failed failed
-PodSummary.Known known
-PodSummary.Pending pending
-PodSummary.Running running
-PodSummary.Succeeded succeeded
-PodSummary.Total total
-PortForward.Error error,omitempty
-PortForward.ID id
-PortForward.Kind kind
-PortForward.LocalPort localPort
-PortForward.Name name
-PortForward.Namespace namespace
-PortForward.Pod pod,omitempty
-PortForward.RemotePort remotePort
-PortForward.StartedAt startedAt
-PortForward.State state
-ResourceCatalog.Categories categories
-ResourceCatalog.Error error,omitempty
-ResourceCounts.Counts counts
-ResourceCounts.Errors errors,omitempty
-ResourceCounts.Failing failing,omitempty
-ResourceDescriptor.Category category
-ResourceDescriptor.Group group
-ResourceDescriptor.Kind kind
-ResourceDescriptor.Namespaced namespaced
-ResourceDescriptor.Resource resource
-ResourceDescriptor.Version version
-ResourceUsage.CPUMilli cpuMilli
-ResourceUsage.CPUPercent cpuPercent
-ResourceUsage.MemPercent memPercent
-ResourceUsage.MemoryMi memoryMi
-Row.Cells cells
-Row.Containers containers,omitempty
-Row.CreatedAt createdAt
-Row.Name name
-Row.Namespace namespace
-Row.UID uid
-RowBatch.Changes changes
-RowBatch.SubID subId
-RowBatch.Type type
-RowChange.Row row,omitzero
-RowChange.Type type
-RowChange.UID uid,omitempty
-RowChanged.Row row
-RowChanged.SubID subId
-RowChanged.Type type
-RowDeleted.SubID subId
-RowDeleted.Type type
-RowDeleted.UID uid
-SearchHit.Group group
-SearchHit.Kind kind
-SearchHit.Name name
-SearchHit.Namespace namespace
-SearchHit.Resource resource
-SearchHit.Version version
-SearchResults.Errors errors,omitempty
-SearchResults.Hits hits
-SearchResults.Truncated truncated
-ServerMsg.Changes changes,omitempty
-ServerMsg.Columns columns,omitempty
-ServerMsg.Limit limit,omitempty
-ServerMsg.Lines lines,omitempty
-ServerMsg.Message message,omitempty
-ServerMsg.Namespaced namespaced,omitempty
-ServerMsg.Row row,omitempty
-ServerMsg.Rows rows,omitempty
-ServerMsg.SubID subId,omitempty
-ServerMsg.Total total,omitempty
-ServerMsg.Type type
-ServerMsg.UID uid,omitempty
-Settings.Values values
-Snapshot.Columns columns
-Snapshot.Limit limit
-Snapshot.Namespaced namespaced
-Snapshot.Rows rows
-Snapshot.SubID subId
-Snapshot.Total total
-Snapshot.Type type
-TerminalSize.Cols cols
-TerminalSize.Rows rows
-ViewState.Hidden hidden
-ViewState.Window window
-ViewSwitch.Reason reason,omitempty
-ViewSwitch.Switched switched
+ActionResult.Action action string
+ActionResult.DryRun dryRun,omitempty bool
+ActionResult.Message message string
+ActionResult.Pods pods,omitempty []PodOutcome
+ArgoActionResult.Action action string
+ArgoApp.CreatedAt createdAt string
+ArgoApp.Destination destination string
+ArgoApp.Group group string
+ArgoApp.Health health string
+ArgoApp.Kind kind string
+ArgoApp.Message message string
+ArgoApp.Name name string
+ArgoApp.Namespace namespace string
+ArgoApp.Owner owner,omitempty string
+ArgoApp.Path path string
+ArgoApp.Project project string
+ArgoApp.Repo repo string
+ArgoApp.Resource resource string
+ArgoApp.Revision revision string
+ArgoApp.Sync sync string
+ArgoApp.Version version string
+ArgoDashboard.ApplicationSets applicationSets []ArgoApp
+ArgoDashboard.Apps apps []ArgoApp
+ArgoDashboard.Error error,omitempty string
+ArgoDashboard.Projects projects []ArgoApp
+Build.Version version string
+Category.Name name string
+Category.Resources resources []ResourceDescriptor
+ClientMsg.Container container string
+ClientMsg.Follow follow bool
+ClientMsg.Group group string
+ClientMsg.Limit limit int
+ClientMsg.Name name string
+ClientMsg.Namespace namespace string
+ClientMsg.Resource resource string
+ClientMsg.SubID subId string
+ClientMsg.TailLines tailLines int64
+ClientMsg.Type type string
+ClientMsg.Version version string
+ClusterOverview.Error error,omitempty string
+ClusterOverview.Nodes nodes NodeSummary
+ClusterOverview.Pods pods PodSummary
+ClusterOverview.Version version string
+ClusterOverview.Warnings warnings []OverviewEvent
+Column.Name name string
+Column.Render render,omitempty string
+Condition.Message message,omitempty string
+Condition.Reason reason,omitempty string
+Condition.Status status string
+Condition.Type type string
+Condition.Updated updated,omitempty string
+ContainerState.Ephemeral ephemeral,omitempty bool
+ContainerState.Init init bool
+ContainerState.Name name string
+ContainerState.Ready ready bool
+ContainerState.Reason reason,omitempty string
+ContainerState.Restarts restarts int64
+ContainerState.State state string
+ContextList.Current current ContextRef
+ContextList.Error error,omitempty string
+ContextList.Kubeconfigs kubeconfigs []Kubeconfig
+ContextList.Protection protection string
+ContextRef.Kubeconfig kubeconfig string
+ContextRef.Name name string
+DebugSession.Container container string
+DebugSession.Created created bool
+DebugSession.Image image string
+DebugSession.Profile profile string
+DebugSession.Target target,omitempty string
+DebugSupport.Allowed allowed bool
+DebugSupport.Image image string
+DebugSupport.Namespace namespace string
+DebugSupport.Pod pod,omitempty string
+DebugSupport.Reason reason,omitempty string
+Event.Count count int64
+Event.FirstSeen firstSeen string
+Event.LastSeen lastSeen string
+Event.Message message string
+Event.Reason reason string
+Event.Source source string
+Event.Type type string
+ExecSupport.Container container string
+ExecSupport.Image image,omitempty string
+ExecSupport.Namespace namespace string
+ExecSupport.Pod pod string
+ExecSupport.Shell shell string
+Failure.Message message string
+FeedError.Message message string
+FeedError.SubID subId string
+FeedError.Type type string
+FilePicker.Available available bool
+FilePicker.Reason reason,omitempty string
+FluxActionResult.Action action string
+FluxActionResult.RequestedAt requestedAt,omitempty string
+FluxController.Name name string
+FluxController.Namespace namespace string
+FluxController.Ready ready bool
+FluxController.Replicas replicas int
+FluxController.Version version string
+FluxController.Wanted wanted int
+FluxDashboard.Error error,omitempty string
+FluxDashboard.Groups groups []FluxGroup
+FluxGroup.Name name string
+FluxGroup.Ready ready int
+FluxGroup.Reporting reporting int
+FluxGroup.Resources resources []FluxResource
+FluxGroup.Total total int
+FluxOverview.Controllers controllers []FluxController
+FluxOverview.Distribution distribution,omitempty string
+FluxOverview.Error error,omitempty string
+FluxOverview.Kubernetes kubernetes string
+FluxOverview.Namespace namespace string
+FluxOverview.Nodes nodes int
+FluxOverview.Operator operator,omitempty string
+FluxOverview.Ready ready bool
+FluxOverview.Summary summary string
+FluxOverview.Sync sync FluxSync
+FluxOverview.Usage usage FluxUsage
+FluxResource.CreatedAt createdAt string
+FluxResource.Group group string
+FluxResource.Kind kind string
+FluxResource.Latest latest,omitempty string
+FluxResource.Message message string
+FluxResource.Name name string
+FluxResource.Namespace namespace string
+FluxResource.Outdated outdated,omitempty bool
+FluxResource.Ready ready string
+FluxResource.Resource resource string
+FluxResource.Revision revision string
+FluxResource.Source source string
+FluxResource.Suspended suspended bool
+FluxResource.Version version string
+FluxSync.Kind kind string
+FluxSync.Name name string
+FluxSync.Namespace namespace string
+FluxSync.Path path string
+FluxSync.Ready ready bool
+FluxSync.Ref ref string
+FluxSync.Revision revision string
+FluxSync.Source source string
+FluxSync.URL url string
+FluxUsage.CPULimitMilli cpuLimitMilli int64
+FluxUsage.CPUMilli cpuMilli int64
+FluxUsage.CPURequestMilli cpuRequestMilli int64
+FluxUsage.Known known bool
+FluxUsage.MemLimitMi memLimitMi int64
+FluxUsage.MemRequestMi memRequestMi int64
+FluxUsage.MemoryMi memoryMi int64
+Graph.Edges edges []GraphEdge
+Graph.Error error,omitempty string
+Graph.Nodes nodes []GraphNode
+GraphEdge.From from string
+GraphEdge.Kind kind string
+GraphEdge.To to string
+GraphNode.Category category string
+GraphNode.Group group string
+GraphNode.ID id string
+GraphNode.Kind kind string
+GraphNode.Name name string
+GraphNode.Namespace namespace string
+GraphNode.Ready ready string
+GraphNode.Resource resource string
+GraphNode.Status status string
+GraphNode.Version version string
+Health.Context context string
+Health.Status status string
+Health.Version version string
+HelmActionResult.Action action string
+HelmActionResult.DryRun dryRun,omitempty bool
+HelmActionResult.Manifest manifest,omitempty string
+HelmActionResult.Message message string
+HelmActionResult.Revision revision,omitempty int64
+HelmChartVersions.Chart chart string
+HelmChartVersions.Error error,omitempty string
+HelmChartVersions.Repos repos []HelmRepoVersions
+HelmRelease.AppVersion appVersion string
+HelmRelease.Chart chart string
+HelmRelease.ChartVersion chartVersion string
+HelmRelease.Description description,omitempty string
+HelmRelease.FluxRef fluxRef,omitempty *ObjectRef
+HelmRelease.Latest latest,omitempty string
+HelmRelease.Name name string
+HelmRelease.Namespace namespace string
+HelmRelease.Outdated outdated,omitempty bool
+HelmRelease.Revision revision int64
+HelmRelease.Status status string
+HelmRelease.Updated updated string
+HelmReleaseDetail.Driver driver string
+HelmReleaseDetail.Error error,omitempty string
+HelmReleaseDetail.FirstDeployed firstDeployed,omitempty string
+HelmReleaseDetail.History history []HelmRevision
+HelmReleaseDetail.Manifest manifest string
+HelmReleaseDetail.Notes notes string
+HelmReleaseDetail.Release release HelmRelease
+HelmReleaseDetail.Resources resources []HelmResource
+HelmReleaseDetail.Values values string
+HelmReleases.Error error,omitempty string
+HelmReleases.Releases releases []HelmRelease
+HelmRepoVersions.Name name,omitempty string
+HelmRepoVersions.OCI oci,omitempty bool
+HelmRepoVersions.URL url string
+HelmRepoVersions.Versions versions []string
+HelmResource.APIVersion apiVersion string
+HelmResource.Group group,omitempty string
+HelmResource.Kind kind string
+HelmResource.Name name string
+HelmResource.Namespace namespace,omitempty string
+HelmResource.Resource resource,omitempty string
+HelmResource.Version version,omitempty string
+HelmRevision.AppVersion appVersion string
+HelmRevision.ChartVersion chartVersion string
+HelmRevision.Description description,omitempty string
+HelmRevision.Revision revision int64
+HelmRevision.Status status string
+HelmRevision.Updated updated string
+HelmSupport.Available available bool
+HelmSupport.Binary binary string
+HelmSupport.Reason reason,omitempty string
+KubeContext.Cluster cluster string
+KubeContext.Name name string
+KubeContext.Namespace namespace,omitempty string
+Kubeconfig.Contexts contexts []KubeContext
+Kubeconfig.Error error,omitempty string
+Kubeconfig.Label label string
+Kubeconfig.Path path string
+Kubeconfig.Removable removable bool
+LocalShell.Available available bool
+LocalShell.Reason reason,omitempty string
+LogEnd.SubID subId string
+LogEnd.Type type string
+LogLines.Lines lines []string
+LogLines.SubID subId string
+LogLines.Type type string
+MetricHistory.CPU cpu []MetricPoint
+MetricHistory.Memory memory []MetricPoint
+MetricHistory.Namespace namespace string
+MetricHistory.Pod pod string
+MetricHistory.Source source,omitempty string
+MetricPoint.At at int64
+MetricPoint.Value value float64
+Metrics.Error error,omitempty string
+Metrics.Nodes nodes map[string]ResourceUsage
+Metrics.Pods pods map[string]ResourceUsage
+Namespaces.Error error,omitempty string
+Namespaces.Names names []string
+NodeSummary.CPUAllocatableMilli cpuAllocatableMilli int64
+NodeSummary.CPUUsedMilli cpuUsedMilli int64
+NodeSummary.MemAllocatableMi memAllocatableMi int64
+NodeSummary.MemUsedMi memUsedMi int64
+NodeSummary.Ready ready int
+NodeSummary.Total total int
+NodeSummary.Unschedulable unschedulable int
+NodeSummary.UsageKnown usageKnown bool
+ObjectDetail.APIVersion apiVersion string
+ObjectDetail.Annotations annotations,omitempty map[string]string
+ObjectDetail.Conditions conditions,omitempty []Condition
+ObjectDetail.Containers containers,omitempty []string
+ObjectDetail.CreatedAt createdAt string
+ObjectDetail.Event event,omitempty *ObjectEvent
+ObjectDetail.HandledAt handledAt,omitempty string
+ObjectDetail.Kind kind string
+ObjectDetail.Labels labels,omitempty map[string]string
+ObjectDetail.Name name string
+ObjectDetail.Namespace namespace string
+ObjectDetail.Owners owners,omitempty []OwnerRef
+ObjectDetail.Ports ports,omitempty []ObjectPort
+ObjectDetail.Replicas replicas,omitempty *int64
+ObjectDetail.Schedulable schedulable,omitempty *bool
+ObjectDetail.Suspended suspended,omitempty *bool
+ObjectDetail.UID uid string
+ObjectDetail.YAML yaml string
+ObjectEvent.Count count,omitempty int64
+ObjectEvent.FirstSeen firstSeen,omitempty string
+ObjectEvent.LastSeen lastSeen,omitempty string
+ObjectEvent.Message message,omitempty string
+ObjectEvent.Object object,omitempty string
+ObjectEvent.Reason reason,omitempty string
+ObjectEvent.Source source,omitempty string
+ObjectEvent.Type type,omitempty string
+ObjectPort.Name name,omitempty string
+ObjectPort.Port port int32
+ObjectPort.Protocol protocol,omitempty string
+ObjectRef.Group group string
+ObjectRef.Name name string
+ObjectRef.Namespace namespace string
+ObjectRef.Resource resource string
+ObjectRef.Version version string
+OverviewEvent.Count count int64
+OverviewEvent.LastSeen lastSeen string
+OverviewEvent.Message message string
+OverviewEvent.Namespace namespace string
+OverviewEvent.Object object string
+OverviewEvent.Reason reason string
+OwnerRef.Kind kind string
+OwnerRef.Name name string
+OwnerRef.UID uid string
+PickedFile.Path path string
+PodOutcome.Name name string
+PodOutcome.Namespace namespace string
+PodOutcome.Outcome outcome string
+PodOutcome.Reason reason,omitempty string
+PodSummary.Failed failed int
+PodSummary.Known known bool
+PodSummary.Pending pending int
+PodSummary.Running running int
+PodSummary.Succeeded succeeded int
+PodSummary.Total total int
+PortForward.Error error,omitempty string
+PortForward.ID id string
+PortForward.Kind kind string
+PortForward.LocalPort localPort int32
+PortForward.Name name string
+PortForward.Namespace namespace string
+PortForward.Pod pod,omitempty string
+PortForward.RemotePort remotePort int32
+PortForward.StartedAt startedAt string
+PortForward.State state string
+ResourceCatalog.Categories categories []Category
+ResourceCatalog.Error error,omitempty string
+ResourceCounts.Counts counts map[string]int
+ResourceCounts.Errors errors,omitempty map[string]string
+ResourceCounts.Failing failing,omitempty map[string]int
+ResourceDescriptor.Category category string
+ResourceDescriptor.Group group string
+ResourceDescriptor.Kind kind string
+ResourceDescriptor.Namespaced namespaced bool
+ResourceDescriptor.Resource resource string
+ResourceDescriptor.Version version string
+ResourceUsage.CPUMilli cpuMilli int64
+ResourceUsage.CPUPercent cpuPercent int64
+ResourceUsage.MemPercent memPercent int64
+ResourceUsage.MemoryMi memoryMi int64
+Row.Cells cells []string
+Row.Containers containers,omitempty []ContainerState
+Row.CreatedAt createdAt string
+Row.Name name string
+Row.Namespace namespace string
+Row.UID uid string
+RowBatch.Changes changes []RowChange
+RowBatch.SubID subId string
+RowBatch.Type type string
+RowChange.Row row,omitzero Row
+RowChange.Type type string
+RowChange.UID uid,omitempty string
+RowChanged.Row row Row
+RowChanged.SubID subId string
+RowChanged.Type type string
+RowDeleted.SubID subId string
+RowDeleted.Type type string
+RowDeleted.UID uid string
+SearchHit.Group group string
+SearchHit.Kind kind string
+SearchHit.Name name string
+SearchHit.Namespace namespace string
+SearchHit.Resource resource string
+SearchHit.Version version string
+SearchResults.Errors errors,omitempty map[string]string
+SearchResults.Hits hits []SearchHit
+SearchResults.Truncated truncated bool
+ServerMsg.Changes changes,omitempty []RowChange
+ServerMsg.Columns columns,omitempty []Column
+ServerMsg.Limit limit,omitempty int
+ServerMsg.Lines lines,omitempty []string
+ServerMsg.Message message,omitempty string
+ServerMsg.Namespaced namespaced,omitempty bool
+ServerMsg.Row row,omitempty *Row
+ServerMsg.Rows rows,omitempty []Row
+ServerMsg.SubID subId,omitempty string
+ServerMsg.Total total,omitempty int
+ServerMsg.Type type string
+ServerMsg.UID uid,omitempty string
+Settings.Values values map[string]string
+Snapshot.Columns columns []Column
+Snapshot.Limit limit int
+Snapshot.Namespaced namespaced bool
+Snapshot.Rows rows []Row
+Snapshot.SubID subId string
+Snapshot.Total total int
+Snapshot.Type type string
+TerminalSize.Cols cols uint16
+TerminalSize.Rows rows uint16
+ViewState.Hidden hidden bool
+ViewState.Window window bool
+ViewSwitch.Reason reason,omitempty string
+ViewSwitch.Switched switched bool

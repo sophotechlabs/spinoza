@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -47,12 +48,13 @@ func fieldLines(typeName string, field *ast.Field) []string {
 	if tag == "-" {
 		return nil
 	}
+	kind := types.ExprString(field.Type)
 	out := []string{}
 	for _, name := range field.Names {
 		if !name.IsExported() {
 			continue
 		}
-		out = append(out, fmt.Sprintf("%s.%s %s", typeName, name.Name, tag))
+		out = append(out, fmt.Sprintf("%s.%s %s %s", typeName, name.Name, tag, kind))
 	}
 	return out
 }
@@ -84,9 +86,9 @@ func TestWireContractIsUnchanged(t *testing.T) {
 	}
 	t.Fatalf(`the JSON wire contract changed.
 
-frontend/src/lib/types.ts mirrors these names by hand, so a renamed or dropped tag
-compiles on both sides and only fails at runtime. Update types.ts, then refresh the
-golden with:
+frontend/src/lib/types.ts mirrors these names and types by hand, so a renamed tag or a
+changed field type compiles on both sides and only fails at runtime. Update types.ts,
+then refresh the golden with:
 
     UPDATE_WIRE_CONTRACT=1 go test ./internal/api/
 
