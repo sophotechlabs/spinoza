@@ -68,7 +68,7 @@ export const useToastsStore = create<ToastsState>((set) => ({
   ask: (message, action) => {
     seq += 1;
     const toast: Toast = { id: seq, tone: 'ok', message, action };
-    const note: Notification = { id: toast.id, tone: 'ok', message, at: new Date().toISOString() };
+    const note: Notification = { ...toast, at: new Date().toISOString() };
     set((state) => ({
       toasts: trim([...state.toasts, toast]),
       history: cap([...state.history, note]),

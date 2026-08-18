@@ -83,7 +83,7 @@ describe('Toasts', () => {
   it('shows nothing until something is reported', () => {
     render(<Toasts />);
 
-    expect(screen.getByLabelText('Notifications')).toBeEmptyDOMElement();
+    expect(screen.getByLabelText('Latest notifications')).toBeEmptyDOMElement();
   });
 
   it('announces a success and a failure', () => {
@@ -96,7 +96,7 @@ describe('Toasts', () => {
 
     expect(screen.getByText('pod-a deleted')).toBeInTheDocument();
     expect(screen.getByText('cannot delete pod-a')).toBeInTheDocument();
-    expect(screen.getByLabelText('Notifications')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByLabelText('Latest notifications')).toHaveAttribute('aria-live', 'polite');
   });
 
   it('colours a failure differently from a success', () => {

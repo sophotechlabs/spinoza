@@ -466,16 +466,19 @@ describe('the one-time namespace offer', () => {
   it('offers to open on the default namespace instead', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('button', { name: 'Open on default' })).toBeInTheDocument();
-    expect(screen.getAllByText(/opens on every namespace/i).length).toBeGreaterThan(0);
+    const strip = within(await screen.findByLabelText('Latest notifications'));
+
+    expect(await strip.findByRole('button', { name: 'Open on default' })).toBeInTheDocument();
+    expect(strip.getByText(/reading every namespace/i)).toBeInTheDocument();
   });
 
   it('takes the offer and remembers it', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('button', { name: 'Open on default' });
+    const strip = within(await screen.findByLabelText('Latest notifications'));
+    await strip.findByRole('button', { name: 'Open on default' });
 
-    await user.click(screen.getByRole('button', { name: 'Open on default' }));
+    await user.click(strip.getByRole('button', { name: 'Open on default' }));
 
     expect(useSettingsStore.getState().namespaceStart).toBe('default');
     expect(useNamespaceStore.getState().namespace).toBe('default');
@@ -483,7 +486,9 @@ describe('the one-time namespace offer', () => {
 
   it('is made once and never again', async () => {
     const first = render(<App />);
-    await screen.findByRole('button', { name: 'Open on default' });
+    await within(await screen.findByLabelText('Latest notifications')).findByRole('button', {
+      name: 'Open on default',
+    });
     first.unmount();
     useToastsStore.getState().clear();
 
@@ -492,7 +497,8 @@ describe('the one-time namespace offer', () => {
     await waitFor(() => {
       expect(useSettingsStore.getState().namespaceAsked).toBe(true);
     });
-    expect(screen.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
+    const strip = within(screen.getByLabelText('Latest notifications'));
+    expect(strip.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
   });
 
   it('stays quiet for someone who already opens on default', async () => {
@@ -501,7 +507,8 @@ describe('the one-time namespace offer', () => {
     render(<App />);
     await screen.findByLabelText('Namespace');
 
-    expect(screen.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
+    const quiet = within(screen.getByLabelText('Latest notifications'));
+    expect(quiet.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
     expect(useSettingsStore.getState().namespaceAsked).toBe(false);
   });
 });

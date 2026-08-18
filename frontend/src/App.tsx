@@ -147,13 +147,16 @@ export default function App() {
       return;
     }
     settings.markNamespaceAsked();
-    askToast('Spinoza opens on every namespace. Open on default instead?', {
-      label: 'Open on default',
-      run: () => {
-        useSettingsStore.getState().setNamespaceStart(DEFAULT_NAMESPACE);
-        chooseNamespace(DEFAULT_NAMESPACE);
+    askToast(
+      'Spinoza is reading every namespace in this cluster. Read only the default namespace instead?',
+      {
+        label: 'Open on default',
+        run: () => {
+          useSettingsStore.getState().setNamespaceStart(DEFAULT_NAMESPACE);
+          chooseNamespace(DEFAULT_NAMESPACE);
+        },
       },
-    });
+    );
   }, [chooseNamespace]);
 
   const [wasDown, setWasDown] = useState(false);

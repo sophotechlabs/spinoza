@@ -53,6 +53,7 @@ function whereFrom(ref: ObjectRef): string {
 
 function Row({ note, onSelectObject }: { note: Notification; onSelectObject: Jump }) {
   const ref = note.ref;
+  const action = note.action;
   return (
     <li className="flex items-baseline gap-2 border-b border-edge px-2 py-1">
       <span className="shrink-0 font-mono text-fg-muted">{clock(note.at)}</span>
@@ -60,6 +61,15 @@ function Row({ note, onSelectObject }: { note: Notification; onSelectObject: Jum
         ●
       </span>
       <span className="break-words text-fg-soft">{note.message}</span>
+      {action !== undefined && (
+        <button
+          type="button"
+          onClick={action.run}
+          className="ml-auto shrink-0 rounded border border-edge-strong px-1.5 py-0.5 text-fg hover:bg-surface-active"
+        >
+          {action.label}
+        </button>
+      )}
       {ref !== undefined && (
         <button
           type="button"

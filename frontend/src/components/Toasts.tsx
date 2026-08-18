@@ -34,7 +34,7 @@ export default function Toasts() {
   return (
     <div
       aria-live="polite"
-      aria-label="Notifications"
+      aria-label="Latest notifications"
       className="pointer-events-none fixed right-3 bottom-3 z-50 flex w-96 flex-col gap-1.5 text-xs"
     >
       {toasts.map((toast) => (

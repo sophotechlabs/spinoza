@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NotificationsPanel from '../../src/components/NotificationsPanel';
 import type { ObjectRef } from '../../src/lib/types';
@@ -33,6 +33,23 @@ function rows(): HTMLElement[] {
 
 beforeEach(() => {
   useToastsStore.getState().clear();
+});
+
+describe('an offer in the history', () => {
+  it('can still be taken from the panel', async () => {
+    const user = userEvent.setup();
+    const run = vi.fn();
+    act(() => {
+      useToastsStore
+        .getState()
+        .ask('Read only the default namespace instead?', { label: 'Open on default', run });
+    });
+    render(<NotificationsPanel onSelectObject={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open on default' }));
+
+    expect(run).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('NotificationsPanel', () => {

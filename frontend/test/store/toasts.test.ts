@@ -56,7 +56,7 @@ describe('toasts', () => {
 });
 
 describe('an offer toast', () => {
-  it('carries its action on screen but not into the history', () => {
+  it('carries its action on screen and into the history', () => {
     const run = () => undefined;
 
     useToastsStore.getState().ask('Open on default instead?', { label: 'Open on default', run });
@@ -65,7 +65,7 @@ describe('an offer toast', () => {
     expect(toast.action?.label).toBe('Open on default');
     expect(history()).toHaveLength(1);
     expect(history()[0].message).toBe('Open on default instead?');
-    expect('action' in history()[0]).toBe(false);
+    expect(history()[0].action?.label).toBe('Open on default');
   });
 });
 
