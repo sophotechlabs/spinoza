@@ -11,9 +11,12 @@ extend-exclude = [
 ]
 
 [default]
+# typos is here for prose. Hashes and hex identifiers are not prose: git commit
+# ids in generated changelogs and the hex suffix kubernetes gives every event
+# name will keep producing false hits forever, so they are ignored by shape.
 extend-ignore-re = [
-  # kubernetes names an event after its object plus a hex suffix: web.17abd9271d3
-  "\\.17[0-9a-f]{3,}",
+  "\\b[0-9a-f]{7,40}\\b",
+  "\\.1[0-9a-f]{4,}\\b",
 ]
 
 [default.extend-words]

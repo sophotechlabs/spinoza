@@ -1,3 +1,5 @@
+name: repo
+
 on:
   push:
     branches:
