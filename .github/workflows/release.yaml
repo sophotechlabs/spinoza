@@ -23,30 +23,33 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Tag the released version before release-please reads the history
+        env:
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! git diff --name-only HEAD^ HEAD | grep -qx '.release-please-manifest.json'; then
+            echo "no release commit here"
+            exit 0
+          fi
+          tag="v$(jq -r '.["."]' .release-please-manifest.json)"
+          if gh api "repos/$REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag is already tagged"
+            exit 0
+          fi
+          gh api "repos/$REPO/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SHA"
+
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-      - name: Tag the draft so the next run starts from it
-        if: steps.release.outputs.release_created
-        env:
-          TAG: ${{ steps.release.outputs.tag_name }}
-          SHA: ${{ github.sha }}
-          REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh api "repos/$REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
-            echo "$TAG is already tagged"
-            exit 0
-          fi
-          gh api "repos/$REPO/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$SHA"
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        if: steps.release.outputs.release_created
-        with:
-          persist-credentials: false
 
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         if: steps.release.outputs.release_created
