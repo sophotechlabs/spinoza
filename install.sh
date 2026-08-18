@@ -164,16 +164,22 @@ report_path() {
         echo "Run it with 'spinoza --open'"
         return 0
     fi
+    hint="$1"
+    case "$hint" in
+        "$HOME"/*)
+            hint="\$HOME${hint#"$HOME"}"
+            ;;
+    esac
     echo "$1 is not on your PATH. Add it with:"
     case "${SHELL:-}" in
         *zsh)
-            echo "   echo 'export PATH=\$HOME/.local/bin:\$PATH' >> ~/.zshrc"
+            echo "   echo 'export PATH=$hint:\$PATH' >> ~/.zshrc"
             ;;
         *fish)
             echo "   fish_add_path -U $1"
             ;;
         *)
-            echo "   echo 'export PATH=\$HOME/.local/bin:\$PATH' >> ~/.bashrc"
+            echo "   echo 'export PATH=$hint:\$PATH' >> ~/.bashrc"
             ;;
     esac
     echo "Or run it now with '$1/spinoza --open'"
