@@ -39,6 +39,13 @@ function percentOf(used: number, total: number): number {
   return Math.round((used * 100) / total);
 }
 
+function meterPercent(used: number, request: number, limit: number): number {
+  if (limit > 0) {
+    return percentOf(used, limit);
+  }
+  return percentOf(used, request);
+}
+
 function shareLabel(used: number, request: number, limit: number): string {
   const parts: string[] = [];
   if (request > 0) {
@@ -86,13 +93,13 @@ function Usage({ usage }: { usage: FluxUsage }) {
       <Meter
         label="CPU"
         value={cpuFromMilli(usage.cpuMilli)}
-        percent={percentOf(usage.cpuMilli, usage.cpuRequestMilli)}
+        percent={meterPercent(usage.cpuMilli, usage.cpuRequestMilli, usage.cpuLimitMilli)}
         share={shareLabel(usage.cpuMilli, usage.cpuRequestMilli, usage.cpuLimitMilli)}
       />
       <Meter
         label="Memory"
         value={memFromMi(usage.memoryMi)}
-        percent={percentOf(usage.memoryMi, usage.memRequestMi)}
+        percent={meterPercent(usage.memoryMi, usage.memRequestMi, usage.memLimitMi)}
         share={shareLabel(usage.memoryMi, usage.memRequestMi, usage.memLimitMi)}
       />
     </div>

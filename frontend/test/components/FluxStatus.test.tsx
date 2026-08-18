@@ -82,6 +82,30 @@ describe('FluxStatus', () => {
     expect(screen.getByText(/13% of limit/)).toBeInTheDocument();
   });
 
+  it('fills the bar against the limit, not the request', () => {
+    const { container } = render(<FluxStatus overview={overview()} />);
+    const bars = [...container.querySelectorAll('span[style]')].map((one) =>
+      one.getAttribute('style'),
+    );
+
+    expect(bars[1]).toContain('width: 13%');
+  });
+
+  it('falls back to the request when nothing sets a limit', () => {
+    const { container } = render(
+      <FluxStatus
+        overview={overview({
+          usage: { ...overview().usage, cpuLimitMilli: 0, memLimitMi: 0 },
+        })}
+      />,
+    );
+    const bars = [...container.querySelectorAll('span[style]')].map((one) =>
+      one.getAttribute('style'),
+    );
+
+    expect(bars[1]).toContain('width: 100%');
+  });
+
   it('says when usage needs metrics-server', () => {
     render(<FluxStatus overview={overview({ usage: { ...overview().usage, known: false } })} />);
 
