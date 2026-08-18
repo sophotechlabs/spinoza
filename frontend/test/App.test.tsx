@@ -281,6 +281,8 @@ vi.mock('../src/components/InspectLogs', () => ({
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { clearRecents, rememberObject } from '../src/store/recents';
+import { useFiltersStore } from '../src/store/filters';
+import { usePanelsStore } from '../src/store/panels';
 import { ALL, useNamespaceStore } from '../src/store/namespace';
 import { useSettingsStore } from '../src/store/settings';
 import { notifyOk, useToastsStore } from '../src/store/toasts';
@@ -661,6 +663,38 @@ describe('App', () => {
     expect(useNamespaceStore.getState().namespace).toBe('default');
   });
 
+  it('drops the filter chips when the cluster changes', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.type(await screen.findByLabelText('Filter'), 'web{Enter}');
+    expect(useFiltersStore.getState().chips['/v1/pods']).toHaveLength(1);
+
+    await user.click(screen.getByTestId('context-changed'));
+
+    expect(useFiltersStore.getState().chips).toEqual({});
+  });
+
+  it('opens the details again when a row is clicked with the panel put away', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    const side = usePanelsStore.getState().placement.overview;
+    act(() => {
+      usePanelsStore.getState().collapse(side, true);
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+
+    expect(usePanelsStore.getState().collapsed[side]).toBe(false);
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+  });
+
   it('starts the notification history over when the cluster changes', async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -826,7 +860,7 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+    await user.click(await screen.findByRole('button', { name: 'Cluster Overview' }));
 
     expect(screen.getByTestId('cluster-overview')).toBeInTheDocument();
     expect(window.location.hash).toContain('view=cluster');
@@ -1120,7 +1154,7 @@ describe('the command palette and shortcuts', () => {
 
     await user.click(await screen.findByRole('button', { name: /Deployment/ }));
 
-    expect(await screen.findByLabelText('Filter by name')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Filter')).toBeInTheDocument();
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ resource: 'deployments' }),
@@ -1136,7 +1170,9 @@ describe('the command palette and shortcuts', () => {
     await user.type(await screen.findByLabelText(/Search resources/), 'airbyte');
     await user.click(await screen.findByRole('button', { name: /airbyte\/airbyte-server/ }));
 
-    expect(await screen.findByLabelText('Filter by name')).toHaveValue('airbyte');
+    expect(
+      await screen.findByRole('button', { name: 'Remove the Name airbyte filter' }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Namespace')).toHaveValue('airbyte');
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       expect.any(String),
@@ -1242,7 +1278,7 @@ describe('the command palette and shortcuts', () => {
     const user = userEvent.setup();
     render(<App />);
     await selectPod(user);
-    const filter = await screen.findByLabelText('Filter by name');
+    const filter = await screen.findByLabelText('Filter');
 
     press('/');
 

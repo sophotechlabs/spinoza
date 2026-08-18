@@ -30,13 +30,14 @@ import { ratioColor, restartColor, statusColor } from '../lib/status';
 import { useMetrics } from '../lib/metrics';
 import { cpuFromMilli, memFromMi } from '../lib/units';
 import { useElementWidth } from '../lib/useElementWidth';
+import { extraWidths, widthOf } from '../lib/columnFit';
 import { useNow } from '../lib/useNow';
 import { ago } from '../lib/time';
-import { filterRows } from '../lib/tableFilter';
-import type { ImposedFilter } from '../lib/tableFilter';
-import { FILTER_INPUT_ID } from '../lib/hotkeys';
+import { fieldsOf, filterRows, parseChip } from '../lib/filterChips';
+import { useChips, useFiltersStore } from '../store/filters';
 import { opensRow } from '../lib/rowClick';
 import { columnLabel, readTableState, tableKey, writeTableState } from '../lib/tableState';
+import FilterBar from './FilterBar';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
 import StaleBanner from './StaleBanner';
@@ -49,28 +50,12 @@ interface ResourceTableProps {
   active: ResourceDescriptor | null;
   subId: string;
   selected: Row | null;
-  imposed: ImposedFilter;
   onSelect: (row: Row) => void;
 }
 
 const ROW_HEIGHT = 28;
 
-const FLEX_COLUMN_IDS = new Set(['name']);
 const SELECT_COLUMN_ID = 'select';
-
-function flexes(id: string, sizing: ColumnSizingState): boolean {
-  if (!FLEX_COLUMN_IDS.has(id)) {
-    return false;
-  }
-  return !Object.hasOwn(sizing, id);
-}
-
-function columnWidth(id: string, base: number, perFlex: number, sizing: ColumnSizingState): number {
-  if (flexes(id, sizing)) {
-    return base + perFlex;
-  }
-  return base;
-}
 
 function cellAt(row: Row, index: number): string {
   if (index >= row.cells.length) {
@@ -210,13 +195,7 @@ function rowClass(selected: boolean): string {
 
 const columnHelper = createColumnHelper<Row>();
 
-export default function ResourceTable({
-  active,
-  subId,
-  selected,
-  imposed,
-  onSelect,
-}: ResourceTableProps) {
+export default function ResourceTable({ active, subId, selected, onSelect }: ResourceTableProps) {
   const dataColumns = useSubColumns(subId);
   const namespaced = useSubNamespaced(subId);
   const error = useSubError(subId);
@@ -230,7 +209,7 @@ export default function ResourceTable({
   );
   const [sizing, setSizing] = useState<ColumnSizingState>(() => readTableState(stateKey).sizing);
   const [selection, setSelection] = useState<RowSelectionState>({});
-  const [query, setQuery] = useState(imposed.text);
+  const [text, setText] = useState('');
   const [lastResource, setLastResource] = useState(subId);
   if (subId !== lastResource) {
     setLastResource(subId);
@@ -239,13 +218,11 @@ export default function ResourceTable({
     setVisibility(next.visibility);
     setSizing(next.sizing);
     setSelection({});
-    setQuery('');
+    setText('');
   }
-  const [lastImposed, setLastImposed] = useState(imposed.at);
-  if (imposed.at !== lastImposed) {
-    setLastImposed(imposed.at);
-    setQuery(imposed.text);
-  }
+  const chips = useChips(stateKey);
+  const clearKind = useFiltersStore((state) => state.clearKind);
+  const fields = useMemo(() => fieldsOf(dataColumns, namespaced), [dataColumns, namespaced]);
 
   function changeSorting(next: SortingState) {
     setSorting(next);
@@ -380,7 +357,13 @@ export default function ResourceTable({
     return defs;
   }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics, now]);
 
-  const visibleRows = useMemo(() => filterRows(rows, query), [rows, query]);
+  const visibleRows = useMemo(() => {
+    const draft = parseChip(text, fields);
+    if (draft === null) {
+      return filterRows(rows, chips, fields);
+    }
+    return filterRows(rows, [...chips, draft], fields);
+  }, [rows, chips, text, fields]);
 
   const table = useReactTable({
     data: visibleRows,
@@ -412,17 +395,20 @@ export default function ResourceTable({
   });
 
   const tableRows = table.getRowModel().rows;
-  const leafColumnCount = table.getVisibleLeafColumns().length;
+  const leafColumns = table.getVisibleLeafColumns();
+  const leafColumnCount = leafColumns.length;
   const containerWidth = useElementWidth(scrollEl);
   const totalSize = table.getTotalSize();
-  const flexCount = table
-    .getVisibleLeafColumns()
-    .filter((column) => flexes(column.id, sizing)).length;
-  const perFlex = Math.max(0, containerWidth - totalSize) / Math.max(1, flexCount);
-  let tableWidth = totalSize;
-  if (flexCount > 0) {
-    tableWidth = Math.max(containerWidth, totalSize);
-  }
+  const stretch = extraWidths(
+    leafColumns.map((column) => ({
+      id: column.id,
+      size: column.getSize(),
+      fixed: !column.getCanResize(),
+      sized: Object.hasOwn(sizing, column.id),
+    })),
+    Math.max(0, containerWidth - totalSize),
+  );
+  const tableWidth = Math.max(containerWidth, totalSize);
 
   const virtualizer = useVirtualizer({
     count: tableRows.length,
@@ -452,7 +438,8 @@ export default function ResourceTable({
   }
 
   function clearFilter() {
-    setQuery('');
+    setText('');
+    clearKind(stateKey);
   }
 
   function clearSelection() {
@@ -497,17 +484,7 @@ export default function ResourceTable({
         <StaleBanner what="Metrics" message={metricsError} onRetry={reloadMetrics} />
       )}
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface px-2 py-1.5 text-xs">
-        <input
-          id={FILTER_INPUT_ID}
-          type="search"
-          aria-label="Filter by name"
-          placeholder="Filter by name"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-          className="w-56 rounded border border-edge bg-surface-raised px-2 py-1 text-fg placeholder:text-fg-muted focus:border-edge-emphasis"
-        />
+        <FilterBar stateKey={stateKey} fields={fields} text={text} onText={setText} />
         <details className="relative">
           <summary className="cursor-pointer rounded border border-edge px-2 py-1 text-fg-soft hover:bg-surface-raised">
             Columns
@@ -549,7 +526,7 @@ export default function ResourceTable({
                     aria-sort={ariaSort(header.column.getIsSorted())}
                     className="relative px-2 py-1 font-medium"
                     style={{
-                      width: `${columnWidth(header.column.id, header.getSize(), perFlex, sizing)}px`,
+                      width: `${widthOf(header.column.id, header.getSize(), stretch)}px`,
                     }}
                   >
                     {header.column.getCanSort() && (
@@ -567,7 +544,7 @@ export default function ResourceTable({
                     {header.column.getCanResize() && (
                       <ColumnResizeHandle
                         column={columnLabel(header.column.columnDef.header, header.column.id)}
-                        size={columnWidth(header.column.id, header.getSize(), perFlex, sizing)}
+                        size={widthOf(header.column.id, header.getSize(), stretch)}
                         min={header.column.columnDef.minSize ?? 0}
                         onSize={(next) => {
                           table.setColumnSizing((old) => ({ ...old, [header.column.id]: next }));
@@ -610,7 +587,7 @@ export default function ResourceTable({
                       key={cell.id}
                       className="truncate px-2 py-1 text-fg"
                       style={{
-                        width: `${columnWidth(cell.column.id, cell.column.getSize(), perFlex, sizing)}px`,
+                        width: `${widthOf(cell.column.id, cell.column.getSize(), stretch)}px`,
                       }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

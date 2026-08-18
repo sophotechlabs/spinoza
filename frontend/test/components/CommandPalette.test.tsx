@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CommandPalette from '../../src/components/CommandPalette';
 import { clearRecents, rememberObject } from '../../src/store/recents';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 import { makeCategory, makeDescriptor } from '../helpers';
 
 const podType = makeDescriptor({ resource: 'pods', kind: 'Pod' });
@@ -219,7 +220,7 @@ describe('CommandPalette', () => {
     expect(await screen.findByRole('button', { name: /Resources/ })).toBeInTheDocument();
   });
 
-  it('forgets the query between openings', async () => {
+  it('keeps the query between openings, selected so the next word replaces it', async () => {
     const user = userEvent.setup();
     const { view, onClose, onSelectView, onSelectResource, onOpenObject } = renderPalette();
     await screen.findByRole('button', { name: /Pod/ });
@@ -234,6 +235,32 @@ describe('CommandPalette', () => {
         onOpenObject={onOpenObject}
       />,
     );
+
+    view.rerender(
+      <CommandPalette
+        open
+        onClose={onClose}
+        onSelectView={onSelectView}
+        onSelectResource={onSelectResource}
+        onOpenObject={onOpenObject}
+      />,
+    );
+
+    const box = screen.getByLabelText(/Search resources/);
+    expect(box).toHaveValue('deploy');
+    expect((box as HTMLInputElement).selectionStart).toBe(0);
+    expect((box as HTMLInputElement).selectionEnd).toBe('deploy'.length);
+  });
+
+  it('forgets the query when the cluster changes', async () => {
+    const user = userEvent.setup();
+    renderPalette();
+    await screen.findByRole('button', { name: /Pod/ });
+    await user.type(screen.getByLabelText(/Search resources/), 'deploy');
+
+    act(() => {
+      bumpClusterEpoch();
+    });
 
     expect(screen.getByLabelText(/Search resources/)).toHaveValue('');
   });

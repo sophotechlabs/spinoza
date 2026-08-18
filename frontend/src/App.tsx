@@ -20,9 +20,12 @@ import { clearRecents, rememberObject } from './store/recents';
 import { clearHistory } from './store/toasts';
 import { DEFAULT_NAMESPACE, useNamespace, useNamespaceStore } from './store/namespace';
 import { useSettingsStore } from './store/settings';
-import { NO_FILTER, imposeFilter } from './lib/tableFilter';
+import { nameChips } from './lib/filterChips';
+import { clearFilters, imposeChips } from './store/filters';
+import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
 import { clearTerminals } from './store/terminals';
+import { revealDetails } from './store/panels';
 import { askToast, notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -70,7 +73,6 @@ export default function App() {
   const [moved, setMoved] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
-  const [imposed, setImposed] = useState(NO_FILTER);
 
   const key = resourceKey(route.resource);
   const [lastKey, setLastKey] = useState(key);
@@ -236,6 +238,7 @@ export default function App() {
     clearHistory();
     clearTerminals();
     clearForwards();
+    clearFilters();
     resetNamespace();
     bumpClusterEpoch();
     feed.reconnect();
@@ -254,6 +257,7 @@ export default function App() {
     }
     if (ref !== null) {
       rememberObject(ref);
+      revealDetails();
     }
     navigate({ ...route, selection: ref });
   }
@@ -263,6 +267,7 @@ export default function App() {
       return;
     }
     rememberObject(found.ref);
+    revealDetails();
     if (found.type === null) {
       navigate({ ...route, selection: found.ref });
       return;
@@ -270,7 +275,7 @@ export default function App() {
     if (found.ref.namespace !== '') {
       chooseNamespace(found.ref.namespace);
     }
-    setImposed((current) => imposeFilter(current, found.filter));
+    imposeChips(tableKey(found.type), nameChips(found.filter));
     navigate({
       context: route.context,
       view: 'resources',
@@ -303,7 +308,6 @@ export default function App() {
       active={active}
       subId={subId}
       selected={selectedRow}
-      imposed={imposed}
       onSelect={handleSelectRow}
     />
   );

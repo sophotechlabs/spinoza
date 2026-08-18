@@ -6,7 +6,8 @@ import ResourceTable from '../../src/components/ResourceTable';
 import { useResourcesStore } from '../../src/store/resources';
 import { makeColumns, makeDescriptor, makeRow } from '../helpers';
 import { readTableState, tableKey } from '../../src/lib/tableState';
-import { NO_FILTER, imposeFilter } from '../../src/lib/tableFilter';
+import { useFiltersStore } from '../../src/store/filters';
+import { ALL, useNamespaceStore } from '../../src/store/namespace';
 
 const SUB = 's1';
 const descriptor = makeDescriptor({ resource: 'pods', kind: 'Pod' });
@@ -28,20 +29,9 @@ function seed(columns: Column[], namespaced: boolean, rows: Row[]): void {
   useResourcesStore.getState().applySnapshot(SUB, columns, namespaced, rows);
 }
 
-function renderTable(
-  active: ResourceDescriptor | null,
-  selected: Row | null,
-  onSelect = vi.fn(),
-  imposed = NO_FILTER,
-) {
+function renderTable(active: ResourceDescriptor | null, selected: Row | null, onSelect = vi.fn()) {
   return render(
-    <ResourceTable
-      active={active}
-      subId={SUB}
-      selected={selected}
-      imposed={imposed}
-      onSelect={onSelect}
-    />,
+    <ResourceTable active={active} subId={SUB} selected={selected} onSelect={onSelect} />,
   );
 }
 
@@ -94,7 +84,7 @@ describe('ResourceTable', () => {
 
     renderTable(descriptor, null);
 
-    expect(screen.queryByLabelText('Filter by name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Filter')).not.toBeInTheDocument();
     expect(screen.getByText('the cluster did not answer in time')).toBeInTheDocument();
   });
 
@@ -591,7 +581,7 @@ describe('ResourceTable', () => {
     renderTable(descriptor, null);
     expect(screen.getByText('2 of 2')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Filter by name'), 'web');
+    await user.type(screen.getByLabelText('Filter'), 'web');
 
     expect(screen.getByRole('button', { name: 'web-1' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'api-1' })).not.toBeInTheDocument();
@@ -603,7 +593,7 @@ describe('ResourceTable', () => {
     renderTable(descriptor, null);
 
     expect(screen.queryByLabelText('Namespace')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Filter by name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter')).toBeInTheDocument();
   });
 
   it('leaves debug containers out of the container squares', async () => {
@@ -654,64 +644,110 @@ describe('a timestamp column', () => {
   });
 });
 
-describe('a filter imposed from outside', () => {
-  it('fills the filter box and narrows the rows', async () => {
+describe('filter chips', () => {
+  beforeEach(() => {
+    resetStore();
+    useFiltersStore.getState().clear();
+    useNamespaceStore.getState().choose(ALL);
+  });
+
+  afterEach(() => {
+    useFiltersStore.getState().clear();
+    useNamespaceStore.getState().choose(ALL);
+  });
+
+  it('narrows the rows to a chip imposed from outside', async () => {
     seed(makeColumns([]), true, [
       makeRow({ uid: 'a', name: 'coredns-1', namespace: 'kube-system' }),
       makeRow({ uid: 'b', name: 'metrics-server', namespace: 'kube-system' }),
     ]);
-    renderTable(descriptor, null, vi.fn(), imposeFilter(NO_FILTER, 'coredns'));
+    useFiltersStore.getState().impose(tableKey(descriptor), [{ field: 'name', value: 'coredns' }]);
+    renderTable(descriptor, null);
 
-    expect(await screen.findByRole('searchbox', { name: 'Filter by name' })).toHaveValue('coredns');
+    expect(await screen.findByText('coredns')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'metrics-server' })).not.toBeInTheDocument();
+    expect(screen.getByText('1 of 2')).toBeInTheDocument();
   });
 
-  it('lands again when the same text is imposed a second time', async () => {
+  it('turns typed text into a chip on Enter', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'web-1', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'api-1', namespace: 'prod' }),
+    ]);
+    renderTable(descriptor, null);
+
+    await user.type(screen.getByLabelText('Filter'), 'web{Enter}');
+
+    expect(screen.getByLabelText('Filter')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Remove the Name web filter' })).toBeInTheDocument();
+    expect(screen.getByText('1 of 2')).toBeInTheDocument();
+  });
+
+  it('filters on a column named by the chip', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns(['Status']), true, [
+      makeRow({ uid: 'a', name: 'web-1', namespace: 'prod', cells: ['Running'] }),
+      makeRow({ uid: 'b', name: 'api-1', namespace: 'prod', cells: ['CrashLoopBackOff'] }),
+    ]);
+    renderTable(descriptor, null);
+
+    await user.type(screen.getByLabelText('Filter'), 'status:crash');
+
+    expect(screen.getByRole('button', { name: 'api-1' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'web-1' })).not.toBeInTheDocument();
+  });
+
+  it('narrows on every chip at once', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns(['Status']), true, [
+      makeRow({ uid: 'a', name: 'web-1', namespace: 'prod', cells: ['Running'] }),
+      makeRow({ uid: 'b', name: 'web-2', namespace: 'prod', cells: ['Pending'] }),
+      makeRow({ uid: 'c', name: 'api-1', namespace: 'prod', cells: ['Running'] }),
+    ]);
+    renderTable(descriptor, null);
+
+    await user.type(screen.getByLabelText('Filter'), 'web{Enter}status:running{Enter}');
+
+    expect(screen.getByText('1 of 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'web-1' })).toBeInTheDocument();
+  });
+
+  it('keeps the chips of a kind but drops the typed text when the list moves on', async () => {
     const user = userEvent.setup();
     seed(makeColumns([]), true, [
       makeRow({ uid: 'a', name: 'coredns-1', namespace: 'kube-system' }),
     ]);
-    const once = imposeFilter(NO_FILTER, 'coredns');
-    const view = renderTable(descriptor, null, vi.fn(), once);
-    const box = await screen.findByRole('searchbox', { name: 'Filter by name' });
-    await user.clear(box);
-    expect(box).toHaveValue('');
+    const view = renderTable(descriptor, null);
+    await user.type(screen.getByLabelText('Filter'), 'coredns{Enter}dns');
 
-    view.rerender(
-      <ResourceTable
-        active={descriptor}
-        subId={SUB}
-        selected={null}
-        imposed={imposeFilter(once, 'coredns')}
-        onSelect={vi.fn()}
-      />,
-    );
-
-    expect(box).toHaveValue('coredns');
-  });
-
-  it('is dropped when the list moves to another resource', async () => {
-    seed(makeColumns([]), true, [
-      makeRow({ uid: 'a', name: 'coredns-1', namespace: 'kube-system' }),
-    ]);
-    const imposed = imposeFilter(NO_FILTER, 'coredns');
-    const view = renderTable(descriptor, null, vi.fn(), imposed);
-    await screen.findByRole('searchbox', { name: 'Filter by name' });
-
+    const other = makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false });
     useResourcesStore
       .getState()
-      .applySnapshot('s2', makeColumns([]), true, [makeRow({ uid: 'c', name: 'node-1' })]);
-    view.rerender(
-      <ResourceTable
-        active={descriptor}
-        subId="s2"
-        selected={null}
-        imposed={imposed}
-        onSelect={vi.fn()}
-      />,
-    );
+      .applySnapshot('s2', makeColumns([]), false, [makeRow({ uid: 'c', name: 'node-1' })]);
+    view.rerender(<ResourceTable active={other} subId="s2" selected={null} onSelect={vi.fn()} />);
 
-    expect(screen.getByRole('searchbox', { name: 'Filter by name' })).toHaveValue('');
+    expect(screen.getByLabelText('Filter')).toHaveValue('');
+    expect(
+      screen.queryByRole('button', { name: 'Remove the Name coredns filter' }),
+    ).not.toBeInTheDocument();
+    expect(useFiltersStore.getState().chips[tableKey(descriptor)]).toEqual([
+      { field: 'name', value: 'coredns' },
+    ]);
+  });
+
+  it('clears the chips and the typed text together', async () => {
+    const user = userEvent.setup();
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'web-0', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+    await user.type(screen.getByLabelText('Filter'), 'nothing{Enter}matches');
+    expect(screen.getByText('Nothing matches the current filter.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear filter' }));
+
+    expect(await screen.findByText('web-0')).toBeInTheDocument();
+    expect(screen.getByLabelText('Filter')).toHaveValue('');
+    expect(useFiltersStore.getState().chips[tableKey(descriptor)]).toBeUndefined();
   });
 });
 
@@ -802,13 +838,7 @@ describe('selecting several rows at once', () => {
       .getState()
       .applySnapshot('s2', makeColumns([]), true, [makeRow({ uid: 'c', name: 'node-1' })]);
     view.rerender(
-      <ResourceTable
-        active={descriptor}
-        subId="s2"
-        selected={null}
-        imposed={NO_FILTER}
-        onSelect={vi.fn()}
-      />,
+      <ResourceTable active={descriptor} subId="s2" selected={null} onSelect={vi.fn()} />,
     );
 
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
@@ -898,15 +928,7 @@ describe('a sort the user chose', () => {
     useResourcesStore
       .getState()
       .applySnapshot('s2', makeColumns([]), false, [makeRow({ uid: 'c', name: 'node-1' })]);
-    view.rerender(
-      <ResourceTable
-        active={other}
-        subId="s2"
-        selected={null}
-        imposed={NO_FILTER}
-        onSelect={vi.fn()}
-      />,
-    );
+    view.rerender(<ResourceTable active={other} subId="s2" selected={null} onSelect={vi.fn()} />);
 
     expect(screen.getAllByRole('columnheader')[1].textContent).not.toContain('▲');
   });
@@ -1155,12 +1177,73 @@ describe('pointer capture during a drag', () => {
     const user = userEvent.setup();
     seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'web-0', namespace: 'prod' })]);
     renderTable(descriptor, null);
-    await user.type(await screen.findByLabelText('Filter by name'), 'nothing-matches');
+    await user.type(await screen.findByLabelText('Filter'), 'nothing-matches');
     expect(screen.getByText('Nothing matches the current filter.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Clear filter' }));
 
     expect(await screen.findByText('web-0')).toBeInTheDocument();
-    expect(screen.getByLabelText('Filter by name')).toHaveValue('');
+    expect(screen.getByLabelText('Filter')).toHaveValue('');
+  });
+});
+
+describe('filling the width on screen', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function headerWidths(): number[] {
+    return screen
+      .getAllByRole('columnheader')
+      .map((header) => Number.parseInt(header.style.width, 10));
+  }
+
+  function total(): number {
+    return headerWidths().reduce((sum, width) => sum + width, 0);
+  }
+
+  it('spans the space the table is given', () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
+    seed(makeColumns(['Status']), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+
+    expect(screen.getByRole('table').style.width).toBe('1200px');
+    expect(total()).toBe(1200);
+  });
+
+  it('shares the room between every column, not just the name', () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
+    seed(makeColumns(['Status']), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+
+    const [, name, status] = headerWidths();
+
+    expect(name).toBeGreaterThan(240);
+    expect(status).toBeGreaterThan(130);
+  });
+
+  it('keeps filling the row once the user has sized a column', () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
+    seed(makeColumns(['Status']), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+
+    const before = headerWidths()[1];
+    drag(screen.getByRole('button', { name: 'Resize the Name column' }), [30]);
+
+    expect(headerWidths()[1]).toBe(before + 30);
+    expect(total()).toBe(1200);
+  });
+
+  it('scrolls instead of squeezing when the columns need more room', () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(200);
+    seed(makeColumns(['Status']), false, [makeRow({ uid: 'a', name: 'pod-a' })]);
+    renderTable(descriptor, null);
+
+    expect(total()).toBeGreaterThan(200);
+    expect(screen.getByRole('table').style.width).toBe(`${String(total())}px`);
   });
 });

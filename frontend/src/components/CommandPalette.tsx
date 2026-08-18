@@ -6,6 +6,7 @@ import type { PaletteItem, PaletteOpen } from '../lib/palette';
 import { SEARCH_DELAY_MS, searchObjects, worthSearching } from '../lib/search';
 import type { SearchHit } from '../lib/types';
 import { useRecents } from '../store/recents';
+import { useClusterEpoch } from '../store/cluster';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -35,9 +36,15 @@ export default function CommandPalette({
   const close = useRef(onClose);
   close.current = onClose;
   const recents = useRecents();
+  const epoch = useClusterEpoch();
   const [categories, setCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
+  const [lastEpoch, setLastEpoch] = useState(epoch);
+  if (epoch !== lastEpoch) {
+    setLastEpoch(epoch);
+    setQuery('');
+  }
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [partial, setPartial] = useState(false);
   const asked = useRef(0);
@@ -47,6 +54,7 @@ export default function CommandPalette({
     if (open && dialog?.open === false) {
       dialog.showModal();
       inputRef.current?.focus();
+      inputRef.current?.select();
     }
     if (!open && dialog?.open === true) {
       dialog.close();
@@ -67,7 +75,6 @@ export default function CommandPalette({
 
   useEffect(() => {
     if (!open) {
-      setQuery('');
       setCursor(0);
       return;
     }
