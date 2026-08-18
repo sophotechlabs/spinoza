@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.1](https://github.com/sophotechlabs/spinoza/compare/v1.6.0...v1.6.1) (2026-08-18)
+
+
+### CI
+
+* publish the release only once the macos app is attached ([2734d52](https://github.com/sophotechlabs/spinoza/commit/2734d526c96f5a0f5a057516a392f0e063dacacd))
+* tag the release commit before release-please scans history ([f8e839d](https://github.com/sophotechlabs/spinoza/commit/f8e839df31fd6303ee94372d3367e0a04027683c))
+
+
+### Documentation
+
+* **changelog:** replace the empty 1.5.0 entry with what it actually shipped ([11d1ca4](https://github.com/sophotechlabs/spinoza/commit/11d1ca44c4ea64662fff4c840a7c5cb2107469ab))
+
 ## [1.6.0](https://github.com/sophotechlabs/spinoza/compare/v1.5.0...v1.6.0) (2026-08-18)
 
 
