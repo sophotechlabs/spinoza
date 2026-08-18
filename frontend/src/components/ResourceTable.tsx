@@ -11,6 +11,7 @@ import {
 import type {
   ColumnDef,
   ColumnSizingState,
+  Row as TanRow,
   RowSelectionState,
   SortDirection,
   SortingState,
@@ -128,6 +129,39 @@ function renderMetricCell(kind: string, metrics: Metrics, row: Row, memory: bool
     return nodeUsageCell(usage, memory);
   }
   return podUsageCell(usage, memory);
+}
+
+const UNMEASURED = -1;
+
+function metricValue(kind: string, metrics: Metrics, row: Row, memory: boolean): number {
+  const usage = metricUsage(kind, metrics, row);
+  if (usage === undefined) {
+    return UNMEASURED;
+  }
+  if (kind === 'Node' && memory) {
+    return usage.memPercent;
+  }
+  if (kind === 'Node') {
+    return usage.cpuPercent;
+  }
+  if (memory) {
+    return usage.memoryMi;
+  }
+  return usage.cpuMilli;
+}
+
+function metricKey(kind: string, metrics: Metrics, row: Row, memory: boolean): string {
+  return String(metricValue(kind, metrics, row, memory));
+}
+
+function byMetric(
+  kind: string,
+  metrics: Metrics,
+  memory: boolean,
+): (left: TanRow<Row>, right: TanRow<Row>) => number {
+  return (left, right) =>
+    metricValue(kind, metrics, left.original, memory) -
+    metricValue(kind, metrics, right.original, memory);
 }
 
 function sortIndicator(dir: false | SortDirection): string {
@@ -297,20 +331,26 @@ export default function ResourceTable({
     });
     if (wantMetrics && metrics !== null) {
       const sample = metrics;
-      defs.push({
-        id: 'cpu',
-        header: 'CPU',
-        size: 110,
-        enableSorting: false,
-        cell: (info) => renderMetricCell(activeKind, sample, info.row.original, false),
-      });
-      defs.push({
-        id: 'memory',
-        header: 'Memory',
-        size: 110,
-        enableSorting: false,
-        cell: (info) => renderMetricCell(activeKind, sample, info.row.original, true),
-      });
+      defs.push(
+        columnHelper.accessor((row) => metricKey(activeKind, sample, row, false), {
+          id: 'cpu',
+          header: 'CPU',
+          size: 110,
+          sortDescFirst: true,
+          sortingFn: byMetric(activeKind, sample, false),
+          cell: (info) => renderMetricCell(activeKind, sample, info.row.original, false),
+        }),
+      );
+      defs.push(
+        columnHelper.accessor((row) => metricKey(activeKind, sample, row, true), {
+          id: 'memory',
+          header: 'Memory',
+          size: 110,
+          sortDescFirst: true,
+          sortingFn: byMetric(activeKind, sample, true),
+          cell: (info) => renderMetricCell(activeKind, sample, info.row.original, true),
+        }),
+      );
     }
     defs.push(
       columnHelper.accessor('createdAt', {

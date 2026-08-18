@@ -58,6 +58,14 @@ function resetStore(): void {
   useResourcesStore.setState({ subs: new Map(), errors: new Map() });
 }
 
+function names(): string[] {
+  return screen
+    .getAllByRole('row')
+    .slice(1)
+    .map((row) => row.querySelector('button')?.textContent ?? '')
+    .filter((name) => name !== '');
+}
+
 describe('ResourceTable', () => {
   beforeEach(() => {
     resetStore();
@@ -425,6 +433,117 @@ describe('ResourceTable', () => {
     expect(await screen.findByText('37%')).toBeInTheDocument();
     expect(screen.getByText('25%')).toBeInTheDocument();
     expect(screen.getAllByText('0%').length).toBeGreaterThan(0);
+  });
+
+  it('sorts nodes by cpu, heaviest first', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: {},
+            nodes: {
+              'node-1': { cpuMilli: 500, memoryMi: 1024, cpuPercent: 12, memPercent: 60 },
+              'node-2': { cpuMilli: 2500, memoryMi: 512, cpuPercent: 80, memPercent: 20 },
+            },
+          }),
+      }),
+    );
+    const nodeDescriptor = makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false });
+    seed(makeColumns([]), false, [
+      makeRow({ uid: 'a', name: 'node-1', namespace: '' }),
+      makeRow({ uid: 'b', name: 'node-2', namespace: '' }),
+    ]);
+    renderTable(nodeDescriptor, null);
+    await screen.findByText('12%');
+
+    await user.click(screen.getByRole('button', { name: /^CPU/ }));
+
+    expect(names()).toEqual(['node-2', 'node-1']);
+  });
+
+  it('sorts nodes by memory on its own column', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: {},
+            nodes: {
+              'node-1': { cpuMilli: 500, memoryMi: 1024, cpuPercent: 12, memPercent: 60 },
+              'node-2': { cpuMilli: 2500, memoryMi: 512, cpuPercent: 80, memPercent: 20 },
+            },
+          }),
+      }),
+    );
+    const nodeDescriptor = makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false });
+    seed(makeColumns([]), false, [
+      makeRow({ uid: 'a', name: 'node-1', namespace: '' }),
+      makeRow({ uid: 'b', name: 'node-2', namespace: '' }),
+    ]);
+    renderTable(nodeDescriptor, null);
+    await screen.findByText('60%');
+
+    await user.click(screen.getByRole('button', { name: /^Memory/ }));
+
+    expect(names()).toEqual(['node-1', 'node-2']);
+  });
+
+  it('sorts pods by memory, hungriest first', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: {
+              'prod/pod-a': { cpuMilli: 900, memoryMi: 64, cpuPercent: 0, memPercent: 0 },
+              'prod/pod-b': { cpuMilli: 100, memoryMi: 512, cpuPercent: 0, memPercent: 0 },
+            },
+            nodes: {},
+          }),
+      }),
+    );
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod' }),
+    ]);
+    renderTable(descriptor, null);
+    await screen.findByText('64Mi');
+
+    await user.click(screen.getByRole('button', { name: /^Memory/ }));
+
+    expect(names()).toEqual(['pod-b', 'pod-a']);
+  });
+
+  it('leaves a pod the metrics server never mentioned at the bottom', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: { 'prod/pod-a': { cpuMilli: 150, memoryMi: 192, cpuPercent: 0, memPercent: 0 } },
+            nodes: {},
+          }),
+      }),
+    );
+    seed(makeColumns([]), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod' }),
+    ]);
+    renderTable(descriptor, null);
+    await screen.findByText('150m');
+
+    await user.click(screen.getByRole('button', { name: /^CPU/ }));
+
+    expect(names()).toEqual(['pod-a', 'pod-b']);
   });
 
   it('says the metrics columns stopped updating without blanking them', async () => {
