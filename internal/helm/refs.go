@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -87,16 +88,16 @@ func refsWithFallback(
 		return refPage{}, err
 	}
 	out := refPage{}
-	refused := 0
+	allowed := []string{}
 	for _, name := range names {
 		one, oneErr := listRefs(ctx, client, driver, gvr, name)
 		if apierrors.IsForbidden(oneErr) {
-			refused++
 			continue
 		}
 		if oneErr != nil {
 			return refPage{}, oneErr
 		}
+		allowed = append(allowed, name)
 		out.items = append(out.items, one.items...)
 		if one.truncated {
 			out.truncated = true
@@ -106,7 +107,7 @@ func refsWithFallback(
 			break
 		}
 	}
-	out.denied = deniedNote(resource, len(names), refused)
+	out.denied = deniedNote(resource, len(names), allowed)
 	return out, nil
 }
 
@@ -156,11 +157,15 @@ func namespaceRefs(ctx context.Context, client metadata.Interface) ([]string, er
 	}
 }
 
-func deniedNote(resource string, namespaces, refused int) string {
-	return fmt.Sprintf(
+func deniedNote(resource string, namespaces int, allowed []string) string {
+	head := fmt.Sprintf(
 		"%s could not be listed cluster-wide; %d of %d namespaces allowed it",
-		resource, namespaces-refused, namespaces,
+		resource, len(allowed), namespaces,
 	)
+	if len(allowed) == 0 {
+		return head
+	}
+	return head + ": " + strings.Join(allowed, ", ")
 }
 
 func joinNotes(left, right string) string {

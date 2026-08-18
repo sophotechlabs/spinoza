@@ -453,6 +453,12 @@ func TestListFallsBackPerNamespaceWhenClusterWideSecretsAreForbidden(t *testing.
 	if !strings.Contains(got.Error, "1 of 2 namespaces allowed it") {
 		t.Fatalf("error = %q, want the namespace tally", got.Error)
 	}
+	if !strings.Contains(got.Error, "allowed it: demo") {
+		t.Fatalf("error = %q, want the readable namespace named", got.Error)
+	}
+	if strings.Contains(got.Error, "locked") {
+		t.Fatalf("error = %q, want the forbidden namespace left out", got.Error)
+	}
 }
 
 func TestListSurfacesTheDenialWhenNamespacesAreHiddenToo(t *testing.T) {
@@ -899,5 +905,23 @@ func TestASecretThatIsNotReleaseStorageIsReportedAsUnreadable(t *testing.T) {
 	}
 	if !strings.Contains(got.Error, "could not be read") {
 		t.Fatalf("error = %q, want the unreadable payload named", got.Error)
+	}
+}
+
+func TestDeniedNoteNamesTheNamespacesItCouldRead(t *testing.T) {
+	got := deniedNote("secrets", 44, []string{"argocd", "default"})
+
+	want := "secrets could not be listed cluster-wide; 2 of 44 namespaces allowed it: argocd, default"
+	if got != want {
+		t.Fatalf("deniedNote = %q, want %q", got, want)
+	}
+}
+
+func TestDeniedNoteStopsAtTheTallyWhenNothingWasReadable(t *testing.T) {
+	got := deniedNote("config maps", 3, nil)
+
+	want := "config maps could not be listed cluster-wide; 0 of 3 namespaces allowed it"
+	if got != want {
+		t.Fatalf("deniedNote = %q, want %q", got, want)
 	}
 }
