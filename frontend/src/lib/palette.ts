@@ -1,5 +1,6 @@
 import type { Category, ObjectRef, ResourceDescriptor, SearchHit, View } from './types';
 import { refOf } from './search';
+import { typeFor } from './catalog';
 import { argoInstalled, fluxInstalled } from './gitops';
 
 export const VIEW_LABELS: Record<View, string> = {
@@ -42,25 +43,6 @@ export interface PaletteOpen {
   ref: ObjectRef;
   type: ResourceDescriptor | null;
   filter: string;
-}
-
-function gvrKey(gvr: { group: string; version: string; resource: string }): string {
-  return `${gvr.group}/${gvr.version}/${gvr.resource}`;
-}
-
-export function typeFor(
-  categories: Category[],
-  gvr: { group: string; version: string; resource: string },
-): ResourceDescriptor | null {
-  const wanted = gvrKey(gvr);
-  for (const category of categories) {
-    for (const descriptor of category.resources) {
-      if (gvrKey(descriptor) === wanted) {
-        return descriptor;
-      }
-    }
-  }
-  return null;
 }
 
 function groupLabel(descriptor: ResourceDescriptor): string {

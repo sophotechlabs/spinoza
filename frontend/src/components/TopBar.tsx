@@ -13,12 +13,20 @@ import Wordmark from './Wordmark';
 
 interface TopBarProps {
   status: ConnectionStatus;
+  scoped?: boolean | null;
   onReconnect?: () => void;
   onContextChanged?: () => void;
   onOpenPalette?: () => void;
   onOpenSettings?: () => void;
   onSelectObject?: (ref: ObjectRef) => void;
   onLeftForDesktop?: () => void;
+}
+
+function pickerTitle(scoped: boolean | null): string {
+  if (scoped === false) {
+    return 'This kind is not in a namespace';
+  }
+  return 'The namespace the resource list shows';
 }
 
 function statusColor(status: ConnectionStatus): string {
@@ -33,6 +41,7 @@ function statusColor(status: ConnectionStatus): string {
 
 export default function TopBar({
   status,
+  scoped = null,
   onReconnect,
   onContextChanged,
   onOpenPalette,
@@ -112,12 +121,13 @@ export default function TopBar({
       </div>
       <select
         aria-label="Namespace"
-        title="The namespace the resource list shows"
+        title={pickerTitle(scoped)}
+        disabled={scoped === false}
         value={namespace}
         onChange={(event) => {
           choose(event.target.value);
         }}
-        className={`${CONTROL} max-w-48 border-edge-strong bg-surface-raised text-fg-soft`}
+        className={`${CONTROL} max-w-48 border-edge-strong bg-surface-raised text-fg-soft disabled:cursor-not-allowed disabled:text-fg-muted`}
       >
         <option value={ALL}>All namespaces</option>
         {names.map((name) => (

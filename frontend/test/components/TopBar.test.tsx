@@ -292,4 +292,20 @@ describe('the top bar entry points', () => {
     expect(useNamespaceStore.getState().namespace).toBe('shop');
     vi.unstubAllGlobals();
   });
+
+  it('stays open while nothing says the kind is cluster-scoped', () => {
+    render(<TopBar status="connected" />);
+
+    const picker = screen.getByRole('combobox', { name: 'Namespace' });
+    expect(picker).toBeEnabled();
+    expect(picker).toHaveAttribute('title', 'The namespace the resource list shows');
+  });
+
+  it('shuts for a kind that is not in a namespace', () => {
+    render(<TopBar status="connected" scoped={false} />);
+
+    const picker = screen.getByRole('combobox', { name: 'Namespace' });
+    expect(picker).toBeDisabled();
+    expect(picker).toHaveAttribute('title', 'This kind is not in a namespace');
+  });
 });

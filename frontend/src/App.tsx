@@ -21,6 +21,8 @@ import { clearHistory } from './store/toasts';
 import { DEFAULT_NAMESPACE, useNamespace, useNamespaceStore } from './store/namespace';
 import { useSettingsStore } from './store/settings';
 import { nameChips } from './lib/filterChips';
+import { kindScope } from './lib/catalog';
+import { clearCatalog, useCategories } from './store/catalog';
 import { clearFilters, imposeChips } from './store/filters';
 import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
@@ -51,6 +53,13 @@ import type { Section } from './components/SettingsDialog';
 
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 const ArgoGraph = lazy(() => import('./components/ArgoGraph'));
+
+function pickerScope(view: View, scope: boolean | null): boolean | null {
+  if (view !== 'resources') {
+    return null;
+  }
+  return scope;
+}
 
 const FIRST_SUB_ID = 'main#0';
 const MAIN_ID = 'content';
@@ -88,6 +97,9 @@ export default function App() {
     }
     return descriptorOf(route.resource);
   }, [route.resource]);
+
+  const categories = useCategories();
+  const scope = useMemo(() => kindScope(categories, route.resource), [categories, route.resource]);
 
   const { subscribe, unsubscribe, subscribeLogs, unsubscribeLogs } = feed;
   const namespace = useNamespace();
@@ -239,6 +251,7 @@ export default function App() {
     clearTerminals();
     clearForwards();
     clearFilters();
+    clearCatalog();
     resetNamespace();
     bumpClusterEpoch();
     feed.reconnect();
@@ -307,6 +320,7 @@ export default function App() {
     <ResourceTable
       active={active}
       subId={subId}
+      scope={scope}
       selected={selectedRow}
       onSelect={handleSelectRow}
     />
@@ -356,6 +370,7 @@ export default function App() {
       <ErrorBoundary label="The top bar">
         <TopBar
           status={feed.status}
+          scoped={pickerScope(route.view, scope)}
           onReconnect={feed.reconnect}
           onContextChanged={handleContextChanged}
           onOpenPalette={() => {

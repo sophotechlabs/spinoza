@@ -4,6 +4,7 @@ import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/di
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 import { useClusterEpoch } from '../store/cluster';
+import { rememberCatalog } from '../store/catalog';
 import {
   ARGO_SECTION,
   FLUX_SECTION,
@@ -224,6 +225,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           return;
         }
         setCategories(catalog.categories);
+        rememberCatalog(catalog.categories);
         setError(catalog.error ?? null);
       } catch (err: unknown) {
         if (mounted) {
@@ -259,6 +261,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     try {
       const catalog = await refreshResources();
       setCategories(catalog.categories);
+      rememberCatalog(catalog.categories);
       setError(catalog.error ?? null);
     } catch (err: unknown) {
       setError(errorMessage(err, 'discovery request failed'));

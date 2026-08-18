@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ObjectRef } from '../../src/lib/types';
-import {
-  VIEW_LABELS,
-  clusterItems,
-  matchItems,
-  paletteItems,
-  typeFor,
-} from '../../src/lib/palette';
+import { VIEW_LABELS, clusterItems, matchItems, paletteItems } from '../../src/lib/palette';
 import { makeCategory, makeDescriptor } from '../helpers';
 
 const podType = makeDescriptor({ resource: 'pods', kind: 'Pod' });
@@ -70,18 +64,6 @@ describe('paletteItems', () => {
     const items = paletteItems(categories, [{ ...recent, resource: 'widgets' }]);
 
     expect(items[0]).toMatchObject({ type: null });
-  });
-});
-
-describe('typeFor', () => {
-  it('finds the discovered kind behind a group, version and resource', () => {
-    expect(typeFor(categories, { group: 'apps', version: 'v1', resource: 'deployments' })).toEqual(
-      deploymentType,
-    );
-  });
-
-  it('has nothing for a resource that is not in the catalog', () => {
-    expect(typeFor(categories, { group: '', version: 'v1', resource: 'widgets' })).toBeNull();
   });
 });
 

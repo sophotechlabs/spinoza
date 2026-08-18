@@ -34,6 +34,7 @@ import { extraWidths, widthOf } from '../lib/columnFit';
 import { useNow } from '../lib/useNow';
 import { ago } from '../lib/time';
 import { fieldsOf, filterRows, parseChip } from '../lib/filterChips';
+import { scopedBy } from '../lib/catalog';
 import { useChips, useFiltersStore } from '../store/filters';
 import { opensRow } from '../lib/rowClick';
 import { columnLabel, readTableState, tableKey, writeTableState } from '../lib/tableState';
@@ -49,6 +50,7 @@ import Loading from './Loading';
 interface ResourceTableProps {
   active: ResourceDescriptor | null;
   subId: string;
+  scope: boolean | null;
   selected: Row | null;
   onSelect: (row: Row) => void;
 }
@@ -195,7 +197,13 @@ function rowClass(selected: boolean): string {
 
 const columnHelper = createColumnHelper<Row>();
 
-export default function ResourceTable({ active, subId, selected, onSelect }: ResourceTableProps) {
+export default function ResourceTable({
+  active,
+  subId,
+  scope,
+  selected,
+  onSelect,
+}: ResourceTableProps) {
   const dataColumns = useSubColumns(subId);
   const namespaced = useSubNamespaced(subId);
   const error = useSubError(subId);
@@ -222,7 +230,8 @@ export default function ResourceTable({ active, subId, selected, onSelect }: Res
   }
   const chips = useChips(stateKey);
   const clearKind = useFiltersStore((state) => state.clearKind);
-  const fields = useMemo(() => fieldsOf(dataColumns, namespaced), [dataColumns, namespaced]);
+  const scoped = scopedBy(scope, namespaced);
+  const fields = useMemo(() => fieldsOf(dataColumns, scoped), [dataColumns, scoped]);
 
   function changeSorting(next: SortingState) {
     setSorting(next);

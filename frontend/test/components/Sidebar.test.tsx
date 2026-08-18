@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { Category, ResourceDescriptor, View } from '../../src/lib/types';
 import Sidebar from '../../src/components/Sidebar';
 import { bumpClusterEpoch } from '../../src/store/cluster';
+import { clearCatalog, useCatalogStore } from '../../src/store/catalog';
 import { anySignal, makeCategory, makeDescriptor, rejectsWith } from '../helpers';
 
 interface RenderOverrides {
@@ -90,9 +91,19 @@ const withArgo: Category[] = [
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearCatalog();
 });
 
 describe('Sidebar', () => {
+  it('hands the discovered catalog to the rest of the app', async () => {
+    stubFetch(categories);
+    renderSidebar();
+
+    await screen.findByRole('button', { name: /Workloads/ });
+
+    expect(useCatalogStore.getState().categories).toEqual(categories);
+  });
+
   it('offers helm releases at the top', () => {
     stubFetch(categories);
     renderSidebar();
@@ -132,12 +143,19 @@ describe('Sidebar', () => {
   });
 
   it('keeps the overview at the top when the cluster has no such group', async () => {
+    const seen: View[] = [];
     stubFetch(categories);
-    renderSidebar();
+    renderSidebar({
+      onSelectView: (view) => {
+        seen.push(view);
+      },
+    });
 
     const overview = await screen.findByRole('button', { name: 'Cluster Overview' });
+    await userEvent.click(overview);
 
     expect(overview.parentElement).toHaveAttribute('aria-label', 'Cluster views');
+    expect(seen).toEqual(['cluster']);
   });
 
   it('keeps the overview reachable when discovery fails', async () => {
@@ -458,6 +476,7 @@ describe('Sidebar', () => {
 
     expect(await screen.findByText(/Workloads/)).toBeInTheDocument();
     expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
+    expect(useCatalogStore.getState().categories).toEqual(categories);
     const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(call).toEqual(['/api/resources', { method: 'POST', signal: anySignal() }]);
   });

@@ -319,7 +319,16 @@ const kustomizationDescriptor = makeDescriptor({
   kind: 'Kustomization',
 });
 
+const nodeDescriptor = makeDescriptor({
+  group: '',
+  version: 'v1',
+  resource: 'nodes',
+  kind: 'Node',
+  namespaced: false,
+});
+
 const categories: Category[] = [
+  makeCategory('Cluster', [nodeDescriptor]),
   makeCategory('Workloads', [podDescriptor, deploymentDescriptor]),
   makeCategory('Custom resources', [kustomizationDescriptor, argoDescriptor]),
 ];
@@ -434,6 +443,11 @@ function goBackTo(hash: string): void {
 
 async function expandWorkloads(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.click(await screen.findByRole('button', { name: /Workloads/ }));
+}
+
+async function selectNode(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.click(await screen.findByRole('button', { name: /^Cluster\s*1$/ }));
+  await user.click(await screen.findByRole('button', { name: 'Node' }));
 }
 
 async function selectPod(user: ReturnType<typeof userEvent.setup>): Promise<void> {
@@ -661,6 +675,30 @@ describe('App', () => {
     await user.click(screen.getByTestId('context-changed'));
 
     expect(useNamespaceStore.getState().namespace).toBe('default');
+  });
+
+  it('shows the namespace it is scoped to before any rows arrive', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    act(() => {
+      useNamespaceStore.getState().choose('prod');
+    });
+
+    await selectPod(user);
+
+    expect(
+      await screen.findByRole('button', { name: 'Remove the Namespace prod filter' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shuts the namespace picker on a kind that has no namespaces', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await selectNode(user);
+
+    expect(await screen.findByLabelText('Namespace')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Remove the Namespace/ })).not.toBeInTheDocument();
   });
 
   it('drops the filter chips when the cluster changes', async () => {

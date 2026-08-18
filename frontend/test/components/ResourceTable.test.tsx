@@ -29,9 +29,20 @@ function seed(columns: Column[], namespaced: boolean, rows: Row[]): void {
   useResourcesStore.getState().applySnapshot(SUB, columns, namespaced, rows);
 }
 
-function renderTable(active: ResourceDescriptor | null, selected: Row | null, onSelect = vi.fn()) {
+function renderTable(
+  active: ResourceDescriptor | null,
+  selected: Row | null,
+  onSelect = vi.fn(),
+  scope: boolean | null = null,
+) {
   return render(
-    <ResourceTable active={active} subId={SUB} selected={selected} onSelect={onSelect} />,
+    <ResourceTable
+      active={active}
+      subId={SUB}
+      scope={scope}
+      selected={selected}
+      onSelect={onSelect}
+    />,
   );
 }
 
@@ -725,7 +736,9 @@ describe('filter chips', () => {
     useResourcesStore
       .getState()
       .applySnapshot('s2', makeColumns([]), false, [makeRow({ uid: 'c', name: 'node-1' })]);
-    view.rerender(<ResourceTable active={other} subId="s2" selected={null} onSelect={vi.fn()} />);
+    view.rerender(
+      <ResourceTable active={other} subId="s2" scope={null} selected={null} onSelect={vi.fn()} />,
+    );
 
     expect(screen.getByLabelText('Filter')).toHaveValue('');
     expect(
@@ -838,7 +851,13 @@ describe('selecting several rows at once', () => {
       .getState()
       .applySnapshot('s2', makeColumns([]), true, [makeRow({ uid: 'c', name: 'node-1' })]);
     view.rerender(
-      <ResourceTable active={descriptor} subId="s2" selected={null} onSelect={vi.fn()} />,
+      <ResourceTable
+        active={descriptor}
+        subId="s2"
+        scope={null}
+        selected={null}
+        onSelect={vi.fn()}
+      />,
     );
 
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
@@ -928,7 +947,9 @@ describe('a sort the user chose', () => {
     useResourcesStore
       .getState()
       .applySnapshot('s2', makeColumns([]), false, [makeRow({ uid: 'c', name: 'node-1' })]);
-    view.rerender(<ResourceTable active={other} subId="s2" selected={null} onSelect={vi.fn()} />);
+    view.rerender(
+      <ResourceTable active={other} subId="s2" scope={null} selected={null} onSelect={vi.fn()} />,
+    );
 
     expect(screen.getAllByRole('columnheader')[1].textContent).not.toContain('▲');
   });
