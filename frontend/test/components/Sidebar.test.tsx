@@ -5,6 +5,7 @@ import type { Category, ResourceDescriptor, View } from '../../src/lib/types';
 import Sidebar from '../../src/components/Sidebar';
 import { bumpClusterEpoch } from '../../src/store/cluster';
 import { clearCatalog, useCatalogStore } from '../../src/store/catalog';
+import { ARGO_VIEWS, FLUX_VIEWS } from '../../src/lib/types';
 import { anySignal, makeCategory, makeDescriptor, rejectsWith } from '../helpers';
 
 interface RenderOverrides {
@@ -176,6 +177,18 @@ describe('Sidebar', () => {
     expect(await screen.findByRole('button', { name: 'Cluster Overview' })).not.toHaveAttribute(
       'aria-current',
     );
+  });
+
+  it('offers one row per view in each gitops group', async () => {
+    stubFetch([...withFlux, ...withArgo.slice(categories.length)]);
+    renderSidebar();
+    await screen.findByRole('button', { name: 'Flux Graph' });
+
+    const flux = screen.getAllByRole('button', { name: /^Flux / });
+    const argo = screen.getAllByRole('button', { name: /^Argo CD / });
+
+    expect(flux).toHaveLength(FLUX_VIEWS.length);
+    expect(argo).toHaveLength(ARGO_VIEWS.length);
   });
 
   it('renders the Flux section once Flux is found in the cluster', async () => {

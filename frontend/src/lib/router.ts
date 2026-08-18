@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ObjectRef, ResourceDescriptor, View } from './types';
-
-export const VIEWS: View[] = [
-  'resources',
-  'cluster',
-  'helm',
-  'gitops',
-  'flux-list',
-  'flux-roles',
-  'argo-apps',
-  'argo-graph',
-  'argo-list',
-];
+import { VIEWS } from './types';
 
 export interface RouteResource {
   group: string;
@@ -57,7 +46,7 @@ export function resourceKey(resource: RouteResource | null): string {
 }
 
 function isView(value: string): value is View {
-  return (VIEWS as string[]).includes(value);
+  return (VIEWS as readonly string[]).includes(value);
 }
 
 function put(params: URLSearchParams, key: string, value: string): void {

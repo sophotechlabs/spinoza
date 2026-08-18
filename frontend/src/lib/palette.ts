@@ -1,4 +1,5 @@
 import type { Category, ObjectRef, ResourceDescriptor, SearchHit, View } from './types';
+import { ARGO_VIEWS, FLUX_VIEWS } from './types';
 import { refOf } from './search';
 import { typeFor } from './catalog';
 import { argoInstalled, fluxInstalled } from './gitops';
@@ -69,10 +70,6 @@ export function clusterItems(hits: SearchHit[], categories: Category[]): Palette
     type: typeFor(categories, hit),
   }));
 }
-
-const FLUX_VIEWS: View[] = ['flux-roles', 'gitops', 'flux-list'];
-
-const ARGO_VIEWS: View[] = ['argo-apps', 'argo-graph', 'argo-list'];
 
 function offered(categories: Category[]): View[] {
   const hidden: View[] = [];

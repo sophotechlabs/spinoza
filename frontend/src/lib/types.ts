@@ -155,6 +155,10 @@ export interface LogRequest {
   follow: boolean;
 }
 
+export interface Failure {
+  message: string;
+}
+
 export type ClientMsg =
   | {
       type: 'subscribe';
@@ -196,16 +200,23 @@ export type ServerMsg =
   | { type: 'log-end'; subId: string }
   | { type: 'error'; subId: string; message: string };
 
-export type View =
-  | 'resources'
-  | 'cluster'
-  | 'helm'
-  | 'gitops'
-  | 'flux-list'
-  | 'flux-roles'
-  | 'argo-apps'
-  | 'argo-graph'
-  | 'argo-list';
+export const VIEWS = [
+  'resources',
+  'cluster',
+  'helm',
+  'gitops',
+  'flux-list',
+  'flux-roles',
+  'argo-apps',
+  'argo-graph',
+  'argo-list',
+] as const;
+
+export type View = (typeof VIEWS)[number];
+
+export const FLUX_VIEWS: View[] = ['flux-roles', 'gitops', 'flux-list'];
+
+export const ARGO_VIEWS: View[] = ['argo-apps', 'argo-graph', 'argo-list'];
 
 export interface ArgoApp {
   kind: string;

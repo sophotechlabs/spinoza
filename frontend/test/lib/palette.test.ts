@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ObjectRef } from '../../src/lib/types';
 import { VIEW_LABELS, clusterItems, matchItems, paletteItems } from '../../src/lib/palette';
 import { makeCategory, makeDescriptor } from '../helpers';
+import { VIEWS } from '../../src/lib/types';
 
 const podType = makeDescriptor({ resource: 'pods', kind: 'Pod' });
 const deploymentType = makeDescriptor({
@@ -13,6 +14,24 @@ const deploymentType = makeDescriptor({
 const categories = [
   makeCategory('Workloads', [podType, deploymentType]),
   makeCategory('Config', [makeDescriptor({ resource: 'configmaps', kind: 'ConfigMap' })]),
+];
+
+const everyCategory = [
+  ...categories,
+  makeCategory('Custom resources', [
+    makeDescriptor({
+      group: 'kustomize.toolkit.fluxcd.io',
+      version: 'v1',
+      resource: 'kustomizations',
+      kind: 'Kustomization',
+    }),
+    makeDescriptor({
+      group: 'argoproj.io',
+      version: 'v1alpha1',
+      resource: 'applications',
+      kind: 'Application',
+    }),
+  ]),
 ];
 
 const recent: ObjectRef = {
@@ -64,6 +83,22 @@ describe('paletteItems', () => {
     const items = paletteItems(categories, [{ ...recent, resource: 'widgets' }]);
 
     expect(items[0]).toMatchObject({ type: null });
+  });
+});
+
+describe('the view registry', () => {
+  it('offers every registered view, in its own order', () => {
+    const offered = paletteItems(everyCategory, [])
+      .filter((item) => item.kind === 'view')
+      .map((item) => item.view);
+
+    expect([...offered].sort()).toEqual([...VIEWS].sort());
+  });
+
+  it('labels every registered view', () => {
+    for (const view of VIEWS) {
+      expect(VIEW_LABELS[view]).not.toBe('');
+    }
   });
 });
 

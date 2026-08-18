@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { Route } from '../../src/lib/router';
+import { VIEWS } from '../../src/lib/types';
 import {
   EMPTY_ROUTE,
-  VIEWS,
   decodeRoute,
   descriptorOf,
   documentTitle,
