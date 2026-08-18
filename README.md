@@ -9,6 +9,28 @@
 
 A self-hosted Kubernetes GUI. Go backend with client-go informers, React frontend, one binary. Runs as a browser tab or a Wails desktop window.
 
+**Source-available, not open source.** [FSL-1.1-ALv2](LICENSE): run it, modify it and redistribute it internally, for professional services, and for non-commercial education and research — you may not offer it as a commercial product or service that competes with it. **Each release becomes Apache-2.0 two years after it ships.**
+
+## Screenshots
+
+Every shot below is a live cluster, Borg theme.
+
+**Flux, grouped by role** — cluster sync from the repository, controller health, and every applier and source with its ready count.
+
+![Spinoza Flux overview: all systems operational, cluster sync from a GitRepository, controller health, and counts for appliers, sources and image automation](docs/images/flux-overview.png)
+
+**The dependency graph** — sources, Kustomizations and HelmReleases, laid out by what manages what. Click a node to open it in the inspect drawer.
+
+![Spinoza GitOps dependency graph: sources, Kustomizations and HelmReleases with the edges that manage and depend on each other](docs/images/gitops-graph.png)
+
+**Pods** — container health, restarts, node, live CPU and memory. Filter by name or by `field:value`.
+
+![Spinoza pods table: every pod with container health, status, restarts, node, live CPU and memory, and age](docs/images/pods.png)
+
+**Cluster overview** — version, node readiness, allocatable capacity against live usage, and the newest warning events.
+
+![Spinoza cluster overview: Kubernetes version, node and pod tiles, allocatable CPU and memory against live usage, and the newest warning events](docs/images/cluster-overview.png)
+
 ## Run
 
 Prereqs: Go 1.26+, Node 20+, a kubeconfig.
