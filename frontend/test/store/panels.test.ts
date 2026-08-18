@@ -134,3 +134,38 @@ describe('the rest of the layout', () => {
     expect(reopened.usePanelsStore.getState().collapsed.left).toBe(true);
   });
 });
+
+describe('showing the details again', () => {
+  it('opens the dock the overview sits in', async () => {
+    const { usePanelsStore, revealDetails } = await freshStore();
+    const side = usePanelsStore.getState().placement.overview;
+    usePanelsStore.getState().collapse(side, true);
+
+    revealDetails();
+
+    expect(usePanelsStore.getState().collapsed[side]).toBe(false);
+  });
+
+  it('follows the overview to whichever dock it was moved to', async () => {
+    const { usePanelsStore, revealDetails } = await freshStore();
+    usePanelsStore.getState().move('overview', 'bottom');
+    usePanelsStore.getState().collapse('bottom', true);
+    usePanelsStore.getState().collapse('right', true);
+
+    revealDetails();
+
+    expect(usePanelsStore.getState().collapsed.bottom).toBe(false);
+    expect(usePanelsStore.getState().collapsed.right).toBe(true);
+  });
+
+  it('leaves an open dock alone', async () => {
+    const { usePanelsStore, revealDetails } = await freshStore();
+    const side = usePanelsStore.getState().placement.overview;
+    usePanelsStore.getState().resize(side, 700);
+
+    revealDetails();
+
+    expect(usePanelsStore.getState().collapsed[side]).toBe(false);
+    expect(usePanelsStore.getState().sizes[side]).toBe(700);
+  });
+});

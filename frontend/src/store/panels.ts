@@ -80,3 +80,12 @@ export const usePanelsStore = create<PanelsState>((set, get) => ({
     set({ placement, ...layout });
   },
 }));
+
+export function revealDetails(): void {
+  const state = usePanelsStore.getState();
+  const side = state.placement.overview;
+  if (!state.collapsed[side]) {
+    return;
+  }
+  state.collapse(side, false);
+}
