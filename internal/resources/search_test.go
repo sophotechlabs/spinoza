@@ -273,3 +273,62 @@ func TestAManagerSearchesTheKindsItKnows(t *testing.T) {
 		t.Fatalf("hits = %v, want the pod", names(found))
 	}
 }
+
+func namespacesManager(t *testing.T, objects ...runtime.Object) *Manager {
+	t.Helper()
+	return NewManager(t.Context(), Deps{Metadata: fakeMeta(t, objects...)})
+}
+
+func TestNamespacesComeBackSorted(t *testing.T) {
+	mgr := namespacesManager(
+		t,
+		meta("", "v1", "Namespace", "", "shop"),
+		meta("", "v1", "Namespace", "", "argocd"),
+		meta("", "v1", "Namespace", "", "kube-system"),
+	)
+
+	got := mgr.Namespaces(context.Background())
+
+	want := []string{"argocd", "kube-system", "shop"}
+	if len(got.Names) != len(want) {
+		t.Fatalf("names = %v, want %v", got.Names, want)
+	}
+	for i, name := range want {
+		if got.Names[i] != name {
+			t.Fatalf("names = %v, want %v", got.Names, want)
+		}
+	}
+	if got.Error != "" {
+		t.Fatalf("error = %q, want none", got.Error)
+	}
+}
+
+func TestNamespacesCarryTheRefusalInstead(t *testing.T) {
+	mgr := namespacesManager(t)
+	client, ok := mgr.meta.(*metadatafake.FakeMetadataClient)
+	if !ok {
+		t.Fatal("the manager is not holding the fake metadata client")
+	}
+	client.PrependReactor("list", "namespaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("namespaces is forbidden")
+	})
+
+	got := mgr.Namespaces(context.Background())
+
+	if got.Error == "" {
+		t.Fatal("a refused listing came back as an empty cluster")
+	}
+	if len(got.Names) != 0 {
+		t.Fatalf("names = %v, want none", got.Names)
+	}
+}
+
+func TestNamespacesWithoutAClusterAreEmpty(t *testing.T) {
+	mgr := NewManager(t.Context(), Deps{})
+
+	got := mgr.Namespaces(context.Background())
+
+	if len(got.Names) != 0 || got.Error != "" {
+		t.Fatalf("namespaces = %+v, want nothing without a cluster", got)
+	}
+}

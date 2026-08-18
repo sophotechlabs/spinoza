@@ -13,8 +13,10 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kubediscovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -51,6 +53,7 @@ const (
 	warmConcurrency    = 8
 	buildBackoff       = 5 * time.Second
 	maxBuildBackoff    = 2 * time.Minute
+	defaultIdleGrace   = 90 * time.Second
 )
 
 type Event struct {
@@ -67,6 +70,7 @@ type Subscription struct {
 	Events     <-chan Event
 	Resync     <-chan struct{}
 	stream     *stream
+	namespace  string
 	cancel     func()
 }
 
@@ -75,7 +79,7 @@ func (s *Subscription) Close() {
 }
 
 func (s *Subscription) Snapshot() ([]api.Row, error) {
-	return s.stream.snapshot()
+	return s.stream.snapshot(s.namespace)
 }
 
 type Manager struct {
@@ -117,6 +121,7 @@ type buildFailure struct {
 
 type Limits struct {
 	SyncTimeout     time.Duration
+	IdleGrace       time.Duration
 	WarmConcurrency int
 	Counts          CountLimits
 	Search          CountLimits
@@ -125,6 +130,9 @@ type Limits struct {
 func (l Limits) orDefaults() Limits {
 	if l.SyncTimeout == 0 {
 		l.SyncTimeout = defaultSyncTimeout
+	}
+	if l.IdleGrace == 0 {
+		l.IdleGrace = defaultIdleGrace
 	}
 	if l.WarmConcurrency == 0 {
 		l.WarmConcurrency = warmConcurrency
@@ -507,19 +515,30 @@ func splitAPIVersion(apiVersion string) (group, version string) {
 
 type streamKey struct {
 	gvr schema.GroupVersionResource
-	ns  string
 }
 
 type subscriber struct {
 	events chan Event
 	resync chan struct{}
+	ns     string
 }
 
-func newSubscriber() *subscriber {
+func newSubscriber(ns string) *subscriber {
 	return &subscriber{
 		events: make(chan Event, eventBuffer),
 		resync: make(chan struct{}, 1),
+		ns:     ns,
 	}
+}
+
+func (s *subscriber) wants(ev Event) bool {
+	if s.ns == "" {
+		return true
+	}
+	if ev.Kind == "added" || ev.Kind == "modified" {
+		return ev.Row.Namespace == s.ns
+	}
+	return true
 }
 
 type stream struct {
@@ -533,6 +552,7 @@ type stream struct {
 	refs     int
 	pinned   bool
 	broken   bool
+	idle     *time.Timer
 }
 
 func (m *Manager) Subscribe(ctx context.Context, group, version, resource, namespace string) (*Subscription, error) {
@@ -545,13 +565,13 @@ func (m *Manager) Subscribe(ctx context.Context, group, version, resource, names
 	if !desc.Namespaced {
 		effNs = ""
 	}
-	key := streamKey{gvr: gvr, ns: effNs}
+	key := streamKey{gvr: gvr}
 
-	st, entry, err := m.attach(ctx, key, desc)
+	st, entry, err := m.attach(ctx, key, desc, effNs)
 	if err != nil {
 		return nil, err
 	}
-	rows, snapErr := st.snapshot()
+	rows, snapErr := st.snapshot(effNs)
 	if snapErr != nil {
 		m.detach(key, st, entry)
 		return nil, snapErr
@@ -561,6 +581,7 @@ func (m *Manager) Subscribe(ctx context.Context, group, version, resource, names
 		Columns:    st.columns,
 		Namespaced: desc.Namespaced,
 		Rows:       rows,
+		namespace:  effNs,
 		Events:     entry.events,
 		Resync:     entry.resync,
 		stream:     st,
@@ -570,13 +591,18 @@ func (m *Manager) Subscribe(ctx context.Context, group, version, resource, names
 	}, nil
 }
 
-func (m *Manager) attach(ctx context.Context, key streamKey, desc api.ResourceDescriptor) (*stream, *subscriber, error) {
+func (m *Manager) attach(
+	ctx context.Context,
+	key streamKey,
+	desc api.ResourceDescriptor,
+	ns string,
+) (*stream, *subscriber, error) {
 	for range attachAttempts {
 		st, err := m.streamFor(ctx, key, desc)
 		if err != nil {
 			return nil, nil, err
 		}
-		entry, ok := m.register(key, st)
+		entry, ok := m.register(key, st, ns)
 		if ok {
 			return st, entry, nil
 		}
@@ -678,15 +704,19 @@ func (m *Manager) unpin(key streamKey) {
 	}
 }
 
-func (m *Manager) register(key streamKey, st *stream) (*subscriber, bool) {
+func (m *Manager) register(key streamKey, st *stream, ns string) (*subscriber, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.streams[key] != st {
 		return nil, false
 	}
-	entry := newSubscriber()
+	entry := newSubscriber(ns)
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	if st.idle != nil {
+		st.idle.Stop()
+		st.idle = nil
+	}
 	st.subs[entry] = struct{}{}
 	st.refs++
 	return entry, true
@@ -703,9 +733,23 @@ func (m *Manager) detach(key streamKey, st *stream, entry *subscriber) {
 		close(entry.resync)
 		st.refs--
 	}
-	idle := st.refs == 0 && !st.pinned
+	idle := st.refs == 0 && !st.pinned && st.idle == nil
+	if idle {
+		st.idle = time.AfterFunc(m.limits.IdleGrace, func() {
+			m.retire(key, st)
+		})
+	}
 	st.mu.Unlock()
-	if !present || !idle {
+}
+
+func (m *Manager) retire(key streamKey, st *stream) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st.mu.Lock()
+	st.idle = nil
+	busy := st.refs > 0 || st.pinned
+	st.mu.Unlock()
+	if busy {
 		return
 	}
 	if m.streams[key] != st {
@@ -809,7 +853,7 @@ func (m *Manager) releaseGate(key streamKey) {
 
 func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.ResourceDescriptor) (*stream, error) {
 	streamCtx, cancel := context.WithCancel(m.rootCtx)
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dyn, 0, key.ns, nil)
+	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dyn, 0, metav1.NamespaceAll, nil)
 	gi := factory.ForResource(key.gvr)
 	informer := gi.Informer()
 
@@ -924,6 +968,9 @@ func (st *stream) fanout(ev Event) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	for sub := range st.subs {
+		if !sub.wants(ev) {
+			continue
+		}
 		select {
 		case sub.events <- ev:
 		default:
@@ -980,8 +1027,8 @@ func signalResync(sub *subscriber) {
 	}
 }
 
-func (st *stream) snapshot() ([]api.Row, error) {
-	objs, err := st.lister.List(labels.Everything())
+func (st *stream) snapshot(ns string) ([]api.Row, error) {
+	objs, err := st.listFor(ns)
 	if err != nil {
 		return nil, fmt.Errorf("reading the cached %s: %w", st.kind, err)
 	}
@@ -994,6 +1041,13 @@ func (st *stream) snapshot() ([]api.Row, error) {
 		rows = append(rows, toRow(u, st.kind))
 	}
 	return rows, nil
+}
+
+func (st *stream) listFor(ns string) ([]runtime.Object, error) {
+	if ns == "" {
+		return st.lister.List(labels.Everything())
+	}
+	return st.lister.ByNamespace(ns).List(labels.Everything())
 }
 
 func toUnstructured(obj any) (*unstructured.Unstructured, bool) {

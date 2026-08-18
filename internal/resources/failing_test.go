@@ -134,8 +134,8 @@ func TestCountsReportWatchedTypesThatAreFailing(t *testing.T) {
 	}
 }
 
-func TestCountsIgnoreANamespacedStream(t *testing.T) {
-	mgr, cancel := newManager(t, newClient(t, brokenDeployment("default", "db")))
+func TestANamespacedViewStillTalliesTheWholeCluster(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, brokenDeployment("other", "db")))
 	defer cancel()
 
 	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
@@ -146,8 +146,8 @@ func TestCountsIgnoreANamespacedStream(t *testing.T) {
 
 	got := mgr.Counts(context.Background())
 
-	if _, found := got.Failing["apps/v1/deployments"]; found {
-		t.Fatalf("failing = %v, want a namespaced cache left out of the cluster tally", got.Failing)
+	if got.Failing["apps/v1/deployments"] != 1 {
+		t.Fatalf("failing = %v, want the whole cluster counted behind a namespaced view", got.Failing)
 	}
 }
 

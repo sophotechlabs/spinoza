@@ -106,9 +106,41 @@ func newClient(t *testing.T, objs ...runtime.Object) *fake.FakeDynamicClient {
 
 func newManager(t *testing.T, dyn dynamic.Interface) (*Manager, context.CancelFunc) {
 	t.Helper()
+	return newManagerWithGrace(t, dyn, time.Millisecond)
+}
+
+func newManagerWithGrace(
+	t *testing.T,
+	dyn dynamic.Interface,
+	grace time.Duration,
+) (*Manager, context.CancelFunc) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	mgr := NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Categories: []api.Category{{Name: "Workloads"}}, Descriptors: testDescs()})
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     dyn,
+		Clientset:   k8sfake.NewClientset(),
+		Categories:  []api.Category{{Name: "Workloads"}},
+		Descriptors: testDescs(),
+		Limits:      Limits{IdleGrace: grace},
+	})
 	return mgr, cancel
+}
+
+func waitForStreams(t *testing.T, mgr *Manager, want int) {
+	t.Helper()
+	for range 200 {
+		mgr.mu.Lock()
+		got := len(mgr.streams)
+		mgr.mu.Unlock()
+		if got == want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	mgr.mu.Lock()
+	got := len(mgr.streams)
+	mgr.mu.Unlock()
+	t.Fatalf("streams = %d, want %d", got, want)
 }
 
 func recvEvent(t *testing.T, ch <-chan Event) Event {
@@ -425,9 +457,7 @@ func TestSubscribeSharedStream(t *testing.T) {
 	}
 
 	sub2.Close()
-	if streamCount(mgr) != 0 {
-		t.Fatalf("streams after second close = %d, want 0", streamCount(mgr))
-	}
+	waitForStreams(t, mgr, 0)
 }
 
 func TestCloseIsIdempotent(t *testing.T) {
@@ -441,9 +471,7 @@ func TestCloseIsIdempotent(t *testing.T) {
 	}
 	sub.Close()
 	sub.Close()
-	if streamCount(mgr) != 0 {
-		t.Fatalf("streams = %d, want 0", streamCount(mgr))
-	}
+	waitForStreams(t, mgr, 0)
 }
 
 func TestSubscribeClusterScoped(t *testing.T) {
@@ -840,7 +868,7 @@ func TestTheBackoffLetsARecoveredResourceThrough(t *testing.T) {
 
 func TestABackoffGrowsWithRepeatedFailures(t *testing.T) {
 	mgr, _ := stuckManager(t, "deployments")
-	key := streamKey{gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, ns: "default"}
+	key := streamKey{gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}}
 
 	mgr.recordFailure(key, errors.New("first"))
 	first := mgr.failures[key].wait
@@ -865,7 +893,6 @@ func TestAWatchThatBreaksAfterSyncReachesTheSubscriber(t *testing.T) {
 	defer sub.Close()
 	st, ok := mgr.lookupStream(streamKey{
 		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
-		ns:  "default",
 	})
 	if !ok {
 		t.Fatal("no stream was registered")
@@ -892,7 +919,6 @@ func TestABrokenWatchIsReportedOnlyOnce(t *testing.T) {
 	defer sub.Close()
 	st, _ := mgr.lookupStream(streamKey{
 		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
-		ns:  "default",
 	})
 
 	st.watchBroke("etcdserver: request timed out")
@@ -912,7 +938,6 @@ func TestAWatchThatComesBackAsksForAFreshSnapshot(t *testing.T) {
 	defer sub.Close()
 	st, _ := mgr.lookupStream(streamKey{
 		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
-		ns:  "default",
 	})
 
 	st.watchBroke("etcdserver: request timed out")
@@ -949,7 +974,6 @@ func TestARefreshStopsAStreamWhoseResourceTypeIsGone(t *testing.T) {
 	}
 	if _, present := mgr.lookupStream(streamKey{
 		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
-		ns:  "default",
 	}); present {
 		t.Fatal("the vanished stream is still registered")
 	}
@@ -1022,7 +1046,6 @@ func TestACancelledRequestStopsWaitingForTheCache(t *testing.T) {
 	}
 	cooling, _ := mgr.coolingOff(streamKey{
 		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
-		ns:  "default",
 	})
 	if cooling {
 		t.Fatal("a caller giving up put the resource into backoff for everyone else")
@@ -1144,7 +1167,7 @@ func TestTheBuildGateIsReleased(t *testing.T) {
 const raceRounds = 40
 
 func deploymentKey() streamKey {
-	return streamKey{gvr: depGVR, ns: "default"}
+	return streamKey{gvr: depGVR}
 }
 
 func TestRegisterRefusesAStreamThatWasAlreadyDropped(t *testing.T) {
@@ -1163,7 +1186,7 @@ func TestRegisterRefusesAStreamThatWasAlreadyDropped(t *testing.T) {
 	mgr.mu.Unlock()
 	st.cancel()
 
-	_, ok := mgr.register(key, st)
+	_, ok := mgr.register(key, st, "")
 
 	if ok {
 		t.Fatal("registered against a torn-down stream; the subscriber would never see an event")
@@ -1185,7 +1208,7 @@ func TestAttachRebuildsAfterTheStreamIsDropped(t *testing.T) {
 	mgr.mu.Unlock()
 	first.cancel()
 
-	st, entry, attachErr := mgr.attach(context.Background(), key, desc)
+	st, entry, attachErr := mgr.attach(context.Background(), key, desc, "")
 	if attachErr != nil {
 		t.Fatalf("attach: %v", attachErr)
 	}
@@ -1207,7 +1230,7 @@ func TestDetachLeavesAStreamThatWasAlreadyReplaced(t *testing.T) {
 	key := deploymentKey()
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	old, entry, err := mgr.attach(context.Background(), key, desc)
+	old, entry, err := mgr.attach(context.Background(), key, desc, "")
 	if err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -1293,7 +1316,7 @@ func TestAFullBufferAsksForAResync(t *testing.T) {
 
 	stream := sub.stream
 	for range eventBuffer + 10 {
-		stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u"}})
+		stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u", Namespace: "default"}})
 	}
 
 	select {
@@ -1314,7 +1337,7 @@ func TestAResyncIsOnlySignalledOnce(t *testing.T) {
 	t.Cleanup(sub.Close)
 
 	for range eventBuffer * 3 {
-		sub.stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u"}})
+		sub.stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u", Namespace: "default"}})
 	}
 
 	<-sub.Resync
@@ -1336,7 +1359,7 @@ func TestAHealthySubscriberIsNotAskedToResync(t *testing.T) {
 	t.Cleanup(sub.Close)
 
 	for range eventBuffer {
-		sub.stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u"}})
+		sub.stream.fanout(Event{Kind: "added", Row: api.Row{UID: "u", Namespace: "default"}})
 	}
 
 	select {

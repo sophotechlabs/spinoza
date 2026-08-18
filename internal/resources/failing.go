@@ -32,9 +32,6 @@ func (m *Manager) watchedTypes() map[string]watchedType {
 	defer m.mu.Unlock()
 	out := map[string]watchedType{}
 	for key, st := range m.streams {
-		if key.ns != "" {
-			continue
-		}
 		if st.kind == "Pod" {
 			continue
 		}
