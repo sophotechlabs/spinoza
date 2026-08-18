@@ -79,6 +79,17 @@ export interface FluxDetail {
   handledAt?: string;
 }
 
+export interface ObjectEvent {
+  type?: string;
+  reason?: string;
+  message?: string;
+  object?: string;
+  source?: string;
+  count?: number;
+  firstSeen?: string;
+  lastSeen?: string;
+}
+
 export interface ObjectDetail {
   apiVersion: string;
   kind: string;
@@ -91,6 +102,7 @@ export interface ObjectDetail {
   owners?: OwnerRef[];
   conditions?: Condition[];
   ports?: ObjectPort[];
+  event?: ObjectEvent;
   yaml: string;
   pod?: PodDetail;
   workload?: WorkloadDetail;

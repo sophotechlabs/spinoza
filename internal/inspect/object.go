@@ -115,8 +115,80 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		Schedulable: schedulableOf(clean),
 		HandledAt:   unstr.String(clean, "status", "lastHandledReconcileAt"),
 		Ports:       portsOf(clean),
+		Event:       eventFactsOf(clean),
 		YAML:        string(raw),
 	}, nil
+}
+
+func eventFactsOf(item *unstructured.Unstructured) *api.ObjectEvent {
+	if item.GetKind() != "Event" {
+		return nil
+	}
+	out := api.ObjectEvent{
+		Type:      unstr.String(item, "type"),
+		Reason:    unstr.String(item, "reason"),
+		Message:   firstOf(item, []string{"message"}, []string{"note"}),
+		Object:    eventObjectOf(item),
+		Source:    eventSourceOf(item),
+		Count:     eventCountOf(item),
+		FirstSeen: firstOf(item, []string{"firstTimestamp"}, []string{"eventTime"}),
+		LastSeen: firstOf(
+			item,
+			[]string{"lastTimestamp"},
+			[]string{"series", "lastObservedTime"},
+			[]string{"deprecatedLastTimestamp"},
+			[]string{"eventTime"},
+		),
+	}
+	return &out
+}
+
+func firstOf(item *unstructured.Unstructured, paths ...[]string) string {
+	for _, path := range paths {
+		found := unstr.String(item, path...)
+		if found != "" {
+			return found
+		}
+	}
+	return ""
+}
+
+func eventObjectOf(item *unstructured.Unstructured) string {
+	for _, field := range []string{"involvedObject", "regarding"} {
+		kind := unstr.String(item, field, "kind")
+		name := unstr.String(item, field, "name")
+		namespace := unstr.String(item, field, "namespace")
+		if kind == "" && name == "" {
+			continue
+		}
+		if namespace == "" {
+			return kind + "/" + name
+		}
+		return kind + " " + namespace + "/" + name
+	}
+	return ""
+}
+
+func eventSourceOf(item *unstructured.Unstructured) string {
+	component := firstOf(item, []string{"source", "component"}, []string{"reportingComponent"})
+	host := firstOf(item, []string{"source", "host"}, []string{"reportingInstance"})
+	if host == "" {
+		return component
+	}
+	if component == "" {
+		return host
+	}
+	return component + " on " + host
+}
+
+func eventCountOf(item *unstructured.Unstructured) int64 {
+	for _, path := range [][]string{{"count"}, {"deprecatedCount"}, {"series", "count"}} {
+		found := unstr.Int(item, path...)
+		if found > 0 {
+			return found
+		}
+	}
+	return 0
 }
 
 func sanitize(u *unstructured.Unstructured) *unstructured.Unstructured {

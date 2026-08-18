@@ -79,7 +79,15 @@ function cellAt(row: Row, index: number): string {
   return row.cells[index];
 }
 
-function renderDataCell(render: string | undefined, value: string, row: Row): ReactNode {
+function renderDataCell(
+  render: string | undefined,
+  value: string,
+  row: Row,
+  now: number,
+): ReactNode {
+  if (render === 'age') {
+    return agoOrDash(value, now);
+  }
   if (render === 'containers') {
     return <ContainerSquares row={row} fallback={value} />;
   }
@@ -93,6 +101,13 @@ function renderDataCell(render: string | undefined, value: string, row: Row): Re
     return <span className={statusColor(value)}>{value}</span>;
   }
   return value;
+}
+
+function agoOrDash(value: string, now: number): string {
+  if (value === '') {
+    return '-';
+  }
+  return ago(value, now);
 }
 
 const METRIC_KINDS = new Set(['Pod', 'Node']);
@@ -326,7 +341,7 @@ export default function ResourceTable({
           id: `cell-${index}`,
           header: column.name,
           size: 130,
-          cell: (info) => renderDataCell(column.render, info.getValue(), info.row.original),
+          cell: (info) => renderDataCell(column.render, info.getValue(), info.row.original, now),
         }),
       );
     });

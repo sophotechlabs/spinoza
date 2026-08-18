@@ -634,6 +634,26 @@ describe('ResourceTable', () => {
   });
 });
 
+describe('a timestamp column', () => {
+  it('reads as an age, and as a dash when the object never reported one', async () => {
+    seed([{ name: 'Last seen', render: 'age' }], true, [
+      makeRow({
+        uid: 'a',
+        name: 'web.17abc',
+        namespace: 'prod',
+        cells: [new Date(Date.now() - 3600000).toISOString()],
+      }),
+      makeRow({ uid: 'b', name: 'web.17abd', namespace: 'prod', cells: [''] }),
+    ]);
+    renderTable(descriptor, null);
+
+    await screen.findByRole('button', { name: 'web.17abc' });
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows[0].textContent).toContain('1h');
+    expect(rows[1].textContent).toContain('-');
+  });
+});
+
 describe('a filter imposed from outside', () => {
   it('fills the filter box and narrows the rows', async () => {
     seed(makeColumns([]), true, [

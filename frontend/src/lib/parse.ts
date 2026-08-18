@@ -163,6 +163,19 @@ export function parseObjectDetail(body: unknown): ObjectDetail {
   if (Array.isArray(item.containers)) {
     detail.pod = { containers: asList(item.containers).map(asString) };
   }
+  const event = asRecord(item.event);
+  if (Object.keys(event).length > 0) {
+    detail.event = {
+      type: optionalString(event.type),
+      reason: optionalString(event.reason),
+      message: optionalString(event.message),
+      object: optionalString(event.object),
+      source: optionalString(event.source),
+      count: optionalNumber(event.count),
+      firstSeen: optionalString(event.firstSeen),
+      lastSeen: optionalString(event.lastSeen),
+    };
+  }
   const replicas = optionalNumber(item.replicas);
   if (replicas !== undefined) {
     detail.workload = { replicas };

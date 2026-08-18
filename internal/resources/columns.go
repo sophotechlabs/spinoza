@@ -36,6 +36,15 @@ func columnsFor(kind string) []api.Column {
 		return []api.Column{statusColumn(), {Name: "Roles"}, {Name: "Version"}}
 	case "Job":
 		return []api.Column{{Name: "Completions", Render: "ratio"}}
+	case "Event":
+		return []api.Column{
+			{Name: "Type", Render: "status"},
+			{Name: "Reason"},
+			{Name: "Object"},
+			{Name: "Count"},
+			{Name: "Last seen", Render: "age"},
+			{Name: "Message"},
+		}
 	default:
 		return []api.Column{statusColumn()}
 	}
@@ -69,9 +78,78 @@ func cellsFor(obj *unstructured.Unstructured, kind string) []string {
 		return []string{unstr.String(obj, "status", "phase")}
 	case "Job":
 		return jobCells(obj)
+	case "Event":
+		return eventCells(obj)
 	default:
 		return []string{unstr.ReadySummary(obj)}
 	}
+}
+
+func eventCells(obj *unstructured.Unstructured) []string {
+	return []string{
+		unstr.String(obj, "type"),
+		unstr.String(obj, "reason"),
+		eventObject(obj),
+		eventCount(obj),
+		eventLastSeen(obj),
+		eventMessage(obj),
+	}
+}
+
+func eventObject(obj *unstructured.Unstructured) string {
+	for _, field := range []string{"involvedObject", "regarding"} {
+		kind := unstr.String(obj, field, "kind")
+		name := unstr.String(obj, field, "name")
+		if kind == "" && name == "" {
+			continue
+		}
+		if kind == "" {
+			return name
+		}
+		return kind + "/" + name
+	}
+	return ""
+}
+
+func eventMessage(obj *unstructured.Unstructured) string {
+	message := unstr.String(obj, "message")
+	if message != "" {
+		return message
+	}
+	return unstr.String(obj, "note")
+}
+
+func eventCount(obj *unstructured.Unstructured) string {
+	count := toInt64(obj.Object["count"])
+	if count == 0 {
+		count = toInt64(obj.Object["deprecatedCount"])
+	}
+	if count == 0 {
+		series, ok := unstr.Map(obj, "series")
+		if ok {
+			count = toInt64(series["count"])
+		}
+	}
+	if count == 0 {
+		return ""
+	}
+	return strconv.FormatInt(count, 10)
+}
+
+func eventLastSeen(obj *unstructured.Unstructured) string {
+	for _, path := range [][]string{
+		{"lastTimestamp"},
+		{"series", "lastObservedTime"},
+		{"deprecatedLastTimestamp"},
+		{"eventTime"},
+		{"firstTimestamp"},
+	} {
+		found := unstr.String(obj, path...)
+		if found != "" {
+			return found
+		}
+	}
+	return ""
 }
 
 func containersFor(obj *unstructured.Unstructured, kind string) []api.ContainerState {

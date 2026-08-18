@@ -193,3 +193,66 @@ describe('copying a metadata value', () => {
     expect(screen.queryByRole('button', { name: 'Copy Namespace' })).not.toBeInTheDocument();
   });
 });
+
+describe('an event', () => {
+  it('says what happened without opening the yaml', () => {
+    render(
+      <InspectOverview
+        detail={{
+          ...detail(),
+          kind: 'Event',
+          event: {
+            type: 'Warning',
+            reason: 'BackOff',
+            message: 'Back-off restarting failed container',
+            object: 'Pod prod/web-0',
+            source: 'kubelet on node-1',
+            count: 42,
+            firstSeen: '2026-08-18T09:00:00Z',
+            lastSeen: '2026-08-18T10:00:00Z',
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('BackOff')).toBeInTheDocument();
+    expect(screen.getByText('Pod prod/web-0')).toBeInTheDocument();
+    expect(screen.getByText('kubelet on node-1')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('Back-off restarting failed container')).toBeInTheDocument();
+  });
+
+  it('colours a warning message', () => {
+    render(
+      <InspectOverview
+        detail={{
+          ...detail(),
+          kind: 'Event',
+          event: { type: 'Warning', message: 'it broke' },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('it broke').className).toContain('text-warn');
+  });
+
+  it('leaves an ordinary message in the plain colour', () => {
+    render(
+      <InspectOverview
+        detail={{
+          ...detail(),
+          kind: 'Event',
+          event: { type: 'Normal', message: 'pulled the image' },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('pulled the image').className).toContain('text-fg');
+  });
+
+  it('leaves an ordinary object alone', () => {
+    render(<InspectOverview detail={detail()} />);
+
+    expect(screen.queryByText('Reason')).not.toBeInTheDocument();
+  });
+});

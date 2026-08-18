@@ -1,4 +1,4 @@
-import type { Condition, ContainerState, ObjectDetail } from '../lib/types';
+import type { Condition, ContainerState, ObjectDetail, ObjectEvent } from '../lib/types';
 import { containerColor } from '../lib/status';
 import CopyButton from './CopyButton';
 
@@ -51,6 +51,39 @@ function entries(map: Record<string, string> | undefined): [string, string][] {
   return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
 }
 
+function eventPairs(event: ObjectEvent): [string, string][] {
+  const pairs: [string, string][] = [];
+  if (event.type !== undefined) {
+    pairs.push(['Type', event.type]);
+  }
+  if (event.reason !== undefined) {
+    pairs.push(['Reason', event.reason]);
+  }
+  if (event.object !== undefined) {
+    pairs.push(['About', event.object]);
+  }
+  if (event.source !== undefined) {
+    pairs.push(['Reported by', event.source]);
+  }
+  if (event.count !== undefined) {
+    pairs.push(['Times', String(event.count)]);
+  }
+  if (event.firstSeen !== undefined) {
+    pairs.push(['First seen', event.firstSeen]);
+  }
+  if (event.lastSeen !== undefined) {
+    pairs.push(['Last seen', event.lastSeen]);
+  }
+  return pairs;
+}
+
+function messageClass(type: string | undefined): string {
+  if (type === 'Warning') {
+    return 'mt-2 break-words text-warn';
+  }
+  return 'mt-2 break-words text-fg';
+}
+
 export default function InspectOverview({ detail, containers }: InspectOverviewProps) {
   const labels = entries(detail.labels);
   const annotations = entries(detail.annotations);
@@ -60,6 +93,14 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
 
   return (
     <div className="overflow-y-auto text-xs">
+      {detail.event !== undefined && (
+        <Section title="Event">
+          <Pairs pairs={eventPairs(detail.event)} />
+          {detail.event.message !== undefined && (
+            <p className={messageClass(detail.event.type)}>{detail.event.message}</p>
+          )}
+        </Section>
+      )}
       <Section title="Metadata">
         <Pairs
           pairs={[

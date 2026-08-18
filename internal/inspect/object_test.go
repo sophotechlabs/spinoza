@@ -647,3 +647,76 @@ func TestApiVersionOfJoinsTheGroup(t *testing.T) {
 		t.Fatalf("apiVersion = %q", got)
 	}
 }
+
+func TestAnEventCarriesItsFactsSeparately(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			{Version: "v1", Resource: "events"}: "EventList",
+		},
+		&unstructured.Unstructured{Object: map[string]any{
+			"apiVersion":     "v1",
+			"kind":           "Event",
+			"metadata":       map[string]any{"name": "web.17abc", "namespace": "prod"},
+			"type":           "Warning",
+			"reason":         "BackOff",
+			"message":        "Back-off restarting failed container",
+			"count":          int64(42),
+			"firstTimestamp": "2026-08-18T09:00:00Z",
+			"lastTimestamp":  "2026-08-18T10:00:00Z",
+			"involvedObject": map[string]any{"kind": "Pod", "name": "web-0", "namespace": "prod"},
+			"source":         map[string]any{"component": "kubelet", "host": "node-1"},
+		}},
+	)
+
+	got, err := Get(context.Background(), dyn, api.ObjectRef{
+		Version: "v1", Resource: "events", Namespace: "prod", Name: "web.17abc",
+	})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	if got.Event == nil {
+		t.Fatal("an event came back without its facts")
+	}
+	if got.Event.Reason != "BackOff" || got.Event.Type != "Warning" {
+		t.Fatalf("event = %+v", got.Event)
+	}
+	if got.Event.Object != "Pod prod/web-0" {
+		t.Fatalf("object = %q", got.Event.Object)
+	}
+	if got.Event.Source != "kubelet on node-1" {
+		t.Fatalf("source = %q", got.Event.Source)
+	}
+	if got.Event.Count != 42 {
+		t.Fatalf("count = %d", got.Event.Count)
+	}
+	if got.Event.LastSeen != "2026-08-18T10:00:00Z" {
+		t.Fatalf("last seen = %q", got.Event.LastSeen)
+	}
+}
+
+func TestAnOrdinaryObjectHasNoEventFacts(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{
+			{Group: "apps", Version: "v1", Resource: "deployments"}: "DeploymentList",
+		},
+		&unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata":   map[string]any{"name": "web", "namespace": "prod"},
+		}},
+	)
+
+	got, err := Get(context.Background(), dyn, api.ObjectRef{
+		Group: "apps", Version: "v1", Resource: "deployments", Namespace: "prod", Name: "web",
+	})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	if got.Event != nil {
+		t.Fatalf("event = %+v, want none", got.Event)
+	}
+}

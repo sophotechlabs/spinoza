@@ -340,3 +340,49 @@ describe('the helm upgrade payloads', () => {
     expect(parseHelmChartVersions({})).toEqual({ chart: '', repos: [], error: undefined });
   });
 });
+
+describe('an event object detail', () => {
+  it('carries the event facts the overview shows', () => {
+    const detail = parseObjectDetail({
+      apiVersion: 'v1',
+      kind: 'Event',
+      name: 'web.17abc',
+      namespace: 'prod',
+      uid: 'u-1',
+      createdAt: '2026-08-18T09:00:00Z',
+      yaml: 'kind: Event\n',
+      event: {
+        type: 'Warning',
+        reason: 'BackOff',
+        message: 'Back-off restarting failed container',
+        object: 'Pod prod/web-0',
+        source: 'kubelet on node-1',
+        count: 42,
+        firstSeen: '2026-08-18T09:00:00Z',
+        lastSeen: '2026-08-18T10:00:00Z',
+      },
+    });
+
+    expect(detail.event).toEqual({
+      type: 'Warning',
+      reason: 'BackOff',
+      message: 'Back-off restarting failed container',
+      object: 'Pod prod/web-0',
+      source: 'kubelet on node-1',
+      count: 42,
+      firstSeen: '2026-08-18T09:00:00Z',
+      lastSeen: '2026-08-18T10:00:00Z',
+    });
+  });
+
+  it('leaves the facts out for anything that is not an event', () => {
+    const detail = parseObjectDetail({
+      apiVersion: 'v1',
+      kind: 'Pod',
+      name: 'web-0',
+      yaml: 'kind: Pod\n',
+    });
+
+    expect(detail.event).toBeUndefined();
+  });
+});

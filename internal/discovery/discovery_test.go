@@ -486,3 +486,58 @@ func TestListPropagatesError(t *testing.T) {
 		t.Fatal("byKey missing pods on partial error")
 	}
 }
+
+func TestTheEventsAliasIsLeftOutWhenBothApisAnswer(t *testing.T) {
+	client := &stubDiscovery{lists: []*metav1.APIResourceList{
+		{
+			GroupVersion: "v1",
+			APIResources: []metav1.APIResource{
+				{Name: "events", Kind: "Event", Namespaced: true, Verbs: listWatch()},
+			},
+		},
+		{
+			GroupVersion: "events.k8s.io/v1",
+			APIResources: []metav1.APIResource{
+				{Name: "events", Kind: "Event", Namespaced: true, Verbs: listWatch()},
+			},
+		},
+	}}
+
+	categories, byKey, err := List(client)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	kinds := []string{}
+	for _, category := range categories {
+		for _, desc := range category.Resources {
+			kinds = append(kinds, desc.Group+"/"+desc.Resource)
+		}
+	}
+	if len(kinds) != 1 || kinds[0] != "/events" {
+		t.Fatalf("kinds = %v, want the core events only", kinds)
+	}
+	if _, ok := byKey[Key("events.k8s.io", "v1", "events")]; !ok {
+		t.Fatal("the alias should still be reachable by key for anything that asks for it")
+	}
+}
+
+func TestTheEventsAliasStandsInWhenCoreEventsAreMissing(t *testing.T) {
+	client := &stubDiscovery{lists: []*metav1.APIResourceList{
+		{
+			GroupVersion: "events.k8s.io/v1",
+			APIResources: []metav1.APIResource{
+				{Name: "events", Kind: "Event", Namespaced: true, Verbs: listWatch()},
+			},
+		},
+	}}
+
+	categories, _, err := List(client)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if len(categories) != 1 || len(categories[0].Resources) != 1 {
+		t.Fatalf("categories = %+v, want the events.k8s.io kind kept", categories)
+	}
+}

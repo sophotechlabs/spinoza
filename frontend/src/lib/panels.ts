@@ -25,6 +25,7 @@ export interface PanelDescriptor {
 
 const SELECT_ROW = 'Select a row to inspect it';
 const SELECT_POD = 'Select a pod to see this';
+const NOT_FOR_EVENTS = 'An event has no events of its own';
 
 function isPod(detail: ObjectDetail | null): boolean {
   if (detail === null) {
@@ -41,6 +42,13 @@ function isPodPanel(ctx: PanelContext): boolean {
   return isPod(ctx.detail);
 }
 
+function takesEvents(ctx: PanelContext): boolean {
+  if (!hasSelection(ctx)) {
+    return false;
+  }
+  return ctx.detail?.kind !== 'Event';
+}
+
 export const PANELS: PanelDescriptor[] = [
   {
     id: 'overview',
@@ -50,7 +58,13 @@ export const PANELS: PanelDescriptor[] = [
     enabled: hasSelection,
   },
   { id: 'yaml', label: 'YAML', defaultSide: 'right', hint: SELECT_ROW, enabled: hasSelection },
-  { id: 'events', label: 'Events', defaultSide: 'right', hint: SELECT_ROW, enabled: hasSelection },
+  {
+    id: 'events',
+    label: 'Events',
+    defaultSide: 'right',
+    hint: NOT_FOR_EVENTS,
+    enabled: takesEvents,
+  },
   { id: 'logs', label: 'Logs', defaultSide: 'right', hint: SELECT_POD, enabled: isPodPanel },
   { id: 'metrics', label: 'Metrics', defaultSide: 'right', hint: SELECT_POD, enabled: isPodPanel },
   {

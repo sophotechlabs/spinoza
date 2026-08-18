@@ -492,3 +492,80 @@ func TestNodeCellsIgnoreANonBoolUnschedulable(t *testing.T) {
 		t.Fatalf("status = %q", got)
 	}
 }
+
+func coreEvent() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion":     "v1",
+		"kind":           "Event",
+		"metadata":       map[string]any{"name": "web.17abc", "namespace": "prod"},
+		"type":           "Warning",
+		"reason":         "BackOff",
+		"message":        "Back-off restarting failed container",
+		"count":          int64(42),
+		"lastTimestamp":  "2026-08-18T10:00:00Z",
+		"firstTimestamp": "2026-08-18T09:00:00Z",
+		"involvedObject": map[string]any{"kind": "Pod", "name": "web-0", "namespace": "prod"},
+		"source":         map[string]any{"component": "kubelet", "host": "node-1"},
+	}}
+}
+
+func newEvent() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion":         "events.k8s.io/v1",
+		"kind":               "Event",
+		"metadata":           map[string]any{"name": "web.17abd", "namespace": "prod"},
+		"type":               "Normal",
+		"reason":             "Scheduled",
+		"note":               "Successfully assigned prod/web-0 to node-1",
+		"eventTime":          "2026-08-18T09:30:00Z",
+		"regarding":          map[string]any{"kind": "Pod", "name": "web-0", "namespace": "prod"},
+		"reportingComponent": "default-scheduler",
+		"series":             map[string]any{"count": int64(3)},
+	}}
+}
+
+func TestEventColumnsSayWhatHappened(t *testing.T) {
+	columns := columnsFor("Event")
+
+	names := make([]string, 0, len(columns))
+	for _, column := range columns {
+		names = append(names, column.Name)
+	}
+	want := []string{"Type", "Reason", "Object", "Count", "Last seen", "Message"}
+	if len(names) != len(want) {
+		t.Fatalf("columns = %v, want %v", names, want)
+	}
+	for i, name := range want {
+		if names[i] != name {
+			t.Fatalf("columns = %v, want %v", names, want)
+		}
+	}
+}
+
+func TestCoreEventCells(t *testing.T) {
+	cells := cellsFor(coreEvent(), "Event")
+
+	want := []string{
+		"Warning", "BackOff", "Pod/web-0", "42", "2026-08-18T10:00:00Z",
+		"Back-off restarting failed container",
+	}
+	for i, value := range want {
+		if cells[i] != value {
+			t.Fatalf("cells = %v, want %v", cells, want)
+		}
+	}
+}
+
+func TestTheNewerEventApiReadsTheSame(t *testing.T) {
+	cells := cellsFor(newEvent(), "Event")
+
+	want := []string{
+		"Normal", "Scheduled", "Pod/web-0", "3", "2026-08-18T09:30:00Z",
+		"Successfully assigned prod/web-0 to node-1",
+	}
+	for i, value := range want {
+		if cells[i] != value {
+			t.Fatalf("cells = %v, want %v", cells, want)
+		}
+	}
+}

@@ -304,7 +304,19 @@ type ObjectDetail struct {
 	Schedulable *bool             `json:"schedulable,omitempty"`
 	HandledAt   string            `json:"handledAt,omitempty"`
 	Ports       []ObjectPort      `json:"ports,omitempty"`
+	Event       *ObjectEvent      `json:"event,omitempty"`
 	YAML        string            `json:"yaml"`
+}
+
+type ObjectEvent struct {
+	Type      string `json:"type,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	Message   string `json:"message,omitempty"`
+	Object    string `json:"object,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Count     int64  `json:"count,omitempty"`
+	FirstSeen string `json:"firstSeen,omitempty"`
+	LastSeen  string `json:"lastSeen,omitempty"`
 }
 
 type ObjectPort struct {

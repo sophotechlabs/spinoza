@@ -253,6 +253,7 @@ ObjectDetail.Annotations annotations,omitempty
 ObjectDetail.Conditions conditions,omitempty
 ObjectDetail.Containers containers,omitempty
 ObjectDetail.CreatedAt createdAt
+ObjectDetail.Event event,omitempty
 ObjectDetail.HandledAt handledAt,omitempty
 ObjectDetail.Kind kind
 ObjectDetail.Labels labels,omitempty
@@ -265,6 +266,14 @@ ObjectDetail.Schedulable schedulable,omitempty
 ObjectDetail.Suspended suspended,omitempty
 ObjectDetail.UID uid
 ObjectDetail.YAML yaml
+ObjectEvent.Count count,omitempty
+ObjectEvent.FirstSeen firstSeen,omitempty
+ObjectEvent.LastSeen lastSeen,omitempty
+ObjectEvent.Message message,omitempty
+ObjectEvent.Object object,omitempty
+ObjectEvent.Reason reason,omitempty
+ObjectEvent.Source source,omitempty
+ObjectEvent.Type type,omitempty
 ObjectPort.Name name,omitempty
 ObjectPort.Port port
 ObjectPort.Protocol protocol,omitempty

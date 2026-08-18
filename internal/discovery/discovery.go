@@ -48,7 +48,30 @@ func List(client discovery.DiscoveryInterface) ([]api.Category, map[string]api.R
 			byKey[Key(gv.Group, gv.Version, resource.Name)] = desc
 		}
 	}
+	descs = withoutAliases(descs)
 	return groupByCategory(descs), byKey, err
+}
+
+const eventsGroup = "events.k8s.io"
+
+func withoutAliases(descs []api.ResourceDescriptor) []api.ResourceDescriptor {
+	core := false
+	for _, desc := range descs {
+		if desc.Group == "" && desc.Resource == "events" {
+			core = true
+		}
+	}
+	if !core {
+		return descs
+	}
+	out := make([]api.ResourceDescriptor, 0, len(descs))
+	for _, desc := range descs {
+		if desc.Group == eventsGroup && desc.Resource == "events" {
+			continue
+		}
+		out = append(out, desc)
+	}
+	return out
 }
 
 func supportsListWatch(verbs metav1.Verbs) bool {
