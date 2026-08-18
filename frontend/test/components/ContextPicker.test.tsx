@@ -581,3 +581,47 @@ describe('ContextPicker', () => {
     expect(await screen.findByLabelText('Add a kubeconfig')).toBeInTheDocument();
   });
 });
+
+describe('the context menu going away on its own', () => {
+  it('closes when something else on the page is clicked', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
+
+    render(
+      <div>
+        <ContextPicker onSwitched={vi.fn()} />
+        <button type="button">elsewhere</button>
+      </div>,
+    );
+    const menu = await openMenu(user);
+    expect(menu).toHaveAttribute('open');
+
+    await user.click(screen.getByRole('button', { name: 'elsewhere' }));
+
+    expect(menu).not.toHaveAttribute('open');
+  });
+
+  it('closes on escape', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
+
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    const menu = await openMenu(user);
+
+    await user.keyboard('{Escape}');
+
+    expect(menu).not.toHaveAttribute('open');
+  });
+
+  it('stays open while the pointer is inside it', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
+
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    const menu = await openMenu(user);
+
+    await user.pointer({ target: screen.getByText('p-mk1'), keys: '[MouseLeft>]' });
+
+    expect(menu).toHaveAttribute('open');
+  });
+});

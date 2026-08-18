@@ -6,6 +6,7 @@ import { notifyError, notifyOk } from '../store/toasts';
 import { useContextList, useContextsStore } from '../store/contexts';
 import { sessionExpired } from '../store/session';
 import { CONTROL } from '../lib/controls';
+import { useDismissMenu } from '../lib/useDismissMenu';
 import KubeconfigDialog from './KubeconfigDialog';
 
 interface ContextPickerProps {
@@ -60,6 +61,8 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   const [attempt, setAttempt] = useState(0);
   const [managing, setManaging] = useState(false);
   const menuRef = useRef<HTMLDetailsElement | null>(null);
+
+  useDismissMenu(menuRef);
 
   const groups = useMemo(() => contextGroups(list), [list]);
 

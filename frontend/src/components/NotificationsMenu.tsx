@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { ObjectRef } from '../lib/types';
 import { ICON_CONTROL } from '../lib/controls';
+import { useDismissMenu } from '../lib/useDismissMenu';
 import NotificationsPanel from './NotificationsPanel';
 import { BellIcon } from './icons';
 
@@ -10,6 +11,8 @@ interface NotificationsMenuProps {
 
 export default function NotificationsMenu({ onSelectObject }: NotificationsMenuProps) {
   const ref = useRef<HTMLDetailsElement | null>(null);
+
+  useDismissMenu(ref);
 
   function handleSelectObject(target: ObjectRef) {
     const menu = ref.current;

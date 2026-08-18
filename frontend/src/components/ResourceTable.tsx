@@ -32,6 +32,7 @@ import { ratioColor, restartColor, statusColor } from '../lib/status';
 import { useMetrics } from '../lib/metrics';
 import { cpuFromMilli, memFromMi } from '../lib/units';
 import { useElementWidth } from '../lib/useElementWidth';
+import { useDismissMenu } from '../lib/useDismissMenu';
 import { extraWidths, widthOf } from '../lib/columnFit';
 import { useNow } from '../lib/useNow';
 import { ago } from '../lib/time';
@@ -266,6 +267,8 @@ export default function ResourceTable({
     writeTableState(stateKey, { sorting, visibility, sizing: next });
   }
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const columnsRef = useRef<HTMLDetailsElement | null>(null);
+  useDismissMenu(columnsRef);
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const setScroll = useCallback((node: HTMLDivElement | null) => {
     scrollRef.current = node;
@@ -519,7 +522,7 @@ export default function ResourceTable({
       )}
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface px-2 py-1.5 text-xs">
         <FilterBar stateKey={stateKey} fields={fields} rows={rows} text={text} onText={setText} />
-        <details className="relative">
+        <details ref={columnsRef} className="relative">
           <summary className="cursor-pointer rounded border border-edge px-2 py-1 text-fg-soft hover:bg-surface-raised">
             Columns
           </summary>
