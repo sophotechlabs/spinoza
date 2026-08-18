@@ -29,6 +29,20 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      - name: Tag the draft so the next run starts from it
+        if: steps.release.outputs.release_created
+        env:
+          TAG: ${{ steps.release.outputs.tag_name }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api "repos/$REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "$TAG is already tagged"
+            exit 0
+          fi
+          gh api "repos/$REPO/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$SHA"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         if: steps.release.outputs.release_created
         with:
