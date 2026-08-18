@@ -6,6 +6,7 @@ import FilterBar from '../../src/components/FilterBar';
 import { fieldsOf } from '../../src/lib/filterChips';
 import { useFiltersStore } from '../../src/store/filters';
 import { ALL, useNamespaceStore } from '../../src/store/namespace';
+import { makeRow } from '../helpers';
 
 const KEY = '/v1/pods';
 
@@ -17,9 +18,14 @@ function chipsOf() {
   return useFiltersStore.getState().chips[KEY];
 }
 
-function Harness({ own = fields }: { own?: typeof fields }) {
+const rows = [
+  makeRow({ uid: 'a', name: 'web-1', namespace: 'prod', cells: ['Running'] }),
+  makeRow({ uid: 'b', name: 'api-1', namespace: 'staging', cells: ['CrashLoopBackOff'] }),
+];
+
+function Harness({ own = fields, held = rows }: { own?: typeof fields; held?: typeof rows }) {
   const [text, setText] = useState('');
-  return <FilterBar stateKey={KEY} fields={own} text={text} onText={setText} />;
+  return <FilterBar stateKey={KEY} fields={own} rows={held} text={text} onText={setText} />;
 }
 
 function filterBox(): HTMLElement {
@@ -166,10 +172,212 @@ describe('FilterBar', () => {
   it('reports every keystroke so the list can narrow as you type', async () => {
     const user = userEvent.setup();
     const onText = vi.fn();
-    render(<FilterBar stateKey={KEY} fields={fields} text="" onText={onText} />);
+    render(<FilterBar stateKey={KEY} fields={fields} rows={rows} text="" onText={onText} />);
 
     await user.type(filterBox(), 'w');
 
     expect(onText).toHaveBeenCalledWith('w');
+  });
+});
+
+describe('completing what is typed', () => {
+  beforeEach(() => {
+    useFiltersStore.getState().clear();
+    useNamespaceStore.setState({ namespace: ALL, names: ['airbyte', 'airbyte-jobs', 'prod'] });
+  });
+
+  afterEach(() => {
+    useFiltersStore.getState().clear();
+    useNamespaceStore.setState({ namespace: ALL, names: [] });
+  });
+
+  it('offers nothing until something is typed', () => {
+    render(<Harness />);
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(filterBox()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('waits rather than scoping to a namespace the cluster does not have', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(filterBox(), 'ns:kube{Enter}');
+
+    expect(useNamespaceStore.getState().namespace).toBe(ALL);
+    expect(filterBox()).toHaveValue('ns:kube');
+  });
+
+  it('scopes to a namespace typed in full', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(filterBox(), 'ns:prod{Enter}');
+
+    expect(useNamespaceStore.getState().namespace).toBe('prod');
+  });
+
+  it('leaves the arrows and Tab alone while no list is open', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(filterBox());
+
+    await user.keyboard('{ArrowDown}{ArrowUp}');
+    await user.tab();
+
+    expect(chipsOf()).toBeUndefined();
+    expect(filterBox()).not.toHaveFocus();
+  });
+
+  it('offers the fields a kind can be filtered by', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(filterBox(), 'stat');
+
+    expect(screen.getByRole('option', { name: /Status:/ })).toBeInTheDocument();
+  });
+
+  it('offers the namespaces the cluster reported', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(filterBox(), 'ns:airbyte-');
+
+    expect(screen.getByRole('option', { name: /airbyte-jobs/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /^prod/ })).not.toBeInTheDocument();
+  });
+
+  it('offers the values on screen for a column', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(filterBox(), 'status:');
+
+    expect(screen.getByRole('option', { name: /Running/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /CrashLoopBackOff/ })).toBeInTheDocument();
+  });
+
+  it('fills the box with a field and waits for its value', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(filterBox(), 'stat');
+
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(filterBox()).toHaveValue('status:');
+    expect(chipsOf()).toBeUndefined();
+  });
+
+  it('keeps a value as a chip as soon as it is chosen', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(filterBox(), 'status:run');
+
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(chipsOf()).toEqual([{ field: 'status', value: 'Running' }]);
+    expect(filterBox()).toHaveValue('');
+  });
+
+  it('takes a chosen namespace as the scope', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(filterBox(), 'ns:airbyte-');
+
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(useNamespaceStore.getState().namespace).toBe('airbyte-jobs');
+  });
+
+  it('takes the first suggestion on Tab', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(filterBox(), 'status:crash');
+
+    await user.tab();
+
+    expect(chipsOf()).toEqual([{ field: 'status', value: 'CrashLoopBackOff' }]);
+  });
+
+  it('takes what was typed when nothing is picked', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(filterBox(), 'status:run{Enter}');
+
+    expect(chipsOf()).toEqual([{ field: 'status', value: 'run' }]);
+  });
+
+  it('walks down the list and back off the top of it', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(filterBox(), 'status:');
+
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowUp}{ArrowUp}{Enter}');
+
+    expect(chipsOf()).toBeUndefined();
+    expect(filterBox()).toHaveValue('status:');
+  });
+
+  it('stops at the end of the list', async () => {
+    const user = userEvent.setup();
+    render(<Harness held={[rows[0]]} />);
+    await user.type(filterBox(), 'status:');
+
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{Enter}');
+
+    expect(chipsOf()).toEqual([{ field: 'status', value: 'Running' }]);
+  });
+
+  it('puts the list away on Escape and brings it back on the next keystroke', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(filterBox(), 'status:');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    await user.type(filterBox(), 'r');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+  });
+
+  it('leaves Escape to the rest of the app when no list is open', async () => {
+    const user = userEvent.setup();
+    const seen: string[] = [];
+    const onKeyDown = (event: KeyboardEvent) => {
+      seen.push(event.key);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    render(<Harness />);
+
+    await user.click(filterBox());
+    await user.keyboard('{Escape}');
+
+    expect(seen).toContain('Escape');
+    window.removeEventListener('keydown', onKeyDown);
+  });
+
+  it('takes a suggestion that is clicked', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(filterBox(), 'status:');
+
+    await user.click(screen.getByRole('option', { name: /Running/ }));
+
+    expect(chipsOf()).toEqual([{ field: 'status', value: 'Running' }]);
+  });
+
+  it('marks the highlighted option for assistive technology', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(filterBox(), 'status:');
+
+    await user.keyboard('{ArrowDown}');
+
+    const active = filterBox().getAttribute('aria-activedescendant');
+    expect(active).not.toBeNull();
+    expect(screen.getByRole('option', { selected: true })).toHaveAttribute('id', active);
   });
 });

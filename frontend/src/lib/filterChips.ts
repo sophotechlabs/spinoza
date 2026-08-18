@@ -104,7 +104,7 @@ export function nameChips(text: string): Chip[] {
   return [{ field: NAME_FIELD, value }];
 }
 
-function valueOf(row: Row, field: FilterField): string {
+export function fieldValue(row: Row, field: FilterField): string {
   if (field.cell === NAME_CELL) {
     return row.name;
   }
@@ -122,7 +122,7 @@ export function matches(row: Row, chip: Chip, fields: FilterField[]): boolean {
   if (field === null) {
     return true;
   }
-  return valueOf(row, field).toLowerCase().includes(chip.value.toLowerCase());
+  return fieldValue(row, field).toLowerCase().includes(chip.value.toLowerCase());
 }
 
 export function filterRows(rows: Row[], chips: Chip[], fields: FilterField[]): Row[] {

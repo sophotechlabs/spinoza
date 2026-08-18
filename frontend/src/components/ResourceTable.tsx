@@ -518,7 +518,7 @@ export default function ResourceTable({
         <StaleBanner what="Metrics" message={metricsError} onRetry={reloadMetrics} />
       )}
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface px-2 py-1.5 text-xs">
-        <FilterBar stateKey={stateKey} fields={fields} text={text} onText={setText} />
+        <FilterBar stateKey={stateKey} fields={fields} rows={rows} text={text} onText={setText} />
         <details className="relative">
           <summary className="cursor-pointer rounded border border-edge px-2 py-1 text-fg-soft hover:bg-surface-raised">
             Columns
