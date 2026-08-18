@@ -118,3 +118,11 @@ jobs:
           TAG: ${{ needs.version.outputs.tag }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  install:
+    needs:
+      - version
+      - publish
+    uses: ./.github/workflows/install.yaml
+    with:
+      version: ${{ needs.version.outputs.tag }}

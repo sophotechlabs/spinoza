@@ -297,7 +297,7 @@ workflows:
 hygiene:
     typos
     editorconfig-checker
-    shellcheck install.sh
+    shellcheck install.sh test/install/container.sh
     just --unstable --fmt --check
 
 docs:
@@ -392,6 +392,127 @@ release-dist: deps
     done
     syft scan dir:dist/build --source-name spinoza --source-version "$version" --output "cyclonedx-json=dist/release/spinoza_${version}_sbom.cdx.json"
     cd dist/release && sha256sum -- *.tar.gz > checksums.txt
+    cd ../..
+    just verify-checksums dist/release
+
+verify-checksums dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir='{{ dir }}'
+    list="$dir/checksums.txt"
+    hash_of() {
+        if command -v sha256sum > /dev/null; then
+            sha256sum "$1" | awk '{ print $1 }'
+            return
+        fi
+        shasum -a 256 "$1" | awk '{ print $1 }'
+    }
+    if [ ! -f "$list" ]; then
+        echo "verify-checksums: $list is missing"
+        exit 1
+    fi
+    if ! awk '$2 ~ "/" { bad = 1 } END { exit bad }' "$list"; then
+        echo "verify-checksums: a name in checksums.txt carries a path, install.sh matches bare filenames"
+        exit 1
+    fi
+    checked=0
+    for file in "$dir"/*.tar.gz "$dir"/*.zip; do
+        if [ ! -f "$file" ]; then
+            continue
+        fi
+        name=$(basename "$file")
+        expected=$(awk -v name="$name" '$2 == name { print $1 }' "$list")
+        if [ -z "$expected" ]; then
+            echo "verify-checksums: $name is not listed in checksums.txt"
+            exit 1
+        fi
+        actual=$(hash_of "$file")
+        if [ "$expected" != "$actual" ]; then
+            echo "verify-checksums: $name does not match the checksum listed for it"
+            exit 1
+        fi
+        checked=$((checked + 1))
+    done
+    if [ "$checked" -eq 0 ]; then
+        echo "verify-checksums: $dir holds no artifacts to check"
+        exit 1
+    fi
+    echo "verify-checksums: every artifact in $dir matches checksums.txt"
+
+wait-for-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="${SPINOZA_VERSION:-}"
+    if [ -z "$version" ]; then
+        exit 0
+    fi
+    url="https://github.com/sophotechlabs/spinoza/releases/download/$version/checksums.txt"
+    for _ in $(seq 1 60); do
+        if curl -fsSL -o /dev/null "$url"; then
+            echo "wait-for-release: $version is downloadable"
+            exit 0
+        fi
+        sleep 5
+    done
+    echo "wait-for-release: $url did not become downloadable within five minutes"
+    exit 1
+
+test-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    image="${IMAGE:?IMAGE is required}"
+    expect="${EXPECT:-install}"
+    args=(--rm)
+    args+=(-e "SETUP=${SETUP:-}")
+    args+=(-e "SPINOZA_VERSION=${SPINOZA_VERSION:-}")
+    args+=(-v "$PWD/install.sh:/install.sh:ro")
+    args+=(-v "$PWD/test/install/container.sh:/container.sh:ro")
+    args+=("$image" sh /container.sh)
+    if [ "$expect" = install ]; then
+        docker run "${args[@]}"
+        echo "test-install: $image installed and ran spinoza"
+        exit 0
+    fi
+    set +e
+    output=$(docker run "${args[@]}" 2>&1)
+    code=$?
+    set -e
+    if [ "$code" -eq 0 ]; then
+        echo "test-install: $image installed spinoza, but this image has no downloader and should have refused"
+        exit 1
+    fi
+    if ! printf '%s' "$output" | grep -q 'neither curl nor wget is on PATH'; then
+        echo "test-install: $image failed for a reason the test did not expect"
+        printf '%s\n' "$output"
+        exit 1
+    fi
+    echo "test-install: $image refused to install without curl or wget"
+
+test-install-host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sh install.sh
+    export PATH="$HOME/.local/bin:$PATH"
+    spinoza --version
+    if [ "$(uname -s)" != Darwin ]; then
+        exit 0
+    fi
+    app=""
+    for candidate in /Applications "$HOME/Applications"; do
+        if [ -d "$candidate/Spinoza.app" ]; then
+            app="$candidate/Spinoza.app"
+            break
+        fi
+    done
+    if [ -z "$app" ]; then
+        echo "test-install-host: the desktop app was not installed"
+        exit 1
+    fi
+    if ! lipo -archs "$app/Contents/MacOS/Spinoza" | grep -q x86_64; then
+        echo "test-install-host: $app is not universal, intel macs cannot run it"
+        exit 1
+    fi
+    echo "test-install-host: installed $app as a universal binary"
 
 smoke:
     #!/usr/bin/env bash
@@ -467,6 +588,7 @@ publish-desktop:
     grep -v "_darwin_app.zip$" dist/release/checksums.remote.txt > dist/release/checksums.merged.txt || true
     (cd dist/release && shasum -a 256 "$(basename "$asset")" >> checksums.merged.txt)
     sort -k2 dist/release/checksums.merged.txt > dist/release/checksums.txt
+    just verify-checksums dist/release
     gh release upload "$tag" dist/release/checksums.txt --clobber
 
 check: lint test

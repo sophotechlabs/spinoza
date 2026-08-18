@@ -1,0 +1,83 @@
+name: install
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+  pull_request:
+    paths:
+      - install.sh
+      - justfile
+      - test/install/**
+      - .github/workflows/install.yaml
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag to install, empty for the latest
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  containers:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: alpine, busybox wget
+            image: alpine:3.22
+            setup: ""
+            expect: install
+          - name: alpine, curl on musl
+            image: alpine:3.22
+            setup: apk add --no-cache curl
+            expect: install
+          - name: debian, curl on glibc
+            image: debian:stable-slim
+            setup: apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+            expect: install
+          - name: debian, no downloader
+            image: debian:stable-slim
+            setup: ""
+            expect: fail
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just
+      - run: just wait-for-release
+        env:
+          SPINOZA_VERSION: ${{ inputs.version }}
+      - run: just test-install
+        env:
+          IMAGE: ${{ matrix.image }}
+          SETUP: ${{ matrix.setup }}
+          EXPECT: ${{ matrix.expect }}
+          SPINOZA_VERSION: ${{ inputs.version }}
+
+  macos:
+    name: macos, binary and app
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just
+      - run: just wait-for-release
+        env:
+          SPINOZA_VERSION: ${{ inputs.version }}
+      - run: just test-install-host
+        env:
+          SPINOZA_VERSION: ${{ inputs.version }}
