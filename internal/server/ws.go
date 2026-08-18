@@ -200,6 +200,8 @@ func (sess *wsSession) handle(msg api.ClientMsg) {
 		sess.subscribe(msg)
 	case "unsubscribe":
 		sess.drop(tables, msg.SubID)
+	case "more":
+		sess.more(msg)
 	case "logs-subscribe":
 		sess.subscribeLogs(msg)
 	case "logs-unsubscribe":
@@ -213,8 +215,26 @@ func (sess *wsSession) subscribe(msg api.ClientMsg) {
 	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(msg, gen) })
 }
 
+type resizable interface {
+	SetLimit(limit int)
+}
+
+func (sess *wsSession) more(msg api.ClientMsg) {
+	sess.mu.Lock()
+	held, ok := sess.entriesOf(tables)[msg.SubID]
+	sess.mu.Unlock()
+	if !ok || held.resource == nil {
+		return
+	}
+	sub, ok := held.resource.(resizable)
+	if !ok {
+		return
+	}
+	sub.SetLimit(msg.Limit)
+}
+
 func (sess *wsSession) buildSub(msg api.ClientMsg, gen uint64) {
-	sub, err := sess.mgr.Subscribe(sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace)
+	sub, err := sess.mgr.Subscribe(sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit)
 	if err != nil {
 		sess.failCurrent(tables, msg.SubID, gen, err)
 		return
@@ -223,17 +243,19 @@ func (sess *wsSession) buildSub(msg api.ClientMsg, gen uint64) {
 		sub.Close()
 		return
 	}
-	sess.writeCurrent(tables, msg.SubID, gen, snapshotOf(msg.SubID, sub, sub.Rows))
+	sess.writeCurrent(tables, msg.SubID, gen, snapshotOf(msg.SubID, sub, sub.Rows, sub.Total))
 	sess.relay(msg.SubID, gen, sub)
 }
 
-func snapshotOf(subID string, sub *resources.Subscription, rows []api.Row) api.Snapshot {
+func snapshotOf(subID string, sub *resources.Subscription, rows []api.Row, total int) api.Snapshot {
 	return api.Snapshot{
 		Type:       "snapshot",
 		SubID:      subID,
 		Columns:    columnsOrEmpty(sub.Columns),
 		Namespaced: sub.Namespaced,
 		Rows:       rowsOrEmpty(rows),
+		Total:      total,
+		Limit:      sub.Limit(),
 	}
 }
 
@@ -266,12 +288,12 @@ func (sess *wsSession) relay(subID string, gen uint64, sub *resources.Subscripti
 
 func (sess *wsSession) sendResync(subID string, gen uint64, sub *resources.Subscription) bool {
 	drainEvents(sub.Events)
-	rows, err := sub.Snapshot()
+	rows, total, err := sub.Snapshot()
 	if err != nil {
 		slog.Warn("a resync could not read the cache", "subId", subID, "error", err)
 		return sess.writeCurrent(tables, subID, gen, api.FeedError{Type: msgError, SubID: subID, Message: err.Error()})
 	}
-	return sess.writeCurrent(tables, subID, gen, snapshotOf(subID, sub, rows))
+	return sess.writeCurrent(tables, subID, gen, snapshotOf(subID, sub, rows, total))
 }
 
 const maxBatch = 200

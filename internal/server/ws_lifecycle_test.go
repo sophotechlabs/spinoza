@@ -160,7 +160,7 @@ func TestResyncSendsAFreshSnapshot(t *testing.T) {
 	mgr, dyn := testManager(t, newDeployment("default", "web"))
 	sess, client, ctx := rawSession(t, mgr)
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestResyncDrainsTheStaleEventsFirst(t *testing.T) {
 	mgr, dyn := testManager(t, newDeployment("default", "web"))
 	sess, _, ctx := rawSession(t, mgr)
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestResyncIsSkippedForAReplacedSubscription(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, client, ctx := rawSession(t, mgr)
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -256,7 +256,7 @@ func waitForRows(t *testing.T, sub *resources.Subscription, want int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		rows, err := sub.Snapshot()
+		rows, _, err := sub.Snapshot()
 		if err != nil {
 			t.Fatalf("snapshot: %v", err)
 		}
@@ -275,7 +275,7 @@ func TestAdoptRefusesASupersededSubscription(t *testing.T) {
 	first := sess.claim(tables, "main")
 	second := sess.claim(tables, "main")
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestAdoptRefusesASubscriptionCancelledWhileBuilding(t *testing.T) {
 	gen := sess.claim(tables, "main")
 	sess.drop(tables, "main")
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestClaimClosesThePreviousSubscription(t *testing.T) {
 	sess, _, _ := rawSession(t, mgr)
 
 	first := sess.claim(tables, "main")
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default")
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -629,3 +629,71 @@ func (c *swappableCluster) Protect(bool) error {
 func (c *swappableCluster) Protected() bool {
 	return false
 }
+
+func TestASnapshotSaysHowMuchOfTheKindItHolds(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, client, ctx := rawSession(t, mgr)
+
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+	sess.tables["main"] = &entry{resource: sub, gen: 1}
+
+	if !sess.sendResync("main", 1, sub) {
+		t.Fatal("sendResync reported the subscription as stale")
+	}
+
+	msg := readMsg(ctx, t, client)
+	if msg.Total != 1 {
+		t.Fatalf("total = %d, want 1", msg.Total)
+	}
+	if msg.Limit != 0 {
+		t.Fatalf("limit = %d, want an unlimited kind to say 0", msg.Limit)
+	}
+}
+
+type widened struct {
+	limit int
+}
+
+func (w *widened) Close() {}
+
+func (w *widened) SetLimit(limit int) {
+	w.limit = limit
+}
+
+func TestMoreWidensTheWindowOfTheLiveSubscription(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, _, _ := rawSession(t, mgr)
+	held := &widened{}
+	sess.tables["main"] = &entry{resource: held, gen: 1}
+
+	sess.handle(api.ClientMsg{Type: "more", SubID: "main", Limit: 200})
+
+	if held.limit != 200 {
+		t.Fatalf("limit = %d, want 200", held.limit)
+	}
+}
+
+func TestMoreIgnoresASubscriptionThatIsNotThere(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, _, _ := rawSession(t, mgr)
+	sess.tables["pending"] = &entry{gen: 1}
+
+	sess.handle(api.ClientMsg{Type: "more", SubID: "missing", Limit: 200})
+	sess.handle(api.ClientMsg{Type: "more", SubID: "pending", Limit: 200})
+}
+
+func TestMoreIgnoresAFeedThatCannotBeWidened(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, _, _ := rawSession(t, mgr)
+	sess.tables["logs"] = &entry{resource: stubStoppable{}, gen: 1}
+
+	sess.handle(api.ClientMsg{Type: "more", SubID: "logs", Limit: 200})
+}
+
+type stubStoppable struct{}
+
+func (stubStoppable) Close() {}

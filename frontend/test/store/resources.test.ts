@@ -126,6 +126,8 @@ describe('useResourcesStore', () => {
       columns: [],
       namespaced: true,
       rows: [],
+      total: 0,
+      limit: 0,
     };
     before.applyDeltas('s1', [msg]);
     expect(useResourcesStore.getState().subs).toBe(before.subs);
@@ -226,5 +228,25 @@ describe('selectors', () => {
     const first = result.current;
     rerender();
     expect(result.current).toBe(first);
+  });
+});
+
+describe('how much of a kind is loaded', () => {
+  it('takes the totals a snapshot carries', () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('s1', makeColumns([]), true, [makeRow({ uid: 'a' })], 79190, 100);
+
+    expect(useResourcesStore.getState().subs.get('s1')?.total).toBe(79190);
+    expect(useResourcesStore.getState().subs.get('s1')?.limit).toBe(100);
+  });
+
+  it('reads an unlimited kind as all of it', () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('s1', makeColumns([]), true, [makeRow({ uid: 'a' }), makeRow({ uid: 'b' })]);
+
+    expect(useResourcesStore.getState().subs.get('s1')?.total).toBe(2);
+    expect(useResourcesStore.getState().subs.get('s1')?.limit).toBe(0);
   });
 });

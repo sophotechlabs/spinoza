@@ -163,8 +163,10 @@ export type ClientMsg =
       version: string;
       resource: string;
       namespace: string;
+      limit: number;
     }
   | { type: 'unsubscribe'; subId: string }
+  | { type: 'more'; subId: string; limit: number }
   | {
       type: 'logs-subscribe';
       subId: string;
@@ -177,7 +179,15 @@ export type ClientMsg =
   | { type: 'logs-unsubscribe'; subId: string };
 
 export type ServerMsg =
-  | { type: 'snapshot'; subId: string; columns: Column[]; namespaced: boolean; rows: Row[] }
+  | {
+      type: 'snapshot';
+      subId: string;
+      columns: Column[];
+      namespaced: boolean;
+      rows: Row[];
+      total: number;
+      limit: number;
+    }
   | { type: 'added'; subId: string; row: Row }
   | { type: 'modified'; subId: string; row: Row }
   | { type: 'deleted'; subId: string; uid: string }

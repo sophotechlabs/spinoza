@@ -101,7 +101,7 @@ export default function App() {
   const categories = useCategories();
   const scope = useMemo(() => kindScope(categories, route.resource), [categories, route.resource]);
 
-  const { subscribe, unsubscribe, subscribeLogs, unsubscribeLogs } = feed;
+  const { subscribe, unsubscribe, loadMore, subscribeLogs, unsubscribeLogs } = feed;
   const namespace = useNamespace();
   const chooseNamespace = useNamespaceStore((state) => state.choose);
   const resetNamespace = useNamespaceStore((state) => state.reset);
@@ -302,6 +302,10 @@ export default function App() {
     });
   }
 
+  function handleMore(limit: number) {
+    loadMore(subId, limit);
+  }
+
   function handleSelectRow(row: Row) {
     remember(refFromRow(active, row));
   }
@@ -323,6 +327,7 @@ export default function App() {
       scope={scope}
       selected={selectedRow}
       onSelect={handleSelectRow}
+      onMore={handleMore}
     />
   );
   if (route.view === 'cluster') {

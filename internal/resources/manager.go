@@ -8,6 +8,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -70,9 +71,11 @@ type Subscription struct {
 	Columns    []api.Column
 	Namespaced bool
 	Rows       []api.Row
+	Total      int
 	Events     <-chan Event
 	Resync     <-chan struct{}
 	stream     *stream
+	entry      *subscriber
 	namespace  string
 	cancel     func()
 }
@@ -81,8 +84,17 @@ func (s *Subscription) Close() {
 	s.cancel()
 }
 
-func (s *Subscription) Snapshot() ([]api.Row, error) {
-	return s.stream.snapshot(s.namespace)
+func (s *Subscription) Limit() int {
+	return int(s.entry.limit.Load())
+}
+
+func (s *Subscription) SetLimit(limit int) {
+	s.entry.limit.Store(int64(limitFor(s.stream.kind, limit)))
+	signalResync(s.entry)
+}
+
+func (s *Subscription) Snapshot() ([]api.Row, int, error) {
+	return s.stream.snapshot(s.namespace, s.Limit())
 }
 
 type Manager struct {
@@ -605,14 +617,17 @@ type subscriber struct {
 	events chan Event
 	resync chan struct{}
 	ns     string
+	limit  atomic.Int64
 }
 
-func newSubscriber(ns string) *subscriber {
-	return &subscriber{
+func newSubscriber(ns string, limit int) *subscriber {
+	sub := &subscriber{
 		events: make(chan Event, eventBuffer),
 		resync: make(chan struct{}, 1),
 		ns:     ns,
 	}
+	sub.limit.Store(int64(limit))
+	return sub
 }
 
 func (s *subscriber) wants(ev Event) bool {
@@ -639,7 +654,11 @@ type stream struct {
 	idle     *time.Timer
 }
 
-func (m *Manager) Subscribe(ctx context.Context, group, version, resource, namespace string) (*Subscription, error) {
+func (m *Manager) Subscribe(
+	ctx context.Context,
+	group, version, resource, namespace string,
+	limit int,
+) (*Subscription, error) {
 	desc, ok := m.descriptors()[discovery.Key(group, version, resource)]
 	if !ok {
 		return nil, fmt.Errorf("unknown resource %s/%s/%s", group, version, resource)
@@ -651,11 +670,11 @@ func (m *Manager) Subscribe(ctx context.Context, group, version, resource, names
 	}
 	key := streamKey{gvr: gvr}
 
-	st, entry, err := m.attach(ctx, key, desc, effNs)
+	st, entry, err := m.attach(ctx, key, desc, effNs, limitFor(desc.Kind, limit))
 	if err != nil {
 		return nil, err
 	}
-	rows, snapErr := st.snapshot(effNs)
+	rows, total, snapErr := st.snapshot(effNs, int(entry.limit.Load()))
 	if snapErr != nil {
 		m.detach(key, st, entry)
 		return nil, snapErr
@@ -665,10 +684,12 @@ func (m *Manager) Subscribe(ctx context.Context, group, version, resource, names
 		Columns:    st.columns,
 		Namespaced: desc.Namespaced,
 		Rows:       rows,
+		Total:      total,
 		namespace:  effNs,
 		Events:     entry.events,
 		Resync:     entry.resync,
 		stream:     st,
+		entry:      entry,
 		cancel: func() {
 			m.detach(key, st, entry)
 		},
@@ -680,13 +701,14 @@ func (m *Manager) attach(
 	key streamKey,
 	desc api.ResourceDescriptor,
 	ns string,
+	limit int,
 ) (*stream, *subscriber, error) {
 	for range attachAttempts {
 		st, err := m.streamFor(ctx, key, desc)
 		if err != nil {
 			return nil, nil, err
 		}
-		entry, ok := m.register(key, st, ns)
+		entry, ok := m.register(key, st, ns, limit)
 		if ok {
 			return st, entry, nil
 		}
@@ -788,13 +810,13 @@ func (m *Manager) unpin(key streamKey) {
 	}
 }
 
-func (m *Manager) register(key streamKey, st *stream, ns string) (*subscriber, bool) {
+func (m *Manager) register(key streamKey, st *stream, ns string, limit int) (*subscriber, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.streams[key] != st {
 		return nil, false
 	}
-	entry := newSubscriber(ns)
+	entry := newSubscriber(ns, limit)
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if st.idle != nil {
@@ -1055,6 +1077,10 @@ func (st *stream) fanout(ev Event) {
 		if !sub.wants(ev) {
 			continue
 		}
+		if sub.limit.Load() > 0 {
+			signalResync(sub)
+			continue
+		}
 		select {
 		case sub.events <- ev:
 		default:
@@ -1111,20 +1137,59 @@ func signalResync(sub *subscriber) {
 	}
 }
 
-func (st *stream) snapshot(ns string) ([]api.Row, error) {
+func (st *stream) snapshot(ns string, limit int) ([]api.Row, int, error) {
 	objs, err := st.listFor(ns)
 	if err != nil {
-		return nil, fmt.Errorf("reading the cached %s: %w", st.kind, err)
+		return nil, 0, fmt.Errorf("reading the cached %s: %w", st.kind, err)
 	}
-	rows := make([]api.Row, 0, len(objs))
+	held := make([]*unstructured.Unstructured, 0, len(objs))
 	for _, o := range objs {
 		u, ok := toUnstructured(o)
 		if !ok {
 			continue
 		}
+		held = append(held, u)
+	}
+	total := len(held)
+	held = newestFirst(st.kind, held, limit)
+	rows := make([]api.Row, 0, len(held))
+	for _, u := range held {
 		rows = append(rows, toRow(u, st.kind))
 	}
-	return rows, nil
+	return rows, total, nil
+}
+
+func newestFirst(kind string, held []*unstructured.Unstructured, limit int) []*unstructured.Unstructured {
+	if limit <= 0 {
+		return held
+	}
+	slices.SortStableFunc(held, func(left, right *unstructured.Unstructured) int {
+		return strings.Compare(sortKey(kind, right), sortKey(kind, left))
+	})
+	if len(held) <= limit {
+		return held
+	}
+	return held[:limit]
+}
+
+func sortKey(kind string, obj *unstructured.Unstructured) string {
+	if kind == eventKind {
+		seen := eventLastSeen(obj)
+		if seen != "" {
+			return seen
+		}
+	}
+	return obj.GetCreationTimestamp().UTC().Format(time.RFC3339)
+}
+
+func limitFor(kind string, asked int) int {
+	if asked > 0 {
+		return asked
+	}
+	if kind == eventKind {
+		return defaultEventWindow
+	}
+	return 0
 }
 
 func (st *stream) listFor(ns string) ([]runtime.Object, error) {

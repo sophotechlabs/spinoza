@@ -22,9 +22,11 @@ import type { Metrics, ObjectRef, ResourceDescriptor, ResourceUsage, Row } from 
 import {
   useSubColumns,
   useSubError,
+  useSubLimit,
   useSubLoaded,
   useSubNamespaced,
   useSubRows,
+  useSubTotal,
 } from '../store/resources';
 import { ratioColor, restartColor, statusColor } from '../lib/status';
 import { useMetrics } from '../lib/metrics';
@@ -53,6 +55,7 @@ interface ResourceTableProps {
   scope: boolean | null;
   selected: Row | null;
   onSelect: (row: Row) => void;
+  onMore?: (limit: number) => void;
 }
 
 const ROW_HEIGHT = 28;
@@ -197,12 +200,25 @@ function rowClass(selected: boolean): string {
 
 const columnHelper = createColumnHelper<Row>();
 
+const LOAD_STEP = 100;
+
+function countLabel(visible: number, loaded: number, total: number, limit: number): string {
+  if (limit === 0) {
+    return `${String(visible)} of ${String(loaded)}`;
+  }
+  if (visible === loaded) {
+    return `newest ${String(loaded)} of ${String(total)}`;
+  }
+  return `${String(visible)} of the newest ${String(loaded)} · ${String(total)} in the cluster`;
+}
+
 export default function ResourceTable({
   active,
   subId,
   scope,
   selected,
   onSelect,
+  onMore,
 }: ResourceTableProps) {
   const dataColumns = useSubColumns(subId);
   const namespaced = useSubNamespaced(subId);
@@ -211,7 +227,9 @@ export default function ResourceTable({
   const now = useNow();
   const stateKey = tableKey(active);
   const [sorting, setSorting] = useState<SortingState>(() => readTableState(stateKey).sorting);
-  const rows = useSubRows(subId, sorting.length === 0);
+  const total = useSubTotal(subId);
+  const limit = useSubLimit(subId);
+  const rows = useSubRows(subId, sorting.length === 0 && limit === 0);
   const [visibility, setVisibility] = useState<VisibilityState>(
     () => readTableState(stateKey).visibility,
   );
@@ -446,6 +464,13 @@ export default function ResourceTable({
     selectedUid = selected.uid;
   }
 
+  function loadMore() {
+    if (onMore === undefined) {
+      return;
+    }
+    onMore(limit + LOAD_STEP);
+  }
+
   function clearFilter() {
     setText('');
     clearKind(stateKey);
@@ -512,8 +537,19 @@ export default function ResourceTable({
           </div>
         </details>
         <span className="ml-auto text-fg-muted">
-          {visibleRows.length} of {rows.length}
+          {countLabel(visibleRows.length, rows.length, total, limit)}
         </span>
+        {limit > 0 && total > rows.length && (
+          <button
+            type="button"
+            onClick={() => {
+              loadMore();
+            }}
+            className="rounded border border-edge px-2 py-1 text-fg-soft hover:bg-surface-raised"
+          >
+            Load {LOAD_STEP} more
+          </button>
+        )}
       </div>
       <BulkBar
         kind={active.kind}

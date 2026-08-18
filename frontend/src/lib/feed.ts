@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { sessionExpired } from '../store/session';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { parseColumn, parseRow } from './parse';
-import { asBoolean, asList, asRecord, asString, listOf } from './wire';
+import { asBoolean, asList, asNumber, asRecord, asString, listOf } from './wire';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
 import { wsURL } from './wsBase';
@@ -23,6 +23,7 @@ export function offline(status: ConnectionStatus, attempt: number): boolean {
 interface Subscription {
   descriptor: ResourceDescriptor;
   namespace: string;
+  limit: number;
 }
 
 export interface ResourceFeed {
@@ -30,6 +31,7 @@ export interface ResourceFeed {
   attempt: number;
   subscribe: (subId: string, descriptor: ResourceDescriptor, namespace: string) => void;
   unsubscribe: (subId: string) => void;
+  loadMore: (subId: string, limit: number) => void;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
   reconnect: () => void;
@@ -48,6 +50,7 @@ function subscribeMsg(subId: string, sub: Subscription): ClientMsg {
     version: sub.descriptor.version,
     resource: sub.descriptor.resource,
     namespace: sub.namespace,
+    limit: sub.limit,
   };
 }
 
@@ -109,6 +112,8 @@ function serverMsg(raw: unknown): ServerMsg | null {
         columns: listOf(item.columns, parseColumn),
         namespaced: asBoolean(item.namespaced),
         rows: listOf(item.rows, parseRow),
+        total: asNumber(item.total),
+        limit: asNumber(item.limit),
       };
     case 'batch':
       return { type: 'batch', subId, changes: changesOf(subId, item.changes) };
@@ -262,7 +267,14 @@ export function useResourceFeed(): ResourceFeed {
       switch (msg.type) {
         case 'snapshot':
           dropPending(msg.subId);
-          store.applySnapshot(msg.subId, msg.columns, msg.namespaced, msg.rows);
+          store.applySnapshot(
+            msg.subId,
+            msg.columns,
+            msg.namespaced,
+            msg.rows,
+            msg.total,
+            msg.limit,
+          );
           break;
         case 'added':
         case 'modified':
@@ -368,7 +380,7 @@ export function useResourceFeed(): ResourceFeed {
 
   const subscribe = useCallback(
     (subId: string, descriptor: ResourceDescriptor, namespace: string) => {
-      const sub: Subscription = { descriptor, namespace };
+      const sub: Subscription = { descriptor, namespace, limit: 0 };
       subsRef.current.set(subId, sub);
       const socket = socketRef.current;
       if (canSend(socket)) {
@@ -377,6 +389,18 @@ export function useResourceFeed(): ResourceFeed {
     },
     [],
   );
+
+  const loadMore = useCallback((subId: string, limit: number) => {
+    const sub = subsRef.current.get(subId);
+    if (sub === undefined) {
+      return;
+    }
+    sub.limit = limit;
+    const socket = socketRef.current;
+    if (canSend(socket)) {
+      send(socket, { type: 'more', subId, limit });
+    }
+  }, []);
 
   const unsubscribe = useCallback((subId: string) => {
     subsRef.current.delete(subId);
@@ -412,5 +436,14 @@ export function useResourceFeed(): ResourceFeed {
     }
   }, []);
 
-  return { status, attempt, subscribe, unsubscribe, subscribeLogs, unsubscribeLogs, reconnect };
+  return {
+    status,
+    attempt,
+    subscribe,
+    unsubscribe,
+    loadMore,
+    subscribeLogs,
+    unsubscribeLogs,
+    reconnect,
+  };
 }

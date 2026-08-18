@@ -25,8 +25,8 @@ func TestEveryFeedFrameKeepsItsWireShape(t *testing.T) {
 	}{
 		{
 			name:  "snapshot",
-			frame: api.Snapshot{Type: "snapshot", SubID: "main", Columns: []api.Column{{Name: "Name"}}, Namespaced: true, Rows: []api.Row{row}},
-			want:  `{"type":"snapshot","subId":"main","columns":[{"name":"Name"}],"namespaced":true,"rows":[{"uid":"u-1","name":"web","namespace":"default","createdAt":"2026-08-06T09:00:00Z","cells":["1/1"]}]}`,
+			frame: api.Snapshot{Type: "snapshot", SubID: "main", Columns: []api.Column{{Name: "Name"}}, Namespaced: true, Rows: []api.Row{row}, Total: 3, Limit: 1},
+			want:  `{"type":"snapshot","subId":"main","columns":[{"name":"Name"}],"namespaced":true,"rows":[{"uid":"u-1","name":"web","namespace":"default","createdAt":"2026-08-06T09:00:00Z","cells":["1/1"]}],"total":3,"limit":1}`,
 		},
 		{
 			name:  "added",

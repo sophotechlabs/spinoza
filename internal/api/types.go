@@ -424,6 +424,7 @@ type ClientMsg struct {
 	Container string `json:"container"`
 	TailLines int64  `json:"tailLines"`
 	Follow    bool   `json:"follow"`
+	Limit     int    `json:"limit"`
 }
 
 type ServerMsg struct {
@@ -434,6 +435,8 @@ type ServerMsg struct {
 	Rows       []Row       `json:"rows,omitempty"`
 	Row        *Row        `json:"row,omitempty"`
 	UID        string      `json:"uid,omitempty"`
+	Total      int         `json:"total,omitempty"`
+	Limit      int         `json:"limit,omitempty"`
 	Lines      []string    `json:"lines,omitempty"`
 	Message    string      `json:"message,omitempty"`
 	Changes    []RowChange `json:"changes,omitempty"`
@@ -445,6 +448,8 @@ type Snapshot struct {
 	Columns    []Column `json:"columns"`
 	Namespaced bool     `json:"namespaced"`
 	Rows       []Row    `json:"rows"`
+	Total      int      `json:"total"`
+	Limit      int      `json:"limit"`
 }
 
 type RowChanged struct {

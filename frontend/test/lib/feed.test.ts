@@ -567,6 +567,7 @@ describe('useResourceFeed', () => {
         version: 'v1',
         resource: 'deployments',
         namespace: 'prod',
+        limit: 0,
       },
     ]);
   });
@@ -589,6 +590,7 @@ describe('useResourceFeed', () => {
         version: 'v1',
         resource: 'deployments',
         namespace: '',
+        limit: 0,
       },
     ]);
   });
@@ -621,8 +623,69 @@ describe('useResourceFeed', () => {
         version: 'v1',
         resource: 'deployments',
         namespace: 'prod',
+        limit: 0,
       },
     ]);
+  });
+
+  it('asks for a wider window and remembers it across a reconnect', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+    });
+    act(() => {
+      result.current.subscribe('main', descriptor, 'prod');
+    });
+    act(() => {
+      result.current.loadMore('main', 200);
+    });
+
+    expect(sentMessages(first)[1]).toEqual({ type: 'more', subId: 'main', limit: 200 });
+
+    act(() => {
+      first.onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    const second = FakeWebSocket.instances[1];
+    act(() => {
+      openSocket(second);
+    });
+
+    expect(sentMessages(second)[0]).toMatchObject({ type: 'subscribe', limit: 200 });
+  });
+
+  it('has nothing to widen for a subscription it does not hold', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      result.current.loadMore('missing', 200);
+    });
+
+    expect(sentMessages(socket)).toEqual([]);
+  });
+
+  it('remembers a wider window asked for while the socket is closed', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      result.current.subscribe('main', descriptor, 'prod');
+    });
+    act(() => {
+      result.current.loadMore('main', 300);
+    });
+    act(() => {
+      openSocket(socket);
+    });
+
+    expect(sentMessages(socket)[0]).toMatchObject({ type: 'subscribe', limit: 300 });
   });
 
   it('sends an unsubscribe frame and clears the sub from the store', () => {

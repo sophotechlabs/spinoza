@@ -6,13 +6,22 @@ interface SubState {
   columns: Column[];
   namespaced: boolean;
   rows: Map<string, Row>;
+  total: number;
+  limit: number;
   revision: number;
 }
 
 interface ResourcesState {
   subs: Map<string, SubState>;
   errors: Map<string, string>;
-  applySnapshot: (subId: string, columns: Column[], namespaced: boolean, rows: Row[]) => void;
+  applySnapshot: (
+    subId: string,
+    columns: Column[],
+    namespaced: boolean,
+    rows: Row[],
+    total?: number,
+    limit?: number,
+  ) => void;
   applyDeltas: (subId: string, msgs: ServerMsg[]) => void;
   failSub: (subId: string, message: string) => void;
   clearSub: (subId: string) => void;
@@ -49,14 +58,14 @@ function applyOne(rows: Map<string, Row>, msg: ServerMsg): boolean {
 export const useResourcesStore = create<ResourcesState>((set) => ({
   subs: new Map(),
   errors: new Map(),
-  applySnapshot: (subId, columns, namespaced, rows) => {
+  applySnapshot: (subId, columns, namespaced, rows, total = rows.length, limit = 0) => {
     set((state) => {
       const rowMap = new Map<string, Row>();
       for (const row of rows) {
         rowMap.set(row.uid, row);
       }
       const subs = new Map(state.subs);
-      subs.set(subId, { columns, namespaced, rows: rowMap, revision: 0 });
+      subs.set(subId, { columns, namespaced, rows: rowMap, total, limit, revision: 0 });
       const errors = new Map(state.errors);
       errors.delete(subId);
       return { subs, errors };
@@ -117,6 +126,22 @@ export function useSubNamespaced(subId: string): boolean {
     return false;
   }
   return namespaced;
+}
+
+export function useSubTotal(subId: string): number {
+  const total = useResourcesStore((state) => state.subs.get(subId)?.total);
+  if (total === undefined) {
+    return 0;
+  }
+  return total;
+}
+
+export function useSubLimit(subId: string): number {
+  const limit = useResourcesStore((state) => state.subs.get(subId)?.limit);
+  if (limit === undefined) {
+    return 0;
+  }
+  return limit;
 }
 
 export function useSubLoaded(subId: string): boolean {

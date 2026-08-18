@@ -29,11 +29,16 @@ function seed(columns: Column[], namespaced: boolean, rows: Row[]): void {
   useResourcesStore.getState().applySnapshot(SUB, columns, namespaced, rows);
 }
 
+function seedWindow(rows: Row[], total: number, limit: number): void {
+  useResourcesStore.getState().applySnapshot(SUB, makeColumns([]), true, rows, total, limit);
+}
+
 function renderTable(
   active: ResourceDescriptor | null,
   selected: Row | null,
   onSelect = vi.fn(),
   scope: boolean | null = null,
+  onMore?: (limit: number) => void,
 ) {
   return render(
     <ResourceTable
@@ -42,6 +47,7 @@ function renderTable(
       scope={scope}
       selected={selected}
       onSelect={onSelect}
+      onMore={onMore}
     />,
   );
 }
@@ -1266,5 +1272,92 @@ describe('filling the width on screen', () => {
 
     expect(total()).toBeGreaterThan(200);
     expect(screen.getByRole('table').style.width).toBe(`${String(total())}px`);
+  });
+});
+
+describe('a kind that opens on a window', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it('says how much of the kind is on screen', async () => {
+    seedWindow([makeRow({ uid: 'a', name: 'web.1', namespace: 'prod' })], 79190, 100);
+    renderTable(descriptor, null);
+
+    expect(await screen.findByText('newest 1 of 79190')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load 100 more' })).toBeInTheDocument();
+  });
+
+  it('asks for a wider window when told to load more', async () => {
+    const user = userEvent.setup();
+    const onMore = vi.fn();
+    seedWindow([makeRow({ uid: 'a', name: 'web.1', namespace: 'prod' })], 79190, 100);
+    renderTable(descriptor, null, vi.fn(), null, onMore);
+
+    await user.click(screen.getByRole('button', { name: 'Load 100 more' }));
+
+    expect(onMore).toHaveBeenCalledWith(200);
+  });
+
+  it('has nothing to load once the window holds the whole kind', () => {
+    seedWindow([makeRow({ uid: 'a', name: 'web.1', namespace: 'prod' })], 1, 100);
+    renderTable(descriptor, null);
+
+    expect(screen.queryByRole('button', { name: 'Load 100 more' })).not.toBeInTheDocument();
+  });
+
+  it('says nothing about a window for a kind that has none', () => {
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'web-1', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+
+    expect(screen.queryByText(/newest/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the order the server sent instead of sorting by name', async () => {
+    seedWindow(
+      [
+        makeRow({ uid: 'c', name: 'zulu', namespace: 'prod' }),
+        makeRow({ uid: 'a', name: 'alpha', namespace: 'prod' }),
+      ],
+      500,
+      100,
+    );
+    renderTable(descriptor, null);
+
+    await screen.findByRole('button', { name: 'zulu' });
+    expect(names()).toEqual(['zulu', 'alpha']);
+  });
+
+  it('has nowhere to send the ask with no handler wired up', async () => {
+    const user = userEvent.setup();
+    seedWindow([makeRow({ uid: 'a', name: 'web.1', namespace: 'prod' })], 79190, 100);
+    renderTable(descriptor, null);
+
+    await user.click(screen.getByRole('button', { name: 'Load 100 more' }));
+
+    expect(screen.getByText('newest 1 of 79190')).toBeInTheDocument();
+  });
+});
+
+describe('what the row count says', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it('counts the filtered rows against the window it came from', async () => {
+    const user = userEvent.setup();
+    seedWindow(
+      [
+        makeRow({ uid: 'a', name: 'web.1', namespace: 'prod' }),
+        makeRow({ uid: 'b', name: 'api.1', namespace: 'prod' }),
+      ],
+      1723,
+      100,
+    );
+    renderTable(descriptor, null);
+
+    await user.type(screen.getByLabelText('Filter'), 'web');
+
+    expect(screen.getByText('1 of the newest 2 · 1723 in the cluster')).toBeInTheDocument();
   });
 });

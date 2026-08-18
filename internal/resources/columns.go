@@ -11,7 +11,13 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
-const readyColumn = "Ready"
+const (
+	readyColumn = "Ready"
+
+	eventKind = "Event"
+
+	defaultEventWindow = 100
+)
 
 func columnsFor(kind string) []api.Column {
 	switch kind {
@@ -36,7 +42,7 @@ func columnsFor(kind string) []api.Column {
 		return []api.Column{statusColumn(), {Name: "Roles"}, {Name: "Version"}}
 	case "Job":
 		return []api.Column{{Name: "Completions", Render: "ratio"}}
-	case "Event":
+	case eventKind:
 		return []api.Column{
 			{Name: "Type", Render: "status"},
 			{Name: "Reason"},
@@ -78,7 +84,7 @@ func cellsFor(obj *unstructured.Unstructured, kind string) []string {
 		return []string{unstr.String(obj, "status", "phase")}
 	case "Job":
 		return jobCells(obj)
-	case "Event":
+	case eventKind:
 		return eventCells(obj)
 	default:
 		return []string{unstr.ReadySummary(obj)}

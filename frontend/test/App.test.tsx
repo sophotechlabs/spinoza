@@ -9,6 +9,7 @@ const feedMocks = vi.hoisted(
     attempt: number;
     subscribe: ReturnType<typeof vi.fn>;
     unsubscribe: ReturnType<typeof vi.fn>;
+    loadMore: ReturnType<typeof vi.fn>;
     subscribeLogs: ReturnType<typeof vi.fn>;
     unsubscribeLogs: ReturnType<typeof vi.fn>;
     reconnect: ReturnType<typeof vi.fn>;
@@ -17,6 +18,7 @@ const feedMocks = vi.hoisted(
     attempt: 0,
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
+    loadMore: vi.fn(),
     subscribeLogs: vi.fn(),
     unsubscribeLogs: vi.fn(),
     reconnect: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('../src/lib/feed', async (importOriginal) => ({
     attempt: feedMocks.attempt,
     subscribe: feedMocks.subscribe,
     unsubscribe: feedMocks.unsubscribe,
+    loadMore: feedMocks.loadMore,
     subscribeLogs: feedMocks.subscribeLogs,
     unsubscribeLogs: feedMocks.unsubscribeLogs,
     reconnect: feedMocks.reconnect,
@@ -675,6 +678,28 @@ describe('App', () => {
     await user.click(screen.getByTestId('context-changed'));
 
     expect(useNamespaceStore.getState().namespace).toBe('default');
+  });
+
+  it('asks the feed for a wider window when the table wants more', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    act(() => {
+      useResourcesStore
+        .getState()
+        .applySnapshot(
+          'main#1',
+          makeColumns([]),
+          true,
+          [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })],
+          79190,
+          100,
+        );
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Load 100 more' }));
+
+    expect(feedMocks.loadMore).toHaveBeenCalledWith('main#1', 200);
   });
 
   it('shows the namespace it is scoped to before any rows arrive', async () => {
