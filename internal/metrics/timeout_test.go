@@ -43,7 +43,7 @@ func TestBuildGivesUpOnAMetricsApiThatNeverAnswers(t *testing.T) {
 	dyn := hungAPIServer(t)
 
 	started := time.Now()
-	built := Build(context.Background(), dyn)
+	built := Build(context.Background(), dyn, FromCluster(dyn))
 	elapsed := time.Since(started)
 
 	if elapsed > time.Second {

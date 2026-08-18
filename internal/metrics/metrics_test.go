@@ -74,7 +74,9 @@ func seed(t *testing.T) *fake.FakeDynamicClient {
 }
 
 func TestBuild(t *testing.T) {
-	metrics := Build(context.Background(), seed(t))
+	dyn := seed(t)
+
+	metrics := Build(context.Background(), dyn, FromCluster(dyn))
 
 	web := metrics.Pods["prod/web"]
 	if web.CPUMilli != 150 || web.MemoryMi != 192 {
@@ -103,7 +105,7 @@ func TestBuildListErrors(t *testing.T) {
 	dyn.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("nodes list failed")
 	})
-	m := Build(context.Background(), dyn)
+	m := Build(context.Background(), dyn, FromCluster(dyn))
 	if len(m.Pods) != 0 {
 		t.Fatalf("pods = %d, want 0", len(m.Pods))
 	}
@@ -120,7 +122,7 @@ func TestNodeAllocatableListError(t *testing.T) {
 		}
 		return false, nil, nil
 	})
-	m := Build(context.Background(), dyn)
+	m := Build(context.Background(), dyn, FromCluster(dyn))
 	n1 := m.Nodes["n1"]
 	if n1.CPUMilli != 1500 || n1.CPUPercent != 0 {
 		t.Fatalf("node n1 = %+v, want usage without percent", n1)
@@ -151,5 +153,51 @@ func TestPercent(t *testing.T) {
 	}
 	if got := percent(5, 0); got != 0 {
 		t.Fatalf("percent(5,0) = %d, want 0", got)
+	}
+}
+
+type stubNodes struct {
+	items []*unstructured.Unstructured
+	err   error
+}
+
+func (s stubNodes) List(context.Context) ([]*unstructured.Unstructured, error) {
+	return s.items, s.err
+}
+
+func TestAllocatableComesFromTheGivenSource(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n1", "", map[string]any{
+		"usage": map[string]any{"cpu": "1000m", "memory": "1024Mi"},
+	}))
+	cached := stubNodes{items: []*unstructured.Unstructured{
+		obj("v1", "Node", "n1", "", map[string]any{
+			"status": map[string]any{"allocatable": map[string]any{"cpu": "4", "memory": "4096Mi"}},
+		}),
+	}}
+
+	built := Build(context.Background(), dyn, cached)
+
+	if built.Nodes["n1"].CPUPercent != 25 || built.Nodes["n1"].MemPercent != 25 {
+		t.Fatalf("node n1 = %+v, want a quarter of the cached allocatable", built.Nodes["n1"])
+	}
+}
+
+func TestANodeSourceThatFailsIsReported(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+	create(t, dyn, nodeMetricsGVR, "", obj("metrics.k8s.io/v1beta1", "NodeMetrics", "n1", "", map[string]any{
+		"usage": map[string]any{"cpu": "1000m", "memory": "1024Mi"},
+	}))
+
+	built := Build(context.Background(), dyn, stubNodes{err: errors.New("nodes is forbidden")})
+
+	if built.Error == "" {
+		t.Fatal("a refused node listing was swallowed")
+	}
+	if built.Nodes["n1"].CPUMilli != 1000 {
+		t.Fatalf("node n1 = %+v, want the usage without percentages", built.Nodes["n1"])
+	}
+	if built.Nodes["n1"].CPUPercent != 0 {
+		t.Fatalf("cpu percent = %d, want none without allocatable", built.Nodes["n1"].CPUPercent)
 	}
 }

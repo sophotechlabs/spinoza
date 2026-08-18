@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/listerr"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
@@ -23,14 +25,51 @@ var (
 
 var buildTimeout = 20 * time.Second
 
-func Build(ctx context.Context, dyn dynamic.Interface) api.Metrics {
+type Nodes interface {
+	List(ctx context.Context) ([]*unstructured.Unstructured, error)
+}
+
+type dynamicNodes struct {
+	dyn dynamic.Interface
+}
+
+func FromCluster(dyn dynamic.Interface) Nodes {
+	return dynamicNodes{dyn: dyn}
+}
+
+func (d dynamicNodes) List(ctx context.Context) ([]*unstructured.Unstructured, error) {
+	list, err := d.dyn.Resource(nodeGVR).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*unstructured.Unstructured, 0, len(list.Items))
+	for i := range list.Items {
+		out = append(out, &list.Items[i])
+	}
+	return out, nil
+}
+
+func Build(ctx context.Context, dyn dynamic.Interface, nodes Nodes) api.Metrics {
 	bounded, cancel := context.WithTimeout(ctx, buildTimeout)
 	defer cancel()
 	ctx = bounded
 	failures := listerr.New()
+	var pods map[string]api.ResourceUsage
+	var used map[string]api.ResourceUsage
+	var group sync.WaitGroup
+	group.Add(2)
+	go safe.Run("reading pod metrics", func() {
+		defer group.Done()
+		pods = podUsage(ctx, dyn, failures)
+	})
+	go safe.Run("reading node metrics", func() {
+		defer group.Done()
+		used = nodeUsage(ctx, dyn, nodes, failures)
+	})
+	group.Wait()
 	return api.Metrics{
-		Pods:  podUsage(ctx, dyn, failures),
-		Nodes: nodeUsage(ctx, dyn, failures),
+		Pods:  pods,
+		Nodes: used,
 		Error: failures.Message(),
 	}
 }
@@ -83,13 +122,18 @@ func NodeUsage(ctx context.Context, dyn dynamic.Interface) (map[string]api.Resou
 	return out, nil
 }
 
-func nodeUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Collector) map[string]api.ResourceUsage {
+func nodeUsage(
+	ctx context.Context,
+	dyn dynamic.Interface,
+	nodes Nodes,
+	failures *listerr.Collector,
+) map[string]api.ResourceUsage {
 	usage, err := NodeUsage(ctx, dyn)
 	failures.Record("nodes.metrics.k8s.io", err)
 	if err != nil {
 		return map[string]api.ResourceUsage{}
 	}
-	allocatable := nodeAllocatable(ctx, dyn, failures)
+	allocatable := nodeAllocatable(ctx, nodes, failures)
 	out := map[string]api.ResourceUsage{}
 	for name, use := range usage {
 		alloc, ok := allocatable[name]
@@ -102,15 +146,18 @@ func nodeUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Col
 	return out
 }
 
-func nodeAllocatable(ctx context.Context, dyn dynamic.Interface, failures *listerr.Collector) map[string]api.ResourceUsage {
+func nodeAllocatable(
+	ctx context.Context,
+	nodes Nodes,
+	failures *listerr.Collector,
+) map[string]api.ResourceUsage {
 	out := map[string]api.ResourceUsage{}
-	list, err := dyn.Resource(nodeGVR).List(ctx, metav1.ListOptions{})
+	found, err := nodes.List(ctx)
 	failures.Record("nodes", err)
 	if err != nil {
 		return out
 	}
-	for i := range list.Items {
-		u := &list.Items[i]
+	for _, u := range found {
 		alloc, ok := unstr.Map(u, "status", "allocatable")
 		if !ok {
 			continue

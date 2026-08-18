@@ -54,6 +54,7 @@ const (
 	buildBackoff       = 5 * time.Second
 	maxBuildBackoff    = 2 * time.Minute
 	defaultIdleGrace   = 90 * time.Second
+	defaultMetricsTTL  = 5 * time.Second
 )
 
 type Event struct {
@@ -106,6 +107,14 @@ type Manager struct {
 	building    map[streamKey]*buildGate
 	failures    map[streamKey]buildFailure
 	syncTimeout time.Duration
+	usage       usageCache
+}
+
+type usageCache struct {
+	mu       sync.Mutex
+	at       time.Time
+	value    api.Metrics
+	building chan struct{}
 }
 
 type buildGate struct {
@@ -122,6 +131,7 @@ type buildFailure struct {
 type Limits struct {
 	SyncTimeout     time.Duration
 	IdleGrace       time.Duration
+	MetricsTTL      time.Duration
 	WarmConcurrency int
 	Counts          CountLimits
 	Search          CountLimits
@@ -133,6 +143,9 @@ func (l Limits) orDefaults() Limits {
 	}
 	if l.IdleGrace == 0 {
 		l.IdleGrace = defaultIdleGrace
+	}
+	if l.MetricsTTL == 0 {
+		l.MetricsTTL = defaultMetricsTTL
 	}
 	if l.WarmConcurrency == 0 {
 		l.WarmConcurrency = warmConcurrency
@@ -403,7 +416,68 @@ func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
 }
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
-	return metrics.Build(ctx, m.dyn)
+	for {
+		fresh, wait := m.cachedMetrics()
+		if wait == nil {
+			return fresh
+		}
+		if wait.mine {
+			return m.buildMetrics(ctx, wait.done)
+		}
+		select {
+		case <-wait.done:
+		case <-ctx.Done():
+			return api.Metrics{Error: ctx.Err().Error()}
+		}
+	}
+}
+
+type metricsTurn struct {
+	done chan struct{}
+	mine bool
+}
+
+func (m *Manager) cachedMetrics() (api.Metrics, *metricsTurn) {
+	m.usage.mu.Lock()
+	defer m.usage.mu.Unlock()
+	if !m.usage.at.IsZero() && m.now().Sub(m.usage.at) < m.limits.MetricsTTL {
+		return m.usage.value, nil
+	}
+	if m.usage.building != nil {
+		return api.Metrics{}, &metricsTurn{done: m.usage.building}
+	}
+	m.usage.building = make(chan struct{})
+	return api.Metrics{}, &metricsTurn{done: m.usage.building, mine: true}
+}
+
+func (m *Manager) buildMetrics(ctx context.Context, done chan struct{}) api.Metrics {
+	value := metrics.Build(ctx, m.dyn, m.nodeSource())
+	m.usage.mu.Lock()
+	if value.Error == "" {
+		m.usage.value = value
+		m.usage.at = m.now()
+	}
+	m.usage.building = nil
+	m.usage.mu.Unlock()
+	close(done)
+	return value
+}
+
+func (m *Manager) nodeSource() metrics.Nodes {
+	desc, ok := m.descriptors()[discovery.Key("", "v1", "nodes")]
+	if !ok {
+		return metrics.FromCluster(m.dyn)
+	}
+	return cachedNodes{mgr: m, desc: desc}
+}
+
+type cachedNodes struct {
+	mgr  *Manager
+	desc api.ResourceDescriptor
+}
+
+func (c cachedNodes) List(ctx context.Context) ([]*unstructured.Unstructured, error) {
+	return c.mgr.List(ctx, c.desc)
 }
 
 func (m *Manager) Overview(ctx context.Context) api.ClusterOverview {
