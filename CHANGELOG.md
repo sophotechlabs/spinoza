@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.7.2](https://github.com/sophotechlabs/spinoza/compare/v1.7.1...v1.7.2) (2026-08-18)
+
+
+### Bug Fixes
+
+* **release:** list checksums under their bare filenames ([d22bb02](https://github.com/sophotechlabs/spinoza/commit/d22bb02e85e87bf7b77f935d6fde90ec3c5b9fbb))
+
+
+### CI
+
+* queue superseded runs instead of cancelling them ([9eebe5f](https://github.com/sophotechlabs/spinoza/commit/9eebe5fe2d6326328076a0d41a519f5c3423b6a0))
+
+
+### Tests
+
+* **api:** pin field types across the wire, not just their names ([41be362](https://github.com/sophotechlabs/spinoza/commit/41be362cd478aee07a34a7849655cffdb476562d))
+
 ## [1.7.1](https://github.com/sophotechlabs/spinoza/compare/v1.7.0...v1.7.1) (2026-08-18)
 
 
