@@ -27,10 +27,9 @@ interface GitopsEntry {
   label: string;
 }
 
-const TOP_VIEWS: GitopsEntry[] = [
-  { view: 'cluster', label: 'Cluster' },
-  { view: 'helm', label: 'Helm releases' },
-];
+const TOP_VIEWS: GitopsEntry[] = [{ view: 'helm', label: 'Helm releases' }];
+
+const CLUSTER_CATEGORY = 'Cluster';
 
 const FLUX_VIEWS: GitopsEntry[] = [
   { view: 'flux-roles', label: 'Overview' },
@@ -161,6 +160,38 @@ function engineClass(found: boolean): string {
   return missingClass;
 }
 
+function overviewAtTop(categories: Category[], error: string | null): boolean {
+  if (error !== null) {
+    return true;
+  }
+  if (categories.length === 0) {
+    return false;
+  }
+  return !categories.some((one) => one.name === CLUSTER_CATEGORY);
+}
+
+function overviewClass(active: boolean): string {
+  const base = 'flex w-full items-center gap-1 px-3 py-1 text-left';
+  if (active) {
+    return `${base} bg-surface-active text-fg-strong`;
+  }
+  return `${base} text-fg-soft hover:bg-surface-raised`;
+}
+
+function OverviewButton({ active, onOpen }: { active: boolean; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Cluster Overview"
+      aria-current={current(active)}
+      onClick={onOpen}
+      className={overviewClass(active)}
+    >
+      Overview
+    </button>
+  );
+}
+
 function engineMark(found: boolean, open: boolean): string {
   if (!found) {
     return '';
@@ -268,6 +299,14 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     >
       <nav className="min-w-0 flex-1 overflow-y-auto py-2">
         <div className="mb-1" aria-label="Cluster views">
+          {overviewAtTop(categories, error) && (
+            <OverviewButton
+              active={view === 'cluster'}
+              onOpen={() => {
+                onSelectView('cluster');
+              }}
+            />
+          )}
           {TOP_VIEWS.map((entry) => (
             <button
               key={entry.view}
@@ -390,6 +429,14 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           const labels = kindLabels(category.resources);
           return (
             <div key={category.name} className="mb-1">
+              {category.name === CLUSTER_CATEGORY && (
+                <OverviewButton
+                  active={view === 'cluster'}
+                  onOpen={() => {
+                    onSelectView('cluster');
+                  }}
+                />
+              )}
               <button
                 type="button"
                 aria-expanded={!isCollapsed}

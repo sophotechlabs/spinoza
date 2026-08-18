@@ -93,27 +93,61 @@ afterEach(() => {
 });
 
 describe('Sidebar', () => {
-  it('offers the cluster overview and helm releases at the top', () => {
+  it('offers helm releases at the top', () => {
     stubFetch(categories);
     renderSidebar();
 
-    expect(screen.getByRole('button', { name: 'Cluster' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Helm releases' })).toBeInTheDocument();
   });
 
-  it('keeps the top views apart from a discovered category of the same name', async () => {
+  it('opens the overview from just above the cluster group', async () => {
+    const seen: View[] = [];
     stubFetch([makeCategory('Cluster', [makeDescriptor({ resource: 'nodes', kind: 'Node' })])]);
-    renderSidebar();
+    renderSidebar({
+      onSelectView: (view) => {
+        seen.push(view);
+      },
+    });
 
-    const category = await screen.findByRole('button', { name: /^Cluster\s*1$/ });
-    const view = screen.getByRole('button', { name: 'Cluster' });
+    const overview = await screen.findByRole('button', { name: 'Cluster Overview' });
+    const group = screen.getByRole('button', { name: /^Cluster\s*1$/ });
+    await userEvent.click(overview);
 
-    expect(category).not.toBe(view);
-    expect(category.className).toContain('uppercase');
-    expect(view.className).not.toContain('uppercase');
+    expect(group.className).toContain('uppercase');
+    expect(overview.className).not.toContain('uppercase');
+    expect(seen).toEqual(['cluster']);
   });
 
-  it('marks the open top view for assistive technology', () => {
+  it('keeps the overview on screen while the group is collapsed', async () => {
+    stubFetch([makeCategory('Cluster', [makeDescriptor({ resource: 'nodes', kind: 'Node' })])]);
+    renderSidebar();
+    const group = await screen.findByRole('button', { name: /^Cluster\s*1$/ });
+    await userEvent.click(group);
+    expect(screen.getByRole('button', { name: /^Node/ })).toBeInTheDocument();
+
+    await userEvent.click(group);
+
+    expect(screen.queryByRole('button', { name: /^Node/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cluster Overview' })).toBeInTheDocument();
+  });
+
+  it('keeps the overview at the top when the cluster has no such group', async () => {
+    stubFetch(categories);
+    renderSidebar();
+
+    const overview = await screen.findByRole('button', { name: 'Cluster Overview' });
+
+    expect(overview.parentElement).toHaveAttribute('aria-label', 'Cluster views');
+  });
+
+  it('keeps the overview reachable when discovery fails', async () => {
+    stubCatalog([], 'discovery is not available');
+    renderSidebar();
+
+    expect(await screen.findByRole('button', { name: 'Cluster Overview' })).toBeInTheDocument();
+  });
+
+  it('marks the open top view for assistive technology', async () => {
     stubFetch(categories);
     renderSidebar({ view: 'helm' });
 
@@ -121,7 +155,9 @@ describe('Sidebar', () => {
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('button', { name: 'Cluster' })).not.toHaveAttribute('aria-current');
+    expect(await screen.findByRole('button', { name: 'Cluster Overview' })).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 
   it('renders the Flux section once Flux is found in the cluster', async () => {
