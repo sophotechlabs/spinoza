@@ -11,6 +11,7 @@ import {
   useSettingsStore,
 } from '../store/settings';
 import { usePanelsStore } from '../store/panels';
+import { useContextList } from '../store/contexts';
 import { useNamespaceStore } from '../store/namespace';
 import { shortcuts } from '../lib/hotkeys';
 import { copyText } from '../lib/clipboard';
@@ -76,6 +77,13 @@ function Row({
   );
 }
 
+function openOnHint(cluster: string): string {
+  if (cluster === '') {
+    return 'The namespace a cluster opens on. The picker in the top bar still switches it for this session.';
+  }
+  return `The namespace ${cluster} opens on. Each cluster keeps its own answer; the picker in the top bar still switches it for this session.`;
+}
+
 export default function SettingsDialog({
   open,
   section: wanted = 'Appearance',
@@ -95,7 +103,8 @@ export default function SettingsDialog({
   const setLogView = useSettingsStore((state) => state.setLogView);
   const screenReader = useScreenReader();
   const setScreenReader = useSettingsStore((state) => state.setScreenReader);
-  const start = useNamespaceStart();
+  const cluster = useContextList().current.name;
+  const start = useNamespaceStart(cluster);
   const setStart = useSettingsStore((state) => state.setNamespaceStart);
   const openOn = useNamespaceStore((state) => state.reset);
   const resetPanels = usePanelsStore((state) => state.reset);
@@ -379,15 +388,12 @@ export default function SettingsDialog({
             </Row>
           )}
           {section === 'Cluster' && (
-            <Row
-              label="Open on"
-              hint="The namespace a cluster opens on. The picker in the top bar still switches it for this session."
-            >
+            <Row label="Open on" hint={openOnHint(cluster)}>
               <select
                 aria-label="Namespace to open on"
                 value={start}
                 onChange={(event) => {
-                  setStart(event.target.value as NamespaceStart);
+                  setStart(cluster, event.target.value as NamespaceStart);
                   openOn();
                 }}
                 className="rounded border border-edge-strong bg-surface-raised px-2 py-0.5 text-fg"

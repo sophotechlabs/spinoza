@@ -5,8 +5,7 @@ import { readSettings, writeSettings } from '../lib/settings';
 interface SettingsState extends Settings {
   setLogView: (logView: LogView) => void;
   setScreenReader: (screenReader: boolean) => void;
-  setNamespaceStart: (namespaceStart: NamespaceStart) => void;
-  markNamespaceAsked: () => void;
+  setNamespaceStart: (context: string, namespaceStart: NamespaceStart) => void;
 }
 
 const stored = readSettings();
@@ -16,7 +15,7 @@ function saved(state: SettingsState): Settings {
     logView: state.logView,
     screenReader: state.screenReader,
     namespaceStart: state.namespaceStart,
-    namespaceAsked: state.namespaceAsked,
+    namespaceStarts: state.namespaceStarts,
   };
 }
 
@@ -24,7 +23,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   logView: stored.logView,
   screenReader: stored.screenReader,
   namespaceStart: stored.namespaceStart,
-  namespaceAsked: stored.namespaceAsked,
+  namespaceStarts: stored.namespaceStarts,
   setLogView: (logView) => {
     writeSettings({ ...saved(get()), logView });
     set({ logView });
@@ -33,13 +32,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     writeSettings({ ...saved(get()), screenReader });
     set({ screenReader });
   },
-  setNamespaceStart: (namespaceStart) => {
-    writeSettings({ ...saved(get()), namespaceStart });
-    set({ namespaceStart });
-  },
-  markNamespaceAsked: () => {
-    writeSettings({ ...saved(get()), namespaceAsked: true });
-    set({ namespaceAsked: true });
+  setNamespaceStart: (context, namespaceStart) => {
+    if (context === '') {
+      writeSettings({ ...saved(get()), namespaceStart });
+      set({ namespaceStart });
+      return;
+    }
+    const namespaceStarts = { ...get().namespaceStarts, [context]: namespaceStart };
+    writeSettings({ ...saved(get()), namespaceStarts });
+    set({ namespaceStarts });
   },
 }));
 
@@ -51,10 +52,24 @@ export function useScreenReader(): boolean {
   return useSettingsStore((state) => state.screenReader);
 }
 
-export function useNamespaceStart(): NamespaceStart {
-  return useSettingsStore((state) => state.namespaceStart);
+export function useNamespaceStart(context: string): NamespaceStart {
+  const held = useSettingsStore((state) => state.namespaceStarts[context]);
+  const fallback = useSettingsStore((state) => state.namespaceStart);
+  if (held !== undefined) {
+    return held;
+  }
+  return fallback;
 }
 
-export function namespaceStart(): NamespaceStart {
-  return useSettingsStore.getState().namespaceStart;
+export function namespaceStart(context: string): NamespaceStart {
+  const state = useSettingsStore.getState();
+  const held = state.namespaceStarts[context];
+  if (held !== undefined) {
+    return held;
+  }
+  return state.namespaceStart;
+}
+
+export function namespaceAnswered(context: string): boolean {
+  return useSettingsStore.getState().namespaceStarts[context] !== undefined;
 }

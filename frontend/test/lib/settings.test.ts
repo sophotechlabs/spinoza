@@ -7,7 +7,7 @@ const base: Settings = {
   logView: 'pretty',
   screenReader: false,
   namespaceStart: 'all',
-  namespaceAsked: false,
+  namespaceStarts: {},
 };
 
 afterEach(() => {
@@ -82,8 +82,21 @@ describe('the namespace to open on', () => {
     expect(parseSettings('{"namespaceStart":"default"}').namespaceStart).toBe('default');
   });
 
-  it('remembers that the offer was already made', () => {
-    expect(parseSettings(null).namespaceAsked).toBe(false);
-    expect(parseSettings('{"namespaceAsked":true}').namespaceAsked).toBe(true);
+  it('remembers what each cluster was told to open on', () => {
+    expect(parseSettings(null).namespaceStarts).toEqual({});
+    expect(parseSettings('{"namespaceStarts":{"p-mk1":"default"}}').namespaceStarts).toEqual({
+      'p-mk1': 'default',
+    });
+  });
+
+  it('keeps only the answers it recognises', () => {
+    const stored = '{"namespaceStarts":{"p-mk1":"default","gke":"sometimes","p-mk2":"all"}}';
+
+    expect(parseSettings(stored).namespaceStarts).toEqual({ 'p-mk1': 'default', 'p-mk2': 'all' });
+  });
+
+  it('has no answers to read out of a broken map', () => {
+    expect(parseSettings('{"namespaceStarts":"nope"}').namespaceStarts).toEqual({});
+    expect(parseSettings('{"namespaceStarts":null}').namespaceStarts).toEqual({});
   });
 });

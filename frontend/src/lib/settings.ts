@@ -7,21 +7,40 @@ export const NAMESPACE_STARTS = ['all', 'default'] as const;
 
 export type NamespaceStart = (typeof NAMESPACE_STARTS)[number];
 
+export const EVERY_NAMESPACE: NamespaceStart = 'all';
+
+export const ONLY_DEFAULT: NamespaceStart = 'default';
+
 export const SETTINGS_KEY = 'spinoza.settings.v1';
 
 export interface Settings {
   logView: LogView;
   screenReader: boolean;
   namespaceStart: NamespaceStart;
-  namespaceAsked: boolean;
+  namespaceStarts: Partial<Record<string, NamespaceStart>>;
 }
 
 const DEFAULTS: Settings = {
   logView: 'pretty',
   screenReader: false,
   namespaceStart: 'all',
-  namespaceAsked: false,
+  namespaceStarts: {},
 };
+
+function parseStarts(value: unknown): Partial<Record<string, NamespaceStart>> {
+  const out: Partial<Record<string, NamespaceStart>> = {};
+  if (typeof value !== 'object' || value === null) {
+    return out;
+  }
+  for (const [context, choice] of Object.entries(value as Record<string, unknown>)) {
+    for (const start of NAMESPACE_STARTS) {
+      if (choice === start) {
+        out[context] = start;
+      }
+    }
+  }
+  return out;
+}
 
 export function parseSettings(raw: string | null): Settings {
   if (raw === null) {
@@ -51,9 +70,7 @@ export function parseSettings(raw: string | null): Settings {
       settings.namespaceStart = start;
     }
   }
-  if (typeof stored.namespaceAsked === 'boolean') {
-    settings.namespaceAsked = stored.namespaceAsked;
-  }
+  settings.namespaceStarts = parseStarts(stored.namespaceStarts);
   return settings;
 }
 

@@ -19,10 +19,12 @@ import { mayDiscard } from './lib/unsaved';
 import { clearRecents, rememberObject } from './store/recents';
 import { clearHistory } from './store/toasts';
 import { DEFAULT_NAMESPACE, useNamespace, useNamespaceStore } from './store/namespace';
-import { useSettingsStore } from './store/settings';
+import { EVERY_NAMESPACE, ONLY_DEFAULT } from './lib/settings';
+import { namespaceAnswered, useSettingsStore } from './store/settings';
+import { PODS_WORTH_ASKING, worthAsking } from './lib/namespaceOffer';
 import { nameChips } from './lib/filterChips';
 import { kindScope } from './lib/catalog';
-import { clearCatalog, useCategories } from './store/catalog';
+import { clearCatalog, useCategories, useCounts } from './store/catalog';
 import { clearFilters, imposeChips } from './store/filters';
 import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
@@ -104,7 +106,9 @@ export default function App() {
   const { subscribe, unsubscribe, loadMore, subscribeLogs, unsubscribeLogs } = feed;
   const namespace = useNamespace();
   const chooseNamespace = useNamespaceStore((state) => state.choose);
+  const openOnStart = useNamespaceStore((state) => state.openOn);
   const resetNamespace = useNamespaceStore((state) => state.reset);
+  const counts = useCounts();
   const selectedRow = useRowForRef(subId, active, route.selection);
   const selection = useMemo<Selection | null>(() => {
     if (route.selection === null) {
@@ -156,22 +160,28 @@ export default function App() {
   }, [route]);
 
   useEffect(() => {
-    const settings = useSettingsStore.getState();
-    if (settings.namespaceAsked || settings.namespaceStart !== 'all') {
+    if (contextName === '') {
       return;
     }
-    settings.markNamespaceAsked();
+    openOnStart(contextName);
+  }, [contextName, openOnStart]);
+
+  useEffect(() => {
+    if (!worthAsking(contextName, counts, namespaceAnswered(contextName))) {
+      return;
+    }
+    useSettingsStore.getState().setNamespaceStart(contextName, EVERY_NAMESPACE);
     askToast(
-      'Spinoza is reading every namespace in this cluster. Read only the default namespace instead?',
+      `Spinoza is reading every namespace on ${contextName}, and it has over ${String(PODS_WORTH_ASKING)} pods. Read only the default namespace here instead?`,
       {
         label: 'Open on default',
         run: () => {
-          useSettingsStore.getState().setNamespaceStart(DEFAULT_NAMESPACE);
+          useSettingsStore.getState().setNamespaceStart(contextName, ONLY_DEFAULT);
           chooseNamespace(DEFAULT_NAMESPACE);
         },
       },
     );
-  }, [chooseNamespace]);
+  }, [chooseNamespace, contextName, counts]);
 
   const [wasDown, setWasDown] = useState(false);
   useEffect(() => {

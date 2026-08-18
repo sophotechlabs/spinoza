@@ -55,13 +55,13 @@ describe('the namespace the app works in', () => {
 
 describe('the namespace a new cluster opens on', () => {
   it('is every namespace while that is the setting', () => {
-    expect(opensOn()).toBe(ALL);
+    expect(opensOn('kind-dev')).toBe(ALL);
   });
 
   it('is default once the setting says so', () => {
     useSettingsStore.setState({ namespaceStart: 'default' });
 
-    expect(opensOn()).toBe('default');
+    expect(opensOn('kind-dev')).toBe('default');
   });
 
   it('is what a reset goes back to', () => {
@@ -73,5 +73,50 @@ describe('the namespace a new cluster opens on', () => {
 
     expect(state().namespace).toBe('default');
     expect(state().names).toEqual([]);
+  });
+});
+
+describe('opening a cluster on its own answer', () => {
+  it('takes the answer recorded for that cluster over the general one', () => {
+    useSettingsStore.setState({
+      namespaceStart: 'all',
+      namespaceStarts: { 'gke-prod': 'default' },
+    });
+
+    expect(opensOn('gke-prod')).toBe('default');
+    expect(opensOn('p-mk2')).toBe(ALL);
+  });
+
+  it('applies that answer when the cluster name arrives', () => {
+    useSettingsStore.setState({
+      namespaceStart: 'all',
+      namespaceStarts: { 'gke-prod': 'default' },
+    });
+
+    state().openOn('gke-prod');
+
+    expect(state().namespace).toBe('default');
+  });
+
+  it('leaves a namespace the user picked alone', () => {
+    useSettingsStore.setState({
+      namespaceStart: 'all',
+      namespaceStarts: { 'gke-prod': 'default' },
+    });
+    state().choose('shop');
+
+    state().openOn('gke-prod');
+
+    expect(state().namespace).toBe('shop');
+  });
+
+  it('forgets that pick when the cluster changes', () => {
+    useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: {} });
+    state().choose('shop');
+
+    state().reset();
+    state().openOn('p-mk2');
+
+    expect(state().namespace).toBe(ALL);
   });
 });

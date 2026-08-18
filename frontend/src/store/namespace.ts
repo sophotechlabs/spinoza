@@ -8,13 +8,15 @@ export const DEFAULT_NAMESPACE = 'default';
 interface NamespaceState {
   namespace: string;
   names: string[];
+  touched: boolean;
   choose: (namespace: string) => void;
   offer: (names: string[]) => void;
+  openOn: (context: string) => void;
   reset: () => void;
 }
 
-export function opensOn(): string {
-  if (namespaceStart() === 'default') {
+export function opensOn(context: string): string {
+  if (namespaceStart(context) === 'default') {
     return DEFAULT_NAMESPACE;
   }
   return ALL;
@@ -31,17 +33,24 @@ export function settle(wanted: string, names: string[]): string {
 }
 
 export const useNamespaceStore = create<NamespaceState>((set, get) => ({
-  namespace: opensOn(),
+  namespace: opensOn(''),
   names: [],
+  touched: false,
   choose: (namespace) => {
-    set({ namespace });
+    set({ namespace, touched: true });
+  },
+  openOn: (context) => {
+    if (get().touched) {
+      return;
+    }
+    set({ namespace: opensOn(context) });
   },
   offer: (names) => {
     const namespace = settle(get().namespace, names);
     set({ names, namespace });
   },
   reset: () => {
-    set({ namespace: opensOn(), names: [] });
+    set({ namespace: opensOn(''), names: [], touched: false });
   },
 }));
 

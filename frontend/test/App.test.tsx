@@ -285,6 +285,7 @@ import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { clearRecents, rememberObject } from '../src/store/recents';
 import { useFiltersStore } from '../src/store/filters';
+import { clearCatalog } from '../src/store/catalog';
 import { usePanelsStore } from '../src/store/panels';
 import { ALL, useNamespaceStore } from '../src/store/namespace';
 import { useSettingsStore } from '../src/store/settings';
@@ -379,10 +380,17 @@ function detailFor(url: string) {
   };
 }
 
-function stubFetch(): void {
+function stubFetch(pods?: number): void {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/resources/counts')) {
+        const counts: Record<string, number> = {};
+        if (pods !== undefined) {
+          counts['/v1/pods'] = pods;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts }) });
+      }
       if (url.startsWith('/api/contexts')) {
         return Promise.resolve({
           ok: true,
@@ -464,34 +472,37 @@ async function selectDeployment(user: ReturnType<typeof userEvent.setup>): Promi
 }
 
 beforeEach(() => {
-  useSettingsStore.setState({ namespaceStart: 'all', namespaceAsked: true });
-  useNamespaceStore.setState({ namespace: ALL, names: [] });
+  useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: {} });
+  useNamespaceStore.setState({ namespace: ALL, names: [], touched: false });
+  clearCatalog();
 });
 
-describe('the one-time namespace offer', () => {
+describe('the namespace offer, once per cluster', () => {
   beforeEach(() => {
     resetStore();
-    stubFetch();
+    stubFetch(1200);
     useToastsStore.getState().clear();
-    useSettingsStore.setState({ namespaceStart: 'all', namespaceAsked: false });
+    useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: {} });
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     useToastsStore.getState().clear();
+    clearCatalog();
     resetStore();
   });
 
-  it('offers to open on the default namespace instead', async () => {
+  it('offers to open on the default namespace on a cluster big enough to matter', async () => {
     render(<App />);
 
     const strip = within(await screen.findByLabelText('Latest notifications'));
 
     expect(await strip.findByRole('button', { name: 'Open on default' })).toBeInTheDocument();
-    expect(strip.getByText(/reading every namespace/i)).toBeInTheDocument();
+    expect(strip.getByText(/reading every namespace on kind-dev/i)).toBeInTheDocument();
+    expect(strip.getByText(/over 1000 pods/i)).toBeInTheDocument();
   });
 
-  it('takes the offer and remembers it', async () => {
+  it('takes the offer and remembers it against that cluster', async () => {
     const user = userEvent.setup();
     render(<App />);
     const strip = within(await screen.findByLabelText('Latest notifications'));
@@ -499,11 +510,11 @@ describe('the one-time namespace offer', () => {
 
     await user.click(strip.getByRole('button', { name: 'Open on default' }));
 
-    expect(useSettingsStore.getState().namespaceStart).toBe('default');
+    expect(useSettingsStore.getState().namespaceStarts['kind-dev']).toBe('default');
     expect(useNamespaceStore.getState().namespace).toBe('default');
   });
 
-  it('is made once and never again', async () => {
+  it('is made once per cluster and never again', async () => {
     const first = render(<App />);
     await within(await screen.findByLabelText('Latest notifications')).findByRole('button', {
       name: 'Open on default',
@@ -514,21 +525,46 @@ describe('the one-time namespace offer', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(useSettingsStore.getState().namespaceAsked).toBe(true);
+      expect(useSettingsStore.getState().namespaceStarts['kind-dev']).toBe('all');
     });
     const strip = within(screen.getByLabelText('Latest notifications'));
     expect(strip.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
   });
 
-  it('stays quiet for someone who already opens on default', async () => {
-    useSettingsStore.setState({ namespaceStart: 'default', namespaceAsked: false });
+  it('stays quiet on a cluster small enough not to care', async () => {
+    vi.unstubAllGlobals();
+    stubFetch(80);
 
     render(<App />);
     await screen.findByLabelText('Namespace');
 
     const quiet = within(screen.getByLabelText('Latest notifications'));
     expect(quiet.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
-    expect(useSettingsStore.getState().namespaceAsked).toBe(false);
+    expect(useSettingsStore.getState().namespaceStarts['kind-dev']).toBeUndefined();
+  });
+
+  it('stays quiet for a cluster that already has an answer', async () => {
+    useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: { 'kind-dev': 'all' } });
+
+    render(<App />);
+    await screen.findByLabelText('Namespace');
+
+    const quiet = within(screen.getByLabelText('Latest notifications'));
+    expect(quiet.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
+  });
+
+  it('opens a cluster on the namespace its own answer names', async () => {
+    useSettingsStore.setState({
+      namespaceStart: 'all',
+      namespaceStarts: { 'kind-dev': 'default' },
+    });
+
+    render(<App />);
+    await screen.findByLabelText('Namespace');
+
+    await waitFor(() => {
+      expect(useNamespaceStore.getState().namespace).toBe('default');
+    });
   });
 });
 
@@ -668,7 +704,7 @@ describe('App', () => {
 
   it('opens the next cluster on the namespace the settings name', async () => {
     const user = userEvent.setup();
-    useSettingsStore.setState({ namespaceStart: 'default', namespaceAsked: true });
+    useSettingsStore.setState({ namespaceStart: 'default', namespaceStarts: {} });
     render(<App />);
     await screen.findByLabelText('Namespace');
     act(() => {

@@ -4,7 +4,7 @@ import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/di
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 import { useClusterEpoch } from '../store/cluster';
-import { rememberCatalog } from '../store/catalog';
+import { rememberCatalog, rememberCounts } from '../store/catalog';
 import {
   ARGO_SECTION,
   FLUX_SECTION,
@@ -246,6 +246,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
       const tally = await fetchResourceCounts();
       if (live()) {
         setCounts(tally.counts);
+        rememberCounts(tally.counts);
         setFailing(tally.failing ?? {});
         setCountsError(null);
       }

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import SettingsDialog from '../../src/components/SettingsDialog';
 import { useThemeStore } from '../../src/store/theme';
 import { useSettingsStore } from '../../src/store/settings';
+import { useContextsStore } from '../../src/store/contexts';
 import { usePanelsStore } from '../../src/store/panels';
 import { useNamespaceStore } from '../../src/store/namespace';
 import { DEFAULT_PLACEMENT } from '../../src/lib/panels';
@@ -115,6 +116,44 @@ describe('the settings dialog', () => {
 
     expect(useSettingsStore.getState().namespaceStart).toBe('all');
     expect(useNamespaceStore.getState().namespace).toBe('');
+  });
+
+  it('keeps the answer against the cluster it was given on', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useContextsStore.getState().setList({
+        current: { kubeconfig: '', name: 'gke-prod' },
+        kubeconfigs: [],
+        protection: 'open',
+      });
+    });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+    await user.selectOptions(screen.getByLabelText('Namespace to open on'), 'default');
+
+    expect(useSettingsStore.getState().namespaceStarts['gke-prod']).toBe('default');
+    expect(useSettingsStore.getState().namespaceStart).toBe('all');
+  });
+
+  it('shows the answer that cluster already has', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useContextsStore.getState().setList({
+        current: { kubeconfig: '', name: 'gke-prod' },
+        kubeconfigs: [],
+        protection: 'open',
+      });
+      useSettingsStore.setState({
+        namespaceStart: 'all',
+        namespaceStarts: { 'gke-prod': 'default' },
+      });
+    });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+
+    expect(screen.getByLabelText('Namespace to open on')).toHaveValue('default');
   });
 
   it('puts the docks back where they started', async () => {
