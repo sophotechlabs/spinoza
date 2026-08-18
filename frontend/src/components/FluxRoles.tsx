@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { useFlux } from '../lib/flux';
+import { useFlux, useFluxOverview } from '../lib/flux';
 import { allReady, readyOf, readySummary, reportingOf } from '../lib/readiness';
 import type { FluxResource } from '../lib/types';
 import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
 import StaleBanner from './StaleBanner';
+import FluxStatus from './FluxStatus';
+import Loading from './Loading';
 
 interface Section {
   name: string;
@@ -158,6 +160,7 @@ interface FluxRolesProps {
 
 export default function FluxRoles({ onSelect }: FluxRolesProps) {
   const { data, error, reload } = useFlux();
+  const status = useFluxOverview();
   const [kind, setKind] = useState<string | null>(null);
 
   if (data === null) {
@@ -166,11 +169,7 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
         <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">
-        Loading Flux resources
-      </div>
-    );
+    return <Loading what="Flux resources" />;
   }
 
   let notice: ReactNode = null;
@@ -200,6 +199,11 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
     <div className="flex h-full min-h-0 flex-col">
       {notice}
       <div className="min-h-0 flex-1 overflow-auto p-3">
+        {status.data !== null && (
+          <div className="mb-5">
+            <FluxStatus overview={status.data} />
+          </div>
+        )}
         {SECTIONS.map((section) => (
           <section key={section.name} className="mb-5">
             <h2 className="mb-2 px-1 text-xs font-semibold tracking-wide text-fg-soft uppercase">

@@ -388,6 +388,37 @@ func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
 	return flux.Build(ctx, m, m.descriptors(), m.charts)
 }
 
+func (m *Manager) FluxOverview(ctx context.Context) api.FluxOverview {
+	return flux.Overview(ctx, m.cs, m, m.descriptors(), flux.Cluster{
+		Kubernetes: m.serverVersion(),
+		Nodes:      m.nodeCount(ctx),
+		Usage:      m.Metrics(ctx).Pods,
+	})
+}
+
+func (m *Manager) serverVersion() string {
+	if m.disco == nil {
+		return ""
+	}
+	info, err := m.disco.ServerVersion()
+	if err != nil {
+		return ""
+	}
+	return info.GitVersion
+}
+
+func (m *Manager) nodeCount(ctx context.Context) int {
+	desc, ok := m.descriptors()[discovery.Key("", "v1", "nodes")]
+	if !ok {
+		return 0
+	}
+	found, err := m.List(ctx, desc)
+	if err != nil {
+		return 0
+	}
+	return len(found)
+}
+
 func (m *Manager) Argo(ctx context.Context) api.ArgoDashboard {
 	return argocd.Build(ctx, m, m.descriptors())
 }

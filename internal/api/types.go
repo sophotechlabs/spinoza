@@ -552,6 +552,51 @@ type FluxGroup struct {
 	Resources []FluxResource `json:"resources"`
 }
 
+type FluxController struct {
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Ready     bool   `json:"ready"`
+	Replicas  int    `json:"replicas"`
+	Wanted    int    `json:"wanted"`
+	Namespace string `json:"namespace"`
+}
+
+type FluxSync struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	Source    string `json:"source"`
+	URL       string `json:"url"`
+	Ref       string `json:"ref"`
+	Path      string `json:"path"`
+	Revision  string `json:"revision"`
+	Ready     bool   `json:"ready"`
+}
+
+type FluxUsage struct {
+	CPUMilli        int64 `json:"cpuMilli"`
+	MemoryMi        int64 `json:"memoryMi"`
+	CPURequestMilli int64 `json:"cpuRequestMilli"`
+	MemRequestMi    int64 `json:"memRequestMi"`
+	CPULimitMilli   int64 `json:"cpuLimitMilli"`
+	MemLimitMi      int64 `json:"memLimitMi"`
+	Known           bool  `json:"known"`
+}
+
+type FluxOverview struct {
+	Ready        bool             `json:"ready"`
+	Summary      string           `json:"summary"`
+	Namespace    string           `json:"namespace"`
+	Kubernetes   string           `json:"kubernetes"`
+	Nodes        int              `json:"nodes"`
+	Operator     string           `json:"operator,omitempty"`
+	Distribution string           `json:"distribution,omitempty"`
+	Controllers  []FluxController `json:"controllers"`
+	Sync         FluxSync         `json:"sync"`
+	Usage        FluxUsage        `json:"usage"`
+	Error        string           `json:"error,omitempty"`
+}
+
 type FluxDashboard struct {
 	Groups []FluxGroup `json:"groups"`
 	Error  string      `json:"error,omitempty"`

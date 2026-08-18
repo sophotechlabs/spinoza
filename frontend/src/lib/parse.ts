@@ -10,7 +10,11 @@ import type {
   ExecSupport,
   LocalShell,
   FluxActionResult,
+  FluxController,
   FluxDashboard,
+  FluxOverview,
+  FluxSync,
+  FluxUsage,
   FluxGroup,
   FluxResource,
   Graph,
@@ -238,6 +242,62 @@ function parseFluxGroup(item: Record<string, unknown>): FluxGroup {
 export function parseFluxDashboard(body: unknown): FluxDashboard {
   const item = asRecord(body);
   return { groups: listOf(item.groups, parseFluxGroup), error: optionalString(item.error) };
+}
+
+function parseFluxController(item: Record<string, unknown>): FluxController {
+  return {
+    name: asString(item.name),
+    version: asString(item.version),
+    ready: item.ready === true,
+    replicas: asNumber(item.replicas),
+    wanted: asNumber(item.wanted),
+    namespace: asString(item.namespace),
+  };
+}
+
+function parseFluxSync(raw: unknown): FluxSync {
+  const item = asRecord(raw);
+  return {
+    namespace: asString(item.namespace),
+    name: asString(item.name),
+    kind: asString(item.kind),
+    source: asString(item.source),
+    url: asString(item.url),
+    ref: asString(item.ref),
+    path: asString(item.path),
+    revision: asString(item.revision),
+    ready: item.ready === true,
+  };
+}
+
+function parseFluxUsage(raw: unknown): FluxUsage {
+  const item = asRecord(raw);
+  return {
+    cpuMilli: asNumber(item.cpuMilli),
+    memoryMi: asNumber(item.memoryMi),
+    cpuRequestMilli: asNumber(item.cpuRequestMilli),
+    memRequestMi: asNumber(item.memRequestMi),
+    cpuLimitMilli: asNumber(item.cpuLimitMilli),
+    memLimitMi: asNumber(item.memLimitMi),
+    known: item.known === true,
+  };
+}
+
+export function parseFluxOverview(body: unknown): FluxOverview {
+  const item = asRecord(body);
+  return {
+    ready: item.ready === true,
+    summary: asString(item.summary),
+    namespace: asString(item.namespace),
+    kubernetes: asString(item.kubernetes),
+    nodes: asNumber(item.nodes),
+    operator: optionalString(item.operator),
+    distribution: optionalString(item.distribution),
+    controllers: listOf(item.controllers, parseFluxController),
+    sync: parseFluxSync(item.sync),
+    usage: parseFluxUsage(item.usage),
+    error: optionalString(item.error),
+  };
 }
 
 export function parseFluxActionResult(body: unknown): FluxActionResult {

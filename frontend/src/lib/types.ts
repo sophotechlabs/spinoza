@@ -211,6 +211,51 @@ export interface ArgoDashboard {
   error?: string;
 }
 
+export interface FluxController {
+  name: string;
+  version: string;
+  ready: boolean;
+  replicas: number;
+  wanted: number;
+  namespace: string;
+}
+
+export interface FluxSync {
+  namespace: string;
+  name: string;
+  kind: string;
+  source: string;
+  url: string;
+  ref: string;
+  path: string;
+  revision: string;
+  ready: boolean;
+}
+
+export interface FluxUsage {
+  cpuMilli: number;
+  memoryMi: number;
+  cpuRequestMilli: number;
+  memRequestMi: number;
+  cpuLimitMilli: number;
+  memLimitMi: number;
+  known: boolean;
+}
+
+export interface FluxOverview {
+  ready: boolean;
+  summary: string;
+  namespace: string;
+  kubernetes: string;
+  nodes: number;
+  operator?: string;
+  distribution?: string;
+  controllers: FluxController[];
+  sync: FluxSync;
+  usage: FluxUsage;
+  error?: string;
+}
+
 export interface FluxResource {
   kind: string;
   group: string;

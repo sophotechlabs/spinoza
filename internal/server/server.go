@@ -128,6 +128,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/helm", s.handleHelm, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false},
+		{http.MethodGet, "/api/flux/overview", s.handleFluxOverview, false},
 		{http.MethodGet, "/api/argocd", s.handleArgo, false},
 		{http.MethodPost, "/api/flux/action", withRef(s.fluxAction), false},
 		{http.MethodPost, "/api/action", s.handleAction, false},
@@ -591,6 +592,10 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Namespaces(r.Context()))
+}
+
+func (s *Server) handleFluxOverview(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().FluxOverview(r.Context()))
 }
 
 func (s *Server) handleArgo(w http.ResponseWriter, r *http.Request) {
