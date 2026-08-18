@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.7.0](https://github.com/sophotechlabs/spinoza/compare/v1.6.1...v1.7.0) (2026-08-18)
+
+
+### Features
+
+* **argocd:** sync and refresh applications from the inspect panel ([d4ad6e5](https://github.com/sophotechlabs/spinoza/commit/d4ad6e5bb65ba25308f522a009e8c928496b4351))
+
+
+### Bug Fixes
+
+* **ci:** tell gh which repo to publish the release in ([82577c6](https://github.com/sophotechlabs/spinoza/commit/82577c6a8678fd74f0617efa2b407b8486a3a428))
+* **desktop:** take the PATH from the login shell so credential plugins run ([4dd683a](https://github.com/sophotechlabs/spinoza/commit/4dd683a625937b76b4cb4913c12fc5434ebb5ae0))
+* **ui:** say what watching every namespace costs ([d4b2a69](https://github.com/sophotechlabs/spinoza/commit/d4b2a69a23eed07058c8f1c6ad90623718d879fb))
+
+
+### CI
+
+* split release-please from the artifact build so nothing is gated on a skipped job ([93b5e04](https://github.com/sophotechlabs/spinoza/commit/93b5e049bcd0f03a032bbb90f27d5db434fa5b76))
+
 ## [1.6.1](https://github.com/sophotechlabs/spinoza/compare/v1.6.0...v1.6.1) (2026-08-18)
 
 
