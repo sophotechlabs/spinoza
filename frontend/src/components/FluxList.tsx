@@ -1,6 +1,5 @@
 import { Fragment, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { ColumnSizingState } from '@tanstack/react-table';
 import {
   createColumnHelper,
   flexRender,
@@ -20,6 +19,7 @@ import {
   statusText,
 } from '../lib/fluxStatus';
 import { useElementWidth } from '../lib/useElementWidth';
+import { extraWidths, widthOf } from '../lib/columnFit';
 import { columnLabel } from '../lib/tableState';
 import LoadWarning from './LoadWarning';
 import LoadFailure from './LoadFailure';
@@ -28,21 +28,6 @@ import ColumnResizeHandle from './ColumnResizeHandle';
 import Loading from './Loading';
 
 const EMPTY: FluxResource[] = [];
-const FLEX_COLUMN_IDS = new Set(['name', 'revision']);
-
-function flexes(id: string, sizing: ColumnSizingState): boolean {
-  if (!FLEX_COLUMN_IDS.has(id)) {
-    return false;
-  }
-  return !Object.hasOwn(sizing, id);
-}
-
-function columnWidth(id: string, base: number, perFlex: number, sizing: ColumnSizingState): number {
-  if (flexes(id, sizing)) {
-    return base + perFlex;
-  }
-  return base;
-}
 
 const LATEST_TITLE = 'The latest revision the source offers for this resource';
 
@@ -158,14 +143,16 @@ export default function FluxList({ onSelect }: FluxListProps) {
   const columnCount = COLUMNS.length;
   const totalSize = table.getTotalSize();
   const sizing = table.getState().columnSizing;
-  const flexCount = table
-    .getVisibleLeafColumns()
-    .filter((column) => flexes(column.id, sizing)).length;
-  const perFlex = Math.max(0, containerWidth - totalSize) / Math.max(1, flexCount);
-  let tableWidth = totalSize;
-  if (flexCount > 0) {
-    tableWidth = Math.max(containerWidth, totalSize);
-  }
+  const stretch = extraWidths(
+    table.getVisibleLeafColumns().map((column) => ({
+      id: column.id,
+      size: column.getSize(),
+      fixed: !column.getCanResize(),
+      sized: Object.hasOwn(sizing, column.id),
+    })),
+    Math.max(0, containerWidth - totalSize),
+  );
+  const tableWidth = Math.max(containerWidth, totalSize);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -180,7 +167,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
             {table.getVisibleLeafColumns().map((column) => (
               <col
                 key={column.id}
-                style={{ width: `${columnWidth(column.id, column.getSize(), perFlex, sizing)}px` }}
+                style={{ width: `${widthOf(column.id, column.getSize(), stretch)}px` }}
               />
             ))}
           </colgroup>
@@ -191,13 +178,13 @@ export default function FluxList({ onSelect }: FluxListProps) {
                   key={header.id}
                   className="relative px-2 py-1 font-medium"
                   style={{
-                    width: `${columnWidth(header.column.id, header.getSize(), perFlex, sizing)}px`,
+                    width: `${widthOf(header.column.id, header.getSize(), stretch)}px`,
                   }}
                 >
                   {flexRender(header.column.columnDef.header, header.getContext())}
                   <ColumnResizeHandle
                     column={columnLabel(header.column.columnDef.header, header.column.id)}
-                    size={columnWidth(header.column.id, header.getSize(), perFlex, sizing)}
+                    size={widthOf(header.column.id, header.getSize(), stretch)}
                     min={header.column.columnDef.minSize ?? 0}
                     onSize={(next) => {
                       table.setColumnSizing((old) => ({ ...old, [header.column.id]: next }));

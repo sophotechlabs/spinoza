@@ -266,17 +266,20 @@ describe('column widths', () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
   }
 
-  it('spreads the spare width across the flexible columns', async () => {
+  it('spreads the spare width across every column', async () => {
     stubFlux(dashboard);
     wideContainer(2000);
 
     render(<FluxList onSelect={vi.fn()} />);
     await screen.findByText('res-a');
 
-    const cols = [...document.querySelectorAll('col')].map((col) => col.style.width);
-    expect(cols[1]).not.toBe('180px');
-    expect(cols[4]).not.toBe('260px');
-    expect(cols[0]).toBe('120px');
+    const cols = [...document.querySelectorAll('col')].map((col) =>
+      Number.parseInt(col.style.width, 10),
+    );
+    const filled = cols.reduce((sum, width) => sum + width, 0);
+    expect(filled).toBe(2000);
+    expect(cols[0]).toBeGreaterThan(120);
+    expect(cols[1]).toBeGreaterThan(180);
   });
 
   it('resizes from the width on screen, not the width behind the flex share', async () => {
