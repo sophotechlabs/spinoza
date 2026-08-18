@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -46,7 +47,14 @@ type Versions interface {
 	ServerVersion() (*version.Info, error)
 }
 
-func Build(ctx context.Context, dyn dynamic.Interface, lister Lister, versions Versions, descs map[string]api.ResourceDescriptor) api.ClusterOverview {
+func Build(
+	ctx context.Context,
+	dyn dynamic.Interface,
+	meta metadata.Interface,
+	lister Lister,
+	versions Versions,
+	descs map[string]api.ResourceDescriptor,
+) api.ClusterOverview {
 	bounded, cancel := context.WithTimeout(ctx, buildTimeout)
 	defer cancel()
 
@@ -64,7 +72,7 @@ func Build(ctx context.Context, dyn dynamic.Interface, lister Lister, versions V
 	})
 	go safe.Run("counting pod phases", func() {
 		defer wg.Done()
-		out.Pods = podSummary(bounded, dyn, descs, failures)
+		out.Pods = podSummary(bounded, meta, descs, failures)
 	})
 	go safe.Run("collecting warnings", func() {
 		defer wg.Done()
@@ -153,7 +161,15 @@ type phaseProbe struct {
 	into     *int
 }
 
-func podSummary(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, failures *listerr.Collector) api.PodSummary {
+func podSummary(
+	ctx context.Context,
+	meta metadata.Interface,
+	descs map[string]api.ResourceDescriptor,
+	failures *listerr.Collector,
+) api.PodSummary {
+	if meta == nil {
+		return api.PodSummary{}
+	}
 	summary := api.PodSummary{}
 	_, ok := descs[discovery.Key("", "v1", "pods")]
 	if !ok {
@@ -177,7 +193,7 @@ func podSummary(ctx context.Context, dyn dynamic.Interface, descs map[string]api
 			defer wg.Done()
 			bounded, cancel := context.WithTimeout(ctx, probeTimeout)
 			defer cancel()
-			got, err := podcount.Count(bounded, dyn, probe.selector)
+			got, err := podcount.Count(bounded, meta, probe.selector)
 			mu.Lock()
 			defer mu.Unlock()
 			failures.Record(podsKey+" "+probe.label, err)

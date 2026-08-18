@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	metadatafake "k8s.io/client-go/metadata/fake"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -191,4 +192,73 @@ func TestNodeAllocatableComesFromTheWatchedCache(t *testing.T) {
 
 func apierror(message string) error {
 	return errors.New(message)
+}
+
+func countingManager(t *testing.T) (*Manager, *int64) {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	err := metav1.AddMetaToScheme(scheme)
+	if err != nil {
+		t.Fatalf("scheme: %v", err)
+	}
+	meta := metadatafake.NewSimpleMetadataClient(scheme)
+	var calls int64
+	var mu sync.Mutex
+	meta.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		return false, nil, nil
+	})
+	descs := map[string]api.ResourceDescriptor{
+		"apps/v1/deployments": {Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment"},
+	}
+	mgr := NewManager(t.Context(), Deps{
+		Dynamic:     fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), metricsKinds()),
+		Metadata:    meta,
+		Clientset:   k8sfake.NewClientset(),
+		Descriptors: descs,
+	})
+	return mgr, &calls
+}
+
+func TestCountsAreReusedWithinTheirWindow(t *testing.T) {
+	mgr, calls := countingManager(t)
+
+	mgr.Counts(context.Background())
+	before := *calls
+	mgr.Counts(context.Background())
+
+	if before == 0 {
+		t.Fatal("the first tally did not reach the cluster")
+	}
+	if *calls != before {
+		t.Fatalf("list calls = %d, want the cached tally reused", *calls)
+	}
+}
+
+func TestCountsAreTakenAgainOnceTheWindowPasses(t *testing.T) {
+	mgr, calls := countingManager(t)
+	mgr.Counts(context.Background())
+	before := *calls
+
+	mgr.now = func() time.Time { return time.Now().Add(2 * defaultCountsTTL) }
+	mgr.Counts(context.Background())
+
+	if *calls <= before {
+		t.Fatalf("list calls = %d, want another tally after the window", *calls)
+	}
+}
+
+func TestWatchedFailuresDoNotLeakIntoTheCachedTally(t *testing.T) {
+	cached := api.ResourceCounts{Counts: map[string]int{"/v1/pods": 3}}
+
+	merged := withWatched(cached, map[string]int{"/v1/pods": 2})
+
+	if merged.Failing["/v1/pods"] != 2 {
+		t.Fatalf("failing = %+v, want the watched count", merged.Failing)
+	}
+	if cached.Failing != nil {
+		t.Fatalf("the cached tally was written through: %+v", cached.Failing)
+	}
 }

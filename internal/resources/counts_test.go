@@ -6,10 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic/fake"
+	metadatafake "k8s.io/client-go/metadata/fake"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -19,21 +18,21 @@ func countDesc(resource string) api.ResourceDescriptor {
 	return api.ResourceDescriptor{Group: "apps", Version: "v1", Resource: resource, Kind: "Deployment"}
 }
 
-func countClient(t *testing.T, objs ...runtime.Object) *fake.FakeDynamicClient {
+func countClient(t *testing.T, objs ...runtime.Object) *metadatafake.FakeMetadataClient {
 	t.Helper()
-	kinds := map[schema.GroupVersionResource]string{
-		{Group: "apps", Version: "v1", Resource: "deployments"}:  "DeploymentList",
-		{Group: "apps", Version: "v1", Resource: "statefulsets"}: "StatefulSetList",
+	scheme := runtime.NewScheme()
+	err := metav1.AddMetaToScheme(scheme)
+	if err != nil {
+		t.Fatalf("scheme: %v", err)
 	}
-	return fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, objs...)
+	return metadatafake.NewSimpleMetadataClient(scheme, objs...)
 }
 
-func countObject(name string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "apps/v1",
-		"kind":       "Deployment",
-		"metadata":   map[string]any{"name": name, "namespace": "default"},
-	}}
+func countObject(name string) *metav1.PartialObjectMetadata {
+	return &metav1.PartialObjectMetadata{
+		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+	}
 }
 
 func TestCountReportsZeroForAnEmptyType(t *testing.T) {
@@ -151,24 +150,20 @@ func podDesc() api.ResourceDescriptor {
 	return api.ResourceDescriptor{Version: "v1", Resource: "pods", Kind: "Pod"}
 }
 
-func podClient(t *testing.T) *fake.FakeDynamicClient {
+func podClient(t *testing.T) *metadatafake.FakeMetadataClient {
 	t.Helper()
-	kinds := map[schema.GroupVersionResource]string{
-		{Version: "v1", Resource: "pods"}: "PodList",
+	return countClient(t)
+}
+
+func podObject(name string) *metav1.PartialObjectMetadata {
+	return &metav1.PartialObjectMetadata{
+		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
 	}
-	return fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds)
 }
 
-func podObject(name string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       "Pod",
-		"metadata":   map[string]any{"name": name, "namespace": "default"},
-	}}
-}
-
-func answerUnhealthy(dyn *fake.FakeDynamicClient, items []runtime.Object, err error) {
-	dyn.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+func answerUnhealthy(client *metadatafake.FakeMetadataClient, items []runtime.Object, err error) {
+	client.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		list, ok := action.(k8stesting.ListAction)
 		if !ok {
 			return false, nil, nil
@@ -179,13 +174,9 @@ func answerUnhealthy(dyn *fake.FakeDynamicClient, items []runtime.Object, err er
 		if err != nil {
 			return true, nil, err
 		}
-		out := &unstructured.UnstructuredList{}
+		out := &metav1.List{}
 		for _, item := range items {
-			u, isUnstructured := item.(*unstructured.Unstructured)
-			if !isUnstructured {
-				continue
-			}
-			out.Items = append(out.Items, *u)
+			out.Items = append(out.Items, runtime.RawExtension{Object: item})
 		}
 		return true, out, nil
 	})

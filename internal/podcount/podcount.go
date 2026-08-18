@@ -5,7 +5,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/metadata"
 )
 
 const (
@@ -21,8 +21,8 @@ type Result struct {
 	Complete bool
 }
 
-func Count(ctx context.Context, dyn dynamic.Interface, selector string) (Result, error) {
-	probe, err := dyn.Resource(podsGVR).List(ctx, metav1.ListOptions{
+func Count(ctx context.Context, client metadata.Interface, selector string) (Result, error) {
+	probe, err := client.Resource(podsGVR).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
 		Limit:         probeLimit,
 		FieldSelector: selector,
 	})
@@ -36,14 +36,14 @@ func Count(ctx context.Context, dyn dynamic.Interface, selector string) (Result,
 	if probe.GetContinue() == "" {
 		return Result{Total: len(probe.Items), Complete: true}, nil
 	}
-	return walk(ctx, dyn, selector)
+	return walk(ctx, client, selector)
 }
 
-func walk(ctx context.Context, dyn dynamic.Interface, selector string) (Result, error) {
+func walk(ctx context.Context, client metadata.Interface, selector string) (Result, error) {
 	total := 0
 	opts := metav1.ListOptions{Limit: pageSize, FieldSelector: selector}
 	for page := range maxPages {
-		list, err := dyn.Resource(podsGVR).List(ctx, opts)
+		list, err := client.Resource(podsGVR).Namespace(metav1.NamespaceAll).List(ctx, opts)
 		if err != nil {
 			return Result{}, err
 		}

@@ -6,45 +6,53 @@ import (
 	"fmt"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic/fake"
+	metadatafake "k8s.io/client-go/metadata/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
 
-func client() *fake.FakeDynamicClient {
-	kinds := map[schema.GroupVersionResource]string{podsGVR: "PodList"}
-	return fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds)
+func client() *metadatafake.FakeMetadataClient {
+	scheme := runtime.NewScheme()
+	err := metav1.AddMetaToScheme(scheme)
+	if err != nil {
+		panic(err)
+	}
+	return metadatafake.NewSimpleMetadataClient(scheme)
 }
 
-func pods(count int) []unstructured.Unstructured {
-	items := make([]unstructured.Unstructured, 0, count)
+func pods(count int) []runtime.RawExtension {
+	items := make([]runtime.RawExtension, 0, count)
 	for i := range count {
-		items = append(items, unstructured.Unstructured{Object: map[string]any{
-			"apiVersion": "v1",
-			"kind":       "Pod",
-			"metadata":   map[string]any{"name": fmt.Sprintf("pod-%d", i), "namespace": "default"},
+		items = append(items, runtime.RawExtension{Object: &metav1.PartialObjectMetadata{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("pod-%d", i),
+				Namespace: "default",
+			},
 		}})
 	}
 	return items
 }
 
-func answerPages(dyn *fake.FakeDynamicClient, pages [][]unstructured.Unstructured, remaining *int64) *[]metav1ListCall {
+func answerPages(
+	client *metadatafake.FakeMetadataClient,
+	pages [][]runtime.RawExtension,
+	remaining *int64,
+) *[]metav1ListCall {
 	calls := &[]metav1ListCall{}
 	index := 0
-	dyn.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+	client.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		list, ok := action.(k8stesting.ListAction)
 		if ok {
 			*calls = append(*calls, metav1ListCall{fields: list.GetListRestrictions().Fields.String()})
 		}
 		page := pages[index]
-		out := &unstructured.UnstructuredList{Items: page}
+		out := &metav1.List{Items: page}
 		if index < len(pages)-1 {
-			out.SetContinue(fmt.Sprintf("page-%d", index+1))
+			out.Continue = fmt.Sprintf("page-%d", index+1)
 		}
 		if index == 0 && remaining != nil {
-			out.SetRemainingItemCount(remaining)
+			out.RemainingItemCount = remaining
 		}
 		index++
 		return true, out, nil
@@ -59,7 +67,7 @@ type metav1ListCall struct {
 func TestAnUnfilteredCountTrustsTheRemainingItemCount(t *testing.T) {
 	dyn := client()
 	remaining := int64(41)
-	answerPages(dyn, [][]unstructured.Unstructured{pods(1)}, &remaining)
+	answerPages(dyn, [][]runtime.RawExtension{pods(1)}, &remaining)
 
 	got, err := Count(context.Background(), dyn, "")
 	if err != nil {
@@ -77,7 +85,7 @@ func TestAnUnfilteredCountTrustsTheRemainingItemCount(t *testing.T) {
 func TestANegativeRemainingCountIsIgnored(t *testing.T) {
 	dyn := client()
 	remaining := int64(-1)
-	answerPages(dyn, [][]unstructured.Unstructured{pods(1)}, &remaining)
+	answerPages(dyn, [][]runtime.RawExtension{pods(1)}, &remaining)
 
 	got, err := Count(context.Background(), dyn, "")
 	if err != nil {
@@ -91,7 +99,7 @@ func TestANegativeRemainingCountIsIgnored(t *testing.T) {
 
 func TestAFilteredCountWalksThePagesTheApiserverGives(t *testing.T) {
 	dyn := client()
-	calls := answerPages(dyn, [][]unstructured.Unstructured{
+	calls := answerPages(dyn, [][]runtime.RawExtension{
 		pods(1),
 		pods(500),
 		pods(7),
@@ -118,7 +126,7 @@ func TestAFilteredCountWalksThePagesTheApiserverGives(t *testing.T) {
 
 func TestAFilteredCountStopsShortOfForever(t *testing.T) {
 	dyn := client()
-	pages := make([][]unstructured.Unstructured, 0, maxPages+5)
+	pages := make([][]runtime.RawExtension, 0, maxPages+5)
 	pages = append(pages, pods(1))
 	for range maxPages + 4 {
 		pages = append(pages, pods(500))
@@ -140,7 +148,7 @@ func TestAFilteredCountStopsShortOfForever(t *testing.T) {
 
 func TestASinglePageNeedsNoWalkAtAll(t *testing.T) {
 	dyn := client()
-	calls := answerPages(dyn, [][]unstructured.Unstructured{pods(1)}, nil)
+	calls := answerPages(dyn, [][]runtime.RawExtension{pods(1)}, nil)
 
 	got, err := Count(context.Background(), dyn, "status.phase=Failed")
 	if err != nil {
@@ -177,7 +185,7 @@ func TestAPageThatFailsMidWalkIsReported(t *testing.T) {
 	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 		index++
 		if index == 1 {
-			out := &unstructured.UnstructuredList{Items: pods(1)}
+			out := &metav1.List{Items: pods(1)}
 			out.SetContinue("page-1")
 			return true, out, nil
 		}

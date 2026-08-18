@@ -8,7 +8,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/podcount"
@@ -41,7 +41,12 @@ func (l CountLimits) orDefaults() CountLimits {
 	return l
 }
 
-func Count(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescriptor, limits CountLimits) api.ResourceCounts {
+func Count(
+	ctx context.Context,
+	client metadata.Interface,
+	descs []api.ResourceDescriptor,
+	limits CountLimits,
+) api.ResourceCounts {
 	limits = limits.orDefaults()
 	bounded, cancel := context.WithTimeout(ctx, limits.Budget)
 	defer cancel()
@@ -58,7 +63,7 @@ func Count(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescr
 			defer wg.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			total, reason := countOne(bounded, dyn, desc, limits)
+			total, reason := countOne(bounded, client, desc, limits)
 			mu.Lock()
 			counts[keyOf(desc)] = total
 			if reason != "" {
@@ -68,20 +73,29 @@ func Count(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescr
 		})
 	}
 	wg.Wait()
-	return api.ResourceCounts{Counts: counts, Failing: failingPods(bounded, dyn, descs, limits), Errors: reasons}
+	return api.ResourceCounts{
+		Counts:  counts,
+		Failing: failingPods(bounded, client, descs, limits),
+		Errors:  reasons,
+	}
 }
 
 const podsKey = "/v1/pods"
 
 const unhealthyPods = "status.phase!=Running,status.phase!=Succeeded"
 
-func failingPods(ctx context.Context, dyn dynamic.Interface, descs []api.ResourceDescriptor, limits CountLimits) map[string]int {
+func failingPods(
+	ctx context.Context,
+	client metadata.Interface,
+	descs []api.ResourceDescriptor,
+	limits CountLimits,
+) map[string]int {
 	if !counted(descs, podsKey) {
 		return nil
 	}
 	bounded, cancel := context.WithTimeout(ctx, limits.PerType)
 	defer cancel()
-	got, err := podcount.Count(bounded, dyn, unhealthyPods)
+	got, err := podcount.Count(bounded, client, unhealthyPods)
 	if err != nil {
 		return nil
 	}
@@ -104,11 +118,18 @@ func keyOf(desc api.ResourceDescriptor) string {
 	return desc.Group + "/" + desc.Version + "/" + desc.Resource
 }
 
-func countOne(ctx context.Context, dyn dynamic.Interface, desc api.ResourceDescriptor, limits CountLimits) (int, string) {
+func countOne(
+	ctx context.Context,
+	client metadata.Interface,
+	desc api.ResourceDescriptor,
+	limits CountLimits,
+) (int, string) {
 	bounded, cancel := context.WithTimeout(ctx, limits.PerType)
 	defer cancel()
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
-	list, err := dyn.Resource(gvr).List(bounded, metav1.ListOptions{Limit: 1})
+	list, err := client.Resource(gvr).
+		Namespace(metav1.NamespaceAll).
+		List(bounded, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		return countUnknown, countReason(ctx, err, limits)
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -55,6 +56,7 @@ const (
 	maxBuildBackoff    = 2 * time.Minute
 	defaultIdleGrace   = 90 * time.Second
 	defaultMetricsTTL  = 5 * time.Second
+	defaultCountsTTL   = 10 * time.Second
 )
 
 type Event struct {
@@ -107,14 +109,8 @@ type Manager struct {
 	building    map[streamKey]*buildGate
 	failures    map[streamKey]buildFailure
 	syncTimeout time.Duration
-	usage       usageCache
-}
-
-type usageCache struct {
-	mu       sync.Mutex
-	at       time.Time
-	value    api.Metrics
-	building chan struct{}
+	usage       recent[api.Metrics]
+	tally       recent[api.ResourceCounts]
 }
 
 type buildGate struct {
@@ -132,6 +128,7 @@ type Limits struct {
 	SyncTimeout     time.Duration
 	IdleGrace       time.Duration
 	MetricsTTL      time.Duration
+	CountsTTL       time.Duration
 	WarmConcurrency int
 	Counts          CountLimits
 	Search          CountLimits
@@ -146,6 +143,9 @@ func (l Limits) orDefaults() Limits {
 	}
 	if l.MetricsTTL == 0 {
 		l.MetricsTTL = defaultMetricsTTL
+	}
+	if l.CountsTTL == 0 {
+		l.CountsTTL = defaultCountsTTL
 	}
 	if l.WarmConcurrency == 0 {
 		l.WarmConcurrency = warmConcurrency
@@ -393,73 +393,52 @@ func (m *Manager) Argo(ctx context.Context) api.ArgoDashboard {
 }
 
 func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
+	return withWatched(m.tallied(ctx), m.failingFromCaches())
+}
+
+func (m *Manager) tallied(ctx context.Context) api.ResourceCounts {
+	empty := api.ResourceCounts{Counts: map[string]int{}}
+	if m.meta == nil {
+		return empty
+	}
 	descs := m.descriptors()
 	flat := make([]api.ResourceDescriptor, 0, len(descs))
 	for _, desc := range descs {
 		flat = append(flat, desc)
 	}
-	out := Count(ctx, m.dyn, flat, m.limits.Counts)
-	watched := m.failingFromCaches()
-	if len(watched) == 0 {
-		return out
-	}
-	if out.Failing == nil {
-		out.Failing = map[string]int{}
-	}
-	for key, count := range watched {
-		if _, taken := out.Failing[key]; taken {
-			continue
-		}
-		out.Failing[key] = count
+	out, ok := shared(ctx, &m.tally, m.now, m.limits.CountsTTL, func(ctx context.Context) (api.ResourceCounts, bool) {
+		return Count(ctx, m.meta, flat, m.limits.Counts), true
+	})
+	if !ok {
+		return empty
 	}
 	return out
 }
 
+func withWatched(out api.ResourceCounts, watched map[string]int) api.ResourceCounts {
+	if len(watched) == 0 {
+		return out
+	}
+	failing := make(map[string]int, len(out.Failing)+len(watched))
+	maps.Copy(failing, out.Failing)
+	for key, count := range watched {
+		if _, taken := failing[key]; taken {
+			continue
+		}
+		failing[key] = count
+	}
+	out.Failing = failing
+	return out
+}
+
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
-	for {
-		fresh, wait := m.cachedMetrics()
-		if wait == nil {
-			return fresh
-		}
-		if wait.mine {
-			return m.buildMetrics(ctx, wait.done)
-		}
-		select {
-		case <-wait.done:
-		case <-ctx.Done():
-			return api.Metrics{Error: ctx.Err().Error()}
-		}
+	value, ok := shared(ctx, &m.usage, m.now, m.limits.MetricsTTL, func(ctx context.Context) (api.Metrics, bool) {
+		built := metrics.Build(ctx, m.dyn, m.nodeSource())
+		return built, built.Error == ""
+	})
+	if !ok {
+		return api.Metrics{Error: ctx.Err().Error()}
 	}
-}
-
-type metricsTurn struct {
-	done chan struct{}
-	mine bool
-}
-
-func (m *Manager) cachedMetrics() (api.Metrics, *metricsTurn) {
-	m.usage.mu.Lock()
-	defer m.usage.mu.Unlock()
-	if !m.usage.at.IsZero() && m.now().Sub(m.usage.at) < m.limits.MetricsTTL {
-		return m.usage.value, nil
-	}
-	if m.usage.building != nil {
-		return api.Metrics{}, &metricsTurn{done: m.usage.building}
-	}
-	m.usage.building = make(chan struct{})
-	return api.Metrics{}, &metricsTurn{done: m.usage.building, mine: true}
-}
-
-func (m *Manager) buildMetrics(ctx context.Context, done chan struct{}) api.Metrics {
-	value := metrics.Build(ctx, m.dyn, m.nodeSource())
-	m.usage.mu.Lock()
-	if value.Error == "" {
-		m.usage.value = value
-		m.usage.at = m.now()
-	}
-	m.usage.building = nil
-	m.usage.mu.Unlock()
-	close(done)
 	return value
 }
 
@@ -481,7 +460,7 @@ func (c cachedNodes) List(ctx context.Context) ([]*unstructured.Unstructured, er
 }
 
 func (m *Manager) Overview(ctx context.Context) api.ClusterOverview {
-	return overview.Build(ctx, m.dyn, m, m.versions(), m.descriptors())
+	return overview.Build(ctx, m.dyn, m.meta, m, m.versions(), m.descriptors())
 }
 
 func (m *Manager) versions() overview.Versions {

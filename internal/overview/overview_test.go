@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/dynamic/fake"
+	metadatafake "k8s.io/client-go/metadata/fake"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -65,6 +66,19 @@ func listKinds() map[schema.GroupVersionResource]string {
 
 func dynClient() *fake.FakeDynamicClient {
 	return fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+}
+
+func metaScheme() *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	err := metav1.AddMetaToScheme(scheme)
+	if err != nil {
+		panic(err)
+	}
+	return scheme
+}
+
+func metaClient() *metadatafake.FakeMetadataClient {
+	return metadatafake.NewSimpleMetadataClient(metaScheme())
 }
 
 func seedNodeMetrics(t *testing.T, dyn *fake.FakeDynamicClient, objs ...*unstructured.Unstructured) {
@@ -132,8 +146,8 @@ func warning(name, reason, object, seen string) *unstructured.Unstructured {
 	}}
 }
 
-func answerPods(dyn *fake.FakeDynamicClient, counts map[string]int) {
-	dyn.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+func answerPods(meta *metadatafake.FakeMetadataClient, counts map[string]int) {
+	meta.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		list, ok := action.(k8stesting.ListAction)
 		if !ok {
 			return false, nil, nil
@@ -143,15 +157,15 @@ func answerPods(dyn *fake.FakeDynamicClient, counts map[string]int) {
 		if !known {
 			return false, nil, nil
 		}
-		out := &unstructured.UnstructuredList{}
+		out := &metav1.List{}
 		remaining := int64(total)
-		out.SetRemainingItemCount(&remaining)
+		out.RemainingItemCount = &remaining
 		return true, out, nil
 	})
 }
 
 func TestBuildReportsTheServerVersion(t *testing.T) {
-	got := Build(context.Background(), dynClient(), &stubLister{}, &stubVersions{info: &version.Info{GitVersion: "v1.36.1"}}, map[string]api.ResourceDescriptor{})
+	got := Build(context.Background(), dynClient(), metaClient(), &stubLister{}, &stubVersions{info: &version.Info{GitVersion: "v1.36.1"}}, map[string]api.ResourceDescriptor{})
 
 	if got.Version != "v1.36.1" {
 		t.Fatalf("version = %q, want v1.36.1", got.Version)
@@ -159,7 +173,7 @@ func TestBuildReportsTheServerVersion(t *testing.T) {
 }
 
 func TestBuildSurvivesAClusterWithNoDiscoveryAtAll(t *testing.T) {
-	got := Build(context.Background(), dynClient(), &stubLister{}, nil, map[string]api.ResourceDescriptor{})
+	got := Build(context.Background(), dynClient(), metaClient(), &stubLister{}, nil, map[string]api.ResourceDescriptor{})
 
 	if got.Version != "" {
 		t.Fatalf("version = %q, want it empty", got.Version)
@@ -173,7 +187,7 @@ func TestBuildSurvivesAClusterWithNoDiscoveryAtAll(t *testing.T) {
 }
 
 func TestBuildSaysWhyTheVersionIsMissing(t *testing.T) {
-	got := Build(context.Background(), dynClient(), &stubLister{}, &stubVersions{err: errors.New("apiserver is unreachable")}, map[string]api.ResourceDescriptor{})
+	got := Build(context.Background(), dynClient(), metaClient(), &stubLister{}, &stubVersions{err: errors.New("apiserver is unreachable")}, map[string]api.ResourceDescriptor{})
 
 	if !strings.Contains(got.Error, "apiserver is unreachable") {
 		t.Fatalf("error = %q, want the apiserver failure in it", got.Error)
@@ -187,7 +201,7 @@ func TestBuildCountsNodesByReadinessAndCapacity(t *testing.T) {
 		node("c", false, false, "2", "4Gi"),
 	}}
 
-	got := Build(context.Background(), dynClient(), lister, nil, fullCatalog())
+	got := Build(context.Background(), dynClient(), metaClient(), lister, nil, fullCatalog())
 
 	if got.Nodes.Total != 3 {
 		t.Fatalf("total = %d, want 3", got.Nodes.Total)
@@ -211,7 +225,7 @@ func TestBuildAddsUpNodeUsage(t *testing.T) {
 	dyn := dynClient()
 	seedNodeMetrics(t, dyn, nodeMetric("a", "1500m", "2Gi"), nodeMetric("b", "500m", "1Gi"))
 
-	got := Build(context.Background(), dyn, lister, nil, fullCatalog())
+	got := Build(context.Background(), dyn, metaClient(), lister, nil, fullCatalog())
 
 	if got.Nodes.CPUUsedMilli != 2000 {
 		t.Fatalf("cpu used = %d, want 2000", got.Nodes.CPUUsedMilli)
@@ -231,7 +245,7 @@ func TestBuildMarksUsageUnknownWhenMetricsAreMissing(t *testing.T) {
 		return true, nil, errors.New("the metrics api is not installed")
 	})
 
-	got := Build(context.Background(), dyn, lister, nil, fullCatalog())
+	got := Build(context.Background(), dyn, metaClient(), lister, nil, fullCatalog())
 
 	if got.Nodes.UsageKnown {
 		t.Fatal("usage was reported as known with no metrics api")
@@ -247,7 +261,7 @@ func TestBuildMarksUsageUnknownWhenMetricsAreMissing(t *testing.T) {
 func TestBuildSaysWhenTheNodeListFailed(t *testing.T) {
 	lister := &stubLister{err: errors.New("nodes is forbidden")}
 
-	got := Build(context.Background(), dynClient(), lister, nil, fullCatalog())
+	got := Build(context.Background(), dynClient(), metaClient(), lister, nil, fullCatalog())
 
 	if got.Nodes.Total != 0 {
 		t.Fatalf("total = %d, want nothing", got.Nodes.Total)
@@ -258,8 +272,8 @@ func TestBuildSaysWhenTheNodeListFailed(t *testing.T) {
 }
 
 func TestBuildCountsPodsByPhase(t *testing.T) {
-	dyn := dynClient()
-	answerPods(dyn, map[string]int{
+	meta := metaClient()
+	answerPods(meta, map[string]int{
 		"":                       40,
 		"status.phase=Running":   30,
 		"status.phase=Pending":   4,
@@ -267,7 +281,7 @@ func TestBuildCountsPodsByPhase(t *testing.T) {
 		"status.phase=Succeeded": 4,
 	})
 
-	got := Build(context.Background(), dyn, &stubLister{}, nil, fullCatalog())
+	got := Build(context.Background(), dynClient(), meta, &stubLister{}, nil, fullCatalog())
 
 	if got.Pods.Total != 40 {
 		t.Fatalf("total = %d, want 40", got.Pods.Total)
@@ -290,12 +304,12 @@ func TestBuildCountsPodsByPhase(t *testing.T) {
 }
 
 func TestBuildMarksThePodTallyUnknownWhenAProbeFails(t *testing.T) {
-	dyn := dynClient()
-	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+	meta := metaClient()
+	meta.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("pods is forbidden")
 	})
 
-	got := Build(context.Background(), dyn, &stubLister{}, nil, fullCatalog())
+	got := Build(context.Background(), dynClient(), meta, &stubLister{}, nil, fullCatalog())
 
 	if got.Pods.Known {
 		t.Fatal("a refused probe still reported a known tally")
@@ -306,9 +320,9 @@ func TestBuildMarksThePodTallyUnknownWhenAProbeFails(t *testing.T) {
 }
 
 func TestBuildSkipsPodsThatDiscoveryNeverReported(t *testing.T) {
-	dyn := dynClient()
+	meta := metaClient()
 	listed := 0
-	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+	meta.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 		listed++
 		return false, nil, nil
 	})
@@ -316,7 +330,7 @@ func TestBuildSkipsPodsThatDiscoveryNeverReported(t *testing.T) {
 		discovery.Key("", "v1", "nodes"): {Version: "v1", Resource: "nodes", Kind: "Node"},
 	}
 
-	got := Build(context.Background(), dyn, &stubLister{}, nil, descs)
+	got := Build(context.Background(), dynClient(), meta, &stubLister{}, nil, descs)
 
 	if listed != 0 {
 		t.Fatalf("pods were listed %d times for a cluster that reports none", listed)
@@ -335,7 +349,7 @@ func TestBuildReturnsTheNewestWarningsFirst(t *testing.T) {
 		warning("middle", "Failed", "web-3", "2026-08-11T11:00:00Z"),
 	)
 
-	got := Build(context.Background(), dyn, &stubLister{}, nil, fullCatalog())
+	got := Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
 
 	if len(got.Warnings) != 3 {
 		t.Fatalf("warnings = %d, want 3", len(got.Warnings))
@@ -368,7 +382,7 @@ func TestBuildAsksTheApiserverOnlyForWarnings(t *testing.T) {
 		return false, nil, nil
 	})
 
-	Build(context.Background(), dyn, &stubLister{}, nil, fullCatalog())
+	Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
 
 	if len(selectors) != 1 {
 		t.Fatalf("events were listed %d times, want once", len(selectors))
@@ -391,7 +405,7 @@ func TestBuildCapsTheWarningsItReturns(t *testing.T) {
 	}
 	seedEvents(t, dyn, objs...)
 
-	got := Build(context.Background(), dyn, &stubLister{}, nil, fullCatalog())
+	got := Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
 
 	if len(got.Warnings) != warningsShown {
 		t.Fatalf("warnings = %d, want the cap of %d", len(got.Warnings), warningsShown)
@@ -404,7 +418,7 @@ func TestBuildSaysWhenEventsCouldNotBeRead(t *testing.T) {
 		return true, nil, errors.New("events is forbidden")
 	})
 
-	got := Build(context.Background(), dyn, &stubLister{}, nil, fullCatalog())
+	got := Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
 
 	if len(got.Warnings) != 0 {
 		t.Fatalf("warnings = %v, want none", got.Warnings)
@@ -416,8 +430,9 @@ func TestBuildSaysWhenEventsCouldNotBeRead(t *testing.T) {
 
 func TestBuildIsQuietWhenEverythingWorked(t *testing.T) {
 	dyn := dynClient()
+	meta := metaClient()
 	seedNodeMetrics(t, dyn, nodeMetric("a", "1", "1Gi"))
-	answerPods(dyn, map[string]int{
+	answerPods(meta, map[string]int{
 		"":                       1,
 		"status.phase=Running":   1,
 		"status.phase=Pending":   0,
@@ -426,7 +441,7 @@ func TestBuildIsQuietWhenEverythingWorked(t *testing.T) {
 	})
 	lister := &stubLister{nodes: []*unstructured.Unstructured{node("a", true, false, "4", "8Gi")}}
 
-	got := Build(context.Background(), dyn, lister, &stubVersions{info: &version.Info{GitVersion: "v1.36.1"}}, fullCatalog())
+	got := Build(context.Background(), dyn, meta, lister, &stubVersions{info: &version.Info{GitVersion: "v1.36.1"}}, fullCatalog())
 
 	if got.Error != "" {
 		t.Fatalf("error = %q, want none", got.Error)
@@ -501,7 +516,7 @@ func TestUnreadableQuantitiesCountAsZero(t *testing.T) {
 		"status":   map[string]any{"allocatable": map[string]any{"cpu": "four", "memory": "eight"}},
 	}}}}
 
-	got := Build(context.Background(), dynClient(), lister, nil, fullCatalog())
+	got := Build(context.Background(), dynClient(), metaClient(), lister, nil, fullCatalog())
 
 	if got.Nodes.CPUAllocatableMilli != 0 {
 		t.Fatalf("cpu = %d, want 0", got.Nodes.CPUAllocatableMilli)
@@ -519,7 +534,7 @@ func TestANodeWithNoAllocatableAtAllStillCounts(t *testing.T) {
 		"metadata": map[string]any{"name": "a"},
 	}}}}
 
-	got := Build(context.Background(), dynClient(), lister, nil, fullCatalog())
+	got := Build(context.Background(), dynClient(), metaClient(), lister, nil, fullCatalog())
 
 	if got.Nodes.Total != 1 {
 		t.Fatalf("total = %d, want 1", got.Nodes.Total)
@@ -527,18 +542,18 @@ func TestANodeWithNoAllocatableAtAllStillCounts(t *testing.T) {
 }
 
 func TestBuildSaysWhenThereAreMorePodsThanItWillCount(t *testing.T) {
-	dyn := dynClient()
-	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
-		out := &unstructured.UnstructuredList{Items: []unstructured.Unstructured{{Object: map[string]any{
-			"apiVersion": "v1",
-			"kind":       "Pod",
-			"metadata":   map[string]any{"name": "one", "namespace": "default"},
-		}}}}
-		out.SetContinue("more")
+	meta := metaClient()
+	meta.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		out := &metav1.List{Items: []runtime.RawExtension{{
+			Object: &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "one", Namespace: "default"},
+			},
+		}}}
+		out.Continue = "more"
 		return true, out, nil
 	})
 
-	got := Build(context.Background(), dyn, &stubLister{}, nil, fullCatalog())
+	got := Build(context.Background(), dynClient(), meta, &stubLister{}, nil, fullCatalog())
 
 	if !strings.Contains(got.Error, "the tally stops there") {
 		t.Fatalf("error = %q, want the truncation named", got.Error)
