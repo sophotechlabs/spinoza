@@ -1,5 +1,6 @@
 [files]
 extend-exclude = [
+  "CHANGELOG.md",
   "frontend/node_modules/",
   "frontend/package-lock.json",
   "frontend/coverage/",
@@ -7,6 +8,12 @@ extend-exclude = [
   "dist/",
   "go.sum",
   "coverage.out",
+]
+
+[default]
+extend-ignore-re = [
+  # kubernetes names an event after its object plus a hex suffix: web.17abd9271d3
+  "\\.17[0-9a-f]{3,}",
 ]
 
 [default.extend-words]
