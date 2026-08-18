@@ -281,7 +281,7 @@ vi.mock('../src/components/InspectLogs', () => ({
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { clearRecents, rememberObject } from '../src/store/recents';
-import { DEFAULT_NAMESPACE, useNamespaceStore } from '../src/store/namespace';
+import { ALL, useNamespaceStore } from '../src/store/namespace';
 import { notifyOk, useToastsStore } from '../src/store/toasts';
 import { setUnsaved } from '../src/lib/unsaved';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
@@ -478,7 +478,7 @@ describe('App', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       'main#1',
       expect.objectContaining({ group: '', version: 'v1', resource: 'pods', kind: 'Pod' }),
-      'default',
+      '',
     );
     expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
     expect(screen.getByText('1/1')).toBeInTheDocument();
@@ -555,7 +555,7 @@ describe('App', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       'main#2',
       expect.objectContaining({ group: 'apps', version: 'v1', resource: 'deployments' }),
-      'default',
+      '',
     );
   });
 
@@ -832,7 +832,7 @@ describe('the address bar', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       'main#0',
       expect.objectContaining({ resource: 'pods' }),
-      'default',
+      '',
     );
     expect(await screen.findByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
   });
@@ -1019,7 +1019,7 @@ describe('the command palette and shortcuts', () => {
     vi.unstubAllGlobals();
     clearRecents();
     resetStore();
-    useNamespaceStore.getState().choose(DEFAULT_NAMESPACE);
+    useNamespaceStore.getState().choose(ALL);
   });
 
   function press(key: string, init: KeyboardEventInit = {}): void {
@@ -1040,7 +1040,7 @@ describe('the command palette and shortcuts', () => {
     expect(feedMocks.subscribe).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ resource: 'deployments' }),
-      'default',
+      '',
     );
   });
 
@@ -1080,7 +1080,7 @@ describe('the command palette and shortcuts', () => {
 
     expect(await screen.findByTestId('inspect-target')).toHaveTextContent('widgets:prod/w-1');
     expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Namespace')).toHaveValue('default');
+    expect(screen.getByLabelText('Namespace')).toHaveValue('');
   });
 
   it('switches view from the palette', async () => {
@@ -1423,7 +1423,7 @@ describe('navigating away from an unsaved draft', () => {
     await user.click(await screen.findByRole('button', { name: /airbyte\/airbyte-server/ }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
-    expect(within(screen.getByRole('banner')).getByLabelText('Namespace')).toHaveValue('default');
+    expect(within(screen.getByRole('banner')).getByLabelText('Namespace')).toHaveValue('');
   });
 
   it('guards a jump to another object', async () => {

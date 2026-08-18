@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchNamespaces } from '../../src/lib/namespaces';
-import { ALL, DEFAULT_NAMESPACE, settle } from '../../src/store/namespace';
+import { ALL, settle } from '../../src/store/namespace';
 
 function stub(body: unknown, ok = true, status = 200) {
   vi.stubGlobal(
@@ -51,12 +51,8 @@ describe('settle', () => {
     expect(settle(ALL, ['default'])).toBe(ALL);
   });
 
-  it('falls back to default when the kept namespace is gone', () => {
-    expect(settle('shop', ['default', 'kube-system'])).toBe(DEFAULT_NAMESPACE);
-  });
-
-  it('falls back to every namespace when there is no default', () => {
-    expect(settle('shop', ['kube-system'])).toBe(ALL);
+  it('falls back to every namespace when the kept one is gone', () => {
+    expect(settle('shop', ['default', 'kube-system'])).toBe(ALL);
   });
 
   it('waits rather than guessing before the names arrive', () => {

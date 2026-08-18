@@ -266,7 +266,7 @@ describe('the top bar entry points', () => {
     await waitFor(() => {
       expect(within(picker).getByRole('option', { name: 'kube-system' })).toBeInTheDocument();
     });
-    expect(picker).toHaveValue('default');
+    expect(picker).toHaveValue('');
     vi.unstubAllGlobals();
   });
 

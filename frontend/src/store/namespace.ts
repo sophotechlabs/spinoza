@@ -5,8 +5,6 @@ export const NAMESPACE_KEY = 'spinoza.namespace.v1';
 
 export const ALL = '';
 
-export const DEFAULT_NAMESPACE = 'default';
-
 interface NamespaceState {
   namespace: string;
   names: string[];
@@ -17,7 +15,7 @@ interface NamespaceState {
 function stored(): string {
   const kept = readStored(NAMESPACE_KEY);
   if (kept === null) {
-    return DEFAULT_NAMESPACE;
+    return ALL;
   }
   return kept;
 }
@@ -28,9 +26,6 @@ export function settle(wanted: string, names: string[]): string {
   }
   if (wanted === ALL || names.includes(wanted)) {
     return wanted;
-  }
-  if (names.includes(DEFAULT_NAMESPACE)) {
-    return DEFAULT_NAMESPACE;
   }
   return ALL;
 }
