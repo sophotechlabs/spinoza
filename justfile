@@ -108,7 +108,7 @@ build-desktop:
         export PRODUCT_VERSION="$numeric"
         yq -i -o=json '.info.productVersion = strenv(PRODUCT_VERSION)' wails.json
     fi
-    wails build -tags desktop -skipbindings -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version"
+    wails build -platform darwin/universal -tags desktop -skipbindings -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version"
     plist=build/bin/spinoza.app/Contents/Info.plist
     if [ -f "$plist" ]; then
         plutil -lint "$plist"
@@ -170,6 +170,9 @@ test-fe:
 
 test: test-be test-fe
 
+test-repeat: stub-assets
+    go test -race -shuffle=on -count=5 {{ go_pkgs }}
+
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml
 
@@ -200,9 +203,13 @@ badges: cover-gate test-fe
     endpoint coverage-web.json 'web coverage' "$web_pct"
     echo "badges: go ${go_pct}%, web ${web_pct}%"
 
-publish-badges: badges
+publish-badges:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [ ! -f dist/badges/coverage-go.json ] || [ ! -f dist/badges/coverage-web.json ]; then
+        echo "publish-badges: dist/badges is empty, run just badges first"
+        exit 1
+    fi
     if [ -z "${GITHUB_REPOSITORY:-}" ]; then
         echo "publish-badges: GITHUB_REPOSITORY is unset"
         exit 1
@@ -290,10 +297,13 @@ workflows:
 hygiene:
     typos
     editorconfig-checker
+    shellcheck install.sh
     just --unstable --fmt --check
 
 docs:
     markdownlint-cli2 "**/*.md"
+
+links:
     lychee --config lychee.toml .
 
 sbom:
@@ -310,7 +320,7 @@ commits:
     if [ -z "$from" ] || ! git cat-file -e "$from^{commit}" 2>/dev/null; then
         from=HEAD~1
     fi
-    npx --yes --package @commitlint/cli --package @commitlint/config-conventional commitlint --from "$from" --to HEAD
+    npx --yes --package @commitlint/cli@21.2.2 --package @commitlint/config-conventional@21.2.2 commitlint --from "$from" --to HEAD
 
 fmt:
     golangci-lint fmt
@@ -358,7 +368,11 @@ release-dist: deps
     version=$(just app-version)
     mkdir -p dist/release
     cd frontend && npm run build && cd ..
-    for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+    tar_sorts=no
+    if tar --version 2>/dev/null | grep -q GNU; then
+        tar_sorts=yes
+    fi
+    for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
         goos="${target%/*}"
         goarch="${target#*/}"
         out="dist/build/${goos}_${goarch}"
@@ -369,9 +383,58 @@ release-dist: deps
         fi
         GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version" -o "$out/$binary" .
         cp LICENSE "$out/LICENSE"
-        tar -czf "dist/release/spinoza_${version}_${goos}_${goarch}.tar.gz" -C "$out" "$binary" LICENSE
+        archive="dist/release/spinoza_${version}_${goos}_${goarch}.tar.gz"
+        if [ "$tar_sorts" = yes ]; then
+            tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -cf - -C "$out" "$binary" LICENSE | gzip -n > "$archive"
+        else
+            tar -cf - -C "$out" "$binary" LICENSE | gzip -n > "$archive"
+        fi
     done
-    cd dist/release && sha256sum *.tar.gz > checksums.txt
+    syft scan dir:dist/build --source-name spinoza --source-version "$version" --output "cyclonedx-json=dist/release/spinoza_${version}_sbom.cdx.json"
+    cd dist/release && sha256sum ./*.tar.gz > checksums.txt
+
+smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    binary="dist/build/$(go env GOOS)_$(go env GOARCH)/spinoza"
+    if [ ! -x "$binary" ]; then
+        echo "smoke: $binary is missing, run just release-dist first"
+        exit 1
+    fi
+    "$binary" --version
+    work=$(mktemp -d)
+    printf 'apiVersion: v1\nkind: Config\n' > "$work/kubeconfig"
+    KUBECONFIG="$work/kubeconfig" "$binary" --addr 127.0.0.1:34988 --token-file "$work/token" &
+    pid=$!
+    trap 'kill "$pid" 2>/dev/null || true; rm -rf "$work"' EXIT
+    for _ in $(seq 1 50); do
+        if [ -s "$work/token" ]; then
+            break
+        fi
+        sleep 0.2
+    done
+    if [ ! -s "$work/token" ]; then
+        echo "smoke: the token file was never written"
+        exit 1
+    fi
+    token=$(cat "$work/token")
+    for _ in $(seq 1 50); do
+        code=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Spinoza-Token: $token" http://127.0.0.1:34988/healthz || true)
+        if [ "$code" = 200 ]; then
+            break
+        fi
+        sleep 0.2
+    done
+    if [ "$code" != 200 ]; then
+        echo "smoke: healthz answered $code"
+        exit 1
+    fi
+    page=$(curl -s -H "X-Spinoza-Token: $token" http://127.0.0.1:34988/ || true)
+    if printf '%s' "$page" | grep -q 'built without its frontend'; then
+        echo "smoke: the binary embeds the placeholder index.html"
+        exit 1
+    fi
+    echo "smoke: $("$binary" --version) answered healthz and served the frontend"
 
 package-desktop: build-desktop
     #!/usr/bin/env bash
@@ -386,6 +449,10 @@ package-desktop: build-desktop
     rm -rf "$staged"
     mkdir -p "$staged" dist/release
     cp -R "$bundle" "$staged/Spinoza.app"
+    if ! lipo -archs "$staged/Spinoza.app/Contents/MacOS/Spinoza" | grep -q x86_64; then
+        echo "package-desktop: the bundle is not universal, intel macs cannot run it"
+        exit 1
+    fi
     codesign --force --deep --sign - "$staged/Spinoza.app"
     codesign --verify --deep "$staged/Spinoza.app"
     ditto -c -k --keepParent "$staged/Spinoza.app" "dist/release/spinoza_${version}_darwin_app.zip"
@@ -404,7 +471,9 @@ publish-desktop:
 
 check: lint test
 
-ci: ci-go-build ci-go-test ci-go-lint ci-go-audit ci-fe-lint ci-fe-test ci-fe-audit ci-fe-build secrets sast vulns workflows hygiene docs sbom
+ci: ci-go-build ci-go-test ci-go-lint ci-go-audit ci-fe-lint ci-fe-test ci-fe-audit ci-fe-build secrets sast vulns workflows hygiene docs links sbom
+
+rescan: stub-assets audit-be vulns sbom links
 
 clean:
     rm -f spinoza coverage.out
