@@ -11,7 +11,7 @@
   "info": {
     "companyName": "Sophotech s.r.o.",
     "productName": "Spinoza",
-    "productVersion": "1.5.0",
+    "productVersion": "1.6.0",
     "copyright": "Copyright © 2026 Sophotech s.r.o. <spinoza@sopho.tech>",
     "comments": "Single-binary, non-Electron Kubernetes IDE — https://spinoza.tech"
   }
