@@ -32,8 +32,18 @@ describe('encoding a route', () => {
     expect(encodeRoute(EMPTY_ROUTE)).toBe('');
   });
 
-  it('leaves the default view out of the hash', () => {
-    expect(encodeRoute(route({ resource: pods }))).toBe('#version=v1&resource=pods&kind=Pod');
+  it('leaves the view out when the resource already implies it', () => {
+    expect(encodeRoute(route({ view: 'resources', resource: pods }))).toBe(
+      '#version=v1&resource=pods&kind=Pod',
+    );
+  });
+
+  it('leaves the view out when the overview is what an empty route means', () => {
+    expect(encodeRoute(route({ view: 'cluster' }))).toBe('');
+  });
+
+  it('names the table when it is asked for without a resource', () => {
+    expect(encodeRoute(route({ view: 'resources' }))).toBe('#view=resources');
   });
 
   it('names a view that is not the default', () => {
@@ -89,7 +99,15 @@ describe('decoding a route', () => {
   });
 
   it('ignores a view it does not know', () => {
-    expect(decodeRoute('#view=nonsense').view).toBe('resources');
+    expect(decodeRoute('#view=nonsense').view).toBe('cluster');
+  });
+
+  it('opens on the overview when the url names nothing', () => {
+    expect(decodeRoute('').view).toBe('cluster');
+  });
+
+  it('opens on the table when the url names a resource', () => {
+    expect(decodeRoute('#version=v1&resource=pods&kind=Pod').view).toBe('resources');
   });
 
   it('accepts every view the app has', () => {
@@ -168,7 +186,7 @@ describe('the document title', () => {
   });
 
   it('names the resource and the cluster', () => {
-    expect(documentTitle(route({ context: 'kind-dev', resource: pods }))).toBe(
+    expect(documentTitle(route({ view: 'resources', context: 'kind-dev', resource: pods }))).toBe(
       'pods kind-dev - Spinoza',
     );
   });
@@ -176,9 +194,9 @@ describe('the document title', () => {
   it('leads with the selected object', () => {
     const selection = { group: '', version: 'v1', resource: 'pods', namespace: 'p', name: 'web-0' };
 
-    expect(documentTitle(route({ context: 'kind-dev', resource: pods, selection }))).toBe(
-      'web-0 pods kind-dev - Spinoza',
-    );
+    expect(
+      documentTitle(route({ view: 'resources', context: 'kind-dev', resource: pods, selection })),
+    ).toBe('web-0 pods kind-dev - Spinoza');
   });
 
   it('names the view instead of the resource outside the table', () => {
@@ -209,7 +227,7 @@ describe('useRouter', () => {
     const before = window.history.length;
 
     act(() => {
-      result.current.navigate(route({ resource: pods }));
+      result.current.navigate(route({ view: 'resources', resource: pods }));
     });
 
     expect(window.location.hash).toBe('#version=v1&resource=pods&kind=Pod');
@@ -266,7 +284,7 @@ describe('useRouter', () => {
   it('follows the back button', () => {
     const { result } = renderHook(() => useRouter());
     act(() => {
-      result.current.navigate(route({ resource: pods }));
+      result.current.navigate(route({ view: 'resources', resource: pods }));
     });
 
     act(() => {
@@ -297,7 +315,7 @@ describe('useRouter', () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
 
-    expect(result.current.route.view).toBe('resources');
+    expect(result.current.route.view).toBe('cluster');
   });
 
   it('restores the argo applications view from the address bar', () => {

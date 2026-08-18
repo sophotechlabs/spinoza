@@ -584,10 +584,11 @@ describe('App', () => {
     resetStore();
   });
 
-  it('renders the connection status and placeholders before a resource is chosen', () => {
+  it('opens on the cluster overview rather than an empty table', () => {
     render(<App />);
     expect(screen.getByRole('status', { name: 'The cluster feed is connected' })).toBeVisible();
-    expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-overview')).toBeInTheDocument();
+    expect(screen.queryByText('Select a resource to view.')).not.toBeInTheDocument();
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
   });
 
@@ -955,14 +956,16 @@ describe('App', () => {
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
   });
 
-  it('opens the cluster overview from the sidebar', async () => {
+  it('comes back to the cluster overview from the sidebar', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Helm releases' }));
+    expect(screen.queryByTestId('cluster-overview')).not.toBeInTheDocument();
 
     await user.click(await screen.findByRole('button', { name: 'Cluster Overview' }));
 
     expect(screen.getByTestId('cluster-overview')).toBeInTheDocument();
-    expect(window.location.hash).toContain('view=cluster');
+    expect(window.location.hash).not.toContain('view=helm');
   });
 
   it('opens the helm releases from the sidebar', async () => {
@@ -1298,7 +1301,7 @@ describe('the command palette and shortcuts', () => {
     await user.click(await screen.findByRole('button', { name: /prod\/w-1/ }));
 
     expect(await screen.findByTestId('inspect-target')).toHaveTextContent('widgets:prod/w-1');
-    expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-overview')).toBeInTheDocument();
     expect(screen.getByLabelText('Namespace')).toHaveValue('');
   });
 

@@ -18,10 +18,18 @@ export interface Route {
 
 export const EMPTY_ROUTE: Route = {
   context: '',
-  view: 'resources',
+  view: 'cluster',
   resource: null,
   selection: null,
 };
+
+// with nothing named, a route showing a resource is a table and everything else is the overview
+function inferredView(resource: RouteResource | null): View {
+  if (resource === null) {
+    return 'cluster';
+  }
+  return 'resources';
+}
 
 export function descriptorOf(resource: RouteResource): ResourceDescriptor {
   return {
@@ -59,7 +67,7 @@ function put(params: URLSearchParams, key: string, value: string): void {
 export function encodeRoute(route: Route): string {
   const params = new URLSearchParams();
   put(params, 'context', route.context);
-  if (route.view !== 'resources') {
+  if (route.view !== inferredView(route.resource)) {
     params.set('view', route.view);
   }
   if (route.resource !== null) {
@@ -126,12 +134,12 @@ function readSelection(params: URLSearchParams, resource: RouteResource | null):
 
 export function decodeRoute(hash: string): Route {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
-  let view: View = 'resources';
+  const resource = readResource(params);
+  let view: View = inferredView(resource);
   const named = params.get('view') ?? '';
   if (isView(named)) {
     view = named;
   }
-  const resource = readResource(params);
   return {
     context: params.get('context') ?? '',
     view,
@@ -145,7 +153,7 @@ export function documentTitle(route: Route): string {
   if (route.selection !== null) {
     parts.push(route.selection.name);
   }
-  if (route.view !== 'resources') {
+  if (route.view !== inferredView(route.resource)) {
     parts.push(route.view);
   }
   if (route.view === 'resources' && route.resource !== null) {
