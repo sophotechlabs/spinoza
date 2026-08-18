@@ -41,6 +41,8 @@ export function fieldsOf(columns: Column[], namespaced: boolean): FilterField[] 
   return out;
 }
 
+const SCOPE_KEYS = ['ns', NAMESPACE_FIELD];
+
 function aliasOf(key: string): string {
   if (key === 'ns') {
     return NAMESPACE_FIELD;
@@ -79,7 +81,11 @@ export function parseChip(text: string, fields: FilterField[]): Chip | null {
   if (at < 0) {
     return { field: NAME_FIELD, value: trimmed };
   }
-  const field = fieldFor(fields, fieldKey(trimmed.slice(0, at)));
+  const key = fieldKey(trimmed.slice(0, at));
+  const field = fieldFor(fields, key);
+  if (field === null && SCOPE_KEYS.includes(key)) {
+    return null;
+  }
   if (field === null) {
     return { field: NAME_FIELD, value: trimmed };
   }

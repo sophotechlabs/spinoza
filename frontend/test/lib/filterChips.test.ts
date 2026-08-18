@@ -88,6 +88,13 @@ describe('reading a chip out of typed text', () => {
     expect(parseChip('status:', fields)).toBeNull();
   });
 
+  it('has nothing to narrow when a kind has no namespace to scope to', () => {
+    const clusterScoped = fieldsOf(columns, false);
+
+    expect(parseChip('ns:kube-system', clusterScoped)).toBeNull();
+    expect(parseChip('namespace:kube-system', clusterScoped)).toBeNull();
+  });
+
   it('keeps an unknown prefix as part of the name', () => {
     expect(parseChip('image:nginx', fields)).toEqual({ field: 'name', value: 'image:nginx' });
   });
