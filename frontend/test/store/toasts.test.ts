@@ -55,6 +55,20 @@ describe('toasts', () => {
   });
 });
 
+describe('an offer toast', () => {
+  it('carries its action on screen but not into the history', () => {
+    const run = () => undefined;
+
+    useToastsStore.getState().ask('Open on default instead?', { label: 'Open on default', run });
+
+    const [toast] = useToastsStore.getState().toasts;
+    expect(toast.action?.label).toBe('Open on default');
+    expect(history()).toHaveLength(1);
+    expect(history()[0].message).toBe('Open on default instead?');
+    expect('action' in history()[0]).toBe(false);
+  });
+});
+
 describe('the notification history', () => {
   it('keeps everything the toasts dropped', () => {
     for (let index = 0; index < MAX_TOASTS + 3; index += 1) {

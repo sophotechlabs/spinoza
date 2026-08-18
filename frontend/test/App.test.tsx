@@ -282,6 +282,7 @@ import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { clearRecents, rememberObject } from '../src/store/recents';
 import { ALL, useNamespaceStore } from '../src/store/namespace';
+import { useSettingsStore } from '../src/store/settings';
 import { notifyOk, useToastsStore } from '../src/store/toasts';
 import { setUnsaved } from '../src/lib/unsaved';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
@@ -443,6 +444,68 @@ async function selectDeployment(user: ReturnType<typeof userEvent.setup>): Promi
   await user.click(await screen.findByRole('button', { name: 'Deployment' }));
 }
 
+beforeEach(() => {
+  useSettingsStore.setState({ namespaceStart: 'all', namespaceAsked: true });
+  useNamespaceStore.setState({ namespace: ALL, names: [] });
+});
+
+describe('the one-time namespace offer', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+    useToastsStore.getState().clear();
+    useSettingsStore.setState({ namespaceStart: 'all', namespaceAsked: false });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useToastsStore.getState().clear();
+    resetStore();
+  });
+
+  it('offers to open on the default namespace instead', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: 'Open on default' })).toBeInTheDocument();
+    expect(screen.getAllByText(/opens on every namespace/i).length).toBeGreaterThan(0);
+  });
+
+  it('takes the offer and remembers it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('button', { name: 'Open on default' });
+
+    await user.click(screen.getByRole('button', { name: 'Open on default' }));
+
+    expect(useSettingsStore.getState().namespaceStart).toBe('default');
+    expect(useNamespaceStore.getState().namespace).toBe('default');
+  });
+
+  it('is made once and never again', async () => {
+    const first = render(<App />);
+    await screen.findByRole('button', { name: 'Open on default' });
+    first.unmount();
+    useToastsStore.getState().clear();
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(useSettingsStore.getState().namespaceAsked).toBe(true);
+    });
+    expect(screen.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
+  });
+
+  it('stays quiet for someone who already opens on default', async () => {
+    useSettingsStore.setState({ namespaceStart: 'default', namespaceAsked: false });
+
+    render(<App />);
+    await screen.findByLabelText('Namespace');
+
+    expect(screen.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
+    expect(useSettingsStore.getState().namespaceAsked).toBe(false);
+  });
+});
+
 describe('App', () => {
   beforeEach(() => {
     resetStore();
@@ -575,6 +638,20 @@ describe('App', () => {
 
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
     expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+  });
+
+  it('opens the next cluster on the namespace the settings name', async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ namespaceStart: 'default', namespaceAsked: true });
+    render(<App />);
+    await screen.findByLabelText('Namespace');
+    act(() => {
+      useNamespaceStore.getState().choose('kube-system');
+    });
+
+    await user.click(screen.getByTestId('context-changed'));
+
+    expect(useNamespaceStore.getState().namespace).toBe('default');
   });
 
   it('starts the notification history over when the cluster changes', async () => {

@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
-import { NAMESPACE_KEY, useNamespaceStore } from '../../src/store/namespace';
-import { readStored } from '../../src/lib/persist';
+import { useNamespaceStore } from '../../src/store/namespace';
 import type { ObjectRef } from '../../src/lib/types';
 import { notifyOk, useToastsStore } from '../../src/store/toasts';
 
@@ -270,7 +269,7 @@ describe('the top bar entry points', () => {
     vi.unstubAllGlobals();
   });
 
-  it('remembers the namespace that was chosen', async () => {
+  it('takes the namespace that was chosen', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
       'fetch',
@@ -291,7 +290,6 @@ describe('the top bar entry points', () => {
     await user.selectOptions(picker, 'shop');
 
     expect(useNamespaceStore.getState().namespace).toBe('shop');
-    expect(readStored(NAMESPACE_KEY)).toBe('shop');
     vi.unstubAllGlobals();
   });
 });

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import Toasts, { TOAST_TTL_MS } from '../../src/components/Toasts';
 import {
   MAX_TOASTS,
+  askToast,
   notifyError,
   notifyOk,
   notifyWarn,
@@ -19,6 +20,64 @@ describe('Toasts', () => {
   afterEach(() => {
     vi.useRealTimers();
     useToastsStore.getState().clear();
+  });
+
+  it('runs the offer it carries and closes', async () => {
+    const user = userEvent.setup();
+    const run = vi.fn();
+    render(<Toasts />);
+    act(() => {
+      askToast('Open on default instead?', { label: 'Open on default', run });
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Open on default' }));
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Open on default instead?')).not.toBeInTheDocument();
+  });
+
+  it('leaves an offer on screen instead of timing it out', () => {
+    vi.useFakeTimers();
+    render(<Toasts />);
+    act(() => {
+      askToast('Open on default instead?', { label: 'Open on default', run: vi.fn() });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(TOAST_TTL_MS * 3);
+    });
+
+    expect(screen.getByText('Open on default instead?')).toBeInTheDocument();
+  });
+
+  it('still times out an ordinary toast sitting behind an offer', () => {
+    vi.useFakeTimers();
+    render(<Toasts />);
+    act(() => {
+      askToast('Open on default instead?', { label: 'Open on default', run: vi.fn() });
+      notifyOk('pod-a deleted');
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(TOAST_TTL_MS);
+    });
+
+    expect(screen.queryByText('pod-a deleted')).not.toBeInTheDocument();
+    expect(screen.getByText('Open on default instead?')).toBeInTheDocument();
+  });
+
+  it('can be dismissed without taking the offer', async () => {
+    const user = userEvent.setup();
+    const run = vi.fn();
+    render(<Toasts />);
+    act(() => {
+      askToast('Open on default instead?', { label: 'Open on default', run });
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss: Open on default instead?' }));
+
+    expect(run).not.toHaveBeenCalled();
+    expect(screen.queryByText('Open on default instead?')).not.toBeInTheDocument();
   });
 
   it('shows nothing until something is reported', () => {

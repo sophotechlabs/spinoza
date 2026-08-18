@@ -1,23 +1,23 @@
 import { create } from 'zustand';
-import { readStored, writeStored } from '../lib/persist';
-
-export const NAMESPACE_KEY = 'spinoza.namespace.v1';
+import { namespaceStart } from './settings';
 
 export const ALL = '';
+
+export const DEFAULT_NAMESPACE = 'default';
 
 interface NamespaceState {
   namespace: string;
   names: string[];
   choose: (namespace: string) => void;
   offer: (names: string[]) => void;
+  reset: () => void;
 }
 
-function stored(): string {
-  const kept = readStored(NAMESPACE_KEY);
-  if (kept === null) {
-    return ALL;
+export function opensOn(): string {
+  if (namespaceStart() === 'default') {
+    return DEFAULT_NAMESPACE;
   }
-  return kept;
+  return ALL;
 }
 
 export function settle(wanted: string, names: string[]): string {
@@ -31,15 +31,17 @@ export function settle(wanted: string, names: string[]): string {
 }
 
 export const useNamespaceStore = create<NamespaceState>((set, get) => ({
-  namespace: stored(),
+  namespace: opensOn(),
   names: [],
   choose: (namespace) => {
-    writeStored(NAMESPACE_KEY, namespace);
     set({ namespace });
   },
   offer: (names) => {
     const namespace = settle(get().namespace, names);
     set({ names, namespace });
+  },
+  reset: () => {
+    set({ namespace: opensOn(), names: [] });
   },
 }));
 

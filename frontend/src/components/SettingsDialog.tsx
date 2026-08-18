@@ -1,16 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import { SYSTEM } from '../lib/theme';
 import { validateTheme } from '../lib/customThemes';
-import { LOG_VIEWS } from '../lib/settings';
-import type { LogView } from '../lib/settings';
+import { LOG_VIEWS, NAMESPACE_STARTS } from '../lib/settings';
+import type { LogView, NamespaceStart } from '../lib/settings';
 import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '../store/theme';
-import { useLogView, useScreenReader, useSettingsStore } from '../store/settings';
+import {
+  useLogView,
+  useNamespaceStart,
+  useScreenReader,
+  useSettingsStore,
+} from '../store/settings';
 import { usePanelsStore } from '../store/panels';
+import { useNamespaceStore } from '../store/namespace';
 import { shortcuts } from '../lib/hotkeys';
 import { copyText } from '../lib/clipboard';
 import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
 
-const SECTIONS = ['Appearance', 'Logs', 'Terminal', 'Panels', 'Keyboard', 'About'] as const;
+const SECTIONS = [
+  'Appearance',
+  'Cluster',
+  'Logs',
+  'Terminal',
+  'Panels',
+  'Keyboard',
+  'About',
+] as const;
 
 export type Section = (typeof SECTIONS)[number];
 
@@ -25,6 +39,13 @@ function versionLabel(version: string): string {
     return '-';
   }
   return version;
+}
+
+function startLabel(start: NamespaceStart): string {
+  if (start === 'default') {
+    return 'the default namespace';
+  }
+  return 'every namespace';
 }
 
 function sectionClass(active: boolean): string {
@@ -74,6 +95,9 @@ export default function SettingsDialog({
   const setLogView = useSettingsStore((state) => state.setLogView);
   const screenReader = useScreenReader();
   const setScreenReader = useSettingsStore((state) => state.setScreenReader);
+  const start = useNamespaceStart();
+  const setStart = useSettingsStore((state) => state.setNamespaceStart);
+  const openOn = useNamespaceStore((state) => state.reset);
   const resetPanels = usePanelsStore((state) => state.reset);
   const themes = useThemes();
   const sortedThemes = [...themes].sort((a, b) => a.name.localeCompare(b.name));
@@ -352,6 +376,28 @@ export default function SettingsDialog({
                   setScreenReader(event.target.checked);
                 }}
               />
+            </Row>
+          )}
+          {section === 'Cluster' && (
+            <Row
+              label="Open on"
+              hint="The namespace a cluster opens on. The picker in the top bar still switches it for this session."
+            >
+              <select
+                aria-label="Namespace to open on"
+                value={start}
+                onChange={(event) => {
+                  setStart(event.target.value as NamespaceStart);
+                  openOn();
+                }}
+                className="rounded border border-edge-strong bg-surface-raised px-2 py-0.5 text-fg"
+              >
+                {NAMESPACE_STARTS.map((option) => (
+                  <option key={option} value={option}>
+                    {startLabel(option)}
+                  </option>
+                ))}
+              </select>
             </Row>
           )}
           {section === 'Panels' && (

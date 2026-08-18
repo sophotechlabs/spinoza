@@ -18,11 +18,12 @@ import { focusFilter, useHotkeys } from './lib/hotkeys';
 import { mayDiscard } from './lib/unsaved';
 import { clearRecents, rememberObject } from './store/recents';
 import { clearHistory } from './store/toasts';
-import { useNamespace, useNamespaceStore } from './store/namespace';
+import { DEFAULT_NAMESPACE, useNamespace, useNamespaceStore } from './store/namespace';
+import { useSettingsStore } from './store/settings';
 import { NO_FILTER, imposeFilter } from './lib/tableFilter';
 import type { PaletteOpen } from './lib/palette';
 import { clearTerminals } from './store/terminals';
-import { notifyOk } from './store/toasts';
+import { askToast, notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -89,6 +90,7 @@ export default function App() {
   const { subscribe, unsubscribe, subscribeLogs, unsubscribeLogs } = feed;
   const namespace = useNamespace();
   const chooseNamespace = useNamespaceStore((state) => state.choose);
+  const resetNamespace = useNamespaceStore((state) => state.reset);
   const selectedRow = useRowForRef(subId, active, route.selection);
   const selection = useMemo<Selection | null>(() => {
     if (route.selection === null) {
@@ -138,6 +140,21 @@ export default function App() {
   useEffect(() => {
     document.title = documentTitle(route);
   }, [route]);
+
+  useEffect(() => {
+    const settings = useSettingsStore.getState();
+    if (settings.namespaceAsked || settings.namespaceStart !== 'all') {
+      return;
+    }
+    settings.markNamespaceAsked();
+    askToast('Spinoza opens on every namespace. Open on default instead?', {
+      label: 'Open on default',
+      run: () => {
+        useSettingsStore.getState().setNamespaceStart(DEFAULT_NAMESPACE);
+        chooseNamespace(DEFAULT_NAMESPACE);
+      },
+    });
+  }, [chooseNamespace]);
 
   const [wasDown, setWasDown] = useState(false);
   useEffect(() => {
@@ -216,6 +233,7 @@ export default function App() {
     clearHistory();
     clearTerminals();
     clearForwards();
+    resetNamespace();
     bumpClusterEpoch();
     feed.reconnect();
   }

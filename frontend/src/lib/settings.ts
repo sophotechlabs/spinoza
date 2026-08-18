@@ -3,14 +3,25 @@ export const LOG_VIEWS = ['pretty', 'raw'] as const;
 
 export type LogView = (typeof LOG_VIEWS)[number];
 
+export const NAMESPACE_STARTS = ['all', 'default'] as const;
+
+export type NamespaceStart = (typeof NAMESPACE_STARTS)[number];
+
 export const SETTINGS_KEY = 'spinoza.settings.v1';
 
-interface Settings {
+export interface Settings {
   logView: LogView;
   screenReader: boolean;
+  namespaceStart: NamespaceStart;
+  namespaceAsked: boolean;
 }
 
-const DEFAULTS: Settings = { logView: 'pretty', screenReader: false };
+const DEFAULTS: Settings = {
+  logView: 'pretty',
+  screenReader: false,
+  namespaceStart: 'all',
+  namespaceAsked: false,
+};
 
 export function parseSettings(raw: string | null): Settings {
   if (raw === null) {
@@ -34,6 +45,14 @@ export function parseSettings(raw: string | null): Settings {
   }
   if (typeof stored.screenReader === 'boolean') {
     settings.screenReader = stored.screenReader;
+  }
+  for (const start of NAMESPACE_STARTS) {
+    if (stored.namespaceStart === start) {
+      settings.namespaceStart = start;
+    }
+  }
+  if (typeof stored.namespaceAsked === 'boolean') {
+    settings.namespaceAsked = stored.namespaceAsked;
   }
   return settings;
 }

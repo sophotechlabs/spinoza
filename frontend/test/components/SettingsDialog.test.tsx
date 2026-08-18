@@ -5,6 +5,7 @@ import SettingsDialog from '../../src/components/SettingsDialog';
 import { useThemeStore } from '../../src/store/theme';
 import { useSettingsStore } from '../../src/store/settings';
 import { usePanelsStore } from '../../src/store/panels';
+import { useNamespaceStore } from '../../src/store/namespace';
 import { DEFAULT_PLACEMENT } from '../../src/lib/panels';
 
 const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
@@ -89,6 +90,31 @@ describe('the settings dialog', () => {
     await user.selectOptions(screen.getByLabelText('Default log view'), 'raw');
 
     expect(useSettingsStore.getState().logView).toBe('raw');
+  });
+
+  it('chooses the namespace a cluster opens on', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+    await user.selectOptions(screen.getByLabelText('Namespace to open on'), 'default');
+
+    expect(useSettingsStore.getState().namespaceStart).toBe('default');
+    expect(useNamespaceStore.getState().namespace).toBe('default');
+  });
+
+  it('goes back to every namespace when the setting is put back', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useSettingsStore.setState({ namespaceStart: 'default' });
+    });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+    await user.selectOptions(screen.getByLabelText('Namespace to open on'), 'all');
+
+    expect(useSettingsStore.getState().namespaceStart).toBe('all');
+    expect(useNamespaceStore.getState().namespace).toBe('');
   });
 
   it('puts the docks back where they started', async () => {

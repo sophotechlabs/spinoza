@@ -1,23 +1,21 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ALL, NAMESPACE_KEY, useNamespaceStore } from '../../src/store/namespace';
-import { readStored, resetStored, writeStored } from '../../src/lib/persist';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ALL, opensOn, useNamespaceStore } from '../../src/store/namespace';
+import { useSettingsStore } from '../../src/store/settings';
+import { resetStored } from '../../src/lib/persist';
 
 function state() {
   return useNamespaceStore.getState();
 }
 
-async function freshStore() {
-  const { useNamespaceStore: fresh } = await import('../../src/store/namespace');
-  return fresh;
-}
-
 beforeEach(() => {
   resetStored();
+  useSettingsStore.setState({ namespaceStart: 'all' });
   useNamespaceStore.setState({ namespace: ALL, names: [] });
 });
 
 afterEach(() => {
   resetStored();
+  useSettingsStore.setState({ namespaceStart: 'all' });
 });
 
 describe('the namespace the app works in', () => {
@@ -29,7 +27,6 @@ describe('the namespace the app works in', () => {
     state().choose('shop');
 
     expect(state().namespace).toBe('shop');
-    expect(readStored(NAMESPACE_KEY)).toBe('shop');
   });
 
   it('takes the names the cluster reported without narrowing the view', () => {
@@ -54,13 +51,27 @@ describe('the namespace the app works in', () => {
 
     expect(state().namespace).toBe('shop');
   });
+});
 
-  it('starts where an earlier session left off', async () => {
-    writeStored(NAMESPACE_KEY, 'argocd');
-    vi.resetModules();
+describe('the namespace a new cluster opens on', () => {
+  it('is every namespace while that is the setting', () => {
+    expect(opensOn()).toBe(ALL);
+  });
 
-    const fresh = await freshStore();
+  it('is default once the setting says so', () => {
+    useSettingsStore.setState({ namespaceStart: 'default' });
 
-    expect(fresh.getState().namespace).toBe('argocd');
+    expect(opensOn()).toBe('default');
+  });
+
+  it('is what a reset goes back to', () => {
+    useSettingsStore.setState({ namespaceStart: 'default' });
+    state().choose('shop');
+    state().offer(['shop', 'default']);
+
+    state().reset();
+
+    expect(state().namespace).toBe('default');
+    expect(state().names).toEqual([]);
   });
 });

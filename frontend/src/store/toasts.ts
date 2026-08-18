@@ -7,10 +7,16 @@ export const MAX_HISTORY = 200;
 
 export type ToastTone = 'ok' | 'warn' | 'error';
 
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 export interface Toast {
   id: number;
   tone: ToastTone;
   message: string;
+  action?: ToastAction;
 }
 
 export interface Notification extends Toast {
@@ -22,6 +28,7 @@ interface ToastsState {
   toasts: Toast[];
   history: Notification[];
   push: (tone: ToastTone, message: string, ref?: ObjectRef) => void;
+  ask: (message: string, action: ToastAction) => void;
   dismiss: (id: number) => void;
   clear: () => void;
   clearHistory: () => void;
@@ -58,6 +65,15 @@ export const useToastsStore = create<ToastsState>((set) => ({
       history: cap([...state.history, note]),
     }));
   },
+  ask: (message, action) => {
+    seq += 1;
+    const toast: Toast = { id: seq, tone: 'ok', message, action };
+    const note: Notification = { id: toast.id, tone: 'ok', message, at: new Date().toISOString() };
+    set((state) => ({
+      toasts: trim([...state.toasts, toast]),
+      history: cap([...state.history, note]),
+    }));
+  },
   dismiss: (id) => {
     set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) }));
   },
@@ -79,6 +95,10 @@ export function notifyWarn(message: string, ref?: ObjectRef): void {
 
 export function notifyError(message: string, ref?: ObjectRef): void {
   useToastsStore.getState().push('error', message, ref);
+}
+
+export function askToast(message: string, action: ToastAction): void {
+  useToastsStore.getState().ask(message, action);
 }
 
 export function clearHistory(): void {

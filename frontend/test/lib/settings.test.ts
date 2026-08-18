@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readStored } from '../../src/lib/persist';
 import { SETTINGS_KEY, parseSettings, readSettings, writeSettings } from '../../src/lib/settings';
+import type { Settings } from '../../src/lib/settings';
+
+const base: Settings = {
+  logView: 'pretty',
+  screenReader: false,
+  namespaceStart: 'all',
+  namespaceAsked: false,
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -24,7 +32,7 @@ describe('parseSettings', () => {
 
 describe('settings that outlive the tab', () => {
   it('round-trip through storage', () => {
-    writeSettings({ logView: 'raw', screenReader: false });
+    writeSettings({ ...base, logView: 'raw' });
 
     expect(readStored(SETTINGS_KEY)).toContain('"logView":"raw"');
     expect(readSettings().logView).toBe('raw');
@@ -44,7 +52,7 @@ describe('settings that outlive the tab', () => {
     });
 
     expect(() => {
-      writeSettings({ logView: 'raw', screenReader: false });
+      writeSettings({ ...base, logView: 'raw' });
     }).not.toThrow();
   });
 });
@@ -61,5 +69,21 @@ describe('the screen reader setting', () => {
 
   it('ignores a value that is not a boolean', () => {
     expect(parseSettings('{"screenReader":"yes"}').screenReader).toBe(false);
+  });
+});
+
+describe('the namespace to open on', () => {
+  it('is every namespace unless something stored says otherwise', () => {
+    expect(parseSettings(null).namespaceStart).toBe('all');
+    expect(parseSettings('{"namespaceStart":"sideways"}').namespaceStart).toBe('all');
+  });
+
+  it('is read back when it was stored', () => {
+    expect(parseSettings('{"namespaceStart":"default"}').namespaceStart).toBe('default');
+  });
+
+  it('remembers that the offer was already made', () => {
+    expect(parseSettings(null).namespaceAsked).toBe(false);
+    expect(parseSettings('{"namespaceAsked":true}').namespaceAsked).toBe(true);
   });
 });
