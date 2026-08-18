@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.7.1](https://github.com/sophotechlabs/spinoza/compare/v1.7.0...v1.7.1) (2026-08-18)
+
+
+### Bug Fixes
+
+* **ui:** close the top-bar menus on an outside click, escape or focus loss ([35f85bc](https://github.com/sophotechlabs/spinoza/commit/35f85bcf3d3d602bee4da90d4948139f98bcd46d))
+
+
+### Miscellaneous
+
+* update readme ([62e4e91](https://github.com/sophotechlabs/spinoza/commit/62e4e915a7eb7e5c43258570975480dd33b5ae0a))
+
+
+### CI
+
+* analyse go and the frontend with codeql ([5e1c1ad](https://github.com/sophotechlabs/spinoza/commit/5e1c1adafd502fd91d85fd91e231dd64729468c3))
+* attest the release artifacts and smoke test the binary ([e8e452b](https://github.com/sophotechlabs/spinoza/commit/e8e452bfae6821e36bcab3620caf5102b599a88a))
+* enable the experimental and opinionated gocritic checks ([5624fe6](https://github.com/sophotechlabs/spinoza/commit/5624fe66aa36fdc16f9ab2c59a5c894a3bc2a892))
+* gate pull requests on the dependencies they add ([f03c085](https://github.com/sophotechlabs/spinoza/commit/f03c0854a58ee49343846746c4db1ae70139adc1))
+* pin the commitlint version the hook downloads ([c85b8a5](https://github.com/sophotechlabs/spinoza/commit/c85b8a55e5be782a9909be50bc89807682139033))
+* rescan weekly and repeat the tests nightly ([4d1715e](https://github.com/sophotechlabs/spinoza/commit/4d1715e809aa646d0ce3947f7f479475bdd6e143))
+* run the integration suite against a kind cluster ([7b9f67d](https://github.com/sophotechlabs/spinoza/commit/7b9f67d8297ed6f6851d743f131a4fc1a5494102))
+* stop holding a write token while the tests run ([a9d1d14](https://github.com/sophotechlabs/spinoza/commit/a9d1d14ec96c1a12753816a07215e3acdd2d848e))
+
+
+### Documentation
+
+* state what spinoza does without arguing for it ([5e77d0d](https://github.com/sophotechlabs/spinoza/commit/5e77d0d81a368a4c46f37cd5da6ddd6dcb6faad6))
+
+
+### Build
+
+* add the recipes the new ci jobs run ([c2251ad](https://github.com/sophotechlabs/spinoza/commit/c2251ad5a24cc1194e5c5e428cddf13f9a3fb2f0))
+* pin kind, kubectl, helm and shellcheck ([c3d3421](https://github.com/sophotechlabs/spinoza/commit/c3d342179d8d9ccafa253c7e44d21bb1b8877081))
+
 ## [1.7.0](https://github.com/sophotechlabs/spinoza/compare/v1.6.1...v1.7.0) (2026-08-18)
 
 
