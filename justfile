@@ -373,6 +373,35 @@ release-dist: deps
     done
     cd dist/release && sha256sum *.tar.gz > checksums.txt
 
+package-desktop: build-desktop
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    bundle=build/bin/spinoza.app
+    if [ ! -d "$bundle" ]; then
+        echo "package-desktop: $bundle was not built"
+        exit 1
+    fi
+    staged=dist/app
+    rm -rf "$staged"
+    mkdir -p "$staged" dist/release
+    cp -R "$bundle" "$staged/Spinoza.app"
+    codesign --force --deep --sign - "$staged/Spinoza.app"
+    codesign --verify --deep "$staged/Spinoza.app"
+    ditto -c -k --keepParent "$staged/Spinoza.app" "dist/release/spinoza_${version}_darwin_app.zip"
+
+publish-desktop:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tag="${TAG:?TAG is required}"
+    asset=$(ls dist/release/*_darwin_app.zip)
+    gh release upload "$tag" "$asset" --clobber
+    gh release download "$tag" --pattern checksums.txt --output dist/release/checksums.remote.txt --clobber
+    grep -v "_darwin_app.zip$" dist/release/checksums.remote.txt > dist/release/checksums.merged.txt || true
+    (cd dist/release && shasum -a 256 "$(basename "$asset")" >> checksums.merged.txt)
+    sort -k2 dist/release/checksums.merged.txt > dist/release/checksums.txt
+    gh release upload "$tag" dist/release/checksums.txt --clobber
+
 check: lint test
 
 ci: ci-go-build ci-go-test ci-go-lint ci-go-audit ci-fe-lint ci-fe-test ci-fe-audit ci-fe-build secrets sast vulns workflows hygiene docs sbom

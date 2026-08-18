@@ -19,6 +19,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
         id: release
@@ -51,4 +54,25 @@ jobs:
         if: steps.release.outputs.release_created
         env:
           TAG: ${{ steps.release.outputs.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  desktop:
+    needs: release
+    if: needs.release.outputs.release_created
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          cache: false
+      - run: just package-desktop
+        env:
+          SPINOZA_VERSION: ${{ needs.release.outputs.tag_name }}
+      - run: just publish-desktop
+        env:
+          TAG: ${{ needs.release.outputs.tag_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
