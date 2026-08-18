@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.1](https://github.com/sophotechlabs/spinoza/compare/v1.8.0...v1.8.1) (2026-08-18)
+
+
+### Miscellaneous
+
+* update gitignore ([d3bf588](https://github.com/sophotechlabs/spinoza/commit/d3bf58814194d373d8131a03d22765ec66d135aa))
+
+
+### Build
+
+* **release:** ship windows as a zip instead of a tarball ([0bc3d23](https://github.com/sophotechlabs/spinoza/commit/0bc3d23bd2b875c2a2fd958eba87281067e61c59))
+
 ## [1.8.0](https://github.com/sophotechlabs/spinoza/compare/v1.7.2...v1.8.0) (2026-08-18)
 
 
