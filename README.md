@@ -7,93 +7,93 @@
 [![web coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/sophotechlabs/spinoza/badges/coverage-web.json)](https://github.com/sophotechlabs/spinoza/actions/workflows/frontend.yaml)
 [![license](https://img.shields.io/badge/license-FSL--1.1--ALv2-blue)](LICENSE)
 
-A self-hosted Kubernetes GUI. Go backend with client-go informers, React frontend, one binary. Runs as a browser tab or a Wails desktop window.
+A self-hosted Kubernetes GUI: Go backend with client-go informers, React frontend, one binary. Runs as a browser tab or a desktop window. [spinoza.tech](https://spinoza.tech)
 
-**Source-available, not open source.** [FSL-1.1-ALv2](LICENSE): run it, modify it and redistribute it internally, for professional services, and for non-commercial education and research — you may not offer it as a commercial product or service that competes with it. **Each release becomes Apache-2.0 two years after it ships.**
+**Source-available, not open source.** [FSL-1.1-ALv2](LICENSE): run it, modify it and redistribute it internally, for professional services, and for non-commercial education and research. You may not offer it as a commercial product or service that competes with it. Each release becomes Apache-2.0 two years after it ships.
+
+## Install
+
+```sh
+curl -fsSL https://spinoza.tech/download | sh
+```
+
+The binary goes to `~/.local/bin` (or `/usr/local/bin` as root; `SPINOZA_INSTALL_DIR` overrides both), and the checksum is verified before anything is written. On macOS the desktop app is installed to `/Applications` as well, so Spotlight finds it.
+
+```sh
+spinoza --open          # browser
+open -a Spinoza         # desktop window, macOS
+```
+
+Or take a tarball from [releases](https://github.com/sophotechlabs/spinoza/releases) for Linux, macOS or Windows. `SPINOZA_VERSION=v1.5.0` pins the installer to a version.
+
+Spinoza needs a kubeconfig and nothing else. Reading Helm releases needs no `helm` binary; upgrades, rollbacks and debug containers shell out to `helm` and `kubectl` and say so when they are missing.
 
 ## Screenshots
 
-Every shot below is a live cluster, Borg theme.
+Every shot is a live cluster, Borg theme.
 
-**Flux, grouped by role** — cluster sync from the repository, controller health, and every applier and source with its ready count.
+**Flux, grouped by role.** Cluster sync from the repository, controller health, and every applier and source with its ready count.
 
 ![Spinoza Flux overview: all systems operational, cluster sync from a GitRepository, controller health, and counts for appliers, sources and image automation](docs/images/flux-overview.png)
 
-**The dependency graph** — sources, Kustomizations and HelmReleases, laid out by what manages what. Click a node to open it in the inspect drawer.
+**The dependency graph.** Sources, Kustomizations and HelmReleases, laid out by what manages what. Click a node to open it.
 
 ![Spinoza GitOps dependency graph: sources, Kustomizations and HelmReleases with the edges that manage and depend on each other](docs/images/gitops-graph.png)
 
-**Pods** — container health, restarts, node, live CPU and memory. Filter by name or by `field:value`.
+**Pods.** Container health, restarts, node, live CPU and memory. Filter by name or by `field:value`.
 
 ![Spinoza pods table: every pod with container health, status, restarts, node, live CPU and memory, and age](docs/images/pods.png)
 
-**Cluster overview** — version, node readiness, allocatable capacity against live usage, and the newest warning events.
+**Cluster overview.** Version, node readiness, allocatable capacity against live usage, and the newest warning events.
 
 ![Spinoza cluster overview: Kubernetes version, node and pod tiles, allocatable CPU and memory against live usage, and the newest warning events](docs/images/cluster-overview.png)
 
-## Run
-
-Prereqs: Go 1.26+, Node 20+, a kubeconfig.
-
-```sh
-just deps    # once, installs frontend deps
-just run     # build frontend + binary, start the server
-```
-
-Open the URL it prints on start. It carries a token generated for that run, and the page keeps it in a cookie so a reload still works. `just rund` builds and opens the desktop app instead.
-
-Spinoza starts on your current kubeconfig context and the top bar switches between every context it can see. **Kubeconfigs** next to that dropdown adds another file by path; the desktop app opens a file dialog for it. An added file is only ever referenced: spinoza re-reads it on every listing and every switch, never copies it, and never merges it with your default one, so contexts stay grouped under the file they came from. The list of files lives in `kubeconfigs.json` under your user config directory; `--kubeconfig PATH` still replaces the default lookup for the run.
-
-It refuses to start on a non-loopback address, and refuses requests whose Host or Origin is not local, because the process holds full cluster credentials. Loopback is not a permission boundary, so every route and both WebSockets also require this run's token, as the `X-Spinoza-Token` header, a `token` query parameter or the cookie. `--token-file PATH` writes it out (mode 0600) for scripts.
-
 ## What it does
 
-- **Cluster overview**: server version, node readiness, allocatable CPU and memory against live usage, pods by phase, and the most recent warning events.
-- **Browse every resource type** discovery reports, grouped into a Lens-style tree. One generic informer-backed view per GVR, so CRDs show up without any per-type code.
-- **Helm releases** read straight out of Helm's own storage objects: secrets or configmaps, whichever driver wrote them. Chart, app version, the newest version your configured repos offer, revision, status and age; open one for its values, notes, rendered manifest, resources and revision history. Reading needs no helm binary; **upgrade, rollback and uninstall** shell out to `helm` and say so when it is missing. An upgrade picks its version from your configured repos, starts from the values you supplied (never `--reuse-values`), and shows a server-rendered manifest diff before you confirm; the server render needs helm 3.13+. A release owned by Flux gets no upgrade button; it links to its HelmRelease object instead, because that change belongs in git.
-- **GitOps view** for Flux and Argo: an overview grouped by role, a dependency graph, per-kind lists and a status-tile board. Reconcile, suspend and resume Flux objects.
-- **Inspect drawer**: metadata, conditions, events, live YAML with schema-aware editing (Monaco + `monaco-yaml`), server-side apply and delete. Collapsible, and an edited YAML draft survives a background reload.
-- **Write actions**: scale, rollout restart, cordon, uncordon, and drain. Drain plans first and shows what it would evict, skip and refuse before you confirm it.
-- **Logs** streamed per container in the pod's inspect drawer. Pausing follow stops the scroll, not the stream.
-- **Exec** into a container over `v5.channel.k8s.io` into a real terminal (xterm). Distroless images have no shell; spinoza probes once and caches the verdict per image digest.
-- **Ephemeral debug containers** by wrapping `kubectl debug` for the images with no shell. Needs `kubectl` on PATH.
-- **Port-forward** to a pod or service, listed and stoppable from one place, surviving navigation.
-- **Metrics**: current usage from metrics-server in the tables, CPU and memory history charted from Prometheus through the apiserver proxy. `--prometheus namespace/service:port` overrides discovery.
+- **Every resource type discovery reports**, grouped into a Lens-style tree. One informer-backed view per GVR, so CRDs appear without per-type code.
+- **Cluster overview**: server version, node readiness, allocatable CPU and memory against live usage, pods by phase, newest warning events.
+- **Helm releases** read straight from Helm's own storage objects, secrets or configmaps, whichever driver wrote them. Chart, app version, the newest version your repos offer, revision, status, values, notes, rendered manifest and history. Upgrade, rollback and uninstall shell out to `helm`; an upgrade shows a server-rendered manifest diff before you confirm. A release owned by Flux links to its HelmRelease instead, because that change belongs in git.
+- **GitOps** for Flux and Argo CD: an overview grouped by role, a dependency graph, per-kind lists. Reconcile, suspend and resume Flux objects.
+- **Inspect drawer** with metadata, conditions, events, and live YAML edited against the cluster's own schema (Monaco with `monaco-yaml`), server-side apply and delete. An edited draft survives a background reload.
+- **Write actions**: scale, rollout restart, cordon, uncordon, drain. Drain plans first and shows what it would evict, skip and refuse.
+- **Logs** per container, streamed. Pausing follow stops the scroll, not the stream.
+- **Exec** into a container over `v5.channel.k8s.io` in a real terminal. Distroless images have no shell, so spinoza probes once and caches the verdict per image digest, then offers an **ephemeral debug container** instead.
+- **Port-forwards** to pods or services, listed and stoppable in one place, surviving navigation.
+- **Metrics**: live usage from metrics-server in the tables, CPU and memory history from Prometheus through the apiserver proxy. `--prometheus namespace/service:port` overrides discovery.
+- **Filtering** by chips: `ns:`, `name:`, or any column of the kind you are looking at, with completion from what the cluster reported.
+
+## Running it
+
+Spinoza starts on your current kubeconfig context, and the top bar switches between every context it can see. **Kubeconfigs** adds another file by path: spinoza only ever references it, re-reading on every listing and switch, never copying or merging it, so contexts stay grouped under the file they came from. The list lives in `kubeconfigs.json` in your user config directory. `--kubeconfig PATH` replaces the default lookup for one run.
+
+The process holds full cluster credentials, so it refuses to start on a non-loopback address and refuses requests whose Host or Origin is not local. Loopback is not a permission boundary on a shared machine, so every route and both WebSockets also require the token generated for that run, sent as the `X-Spinoza-Token` header, a `token` query parameter, or the cookie the page keeps. `--token-file PATH` writes it out at mode 0600 for scripts.
+
+Destructive actions can be put behind a typed confirmation per cluster: with protection on, delete and apply ask you to type the object's name first.
 
 ## Develop
 
+Toolchain versions are pinned in `mise.toml` (Go 1.26, Node 24); `mise install` gets them.
+
 ```sh
+just deps      # frontend dependencies, once
+just run       # build the frontend and the binary, then start
 just dev-api   # Go server on :34115
-just dev-web   # Vite dev server, proxies to the API
+just dev-web   # Vite, proxying to the API
+just rund      # build and open the desktop app
 ```
 
-Vite serves its own `index.html`, so it cannot inject the token: open `http://localhost:5173/?token=<the token dev-api printed>` and the app picks it up from the URL.
+Vite serves its own `index.html` and cannot inject the token, so open `http://localhost:5173/?token=<the token dev-api printed>`.
 
-The binary embeds the built frontend, so `go build` on its own fails with `pattern web/dist/index.html: no matching files found` until there is one. `just build` produces the real thing; `just stub-assets` drops in a placeholder page, which is what the Go-only recipes and `just dev-api` use so they need no Node.
+The binary embeds the built frontend, so a bare `go build` fails until one exists. `just stub-assets` drops in a placeholder, which is what the Go-only recipes use so they need no Node.
 
-## CI
-
-CI runs on GitHub Actions (`.forgejo/workflows/` mirrors the same jobs onto a self-hosted Forgejo forge).
-
-```sh
-git remote add ci ssh://git@git.c.p-mk1.sopho.tech:2222/arch/spinoza.git
-git push ci main
-```
-
-Every check is a `just` recipe, so the same command runs on a laptop and in CI. `just ci` runs everything; `just check` is the pre-push subset that `lefthook` calls. CI adds cross-compilation, the coverage gate, `govulncheck`, dead-code and unused-dependency checks, a bundle-size budget, secret scanning and SAST.
-
-The coverage badges above are not a third-party service: `just badges` turns the two coverage runs into shields endpoint files, and `.github/workflows/badges.yaml` publishes them to the orphan `badges` branch on every push to `main`.
-
-Forgejo runs: `https://git.c.p-mk1.sopho.tech/arch/spinoza/actions`
+Every check is a `just` recipe, so the same command runs on a laptop and in CI: `just check` before pushing, `just ci` for everything CI does, which adds cross-compilation, the coverage gate, `govulncheck`, dead-code and unused-dependency checks, a bundle-size budget, secret scanning and SAST.
 
 ## Architecture
 
-Discovery builds a resource catalog; each subscribed GVR gets a dynamic informer whose cache is projected into table rows. A WebSocket sends a snapshot then deltas, keyed by uid. Exec and port-forward do not fit that pipe: they are long-lived and bidirectional, so they get their own transports: a binary WebSocket carrying the Kubernetes exec channel protocol, and a process-global forward registry independent of any request.
+Discovery builds a resource catalog. Each subscribed GVR gets a dynamic informer whose cache is projected into table rows; a WebSocket sends one snapshot and then deltas keyed by uid. Exec and port-forwarding do not fit that pipe, being long-lived and bidirectional, so they get their own transports: a binary WebSocket carrying the Kubernetes exec channel protocol, and a process-global forward registry independent of any request.
 
-The React SPA is embedded with `embed.FS`. The same HTTP+WS server backs both the browser tab and the Wails window.
+The React app is embedded with `embed.FS`. The same HTTP and WebSocket server backs both the browser tab and the desktop window.
 
 ## License
 
-Copyright 2026 Sophotech s.r.o. Source-available under the [Functional Source License](LICENSE) (FSL-1.1-ALv2), not open source.
-
-Run it, modify it, redistribute it: internally, for professional services, for non-commercial education and research. You may not offer it to others as a commercial product or service that competes with it. Each release becomes Apache-2.0 two years after it ships.
+Copyright 2026 Sophotech s.r.o. Source-available under the [Functional Source License](LICENSE), FSL-1.1-ALv2. Run it, modify it, redistribute it internally, for professional services, and for non-commercial education and research. You may not offer it to others as a commercial product or service that competes with it. Each release becomes Apache-2.0 two years after it ships.
