@@ -140,7 +140,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	if fromQuery {
-		//nolint:gosec // loopback http only; Secure would stop the desktop webview sending it back
+		//nolint:gosec // this carries the run token once main.tsx strips it from the url, and Secure blocks it over loopback http
 		http.SetCookie(w, &http.Cookie{
 			Name:     authCookie,
 			Value:    presented,
