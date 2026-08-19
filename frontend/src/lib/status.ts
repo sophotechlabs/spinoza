@@ -85,3 +85,33 @@ export function restartColor(value: string): string {
   }
   return 'text-warn';
 }
+
+const ALARMING_WHEN_TRUE = [
+  'Pressure',
+  'Unavailable',
+  'Degraded',
+  'Failed',
+  'Failure',
+  'Error',
+  'Stalled',
+  'Disruption',
+];
+
+const NEITHER_WAY_IS_TROUBLE = ['Reconciling', 'Progressing', 'Issuing', 'Initialized'];
+
+export function alarmingWhenTrue(type: string): boolean {
+  return ALARMING_WHEN_TRUE.some((word) => type.includes(word));
+}
+
+export function conditionColor(type: string, status: string): string {
+  if (NEITHER_WAY_IS_TROUBLE.includes(type)) {
+    return 'text-fg-muted';
+  }
+  if (status !== 'True' && status !== 'False') {
+    return 'text-fg-muted';
+  }
+  if (alarmingWhenTrue(type) === (status === 'True')) {
+    return 'text-error';
+  }
+  return 'text-ok';
+}

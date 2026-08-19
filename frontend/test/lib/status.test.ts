@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ContainerState } from '../../src/lib/types';
 import {
+  alarmingWhenTrue,
+  conditionColor,
   containerColor,
   containerTitle,
   ratioColor,
@@ -147,5 +149,43 @@ describe('a cordoned node', () => {
   it('reads as a warning rather than healthy', () => {
     expect(statusColor('Ready')).toBe('text-ok');
     expect(statusColor('Ready,SchedulingDisabled')).toBe('text-warn');
+  });
+});
+
+describe('which way a condition reads', () => {
+  it('treats the node pressures as trouble only when true', () => {
+    for (const type of ['DiskPressure', 'MemoryPressure', 'PIDPressure']) {
+      expect(conditionColor(type, 'False')).toBe('text-ok');
+      expect(conditionColor(type, 'True')).toBe('text-error');
+    }
+  });
+
+  it('reads the usual conditions the other way round', () => {
+    for (const type of ['Ready', 'Available', 'ContainersReady', 'PodScheduled']) {
+      expect(conditionColor(type, 'True')).toBe('text-ok');
+      expect(conditionColor(type, 'False')).toBe('text-error');
+    }
+  });
+
+  it('knows the negative words a CRD might use', () => {
+    expect(alarmingWhenTrue('NetworkUnavailable')).toBe(true);
+    expect(alarmingWhenTrue('Degraded')).toBe(true);
+    expect(alarmingWhenTrue('Stalled')).toBe(true);
+    expect(alarmingWhenTrue('ImagePullFailed')).toBe(true);
+    expect(alarmingWhenTrue('DisruptionTarget')).toBe(true);
+    expect(alarmingWhenTrue('Ready')).toBe(false);
+    expect(alarmingWhenTrue('Healthy')).toBe(false);
+  });
+
+  it('leaves the ones that report work in progress alone', () => {
+    for (const type of ['Reconciling', 'Progressing', 'Issuing', 'Initialized']) {
+      expect(conditionColor(type, 'True')).toBe('text-fg-muted');
+      expect(conditionColor(type, 'False')).toBe('text-fg-muted');
+    }
+  });
+
+  it('says nothing about a status it cannot read', () => {
+    expect(conditionColor('Ready', 'Unknown')).toBe('text-fg-muted');
+    expect(conditionColor('DiskPressure', '')).toBe('text-fg-muted');
   });
 });

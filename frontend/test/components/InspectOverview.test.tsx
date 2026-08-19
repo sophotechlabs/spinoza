@@ -36,6 +36,14 @@ describe('InspectOverview', () => {
     expect(screen.queryByText('Containers')).not.toBeInTheDocument();
   });
 
+  function statusOf(type: string): Element {
+    const found = screen.getByText(type, { selector: 'span.text-fg' }).nextElementSibling;
+    if (found === null) {
+      throw new Error(`the ${type} condition has no status beside it`);
+    }
+    return found;
+  }
+
   it('renders conditions with their status colour and message', () => {
     render(
       <InspectOverview
@@ -50,10 +58,26 @@ describe('InspectOverview', () => {
     );
 
     expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(screen.getByText('True')).toHaveClass('text-ok');
-    expect(screen.getByText('False')).toHaveClass('text-error');
-    expect(screen.getByText('Unknown', { selector: 'span.text-fg-muted' })).toBeInTheDocument();
+    expect(statusOf('Ready')).toHaveClass('text-ok');
+    expect(statusOf('Stalled')).toHaveClass('text-ok');
+    expect(statusOf('Unknown')).toHaveClass('text-fg-muted');
     expect(screen.getByText('all good')).toBeInTheDocument();
+  });
+
+  it('reads a pressure the way a node means it', () => {
+    render(
+      <InspectOverview
+        detail={detail({
+          conditions: [
+            { type: 'DiskPressure', status: 'False' },
+            { type: 'MemoryPressure', status: 'True' },
+          ],
+        })}
+      />,
+    );
+
+    expect(statusOf('DiskPressure')).toHaveClass('text-ok');
+    expect(statusOf('MemoryPressure')).toHaveClass('text-error');
   });
 
   it('hides an empty condition message', () => {

@@ -1,20 +1,10 @@
-import type { Condition, ContainerState, ObjectDetail, ObjectEvent } from '../lib/types';
-import { containerColor } from '../lib/status';
+import type { ContainerState, ObjectDetail, ObjectEvent } from '../lib/types';
+import { conditionColor, containerColor } from '../lib/status';
 import CopyButton from './CopyButton';
 
 interface InspectOverviewProps {
   detail: ObjectDetail;
   containers?: ContainerState[];
-}
-
-function conditionColor(condition: Condition): string {
-  if (condition.status === 'True') {
-    return 'text-ok';
-  }
-  if (condition.status === 'False') {
-    return 'text-error';
-  }
-  return 'text-fg-muted';
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -121,7 +111,9 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
               <div key={condition.type}>
                 <div className="flex items-baseline gap-2">
                   <span className="text-fg">{condition.type}</span>
-                  <span className={conditionColor(condition)}>{condition.status}</span>
+                  <span className={conditionColor(condition.type, condition.status)}>
+                    {condition.status}
+                  </span>
                   <span className="ml-auto text-[11px] text-fg-muted">{condition.updated}</span>
                 </div>
                 {condition.message !== undefined && condition.message !== '' && (
