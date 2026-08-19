@@ -71,6 +71,7 @@ import PanelLayout from '../../src/components/PanelLayout';
 import { PLACEMENT_KEY } from '../../src/lib/panels';
 import { usePanelsStore } from '../../src/store/panels';
 import { useToastsStore } from '../../src/store/toasts';
+import { useContextsStore } from '../../src/store/contexts';
 import type { ObjectRef } from '../../src/lib/types';
 import { makeRow, parentOf } from '../helpers';
 
@@ -594,5 +595,41 @@ describe('the release panel', () => {
     );
     expect(onSelectResource).toHaveBeenCalledWith(expect.objectContaining({ name: 'front' }));
     expect(onReleaseClose).toHaveBeenCalled();
+  });
+});
+
+describe('the compare tab', () => {
+  beforeEach(() => {
+    stubApi();
+    useContextsStore.getState().setList({
+      current: { kubeconfig: '', name: 'p-mk1' },
+      kubeconfigs: [
+        {
+          label: 'default',
+          path: '',
+          removable: false,
+          contexts: [
+            { name: 'p-mk1', cluster: 'p-mk1' },
+            { name: 'gke-prod', cluster: 'gke-prod' },
+          ],
+        },
+      ],
+      protection: 'open',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens on the selected object', async () => {
+    const user = userEvent.setup();
+    renderLayout();
+    await screen.findByText('Metadata');
+
+    await user.click(within(dockStrip('bottom')).getByRole('tab', { name: 'Compare' }));
+
+    expect(await screen.findByLabelText('Against')).toBeInTheDocument();
+    expect(screen.getByLabelText('Namespace')).toHaveValue('prod');
   });
 });

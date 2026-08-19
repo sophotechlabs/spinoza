@@ -61,7 +61,12 @@ describe('parsePlacement', () => {
 
 describe('panelsOn', () => {
   it('lists the panels of one dock in registry order', () => {
-    expect(panelsOn(DEFAULT_PLACEMENT, 'bottom')).toEqual(['forwards', 'terminal', 'release']);
+    expect(panelsOn(DEFAULT_PLACEMENT, 'bottom')).toEqual([
+      'forwards',
+      'terminal',
+      'compare',
+      'release',
+    ]);
     expect(panelsOn(DEFAULT_PLACEMENT, 'left')).toEqual([]);
   });
 

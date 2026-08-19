@@ -44,6 +44,12 @@ ClusterOverview.Version version string
 ClusterOverview.Warnings warnings []OverviewEvent
 Column.Name name string
 Column.Render render,omitempty string
+Comparison.Identical identical bool
+Comparison.Left left string
+Comparison.LeftContext leftContext string
+Comparison.Missing missing,omitempty string
+Comparison.Right right string
+Comparison.RightContext rightContext string
 Condition.Message message,omitempty string
 Condition.Reason reason,omitempty string
 Condition.Status status string

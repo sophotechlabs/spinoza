@@ -626,6 +626,10 @@ func (c *swappableCluster) Protect(bool) error {
 	return nil
 }
 
+func (c *swappableCluster) Read(context.Context, api.ContextRef, api.ObjectRef) (string, error) {
+	return "", errors.New("this stub reads one context")
+}
+
 func (c *swappableCluster) Protected() bool {
 	return false
 }

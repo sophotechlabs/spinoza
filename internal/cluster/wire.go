@@ -7,10 +7,14 @@ import (
 	"net/http"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
+	"github.com/sophotechlabs/spinoza/internal/compare"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
@@ -30,13 +34,45 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 		return nil, targetErr
 	}
 	sources := kubeconfig.NewSources(options.Kubeconfig, openStore())
-	return newCluster(ctx, func(buildCtx context.Context, ref api.ContextRef) (*connection, error) {
+	cluster := newCluster(ctx, func(buildCtx context.Context, ref api.ContextRef) (*connection, error) {
 		manager, bundle, err := build(buildCtx, ref, options, promTarget)
 		if err != nil {
 			return nil, err
 		}
 		return &connection{manager: manager, ref: bundle.Ref, host: bundle.Config.Host}, nil
-	}, sources, openProtection()), nil
+	}, sources, openProtection())
+	cluster.useReader(readerFor(options))
+	return cluster, nil
+}
+
+const readAcrossTimeout = 15 * time.Second
+
+func objectsIn(dyn dynamic.Interface, gvr schema.GroupVersionResource, namespace string) dynamic.ResourceInterface {
+	if namespace == "" {
+		return dyn.Resource(gvr)
+	}
+	return dyn.Resource(gvr).Namespace(namespace)
+}
+
+func readerFor(options Options) reader {
+	return func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error) {
+		bundle, err := kube.LoadContext(ref, kube.Options{
+			Kubeconfig: options.Kubeconfig,
+			QPS:        options.ClientQPS,
+			Burst:      options.ClientBurst,
+		})
+		if err != nil {
+			return "", fmt.Errorf("kube: %w", err)
+		}
+		gvr := schema.GroupVersionResource{Group: target.Group, Version: target.Version, Resource: target.Resource}
+		read, cancel := context.WithTimeout(ctx, readAcrossTimeout)
+		defer cancel()
+		found, getErr := objectsIn(bundle.Dynamic, gvr, target.Namespace).Get(read, target.Name, metav1.GetOptions{})
+		if getErr != nil {
+			return "", getErr
+		}
+		return compare.YAML(found)
+	}
 }
 
 func openProtection() *protect.Store {

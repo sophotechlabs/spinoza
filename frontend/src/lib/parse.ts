@@ -4,6 +4,7 @@ import type {
   Category,
   ClusterOverview,
   Column,
+  Comparison,
   Condition,
   ContainerState,
   DebugSession,
@@ -143,6 +144,18 @@ function parsePort(item: Record<string, unknown>): ObjectPort {
     name: optionalString(item.name),
     port: asNumber(item.port),
     protocol: optionalString(item.protocol),
+  };
+}
+
+export function parseComparison(body: unknown): Comparison {
+  const item = asRecord(body);
+  return {
+    left: asString(item.left),
+    right: asString(item.right),
+    leftContext: asString(item.leftContext),
+    rightContext: asString(item.rightContext),
+    identical: asBoolean(item.identical),
+    missing: optionalString(item.missing),
   };
 }
 

@@ -36,6 +36,10 @@ type connection struct {
 
 type builder func(ctx context.Context, ref api.ContextRef) (*connection, error)
 
+// reader fetches one object from a context that is not the current one, without
+// starting informers or anything else a full connection carries.
+type reader func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error)
+
 type Protection interface {
 	Verdict(server string) string
 	Set(server string, protected bool) error
@@ -51,6 +55,7 @@ type Kubeconfigs interface {
 type Cluster struct {
 	root       context.Context
 	build      builder
+	read       reader
 	sources    Kubeconfigs
 	protection Protection
 
@@ -143,6 +148,19 @@ func (c *Cluster) readable(path string) bool {
 		}
 	}
 	return false
+}
+
+func (c *Cluster) useReader(read reader) {
+	c.read = read
+}
+
+// Read renders one object from another context as yaml. It opens a client for that
+// read alone, so the current connection and its caches are untouched.
+func (c *Cluster) Read(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error) {
+	if c.read == nil {
+		return "", fmt.Errorf("%w: reading another context is not wired up", api.ErrInternal)
+	}
+	return c.read(ctx, ref, target)
 }
 
 func (c *Cluster) Use(ref api.ContextRef) error {

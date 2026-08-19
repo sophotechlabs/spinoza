@@ -309,6 +309,15 @@ type ObjectDetail struct {
 	YAML        string            `json:"yaml"`
 }
 
+type Comparison struct {
+	Left         string `json:"left"`
+	Right        string `json:"right"`
+	LeftContext  string `json:"leftContext"`
+	RightContext string `json:"rightContext"`
+	Identical    bool   `json:"identical"`
+	Missing      string `json:"missing,omitempty"`
+}
+
 type SecretEntry struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`

@@ -90,6 +90,15 @@ export interface ObjectEvent {
   lastSeen?: string;
 }
 
+export interface Comparison {
+  left: string;
+  right: string;
+  leftContext: string;
+  rightContext: string;
+  identical: boolean;
+  missing?: string;
+}
+
 export interface SecretEntry {
   key: string;
   value: string;

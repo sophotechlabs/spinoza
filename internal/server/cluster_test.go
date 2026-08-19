@@ -13,6 +13,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/resources"
@@ -21,6 +23,8 @@ import (
 type stubCluster struct {
 	mu          sync.Mutex
 	mgr         *resources.Manager
+	elsewhere   map[string]string
+	readErr     error
 	kubeconfigs []api.Kubeconfig
 	current     api.ContextRef
 	useErr      error
@@ -101,6 +105,19 @@ func (s *stubCluster) Protect(protected bool) error {
 		s.protection = api.ProtectionProtected
 	}
 	return nil
+}
+
+func (s *stubCluster) Read(_ context.Context, ref api.ContextRef, target api.ObjectRef) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.readErr != nil {
+		return "", s.readErr
+	}
+	found, held := s.elsewhere[ref.Name+"/"+target.Namespace+"/"+target.Name]
+	if !held {
+		return "", apierrors.NewNotFound(schema.GroupResource{Resource: target.Resource}, target.Name)
+	}
+	return found, nil
 }
 
 func (s *stubCluster) Protected() bool {

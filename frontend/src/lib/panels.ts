@@ -4,7 +4,15 @@ import type { PodTarget } from './pods';
 import { readStored, writeStored } from './persist';
 
 export type PanelId =
-  'overview' | 'yaml' | 'events' | 'logs' | 'metrics' | 'forwards' | 'terminal' | 'release';
+  | 'overview'
+  | 'yaml'
+  | 'events'
+  | 'logs'
+  | 'metrics'
+  | 'forwards'
+  | 'terminal'
+  | 'release'
+  | 'compare';
 
 export type DockSide = 'left' | 'right' | 'bottom';
 
@@ -86,6 +94,13 @@ export const PANELS: PanelDescriptor[] = [
     defaultSide: 'bottom',
     hint: 'Nothing docked here yet',
     enabled: () => true,
+  },
+  {
+    id: 'compare',
+    label: 'Compare',
+    defaultSide: 'bottom',
+    hint: 'Select an object to compare it against another context',
+    enabled: (ctx) => ctx.selection !== null,
   },
   {
     id: 'release',

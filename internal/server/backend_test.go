@@ -64,6 +64,10 @@ func (s *stubBackendCluster) Protect(bool) error {
 	return errors.New("this stub protects nothing")
 }
 
+func (s *stubBackendCluster) Read(context.Context, api.ContextRef, api.ObjectRef) (string, error) {
+	return "", errors.New("this stub reads one context")
+}
+
 func (s *stubBackendCluster) Protected() bool {
 	return s.protected
 }

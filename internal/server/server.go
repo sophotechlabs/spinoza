@@ -22,6 +22,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/compare"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
@@ -46,6 +47,7 @@ type Cluster interface {
 	RemoveKubeconfig(path string) error
 	Protect(protected bool) error
 	Protected() bool
+	Read(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error)
 }
 
 type FilePicker func(ctx context.Context) (string, error)
@@ -149,6 +151,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPost, "/api/action", s.handleAction, false},
 		{http.MethodGet, "/api/metrics/history", s.handleMetricHistory, false},
 		{http.MethodGet, "/api/metrics", s.handleMetrics, false},
+		{http.MethodGet, "/api/compare", withRef(s.compare), false},
 		{http.MethodGet, "/api/object", withRef(s.getObject), false},
 		{http.MethodPut, "/api/object", withRef(s.applyObject), false},
 		{http.MethodDelete, "/api/object", withRef(s.deleteObject), false},
@@ -662,6 +665,69 @@ func (s *Server) fluxAction(w http.ResponseWriter, r *http.Request, ref api.Obje
 		return
 	}
 	writeJSON(w, result)
+}
+
+func (s *Server) compare(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
+	query := r.URL.Query()
+	against := api.ContextRef{Kubeconfig: query.Get("againstKubeconfig"), Name: query.Get("against")}
+	if against.Name == "" {
+		writeError(w, http.StatusBadRequest, "name the context to compare against")
+		return
+	}
+	keep := query.Get("raw") == queryTrue
+	here, err := s.manager().Object(r.Context(), ref)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	left, leftErr := compare.Rendered(here.YAML, keep)
+	if leftErr != nil {
+		writeAPIError(w, leftErr)
+		return
+	}
+	writeJSON(w, s.against(r, ref, against, left, keep))
+}
+
+func (s *Server) against(r *http.Request, ref api.ObjectRef, against api.ContextRef, left string, keep bool) api.Comparison {
+	result := api.Comparison{
+		Left:         left,
+		LeftContext:  s.cluster.Contexts().Current.Name,
+		RightContext: against.Name,
+	}
+	raw, err := s.cluster.Read(r.Context(), against, farSide(r, ref))
+	if err != nil {
+		result.Missing = missingReason(err)
+		return result
+	}
+	right, renderErr := compare.Rendered(raw, keep)
+	if renderErr != nil {
+		result.Missing = renderErr.Error()
+		return result
+	}
+	result.Right = right
+	result.Identical = left == right
+	return result
+}
+
+func farSide(r *http.Request, ref api.ObjectRef) api.ObjectRef {
+	query := r.URL.Query()
+	far := ref
+	namespace := query.Get("againstNamespace")
+	if namespace != "" {
+		far.Namespace = namespace
+	}
+	name := query.Get("againstName")
+	if name != "" {
+		far.Name = name
+	}
+	return far
+}
+
+func missingReason(err error) string {
+	if apierrors.IsNotFound(err) {
+		return "that context has no such object"
+	}
+	return err.Error()
 }
 
 func (s *Server) argoAction(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {

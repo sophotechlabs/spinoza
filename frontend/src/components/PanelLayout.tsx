@@ -34,6 +34,7 @@ import InspectLogs from './InspectLogs';
 import ForwardsPanel from './ForwardsPanel';
 import TerminalTab from './TerminalTab';
 import ReleasePanel from './ReleasePanel';
+import ComparePanel from './ComparePanel';
 import Loading from './Loading';
 
 const InspectMetrics = lazy(() => import('./InspectMetrics'));
@@ -146,6 +147,11 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
       onOpenResource={ctx.onOpenResource}
       onClose={ctx.onReleaseClose}
     />
+  ),
+  compare: (ctx) => (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ComparePanel target={refOf(ctx.selection)} />
+    </div>
   ),
   overview: (ctx) =>
     objectPanel(ctx, (selection, detail) => (
