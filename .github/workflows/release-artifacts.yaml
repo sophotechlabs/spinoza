@@ -68,6 +68,7 @@ jobs:
         with:
           subject-path: |
             dist/release/*.tar.gz
+            dist/release/*.zip
             dist/release/*_sbom.cdx.json
 
       - run: gh release upload "$TAG" dist/release/* --clobber
