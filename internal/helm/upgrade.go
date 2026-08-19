@@ -70,7 +70,7 @@ func (s *Service) admitsUpgrade(req UpgradeRequest) error {
 	if !charts.ValidVersion(req.Version) {
 		return fmt.Errorf("version %q is not a semantic version", req.Version)
 	}
-	repoErr := charts.CheckFetchable(req.RepoURL)
+	repoErr := charts.CheckRepoURL(req.RepoURL)
 	if repoErr != nil {
 		return repoErr
 	}
