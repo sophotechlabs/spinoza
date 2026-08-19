@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.9.0](https://github.com/sophotechlabs/spinoza/compare/v1.8.1...v1.9.0) (2026-08-19)
+
+
+### Features
+
+* **ui:** say why the desktop switch is unavailable instead of hiding it ([d2af123](https://github.com/sophotechlabs/spinoza/commit/d2af12318ec14c6a0249c0bc7c2b854bc6b486bc))
+
+
+### Bug Fixes
+
+* **ci:** green sast, go lint and the integration helm upgrade test ([feaf6d1](https://github.com/sophotechlabs/spinoza/commit/feaf6d10bebd6b96c1763b4c3090274cf5b3c975))
+* **cli:** rewrite the token file so mode 0600 always applies ([44acf60](https://github.com/sophotechlabs/spinoza/commit/44acf608afee877f7bf6cfb2b889acb5057dcea8))
+* **helm:** block private hosts on the upgrade repo URL ([b565907](https://github.com/sophotechlabs/spinoza/commit/b565907fabd37769a9e61a7b48cf56d2b5cf134a))
+* **server:** drop the run token from the address bar after load ([1005b1c](https://github.com/sophotechlabs/spinoza/commit/1005b1c0ce7300ad723010d07d53f67aa8837255))
+* **server:** keep the pprof profiler off unless -pprof is set ([584a267](https://github.com/sophotechlabs/spinoza/commit/584a2678de1a81fcbe9fb9d6e562267289a6573a))
+* **server:** only treat GET as a websocket upgrade ([67345d6](https://github.com/sophotechlabs/spinoza/commit/67345d6a2c08e7c1632430c760546cc78d8009e8))
+* **server:** send Referrer-Policy: no-referrer on served pages ([c6ac62b](https://github.com/sophotechlabs/spinoza/commit/c6ac62b8278672cf4445a6dc8647860422b10ae3))
+
+
+### CI
+
+* attest the windows zip release artifacts ([370eabe](https://github.com/sophotechlabs/spinoza/commit/370eabe916bf2dfb482621a8c9e2db2d082326d3))
+
+
+### Build
+
+* lock the toolchain artifacts mise installs ([7364f5c](https://github.com/sophotechlabs/spinoza/commit/7364f5c793e76878ba3dad7aa95a3842caddc39d))
+
 ## [1.8.1](https://github.com/sophotechlabs/spinoza/compare/v1.8.0...v1.8.1) (2026-08-18)
 
 
