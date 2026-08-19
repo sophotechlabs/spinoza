@@ -4,6 +4,7 @@ import type {
   GraphNode,
   HelmRelease,
   ObjectRef,
+  ReleaseRef,
   ResourceDescriptor,
   Row,
   View,
@@ -56,6 +57,13 @@ import type { Section } from './components/SettingsDialog';
 
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 const ArgoGraph = lazy(() => import('./components/ArgoGraph'));
+
+function releaseIdentity(release: ReleaseRef | null): string {
+  if (release === null) {
+    return '';
+  }
+  return `${release.namespace}/${release.name}`;
+}
 
 function pickerScope(view: View, scope: boolean | null): boolean | null {
   if (view !== 'resources') {
@@ -166,6 +174,14 @@ export default function App() {
     }
     openOnStart(contextName);
   }, [contextName, openOnStart]);
+
+  const releaseKey = releaseIdentity(route.release);
+  useEffect(() => {
+    if (releaseKey === '') {
+      return;
+    }
+    revealPanel('release');
+  }, [releaseKey]);
 
   useEffect(() => {
     if (!worthAsking(contextName, counts, namespaceAnswered(contextName))) {
@@ -289,7 +305,6 @@ export default function App() {
 
   function openRelease(release: HelmRelease) {
     navigate({ ...route, release: { namespace: release.namespace, name: release.name } });
-    revealPanel('release');
   }
 
   function closeRelease() {

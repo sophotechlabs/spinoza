@@ -168,6 +168,9 @@ export function documentTitle(route: Route): string {
   if (route.selection !== null) {
     parts.push(route.selection.name);
   }
+  if (route.selection === null && route.release !== null) {
+    parts.push(route.release.name);
+  }
   if (route.view !== inferredView(route.resource)) {
     parts.push(route.view);
   }

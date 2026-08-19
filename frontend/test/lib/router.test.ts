@@ -368,3 +368,21 @@ describe('useRouter', () => {
     expect(VIEWS).toContain('argo-apps');
   });
 });
+
+describe('the title of a docked release', () => {
+  const release = { namespace: 'cert-manager', name: 'cert-manager' };
+
+  it('names the release when nothing else is selected', () => {
+    expect(documentTitle(route({ view: 'helm', context: 'p-mk1', release }))).toBe(
+      'cert-manager helm p-mk1 - Spinoza',
+    );
+  });
+
+  it('lets the selected object win', () => {
+    const selection = { group: '', version: 'v1', resource: 'pods', namespace: 'p', name: 'web-0' };
+
+    expect(documentTitle(route({ view: 'resources', context: 'p-mk1', release, selection }))).toBe(
+      'web-0 resources p-mk1 - Spinoza',
+    );
+  });
+});
