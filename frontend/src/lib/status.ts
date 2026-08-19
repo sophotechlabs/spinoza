@@ -97,7 +97,7 @@ const ALARMING_WHEN_TRUE = [
   'Disruption',
 ];
 
-const NEITHER_WAY_IS_TROUBLE = ['Reconciling', 'Progressing', 'Issuing', 'Initialized'];
+const NEITHER_WAY_IS_TROUBLE = ['Reconciling', 'Issuing'];
 
 export function alarmingWhenTrue(type: string): boolean {
   return ALARMING_WHEN_TRUE.some((word) => type.includes(word));

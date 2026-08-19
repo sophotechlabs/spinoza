@@ -177,11 +177,17 @@ describe('which way a condition reads', () => {
     expect(alarmingWhenTrue('Healthy')).toBe(false);
   });
 
-  it('leaves the ones that report work in progress alone', () => {
-    for (const type of ['Reconciling', 'Progressing', 'Issuing', 'Initialized']) {
+  it('leaves the ones that only report work in flight alone', () => {
+    for (const type of ['Reconciling', 'Issuing']) {
       expect(conditionColor(type, 'True')).toBe('text-fg-muted');
       expect(conditionColor(type, 'False')).toBe('text-fg-muted');
     }
+  });
+
+  it('still calls out a deployment that stopped progressing', () => {
+    expect(conditionColor('Progressing', 'True')).toBe('text-ok');
+    expect(conditionColor('Progressing', 'False')).toBe('text-error');
+    expect(conditionColor('Initialized', 'True')).toBe('text-ok');
   });
 
   it('says nothing about a status it cannot read', () => {
