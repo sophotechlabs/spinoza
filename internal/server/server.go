@@ -225,6 +225,7 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAssets(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	if r.URL.Path == "/" || r.URL.Path == "/index.html" {
 		s.serveIndex(w)
 		return
