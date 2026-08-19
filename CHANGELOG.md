@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.10.0](https://github.com/sophotechlabs/spinoza/compare/v1.9.0...v1.10.0) (2026-08-19)
+
+
+### Features
+
+* **ui:** add ui to display secrets ([c57474c](https://github.com/sophotechlabs/spinoza/commit/c57474ca3478bbab891a45144bb962a4f611a358))
+* **ui:** dock the helm release detail and drill into its resources ([51c9da0](https://github.com/sophotechlabs/spinoza/commit/51c9da09d528b0aec26e62e15149729dd3371d23))
+
+
+### Bug Fixes
+
+* **ui:** colour a condition by what it means, not by its truth value ([461f884](https://github.com/sophotechlabs/spinoza/commit/461f884263609220dfd38a614b3a2082d488face))
+* **ui:** keep Progressing and Initialized reading as they did ([3df1d18](https://github.com/sophotechlabs/spinoza/commit/3df1d189c9c162b08a9c101a0e45be1a6e8d7052))
+
+
+### Documentation
+
+* add helm, inspect, port-forward and drain screenshots ([bbddbe6](https://github.com/sophotechlabs/spinoza/commit/bbddbe6fa5d44ae8d9214c09fd9a38956760f46a))
+* back each feature with its screenshot and restore the licence terms ([ed1fe7c](https://github.com/sophotechlabs/spinoza/commit/ed1fe7cf51a519b5cbc7bb70db3ffe3814efa1f5))
+* recapture the drain plan with the new condition colours ([5134983](https://github.com/sophotechlabs/spinoza/commit/51349832ba4fb3eee857bd4ceeab93f6fa226e8f))
+* rewrite the readme for a devops audience ([a990efb](https://github.com/sophotechlabs/spinoza/commit/a990efb340c58bd7e127ab7db71d1d2357b2b266))
+* **server:** say why the auth cookie omits Secure ([96ac006](https://github.com/sophotechlabs/spinoza/commit/96ac006fdd4cb8ddc811d1a057313d88a4271d05))
+* show the docked release detail and the resource drill-through ([2de9402](https://github.com/sophotechlabs/spinoza/commit/2de94026c4d6ae14f238e412a4d569836055a77d))
+
 ## [1.9.0](https://github.com/sophotechlabs/spinoza/compare/v1.8.1...v1.9.0) (2026-08-19)
 
 
