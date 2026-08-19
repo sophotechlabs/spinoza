@@ -81,6 +81,7 @@ func run() error {
 	}
 
 	srv := server.New(clusters, assets, token)
+	srv.UseProfiler(opts.pprof)
 	keepSettings(srv)
 	httpServer := &http.Server{
 		Addr:              opts.addr,

@@ -66,6 +66,7 @@ type Server struct {
 	views      views
 	sessions   map[*wsSession]struct{}
 	terminals  map[*websocket.Conn]struct{}
+	profiler   bool
 }
 
 func New(cluster Cluster, assets fs.FS, token string) *Server {
@@ -89,6 +90,18 @@ func (s *Server) UseFilePicker(picker FilePicker) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.picker = picker
+}
+
+func (s *Server) UseProfiler(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.profiler = enabled
+}
+
+func (s *Server) wantsProfiler() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.profiler
 }
 
 func (s *Server) filePicker() FilePicker {
@@ -169,7 +182,9 @@ func (s *Server) Handler() http.Handler {
 	for path := range known {
 		mux.HandleFunc(path, methodNotAllowed)
 	}
-	mountProfiler(mux)
+	if s.wantsProfiler() {
+		mountProfiler(mux)
+	}
 	mux.HandleFunc("/", s.handleAssets)
 	return s.guard(mux.ServeHTTP)
 }

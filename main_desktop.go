@@ -127,6 +127,7 @@ func runDesktop() error {
 
 	var window atomic.Pointer[context.Context]
 	srv := server.New(clusters, assets, token)
+	srv.UseProfiler(opts.pprof)
 	keepSettings(srv)
 	srv.UseLocalShell(func(cols, rows uint16) (server.LocalShell, error) {
 		session, err := localshell.Start(context.Background(), localshell.Options{

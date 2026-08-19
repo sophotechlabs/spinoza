@@ -8,8 +8,18 @@ import (
 	"testing"
 )
 
-func TestTheProfilerIsServedToALocalRequest(t *testing.T) {
-	ts := tokenServer(t)
+func profilerServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mgr, _ := testManager(t)
+	srv := New(fixed(mgr), testAssets(), testToken)
+	srv.UseProfiler(true)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func TestTheProfilerIsServedWhenEnabled(t *testing.T) {
+	ts := profilerServer(t)
 
 	res := get(t, ts, "/debug/pprof/", func(r *http.Request) {
 		r.Header.Set(AuthHeader, testToken)
@@ -27,8 +37,20 @@ func TestTheProfilerIsServedToALocalRequest(t *testing.T) {
 	}
 }
 
-func TestTheProfilerNeedsTheTokenLikeEverythingElse(t *testing.T) {
+func TestTheProfilerIsOffByDefault(t *testing.T) {
 	ts := tokenServer(t)
+
+	res := get(t, ts, "/debug/pprof/", func(r *http.Request) {
+		r.Header.Set(AuthHeader, testToken)
+	})
+
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; the profiler stays off without -pprof", res.StatusCode)
+	}
+}
+
+func TestTheProfilerNeedsTheTokenLikeEverythingElse(t *testing.T) {
+	ts := profilerServer(t)
 
 	res := get(t, ts, "/debug/pprof/", nil)
 
@@ -39,7 +61,9 @@ func TestTheProfilerNeedsTheTokenLikeEverythingElse(t *testing.T) {
 
 func TestTheProfilerRefusesAForeignOrigin(t *testing.T) {
 	mgr, _ := testManager(t)
-	ts := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
+	srv := New(fixed(mgr), testAssets(), testToken)
+	srv.UseProfiler(true)
+	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 
 	res := get(t, ts, "/debug/pprof/", func(r *http.Request) {
