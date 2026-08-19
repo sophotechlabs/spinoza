@@ -167,6 +167,7 @@ func writeTokenFile(path, token string) error {
 	if path == "" {
 		return nil
 	}
+	_ = os.Remove(path)
 	err := os.WriteFile(path, []byte(token+"\n"), 0o600)
 	if err != nil {
 		return fmt.Errorf("token file: %w", err)
