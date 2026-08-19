@@ -48,7 +48,11 @@ The dependency graph is laid out by what manages what. Argo's is the app-of-apps
 
 Releases read from Helm's own storage, either driver. Chart and app version, what your repos offer, revision, status, values, notes, rendered manifest, history. OCI end to end. Upgrade behind a server-rendered manifest diff; rollback and uninstall from the same panel. A Flux-owned release links to its HelmRelease instead of offering an upgrade button.
 
-![Spinoza Helm releases with chart and app versions, revision, status, and a Latest column flagging available upgrades](docs/images/helm-releases.png)
+![Spinoza Helm releases with chart and app versions, revision and status, and the selected release docked below showing the resources it rendered](docs/images/helm-releases.png)
+
+Selecting a release docks its detail as a panel. Drag it to any side, resize it, collapse it; the placement persists, and `release` and `releaseNs` in the URL carry it through a reload or a back button. Clicking a rendered resource opens that object in its own table with the row selected and the drawer open, while the release stays docked underneath.
+
+![Spinoza deployments table scoped to the cert-manager namespace with the deployment selected, its inspect drawer open on metadata and conditions, and the Helm release still docked below on its resource list](docs/images/helm-resources.png)
 
 ## Inspect and edit
 
