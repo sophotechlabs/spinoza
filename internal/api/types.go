@@ -305,7 +305,7 @@ type ObjectDetail struct {
 	HandledAt   string            `json:"handledAt,omitempty"`
 	Ports       []ObjectPort      `json:"ports,omitempty"`
 	Event       *ObjectEvent      `json:"event,omitempty"`
-	Data        []SecretEntry     `json:"data,omitempty"`
+	Data        []DataEntry       `json:"data,omitempty"`
 	YAML        string            `json:"yaml"`
 }
 
@@ -318,7 +318,7 @@ type Comparison struct {
 	Missing      string `json:"missing,omitempty"`
 }
 
-type SecretEntry struct {
+type DataEntry struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`
 	Bytes  int    `json:"bytes"`

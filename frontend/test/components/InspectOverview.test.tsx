@@ -303,3 +303,19 @@ describe('a secret in the inspect overview', () => {
     expect(screen.queryByText('Data')).not.toBeInTheDocument();
   });
 });
+
+describe('a configmap in the inspect overview', () => {
+  it('shows its values in the clear', () => {
+    render(
+      <InspectOverview
+        detail={detail({
+          kind: 'ConfigMap',
+          data: [{ key: 'log.level', value: 'debug', bytes: 5 }],
+        })}
+      />,
+    );
+
+    expect(screen.getByLabelText('log.level')).toHaveValue('debug');
+    expect(screen.queryByRole('button', { name: 'Show log.level' })).not.toBeInTheDocument();
+  });
+});

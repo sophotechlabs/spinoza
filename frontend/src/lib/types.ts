@@ -99,7 +99,7 @@ export interface Comparison {
   missing?: string;
 }
 
-export interface SecretEntry {
+export interface DataEntry {
   key: string;
   value: string;
   bytes: number;
@@ -119,7 +119,7 @@ export interface ObjectDetail {
   conditions?: Condition[];
   ports?: ObjectPort[];
   event?: ObjectEvent;
-  data?: SecretEntry[];
+  data?: DataEntry[];
   yaml: string;
   pod?: PodDetail;
   workload?: WorkloadDetail;

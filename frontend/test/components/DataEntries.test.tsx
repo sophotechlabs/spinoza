@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import SecretData from '../../src/components/SecretData';
-import type { SecretEntry } from '../../src/lib/types';
+import DataEntries from '../../src/components/DataEntries';
+import type { DataEntry } from '../../src/lib/types';
 import { useToastsStore } from '../../src/store/toasts';
 
 const MASK = '••••••••••••';
 
-function entries(): SecretEntry[] {
+function entries(): DataEntry[] {
   return [
     { key: 'password', value: 'hunter2', bytes: 7 },
     { key: 'keystore', value: '/v8A', bytes: 3, binary: true },
@@ -15,7 +15,7 @@ function entries(): SecretEntry[] {
 }
 
 function renderData(uid = 'uid-1') {
-  return render(<SecretData uid={uid} entries={entries()} />);
+  return render(<DataEntries uid={uid} entries={entries()} masked />);
 }
 
 beforeEach(() => {
@@ -70,7 +70,7 @@ describe('a secret in the overview', () => {
   });
 
   it('counts a single byte in the singular', () => {
-    render(<SecretData uid="uid-1" entries={[{ key: 'a', value: 'x', bytes: 1 }]} />);
+    render(<DataEntries uid="uid-1" entries={[{ key: 'a', value: 'x', bytes: 1 }]} masked />);
 
     expect(screen.getByText('1 byte')).toBeInTheDocument();
   });
@@ -98,7 +98,7 @@ describe('a secret in the overview', () => {
     const view = renderData();
     await user.click(screen.getByRole('button', { name: 'Show password' }));
 
-    view.rerender(<SecretData uid="uid-2" entries={entries()} />);
+    view.rerender(<DataEntries uid="uid-2" entries={entries()} masked />);
 
     expect(screen.getByLabelText('password')).toHaveValue(MASK);
   });
@@ -109,7 +109,11 @@ describe('a value with more than one line', () => {
 
   it('stays on one masked line until it is shown', () => {
     render(
-      <SecretData uid="uid-1" entries={[{ key: 'config.yaml', value: yamlValue, bytes: 44 }]} />,
+      <DataEntries
+        uid="uid-1"
+        entries={[{ key: 'config.yaml', value: yamlValue, bytes: 44 }]}
+        masked
+      />,
     );
 
     expect(screen.getByLabelText('config.yaml').tagName).toBe('INPUT');
@@ -118,7 +122,11 @@ describe('a value with more than one line', () => {
   it('opens into a box that keeps the line breaks', async () => {
     const user = userEvent.setup();
     render(
-      <SecretData uid="uid-1" entries={[{ key: 'config.yaml', value: yamlValue, bytes: 44 }]} />,
+      <DataEntries
+        uid="uid-1"
+        entries={[{ key: 'config.yaml', value: yamlValue, bytes: 44 }]}
+        masked
+      />,
     );
 
     await user.click(screen.getByRole('button', { name: 'Show config.yaml' }));
@@ -132,10 +140,55 @@ describe('a value with more than one line', () => {
   it('stops growing at twelve rows', async () => {
     const user = userEvent.setup();
     const long = Array.from({ length: 40 }, (_, index) => `line ${String(index)}`).join('\n');
-    render(<SecretData uid="uid-1" entries={[{ key: 'long', value: long, bytes: long.length }]} />);
+    render(
+      <DataEntries
+        uid="uid-1"
+        entries={[{ key: 'long', value: long, bytes: long.length }]}
+        masked
+      />,
+    );
 
     await user.click(screen.getByRole('button', { name: 'Show long' }));
 
     expect(screen.getByLabelText('long')).toHaveAttribute('rows', '12');
+  });
+});
+
+describe('a configmap, whose values are not secret', () => {
+  it('shows every value without asking', () => {
+    render(
+      <DataEntries
+        uid="uid-cm"
+        entries={[{ key: 'log.level', value: 'debug', bytes: 5 }]}
+        masked={false}
+      />,
+    );
+
+    expect(screen.getByLabelText('log.level')).toHaveValue('debug');
+  });
+
+  it('offers no eye, because there is nothing to hide', () => {
+    render(
+      <DataEntries
+        uid="uid-cm"
+        entries={[{ key: 'log.level', value: 'debug', bytes: 5 }]}
+        masked={false}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Show|Hide/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy log.level' })).toBeInTheDocument();
+  });
+
+  it('still opens a multi-line value into a box', () => {
+    render(
+      <DataEntries
+        uid="uid-cm"
+        entries={[{ key: 'nginx.conf', value: 'server {\n  listen 80;\n}\n', bytes: 24 }]}
+        masked={false}
+      />,
+    );
+
+    expect(screen.getByLabelText('nginx.conf').tagName).toBe('TEXTAREA');
   });
 });

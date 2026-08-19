@@ -1,7 +1,7 @@
 import type { ContainerState, ObjectDetail, ObjectEvent } from '../lib/types';
 import { conditionColor, containerColor } from '../lib/status';
 import CopyButton from './CopyButton';
-import SecretData from './SecretData';
+import DataEntries from './DataEntries';
 
 interface InspectOverviewProps {
   detail: ObjectDetail;
@@ -108,7 +108,7 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
 
       {data.length > 0 && (
         <Section title="Data">
-          <SecretData uid={detail.uid} entries={data} />
+          <DataEntries uid={detail.uid} entries={data} masked={detail.kind === 'Secret'} />
         </Section>
       )}
 

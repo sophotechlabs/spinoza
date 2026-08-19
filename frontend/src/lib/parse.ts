@@ -47,7 +47,7 @@ import type {
   ResourceCatalog,
   ResourceCounts,
   ResourceDescriptor,
-  SecretEntry,
+  DataEntry,
   ResourceUsage,
   Row,
 } from './types';
@@ -159,7 +159,7 @@ export function parseComparison(body: unknown): Comparison {
   };
 }
 
-function parseSecretEntry(item: Record<string, unknown>): SecretEntry {
+function parseDataEntry(item: Record<string, unknown>): DataEntry {
   return {
     key: asString(item.key),
     value: asString(item.value),
@@ -182,7 +182,7 @@ export function parseObjectDetail(body: unknown): ObjectDetail {
     owners: optionalListOf(item.owners, parseOwner),
     conditions: optionalListOf(item.conditions, parseCondition),
     ports: optionalListOf(item.ports, parsePort),
-    data: optionalListOf(item.data, parseSecretEntry),
+    data: optionalListOf(item.data, parseDataEntry),
     yaml: asString(item.yaml),
   };
   if (Array.isArray(item.containers)) {

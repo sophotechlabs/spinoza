@@ -120,20 +120,55 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		HandledAt:   unstr.String(clean, "status", "lastHandledReconcileAt"),
 		Ports:       portsOf(clean),
 		Event:       eventFactsOf(clean),
-		Data:        secretDataOf(clean),
+		Data:        dataOf(clean),
 		YAML:        string(raw),
 	}, nil
 }
 
-func secretDataOf(item *unstructured.Unstructured) []api.SecretEntry {
-	if item.GetKind() != "Secret" {
+// A Secret keeps every value base64 encoded; a ConfigMap keeps text in data and
+// base64 only in binaryData. Both arrive as the same entries.
+func dataOf(item *unstructured.Unstructured) []api.DataEntry {
+	switch item.GetKind() {
+	case "Secret":
+		return sorted(encodedEntries(item, "data"))
+	case "ConfigMap":
+		return sorted(append(plainEntries(item), encodedEntries(item, "binaryData")...))
+	}
+	return nil
+}
+
+func sorted(out []api.DataEntry) []api.DataEntry {
+	if len(out) == 0 {
 		return nil
 	}
+	slices.SortFunc(out, func(left, right api.DataEntry) int {
+		return strings.Compare(left.Key, right.Key)
+	})
+	return out
+}
+
+func plainEntries(item *unstructured.Unstructured) []api.DataEntry {
 	held, found, err := unstructured.NestedMap(item.Object, "data")
 	if !found || err != nil {
 		return nil
 	}
-	out := make([]api.SecretEntry, 0, len(held))
+	out := make([]api.DataEntry, 0, len(held))
+	for key, raw := range held {
+		text, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		out = append(out, api.DataEntry{Key: key, Value: text, Bytes: len(text)})
+	}
+	return out
+}
+
+func encodedEntries(item *unstructured.Unstructured, field string) []api.DataEntry {
+	held, found, err := unstructured.NestedMap(item.Object, field)
+	if !found || err != nil {
+		return nil
+	}
+	out := make([]api.DataEntry, 0, len(held))
 	for key, raw := range held {
 		encoded, ok := raw.(string)
 		if !ok {
@@ -141,21 +176,18 @@ func secretDataOf(item *unstructured.Unstructured) []api.SecretEntry {
 		}
 		out = append(out, entryOf(key, encoded))
 	}
-	slices.SortFunc(out, func(left, right api.SecretEntry) int {
-		return strings.Compare(left.Key, right.Key)
-	})
 	return out
 }
 
-func entryOf(key, encoded string) api.SecretEntry {
+func entryOf(key, encoded string) api.DataEntry {
 	decoded, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return api.SecretEntry{Key: key, Value: encoded, Bytes: len(encoded), Binary: true}
+		return api.DataEntry{Key: key, Value: encoded, Bytes: len(encoded), Binary: true}
 	}
 	if !utf8.Valid(decoded) {
-		return api.SecretEntry{Key: key, Value: encoded, Bytes: len(decoded), Binary: true}
+		return api.DataEntry{Key: key, Value: encoded, Bytes: len(decoded), Binary: true}
 	}
-	return api.SecretEntry{Key: key, Value: string(decoded), Bytes: len(decoded)}
+	return api.DataEntry{Key: key, Value: string(decoded), Bytes: len(decoded)}
 }
 
 func eventFactsOf(item *unstructured.Unstructured) *api.ObjectEvent {

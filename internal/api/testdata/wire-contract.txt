@@ -68,6 +68,10 @@ ContextList.Kubeconfigs kubeconfigs []Kubeconfig
 ContextList.Protection protection string
 ContextRef.Kubeconfig kubeconfig string
 ContextRef.Name name string
+DataEntry.Binary binary,omitempty bool
+DataEntry.Bytes bytes int
+DataEntry.Key key string
+DataEntry.Value value string
 DebugSession.Container container string
 DebugSession.Created created bool
 DebugSession.Image image string
@@ -262,7 +266,7 @@ ObjectDetail.Annotations annotations,omitempty map[string]string
 ObjectDetail.Conditions conditions,omitempty []Condition
 ObjectDetail.Containers containers,omitempty []string
 ObjectDetail.CreatedAt createdAt string
-ObjectDetail.Data data,omitempty []SecretEntry
+ObjectDetail.Data data,omitempty []DataEntry
 ObjectDetail.Event event,omitempty *ObjectEvent
 ObjectDetail.HandledAt handledAt,omitempty string
 ObjectDetail.Kind kind string
@@ -364,10 +368,6 @@ SearchHit.Version version string
 SearchResults.Errors errors,omitempty map[string]string
 SearchResults.Hits hits []SearchHit
 SearchResults.Truncated truncated bool
-SecretEntry.Binary binary,omitempty bool
-SecretEntry.Bytes bytes int
-SecretEntry.Key key string
-SecretEntry.Value value string
 ServerMsg.Changes changes,omitempty []RowChange
 ServerMsg.Columns columns,omitempty []Column
 ServerMsg.Limit limit,omitempty int
