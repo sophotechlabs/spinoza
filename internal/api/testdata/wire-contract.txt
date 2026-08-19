@@ -256,6 +256,7 @@ ObjectDetail.Annotations annotations,omitempty map[string]string
 ObjectDetail.Conditions conditions,omitempty []Condition
 ObjectDetail.Containers containers,omitempty []string
 ObjectDetail.CreatedAt createdAt string
+ObjectDetail.Data data,omitempty []SecretEntry
 ObjectDetail.Event event,omitempty *ObjectEvent
 ObjectDetail.HandledAt handledAt,omitempty string
 ObjectDetail.Kind kind string
@@ -357,6 +358,10 @@ SearchHit.Version version string
 SearchResults.Errors errors,omitempty map[string]string
 SearchResults.Hits hits []SearchHit
 SearchResults.Truncated truncated bool
+SecretEntry.Binary binary,omitempty bool
+SecretEntry.Bytes bytes int
+SecretEntry.Key key string
+SecretEntry.Value value string
 ServerMsg.Changes changes,omitempty []RowChange
 ServerMsg.Columns columns,omitempty []Column
 ServerMsg.Limit limit,omitempty int

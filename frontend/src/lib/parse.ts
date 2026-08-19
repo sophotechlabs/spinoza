@@ -46,6 +46,7 @@ import type {
   ResourceCatalog,
   ResourceCounts,
   ResourceDescriptor,
+  SecretEntry,
   ResourceUsage,
   Row,
 } from './types';
@@ -145,6 +146,15 @@ function parsePort(item: Record<string, unknown>): ObjectPort {
   };
 }
 
+function parseSecretEntry(item: Record<string, unknown>): SecretEntry {
+  return {
+    key: asString(item.key),
+    value: asString(item.value),
+    bytes: asNumber(item.bytes),
+    binary: optionalBoolean(item.binary),
+  };
+}
+
 export function parseObjectDetail(body: unknown): ObjectDetail {
   const item = asRecord(body);
   const detail: ObjectDetail = {
@@ -159,6 +169,7 @@ export function parseObjectDetail(body: unknown): ObjectDetail {
     owners: optionalListOf(item.owners, parseOwner),
     conditions: optionalListOf(item.conditions, parseCondition),
     ports: optionalListOf(item.ports, parsePort),
+    data: optionalListOf(item.data, parseSecretEntry),
     yaml: asString(item.yaml),
   };
   if (Array.isArray(item.containers)) {

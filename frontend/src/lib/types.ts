@@ -90,6 +90,13 @@ export interface ObjectEvent {
   lastSeen?: string;
 }
 
+export interface SecretEntry {
+  key: string;
+  value: string;
+  bytes: number;
+  binary?: boolean;
+}
+
 export interface ObjectDetail {
   apiVersion: string;
   kind: string;
@@ -103,6 +110,7 @@ export interface ObjectDetail {
   conditions?: Condition[];
   ports?: ObjectPort[];
   event?: ObjectEvent;
+  data?: SecretEntry[];
   yaml: string;
   pod?: PodDetail;
   workload?: WorkloadDetail;

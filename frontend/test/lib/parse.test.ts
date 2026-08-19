@@ -58,6 +58,41 @@ describe('parseRow', () => {
 });
 
 describe('parseObjectDetail', () => {
+  it('reads the decoded entries of a secret', () => {
+    const detail = parseObjectDetail({
+      apiVersion: 'v1',
+      kind: 'Secret',
+      name: 'creds',
+      namespace: 'prod',
+      uid: 'u',
+      createdAt: 'now',
+      data: [
+        { key: 'password', value: 'hunter2', bytes: 7 },
+        { key: 'keystore', value: '/v8A', bytes: 3, binary: true },
+      ],
+      yaml: 'kind: Secret\n',
+    });
+
+    expect(detail.data).toEqual([
+      { key: 'password', value: 'hunter2', bytes: 7, binary: undefined },
+      { key: 'keystore', value: '/v8A', bytes: 3, binary: true },
+    ]);
+  });
+
+  it('leaves the entries out for anything that is not a secret', () => {
+    const detail = parseObjectDetail({
+      apiVersion: 'v1',
+      kind: 'Pod',
+      name: 'web',
+      namespace: 'prod',
+      uid: 'u',
+      createdAt: 'now',
+      yaml: 'kind: Pod\n',
+    });
+
+    expect(detail.data).toBeUndefined();
+  });
+
   it('groups the per-kind fields into facets', () => {
     const detail = parseObjectDetail({
       apiVersion: 'v1',

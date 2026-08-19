@@ -1,6 +1,7 @@
 import type { ContainerState, ObjectDetail, ObjectEvent } from '../lib/types';
 import { conditionColor, containerColor } from '../lib/status';
 import CopyButton from './CopyButton';
+import SecretData from './SecretData';
 
 interface InspectOverviewProps {
   detail: ObjectDetail;
@@ -79,6 +80,7 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
   const annotations = entries(detail.annotations);
   const owners = detail.owners ?? [];
   const conditions = detail.conditions ?? [];
+  const data = detail.data ?? [];
   const runtimeContainers = containers ?? [];
 
   return (
@@ -103,6 +105,12 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
           ]}
         />
       </Section>
+
+      {data.length > 0 && (
+        <Section title="Data">
+          <SecretData uid={detail.uid} entries={data} />
+        </Section>
+      )}
 
       {conditions.length > 0 && (
         <Section title="Conditions">

@@ -2,8 +2,12 @@ package inspect
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -116,8 +120,42 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		HandledAt:   unstr.String(clean, "status", "lastHandledReconcileAt"),
 		Ports:       portsOf(clean),
 		Event:       eventFactsOf(clean),
+		Data:        secretDataOf(clean),
 		YAML:        string(raw),
 	}, nil
+}
+
+func secretDataOf(item *unstructured.Unstructured) []api.SecretEntry {
+	if item.GetKind() != "Secret" {
+		return nil
+	}
+	held, found, err := unstructured.NestedMap(item.Object, "data")
+	if !found || err != nil {
+		return nil
+	}
+	out := make([]api.SecretEntry, 0, len(held))
+	for key, raw := range held {
+		encoded, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		out = append(out, entryOf(key, encoded))
+	}
+	slices.SortFunc(out, func(left, right api.SecretEntry) int {
+		return strings.Compare(left.Key, right.Key)
+	})
+	return out
+}
+
+func entryOf(key, encoded string) api.SecretEntry {
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return api.SecretEntry{Key: key, Value: encoded, Bytes: len(encoded), Binary: true}
+	}
+	if !utf8.Valid(decoded) {
+		return api.SecretEntry{Key: key, Value: encoded, Bytes: len(decoded), Binary: true}
+	}
+	return api.SecretEntry{Key: key, Value: string(decoded), Bytes: len(decoded)}
 }
 
 func eventFactsOf(item *unstructured.Unstructured) *api.ObjectEvent {

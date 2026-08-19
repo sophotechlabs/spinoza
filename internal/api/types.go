@@ -305,7 +305,15 @@ type ObjectDetail struct {
 	HandledAt   string            `json:"handledAt,omitempty"`
 	Ports       []ObjectPort      `json:"ports,omitempty"`
 	Event       *ObjectEvent      `json:"event,omitempty"`
+	Data        []SecretEntry     `json:"data,omitempty"`
 	YAML        string            `json:"yaml"`
+}
+
+type SecretEntry struct {
+	Key    string `json:"key"`
+	Value  string `json:"value"`
+	Bytes  int    `json:"bytes"`
+	Binary bool   `json:"binary,omitempty"`
 }
 
 type ObjectEvent struct {

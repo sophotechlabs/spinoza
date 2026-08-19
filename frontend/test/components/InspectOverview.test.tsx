@@ -280,3 +280,26 @@ describe('an event', () => {
     expect(screen.queryByText('Reason')).not.toBeInTheDocument();
   });
 });
+
+describe('a secret in the inspect overview', () => {
+  it('gives every key a masked, copyable field', () => {
+    render(
+      <InspectOverview
+        detail={detail({
+          kind: 'Secret',
+          data: [{ key: 'password', value: 'hunter2', bytes: 7 }],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Data')).toBeInTheDocument();
+    expect(screen.getByLabelText('password')).toHaveValue('••••••••••••');
+    expect(screen.getByRole('button', { name: 'Show password' })).toBeInTheDocument();
+  });
+
+  it('shows no data section for anything without entries', () => {
+    render(<InspectOverview detail={detail({})} />);
+
+    expect(screen.queryByText('Data')).not.toBeInTheDocument();
+  });
+});
