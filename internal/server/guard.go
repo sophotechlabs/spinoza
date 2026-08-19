@@ -144,7 +144,6 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) bool {
 			Name:     authCookie,
 			Value:    presented,
 			Path:     "/",
-			Secure:   true,
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
 		})
