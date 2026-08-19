@@ -153,6 +153,42 @@ func TestRawKeepsWhatNormalisationWouldStrip(t *testing.T) {
 	}
 }
 
+func TestAClusterScopedObjectComparesWithoutANamespace(t *testing.T) {
+	node := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Node",
+		"metadata":   map[string]any{"name": "p-mk1", "uid": "near"},
+		"spec":       map[string]any{"podCIDR": "10.42.0.0/24"},
+	}}
+	far := node.DeepCopy()
+	far.SetUID("far")
+	kinds := map[schema.GroupVersionResource]string{
+		{Version: "v1", Resource: "nodes"}: "NodeList",
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, node)
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("", "v1", "nodes"): {Version: "v1", Resource: "nodes", Kind: "Node"},
+	}
+	mgr := resources.NewManager(t.Context(), resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
+	cluster := &stubCluster{
+		mgr:       mgr,
+		current:   api.ContextRef{Name: "staging"},
+		elsewhere: map[string]string{"prod//p-mk1": rawOf(t, far)},
+	}
+	ts := clusterServer(t, cluster)
+
+	_, body := doRequest(t, http.MethodGet,
+		ts.URL+"/api/compare?version=v1&resource=nodes&name=p-mk1&against=prod", nil)
+
+	result := comparisonFrom(t, body)
+	if result.Missing != "" {
+		t.Fatalf("missing = %q, want the cluster-scoped read to have found it", result.Missing)
+	}
+	if !result.Identical {
+		t.Fatalf("a node differing only by uid was not identical:\n%s\n%s", result.Left, result.Right)
+	}
+}
+
 // what it says when the far side cannot answer
 
 func TestAnObjectMissingThereIsSaidPlainly(t *testing.T) {

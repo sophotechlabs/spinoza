@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FluxDashboard as FluxDashboardData } from '../../src/lib/types';
 import FluxList from '../../src/components/FluxList';
@@ -273,11 +273,15 @@ describe('column widths', () => {
     render(<FluxList onSelect={vi.fn()} />);
     await screen.findByText('res-a');
 
+    await waitFor(() => {
+      const spread = [...document.querySelectorAll('col')].map((col) =>
+        Number.parseInt(col.style.width, 10),
+      );
+      expect(spread.reduce((sum, width) => sum + width, 0)).toBe(2000);
+    });
     const cols = [...document.querySelectorAll('col')].map((col) =>
       Number.parseInt(col.style.width, 10),
     );
-    const filled = cols.reduce((sum, width) => sum + width, 0);
-    expect(filled).toBe(2000);
     expect(cols[0]).toBeGreaterThan(120);
     expect(cols[1]).toBeGreaterThan(180);
   });
