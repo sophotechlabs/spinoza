@@ -95,6 +95,9 @@ func finish(recorded *recorder, r *http.Request, started time.Time, caught any) 
 }
 
 func upgrading(r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
 	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }
 
