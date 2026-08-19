@@ -89,3 +89,12 @@ export function revealDetails(): void {
   }
   state.collapse(side, false);
 }
+
+export function revealPanel(id: PanelId): void {
+  const state = usePanelsStore.getState();
+  const side = state.placement[id];
+  state.activate(side, id);
+  if (state.collapsed[side]) {
+    state.collapse(side, false);
+  }
+}

@@ -169,3 +169,34 @@ describe('showing the details again', () => {
     expect(usePanelsStore.getState().sizes[side]).toBe(700);
   });
 });
+
+describe('revealing one panel', () => {
+  it('activates the panel and opens the dock it sits in', async () => {
+    const { usePanelsStore, revealPanel } = await freshStore();
+    usePanelsStore.getState().collapse('bottom', true);
+
+    revealPanel('release');
+
+    expect(usePanelsStore.getState().active.bottom).toBe('release');
+    expect(usePanelsStore.getState().collapsed.bottom).toBe(false);
+  });
+
+  it('follows the panel to whichever dock it was moved to', async () => {
+    const { usePanelsStore, revealPanel } = await freshStore();
+    usePanelsStore.getState().move('release', 'right');
+
+    revealPanel('release');
+
+    expect(usePanelsStore.getState().active.right).toBe('release');
+  });
+
+  it('leaves an open dock uncollapsed and remembers the tab', async () => {
+    const { usePanelsStore, revealPanel } = await freshStore();
+
+    revealPanel('release');
+
+    const reopened = await freshStore();
+    expect(reopened.usePanelsStore.getState().active.bottom).toBe('release');
+    expect(usePanelsStore.getState().collapsed.bottom).toBe(false);
+  });
+});

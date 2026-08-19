@@ -435,6 +435,11 @@ export interface ClusterOverview {
   error?: string;
 }
 
+export interface ReleaseRef {
+  namespace: string;
+  name: string;
+}
+
 export interface HelmRelease {
   name: string;
   namespace: string;

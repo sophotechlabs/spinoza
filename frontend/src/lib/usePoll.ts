@@ -13,6 +13,7 @@ export interface PollOptions {
   intervalMs: number;
   enabled?: boolean;
   fallback?: string;
+  refreshKey?: number;
 }
 
 function messageOf(err: unknown, fallback: string): string {
@@ -23,7 +24,7 @@ function messageOf(err: unknown, fallback: string): string {
 }
 
 export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Polled<T> {
-  const { intervalMs, enabled = true, fallback = 'request failed' } = options;
+  const { intervalMs, enabled = true, fallback = 'request failed', refreshKey = 0 } = options;
   const epoch = useClusterEpoch();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
       mounted = false;
       clearInterval(timer);
     };
-  }, [fetcher, intervalMs, enabled, fallback, epoch, reloads]);
+  }, [fetcher, intervalMs, enabled, fallback, epoch, reloads, refreshKey]);
 
   const reload = useCallback(() => {
     setReloads((value) => value + 1);

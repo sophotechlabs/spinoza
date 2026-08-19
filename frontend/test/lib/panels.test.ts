@@ -61,7 +61,7 @@ describe('parsePlacement', () => {
 
 describe('panelsOn', () => {
   it('lists the panels of one dock in registry order', () => {
-    expect(panelsOn(DEFAULT_PLACEMENT, 'bottom')).toEqual(['forwards', 'terminal']);
+    expect(panelsOn(DEFAULT_PLACEMENT, 'bottom')).toEqual(['forwards', 'terminal', 'release']);
     expect(panelsOn(DEFAULT_PLACEMENT, 'left')).toEqual([]);
   });
 
@@ -122,7 +122,7 @@ describe('the panel registry', () => {
   });
 
   function ctx(overrides: Partial<PanelContext> = {}): PanelContext {
-    return { selection: null, detail: null, pod: null, ...overrides };
+    return { selection: null, detail: null, pod: null, release: null, ...overrides };
   }
 
   const podRef = { group: '', version: 'v1', resource: 'pods', namespace: 'prod', name: 'web' };
@@ -164,6 +164,13 @@ describe('the panel registry', () => {
 
   it('keeps forwards open at all times', () => {
     expect(panelById('forwards').enabled(ctx())).toBe(true);
+  });
+
+  it('opens the release panel only once a helm release is selected', () => {
+    expect(panelById('release').enabled(ctx())).toBe(false);
+    expect(
+      panelById('release').enabled(ctx({ release: { namespace: 'demo', name: 'podinfo' } })),
+    ).toBe(true);
   });
 });
 

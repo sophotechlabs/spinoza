@@ -5,6 +5,7 @@ import { configure } from '@testing-library/react';
 import { installMatchMedia } from './helpers';
 import { usePanelsStore } from '../src/store/panels';
 import { useClusterStore } from '../src/store/cluster';
+import { useHelmStore } from '../src/store/helm';
 import { useSessionStore } from '../src/store/session';
 import { useContextsStore } from '../src/store/contexts';
 import { useForwardsStore } from '../src/store/forwards';
@@ -20,6 +21,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/');
   usePanelsStore.getState().reset();
   useClusterStore.getState().reset();
+  useHelmStore.getState().reset();
   useSessionStore.getState().reset();
   useContextsStore.getState().reset();
   useForwardsStore.getState().setForwards([]);

@@ -20,6 +20,7 @@ import {
   statusTone,
   useHelmReleases,
 } from '../../src/lib/helm';
+import { bumpHelmEpoch } from '../../src/store/helm';
 import { anySignal } from '../helpers';
 
 const payload = {
@@ -103,6 +104,24 @@ describe('useHelmReleases', () => {
 
     await waitFor(() => {
       expect(result.current.data?.releases).toHaveLength(1);
+    });
+  });
+
+  it('refetches as soon as a helm action bumps the epoch', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(payload) });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useHelmReleases());
+    await waitFor(() => {
+      expect(result.current.data?.releases).toHaveLength(1);
+    });
+    const before = fetchMock.mock.calls.length;
+
+    act(() => {
+      bumpHelmEpoch();
+    });
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.length).toBe(before + 1);
     });
   });
 

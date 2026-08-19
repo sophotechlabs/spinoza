@@ -1,6 +1,13 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { ContainerState, LogRequest, ObjectDetail, ObjectRef, Row } from '../lib/types';
+import type {
+  ContainerState,
+  LogRequest,
+  ObjectDetail,
+  ObjectRef,
+  ReleaseRef,
+  Row,
+} from '../lib/types';
 import type { DockSide, PanelContext, PanelId } from '../lib/panels';
 import type { Selection } from '../lib/refs';
 import { DOCK_SIDES, panelBodyId, panelById, panelsOn, tabId } from '../lib/panels';
@@ -26,16 +33,21 @@ import InspectEvents from './InspectEvents';
 import InspectLogs from './InspectLogs';
 import ForwardsPanel from './ForwardsPanel';
 import TerminalTab from './TerminalTab';
+import ReleasePanel from './ReleasePanel';
 import Loading from './Loading';
 
 const InspectMetrics = lazy(() => import('./InspectMetrics'));
 
 interface PanelLayoutProps {
   selection: Selection | null;
+  release: ReleaseRef | null;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
   onClose: () => void;
   onDeleted: () => void;
+  onSelectResource: (ref: ObjectRef) => void;
+  onOpenResource: (ref: ObjectRef, kind: string) => void;
+  onReleaseClose: () => void;
   children: ReactNode;
 }
 
@@ -52,6 +64,9 @@ interface RenderContext extends PanelContext {
   reload: () => void;
   onClose: () => void;
   onDeleted: () => void;
+  onSelectResource: (ref: ObjectRef) => void;
+  onOpenResource: (ref: ObjectRef, kind: string) => void;
+  onReleaseClose: () => void;
 }
 
 function liveContainers(selection: Selection): ContainerState[] | undefined {
@@ -124,6 +139,14 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
     </div>
   ),
   terminal: (ctx) => <TerminalTab pod={ctx.pod} />,
+  release: (ctx) => (
+    <ReleasePanel
+      target={ctx.release}
+      onSelectResource={ctx.onSelectResource}
+      onOpenResource={ctx.onOpenResource}
+      onClose={ctx.onReleaseClose}
+    />
+  ),
   overview: (ctx) =>
     objectPanel(ctx, (selection, detail) => (
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -184,10 +207,14 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
 
 export default function PanelLayout({
   selection,
+  release,
   subscribeLogs,
   unsubscribeLogs,
   onClose,
   onDeleted,
+  onSelectResource,
+  onOpenResource,
+  onReleaseClose,
   children,
 }: PanelLayoutProps) {
   const placement = usePanelsStore((state) => state.placement);
@@ -198,7 +225,7 @@ export default function PanelLayout({
   const [opened, setOpened] = useState<PanelId[]>([]);
   const { detail, error, gone, reload } = useObjectDetail(refOf(selection), rowOf(selection));
 
-  const ctx: PanelContext = { selection, detail, pod: podFor(selection, detail) };
+  const ctx: PanelContext = { selection, detail, pod: podFor(selection, detail), release };
 
   const live = DOCK_SIDES.map((side) => activeOn(side)).filter((id) => id !== null);
   const liveKey = live.join(',');
@@ -295,6 +322,9 @@ export default function PanelLayout({
           reload,
           onClose,
           onDeleted,
+          onSelectResource,
+          onOpenResource,
+          onReleaseClose,
         };
         return (
           <PanelMount

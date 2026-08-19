@@ -5,6 +5,7 @@ import type { HelmRelease, HelmReleaseDetail as Detail } from '../../src/lib/typ
 import HelmReleaseDetail from '../../src/components/HelmReleaseDetail';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
+import { useHelmStore } from '../../src/store/helm';
 
 vi.mock('../../src/components/HelmUpgradeDialog', () => ({
   default: ({
@@ -123,17 +124,18 @@ function stub(options: Stubs = {}) {
 
 function renderDetail() {
   const onSelectResource = vi.fn();
-  const onChanged = vi.fn();
+  const onOpenResource = vi.fn();
   const onClose = vi.fn();
   render(
     <HelmReleaseDetail
-      release={release}
+      namespace="demo"
+      name="podinfo"
       onSelectResource={onSelectResource}
-      onChanged={onChanged}
+      onOpenResource={onOpenResource}
       onClose={onClose}
     />,
   );
-  return { onSelectResource, onChanged, onClose };
+  return { onSelectResource, onOpenResource, onClose };
 }
 
 beforeEach(() => {
@@ -191,22 +193,25 @@ describe('HelmReleaseDetail', () => {
     expect(screen.getByText(/kind: ConfigMap/)).toBeInTheDocument();
   });
 
-  it('opens a rendered resource in the inspector', async () => {
+  it('opens a rendered resource in its table', async () => {
     const user = userEvent.setup();
     stub();
-    const { onSelectResource } = renderDetail();
+    const { onOpenResource } = renderDetail();
     await screen.findByText('Upgrade complete');
 
     await user.click(screen.getByRole('button', { name: 'Resources' }));
     await user.click(screen.getByRole('button', { name: 'podinfo' }));
 
-    expect(onSelectResource).toHaveBeenCalledWith({
-      group: '',
-      version: 'v1',
-      resource: 'configmaps',
-      namespace: 'demo',
-      name: 'podinfo',
-    });
+    expect(onOpenResource).toHaveBeenCalledWith(
+      {
+        group: '',
+        version: 'v1',
+        resource: 'configmaps',
+        namespace: 'demo',
+        name: 'podinfo',
+      },
+      'ConfigMap',
+    );
   });
 
   it('leaves a kind the cluster does not report unopenable', async () => {
@@ -224,7 +229,7 @@ describe('HelmReleaseDetail', () => {
   it('lists the revision history newest first and offers a rollback', async () => {
     const user = userEvent.setup();
     const calls = stub();
-    const { onChanged } = renderDetail();
+    renderDetail();
     await screen.findByText('Upgrade complete');
 
     await user.click(screen.getByRole('button', { name: 'History' }));
@@ -232,7 +237,7 @@ describe('HelmReleaseDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Roll back' }));
 
     await waitFor(() => {
-      expect(onChanged).toHaveBeenCalled();
+      expect(useHelmStore.getState().epoch).toBe(1);
     });
     const action = calls.find((call) => call.url.startsWith('/api/helm/action'));
     expect(action?.method).toBe('POST');
@@ -255,7 +260,7 @@ describe('HelmReleaseDetail', () => {
   it('asks before uninstalling and only then calls helm', async () => {
     const user = userEvent.setup();
     const calls = stub({ actionBody: { action: 'uninstall', message: 'release removed' } });
-    const { onClose, onChanged } = renderDetail();
+    const { onClose } = renderDetail();
     await screen.findByText('Upgrade complete');
 
     await user.click(screen.getByRole('button', { name: 'Uninstall' }));
@@ -267,7 +272,7 @@ describe('HelmReleaseDetail', () => {
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled();
     });
-    expect(onChanged).toHaveBeenCalled();
+    expect(useHelmStore.getState().epoch).toBe(1);
     const action = calls.find((call) => call.url.startsWith('/api/helm/action'));
     expect(action?.url).toContain('action=uninstall');
   });
@@ -297,7 +302,7 @@ describe('HelmReleaseDetail', () => {
   it('opens the upgrade dialog seeded with the loaded release', async () => {
     const user = userEvent.setup();
     const calls = stub();
-    const { onChanged } = renderDetail();
+    renderDetail();
     await screen.findByText('Upgrade complete');
 
     await user.click(screen.getByRole('button', { name: 'Upgrade' }));
@@ -309,7 +314,7 @@ describe('HelmReleaseDetail', () => {
     const before = calls.filter((call) => call.url.startsWith('/api/helm/release')).length;
     await user.click(screen.getByRole('button', { name: 'finish-upgrade' }));
 
-    expect(onChanged).toHaveBeenCalled();
+    expect(useHelmStore.getState().epoch).toBe(1);
     await waitFor(() => {
       const after = calls.filter((call) => call.url.startsWith('/api/helm/release')).length;
       expect(after).toBe(before + 1);
@@ -447,7 +452,7 @@ describe('HelmReleaseDetail on a protected cluster', () => {
   it('asks for the release name before rolling back', async () => {
     const user = userEvent.setup();
     const calls = stub();
-    const { onChanged } = renderDetail();
+    renderDetail();
     await screen.findByText('Upgrade complete');
 
     await user.click(screen.getByRole('button', { name: 'History' }));
@@ -458,7 +463,7 @@ describe('HelmReleaseDetail on a protected cluster', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
     await waitFor(() => {
-      expect(onChanged).toHaveBeenCalled();
+      expect(useHelmStore.getState().epoch).toBe(1);
     });
     const action = calls.find((call) => call.url.startsWith('/api/helm/action'));
     expect(action?.url).toContain('revision=2');

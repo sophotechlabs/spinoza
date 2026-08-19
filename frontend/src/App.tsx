@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   FluxResource,
   GraphNode,
+  HelmRelease,
   ObjectRef,
   ResourceDescriptor,
   Row,
@@ -29,7 +30,7 @@ import { clearFilters, imposeChips } from './store/filters';
 import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
 import { clearTerminals } from './store/terminals';
-import { revealDetails } from './store/panels';
+import { revealDetails, revealPanel } from './store/panels';
 import { askToast, notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -152,7 +153,7 @@ export default function App() {
       replace({ ...route, context: contextName });
       return;
     }
-    replace({ ...route, context: contextName, selection: null });
+    replace({ ...route, context: contextName, selection: null, release: null });
   }, [contextName, route, replace]);
 
   useEffect(() => {
@@ -250,11 +251,12 @@ export default function App() {
         kind: descriptor.kind,
       },
       selection: null,
+      release: route.release,
     });
   }
 
   function handleContextChanged() {
-    navigate({ context: '', view: route.view, resource: null, selection: null });
+    navigate({ context: '', view: route.view, resource: null, selection: null, release: null });
     setContextName('');
     clearRecents();
     clearHistory();
@@ -285,6 +287,32 @@ export default function App() {
     navigate({ ...route, selection: ref });
   }
 
+  function openRelease(release: HelmRelease) {
+    navigate({ ...route, release: { namespace: release.namespace, name: release.name } });
+    revealPanel('release');
+  }
+
+  function closeRelease() {
+    navigate({ ...route, release: null });
+  }
+
+  function openInTable(ref: ObjectRef, kind: string) {
+    if (!mayDiscard()) {
+      return;
+    }
+    rememberObject(ref);
+    if (ref.namespace !== '') {
+      chooseNamespace(ref.namespace);
+    }
+    navigate({
+      context: route.context,
+      view: 'resources',
+      resource: { group: ref.group, version: ref.version, resource: ref.resource, kind },
+      selection: ref,
+      release: route.release,
+    });
+  }
+
   function openFound(found: PaletteOpen) {
     if (!mayDiscard()) {
       return;
@@ -309,6 +337,7 @@ export default function App() {
         kind: found.type.kind,
       },
       selection: found.ref,
+      release: route.release,
     });
   }
 
@@ -344,7 +373,7 @@ export default function App() {
     mainArea = <ClusterOverview />;
   }
   if (route.view === 'helm') {
-    mainArea = <HelmReleases onSelectResource={remember} />;
+    mainArea = <HelmReleases selected={route.release} onSelect={openRelease} />;
   }
   if (route.view === 'gitops') {
     mainArea = (
@@ -419,10 +448,14 @@ export default function App() {
         >
           <PanelLayout
             selection={selection}
+            release={route.release}
             subscribeLogs={subscribeLogs}
             unsubscribeLogs={unsubscribeLogs}
             onClose={clearSelection}
             onDeleted={clearSelection}
+            onSelectResource={remember}
+            onOpenResource={openInTable}
+            onReleaseClose={closeRelease}
           >
             <ErrorBoundary label={route.view}>{mainArea}</ErrorBoundary>
           </PanelLayout>

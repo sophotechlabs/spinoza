@@ -164,6 +164,51 @@ describe('decoding a route', () => {
   });
 });
 
+describe('the release in the address bar', () => {
+  it('writes the release next to whatever else the route holds', () => {
+    const hash = encodeRoute(
+      route({ view: 'helm', release: { namespace: 'demo', name: 'podinfo' } }),
+    );
+
+    expect(hash).toContain('view=helm');
+    expect(hash).toContain('release=podinfo');
+    expect(hash).toContain('releaseNs=demo');
+  });
+
+  it('round-trips a release', () => {
+    const release = { namespace: 'demo', name: 'podinfo' };
+
+    expect(roundTrip(route({ view: 'helm', release })).release).toEqual(release);
+  });
+
+  it('round-trips a release with no namespace of its own', () => {
+    const release = { namespace: '', name: 'podinfo' };
+
+    expect(roundTrip(route({ view: 'helm', release })).release).toEqual(release);
+  });
+
+  it('reads an old url without release params as no release', () => {
+    expect(decodeRoute('#view=helm').release).toBeNull();
+  });
+
+  it('drops a release namespace that names no release', () => {
+    expect(decodeRoute('#releaseNs=demo').release).toBeNull();
+  });
+
+  it('keeps the release apart from an object selection', () => {
+    const decoded = roundTrip(
+      route({
+        resource: pods,
+        selection: { group: '', version: 'v1', resource: 'pods', namespace: 'p', name: 'web-0' },
+        release: { namespace: 'demo', name: 'podinfo' },
+      }),
+    );
+
+    expect(decoded.selection?.name).toBe('web-0');
+    expect(decoded.release).toEqual({ namespace: 'demo', name: 'podinfo' });
+  });
+});
+
 describe('resourceKey', () => {
   it('is empty without a resource', () => {
     expect(resourceKey(null)).toBe('');

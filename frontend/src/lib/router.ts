@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ObjectRef, ResourceDescriptor, View } from './types';
+import type { ObjectRef, ReleaseRef, ResourceDescriptor, View } from './types';
 import { VIEWS } from './types';
 
 export interface RouteResource {
@@ -14,6 +14,7 @@ export interface Route {
   view: View;
   resource: RouteResource | null;
   selection: ObjectRef | null;
+  release: ReleaseRef | null;
 }
 
 export const EMPTY_ROUTE: Route = {
@@ -21,6 +22,7 @@ export const EMPTY_ROUTE: Route = {
   view: 'cluster',
   resource: null,
   selection: null,
+  release: null,
 };
 
 // with nothing named, a route showing a resource is a table and everything else is the overview
@@ -85,6 +87,10 @@ export function encodeRoute(route: Route): string {
       put(params, 'selResource', route.selection.resource);
     }
   }
+  if (route.release !== null) {
+    params.set('release', route.release.name);
+    put(params, 'releaseNs', route.release.namespace);
+  }
   const query = params.toString();
   if (query === '') {
     return '';
@@ -132,6 +138,14 @@ function readSelection(params: URLSearchParams, resource: RouteResource | null):
   };
 }
 
+function readRelease(params: URLSearchParams): ReleaseRef | null {
+  const name = params.get('release') ?? '';
+  if (name === '') {
+    return null;
+  }
+  return { namespace: params.get('releaseNs') ?? '', name };
+}
+
 export function decodeRoute(hash: string): Route {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const resource = readResource(params);
@@ -145,6 +159,7 @@ export function decodeRoute(hash: string): Route {
     view,
     resource,
     selection: readSelection(params, resource),
+    release: readRelease(params),
   };
 }
 

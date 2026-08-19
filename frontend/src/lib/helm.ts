@@ -10,6 +10,7 @@ import type {
 } from './types';
 import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { failure } from './object';
+import { useHelmEpoch } from '../store/helm';
 import {
   parseHelmActionResult,
   parseHelmChartVersions,
@@ -31,10 +32,12 @@ export async function fetchHelmReleases(): Promise<HelmReleases> {
 }
 
 export function useHelmReleases(enabled = true): Polled<HelmReleases> {
+  const epoch = useHelmEpoch();
   return usePoll(fetchHelmReleases, {
     intervalMs: HELM_POLL_MS,
     enabled,
     fallback: 'helm request failed',
+    refreshKey: epoch,
   });
 }
 

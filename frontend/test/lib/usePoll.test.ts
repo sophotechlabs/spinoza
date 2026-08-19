@@ -162,6 +162,25 @@ describe('usePoll', () => {
     });
   });
 
+  it('refetches without dropping the data when the refresh key moves', async () => {
+    const fetcher = vi.fn().mockResolvedValue('one');
+    const { result, rerender } = renderHook(
+      ({ refreshKey }: { refreshKey: number }) =>
+        usePoll(fetcher, { intervalMs: 1000, refreshKey }),
+      { initialProps: { refreshKey: 0 } },
+    );
+    await waitFor(() => {
+      expect(result.current.data).toBe('one');
+    });
+
+    rerender({ refreshKey: 1 });
+    expect(result.current.data).toBe('one');
+
+    await waitFor(() => {
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('refetches on demand when reload is called', async () => {
     const fetcher = vi.fn().mockResolvedValue('one');
     const { result } = renderHook(() => usePoll(fetcher, options()));

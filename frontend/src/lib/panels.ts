@@ -1,9 +1,10 @@
-import type { ObjectDetail } from './types';
+import type { ObjectDetail, ReleaseRef } from './types';
 import type { Selection } from './refs';
 import type { PodTarget } from './pods';
 import { readStored, writeStored } from './persist';
 
-export type PanelId = 'overview' | 'yaml' | 'events' | 'logs' | 'metrics' | 'forwards' | 'terminal';
+export type PanelId =
+  'overview' | 'yaml' | 'events' | 'logs' | 'metrics' | 'forwards' | 'terminal' | 'release';
 
 export type DockSide = 'left' | 'right' | 'bottom';
 
@@ -13,6 +14,7 @@ export interface PanelContext {
   selection: Selection | null;
   detail: ObjectDetail | null;
   pod: PodTarget | null;
+  release: ReleaseRef | null;
 }
 
 export interface PanelDescriptor {
@@ -49,6 +51,10 @@ function takesEvents(ctx: PanelContext): boolean {
   return ctx.detail?.kind !== 'Event';
 }
 
+function hasRelease(ctx: PanelContext): boolean {
+  return ctx.release !== null;
+}
+
 export const PANELS: PanelDescriptor[] = [
   {
     id: 'overview',
@@ -80,6 +86,13 @@ export const PANELS: PanelDescriptor[] = [
     defaultSide: 'bottom',
     hint: 'Nothing docked here yet',
     enabled: () => true,
+  },
+  {
+    id: 'release',
+    label: 'Release',
+    defaultSide: 'bottom',
+    hint: 'Select a Helm release to inspect it',
+    enabled: hasRelease,
   },
 ];
 

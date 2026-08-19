@@ -21,6 +21,52 @@ vi.mock('../../src/components/InspectMetrics', () => ({
   default: () => <div data-testid="metrics-panel" />,
 }));
 
+vi.mock('../../src/components/ReleasePanel', () => {
+  const drillRef = {
+    group: 'apps',
+    version: 'v1',
+    resource: 'deployments',
+    namespace: 'prod',
+    name: 'front',
+  };
+  return {
+    default: ({
+      target,
+      onSelectResource,
+      onOpenResource,
+      onClose,
+    }: {
+      target: { namespace: string; name: string } | null;
+      onSelectResource: (ref: typeof drillRef) => void;
+      onOpenResource: (ref: typeof drillRef, kind: string) => void;
+      onClose: () => void;
+    }) => (
+      <div data-testid="release-panel">
+        {target === null ? 'no release' : `${target.namespace}/${target.name}`}
+        <button
+          type="button"
+          onClick={() => {
+            onOpenResource(drillRef, 'Deployment');
+          }}
+        >
+          drill-in
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSelectResource(drillRef);
+          }}
+        >
+          open-flux-owner
+        </button>
+        <button type="button" onClick={onClose}>
+          close-release
+        </button>
+      </div>
+    ),
+  };
+});
+
 import PanelLayout from '../../src/components/PanelLayout';
 import { PLACEMENT_KEY } from '../../src/lib/panels';
 import { usePanelsStore } from '../../src/store/panels';
@@ -65,6 +111,9 @@ function stubApi(): void {
 function renderLayout(overrides: Partial<Parameters<typeof PanelLayout>[0]> = {}) {
   const onClose = vi.fn();
   const onDeleted = vi.fn();
+  const onSelectResource = vi.fn();
+  const onOpenResource = vi.fn();
+  const onReleaseClose = vi.fn();
   const view = render(
     <PanelLayout
       selection={{
@@ -79,16 +128,20 @@ function renderLayout(overrides: Partial<Parameters<typeof PanelLayout>[0]> = {}
           ],
         }),
       }}
+      release={null}
       subscribeLogs={vi.fn()}
       unsubscribeLogs={vi.fn()}
       onClose={onClose}
       onDeleted={onDeleted}
+      onSelectResource={onSelectResource}
+      onOpenResource={onOpenResource}
+      onReleaseClose={onReleaseClose}
       {...overrides}
     >
       <div data-testid="main-area" />
     </PanelLayout>,
   );
-  return { onClose, onDeleted, view };
+  return { onClose, onDeleted, onSelectResource, onOpenResource, onReleaseClose, view };
 }
 
 function dockStrip(side: 'left' | 'right' | 'bottom'): HTMLElement {
@@ -420,10 +473,14 @@ describe('an object deleted out from under the panels', () => {
     view.rerender(
       <PanelLayout
         selection={{ ref: podRef, row: null }}
+        release={null}
         subscribeLogs={vi.fn()}
         unsubscribeLogs={vi.fn()}
         onClose={vi.fn()}
         onDeleted={vi.fn()}
+        onSelectResource={vi.fn()}
+        onOpenResource={vi.fn()}
+        onReleaseClose={vi.fn()}
       >
         <div data-testid="main-area" />
       </PanelLayout>,
@@ -487,5 +544,55 @@ describe('gitops actions above the overview', () => {
 
     expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
+  });
+});
+
+describe('the release panel', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    usePanelsStore.getState().reset();
+    useToastsStore.getState().clear();
+    stubApi();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('offers the release tab disabled until a release is picked', () => {
+    renderLayout();
+
+    const tab = within(dockStrip('bottom')).getByRole('tab', { name: 'Release' });
+    expect(tab).toHaveAttribute('aria-disabled', 'true');
+    expect(tab).toHaveAttribute('title', 'Select a Helm release to inspect it');
+  });
+
+  it('shows the selected release once its tab is active', async () => {
+    const user = userEvent.setup();
+    renderLayout({ release: { namespace: 'demo', name: 'podinfo' } });
+
+    await user.click(within(dockStrip('bottom')).getByRole('tab', { name: 'Release' }));
+
+    expect(await screen.findByTestId('release-panel')).toHaveTextContent('demo/podinfo');
+  });
+
+  it('threads the drill-in, owner and close callbacks through', async () => {
+    const user = userEvent.setup();
+    const { onOpenResource, onSelectResource, onReleaseClose } = renderLayout({
+      release: { namespace: 'demo', name: 'podinfo' },
+    });
+    await user.click(within(dockStrip('bottom')).getByRole('tab', { name: 'Release' }));
+    await screen.findByTestId('release-panel');
+
+    await user.click(screen.getByRole('button', { name: 'drill-in' }));
+    await user.click(screen.getByRole('button', { name: 'open-flux-owner' }));
+    await user.click(screen.getByRole('button', { name: 'close-release' }));
+
+    expect(onOpenResource).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'front' }),
+      'Deployment',
+    );
+    expect(onSelectResource).toHaveBeenCalledWith(expect.objectContaining({ name: 'front' }));
+    expect(onReleaseClose).toHaveBeenCalled();
   });
 });

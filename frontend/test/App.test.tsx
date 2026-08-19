@@ -136,21 +136,72 @@ vi.mock('../src/components/ClusterOverview', () => ({
   default: () => <div data-testid="cluster-overview" />,
 }));
 vi.mock('../src/components/HelmReleases', () => ({
-  default: ({ onSelectResource }: { onSelectResource: (ref: ObjectRef) => void }) => (
-    <div data-testid="helm-releases">
+  default: ({
+    selected,
+    onSelect,
+  }: {
+    selected: { namespace: string; name: string } | null;
+    onSelect: (release: { namespace: string; name: string }) => void;
+  }) => (
+    <div data-testid="helm-releases" data-selected={selected === null ? '' : selected.name}>
+      <button
+        type="button"
+        onClick={() => {
+          onSelect({ namespace: 'demo', name: 'podinfo' });
+        }}
+      >
+        select-release
+      </button>
+    </div>
+  ),
+}));
+vi.mock('../src/components/ReleasePanel', () => ({
+  default: ({
+    target,
+    onSelectResource,
+    onOpenResource,
+    onClose,
+  }: {
+    target: { namespace: string; name: string } | null;
+    onSelectResource: (ref: ObjectRef) => void;
+    onOpenResource: (ref: ObjectRef, kind: string) => void;
+    onClose: () => void;
+  }) => (
+    <div data-testid="release-panel">
+      {target === null ? 'no release' : `release ${target.namespace}/${target.name}`}
+      <button
+        type="button"
+        onClick={() => {
+          onOpenResource(
+            {
+              group: '',
+              version: 'v1',
+              resource: 'configmaps',
+              namespace: 'demo',
+              name: 'live-check',
+            },
+            'ConfigMap',
+          );
+        }}
+      >
+        open-release-resource
+      </button>
       <button
         type="button"
         onClick={() => {
           onSelectResource({
-            group: '',
-            version: 'v1',
-            resource: 'configmaps',
+            group: 'helm.toolkit.fluxcd.io',
+            version: 'v2',
+            resource: 'helmreleases',
             namespace: 'demo',
-            name: 'live-check',
+            name: 'podinfo',
           });
         }}
       >
-        select-helm-resource
+        open-release-owner
+      </button>
+      <button type="button" onClick={onClose}>
+        close-release-panel
       </button>
     </div>
   ),
@@ -1759,5 +1810,119 @@ describe('finding your way in by keyboard', () => {
     await user.click(screen.getByRole('button', { name: 'select-argo' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('applications:argocd/root');
+  });
+});
+
+describe('the helm release panel', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+    setUnsaved(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setUnsaved(false);
+    resetStore();
+  });
+
+  async function openRelease(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+    await user.click(await screen.findByRole('button', { name: 'Helm releases' }));
+    await user.click(await screen.findByRole('button', { name: 'select-release' }));
+  }
+
+  it('puts the release into the address bar and reveals its panel', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await openRelease(user);
+
+    expect(window.location.hash).toContain('release=podinfo');
+    expect(window.location.hash).toContain('releaseNs=demo');
+    expect(screen.getByTestId('helm-releases').dataset.selected).toBe('podinfo');
+    expect(screen.getByTestId('release-panel')).toHaveTextContent('release demo/podinfo');
+    expect(screen.getByTestId('release-panel')).toBeVisible();
+  });
+
+  it('reveals the panel even when its dock was collapsed', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Helm releases' }));
+    await user.click(screen.getByRole('button', { name: 'Hide the bottom dock' }));
+
+    await user.click(await screen.findByRole('button', { name: 'select-release' }));
+
+    expect(screen.getByTestId('release-panel')).toBeVisible();
+  });
+
+  it('leads from the release to a rendered resource in its table', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openRelease(user);
+
+    await user.click(screen.getByRole('button', { name: 'open-release-resource' }));
+
+    expect(window.location.hash).toContain('resource=configmaps');
+    expect(window.location.hash).toContain('kind=ConfigMap');
+    expect(window.location.hash).toContain('name=live-check');
+    expect(window.location.hash).toContain('release=podinfo');
+    expect(window.location.hash).not.toContain('view=helm');
+    expect(screen.queryByTestId('helm-releases')).not.toBeInTheDocument();
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('configmaps:demo/live-check');
+  });
+
+  it('opens the flux owner in the drawer without leaving the helm view', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openRelease(user);
+
+    await user.click(screen.getByRole('button', { name: 'open-release-owner' }));
+
+    expect(window.location.hash).toContain('view=helm');
+    expect(screen.getByTestId('helm-releases')).toBeInTheDocument();
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('helmreleases:demo/podinfo');
+  });
+
+  it('closes the release from its own panel', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openRelease(user);
+
+    await user.click(screen.getByRole('button', { name: 'close-release-panel' }));
+
+    expect(window.location.hash).not.toContain('release=');
+    expect(screen.getByRole('tab', { name: 'Release' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('guards the jump into the table behind an unsaved draft', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openRelease(user);
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+
+    await user.click(screen.getByRole('button', { name: 'open-release-resource' }));
+
+    expect(window.location.hash).toContain('view=helm');
+    expect(screen.getByTestId('helm-releases')).toBeInTheDocument();
+  });
+
+  it('enables the release tab from a cold link without forcing the dock open', async () => {
+    openAt('#view=helm&release=podinfo&releaseNs=demo');
+    render(<App />);
+
+    const tab = await screen.findByRole('tab', { name: 'Release' });
+    expect(tab).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('helm-releases').dataset.selected).toBe('podinfo');
+  });
+
+  it('drops the release when the cluster changes', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openRelease(user);
+
+    await user.click(screen.getByTestId('context-changed'));
+
+    expect(window.location.hash).not.toContain('release=');
   });
 });
