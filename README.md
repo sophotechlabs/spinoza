@@ -9,7 +9,7 @@
 
 A self-hosted Kubernetes GUI: Go backend with client-go informers, React frontend, one binary. Runs as a browser tab or a desktop window. [spinoza.tech](https://spinoza.tech)
 
-**Source-available, not open source.** [FSL-1.1-ALv2](LICENSE): run it, modify it and redistribute it internally, for professional services, and for non-commercial education and research. You may not offer it as a commercial product or service that competes with it. Each release becomes Apache-2.0 two years after it ships.
+**Source-available, not open source:** [FSL-1.1-ALv2](LICENSE), Apache-2.0 after two years.
 
 ## Install
 
@@ -26,69 +26,66 @@ open -a Spinoza         # desktop window, macOS
 
 Archives are on the [releases page](https://github.com/sophotechlabs/spinoza/releases): tarballs for Linux and macOS, zips for Windows. `SPINOZA_VERSION=v1.8.1` pins the installer.
 
-Spinoza needs a kubeconfig. Helm releases are read straight from the cluster; upgrades, rollbacks and debug containers call `helm` and `kubectl`.
+Needs a kubeconfig. Upgrades, rollbacks and debug containers call `helm` and `kubectl`.
 
-## What it does
+## Every GVR discovery reports
 
-Live clusters below, Borg theme.
-
-### Every GVR discovery reports
-
-One informer-backed view per type, so CRDs appear without per-type code. A snapshot, then deltas over a WebSocket keyed by uid. Filter by name or by any column of the kind in view, completed from what the cluster reported. Selecting a row fills the inspect drawer.
+One informer-backed view per type, so CRDs need no per-type code. Snapshot, then deltas over a WebSocket keyed by uid. Field-aware filter completed from what the cluster reported, namespace scope, failing-object badges, bulk restart and delete.
 
 ![Spinoza pods table with the inspect drawer open on coredns: ports, metadata, conditions, containers and owner references](docs/images/pods.png)
 
-### GitOps, grouped by role
+## GitOps
 
-Flux and Argo CD side by side: cluster sync, controller health, and every applier and source with its ready count. Reconcile, suspend and resume Flux objects. Sync and refresh Argo Applications.
+Flux and Argo CD side by side: cluster sync, controller health, per-kind lists, status tiles. Reconcile, suspend and resume Flux objects. Sync and refresh Argo Applications.
 
 ![Spinoza Flux overview: all systems operational, cluster sync from a GitRepository, controller health, and counts for appliers, sources and image automation](docs/images/flux-overview.png)
 
-The dependency graph draws sources, Kustomizations and HelmReleases by what manages what. Argo's is the app-of-apps, with ApplicationSets above what they generate. Clicking a node opens it in the drawer with its actions.
+The dependency graph is laid out by what manages what. Argo's is the app-of-apps, ApplicationSets above what they generate. A node opens in the drawer with its actions.
 
 ![Spinoza GitOps dependency graph: sources, Kustomizations and HelmReleases with the edges that manage and depend on each other](docs/images/gitops-graph.png)
 
-### Helm without the binary
+## Helm without the binary
 
-Releases read straight from Helm's own storage objects, secrets or configmaps, whichever driver wrote them. Chart, app version, the newest version your repos offer, revision, status, values, notes, rendered manifest and history. OCI end to end. Upgrade, rollback and uninstall call `helm`, and an upgrade shows a server-rendered manifest diff before you confirm. A release owned by Flux gets no upgrade button; it links to its HelmRelease, because that change belongs in git.
+Releases read from Helm's own storage, either driver. Chart and app version, what your repos offer, revision, status, values, notes, rendered manifest, history. OCI end to end. Upgrade behind a server-rendered manifest diff; rollback and uninstall from the same panel. A Flux-owned release links to its HelmRelease instead of offering an upgrade button.
 
 ![Spinoza Helm releases with chart and app versions, revision, status, and a Latest column flagging available upgrades](docs/images/helm-releases.png)
 
-### Inspect and edit
+## Inspect and edit
 
-Metadata, conditions, events, and live YAML edited against the cluster's own schema in Monaco with `monaco-yaml`. Server-side apply and delete. An edited draft survives a background reload.
+Metadata, conditions, events and live YAML in Monaco. Schema-aware completion from the cluster's own OpenAPI, server-side apply and delete. An edited draft survives a background reload.
 
 ![Spinoza deployments table with the inspect drawer open on live YAML in Monaco, with apply, revert and delete](docs/images/inspect-yaml.png)
 
-### Port-forwarding
+## Port-forwarding
 
-Any pod or service on localhost without touching kubectl. Forwards survive navigation, are listed in one place, and stop with one click.
+Any pod or service on localhost, no kubectl. Forwards survive navigation, listed and stopped from one panel.
 
 ![Spinoza pods table with the inspect drawer open on Grafana's ports: 3000 forwarded to a local port with open and stop controls, and a toast confirming the forward](docs/images/port-forward.png)
 
-### Write actions that show their work
+## Write actions
 
-Scale, rollout restart, cordon, uncordon, drain. Drain plans first: it counts what it would evict, leave in place and block, names the reason for each, and keeps the button disabled until you accept the blocked pods. Destructive actions can be put behind a typed confirmation per cluster, which then asks for the object's name.
+Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan before it runs: what it evicts, what it leaves, what it blocks and why. Protected clusters require the object name typed out.
 
 ![Spinoza drain plan for a node: how many pods it would evict, leave in place and block, the reason for each, and the drain button disabled behind a checkbox](docs/images/drain-plan.png)
 
-### The rest
+## Also
 
-- **Cluster overview**: server version, node readiness, allocatable CPU and memory against live usage, pods by phase, newest warning events.
-- **Logs** per container, streamed. Pausing follow stops the scroll, not the stream.
-- **Exec** into a container over `v5.channel.k8s.io` in a real terminal. Shell-less images get an ephemeral debug container instead, on a verdict cached per image digest.
-- **Metrics**: live usage from metrics-server in the tables, CPU and memory history from Prometheus through the apiserver proxy. `--prometheus namespace/service:port` overrides discovery.
-- **Nine themes**, contrast-gated in CI, plus your own as JSON.
+- **Cluster overview**: server version, node readiness, allocatable against live usage, pods by phase, recent warning events.
+- **Exec** over `v5.channel.k8s.io` into xterm. Shell-less images get an ephemeral debug container, on a verdict cached per image digest.
+- **Logs** per container. Pausing follow stops the scroll, not the stream.
+- **Metrics**: metrics-server in the tables, CPU and memory history from Prometheus through the apiserver proxy. `--prometheus namespace/service:port` overrides discovery.
+- **Kubeconfigs** added by path, referenced in place, never copied or merged. Contexts grouped per file, listed in `kubeconfigs.json`. `--kubeconfig PATH` replaces the default lookup for one run.
+- **Nine themes**, contrast-gated in CI, plus your own as JSON. Screenshots here are Borg.
 
-## Running it
+## Security
 
-Spinoza starts on your current kubeconfig context, and the top bar switches between every context it can see. **Kubeconfigs** adds another file by path, referenced rather than copied or merged, so contexts stay grouped under the file they came from. The list lives in `kubeconfigs.json` in your user config directory. `--kubeconfig PATH` replaces the default lookup for one run.
+Binds loopback only; rejects non-local Host or Origin. Every route and both WebSockets require the token minted for that run, as the `X-Spinoza-Token` header, a `token` query parameter, or the cookie the page keeps. `--token-file PATH` writes it at mode 0600. Exits when the last view closes.
 
-Spinoza binds loopback only and rejects requests whose Host or Origin is not local. Every route and both WebSockets require the token generated for that run, sent as the `X-Spinoza-Token` header, a `token` query parameter, or the cookie the page keeps. `--token-file PATH` writes it out at mode 0600. When the last view closes, the process exits.
+Outbound: your apiserver and the chart repos you configured.
 
 ## Develop
 
-Toolchain versions are pinned in `mise.toml` (Go 1.26, Node 24); `mise install` gets them.
+Toolchain pinned in `mise.toml` (Go 1.26, Node 24); `mise install` gets them.
 
 ```sh
 just deps      # frontend dependencies, once
@@ -100,20 +97,14 @@ just rund      # build and open the desktop app
 
 Vite serves its own `index.html` without the token, so open `http://localhost:5173/?token=<the token dev-api printed>`.
 
-The binary embeds the built frontend. `just stub-assets` writes a placeholder for the Go-only recipes.
+The binary embeds the built frontend; `just stub-assets` writes a placeholder for the Go-only recipes.
 
-Every check is a `just` recipe: `just check` before pushing, `just ci` for everything CI runs, which adds cross-compilation, the coverage gate, `govulncheck`, dead-code and unused-dependency checks, a bundle-size budget, secret scanning and SAST.
+`just check` before pushing. `just ci` runs everything CI does: cross-compilation, the coverage gate, `govulncheck`, dead-code and unused-dependency checks, a bundle-size budget, secret scanning and SAST.
 
 ## Architecture
 
-Discovery builds a resource catalog. Each subscribed GVR gets a dynamic informer whose cache is projected into table rows; a WebSocket sends one snapshot and then deltas keyed by uid. Informers strip managedFields before caching. Exec and port-forwarding get their own transports: a binary WebSocket carrying the Kubernetes exec channel protocol, and a process-global forward registry independent of any request.
+Discovery builds a resource catalog. Each subscribed GVR gets a dynamic informer whose cache is projected into table rows; a WebSocket sends one snapshot then deltas keyed by uid. Informers strip managedFields before caching. Exec and port-forwarding get their own transports: a binary WebSocket carrying the Kubernetes exec channel protocol, and a process-global forward registry independent of any request.
 
-The React app is embedded with `embed.FS`. One HTTP and WebSocket server backs both the browser tab and the desktop window, and you can move between them mid-session.
+The React app is embedded with `embed.FS`. One HTTP and WebSocket server backs both the browser tab and the desktop window, and you move between them mid-session.
 
 Built on client-go v0.36, so Kubernetes 1.35 to 1.37 by skew policy. Runs in production against k3s v1.36.
-
-## License
-
-Copyright 2026 Sophotech s.r.o. Source-available under the [Functional Source License](LICENSE) (FSL-1.1-ALv2), not open source.
-
-Run it, modify it, redistribute it: internally, for professional services, for non-commercial education and research. You may not offer it to others as a commercial product or service that competes with it. Each release becomes Apache-2.0 two years after it ships.
