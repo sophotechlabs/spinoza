@@ -30,4 +30,9 @@ jobs:
             ~/go/pkg/mod
           key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: go-${{ runner.os }}-
+      - name: Point a name at the loopback chart repo, which private hosts are refused for
+        run: echo "127.0.0.1 charts.spinoza.test" | sudo tee -a /etc/hosts
+
       - run: just test-integration
+        env:
+          SPINOZA_CHART_HOST: charts.spinoza.test

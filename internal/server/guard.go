@@ -140,6 +140,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	if fromQuery {
+		//nolint:gosec // loopback http only; Secure would stop the desktop webview sending it back
 		http.SetCookie(w, &http.Cookie{
 			Name:     authCookie,
 			Value:    presented,

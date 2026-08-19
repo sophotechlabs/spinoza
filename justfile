@@ -280,8 +280,12 @@ secrets:
     gitleaks dir . --no-banner --redact
     gitleaks git . --no-banner --redact
 
+# the run token cookie is served over loopback http only, so Secure would keep the
+# desktop webview from ever sending it back; see internal/server/guard.go
+sast_excluded := 'go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure'
+
 sast:
-    semgrep scan --config .semgrep --config p/golang --config p/typescript --config p/react --error --quiet
+    semgrep scan --config .semgrep --config p/golang --config p/typescript --config p/react --exclude-rule {{ sast_excluded }} --error --quiet
 
 vulns:
     trivy fs --exit-code 1 --scanners secret,misconfig .

@@ -5,8 +5,10 @@ package integration
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
@@ -530,6 +532,49 @@ func TestHelmDetailAndActionsAgainstRealHelm(t *testing.T) {
 	}
 }
 
+// the upgrade path refuses private hosts, so the repo has to answer to a name
+const chartHostVar = "SPINOZA_CHART_HOST"
+
+func namedRepo(t *testing.T, raw string) string {
+	t.Helper()
+	host := os.Getenv(chartHostVar)
+	if host == "" {
+		t.Skipf("set %s to a name mapped to 127.0.0.1 to run this test", chartHostVar)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse %q: %v", raw, err)
+	}
+	if _, lookupErr := net.LookupHost(host); lookupErr != nil {
+		t.Fatalf("%s is %q, which does not resolve: %v", chartHostVar, host, lookupErr)
+	}
+	return "http://" + net.JoinHostPort(host, parsed.Port())
+}
+
+func TestHelmUpgradeRefusesARepoOnThisMachine(t *testing.T) {
+	loaded := bundle(t)
+	mgr := manager(t, loaded)
+	installRelease(t, loaded)
+
+	server := httptest.NewServer(http.FileServer(http.Dir(packageChart(t, writeChartVersion(t, "0.2.0")))))
+	t.Cleanup(server.Close)
+
+	_, err := mgr.HelmUpgrade(context.Background(), helm.UpgradeRequest{
+		Namespace: namespace,
+		Name:      "smoke-release",
+		Chart:     "spinoza-smoke",
+		Version:   "0.2.0",
+		RepoURL:   server.URL,
+	})
+
+	if err == nil {
+		t.Fatal("a chart repo on this machine was accepted")
+	}
+	if !strings.Contains(err.Error(), "is not a public address") {
+		t.Fatalf("error = %v, want it to name the private address", err)
+	}
+}
+
 func TestHelmUpgradeThroughAChartRepo(t *testing.T) {
 	loaded := bundle(t)
 	mgr := manager(t, loaded)
@@ -544,7 +589,7 @@ func TestHelmUpgradeThroughAChartRepo(t *testing.T) {
 		Name:      "smoke-release",
 		Chart:     "spinoza-smoke",
 		Version:   "0.2.0",
-		RepoURL:   server.URL,
+		RepoURL:   namedRepo(t, server.URL),
 		Values:    "extra: upgraded\n",
 	}
 
