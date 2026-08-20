@@ -131,3 +131,7 @@ export function filterRows(rows: Row[], chips: Chip[], fields: FilterField[]): R
   }
   return rows.filter((row) => chips.every((chip) => matches(row, chip, fields)));
 }
+
+export function chipsKey(chips: Chip[]): string {
+  return chips.map(chipKey).join('&');
+}

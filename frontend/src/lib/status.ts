@@ -39,7 +39,7 @@ export function containerTitle(container: ContainerState): string {
 }
 
 const GOOD_STATUS = ['Running', 'Ready', 'Active', 'Bound', 'Available', 'Healthy'];
-const SETTLED_STATUS = ['Succeeded', 'Completed'];
+const SETTLED_STATUS = ['Succeeded', 'Completed', 'Normal'];
 const BAD_STATUS = ['Failed', 'Error', 'Evicted', 'Lost', 'NotReady', 'Unhealthy', 'OOMKilled'];
 
 export function statusColor(value: string): string {

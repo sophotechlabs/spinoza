@@ -73,7 +73,7 @@ function openFeedFor(subId: string): FakeWebSocket {
     openSocket(socket);
   });
   act(() => {
-    hook.result.current.subscribe(subId, makeDescriptor({}), '');
+    hook.result.current.subscribe(subId, makeDescriptor({}), '', []);
   });
   return socket;
 }
@@ -269,11 +269,11 @@ describe('useResourceFeed', () => {
       openSocket(socket);
     });
     act(() => {
-      hook.result.current.subscribe('main#1', makeDescriptor({}), '');
+      hook.result.current.subscribe('main#1', makeDescriptor({}), '', []);
     });
     act(() => {
       hook.result.current.unsubscribe('main#1');
-      hook.result.current.subscribe('main#2', makeDescriptor({}), '');
+      hook.result.current.subscribe('main#2', makeDescriptor({}), '', []);
     });
 
     act(() => {
@@ -302,7 +302,7 @@ describe('useResourceFeed', () => {
       openSocket(socket);
     });
     act(() => {
-      hook.result.current.subscribe('main#1', makeDescriptor({}), '');
+      hook.result.current.subscribe('main#1', makeDescriptor({}), '', []);
     });
     act(() => {
       socket.onmessage?.(
@@ -369,7 +369,7 @@ describe('useResourceFeed', () => {
       openSocket(socket);
     });
     act(() => {
-      hook.result.current.subscribe('main#3', makeDescriptor({}), '');
+      hook.result.current.subscribe('main#3', makeDescriptor({}), '', []);
     });
     act(() => {
       hook.result.current.unsubscribe('main#3');
@@ -520,7 +520,7 @@ describe('useResourceFeed', () => {
       openSocket(socket);
     });
     act(() => {
-      hook.result.current.subscribe('main', makeDescriptor({}), '');
+      hook.result.current.subscribe('main', makeDescriptor({}), '', []);
     });
     const data = JSON.stringify({ type: 'error', subId: 'main', message: 'stream failed' });
     act(() => {
@@ -557,7 +557,7 @@ describe('useResourceFeed', () => {
       openSocket(socket);
     });
     act(() => {
-      result.current.subscribe('main', descriptor, 'prod');
+      result.current.subscribe('main', descriptor, 'prod', []);
     });
     expect(sentMessages(socket)).toEqual([
       {
@@ -568,6 +568,7 @@ describe('useResourceFeed', () => {
         resource: 'deployments',
         namespace: 'prod',
         limit: 0,
+        filters: [],
       },
     ]);
   });
@@ -576,7 +577,7 @@ describe('useResourceFeed', () => {
     const { result } = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
-      result.current.subscribe('main', descriptor, '');
+      result.current.subscribe('main', descriptor, '', []);
     });
     expect(socket.send).not.toHaveBeenCalled();
     act(() => {
@@ -591,6 +592,7 @@ describe('useResourceFeed', () => {
         resource: 'deployments',
         namespace: '',
         limit: 0,
+        filters: [],
       },
     ]);
   });
@@ -603,7 +605,7 @@ describe('useResourceFeed', () => {
       openSocket(first);
     });
     act(() => {
-      result.current.subscribe('main', descriptor, 'prod');
+      result.current.subscribe('main', descriptor, 'prod', []);
     });
     act(() => {
       first.onclose?.(new CloseEvent('close'));
@@ -624,6 +626,7 @@ describe('useResourceFeed', () => {
         resource: 'deployments',
         namespace: 'prod',
         limit: 0,
+        filters: [],
       },
     ]);
   });
@@ -636,7 +639,7 @@ describe('useResourceFeed', () => {
       openSocket(first);
     });
     act(() => {
-      result.current.subscribe('main', descriptor, 'prod');
+      result.current.subscribe('main', descriptor, 'prod', []);
     });
     act(() => {
       result.current.loadMore('main', 200);
@@ -676,7 +679,7 @@ describe('useResourceFeed', () => {
     const { result } = renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];
     act(() => {
-      result.current.subscribe('main', descriptor, 'prod');
+      result.current.subscribe('main', descriptor, 'prod', []);
     });
     act(() => {
       result.current.loadMore('main', 300);
@@ -698,7 +701,7 @@ describe('useResourceFeed', () => {
       openSocket(socket);
     });
     act(() => {
-      result.current.subscribe('main', descriptor, '');
+      result.current.subscribe('main', descriptor, '', []);
     });
     socket.send.mockClear();
     act(() => {
@@ -716,7 +719,7 @@ describe('useResourceFeed', () => {
       openSocket(first);
     });
     act(() => {
-      result.current.subscribe('main', descriptor, '');
+      result.current.subscribe('main', descriptor, '', []);
     });
     act(() => {
       result.current.unsubscribe('main');
@@ -739,7 +742,7 @@ describe('useResourceFeed', () => {
     const subscribe = result.current.subscribe;
     unmount();
     expect(() => {
-      subscribe('main', descriptor, '');
+      subscribe('main', descriptor, '', []);
     }).not.toThrow();
   });
 
@@ -1078,6 +1081,56 @@ describe('useResourceFeed', () => {
       result.current.unsubscribeLogs('logs');
     }).not.toThrow();
   });
+  it('sends the chips so the server can look past the window', () => {
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      result.current.subscribe('main', descriptor, 'prod', [{ field: 'type', value: 'Warning' }]);
+    });
+
+    expect(sentMessages(socket)).toEqual([
+      {
+        type: 'subscribe',
+        subId: 'main',
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+        namespace: 'prod',
+        limit: 0,
+        filters: [{ field: 'type', value: 'Warning' }],
+      },
+    ]);
+  });
+
+  it('keeps the chips when the socket comes back', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+    });
+    act(() => {
+      result.current.subscribe('main', descriptor, 'prod', [{ field: 'type', value: 'Warning' }]);
+    });
+    act(() => {
+      first.onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    const second = FakeWebSocket.instances[1];
+
+    act(() => {
+      openSocket(second);
+    });
+
+    const resent = sentMessages(second)[0] as { filters: unknown };
+    expect(resent.filters).toEqual([{ field: 'type', value: 'Warning' }]);
+  });
 });
 
 describe('a burst of watch events', () => {
@@ -1188,7 +1241,7 @@ describe('deltas still waiting when the feed goes away', () => {
       openSocket(socket);
     });
     act(() => {
-      hook.result.current.subscribe('main', makeDescriptor({}), '');
+      hook.result.current.subscribe('main', makeDescriptor({}), '', []);
     });
     act(() => {
       socket.onmessage?.(
@@ -1216,7 +1269,7 @@ describe('deltas still waiting when the feed goes away', () => {
       openSocket(socket);
     });
     act(() => {
-      hook.result.current.subscribe('main', makeDescriptor({}), '');
+      hook.result.current.subscribe('main', makeDescriptor({}), '', []);
     });
     act(() => {
       socket.onmessage?.(

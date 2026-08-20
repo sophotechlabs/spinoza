@@ -122,14 +122,14 @@ func TestAForbiddenListFailsFastForALimitedUser(t *testing.T) {
 	dyn, cs := limitedClients(t, loaded)
 	mgr := limitedManager(t, loaded, dyn, cs)
 
-	allowed, err := mgr.Subscribe(context.Background(), "", "v1", "pods", namespace, 0)
+	allowed, err := mgr.Subscribe(context.Background(), "", "v1", "pods", namespace, 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe pods as the limited user: %v", err)
 	}
 	allowed.Close()
 
 	start := time.Now()
-	_, err = mgr.Subscribe(context.Background(), "", "v1", "secrets", "", 0)
+	_, err = mgr.Subscribe(context.Background(), "", "v1", "secrets", "", 0, nil)
 	elapsed := time.Since(start)
 
 	if err == nil {

@@ -36,7 +36,12 @@ type Objects interface {
 }
 
 type Feeds interface {
-	Subscribe(ctx context.Context, group, version, resource, namespace string, limit int) (*resources.Subscription, error)
+	Subscribe(
+		ctx context.Context,
+		group, version, resource, namespace string,
+		limit int,
+		filters []api.RowFilter,
+	) (*resources.Subscription, error)
 	Logs(ctx context.Context, req logs.Request) (*logs.Stream, error)
 }
 

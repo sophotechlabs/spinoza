@@ -160,7 +160,7 @@ func TestResyncSendsAFreshSnapshot(t *testing.T) {
 	mgr, dyn := testManager(t, newDeployment("default", "web"))
 	sess, client, ctx := rawSession(t, mgr)
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestResyncDrainsTheStaleEventsFirst(t *testing.T) {
 	mgr, dyn := testManager(t, newDeployment("default", "web"))
 	sess, _, ctx := rawSession(t, mgr)
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestResyncIsSkippedForAReplacedSubscription(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, client, ctx := rawSession(t, mgr)
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestAdoptRefusesASupersededSubscription(t *testing.T) {
 	first := sess.claim(tables, "main")
 	second := sess.claim(tables, "main")
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestAdoptRefusesASubscriptionCancelledWhileBuilding(t *testing.T) {
 	gen := sess.claim(tables, "main")
 	sess.drop(tables, "main")
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestClaimClosesThePreviousSubscription(t *testing.T) {
 	sess, _, _ := rawSession(t, mgr)
 
 	first := sess.claim(tables, "main")
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -638,7 +638,7 @@ func TestASnapshotSaysHowMuchOfTheKindItHolds(t *testing.T) {
 	mgr, _ := testManager(t, newDeployment("default", "web"))
 	sess, client, ctx := rawSession(t, mgr)
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}

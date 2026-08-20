@@ -234,7 +234,9 @@ func (sess *wsSession) more(msg api.ClientMsg) {
 }
 
 func (sess *wsSession) buildSub(msg api.ClientMsg, gen uint64) {
-	sub, err := sess.mgr.Subscribe(sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit)
+	sub, err := sess.mgr.Subscribe(
+		sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit, msg.Filters,
+	)
 	if err != nil {
 		sess.failCurrent(tables, msg.SubID, gen, err)
 		return

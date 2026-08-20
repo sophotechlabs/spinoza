@@ -203,9 +203,18 @@ const columnHelper = createColumnHelper<Row>();
 
 const LOAD_STEP = 100;
 
-function countLabel(visible: number, loaded: number, total: number, limit: number): string {
+function countLabel(
+  visible: number,
+  loaded: number,
+  total: number,
+  limit: number,
+  filtered: boolean,
+): string {
   if (limit === 0) {
     return `${String(visible)} of ${String(loaded)}`;
+  }
+  if (filtered) {
+    return `newest ${String(loaded)} of ${String(total)} matching in the cluster`;
   }
   if (visible === loaded) {
     return `newest ${String(loaded)} of ${String(total)}`;
@@ -540,7 +549,7 @@ export default function ResourceTable({
           </div>
         </details>
         <span className="ml-auto text-fg-muted">
-          {countLabel(visibleRows.length, rows.length, total, limit)}
+          {countLabel(visibleRows.length, rows.length, total, limit, chips.length > 0)}
         </span>
         {limit > 0 && total > rows.length && (
           <button

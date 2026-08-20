@@ -476,18 +476,24 @@ type Failure struct {
 	Message string `json:"message"`
 }
 
+type RowFilter struct {
+	Field string `json:"field"`
+	Value string `json:"value"`
+}
+
 type ClientMsg struct {
-	Type      string `json:"type"`
-	SubID     string `json:"subId"`
-	Group     string `json:"group"`
-	Version   string `json:"version"`
-	Resource  string `json:"resource"`
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	Container string `json:"container"`
-	TailLines int64  `json:"tailLines"`
-	Follow    bool   `json:"follow"`
-	Limit     int    `json:"limit"`
+	Type      string      `json:"type"`
+	SubID     string      `json:"subId"`
+	Group     string      `json:"group"`
+	Version   string      `json:"version"`
+	Resource  string      `json:"resource"`
+	Namespace string      `json:"namespace"`
+	Name      string      `json:"name"`
+	Container string      `json:"container"`
+	TailLines int64       `json:"tailLines"`
+	Follow    bool        `json:"follow"`
+	Limit     int         `json:"limit"`
+	Filters   []RowFilter `json:"filters,omitempty"`
 }
 
 type ServerMsg struct {

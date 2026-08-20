@@ -1360,4 +1360,14 @@ describe('what the row count says', () => {
 
     expect(screen.getByText('1 of the newest 2 · 1723 in the cluster')).toBeInTheDocument();
   });
+
+  it('says the count is of what matches once a chip does the cutting', () => {
+    useFiltersStore.getState().impose(tableKey(descriptor), [{ field: 'name', value: 'web' }]);
+    seedWindow([makeRow({ uid: 'a', name: 'web.1', namespace: 'prod' })], 23, 100);
+
+    renderTable(descriptor, null);
+
+    expect(screen.getByText('newest 1 of 23 matching in the cluster')).toBeInTheDocument();
+    useFiltersStore.getState().clear();
+  });
 });

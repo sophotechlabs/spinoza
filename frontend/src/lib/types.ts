@@ -185,6 +185,11 @@ export interface Failure {
   message: string;
 }
 
+export interface RowFilter {
+  field: string;
+  value: string;
+}
+
 export type ClientMsg =
   | {
       type: 'subscribe';
@@ -194,6 +199,7 @@ export type ClientMsg =
       resource: string;
       namespace: string;
       limit: number;
+      filters?: RowFilter[];
     }
   | { type: 'unsubscribe'; subId: string }
   | { type: 'more'; subId: string; limit: number }

@@ -432,7 +432,7 @@ func TestAConditionThatIsNotAMapIsSkipped(t *testing.T) {
 func TestPodStreamsAreLeftToThePodCounter(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()
-	sub, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}

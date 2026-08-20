@@ -25,10 +25,12 @@ import { DEFAULT_NAMESPACE, useNamespace, useNamespaceStore } from './store/name
 import { EVERY_NAMESPACE, ONLY_DEFAULT } from './lib/settings';
 import { namespaceAnswered, useSettingsStore } from './store/settings';
 import { podsIn, worthAsking } from './lib/namespaceOffer';
-import { nameChips } from './lib/filterChips';
 import { kindScope } from './lib/catalog';
 import { clearCatalog, useCategories, useCounts } from './store/catalog';
-import { clearFilters, imposeChips } from './store/filters';
+import { useSubLimit } from './store/resources';
+import type { Chip } from './lib/filterChips';
+import { chipsKey, nameChips } from './lib/filterChips';
+import { chipsOf, clearFilters, imposeChips, useChips } from './store/filters';
 import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
 import { clearTerminals } from './store/terminals';
@@ -89,6 +91,21 @@ async function adoptContext(name: string): Promise<string> {
   return found.current.name;
 }
 
+// The server only applies filters to a table it cuts down, so the chips can
+// always be sent; what this decides is whether changing one is worth a fresh
+// subscription. Whether a kind is windowed is remembered per kind, because a
+// fresh subscription has no limit yet and would otherwise flip the answer back.
+function windowKey(windowed: boolean, chips: Chip[]): string {
+  if (!windowed) {
+    return '';
+  }
+  return chipsKey(chips);
+}
+
+function chipsNow(active: ResourceDescriptor): Chip[] {
+  return chipsOf(tableKey(active));
+}
+
 function staleClass(stale: boolean): string {
   if (stale) {
     return 'opacity-60';
@@ -110,20 +127,26 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
 
-  const key = resourceKey(route.resource);
-  const [lastKey, setLastKey] = useState(key);
-  if (key !== lastKey) {
-    setLastKey(key);
-    subSeq.current += 1;
-    setSubId(`main#${String(subSeq.current)}`);
-  }
-
   const active = useMemo(() => {
     if (route.resource === null) {
       return null;
     }
     return descriptorOf(route.resource);
   }, [route.resource]);
+
+  const chips = useChips(tableKey(active));
+  const windowedKinds = useRef(new Set<string>());
+  const resource = resourceKey(route.resource);
+  if (useSubLimit(subId) > 0) {
+    windowedKinds.current.add(resource);
+  }
+  const key = `${resource}|${windowKey(windowedKinds.current.has(resource), chips)}`;
+  const [lastKey, setLastKey] = useState(key);
+  if (key !== lastKey) {
+    setLastKey(key);
+    subSeq.current += 1;
+    setSubId(`main#${String(subSeq.current)}`);
+  }
 
   const categories = useCategories();
   const scope = useMemo(() => kindScope(categories, route.resource), [categories, route.resource]);
@@ -146,7 +169,7 @@ export default function App() {
     if (active === null) {
       return;
     }
-    subscribe(subId, active, namespace);
+    subscribe(subId, active, namespace, chipsNow(active));
     return () => {
       unsubscribe(subId);
     };

@@ -27,6 +27,7 @@ Build.Version version string
 Category.Name name string
 Category.Resources resources []ResourceDescriptor
 ClientMsg.Container container string
+ClientMsg.Filters filters,omitempty []RowFilter
 ClientMsg.Follow follow bool
 ClientMsg.Group group string
 ClientMsg.Limit limit int
@@ -382,6 +383,8 @@ RowChanged.Type type string
 RowDeleted.SubID subId string
 RowDeleted.Type type string
 RowDeleted.UID uid string
+RowFilter.Field field string
+RowFilter.Value value string
 SearchHit.Group group string
 SearchHit.Kind kind string
 SearchHit.Name name string

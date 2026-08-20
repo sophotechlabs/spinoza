@@ -78,6 +78,7 @@ type Subscription struct {
 	stream     *stream
 	entry      *subscriber
 	namespace  string
+	filters    []api.RowFilter
 	cancel     func()
 }
 
@@ -95,7 +96,7 @@ func (s *Subscription) SetLimit(limit int) {
 }
 
 func (s *Subscription) Snapshot() ([]api.Row, int, error) {
-	return s.stream.snapshot(s.namespace, s.Limit())
+	return s.stream.snapshot(s.namespace, s.Limit(), s.filters)
 }
 
 type Manager struct {
@@ -708,6 +709,7 @@ func (m *Manager) Subscribe(
 	ctx context.Context,
 	group, version, resource, namespace string,
 	limit int,
+	filters []api.RowFilter,
 ) (*Subscription, error) {
 	desc, ok := m.descriptors()[discovery.Key(group, version, resource)]
 	if !ok {
@@ -724,7 +726,7 @@ func (m *Manager) Subscribe(
 	if err != nil {
 		return nil, err
 	}
-	rows, total, snapErr := st.snapshot(effNs, int(entry.limit.Load()))
+	rows, total, snapErr := st.snapshot(effNs, int(entry.limit.Load()), filters)
 	if snapErr != nil {
 		m.detach(key, st, entry)
 		return nil, snapErr
@@ -736,6 +738,7 @@ func (m *Manager) Subscribe(
 		Rows:       rows,
 		Total:      total,
 		namespace:  effNs,
+		filters:    filters,
 		Events:     entry.events,
 		Resync:     entry.resync,
 		stream:     st,
@@ -1187,7 +1190,7 @@ func signalResync(sub *subscriber) {
 	}
 }
 
-func (st *stream) snapshot(ns string, limit int) ([]api.Row, int, error) {
+func (st *stream) snapshot(ns string, limit int, filters []api.RowFilter) ([]api.Row, int, error) {
 	objs, err := st.listFor(ns)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading the cached %s: %w", st.kind, err)
@@ -1200,6 +1203,7 @@ func (st *stream) snapshot(ns string, limit int) ([]api.Row, int, error) {
 		}
 		held = append(held, u)
 	}
+	held = st.keepMatching(held, limit, filters)
 	total := len(held)
 	held = newestFirst(st.kind, held, limit)
 	rows := make([]api.Row, 0, len(held))
@@ -1207,6 +1211,28 @@ func (st *stream) snapshot(ns string, limit int) ([]api.Row, int, error) {
 		rows = append(rows, toRow(u, st.kind))
 	}
 	return rows, total, nil
+}
+
+// Only a capped stream is filtered here. An uncapped one hands every row to the
+// browser, which filters them itself; a capped one cuts the newest few first, so
+// anything older than the cut would be unfindable without this.
+func (st *stream) keepMatching(
+	held []*unstructured.Unstructured,
+	limit int,
+	filters []api.RowFilter,
+) []*unstructured.Unstructured {
+	matcher := matcherFor(st.columns, filters)
+	if limit <= 0 || !matcher.wanted() {
+		return held
+	}
+	kept := make([]*unstructured.Unstructured, 0, len(held))
+	for _, u := range held {
+		if !matcher.matches(toRow(u, st.kind)) {
+			continue
+		}
+		kept = append(kept, u)
+	}
+	return kept
 }
 
 func newestFirst(kind string, held []*unstructured.Unstructured, limit int) []*unstructured.Unstructured {

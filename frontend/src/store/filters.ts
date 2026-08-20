@@ -73,3 +73,7 @@ export function imposeChips(key: string, chips: Chip[]): void {
 export function clearFilters(): void {
   useFiltersStore.getState().clear();
 }
+
+export function chipsOf(key: string): Chip[] {
+  return useFiltersStore.getState().chips[key] ?? NONE;
+}

@@ -121,7 +121,7 @@ func TestCountsReportWatchedTypesThatAreFailing(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web"), brokenDeployment("default", "db")))
 	defer cancel()
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestANamespacedViewStillTalliesTheWholeCluster(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, brokenDeployment("other", "db")))
 	defer cancel()
 
-	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0)
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}

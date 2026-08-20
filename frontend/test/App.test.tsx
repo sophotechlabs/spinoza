@@ -335,8 +335,9 @@ vi.mock('../src/components/InspectLogs', () => ({
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
 import { clearRecents, rememberObject } from '../src/store/recents';
-import { useFiltersStore } from '../src/store/filters';
+
 import { clearCatalog } from '../src/store/catalog';
+import { useFiltersStore } from '../src/store/filters';
 import { usePanelsStore } from '../src/store/panels';
 import { ALL, useNamespaceStore } from '../src/store/namespace';
 import { useSettingsStore } from '../src/store/settings';
@@ -658,6 +659,7 @@ describe('App', () => {
       'main#1',
       expect.objectContaining({ group: '', version: 'v1', resource: 'pods', kind: 'Pod' }),
       '',
+      [],
     );
     expect(await screen.findByRole('button', { name: 'pod-a' })).toBeInTheDocument();
     expect(screen.getByText('1/1')).toBeInTheDocument();
@@ -735,6 +737,7 @@ describe('App', () => {
       'main#2',
       expect.objectContaining({ group: 'apps', version: 'v1', resource: 'deployments' }),
       '',
+      [],
     );
   });
 
@@ -1106,6 +1109,7 @@ describe('the address bar', () => {
       'main#0',
       expect.objectContaining({ resource: 'pods' }),
       '',
+      [],
     );
     expect(await screen.findByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
   });
@@ -1521,6 +1525,7 @@ describe('the command palette and shortcuts', () => {
       expect.any(String),
       expect.objectContaining({ resource: 'deployments' }),
       '',
+      [],
     );
   });
 
@@ -1540,6 +1545,7 @@ describe('the command palette and shortcuts', () => {
       expect.any(String),
       expect.objectContaining({ resource: 'deployments' }),
       'airbyte',
+      expect.any(Array),
     );
     expect(screen.getByTestId('inspect-target')).toHaveTextContent(
       'deployments:airbyte/airbyte-server',
@@ -2133,5 +2139,76 @@ describe('the helm release panel', () => {
     await user.click(screen.getByTestId('context-changed'));
 
     expect(window.location.hash).not.toContain('release=');
+  });
+});
+
+describe('a filter on a windowed table', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useFiltersStore.getState().clear();
+  });
+
+  it('re-subscribes so the server searches past the window', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    act(() => {
+      useResourcesStore
+        .getState()
+        .applySnapshot(
+          'main#1',
+          makeColumns([]),
+          true,
+          [makeRow({ uid: 'a', name: 'pod-a' })],
+          1900,
+          100,
+        );
+    });
+    feedMocks.subscribe.mockClear();
+
+    act(() => {
+      useFiltersStore.getState().impose('/v1/pods', [{ field: 'name', value: 'web' }]);
+    });
+
+    await waitFor(() => {
+      expect(feedMocks.subscribe).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ resource: 'pods' }),
+        expect.any(String),
+        [{ field: 'name', value: 'web' }],
+      );
+    });
+    useFiltersStore.getState().clear();
+  });
+
+  it('leaves an uncapped table alone, since it already holds every row', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    act(() => {
+      useResourcesStore
+        .getState()
+        .applySnapshot(
+          'main#1',
+          makeColumns([]),
+          true,
+          [makeRow({ uid: 'a', name: 'pod-a' })],
+          1,
+          0,
+        );
+    });
+    feedMocks.subscribe.mockClear();
+
+    act(() => {
+      useFiltersStore.getState().impose('/v1/pods', [{ field: 'name', value: 'web' }]);
+    });
+
+    expect(feedMocks.subscribe).not.toHaveBeenCalled();
+    useFiltersStore.getState().clear();
   });
 });

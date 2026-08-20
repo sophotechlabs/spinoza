@@ -210,7 +210,7 @@ func TestSubscribeSeesARealInformerFill(t *testing.T) {
 	mgr := manager(t, loaded)
 	runningPod(t, loaded, "smoke-subscribe")
 
-	sub, err := mgr.Subscribe(context.Background(), "", "v1", "pods", namespace, 0)
+	sub, err := mgr.Subscribe(context.Background(), "", "v1", "pods", namespace, 0, nil)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}

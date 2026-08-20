@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chipKey,
+  chipsKey,
   fieldFor,
   fieldKey,
   fieldsOf,
@@ -161,5 +162,23 @@ describe('filtering rows by chips', () => {
 
   it('hides nothing for a chip the kind knows no field for', () => {
     expect(matches(rows[0], { field: 'node', value: 'anything' }, fields)).toBe(true);
+  });
+});
+
+describe('chipsKey', () => {
+  it('is the same for the same chips', () => {
+    const chips = [
+      { field: 'type', value: 'Warning' },
+      { field: 'reason', value: 'BackOff' },
+    ];
+
+    expect(chipsKey(chips)).toBe(chipsKey([...chips]));
+  });
+
+  it('changes when a chip changes, so the subscription is rebuilt', () => {
+    const before = chipsKey([{ field: 'type', value: 'Warning' }]);
+
+    expect(chipsKey([{ field: 'type', value: 'Normal' }])).not.toBe(before);
+    expect(chipsKey([])).not.toBe(before);
   });
 });

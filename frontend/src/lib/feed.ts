@@ -3,6 +3,7 @@ import { sessionExpired } from '../store/session';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { parseColumn, parseRow } from './parse';
 import { asBoolean, asList, asNumber, asRecord, asString, listOf } from './wire';
+import type { Chip } from './filterChips';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
 import { wsURL } from './wsBase';
@@ -24,12 +25,18 @@ interface Subscription {
   descriptor: ResourceDescriptor;
   namespace: string;
   limit: number;
+  filters: Chip[];
 }
 
 export interface ResourceFeed {
   status: ConnectionStatus;
   attempt: number;
-  subscribe: (subId: string, descriptor: ResourceDescriptor, namespace: string) => void;
+  subscribe: (
+    subId: string,
+    descriptor: ResourceDescriptor,
+    namespace: string,
+    filters: Chip[],
+  ) => void;
   unsubscribe: (subId: string) => void;
   loadMore: (subId: string, limit: number) => void;
   subscribeLogs: (subId: string, request: LogRequest) => void;
@@ -51,6 +58,7 @@ function subscribeMsg(subId: string, sub: Subscription): ClientMsg {
     resource: sub.descriptor.resource,
     namespace: sub.namespace,
     limit: sub.limit,
+    filters: sub.filters,
   };
 }
 
@@ -379,8 +387,8 @@ export function useResourceFeed(): ResourceFeed {
   }, []);
 
   const subscribe = useCallback(
-    (subId: string, descriptor: ResourceDescriptor, namespace: string) => {
-      const sub: Subscription = { descriptor, namespace, limit: 0 };
+    (subId: string, descriptor: ResourceDescriptor, namespace: string, filters: Chip[]) => {
+      const sub: Subscription = { descriptor, namespace, limit: 0, filters };
       subsRef.current.set(subId, sub);
       const socket = socketRef.current;
       if (canSend(socket)) {
