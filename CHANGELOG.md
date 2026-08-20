@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.11.0](https://github.com/sophotechlabs/spinoza/compare/v1.10.0...v1.11.0) (2026-08-20)
+
+
+### Features
+
+* **compare:** report drift across two contexts for a whole kind ([4c83d0a](https://github.com/sophotechlabs/spinoza/commit/4c83d0a27e34cf2a3c62dbe558b7d1359d0b6d6e))
+* **events:** filter a windowed table against the whole cluster ([7ffcb87](https://github.com/sophotechlabs/spinoza/commit/7ffcb87320cf20cfed6dff674bcb9db7679adab0))
+* **helm:** find and install charts from oci registries ([1a85ac2](https://github.com/sophotechlabs/spinoza/commit/1a85ac22f17e2d83be3fdcb0eb7b931b2014b7f6))
+* **helm:** install a chart from a configured repository ([d5de7cf](https://github.com/sophotechlabs/spinoza/commit/d5de7cfbb6f001ae039079ac2784d4345b79166c))
+* **nodeshell:** open a root shell on a node from the node panel ([878fe3b](https://github.com/sophotechlabs/spinoza/commit/878fe3b2f103df53628f9ec1b22c83115261ad86))
+* **ui:** compare an object against another context ([7797e80](https://github.com/sophotechlabs/spinoza/commit/7797e80e853b30ef7a36c5f3d2c342bcdc901ba3))
+* **ui:** show configmap data beside the secret values ([ae53630](https://github.com/sophotechlabs/spinoza/commit/ae5363088ebf2af69e10268a911c08a7b2265c82))
+* **ui:** turn node shells on in settings, and follow the cluster a link names ([3992b15](https://github.com/sophotechlabs/spinoza/commit/3992b15050ee45a60b23274d4dd0de0edd303b44))
+
+
+### Bug Fixes
+
+* **ui:** focus a docked release on a deep link and name it in the title ([74ef4ea](https://github.com/sophotechlabs/spinoza/commit/74ef4ea54a9d2428dab780d36407255677531f84))
+
+
+### Tests
+
+* pin cluster-scoped compare and settle the column width race ([cf78f30](https://github.com/sophotechlabs/spinoza/commit/cf78f3003d8c7b26c48264c669460b055f792e49))
+* pin the node shell lifecycle, chart search order and manager delegation ([8049f13](https://github.com/sophotechlabs/spinoza/commit/8049f13f7cc1a1f8432161f4060846b40e971c8a))
+
 ## [1.10.0](https://github.com/sophotechlabs/spinoza/compare/v1.9.0...v1.10.0) (2026-08-19)
 
 
