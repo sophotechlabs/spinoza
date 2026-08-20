@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Row } from '../../src/lib/types';
 import { expireSession } from '../../src/store/session';
 import { DELTA_FLUSH_MS, useResourceFeed } from '../../src/lib/feed';
 import { useResourcesStore } from '../../src/store/resources';
 import { useLogsStore } from '../../src/store/logs';
+import { useContextsStore } from '../../src/store/contexts';
 import { makeColumns, makeDescriptor, makeRow } from '../helpers';
 
 async function flushDeltas(): Promise<void> {
@@ -1535,5 +1536,85 @@ describe('a batch of row changes', () => {
     await flushDeltas();
 
     expect(useResourcesStore.getState().subs.get('other')).toBeUndefined();
+  });
+});
+
+describe('the server saying which cluster it is on', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    useContextsStore.getState().reset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useContextsStore.getState().reset();
+  });
+
+  function announce(socket: FakeWebSocket, context: string): void {
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', { data: JSON.stringify({ type: 'context', context }) }),
+      );
+    });
+  }
+
+  it('adopts a cluster this window did not switch to', async () => {
+    const list = {
+      current: { kubeconfig: '', name: 'elsewhere' },
+      kubeconfigs: [],
+      protection: 'open',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(list) }),
+    );
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    announce(socket, 'elsewhere');
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/contexts', expect.anything());
+    });
+    await waitFor(() => {
+      expect(useContextsStore.getState().list.current.name).toBe('elsewhere');
+    });
+  });
+
+  it('says nothing when the cluster is the one it already knows', () => {
+    useContextsStore.getState().setList({
+      current: { kubeconfig: '', name: 'p-mk1' },
+      kubeconfigs: [],
+      protection: 'open',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    announce(socket, 'p-mk1');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores an announcement with no cluster in it', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    announce(socket, '');
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

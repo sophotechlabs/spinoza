@@ -282,3 +282,72 @@ func TestManyClustersCanBeAnswered(t *testing.T) {
 		t.Fatal("a later answer overwrote an earlier one")
 	}
 }
+
+func readOnlyDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "locked")
+	if err := os.MkdirAll(dir, 0o500); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(dir, 0o700)
+	})
+	return dir
+}
+
+func TestAFileThatCannotBeReadIsReported(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "protected.json")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	_, err := Open(path)
+
+	if err == nil {
+		t.Fatal("a file that could not be read opened without complaint")
+	}
+}
+
+func TestAFileThatIsNotJsonIsReported(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "protected.json")
+	if err := os.WriteFile(path, []byte("not json at all"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	store, err := Open(path)
+
+	if err == nil {
+		t.Fatal("a file that is not json opened without complaint")
+	}
+	if store == nil {
+		t.Fatal("a store that could not be read must still be usable")
+	}
+}
+
+func TestAnAnswerThatCannotBeSavedIsReported(t *testing.T) {
+	store := openStore(t, filepath.Join(readOnlyDir(t), "nested", "protected.json"))
+
+	err := store.Set(remote, true)
+
+	if err == nil {
+		t.Fatal("an answer that could not be written was reported as saved")
+	}
+	if store.Verdict(remote) != api.ProtectionUnknown {
+		t.Fatal("an answer that was not written was remembered anyway")
+	}
+}
+
+func TestAStoreWithNowhereToWriteKeepsTheAnswerInMemory(t *testing.T) {
+	store, err := Open("")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	if setErr := store.Set(remote, true); setErr != nil {
+		t.Fatalf("set: %v", setErr)
+	}
+
+	if store.Verdict(remote) != api.ProtectionProtected {
+		t.Fatalf("verdict = %q", store.Verdict(remote))
+	}
+}

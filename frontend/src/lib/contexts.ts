@@ -9,6 +9,7 @@ import type {
 } from './types';
 import { failure } from './object';
 import { SLOW_REQUEST_TIMEOUT_MS, request } from './http';
+import { useContextsStore } from '../store/contexts';
 
 export interface ContextEntry {
   cluster: string;
@@ -117,6 +118,24 @@ export async function fetchContexts(): Promise<ContextList> {
     throw await failure(response, `contexts request failed with status ${response.status}`);
   }
   return normalize((await response.json()) as WireContexts);
+}
+
+// contextAnnounced is the server telling this window which cluster it is on.
+// Only a name that differs from what the window believes is worth acting on,
+// and the full list is refetched because protection travels with it.
+export async function contextAnnounced(name: string): Promise<void> {
+  if (name === '') {
+    return;
+  }
+  if (useContextsStore.getState().list.current.name === name) {
+    return;
+  }
+  try {
+    useContextsStore.getState().setList(await fetchContexts());
+  } catch {
+    // A window that cannot reach the server has bigger problems than a stale
+    // context name, and the next reconnect asks again.
+  }
 }
 
 export async function switchContext(

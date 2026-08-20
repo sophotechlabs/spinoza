@@ -397,6 +397,7 @@ func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, err)
 		return
 	}
+	s.announceContext()
 	s.dropSessions()
 	writeJSON(w, s.cluster.Contexts())
 }

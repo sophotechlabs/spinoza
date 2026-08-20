@@ -1,9 +1,14 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/coder/websocket"
 
 	authv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -94,5 +99,112 @@ func TestAccessIsReadOnly(t *testing.T) {
 
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want 405", resp.StatusCode)
+	}
+}
+
+func TestAFeedIsToldWhichClusterItIsOn(t *testing.T) {
+	ts := inspectServer(t, newPod())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+
+	hello := readAnyMsg(ctx, t, conn)
+
+	if hello.Type != "context" {
+		t.Fatalf("type = %q, want the context frame first", hello.Type)
+	}
+	if hello.Context == "" {
+		t.Fatal("the context frame named no cluster")
+	}
+}
+
+func TestSwitchingContextTellsEveryOpenFeed(t *testing.T) {
+	ts := inspectServer(t, newPod())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+	readAnyMsg(ctx, t, conn)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=elsewhere", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+
+	told := readAnyMsg(ctx, t, conn)
+	if told.Type != "context" {
+		t.Fatalf("type = %q, want a context frame on the switch", told.Type)
+	}
+	if told.Context != "elsewhere" {
+		t.Fatalf("context = %q, want the cluster that was switched to", told.Context)
+	}
+}
+
+func TestComparingAKindNeedsAKind(t *testing.T) {
+	ts := inspectServer(t, newPod())
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/compare/kind?version=v1&against=p-mk1", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+}
+
+func TestComparingAKindNeedsSomewhereToCompareWith(t *testing.T) {
+	ts := inspectServer(t, newPod())
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/compare/kind?version=v1&resource=pods", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+}
+
+func TestComparingAKindThatCannotBeListedHere(t *testing.T) {
+	ts := inspectServer(t, newPod())
+
+	resp, body := doRequest(
+		t,
+		http.MethodGet,
+		ts.URL+"/api/compare/kind?version=v1&resource=nothings&against=p-mk1",
+		nil,
+	)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatalf("a kind that cannot be listed compared fine: %s", body)
+	}
+}
+
+func TestInstallingAChartNeedsEveryField(t *testing.T) {
+	ts := inspectServer(t, newPod())
+
+	resp, body := doRequest(
+		t,
+		http.MethodPost,
+		ts.URL+"/api/helm/install",
+		strings.NewReader(`{"namespace":"prod"}`),
+	)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+}
+
+func TestAnInstallRequestThatIsNotJsonIsRefused(t *testing.T) {
+	ts := inspectServer(t, newPod())
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/helm/install", strings.NewReader("{"))
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
 	}
 }

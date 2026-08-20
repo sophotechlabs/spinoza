@@ -32,9 +32,16 @@ const (
 	nodes     = "nodes"
 )
 
+// capability is a button and everything that has to be permitted for it to work.
+// A button with more than one requirement is refused by the first one that is
+// refused.
 type capability struct {
-	name  string
-	check Check
+	name   string
+	checks []Check
+}
+
+func needs(name string, checks ...Check) capability {
+	return capability{name: name, checks: checks}
 }
 
 type groupResource struct {
@@ -73,19 +80,19 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 	here := groupResource{group: ref.Group, resource: ref.Resource}
 	object := Check{Group: ref.Group, Resource: ref.Resource, Namespace: ref.Namespace, Name: ref.Name}
 	held := []capability{
-		{name: Edit, check: with(object, "update")},
-		{name: Delete, check: with(object, "delete")},
+		needs(Edit, with(object, "update")),
+		needs(Delete, with(object, "delete")),
 	}
 	if scalable[here] {
 		scale := with(object, "patch")
 		scale.Subresource = "scale"
-		held = append(held, capability{name: Scale, check: scale})
+		held = append(held, needs(Scale, scale))
 	}
 	if restartable[here] {
-		held = append(held, capability{name: Restart, check: with(object, "patch")})
+		held = append(held, needs(Restart, with(object, "patch")))
 	}
 	if gitops(ref.Group) {
-		held = append(held, capability{name: Reconcile, check: with(object, "patch")})
+		held = append(held, needs(Reconcile, with(object, "patch")))
 	}
 	if here == (groupResource{resource: nodes}) {
 		held = append(held, nodeCapabilities(object)...)
@@ -94,15 +101,12 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 		return append(held, podCapabilities(ref)...)
 	}
 	if ownsPods[here] {
-		held = append(held, capability{name: Logs, check: podCheck("get", ref.Namespace, "", "log")})
+		held = append(held, needs(Logs, podCheck("get", ref.Namespace, "", "log")))
 	}
 	// A service is forwarded through one of the pods behind it, so the question
 	// is about pods here rather than about the service.
 	if here == (groupResource{resource: "services"}) {
-		held = append(held, capability{
-			name:  PortForward,
-			check: podCheck("create", ref.Namespace, "", "portforward"),
-		})
+		held = append(held, needs(PortForward, podCheck("create", ref.Namespace, "", "portforward")))
 	}
 	return held
 }
@@ -114,19 +118,22 @@ func gitops(group string) bool {
 }
 
 func nodeCapabilities(object Check) []capability {
+	cordon := with(object, "patch")
 	return []capability{
-		{name: Cordon, check: with(object, "patch")},
-		// A drain cordons the node and then evicts what runs on it, wherever that
-		// happens to be, so the eviction question is not tied to one namespace.
-		{name: Drain, check: podCheck("create", "", "", "eviction")},
+		needs(Cordon, cordon),
+		// A drain reads the pods on the node, cordons it, and then evicts them one
+		// at a time. Only the first two are all or nothing. Eviction is per pod and
+		// a partial drain is a real outcome, so a user who may evict in some
+		// namespaces and not others keeps the button and reads the result per pod.
+		needs(Drain, podCheck("list", "", "", ""), cordon),
 	}
 }
 
 func podCapabilities(ref api.ObjectRef) []capability {
 	return []capability{
-		{name: Logs, check: podCheck("get", ref.Namespace, ref.Name, "log")},
-		{name: Exec, check: podCheck("create", ref.Namespace, ref.Name, "exec")},
-		{name: PortForward, check: podCheck("create", ref.Namespace, ref.Name, "portforward")},
+		needs(Logs, podCheck("get", ref.Namespace, ref.Name, "log")),
+		needs(Exec, podCheck("create", ref.Namespace, ref.Name, "exec")),
+		needs(PortForward, podCheck("create", ref.Namespace, ref.Name, "portforward")),
 	}
 }
 
@@ -151,20 +158,31 @@ func (s *Service) Review(ctx context.Context, ref api.ObjectRef) api.Access {
 	held := capabilitiesFor(ref)
 	checks := make([]Check, 0, len(held))
 	for _, one := range held {
-		checks = append(checks, one.check)
+		checks = append(checks, one.checks...)
 	}
 	decisions := s.review(ctx, checks)
 	refused := make([]api.Refusal, 0, len(held))
-	for i, one := range held {
-		if decisions[i].Allowed {
+	at := 0
+	for _, one := range held {
+		answers := decisions[at : at+len(one.checks)]
+		at += len(one.checks)
+		stopped, why := firstRefusal(one.checks, answers)
+		if stopped == nil {
 			continue
 		}
-		refused = append(refused, api.Refusal{
-			Capability: one.name,
-			Reason:     because(decisions[i].Reason, one.check),
-		})
+		refused = append(refused, api.Refusal{Capability: one.name, Reason: because(why, *stopped)})
 	}
 	return api.Access{Refused: refused}
+}
+
+func firstRefusal(checks []Check, decisions []Decision) (*Check, string) {
+	for i, decision := range decisions {
+		if decision.Allowed {
+			continue
+		}
+		return &checks[i], decision.Reason
+	}
+	return nil, ""
 }
 
 // because falls back to a plain sentence when the cluster refused without

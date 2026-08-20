@@ -2212,3 +2212,44 @@ describe('a filter on a windowed table', () => {
     useFiltersStore.getState().clear();
   });
 });
+
+describe('a cluster this window did not switch to', () => {
+  it('follows the server and drops what it had selected', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/contexts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              current: { kubeconfig: '', name: 'somewhere-else' },
+              kubeconfigs: [],
+              protection: 'open',
+            }),
+        });
+      }
+      if (url.startsWith('/api/object')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(objectDetail) });
+      }
+      if (url.startsWith('/api/events')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    openAt('#context=kind-dev&version=v1&resource=pods&kind=Pod&namespace=prod&name=pod-a');
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#0', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+
+    render(<App />);
+
+    // The feed announced a different cluster; the window follows it rather than
+    // carrying on showing the last one.
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=somewhere-else');
+    });
+    expect(window.location.hash).not.toContain('name=pod-a');
+  });
+});

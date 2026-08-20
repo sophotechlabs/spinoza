@@ -235,7 +235,7 @@ func TestAWorkloadIsNotAskedAboutExec(t *testing.T) {
 	}
 }
 
-func TestANodeIsAskedAboutCordonAndEviction(t *testing.T) {
+func TestANodeIsAskedAboutCordonAndTheReadsADrainNeeds(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)
 
@@ -245,13 +245,67 @@ func TestANodeIsAskedAboutCordonAndEviction(t *testing.T) {
 	if _, ok := questions["patch  nodes "]; !ok {
 		t.Fatalf("cordoning was never asked about: %v", questions)
 	}
-	eviction, ok := questions["create  pods eviction"]
+	// A drain reads every pod on the node before it cordons, and that read is
+	// cluster wide because the pods can be anywhere.
+	listing, ok := questions["list  pods "]
 	if !ok {
-		t.Fatalf("eviction was never asked about: %v", questions)
+		t.Fatalf("the pod list a drain needs was never asked about: %v", questions)
 	}
-	// A drain evicts whatever runs on the node, wherever it lives.
-	if eviction.Namespace != "" {
-		t.Fatalf("eviction asked in namespace %q, want every namespace", eviction.Namespace)
+	if listing.Namespace != "" {
+		t.Fatalf("the pod list was asked in %q, want every namespace", listing.Namespace)
+	}
+}
+
+// Eviction is per pod, and a drain reports each pod separately, so a user who
+// may evict in some namespaces and not others must keep the button.
+func TestANodeIsNotAskedAboutEvictingEverywhere(t *testing.T) {
+	auth := refusing(nil)
+	service := serviceFor(t, auth)
+
+	service.Review(t.Context(), nodeRef())
+
+	if _, ok := asked(auth)["create  pods eviction"]; ok {
+		t.Fatal("draining was gated on being able to evict in every namespace")
+	}
+}
+
+func TestADrainIsRefusedWhenItsPodListIs(t *testing.T) {
+	service := serviceFor(t, refusing(map[string]string{"list  pods ": "no listing pods"}))
+
+	got := reasons(service.Review(t.Context(), nodeRef()))
+
+	if got[Drain] != "no listing pods" {
+		t.Fatalf("drain reason = %q, want the refused pod list", got[Drain])
+	}
+	if _, refused := got[Cordon]; refused {
+		t.Fatalf("cordon was withheld over the pod list: %v", got)
+	}
+}
+
+func TestADrainIsRefusedWhenTheCordonIs(t *testing.T) {
+	service := serviceFor(t, refusing(map[string]string{"patch  nodes ": "no patching nodes"}))
+
+	got := reasons(service.Review(t.Context(), nodeRef()))
+
+	if got[Drain] != "no patching nodes" {
+		t.Fatalf("drain reason = %q, want the refused cordon", got[Drain])
+	}
+	if got[Cordon] != "no patching nodes" {
+		t.Fatalf("cordon reason = %q", got[Cordon])
+	}
+}
+
+func TestTheFirstRefusalIsTheOneReported(t *testing.T) {
+	service := serviceFor(t, refusing(map[string]string{
+		"list  pods ":   "no listing pods",
+		"patch  nodes ": "no patching nodes",
+	}))
+
+	got := reasons(service.Review(t.Context(), nodeRef()))
+
+	// The list comes first, so that is what stopped it.
+	if got[Drain] != "no listing pods" {
+		t.Fatalf("drain reason = %q, want the first requirement that failed", got[Drain])
 	}
 }
 

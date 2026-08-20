@@ -64,6 +64,8 @@ ContainerState.Ready ready bool
 ContainerState.Reason reason,omitempty string
 ContainerState.Restarts restarts int64
 ContainerState.State state string
+ContextChanged.Context context string
+ContextChanged.Type type string
 ContextList.Current current ContextRef
 ContextList.Error error,omitempty string
 ContextList.Kubeconfigs kubeconfigs []Kubeconfig
@@ -419,6 +421,7 @@ SearchResults.Truncated truncated bool
 ServerMsg.Attached attached,omitempty int
 ServerMsg.Changes changes,omitempty []RowChange
 ServerMsg.Columns columns,omitempty []Column
+ServerMsg.Context context,omitempty string
 ServerMsg.Limit limit,omitempty int
 ServerMsg.Lines lines,omitempty []string
 ServerMsg.Matched matched,omitempty int

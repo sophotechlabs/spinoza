@@ -411,6 +411,9 @@ func (m *Manager) StopForward(id string) error {
 }
 
 func (m *Manager) Access(ctx context.Context, ref api.ObjectRef) api.Access {
+	if m.perms == nil {
+		return api.Access{}
+	}
 	return m.perms.Review(ctx, ref)
 }
 

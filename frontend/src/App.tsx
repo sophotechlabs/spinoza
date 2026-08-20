@@ -117,8 +117,11 @@ export default function App() {
   const feed = useResourceFeed();
   const { route, navigate, replace } = useRouter();
   const contextEpoch = useClusterEpoch();
+  const serverContext = useContextsStore((state) => state.list.current.name);
   const [contextName, setContextName] = useState('');
   const subSeq = useRef(0);
+  const routeRef = useRef(route);
+  routeRef.current = route;
   const adopted = useRef(false);
   const adopting = useRef(false);
   const [subId, setSubId] = useState(FIRST_SUB_ID);
@@ -200,6 +203,25 @@ export default function App() {
     bumpClusterEpoch();
     reconnect();
   }, [reconnect, resetNamespace]);
+
+  // The server says which cluster it is on when a feed opens and whenever the
+  // context changes, so a window that did not do the switching still moves.
+  useEffect(() => {
+    if (serverContext === '') {
+      return;
+    }
+    if (serverContext === contextName) {
+      return;
+    }
+    // A switch this window is in the middle of making is not news, and the
+    // route it is already writing keeps whatever the link selected.
+    if (adopting.current) {
+      return;
+    }
+    setContextName(serverContext);
+    forgetCluster();
+    replace({ ...routeRef.current, context: serverContext, selection: null, release: null });
+  }, [serverContext, contextName, forgetCluster, replace]);
 
   useEffect(() => {
     if (contextName === '') {

@@ -6,6 +6,7 @@ import { asBoolean, asList, asNumber, asRecord, asString, listOf, optionalString
 import type { Chip } from './filterChips';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
+import { contextAnnounced } from './contexts';
 import { wsURL } from './wsBase';
 import { viewKind } from './view';
 
@@ -150,6 +151,8 @@ function serverMsg(raw: unknown): ServerMsg | null {
       };
     case 'log-end':
       return { type: 'log-end', subId };
+    case 'context':
+      return { type: 'context', subId, context: asString(item.context) };
     case 'error':
       return { type: 'error', subId, message: asString(item.message) };
     default:
@@ -265,6 +268,10 @@ export function useResourceFeed(): ResourceFeed {
     }
 
     function knownSub(msg: ServerMsg): boolean {
+      // The context frame belongs to the connection, not to a subscription.
+      if (msg.type === 'context') {
+        return true;
+      }
       if (msg.type === 'log' || msg.type === 'log-end' || msg.type === 'log-open') {
         return logSubsRef.current.has(msg.subId);
       }
@@ -328,6 +335,9 @@ export function useResourceFeed(): ResourceFeed {
         case 'log-end':
           flush();
           logs.endStream(msg.subId);
+          break;
+        case 'context':
+          void contextAnnounced(msg.context);
           break;
         case 'error':
           flush();

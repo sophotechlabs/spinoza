@@ -102,6 +102,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer s.views.closed(kind)
 	defer s.forget(sess)
 	sess.mgr = s.manager()
+	// A feed is told which cluster it is on the moment it opens, so a window that
+	// was away while the context changed corrects itself on reconnect.
+	sess.write(ctx, api.ContextChanged{Type: "context", Context: s.cluster.Contexts().Current.Name})
 
 	for {
 		var msg api.ClientMsg
@@ -600,6 +603,21 @@ func (s *Server) forgetExec(conn *websocket.Conn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.terminals, conn)
+}
+
+// announceContext tells every open feed which cluster the server is on, so a
+// window that did not do the switching does not carry on showing the last one.
+func (s *Server) announceContext() {
+	msg := api.ContextChanged{Type: "context", Context: s.cluster.Contexts().Current.Name}
+	s.mu.Lock()
+	open := make([]*wsSession, 0, len(s.sessions))
+	for sess := range s.sessions {
+		open = append(open, sess)
+	}
+	s.mu.Unlock()
+	for _, sess := range open {
+		sess.write(sess.ctx, msg)
+	}
 }
 
 func (s *Server) dropSessions() {

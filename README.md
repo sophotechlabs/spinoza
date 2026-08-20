@@ -9,8 +9,6 @@
 
 A self-hosted Kubernetes GUI: Go backend with client-go informers, React frontend, one binary. Runs as a browser tab or a desktop window. [spinoza.tech](https://spinoza.tech)
 
-**Source-available, not open source:** [FSL-1.1-ALv2](LICENSE), Apache-2.0 after two years.
-
 ## Install
 
 ```sh

@@ -111,7 +111,20 @@ func readChange(ctx context.Context, t *testing.T, c *websocket.Conn) api.RowCha
 	return msg.Changes[0]
 }
 
+// readMsg skips the context frame every feed opens with, which is about the
+// connection rather than about anything a test subscribed to.
 func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg {
+	t.Helper()
+	for {
+		msg := readAnyMsg(ctx, t, c)
+		if msg.Type == "context" {
+			continue
+		}
+		return msg
+	}
+}
+
+func readAnyMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg {
 	t.Helper()
 	var msg api.ServerMsg
 	if err := wsjson.Read(ctx, c, &msg); err != nil {
@@ -758,12 +771,17 @@ func TestWSRejectsNonWebsocketRequest(t *testing.T) {
 
 func readRaw(ctx context.Context, t *testing.T, c *websocket.Conn) map[string]json.RawMessage {
 	t.Helper()
-	fields := map[string]json.RawMessage{}
-	err := wsjson.Read(ctx, c, &fields)
-	if err != nil {
-		t.Fatalf("read message: %v", err)
+	for {
+		fields := map[string]json.RawMessage{}
+		err := wsjson.Read(ctx, c, &fields)
+		if err != nil {
+			t.Fatalf("read message: %v", err)
+		}
+		if string(fields["type"]) == `"context"` {
+			continue
+		}
+		return fields
 	}
-	return fields
 }
 
 func subscribeRaw(t *testing.T, mgr *resources.Manager, sub api.ClientMsg) map[string]json.RawMessage {

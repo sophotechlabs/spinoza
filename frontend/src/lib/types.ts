@@ -272,6 +272,7 @@ export type ServerMsg =
   | { type: 'log'; subId: string; lines: string[]; source?: string }
   | { type: 'log-open'; subId: string; attached: number; matched: number }
   | { type: 'log-end'; subId: string }
+  | { type: 'context'; subId: string; context: string }
   | { type: 'error'; subId: string; message: string };
 
 export const VIEWS = [

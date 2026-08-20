@@ -15,17 +15,18 @@ var namedDifferentlyInTypeScript = map[string]string{
 }
 
 var sentAsADiscriminatedUnion = map[string]string{
-	"ClientMsg":  "ClientMsg",
-	"ServerMsg":  "ServerMsg",
-	"Snapshot":   "ServerMsg",
-	"RowChanged": "ServerMsg",
-	"RowDeleted": "ServerMsg",
-	"RowChange":  "ServerMsg",
-	"RowBatch":   "ServerMsg",
-	"LogLines":   "ServerMsg",
-	"LogOpened":  "ServerMsg",
-	"LogEnd":     "ServerMsg",
-	"FeedError":  "ServerMsg",
+	"ClientMsg":      "ClientMsg",
+	"ServerMsg":      "ServerMsg",
+	"Snapshot":       "ServerMsg",
+	"RowChanged":     "ServerMsg",
+	"RowDeleted":     "ServerMsg",
+	"RowChange":      "ServerMsg",
+	"RowBatch":       "ServerMsg",
+	"LogLines":       "ServerMsg",
+	"LogOpened":      "ServerMsg",
+	"LogEnd":         "ServerMsg",
+	"ContextChanged": "ServerMsg",
+	"FeedError":      "ServerMsg",
 }
 
 var neverReachesTheBrowser = map[string]bool{

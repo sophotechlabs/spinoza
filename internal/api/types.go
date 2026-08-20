@@ -550,7 +550,16 @@ type ServerMsg struct {
 	Attached   int         `json:"attached,omitempty"`
 	Matched    int         `json:"matched,omitempty"`
 	Message    string      `json:"message,omitempty"`
+	Context    string      `json:"context,omitempty"`
 	Changes    []RowChange `json:"changes,omitempty"`
+}
+
+// ContextChanged tells every open feed which cluster the server is on. It is
+// sent when a feed opens and again whenever the context changes, so a window
+// that did not do the switching still finds out.
+type ContextChanged struct {
+	Type    string `json:"type"`
+	Context string `json:"context"`
 }
 
 type Snapshot struct {

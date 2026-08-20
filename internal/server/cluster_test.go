@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -500,9 +501,16 @@ func TestSwitchingClosesOpenSessions(t *testing.T) {
 		t.Fatalf("switch: %d %s", resp.StatusCode, body)
 	}
 
-	_, _, readErr := conn.Read(ctx)
-	if readErr == nil {
-		t.Fatal("the session survived a context switch; it would stream the old cluster's objects")
+	// The switch announces the new cluster and then drops the socket, so the
+	// frames that follow are the announcement and the close.
+	for {
+		_, payload, readErr := conn.Read(ctx)
+		if readErr != nil {
+			return
+		}
+		if !bytes.Contains(payload, []byte(`"type":"context"`)) {
+			t.Fatal("the session survived a context switch; it would stream the old cluster's objects")
+		}
 	}
 }
 
