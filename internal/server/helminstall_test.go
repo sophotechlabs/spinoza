@@ -203,3 +203,19 @@ func TestTheChartValuesEndpointReportsAFailure(t *testing.T) {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
 }
+
+func TestTheInstallEndpointRefusesABodyThatIsTooBig(t *testing.T) {
+	backend := &stubViews{}
+	ts := stubbedServer(t, backend)
+	body := installBody()
+	body["values"] = strings.Repeat("a: b\n", 1<<20)
+
+	resp, out := postInstall(t, ts.URL+"/api/helm/install", body)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatalf("an oversized install was accepted: %s", out)
+	}
+	if len(backend.installs) != 0 {
+		t.Fatal("an oversized body reached the backend")
+	}
+}

@@ -1082,3 +1082,51 @@ func TestSearchServesTheSecondAskFromTheCache(t *testing.T) {
 		t.Fatalf("index fetched %d times, want once", asks)
 	}
 }
+
+func TestSearchMatchesTheMiddleOfAName(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`entries:
+  podinfo:
+    - version: 6.14.1
+      description: a tiny greeter
+  kube-prometheus-stack:
+    - version: 88.3.0
+      description: a bundle
+`))
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "prometheus", 10)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found) != 1 || found[0].Name != "kube-prometheus-stack" {
+		t.Fatalf("found = %+v, want the chart whose name carries the word", found)
+	}
+}
+
+func TestAChartWithNoUsableVersionIsLeftOutOfTheCatalogue(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`entries:
+  podinfo:
+    - version: 6.14.1
+  broken:
+    - version: not-a-version
+  prereleased:
+    - version: 1.0.0-rc1
+`))
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "", 10)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found) != 1 || found[0].Name != "podinfo" {
+		t.Fatalf("found = %+v, want only the chart with a version helm could install", found)
+	}
+}

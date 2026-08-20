@@ -9,10 +9,13 @@ import (
 	"testing"
 	"time"
 
+	authv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	kubediscovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -24,9 +27,12 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
+	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 )
@@ -564,4 +570,224 @@ func TestHelmReleasesAreOnlyLookedForInTheFluxKind(t *testing.T) {
 	if len(owners) != 0 {
 		t.Fatalf("owners = %v, want none when the flux kind was never discovered", owners)
 	}
+}
+
+// what the manager answers when a service was never wired into it. Each of these
+// is what a caller meets on a connection built without that piece, and none of
+// them may be a nil dereference.
+
+func TestTheChartEndpointsSayTheyAreNotWiredUp(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+	want := "spinoza could not do that: helm is not wired up"
+
+	_, searchErr := mgr.HelmChartSearch(context.Background(), "podinfo")
+	_, valuesErr := mgr.HelmChartValues(context.Background(), helm.ValuesRequest{Chart: "podinfo"})
+	_, installErr := mgr.HelmInstall(context.Background(), helm.InstallRequest{Name: "podinfo"})
+
+	for name, err := range map[string]error{
+		"search":  searchErr,
+		"values":  valuesErr,
+		"install": installErr,
+	} {
+		if err == nil || err.Error() != want {
+			t.Fatalf("%s error = %v, want %q", name, err, want)
+		}
+	}
+}
+
+func TestNodeShellsSayTheyAreNotWiredUp(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	support := mgr.NodeShellSupport(context.Background(), "p-mk1")
+	_, startErr := mgr.StartNodeShell(context.Background(), "p-mk1")
+
+	if support.Enabled || support.Node != "p-mk1" {
+		t.Fatalf("support = %+v, want it off but still about the node asked for", support)
+	}
+	if !strings.Contains(support.Reason, "not wired up") {
+		t.Fatalf("reason = %q", support.Reason)
+	}
+	want := "spinoza could not do that: node shells are not wired up"
+	if startErr == nil || startErr.Error() != want {
+		t.Fatalf("error = %v, want %q", startErr, want)
+	}
+}
+
+func TestRemovingANodeShellThatWasNeverWiredUpIsQuiet(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	mgr.RemoveNodeShell(context.Background(), "spinoza-node-shell-abc")
+}
+
+func TestAnArgoActionReachesTheObjectItNames(t *testing.T) {
+	app := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1",
+		"kind":       "Application",
+		"metadata":   map[string]any{"name": "web", "namespace": "argocd"},
+	}}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		{Group: "argoproj.io", Version: "v1alpha1", Resource: "applications"}: "ApplicationList",
+	}, app)
+	mgr, cancel := newManager(t, dyn)
+	defer cancel()
+	ref := api.ObjectRef{
+		Group:     "argoproj.io",
+		Version:   "v1alpha1",
+		Resource:  "applications",
+		Namespace: "argocd",
+		Name:      "web",
+	}
+
+	result, err := mgr.ArgoAction(context.Background(), ref, argocd.Refresh)
+	if err != nil {
+		t.Fatalf("argo action: %v", err)
+	}
+
+	if result.Action != string(argocd.Refresh) {
+		t.Fatalf("result = %+v, want the refresh it was asked for", result)
+	}
+	live, getErr := dyn.Resource(schema.GroupVersionResource{
+		Group: "argoproj.io", Version: "v1alpha1", Resource: "applications",
+	}).Namespace("argocd").Get(context.Background(), "web", metav1.GetOptions{})
+	if getErr != nil {
+		t.Fatalf("get: %v", getErr)
+	}
+	annotations := live.GetAnnotations()
+	if _, ok := annotations["argocd.argoproj.io/refresh"]; !ok {
+		t.Fatalf("annotations = %v, want the refresh argo watches for", annotations)
+	}
+}
+
+// the same delegations once the services are actually wired in: the manager must
+// hand the call on, not quietly answer for itself.
+
+func shellClientset(t *testing.T) *k8sfake.Clientset {
+	t.Helper()
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &authv1.SelfSubjectAccessReview{
+			Status: authv1.SubjectAccessReviewStatus{Allowed: true},
+		}, nil
+	})
+	cs.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		pod, ok := create.GetObject().(*corev1.Pod)
+		if !ok {
+			return false, nil, nil
+		}
+		pod.Name = "spinoza-node-shell-abc"
+		pod.Status.Phase = corev1.PodRunning
+		return false, pod, nil
+	})
+	return cs
+}
+
+func managerWithNodeShells(t *testing.T, cs *k8sfake.Clientset) (*Manager, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	mgr := NewManager(ctx, Deps{
+		Dynamic:    newClient(t),
+		Clientset:  cs,
+		NodeShells: nodeshell.NewService(cs, "busybox:1.37", nodeshell.DefaultNamespace, func() bool { return true }),
+		Limits:     Limits{IdleGrace: time.Millisecond},
+	})
+	return mgr, cancel
+}
+
+func TestTheManagerHandsANodeShellToTheServiceThatRunsIt(t *testing.T) {
+	cs := shellClientset(t)
+	mgr, cancel := managerWithNodeShells(t, cs)
+	defer cancel()
+
+	support := mgr.NodeShellSupport(context.Background(), "p-mk1")
+	session, err := mgr.StartNodeShell(context.Background(), "p-mk1")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	if !support.Enabled || !support.Allowed {
+		t.Fatalf("support = %+v, want the service's own answer", support)
+	}
+	if session.Pod != "spinoza-node-shell-abc" || session.Node != "p-mk1" {
+		t.Fatalf("session = %+v", session)
+	}
+
+	mgr.RemoveNodeShell(context.Background(), session.Pod)
+
+	left, listErr := cs.CoreV1().Pods(nodeshell.DefaultNamespace).List(context.Background(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("list: %v", listErr)
+	}
+	if len(left.Items) != 0 {
+		t.Fatalf("pods = %d, want the removal passed on", len(left.Items))
+	}
+}
+
+func TestTheManagerHandsChartWorkToHelm(t *testing.T) {
+	ctx := t.Context()
+	runner := &recordingRunner{out: "replicaCount: 1\n"}
+	mgr := NewManager(ctx, Deps{
+		Dynamic:   newClient(t),
+		Clientset: k8sfake.NewClientset(),
+		Helm: helm.NewService(
+			k8sfake.NewClientset(), nil, runner, nil,
+			[]helm.RepoEntry{},
+			api.ContextRef{Name: "kind-spinoza"},
+		),
+		Limits: Limits{IdleGrace: time.Millisecond},
+	})
+
+	search, searchErr := mgr.HelmChartSearch(ctx, "podinfo")
+	values, valuesErr := mgr.HelmChartValues(ctx, helm.ValuesRequest{
+		Chart:   "podinfo",
+		Version: "6.14.1",
+		RepoURL: "https://charts.example.com",
+	})
+	if searchErr != nil || valuesErr != nil {
+		t.Fatalf("search: %v, values: %v", searchErr, valuesErr)
+	}
+
+	if !strings.Contains(search.Error, "helm repo add") {
+		t.Fatalf("search = %+v, want the service's own answer for a machine with no repositories", search)
+	}
+	if values.Values != "replicaCount: 1\n" {
+		t.Fatalf("values = %q, want what helm printed", values.Values)
+	}
+	if len(runner.args) == 0 || runner.args[0][0] != "show" {
+		t.Fatalf("helm was run with %v, want show values", runner.args)
+	}
+
+	_, installErr := mgr.HelmInstall(ctx, helm.InstallRequest{
+		Namespace: "demo",
+		Name:      "greeter",
+		Chart:     "podinfo",
+		Version:   "6.14.1",
+		RepoURL:   "https://charts.example.com",
+	})
+	if installErr != nil {
+		t.Fatalf("install: %v", installErr)
+	}
+	if runner.args[1][0] != "install" {
+		t.Fatalf("helm was run with %v, want install", runner.args[1])
+	}
+}
+
+type recordingRunner struct {
+	args [][]string
+	out  string
+}
+
+func (r *recordingRunner) Run(_ context.Context, args, _ []string) (string, error) {
+	r.args = append(r.args, args)
+	return r.out, nil
+}
+
+func (r *recordingRunner) Available() error {
+	return nil
 }

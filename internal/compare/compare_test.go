@@ -222,3 +222,72 @@ func TestSomethingThatIsNotYamlIsRefused(t *testing.T) {
 		t.Fatalf("error = %v, want it to say what failed", err)
 	}
 }
+
+func TestOrdinaryAnnotationsSurviveTheNormalising(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata": map[string]any{
+			"name":      "settings",
+			"namespace": "demo",
+			"annotations": map[string]any{
+				"meta.helm.sh/release-name":  "podinfo",
+				"reloader.stakater.com/auto": "true",
+			},
+		},
+	}}
+
+	clean := Normalise(item)
+
+	annotations := clean.GetAnnotations()
+	if len(annotations) != 2 {
+		t.Fatalf("annotations = %v, want both kept: only the kubectl blob is noise", annotations)
+	}
+}
+
+func TestAnObjectWithNoAnnotationsIsLeftAlone(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata":   map[string]any{"name": "settings", "namespace": "demo"},
+	}}
+
+	clean := Normalise(item)
+
+	metadata, ok := clean.Object["metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata = %T, want a map", clean.Object["metadata"])
+	}
+	if _, invented := metadata["annotations"]; invented {
+		t.Fatal("normalising invented an annotations map")
+	}
+}
+
+func TestOwnerReferencesThatAreNotObjectsAreLeftAlone(t *testing.T) {
+	item := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata": map[string]any{
+			"name":            "web",
+			"namespace":       "demo",
+			"ownerReferences": []any{"not an owner", map[string]any{"name": "rs", "uid": "abc"}},
+		},
+	}}
+
+	clean := Normalise(item)
+
+	owners, _, err := unstructured.NestedSlice(clean.Object, "metadata", "ownerReferences")
+	if err != nil {
+		t.Fatalf("owners: %v", err)
+	}
+	if len(owners) != 2 {
+		t.Fatalf("owners = %v, want both entries kept", owners)
+	}
+	kept, ok := owners[1].(map[string]any)
+	if !ok {
+		t.Fatalf("owner = %T, want the map still there", owners[1])
+	}
+	if _, carries := kept["uid"]; carries {
+		t.Fatalf("owner = %v, want the uid dropped", kept)
+	}
+}

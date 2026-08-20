@@ -311,3 +311,67 @@ func TestARegistryWithNoTagsForThatNameAddsNoHit(t *testing.T) {
 		t.Fatalf("hits = %+v", found.Hits)
 	}
 }
+
+func TestTheSameChartInTwoRepositoriesIsListedOnceEach(t *testing.T) {
+	index := &stubCharts{catalog: map[string][]charts.Chart{
+		"https://two.example.com": {{Name: "redis", Version: "20.0.1"}},
+		"https://one.example.com": {{Name: "redis", Version: "19.5.0"}},
+	}}
+	svc := searcher(t, index, []RepoEntry{
+		{Name: "zeta", Repo: charts.Repo{URL: "https://two.example.com"}},
+		{Name: "alpha", Repo: charts.Repo{URL: "https://one.example.com"}},
+	})
+
+	found, err := svc.SearchCharts(t.Context(), "redis")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found.Hits) != 2 {
+		t.Fatalf("hits = %+v, want one per repository", found.Hits)
+	}
+	if found.Hits[0].Repo != "alpha" || found.Hits[1].Repo != "zeta" {
+		t.Fatalf("hits = %+v, want the same name settled by repository", found.Hits)
+	}
+}
+
+func TestAnExactNameBeatsOneThatMerelyContainsIt(t *testing.T) {
+	index := &stubCharts{catalog: map[string][]charts.Chart{
+		"https://one.example.com": {
+			{Name: "kube-redis", Version: "1.0.0"},
+			{Name: "redis-cluster", Version: "13.0.4"},
+			{Name: "redis", Version: "20.0.1"},
+		},
+	}}
+	svc := searcher(t, index, []RepoEntry{{Name: "one", Repo: charts.Repo{URL: "https://one.example.com"}}})
+
+	found, err := svc.SearchCharts(t.Context(), "redis")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	order := make([]string, 0, len(found.Hits))
+	for _, hit := range found.Hits {
+		order = append(order, hit.Chart)
+	}
+	want := []string{"redis", "redis-cluster", "kube-redis"}
+	if !slices.Equal(order, want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+}
+
+func TestAnEmptyQueryStillListsWhatEachRepositoryHas(t *testing.T) {
+	index := &stubCharts{catalog: map[string][]charts.Chart{
+		"https://one.example.com": {{Name: "podinfo", Version: "6.14.1"}, {Name: "redis", Version: "20.0.1"}},
+	}}
+	svc := searcher(t, index, []RepoEntry{{Name: "one", Repo: charts.Repo{URL: "https://one.example.com"}}})
+
+	found, err := svc.SearchCharts(t.Context(), "")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found.Hits) != 2 {
+		t.Fatalf("hits = %+v, want everything the repository offers", found.Hits)
+	}
+}

@@ -3,13 +3,16 @@ package nodeshell
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
@@ -329,5 +332,99 @@ func TestThePodCannotOutliveTheDay(t *testing.T) {
 	}
 	if *pod.Spec.ActiveDeadlineSeconds > int64((4 * time.Hour).Seconds()) {
 		t.Fatalf("deadline = %ds, want it short enough to matter", *pod.Spec.ActiveDeadlineSeconds)
+	}
+}
+
+func TestItRepeatsWhyTheApiserverSaidNo(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &authv1.SelfSubjectAccessReview{Status: authv1.SubjectAccessReviewStatus{
+			Allowed: false,
+			Reason:  `no RBAC policy matched for user "arch"`,
+		}}, nil
+	})
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true })
+
+	support := svc.Support(t.Context(), "p-mk1")
+
+	if support.Allowed {
+		t.Fatal("a refusal was read as permission")
+	}
+	if support.Reason != `no RBAC policy matched for user "arch"` {
+		t.Fatalf("reason = %q, want the apiserver's own words", support.Reason)
+	}
+}
+
+func TestAPodTheClusterRefusesIsReported(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	allow(cs, true)
+	cs.PrependReactor("create", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "pods"}, "",
+			errors.New("privileged pods are not allowed in this namespace"),
+		)
+	})
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true })
+
+	_, err := svc.Start(t.Context(), "p-mk1")
+
+	if err == nil {
+		t.Fatal("a refused pod reported a working shell")
+	}
+	if !strings.Contains(err.Error(), "privileged pods are not allowed") {
+		t.Fatalf("error = %v, want what the cluster said", err)
+	}
+}
+
+func TestAPodThatNeverStartsIsTakenAwayAgain(t *testing.T) {
+	restore := hurry(t)
+	defer restore()
+	cs := k8sfake.NewClientset()
+	allow(cs, true)
+	creates(cs, "spinoza-node-shell-slow", corev1.PodPending, "")
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true })
+
+	_, err := svc.Start(t.Context(), "p-mk1")
+
+	if err == nil {
+		t.Fatal("a pod that never ran reported a working shell")
+	}
+	if !strings.Contains(err.Error(), "did not start within") {
+		t.Fatalf("error = %v, want the wait to be named", err)
+	}
+	left, listErr := cs.CoreV1().Pods(DefaultNamespace).List(t.Context(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("list: %v", listErr)
+	}
+	if len(left.Items) != 0 {
+		t.Fatalf("pods = %d, want the one that never started taken away", len(left.Items))
+	}
+}
+
+func TestAPodThatCannotBeReadWhileWaitingIsReported(t *testing.T) {
+	restore := hurry(t)
+	defer restore()
+	cs := k8sfake.NewClientset()
+	allow(cs, true)
+	creates(cs, "spinoza-node-shell-gone", corev1.PodPending, "")
+	cs.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("the connection was reset")
+	})
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true })
+
+	_, err := svc.Start(t.Context(), "p-mk1")
+
+	if err == nil || !strings.Contains(err.Error(), "connection was reset") {
+		t.Fatalf("error = %v, want the read failure", err)
+	}
+}
+
+func hurry(t *testing.T) func() {
+	t.Helper()
+	oldTimeout, oldPoll := startTimeout, pollEvery
+	startTimeout = 60 * time.Millisecond
+	pollEvery = 10 * time.Millisecond
+	return func() {
+		startTimeout, pollEvery = oldTimeout, oldPoll
 	}
 }

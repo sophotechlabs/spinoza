@@ -237,3 +237,42 @@ func TestAnObjectMissingHereIsAnError(t *testing.T) {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestAFarSideThatIsNotAnObjectIsReportedNotRendered(t *testing.T) {
+	ts, _ := compareServer(
+		t,
+		map[string]string{"p-mk2/prod/web": "this is not a kubernetes object"},
+		comparedDeployment(2, "left-uid"),
+	)
+
+	var got api.Comparison
+	resp := getJSON(t, ts.URL+"/api/compare"+comparedQuery+"&against=p-mk2", &got)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want the comparison to answer with what went wrong", resp.StatusCode)
+	}
+	if got.Right != "" {
+		t.Fatalf("right = %q, want nothing rendered from junk", got.Right)
+	}
+	if got.Missing == "" {
+		t.Fatal("a far side that could not be read said nothing about why")
+	}
+	if got.Left == "" {
+		t.Fatal("the side that could be read was dropped too")
+	}
+}
+
+func TestTheRawComparisonKeepsWhatTheClusterSentEvenWhenItIsNotAnObject(t *testing.T) {
+	ts, _ := compareServer(
+		t,
+		map[string]string{"p-mk2/prod/web": "this is not a kubernetes object"},
+		comparedDeployment(2, "left-uid"),
+	)
+
+	var got api.Comparison
+	getJSON(t, ts.URL+"/api/compare"+comparedQuery+"&against=p-mk2&raw=true", &got)
+
+	if got.Right != "this is not a kubernetes object" {
+		t.Fatalf("right = %q, want the raw answer carried through untouched", got.Right)
+	}
+}
