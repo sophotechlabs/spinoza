@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { changedSections, differingLines, fetchComparison } from '../../src/lib/compare';
+import {
+  changedSections,
+  differingLines,
+  fetchComparison,
+  fetchKindComparison,
+} from '../../src/lib/compare';
 import type { ObjectRef } from '../../src/lib/types';
 import { anySignal } from '../helpers';
 
@@ -139,5 +144,115 @@ describe('a far side with a different name', () => {
     await fetchComparison(ref, { ...target, object: 'api' }, false);
 
     expect(mock.mock.calls[0][0]).toContain('againstName=api');
+  });
+});
+
+describe('comparing a whole kind', () => {
+  const kind = {
+    group: 'apps',
+    version: 'v1',
+    resource: 'deployments',
+    kind: 'Deployment',
+    namespaced: true,
+    category: 'Workloads',
+  };
+
+  it('names the kind, the namespace and the context', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          resource: 'deployments',
+          leftContext: 'p-mk1',
+          rightContext: 'p-mk2',
+          objects: [{ name: 'web', verdict: 'differs', lines: 3 }],
+          same: 0,
+          differs: 1,
+          onlyHere: 0,
+          onlyThere: 0,
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await fetchKindComparison(kind, 'flux-system', {
+      kubeconfig: '/work.yaml',
+      name: 'p-mk2',
+      namespace: 'flux-system',
+      object: '',
+    });
+
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('resource=deployments');
+    expect(url).toContain('namespace=flux-system');
+    expect(url).toContain('against=p-mk2');
+    expect(url).toContain('againstKubeconfig=%2Fwork.yaml');
+    expect(url).not.toContain('againstNamespace');
+    expect(got.objects[0].lines).toBe(3);
+  });
+
+  it('names the far namespace only when it is a different one', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          resource: 'deployments',
+          leftContext: 'a',
+          rightContext: 'b',
+          objects: [],
+          same: 0,
+          differs: 0,
+          onlyHere: 0,
+          onlyThere: 0,
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchKindComparison(kind, 'prod', {
+      kubeconfig: '',
+      name: 'b',
+      namespace: 'staging',
+      object: '',
+    });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('againstNamespace=staging');
+  });
+
+  it('carries the failure the server reports', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () =>
+          Promise.resolve({ message: 'the server could not find the requested resource' }),
+      }),
+    );
+
+    await expect(
+      fetchKindComparison(kind, 'prod', {
+        kubeconfig: '',
+        name: 'b',
+        namespace: 'prod',
+        object: '',
+      }),
+    ).rejects.toThrow('could not find');
+  });
+
+  it('falls back to the status when the body says nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 502, json: () => Promise.reject(new Error()) }),
+    );
+
+    await expect(
+      fetchKindComparison(kind, 'prod', {
+        kubeconfig: '',
+        name: 'b',
+        namespace: 'prod',
+        object: '',
+      }),
+    ).rejects.toThrow('comparing the kind failed with status 502');
   });
 });

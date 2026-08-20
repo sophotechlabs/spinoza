@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -24,6 +25,8 @@ type stubCluster struct {
 	mu          sync.Mutex
 	mgr         *resources.Manager
 	elsewhere   map[string]string
+	over        map[string][]*unstructured.Unstructured
+	listErr     error
 	readErr     error
 	kubeconfigs []api.Kubeconfig
 	current     api.ContextRef
@@ -105,6 +108,19 @@ func (s *stubCluster) Protect(protected bool) error {
 		s.protection = api.ProtectionProtected
 	}
 	return nil
+}
+
+func (s *stubCluster) List(
+	_ context.Context,
+	ref api.ContextRef,
+	target api.ObjectRef,
+) ([]*unstructured.Unstructured, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	return s.over[ref.Name+"/"+target.Namespace], nil
 }
 
 func (s *stubCluster) Read(_ context.Context, ref api.ContextRef, target api.ObjectRef) (string, error) {

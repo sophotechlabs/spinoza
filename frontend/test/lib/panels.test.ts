@@ -127,7 +127,15 @@ describe('the panel registry', () => {
   });
 
   function ctx(overrides: Partial<PanelContext> = {}): PanelContext {
-    return { selection: null, detail: null, pod: null, release: null, ...overrides };
+    return {
+      selection: null,
+      detail: null,
+      pod: null,
+      release: null,
+      kind: null,
+      namespace: '',
+      ...overrides,
+    };
   }
 
   const podRef = { group: '', version: 'v1', resource: 'pods', namespace: 'prod', name: 'web' };
@@ -176,6 +184,24 @@ describe('the panel registry', () => {
     expect(
       panelById('release').enabled(ctx({ release: { namespace: 'demo', name: 'podinfo' } })),
     ).toBe(true);
+  });
+  describe('the compare panel', () => {
+    const kind = {
+      group: 'apps',
+      version: 'v1',
+      resource: 'deployments',
+      kind: 'Deployment',
+      namespaced: true,
+      category: 'Workloads',
+    };
+
+    it('opens on a kind with nothing selected, so a whole table can be compared', () => {
+      expect(panelById('compare').enabled(ctx({ kind }))).toBe(true);
+    });
+
+    it('stays shut when there is neither a kind nor a selection', () => {
+      expect(panelById('compare').enabled(ctx())).toBe(false);
+    });
   });
 });
 

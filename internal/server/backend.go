@@ -6,6 +6,8 @@ import (
 	"io"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
@@ -32,6 +34,7 @@ type Objects interface {
 	ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error)
 	DeleteObject(ctx context.Context, ref api.ObjectRef) error
 	Events(ctx context.Context, namespace, uid string) ([]api.Event, error)
+	ListKind(ctx context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error)
 	Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error)
 }
 

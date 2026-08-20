@@ -1,4 +1,4 @@
-import type { ObjectDetail, ReleaseRef } from './types';
+import type { ObjectDetail, ReleaseRef, ResourceDescriptor } from './types';
 import type { Selection } from './refs';
 import type { PodTarget } from './pods';
 import { readStored, writeStored } from './persist';
@@ -23,6 +23,8 @@ export interface PanelContext {
   detail: ObjectDetail | null;
   pod: PodTarget | null;
   release: ReleaseRef | null;
+  kind: ResourceDescriptor | null;
+  namespace: string;
 }
 
 export interface PanelDescriptor {
@@ -99,8 +101,8 @@ export const PANELS: PanelDescriptor[] = [
     id: 'compare',
     label: 'Compare',
     defaultSide: 'bottom',
-    hint: 'Select an object to compare it against another context',
-    enabled: (ctx) => ctx.selection !== null,
+    hint: 'Open a kind, or select an object, to compare against another context',
+    enabled: (ctx) => ctx.selection !== null || ctx.kind !== null,
   },
   {
     id: 'release',

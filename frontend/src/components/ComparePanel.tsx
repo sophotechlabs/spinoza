@@ -1,5 +1,5 @@
 import { Suspense, lazy, useMemo, useState } from 'react';
-import type { Comparison, ObjectRef } from '../lib/types';
+import type { Comparison, ObjectRef, ResourceDescriptor } from '../lib/types';
 import type { CompareTarget } from '../lib/compare';
 import { changedSections, differingLines, fetchComparison } from '../lib/compare';
 import { contextGroups, sameContext } from '../lib/contexts';
@@ -10,10 +10,16 @@ import Announce from './Announce';
 import Loading from './Loading';
 
 const YamlDiff = lazy(() => import('./YamlDiff'));
+const KindCompare = lazy(() => import('./KindCompare'));
 
 interface ComparePanelProps {
   target: ObjectRef | null;
+  kind: ResourceDescriptor | null;
+  namespace: string;
+  onOpen: (ref: ObjectRef) => void;
 }
+
+type Scope = 'object' | 'kind';
 
 const SIDE_BY_SIDE_FROM = 900;
 
@@ -36,16 +42,19 @@ function reason(err: unknown): string {
   return 'the comparison did not run';
 }
 
-export default function ComparePanel({ target }: ComparePanelProps) {
+export default function ComparePanel({ target, kind, namespace, onOpen }: ComparePanelProps) {
   const list = useContextList();
+  const [chosen, setChosen] = useState('');
 
   const others = useMemo(() => {
     const entries = contextGroups(list).flatMap((group) => group.entries);
     return entries.filter((entry) => !sameContext(entry, list.current));
   }, [list]);
 
-  if (target === null) {
-    return <p className="p-4 text-xs text-fg-muted">Select an object to compare it.</p>;
+  if (target === null && kind === null) {
+    return (
+      <p className="p-4 text-xs text-fg-muted">Open a kind, or select an object, to compare.</p>
+    );
   }
 
   if (others.length === 0) {
@@ -56,18 +65,34 @@ export default function ComparePanel({ target }: ComparePanelProps) {
     );
   }
 
-  const identity = `${target.resource}/${target.namespace}/${target.name}`;
-  return <Comparing key={identity} target={target} others={others} />;
+  const identity = `${kind?.resource ?? ''}/${target?.namespace ?? ''}/${target?.name ?? ''}`;
+  return (
+    <Comparing
+      key={identity}
+      target={target}
+      kind={kind}
+      scope={namespace}
+      others={others}
+      chosen={chosen}
+      onChoose={setChosen}
+      onOpen={onOpen}
+    />
+  );
 }
 
 interface ComparingProps {
-  target: ObjectRef;
+  target: ObjectRef | null;
+  kind: ResourceDescriptor | null;
+  scope: string;
   others: ContextEntry[];
+  chosen: string;
+  onChoose: (value: string) => void;
+  onOpen: (ref: ObjectRef) => void;
 }
 
-function Comparing({ target, others }: ComparingProps) {
-  const [chosen, setChosen] = useState('');
-  const [namespace, setNamespace] = useState(target.namespace);
+function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: ComparingProps) {
+  const [where, setWhere] = useState<Scope>(opensOn(target));
+  const [namespace, setNamespace] = useState(target?.namespace ?? scope);
   const [raw, setRaw] = useState(false);
   const [result, setResult] = useState<Comparison | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,17 +102,17 @@ function Comparing({ target, others }: ComparingProps) {
 
   const picked = others.find((entry) => entry.value === chosen) ?? null;
 
-  async function run(against: ContextEntry) {
+  async function run(against: ContextEntry, object: ObjectRef) {
     setBusy(true);
     setError(null);
     const wanted: CompareTarget = {
       kubeconfig: against.kubeconfig,
       name: against.name,
       namespace,
-      object: target.name,
+      object: object.name,
     };
     try {
-      setResult(await fetchComparison(target, wanted, raw));
+      setResult(await fetchComparison(object, wanted, raw));
     } catch (err: unknown) {
       setResult(null);
       setError(reason(err));
@@ -106,7 +131,7 @@ function Comparing({ target, others }: ComparingProps) {
           id="compare-context"
           value={chosen}
           onChange={(event) => {
-            setChosen(event.target.value);
+            onChoose(event.target.value);
           }}
           className="rounded border border-edge-strong bg-surface-raised px-2 py-1 text-fg"
         >
@@ -116,6 +141,25 @@ function Comparing({ target, others }: ComparingProps) {
               {entry.name}
             </option>
           ))}
+        </select>
+        <label htmlFor="compare-scope" className="text-fg-muted">
+          Compare
+        </label>
+        <select
+          id="compare-scope"
+          aria-label="What to compare"
+          value={where}
+          onChange={(event) => {
+            setWhere(event.target.value as Scope);
+          }}
+          className="rounded border border-edge-strong bg-surface-raised px-2 py-1 text-fg"
+        >
+          <option value="object" disabled={target === null}>
+            this object
+          </option>
+          <option value="kind" disabled={kind === null}>
+            every {kind?.kind ?? 'object'}
+          </option>
         </select>
         <label htmlFor="compare-namespace" className="text-fg-muted">
           Namespace
@@ -128,50 +172,84 @@ function Comparing({ target, others }: ComparingProps) {
           }}
           className="w-40 rounded border border-edge-strong bg-surface-raised px-2 py-1 font-mono text-fg"
         />
-        <button
-          type="button"
-          disabled={picked === null || busy}
-          onClick={() => {
-            if (picked !== null) {
-              void run(picked);
-            }
-          }}
-          className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
-        >
-          Compare
-        </button>
-        <label className="flex items-center gap-1 text-fg-muted">
-          <input
-            type="checkbox"
-            checked={raw}
-            onChange={(event) => {
-              setRaw(event.target.checked);
-            }}
-          />
-          Show everything
-        </label>
+        {where === 'object' && (
+          <>
+            <button
+              type="button"
+              disabled={picked === null || target === null || busy}
+              onClick={() => {
+                if (picked !== null && target !== null) {
+                  void run(picked, target);
+                }
+              }}
+              className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+            >
+              Compare
+            </button>
+            <label className="flex items-center gap-1 text-fg-muted">
+              <input
+                type="checkbox"
+                checked={raw}
+                onChange={(event) => {
+                  setRaw(event.target.checked);
+                }}
+              />
+              Show everything
+            </label>
+          </>
+        )}
         {busy && <span className="text-fg-muted">reading</span>}
       </div>
-      <Announce message={error} urgent className="px-3 py-1.5 text-xs break-words text-error" />
-      {result?.missing !== undefined && (
-        <p className="px-3 py-2 text-xs text-warn">{result.missing}</p>
+      {where === 'kind' && kind !== null && picked === null && (
+        <p className="px-3 py-2 text-xs text-fg-muted">Pick a context to compare against.</p>
       )}
-      {result !== null && result.missing === undefined && (
+      {where === 'kind' && kind !== null && picked !== null && (
+        <Suspense fallback={<Loading what="the comparison" />}>
+          <KindCompare
+            key={`${picked.value}/${namespace}`}
+            kind={kind}
+            namespace={namespace}
+            target={{
+              kubeconfig: picked.kubeconfig,
+              name: picked.name,
+              namespace,
+              object: '',
+            }}
+            onOpen={onOpen}
+          />
+        </Suspense>
+      )}
+      {where === 'object' && (
         <>
-          <p className="px-3 py-1.5 text-xs text-fg-muted">
-            {result.leftContext} against {result.rightContext} · {summary(result)}
-          </p>
-          <div className="min-h-0 flex-1">
-            <Suspense fallback={<Loading what="the diff" />}>
-              <YamlDiff
-                left={result.left}
-                right={result.right}
-                sideBySide={width >= SIDE_BY_SIDE_FROM}
-              />
-            </Suspense>
-          </div>
+          <Announce message={error} urgent className="px-3 py-1.5 text-xs break-words text-error" />
+          {result?.missing !== undefined && (
+            <p className="px-3 py-2 text-xs text-warn">{result.missing}</p>
+          )}
+          {result !== null && result.missing === undefined && (
+            <>
+              <p className="px-3 py-1.5 text-xs text-fg-muted">
+                {result.leftContext} against {result.rightContext} · {summary(result)}
+              </p>
+              <div className="min-h-0 flex-1">
+                <Suspense fallback={<Loading what="the diff" />}>
+                  <YamlDiff
+                    left={result.left}
+                    right={result.right}
+                    sideBySide={width >= SIDE_BY_SIDE_FROM}
+                  />
+                </Suspense>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
   );
+}
+
+function opensOn(target: ObjectRef | null): Scope {
+  if (target === null) {
+    return 'kind';
+  }
+  return 'object';
 }

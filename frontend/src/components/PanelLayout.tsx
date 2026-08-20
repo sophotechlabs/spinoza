@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
+  ResourceDescriptor,
   ContainerState,
   LogRequest,
   ObjectDetail,
@@ -42,6 +43,8 @@ const InspectMetrics = lazy(() => import('./InspectMetrics'));
 interface PanelLayoutProps {
   selection: Selection | null;
   release: ReleaseRef | null;
+  kind: ResourceDescriptor | null;
+  namespace: string;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
   onClose: () => void;
@@ -150,7 +153,12 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
   ),
   compare: (ctx) => (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ComparePanel target={refOf(ctx.selection)} />
+      <ComparePanel
+        target={refOf(ctx.selection)}
+        kind={ctx.kind}
+        namespace={ctx.namespace}
+        onOpen={ctx.onSelectResource}
+      />
     </div>
   ),
   overview: (ctx) =>
@@ -214,6 +222,8 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
 export default function PanelLayout({
   selection,
   release,
+  kind,
+  namespace,
   subscribeLogs,
   unsubscribeLogs,
   onClose,
@@ -231,7 +241,14 @@ export default function PanelLayout({
   const [opened, setOpened] = useState<PanelId[]>([]);
   const { detail, error, gone, reload } = useObjectDetail(refOf(selection), rowOf(selection));
 
-  const ctx: PanelContext = { selection, detail, pod: podFor(selection, detail), release };
+  const ctx: PanelContext = {
+    selection,
+    detail,
+    pod: podFor(selection, detail),
+    release,
+    kind,
+    namespace,
+  };
 
   const live = DOCK_SIDES.map((side) => activeOn(side)).filter((id) => id !== null);
   const liveKey = live.join(',');

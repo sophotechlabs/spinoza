@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseKindComparison,
   parseActionResult,
   parseCatalog,
   parseCounts,
@@ -419,5 +420,58 @@ describe('an event object detail', () => {
     });
 
     expect(detail.event).toBeUndefined();
+  });
+});
+
+describe('parseKindComparison', () => {
+  it('reads the verdicts and the tally', () => {
+    const got = parseKindComparison({
+      resource: 'deployments',
+      leftContext: 'p-mk1',
+      rightContext: 'p-mk2',
+      namespace: 'flux-system',
+      objects: [
+        { namespace: 'flux-system', name: 'web', verdict: 'differs', lines: 4 },
+        { name: 'cluster-admin', verdict: 'onlyThere' },
+      ],
+      same: 1,
+      differs: 2,
+      onlyHere: 3,
+      onlyThere: 4,
+      matchedByName: true,
+    });
+
+    expect(got.objects[0]).toEqual({
+      namespace: 'flux-system',
+      name: 'web',
+      verdict: 'differs',
+      lines: 4,
+    });
+    expect(got.objects[1].namespace).toBeUndefined();
+    expect([got.same, got.differs, got.onlyHere, got.onlyThere]).toEqual([1, 2, 3, 4]);
+    expect(got.matchedByName).toBe(true);
+  });
+
+  it('treats a verdict it does not know as same rather than inventing drift', () => {
+    const got = parseKindComparison({
+      resource: 'deployments',
+      leftContext: 'a',
+      rightContext: 'b',
+      objects: [{ name: 'web', verdict: 'sideways' }],
+      same: 0,
+      differs: 0,
+      onlyHere: 0,
+      onlyThere: 0,
+    });
+
+    expect(got.objects[0].verdict).toBe('same');
+  });
+
+  it('fills in what the backend left out', () => {
+    const got = parseKindComparison({});
+
+    expect(got.objects).toEqual([]);
+    expect(got.same).toBe(0);
+    expect(got.matchedByName).toBeUndefined();
   });
 });

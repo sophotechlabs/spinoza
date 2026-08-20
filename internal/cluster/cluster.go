@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/sophotechlabs/spinoza/internal/api"
 
 	"github.com/sophotechlabs/spinoza/internal/resources"
@@ -43,6 +45,10 @@ type builder func(ctx context.Context, ref api.ContextRef) (*connection, error)
 // starting informers or anything else a full connection carries.
 type reader func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error)
 
+// lister does the same for every object of one kind, which is what a drift report
+// across two clusters is made of.
+type lister func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) ([]*unstructured.Unstructured, error)
+
 type Protection interface {
 	Verdict(server string) string
 	Set(server string, protected bool) error
@@ -59,6 +65,7 @@ type Cluster struct {
 	root       context.Context
 	build      builder
 	read       reader
+	list       lister
 	sources    Kubeconfigs
 	protection Protection
 
@@ -155,6 +162,23 @@ func (c *Cluster) readable(path string) bool {
 
 func (c *Cluster) useReader(read reader) {
 	c.read = read
+}
+
+func (c *Cluster) useLister(list lister) {
+	c.list = list
+}
+
+// List reads every object of one kind from another context, for the same reason
+// Read exists: the current connection and its caches stay untouched.
+func (c *Cluster) List(
+	ctx context.Context,
+	ref api.ContextRef,
+	target api.ObjectRef,
+) ([]*unstructured.Unstructured, error) {
+	if c.list == nil {
+		return nil, fmt.Errorf("%w: listing another context is not wired up", api.ErrInternal)
+	}
+	return c.list(ctx, ref, target)
 }
 
 // Read renders one object from another context as yaml. It opens a client for that

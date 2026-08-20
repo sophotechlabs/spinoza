@@ -532,6 +532,8 @@ export default function App() {
           <PanelLayout
             selection={selection}
             release={route.release}
+            kind={active}
+            namespace={namespace}
             subscribeLogs={subscribeLogs}
             unsubscribeLogs={unsubscribeLogs}
             onClose={clearSelection}

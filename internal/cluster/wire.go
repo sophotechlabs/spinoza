@@ -8,6 +8,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/metadata"
@@ -43,6 +44,7 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 		return &connection{manager: manager, ref: bundle.Ref, host: bundle.Config.Host}, nil
 	}, sources, openProtection())
 	cluster.useReader(readerFor(options))
+	cluster.useLister(listerFor(options))
 	return cluster, nil
 }
 
@@ -73,6 +75,33 @@ func readerFor(options Options) reader {
 			return "", getErr
 		}
 		return compare.YAML(found)
+	}
+}
+
+const listAcrossTimeout = 60 * time.Second
+
+func listerFor(options Options) lister {
+	return func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) ([]*unstructured.Unstructured, error) {
+		bundle, err := kube.LoadContext(ref, kube.Options{
+			Kubeconfig: options.Kubeconfig,
+			QPS:        options.ClientQPS,
+			Burst:      options.ClientBurst,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("kube: %w", err)
+		}
+		gvr := schema.GroupVersionResource{Group: target.Group, Version: target.Version, Resource: target.Resource}
+		list, cancel := context.WithTimeout(ctx, listAcrossTimeout)
+		defer cancel()
+		found, listErr := objectsIn(bundle.Dynamic, gvr, target.Namespace).List(list, metav1.ListOptions{})
+		if listErr != nil {
+			return nil, listErr
+		}
+		out := make([]*unstructured.Unstructured, 0, len(found.Items))
+		for i := range found.Items {
+			out = append(out, &found.Items[i])
+		}
+		return out, nil
 	}
 }
 

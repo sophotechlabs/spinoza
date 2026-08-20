@@ -18,6 +18,7 @@ import (
 
 	"github.com/coder/websocket"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -40,7 +41,13 @@ const (
 	ociScheme   = "oci://"
 )
 
+type Elsewhere interface {
+	Read(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error)
+	List(ctx context.Context, ref api.ContextRef, target api.ObjectRef) ([]*unstructured.Unstructured, error)
+}
+
 type Cluster interface {
+	Elsewhere
 	Manager() Backend
 	Contexts() api.ContextList
 	Use(ref api.ContextRef) error
@@ -48,7 +55,6 @@ type Cluster interface {
 	RemoveKubeconfig(path string) error
 	Protect(protected bool) error
 	Protected() bool
-	Read(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error)
 }
 
 type FilePicker func(ctx context.Context) (string, error)
@@ -156,6 +162,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/metrics/history", s.handleMetricHistory, false},
 		{http.MethodGet, "/api/metrics", s.handleMetrics, false},
 		{http.MethodGet, "/api/compare", withRef(s.compare), false},
+		{http.MethodGet, "/api/compare/kind", s.compareKind, false},
 		{http.MethodGet, "/api/object", withRef(s.getObject), false},
 		{http.MethodPut, "/api/object", withRef(s.applyObject), false},
 		{http.MethodDelete, "/api/object", withRef(s.deleteObject), false},
@@ -789,6 +796,46 @@ func (s *Server) against(r *http.Request, ref api.ObjectRef, against api.Context
 	result.Right = right
 	result.Identical = left == right
 	return result
+}
+
+func (s *Server) compareKind(w http.ResponseWriter, r *http.Request) {
+	ref := refFrom(r)
+	if ref.Version == "" || ref.Resource == "" {
+		writeError(w, http.StatusBadRequest, "version and resource are required")
+		return
+	}
+	query := r.URL.Query()
+	against := api.ContextRef{Kubeconfig: query.Get("againstKubeconfig"), Name: query.Get("against")}
+	if against.Name == "" {
+		writeError(w, http.StatusBadRequest, "name the context to compare against")
+		return
+	}
+	here, err := s.manager().ListKind(r.Context(), ref)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	far := farSide(r, ref)
+	there, listErr := s.cluster.List(r.Context(), against, far)
+	if listErr != nil {
+		writeAPIError(w, listErr)
+		return
+	}
+	byName := ref.Namespace != "" && far.Namespace != ref.Namespace
+	objects := compare.Kinds(here, there, byName)
+	same, differs, onlyHere, onlyThere := compare.Tally(objects)
+	writeJSON(w, api.KindComparison{
+		Resource:      ref.Resource,
+		LeftContext:   s.cluster.Contexts().Current.Name,
+		RightContext:  against.Name,
+		Namespace:     ref.Namespace,
+		Objects:       objects,
+		Same:          same,
+		Differs:       differs,
+		OnlyHere:      onlyHere,
+		OnlyThere:     onlyThere,
+		MatchedByName: byName,
+	})
 }
 
 func farSide(r *http.Request, ref api.ObjectRef) api.ObjectRef {

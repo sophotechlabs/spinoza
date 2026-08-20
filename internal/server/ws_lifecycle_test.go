@@ -15,6 +15,8 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/resources"
@@ -628,6 +630,14 @@ func (c *swappableCluster) Protect(bool) error {
 
 func (c *swappableCluster) Read(context.Context, api.ContextRef, api.ObjectRef) (string, error) {
 	return "", errors.New("this stub reads one context")
+}
+
+func (c *swappableCluster) List(
+	context.Context,
+	api.ContextRef,
+	api.ObjectRef,
+) ([]*unstructured.Unstructured, error) {
+	return nil, errors.New("this stub reads one context")
 }
 
 func (c *swappableCluster) Protected() bool {

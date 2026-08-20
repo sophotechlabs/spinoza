@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
@@ -66,6 +68,14 @@ func (s *stubBackendCluster) Protect(bool) error {
 
 func (s *stubBackendCluster) Read(context.Context, api.ContextRef, api.ObjectRef) (string, error) {
 	return "", errors.New("this stub reads one context")
+}
+
+func (s *stubBackendCluster) List(
+	context.Context,
+	api.ContextRef,
+	api.ObjectRef,
+) ([]*unstructured.Unstructured, error) {
+	return nil, errors.New("this stub reads one context")
 }
 
 func (s *stubBackendCluster) Protected() bool {

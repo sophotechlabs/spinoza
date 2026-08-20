@@ -24,6 +24,8 @@ import type {
   GraphNode,
   HelmActionResult,
   HelmChartHit,
+  KindComparison,
+  KindDiff,
   HelmChartSearch,
   HelmChartValues,
   HelmChartVersions,
@@ -63,6 +65,8 @@ import {
   GRAPH_NODE_CATEGORIES,
   READY_STATES,
 } from './types';
+import { VERDICTS } from './types';
+import type { Verdict } from './types';
 import {
   asBoolean,
   asList,
@@ -172,6 +176,40 @@ export function parseComparison(body: unknown): Comparison {
     rightContext: asString(item.rightContext),
     identical: asBoolean(item.identical),
     missing: optionalString(item.missing),
+  };
+}
+
+function parseVerdict(value: unknown): Verdict {
+  for (const verdict of VERDICTS) {
+    if (value === verdict) {
+      return verdict;
+    }
+  }
+  return 'same';
+}
+
+function parseKindDiff(item: Record<string, unknown>): KindDiff {
+  return {
+    namespace: optionalString(item.namespace),
+    name: asString(item.name),
+    verdict: parseVerdict(item.verdict),
+    lines: optionalNumber(item.lines),
+  };
+}
+
+export function parseKindComparison(body: unknown): KindComparison {
+  const item = asRecord(body);
+  return {
+    resource: asString(item.resource),
+    leftContext: asString(item.leftContext),
+    rightContext: asString(item.rightContext),
+    namespace: optionalString(item.namespace),
+    objects: listOf(item.objects, parseKindDiff),
+    same: asNumber(item.same),
+    differs: asNumber(item.differs),
+    onlyHere: asNumber(item.onlyHere),
+    onlyThere: asNumber(item.onlyThere),
+    matchedByName: optionalBoolean(item.matchedByName),
   };
 }
 

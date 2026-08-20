@@ -99,6 +99,30 @@ export interface Comparison {
   missing?: string;
 }
 
+export const VERDICTS = ['same', 'differs', 'onlyHere', 'onlyThere'] as const;
+
+export type Verdict = (typeof VERDICTS)[number];
+
+export interface KindDiff {
+  namespace?: string;
+  name: string;
+  verdict: Verdict;
+  lines?: number;
+}
+
+export interface KindComparison {
+  resource: string;
+  leftContext: string;
+  rightContext: string;
+  namespace?: string;
+  objects: KindDiff[];
+  same: number;
+  differs: number;
+  onlyHere: number;
+  onlyThere: number;
+  matchedByName?: boolean;
+}
+
 export interface NodeShellSupport {
   node: string;
   enabled: boolean;

@@ -1,7 +1,7 @@
-import type { Comparison, ObjectRef } from './types';
+import type { Comparison, KindComparison, ObjectRef, ResourceDescriptor } from './types';
 import { failure, refQuery } from './object';
-import { parseComparison } from './parse';
-import { request } from './http';
+import { parseComparison, parseKindComparison } from './parse';
+import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 
 export interface CompareTarget {
   kubeconfig: string;
@@ -65,4 +65,40 @@ export async function fetchComparison(
     throw await failure(response, `compare failed with status ${response.status}`);
   }
   return parseComparison(await response.json());
+}
+
+export async function fetchKindComparison(
+  kind: ResourceDescriptor,
+  namespace: string,
+  target: CompareTarget,
+): Promise<KindComparison> {
+  const params = new URLSearchParams({
+    group: kind.group,
+    version: kind.version,
+    resource: kind.resource,
+    namespace,
+    against: target.name,
+    againstKubeconfig: target.kubeconfig,
+  });
+  if (target.namespace !== '' && target.namespace !== namespace) {
+    params.set('againstNamespace', target.namespace);
+  }
+  const response = await request(`/api/compare/kind?${params.toString()}`, {
+    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw await failure(response, `comparing the kind failed with status ${response.status}`);
+  }
+  return parseKindComparison(await response.json());
+}
+
+export function summaryOf(result: KindComparison): string {
+  const parts = [`${String(result.same)} same`, `${String(result.differs)} differ`];
+  if (result.onlyHere > 0) {
+    parts.push(`${String(result.onlyHere)} only on ${result.leftContext}`);
+  }
+  if (result.onlyThere > 0) {
+    parts.push(`${String(result.onlyThere)} only on ${result.rightContext}`);
+  }
+  return parts.join(' · ');
 }

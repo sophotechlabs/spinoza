@@ -59,6 +59,7 @@ const (
 	defaultIdleGrace   = 90 * time.Second
 	defaultMetricsTTL  = 5 * time.Second
 	defaultCountsTTL   = 10 * time.Second
+	listKindTimeout    = 60 * time.Second
 )
 
 type Event struct {
@@ -316,6 +317,33 @@ func (m *Manager) kindFor(ref api.ObjectRef) string {
 
 func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef) error {
 	return inspect.Delete(ctx, m.dyn, ref)
+}
+
+// ListKind reads every object of one kind straight from the apiserver rather than
+// the informer cache, so both sides of a comparison are read the same way.
+func (m *Manager) ListKind(ctx context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error) {
+	if m.dyn == nil {
+		return nil, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
+	}
+	gvr := schema.GroupVersionResource{Group: ref.Group, Version: ref.Version, Resource: ref.Resource}
+	bounded, cancel := context.WithTimeout(ctx, listKindTimeout)
+	defer cancel()
+	found, err := objectsOf(m.dyn, gvr, ref.Namespace).List(bounded, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*unstructured.Unstructured, 0, len(found.Items))
+	for i := range found.Items {
+		out = append(out, &found.Items[i])
+	}
+	return out, nil
+}
+
+func objectsOf(dyn dynamic.Interface, gvr schema.GroupVersionResource, namespace string) dynamic.ResourceInterface {
+	if namespace == "" {
+		return dyn.Resource(gvr)
+	}
+	return dyn.Resource(gvr).Namespace(namespace)
 }
 
 func (m *Manager) Events(ctx context.Context, namespace, uid string) ([]api.Event, error) {

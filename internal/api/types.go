@@ -339,6 +339,33 @@ type Comparison struct {
 	Missing      string `json:"missing,omitempty"`
 }
 
+const (
+	VerdictSame      = "same"
+	VerdictDiffers   = "differs"
+	VerdictOnlyHere  = "onlyHere"
+	VerdictOnlyThere = "onlyThere"
+)
+
+type KindDiff struct {
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name"`
+	Verdict   string `json:"verdict"`
+	Lines     int    `json:"lines,omitempty"`
+}
+
+type KindComparison struct {
+	Resource      string     `json:"resource"`
+	LeftContext   string     `json:"leftContext"`
+	RightContext  string     `json:"rightContext"`
+	Namespace     string     `json:"namespace,omitempty"`
+	Objects       []KindDiff `json:"objects"`
+	Same          int        `json:"same"`
+	Differs       int        `json:"differs"`
+	OnlyHere      int        `json:"onlyHere"`
+	OnlyThere     int        `json:"onlyThere"`
+	MatchedByName bool       `json:"matchedByName,omitempty"`
+}
+
 type NodeShellSupport struct {
 	Node      string `json:"node"`
 	Enabled   bool   `json:"enabled"`

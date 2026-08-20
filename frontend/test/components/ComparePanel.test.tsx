@@ -62,35 +62,35 @@ afterEach(() => {
 });
 
 describe('what the panel shows before anything is chosen', () => {
-  it('asks for an object when none is selected', () => {
-    render(<ComparePanel target={null} />);
+  it('asks for an object or a kind when neither is there', () => {
+    render(<ComparePanel target={null} kind={null} namespace="" onOpen={vi.fn()} />);
 
-    expect(screen.getByText('Select an object to compare it.')).toBeInTheDocument();
+    expect(screen.getByText('Open a kind, or select an object, to compare.')).toBeInTheDocument();
   });
 
   it('says so when there is nothing to compare against', () => {
     withContexts(['p-mk1']);
 
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     expect(screen.getByText(/needs a second context/)).toBeInTheDocument();
   });
 
   it('offers the other contexts, never the current one', () => {
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     expect(screen.getByRole('option', { name: 'gke-prod' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'p-mk1' })).not.toBeInTheDocument();
   });
 
   it('starts on the namespace the object is in', () => {
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     expect(screen.getByLabelText('Namespace')).toHaveValue('prod');
   });
 
   it('keeps the button disabled until a context is picked', () => {
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Compare' })).toBeDisabled();
   });
@@ -100,7 +100,7 @@ describe('running a comparison', () => {
   it('reports what differs and shows the diff', async () => {
     const user = userEvent.setup();
     stub(answer);
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByRole('button', { name: 'Compare' }));
@@ -113,7 +113,7 @@ describe('running a comparison', () => {
   it('says when the two sides match', async () => {
     const user = userEvent.setup();
     stub({ ...answer, right: answer.left, identical: true });
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByRole('button', { name: 'Compare' }));
@@ -126,7 +126,7 @@ describe('running a comparison', () => {
   it('passes the far namespace when it was changed', async () => {
     const user = userEvent.setup();
     const mock = stub(answer);
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.clear(screen.getByLabelText('Namespace'));
@@ -141,7 +141,7 @@ describe('running a comparison', () => {
   it('asks for everything when the box is ticked', async () => {
     const user = userEvent.setup();
     const mock = stub(answer);
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByLabelText('Show everything'));
@@ -155,7 +155,7 @@ describe('running a comparison', () => {
   it('says plainly when the other cluster has no such object', async () => {
     const user = userEvent.setup();
     stub({ ...answer, right: '', missing: 'that context has no such object' });
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByRole('button', { name: 'Compare' }));
@@ -167,7 +167,7 @@ describe('running a comparison', () => {
   it('reports a request that failed', async () => {
     const user = userEvent.setup();
     stub({ message: 'the apiserver is unreachable' }, false);
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByRole('button', { name: 'Compare' }));
@@ -178,12 +178,19 @@ describe('running a comparison', () => {
   it('drops the result when another object is selected', async () => {
     const user = userEvent.setup();
     stub(answer);
-    const view = render(<ComparePanel target={target} />);
+    const view = render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByRole('button', { name: 'Compare' }));
     await screen.findByTestId('yaml-diff');
 
-    view.rerender(<ComparePanel target={{ ...target, name: 'api' }} />);
+    view.rerender(
+      <ComparePanel
+        target={{ ...target, name: 'api' }}
+        kind={null}
+        namespace=""
+        onOpen={vi.fn()}
+      />,
+    );
 
     expect(screen.queryByTestId('yaml-diff')).not.toBeInTheDocument();
   });
@@ -193,7 +200,7 @@ describe('the odd cases the summary and errors have to cover', () => {
   it('counts lines even when no section can be named', async () => {
     const user = userEvent.setup();
     stub({ ...answer, left: '  replicas: 3\n', right: '  replicas: 5\n' });
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByRole('button', { name: 'Compare' }));
@@ -204,11 +211,91 @@ describe('the odd cases the summary and errors have to cover', () => {
   it('falls back to a plain sentence when the failure is not an Error', async () => {
     const user = userEvent.setup();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue('nope'));
-    render(<ComparePanel target={target} />);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
 
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByRole('button', { name: 'Compare' }));
 
     expect(await screen.findByText('the comparison did not run')).toBeInTheDocument();
+  });
+});
+
+describe('choosing what to compare', () => {
+  const kind = {
+    group: 'apps',
+    version: 'v1',
+    resource: 'deployments',
+    kind: 'Deployment',
+    namespaced: true,
+    category: 'Workloads',
+  };
+
+  it('opens on the kind when nothing is selected', () => {
+    stub(answer);
+
+    render(<ComparePanel target={null} kind={kind} namespace="prod" onOpen={vi.fn()} />);
+
+    expect(screen.getByLabelText('What to compare')).toHaveValue('kind');
+    expect(screen.getByRole('option', { name: 'this object' })).toBeDisabled();
+  });
+
+  it('opens on the object when one is selected', () => {
+    stub(answer);
+
+    render(<ComparePanel target={target} kind={kind} namespace="prod" onOpen={vi.fn()} />);
+
+    expect(screen.getByLabelText('What to compare')).toHaveValue('object');
+  });
+
+  it('asks for a context before it reads a whole kind', () => {
+    stub(answer);
+
+    render(<ComparePanel target={null} kind={kind} namespace="prod" onOpen={vi.fn()} />);
+
+    expect(screen.getByText('Pick a context to compare against.')).toBeInTheDocument();
+  });
+
+  it('offers the kind comparison once a context is picked', async () => {
+    const user = userEvent.setup();
+    stub(answer);
+    render(<ComparePanel target={null} kind={kind} namespace="prod" onOpen={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
+
+    expect(
+      await screen.findByRole('button', { name: 'Compare every Deployment' }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the context it was given when the object changes', async () => {
+    const user = userEvent.setup();
+    stub(answer);
+    const view = render(
+      <ComparePanel target={target} kind={kind} namespace="prod" onOpen={vi.fn()} />,
+    );
+    await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
+
+    view.rerender(
+      <ComparePanel
+        target={{ ...target, name: 'api' }}
+        kind={kind}
+        namespace="prod"
+        onOpen={vi.fn()}
+      />,
+    );
+
+    const kept = screen.getByLabelText('Against');
+    expect(kept).toHaveDisplayValue('gke-prod');
+  });
+
+  it('switches back to the object once one is chosen', async () => {
+    const user = userEvent.setup();
+    stub(answer);
+    render(<ComparePanel target={target} kind={kind} namespace="prod" onOpen={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText('What to compare'), 'kind');
+    await user.selectOptions(screen.getByLabelText('What to compare'), 'object');
+
+    expect(screen.getByRole('button', { name: 'Compare' })).toBeInTheDocument();
   });
 });

@@ -276,3 +276,123 @@ func TestTheRawComparisonKeepsWhatTheClusterSentEvenWhenItIsNotAnObject(t *testi
 		t.Fatalf("right = %q, want the raw answer carried through untouched", got.Right)
 	}
 }
+
+func kindObject(namespace, name string, replicas int64) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"name":            name,
+			"namespace":       namespace,
+			"uid":             "uid-" + name,
+			"resourceVersion": "7",
+		},
+		"spec":   map[string]any{"replicas": replicas},
+		"status": map[string]any{"readyReplicas": replicas},
+	}}
+}
+
+func kindComparisonFrom(t *testing.T, body []byte) api.KindComparison {
+	t.Helper()
+	var result api.KindComparison
+	err := json.Unmarshal(body, &result)
+	if err != nil {
+		t.Fatalf("decode: %v\n%s", err, body)
+	}
+	return result
+}
+
+const kindQuery = "?group=apps&version=v1&resource=deployments&namespace=prod"
+
+func TestAKindComparisonReportsEachObjectsVerdict(t *testing.T) {
+	ts, cluster := compareServer(
+		t, nil,
+		comparedDeployment(2, "left-uid"),
+		kindObject("prod", "api", 3),
+	)
+	cluster.over = map[string][]*unstructured.Unstructured{
+		"p-mk2/prod": {kindObject("prod", "web", 5), kindObject("prod", "only-there", 1)},
+	}
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/compare/kind"+kindQuery+"&against=p-mk2", nil)
+
+	result := kindComparisonFrom(t, body)
+	if result.LeftContext != "staging" || result.RightContext != "p-mk2" {
+		t.Fatalf("contexts = %q against %q", result.LeftContext, result.RightContext)
+	}
+	verdict := map[string]string{}
+	for _, object := range result.Objects {
+		verdict[object.Name] = object.Verdict
+	}
+	if verdict["web"] != api.VerdictDiffers {
+		t.Fatalf("web = %q, want differs", verdict["web"])
+	}
+	if verdict["api"] != api.VerdictOnlyHere {
+		t.Fatalf("api = %q, want onlyHere", verdict["api"])
+	}
+	if verdict["only-there"] != api.VerdictOnlyThere {
+		t.Fatalf("only-there = %q, want onlyThere", verdict["only-there"])
+	}
+	if result.Differs != 1 || result.OnlyHere != 1 || result.OnlyThere != 1 || result.Same != 0 {
+		t.Fatalf("tally = %+v", result)
+	}
+}
+
+func TestAKindComparisonNeedsAContextToCompareAgainst(t *testing.T) {
+	ts, _ := compareServer(t, nil, comparedDeployment(2, "left-uid"))
+
+	resp, _ := doRequest(t, http.MethodGet, ts.URL+"/api/compare/kind"+kindQuery, nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestAKindComparisonReportsAFarSideItCouldNotList(t *testing.T) {
+	ts, cluster := compareServer(t, nil, comparedDeployment(2, "left-uid"))
+	cluster.listErr = errors.New("the other cluster refused the list")
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/compare/kind"+kindQuery+"&against=p-mk2", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatalf("a failed list was reported as a comparison: %s", body)
+	}
+	if !strings.Contains(string(body), "refused the list") {
+		t.Fatalf("body = %s", body)
+	}
+}
+
+func TestAKindComparisonAcrossNamespacesMatchesByName(t *testing.T) {
+	ts, cluster := compareServer(t, nil, comparedDeployment(2, "left-uid"))
+	cluster.over = map[string][]*unstructured.Unstructured{
+		"p-mk2/staging": {kindObject("staging", "web", 2)},
+	}
+
+	_, body := doRequest(t, http.MethodGet,
+		ts.URL+"/api/compare/kind"+kindQuery+"&against=p-mk2&againstNamespace=staging", nil)
+
+	result := kindComparisonFrom(t, body)
+	if !result.MatchedByName {
+		t.Fatal("comparing two namespaces did not say it matched on the name alone")
+	}
+	if len(result.Objects) != 1 {
+		t.Fatalf("objects = %+v, want the pair matched", result.Objects)
+	}
+	if result.Objects[0].Verdict != api.VerdictDiffers {
+		t.Fatalf("verdict = %q, want differs: the namespace is part of the object", result.Objects[0].Verdict)
+	}
+}
+
+func TestAKindComparisonWithNothingOnEitherSideIsEmptyNotAnError(t *testing.T) {
+	ts, _ := compareServer(t, nil)
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/compare/kind"+kindQuery+"&against=p-mk2", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	result := kindComparisonFrom(t, body)
+	if len(result.Objects) != 0 {
+		t.Fatalf("objects = %+v, want none", result.Objects)
+	}
+}

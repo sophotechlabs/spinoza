@@ -117,6 +117,8 @@ function renderLayout(overrides: Partial<Parameters<typeof PanelLayout>[0]> = {}
   const onReleaseClose = vi.fn();
   const view = render(
     <PanelLayout
+      kind={null}
+      namespace=""
       selection={{
         ref: podRef,
         row: makeRow({
@@ -475,6 +477,8 @@ describe('an object deleted out from under the panels', () => {
       <PanelLayout
         selection={{ ref: podRef, row: null }}
         release={null}
+        kind={null}
+        namespace=""
         subscribeLogs={vi.fn()}
         unsubscribeLogs={vi.fn()}
         onClose={vi.fn()}
