@@ -124,7 +124,7 @@ func TestManagerLogs(t *testing.T) {
 		if !ok {
 			t.Fatalf("log channel closed without a line")
 		}
-		if line == "" {
+		if line.Text == "" {
 			t.Fatalf("empty log line")
 		}
 	case <-time.After(5 * time.Second):

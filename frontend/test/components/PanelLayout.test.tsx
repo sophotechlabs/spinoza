@@ -252,7 +252,23 @@ describe('PanelLayout', () => {
     expect(screen.getByTestId('terminal-panel')).toBe(before);
   });
 
-  it('greys out the pod panels for something that is not a pod', async () => {
+  it('greys out the pod panels for something that owns no pods', async () => {
+    stubApi();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ ...detail, kind: 'ConfigMap', containers: undefined }),
+      }),
+    );
+    renderLayout({ selection: { ref: podRef, row: null } });
+    await screen.findByText('Metadata');
+
+    expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('tab', { name: 'Metrics' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('offers logs for a workload that owns pods, and metrics only for a pod', async () => {
     stubApi();
     vi.stubGlobal(
       'fetch',
@@ -264,8 +280,42 @@ describe('PanelLayout', () => {
     renderLayout({ selection: { ref: podRef, row: null } });
     await screen.findByText('Metadata');
 
-    expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('tab', { name: 'Logs' })).not.toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('tab', { name: 'Metrics' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('tails a workload through its own ref rather than a pod name', async () => {
+    const user = userEvent.setup();
+    const subscribeLogs = vi.fn();
+    const deployRef: ObjectRef = {
+      group: 'apps',
+      version: 'v1',
+      resource: 'deployments',
+      namespace: 'prod',
+      name: 'web',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ ...detail, kind: 'Deployment', containers: ['app'] }),
+      }),
+    );
+    renderLayout({ selection: { ref: deployRef, row: null }, subscribeLogs });
+    await screen.findByText('Metadata');
+
+    await user.click(screen.getByRole('tab', { name: 'Logs' }));
+
+    expect(subscribeLogs).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+        name: 'web',
+        namespace: 'prod',
+      }),
+    );
   });
 
   it('greys out every object panel with nothing selected', () => {

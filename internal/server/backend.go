@@ -46,6 +46,7 @@ type Feeds interface {
 		filters []api.RowFilter,
 	) (*resources.Subscription, error)
 	Logs(ctx context.Context, req logs.Request) (*logs.Stream, error)
+	PodSelector(ctx context.Context, ref api.ObjectRef) (string, error)
 }
 
 type Views interface {

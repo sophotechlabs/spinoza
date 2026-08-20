@@ -368,7 +368,7 @@ func TestClaimLogsClosesThePreviousStream(t *testing.T) {
 	}
 }
 
-func drainLines(t *testing.T, lines <-chan string) {
+func drainLines(t *testing.T, lines <-chan logs.Line) {
 	t.Helper()
 	for {
 		select {

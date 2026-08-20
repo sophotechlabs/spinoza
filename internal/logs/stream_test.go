@@ -33,7 +33,7 @@ func collect(t *testing.T, stream *Stream, want int) []string {
 			if !ok {
 				return lines
 			}
-			lines = append(lines, line)
+			lines = append(lines, line.Text)
 		case <-deadline:
 			t.Fatalf("timed out after %d lines", len(lines))
 		}

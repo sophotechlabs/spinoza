@@ -905,10 +905,13 @@ describe('useResourceFeed', () => {
     });
     expect(useLogsStore.getState().streams.get('logs')).toEqual({
       lines: [],
+      sources: [],
       dropped: 0,
       revision: 0,
       ended: false,
       resumed: false,
+      attached: 0,
+      matched: 0,
     });
   });
 
@@ -1343,6 +1346,62 @@ describe('a chatty log stream', () => {
 
     expect(writes).toBe(1);
     expect(useLogsStore.getState().streams.get('logs')?.lines).toHaveLength(20);
+  });
+
+  function sendFrom(socket: FakeWebSocket, source: string, lines: string[]): void {
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log', subId: 'logs', lines, source }),
+        }),
+      );
+    });
+  }
+
+  it('keeps every batch on the pod that wrote it', async () => {
+    const { socket } = openLogFeed();
+
+    sendFrom(socket, 'web-0', ['one']);
+    sendFrom(socket, 'web-1', ['two']);
+    sendFrom(socket, 'web-0', ['three']);
+    await flushDeltas();
+
+    const stream = useLogsStore.getState().streams.get('logs');
+    expect(stream?.lines).toEqual(['one', 'two', 'three']);
+    expect(stream?.sources).toEqual(['web-0', 'web-1', 'web-0']);
+  });
+
+  it('writes once per pod rather than once per message', async () => {
+    const { socket } = openLogFeed();
+    let writes = 0;
+    const stop = useLogsStore.subscribe(() => {
+      writes += 1;
+    });
+
+    sendFrom(socket, 'web-0', ['one']);
+    sendFrom(socket, 'web-0', ['two']);
+    sendFrom(socket, 'web-1', ['three']);
+    await flushDeltas();
+    stop();
+
+    expect(writes).toBe(2);
+  });
+
+  it('takes the pod count the server reports while the stream runs', () => {
+    const { socket } = openLogFeed();
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'log-open', subId: 'logs', attached: 3, matched: 7 }),
+        }),
+      );
+    });
+
+    expect(useLogsStore.getState().streams.get('logs')).toMatchObject({
+      attached: 3,
+      matched: 7,
+    });
   });
 
   it('does not lose the tail when the stream ends inside the window', () => {

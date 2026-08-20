@@ -7,7 +7,14 @@ import { useLogsStore } from '../../src/store/logs';
 
 type SubscribeLogs = ReturnType<typeof vi.fn<(subId: string, request: unknown) => void>>;
 
-function renderLogs(props: { namespace?: string; pod?: string; containers?: string[] } = {}) {
+function renderLogs(
+  props: {
+    namespace?: string;
+    pod?: string;
+    containers?: string[];
+    workload?: { group: string; version: string; resource: string };
+  } = {},
+) {
   const subscribeLogs = vi.fn<(subId: string, request: unknown) => void>();
   const unsubscribeLogs = vi.fn<(subId: string) => void>();
   const view = render(
@@ -15,6 +22,7 @@ function renderLogs(props: { namespace?: string; pod?: string; containers?: stri
       namespace={props.namespace ?? 'flux-system'}
       pod={props.pod ?? 'web'}
       containers={props.containers ?? ['app', 'sidecar']}
+      workload={props.workload}
       subscribeLogs={subscribeLogs}
       unsubscribeLogs={unsubscribeLogs}
     />,
@@ -92,7 +100,7 @@ describe('InspectLogs', () => {
     const first = liveSubId(subscribeLogs);
     act(() => {
       useLogsStore.getState().startStream(first);
-      useLogsStore.getState().appendLines(first, ['from-app']);
+      useLogsStore.getState().appendLines(first, ['from-app'], '');
     });
     expect(screen.getByText('from-app')).toBeInTheDocument();
 
@@ -101,7 +109,7 @@ describe('InspectLogs', () => {
 
     expect(second).not.toBe(first);
     act(() => {
-      useLogsStore.getState().appendLines(first, ['late-from-app']);
+      useLogsStore.getState().appendLines(first, ['late-from-app'], '');
     });
     expect(screen.queryByText('late-from-app')).not.toBeInTheDocument();
     expect(screen.getByText('Waiting for output')).toBeInTheDocument();
@@ -115,7 +123,7 @@ describe('InspectLogs', () => {
 
     act(() => {
       useLogsStore.getState().startStream(subId);
-      useLogsStore.getState().appendLines(subId, ['one']);
+      useLogsStore.getState().appendLines(subId, ['one'], '');
     });
 
     expect(body.scrollTop).toBe(900);
@@ -131,7 +139,7 @@ describe('InspectLogs', () => {
 
     act(() => {
       useLogsStore.getState().startStream(subId);
-      useLogsStore.getState().appendLines(subId, ['one']);
+      useLogsStore.getState().appendLines(subId, ['one'], '');
     });
 
     expect(body.scrollTop).toBe(0);
@@ -185,7 +193,7 @@ describe('InspectLogs stream state', () => {
 
     act(() => {
       useLogsStore.getState().startStream(subId);
-      useLogsStore.getState().appendLines(subId, ['before the drop']);
+      useLogsStore.getState().appendLines(subId, ['before the drop'], '');
       useLogsStore.getState().resumeStream(subId);
     });
 
@@ -215,7 +223,7 @@ describe('reading a structured log line', () => {
     const subId = liveSubId(subscribeLogs);
     act(() => {
       useLogsStore.getState().startStream(subId);
-      useLogsStore.getState().appendLines(subId, [jsonLine]);
+      useLogsStore.getState().appendLines(subId, [jsonLine], '');
     });
   }
 
@@ -258,6 +266,7 @@ describe('a very long log buffer', () => {
       useLogsStore.getState().appendLines(
         subId,
         Array.from({ length: 5000 }, (_unused, index) => `line ${String(index)}`),
+        '',
       );
     });
 
@@ -271,7 +280,7 @@ describe('a very long log buffer', () => {
     const subId = liveSubId(subscribeLogs);
     act(() => {
       useLogsStore.getState().startStream(subId);
-      useLogsStore.getState().appendLines(subId, ['alpha', 'bravo']);
+      useLogsStore.getState().appendLines(subId, ['alpha', 'bravo'], '');
     });
 
     const rendered = [...document.querySelectorAll<HTMLElement>('[data-index]')];
@@ -284,7 +293,7 @@ describe('a very long log buffer', () => {
     const subId = liveSubId(subscribeLogs);
     act(() => {
       useLogsStore.getState().startStream(subId);
-      useLogsStore.getState().appendLines(subId, ['only line']);
+      useLogsStore.getState().appendLines(subId, ['only line'], '');
     });
     const small = document.querySelectorAll('[data-index]').length;
 
@@ -292,6 +301,7 @@ describe('a very long log buffer', () => {
       useLogsStore.getState().appendLines(
         subId,
         Array.from({ length: 4000 }, (_unused, index) => `more ${String(index)}`),
+        '',
       );
     });
 
@@ -354,7 +364,7 @@ describe('working through a log buffer', () => {
     const subId = liveSubId(subscribeLogs);
     act(() => {
       useLogsStore.getState().startStream(subId);
-      useLogsStore.getState().appendLines(subId, lines);
+      useLogsStore.getState().appendLines(subId, lines, '');
     });
     return subId;
   }
@@ -505,6 +515,102 @@ describe('working through a log buffer', () => {
   });
 });
 
+describe('tailing every pod of a workload', () => {
+  const workload = { group: 'apps', version: 'v1', resource: 'deployments' };
+
+  beforeEach(() => {
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function seedPods(subscribeLogs: SubscribeLogs, attached: number, matched: number): string {
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().openedStream(subId, attached, matched);
+      useLogsStore.getState().appendLines(subId, ['alpha one'], 'web-0');
+      useLogsStore.getState().appendLines(subId, ['bravo two'], 'web-1');
+    });
+    return subId;
+  }
+
+  it('asks for the workload rather than one pod', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+
+    expect(subscribeLogs).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+        name: 'web',
+        namespace: 'flux-system',
+      }),
+    );
+  });
+
+  it('puts the pod that wrote a line in front of it', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+    seedPods(subscribeLogs, 2, 2);
+
+    expect(screen.getByText('web-0')).toBeInTheDocument();
+    expect(screen.getByText('web-1')).toBeInTheDocument();
+  });
+
+  it('says how many pods it is reading', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+    seedPods(subscribeLogs, 2, 2);
+
+    expect(screen.getByText('2 pods')).toBeInTheDocument();
+  });
+
+  it('says so when it is reading only some of the pods', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+    seedPods(subscribeLogs, 20, 45);
+
+    expect(screen.getByText('20 of 45 pods')).toBeInTheDocument();
+  });
+
+  it('keeps quiet about the count while reading a single pod', () => {
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().openedStream(subId, 1, 1);
+      useLogsStore.getState().appendLines(subId, ['alpha one'], '');
+    });
+
+    expect(screen.queryByText('1 pods')).not.toBeInTheDocument();
+  });
+
+  it('filters on the pod name as well as the text', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs } = renderLogs({ workload });
+    seedPods(subscribeLogs, 2, 2);
+
+    await user.type(screen.getByLabelText('Filter log lines'), 'web-1');
+
+    expect(screen.getByText('bravo two')).toBeInTheDocument();
+    expect(screen.queryByText('alpha one')).not.toBeInTheDocument();
+    expect(screen.getByText('1 of 2')).toBeInTheDocument();
+  });
+
+  it('copies the lines with the pod each came from', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const { subscribeLogs } = renderLogs({ workload });
+    seedPods(subscribeLogs, 2, 2);
+
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledWith('web-0 alpha one\nweb-1 bravo two');
+  });
+});
+
 describe('copying the log buffer', () => {
   beforeEach(() => {
     useLogsStore.setState({ streams: new Map() });
@@ -518,7 +624,7 @@ describe('copying the log buffer', () => {
     const subId = liveSubId(subscribeLogs);
     act(() => {
       useLogsStore.getState().startStream(subId);
-      useLogsStore.getState().appendLines(subId, ['alpha one', 'bravo two']);
+      useLogsStore.getState().appendLines(subId, ['alpha one', 'bravo two'], '');
     });
 
     await user.click(screen.getByRole('button', { name: 'Copy' }));

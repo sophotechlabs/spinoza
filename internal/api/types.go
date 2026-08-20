@@ -534,6 +534,9 @@ type ServerMsg struct {
 	Total      int         `json:"total,omitempty"`
 	Limit      int         `json:"limit,omitempty"`
 	Lines      []string    `json:"lines,omitempty"`
+	Source     string      `json:"source,omitempty"`
+	Attached   int         `json:"attached,omitempty"`
+	Matched    int         `json:"matched,omitempty"`
 	Message    string      `json:"message,omitempty"`
 	Changes    []RowChange `json:"changes,omitempty"`
 }
@@ -573,9 +576,17 @@ type RowBatch struct {
 }
 
 type LogLines struct {
-	Type  string   `json:"type"`
-	SubID string   `json:"subId"`
-	Lines []string `json:"lines"`
+	Type   string   `json:"type"`
+	SubID  string   `json:"subId"`
+	Lines  []string `json:"lines"`
+	Source string   `json:"source,omitempty"`
+}
+
+type LogOpened struct {
+	Type     string `json:"type"`
+	SubID    string `json:"subId"`
+	Attached int    `json:"attached"`
+	Matched  int    `json:"matched"`
 }
 
 type LogEnd struct {

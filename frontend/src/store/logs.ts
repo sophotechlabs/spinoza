@@ -4,10 +4,15 @@ export const MAX_LOG_LINES = 5000;
 
 interface StreamState {
   lines: string[];
+  // sources sits alongside lines, one entry each, holding the pod a line came
+  // from. A single-pod stream leaves them empty.
+  sources: string[];
   dropped: number;
   revision: number;
   ended: boolean;
   resumed: boolean;
+  attached: number;
+  matched: number;
   error?: string;
 }
 
@@ -15,7 +20,8 @@ interface LogsState {
   streams: Map<string, StreamState>;
   startStream: (subId: string) => void;
   resumeStream: (subId: string) => void;
-  appendLines: (subId: string, lines: string[]) => void;
+  openedStream: (subId: string, attached: number, matched: number) => void;
+  appendLines: (subId: string, lines: string[], source: string) => void;
   clearLines: (subId: string) => void;
   endStream: (subId: string) => void;
   failStream: (subId: string, message: string) => void;
@@ -24,15 +30,30 @@ interface LogsState {
 
 const EMPTY_LINES: string[] = [];
 
-function append(buffer: string[], lines: string[]): number {
+function fresh(): StreamState {
+  return {
+    lines: [],
+    sources: [],
+    dropped: 0,
+    revision: 0,
+    ended: false,
+    resumed: false,
+    attached: 0,
+    matched: 0,
+  };
+}
+
+function append(held: StreamState, lines: string[], source: string): number {
   for (const line of lines) {
-    buffer.push(line);
+    held.lines.push(line);
+    held.sources.push(source);
   }
-  if (buffer.length <= MAX_LOG_LINES) {
+  if (held.lines.length <= MAX_LOG_LINES) {
     return 0;
   }
-  const excess = buffer.length - MAX_LOG_LINES;
-  buffer.splice(0, excess);
+  const excess = held.lines.length - MAX_LOG_LINES;
+  held.lines.splice(0, excess);
+  held.sources.splice(0, excess);
   return excess;
 }
 
@@ -41,7 +62,7 @@ export const useLogsStore = create<LogsState>((set) => ({
   startStream: (subId) => {
     set((state) => {
       const streams = new Map(state.streams);
-      streams.set(subId, { lines: [], dropped: 0, revision: 0, ended: false, resumed: false });
+      streams.set(subId, fresh());
       return { streams };
     });
   },
@@ -50,7 +71,7 @@ export const useLogsStore = create<LogsState>((set) => ({
       const existing = state.streams.get(subId);
       const streams = new Map(state.streams);
       if (existing === undefined) {
-        streams.set(subId, { lines: [], dropped: 0, revision: 0, ended: false, resumed: false });
+        streams.set(subId, fresh());
         return { streams };
       }
       streams.set(subId, {
@@ -63,13 +84,24 @@ export const useLogsStore = create<LogsState>((set) => ({
       return { streams };
     });
   },
-  appendLines: (subId, lines) => {
+  openedStream: (subId, attached, matched) => {
     set((state) => {
       const existing = state.streams.get(subId);
       if (existing === undefined) {
         return state;
       }
-      const dropped = append(existing.lines, lines);
+      const streams = new Map(state.streams);
+      streams.set(subId, { ...existing, attached, matched });
+      return { streams };
+    });
+  },
+  appendLines: (subId, lines, source) => {
+    set((state) => {
+      const existing = state.streams.get(subId);
+      if (existing === undefined) {
+        return state;
+      }
+      const dropped = append(existing, lines, source);
       const streams = new Map(state.streams);
       streams.set(subId, {
         ...existing,
@@ -86,6 +118,7 @@ export const useLogsStore = create<LogsState>((set) => ({
         return state;
       }
       existing.lines.length = 0;
+      existing.sources.length = 0;
       const streams = new Map(state.streams);
       streams.set(subId, { ...existing, resumed: false, revision: existing.revision + 1 });
       return { streams };
@@ -131,6 +164,20 @@ export function useLogLines(subId: string): string[] {
     return EMPTY_LINES;
   }
   return lines;
+}
+
+export function useLogSources(subId: string): string[] {
+  const sources = useLogsStore((state) => state.streams.get(subId)?.sources);
+  if (sources === undefined) {
+    return EMPTY_LINES;
+  }
+  return sources;
+}
+
+export function useLogPods(subId: string): { attached: number; matched: number } {
+  const attached = useLogsStore((state) => state.streams.get(subId)?.attached ?? 0);
+  const matched = useLogsStore((state) => state.streams.get(subId)?.matched ?? 0);
+  return { attached, matched };
 }
 
 export function useLogRevision(subId: string): number {

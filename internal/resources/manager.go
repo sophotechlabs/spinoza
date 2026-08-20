@@ -354,6 +354,26 @@ func (m *Manager) Logs(ctx context.Context, req logs.Request) (*logs.Stream, err
 	return logs.Open(ctx, m.cs, req)
 }
 
+// PodSelector reads the labels a workload puts on the pods it owns, which is how
+// every pod behind a Deployment is followed at once.
+func (m *Manager) PodSelector(ctx context.Context, ref api.ObjectRef) (string, error) {
+	if m.dyn == nil {
+		return "", fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
+	}
+	gvr := schema.GroupVersionResource{Group: ref.Group, Version: ref.Version, Resource: ref.Resource}
+	bounded, cancel := context.WithTimeout(ctx, listKindTimeout)
+	defer cancel()
+	found, err := m.dyn.Resource(gvr).Namespace(ref.Namespace).Get(bounded, ref.Name, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	matched, ok, err := unstructured.NestedStringMap(found.Object, "spec", "selector", "matchLabels")
+	if err != nil || !ok || len(matched) == 0 {
+		return "", fmt.Errorf("%w: %s/%s selects no pods", api.ErrInternal, ref.Resource, ref.Name)
+	}
+	return metav1.FormatLabelSelector(&metav1.LabelSelector{MatchLabels: matched}), nil
+}
+
 func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error) {
 	return flux.Do(ctx, m.dyn, ref, action, time.Now())
 }

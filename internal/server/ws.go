@@ -20,6 +20,19 @@ const maxLogBatch = 200
 
 const msgError = "error"
 
+// podCountInterval is how often a quiet log stream is asked whether it is still
+// reading the same pods.
+var podCountInterval = 2 * time.Second
+
+type relayStep int
+
+const (
+	relayLine relayStep = iota
+	relayIdle
+	relayEnd
+	relayStop
+)
+
 var minResyncInterval = 2 * time.Second
 
 type throttle struct {
@@ -360,12 +373,18 @@ func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 }
 
 func (sess *wsSession) buildLogs(msg api.ClientMsg, gen uint64) {
+	selector, selErr := sess.selectorFor(msg)
+	if selErr != nil {
+		sess.failCurrent(streams, msg.SubID, gen, selErr)
+		return
+	}
 	stream, err := sess.mgr.Logs(sess.ctx, logs.Request{
 		Namespace: msg.Namespace,
 		Name:      msg.Name,
 		Container: msg.Container,
 		TailLines: msg.TailLines,
 		Follow:    msg.Follow,
+		Selector:  selector,
 	})
 	if err != nil {
 		sess.failCurrent(streams, msg.SubID, gen, err)
@@ -375,24 +394,101 @@ func (sess *wsSession) buildLogs(msg api.ClientMsg, gen uint64) {
 		stream.Close()
 		return
 	}
+	sess.writeCurrent(streams, msg.SubID, gen, openedBy(msg.SubID, stream))
 	sess.relayLogs(msg.SubID, gen, stream)
 }
 
+// selectorFor turns a workload into the labels its pods carry. A request that
+// names no resource, or names pods, is one pod and needs no selector.
+func (sess *wsSession) selectorFor(msg api.ClientMsg) (string, error) {
+	if msg.Resource == "" || msg.Resource == "pods" {
+		return "", nil
+	}
+	return sess.mgr.PodSelector(sess.ctx, api.ObjectRef{
+		Group:     msg.Group,
+		Version:   msg.Version,
+		Resource:  msg.Resource,
+		Namespace: msg.Namespace,
+		Name:      msg.Name,
+	})
+}
+
 func (sess *wsSession) relayLogs(subID string, gen uint64, stream *logs.Stream) {
+	ticker := time.NewTicker(podCountInterval)
+	defer ticker.Stop()
+	var held *logs.Line
+	reported := openedBy(subID, stream)
 	for {
-		select {
-		case <-sess.ctx.Done():
+		line, step := sess.nextLine(stream, held, ticker.C)
+		if step == relayStop {
 			return
-		case line, ok := <-stream.Lines:
-			if !ok {
-				sess.writeCurrent(streams, subID, gen, endOfLogs(subID, stream))
-				return
-			}
-			batch := api.LogLines{Type: "log", SubID: subID, Lines: batchLines(stream.Lines, line)}
+		}
+		if step == relayEnd {
+			sess.writeCurrent(streams, subID, gen, endOfLogs(subID, stream))
+			return
+		}
+		if step == relayLine {
+			texts, leftover := batchLines(stream.Lines, *line)
+			held = leftover
+			batch := api.LogLines{Type: "log", SubID: subID, Lines: texts, Source: line.Pod}
 			if !sess.writeCurrent(streams, subID, gen, batch) {
 				return
 			}
 		}
+		if !sess.reportPods(subID, gen, stream, &reported) {
+			return
+		}
+	}
+}
+
+func openedBy(subID string, stream *logs.Stream) api.LogOpened {
+	return api.LogOpened{
+		Type:     "log-open",
+		SubID:    subID,
+		Attached: stream.Attached(),
+		Matched:  stream.Matched(),
+	}
+}
+
+// reportPods says so when the set of pods being read changes, so the count on
+// screen is the one that is true now rather than the one at open. A rollout adds
+// pods to a stream that is already running.
+func (sess *wsSession) reportPods(
+	subID string,
+	gen uint64,
+	stream *logs.Stream,
+	reported *api.LogOpened,
+) bool {
+	now := openedBy(subID, stream)
+	if now == *reported {
+		return true
+	}
+	*reported = now
+	return sess.writeCurrent(streams, subID, gen, now)
+}
+
+// nextLine hands back the line a batch stopped on before reading the channel
+// again, so a line that belongs to another pod is never dropped between batches.
+// A stream that has gone quiet still wakes on the tick, because the pods being
+// read can change without anything being written.
+func (sess *wsSession) nextLine(
+	stream *logs.Stream,
+	held *logs.Line,
+	tick <-chan time.Time,
+) (*logs.Line, relayStep) {
+	if held != nil {
+		return held, relayLine
+	}
+	select {
+	case <-sess.ctx.Done():
+		return nil, relayStop
+	case <-tick:
+		return nil, relayIdle
+	case line, ok := <-stream.Lines:
+		if !ok {
+			return nil, relayEnd
+		}
+		return &line, relayLine
 	}
 }
 
@@ -404,20 +500,26 @@ func endOfLogs(subID string, stream *logs.Stream) any {
 	return api.FeedError{Type: msgError, SubID: subID, Message: err.Error()}
 }
 
-func batchLines(lines <-chan string, first string) []string {
-	batch := []string{first}
+// batchLines gathers what is already queued from the same pod. A line from
+// another pod ends the batch and is handed back, because a batch carries one
+// source for all of its lines.
+func batchLines(lines <-chan logs.Line, first logs.Line) ([]string, *logs.Line) {
+	batch := []string{first.Text}
 	for len(batch) < maxLogBatch {
 		select {
 		case line, ok := <-lines:
 			if !ok {
-				return batch
+				return batch, nil
 			}
-			batch = append(batch, line)
+			if line.Pod != first.Pod {
+				return batch, &line
+			}
+			batch = append(batch, line.Text)
 		default:
-			return batch
+			return batch, nil
 		}
 	}
-	return batch
+	return batch, nil
 }
 
 func (sess *wsSession) closeAll() {

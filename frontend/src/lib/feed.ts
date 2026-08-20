@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { sessionExpired } from '../store/session';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { parseColumn, parseRow } from './parse';
-import { asBoolean, asList, asNumber, asRecord, asString, listOf } from './wire';
+import { asBoolean, asList, asNumber, asRecord, asString, listOf, optionalString } from './wire';
 import type { Chip } from './filterChips';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
@@ -71,6 +71,9 @@ function logsMsg(subId: string, request: LogRequest): ClientMsg {
     container: request.container,
     tailLines: request.tailLines,
     follow: request.follow,
+    group: request.group,
+    version: request.version,
+    resource: request.resource,
   };
 }
 
@@ -132,7 +135,19 @@ function serverMsg(raw: unknown): ServerMsg | null {
     case 'deleted':
       return { type: 'deleted', subId, uid: asString(item.uid) };
     case 'log':
-      return { type: 'log', subId, lines: asList(item.lines).map(asString) };
+      return {
+        type: 'log',
+        subId,
+        lines: asList(item.lines).map(asString),
+        source: optionalString(item.source),
+      };
+    case 'log-open':
+      return {
+        type: 'log-open',
+        subId,
+        attached: asNumber(item.attached),
+        matched: asNumber(item.matched),
+      };
     case 'log-end':
       return { type: 'log-end', subId };
     case 'error':
@@ -157,7 +172,7 @@ export function useResourceFeed(): ResourceFeed {
     const store = useResourcesStore.getState();
     const logs = useLogsStore.getState();
     const pending = new Map<string, ServerMsg[]>();
-    const pendingLines = new Map<string, string[]>();
+    const pendingLines = new Map<string, { lines: string[]; source: string }[]>();
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
     function flush() {
@@ -169,8 +184,10 @@ export function useResourceFeed(): ResourceFeed {
         store.applyDeltas(subId, msgs);
       }
       pending.clear();
-      for (const [subId, lines] of pendingLines) {
-        logs.appendLines(subId, lines);
+      for (const [subId, batches] of pendingLines) {
+        for (const batch of batches) {
+          logs.appendLines(subId, batch.lines, batch.source);
+        }
       }
       pendingLines.clear();
     }
@@ -189,12 +206,20 @@ export function useResourceFeed(): ResourceFeed {
       schedule();
     }
 
-    function queueLines(subId: string, lines: string[]) {
+    function queueLines(subId: string, lines: string[], source: string) {
       const waiting = pendingLines.get(subId);
       if (waiting === undefined) {
-        pendingLines.set(subId, [...lines]);
+        pendingLines.set(subId, [{ lines: [...lines], source }]);
+        schedule();
+        return;
+      }
+      // Runs of lines from the same pod go to the store together; only a change
+      // of pod needs a batch of its own, because the source is per batch.
+      const last = waiting.at(-1);
+      if (last?.source === source) {
+        last.lines.push(...lines);
       } else {
-        waiting.push(...lines);
+        waiting.push({ lines: [...lines], source });
       }
       schedule();
     }
@@ -240,7 +265,7 @@ export function useResourceFeed(): ResourceFeed {
     }
 
     function knownSub(msg: ServerMsg): boolean {
-      if (msg.type === 'log' || msg.type === 'log-end') {
+      if (msg.type === 'log' || msg.type === 'log-end' || msg.type === 'log-open') {
         return logSubsRef.current.has(msg.subId);
       }
       if (msg.type === 'error') {
@@ -295,7 +320,10 @@ export function useResourceFeed(): ResourceFeed {
           }
           break;
         case 'log':
-          queueLines(msg.subId, msg.lines);
+          queueLines(msg.subId, msg.lines, msg.source ?? '');
+          break;
+        case 'log-open':
+          logs.openedStream(msg.subId, msg.attached, msg.matched);
           break;
         case 'log-end':
           flush();

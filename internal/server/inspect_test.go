@@ -24,6 +24,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
@@ -294,6 +295,14 @@ func TestWSStreamsPodLogs(t *testing.T) {
 		TailLines: 100,
 	})
 
+	opened := readMsg(ctx, t, conn)
+	if opened.Type != "log-open" {
+		t.Fatalf("type = %q, want log-open first (message %q)", opened.Type, opened.Message)
+	}
+	if opened.Attached != 1 || opened.Matched != 1 {
+		t.Fatalf("opened = %+v, want one pod attached", opened)
+	}
+
 	msg := readMsg(ctx, t, conn)
 	if msg.Type != "log" {
 		t.Fatalf("type = %q, want log (message %q)", msg.Type, msg.Message)
@@ -303,6 +312,9 @@ func TestWSStreamsPodLogs(t *testing.T) {
 	}
 	if len(msg.Lines) == 0 {
 		t.Fatalf("no log lines delivered")
+	}
+	if msg.Source != "" {
+		t.Fatalf("source = %q, want none for a single pod", msg.Source)
 	}
 
 	end := readMsg(ctx, t, conn)
@@ -347,7 +359,7 @@ func TestWSTellsABrokenLogStreamFromAFinishedOne(t *testing.T) {
 
 	for {
 		msg := readMsg(ctx, t, conn)
-		if msg.Type == "log" {
+		if msg.Type == "log" || msg.Type == "log-open" {
 			continue
 		}
 		if msg.Type == "log-end" {
@@ -453,36 +465,57 @@ func TestStatusForMapsAPIErrors(t *testing.T) {
 }
 
 func TestBatchLinesDrainsWhatIsBuffered(t *testing.T) {
-	lines := make(chan string, 4)
-	lines <- "second"
-	lines <- "third"
+	lines := make(chan logs.Line, 4)
+	lines <- logs.Line{Text: "second"}
+	lines <- logs.Line{Text: "third"}
 
-	batch := batchLines(lines, "first")
+	batch, leftover := batchLines(lines, logs.Line{Text: "first"})
 
 	if strings.Join(batch, ",") != "first,second,third" {
 		t.Fatalf("batch = %v", batch)
 	}
+	if leftover != nil {
+		t.Fatalf("leftover = %+v, want none", leftover)
+	}
+}
+
+func TestBatchLinesKeepsOnePodPerBatch(t *testing.T) {
+	lines := make(chan logs.Line, 4)
+	lines <- logs.Line{Pod: "web-0", Text: "second"}
+	lines <- logs.Line{Pod: "web-1", Text: "from the other pod"}
+
+	batch, leftover := batchLines(lines, logs.Line{Pod: "web-0", Text: "first"})
+
+	if strings.Join(batch, ",") != "first,second" {
+		t.Fatalf("batch = %v, want only web-0 lines", batch)
+	}
+	if leftover == nil || leftover.Pod != "web-1" {
+		t.Fatalf("leftover = %+v, want the other pod's line handed back", leftover)
+	}
 }
 
 func TestBatchLinesStopsAtClosedChannel(t *testing.T) {
-	lines := make(chan string, 2)
-	lines <- "second"
+	lines := make(chan logs.Line, 2)
+	lines <- logs.Line{Text: "second"}
 	close(lines)
 
-	batch := batchLines(lines, "first")
+	batch, leftover := batchLines(lines, logs.Line{Text: "first"})
 
 	if strings.Join(batch, ",") != "first,second" {
 		t.Fatalf("batch = %v", batch)
 	}
+	if leftover != nil {
+		t.Fatalf("leftover = %+v, want none", leftover)
+	}
 }
 
 func TestBatchLinesStopsAtTheBatchCap(t *testing.T) {
-	lines := make(chan string, maxLogBatch*2)
+	lines := make(chan logs.Line, maxLogBatch*2)
 	for range maxLogBatch * 2 {
-		lines <- "line"
+		lines <- logs.Line{Text: "line"}
 	}
 
-	batch := batchLines(lines, "first")
+	batch, _ := batchLines(lines, logs.Line{Text: "first"})
 
 	if len(batch) != maxLogBatch {
 		t.Fatalf("batch = %d lines, want %d", len(batch), maxLogBatch)

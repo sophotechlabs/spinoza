@@ -203,6 +203,9 @@ export interface LogRequest {
   container: string;
   tailLines: number;
   follow: boolean;
+  group?: string;
+  version?: string;
+  resource?: string;
 }
 
 export interface Failure {
@@ -235,6 +238,9 @@ export type ClientMsg =
       container: string;
       tailLines: number;
       follow: boolean;
+      group?: string;
+      version?: string;
+      resource?: string;
     }
   | { type: 'logs-unsubscribe'; subId: string };
 
@@ -252,7 +258,8 @@ export type ServerMsg =
   | { type: 'modified'; subId: string; row: Row }
   | { type: 'deleted'; subId: string; uid: string }
   | { type: 'batch'; subId: string; changes: ServerMsg[] }
-  | { type: 'log'; subId: string; lines: string[] }
+  | { type: 'log'; subId: string; lines: string[]; source?: string }
+  | { type: 'log-open'; subId: string; attached: number; matched: number }
   | { type: 'log-end'; subId: string }
   | { type: 'error'; subId: string; message: string };
 

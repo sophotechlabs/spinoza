@@ -6,8 +6,10 @@ import {
   useLogError,
   useLogLines,
   useLogOffset,
+  useLogPods,
   useLogResumed,
   useLogRevision,
+  useLogSources,
   useLogsStore,
 } from '../store/logs';
 import { useLogStream } from '../lib/useLogStream';
@@ -22,16 +24,18 @@ const LOG_LINE_HEIGHT = 16;
 interface VisibleLine {
   index: number;
   text: string;
+  source: string;
 }
 
-function matching(lines: string[], query: string): VisibleLine[] {
+function matching(lines: string[], sources: string[], query: string): VisibleLine[] {
   const needle = query.trim().toLowerCase();
   const out: VisibleLine[] = [];
   lines.forEach((text, index) => {
-    if (needle !== '' && !text.toLowerCase().includes(needle)) {
+    const source = sources[index] ?? '';
+    if (needle !== '' && !`${source} ${text}`.toLowerCase().includes(needle)) {
       return;
     }
-    out.push({ index, text });
+    out.push({ index, text, source });
   });
   return out;
 }
@@ -64,6 +68,9 @@ interface InspectLogsProps {
   namespace: string;
   pod: string;
   containers: string[];
+  // Set when the selection is a workload rather than a pod, which tails every
+  // pod behind it at once.
+  workload?: { group: string; version: string; resource: string };
   active?: boolean;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
@@ -74,6 +81,20 @@ function fileName(namespace: string, pod: string, container: string): string {
     return `${namespace}-${pod}.log`;
   }
   return `${namespace}-${pod}-${container}.log`;
+}
+
+function withSource(line: VisibleLine): string {
+  if (line.source === '') {
+    return line.text;
+  }
+  return `${line.source} ${line.text}`;
+}
+
+function podsLabel(attached: number, matched: number): string {
+  if (matched > attached) {
+    return `${String(attached)} of ${String(matched)} pods`;
+  }
+  return `${String(attached)} pods`;
 }
 
 function followLabel(follow: boolean): string {
@@ -94,6 +115,7 @@ export default function InspectLogs({
   namespace,
   pod,
   containers,
+  workload,
   active = true,
   subscribeLogs,
   unsubscribeLogs,
@@ -120,19 +142,22 @@ export default function InspectLogs({
     namespace,
     name: pod,
     container,
+    workload,
     enabled: active,
     subscribeLogs,
     unsubscribeLogs,
   });
 
   const lines = useLogLines(subId);
+  const sources = useLogSources(subId);
+  const pods = useLogPods(subId);
   const offset = useLogOffset(subId);
   const revision = useLogRevision(subId);
   const ended = useLogEnded(subId);
   const error = useLogError(subId);
   const resumed = useLogResumed(subId);
 
-  const visible = matching(lines, query);
+  const visible = matching(lines, sources, query);
 
   const virtualizer = useVirtualizer({
     count: visible.length,
@@ -168,12 +193,16 @@ export default function InspectLogs({
     return rawSegments(text);
   }
 
+  function asText(): string {
+    return visible.map(withSource).join('\n');
+  }
+
   function handleDownload() {
-    saveAs(fileName(namespace, pod, container), visible.map((line) => line.text).join('\n'));
+    saveAs(fileName(namespace, pod, container), asText());
   }
 
   function handleCopy() {
-    void copyText('log lines', visible.map((line) => line.text).join('\n'));
+    void copyText('log lines', asText());
   }
 
   function handleClear() {
@@ -284,6 +313,9 @@ export default function InspectLogs({
             Jump to bottom
           </button>
         )}
+        {pods.attached > 1 && (
+          <span className="shrink-0 text-fg-muted">{podsLabel(pods.attached, pods.matched)}</span>
+        )}
         {query !== '' && (
           <span className="shrink-0 text-fg-muted">
             {visible.length} of {lines.length}
@@ -322,6 +354,9 @@ export default function InspectLogs({
               style={{ transform: `translateY(${item.start}px)` }}
               className={`absolute top-0 left-0 w-full ${wrapClass(wrap)}`}
             >
+              {visible[item.index].source !== '' && (
+                <span className="text-fg-muted">{visible[item.index].source} </span>
+              )}
               {segmentsFor(visible[item.index].text).map((segment, part) => (
                 <span key={part} className={segment.className}>
                   {segment.text}

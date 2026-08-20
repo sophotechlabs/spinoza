@@ -11,7 +11,7 @@ import type {
 } from '../lib/types';
 import type { DockSide, PanelContext, PanelId } from '../lib/panels';
 import type { Selection } from '../lib/refs';
-import { DOCK_SIDES, panelBodyId, panelById, panelsOn, tabId } from '../lib/panels';
+import { DOCK_SIDES, ownsPods, panelBodyId, panelById, panelsOn, tabId } from '../lib/panels';
 import { podFor } from '../lib/pods';
 import { usePanelsStore } from '../store/panels';
 import { containerNames } from '../lib/containers';
@@ -78,6 +78,22 @@ function liveContainers(selection: Selection): ContainerState[] | undefined {
     return undefined;
   }
   return selection.row.containers;
+}
+
+// A workload is tailed through its own ref, so the server can read the selector
+// it puts on its pods.
+function workloadOf(
+  selection: Selection,
+  detail: ObjectDetail,
+): { group: string; version: string; resource: string } | undefined {
+  if (!ownsPods(detail)) {
+    return undefined;
+  }
+  return {
+    group: selection.ref.group,
+    version: selection.ref.version,
+    resource: selection.ref.resource,
+  };
 }
 
 function refOf(selection: Selection | null): ObjectRef | null {
@@ -206,6 +222,7 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
         namespace={detail.namespace}
         pod={detail.name}
         containers={logContainers(liveContainers(selection), detail)}
+        workload={workloadOf(selection, detail)}
         active={ctx.open}
         subscribeLogs={ctx.subscribeLogs}
         unsubscribeLogs={ctx.unsubscribeLogs}

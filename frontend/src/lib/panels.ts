@@ -37,6 +37,18 @@ export interface PanelDescriptor {
 
 const SELECT_ROW = 'Select a row to inspect it';
 const SELECT_POD = 'Select a pod to see this';
+const SELECT_LOGGABLE = 'Select a pod, or a workload that owns some, to see logs';
+
+// Kinds that put a selector on the pods they own, so every one of them can be
+// tailed at once.
+const LOGGABLE_WORKLOADS = [
+  'Deployment',
+  'StatefulSet',
+  'DaemonSet',
+  'ReplicaSet',
+  'Job',
+  'ReplicationController',
+];
 const NOT_FOR_EVENTS = 'An event has no events of its own';
 
 function isPod(detail: ObjectDetail | null): boolean {
@@ -52,6 +64,17 @@ function hasSelection(ctx: PanelContext): boolean {
 
 function isPodPanel(ctx: PanelContext): boolean {
   return isPod(ctx.detail);
+}
+
+export function ownsPods(detail: ObjectDetail | null): boolean {
+  if (detail === null) {
+    return false;
+  }
+  return LOGGABLE_WORKLOADS.includes(detail.kind);
+}
+
+function hasLogs(ctx: PanelContext): boolean {
+  return isPod(ctx.detail) || ownsPods(ctx.detail);
 }
 
 function takesEvents(ctx: PanelContext): boolean {
@@ -81,7 +104,7 @@ export const PANELS: PanelDescriptor[] = [
     hint: NOT_FOR_EVENTS,
     enabled: takesEvents,
   },
-  { id: 'logs', label: 'Logs', defaultSide: 'right', hint: SELECT_POD, enabled: isPodPanel },
+  { id: 'logs', label: 'Logs', defaultSide: 'right', hint: SELECT_LOGGABLE, enabled: hasLogs },
   { id: 'metrics', label: 'Metrics', defaultSide: 'right', hint: SELECT_POD, enabled: isPodPanel },
   {
     id: 'forwards',

@@ -23,13 +23,47 @@ type Request struct {
 	Container string
 	TailLines int64
 	Follow    bool
+	// Selector tails every pod that carries these labels rather than one named
+	// pod, which is how a whole workload is followed.
+	Selector string
+}
+
+// Line carries the pod it came from, so a merged stream can say which of them
+// wrote it. A single-pod stream leaves Pod empty.
+type Line struct {
+	Pod  string
+	Text string
 }
 
 type Stream struct {
-	Lines  <-chan string
-	cancel func()
-	mu     sync.Mutex
-	err    error
+	Lines    <-chan Line
+	cancel   func()
+	attached int
+	matched  int
+	mu       sync.Mutex
+	err      error
+}
+
+// Attached is how many pods this stream is reading, and Matched how many the
+// selector found. They differ when a workload has more pods than spinoza opens,
+// and both move while a following stream picks up pods that appear later.
+func (s *Stream) Attached() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.attached
+}
+
+func (s *Stream) Matched() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.matched
+}
+
+func (s *Stream) setCounts(attached, matched int) {
+	s.mu.Lock()
+	s.attached = attached
+	s.matched = matched
+	s.mu.Unlock()
 }
 
 func (s *Stream) Close() {
@@ -49,6 +83,13 @@ func (s *Stream) fail(err error) {
 }
 
 func Open(ctx context.Context, cs kubernetes.Interface, req Request) (*Stream, error) {
+	if req.Selector != "" {
+		return openMany(ctx, cs, req)
+	}
+	return openOne(ctx, cs, req)
+}
+
+func openOne(ctx context.Context, cs kubernetes.Interface, req Request) (*Stream, error) {
 	streamCtx, cancel := context.WithCancel(ctx)
 	rc, err := cs.CoreV1().Pods(req.Namespace).GetLogs(req.Name, optionsFor(req)).Stream(streamCtx)
 	if err != nil {
@@ -64,8 +105,8 @@ func Open(ctx context.Context, cs kubernetes.Interface, req Request) (*Stream, e
 		})
 	}
 
-	lines := make(chan string, lineBuffer)
-	stream := &Stream{Lines: lines, cancel: shut}
+	lines := make(chan Line, lineBuffer)
+	stream := &Stream{Lines: lines, cancel: shut, attached: 1, matched: 1}
 	safe.Go("streaming logs for "+req.Namespace+"/"+req.Name, func() {
 		defer close(lines)
 		defer shut()
@@ -92,14 +133,14 @@ func optionsFor(req Request) *corev1.PodLogOptions {
 	return opts
 }
 
-func pump(ctx context.Context, r io.Reader, lines chan<- string) error {
+func pump(ctx context.Context, r io.Reader, lines chan<- Line) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
 			return nil
-		case lines <- scanner.Text():
+		case lines <- Line{Text: scanner.Text()}:
 		}
 	}
 	return scanner.Err()

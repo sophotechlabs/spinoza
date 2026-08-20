@@ -15,21 +15,25 @@ interface LogStream {
   namespace: string;
   name: string;
   container: string;
+  // Naming a workload rather than a pod tails every pod behind it.
+  workload?: { group: string; version: string; resource: string };
   enabled: boolean;
   subscribeLogs: (subId: string, request: LogRequest) => void;
   unsubscribeLogs: (subId: string) => void;
 }
 
 export function useLogStream(stream: LogStream): string {
-  const { prefix, namespace, name, container, enabled, subscribeLogs, unsubscribeLogs } = stream;
+  const { prefix, namespace, name, container, workload, enabled, subscribeLogs, unsubscribeLogs } =
+    stream;
   const [subId, setSubId] = useState('');
+  const target = workloadKey(workload);
 
   useEffect(() => {
     if (!enabled) {
       setSubId('');
       return;
     }
-    if (container === '') {
+    if (container === '' && target === '') {
       setSubId('');
       return;
     }
@@ -41,11 +45,27 @@ export function useLogStream(stream: LogStream): string {
       container,
       tailLines: TAIL_LINES,
       follow: true,
+      ...workloadFrom(target),
     });
     return () => {
       unsubscribeLogs(id);
     };
-  }, [prefix, namespace, name, container, enabled, subscribeLogs, unsubscribeLogs]);
+  }, [prefix, namespace, name, container, target, enabled, subscribeLogs, unsubscribeLogs]);
 
   return subId;
+}
+
+function workloadKey(workload: LogStream['workload']): string {
+  if (workload === undefined) {
+    return '';
+  }
+  return `${workload.group}/${workload.version}/${workload.resource}`;
+}
+
+function workloadFrom(key: string): Partial<LogRequest> {
+  if (key === '') {
+    return {};
+  }
+  const [group, version, resource] = key.split('/');
+  return { group, version, resource };
 }
