@@ -41,6 +41,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
+	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 	"github.com/sophotechlabs/spinoza/internal/overview"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
@@ -107,6 +108,7 @@ type Manager struct {
 	forwards    *portforward.Registry
 	shells      *exec.Service
 	debugger    *debugcontainer.Service
+	nodeShells  *nodeshell.Service
 	helm        *helm.Service
 	prom        *prom.Client
 	disco       kubediscovery.CachedDiscoveryInterface
@@ -176,6 +178,7 @@ type Deps struct {
 	Forwards    *portforward.Registry
 	Shells      *exec.Service
 	Debugger    *debugcontainer.Service
+	NodeShells  *nodeshell.Service
 	Helm        *helm.Service
 	Prometheus  *prom.Client
 	Charts      *charts.Cache
@@ -186,24 +189,25 @@ type Deps struct {
 func NewManager(ctx context.Context, deps Deps) *Manager {
 	limits := deps.Limits.orDefaults()
 	return &Manager{
-		limits:   limits,
-		rootCtx:  ctx,
-		dyn:      deps.Dynamic,
-		meta:     deps.Metadata,
-		cs:       deps.Clientset,
-		schemas:  deps.Schemas,
-		charts:   chartCache(ctx, deps.Charts),
-		forwards: deps.Forwards,
-		shells:   deps.Shells,
-		debugger: deps.Debugger,
-		helm:     deps.Helm,
-		prom:     deps.Prometheus,
-		cats:     deps.Categories,
-		descs:    deps.Descriptors,
-		now:      time.Now,
-		streams:  map[streamKey]*stream{},
-		building: map[streamKey]*buildGate{},
-		failures: map[streamKey]buildFailure{},
+		limits:     limits,
+		rootCtx:    ctx,
+		dyn:        deps.Dynamic,
+		meta:       deps.Metadata,
+		cs:         deps.Clientset,
+		schemas:    deps.Schemas,
+		charts:     chartCache(ctx, deps.Charts),
+		forwards:   deps.Forwards,
+		shells:     deps.Shells,
+		debugger:   deps.Debugger,
+		nodeShells: deps.NodeShells,
+		helm:       deps.Helm,
+		prom:       deps.Prometheus,
+		cats:       deps.Categories,
+		descs:      deps.Descriptors,
+		now:        time.Now,
+		streams:    map[streamKey]*stream{},
+		building:   map[streamKey]*buildGate{},
+		failures:   map[streamKey]buildFailure{},
 
 		syncTimeout: limits.SyncTimeout,
 	}
@@ -380,6 +384,27 @@ func (m *Manager) StartDebug(ctx context.Context, req debugcontainer.Request) (a
 		return api.DebugSession{}, debugcontainer.ErrUnavailable
 	}
 	return m.debugger.Ensure(ctx, req)
+}
+
+func (m *Manager) NodeShellSupport(ctx context.Context, node string) api.NodeShellSupport {
+	if m.nodeShells == nil {
+		return api.NodeShellSupport{Node: node, Reason: "node shells are not wired up"}
+	}
+	return m.nodeShells.Support(ctx, node)
+}
+
+func (m *Manager) StartNodeShell(ctx context.Context, node string) (api.NodeShellSession, error) {
+	if m.nodeShells == nil {
+		return api.NodeShellSession{}, fmt.Errorf("%w: node shells are not wired up", api.ErrInternal)
+	}
+	return m.nodeShells.Start(ctx, node)
+}
+
+func (m *Manager) RemoveNodeShell(ctx context.Context, pod string) {
+	if m.nodeShells == nil {
+		return
+	}
+	m.nodeShells.Remove(ctx, pod)
 }
 
 func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {

@@ -253,6 +253,17 @@ Metrics.Nodes nodes map[string]ResourceUsage
 Metrics.Pods pods map[string]ResourceUsage
 Namespaces.Error error,omitempty string
 Namespaces.Names names []string
+NodeShellSession.Container container string
+NodeShellSession.Image image string
+NodeShellSession.Namespace namespace string
+NodeShellSession.Node node string
+NodeShellSession.Pod pod string
+NodeShellSupport.Allowed allowed bool
+NodeShellSupport.Enabled enabled bool
+NodeShellSupport.Image image string
+NodeShellSupport.Namespace namespace string
+NodeShellSupport.Node node string
+NodeShellSupport.Reason reason,omitempty string
 NodeSummary.CPUAllocatableMilli cpuAllocatableMilli int64
 NodeSummary.CPUUsedMilli cpuUsedMilli int64
 NodeSummary.MemAllocatableMi memAllocatableMi int64

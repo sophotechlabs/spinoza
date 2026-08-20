@@ -14,6 +14,7 @@ import { refQuery } from '../lib/object';
 import { notifyError, notifyOk } from '../store/toasts';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
+import NodeShellButton from './NodeShellButton';
 import { useProtectedCluster } from '../store/contexts';
 
 interface InspectObjectActionsProps {
@@ -251,6 +252,7 @@ export default function InspectObjectActions({
             Drain
           </button>
         )}
+        {isNode(target) && <NodeShellButton node={target.name} />}
         {cordoned && <span className="text-warn-muted">cordoned</span>}
         {busy && <span className="text-fg-muted">working</span>}
       </div>

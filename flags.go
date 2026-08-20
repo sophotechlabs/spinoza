@@ -12,6 +12,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/helm"
+	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 )
 
 var errHelp = errors.New("help requested")
@@ -45,6 +46,9 @@ func parseFlags(args []string) (settings, error) {
 	showVersion := flags.Bool("version", false, "print the version and exit")
 	profiler := flags.Bool("pprof", envBool("SPINOZA_PPROF"), "mount net/http/pprof under /debug/pprof, behind the same auth; off by default")
 	debugImage := flags.String("debug-image", envOr("SPINOZA_DEBUG_IMAGE", debugcontainer.DefaultImage), "image used for debug containers")
+	nodeShell := flags.Bool("node-shell", envOr("SPINOZA_NODE_SHELL", "") == "true", "allow a root shell on a node, which creates a privileged pod")
+	nodeShellImage := flags.String("node-shell-image", envOr("SPINOZA_NODE_SHELL_IMAGE", debugcontainer.DefaultImage), "image the node shell pod runs")
+	nodeShellNamespace := flags.String("node-shell-namespace", envOr("SPINOZA_NODE_SHELL_NAMESPACE", nodeshell.DefaultNamespace), "namespace the node shell pod is created in")
 	kubectlBinary := flags.String("kubectl", envOr("SPINOZA_KUBECTL", debugcontainer.DefaultBinary), "kubectl binary used to create debug containers")
 	helmBinary := flags.String("helm", envOr("SPINOZA_HELM", helm.DefaultBinary), "helm binary used to roll back and uninstall releases")
 	promSpec := flags.String("prometheus", envOr("SPINOZA_PROMETHEUS", ""), "prometheus service as namespace/service:port; discovered when empty")
@@ -76,6 +80,9 @@ func parseFlags(args []string) (settings, error) {
 		pprof:       *profiler,
 		cluster: cluster.Options{
 			DebugImage:       *debugImage,
+			NodeShell:        *nodeShell,
+			NodeShellImage:   *nodeShellImage,
+			NodeShellNS:      *nodeShellNamespace,
 			KubectlBinary:    *kubectlBinary,
 			HelmBinary:       *helmBinary,
 			PromSpec:         *promSpec,

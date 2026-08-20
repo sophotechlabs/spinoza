@@ -121,3 +121,24 @@ describe('terminal sessions', () => {
     expect(state().sessions[0].kind).toBe('pod');
   });
 });
+
+describe('a shell on a node', () => {
+  it('opens one session per node and focuses it', () => {
+    useTerminalsStore.getState().openNode('p-mk1');
+
+    const state = useTerminalsStore.getState();
+    expect(state.sessions).toHaveLength(1);
+    expect(state.sessions[0]).toMatchObject({ kind: 'node', pod: 'p-mk1', id: 'node/p-mk1' });
+    expect(state.active).toBe('node/p-mk1');
+  });
+
+  it('focuses the one it already has rather than opening a second', () => {
+    useTerminalsStore.getState().openNode('p-mk1');
+    useTerminalsStore.getState().openNode('p-mk2');
+    useTerminalsStore.getState().openNode('p-mk1');
+
+    const state = useTerminalsStore.getState();
+    expect(state.sessions).toHaveLength(2);
+    expect(state.active).toBe('node/p-mk1');
+  });
+});

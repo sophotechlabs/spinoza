@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHANNEL_ERROR,
+  fetchNodeShellSupport,
+  openNodeShell,
   CONNECT_FAILED,
   CONNECTION_LOST,
   CHANNEL_RESIZE,
@@ -367,6 +369,13 @@ describe('the shell on this machine', () => {
     expect(latest().url).not.toContain('/api/exec');
   });
 
+  it('opens a node shell against the node it was given', () => {
+    openNodeShell('p-mk1', handlers());
+
+    expect(latest().url).toContain('/api/nodeshell?node=p-mk1');
+    expect(latest().url).not.toContain('/api/exec');
+  });
+
   it('carries what is typed like any other session', () => {
     const session = openLocalShell(handlers());
     const socket = latest();
@@ -415,5 +424,40 @@ describe('the shell on this machine', () => {
     );
 
     await expect(fetchLocalShellSupport()).rejects.toThrow('no');
+  });
+});
+
+describe('the node shell endpoints', () => {
+  it('names the node when asking whether one can be opened', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          node: 'p-mk1',
+          enabled: true,
+          allowed: true,
+          image: 'busybox:1.37',
+          namespace: 'kube-system',
+        }),
+    });
+    vi.stubGlobal('fetch', mock);
+
+    const support = await fetchNodeShellSupport('p-mk1');
+
+    expect(mock.mock.calls[0][0]).toBe('/api/nodeshell/support?node=p-mk1');
+    expect(support).toMatchObject({ node: 'p-mk1', enabled: true, allowed: true });
+  });
+
+  it('surfaces a refusal', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ message: 'the apiserver said no' }),
+      }),
+    );
+
+    await expect(fetchNodeShellSupport('p-mk1')).rejects.toThrow('the apiserver said no');
   });
 });

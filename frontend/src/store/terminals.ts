@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type TerminalKind = 'pod' | 'local';
+export type TerminalKind = 'pod' | 'local' | 'node';
 
 export interface TerminalSession {
   id: string;
@@ -15,12 +15,17 @@ interface TerminalsState {
   active: string | null;
   open: (namespace: string, pod: string, container: string) => void;
   openLocal: () => void;
+  openNode: (node: string) => void;
   focus: (id: string) => void;
   close: (id: string) => void;
   reset: () => void;
 }
 
 export const LOCAL_SESSION = 'local';
+
+function nodeSessionId(node: string): string {
+  return `node/${node}`;
+}
 
 export function sessionId(namespace: string, pod: string, container: string): string {
   return `${namespace}/${pod}/${container}`;
@@ -75,6 +80,23 @@ export const useTerminalsStore = create<TerminalsState>((set) => ({
         container: '',
       };
       return { sessions: [local, ...state.sessions], active: LOCAL_SESSION };
+    });
+  },
+  openNode: (node) => {
+    set((state) => {
+      const id = nodeSessionId(node);
+      const known = state.sessions.some((session) => session.id === id);
+      if (known) {
+        return { active: id };
+      }
+      const shell: TerminalSession = {
+        id,
+        kind: 'node',
+        namespace: '',
+        pod: node,
+        container: '',
+      };
+      return { sessions: [shell, ...state.sessions], active: id };
     });
   },
   focus: (id) => {

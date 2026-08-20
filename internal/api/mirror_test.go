@@ -28,8 +28,9 @@ var sentAsADiscriminatedUnion = map[string]string{
 }
 
 var neverReachesTheBrowser = map[string]bool{
-	"Build":  true,
-	"Health": true,
+	"Build":            true,
+	"Health":           true,
+	"NodeShellSession": true,
 }
 
 var regroupedIntoNestedViewTypes = map[string]bool{

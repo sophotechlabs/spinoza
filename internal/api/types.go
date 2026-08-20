@@ -318,6 +318,23 @@ type Comparison struct {
 	Missing      string `json:"missing,omitempty"`
 }
 
+type NodeShellSupport struct {
+	Node      string `json:"node"`
+	Enabled   bool   `json:"enabled"`
+	Allowed   bool   `json:"allowed"`
+	Reason    string `json:"reason,omitempty"`
+	Image     string `json:"image"`
+	Namespace string `json:"namespace"`
+}
+
+type NodeShellSession struct {
+	Namespace string `json:"namespace"`
+	Pod       string `json:"pod"`
+	Container string `json:"container"`
+	Node      string `json:"node"`
+	Image     string `json:"image"`
+}
+
 type DataEntry struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`

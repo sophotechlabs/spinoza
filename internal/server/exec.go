@@ -14,10 +14,13 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
+	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const execWriteTimeout = 10 * time.Second
+
+const removeTimeout = 15 * time.Second
 
 var execStdinTimeout = 10 * time.Second
 
@@ -72,6 +75,67 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, session)
+}
+
+func (s *Server) handleNodeShellSupport(w http.ResponseWriter, r *http.Request) {
+	node := r.URL.Query().Get("node")
+	if node == "" {
+		writeError(w, http.StatusBadRequest, "node is required")
+		return
+	}
+	writeJSON(w, s.manager().NodeShellSupport(r.Context(), node))
+}
+
+func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
+	node := r.URL.Query().Get("node")
+	if node == "" {
+		writeError(w, http.StatusBadRequest, "node is required")
+		return
+	}
+	socket, err := accept(w, r)
+	if err != nil {
+		slog.Warn("a node shell upgrade was refused", "node", node, "error", err)
+		return
+	}
+	defer func() { _ = socket.CloseNow() }()
+	s.trackExec(socket)
+	defer s.forgetExec(socket)
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	conn := &execConn{conn: socket, ctx: ctx}
+	shell, startErr := s.manager().StartNodeShell(ctx, node)
+	if startErr != nil {
+		_ = conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
+		return
+	}
+	defer func() {
+		gone, stop := context.WithTimeout(context.WithoutCancel(ctx), removeTimeout)
+		defer stop()
+		s.manager().RemoveNodeShell(gone, shell.Pod)
+	}()
+
+	req := exec.Request{
+		Namespace: shell.Namespace,
+		Pod:       shell.Pod,
+		Container: shell.Container,
+		Command:   nodeshell.Enter,
+	}
+	session, sessionErr := s.manager().StartExec(ctx, req, conn)
+	if sessionErr != nil {
+		_ = conn.send(ctx, api.ExecChannelError, []byte(sessionErr.Error()))
+		return
+	}
+	defer session.Close()
+
+	safe.Go("watching the node shell on "+node, func() {
+		streamErr := <-session.Done()
+		_ = conn.send(ctx, api.ExecChannelError, endMessage(streamErr))
+		cancel()
+	})
+
+	conn.pump(ctx, socket, session)
 }
 
 func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {

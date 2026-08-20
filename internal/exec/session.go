@@ -15,6 +15,8 @@ type Request struct {
 	Namespace string
 	Pod       string
 	Container string
+	// Command is what runs in the container. Empty means an ordinary shell.
+	Command []string
 }
 
 type Size struct {
@@ -64,7 +66,7 @@ func start(ctx context.Context, streamer Streamer, req Request, stdout io.Writer
 			sess.done <- err
 		}()
 		err = streamer.Stream(streamCtx, req, Options{
-			Command: []string{ShellPath},
+			Command: commandOf(req),
 			Stdin:   reader,
 			Stdout:  stdout,
 			Resize:  sess.resize,
@@ -72,6 +74,13 @@ func start(ctx context.Context, streamer Streamer, req Request, stdout io.Writer
 		completed = true
 	})
 	return sess
+}
+
+func commandOf(req Request) []string {
+	if len(req.Command) > 0 {
+		return req.Command
+	}
+	return []string{ShellPath}
 }
 
 func (s *Session) Write(p []byte) (int, error) {

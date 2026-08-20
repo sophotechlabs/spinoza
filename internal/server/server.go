@@ -164,6 +164,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/debug/support", s.handleDebugSupport, false},
 		{http.MethodPost, "/api/debug", s.handleDebug, false},
 		{http.MethodGet, "/api/exec", s.handleExec, false},
+		{http.MethodGet, "/api/nodeshell/support", s.handleNodeShellSupport, false},
+		{http.MethodGet, "/api/nodeshell", s.handleNodeShell, false},
 		{http.MethodGet, "/api/view", s.readView, true},
 		{http.MethodPost, "/api/view/browser", s.toBrowser, true},
 		{http.MethodPost, "/api/view/desktop", s.toDesktop, true},

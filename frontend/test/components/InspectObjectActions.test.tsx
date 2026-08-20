@@ -37,20 +37,41 @@ function detailFor(overrides: Partial<ObjectDetail> = {}): ObjectDetail {
   };
 }
 
+// the node shell button asks about support on mount, which must not eat a queued reply
+const NODE_SHELL_SUPPORT = {
+  node: 'worker-1',
+  enabled: false,
+  allowed: false,
+  reason: 'node shells are off',
+  image: 'busybox:1.37',
+  namespace: 'kube-system',
+};
+
+function answersSupport(url: unknown): boolean {
+  return typeof url === 'string' && url.startsWith('/api/nodeshell/support');
+}
+
 function stub(...bodies: unknown[]) {
-  const fetchMock = vi.fn();
+  const actions = vi.fn<(url: unknown, init?: unknown) => Promise<unknown>>();
   for (const body of bodies) {
-    fetchMock.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(body) });
+    actions.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(body) });
   }
+  const fetchMock = vi.fn((url: unknown, init?: unknown): Promise<unknown> => {
+    if (answersSupport(url)) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(NODE_SHELL_SUPPORT) });
+    }
+    return actions(url, init);
+  });
   vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
+  return actions;
 }
 
 function stubFailure(message: string) {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: false,
-    status: 400,
-    json: () => Promise.resolve({ message }),
+  const fetchMock = vi.fn((url: unknown) => {
+    if (answersSupport(url)) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(NODE_SHELL_SUPPORT) });
+    }
+    return Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ message }) });
   });
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;

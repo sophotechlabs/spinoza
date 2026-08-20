@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useState } from 'react';
-import { openExec, openLocalShell } from '../lib/exec';
+import { openExec, openLocalShell, openNodeShell } from '../lib/exec';
 import type { ExecHandlers } from '../lib/exec';
 import { useShellSupport } from '../lib/useShellSupport';
 import DebugPrompt from './DebugPrompt';
@@ -11,6 +11,18 @@ interface TerminalSessionProps {
   namespace: string;
   pod: string;
   container: string;
+}
+
+export function NodeTerminalSession({ node }: { node: string }) {
+  const open = useCallback((handlers: ExecHandlers) => openNodeShell(node, handlers), [node]);
+  const missing = useCallback(() => undefined, []);
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <Suspense fallback={<Loading what="terminal" />}>
+        <TerminalPanel key={`node/${node}`} openSession={open} onShellMissing={missing} />
+      </Suspense>
+    </div>
+  );
 }
 
 export function LocalTerminalSession() {

@@ -35,6 +35,7 @@ import type {
   MetricHistory,
   MetricPoint,
   Metrics,
+  NodeShellSupport,
   NodeSummary,
   ObjectDetail,
   ObjectPort,
@@ -144,6 +145,18 @@ function parsePort(item: Record<string, unknown>): ObjectPort {
     name: optionalString(item.name),
     port: asNumber(item.port),
     protocol: optionalString(item.protocol),
+  };
+}
+
+export function parseNodeShellSupport(body: unknown): NodeShellSupport {
+  const item = asRecord(body);
+  return {
+    node: asString(item.node),
+    enabled: asBoolean(item.enabled),
+    allowed: asBoolean(item.allowed),
+    reason: optionalString(item.reason),
+    image: asString(item.image),
+    namespace: asString(item.namespace),
   };
 }
 

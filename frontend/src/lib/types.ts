@@ -99,6 +99,15 @@ export interface Comparison {
   missing?: string;
 }
 
+export interface NodeShellSupport {
+  node: string;
+  enabled: boolean;
+  allowed: boolean;
+  reason?: string;
+  image: string;
+  namespace: string;
+}
+
 export interface DataEntry {
   key: string;
   value: string;

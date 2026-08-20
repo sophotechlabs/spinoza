@@ -9,6 +9,9 @@ vi.mock('../../src/components/TerminalSession', () => ({
     </div>
   ),
   LocalTerminalSession: () => <div data-testid="terminal-session">local shell</div>,
+  NodeTerminalSession: ({ node }: { node: string }) => (
+    <div data-testid="terminal-session">node shell on {node}</div>
+  ),
 }));
 
 import TerminalTab from '../../src/components/TerminalTab';
@@ -231,5 +234,19 @@ describe('TerminalTab', () => {
     expect(
       await screen.findByText('A shell on this machine is only available in the desktop app.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('a node shell tab', () => {
+  it('labels the session by its node and offers to close it', async () => {
+    useTerminalsStore.getState().openNode('p-mk1');
+
+    render(<TerminalTab pod={null} />);
+
+    expect(await screen.findByRole('button', { name: 'node p-mk1' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Close the shell on node p-mk1' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('terminal-session')).toHaveTextContent('node shell on p-mk1');
   });
 });

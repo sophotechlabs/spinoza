@@ -15,6 +15,9 @@ import (
 
 type Options struct {
 	DebugImage       string
+	NodeShell        bool
+	NodeShellImage   string
+	NodeShellNS      string
 	KubectlBinary    string
 	HelmBinary       string
 	PromSpec         string

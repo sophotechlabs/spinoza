@@ -77,6 +77,9 @@ type Terminals interface {
 	StartExec(ctx context.Context, req exec.Request, stdout io.Writer) (*exec.Session, error)
 	DebugSupport(ctx context.Context, namespace, pod string) api.DebugSupport
 	StartDebug(ctx context.Context, req debugcontainer.Request) (api.DebugSession, error)
+	NodeShellSupport(ctx context.Context, node string) api.NodeShellSupport
+	StartNodeShell(ctx context.Context, node string) (api.NodeShellSession, error)
+	RemoveNodeShell(ctx context.Context, pod string)
 }
 
 type Backend interface {

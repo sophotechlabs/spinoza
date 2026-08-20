@@ -1,7 +1,7 @@
-import type { ExecSupport, ExecTarget, LocalShell } from './types';
+import type { ExecSupport, ExecTarget, LocalShell, NodeShellSupport } from './types';
 import { failure } from './object';
 import { request } from './http';
-import { parseExecSupport, parseLocalShell } from './parse';
+import { parseExecSupport, parseLocalShell, parseNodeShellSupport } from './parse';
 import { wsURL } from './wsBase';
 
 export const CHANNEL_STDIN = 0x00;
@@ -76,6 +76,22 @@ export function openExec(target: ExecTarget, handlers: ExecHandlers): ExecSessio
 
 export function openLocalShell(handlers: ExecHandlers): ExecSession {
   return openStream('/api/shell', handlers);
+}
+
+function nodeQuery(node: string): string {
+  return new URLSearchParams({ node }).toString();
+}
+
+export async function fetchNodeShellSupport(node: string): Promise<NodeShellSupport> {
+  const response = await request(`/api/nodeshell/support?${nodeQuery(node)}`);
+  if (!response.ok) {
+    throw await failure(response, `node shell support failed with status ${response.status}`);
+  }
+  return parseNodeShellSupport(await response.json());
+}
+
+export function openNodeShell(node: string, handlers: ExecHandlers): ExecSession {
+  return openStream(`/api/nodeshell?${nodeQuery(node)}`, handlers);
 }
 
 function openStream(path: string, handlers: ExecHandlers): ExecSession {

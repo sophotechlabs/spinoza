@@ -22,6 +22,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/kubeconfig"
+	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/protect"
@@ -155,6 +156,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		helm.Repositories(helm.RepositoryConfig()),
 		bundle.Ref,
 	)
+	nodeShells := nodeshell.NewService(bundle.Clientset, options.NodeShellImage, options.NodeShellNS, options.NodeShell)
 	promClient := prom.NewClient(bundle.Clientset, promTarget)
 	mgr := resources.NewManager(ctx, resources.Deps{
 		Limits: resources.Limits{
@@ -173,6 +175,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		Forwards:    forwards,
 		Shells:      shells,
 		Debugger:    debugger,
+		NodeShells:  nodeShells,
 		Helm:        releases,
 		Charts:      index,
 		Prometheus:  promClient,

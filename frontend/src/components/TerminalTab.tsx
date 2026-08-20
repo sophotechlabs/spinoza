@@ -4,7 +4,7 @@ import { firstContainer } from '../lib/pods';
 import { useLocalShellSupport } from '../lib/useLocalShell';
 import { useTerminalsStore } from '../store/terminals';
 import type { TerminalSession as Session } from '../store/terminals';
-import TerminalSession, { LocalTerminalSession } from './TerminalSession';
+import TerminalSession, { LocalTerminalSession, NodeTerminalSession } from './TerminalSession';
 
 interface TerminalTabProps {
   pod: PodTarget | null;
@@ -22,12 +22,18 @@ function tabLabel(session: Session): string {
   if (session.kind === 'local') {
     return 'local';
   }
+  if (session.kind === 'node') {
+    return `node ${session.pod}`;
+  }
   return `${session.pod}/${session.container}`;
 }
 
 function closeLabel(session: Session): string {
   if (session.kind === 'local') {
     return 'Close the local shell';
+  }
+  if (session.kind === 'node') {
+    return `Close the shell on node ${session.pod}`;
   }
   return `Close the shell in ${session.pod}`;
 }
@@ -139,6 +145,7 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
           className={session.id === active ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'hidden'}
         >
           {session.kind === 'local' && <LocalTerminalSession />}
+          {session.kind === 'node' && <NodeTerminalSession node={session.pod} />}
           {session.kind === 'pod' && (
             <TerminalSession
               namespace={session.namespace}

@@ -1,0 +1,305 @@
+package nodeshell
+
+import (
+	"errors"
+	"slices"
+	"testing"
+	"time"
+
+	authv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
+)
+
+func running(name string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: DefaultNamespace},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+}
+
+func service(t *testing.T, enabled bool, objs ...runtime.Object) (*Service, *k8sfake.Clientset) {
+	t.Helper()
+	cs := k8sfake.NewClientset(objs...)
+	return NewService(cs, "busybox:1.37", "", enabled), cs
+}
+
+// the fake does not fill GenerateName, so name the pod and let the tracker keep it.
+func creates(cs *k8sfake.Clientset, name string, phase corev1.PodPhase, reason string) {
+	cs.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		pod, ok := create.GetObject().(*corev1.Pod)
+		if !ok {
+			return false, nil, nil
+		}
+		pod.Name = name
+		pod.Status.Phase = phase
+		pod.Status.Reason = reason
+		return false, pod, nil
+	})
+}
+
+func allow(cs *k8sfake.Clientset, allowed bool) {
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &authv1.SelfSubjectAccessReview{Status: authv1.SubjectAccessReviewStatus{Allowed: allowed}}, nil
+	})
+}
+
+// what it says before anything is created
+
+func TestItStaysOffUntilItIsTurnedOn(t *testing.T) {
+	svc, _ := service(t, false)
+
+	support := svc.Support(t.Context(), "p-mk1")
+
+	if support.Enabled || support.Allowed {
+		t.Fatalf("support = %+v, want it off", support)
+	}
+	if support.Reason == "" {
+		t.Fatal("an off node shell said nothing about how to turn it on")
+	}
+}
+
+func TestItReportsTheImageAndNamespaceItWouldUse(t *testing.T) {
+	svc, cs := service(t, true)
+	allow(cs, true)
+
+	support := svc.Support(t.Context(), "p-mk1")
+
+	if support.Image != "busybox:1.37" || support.Namespace != DefaultNamespace {
+		t.Fatalf("support = %+v, want the image and namespace named", support)
+	}
+	if !support.Allowed {
+		t.Fatalf("support = %+v, want it allowed", support)
+	}
+}
+
+func TestItSaysWhenYouMayNotCreatePods(t *testing.T) {
+	svc, cs := service(t, true)
+	allow(cs, false)
+
+	support := svc.Support(t.Context(), "p-mk1")
+
+	if support.Allowed {
+		t.Fatal("a refused access review was reported as allowed")
+	}
+	if support.Reason == "" {
+		t.Fatal("a refusal came back without a reason")
+	}
+}
+
+func TestItNeedsANodeToCheckAgainst(t *testing.T) {
+	svc, cs := service(t, true)
+	allow(cs, true)
+
+	if svc.Support(t.Context(), "").Reason != "no node was named" {
+		t.Fatal("an empty node was not refused")
+	}
+}
+
+func TestAReviewThatFailsIsReportedNotSwallowed(t *testing.T) {
+	svc, cs := service(t, true)
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("the apiserver said no")
+	})
+
+	support := svc.Support(t.Context(), "p-mk1")
+
+	if support.Allowed {
+		t.Fatal("a failed review was treated as permission")
+	}
+	if support.Reason == "" {
+		t.Fatal("a failed review came back without a reason")
+	}
+}
+
+// the pod it lands on the node
+
+func TestThePodJoinsTheHostNamespaces(t *testing.T) {
+	svc, _ := service(t, true)
+
+	pod := svc.pod("p-mk1")
+
+	if !pod.Spec.HostPID || !pod.Spec.HostIPC || !pod.Spec.HostNetwork {
+		t.Fatalf("spec = %+v, want the host namespaces joined", pod.Spec)
+	}
+	if pod.Spec.NodeName != "p-mk1" {
+		t.Fatalf("nodeName = %q, want the node it was asked for", pod.Spec.NodeName)
+	}
+	if pod.Spec.Containers[0].SecurityContext.Privileged == nil || !*pod.Spec.Containers[0].SecurityContext.Privileged {
+		t.Fatal("the container is not privileged, so nsenter could not enter the host")
+	}
+}
+
+func TestThePodToleratesEveryTaint(t *testing.T) {
+	svc, _ := service(t, true)
+
+	pod := svc.pod("p-mk1")
+
+	if len(pod.Spec.Tolerations) != 1 || pod.Spec.Tolerations[0].Operator != corev1.TolerationOpExists {
+		t.Fatalf("tolerations = %+v, want one that matches every taint", pod.Spec.Tolerations)
+	}
+}
+
+func TestThePodSaysWhoMadeItAndWhy(t *testing.T) {
+	svc, _ := service(t, true)
+
+	pod := svc.pod("p-mk1")
+
+	if pod.Labels[managedBy] != owner || pod.Labels[nodeLabel] != "p-mk1" {
+		t.Fatalf("labels = %v, want spinoza and the node named", pod.Labels)
+	}
+	if pod.GenerateName == "" {
+		t.Fatal("the pod has a fixed name, so two shells would collide")
+	}
+}
+
+func TestThePodOnlySleeps(t *testing.T) {
+	svc, _ := service(t, true)
+
+	pod := svc.pod("p-mk1")
+
+	if pod.Spec.Containers[0].Command[0] != "sleep" {
+		t.Fatalf("command = %v, want it to wait while the shell execs in", pod.Spec.Containers[0].Command)
+	}
+	if pod.Spec.RestartPolicy != corev1.RestartPolicyNever {
+		t.Fatalf("restart policy = %q, want it not to come back", pod.Spec.RestartPolicy)
+	}
+}
+
+func TestTheShellEntersTheHostNamespaces(t *testing.T) {
+	if Enter[0] != "nsenter" {
+		t.Fatalf("command = %v, want nsenter", Enter)
+	}
+	for _, flag := range []string{"--mount", "--uts", "--ipc", "--net", "--pid"} {
+		if !contains(Enter, flag) {
+			t.Fatalf("command = %v, want %s", Enter, flag)
+		}
+	}
+}
+
+func contains(list []string, want string) bool {
+	return slices.Contains(list, want)
+}
+
+// starting and stopping
+
+func TestStartWaitsUntilThePodRuns(t *testing.T) {
+	svc, cs := service(t, true)
+	creates(cs, "spinoza-node-shell-abc", corev1.PodRunning, "")
+
+	session, err := svc.Start(t.Context(), "p-mk1")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	if session.Pod != "spinoza-node-shell-abc" || session.Container != container {
+		t.Fatalf("session = %+v", session)
+	}
+	if session.Node != "p-mk1" || session.Namespace != DefaultNamespace {
+		t.Fatalf("session = %+v, want the node and namespace named", session)
+	}
+}
+
+func TestStartRefusesWhileOff(t *testing.T) {
+	svc, _ := service(t, false)
+
+	_, err := svc.Start(t.Context(), "p-mk1")
+
+	if err == nil {
+		t.Fatal("a node shell started while the feature was off")
+	}
+}
+
+func TestStartNeedsANode(t *testing.T) {
+	svc, _ := service(t, true)
+
+	_, err := svc.Start(t.Context(), "")
+
+	if err == nil {
+		t.Fatal("a node shell started without a node")
+	}
+}
+
+func TestAPodThatFailsIsReportedAndRemoved(t *testing.T) {
+	svc, cs := service(t, true)
+	creates(cs, "spinoza-node-shell-bad", corev1.PodFailed, "OutOfpods")
+	deleted := false
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deleted = true
+		return true, nil, nil
+	})
+
+	_, err := svc.Start(t.Context(), "p-mk1")
+
+	if err == nil {
+		t.Fatal("a failed pod was reported as a working shell")
+	}
+	if !deleted {
+		t.Fatal("a failed pod was left behind")
+	}
+}
+
+func TestAPodThatNeverStartsGivesUp(t *testing.T) {
+	svc, cs := service(t, true)
+	creates(cs, "spinoza-node-shell-slow", corev1.PodPending, "")
+	was := startTimeout
+	startTimeout = 10 * time.Millisecond
+	pollWas := pollEvery
+	pollEvery = time.Millisecond
+	t.Cleanup(func() {
+		startTimeout = was
+		pollEvery = pollWas
+	})
+
+	_, err := svc.Start(t.Context(), "p-mk1")
+
+	if err == nil {
+		t.Fatal("a pod that never ran was reported as a working shell")
+	}
+}
+
+func TestRemoveDeletesThePod(t *testing.T) {
+	svc, cs := service(t, true, running("spinoza-node-shell-abc"))
+
+	svc.Remove(t.Context(), "spinoza-node-shell-abc")
+
+	_, err := cs.CoreV1().Pods(DefaultNamespace).Get(t.Context(), "spinoza-node-shell-abc", metav1.GetOptions{})
+	if err == nil {
+		t.Fatal("the pod outlived the shell")
+	}
+}
+
+func TestRemoveWithNoPodDoesNothing(t *testing.T) {
+	svc, cs := service(t, true)
+	called := false
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		called = true
+		return true, nil, nil
+	})
+
+	svc.Remove(t.Context(), "")
+
+	if called {
+		t.Fatal("an empty pod name still reached the apiserver")
+	}
+}
+
+func TestThePodCannotOutliveTheDay(t *testing.T) {
+	svc, _ := service(t, true)
+
+	pod := svc.pod("p-mk1")
+
+	if pod.Spec.ActiveDeadlineSeconds == nil {
+		t.Fatal("a privileged pod was created with no deadline, so an abandoned one would run forever")
+	}
+	if *pod.Spec.ActiveDeadlineSeconds > int64((4 * time.Hour).Seconds()) {
+		t.Fatalf("deadline = %ds, want it short enough to matter", *pod.Spec.ActiveDeadlineSeconds)
+	}
+}

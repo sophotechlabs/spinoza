@@ -43,6 +43,10 @@ vi.mock('../../src/lib/exec', async () => {
       opened.push({ pod: 'this machine', container: 'shell' });
       return { send: vi.fn(), resize: vi.fn(), close: vi.fn() };
     },
+    openNodeShell: (node: string) => {
+      opened.push({ pod: node, container: 'node shell' });
+      return { send: vi.fn(), resize: vi.fn(), close: vi.fn() };
+    },
   };
 });
 
@@ -67,7 +71,10 @@ vi.mock('../../src/components/TerminalPanel', () => ({
   },
 }));
 
-import TerminalSession, { LocalTerminalSession } from '../../src/components/TerminalSession';
+import TerminalSession, {
+  LocalTerminalSession,
+  NodeTerminalSession,
+} from '../../src/components/TerminalSession';
 
 function stubShell(shell: string): void {
   vi.stubGlobal(
@@ -145,6 +152,27 @@ describe('TerminalSession', () => {
     await screen.findByTestId('terminal-panel');
 
     expect(screen.queryByText(/Could not check whether/)).not.toBeInTheDocument();
+  });
+});
+
+describe('NodeTerminalSession', () => {
+  it('opens against the node without probing a pod for a shell', async () => {
+    opened.length = 0;
+
+    render(<NodeTerminalSession node="p-mk1" />);
+
+    expect(await screen.findByTestId('terminal-panel')).toHaveTextContent('p-mk1/node shell');
+  });
+
+  it('has nothing to report when a shell is missing, since it makes its own', async () => {
+    const user = userEvent.setup();
+    opened.length = 0;
+    render(<NodeTerminalSession node="p-mk1" />);
+    await screen.findByTestId('terminal-panel');
+
+    await user.click(screen.getByRole('button', { name: 'Report missing shell' }));
+
+    expect(screen.getByTestId('terminal-panel')).toBeInTheDocument();
   });
 });
 
