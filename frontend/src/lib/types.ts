@@ -183,6 +183,17 @@ export interface PortForward {
   startedAt: string;
 }
 
+// What the cluster says this user may not do to the selected object. Anything
+// absent is either permitted or unanswerable, and both mean: let them try.
+export interface Refusal {
+  capability: string;
+  reason: string;
+}
+
+export interface Access {
+  refused: Refusal[];
+}
+
 export const EVENT_TYPES = ['Normal', 'Warning'] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

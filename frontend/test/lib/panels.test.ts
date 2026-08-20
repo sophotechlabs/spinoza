@@ -134,6 +134,7 @@ describe('the panel registry', () => {
       release: null,
       kind: null,
       namespace: '',
+      refused: {},
       ...overrides,
     };
   }

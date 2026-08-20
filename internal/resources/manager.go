@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
@@ -111,6 +112,7 @@ type Manager struct {
 	shells      *exec.Service
 	debugger    *debugcontainer.Service
 	nodeShells  *nodeshell.Service
+	perms       *access.Service
 	helm        *helm.Service
 	prom        *prom.Client
 	disco       kubediscovery.CachedDiscoveryInterface
@@ -202,6 +204,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		shells:     deps.Shells,
 		debugger:   deps.Debugger,
 		nodeShells: deps.NodeShells,
+		perms:      access.New(deps.Clientset),
 		helm:       deps.Helm,
 		prom:       deps.Prometheus,
 		cats:       deps.Categories,
@@ -405,6 +408,10 @@ func (m *Manager) StopForward(id string) error {
 		return fmt.Errorf("%w: port forwarding is not wired up", api.ErrInternal)
 	}
 	return m.forwards.Stop(id)
+}
+
+func (m *Manager) Access(ctx context.Context, ref api.ObjectRef) api.Access {
+	return m.perms.Review(ctx, ref)
 }
 
 func (m *Manager) ExecSupport(ctx context.Context, req exec.Request) (api.ExecSupport, error) {

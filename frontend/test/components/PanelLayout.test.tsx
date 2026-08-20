@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readStored } from '../../src/lib/persist';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../../src/components/ForwardsPanel', () => ({
@@ -72,6 +72,7 @@ import { PLACEMENT_KEY } from '../../src/lib/panels';
 import { usePanelsStore } from '../../src/store/panels';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
+import { useAccessStore } from '../../src/store/access';
 import type { ObjectRef } from '../../src/lib/types';
 import { makeRow, parentOf } from '../helpers';
 
@@ -103,6 +104,9 @@ function stubApi(): void {
       }
       if (url.startsWith('/api/exec/support')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ shell: 'present' }) });
+      }
+      if (url.startsWith('/api/access')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve(detail) });
     }),
@@ -685,5 +689,78 @@ describe('the compare tab', () => {
 
     expect(await screen.findByLabelText('Against')).toBeInTheDocument();
     expect(screen.getByLabelText('Namespace')).toHaveValue('prod');
+  });
+});
+
+describe('a panel the cluster would refuse', () => {
+  function stubRefusing(refused: { capability: string; reason: string }[]): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/events')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        if (url.startsWith('/api/exec/support')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ shell: 'present' }) });
+        }
+        if (url.startsWith('/api/access')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(detail) });
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    usePanelsStore.getState().reset();
+    useToastsStore.getState().clear();
+    useAccessStore.getState().forget();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useAccessStore.getState().forget();
+  });
+
+  it('greys out the Logs tab and puts the cluster\u2019s reason on it', async () => {
+    stubRefusing([{ capability: 'logs', reason: 'requires container.pods.getLogs in Cloud IAM' }]);
+    renderLayout();
+
+    const tab = await screen.findByRole('tab', { name: 'Logs' });
+    await waitFor(() => {
+      expect(tab).toHaveAttribute('aria-disabled', 'true');
+    });
+    expect(tab).toHaveAttribute('title', 'requires container.pods.getLogs in Cloud IAM');
+  });
+
+  it('leaves the Logs tab alone when the cluster allows it', async () => {
+    stubRefusing([]);
+    renderLayout();
+    await screen.findByText('Metadata');
+
+    expect(screen.getByRole('tab', { name: 'Logs' })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('does not grey out a tab that was never about permissions', async () => {
+    stubRefusing([{ capability: 'logs', reason: 'no logs' }]);
+    renderLayout();
+    await screen.findByText('Metadata');
+
+    expect(screen.getByRole('tab', { name: 'YAML' })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('keeps a refusal off an object it was not asked about', async () => {
+    stubRefusing([{ capability: 'logs', reason: 'no logs' }]);
+    renderLayout();
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    useAccessStore.getState().setRefused('somewhere-else', { logs: 'no logs' });
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-disabled', 'false');
+    });
   });
 });

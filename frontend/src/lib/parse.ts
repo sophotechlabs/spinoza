@@ -1,4 +1,5 @@
 import type {
+  Access,
   ActionResult,
   ArgoActionResult,
   Category,
@@ -491,6 +492,16 @@ export function parseCounts(body: unknown): ResourceCounts {
     counts: numberMap(item.counts),
     failing: optionalNumberMap(item.failing),
     errors: stringMap(item.errors),
+  };
+}
+
+export function parseAccess(body: unknown): Access {
+  const item = asRecord(body);
+  return {
+    refused: listOf(item.refused, (entry) => ({
+      capability: asString(entry.capability),
+      reason: asString(entry.reason),
+    })),
   };
 }
 

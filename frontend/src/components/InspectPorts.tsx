@@ -4,6 +4,7 @@ import { refreshForwards, startForward, stopForward } from '../lib/portForward';
 import { forwardURL, openExternal } from '../lib/openExternal';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useForwardsStore } from '../store/forwards';
+import { useRefusal } from '../store/access';
 import Announce from './Announce';
 
 interface InspectPortsProps {
@@ -50,6 +51,7 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
   const forwards = useForwardsStore((state) => state.forwards);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const noForward = useRefusal(target, 'portForward');
 
   useEffect(() => {
     void refreshForwards();
@@ -102,7 +104,8 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
                 <button
                   type="button"
                   onClick={() => void forward(port.port)}
-                  disabled={busy !== null}
+                  disabled={busy !== null || noForward !== null}
+                  title={noForward ?? undefined}
                   className="ml-auto rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
                 >
                   Forward

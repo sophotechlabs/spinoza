@@ -16,6 +16,7 @@ import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import NodeShellButton from './NodeShellButton';
 import { useProtectedCluster } from '../store/contexts';
+import { useRefusal } from '../store/access';
 
 interface InspectObjectActionsProps {
   target: ObjectRef;
@@ -83,6 +84,10 @@ export default function InspectObjectActions({
   const [force, setForce] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const protectedCluster = useProtectedCluster();
+  const noScale = useRefusal(target, 'scale');
+  const noRestart = useRefusal(target, 'restart');
+  const noCordon = useRefusal(target, 'cordon');
+  const noDrain = useRefusal(target, 'drain');
 
   const refKey = refQuery(target);
 
@@ -203,7 +208,13 @@ export default function InspectObjectActions({
               }}
               className="w-16 rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
             />
-            <button type="button" onClick={handleScale} disabled={busy} className={buttonClass}>
+            <button
+              type="button"
+              onClick={handleScale}
+              disabled={busy || noScale !== null}
+              title={noScale ?? undefined}
+              className={buttonClass}
+            >
               Scale
             </button>
           </>
@@ -214,7 +225,8 @@ export default function InspectObjectActions({
             onClick={() => {
               ask('restart', {}, `Restart ${target.name}? Every pod is replaced.`);
             }}
-            disabled={busy}
+            disabled={busy || noRestart !== null}
+            title={noRestart ?? undefined}
             className={buttonClass}
           >
             Restart
@@ -226,7 +238,8 @@ export default function InspectObjectActions({
             onClick={() => {
               ask('cordon', {}, `Cordon ${target.name}? Nothing new will be scheduled on it.`);
             }}
-            disabled={busy}
+            disabled={busy || noCordon !== null}
+            title={noCordon ?? undefined}
             className={dangerClass}
           >
             Cordon
@@ -236,7 +249,8 @@ export default function InspectObjectActions({
           <button
             type="button"
             onClick={() => void run('uncordon')}
-            disabled={busy}
+            disabled={busy || noCordon !== null}
+            title={noCordon ?? undefined}
             className="rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Uncordon
@@ -246,7 +260,8 @@ export default function InspectObjectActions({
           <button
             type="button"
             onClick={() => void run('drain', { dryRun: true })}
-            disabled={busy}
+            disabled={busy || noDrain !== null}
+            title={noDrain ?? undefined}
             className={dangerClass}
           >
             Drain

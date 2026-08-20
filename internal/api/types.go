@@ -489,6 +489,18 @@ type ExecSupport struct {
 	Shell     string `json:"shell"`
 }
 
+// Access carries only what the cluster refuses. Anything absent is either
+// permitted or unanswerable, and both mean the same thing to the browser: let
+// the user try.
+type Access struct {
+	Refused []Refusal `json:"refused"`
+}
+
+type Refusal struct {
+	Capability string `json:"capability"`
+	Reason     string `json:"reason"`
+}
+
 type Event struct {
 	Type      string `json:"type"`
 	Reason    string `json:"reason"`

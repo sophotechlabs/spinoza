@@ -18,6 +18,7 @@ import TerminalTab from '../../src/components/TerminalTab';
 import { terminalTitle } from '../../src/lib/shell';
 import type { PodTarget } from '../../src/lib/pods';
 import { useTerminalsStore } from '../../src/store/terminals';
+import { useAccessStore } from '../../src/store/access';
 
 function pod(overrides: Partial<PodTarget> = {}): PodTarget {
   return { namespace: 'prod', name: 'web', containers: ['app'], ...overrides };
@@ -248,5 +249,46 @@ describe('a node shell tab', () => {
       screen.getByRole('button', { name: 'Close the shell on node p-mk1' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('terminal-session')).toHaveTextContent('node shell on p-mk1');
+  });
+});
+
+describe('a shell the cluster would refuse', () => {
+  const podKey = 'group=&version=v1&resource=pods&namespace=prod&name=web';
+
+  beforeEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  afterEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  it('greys out the shell button and says why', () => {
+    useAccessStore.getState().setRefused(podKey, {
+      exec: 'requires container.pods.exec in Cloud IAM',
+    });
+    render(<TerminalTab pod={pod()} />);
+
+    const button = screen.getByRole('button', { name: 'Shell in web' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'requires container.pods.exec in Cloud IAM');
+  });
+
+  it('leaves the shell button alone when exec is allowed', () => {
+    useAccessStore.getState().setRefused(podKey, { logs: 'no logs, but exec is fine' });
+    render(<TerminalTab pod={pod()} />);
+
+    expect(screen.getByRole('button', { name: 'Shell in web' })).toBeEnabled();
+  });
+
+  it('keeps the refusal for another pod off this one', () => {
+    useAccessStore
+      .getState()
+      .setRefused('group=&version=v1&resource=pods&namespace=prod&name=api', {
+        exec: 'not about this pod',
+      });
+    render(<TerminalTab pod={pod()} />);
+
+    expect(screen.getByRole('button', { name: 'Shell in web' })).toBeEnabled();
   });
 });

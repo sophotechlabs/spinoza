@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import InspectObjectActions from '../../src/components/InspectObjectActions';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
+import { useAccessStore } from '../../src/store/access';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const deployment: ObjectRef = {
@@ -749,5 +750,108 @@ describe('on a protected cluster', () => {
       expect(fetchMock).toHaveBeenCalled();
     });
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm');
+  });
+});
+
+describe('an action the cluster would refuse', () => {
+  const deploymentKey = 'group=apps&version=v1&resource=deployments&namespace=shop&name=web';
+  const nodeKey = 'group=&version=v1&resource=nodes&namespace=&name=worker-1';
+
+  beforeEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  afterEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  it('greys out Scale and says why', () => {
+    stub();
+    useAccessStore.getState().setRefused(deploymentKey, {
+      scale: 'requires container.deployments.update in Cloud IAM',
+    });
+    render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 3 } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Scale' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'requires container.deployments.update in Cloud IAM');
+  });
+
+  it('greys out Restart and says why', () => {
+    stub();
+    useAccessStore.getState().setRefused(deploymentKey, { restart: 'no patching here' });
+    render(<InspectObjectActions target={deployment} detail={detailFor()} onDone={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Restart' })).toBeDisabled();
+  });
+
+  it('greys out Cordon and Drain on a node', () => {
+    stub();
+    useAccessStore.getState().setRefused(nodeKey, {
+      cordon: 'no patching nodes',
+      drain: 'no evicting pods',
+    });
+    render(
+      <InspectObjectActions
+        target={node}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Cordon' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Drain' })).toHaveAttribute(
+      'title',
+      'no evicting pods',
+    );
+  });
+
+  it('greys out Uncordon on a node that is already cordoned', () => {
+    stub();
+    useAccessStore.getState().setRefused(nodeKey, { cordon: 'no patching nodes' });
+    render(
+      <InspectObjectActions
+        target={node}
+        detail={detailFor({ kind: 'Node', node: { schedulable: false } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Uncordon' })).toBeDisabled();
+  });
+
+  it('leaves the buttons alone when the refusals are about another object', () => {
+    stub();
+    useAccessStore.getState().setRefused(nodeKey, { scale: 'not about this deployment' });
+    render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 3 } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Scale' })).toBeEnabled();
+  });
+
+  it('leaves the buttons alone when nothing is refused', () => {
+    stub();
+    useAccessStore.getState().setRefused(deploymentKey, {});
+    render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 3 } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Scale' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Scale' })).not.toHaveAttribute('title');
   });
 });

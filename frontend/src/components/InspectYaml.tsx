@@ -9,6 +9,7 @@ import CopyButton from './CopyButton';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import { useProtectedCluster } from '../store/contexts';
+import { useRefusal } from '../store/access';
 import { confirmName } from '../lib/contexts';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
@@ -48,6 +49,8 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const protectedCluster = useProtectedCluster();
+  const noEdit = useRefusal(target, 'edit');
+  const noDelete = useRefusal(target, 'delete');
 
   const targetKey = refKey(target);
   const [lastTarget, setLastTarget] = useState(targetKey);
@@ -189,7 +192,8 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         <button
           type="button"
           onClick={askApply}
-          disabled={busy || !dirty}
+          disabled={busy || !dirty || noEdit !== null}
+          title={noEdit ?? undefined}
           className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
           Apply
@@ -228,7 +232,8 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
             ref={deleteRef}
             type="button"
             onClick={askDelete}
-            disabled={busy}
+            disabled={busy || noDelete !== null}
+            title={noDelete ?? undefined}
             className="ml-auto rounded border border-error-line px-2 py-1 text-error hover:bg-error-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Delete

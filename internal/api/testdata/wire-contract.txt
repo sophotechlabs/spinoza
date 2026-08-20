@@ -1,3 +1,4 @@
+Access.Refused refused []Refusal
 ActionResult.Action action string
 ActionResult.DryRun dryRun,omitempty bool
 ActionResult.Message message string
@@ -369,6 +370,8 @@ PortForward.Pod pod,omitempty string
 PortForward.RemotePort remotePort int32
 PortForward.StartedAt startedAt string
 PortForward.State state string
+Refusal.Capability capability string
+Refusal.Reason reason string
 ResourceCatalog.Categories categories []Category
 ResourceCatalog.Error error,omitempty string
 ResourceCounts.Counts counts map[string]int

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import InspectPorts from '../../src/components/InspectPorts';
 import { useForwardsStore } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
+import { useAccessStore } from '../../src/store/access';
 import type { ObjectPort, ObjectRef, PortForward } from '../../src/lib/types';
 
 const target: ObjectRef = {
@@ -237,5 +238,38 @@ describe('InspectPorts', () => {
     await screen.findByText('127.0.0.1:45123 to 8080');
 
     expect(screen.queryByRole('button', { name: 'Stop forwarding port 9090' })).toBeNull();
+  });
+});
+
+describe('a forward the cluster would refuse', () => {
+  const podKey = 'group=&version=v1&resource=pods&namespace=flux-system&name=web';
+
+  beforeEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  afterEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  it('greys out Forward and says why', async () => {
+    stubListed([]);
+    useAccessStore.getState().setRefused(podKey, {
+      portForward: 'requires container.pods.portForward in Cloud IAM',
+    });
+    render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+
+    const buttons = await screen.findAllByRole('button', { name: 'Forward' });
+    expect(buttons[0]).toBeDisabled();
+    expect(buttons[0]).toHaveAttribute('title', 'requires container.pods.portForward in Cloud IAM');
+  });
+
+  it('leaves Forward alone when nothing stands in the way', async () => {
+    stubListed([]);
+    useAccessStore.getState().setRefused(podKey, {});
+    render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+
+    const buttons = await screen.findAllByRole('button', { name: 'Forward' });
+    expect(buttons[0]).toBeEnabled();
   });
 });

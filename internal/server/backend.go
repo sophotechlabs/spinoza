@@ -31,6 +31,7 @@ type Catalog interface {
 
 type Objects interface {
 	Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDetail, error)
+	Access(ctx context.Context, ref api.ObjectRef) api.Access
 	ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error)
 	DeleteObject(ctx context.Context, ref api.ObjectRef) error
 	Events(ctx context.Context, namespace, uid string) ([]api.Event, error)

@@ -1,4 +1,5 @@
 import type { ObjectDetail, ReleaseRef, ResourceDescriptor } from './types';
+import type { Capability } from './access';
 import type { Selection } from './refs';
 import type { PodTarget } from './pods';
 import { readStored, writeStored } from './persist';
@@ -25,6 +26,8 @@ export interface PanelContext {
   release: ReleaseRef | null;
   kind: ResourceDescriptor | null;
   namespace: string;
+  // Why the cluster would turn this panel's requests down, per capability.
+  refused: Partial<Record<Capability, string>>;
 }
 
 export interface PanelDescriptor {
@@ -33,6 +36,9 @@ export interface PanelDescriptor {
   defaultSide: DockSide;
   hint: string;
   enabled: (ctx: PanelContext) => boolean;
+  // refused answers with the cluster's own words when this panel would only
+  // produce a permission error, and null when there is nothing in the way.
+  refused?: (ctx: PanelContext) => string | null;
 }
 
 const SELECT_ROW = 'Select a row to inspect it';
@@ -104,7 +110,14 @@ export const PANELS: PanelDescriptor[] = [
     hint: NOT_FOR_EVENTS,
     enabled: takesEvents,
   },
-  { id: 'logs', label: 'Logs', defaultSide: 'right', hint: SELECT_LOGGABLE, enabled: hasLogs },
+  {
+    id: 'logs',
+    label: 'Logs',
+    defaultSide: 'right',
+    hint: SELECT_LOGGABLE,
+    enabled: hasLogs,
+    refused: (ctx) => ctx.refused.logs ?? null,
+  },
   { id: 'metrics', label: 'Metrics', defaultSide: 'right', hint: SELECT_POD, enabled: isPodPanel },
   {
     id: 'forwards',

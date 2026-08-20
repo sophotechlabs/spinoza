@@ -1,4 +1,4 @@
-import type { ObjectDetail, Row } from './types';
+import type { ObjectDetail, ObjectRef, Row } from './types';
 import type { Selection } from './refs';
 import { containerNames } from './containers';
 
@@ -6,6 +6,20 @@ export interface PodTarget {
   namespace: string;
   name: string;
   containers: string[];
+}
+
+// podRef names the pod as an object, which is how the cluster is asked about it.
+export function podRef(pod: PodTarget | null): ObjectRef | null {
+  if (pod === null) {
+    return null;
+  }
+  return {
+    group: '',
+    version: 'v1',
+    resource: 'pods',
+    namespace: pod.namespace,
+    name: pod.name,
+  };
 }
 
 export function podTarget(row: Row | null): PodTarget | null {

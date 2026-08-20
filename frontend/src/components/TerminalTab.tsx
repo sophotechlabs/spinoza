@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { PodTarget } from '../lib/pods';
-import { firstContainer } from '../lib/pods';
+import { firstContainer, podRef } from '../lib/pods';
 import { useLocalShellSupport } from '../lib/useLocalShell';
 import { useTerminalsStore } from '../store/terminals';
+import { useRefusal } from '../store/access';
 import type { TerminalSession as Session } from '../store/terminals';
 import TerminalSession, { LocalTerminalSession, NodeTerminalSession } from './TerminalSession';
 
@@ -47,6 +48,7 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
   const close = useTerminalsStore((state) => state.close);
   const [container, setContainer] = useState(() => firstContainer(pod));
   const support = useLocalShellSupport();
+  const noExec = useRefusal(podRef(pod), 'exec');
 
   const podKey = pod === null ? '' : `${pod.namespace}/${pod.name}`;
   const [lastPodKey, setLastPodKey] = useState(podKey);
@@ -125,7 +127,9 @@ export default function TerminalTab({ pod }: TerminalTabProps) {
               onClick={() => {
                 open(pod.namespace, pod.name, container);
               }}
-              className="rounded border border-edge-strong px-1.5 py-0.5 text-fg hover:bg-surface-active"
+              disabled={noExec !== null}
+              title={noExec ?? undefined}
+              className="rounded border border-edge-strong px-1.5 py-0.5 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
             >
               Shell in {pod.name}
             </button>

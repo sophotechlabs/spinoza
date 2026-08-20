@@ -26,6 +26,7 @@ vi.mock('@monaco-editor/react', () => ({
 import InspectYaml from '../../src/components/InspectYaml';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
+import { useAccessStore } from '../../src/store/access';
 import { hasUnsaved, setUnsaved } from '../../src/lib/unsaved';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
@@ -536,5 +537,45 @@ describe('InspectYaml on a protected cluster', () => {
       return options?.method === 'PUT';
     });
     expect(applied).toBe(false);
+  });
+});
+
+describe('editing and deleting what the cluster would refuse', () => {
+  const deploymentKey = 'group=apps&version=v1&resource=deployments&namespace=flux-system&name=web';
+
+  beforeEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  afterEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  it('greys out Delete and says why', () => {
+    useAccessStore.getState().setRefused(deploymentKey, {
+      delete: 'requires container.deployments.delete in Cloud IAM',
+    });
+    renderYaml();
+
+    const button = screen.getByRole('button', { name: 'Delete' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'requires container.deployments.delete in Cloud IAM');
+  });
+
+  it('greys out Apply even after an edit', async () => {
+    const user = userEvent.setup();
+    useAccessStore.getState().setRefused(deploymentKey, { edit: 'no updating here' });
+    renderYaml();
+
+    await user.type(screen.getByRole('textbox'), 'x');
+
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  });
+
+  it('leaves Delete alone when nothing stands in the way', () => {
+    useAccessStore.getState().setRefused(deploymentKey, { edit: 'no updating here' });
+    renderYaml();
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
   });
 });

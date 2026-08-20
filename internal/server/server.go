@@ -163,6 +163,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/metrics", s.handleMetrics, false},
 		{http.MethodGet, "/api/compare", withRef(s.compare), false},
 		{http.MethodGet, "/api/compare/kind", s.compareKind, false},
+		{http.MethodGet, "/api/access", withRef(s.objectAccess), false},
 		{http.MethodGet, "/api/object", withRef(s.getObject), false},
 		{http.MethodPut, "/api/object", withRef(s.applyObject), false},
 		{http.MethodDelete, "/api/object", withRef(s.deleteObject), false},
@@ -994,6 +995,10 @@ func (s *Server) getObject(w http.ResponseWriter, r *http.Request, ref api.Objec
 		return
 	}
 	writeJSON(w, detail)
+}
+
+func (s *Server) objectAccess(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
+	writeJSON(w, s.manager().Access(r.Context(), ref))
 }
 
 func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {

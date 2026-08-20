@@ -20,6 +20,8 @@ import { isFluxObject } from '../lib/fluxActions';
 import { isArgoApplication } from '../lib/argoActions';
 import { hasActions } from '../lib/objectActions';
 import { useObjectDetail } from '../lib/useObjectDetail';
+import { useAccess } from '../lib/useAccess';
+import { useRefusalsFor } from '../store/access';
 import PanelHost from './PanelHost';
 import type { PanelTab } from './PanelHost';
 import PanelMount from './PanelMount';
@@ -257,6 +259,8 @@ export default function PanelLayout({
   const [hosts, setHosts] = useState<Hosts>(NO_HOSTS);
   const [opened, setOpened] = useState<PanelId[]>([]);
   const { detail, error, gone, reload } = useObjectDetail(refOf(selection), rowOf(selection));
+  useAccess(refOf(selection));
+  const refused = useRefusalsFor(refOf(selection));
 
   const ctx: PanelContext = {
     selection,
@@ -265,6 +269,7 @@ export default function PanelLayout({
     release,
     kind,
     namespace,
+    refused,
   };
 
   const live = DOCK_SIDES.map((side) => activeOn(side)).filter((id) => id !== null);
@@ -293,8 +298,22 @@ export default function PanelLayout({
     return { left: setter('left'), right: setter('right'), bottom: setter('bottom') };
   }, []);
 
+  function refusalOf(id: PanelId): string | null {
+    const panel = panelById(id);
+    if (panel.refused === undefined) {
+      return null;
+    }
+    if (!panel.enabled(ctx)) {
+      return null;
+    }
+    return panel.refused(ctx);
+  }
+
   function enabledOf(id: PanelId): boolean {
-    return panelById(id).enabled(ctx);
+    if (!panelById(id).enabled(ctx)) {
+      return false;
+    }
+    return refusalOf(id) === null;
   }
 
   function titleOf(id: PanelId): string {
@@ -302,7 +321,7 @@ export default function PanelLayout({
     if (enabledOf(id)) {
       return `${panel.label}, drag to move`;
     }
-    return panel.hint;
+    return refusalOf(id) ?? panel.hint;
   }
 
   function tabsFor(side: DockSide): PanelTab[] {
@@ -331,6 +350,10 @@ export default function PanelLayout({
     const blocked = panelsOn(placement, side).find((id) => !enabledOf(id));
     if (blocked === undefined) {
       return 'Nothing docked here yet.';
+    }
+    const refusal = refusalOf(blocked);
+    if (refusal !== null) {
+      return refusal;
     }
     return `${panelById(blocked).hint}.`;
   }
