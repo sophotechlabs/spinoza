@@ -37,6 +37,7 @@ import (
 const (
 	maxDocBytes = 4 << 20
 	queryTrue   = "true"
+	ociScheme   = "oci://"
 )
 
 type Cluster interface {
@@ -139,8 +140,11 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/helm/support", s.handleHelmSupport, true},
 		{http.MethodGet, "/api/helm/release", s.handleHelmRelease, false},
 		{http.MethodGet, "/api/helm/versions", s.handleHelmVersions, false},
+		{http.MethodGet, "/api/helm/charts", s.handleHelmCharts, false},
+		{http.MethodGet, "/api/helm/values", s.handleHelmChartValues, false},
 		{http.MethodPost, "/api/helm/action", s.handleHelmAction, false},
 		{http.MethodPost, "/api/helm/upgrade", s.handleHelmUpgrade, false},
+		{http.MethodPost, "/api/helm/install", s.handleHelmInstall, false},
 		{http.MethodGet, "/api/helm", s.handleHelm, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false},
@@ -532,6 +536,82 @@ func (s *Server) handleHelmVersions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, found)
 }
 
+func (s *Server) handleHelmCharts(w http.ResponseWriter, r *http.Request) {
+	found, err := s.manager().HelmChartSearch(r.Context(), r.URL.Query().Get("query"))
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, found)
+}
+
+func (s *Server) handleHelmChartValues(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	chart := query.Get("chart")
+	repo := query.Get("repo")
+	wanted := query.Get("version")
+	if chart == "" || repo == "" || wanted == "" {
+		writeError(w, http.StatusBadRequest, "chart, repo and version are required")
+		return
+	}
+	found, err := s.manager().HelmChartValues(r.Context(), helm.ValuesRequest{
+		Chart:   chart,
+		Version: wanted,
+		RepoURL: repo,
+		OCI:     strings.HasPrefix(repo, ociScheme),
+	})
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, found)
+}
+
+type helmInstallBody struct {
+	Namespace       string `json:"namespace"`
+	Name            string `json:"name"`
+	Chart           string `json:"chart"`
+	Repo            string `json:"repo"`
+	Version         string `json:"version"`
+	Values          string `json:"values"`
+	CreateNamespace bool   `json:"createNamespace"`
+}
+
+func (s *Server) handleHelmInstall(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxDocBytes))
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	var dto helmInstallBody
+	unmarshalErr := json.Unmarshal(body, &dto)
+	if unmarshalErr != nil {
+		writeError(w, http.StatusBadRequest, "the install request must be json: "+unmarshalErr.Error())
+		return
+	}
+	if dto.Namespace == "" || dto.Name == "" || dto.Chart == "" || dto.Repo == "" || dto.Version == "" {
+		writeError(w, http.StatusBadRequest, "namespace, name, chart, repo and version are required")
+		return
+	}
+	dryRun := r.URL.Query().Get("dryRun") == queryTrue
+	if !dryRun && s.unconfirmed(r, dto.Name) {
+		refuseUnconfirmed(w, dto.Name)
+		return
+	}
+	result, installErr := s.manager().HelmInstall(r.Context(), helm.InstallRequest{
+		Namespace:       dto.Namespace,
+		Name:            dto.Name,
+		Chart:           dto.Chart,
+		Version:         dto.Version,
+		RepoURL:         dto.Repo,
+		OCI:             strings.HasPrefix(dto.Repo, ociScheme),
+		Values:          dto.Values,
+		CreateNamespace: dto.CreateNamespace,
+		DryRun:          dryRun,
+	})
+	s.finishHelmAction(w, result, installErr)
+}
+
 type helmUpgradeBody struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
@@ -568,7 +648,7 @@ func (s *Server) handleHelmUpgrade(w http.ResponseWriter, r *http.Request) {
 		Chart:     dto.Chart,
 		Version:   dto.Version,
 		RepoURL:   dto.Repo,
-		OCI:       strings.HasPrefix(dto.Repo, "oci://"),
+		OCI:       strings.HasPrefix(dto.Repo, ociScheme),
 		Values:    dto.Values,
 		DryRun:    dryRun,
 	}

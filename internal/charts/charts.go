@@ -31,9 +31,20 @@ type Repo struct {
 	OCI bool
 }
 
+type Chart struct {
+	Name        string
+	Description string
+	Version     string
+}
+
 type key struct {
 	repo  Repo
 	chart string
+}
+
+type listing struct {
+	versions map[string][]string
+	charts   []Chart
 }
 
 type Cache struct {
@@ -45,6 +56,7 @@ type Cache struct {
 
 	mu       sync.Mutex
 	lists    map[key][]string
+	catalog  map[Repo][]Chart
 	fetched  map[key]time.Time
 	inflight map[key]bool
 }
@@ -56,6 +68,7 @@ func New(ctx context.Context, client *http.Client, ttl time.Duration) *Cache {
 		ttl:      ttl,
 		now:      time.Now,
 		lists:    map[key][]string{},
+		catalog:  map[Repo][]Chart{},
 		fetched:  map[key]time.Time{},
 		inflight: map[key]bool{},
 	}
@@ -159,30 +172,98 @@ func (c *Cache) Latest(repo Repo, chart string) string {
 }
 
 func (c *Cache) Versions(ctx context.Context, repo Repo, chart string) ([]string, error) {
+	err := c.ensure(ctx, repo, chart)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.lists[key{repo: repo, chart: chart}]), nil
+}
+
+func (c *Cache) Search(ctx context.Context, repo Repo, query string, limit int) ([]Chart, error) {
+	if repo.OCI {
+		return nil, fmt.Errorf("%q is an oci registry, which cannot be listed; name the chart instead", repo.URL)
+	}
+	err := c.ensure(ctx, repo, "")
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	known := slices.Clone(c.catalog[repo])
+	c.mu.Unlock()
+	return matching(known, query, limit), nil
+}
+
+func matching(known []Chart, query string, limit int) []Chart {
+	needle := strings.ToLower(strings.TrimSpace(query))
+	hits := []Chart{}
+	for _, chart := range known {
+		if rank(chart, needle) < 0 {
+			continue
+		}
+		hits = append(hits, chart)
+	}
+	slices.SortStableFunc(hits, func(a, b Chart) int {
+		byRank := rank(a, needle) - rank(b, needle)
+		if byRank != 0 {
+			return byRank
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	if limit > 0 && len(hits) > limit {
+		return hits[:limit]
+	}
+	return hits
+}
+
+func rank(chart Chart, needle string) int {
+	if needle == "" {
+		return 1
+	}
+	name := strings.ToLower(chart.Name)
+	if strings.HasPrefix(name, needle) {
+		return 0
+	}
+	if strings.Contains(name, needle) {
+		return 1
+	}
+	if strings.Contains(strings.ToLower(chart.Description), needle) {
+		return 2
+	}
+	return -1
+}
+
+func (c *Cache) ensure(ctx context.Context, repo Repo, chart string) error {
 	unit := fetchUnit(repo, chart)
-	entry := key{repo: repo, chart: chart}
 
 	c.mu.Lock()
 	last, seen := c.fetched[unit]
-	if seen && c.now().Sub(last) < c.ttl {
-		cached := slices.Clone(c.lists[entry])
-		c.mu.Unlock()
-		return cached, nil
-	}
+	fresh := seen && c.now().Sub(last) < c.ttl
 	c.mu.Unlock()
+	if fresh {
+		return nil
+	}
 
-	found, err := c.Resolve(ctx, repo, chart)
+	found, err := c.resolve(ctx, repo, chart)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.fetched[unit] = c.now()
-	for name, list := range found {
+	c.keep(repo, found)
+	return nil
+}
+
+func (c *Cache) keep(repo Repo, found listing) {
+	for name, list := range found.versions {
 		c.lists[key{repo: repo, chart: name}] = list
 	}
-	return slices.Clone(c.lists[entry]), nil
+	if found.charts != nil {
+		c.catalog[repo] = found.charts
+	}
 }
 
 func (c *Cache) Warm(repo Repo, chart string) {
@@ -220,7 +301,7 @@ func (c *Cache) refresh(unit key, repo Repo, chart string) {
 	ctx, cancel := context.WithTimeout(c.ctx, fetchTimeout)
 	defer cancel()
 
-	found, err := c.Resolve(ctx, repo, chart)
+	found, err := c.resolve(ctx, repo, chart)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -229,60 +310,78 @@ func (c *Cache) refresh(unit key, repo Repo, chart string) {
 	if err != nil {
 		return
 	}
-	for name, list := range found {
-		c.lists[key{repo: repo, chart: name}] = list
-	}
+	c.keep(repo, found)
 }
 
 func (c *Cache) Resolve(ctx context.Context, repo Repo, chart string) (map[string][]string, error) {
+	found, err := c.resolve(ctx, repo, chart)
+	if err != nil {
+		return nil, err
+	}
+	return found.versions, nil
+}
+
+func (c *Cache) resolve(ctx context.Context, repo Repo, chart string) (listing, error) {
 	if repo.OCI {
 		return c.resolveOCI(ctx, repo, chart)
 	}
 	return c.resolveIndex(ctx, repo)
 }
 
-func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (map[string][]string, error) {
+func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (listing, error) {
 	endpoint := strings.TrimSuffix(repo.URL, "/") + "/" + indexFilename
 	body, err := c.get(ctx, endpoint, "")
 	if err != nil {
-		return nil, err
+		return listing{}, err
 	}
 	defer func() { _ = body.Close() }()
 
 	var doc struct {
 		Entries map[string][]struct {
-			Version string `yaml:"version"`
+			Version     string `yaml:"version"`
+			Description string `yaml:"description"`
 		} `yaml:"entries"`
 	}
 	decodeErr := yaml.NewDecoder(io.LimitReader(body, maxBodyBytes)).Decode(&doc)
 	if decodeErr != nil {
-		return nil, fmt.Errorf("parse %s: %w", endpoint, decodeErr)
+		return listing{}, fmt.Errorf("parse %s: %w", endpoint, decodeErr)
 	}
 
-	out := map[string][]string{}
+	out := listing{versions: map[string][]string{}, charts: []Chart{}}
 	for name, releases := range doc.Entries {
+		described := map[string]string{}
 		raw := make([]string, 0, len(releases))
 		for _, release := range releases {
 			raw = append(raw, release.Version)
+			described[release.Version] = release.Description
 		}
 		sorted := sortVersions(raw)
-		if len(sorted) > 0 {
-			out[name] = sorted
+		if len(sorted) == 0 {
+			continue
 		}
+		out.versions[name] = sorted
+		out.charts = append(out.charts, Chart{
+			Name:        name,
+			Description: described[sorted[0]],
+			Version:     sorted[0],
+		})
 	}
+	slices.SortFunc(out.charts, func(a, b Chart) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	return out, nil
 }
 
-func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[string][]string, error) {
+func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (listing, error) {
 	host, path, err := splitOCI(repo.URL)
 	if err != nil {
-		return nil, err
+		return listing{}, err
 	}
 	endpoint := fmt.Sprintf("https://%s/v2/%s/%s/tags/list", host, path, url.PathEscape(chart))
 
 	body, err := c.get(ctx, endpoint, "")
 	if err != nil {
-		return nil, err
+		return listing{}, err
 	}
 	defer func() { _ = body.Close() }()
 
@@ -291,14 +390,14 @@ func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (map[st
 	}
 	decodeErr := json.NewDecoder(io.LimitReader(body, maxBodyBytes)).Decode(&doc)
 	if decodeErr != nil {
-		return nil, fmt.Errorf("parse tags for %s: %w", endpoint, decodeErr)
+		return listing{}, fmt.Errorf("parse tags for %s: %w", endpoint, decodeErr)
 	}
 
 	sorted := sortVersions(doc.Tags)
 	if len(sorted) == 0 {
-		return map[string][]string{}, nil
+		return listing{versions: map[string][]string{}}, nil
 	}
-	return map[string][]string{chart: sorted}, nil
+	return listing{versions: map[string][]string{chart: sorted}}, nil
 }
 
 func (c *Cache) get(ctx context.Context, endpoint, token string) (io.ReadCloser, error) {

@@ -909,3 +909,176 @@ func TestCheckHostRefusesAnEmptyHost(t *testing.T) {
 		t.Fatalf("error = %q", err.Error())
 	}
 }
+
+func TestSearchListsWhatTheIndexOffers(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`entries:
+  podinfo:
+    - version: 6.10.0
+      description: a tiny greeter
+    - version: 6.9.0
+      description: an older greeter
+  redis:
+    - version: 20.0.1
+      description: an in-memory store
+`))
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "pod", 10)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found) != 1 {
+		t.Fatalf("found = %+v, want only podinfo", found)
+	}
+	if found[0].Version != "6.10.0" {
+		t.Fatalf("version = %q, want the newest", found[0].Version)
+	}
+	if found[0].Description != "a tiny greeter" {
+		t.Fatalf("description = %q, want the newest version's", found[0].Description)
+	}
+}
+
+func TestSearchMatchesTheDescriptionToo(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`entries:
+  redis:
+    - version: 20.0.1
+      description: an in-memory store
+`))
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "in-memory", 10)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found) != 1 || found[0].Name != "redis" {
+		t.Fatalf("found = %+v", found)
+	}
+}
+
+func TestSearchPutsNameMatchesBeforeDescriptionMatches(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`entries:
+  cache-proxy:
+    - version: 1.0.0
+      description: a proxy
+  redis:
+    - version: 20.0.1
+      description: a cache
+`))
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "cache", 10)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found) != 2 {
+		t.Fatalf("found = %+v", found)
+	}
+	if found[0].Name != "cache-proxy" {
+		t.Fatalf("first = %q, want the name match first", found[0].Name)
+	}
+}
+
+func TestSearchKeepsAtMostTheLimit(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`entries:
+  chart-a:
+    - version: 1.0.0
+  chart-b:
+    - version: 1.0.0
+  chart-c:
+    - version: 1.0.0
+`))
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "chart", 2)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found) != 2 {
+		t.Fatalf("found = %d, want the limit", len(found))
+	}
+}
+
+func TestAnEmptySearchListsEverything(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`entries:
+  chart-a:
+    - version: 1.0.0
+  chart-b:
+    - version: 1.0.0
+`))
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "", 0)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found) != 2 {
+		t.Fatalf("found = %+v, want both", found)
+	}
+}
+
+func TestSearchRefusesAnOCIRegistry(t *testing.T) {
+	cache := New(context.Background(), http.DefaultClient, DefaultTTL)
+
+	_, err := cache.Search(context.Background(), Repo{URL: "oci://registry.example.com/charts", OCI: true}, "podinfo", 10)
+
+	if err == nil {
+		t.Fatal("an oci registry was listed")
+	}
+	if !strings.Contains(err.Error(), "name the chart instead") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestSearchReportsAnIndexItCannotRead(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	_, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "podinfo", 10)
+
+	if err == nil {
+		t.Fatal("a missing index reported success")
+	}
+}
+
+func TestSearchServesTheSecondAskFromTheCache(t *testing.T) {
+	asks := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asks++
+		_, _ = w.Write([]byte("entries:\n  podinfo:\n    - version: 6.10.0\n"))
+	}))
+	defer ts.Close()
+	cache := New(context.Background(), ts.Client(), DefaultTTL)
+
+	_, first := cache.Search(context.Background(), Repo{URL: ts.URL}, "podinfo", 10)
+	_, second := cache.Search(context.Background(), Repo{URL: ts.URL}, "pod", 10)
+
+	if first != nil || second != nil {
+		t.Fatalf("search: %v %v", first, second)
+	}
+	if asks != 1 {
+		t.Fatalf("index fetched %d times, want once", asks)
+	}
+}

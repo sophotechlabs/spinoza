@@ -241,6 +241,27 @@ type HelmChartVersions struct {
 	Error string             `json:"error,omitempty"`
 }
 
+type HelmChartHit struct {
+	Chart       string `json:"chart"`
+	Version     string `json:"version"`
+	Description string `json:"description,omitempty"`
+	Repo        string `json:"repo,omitempty"`
+	URL         string `json:"url"`
+}
+
+type HelmChartSearch struct {
+	Query     string         `json:"query"`
+	Hits      []HelmChartHit `json:"hits"`
+	Truncated bool           `json:"truncated,omitempty"`
+	Error     string         `json:"error,omitempty"`
+}
+
+type HelmChartValues struct {
+	Chart   string `json:"chart"`
+	Version string `json:"version"`
+	Values  string `json:"values"`
+}
+
 type Column struct {
 	Name   string `json:"name"`
 	Render string `json:"render,omitempty"`

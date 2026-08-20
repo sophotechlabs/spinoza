@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { HelmRelease, ReleaseRef } from '../lib/types';
 import {
@@ -9,13 +9,18 @@ import {
   statusLabel,
   statusText,
   useHelmReleases,
+  useHelmSupport,
 } from '../lib/helm';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
+import { ALL, DEFAULT_NAMESPACE, useNamespaceStore } from '../store/namespace';
+import { bumpHelmEpoch } from '../store/helm';
 import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
+
+const HelmInstallDialog = lazy(() => import('./HelmInstallDialog'));
 
 interface HelmReleasesProps {
   active?: boolean;
@@ -63,7 +68,10 @@ function matching(releases: HelmRelease[], query: string): HelmRelease[] {
 export default function HelmReleases({ active = true, selected, onSelect }: HelmReleasesProps) {
   const { data, error, reload } = useHelmReleases(active);
   const [query, setQuery] = useState('');
+  const [installing, setInstalling] = useState(false);
   const now = useNow();
+  const support = useHelmSupport();
+  const namespace = useNamespaceStore((state) => state.namespace);
 
   if (data === null) {
     if (error !== null) {
@@ -97,7 +105,30 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
         <span className="text-fg-muted">
           {visible.length} of {data.releases.length}
         </span>
+        <span className="ml-auto" title={installNote(support)}>
+          <button
+            type="button"
+            disabled={support?.available !== true}
+            onClick={() => {
+              setInstalling(true);
+            }}
+            className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+          >
+            Install chart
+          </button>
+        </span>
       </div>
+      {installing && (
+        <Suspense fallback={null}>
+          <HelmInstallDialog
+            namespace={startingNamespace(namespace)}
+            onClose={() => {
+              setInstalling(false);
+            }}
+            onInstalled={bumpHelmEpoch}
+          />
+        </Suspense>
+      )}
       {data.releases.length === 0 && (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
           No Helm releases in this cluster.
@@ -176,6 +207,26 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
       )}
     </div>
   );
+}
+
+function startingNamespace(namespace: string): string {
+  if (namespace === ALL) {
+    return DEFAULT_NAMESPACE;
+  }
+  return namespace;
+}
+
+function installNote(support: { available: boolean; reason?: string } | null): string {
+  if (support === null) {
+    return 'Checking whether helm can be run';
+  }
+  if (support.available) {
+    return 'Install a chart from a configured helm repository';
+  }
+  if (support.reason !== undefined && support.reason !== '') {
+    return support.reason;
+  }
+  return 'helm is not available';
 }
 
 function chartLabel(release: HelmRelease): string {

@@ -23,6 +23,9 @@ import type {
   GraphEdge,
   GraphNode,
   HelmActionResult,
+  HelmChartHit,
+  HelmChartSearch,
+  HelmChartValues,
   HelmChartVersions,
   HelmRelease,
   HelmReleaseDetail,
@@ -650,6 +653,35 @@ export function parseHelmChartVersions(body: unknown): HelmChartVersions {
     chart: asString(item.chart),
     repos: listOf(item.repos, parseHelmRepoVersions),
     error: optionalString(item.error),
+  };
+}
+
+function parseHelmChartHit(item: Record<string, unknown>): HelmChartHit {
+  return {
+    chart: asString(item.chart),
+    version: asString(item.version),
+    description: optionalString(item.description),
+    repo: optionalString(item.repo),
+    url: asString(item.url),
+  };
+}
+
+export function parseHelmChartSearch(body: unknown): HelmChartSearch {
+  const item = asRecord(body);
+  return {
+    query: asString(item.query),
+    hits: listOf(item.hits, parseHelmChartHit),
+    truncated: optionalBoolean(item.truncated),
+    error: optionalString(item.error),
+  };
+}
+
+export function parseHelmChartValues(body: unknown): HelmChartValues {
+  const item = asRecord(body);
+  return {
+    chart: asString(item.chart),
+    version: asString(item.version),
+    values: asString(item.values),
   };
 }
 

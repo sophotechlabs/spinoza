@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { HelmRelease, HelmReleases as Releases } from '../../src/lib/types';
 import HelmReleases from '../../src/components/HelmReleases';
+import { useNamespaceStore } from '../../src/store/namespace';
 
 function release(patch: Partial<HelmRelease> = {}): HelmRelease {
   return {
@@ -251,5 +252,194 @@ describe('HelmReleases', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(fetchMock.mock.calls.length).toBeGreaterThan(before);
+  });
+});
+
+describe('installing from the releases view', () => {
+  function stubWith(support: unknown): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/support')) {
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(support) });
+        }
+        if (url.startsWith('/api/helm/charts')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ query: '', hits: [] }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ releases: [release()] }),
+        });
+      }),
+    );
+  }
+
+  it('offers an install once helm is there', async () => {
+    stubWith({ available: true, binary: 'helm' });
+    render(<HelmReleases selected={null} onSelect={vi.fn()} />);
+
+    const button = await screen.findByRole('button', { name: 'Install chart' });
+
+    await vi.waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+  });
+
+  it('says why it cannot install when helm is missing', async () => {
+    stubWith({ available: false, binary: 'helm', reason: 'helm was not found on PATH' });
+    render(<HelmReleases selected={null} onSelect={vi.fn()} />);
+
+    expect(await screen.findByTitle('helm was not found on PATH')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Install chart' })).toBeDisabled();
+  });
+
+  it('opens the install dialog', async () => {
+    const user = userEvent.setup();
+    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+      this.open = false;
+    };
+    stubWith({ available: true, binary: 'helm' });
+    render(<HelmReleases selected={null} onSelect={vi.fn()} />);
+    const button = await screen.findByRole('button', { name: 'Install chart' });
+    await vi.waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+
+    await user.click(button);
+
+    expect(await screen.findByLabelText('Install a chart')).toBeInTheDocument();
+  });
+});
+
+describe('what the install dialog starts on', () => {
+  function stubReady(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/support')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ available: true, binary: 'helm' }),
+          });
+        }
+        if (url.startsWith('/api/helm/charts')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                query: 'podinfo',
+                hits: [{ chart: 'podinfo', version: '6.15.1', url: 'https://example.com' }],
+              }),
+          });
+        }
+        if (url.startsWith('/api/helm/versions')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                chart: 'podinfo',
+                repos: [{ url: 'https://example.com', versions: ['6.15.1'] }],
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ releases: [release()] }),
+        });
+      }),
+    );
+  }
+
+  async function pickAChart(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText('Search charts'), 'podinfo');
+    await user.click(await screen.findByRole('button', { name: /^podinfo 6.15.1 from/ }));
+    await screen.findByLabelText('Chart version');
+  }
+
+  async function openDialog(user: ReturnType<typeof userEvent.setup>) {
+    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+      this.open = false;
+    };
+    render(<HelmReleases selected={null} onSelect={vi.fn()} />);
+    const button = await screen.findByRole('button', { name: 'Install chart' });
+    await vi.waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+    await user.click(button);
+    return screen.findByLabelText('Install a chart');
+  }
+
+  afterEach(() => {
+    act(() => {
+      useNamespaceStore.getState().reset();
+    });
+  });
+
+  it('starts on the namespace in the picker', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useNamespaceStore.getState().choose('flux-system');
+    });
+    stubReady();
+
+    await openDialog(user);
+    await pickAChart(user);
+
+    expect(screen.getByLabelText('Namespace')).toHaveValue('flux-system');
+  });
+
+  it('starts on the default namespace when every namespace is shown', async () => {
+    const user = userEvent.setup();
+    stubReady();
+
+    await openDialog(user);
+    await pickAChart(user);
+
+    expect(screen.getByLabelText('Namespace')).toHaveValue('default');
+  });
+
+  it('closes again', async () => {
+    const user = userEvent.setup();
+    stubReady();
+    await openDialog(user);
+
+    await user.click(screen.getByRole('button', { name: 'Close the install dialog' }));
+
+    expect(screen.queryByLabelText('Install a chart')).not.toBeInTheDocument();
+  });
+
+  it('says it is still checking before helm has answered', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/support')) {
+          return new Promise(() => undefined);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ releases: [release()] }),
+        });
+      }),
+    );
+
+    render(<HelmReleases selected={null} onSelect={vi.fn()} />);
+
+    expect(await screen.findByTitle('Checking whether helm can be run')).toBeInTheDocument();
   });
 });

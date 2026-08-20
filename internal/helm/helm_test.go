@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -663,11 +664,14 @@ func TestAPartialPayloadIsCompletedFromTheLabels(t *testing.T) {
 }
 
 type stubCharts struct {
+	mu       sync.Mutex
 	versions map[string]string
 	lists    map[string][]string
+	catalog  map[string][]charts.Chart
 	failures map[string]error
 	warmed   []string
 	asked    []string
+	searched []string
 }
 
 func (s *stubCharts) Latest(repo charts.Repo, chart string) string {
@@ -686,6 +690,17 @@ func (s *stubCharts) Versions(ctx context.Context, repo charts.Repo, chart strin
 		return nil, err
 	}
 	return s.lists[unit], nil
+}
+
+func (s *stubCharts) Search(ctx context.Context, repo charts.Repo, query string, limit int) ([]charts.Chart, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searched = append(s.searched, repo.URL+"|"+query)
+	err := s.failures[repo.URL]
+	if err != nil {
+		return nil, err
+	}
+	return s.catalog[repo.URL], nil
 }
 
 func TestListMarksAReleaseThatHasANewerChart(t *testing.T) {

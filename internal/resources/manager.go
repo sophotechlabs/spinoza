@@ -608,6 +608,27 @@ func (m *Manager) HelmVersions(ctx context.Context, chart string) (api.HelmChart
 	return m.helm.Versions(ctx, chart)
 }
 
+func (m *Manager) HelmChartSearch(ctx context.Context, query string) (api.HelmChartSearch, error) {
+	if m.helm == nil {
+		return api.HelmChartSearch{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
+	}
+	return m.helm.SearchCharts(ctx, query)
+}
+
+func (m *Manager) HelmChartValues(ctx context.Context, req helm.ValuesRequest) (api.HelmChartValues, error) {
+	if m.helm == nil {
+		return api.HelmChartValues{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
+	}
+	return m.helm.ChartValues(ctx, req)
+}
+
+func (m *Manager) HelmInstall(ctx context.Context, req helm.InstallRequest) (api.HelmActionResult, error) {
+	if m.helm == nil {
+		return api.HelmActionResult{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
+	}
+	return m.helm.Install(ctx, req)
+}
+
 func (m *Manager) resolveKind(apiVersion, kind string) (helm.Kind, bool) {
 	wantGroup, wantVersion := splitAPIVersion(apiVersion)
 	for _, desc := range m.descriptors() {

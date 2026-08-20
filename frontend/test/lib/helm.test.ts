@@ -4,8 +4,11 @@ import {
   fetchHelmRelease,
   fetchHelmReleases,
   fetchHelmSupport,
+  fetchChartValues,
   fetchHelmVersions,
+  installRelease,
   refOf,
+  searchCharts,
   rollbackRelease,
   uninstallRelease,
   upgradeRelease,
@@ -588,5 +591,176 @@ describe('the helm support hook', () => {
       expect(result.current?.available).toBe(false);
     });
     expect(result.current?.reason).toBe('offline');
+  });
+});
+
+describe('searching for a chart', () => {
+  it('asks the backend with the query', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          query: 'podinfo',
+          hits: [{ chart: 'podinfo', version: '6.15.1', url: 'https://example.com' }],
+          truncated: true,
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await searchCharts('podinfo');
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/api/helm/charts?query=podinfo');
+    expect(got.hits[0].chart).toBe('podinfo');
+    expect(got.truncated).toBe(true);
+  });
+
+  it('carries the failure the server reports', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ message: 'the index is unreachable' }),
+      }),
+    );
+
+    await expect(searchCharts('podinfo')).rejects.toThrow('the index is unreachable');
+  });
+
+  it('falls back to the status when the body says nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 502, json: () => Promise.reject(new Error()) }),
+    );
+
+    await expect(searchCharts('podinfo')).rejects.toThrow(
+      'the chart search failed with status 502',
+    );
+  });
+});
+
+describe('reading the chart defaults', () => {
+  it('names the chart, the repository and the version', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ chart: 'podinfo', version: '6.15.1', values: 'replicaCount: 1\n' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await fetchChartValues('podinfo', 'https://example.com', '6.15.1');
+
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('chart=podinfo');
+    expect(url).toContain('repo=https%3A%2F%2Fexample.com');
+    expect(url).toContain('version=6.15.1');
+    expect(got.values).toBe('replicaCount: 1\n');
+  });
+
+  it('carries the failure the server reports', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ message: 'chart not found' }),
+      }),
+    );
+
+    await expect(fetchChartValues('podinfo', 'https://example.com', '6.15.1')).rejects.toThrow(
+      'chart not found',
+    );
+  });
+
+  it('falls back to the status when the body says nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 502, json: () => Promise.reject(new Error()) }),
+    );
+
+    await expect(fetchChartValues('podinfo', 'https://example.com', '6.15.1')).rejects.toThrow(
+      'the chart values request failed with status 502',
+    );
+  });
+});
+
+describe('installing a chart', () => {
+  const args = {
+    namespace: 'demo',
+    name: 'podinfo',
+    chart: 'podinfo',
+    repo: 'https://example.com',
+    version: '6.15.1',
+    values: 'replicaCount: 2\n',
+    createNamespace: true,
+  };
+
+  it('posts the install as a json body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'install', message: 'installed' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await installRelease(args, false);
+
+    const call = fetchMock.mock.calls[0] as [string, { method: string; body: string }];
+    expect(call[0]).toBe('/api/helm/install');
+    expect(call[1].method).toBe('POST');
+    expect(JSON.parse(call[1].body)).toEqual(args);
+    expect(got.message).toBe('installed');
+  });
+
+  it('asks for a dry run in the query', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'install', dryRun: true, manifest: 'kind: Service\n' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await installRelease(args, true);
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/api/helm/install?dryRun=true');
+    expect(got.manifest).toBe('kind: Service\n');
+  });
+
+  it('carries the typed confirmation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ action: 'install', message: 'installed' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await installRelease(args, false, 'podinfo');
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/api/helm/install?confirm=podinfo');
+  });
+
+  it('carries the failure the server reports', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ message: 'cannot re-use a name' }),
+      }),
+    );
+
+    await expect(installRelease(args, false)).rejects.toThrow('cannot re-use a name');
+  });
+
+  it('falls back to the status when the body says nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 502, json: () => Promise.reject(new Error()) }),
+    );
+
+    await expect(installRelease(args, false)).rejects.toThrow('the install failed with status 502');
   });
 });

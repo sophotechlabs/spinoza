@@ -51,13 +51,20 @@ type Views interface {
 }
 
 type Releases interface {
+	ChartRepos
 	HelmReleases(ctx context.Context) (api.HelmReleases, error)
 	HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error)
 	HelmSupport() api.HelmSupport
-	HelmVersions(ctx context.Context, chart string) (api.HelmChartVersions, error)
 	HelmRollback(ctx context.Context, namespace, name string, revision int64) (api.HelmActionResult, error)
 	HelmUninstall(ctx context.Context, namespace, name string) (api.HelmActionResult, error)
 	HelmUpgrade(ctx context.Context, req helm.UpgradeRequest) (api.HelmActionResult, error)
+}
+
+type ChartRepos interface {
+	HelmVersions(ctx context.Context, chart string) (api.HelmChartVersions, error)
+	HelmChartSearch(ctx context.Context, query string) (api.HelmChartSearch, error)
+	HelmChartValues(ctx context.Context, req helm.ValuesRequest) (api.HelmChartValues, error)
+	HelmInstall(ctx context.Context, req helm.InstallRequest) (api.HelmActionResult, error)
 }
 
 type Changes interface {

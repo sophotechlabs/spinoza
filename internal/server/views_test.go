@@ -33,6 +33,36 @@ type stubViews struct {
 	versions      api.HelmChartVersions
 	versionsAsked []string
 	upgrades      []helm.UpgradeRequest
+
+	search      api.HelmChartSearch
+	searchAsked []string
+	chartValues api.HelmChartValues
+	valuesAsked []helm.ValuesRequest
+	installs    []helm.InstallRequest
+}
+
+func (s *stubViews) HelmChartSearch(_ context.Context, query string) (api.HelmChartSearch, error) {
+	s.searchAsked = append(s.searchAsked, query)
+	if s.helmErr != nil {
+		return api.HelmChartSearch{}, s.helmErr
+	}
+	return s.search, nil
+}
+
+func (s *stubViews) HelmChartValues(_ context.Context, req helm.ValuesRequest) (api.HelmChartValues, error) {
+	s.valuesAsked = append(s.valuesAsked, req)
+	if s.helmErr != nil {
+		return api.HelmChartValues{}, s.helmErr
+	}
+	return s.chartValues, nil
+}
+
+func (s *stubViews) HelmInstall(_ context.Context, req helm.InstallRequest) (api.HelmActionResult, error) {
+	s.installs = append(s.installs, req)
+	if s.actionErr != nil {
+		return api.HelmActionResult{}, s.actionErr
+	}
+	return s.action, nil
 }
 
 func (s *stubViews) HelmRelease(_ context.Context, namespace, name string) (api.HelmReleaseDetail, error) {

@@ -51,7 +51,7 @@ func (s *Service) Upgrade(ctx context.Context, req UpgradeRequest) (api.HelmActi
 		return api.HelmActionResult{}, runErr
 	}
 	if req.DryRun {
-		return dryRunResult(req, out)
+		return renderResult(ActionUpgrade, req.Chart, req.Version, true, out)
 	}
 	return api.HelmActionResult{
 		Action:  ActionUpgrade,
@@ -108,7 +108,13 @@ func writeValues(values string) (string, error) {
 }
 
 func upgradeArgs(req UpgradeRequest, valuesFile string) []string {
-	args := []string{"upgrade", req.Name, chartRef(req), "--namespace", req.Namespace, "--version", req.Version}
+	args := []string{
+		"upgrade",
+		req.Name,
+		chartRef(req.Chart, req.RepoURL, req.OCI),
+		"--namespace", req.Namespace,
+		"--version", req.Version,
+	}
 	if !req.OCI {
 		args = append(args, "--repo", req.RepoURL)
 	}
@@ -119,23 +125,30 @@ func upgradeArgs(req UpgradeRequest, valuesFile string) []string {
 	return args
 }
 
-func chartRef(req UpgradeRequest) string {
-	if req.OCI {
-		return strings.TrimSuffix(req.RepoURL, "/") + "/" + req.Chart
+func chartRef(chart, repoURL string, oci bool) string {
+	if oci {
+		return strings.TrimSuffix(repoURL, "/") + "/" + chart
 	}
-	return req.Chart
+	return chart
 }
 
-func dryRunResult(req UpgradeRequest, out string) (api.HelmActionResult, error) {
+func renderResult(action, chart, version string, onCluster bool, out string) (api.HelmActionResult, error) {
 	var rendered payload
 	err := json.Unmarshal([]byte(out), &rendered)
 	if err != nil {
 		return api.HelmActionResult{}, fmt.Errorf("could not read helm's dry-run output: %w", err)
 	}
 	return api.HelmActionResult{
-		Action:   ActionUpgrade,
+		Action:   action,
 		DryRun:   true,
 		Manifest: rendered.Manifest,
-		Message:  fmt.Sprintf("server render of %s %s", req.Chart, req.Version),
+		Message:  fmt.Sprintf("%s render of %s %s", renderedBy(onCluster), chart, version),
 	}, nil
+}
+
+func renderedBy(onCluster bool) string {
+	if onCluster {
+		return "server"
+	}
+	return "local"
 }

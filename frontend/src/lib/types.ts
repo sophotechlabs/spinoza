@@ -544,6 +544,27 @@ export interface HelmChartVersions {
   error?: string;
 }
 
+export interface HelmChartHit {
+  chart: string;
+  version: string;
+  description?: string;
+  repo?: string;
+  url: string;
+}
+
+export interface HelmChartSearch {
+  query: string;
+  hits: HelmChartHit[];
+  truncated?: boolean;
+  error?: string;
+}
+
+export interface HelmChartValues {
+  chart: string;
+  version: string;
+  values: string;
+}
+
 export interface FluxGroup {
   name: string;
   ready: number;

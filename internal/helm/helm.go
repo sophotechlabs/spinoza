@@ -43,6 +43,7 @@ type Charts interface {
 	Latest(repo charts.Repo, chart string) string
 	Warm(repo charts.Repo, chart string)
 	Versions(ctx context.Context, repo charts.Repo, chart string) ([]string, error)
+	Search(ctx context.Context, repo charts.Repo, query string, limit int) ([]charts.Chart, error)
 }
 
 type Service struct {
