@@ -14,6 +14,7 @@ const KEYS = [
   'spinoza.sidebar.v1',
   'spinoza.settings.v1',
   'spinoza.painted.v1',
+  'spinoza.nodeshell.v1',
 ];
 
 declare global {
@@ -100,7 +101,7 @@ export function hydrate(): void {
   const local = fromBrowser();
   replace(local);
   if (local.size > 0) {
-    save();
+    void save();
   }
 }
 
@@ -131,20 +132,30 @@ function schedule(): void {
   }
   timer = setTimeout(() => {
     timer = null;
-    save();
+    void save();
   }, SAVE_DELAY_MS);
 }
 
-export function save(): void {
+export function save(): Promise<void> {
   if (!saving) {
-    return;
+    return Promise.resolve();
   }
   const settings: Settings = { values: Object.fromEntries(cache()) };
-  void request(SETTINGS_PATH, {
+  return request(SETTINGS_PATH, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
-  }).catch(() => undefined);
+  })
+    .then(() => undefined)
+    .catch(() => undefined);
+}
+
+export function flush(): Promise<void> {
+  if (timer !== null) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  return save();
 }
 
 export function resetStored(): void {

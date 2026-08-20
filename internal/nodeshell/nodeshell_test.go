@@ -24,7 +24,7 @@ func running(name string) *corev1.Pod {
 func service(t *testing.T, enabled bool, objs ...runtime.Object) (*Service, *k8sfake.Clientset) {
 	t.Helper()
 	cs := k8sfake.NewClientset(objs...)
-	return NewService(cs, "busybox:1.37", "", enabled), cs
+	return NewService(cs, "busybox:1.37", "", func() bool { return enabled }), cs
 }
 
 // the fake does not fill GenerateName, so name the pod and let the tracker keep it.
@@ -63,6 +63,34 @@ func TestItStaysOffUntilItIsTurnedOn(t *testing.T) {
 	}
 	if support.Reason == "" {
 		t.Fatal("an off node shell said nothing about how to turn it on")
+	}
+}
+
+func TestTurningItOnIsSeenWithoutARestart(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	allow(cs, true)
+	on := false
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return on })
+
+	before := svc.Support(t.Context(), "p-mk1")
+	on = true
+	after := svc.Support(t.Context(), "p-mk1")
+
+	if before.Enabled {
+		t.Fatal("it was enabled before anything turned it on")
+	}
+	if !after.Enabled || !after.Allowed {
+		t.Fatalf("support = %+v, want it on and allowed", after)
+	}
+}
+
+func TestNoWayToAskLeavesItOff(t *testing.T) {
+	svc := NewService(k8sfake.NewClientset(), "busybox:1.37", "", nil)
+
+	support := svc.Support(t.Context(), "p-mk1")
+
+	if support.Enabled {
+		t.Fatal("a service with nothing to ask reported itself on")
 	}
 }
 

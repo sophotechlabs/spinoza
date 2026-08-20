@@ -38,25 +38,29 @@ type Service struct {
 	cs        kubernetes.Interface
 	image     string
 	namespace string
-	enabled   bool
+	allow     func() bool
 }
 
-func NewService(cs kubernetes.Interface, image, namespace string, enabled bool) *Service {
+func NewService(cs kubernetes.Interface, image, namespace string, allow func() bool) *Service {
 	if namespace == "" {
 		namespace = DefaultNamespace
 	}
-	return &Service{cs: cs, image: image, namespace: namespace, enabled: enabled}
+	if allow == nil {
+		allow = func() bool { return false }
+	}
+	return &Service{cs: cs, image: image, namespace: namespace, allow: allow}
 }
 
 func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport {
+	enabled := s.allow()
 	support := api.NodeShellSupport{
 		Node:      node,
-		Enabled:   s.enabled,
+		Enabled:   enabled,
 		Image:     s.image,
 		Namespace: s.namespace,
 	}
-	if !s.enabled {
-		support.Reason = "node shells are off; turn them on in settings, or start spinoza with --node-shell"
+	if !enabled {
+		support.Reason = "node shells are off; turn them on in Settings under Cluster, or start spinoza with --node-shell"
 		return support
 	}
 	if node == "" {
@@ -88,7 +92,7 @@ func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport
 }
 
 func (s *Service) Start(ctx context.Context, node string) (api.NodeShellSession, error) {
-	if !s.enabled {
+	if !s.allow() {
 		return api.NodeShellSession{}, fmt.Errorf("%w: node shells are off", api.ErrInternal)
 	}
 	if node == "" {

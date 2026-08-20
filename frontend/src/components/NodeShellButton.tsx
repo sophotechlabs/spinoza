@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { NodeShellSupport } from '../lib/types';
 import { fetchNodeShellSupport } from '../lib/exec';
 import { useTerminalsStore } from '../store/terminals';
+import { useNodeShell } from '../store/settings';
 import { revealPanel } from '../store/panels';
 
 interface NodeShellButtonProps {
@@ -24,6 +25,7 @@ function why(support: NodeShellSupport | null): string {
 export default function NodeShellButton({ node }: NodeShellButtonProps) {
   const [support, setSupport] = useState<NodeShellSupport | null>(null);
   const openNode = useTerminalsStore((state) => state.openNode);
+  const turnedOn = useNodeShell();
 
   useEffect(() => {
     let live = true;
@@ -38,7 +40,7 @@ export default function NodeShellButton({ node }: NodeShellButtonProps) {
     return () => {
       live = false;
     };
-  }, [node]);
+  }, [node, turnedOn]);
 
   const ready = support !== null && support.enabled && support.allowed;
 

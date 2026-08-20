@@ -119,7 +119,9 @@ export async function fetchContexts(): Promise<ContextList> {
   return normalize((await response.json()) as WireContexts);
 }
 
-export async function switchContext(entry: ContextEntry): Promise<ContextList> {
+export async function switchContext(
+  entry: Pick<ContextEntry, 'kubeconfig' | 'name'>,
+): Promise<ContextList> {
   const params = new URLSearchParams({ kubeconfig: entry.kubeconfig, name: entry.name });
   const response = await request(`/api/contexts?${params.toString()}`, { method: 'POST' });
   if (!response.ok) {

@@ -7,6 +7,7 @@ import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '
 import {
   useLogView,
   useNamespaceStart,
+  useNodeShell,
   useScreenReader,
   useSettingsStore,
 } from '../store/settings';
@@ -106,6 +107,8 @@ export default function SettingsDialog({
   const cluster = useContextList().current.name;
   const start = useNamespaceStart(cluster);
   const setStart = useSettingsStore((state) => state.setNamespaceStart);
+  const nodeShell = useNodeShell();
+  const setNodeShell = useSettingsStore((state) => state.setNodeShell);
   const openOn = useNamespaceStore((state) => state.reset);
   const resetPanels = usePanelsStore((state) => state.reset);
   const themes = useThemes();
@@ -388,23 +391,38 @@ export default function SettingsDialog({
             </Row>
           )}
           {section === 'Cluster' && (
-            <Row label="Open on" hint={openOnHint(cluster)}>
-              <select
-                aria-label="Namespace to open on"
-                value={start}
-                onChange={(event) => {
-                  setStart(cluster, event.target.value as NamespaceStart);
-                  openOn();
-                }}
-                className="rounded border border-edge-strong bg-surface-raised px-2 py-0.5 text-fg"
+            <>
+              <Row label="Open on" hint={openOnHint(cluster)}>
+                <select
+                  aria-label="Namespace to open on"
+                  value={start}
+                  onChange={(event) => {
+                    setStart(cluster, event.target.value as NamespaceStart);
+                    openOn();
+                  }}
+                  className="rounded border border-edge-strong bg-surface-raised px-2 py-0.5 text-fg"
+                >
+                  {NAMESPACE_STARTS.map((option) => (
+                    <option key={option} value={option}>
+                      {startLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+              <Row
+                label="Node shell"
+                hint="Offer a root shell on a node. It runs a privileged pod on that node for as long as the shell is open, so it needs rights to create one."
               >
-                {NAMESPACE_STARTS.map((option) => (
-                  <option key={option} value={option}>
-                    {startLabel(option)}
-                  </option>
-                ))}
-              </select>
-            </Row>
+                <input
+                  type="checkbox"
+                  aria-label="Node shell"
+                  checked={nodeShell}
+                  onChange={(event) => {
+                    void setNodeShell(event.target.checked);
+                  }}
+                />
+              </Row>
+            </>
           )}
           {section === 'Panels' && (
             <Row label="Dock layout" hint="Put every panel and dock back where it started.">

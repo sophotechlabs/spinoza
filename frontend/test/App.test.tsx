@@ -341,6 +341,7 @@ import { usePanelsStore } from '../src/store/panels';
 import { ALL, useNamespaceStore } from '../src/store/namespace';
 import { useSettingsStore } from '../src/store/settings';
 import { notifyOk, useToastsStore } from '../src/store/toasts';
+import { bumpClusterEpoch } from '../src/store/cluster';
 import { setUnsaved } from '../src/lib/unsaved';
 import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
 
@@ -448,6 +449,7 @@ function stubFetch(pods?: number): void {
           json: () =>
             Promise.resolve({
               current: { kubeconfig: '', name: 'kind-dev' },
+              protection: 'open',
               kubeconfigs: [
                 {
                   label: '/home/arch/.kube/config',
@@ -1106,6 +1108,213 @@ describe('the address bar', () => {
       '',
     );
     expect(await screen.findByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+  });
+
+  it('switches to the cluster a link names, and keeps what it selected', async () => {
+    let current = 'kind-dev';
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+      if (url.startsWith('/api/contexts')) {
+        if (init?.method === 'POST') {
+          current = 'other-cluster';
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              current: { kubeconfig: '', name: current },
+              kubeconfigs: [],
+              protection: 'open',
+            }),
+        });
+      }
+      if (url.startsWith('/api/object')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(objectDetail) });
+      }
+      if (url.startsWith('/api/events')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    openAt('#context=other-cluster&version=v1&resource=pods&kind=Pod&namespace=prod&name=pod-a');
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#0', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+
+    render(<App />);
+
+    expect(await screen.findByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+    expect(window.location.hash).toContain('context=other-cluster');
+    expect(window.location.hash).toContain('name=pod-a');
+    const posts = fetchMock.mock.calls.filter(
+      (call) => (call[1] as { method?: string } | undefined)?.method === 'POST',
+    );
+    expect(posts).toHaveLength(1);
+    expect(posts[0][0]).toContain('name=other-cluster');
+  });
+
+  it('says why, and follows the cluster it has, when the link names an unreachable one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+        if (url.startsWith('/api/contexts') && init?.method === 'POST') {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: () => Promise.resolve({ message: 'context "other-cluster" does not exist' }),
+          });
+        }
+        if (url.startsWith('/api/contexts')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                current: { kubeconfig: '', name: 'kind-dev' },
+                kubeconfigs: [],
+                protection: 'open',
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    openAt('#context=other-cluster&version=v1&resource=pods&kind=Pod&namespace=prod&name=pod-a');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=kind-dev');
+    });
+    expect(window.location.hash).not.toContain('name=pod-a');
+    expect(await screen.findAllByText(/does not exist/)).not.toHaveLength(0);
+  });
+
+  it('asks only once while the switch is still going', async () => {
+    let release: ((value: unknown) => void) | null = null;
+    const posted = vi.fn();
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+      if (url.startsWith('/api/contexts') && init?.method === 'POST') {
+        posted();
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      }
+      if (url.startsWith('/api/contexts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              current: { kubeconfig: '', name: 'kind-dev' },
+              kubeconfigs: [],
+              protection: 'open',
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    openAt('#context=other-cluster&version=v1&resource=pods&kind=Pod');
+    render(<App />);
+    await waitFor(() => {
+      expect(posted).toHaveBeenCalledTimes(1);
+    });
+
+    goBackTo('#context=other-cluster&version=v1&resource=pods&kind=Pod&namespace=prod');
+
+    expect(posted).toHaveBeenCalledTimes(1);
+    act(() => {
+      release?.({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            current: { kubeconfig: '', name: 'other-cluster' },
+            kubeconfigs: [],
+            protection: 'open',
+          }),
+      });
+    });
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=other-cluster');
+    });
+  });
+
+  it('falls back to a plain reason when the switch fails without one', async () => {
+    const rejectNonError = vi.fn<() => Promise<never>>().mockRejectedValue('no reason given');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+        if (url.startsWith('/api/contexts') && init?.method === 'POST') {
+          return rejectNonError();
+        }
+        if (url.startsWith('/api/contexts')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                current: { kubeconfig: '', name: 'kind-dev' },
+                kubeconfigs: [],
+                protection: 'open',
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    openAt('#context=other-cluster&version=v1&resource=pods&kind=Pod');
+
+    render(<App />);
+
+    expect(await screen.findAllByText(/switching context failed/)).not.toHaveLength(0);
+  });
+
+  it('follows a cluster that changed underneath it, without switching back', async () => {
+    let current = 'kind-dev';
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/contexts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              current: { kubeconfig: '', name: current },
+              kubeconfigs: [],
+              protection: 'open',
+            }),
+        });
+      }
+      if (url.startsWith('/api/object')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(objectDetail) });
+      }
+      if (url.startsWith('/api/events')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    openAt('#context=kind-dev&version=v1&resource=pods&kind=Pod&namespace=prod&name=pod-a');
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#0', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    render(<App />);
+    await screen.findByTestId('inspect-target');
+
+    current = 'other-cluster';
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=other-cluster');
+    });
+    expect(window.location.hash).not.toContain('name=pod-a');
+    expect(
+      fetchMock.mock.calls.filter(
+        (call) => (call[1] as { method?: string } | undefined)?.method === 'POST',
+      ),
+    ).toHaveLength(0);
   });
 
   it('keeps the resource but drops an object from another cluster', async () => {

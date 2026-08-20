@@ -34,6 +34,7 @@ type settings struct {
 	logLevel    slog.Level
 	showVersion bool
 	pprof       bool
+	nodeShell   bool
 	cluster     cluster.Options
 }
 
@@ -46,7 +47,7 @@ func parseFlags(args []string) (settings, error) {
 	showVersion := flags.Bool("version", false, "print the version and exit")
 	profiler := flags.Bool("pprof", envBool("SPINOZA_PPROF"), "mount net/http/pprof under /debug/pprof, behind the same auth; off by default")
 	debugImage := flags.String("debug-image", envOr("SPINOZA_DEBUG_IMAGE", debugcontainer.DefaultImage), "image used for debug containers")
-	nodeShell := flags.Bool("node-shell", envOr("SPINOZA_NODE_SHELL", "") == "true", "allow a root shell on a node, which creates a privileged pod")
+	nodeShell := flags.Bool("node-shell", envBool("SPINOZA_NODE_SHELL"), "allow a root shell on a node, which creates a privileged pod")
 	nodeShellImage := flags.String("node-shell-image", envOr("SPINOZA_NODE_SHELL_IMAGE", debugcontainer.DefaultImage), "image the node shell pod runs")
 	nodeShellNamespace := flags.String("node-shell-namespace", envOr("SPINOZA_NODE_SHELL_NAMESPACE", nodeshell.DefaultNamespace), "namespace the node shell pod is created in")
 	kubectlBinary := flags.String("kubectl", envOr("SPINOZA_KUBECTL", debugcontainer.DefaultBinary), "kubectl binary used to create debug containers")
@@ -78,9 +79,9 @@ func parseFlags(args []string) (settings, error) {
 		logLevel:    level,
 		showVersion: *showVersion,
 		pprof:       *profiler,
+		nodeShell:   *nodeShell,
 		cluster: cluster.Options{
 			DebugImage:       *debugImage,
-			NodeShell:        *nodeShell,
 			NodeShellImage:   *nodeShellImage,
 			NodeShellNS:      *nodeShellNamespace,
 			KubectlBinary:    *kubectlBinary,

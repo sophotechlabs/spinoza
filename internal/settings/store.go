@@ -15,6 +15,10 @@ const dirMode = 0o700
 
 const fileMode = 0o600
 
+const NodeShellKey = "spinoza.nodeshell.v1"
+
+const enabled = "on"
+
 type state struct {
 	Values map[string]string `json:"values"`
 }
@@ -59,6 +63,12 @@ func (s *Store) All() map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return maps.Clone(s.values)
+}
+
+func (s *Store) On(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.values[key] == enabled
 }
 
 func (s *Store) Replace(values map[string]string) error {

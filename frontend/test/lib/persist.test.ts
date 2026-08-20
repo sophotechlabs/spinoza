@@ -175,9 +175,7 @@ describe('keeping settings', () => {
     startSaving();
     writeStored('spinoza.theme.v1', '"nord"');
 
-    save();
-    await Promise.resolve();
-    await Promise.resolve();
+    await save();
 
     expect(readStored('spinoza.theme.v1')).toBe('"nord"');
   });
@@ -186,7 +184,7 @@ describe('keeping settings', () => {
     const fetchMock = stubFetch();
     writeStored('spinoza.theme.v1', '"nord"');
 
-    save();
+    void save();
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

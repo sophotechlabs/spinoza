@@ -8,6 +8,8 @@ import { useContextsStore } from '../../src/store/contexts';
 import { usePanelsStore } from '../../src/store/panels';
 import { useNamespaceStore } from '../../src/store/namespace';
 import { DEFAULT_PLACEMENT } from '../../src/lib/panels';
+import { readStored, resetStored, startSaving, stopSaving } from '../../src/lib/persist';
+import { NODE_SHELL_KEY } from '../../src/lib/settings';
 
 const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
   this.open = true;
@@ -28,8 +30,12 @@ afterEach(() => {
   act(() => {
     useThemeStore.getState().setPreference('dark');
     useSettingsStore.getState().setLogView('pretty');
+    useSettingsStore.setState({ nodeShell: false });
     usePanelsStore.getState().reset();
   });
+  vi.unstubAllGlobals();
+  stopSaving();
+  resetStored();
   window.localStorage.clear();
 });
 
@@ -154,6 +160,37 @@ describe('the settings dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Cluster' }));
 
     expect(screen.getByLabelText('Namespace to open on')).toHaveValue('default');
+  });
+
+  it('turns node shells on, and waits for the server to have it', async () => {
+    const user = userEvent.setup();
+    startSaving();
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ values: {} }) }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+    await user.click(screen.getByLabelText('Node shell'));
+
+    await waitFor(() => {
+      expect(useSettingsStore.getState().nodeShell).toBe(true);
+    });
+    expect(readStored(NODE_SHELL_KEY)).toBe('on');
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it('shows node shells as on when they already are', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useSettingsStore.setState({ nodeShell: true });
+    });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+
+    expect(screen.getByLabelText('Node shell')).toBeChecked();
   });
 
   it('puts the docks back where they started', async () => {

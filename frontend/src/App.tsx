@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   FluxResource,
   GraphNode,
@@ -10,7 +10,8 @@ import type {
   View,
 } from './lib/types';
 import { offline, useResourceFeed } from './lib/feed';
-import { fetchContexts } from './lib/contexts';
+import { fetchContexts, switchContext } from './lib/contexts';
+import { useContextsStore } from './store/contexts';
 import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
 import type { Selection } from './lib/refs';
 import { refFromFlux, refFromNode, refFromRow, useRowForRef } from './lib/refs';
@@ -32,7 +33,7 @@ import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
 import { clearTerminals } from './store/terminals';
 import { revealDetails, revealPanel } from './store/panels';
-import { askToast, notifyOk } from './store/toasts';
+import { askToast, notifyError, notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -75,6 +76,19 @@ function pickerScope(view: View, scope: boolean | null): boolean | null {
 const FIRST_SUB_ID = 'main#0';
 const MAIN_ID = 'content';
 
+function switchFailed(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return 'switching context failed';
+}
+
+async function adoptContext(name: string): Promise<string> {
+  const found = await switchContext({ name, kubeconfig: '' });
+  useContextsStore.getState().setList(found);
+  return found.current.name;
+}
+
 function staleClass(stale: boolean): string {
   if (stale) {
     return 'opacity-60';
@@ -88,6 +102,8 @@ export default function App() {
   const contextEpoch = useClusterEpoch();
   const [contextName, setContextName] = useState('');
   const subSeq = useRef(0);
+  const adopted = useRef(false);
+  const adopting = useRef(false);
   const [subId, setSubId] = useState(FIRST_SUB_ID);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moved, setMoved] = useState(false);
@@ -112,7 +128,7 @@ export default function App() {
   const categories = useCategories();
   const scope = useMemo(() => kindScope(categories, route.resource), [categories, route.resource]);
 
-  const { subscribe, unsubscribe, loadMore, subscribeLogs, unsubscribeLogs } = feed;
+  const { subscribe, unsubscribe, loadMore, subscribeLogs, unsubscribeLogs, reconnect } = feed;
   const namespace = useNamespace();
   const chooseNamespace = useNamespaceStore((state) => state.choose);
   const openOnStart = useNamespaceStore((state) => state.openOn);
@@ -150,19 +166,56 @@ export default function App() {
     };
   }, [contextEpoch]);
 
+  const forgetCluster = useCallback(() => {
+    clearRecents();
+    clearHistory();
+    clearTerminals();
+    clearForwards();
+    clearFilters();
+    clearCatalog();
+    resetNamespace();
+    bumpClusterEpoch();
+    reconnect();
+  }, [reconnect, resetNamespace]);
+
   useEffect(() => {
     if (contextName === '') {
       return;
     }
     if (route.context === contextName) {
+      adopted.current = true;
       return;
     }
     if (route.context === '') {
       replace({ ...route, context: contextName });
       return;
     }
+    if (adopting.current) {
+      return;
+    }
+    if (!adopted.current) {
+      adopted.current = true;
+      adopting.current = true;
+      adoptContext(route.context)
+        .then((name) => {
+          setContextName(name);
+          if (name === route.context) {
+            forgetCluster();
+            return;
+          }
+          replace({ ...route, context: name, selection: null, release: null });
+        })
+        .catch((err: unknown) => {
+          notifyError(`Switching to ${route.context}: ${switchFailed(err)}`);
+          replace({ ...route, context: contextName, selection: null, release: null });
+        })
+        .finally(() => {
+          adopting.current = false;
+        });
+      return;
+    }
     replace({ ...route, context: contextName, selection: null, release: null });
-  }, [contextName, route, replace]);
+  }, [contextName, route, replace, forgetCluster]);
 
   useEffect(() => {
     document.title = documentTitle(route);
@@ -274,15 +327,7 @@ export default function App() {
   function handleContextChanged() {
     navigate({ context: '', view: route.view, resource: null, selection: null, release: null });
     setContextName('');
-    clearRecents();
-    clearHistory();
-    clearTerminals();
-    clearForwards();
-    clearFilters();
-    clearCatalog();
-    resetNamespace();
-    bumpClusterEpoch();
-    feed.reconnect();
+    forgetCluster();
   }
 
   function handleSelectView(next: View) {

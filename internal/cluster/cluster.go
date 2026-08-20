@@ -15,7 +15,7 @@ import (
 
 type Options struct {
 	DebugImage       string
-	NodeShell        bool
+	NodeShell        func() bool
 	NodeShellImage   string
 	NodeShellNS      string
 	KubectlBinary    string

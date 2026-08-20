@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NodeShellButton from '../../src/components/NodeShellButton';
 import { useTerminalsStore } from '../../src/store/terminals';
+import { useSettingsStore } from '../../src/store/settings';
 
 function support(overrides: Record<string, unknown> = {}) {
   return {
@@ -25,6 +26,7 @@ function stub(body: unknown, ok = true) {
 afterEach(() => {
   vi.unstubAllGlobals();
   useTerminalsStore.getState().reset();
+  useSettingsStore.setState({ nodeShell: false });
 });
 
 describe('the node shell button', () => {
@@ -88,6 +90,21 @@ describe('the node shell button', () => {
 
     expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
     expect(useTerminalsStore.getState().sessions).toHaveLength(0);
+  });
+
+  it('asks again when the setting turns node shells on', async () => {
+    stub(support({ enabled: false, allowed: false, reason: 'node shells are off' }));
+    render(<NodeShellButton node="p-mk1" />);
+    await screen.findByTitle('node shells are off');
+
+    stub(support());
+    act(() => {
+      useSettingsStore.setState({ nodeShell: true });
+    });
+
+    await vi.waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Node shell' })).toBeEnabled();
+    });
   });
 
   it('asks again when another node is selected', async () => {

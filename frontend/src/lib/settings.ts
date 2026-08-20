@@ -1,4 +1,4 @@
-import { readStored, writeStored } from './persist';
+import { flush, readStored, writeStored } from './persist';
 export const LOG_VIEWS = ['pretty', 'raw'] as const;
 
 export type LogView = (typeof LOG_VIEWS)[number];
@@ -80,4 +80,23 @@ export function readSettings(): Settings {
 
 export function writeSettings(settings: Settings): void {
   writeStored(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+export const NODE_SHELL_KEY = 'spinoza.nodeshell.v1';
+
+const ON = 'on';
+
+const OFF = 'off';
+
+export function readNodeShell(): boolean {
+  return readStored(NODE_SHELL_KEY) === ON;
+}
+
+export function writeNodeShell(enabled: boolean): Promise<void> {
+  if (enabled) {
+    writeStored(NODE_SHELL_KEY, ON);
+  } else {
+    writeStored(NODE_SHELL_KEY, OFF);
+  }
+  return flush();
 }

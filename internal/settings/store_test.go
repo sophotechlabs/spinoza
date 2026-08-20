@@ -29,6 +29,24 @@ func TestAFreshStoreHasNothingInIt(t *testing.T) {
 	}
 }
 
+func TestOnlyTheWordOnTurnsAKeyOn(t *testing.T) {
+	store := openAt(t, tempPath(t))
+	err := store.Replace(map[string]string{NodeShellKey: "on", "other": "true"})
+	if err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+
+	if !store.On(NodeShellKey) {
+		t.Fatal(`a key holding "on" reads as off`)
+	}
+	if store.On("other") {
+		t.Fatal(`a key holding "true" reads as on`)
+	}
+	if store.On("missing") {
+		t.Fatal("a key that was never written reads as on")
+	}
+}
+
 func TestWhatIsWrittenComesBack(t *testing.T) {
 	path := tempPath(t)
 	store := openAt(t, path)

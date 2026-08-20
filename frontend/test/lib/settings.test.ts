@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readStored } from '../../src/lib/persist';
-import { SETTINGS_KEY, parseSettings, readSettings, writeSettings } from '../../src/lib/settings';
+import { readStored, resetStored, startSaving, stopSaving } from '../../src/lib/persist';
+import {
+  NODE_SHELL_KEY,
+  SETTINGS_KEY,
+  parseSettings,
+  readNodeShell,
+  readSettings,
+  writeNodeShell,
+  writeSettings,
+} from '../../src/lib/settings';
 import type { Settings } from '../../src/lib/settings';
 
 const base: Settings = {
@@ -12,6 +20,9 @@ const base: Settings = {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  stopSaving();
+  resetStored();
   window.localStorage.clear();
 });
 
@@ -98,5 +109,50 @@ describe('the namespace to open on', () => {
   it('has no answers to read out of a broken map', () => {
     expect(parseSettings('{"namespaceStarts":"nope"}').namespaceStarts).toEqual({});
     expect(parseSettings('{"namespaceStarts":null}').namespaceStarts).toEqual({});
+  });
+});
+
+describe('the node shell setting', () => {
+  it('is off until something turns it on', () => {
+    expect(readNodeShell()).toBe(false);
+  });
+
+  it('is read back on, and written where the server looks for it', async () => {
+    startSaving();
+
+    await writeNodeShell(true);
+
+    expect(readStored(NODE_SHELL_KEY)).toBe('on');
+    expect(readNodeShell()).toBe(true);
+  });
+
+  it('says off in as many words when it is turned back off', async () => {
+    startSaving();
+    await writeNodeShell(true);
+
+    await writeNodeShell(false);
+
+    expect(readStored(NODE_SHELL_KEY)).toBe('off');
+    expect(readNodeShell()).toBe(false);
+  });
+
+  it('reaches the server before it resolves', async () => {
+    const fetchMock = vi.fn((url: string, init?: { body?: string }) => {
+      void url;
+      void init;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ values: {} }),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    startSaving();
+
+    await writeNodeShell(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const sent = fetchMock.mock.calls[0][1]?.body ?? '{}';
+    expect(JSON.parse(sent)).toMatchObject({ values: { [NODE_SHELL_KEY]: 'on' } });
   });
 });

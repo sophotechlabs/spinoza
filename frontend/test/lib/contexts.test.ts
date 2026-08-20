@@ -129,7 +129,7 @@ describe('switchContext', () => {
   it('names the context and the kubeconfig it came from', async () => {
     const fetchMock = stub(list);
 
-    await switchContext({ cluster: 'work', kubeconfig: '/work.yaml', name: 'beta', value: '1.0' });
+    await switchContext({ kubeconfig: '/work.yaml', name: 'beta' });
 
     expect(fetchMock.mock.calls[0][0]).toContain('kubeconfig=%2Fwork.yaml');
     expect(fetchMock.mock.calls[0][0]).toContain('name=beta');
@@ -138,9 +138,7 @@ describe('switchContext', () => {
   it('reports a switch the backend refused', async () => {
     stub({ message: 'context "gone" does not exist' }, false, 400);
 
-    await expect(
-      switchContext({ cluster: 'c', kubeconfig: '', name: 'gone', value: '0.0' }),
-    ).rejects.toThrow('does not exist');
+    await expect(switchContext({ kubeconfig: '', name: 'gone' })).rejects.toThrow('does not exist');
   });
 });
 
