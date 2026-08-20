@@ -26,7 +26,8 @@ vi.mock('@monaco-editor/react', () => ({
 import InspectYaml from '../../src/components/InspectYaml';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
-import { useAccessStore } from '../../src/store/access';
+import { accessKey, useAccessStore } from '../../src/store/access';
+import { EMPTY_CONTEXTS } from '../../src/store/contexts';
 import { hasUnsaved, setUnsaved } from '../../src/lib/unsaved';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
@@ -541,10 +542,14 @@ describe('InspectYaml on a protected cluster', () => {
 });
 
 describe('editing and deleting what the cluster would refuse', () => {
-  const deploymentKey = 'group=apps&version=v1&resource=deployments&namespace=flux-system&name=web';
+  const deploymentKey = accessKey('p-mk1', target);
 
   beforeEach(() => {
     useAccessStore.getState().forget();
+    useContextsStore.getState().setList({
+      ...EMPTY_CONTEXTS,
+      current: { kubeconfig: '', name: 'p-mk1' },
+    });
   });
 
   afterEach(() => {

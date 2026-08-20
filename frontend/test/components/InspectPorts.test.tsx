@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import InspectPorts from '../../src/components/InspectPorts';
 import { useForwardsStore } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
-import { useAccessStore } from '../../src/store/access';
+import { accessKey, useAccessStore } from '../../src/store/access';
+import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 import type { ObjectPort, ObjectRef, PortForward } from '../../src/lib/types';
 
 const target: ObjectRef = {
@@ -242,10 +243,14 @@ describe('InspectPorts', () => {
 });
 
 describe('a forward the cluster would refuse', () => {
-  const podKey = 'group=&version=v1&resource=pods&namespace=flux-system&name=web';
+  const podKey = accessKey('p-mk1', target);
 
   beforeEach(() => {
     useAccessStore.getState().forget();
+    useContextsStore.getState().setList({
+      ...EMPTY_CONTEXTS,
+      current: { kubeconfig: '', name: 'p-mk1' },
+    });
   });
 
   afterEach(() => {

@@ -3,6 +3,7 @@ import type { ObjectRef } from '../lib/types';
 import { pollReconcile, runFluxAction } from '../lib/fluxActions';
 import type { FluxAction, ReconcileProgress, ReconcileState } from '../lib/fluxActions';
 import Announce from './Announce';
+import { useRefusal } from '../store/access';
 
 interface InspectActionsProps {
   target: ObjectRef;
@@ -99,7 +100,8 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
     }
   }
 
-  const disabled = busy !== null;
+  const refused = useRefusal(target, 'reconcile');
+  const disabled = busy !== null || refused !== null;
 
   return (
     <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
@@ -108,6 +110,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
           type="button"
           onClick={() => void run('reconcile')}
           disabled={disabled}
+          title={refused ?? undefined}
           className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
           Reconcile
@@ -117,6 +120,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
             type="button"
             onClick={() => void run('resume')}
             disabled={disabled}
+            title={refused ?? undefined}
             className="rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Resume
@@ -127,6 +131,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
             type="button"
             onClick={() => void run('suspend')}
             disabled={disabled}
+            title={refused ?? undefined}
             className="rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Suspend

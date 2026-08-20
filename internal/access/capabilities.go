@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/flux"
 )
 
 // The names the browser knows. Each one stands for a button or a tab, and maps
@@ -18,6 +20,10 @@ const (
 	Logs        = "logs"
 	Exec        = "exec"
 	PortForward = "portForward"
+	// Reconcile covers every gitops button on one resource. Suspending, resuming
+	// and reconciling are all the same patch on the same object, so one answer
+	// speaks for all of them.
+	Reconcile = "reconcile"
 )
 
 const (
@@ -78,6 +84,9 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 	if restartable[here] {
 		held = append(held, capability{name: Restart, check: with(object, "patch")})
 	}
+	if gitops(ref.Group) {
+		held = append(held, capability{name: Reconcile, check: with(object, "patch")})
+	}
 	if here == (groupResource{resource: nodes}) {
 		held = append(held, nodeCapabilities(object)...)
 	}
@@ -96,6 +105,12 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 		})
 	}
 	return held
+}
+
+// gitops is true for the kinds whose Reconcile, Suspend, Resume, Sync and
+// Refresh buttons all patch the resource itself.
+func gitops(group string) bool {
+	return flux.IsFluxGroup(group) || argocd.IsArgoGroup(group)
 }
 
 func nodeCapabilities(object Check) []capability {

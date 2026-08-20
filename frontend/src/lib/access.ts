@@ -1,16 +1,21 @@
-import type { Access, ObjectRef } from './types';
-import { failure, refQuery } from './object';
+import type { Access } from './types';
+import { failure } from './object';
 import { request } from './http';
 import { parseAccess } from './parse';
 
 // The capabilities the server answers about. Each one stands for a button or a
 // tab, not for a verb.
 export type Capability =
-  'edit' | 'delete' | 'scale' | 'restart' | 'cordon' | 'drain' | 'logs' | 'exec' | 'portForward';
-
-export function accessQuery(ref: ObjectRef): string {
-  return refQuery(ref);
-}
+  | 'edit'
+  | 'delete'
+  | 'scale'
+  | 'restart'
+  | 'cordon'
+  | 'drain'
+  | 'logs'
+  | 'exec'
+  | 'portForward'
+  | 'reconcile';
 
 export async function fetchAccess(query: string): Promise<Access> {
   const response = await request(`/api/access?${query}`);

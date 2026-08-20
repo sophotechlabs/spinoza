@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectActions from '../../src/components/InspectActions';
 import type { ObjectRef } from '../../src/lib/types';
+import { accessKey, useAccessStore } from '../../src/store/access';
+import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 
 const target: ObjectRef = {
   group: 'kustomize.toolkit.fluxcd.io',
@@ -317,5 +319,47 @@ describe('InspectActions', () => {
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
 
     expect(await screen.findByText('Reconciliation requested')).toBeInTheDocument();
+  });
+});
+
+describe('gitops buttons the cluster would refuse', () => {
+  beforeEach(() => {
+    useAccessStore.getState().forget();
+    useContextsStore.getState().setList({
+      ...EMPTY_CONTEXTS,
+      current: { kubeconfig: '', name: 'p-mk1' },
+    });
+  });
+
+  afterEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  it('greys out Reconcile and Suspend with the cluster’s reason', () => {
+    useAccessStore
+      .getState()
+      .setRefused(accessKey('p-mk1', target), { reconcile: 'no patching kustomizations' });
+    renderActions(false);
+
+    const reconcile = screen.getByRole('button', { name: 'Reconcile' });
+    expect(reconcile).toBeDisabled();
+    expect(reconcile).toHaveAttribute('title', 'no patching kustomizations');
+    expect(screen.getByRole('button', { name: 'Suspend' })).toBeDisabled();
+  });
+
+  it('greys out Resume on a suspended resource', () => {
+    useAccessStore
+      .getState()
+      .setRefused(accessKey('p-mk1', target), { reconcile: 'no patching kustomizations' });
+    renderActions(true);
+
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeDisabled();
+  });
+
+  it('leaves them alone when nothing stands in the way', () => {
+    useAccessStore.getState().setRefused(accessKey('p-mk1', target), {});
+    renderActions(false);
+
+    expect(screen.getByRole('button', { name: 'Reconcile' })).toBeEnabled();
   });
 });

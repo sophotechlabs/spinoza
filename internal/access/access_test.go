@@ -441,3 +441,73 @@ func TestAServiceIsAskedAboutForwardingToItsPods(t *testing.T) {
 		t.Fatalf("asked in %q", forward.Namespace)
 	}
 }
+
+func TestAFluxResourceIsAskedAboutPatchingItself(t *testing.T) {
+	auth := refusing(nil)
+	service := serviceFor(t, auth)
+
+	service.Review(t.Context(), api.ObjectRef{
+		Group:     "kustomize.toolkit.fluxcd.io",
+		Version:   "v1",
+		Resource:  "kustomizations",
+		Namespace: "flux-system",
+		Name:      "apps",
+	})
+
+	// Reconcile, Suspend and Resume are all this one patch.
+	if _, ok := asked(auth)["patch kustomize.toolkit.fluxcd.io kustomizations "]; !ok {
+		t.Fatalf("the gitops buttons were never asked about: %v", asked(auth))
+	}
+}
+
+func TestAnArgoApplicationIsAskedAboutPatchingItself(t *testing.T) {
+	auth := refusing(nil)
+	service := serviceFor(t, auth)
+
+	service.Review(t.Context(), api.ObjectRef{
+		Group:     "argoproj.io",
+		Version:   "v1alpha1",
+		Resource:  "applications",
+		Namespace: "argocd",
+		Name:      "web",
+	})
+
+	if _, ok := asked(auth)["patch argoproj.io applications "]; !ok {
+		t.Fatalf("Sync and Refresh were never asked about: %v", asked(auth))
+	}
+}
+
+func TestAnOrdinaryKindIsNotAskedAboutReconciling(t *testing.T) {
+	auth := refusing(nil)
+	service := serviceFor(t, auth)
+
+	service.Review(t.Context(), deploymentRef())
+
+	for _, one := range auth.questions() {
+		if one.Verb == "patch" && one.Subresource == "" && one.Resource == "deployments" {
+			// This is the restart question, which a deployment does have.
+			continue
+		}
+		if one.Verb == "patch" && one.Group == "argoproj.io" {
+			t.Fatalf("a deployment was asked a gitops question: %+v", one)
+		}
+	}
+}
+
+func TestARefusedGitopsPatchIsReported(t *testing.T) {
+	service := serviceFor(t, refusing(map[string]string{
+		"patch kustomize.toolkit.fluxcd.io kustomizations ": "no reconciling for you",
+	}))
+
+	got := reasons(service.Review(t.Context(), api.ObjectRef{
+		Group:     "kustomize.toolkit.fluxcd.io",
+		Version:   "v1",
+		Resource:  "kustomizations",
+		Namespace: "flux-system",
+		Name:      "apps",
+	}))
+
+	if got[Reconcile] != "no reconciling for you" {
+		t.Fatalf("reconcile reason = %q", got[Reconcile])
+	}
+}

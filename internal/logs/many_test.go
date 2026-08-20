@@ -24,6 +24,7 @@ type cluster struct {
 	listed   int
 	selector string
 	hold     bool
+	tail     string
 }
 
 func (apiserver *cluster) handler(t *testing.T) http.HandlerFunc {
@@ -59,6 +60,7 @@ func (apiserver *cluster) serveLog(w http.ResponseWriter, r *http.Request) {
 	name := parts[len(parts)-2]
 	apiserver.mu.Lock()
 	lines := apiserver.lines[name]
+	apiserver.tail = r.URL.Query().Get("tailLines")
 	apiserver.mu.Unlock()
 	for _, line := range lines {
 		_, _ = fmt.Fprintln(w, line)
@@ -92,6 +94,13 @@ func (apiserver *cluster) add(name string, lines ...string) {
 	defer apiserver.mu.Unlock()
 	apiserver.pods = append(apiserver.pods, name)
 	apiserver.lines[name] = lines
+}
+
+// askedForTail is the tailLines the apiserver was given for a pod's log.
+func (apiserver *cluster) askedForTail() string {
+	apiserver.mu.Lock()
+	defer apiserver.mu.Unlock()
+	return apiserver.tail
 }
 
 func (apiserver *cluster) lists() int {
@@ -638,5 +647,61 @@ func TestAStreamThatIsNotFollowingFailsWhenNothingCanBeRead(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("a one-shot read of nothing reported success")
+	}
+}
+
+func TestOnePodKeepsTheWholeTail(t *testing.T) {
+	apiserver := newCluster()
+	apiserver.add("web-0", "hello")
+
+	stream, err := Open(t.Context(), manyClient(t, apiserver), Request{
+		Namespace: "prod",
+		Selector:  "app=web",
+		TailLines: 500,
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	gather(t, stream, 1)
+
+	if apiserver.askedForTail() != "500" {
+		t.Fatalf("tailLines = %q, want the whole tail for a single pod", apiserver.askedForTail())
+	}
+}
+
+func TestManyPodsShareTheTailBetweenThem(t *testing.T) {
+	apiserver := newCluster()
+	for i := range maxPods {
+		apiserver.add(fmt.Sprintf("web-%02d", i), "hello")
+	}
+
+	stream, err := Open(t.Context(), manyClient(t, apiserver), Request{
+		Namespace: "prod",
+		Selector:  "app=web",
+		TailLines: 500,
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	gather(t, stream, 1)
+
+	// Twenty pods asking for 500 lines each would be 10,000 lines into a buffer
+	// that holds 5,000, so most of what was fetched would be dropped unseen.
+	if apiserver.askedForTail() != "250" {
+		t.Fatalf("tailLines = %q, want the budget split across the pods", apiserver.askedForTail())
+	}
+}
+
+func TestTheTailNeverShrinksBelowSomethingUseful(t *testing.T) {
+	if share(500, 1000) != minTail {
+		t.Fatalf("share = %d, want a floor of %d", share(500, 1000), minTail)
+	}
+	if share(0, 20) != 0 {
+		t.Fatalf("share = %d, want no tail when none was asked for", share(0, 20))
+	}
+	if share(10, 20) != 10 {
+		t.Fatalf("share = %d, want a small tail left alone", share(10, 20))
 	}
 }

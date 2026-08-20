@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import InspectObjectActions from '../../src/components/InspectObjectActions';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
-import { useAccessStore } from '../../src/store/access';
+import { accessKey, useAccessStore } from '../../src/store/access';
+import { EMPTY_CONTEXTS } from '../../src/store/contexts';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
 
 const deployment: ObjectRef = {
@@ -754,11 +755,15 @@ describe('on a protected cluster', () => {
 });
 
 describe('an action the cluster would refuse', () => {
-  const deploymentKey = 'group=apps&version=v1&resource=deployments&namespace=shop&name=web';
-  const nodeKey = 'group=&version=v1&resource=nodes&namespace=&name=worker-1';
+  const deploymentKey = accessKey('p-mk1', deployment);
+  const nodeKey = accessKey('p-mk1', node);
 
   beforeEach(() => {
     useAccessStore.getState().forget();
+    useContextsStore.getState().setList({
+      ...EMPTY_CONTEXTS,
+      current: { kubeconfig: '', name: 'p-mk1' },
+    });
   });
 
   afterEach(() => {

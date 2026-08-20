@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { accessQuery, fetchAccess, refusalsOf } from '../../src/lib/access';
+import { fetchAccess, refusalsOf } from '../../src/lib/access';
+import { refQuery } from '../../src/lib/object';
 import type { ObjectRef } from '../../src/lib/types';
 import { anySignal } from '../helpers';
 
@@ -23,7 +24,7 @@ describe('asking the cluster what it would refuse', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await fetchAccess(accessQuery(ref));
+    await fetchAccess(refQuery(ref));
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/access?group=&version=v1&resource=pods&namespace=kube-system&name=calico-node-2cv49',
@@ -46,7 +47,7 @@ describe('asking the cluster what it would refuse', () => {
       }),
     );
 
-    const access = await fetchAccess(accessQuery(ref));
+    const access = await fetchAccess(refQuery(ref));
 
     expect(refusalsOf(access)).toEqual({
       logs: 'requires container.pods.getLogs',
@@ -60,7 +61,7 @@ describe('asking the cluster what it would refuse', () => {
       vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }),
     );
 
-    const access = await fetchAccess(accessQuery(ref));
+    const access = await fetchAccess(refQuery(ref));
 
     expect(refusalsOf(access)).toEqual({});
   });
@@ -75,7 +76,7 @@ describe('asking the cluster what it would refuse', () => {
       }),
     );
 
-    await expect(fetchAccess(accessQuery(ref))).rejects.toThrow('the cluster went away');
+    await expect(fetchAccess(refQuery(ref))).rejects.toThrow('the cluster went away');
   });
 
   it('falls back to a status message', async () => {
@@ -88,7 +89,7 @@ describe('asking the cluster what it would refuse', () => {
       }),
     );
 
-    await expect(fetchAccess(accessQuery(ref))).rejects.toThrow(
+    await expect(fetchAccess(refQuery(ref))).rejects.toThrow(
       'access request failed with status 502',
     );
   });

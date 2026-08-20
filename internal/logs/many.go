@@ -20,6 +20,13 @@ const (
 	// A workload with more pods than this is tailed in part. Every attachment is
 	// its own connection to the apiserver, and the caller is told what it got.
 	maxPods = 20
+	// tailBudget is how many lines the whole merged stream may start with. The
+	// browser keeps a buffer of this size, so asking every pod for a full tail
+	// would only fill it with whichever pods answered first and throw the rest
+	// away before anyone saw them.
+	tailBudget = 5000
+	// A pod is worth reading with at least this much history behind it.
+	minTail = 50
 )
 
 // While following, pods that appear after the stream opened are picked up, so a
@@ -47,6 +54,7 @@ func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Strea
 		return nil, fmt.Errorf("no pods match %s in %s", req.Selector, req.Namespace)
 	}
 
+	req.TailLines = share(req.TailLines, len(names))
 	lines := make(chan Line, lineBuffer*2)
 	held := newAttachments()
 	var wg sync.WaitGroup
@@ -246,6 +254,20 @@ func podsMatching(
 		return found, len(found), nil
 	}
 	return found[:maxPods], len(found), nil
+}
+
+// share splits the caller's tail across the pods being read, so a workload with
+// twenty pods opens with a full buffer of all twenty rather than a full buffer
+// of the three that answered first.
+func share(tail int64, pods int) int64 {
+	if tail <= 0 || pods < 2 {
+		return tail
+	}
+	each := max(int64(tailBudget/pods), minTail)
+	if each > tail {
+		return tail
+	}
+	return each
 }
 
 // permanent tells a refusal apart from a pod that has not started writing yet.

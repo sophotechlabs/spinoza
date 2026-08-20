@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { useAccessStore, useRefusal, useRefusalsFor } from '../../src/store/access';
+import { accessKey, useAccessStore, useRefusal, useRefusalsFor } from '../../src/store/access';
+import { useContextsStore, EMPTY_CONTEXTS } from '../../src/store/contexts';
 import { useAccess } from '../../src/lib/useAccess';
 import type { ObjectRef } from '../../src/lib/types';
 
@@ -14,10 +15,15 @@ const pod: ObjectRef = {
 
 const otherPod: ObjectRef = { ...pod, name: 'calico-node-77xyz' };
 
-const podKey = 'group=&version=v1&resource=pods&namespace=kube-system&name=calico-node-2cv49';
+const podKey = accessKey('p-mk1', pod);
+
+function onCluster(name: string): void {
+  useContextsStore.getState().setList({ ...EMPTY_CONTEXTS, current: { kubeconfig: '', name } });
+}
 
 function reset(): void {
   useAccessStore.getState().forget();
+  onCluster('p-mk1');
 }
 
 describe('what the cluster refuses for the selected object', () => {
@@ -161,5 +167,44 @@ describe('asking on selection', () => {
     rerender({ ref: { ...pod } });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the same object in another cluster', () => {
+  beforeEach(() => {
+    useAccessStore.getState().forget();
+    onCluster('p-mk1');
+    vi.unstubAllGlobals();
+  });
+
+  it('does not reuse the answers from the cluster they were asked in', () => {
+    useAccessStore.getState().setRefused(accessKey('p-mk1', pod), { logs: 'no logs here' });
+
+    onCluster('gke-staging');
+    const { result } = renderHook(() => useRefusal(pod, 'logs'));
+
+    expect(result.current).toBeNull();
+  });
+
+  it('asks again when the cluster changes under the same selection', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ refused: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { rerender } = renderHook(() => {
+      useAccess(pod);
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    onCluster('gke-staging');
+    rerender();
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

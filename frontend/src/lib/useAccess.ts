@@ -1,12 +1,18 @@
 import { useEffect } from 'react';
 import type { ObjectRef } from './types';
-import { accessQuery, fetchAccess, refusalsOf } from './access';
-import { useAccessStore } from '../store/access';
+import { fetchAccess, refusalsOf } from './access';
+import { refQuery } from './object';
+import { accessKey, useAccessStore } from '../store/access';
+import { useContextsStore } from '../store/contexts';
 
 // useAccess asks the cluster what it would refuse for the selected object, once
-// per selection. A question that cannot be answered leaves every button alone.
+// per selection. A question that cannot be answered leaves every button alone,
+// and switching cluster asks again: the same object elsewhere is another
+// question.
 export function useAccess(target: ObjectRef | null): void {
-  const key = target === null ? '' : accessQuery(target);
+  const context = useContextsStore((state) => state.list.current.name);
+  const key = accessKey(context, target);
+  const query = target === null ? '' : refQuery(target);
 
   useEffect(() => {
     const { setRefused, forget } = useAccessStore.getState();
@@ -17,7 +23,7 @@ export function useAccess(target: ObjectRef | null): void {
     let mounted = true;
     const load = async () => {
       try {
-        const access = await fetchAccess(key);
+        const access = await fetchAccess(query);
         if (mounted) {
           setRefused(key, refusalsOf(access));
         }
@@ -31,5 +37,5 @@ export function useAccess(target: ObjectRef | null): void {
     return () => {
       mounted = false;
     };
-  }, [key]);
+  }, [key, query]);
 }

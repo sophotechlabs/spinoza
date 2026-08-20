@@ -4,6 +4,7 @@ import type { ArgoAction } from '../lib/argoActions';
 import { runArgoAction } from '../lib/argoActions';
 import { confirmName } from '../lib/contexts';
 import { useProtectedCluster } from '../store/contexts';
+import { useRefusal } from '../store/access';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 
@@ -79,7 +80,8 @@ export default function ArgoActions({ target, onDone }: ArgoActionsProps) {
     void run('sync');
   }
 
-  const disabled = busy !== null;
+  const refused = useRefusal(target, 'reconcile');
+  const disabled = busy !== null || refused !== null;
 
   return (
     <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
@@ -88,6 +90,7 @@ export default function ArgoActions({ target, onDone }: ArgoActionsProps) {
           type="button"
           onClick={askSync}
           disabled={disabled}
+          title={refused ?? undefined}
           className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
           Sync
@@ -96,6 +99,7 @@ export default function ArgoActions({ target, onDone }: ArgoActionsProps) {
           type="button"
           onClick={() => void run('refresh')}
           disabled={disabled}
+          title={refused ?? undefined}
           className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
           Refresh

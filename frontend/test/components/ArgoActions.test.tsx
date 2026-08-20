@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ArgoActions from '../../src/components/ArgoActions';
 import type { ObjectRef } from '../../src/lib/types';
-import { useContextsStore } from '../../src/store/contexts';
+import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
+import { accessKey, useAccessStore } from '../../src/store/access';
 
 const target: ObjectRef = {
   group: 'argoproj.io',
@@ -258,5 +259,39 @@ describe('an argo action that outlives its panel', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(screen.queryByText('forbidden')).not.toBeInTheDocument();
+  });
+});
+
+describe('argo buttons the cluster would refuse', () => {
+  beforeEach(() => {
+    useAccessStore.getState().forget();
+    useContextsStore.getState().setList({
+      ...EMPTY_CONTEXTS,
+      current: { kubeconfig: '', name: 'p-mk1' },
+    });
+  });
+
+  afterEach(() => {
+    useAccessStore.getState().forget();
+  });
+
+  it('greys out Sync and Refresh with the cluster’s reason', () => {
+    useAccessStore
+      .getState()
+      .setRefused(accessKey('p-mk1', target), { reconcile: 'no patching applications' });
+    renderActions();
+
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toHaveAttribute(
+      'title',
+      'no patching applications',
+    );
+  });
+
+  it('leaves them alone when nothing stands in the way', () => {
+    useAccessStore.getState().setRefused(accessKey('p-mk1', target), {});
+    renderActions();
+
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeEnabled();
   });
 });

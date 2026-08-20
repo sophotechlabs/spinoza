@@ -18,7 +18,9 @@ import TerminalTab from '../../src/components/TerminalTab';
 import { terminalTitle } from '../../src/lib/shell';
 import type { PodTarget } from '../../src/lib/pods';
 import { useTerminalsStore } from '../../src/store/terminals';
-import { useAccessStore } from '../../src/store/access';
+import { accessKey, useAccessStore } from '../../src/store/access';
+import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
+import { podRef } from '../../src/lib/pods';
 
 function pod(overrides: Partial<PodTarget> = {}): PodTarget {
   return { namespace: 'prod', name: 'web', containers: ['app'], ...overrides };
@@ -253,10 +255,14 @@ describe('a node shell tab', () => {
 });
 
 describe('a shell the cluster would refuse', () => {
-  const podKey = 'group=&version=v1&resource=pods&namespace=prod&name=web';
+  const podKey = accessKey('p-mk1', podRef(pod()));
 
   beforeEach(() => {
     useAccessStore.getState().forget();
+    useContextsStore.getState().setList({
+      ...EMPTY_CONTEXTS,
+      current: { kubeconfig: '', name: 'p-mk1' },
+    });
   });
 
   afterEach(() => {
