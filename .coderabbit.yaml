@@ -1,0 +1,153 @@
+language: en-US
+tone_instructions: >-
+  Plain, specific, calm. No praise, no filler, no restating what the diff obviously does.
+  Say what is wrong or risky and why, in one or two sentences. Skip style opinions the
+  linters already enforce.
+early_access: false
+enable_free_tier: true
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+  suggested_labels: false
+  poem: false
+  commit_status: true
+  fail_commit_status: false
+
+  path_filters:
+    - "!CHANGELOG.md"
+    - "!frontend/package-lock.json"
+    - "!frontend/package.json.md5"
+    - "!frontend/wailsjs/**"
+    - "!web/dist/**"
+    - "!dist/**"
+    - "!build/bin/**"
+
+  path_instructions:
+    - path: "**/*.go"
+      instructions: >-
+        golangci-lint runs in CI with a strict config (.golangci.yml): cyclop 15, gocognit 20,
+        nestif 5, varnamelen, revive, gocritic with every tag on. Do not repeat what those
+        linters already catch. Enforced by config, so only flag a violation the linter would
+        miss: errors wrapped with %w (github.com/pkg/errors is denied), no io/ioutil, no
+        math/rand v1, no fmt.Print (use log or a returned error), no testing imports in
+        production code, k8s import aliases corev1 / metav1 / apierrors.
+        One statement per line: no inline conditional expressions, no `if cond: do()` on one
+        line, no branches joined on a single line, because line coverage hides the untaken
+        branch. Comments are deliberately sparse; production files explain only a mechanism
+        that is not obvious from the code. Do not ask for doc comments beyond what godoclint
+        and godot require. Focus on concurrency, context propagation, client-go informer
+        lifecycle, goroutine and watch leaks, and error paths that drop data.
+    - path: "**/*_test.go"
+      instructions: >-
+        Tests run with -race -shuffle=on and coverage is gated by .testcoverage.yml. Each test
+        carries a one-line doc comment stating the behaviour it pins. Prefer table-driven cases
+        where the inputs vary. Flag tests that assert on implementation detail rather than
+        behaviour, and tests that would pass if the code under test were deleted.
+    - path: "frontend/src/**"
+      instructions: >-
+        React and TypeScript on vite. eslint, prettier, tsc, knip, depcheck, madge and a
+        contrast check already gate in CI. Review correctness and the contract with the Go
+        backend, not formatting: websocket reconnect and cleanup, effect dependencies,
+        unbounded state growth from informer updates, and shapes that disagree with the JSON
+        the server sends.
+    - path: ".github/workflows/**"
+      instructions: >-
+        commits, frontend, go and repo also exist under .forgejo/workflows. When one side
+        changes, check whether its twin needs the same change. actionlint, zizmor and yamllint
+        already gate these files.
+    - path: ".forgejo/workflows/**"
+      instructions: >-
+        commits, frontend, go and repo also exist under .github/workflows. When one side
+        changes, check whether its twin needs the same change. actionlint, zizmor and yamllint
+        already gate these files.
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - main
+    ignore_title_keywords:
+      - "chore(main): release"
+    ignore_usernames:
+      - release-please[bot]
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+    autofix:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+
+  pre_merge_checks:
+    title:
+      mode: "off"
+    description:
+      mode: warning
+    docstrings:
+      mode: "off"
+    issue_assessment:
+      mode: "off"
+
+  tools:
+    github-checks:
+      enabled: true
+    golangci-lint:
+      enabled: false
+    eslint:
+      enabled: false
+    semgrep:
+      enabled: false
+    opengrep:
+      enabled: false
+    gitleaks:
+      enabled: false
+    trufflehog:
+      enabled: false
+    trivy:
+      enabled: false
+    osvScanner:
+      enabled: false
+    yamllint:
+      enabled: false
+    actionlint:
+      enabled: false
+    zizmor:
+      enabled: false
+    markdownlint:
+      enabled: false
+    shellcheck:
+      enabled: false
+    languagetool:
+      enabled: false
+
+chat:
+  art: false
+  auto_reply: true
+  allow_non_org_members: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  learnings:
+    scope: local
+  issues:
+    scope: local
+  pull_requests:
+    scope: local
