@@ -551,7 +551,18 @@ type ServerMsg struct {
 	Matched    int         `json:"matched,omitempty"`
 	Message    string      `json:"message,omitempty"`
 	Context    string      `json:"context,omitempty"`
+	Reachable  bool        `json:"reachable,omitempty"`
+	Reason     string      `json:"reason,omitempty"`
 	Changes    []RowChange `json:"changes,omitempty"`
+}
+
+// ClusterHealth says whether spinoza can reach the cluster's apiserver right
+// now. A window that is connected to spinoza is not the same as a cluster that
+// is answering, and the difference is invisible without this.
+type ClusterHealth struct {
+	Type      string `json:"type"`
+	Reachable bool   `json:"reachable"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 // ContextChanged tells every open feed which cluster the server is on. It is

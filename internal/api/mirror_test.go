@@ -26,6 +26,7 @@ var sentAsADiscriminatedUnion = map[string]string{
 	"LogOpened":      "ServerMsg",
 	"LogEnd":         "ServerMsg",
 	"ContextChanged": "ServerMsg",
+	"ClusterHealth":  "ServerMsg",
 	"FeedError":      "ServerMsg",
 }
 

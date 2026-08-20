@@ -140,13 +140,27 @@ func TestSwitchingContextTellsEveryOpenFeed(t *testing.T) {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
 	}
 
-	told := readAnyMsg(ctx, t, conn)
+	told := nextContextFrame(ctx, t, conn)
 	if told.Type != "context" {
 		t.Fatalf("type = %q, want a context frame on the switch", told.Type)
 	}
 	if told.Context != "elsewhere" {
 		t.Fatalf("context = %q, want the cluster that was switched to", told.Context)
 	}
+}
+
+// nextContextFrame skips past whatever else the server is saying to find the
+// next word about which cluster it is on.
+func nextContextFrame(ctx context.Context, t *testing.T, conn *websocket.Conn) api.ServerMsg {
+	t.Helper()
+	for range 10 {
+		msg := readAnyMsg(ctx, t, conn)
+		if msg.Type == "context" {
+			return msg
+		}
+	}
+	t.Fatal("no context frame arrived")
+	return api.ServerMsg{}
 }
 
 func TestComparingAKindNeedsAKind(t *testing.T) {

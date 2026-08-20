@@ -111,17 +111,22 @@ func readChange(ctx context.Context, t *testing.T, c *websocket.Conn) api.RowCha
 	return msg.Changes[0]
 }
 
-// readMsg skips the context frame every feed opens with, which is about the
-// connection rather than about anything a test subscribed to.
+// readMsg skips the frames every feed opens with — which cluster it is on and
+// whether that cluster answers — because they are about the connection rather
+// than about anything a test subscribed to.
 func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg {
 	t.Helper()
 	for {
 		msg := readAnyMsg(ctx, t, c)
-		if msg.Type == "context" {
+		if aboutTheConnection(msg.Type) {
 			continue
 		}
 		return msg
 	}
+}
+
+func aboutTheConnection(kind string) bool {
+	return kind == "context" || kind == "cluster"
 }
 
 func readAnyMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg {
@@ -777,7 +782,7 @@ func readRaw(ctx context.Context, t *testing.T, c *websocket.Conn) map[string]js
 		if err != nil {
 			t.Fatalf("read message: %v", err)
 		}
-		if string(fields["type"]) == `"context"` {
+		if aboutTheConnection(strings.Trim(string(fields["type"]), `"`)) {
 			continue
 		}
 		return fields

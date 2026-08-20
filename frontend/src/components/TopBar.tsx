@@ -9,6 +9,7 @@ import ViewSwitch from './ViewSwitch';
 import { ReconnectIcon } from './icons';
 import { useNamespaces } from '../lib/namespaces';
 import { ALL, useNamespaceStore } from '../store/namespace';
+import { useClusterReachable, useClusterUnreachableReason } from '../store/clusterHealth';
 import Wordmark from './Wordmark';
 
 interface TopBarProps {
@@ -29,14 +30,30 @@ function pickerTitle(scoped: boolean | null): string {
   return 'The namespace the resource list shows';
 }
 
-function statusColor(status: ConnectionStatus): string {
-  if (status === 'connected') {
-    return 'bg-ok-solid';
+// The dot is about the whole path to the cluster, not just the socket to
+// spinoza. A window that is connected to a server whose cluster stopped
+// answering is showing the last thing it knew, and has to say so.
+function statusColor(status: ConnectionStatus, clusterReachable: boolean): string {
+  if (status !== 'connected') {
+    if (status === 'connecting') {
+      return 'bg-warn-solid';
+    }
+    return 'bg-error-solid';
   }
-  if (status === 'connecting') {
-    return 'bg-warn-solid';
+  if (!clusterReachable) {
+    return 'bg-error-solid';
   }
-  return 'bg-error-solid';
+  return 'bg-ok-solid';
+}
+
+function statusLabel(status: ConnectionStatus, clusterReachable: boolean, reason: string): string {
+  if (status === 'connected' && !clusterReachable) {
+    if (reason === '') {
+      return 'The cluster is not answering; what is on screen is the last thing it said';
+    }
+    return `The cluster is not answering: ${reason}`;
+  }
+  return `The cluster feed is ${status}`;
 }
 
 export default function TopBar({
@@ -49,6 +66,8 @@ export default function TopBar({
   onSelectObject,
   onLeftForDesktop,
 }: TopBarProps) {
+  const clusterReachable = useClusterReachable();
+  const unreachableReason = useClusterUnreachableReason();
   const namespace = useNamespaceStore((state) => state.namespace);
   const names = useNamespaceStore((state) => state.names);
   const choose = useNamespaceStore((state) => state.choose);
@@ -100,15 +119,18 @@ export default function TopBar({
         <ProtectionToggle />
         <span
           role="status"
-          aria-label={`The cluster feed is ${status}`}
-          title={`The cluster feed is ${status}`}
+          aria-label={statusLabel(status, clusterReachable, unreachableReason)}
+          title={statusLabel(status, clusterReachable, unreachableReason)}
           className={`${ICON_CONTROL} border-edge-strong`}
         >
           <span
             data-testid="connection-dot"
-            className={`h-2 w-2 rounded-full ${statusColor(status)}`}
+            className={`h-2 w-2 rounded-full ${statusColor(status, clusterReachable)}`}
           />
         </span>
+        {status === 'connected' && !clusterReachable && (
+          <span className="shrink-0 text-error">cluster not answering</span>
+        )}
         <button
           type="button"
           aria-label="Reconnect"

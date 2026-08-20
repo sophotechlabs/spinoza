@@ -273,6 +273,7 @@ export type ServerMsg =
   | { type: 'log-open'; subId: string; attached: number; matched: number }
   | { type: 'log-end'; subId: string }
   | { type: 'context'; subId: string; context: string }
+  | { type: 'cluster'; subId: string; reachable: boolean; reason?: string }
   | { type: 'error'; subId: string; message: string };
 
 export const VIEWS = [

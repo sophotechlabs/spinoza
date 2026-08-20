@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -76,6 +77,9 @@ type Server struct {
 	sessions   map[*wsSession]struct{}
 	terminals  map[*websocket.Conn]struct{}
 	profiler   bool
+	health     api.ClusterHealth
+	watching   bool
+	pingEvery  time.Duration
 }
 
 func New(cluster Cluster, assets fs.FS, token string) *Server {
@@ -87,6 +91,8 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		settings:  settings.Memory(),
 		sessions:  map[*wsSession]struct{}{},
 		terminals: map[*websocket.Conn]struct{}{},
+		health:    assumedHealth(),
+		pingEvery: defaultPingInterval,
 		views:     views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}
 }
@@ -345,6 +351,8 @@ func statusFor(err error) int {
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, inspect.ErrInvalidUID):
 		return http.StatusBadRequest
+	case errors.Is(err, inspect.ErrNoResourceVersion):
+		return http.StatusBadRequest
 	case errors.Is(err, jsonschema.ErrNoSchema):
 		return http.StatusNotFound
 	case errors.Is(err, helm.ErrNoRelease):
@@ -397,6 +405,7 @@ func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, err)
 		return
 	}
+	s.forgetHealth()
 	s.announceContext()
 	s.dropSessions()
 	writeJSON(w, s.cluster.Contexts())

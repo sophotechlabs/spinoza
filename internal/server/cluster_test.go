@@ -508,7 +508,8 @@ func TestSwitchingClosesOpenSessions(t *testing.T) {
 		if readErr != nil {
 			return
 		}
-		if !bytes.Contains(payload, []byte(`"type":"context"`)) {
+		if !bytes.Contains(payload, []byte(`"type":"context"`)) &&
+			!bytes.Contains(payload, []byte(`"type":"cluster"`)) {
 			t.Fatal("the session survived a context switch; it would stream the old cluster's objects")
 		}
 	}

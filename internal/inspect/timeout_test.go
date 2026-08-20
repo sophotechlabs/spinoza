@@ -71,7 +71,7 @@ func TestGetGivesUpOnAnApiserverThatNeverAnswers(t *testing.T) {
 func TestApplyGivesUpOnAnApiserverThatNeverAnswers(t *testing.T) {
 	shorten(t, &writeTimeout)
 	dyn := hungAPIServer(t)
-	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"42\"\n")
 
 	started := time.Now()
 	_, err := Apply(context.Background(), dyn, podRef(), "Pod", doc)

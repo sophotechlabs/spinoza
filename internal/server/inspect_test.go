@@ -179,7 +179,7 @@ func TestGetObjectNotFound(t *testing.T) {
 
 func TestPutObjectApplies(t *testing.T) {
 	ts := inspectServer(t, newPod())
-	doc := "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  labels:\n    app: edited\n"
+	doc := "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"7\"\n  labels:\n    app: edited\n"
 
 	resp, body := doRequest(t, http.MethodPut, ts.URL+"/api/object"+objectQuery, strings.NewReader(doc))
 

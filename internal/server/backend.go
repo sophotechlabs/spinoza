@@ -30,6 +30,7 @@ type Catalog interface {
 }
 
 type Objects interface {
+	Ping(ctx context.Context) error
 	Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDetail, error)
 	Access(ctx context.Context, ref api.ObjectRef) api.Access
 	ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error)

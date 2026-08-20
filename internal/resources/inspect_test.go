@@ -70,7 +70,7 @@ func TestManagerObject(t *testing.T) {
 
 func TestManagerApplyObject(t *testing.T) {
 	mgr := inspectManager(t, newDeployment("flux-system", "web"))
-	doc := []byte("apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n  namespace: flux-system\n  labels:\n    app: edited\n")
+	doc := []byte("apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"9\"\n  labels:\n    app: edited\n")
 
 	detail, err := mgr.ApplyObject(context.Background(), deploymentRef(), doc)
 	if err != nil {

@@ -7,6 +7,7 @@ import type { Chip } from './filterChips';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
 import { contextAnnounced } from './contexts';
+import { useClusterHealthStore } from '../store/clusterHealth';
 import { wsURL } from './wsBase';
 import { viewKind } from './view';
 
@@ -153,6 +154,13 @@ function serverMsg(raw: unknown): ServerMsg | null {
       return { type: 'log-end', subId };
     case 'context':
       return { type: 'context', subId, context: asString(item.context) };
+    case 'cluster':
+      return {
+        type: 'cluster',
+        subId,
+        reachable: asBoolean(item.reachable),
+        reason: optionalString(item.reason),
+      };
     case 'error':
       return { type: 'error', subId, message: asString(item.message) };
     default:
@@ -268,8 +276,8 @@ export function useResourceFeed(): ResourceFeed {
     }
 
     function knownSub(msg: ServerMsg): boolean {
-      // The context frame belongs to the connection, not to a subscription.
-      if (msg.type === 'context') {
+      // These belong to the connection, not to a subscription.
+      if (msg.type === 'context' || msg.type === 'cluster') {
         return true;
       }
       if (msg.type === 'log' || msg.type === 'log-end' || msg.type === 'log-open') {
@@ -338,6 +346,9 @@ export function useResourceFeed(): ResourceFeed {
           break;
         case 'context':
           void contextAnnounced(msg.context);
+          break;
+        case 'cluster':
+          useClusterHealthStore.getState().report(msg.reachable, msg.reason ?? '');
           break;
         case 'error':
           flush();

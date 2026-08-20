@@ -410,6 +410,38 @@ func (m *Manager) StopForward(id string) error {
 	return m.forwards.Stop(id)
 }
 
+// Ping asks the apiserver for its version, which is the cheapest question that
+// proves the cluster is answering. A refusal still counts as an answer: the
+// cluster is there, this user just may not read that endpoint.
+func (m *Manager) Ping(ctx context.Context) error {
+	if m.cs == nil {
+		return fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
+	}
+	done := make(chan error, 1)
+	safe.Go("asking the apiserver for its version", func() {
+		_, err := m.cs.Discovery().ServerVersion()
+		done <- err
+	})
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-done:
+		if answered(err) {
+			return nil
+		}
+		return err
+	}
+}
+
+// answered is true when the apiserver replied at all, even to refuse.
+func answered(err error) bool {
+	if err == nil {
+		return true
+	}
+	var status apierrors.APIStatus
+	return errors.As(err, &status)
+}
+
 func (m *Manager) Access(ctx context.Context, ref api.ObjectRef) api.Access {
 	if m.perms == nil {
 		return api.Access{}

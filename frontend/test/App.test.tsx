@@ -334,6 +334,7 @@ vi.mock('../src/components/InspectLogs', () => ({
 
 import App from '../src/App';
 import { useResourcesStore } from '../src/store/resources';
+import { useContextsStore } from '../src/store/contexts';
 import { clearRecents, rememberObject } from '../src/store/recents';
 
 import { clearCatalog } from '../src/store/catalog';
@@ -2251,5 +2252,51 @@ describe('a cluster this window did not switch to', () => {
       expect(window.location.hash).toContain('context=somewhere-else');
     });
     expect(window.location.hash).not.toContain('name=pod-a');
+  });
+});
+
+describe('a deep link that names a cluster and an object', () => {
+  it('keeps what it selected when the picker loads the context list', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/contexts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              current: { kubeconfig: '', name: 'kind-dev' },
+              kubeconfigs: [],
+              protection: 'open',
+            }),
+        });
+      }
+      if (url.startsWith('/api/object')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(objectDetail) });
+      }
+      if (url.startsWith('/api/events')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    openAt('#context=kind-dev&version=v1&resource=pods&kind=Pod&namespace=prod&name=pod-a');
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#0', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    // The context picker fills the store as it mounts, before this window has
+    // settled on a context of its own. That must not read as a switch.
+    useContextsStore.getState().setList({
+      current: { kubeconfig: '', name: 'kind-dev' },
+      kubeconfigs: [],
+      protection: 'open',
+    });
+
+    render(<App />);
+
+    expect(await screen.findByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
+    await waitFor(() => {
+      expect(window.location.hash).toContain('name=pod-a');
+    });
   });
 });

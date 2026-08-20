@@ -97,6 +97,26 @@ function podsLabel(attached: number, matched: number): string {
   return `${String(attached)} pods`;
 }
 
+// A merged stream that is reading nothing stays open, because pods come back.
+// What is on screen is the last thing they said, and saying so is the whole
+// point: an unchanging buffer otherwise looks like a working one.
+function readingNothing(pods: {
+  attached: number;
+  matched: number;
+  opened: boolean;
+}): string | null {
+  if (!pods.opened) {
+    return null;
+  }
+  if (pods.attached > 0) {
+    return null;
+  }
+  if (pods.matched > 0) {
+    return 'no pod is readable, showing the last output';
+  }
+  return 'no pods to read, showing the last output';
+}
+
 function followLabel(follow: boolean): string {
   if (follow) {
     return 'Following';
@@ -158,6 +178,7 @@ export default function InspectLogs({
   const resumed = useLogResumed(subId);
 
   const visible = matching(lines, sources, query);
+  const idle = readingNothing(pods);
 
   const virtualizer = useVirtualizer({
     count: visible.length,
@@ -315,6 +336,11 @@ export default function InspectLogs({
         )}
         {pods.attached > 1 && (
           <span className="shrink-0 text-fg-muted">{podsLabel(pods.attached, pods.matched)}</span>
+        )}
+        {idle !== null && (
+          <span role="status" className="shrink-0 text-warn">
+            {idle}
+          </span>
         )}
         {query !== '' && (
           <span className="shrink-0 text-fg-muted">

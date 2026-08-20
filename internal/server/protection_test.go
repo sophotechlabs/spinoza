@@ -165,7 +165,7 @@ func TestRollingBackAReleaseOnAProtectedClusterNeedsTheNameTyped(t *testing.T) {
 func TestApplyingOnAProtectedClusterNeedsTheNameTyped(t *testing.T) {
 	ts := inspectServer(t, newPod())
 	protect(t, ts)
-	doc := strings.NewReader("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+	doc := strings.NewReader("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"7\"\n")
 
 	resp, body := doRequest(t, http.MethodPut, ts.URL+"/api/object"+objectQuery, doc)
 
@@ -180,7 +180,7 @@ func TestApplyingOnAProtectedClusterNeedsTheNameTyped(t *testing.T) {
 func TestApplyingGoesAheadOnceTheNameMatches(t *testing.T) {
 	ts := inspectServer(t, newPod())
 	protect(t, ts)
-	doc := strings.NewReader("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+	doc := strings.NewReader("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"7\"\n")
 
 	resp, body := doRequest(t, http.MethodPut, ts.URL+"/api/object"+objectQuery+"&confirm=web", doc)
 

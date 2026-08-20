@@ -3,13 +3,16 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
@@ -177,7 +180,42 @@ func endMessage(err error) []byte {
 	if err == nil {
 		return nil
 	}
-	return []byte(err.Error())
+	return []byte(plainly(err))
+}
+
+// plainly turns the transport's own words into something worth reading. A shell
+// that ends because the connection broke says so; anything spinoza does not
+// recognize is passed through rather than papered over.
+func plainly(err error) string {
+	text := err.Error()
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "the shell was closed"
+	case brokenConnection(text):
+		return "the connection to the cluster dropped, so the shell ended"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "the cluster stopped answering, so the shell ended"
+	}
+	if apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) {
+		return "the cluster refused the shell: " + text
+	}
+	return text
+}
+
+func brokenConnection(text string) bool {
+	for _, mark := range []string{
+		"abnormal closure",
+		"unexpected EOF",
+		"use of closed network connection",
+		"connection reset by peer",
+		"broken pipe",
+		"going away",
+	} {
+		if strings.Contains(text, mark) {
+			return true
+		}
+	}
+	return false
 }
 
 type execConn struct {

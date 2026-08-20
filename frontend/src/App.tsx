@@ -213,6 +213,12 @@ export default function App() {
     if (serverContext === contextName) {
       return;
     }
+    // Until this window has settled on a context of its own, the opening route
+    // owns what is selected. Reacting here would throw away what a deep link
+    // named before it had a chance to load.
+    if (contextName === '') {
+      return;
+    }
     // A switch this window is in the middle of making is not news, and the
     // route it is already writing keeps whatever the link selected.
     if (adopting.current) {

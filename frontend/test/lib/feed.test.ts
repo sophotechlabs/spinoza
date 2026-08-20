@@ -6,6 +6,7 @@ import { DELTA_FLUSH_MS, useResourceFeed } from '../../src/lib/feed';
 import { useResourcesStore } from '../../src/store/resources';
 import { useLogsStore } from '../../src/store/logs';
 import { useContextsStore } from '../../src/store/contexts';
+import { useClusterHealthStore } from '../../src/store/clusterHealth';
 import { makeColumns, makeDescriptor, makeRow } from '../helpers';
 
 async function flushDeltas(): Promise<void> {
@@ -913,6 +914,7 @@ describe('useResourceFeed', () => {
       resumed: false,
       attached: 0,
       matched: 0,
+      opened: false,
     });
   });
 
@@ -1616,5 +1618,68 @@ describe('the server saying which cluster it is on', () => {
     announce(socket, '');
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('the server saying whether the cluster answers', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    useClusterHealthStore.getState().reset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useClusterHealthStore.getState().reset();
+  });
+
+  function say(socket: FakeWebSocket, reachable: boolean, reason?: string): void {
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'cluster', reachable, reason }),
+        }),
+      );
+    });
+  }
+
+  it('records a cluster that stopped answering, with the reason', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    say(socket, false, 'dial tcp 10.0.0.1:6443: connect: connection refused');
+
+    expect(useClusterHealthStore.getState()).toMatchObject({
+      reachable: false,
+      reason: 'dial tcp 10.0.0.1:6443: connect: connection refused',
+    });
+  });
+
+  it('records a cluster that came back', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+    say(socket, false, 'connection refused');
+
+    say(socket, true);
+
+    expect(useClusterHealthStore.getState()).toMatchObject({ reachable: true, reason: '' });
+  });
+
+  it('takes the frame even though it names no subscription', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    say(socket, false, 'gone');
+
+    expect(useClusterHealthStore.getState().reachable).toBe(false);
   });
 });

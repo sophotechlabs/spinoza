@@ -3,6 +3,7 @@ package inspect
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -20,6 +21,14 @@ import (
 )
 
 const lastAppliedAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
+
+// ErrNoResourceVersion is what a document that names no resourceVersion earns.
+// The apiserver would take it as an unconditional write and overwrite whatever
+// is there now, which is not what editing the object that was loaded means.
+var ErrNoResourceVersion = errors.New(
+	"this document names no resourceVersion, so applying it would overwrite whatever is on the server now; " +
+		"Revert to load the current object, then make the change again",
+)
 
 var readTimeout = 15 * time.Second
 
@@ -45,6 +54,9 @@ func Apply(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, kind s
 	matchErr := matchesRef(desired, ref, kind)
 	if matchErr != nil {
 		return api.ObjectDetail{}, matchErr
+	}
+	if desired.GetResourceVersion() == "" {
+		return api.ObjectDetail{}, ErrNoResourceVersion
 	}
 	bounded, cancel := context.WithTimeout(ctx, writeTimeout)
 	defer cancel()

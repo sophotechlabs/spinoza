@@ -2,6 +2,7 @@ package inspect
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -46,6 +47,7 @@ func newPod() *unstructured.Unstructured {
 			"name":              "web",
 			"namespace":         "flux-system",
 			"uid":               "pod-uid",
+			"resourceVersion":   "42",
 			"creationTimestamp": "2026-07-27T09:00:00Z",
 			"labels":            map[string]any{"app": "web"},
 			"annotations": map[string]any{
@@ -199,7 +201,7 @@ func TestGetMissingObject(t *testing.T) {
 
 func TestApplyUpdatesObject(t *testing.T) {
 	client := newClient(newPod())
-	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  labels:\n    app: edited\n")
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"42\"\n  labels:\n    app: edited\n")
 
 	detail, err := Apply(context.Background(), client, podRef(), "Pod", doc)
 	if err != nil {
@@ -229,7 +231,7 @@ func TestApplyRejectsBadYAML(t *testing.T) {
 }
 
 func TestApplyRejectsNameMismatch(t *testing.T) {
-	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: other\n  namespace: flux-system\n")
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: other\n  namespace: flux-system\n  resourceVersion: \"42\"\n")
 	_, err := Apply(context.Background(), newClient(newPod()), podRef(), "Pod", doc)
 	if err == nil {
 		t.Fatalf("expected a name mismatch error")
@@ -240,7 +242,7 @@ func TestApplyRejectsNameMismatch(t *testing.T) {
 }
 
 func TestApplyRejectsNamespaceMismatch(t *testing.T) {
-	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: default\n")
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: default\n  resourceVersion: \"42\"\n")
 	_, err := Apply(context.Background(), newClient(newPod()), podRef(), "Pod", doc)
 	if err == nil {
 		t.Fatalf("expected a namespace mismatch error")
@@ -251,7 +253,7 @@ func TestApplyRejectsNamespaceMismatch(t *testing.T) {
 }
 
 func TestApplyPropagatesAPIError(t *testing.T) {
-	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"42\"\n")
 	_, err := Apply(context.Background(), newClient(), podRef(), "Pod", doc)
 	if err == nil {
 		t.Fatalf("expected an update error for a missing object")
@@ -631,7 +633,7 @@ func TestApplyRejectsADocumentForAnotherGroup(t *testing.T) {
 
 func TestApplyAcceptsAMatchingDocument(t *testing.T) {
 	client := newClient(newPod())
-	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"42\"\n")
 
 	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
 	if err != nil {
@@ -744,5 +746,73 @@ func TestACountWithNoNumbersAnywhereIsZero(t *testing.T) {
 
 	if got := eventCountOf(item); got != 0 {
 		t.Fatalf("count = %d, want 0", got)
+	}
+}
+
+func TestApplyRefusesADocumentThatNamesNoResourceVersion(t *testing.T) {
+	client := newClient(newPod())
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  labels:\n    app: edited\n")
+
+	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
+
+	if !errors.Is(err, ErrNoResourceVersion) {
+		t.Fatalf("error = %v, want it refused for naming no resourceVersion", err)
+	}
+}
+
+func TestADocumentWithoutAResourceVersionChangesNothing(t *testing.T) {
+	client := newClient(newPod())
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  labels:\n    app: edited\n")
+
+	_, _ = Apply(context.Background(), client, podRef(), "Pod", doc)
+
+	stored, err := client.Resource(podGVR).
+		Namespace("flux-system").
+		Get(context.Background(), "web", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if stored.GetLabels()["app"] != "web" {
+		t.Fatalf("labels = %v, want the object untouched", stored.GetLabels())
+	}
+}
+
+func TestTheRefusalSaysHowToGetGoing(t *testing.T) {
+	client := newClient(newPod())
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n")
+
+	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
+
+	if !strings.Contains(err.Error(), "Revert") {
+		t.Fatalf("error = %v, want it to say what to do next", err)
+	}
+	if !strings.Contains(err.Error(), "overwrite") {
+		t.Fatalf("error = %v, want it to say what would otherwise happen", err)
+	}
+}
+
+// An empty resourceVersion is the same ask as a missing one: the apiserver
+// treats both as an unconditional write.
+func TestAnEmptyResourceVersionIsRefusedToo(t *testing.T) {
+	client := newClient(newPod())
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"\"\n")
+
+	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
+
+	if !errors.Is(err, ErrNoResourceVersion) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAStaleResourceVersionIsTheApiserversToRefuse(t *testing.T) {
+	client := newClient(newPod())
+	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"1\"\n")
+
+	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
+
+	// Whether an old version still applies is the cluster's call, not spinoza's;
+	// what matters is that spinoza did not silently drop the version.
+	if errors.Is(err, ErrNoResourceVersion) {
+		t.Fatal("a document that names a version was treated as naming none")
 	}
 }

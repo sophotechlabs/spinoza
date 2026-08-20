@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
@@ -538,5 +540,80 @@ func TestAStalledStdinDoesNotWedgeTheSession(t *testing.T) {
 	case <-shell.returned:
 	case <-time.After(10 * time.Second):
 		t.Fatal("the session never tore down; the pump is wedged writing to stdin nobody reads")
+	}
+}
+
+func TestWhatAShellSaysWhenItEnds(t *testing.T) {
+	forbidden := apierrors.NewForbidden(
+		schema.GroupResource{Resource: "pods"},
+		"web",
+		errors.New("no exec for you"),
+	)
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "nothing went wrong",
+			err:  nil,
+			want: "",
+		},
+		{
+			name: "the connection broke mid-session",
+			err:  errors.New("error reading from error stream: next reader: websocket: close 1006 (abnormal closure): unexpected EOF"),
+			want: "the connection to the cluster dropped, so the shell ended",
+		},
+		{
+			name: "the socket was closed under it",
+			err:  errors.New("write tcp 127.0.0.1:1: use of closed network connection"),
+			want: "the connection to the cluster dropped, so the shell ended",
+		},
+		{
+			name: "the peer reset it",
+			err:  errors.New("read tcp 10.0.0.1:443: connection reset by peer"),
+			want: "the connection to the cluster dropped, so the shell ended",
+		},
+		{
+			name: "the apiserver went away",
+			err:  errors.New("websocket: close 1001 (going away)"),
+			want: "the connection to the cluster dropped, so the shell ended",
+		},
+		{
+			name: "the user closed the tab",
+			err:  context.Canceled,
+			want: "the shell was closed",
+		},
+		{
+			name: "the cluster stopped answering",
+			err:  context.DeadlineExceeded,
+			want: "the cluster stopped answering, so the shell ended",
+		},
+		{
+			name: "the cluster refused it",
+			err:  forbidden,
+			want: "the cluster refused the shell: " + forbidden.Error(),
+		},
+		{
+			name: "something spinoza does not recognize is passed through",
+			err:  errors.New("command terminated with exit code 137"),
+			want: "command terminated with exit code 137",
+		},
+	}
+
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			if got := string(endMessage(one.err)); got != one.want {
+				t.Fatalf("message = %q, want %q", got, one.want)
+			}
+		})
+	}
+}
+
+func TestAWrappedBreakIsStillRecognized(t *testing.T) {
+	wrapped := fmt.Errorf("streaming logs: %w", context.Canceled)
+
+	if got := string(endMessage(wrapped)); got != "the shell was closed" {
+		t.Fatalf("message = %q", got)
 	}
 }

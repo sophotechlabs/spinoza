@@ -29,6 +29,7 @@ describe('logs store', () => {
       resumed: false,
       attached: 0,
       matched: 0,
+      opened: false,
     });
   });
 
@@ -185,7 +186,7 @@ describe('a stream merged from several pods', () => {
     const pods = renderHook(() => useLogPods('logs'));
 
     expect(sources.result.current).toEqual([]);
-    expect(pods.result.current).toEqual({ attached: 0, matched: 0 });
+    expect(pods.result.current).toEqual({ attached: 0, matched: 0, opened: false });
 
     useLogsStore.getState().startStream('logs');
     useLogsStore.getState().appendLines('logs', ['one'], 'web-0');
@@ -194,7 +195,7 @@ describe('a stream merged from several pods', () => {
     pods.rerender();
 
     expect(sources.result.current).toEqual(['web-0']);
-    expect(pods.result.current).toEqual({ attached: 2, matched: 4 });
+    expect(pods.result.current).toEqual({ attached: 2, matched: 4, opened: true });
   });
 });
 
@@ -295,6 +296,7 @@ describe('resuming a stream after a reconnect', () => {
       resumed: false,
       attached: 0,
       matched: 0,
+      opened: false,
     });
   });
 

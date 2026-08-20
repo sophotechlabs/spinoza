@@ -632,3 +632,85 @@ describe('copying the log buffer', () => {
     expect(writeText).toHaveBeenCalledWith('alpha one\nbravo two');
   });
 });
+
+describe('a merged stream with nothing left to read', () => {
+  const workload = { group: 'apps', version: 'v1', resource: 'deployments' };
+
+  beforeEach(() => {
+    useLogsStore.setState({ streams: new Map() });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function openWith(subscribeLogs: SubscribeLogs, attached: number, matched: number): string {
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().appendLines(subId, ['web-0 said something'], 'web-0');
+      useLogsStore.getState().openedStream(subId, attached, matched);
+    });
+    return subId;
+  }
+
+  it('says so when the workload has no pods at all', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+    openWith(subscribeLogs, 0, 0);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'no pods to read, showing the last output',
+    );
+  });
+
+  it('says so when there are pods but none can be read', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+    openWith(subscribeLogs, 0, 3);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'no pod is readable, showing the last output',
+    );
+  });
+
+  it('keeps the output that was already there', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+    openWith(subscribeLogs, 0, 0);
+
+    expect(screen.getByText('web-0 said something')).toBeInTheDocument();
+  });
+
+  it('says nothing before the stream has been answered', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+    });
+
+    expect(screen.queryByText(/no pods to read/)).not.toBeInTheDocument();
+  });
+
+  it('drops the note once a pod comes back', () => {
+    const { subscribeLogs } = renderLogs({ workload });
+    const subId = openWith(subscribeLogs, 0, 0);
+    expect(screen.getByText(/no pods to read/)).toBeInTheDocument();
+
+    act(() => {
+      useLogsStore.getState().openedStream(subId, 2, 2);
+    });
+
+    expect(screen.queryByText(/no pods to read/)).not.toBeInTheDocument();
+    expect(screen.getByText('2 pods')).toBeInTheDocument();
+  });
+
+  it('says nothing for a single pod that is being read', () => {
+    const { subscribeLogs } = renderLogs();
+    const subId = liveSubId(subscribeLogs);
+    act(() => {
+      useLogsStore.getState().startStream(subId);
+      useLogsStore.getState().openedStream(subId, 1, 1);
+      useLogsStore.getState().appendLines(subId, ['alpha one'], '');
+    });
+
+    expect(screen.queryByText(/no pods/)).not.toBeInTheDocument();
+  });
+});

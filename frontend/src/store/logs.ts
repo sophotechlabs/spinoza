@@ -13,6 +13,9 @@ interface StreamState {
   resumed: boolean;
   attached: number;
   matched: number;
+  // opened separates a stream that is reading nothing from one that has not
+  // been answered yet: both have no pods, and only one is worth saying.
+  opened: boolean;
   error?: string;
 }
 
@@ -40,6 +43,7 @@ function fresh(): StreamState {
     resumed: false,
     attached: 0,
     matched: 0,
+    opened: false,
   };
 }
 
@@ -91,7 +95,7 @@ export const useLogsStore = create<LogsState>((set) => ({
         return state;
       }
       const streams = new Map(state.streams);
-      streams.set(subId, { ...existing, attached, matched });
+      streams.set(subId, { ...existing, attached, matched, opened: true });
       return { streams };
     });
   },
@@ -174,10 +178,15 @@ export function useLogSources(subId: string): string[] {
   return sources;
 }
 
-export function useLogPods(subId: string): { attached: number; matched: number } {
+export function useLogPods(subId: string): {
+  attached: number;
+  matched: number;
+  opened: boolean;
+} {
   const attached = useLogsStore((state) => state.streams.get(subId)?.attached ?? 0);
   const matched = useLogsStore((state) => state.streams.get(subId)?.matched ?? 0);
-  return { attached, matched };
+  const opened = useLogsStore((state) => state.streams.get(subId)?.opened ?? false);
+  return { attached, matched, opened };
 }
 
 export function useLogRevision(subId: string): number {

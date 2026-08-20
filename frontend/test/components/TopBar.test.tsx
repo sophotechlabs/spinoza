@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
+import { useClusterHealthStore } from '../../src/store/clusterHealth';
 import { useNamespaceStore } from '../../src/store/namespace';
 import type { ObjectRef } from '../../src/lib/types';
 import { notifyOk, useToastsStore } from '../../src/store/toasts';
@@ -307,5 +308,78 @@ describe('the top bar entry points', () => {
     const picker = screen.getByRole('combobox', { name: 'Namespace' });
     expect(picker).toBeDisabled();
     expect(picker).toHaveAttribute('title', 'This kind is not in a namespace');
+  });
+});
+
+describe('a cluster that stopped answering', () => {
+  beforeEach(() => {
+    useClusterHealthStore.getState().reset();
+  });
+
+  afterEach(() => {
+    useClusterHealthStore.getState().reset();
+  });
+
+  it('turns the dot red even though the feed is connected', () => {
+    useClusterHealthStore.getState().report(false, 'connection refused');
+
+    const { container } = render(<TopBar status="connected" />);
+
+    expect(dotFor(container).className).toContain('bg-error-solid');
+  });
+
+  it('says so in words, not only in colour', () => {
+    useClusterHealthStore.getState().report(false, 'connection refused');
+
+    render(<TopBar status="connected" />);
+
+    expect(screen.getByText('cluster not answering')).toBeVisible();
+  });
+
+  it('carries the reason the cluster gave', () => {
+    useClusterHealthStore.getState().report(false, 'dial tcp 10.0.0.1:6443: connection refused');
+
+    render(<TopBar status="connected" />);
+
+    expect(
+      screen.getByRole('status', {
+        name: 'The cluster is not answering: dial tcp 10.0.0.1:6443: connection refused',
+      }),
+    ).toBeVisible();
+  });
+
+  it('still says something useful when no reason came with it', () => {
+    useClusterHealthStore.getState().report(false, '');
+
+    render(<TopBar status="connected" />);
+
+    expect(
+      screen.getByRole('status', {
+        name: 'The cluster is not answering; what is on screen is the last thing it said',
+      }),
+    ).toBeVisible();
+  });
+
+  it('goes back to green when the cluster answers again', () => {
+    useClusterHealthStore.getState().report(false, 'connection refused');
+    const { container, rerender } = render(<TopBar status="connected" />);
+    expect(dotFor(container).className).toContain('bg-error-solid');
+
+    act(() => {
+      useClusterHealthStore.getState().report(true, '');
+    });
+    rerender(<TopBar status="connected" />);
+
+    expect(dotFor(container).className).toContain('bg-ok-solid');
+    expect(screen.queryByText('cluster not answering')).not.toBeInTheDocument();
+  });
+
+  it('leaves a disconnected feed reading as disconnected', () => {
+    useClusterHealthStore.getState().report(false, 'connection refused');
+
+    render(<TopBar status="disconnected" />);
+
+    expect(screen.getByRole('status', { name: 'The cluster feed is disconnected' })).toBeVisible();
+    expect(screen.queryByText('cluster not answering')).not.toBeInTheDocument();
   });
 });

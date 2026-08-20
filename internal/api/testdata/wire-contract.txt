@@ -39,6 +39,9 @@ ClientMsg.SubID subId string
 ClientMsg.TailLines tailLines int64
 ClientMsg.Type type string
 ClientMsg.Version version string
+ClusterHealth.Reachable reachable bool
+ClusterHealth.Reason reason,omitempty string
+ClusterHealth.Type type string
 ClusterOverview.Error error,omitempty string
 ClusterOverview.Nodes nodes NodeSummary
 ClusterOverview.Pods pods PodSummary
@@ -427,6 +430,8 @@ ServerMsg.Lines lines,omitempty []string
 ServerMsg.Matched matched,omitempty int
 ServerMsg.Message message,omitempty string
 ServerMsg.Namespaced namespaced,omitempty bool
+ServerMsg.Reachable reachable,omitempty bool
+ServerMsg.Reason reason,omitempty string
 ServerMsg.Row row,omitempty *Row
 ServerMsg.Rows rows,omitempty []Row
 ServerMsg.Source source,omitempty string
