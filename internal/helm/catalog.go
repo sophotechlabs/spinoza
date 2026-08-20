@@ -79,11 +79,29 @@ func (s *Service) askEveryRepo(ctx context.Context, query string) []repoHits {
 }
 
 func (s *Service) askRepo(ctx context.Context, entry RepoEntry, query string) repoHits {
+	if entry.Repo.OCI {
+		return s.probeRegistry(ctx, entry, query)
+	}
 	list, err := s.index.Search(ctx, entry.Repo, query, searchLimit)
 	if err != nil {
 		return repoHits{entry: entry, failure: fmt.Sprintf("%s: %v", repoLabel(entry), err)}
 	}
 	return repoHits{entry: entry, charts: list}
+}
+
+func (s *Service) probeRegistry(ctx context.Context, entry RepoEntry, query string) repoHits {
+	name := strings.TrimSpace(query)
+	if !nameFormat.MatchString(name) {
+		return repoHits{entry: entry}
+	}
+	tags, err := s.index.Versions(ctx, entry.Repo, name)
+	if err != nil {
+		return repoHits{entry: entry}
+	}
+	if len(tags) == 0 {
+		return repoHits{entry: entry}
+	}
+	return repoHits{entry: entry, charts: []charts.Chart{{Name: name, Version: tags[0]}}}
 }
 
 func closerFirst(query string) func(left, right api.HelmChartHit) int {

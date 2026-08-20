@@ -683,6 +683,8 @@ func (s *stubCharts) Warm(repo charts.Repo, chart string) {
 }
 
 func (s *stubCharts) Versions(ctx context.Context, repo charts.Repo, chart string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	unit := repo.URL + "|" + chart
 	s.asked = append(s.asked, unit)
 	err := s.failures[unit]

@@ -134,7 +134,7 @@ func chartRef(chart, repoURL string, oci bool) string {
 
 func renderResult(action, chart, version string, onCluster bool, out string) (api.HelmActionResult, error) {
 	var rendered payload
-	err := json.Unmarshal([]byte(out), &rendered)
+	err := json.Unmarshal([]byte(afterThePull(out)), &rendered)
 	if err != nil {
 		return api.HelmActionResult{}, fmt.Errorf("could not read helm's dry-run output: %w", err)
 	}
@@ -144,6 +144,14 @@ func renderResult(action, chart, version string, onCluster bool, out string) (ap
 		Manifest: rendered.Manifest,
 		Message:  fmt.Sprintf("%s render of %s %s", renderedBy(onCluster), chart, version),
 	}, nil
+}
+
+func afterThePull(out string) string {
+	start := strings.Index(out, "{")
+	if start < 0 {
+		return out
+	}
+	return out[start:]
 }
 
 func renderedBy(onCluster bool) string {

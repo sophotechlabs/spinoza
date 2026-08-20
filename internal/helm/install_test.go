@@ -216,3 +216,36 @@ func hasPair(args []string, flag, value string) bool {
 	}
 	return false
 }
+
+func TestAPreviewReadsPastWhatHelmPrintsWhenItPullsFromARegistry(t *testing.T) {
+	pulled := "Pulled: ghcr.io/acme/charts/podinfo:6.11.0\nDigest: sha256:455d6a04\n" +
+		`{"manifest":"kind: Service\n"}`
+	runner := &stubRunner{out: pulled}
+	svc := installer(t, runner, namespaceObject("demo"))
+	req := installRequest()
+	req.RepoURL = "oci://ghcr.io/acme/charts"
+	req.OCI = true
+	req.DryRun = true
+
+	result, err := svc.Install(t.Context(), req)
+	if err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	if result.Manifest != "kind: Service\n" {
+		t.Fatalf("manifest = %q, want the render helm printed after the pull notice", result.Manifest)
+	}
+}
+
+func TestAPreviewWithNothingThatLooksLikeJSONIsStillReported(t *testing.T) {
+	runner := &stubRunner{out: "Pulled: ghcr.io/acme/charts/podinfo:6.11.0"}
+	svc := installer(t, runner, namespaceObject("demo"))
+	req := installRequest()
+	req.DryRun = true
+
+	_, err := svc.Install(t.Context(), req)
+
+	if err == nil {
+		t.Fatal("output with no render at all was accepted")
+	}
+}

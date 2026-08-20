@@ -226,3 +226,88 @@ func TestChartValuesFromAnOCIRegistryCarriesTheRef(t *testing.T) {
 		t.Fatalf("args = %v, want no --repo for an oci chart", args)
 	}
 }
+
+func TestARegistryIsAskedForTheNameThatWasTyped(t *testing.T) {
+	index := &stubCharts{lists: map[string][]string{
+		"oci://ghcr.io/acme/charts|podinfo": {"6.11.0", "6.10.2"},
+	}}
+	svc := searcher(t, index, []RepoEntry{
+		{Name: "acme", Repo: charts.Repo{URL: "oci://ghcr.io/acme/charts", OCI: true}},
+	})
+
+	found, err := svc.SearchCharts(t.Context(), "podinfo")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found.Hits) != 1 {
+		t.Fatalf("hits = %+v, want the registry's chart", found.Hits)
+	}
+	if found.Hits[0].Chart != "podinfo" || found.Hits[0].Version != "6.11.0" {
+		t.Fatalf("hit = %+v, want the newest tag", found.Hits[0])
+	}
+	if found.Hits[0].URL != "oci://ghcr.io/acme/charts" || found.Hits[0].Repo != "acme" {
+		t.Fatalf("hit = %+v, want the registry it came from", found.Hits[0])
+	}
+	if len(index.searched) != 0 {
+		t.Fatalf("searched = %v, want no index listing for a registry", index.searched)
+	}
+}
+
+func TestARegistryIsNotAskedAboutSomethingThatIsNotAChartName(t *testing.T) {
+	index := &stubCharts{}
+	svc := searcher(t, index, []RepoEntry{
+		{Name: "acme", Repo: charts.Repo{URL: "oci://ghcr.io/acme/charts", OCI: true}},
+	})
+
+	found, err := svc.SearchCharts(t.Context(), "Pod Info")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found.Hits) != 0 {
+		t.Fatalf("hits = %+v", found.Hits)
+	}
+	if len(index.asked) != 0 {
+		t.Fatalf("asked = %v, want the registry left alone", index.asked)
+	}
+}
+
+func TestARegistryThatWillNotAnswerJustAddsNoHit(t *testing.T) {
+	index := &stubCharts{
+		catalog:  map[string][]charts.Chart{"https://one.example.com": {{Name: "podinfo", Version: "6.14.1"}}},
+		failures: map[string]error{"oci://ghcr.io/acme/charts|podinfo": errors.New("status 403")},
+	}
+	svc := searcher(t, index, []RepoEntry{
+		{Name: "one", Repo: charts.Repo{URL: "https://one.example.com"}},
+		{Name: "acme", Repo: charts.Repo{URL: "oci://ghcr.io/acme/charts", OCI: true}},
+	})
+
+	found, err := svc.SearchCharts(t.Context(), "podinfo")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found.Hits) != 1 || found.Hits[0].Repo != "one" {
+		t.Fatalf("hits = %+v, want only the index repository", found.Hits)
+	}
+	if found.Error != "" {
+		t.Fatalf("error = %q, want silence: a registry cannot be listed, so a miss is the only answer", found.Error)
+	}
+}
+
+func TestARegistryWithNoTagsForThatNameAddsNoHit(t *testing.T) {
+	index := &stubCharts{lists: map[string][]string{"oci://ghcr.io/acme/charts|podinfo": {}}}
+	svc := searcher(t, index, []RepoEntry{
+		{Name: "acme", Repo: charts.Repo{URL: "oci://ghcr.io/acme/charts", OCI: true}},
+	})
+
+	found, err := svc.SearchCharts(t.Context(), "podinfo")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+
+	if len(found.Hits) != 0 {
+		t.Fatalf("hits = %+v", found.Hits)
+	}
+}
