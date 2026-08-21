@@ -10,6 +10,8 @@ import {
 } from '../lib/helm';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
+import { useHelmAccess } from '../lib/useHelmAccess';
+import { useHelmRefusal } from '../store/helmAccess';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useProtectedCluster } from '../store/contexts';
 import { confirmName } from '../lib/contexts';
@@ -66,6 +68,24 @@ interface TypedConfirm {
   question: string;
 }
 
+// reasonFor is what the button says about itself: what it would do, or why it
+// cannot. A cluster that refuses the action is the more specific answer, so it
+// is the one shown.
+function reasonFor(
+  what: string,
+  helmReady: boolean,
+  helmReason: string,
+  refused: string | null,
+): string {
+  if (!helmReady) {
+    return helmReason;
+  }
+  if (refused !== null) {
+    return refused;
+  }
+  return what;
+}
+
 function orDash(value: string): string {
   if (value === '') {
     return '-';
@@ -90,6 +110,11 @@ export default function HelmReleaseDetail({
   const protectedCluster = useProtectedCluster();
   const [failure, setFailure] = useState<string | null>(null);
   const now = useNow();
+
+  useHelmAccess(namespace, name);
+  const noUpgrade = useHelmRefusal(namespace, name, 'upgrade');
+  const noRollback = useHelmRefusal(namespace, name, 'rollback');
+  const noUninstall = useHelmRefusal(namespace, name, 'uninstall');
 
   const helmReady = support?.available === true;
   const helmReason = support?.reason ?? 'checking whether helm is available';
@@ -205,8 +230,8 @@ export default function HelmReleaseDetail({
           {fluxRef === undefined && confirming === null && (
             <button
               type="button"
-              disabled={busy || !helmReady || data === null}
-              title={helmReady ? 'Upgrade this release' : helmReason}
+              disabled={busy || !helmReady || data === null || noUpgrade !== null}
+              title={reasonFor('Upgrade this release', helmReady, helmReason, noUpgrade)}
               onClick={() => {
                 setUpgrading(true);
               }}
@@ -218,8 +243,8 @@ export default function HelmReleaseDetail({
           {confirming === null && (
             <button
               type="button"
-              disabled={busy || !helmReady}
-              title={helmReady ? 'Uninstall this release' : helmReason}
+              disabled={busy || !helmReady || noUninstall !== null}
+              title={reasonFor('Uninstall this release', helmReady, helmReason, noUninstall)}
               onClick={() => {
                 askUninstall();
               }}
@@ -331,6 +356,7 @@ export default function HelmReleaseDetail({
               busy={busy}
               helmReady={helmReady}
               helmReason={helmReason}
+              refused={noRollback}
               onRollback={(revision) => {
                 askRollback(revision);
               }}
@@ -411,6 +437,7 @@ function History({
   busy,
   helmReady,
   helmReason,
+  refused,
   onRollback,
 }: {
   revisions: {
@@ -425,6 +452,7 @@ function History({
   busy: boolean;
   helmReady: boolean;
   helmReason: string;
+  refused: string | null;
   onRollback: (revision: number) => void;
 }) {
   if (revisions.length === 0) {
@@ -456,8 +484,13 @@ function History({
               {entry.revision !== current && (
                 <button
                   type="button"
-                  disabled={busy || !helmReady}
-                  title={helmReady ? `Roll back to revision ${String(entry.revision)}` : helmReason}
+                  disabled={busy || !helmReady || refused !== null}
+                  title={reasonFor(
+                    `Roll back to revision ${String(entry.revision)}`,
+                    helmReady,
+                    helmReason,
+                    refused,
+                  )}
                   onClick={() => {
                     onRollback(entry.revision);
                   }}

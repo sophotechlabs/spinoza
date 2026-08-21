@@ -155,7 +155,12 @@ func with(check Check, verb string) Check {
 // Review answers what this object's buttons would need, and reports only the
 // refusals: a capability the cluster did not object to is simply absent.
 func (s *Service) Review(ctx context.Context, ref api.ObjectRef) api.Access {
-	held := capabilitiesFor(ref)
+	return s.answer(ctx, capabilitiesFor(ref))
+}
+
+// answer puts every capability's questions in one pass, so the cache and the
+// concurrency limit hold across the whole set.
+func (s *Service) answer(ctx context.Context, held []capability) api.Access {
 	checks := make([]Check, 0, len(held))
 	for _, one := range held {
 		checks = append(checks, one.checks...)

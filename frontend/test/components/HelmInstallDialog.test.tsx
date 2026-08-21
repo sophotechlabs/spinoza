@@ -5,6 +5,7 @@ import HelmInstallDialog from '../../src/components/HelmInstallDialog';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { useNamespaceStore } from '../../src/store/namespace';
+import { useHelmAccessStore } from '../../src/store/helmAccess';
 
 vi.mock('../../src/lib/monaco', () => ({
   defineEditorTheme: vi.fn(),
@@ -63,7 +64,20 @@ const versionsPayload = {
   ],
 };
 
+const nginxPayload = {
+  hits: [
+    {
+      chart: 'nginx',
+      version: '1.2.3',
+      repo: 'bitnami',
+      url: 'https://charts.bitnami.com/bitnami',
+      versions: ['1.2.3'],
+    },
+  ],
+};
+
 interface Stubs {
+  refused?: { capability: string; reason: string }[];
   search?: unknown;
   searchStatus?: number;
   versions?: unknown;
@@ -83,6 +97,13 @@ function stub(options: Stubs = {}) {
         ok: status === 200,
         status,
         json: () => Promise.resolve(options.search ?? searchPayload),
+      });
+    }
+    if (url.startsWith('/api/helm/access')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ refused: options.refused ?? [] }),
       });
     }
     if (url.startsWith('/api/helm/versions')) {
@@ -142,6 +163,7 @@ const close = vi.fn(function close(this: HTMLDialogElement) {
 
 beforeEach(() => {
   useToastsStore.getState().clear();
+  useHelmAccessStore.setState({ answers: {} });
   useNamespaceStore.setState({ names: ['default', 'demo'] });
   showModal.mockClear();
   close.mockClear();
@@ -488,6 +510,13 @@ describe('the corners of the install dialog', () => {
             json: () => Promise.resolve(searchPayload),
           });
         }
+        if (url.startsWith('/api/helm/access')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ refused: [] }),
+          });
+        }
         if (url.startsWith('/api/helm/versions')) {
           return Promise.resolve({
             ok: true,
@@ -552,6 +581,13 @@ describe('the corners of the install dialog', () => {
             ok: true,
             status: 200,
             json: () => Promise.resolve(searchPayload),
+          });
+        }
+        if (url.startsWith('/api/helm/access')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ refused: [] }),
           });
         }
         if (url.startsWith('/api/helm/versions')) {
@@ -623,5 +659,134 @@ describe('the corners of the install dialog', () => {
     settle.resolve?.({ ok: true, status: 200, json: () => Promise.resolve(versionsPayload) });
 
     expect(screen.queryByLabelText('Chart version')).not.toBeInTheDocument();
+  });
+});
+
+// A search that comes back after the user has typed on is about a query nobody
+// is looking at any more, and putting its hits on screen would replace the ones
+// that are.
+describe('HelmInstallDialog and a search that was left behind', () => {
+  it('drops the hits for a query that has moved on', async () => {
+    const user = userEvent.setup();
+    let answerFirst: (body: unknown) => void = () => undefined;
+    const held = new Promise((resolve) => {
+      answerFirst = resolve;
+    });
+    let asked = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/charts')) {
+          asked += 1;
+          if (asked === 1) {
+            return held;
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(nginxPayload),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ refused: [] }),
+        });
+      }),
+    );
+    renderDialog();
+
+    await user.type(screen.getByLabelText('Search charts'), 'pod');
+    await waitFor(() => {
+      expect(asked).toBe(1);
+    });
+    await user.type(screen.getByLabelText('Search charts'), 'x');
+    await screen.findByRole('button', { name: /^nginx/ });
+    answerFirst({ ok: true, status: 200, json: () => Promise.resolve(searchPayload) });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^nginx/ })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /^podinfo/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('HelmInstallDialog when the cluster refuses', () => {
+  it('holds back Install and says why', async () => {
+    const user = userEvent.setup();
+    stub({ refused: [{ capability: 'install', reason: 'no creating secrets in demo' }] });
+    renderDialog();
+    await reachTheForm(user);
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    const install = await screen.findByRole('button', { name: 'Install podinfo' });
+
+    await waitFor(() => {
+      expect(install).toBeDisabled();
+    });
+    expect(install).toHaveAttribute('title', 'no creating secrets in demo');
+  });
+
+  // A preview is a dry run. It writes no release object, so a cluster that
+  // refuses the install still lets you see what it would have done.
+  it('still previews what would be installed', async () => {
+    const user = userEvent.setup();
+    const calls = stub({
+      refused: [{ capability: 'install', reason: 'no creating secrets in demo' }],
+      installBody: { action: 'install', dryRun: true, manifest: 'kind: Service\n' },
+    });
+    renderDialog();
+    await reachTheForm(user);
+
+    const preview = screen.getByRole('button', { name: 'Preview' });
+    expect(preview).toBeEnabled();
+    await user.click(preview);
+
+    expect(await screen.findByTestId('manifest-diff')).toBeInTheDocument();
+    expect(calls.some((call) => call.url.includes('dryRun=true'))).toBe(true);
+  });
+
+  it('leaves Install alone when nothing is refused', async () => {
+    const user = userEvent.setup();
+    stub({ installBody: { action: 'install', dryRun: true, manifest: 'kind: Service\n' } });
+    renderDialog();
+    await reachTheForm(user);
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    const install = await screen.findByRole('button', { name: 'Install podinfo' });
+
+    await waitFor(() => {
+      expect(install).toBeEnabled();
+    });
+    expect(install).toHaveAttribute('title', 'Install podinfo into demo');
+  });
+
+  it('asks about the namespace it would install into', async () => {
+    const user = userEvent.setup();
+    const calls = stub();
+    renderDialog();
+    await reachTheForm(user);
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.url === '/api/helm/access?namespace=demo')).toBe(true);
+    });
+  });
+
+  // The namespace is a field on the form, so the answer has to follow it.
+  it('asks again when the namespace is changed', async () => {
+    const user = userEvent.setup();
+    const calls = stub();
+    renderDialog();
+    await reachTheForm(user);
+    await waitFor(() => {
+      expect(calls.some((call) => call.url === '/api/helm/access?namespace=demo')).toBe(true);
+    });
+
+    await user.clear(screen.getByLabelText('Namespace'));
+    await user.type(screen.getByLabelText('Namespace'), 'prod');
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.url === '/api/helm/access?namespace=prod')).toBe(true);
+    });
   });
 });

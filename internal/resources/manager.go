@@ -467,6 +467,16 @@ func (m *Manager) AccessEach(ctx context.Context, name string, refs []api.Object
 	return m.perms.ReviewEach(ctx, name, refs)
 }
 
+// HelmAccess answers what the cluster would refuse a helm action in this
+// namespace. An empty name is a release that does not exist yet, which is what
+// an install is.
+func (m *Manager) HelmAccess(ctx context.Context, namespace, name string) api.Access {
+	if m.perms == nil {
+		return api.Access{}
+	}
+	return m.perms.ReviewRelease(ctx, namespace, m.helm.ReleaseDriver(ctx, namespace, name))
+}
+
 func (m *Manager) ExecSupport(ctx context.Context, req exec.Request) (api.ExecSupport, error) {
 	if m.shells == nil {
 		return api.ExecSupport{}, fmt.Errorf("%w: exec is not wired up", api.ErrInternal)

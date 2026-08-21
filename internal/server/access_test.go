@@ -479,3 +479,70 @@ func TestAnErrorNobodyIsListeningForIsNotFatal(t *testing.T) {
 		t.Fatalf("status = %d, want the code written before the body failed", writer.status)
 	}
 }
+
+func TestHelmAccessReportsWhatTheClusterRefuses(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, false, "no writing here"), newPod())
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/helm/access?namespace=demo&name=podinfo", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	refused := accessOf(t, body)
+	for _, capability := range []string{"install", "upgrade", "rollback", "uninstall"} {
+		if refused[capability] != "no writing here" {
+			t.Fatalf("%s = %q, want the cluster's reason", capability, refused[capability])
+		}
+	}
+}
+
+func TestHelmAccessHoldsNothingBackWhenEverythingIsAllowed(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/helm/access?namespace=demo&name=podinfo", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	if len(accessOf(t, body)) != 0 {
+		t.Fatalf("refused = %v, want nothing", accessOf(t, body))
+	}
+}
+
+// Installing is asking about a release that is not there yet, so the name is
+// optional.
+func TestHelmAccessAnswersWithoutAReleaseName(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, false, "no writing here"), newPod())
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/helm/access?namespace=demo", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	if accessOf(t, body)["install"] != "no writing here" {
+		t.Fatalf("refused = %v, want the install held back", accessOf(t, body))
+	}
+}
+
+func TestHelmAccessNeedsANamespace(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/helm/access?name=podinfo", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "namespace") {
+		t.Fatalf("message = %s, want it to say what is missing", body)
+	}
+}
+
+func TestHelmAccessCannotBeChanged(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+
+	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/helm/access?namespace=demo", nil)
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", resp.StatusCode)
+	}
+}

@@ -55,6 +55,7 @@ type Objects interface {
 type Permissions interface {
 	Access(ctx context.Context, ref api.ObjectRef) api.Access
 	AccessEach(ctx context.Context, capability string, refs []api.ObjectRef) api.BulkAccess
+	HelmAccess(ctx context.Context, namespace, name string) api.Access
 }
 
 type Feeds interface {

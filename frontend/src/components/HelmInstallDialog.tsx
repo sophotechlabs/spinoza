@@ -3,6 +3,8 @@ import type { HelmChartHit, HelmChartVersions } from '../lib/types';
 import { fetchChartValues, fetchHelmVersions, installRelease, searchCharts } from '../lib/helm';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useProtectedCluster } from '../store/contexts';
+import { useHelmAccess } from '../lib/useHelmAccess';
+import { useHelmRefusal } from '../store/helmAccess';
 import { useNamespaceStore } from '../store/namespace';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
@@ -95,6 +97,7 @@ export default function HelmInstallDialog({
   const [typing, setTyping] = useState(false);
   const protectedCluster = useProtectedCluster();
   const known = useNamespaceStore((state) => state.names);
+  useHelmAccess(target, '');
 
   useEffect(() => {
     const dialog = ref.current;
@@ -239,6 +242,9 @@ export default function HelmInstallDialog({
   }
 
   const ready = choice !== null && name !== '' && target !== '';
+  // The preview is a dry run, which writes no release object at all, so it is
+  // never the thing a refusal stands in the way of.
+  const noInstall = useHelmRefusal(target, '', 'install');
 
   return (
     <dialog
@@ -501,7 +507,8 @@ export default function HelmInstallDialog({
                   </button>
                   <button
                     type="button"
-                    disabled={busy || !ready}
+                    disabled={busy || !ready || noInstall !== null}
+                    title={noInstall ?? `Install ${name} into ${target}`}
                     onClick={() => {
                       if (choice !== null) {
                         askInstall(choice);

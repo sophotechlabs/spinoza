@@ -150,6 +150,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPost, "/api/resources", s.refreshResources, false},
 		{http.MethodGet, "/api/overview", s.handleOverview, false},
 		{http.MethodGet, "/api/helm/support", s.handleHelmSupport, true},
+		{http.MethodGet, "/api/helm/access", s.helmAccess, false},
 		{http.MethodGet, "/api/helm/release", s.handleHelmRelease, false},
 		{http.MethodGet, "/api/helm/versions", s.handleHelmVersions, false},
 		{http.MethodGet, "/api/helm/charts", s.handleHelmCharts, false},

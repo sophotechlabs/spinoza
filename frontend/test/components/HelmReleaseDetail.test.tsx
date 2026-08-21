@@ -6,6 +6,7 @@ import HelmReleaseDetail from '../../src/components/HelmReleaseDetail';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { useHelmStore } from '../../src/store/helm';
+import { useHelmAccessStore } from '../../src/store/helmAccess';
 
 vi.mock('../../src/components/HelmUpgradeDialog', () => ({
   default: ({
@@ -82,7 +83,13 @@ function detail(patch: Partial<Detail> = {}): Detail {
   };
 }
 
+interface Refusal {
+  capability: string;
+  reason: string;
+}
+
 interface Stubs {
+  refused?: Refusal[];
   detail?: Detail;
   detailStatus?: number;
   support?: { available: boolean; reason?: string; binary: string };
@@ -98,6 +105,12 @@ function stub(options: Stubs = {}) {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(options.support ?? { available: true, binary: 'helm' }),
+      });
+    }
+    if (url.startsWith('/api/helm/access')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ refused: options.refused ?? [] }),
       });
     }
     if (url.startsWith('/api/helm/action')) {
@@ -140,6 +153,7 @@ function renderDetail() {
 
 beforeEach(() => {
   useToastsStore.getState().clear();
+  useHelmAccessStore.setState({ answers: {} });
 });
 
 afterEach(() => {
@@ -481,5 +495,97 @@ describe('HelmReleaseDetail on a protected cluster', () => {
 
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
     expect(calls.some((call) => call.url.startsWith('/api/helm/action'))).toBe(false);
+  });
+});
+
+describe('HelmReleaseDetail when the cluster refuses', () => {
+  it('holds back Upgrade and says why', async () => {
+    stub({ refused: [{ capability: 'upgrade', reason: 'no creating secrets in demo' }] });
+    renderDetail();
+
+    const upgrade = await screen.findByRole('button', { name: 'Upgrade' });
+
+    await waitFor(() => {
+      expect(upgrade).toBeDisabled();
+    });
+    expect(upgrade).toHaveAttribute('title', 'no creating secrets in demo');
+  });
+
+  it('holds back Uninstall and says why', async () => {
+    stub({ refused: [{ capability: 'uninstall', reason: 'no deleting secrets in demo' }] });
+    renderDetail();
+
+    const uninstall = await screen.findByRole('button', { name: 'Uninstall' });
+
+    await waitFor(() => {
+      expect(uninstall).toBeDisabled();
+    });
+    expect(uninstall).toHaveAttribute('title', 'no deleting secrets in demo');
+  });
+
+  it('holds back every Roll back and says why', async () => {
+    const user = userEvent.setup();
+    stub({ refused: [{ capability: 'rollback', reason: 'no creating secrets in demo' }] });
+    renderDetail();
+    await user.click(await screen.findByRole('button', { name: 'History' }));
+
+    const rollback = await screen.findByRole('button', { name: 'Roll back' });
+
+    await waitFor(() => {
+      expect(rollback).toBeDisabled();
+    });
+    expect(rollback).toHaveAttribute('title', 'no creating secrets in demo');
+  });
+
+  // One refusal is about one action. An upgrade nobody may make says nothing
+  // about uninstalling.
+  it('leaves the actions it was not told about alone', async () => {
+    stub({ refused: [{ capability: 'upgrade', reason: 'no creating secrets in demo' }] });
+    renderDetail();
+
+    const uninstall = await screen.findByRole('button', { name: 'Uninstall' });
+
+    await waitFor(() => {
+      expect(uninstall).toBeEnabled();
+    });
+  });
+
+  it('leaves every button alone when nothing is refused', async () => {
+    stub();
+    renderDetail();
+
+    const upgrade = await screen.findByRole('button', { name: 'Upgrade' });
+
+    await waitFor(() => {
+      expect(upgrade).toBeEnabled();
+    });
+    expect(upgrade).toHaveAttribute('title', 'Upgrade this release');
+  });
+
+  it('asks about the release that is open', async () => {
+    const calls = stub();
+    renderDetail();
+
+    await waitFor(() => {
+      expect(
+        calls.some((call) => call.url === '/api/helm/access?namespace=demo&name=podinfo'),
+      ).toBe(true);
+    });
+  });
+
+  // Helm missing is the plainer problem, and it is what stops every button.
+  it('says helm is missing before it says the cluster refused', async () => {
+    stub({
+      support: { available: false, reason: 'helm was not found on PATH', binary: 'helm' },
+      refused: [{ capability: 'uninstall', reason: 'no deleting secrets in demo' }],
+    });
+    renderDetail();
+
+    const uninstall = await screen.findByRole('button', { name: 'Uninstall' });
+
+    await waitFor(() => {
+      expect(uninstall).toBeDisabled();
+    });
+    expect(uninstall).toHaveAttribute('title', 'helm was not found on PATH');
   });
 });

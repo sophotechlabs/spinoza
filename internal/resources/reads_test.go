@@ -22,6 +22,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/exec"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
@@ -236,6 +237,35 @@ func TestAccessReportsWhatTheClusterRefuses(t *testing.T) {
 	}
 }
 
+// The helm buttons are answered for even when the cluster has no helm service
+// wired up: where a release would be stored does not depend on the binary.
+func TestHelmAccessReportsWhatTheClusterRefuses(t *testing.T) {
+	mgr, cancel := managerWithClientset(t, decidingClientset(false, "not for you"))
+	defer cancel()
+
+	result := mgr.HelmAccess(t.Context(), "prod", "podinfo")
+
+	if len(result.Refused) != 4 {
+		t.Fatalf("refused = %v, want every helm button held back", result.Refused)
+	}
+	for _, refusal := range result.Refused {
+		if refusal.Reason != "not for you" {
+			t.Fatalf("%s reason = %q", refusal.Capability, refusal.Reason)
+		}
+	}
+}
+
+func TestHelmAccessHoldsNothingBackWhenEverythingIsAllowed(t *testing.T) {
+	mgr, cancel := managerWithClientset(t, decidingClientset(true, ""))
+	defer cancel()
+
+	result := mgr.HelmAccess(t.Context(), "prod", "podinfo")
+
+	if len(result.Refused) != 0 {
+		t.Fatalf("refused = %v, want nothing", result.Refused)
+	}
+}
+
 func TestAccessHoldsNothingBackWhenEverythingIsAllowed(t *testing.T) {
 	mgr, cancel := managerWithClientset(t, decidingClientset(true, ""))
 	defer cancel()
@@ -326,6 +356,11 @@ func TestWhatAManagerWithNothingWiredUpSays(t *testing.T) {
 	t.Run("access", func(t *testing.T) {
 		if len(mgr.Access(t.Context(), ref).Refused) != 0 {
 			t.Fatal("a manager with no cluster refused something")
+		}
+	})
+	t.Run("helm access", func(t *testing.T) {
+		if len(mgr.HelmAccess(t.Context(), "prod", "web").Refused) != 0 {
+			t.Fatal("a manager with no cluster refused a helm action")
 		}
 	})
 }
@@ -506,4 +541,79 @@ type rangeProxy struct{}
 func (*rangeProxy) Get(context.Context, prom.Target, string, map[string]string) ([]byte, error) {
 	return []byte(`{"status":"success","data":{"resultType":"matrix","result":` +
 		`[{"metric":{},"values":[[1785434552,"0.028"],[1785434612,"0.031"]]}]}}`), nil
+}
+
+// refusingResource answers every access review except the ones about one kind,
+// so a test can tell which kind was asked about by what comes back refused.
+func refusingResource(resource string) *k8sfake.Clientset {
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor(
+		"create",
+		"selfsubjectaccessreviews",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			create, ok := action.(k8stesting.CreateAction)
+			if !ok {
+				return false, nil, nil
+			}
+			review, ok := create.GetObject().(*authv1.SelfSubjectAccessReview)
+			if !ok {
+				return false, nil, nil
+			}
+			refused := review.Spec.ResourceAttributes.Resource == resource
+			review.Status = authv1.SubjectAccessReviewStatus{Allowed: !refused, Reason: "not that kind"}
+			return true, review, nil
+		},
+	)
+	return cs
+}
+
+func helmManager(t *testing.T, cs *k8sfake.Clientset, releases *helm.Service) (*Manager, func()) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     newClient(t),
+		Clientset:   cs,
+		Helm:        releases,
+		Descriptors: testDescs(),
+	})
+	return mgr, cancel
+}
+
+func releaseConfigMap() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "prod",
+			Name:      "sh.helm.release.v1.podinfo.v1",
+			Labels:    map[string]string{"owner": "helm", "name": "podinfo", "version": "1"},
+		},
+		Data: map[string]string{"release": "body"},
+	}
+}
+
+// A release kept in configmaps is asked about as one. Getting this wrong would
+// grey a button over a kind the release has nothing to do with.
+func TestHelmAccessAsksAboutWhereTheReleaseIsKept(t *testing.T) {
+	cs := refusingResource("configmaps")
+	store := k8sfake.NewClientset(releaseConfigMap())
+	mgr, cancel := helmManager(t, cs, helm.NewService(store, nil, nil, nil, nil, api.ContextRef{}))
+	defer cancel()
+
+	result := mgr.HelmAccess(t.Context(), "prod", "podinfo")
+
+	if len(result.Refused) != 4 {
+		t.Fatalf("refused = %v, want the configmap release held back", result.Refused)
+	}
+}
+
+func TestHelmAccessDoesNotAskAboutTheKindTheReleaseIsNotIn(t *testing.T) {
+	cs := refusingResource("secrets")
+	store := k8sfake.NewClientset(releaseConfigMap())
+	mgr, cancel := helmManager(t, cs, helm.NewService(store, nil, nil, nil, nil, api.ContextRef{}))
+	defer cancel()
+
+	result := mgr.HelmAccess(t.Context(), "prod", "podinfo")
+
+	if len(result.Refused) != 0 {
+		t.Fatalf("refused = %v; a configmap release was refused over secrets", result.Refused)
+	}
 }

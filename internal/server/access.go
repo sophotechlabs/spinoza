@@ -44,6 +44,22 @@ func (s *Server) bulkAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().AccessEach(bounded, query.Capability, query.Refs))
 }
 
+// helmAccess answers what the cluster would refuse a helm action in one
+// namespace. A release name is optional: without one the question is about
+// installing something that is not there yet, and the answer is about where a
+// new release would be stored.
+func (s *Server) helmAccess(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	namespace := query.Get("namespace")
+	if namespace == "" {
+		writeError(w, http.StatusBadRequest, "namespace is required")
+		return
+	}
+	bounded, cancel := context.WithTimeout(r.Context(), accessTimeout)
+	defer cancel()
+	writeJSON(w, s.manager().HelmAccess(bounded, namespace, query.Get("name")))
+}
+
 // readable holds the answers exact. An object without a name would be asked
 // about by kind alone, and a refusal for the kind is not a refusal for the row
 // that was selected.
