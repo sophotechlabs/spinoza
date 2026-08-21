@@ -46,6 +46,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/overview"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
+	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
@@ -113,6 +114,7 @@ type Manager struct {
 	debugger    *debugcontainer.Service
 	nodeShells  *nodeshell.Service
 	perms       *access.Service
+	answers     *reach.Sink
 	helm        *helm.Service
 	prom        *prom.Client
 	disco       kubediscovery.CachedDiscoveryInterface
@@ -186,6 +188,7 @@ type Deps struct {
 	Helm        *helm.Service
 	Prometheus  *prom.Client
 	Charts      *charts.Cache
+	Reach       *reach.Sink
 	Categories  []api.Category
 	Descriptors map[string]api.ResourceDescriptor
 }
@@ -205,6 +208,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		debugger:   deps.Debugger,
 		nodeShells: deps.NodeShells,
 		perms:      access.New(deps.Clientset),
+		answers:    deps.Reach,
 		helm:       deps.Helm,
 		prom:       deps.Prometheus,
 		cats:       deps.Categories,
@@ -433,6 +437,13 @@ func (m *Manager) Ping(ctx context.Context) error {
 	}
 }
 
+// Reach is what the requests already made say about the cluster. It is nil
+// until a client is built on a real config, which is what the tests and the
+// no-cluster case look like.
+func (m *Manager) Reach() *reach.Sink {
+	return m.answers
+}
+
 // answered is true when the apiserver replied at all, even to refuse.
 func answered(err error) bool {
 	if err == nil {
@@ -447,6 +458,13 @@ func (m *Manager) Access(ctx context.Context, ref api.ObjectRef) api.Access {
 		return api.Access{}
 	}
 	return m.perms.Review(ctx, ref)
+}
+
+func (m *Manager) AccessEach(ctx context.Context, name string, refs []api.ObjectRef) api.BulkAccess {
+	if m.perms == nil {
+		return api.BulkAccess{}
+	}
+	return m.perms.ReviewEach(ctx, name, refs)
 }
 
 func (m *Manager) ExecSupport(ctx context.Context, req exec.Request) (api.ExecSupport, error) {

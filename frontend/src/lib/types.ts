@@ -194,6 +194,23 @@ export interface Access {
   refused: Refusal[];
 }
 
+// One question about a whole selection: what would stand in the way of this
+// capability, row by row.
+export interface AccessQuery {
+  capability: string;
+  refs: ObjectRef[];
+}
+
+export interface BulkAccess {
+  refused: RowRefusal[];
+}
+
+// at is the row's place in the list that was asked about.
+export interface RowRefusal {
+  at: number;
+  reason: string;
+}
+
 export const EVENT_TYPES = ['Normal', 'Warning'] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

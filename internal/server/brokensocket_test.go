@@ -89,9 +89,16 @@ func (l *breakingListener) Accept() (net.Conn, error) {
 // underneath a subscription that can no longer be written to.
 func brokenServer(t *testing.T) (*httptest.Server, *breaking, dynamic.Interface) {
 	t.Helper()
+	return brokenServerResyncing(t, defaultResyncInterval)
+}
+
+func brokenServerResyncing(t *testing.T, resync time.Duration) (*httptest.Server, *breaking, dynamic.Interface) {
+	t.Helper()
 	mgr, dyn := testManager(t)
 	state := &breaking{}
-	ts := httptest.NewUnstartedServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
+	srv := New(fixed(mgr), testAssets(), testToken)
+	srv.resyncEvery = resync
+	ts := httptest.NewUnstartedServer(authed(srv.Handler()))
 	ts.Listener = &breakingListener{Listener: ts.Listener, state: state}
 	ts.Start()
 	t.Cleanup(ts.Close)
@@ -247,12 +254,7 @@ func TestAResyncThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 // A feed whose window goes away in the middle of the pause between resyncs has
 // nothing left to write to, and has to give up rather than wait out the pause.
 func TestAFeedWhoseWindowGoesAwayMidPauseStops(t *testing.T) {
-	was := minResyncInterval
-	minResyncInterval = 2 * time.Second
-	t.Cleanup(func() {
-		minResyncInterval = was
-	})
-	ts, _, _ := brokenServer(t)
+	ts, _, _ := brokenServerResyncing(t, 2*time.Second)
 	ctx, conn := openBrokenFeed(t, ts)
 	readAnyMsg(ctx, t, conn)
 	sendMsg(ctx, t, conn, api.ClientMsg{

@@ -52,23 +52,32 @@ func New(cs kubernetes.Interface) *Service {
 }
 
 // review answers every check, asking the apiserver only about the ones whose
-// answer is not still fresh.
+// answer is not still fresh. The same question asked twice in one pass is one
+// question: a selection of fifty nodes shares the cluster-wide read a drain
+// needs, and the cache cannot help with answers that have not arrived yet.
 func (s *Service) review(ctx context.Context, checks []Check) []Decision {
 	out := make([]Decision, len(checks))
-	slots := make(chan struct{}, atOnce)
-	var group sync.WaitGroup
+	asking := map[Check][]int{}
 	for i, check := range checks {
 		held, ok := s.recall(check)
 		if ok {
 			out[i] = held
 			continue
 		}
+		asking[check] = append(asking[check], i)
+	}
+	slots := make(chan struct{}, atOnce)
+	var group sync.WaitGroup
+	for check, places := range asking {
 		group.Go(func() {
 			slots <- struct{}{}
 			defer func() {
 				<-slots
 			}()
-			out[i] = s.ask(ctx, check)
+			decision := s.ask(ctx, check)
+			for _, at := range places {
+				out[at] = decision
+			}
 		})
 	}
 	group.Wait()

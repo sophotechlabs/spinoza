@@ -2,6 +2,7 @@ import type {
   Access,
   ActionResult,
   ArgoActionResult,
+  BulkAccess,
   Category,
   ClusterOverview,
   Column,
@@ -500,6 +501,16 @@ export function parseAccess(body: unknown): Access {
   return {
     refused: listOf(item.refused, (entry) => ({
       capability: asString(entry.capability),
+      reason: asString(entry.reason),
+    })),
+  };
+}
+
+export function parseBulkAccess(body: unknown): BulkAccess {
+  const item = asRecord(body);
+  return {
+    refused: listOf(item.refused, (entry) => ({
+      at: asNumber(entry.at),
       reason: asString(entry.reason),
     })),
   };

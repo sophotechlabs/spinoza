@@ -1,4 +1,6 @@
 Access.Refused refused []Refusal
+AccessQuery.Capability capability string
+AccessQuery.Refs refs []ObjectRef
 ActionResult.Action action string
 ActionResult.DryRun dryRun,omitempty bool
 ActionResult.Message message string
@@ -25,6 +27,7 @@ ArgoDashboard.Apps apps []ArgoApp
 ArgoDashboard.Error error,omitempty string
 ArgoDashboard.Projects projects []ArgoApp
 Build.Version version string
+BulkAccess.Refused refused []RowRefusal
 Category.Name name string
 Category.Resources resources []ResourceDescriptor
 ClientMsg.Container container string
@@ -412,6 +415,8 @@ RowDeleted.Type type string
 RowDeleted.UID uid string
 RowFilter.Field field string
 RowFilter.Value value string
+RowRefusal.At at int
+RowRefusal.Reason reason string
 SearchHit.Group group string
 SearchHit.Kind kind string
 SearchHit.Name name string

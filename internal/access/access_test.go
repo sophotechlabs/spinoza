@@ -19,9 +19,13 @@ import (
 // authorizer answers access reviews the way an apiserver does, recording what it
 // was asked so a test can check the question and not only the answer.
 type authorizer struct {
-	mu     sync.Mutex
+	mu sync.Mutex
+
 	asked  []authv1.ResourceAttributes
 	refuse map[string]string
+	// byName refuses one object rather than a whole kind, which is what a
+	// resourceNames rule does.
+	byName map[string]string
 	broken bool
 	unsure bool
 }
@@ -39,7 +43,12 @@ func (a *authorizer) answer(action k8stesting.Action) (bool, runtime.Object, err
 	a.mu.Lock()
 	a.asked = append(a.asked, attributes)
 	reason, refused := a.refuse[key(attributes)]
+	named, refusedByName := a.byName[attributes.Name]
 	a.mu.Unlock()
+	if refusedByName {
+		reason = named
+		refused = true
+	}
 
 	if a.broken {
 		return true, nil, errors.New("the apiserver would not answer")
@@ -266,6 +275,25 @@ func TestANodeIsNotAskedAboutEvictingEverywhere(t *testing.T) {
 
 	if _, ok := asked(auth)["create  pods eviction"]; ok {
 		t.Fatal("draining was gated on being able to evict in every namespace")
+	}
+}
+
+// Cordoning and draining both need the same patch, and one object's review puts
+// both questions at once. It is still one question.
+func TestARequirementTwoButtonsShareIsAskedOnce(t *testing.T) {
+	auth := refusing(nil)
+	service := serviceFor(t, auth)
+
+	service.Review(t.Context(), nodeRef())
+
+	patches := 0
+	for _, one := range auth.questions() {
+		if one.Verb == "patch" && one.Resource == "nodes" {
+			patches++
+		}
+	}
+	if patches != 1 {
+		t.Fatalf("asked to patch the node %d times, want once", patches)
 	}
 }
 

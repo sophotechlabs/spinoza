@@ -501,6 +501,24 @@ type Refusal struct {
 	Reason     string `json:"reason"`
 }
 
+// AccessQuery asks one question about a whole selection: what would stand in
+// the way of this capability, object by object.
+type AccessQuery struct {
+	Capability string      `json:"capability"`
+	Refs       []ObjectRef `json:"refs"`
+}
+
+// BulkAccess names only the objects the cluster refuses, by their place in the
+// list that was asked about.
+type BulkAccess struct {
+	Refused []RowRefusal `json:"refused"`
+}
+
+type RowRefusal struct {
+	At     int    `json:"at"`
+	Reason string `json:"reason"`
+}
+
 type Event struct {
 	Type      string `json:"type"`
 	Reason    string `json:"reason"`

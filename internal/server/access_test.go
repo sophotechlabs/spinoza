@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -94,13 +96,143 @@ func TestAccessNeedsAnObject(t *testing.T) {
 	}
 }
 
-func TestAccessIsReadOnly(t *testing.T) {
+func TestAccessCannotBeChanged(t *testing.T) {
 	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
 
-	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/access"+objectQuery, nil)
+	resp, _ := doRequest(t, http.MethodPut, ts.URL+"/api/access"+objectQuery, nil)
 
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want 405", resp.StatusCode)
+	}
+}
+
+func bulkQuery(capability string, names ...string) string {
+	refs := make([]api.ObjectRef, 0, len(names))
+	for _, name := range names {
+		refs = append(refs, api.ObjectRef{
+			Version:   "v1",
+			Resource:  "pods",
+			Namespace: "flux-system",
+			Name:      name,
+		})
+	}
+	body, err := json.Marshal(api.AccessQuery{Capability: capability, Refs: refs})
+	if err != nil {
+		panic(err)
+	}
+	return string(body)
+}
+
+func bulkAccessOf(t *testing.T, body []byte) api.BulkAccess {
+	t.Helper()
+	var result api.BulkAccess
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatalf("decode: %v (%s)", err, body)
+	}
+	return result
+}
+
+func askAccess(t *testing.T, ts *httptest.Server, body string) (*http.Response, []byte) {
+	t.Helper()
+	return doRequest(t, http.MethodPost, ts.URL+"/api/access", strings.NewReader(body))
+}
+
+func TestASelectionIsAnsweredRowByRow(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, false, "no deleting here"), newPod())
+
+	resp, body := askAccess(t, ts, bulkQuery("delete", "web-0", "web-1"))
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	result := bulkAccessOf(t, body)
+	if len(result.Refused) != 2 {
+		t.Fatalf("refused = %v, want both rows", result.Refused)
+	}
+	if result.Refused[0].At != 0 || result.Refused[1].At != 1 {
+		t.Fatalf("refused = %v, want the rows named by their place", result.Refused)
+	}
+	if result.Refused[0].Reason != "no deleting here" {
+		t.Fatalf("reason = %q, want the cluster's own words", result.Refused[0].Reason)
+	}
+}
+
+func TestASelectionThePermittedIsAnsweredWithNothing(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+
+	resp, body := askAccess(t, ts, bulkQuery("delete", "web-0", "web-1"))
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	if len(bulkAccessOf(t, body).Refused) != 0 {
+		t.Fatalf("refused = %s, want nothing", body)
+	}
+}
+
+func TestASelectionQueryThatIsNotJsonIsRefused(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+
+	resp, body := askAccess(t, ts, "{")
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+}
+
+func TestASelectionQueryNeedsACapability(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+
+	resp, body := askAccess(t, ts, bulkQuery("", "web-0"))
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+}
+
+// A question without a name is a question about the kind, and a kind that is
+// refused says nothing about the row that was selected.
+func TestASelectionQueryNeedsEveryObjectNamed(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+	body := `{"capability":"delete","refs":[{"version":"v1","resource":"pods","namespace":"prod"}]}`
+
+	resp, said := askAccess(t, ts, body)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, said)
+	}
+	if !strings.Contains(string(said), "name") {
+		t.Fatalf("message = %s, want it to say what is missing", said)
+	}
+}
+
+func TestASelectionLargerThanTheCapIsRefused(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+	names := make([]string, 0, maxAccessRefs+1)
+	for i := range maxAccessRefs + 1 {
+		names = append(names, fmt.Sprintf("web-%d", i))
+	}
+
+	resp, body := askAccess(t, ts, bulkQuery("delete", names...))
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), strconv.Itoa(maxAccessRefs)) {
+		t.Fatalf("message = %s, want it to say how many is too many", body)
+	}
+}
+
+func TestASelectionOfNothingIsAnsweredWithNothing(t *testing.T) {
+	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
+
+	resp, body := askAccess(t, ts, bulkQuery("delete"))
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	if len(bulkAccessOf(t, body).Refused) != 0 {
+		t.Fatalf("refused = %s", body)
 	}
 }
 

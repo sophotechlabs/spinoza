@@ -175,6 +175,45 @@ func (s *Service) Review(ctx context.Context, ref api.ObjectRef) api.Access {
 	return api.Access{Refused: refused}
 }
 
+// ReviewEach answers one capability across many objects in a single pass, so
+// that the cache and the concurrency limit hold across the whole selection
+// rather than across each object on its own. A capability that means nothing
+// for a kind is not a refusal: it is simply never asked about.
+func (s *Service) ReviewEach(ctx context.Context, name string, refs []api.ObjectRef) api.BulkAccess {
+	wanted := make([][]Check, len(refs))
+	checks := []Check{}
+	for i, ref := range refs {
+		found, ok := capabilityNamed(name, ref)
+		if !ok {
+			continue
+		}
+		wanted[i] = found.checks
+		checks = append(checks, found.checks...)
+	}
+	decisions := s.review(ctx, checks)
+	refused := make([]api.RowRefusal, 0, len(refs))
+	at := 0
+	for i, mine := range wanted {
+		answers := decisions[at : at+len(mine)]
+		at += len(mine)
+		stopped, why := firstRefusal(mine, answers)
+		if stopped == nil {
+			continue
+		}
+		refused = append(refused, api.RowRefusal{At: i, Reason: because(why, *stopped)})
+	}
+	return api.BulkAccess{Refused: refused}
+}
+
+func capabilityNamed(name string, ref api.ObjectRef) (capability, bool) {
+	for _, one := range capabilitiesFor(ref) {
+		if one.name == name {
+			return one, true
+		}
+	}
+	return capability{}, false
+}
+
 func firstRefusal(checks []Check, decisions []Decision) (*Check, string) {
 	for i, decision := range decisions {
 		if decision.Allowed {

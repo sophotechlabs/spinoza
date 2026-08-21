@@ -63,37 +63,39 @@ type FilePicker func(ctx context.Context) (string, error)
 const noFilePicker = "only the desktop window can open a file dialog; type the path instead"
 
 type Server struct {
-	cluster    Cluster
-	assets     fs.FS
-	files      http.Handler
-	token      string
-	mu         sync.Mutex
-	picker     FilePicker
-	localShell LocalShellOpener
-	settings   Settings
-	window     Window
-	browser    BrowserOpener
-	views      views
-	sessions   map[*wsSession]struct{}
-	terminals  map[*websocket.Conn]struct{}
-	profiler   bool
-	health     api.ClusterHealth
-	watching   bool
-	pingEvery  time.Duration
+	cluster     Cluster
+	assets      fs.FS
+	files       http.Handler
+	token       string
+	mu          sync.Mutex
+	picker      FilePicker
+	localShell  LocalShellOpener
+	settings    Settings
+	window      Window
+	browser     BrowserOpener
+	views       views
+	sessions    map[*wsSession]struct{}
+	terminals   map[*websocket.Conn]struct{}
+	profiler    bool
+	health      api.ClusterHealth
+	watching    bool
+	pingEvery   time.Duration
+	resyncEvery time.Duration
 }
 
 func New(cluster Cluster, assets fs.FS, token string) *Server {
 	return &Server{
-		cluster:   cluster,
-		assets:    assets,
-		files:     http.FileServerFS(assets),
-		token:     token,
-		settings:  settings.Memory(),
-		sessions:  map[*wsSession]struct{}{},
-		terminals: map[*websocket.Conn]struct{}{},
-		health:    assumedHealth(),
-		pingEvery: defaultPingInterval,
-		views:     views{grace: defaultIdleGrace, await: defaultBrowserAwait},
+		cluster:     cluster,
+		assets:      assets,
+		files:       http.FileServerFS(assets),
+		token:       token,
+		settings:    settings.Memory(),
+		sessions:    map[*wsSession]struct{}{},
+		terminals:   map[*websocket.Conn]struct{}{},
+		health:      assumedHealth(),
+		pingEvery:   defaultPingInterval,
+		resyncEvery: defaultResyncInterval,
+		views:       views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}
 }
 
@@ -170,6 +172,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/compare", withRef(s.compare), false},
 		{http.MethodGet, "/api/compare/kind", s.compareKind, false},
 		{http.MethodGet, "/api/access", withRef(s.objectAccess), false},
+		{http.MethodPost, "/api/access", s.bulkAccess, false},
 		{http.MethodGet, "/api/object", withRef(s.getObject), false},
 		{http.MethodPut, "/api/object", withRef(s.applyObject), false},
 		{http.MethodDelete, "/api/object", withRef(s.deleteObject), false},
@@ -1005,10 +1008,6 @@ func (s *Server) getObject(w http.ResponseWriter, r *http.Request, ref api.Objec
 		return
 	}
 	writeJSON(w, detail)
-}
-
-func (s *Server) objectAccess(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	writeJSON(w, s.manager().Access(r.Context(), ref))
 }
 
 func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {

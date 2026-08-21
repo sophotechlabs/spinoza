@@ -18,6 +18,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
+	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
@@ -29,15 +30,31 @@ type Catalog interface {
 	Namespaces(ctx context.Context) api.Namespaces
 }
 
-type Objects interface {
+// Liveness is what spinoza can find out about whether the cluster answers: by
+// asking it outright, and from what the requests it is already making came back
+// with.
+type Liveness interface {
 	Ping(ctx context.Context) error
+	Reach() *reach.Sink
+}
+
+type Objects interface {
+	Permissions
+	Liveness
+
 	Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDetail, error)
-	Access(ctx context.Context, ref api.ObjectRef) api.Access
 	ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error)
 	DeleteObject(ctx context.Context, ref api.ObjectRef) error
 	Events(ctx context.Context, namespace, uid string) ([]api.Event, error)
 	ListKind(ctx context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error)
 	Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error)
+}
+
+// Permissions is what the cluster would refuse, asked about one object or about
+// a whole selection at once.
+type Permissions interface {
+	Access(ctx context.Context, ref api.ObjectRef) api.Access
+	AccessEach(ctx context.Context, capability string, refs []api.ObjectRef) api.BulkAccess
 }
 
 type Feeds interface {
