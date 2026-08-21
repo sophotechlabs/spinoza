@@ -73,17 +73,11 @@ func (a *awkward) PodSelector(ctx context.Context, ref api.ObjectRef) (string, e
 
 func awkwardServer(t *testing.T, broken *awkward) *httptest.Server {
 	t.Helper()
-	return awkwardServerResyncing(t, broken, defaultResyncInterval)
-}
-
-func awkwardServerResyncing(t *testing.T, broken *awkward, resync time.Duration) *httptest.Server {
-	t.Helper()
 	mgr, _ := testManager(t)
 	broken.Backend = mgr
 	cluster := fixed(mgr)
 	cluster.mgr = mgr
 	srv := New(&brokenCluster{stubCluster: cluster, backend: broken}, testAssets(), testToken)
-	srv.resyncEvery = resync
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts
@@ -221,7 +215,7 @@ func TestAnUnknownClientFrameIsIgnored(t *testing.T) {
 }
 
 func TestRaisingTheLimitSendsAFreshSnapshot(t *testing.T) {
-	ts := awkwardServerResyncing(t, &awkward{}, time.Millisecond)
+	ts := awkwardServer(t, &awkward{})
 	ctx, conn := openAwkwardFeed(t, ts)
 
 	sendMsg(ctx, t, conn, api.ClientMsg{

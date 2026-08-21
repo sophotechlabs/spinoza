@@ -33,16 +33,11 @@ const (
 	relayStop
 )
 
-// defaultResyncInterval is the shortest gap between two fresh snapshots on one
-// subscription. It lives on the Server so that a test can shorten it without
-// reaching into a variable a running feed is reading.
-const defaultResyncInterval = 2 * time.Second
-
-func (s *Server) resyncInterval() time.Duration {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.resyncEvery
-}
+// minResyncInterval is the shortest gap between two fresh snapshots on one
+// subscription. A constant on purpose: a feed reads it from a goroutine that
+// outlives the test that started it, so anything a test could write here it
+// would be writing underneath another test's feed.
+const minResyncInterval = 2 * time.Second
 
 type throttle struct {
 	interval time.Duration
@@ -101,7 +96,6 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	sess := &wsSession{
 		conn:   conn,
 		ctx:    ctx,
-		resync: s.resyncInterval(),
 		tables: map[string]*entry{},
 		logs:   map[string]*entry{},
 	}
@@ -132,7 +126,6 @@ type wsSession struct {
 	conn    *websocket.Conn
 	ctx     context.Context
 	mgr     Backend
-	resync  time.Duration
 	mu      sync.Mutex
 	tables  map[string]*entry
 	logs    map[string]*entry
@@ -291,7 +284,7 @@ func snapshotOf(subID string, sub *resources.Subscription, rows []api.Row, total
 }
 
 func (sess *wsSession) relay(subID string, gen uint64, sub *resources.Subscription) {
-	spacing := newThrottle(sess.resync)
+	spacing := newThrottle(minResyncInterval)
 	for {
 		select {
 		case <-sess.ctx.Done():

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/client-go/dynamic"
@@ -89,15 +90,9 @@ func (l *breakingListener) Accept() (net.Conn, error) {
 // underneath a subscription that can no longer be written to.
 func brokenServer(t *testing.T) (*httptest.Server, *breaking, dynamic.Interface) {
 	t.Helper()
-	return brokenServerResyncing(t, defaultResyncInterval)
-}
-
-func brokenServerResyncing(t *testing.T, resync time.Duration) (*httptest.Server, *breaking, dynamic.Interface) {
-	t.Helper()
 	mgr, dyn := testManager(t)
 	state := &breaking{}
 	srv := New(fixed(mgr), testAssets(), testToken)
-	srv.resyncEvery = resync
 	ts := httptest.NewUnstartedServer(authed(srv.Handler()))
 	ts.Listener = &breakingListener{Listener: ts.Listener, state: state}
 	ts.Start()
@@ -105,6 +100,11 @@ func brokenServerResyncing(t *testing.T, resync time.Duration) (*httptest.Server
 	return ts, state, dyn
 }
 
+// openBrokenFeed opens a feed and waits out the frames the server sends unasked,
+// so that the next thing it writes is the thing the test asked for. Breaking the
+// socket before that is over breaks whichever greeting frame was still in flight:
+// the write fails, the socket goes, and the message the test then sends is never
+// read — which looks like the server going quiet for no reason.
 func openBrokenFeed(t *testing.T, ts *httptest.Server) (context.Context, *websocket.Conn) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -114,7 +114,23 @@ func openBrokenFeed(t *testing.T, ts *httptest.Server) (context.Context, *websoc
 		t.Fatalf("dial: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.CloseNow() })
+	greeted(ctx, t, conn)
 	return ctx, conn
+}
+
+// greeted reads until every opening frame has arrived. A frame that has been
+// read has been written, so the write count stands still from here until the
+// test asks for something.
+func greeted(ctx context.Context, t *testing.T, conn *websocket.Conn) {
+	t.Helper()
+	seen := map[string]bool{}
+	for len(seen) < len(openingFrames) {
+		msg := readAnyMsg(ctx, t, conn)
+		if !aboutTheConnection(msg.Type) {
+			t.Fatalf("type = %q, want the frames a feed opens with", msg.Type)
+		}
+		seen[msg.Type] = true
+	}
 }
 
 // stillServing proves the server is alive after a socket failed under it, which
@@ -131,7 +147,6 @@ func stillServing(t *testing.T, ts *httptest.Server) {
 func TestASnapshotThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
-	readAnyMsg(ctx, t, conn)
 
 	socket.after(0)
 	sendMsg(ctx, t, conn, api.ClientMsg{
@@ -145,7 +160,6 @@ func TestASnapshotThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 func TestAnUpdateThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	ts, socket, dyn := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
-	readAnyMsg(ctx, t, conn)
 	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type:      "subscribe",
 		SubID:     "s1",
@@ -170,14 +184,17 @@ func TestAnUpdateThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	stillServing(t, ts)
 }
 
-func waitForWrites(t *testing.T, socket *breaking, n int64) {
+func waitForWrites(t *testing.T, socket *breaking, wanted int64) {
 	t.Helper()
 	start := socket.wrote()
-	deadline := time.After(5 * time.Second)
-	for socket.wrote() < start+n {
+	deadline := time.After(15 * time.Second)
+	for socket.wrote() < start+wanted {
 		select {
 		case <-deadline:
-			t.Fatalf("the server never tried to write again (%d frames)", socket.wrote())
+			t.Fatalf(
+				"the server is at %d writes, waiting for %d more after %d",
+				socket.wrote(), wanted, start,
+			)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
@@ -186,7 +203,6 @@ func waitForWrites(t *testing.T, socket *breaking, n int64) {
 func TestALogLineThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
-	readAnyMsg(ctx, t, conn)
 
 	socket.after(0)
 	sendMsg(ctx, t, conn, api.ClientMsg{
@@ -208,7 +224,6 @@ func TestALogLineThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 func TestThePodCountFrameFailingAfterALogBatchIsSurvived(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
-	readAnyMsg(ctx, t, conn)
 
 	// Let one more frame through, then break: the log-open frame lands and what
 	// comes after it does not.
@@ -229,7 +244,6 @@ func TestThePodCountFrameFailingAfterALogBatchIsSurvived(t *testing.T) {
 func TestAResyncThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
-	readAnyMsg(ctx, t, conn)
 	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type:      "subscribe",
 		SubID:     "s1",
@@ -254,9 +268,8 @@ func TestAResyncThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 // A feed whose window goes away in the middle of the pause between resyncs has
 // nothing left to write to, and has to give up rather than wait out the pause.
 func TestAFeedWhoseWindowGoesAwayMidPauseStops(t *testing.T) {
-	ts, _, _ := brokenServerResyncing(t, 2*time.Second)
+	ts, _, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
-	readAnyMsg(ctx, t, conn)
 	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type:      "subscribe",
 		SubID:     "s1",
@@ -277,5 +290,54 @@ func TestAFeedWhoseWindowGoesAwayMidPauseStops(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	_ = conn.CloseNow()
 
+	stillServing(t, ts)
+}
+
+// Every test in this file counts writes from the moment a feed is open, so what
+// a feed is sent before it asks for anything has to be both known and over. A
+// third opening frame added above would go out while a test believed the server
+// was idle, and would be the frame that got broken instead of the one the test
+// meant to break.
+func TestAFeedIsSentItsOpeningFramesAndThenNothing(t *testing.T) {
+	ts, socket, _ := brokenServer(t)
+	ctx, conn := openBrokenFeed(t, ts)
+	settled := socket.wrote()
+
+	quiet, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+	var extra api.ServerMsg
+	err := wsjson.Read(quiet, conn, &extra)
+
+	if err == nil {
+		t.Fatalf("a feed that asked for nothing was sent a %q frame", extra.Type)
+	}
+	if socket.wrote() != settled {
+		t.Fatalf("the server wrote %d frames at a feed that asked for nothing", socket.wrote()-settled)
+	}
+}
+
+// The other half of why a broken greeting frame is so quiet: the first write a
+// socket refuses is the last one the server attempts on it. Everything the
+// window asks for afterwards goes unanswered, which is correct — but it is also
+// why a test that breaks the wrong frame sees nothing at all rather than a
+// failure.
+func TestNothingMoreIsWrittenToASocketThatHasGone(t *testing.T) {
+	ts, socket, _ := brokenServer(t)
+	ctx, conn := openBrokenFeed(t, ts)
+	socket.after(0)
+	sendMsg(ctx, t, conn, api.ClientMsg{
+		Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments",
+	})
+	waitForWrites(t, socket, 1)
+	refused := socket.wrote()
+
+	_ = wsjson.Write(ctx, conn, api.ClientMsg{
+		Type: "subscribe", SubID: "s2", Group: "apps", Version: "v1", Resource: "deployments",
+	})
+	time.Sleep(250 * time.Millisecond)
+
+	if socket.wrote() != refused {
+		t.Fatalf("the server made %d more writes into a socket that had gone", socket.wrote()-refused)
+	}
 	stillServing(t, ts)
 }

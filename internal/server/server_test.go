@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -125,8 +126,12 @@ func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg
 	}
 }
 
+// openingFrames are what every feed is sent before it has asked for anything:
+// which cluster it is on, and whether that cluster answers.
+var openingFrames = []string{"context", "cluster"}
+
 func aboutTheConnection(kind string) bool {
-	return kind == "context" || kind == "cluster"
+	return slices.Contains(openingFrames, kind)
 }
 
 func readAnyMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg {
