@@ -342,3 +342,38 @@ func TestACleanExitSaysNothingInParticular(t *testing.T) {
 		t.Fatalf("payload = %q, want nothing", payload)
 	}
 }
+
+func TestALocalShellIgnoresATextFrame(t *testing.T) {
+	shell := newStubShell()
+	ts := shellServer(t, func(uint16, uint16) (LocalShell, error) {
+		return shell, nil
+	})
+	conn := dialShell(t, ts, "")
+
+	// The protocol is binary. A text frame is not something to feed to a shell.
+	if err := conn.Write(t.Context(), websocket.MessageText, []byte("hello")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	sendShellFrame(t, conn, api.ExecChannelStdin, []byte("after"))
+
+	waitForServer(t, func() bool { return shell.typed() == "after" }, "the shell never saw the keystrokes")
+	if strings.Contains(shell.typed(), "hello") {
+		t.Fatalf("typed = %q, want the text frame left out", shell.typed())
+	}
+}
+
+func TestALocalShellIgnoresAnEmptyFrame(t *testing.T) {
+	shell := newStubShell()
+	ts := shellServer(t, func(uint16, uint16) (LocalShell, error) {
+		return shell, nil
+	})
+	conn := dialShell(t, ts, "")
+
+	// A frame with no channel byte has nothing to route.
+	if err := conn.Write(t.Context(), websocket.MessageBinary, nil); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	sendShellFrame(t, conn, api.ExecChannelStdin, []byte("after"))
+
+	waitForServer(t, func() bool { return shell.typed() == "after" }, "the shell never saw the keystrokes")
+}

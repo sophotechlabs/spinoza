@@ -14,6 +14,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
@@ -515,5 +516,68 @@ func TestSourceOfStillNamesAKustomizationSource(t *testing.T) {
 
 	if got := sourceOf(kustomization); got != "GitRepository/app-repo" {
 		t.Fatalf("source = %q", got)
+	}
+}
+
+func helmReleaseNaming(repoNamespace, repoName string) *unstructured.Unstructured {
+	sourceRef := map[string]any{"kind": "HelmRepository", "name": repoName}
+	if repoNamespace != "" {
+		sourceRef["namespace"] = repoNamespace
+	}
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "helm.toolkit.fluxcd.io/v2",
+		"kind":       "HelmRelease",
+		"metadata":   map[string]any{"name": "podinfo", "namespace": "apps"},
+		"spec": map[string]any{
+			"chart": map[string]any{
+				"spec": map[string]any{"chart": "podinfo", "sourceRef": sourceRef},
+			},
+		},
+	}}
+}
+
+// The chart's repository can be gone, or not readable, which is what an upgrade
+// check has to cope with rather than pointing at a repository that is not there.
+func TestAChartWhoseRepositoryIsNotThereHasNoSource(t *testing.T) {
+	_, _, ok := chartSource(helmReleaseNaming("", "missing"), map[string]charts.Repo{})
+
+	if ok {
+		t.Fatal("a chart pointing at a repository nobody has was given a source")
+	}
+}
+
+func TestAChartWhoseRepositoryHasNoUrlHasNoSource(t *testing.T) {
+	repos := map[string]charts.Repo{"apps/podinfo": {}}
+
+	_, _, ok := chartSource(helmReleaseNaming("", "podinfo"), repos)
+
+	if ok {
+		t.Fatal("a repository with no url was offered as a source")
+	}
+}
+
+func TestAChartTakesTheRepositoryFromItsOwnNamespaceByDefault(t *testing.T) {
+	repos := map[string]charts.Repo{"apps/podinfo": {URL: "https://example.test"}}
+
+	repo, chart, ok := chartSource(helmReleaseNaming("", "podinfo"), repos)
+
+	if !ok {
+		t.Fatal("a repository in the release's own namespace was not found")
+	}
+	if chart != "podinfo" || repo.URL != "https://example.test" {
+		t.Fatalf("chart = %q repo = %+v", chart, repo)
+	}
+}
+
+func TestAChartCanNameARepositoryInAnotherNamespace(t *testing.T) {
+	repos := map[string]charts.Repo{"flux-system/podinfo": {URL: "https://example.test"}}
+
+	repo, _, ok := chartSource(helmReleaseNaming("flux-system", "podinfo"), repos)
+
+	if !ok {
+		t.Fatal("a repository named with its namespace was not found")
+	}
+	if repo.URL != "https://example.test" {
+		t.Fatalf("repo = %+v", repo)
 	}
 }

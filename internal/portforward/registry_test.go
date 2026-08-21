@@ -918,3 +918,39 @@ func TestAdoptingIsDroppedForAForwardThatIsGone(t *testing.T) {
 		t.Fatalf("forwards = %d, want nothing adopted for a forward that is gone", held)
 	}
 }
+
+// The pod moved and the forward onto its replacement never came up. Sitting
+// there looking healthy is the one thing it must not do.
+func TestAMoveThatNeverBecomesReadyFails(t *testing.T) {
+	runner := newStubRunner(45123)
+	resolver := &stubResolver{pod: "web-abc", podPort: 8080}
+	prober := &stubProber{alive: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	registry := newRegistry(ctx, runner, resolver, prober, 60*time.Millisecond, time.Hour, time.Second)
+	t.Cleanup(registry.StopAll)
+
+	if _, err := registry.Start(context.Background(), webService(), 8080); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	// hang holds the run open without ever signaling ready, which is a forward
+	// that is starting and never arrives.
+	runner.mu.Lock()
+	runner.hang = true
+	runner.mu.Unlock()
+	prober.kill()
+	resolver.moveTo("web-def", nil)
+	registry.Reap()
+
+	deadline := time.After(5 * time.Second)
+	for registry.List()[0].State != StateFailed {
+		select {
+		case <-deadline:
+			t.Fatalf("the forward never failed: %+v", registry.List()[0])
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if !strings.Contains(registry.List()[0].Error, "timed out moving") {
+		t.Fatalf("error = %q, want it to say the move timed out", registry.List()[0].Error)
+	}
+}

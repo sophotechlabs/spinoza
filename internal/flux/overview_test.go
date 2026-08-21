@@ -544,3 +544,69 @@ func TestVerdictNamesAnUnreadySync(t *testing.T) {
 		t.Fatalf("summary = %q", summary)
 	}
 }
+
+// A Kustomization that names a source which is not in the cluster is a real
+// state — the GitRepository was deleted, or has not been created yet. The
+// overview still has to describe the sync it did find.
+func TestASyncWhoseSourceIsMissingStillNamesTheKind(t *testing.T) {
+	got := overviewFor(
+		t,
+		[]runtime.Object{controllerDeployment("kustomize-controller", "v2.9.4", 1)},
+		[]runtime.Object{syncKustomization()},
+		nil,
+	)
+
+	if got.Sync.Name != "flux-system" {
+		t.Fatalf("sync = %+v, want the kustomization itself", got.Sync)
+	}
+	if got.Sync.Source != "GitRepository" {
+		t.Fatalf("source = %q, want the kind it points at", got.Sync.Source)
+	}
+	if got.Sync.URL != "" {
+		t.Fatalf("url = %q, want nothing when the source is not there", got.Sync.URL)
+	}
+}
+
+func TestASyncThatIsNotReadySaysSo(t *testing.T) {
+	notReady := syncKustomization()
+	status, ok := notReady.Object["status"].(map[string]any)
+	if !ok {
+		t.Fatal("the fixture lost its status")
+	}
+	status["conditions"] = []any{
+		map[string]any{"type": "Ready", "status": "False"},
+	}
+
+	got := overviewFor(
+		t,
+		[]runtime.Object{controllerDeployment("kustomize-controller", "v2.9.4", 1)},
+		[]runtime.Object{notReady, syncSourceRepo()},
+		nil,
+	)
+
+	if got.Sync.Ready {
+		t.Fatal("a Ready=False sync was reported ready")
+	}
+}
+
+func TestASyncWithNoReadyConditionAtAllIsNotReady(t *testing.T) {
+	silent := syncKustomization()
+	status, ok := silent.Object["status"].(map[string]any)
+	if !ok {
+		t.Fatal("the fixture lost its status")
+	}
+	status["conditions"] = []any{
+		map[string]any{"type": "Reconciling", "status": "True"},
+	}
+
+	got := overviewFor(
+		t,
+		[]runtime.Object{controllerDeployment("kustomize-controller", "v2.9.4", 1)},
+		[]runtime.Object{silent, syncSourceRepo()},
+		nil,
+	)
+
+	if got.Sync.Ready {
+		t.Fatal("a sync that never said Ready was reported ready")
+	}
+}

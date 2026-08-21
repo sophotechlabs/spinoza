@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/logs"
@@ -22,6 +23,15 @@ type awkward struct {
 	subscribeErr error
 	logsErr      error
 	selectorErr  error
+	// hold keeps a build waiting so a test can replace the subscription while
+	// the first one is still being made.
+	hold chan struct{}
+}
+
+func (a *awkward) wait() {
+	if a.hold != nil {
+		<-a.hold
+	}
 }
 
 func (a *awkward) Subscribe(
@@ -30,6 +40,7 @@ func (a *awkward) Subscribe(
 	limit int,
 	filters []api.RowFilter,
 ) (*resources.Subscription, error) {
+	a.wait()
 	if a.subscribeErr != nil {
 		return nil, a.subscribeErr
 	}
@@ -37,6 +48,7 @@ func (a *awkward) Subscribe(
 }
 
 func (a *awkward) Logs(ctx context.Context, req logs.Request) (*logs.Stream, error) {
+	a.wait()
 	if a.logsErr != nil {
 		return nil, a.logsErr
 	}
@@ -222,5 +234,71 @@ func TestRaisingTheLimitSendsAFreshSnapshot(t *testing.T) {
 	}
 	if again.Limit != 200 {
 		t.Fatalf("limit = %d, want the one that was asked for", again.Limit)
+	}
+}
+
+// Subscribing again under the same id while the first one is still being built
+// leaves that first subscription with nobody to give it to. It has to be closed
+// rather than left running against the cluster.
+func TestASubscriptionReplacedWhileItWasBeingBuiltIsDropped(t *testing.T) {
+	broken := &awkward{hold: make(chan struct{})}
+	ts := awkwardServer(t, broken)
+	ctx, conn := openAwkwardFeed(t, ts)
+	subscribe := api.ClientMsg{
+		Type:      "subscribe",
+		SubID:     "s1",
+		Group:     "apps",
+		Version:   "v1",
+		Resource:  "deployments",
+		Namespace: "default",
+	}
+
+	sendMsg(ctx, t, conn, subscribe)
+	sendMsg(ctx, t, conn, subscribe)
+	time.Sleep(50 * time.Millisecond)
+	close(broken.hold)
+
+	if first := readMsg(ctx, t, conn); first.Type != "snapshot" {
+		t.Fatalf("type = %q, want the surviving subscription's snapshot", first.Type)
+	}
+	quiet, stop := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer stop()
+	var extra api.ServerMsg
+	if err := wsjson.Read(quiet, conn, &extra); err == nil && extra.Type == "snapshot" {
+		t.Fatal("both builds delivered a snapshot; the replaced one was not dropped")
+	}
+}
+
+func TestALogStreamReplacedWhileItWasBeingOpenedIsDropped(t *testing.T) {
+	broken := &awkward{hold: make(chan struct{})}
+	ts := awkwardServer(t, broken)
+	ctx, conn := openAwkwardFeed(t, ts)
+	subscribe := api.ClientMsg{
+		Type:      "logs-subscribe",
+		SubID:     "logs",
+		Namespace: "prod",
+		Name:      "web",
+		Container: "app",
+	}
+
+	sendMsg(ctx, t, conn, subscribe)
+	sendMsg(ctx, t, conn, subscribe)
+	time.Sleep(50 * time.Millisecond)
+	close(broken.hold)
+
+	opened := 0
+	quiet, stop := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer stop()
+	for {
+		var msg api.ServerMsg
+		if err := wsjson.Read(quiet, conn, &msg); err != nil {
+			break
+		}
+		if msg.Type == "log-open" {
+			opened++
+		}
+	}
+	if opened > 1 {
+		t.Fatalf("%d streams were opened; the replaced one was not dropped", opened)
 	}
 }

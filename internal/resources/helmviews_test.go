@@ -194,3 +194,28 @@ func TestHelmMethodsReachTheService(t *testing.T) {
 		t.Fatal("an action with no runner reported success")
 	}
 }
+
+// A manifest that names a version the cluster does not serve must not be
+// resolved to whatever version happens to share the kind, or a rollback would
+// address the wrong API.
+func TestTheManagerRefusesAKindAtAVersionItDoesNotServe(t *testing.T) {
+	mgr := viewManager(t, nil)
+
+	found, ok := mgr.resolveKind("apps/v1beta1", "Deployment")
+
+	if ok {
+		t.Fatalf("resolved %+v, want nothing for a version discovery never listed", found)
+	}
+}
+
+func TestAHelmListThatFailsIsReported(t *testing.T) {
+	mgr := viewManager(t, nil)
+
+	// The helm binary is not there in a test, so listing has to fail rather than
+	// hand back an empty cluster as though nothing were installed.
+	list, err := mgr.HelmReleases(t.Context())
+
+	if err == nil && len(list.Releases) == 0 && list.Error == "" {
+		t.Fatal("a failed helm list was reported as a cluster with no releases")
+	}
+}

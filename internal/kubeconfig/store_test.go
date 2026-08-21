@@ -256,3 +256,90 @@ func TestDefaultPathSitsUnderTheUserConfigDirectory(t *testing.T) {
 		t.Fatalf("path = %q, want it under a spinoza directory", path)
 	}
 }
+
+func lockedDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "locked")
+	if err := os.MkdirAll(dir, 0o500); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(dir, 0o700)
+	})
+	return dir
+}
+
+func TestAListThatCannotBeReadIsReported(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kubeconfigs.json")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	store, err := Open(path)
+
+	if err == nil {
+		t.Fatal("a list that could not be read opened without complaint")
+	}
+	if store == nil {
+		t.Fatal("a store that could not be read must still be usable")
+	}
+}
+
+func TestAListThatIsNotJsonIsReported(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kubeconfigs.json")
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	store, err := Open(path)
+
+	if err == nil {
+		t.Fatal("a list that is not json opened without complaint")
+	}
+	if len(store.Paths()) != 0 {
+		t.Fatalf("paths = %v, want nothing kept from a file that could not be read", store.Paths())
+	}
+}
+
+func TestAKubeconfigThatCannotBeSavedIsNotRemembered(t *testing.T) {
+	store, err := Open(filepath.Join(lockedDir(t), "nested", "kubeconfigs.json"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	addErr := store.Add("/home/arch/.kube/other")
+
+	if addErr == nil {
+		t.Fatal("a list that could not be written was reported as saved")
+	}
+	if len(store.Paths()) != 0 {
+		t.Fatalf("paths = %v, want the list unchanged", store.Paths())
+	}
+}
+
+func TestARemovalThatCannotBeSavedLeavesTheListAlone(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "kubeconfigs.json")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if addErr := store.Add("/home/arch/.kube/other"); addErr != nil {
+		t.Fatalf("add: %v", addErr)
+	}
+	if chmodErr := os.Chmod(dir, 0o500); chmodErr != nil {
+		t.Fatalf("chmod: %v", chmodErr)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(dir, 0o700)
+	})
+
+	removeErr := store.Remove("/home/arch/.kube/other")
+
+	if removeErr == nil {
+		t.Fatal("a removal that could not be written was reported as saved")
+	}
+	if len(store.Paths()) != 1 {
+		t.Fatalf("paths = %v, want the kubeconfig still on the list", store.Paths())
+	}
+}

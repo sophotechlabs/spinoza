@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -220,5 +222,80 @@ func TestAnInstallRequestThatIsNotJsonIsRefused(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+}
+
+func TestInstallingAChartOnAProtectedClusterNeedsTheName(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	cluster.protection = api.ProtectionProtected
+	ts := httptest.NewServer(authed(New(cluster, testAssets(), testToken).Handler()))
+	t.Cleanup(ts.Close)
+	body := `{"namespace":"prod","name":"podinfo","chart":"podinfo","repo":"https://example.test","version":"6.7.1"}`
+
+	resp, said := doRequest(t, http.MethodPost, ts.URL+"/api/helm/install", strings.NewReader(body))
+
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("status = %d, want the typed confirmation demanded: %s", resp.StatusCode, said)
+	}
+	if !strings.Contains(string(said), "podinfo") {
+		t.Fatalf("message = %s, want it to name what to type", said)
+	}
+}
+
+// A dry run changes nothing, so it does not ask for the name.
+func TestADryRunInstallGoesStraightThrough(t *testing.T) {
+	mgr, _ := testManager(t)
+	cluster := fixed(mgr)
+	cluster.protection = api.ProtectionProtected
+	ts := httptest.NewServer(authed(New(cluster, testAssets(), testToken).Handler()))
+	t.Cleanup(ts.Close)
+	body := `{"namespace":"prod","name":"podinfo","chart":"podinfo","repo":"https://example.test","version":"6.7.1"}`
+
+	resp, _ := doRequest(
+		t,
+		http.MethodPost,
+		ts.URL+"/api/helm/install?dryRun=true",
+		strings.NewReader(body),
+	)
+
+	if resp.StatusCode == http.StatusPreconditionFailed {
+		t.Fatal("a dry run was made to type the release name")
+	}
+}
+
+func TestApplyingADocumentWithNoResourceVersionIsABadRequest(t *testing.T) {
+	ts := inspectServer(t, newPod())
+	doc := "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n"
+
+	resp, body := doRequest(t, http.MethodPut, ts.URL+"/api/object"+objectQuery, strings.NewReader(doc))
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "resourceVersion") {
+		t.Fatalf("message = %s, want it to name what is missing", body)
+	}
+}
+
+func TestComparingAKindTheOtherClusterCannotList(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "api"))
+	cluster := fixed(mgr)
+	cluster.listErr = errors.New("that cluster is unreachable")
+	ts := httptest.NewServer(authed(New(cluster, testAssets(), testToken).Handler()))
+	t.Cleanup(ts.Close)
+
+	resp, body := doRequest(
+		t,
+		http.MethodGet,
+		ts.URL+"/api/compare/kind?group=apps&version=v1&resource=deployments&namespace=default&against=p-mk1",
+		nil,
+	)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatalf("a far side that could not be listed compared fine: %s", body)
+	}
+	if !strings.Contains(string(body), "unreachable") {
+		t.Fatalf("message = %s, want what went wrong", body)
 	}
 }

@@ -3,12 +3,16 @@ package resources
 import (
 	"context"
 	"errors"
+	"net"
+	"strings"
 	"testing"
 	"time"
 
 	authv1 "k8s.io/api/authorization/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
@@ -319,4 +323,90 @@ func TestWhatAManagerWithNothingWiredUpSays(t *testing.T) {
 			t.Fatal("a manager with no cluster refused something")
 		}
 	})
+}
+
+func versionSays(err error) *k8sfake.Clientset {
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("get", "version", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, err
+	})
+	return cs
+}
+
+func TestAClusterThatAnswersIsReachable(t *testing.T) {
+	mgr, cancel := managerWithClientset(t, versionSays(nil))
+	defer cancel()
+
+	if err := mgr.Ping(t.Context()); err != nil {
+		t.Fatalf("ping: %v, want the cluster counted as answering", err)
+	}
+}
+
+// A cluster that refuses is still a cluster that is there. Treating a refusal
+// as an outage would put every restricted cluster permanently in the red.
+func TestAClusterThatRefusesTheQuestionIsStillReachable(t *testing.T) {
+	refused := apierrors.NewForbidden(
+		schema.GroupResource{Resource: "version"},
+		"",
+		errors.New("requires container.clusters.get"),
+	)
+	mgr, cancel := managerWithClientset(t, versionSays(refused))
+	defer cancel()
+
+	if err := mgr.Ping(t.Context()); err != nil {
+		t.Fatalf("ping: %v, want a refusal to count as an answer", err)
+	}
+}
+
+func TestAClusterThatDoesNotAnswerAtAllIsUnreachable(t *testing.T) {
+	mgr, cancel := managerWithClientset(t, versionSays(
+		&net.OpError{Op: "dial", Err: errors.New("connect: connection refused")},
+	))
+	defer cancel()
+
+	err := mgr.Ping(t.Context())
+
+	if err == nil {
+		t.Fatal("a cluster that could not be dialed was reported as answering")
+	}
+	if !strings.Contains(err.Error(), "connection refused") {
+		t.Fatalf("error = %v, want what went wrong", err)
+	}
+}
+
+func TestAnUnauthorizedClusterIsStillReachable(t *testing.T) {
+	mgr, cancel := managerWithClientset(t, versionSays(apierrors.NewUnauthorized("token expired")))
+	defer cancel()
+
+	if err := mgr.Ping(t.Context()); err != nil {
+		t.Fatalf("ping: %v, want the apiserver's refusal counted as an answer", err)
+	}
+}
+
+func TestAPingWithNoClusterWiredUpSaysSo(t *testing.T) {
+	mgr := &Manager{}
+
+	if err := mgr.Ping(t.Context()); !errors.Is(err, api.ErrInternal) {
+		t.Fatalf("error = %v, want an internal one", err)
+	}
+}
+
+func TestAPingGivesUpWhenTheCallerDoes(t *testing.T) {
+	held := make(chan struct{})
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("get", "version", func(k8stesting.Action) (bool, runtime.Object, error) {
+		<-held
+		return true, nil, nil
+	})
+	mgr, cancel := managerWithClientset(t, cs)
+	defer cancel()
+	defer close(held)
+
+	ctx, giveUp := context.WithCancel(t.Context())
+	giveUp()
+	err := mgr.Ping(ctx)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want it to stop when the caller did", err)
+	}
 }

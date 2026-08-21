@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -703,5 +704,91 @@ func TestTheTailNeverShrinksBelowSomethingUseful(t *testing.T) {
 	}
 	if share(10, 20) != 10 {
 		t.Fatalf("share = %d, want a small tail left alone", share(10, 20))
+	}
+}
+
+// remove takes a pod out of the cluster the way a rollout does.
+func (apiserver *cluster) remove(name string) {
+	apiserver.mu.Lock()
+	defer apiserver.mu.Unlock()
+	apiserver.pods = slices.DeleteFunc(apiserver.pods, func(held string) bool {
+		return held == name
+	})
+}
+
+func TestAPodThatComesBackIsReadAgain(t *testing.T) {
+	restore := hurryResolve(t)
+	defer restore()
+	apiserver := newCluster()
+	apiserver.add("web-0", "first time")
+
+	stream, err := Open(t.Context(), manyClient(t, apiserver), Request{
+		Namespace: "prod",
+		Selector:  "app=web",
+		Follow:    true,
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	gather(t, stream, 1)
+
+	// The pod goes away and a pod of the same name comes back, which is what a
+	// static pod or a recreated name looks like. Its log has to be read again
+	// rather than treated as something already seen.
+	apiserver.remove("web-0")
+	time.Sleep(3 * resolveEvery)
+	apiserver.add("web-0", "second time")
+
+	found := gather(t, stream, 1)
+	if found["web-0"] == nil {
+		t.Fatalf("lines = %v, want the pod read again after it came back", found)
+	}
+}
+
+func TestTheCapHoldsForPodsThatTurnUpLater(t *testing.T) {
+	restore := hurryResolve(t)
+	defer restore()
+	apiserver := newCluster()
+	apiserver.holdOpen()
+	for i := range maxPods {
+		apiserver.add(fmt.Sprintf("web-%02d", i), "hello")
+	}
+
+	stream, err := Open(t.Context(), manyClient(t, apiserver), Request{
+		Namespace: "prod",
+		Selector:  "app=web",
+		Follow:    true,
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	gather(t, stream, 1)
+
+	// A rollout that adds pods to a workload already at the cap must not open
+	// more connections than the cap allows.
+	for i := maxPods; i < maxPods+5; i++ {
+		apiserver.add(fmt.Sprintf("web-%02d", i), "hello")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if stream.Matched() > maxPods {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if stream.Attached() > maxPods {
+		t.Fatalf("attached = %d, want no more than the cap of %d", stream.Attached(), maxPods)
+	}
+	if stream.Matched() != maxPods+5 {
+		t.Fatalf("matched = %d, want every pod counted", stream.Matched())
+	}
+}
+
+func TestNoErrorIsNotAPermanentRefusal(t *testing.T) {
+	if permanent(nil) {
+		t.Fatal("a pod that opened fine was treated as refused")
 	}
 }
