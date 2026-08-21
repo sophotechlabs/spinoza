@@ -359,3 +359,42 @@ func TestValuesThatCannotBeMarshalledReadEmpty(t *testing.T) {
 		t.Fatalf("values = %q, want nothing when the config will not marshal", got)
 	}
 }
+
+// A context name means nothing without the file it came from. When spinoza was
+// started with one, helm has to be told the same file, or it looks the context
+// up in the default kubeconfig and does not find it.
+func TestAnActionNamesTheKubeconfigTheContextCameFrom(t *testing.T) {
+	runner := &stubRunner{}
+	client := k8sfake.NewClientset(helmSecret(sampleRelease()))
+	service := NewService(client, mirrorMeta(client), runner, nil, nil, api.ContextRef{
+		Name:       "kind-spinoza",
+		Kubeconfig: "/tmp/spinoza.kubeconfig",
+	})
+
+	_, err := service.Uninstall(context.Background(), "demo", "podinfo")
+	if err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+
+	args := strings.Join(runner.args[0], " ")
+	want := "uninstall podinfo --namespace demo --kube-context kind-spinoza" +
+		" --kubeconfig /tmp/spinoza.kubeconfig"
+	if args != want {
+		t.Fatalf("args = %q, want %q", args, want)
+	}
+}
+
+// Started with no file named, helm keeps its own lookup rules.
+func TestAnActionLeavesHelmsOwnLookupAloneWhenNoFileIsNamed(t *testing.T) {
+	runner := &stubRunner{}
+	service := acting(t, runner, helmSecret(sampleRelease()))
+
+	_, err := service.Uninstall(context.Background(), "demo", "podinfo")
+	if err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+
+	if strings.Contains(strings.Join(runner.args[0], " "), "--kubeconfig") {
+		t.Fatalf("args = %v, want no file forced on helm", runner.args[0])
+	}
+}

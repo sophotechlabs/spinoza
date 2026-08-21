@@ -232,6 +232,58 @@ func TestARefWithNoKubeconfigFallsBackToTheOneSpinozaWasStartedWith(t *testing.T
 	}
 }
 
+// helm and kubectl are handed this ref and run as child processes. A context
+// name on its own sends them to the default kubeconfig, where a context that
+// only exists in the file spinoza was started with is not there at all.
+func TestTheFileSpinozaWasStartedWithIsNamedOnTheRef(t *testing.T) {
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
+	other := writeKubeconfig(t, otherKubeconfig)
+
+	bundle, err := LoadContext(api.ContextRef{}, Options{Kubeconfig: other})
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+
+	if bundle.Ref.Kubeconfig != other {
+		t.Fatalf("Ref.Kubeconfig = %q, want the file spinoza was started with", bundle.Ref.Kubeconfig)
+	}
+}
+
+// The file a ref already names is the one it came from, and outranks the file
+// spinoza was started with.
+func TestAFileOnTheRefIsNotReplacedByTheOneSpinozaWasStartedWith(t *testing.T) {
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, validKubeconfig))
+	started := writeKubeconfig(t, twoContextKubeconfig)
+	other := writeKubeconfig(t, otherKubeconfig)
+
+	bundle, err := LoadContext(
+		api.ContextRef{Kubeconfig: other, Name: "gamma"},
+		Options{Kubeconfig: started},
+	)
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+
+	if bundle.Ref.Kubeconfig != other {
+		t.Fatalf("Ref.Kubeconfig = %q, want the file the context came from", bundle.Ref.Kubeconfig)
+	}
+}
+
+// Started with no file named, spinoza reads the usual chain and so does
+// everything it runs. Naming one file here would cut the others out.
+func TestAStartWithNoFileNamedLeavesTheRefWithoutOne(t *testing.T) {
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
+
+	bundle, err := LoadContext(api.ContextRef{}, Options{})
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+
+	if bundle.Ref.Kubeconfig != "" {
+		t.Fatalf("Ref.Kubeconfig = %q, want the usual lookup rules left alone", bundle.Ref.Kubeconfig)
+	}
+}
+
 func TestLoadContextRejectsAContextThatIsNotThere(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
 

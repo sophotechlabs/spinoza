@@ -139,6 +139,14 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(cached)
 
 	resolved := ref
+	// helm and kubectl are run as child processes and told which context to use
+	// by name. A name is only worth anything alongside the file it came from, so
+	// the ref carries the file spinoza actually read — otherwise those two look
+	// in the default kubeconfig for a context that may only exist in the one
+	// spinoza was started with.
+	if resolved.Kubeconfig == "" {
+		resolved.Kubeconfig = options.Kubeconfig
+	}
 	if resolved.Name == "" {
 		rawConfig, rawErr := clientConfig.RawConfig()
 		if rawErr == nil {
