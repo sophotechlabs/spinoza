@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
@@ -37,19 +38,50 @@ func (s *Server) watchCluster(ctx context.Context) {
 	})
 }
 
+// pingUntilNobodyIsWatching asks the cluster on a timer, and listens in between
+// for what the requests spinoza is already making came back with. The timer is
+// there for a cluster nobody is asking anything of; the listening is what makes
+// an outage show the moment a user runs into it.
 func (s *Server) pingUntilNobodyIsWatching(ctx context.Context) {
 	ticker := time.NewTicker(s.pingInterval())
 	defer ticker.Stop()
 	s.pingCluster(ctx)
-	for range ticker.C {
-		if s.sessionsOpen() == 0 {
-			s.mu.Lock()
-			s.watching = false
-			s.mu.Unlock()
-			return
+	for {
+		select {
+		case <-ticker.C:
+			if s.sessionsOpen() == 0 {
+				s.stopWatching()
+				return
+			}
+			s.pingCluster(ctx)
+		case <-s.reach().Changed():
+			s.recordHealth(s.reachHealth())
 		}
-		s.pingCluster(ctx)
 	}
+}
+
+func (s *Server) stopWatching() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.watching = false
+}
+
+// reach is the sink behind the cluster that is current. There is none before a
+// context is picked, and a sink that is not there is never heard from.
+func (s *Server) reach() *reach.Sink {
+	backend := s.manager()
+	if backend == nil {
+		return nil
+	}
+	return backend.Reach()
+}
+
+func (s *Server) reachHealth() api.ClusterHealth {
+	alive, reason := s.reach().State()
+	if alive {
+		return answering()
+	}
+	return notAnswering(reason)
 }
 
 func (s *Server) sessionsOpen() int {
@@ -66,9 +98,17 @@ func (s *Server) pingCluster(ctx context.Context) {
 
 func healthOf(err error) api.ClusterHealth {
 	if err == nil {
-		return api.ClusterHealth{Type: "cluster", Reachable: true}
+		return answering()
 	}
-	return api.ClusterHealth{Type: "cluster", Reachable: false, Reason: err.Error()}
+	return notAnswering(err.Error())
+}
+
+func answering() api.ClusterHealth {
+	return api.ClusterHealth{Type: "cluster", Reachable: true}
+}
+
+func notAnswering(reason string) api.ClusterHealth {
+	return api.ClusterHealth{Type: "cluster", Reachable: false, Reason: reason}
 }
 
 // recordHealth keeps the answer and tells every window when it changed. An
@@ -87,7 +127,7 @@ func (s *Server) recordHealth(now api.ClusterHealth) {
 // assumedHealth is what spinoza says before it has asked anything. A window
 // that has just opened should not be told the cluster is down on no evidence.
 func assumedHealth() api.ClusterHealth {
-	return api.ClusterHealth{Type: "cluster", Reachable: true}
+	return answering()
 }
 
 // forgetHealth drops what was known about the cluster that was current, so the

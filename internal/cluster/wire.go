@@ -208,6 +208,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		Helm:        releases,
 		Charts:      index,
 		Prometheus:  promClient,
+		Reach:       bundle.Reach,
 		Categories:  cats,
 		Descriptors: descs,
 	})

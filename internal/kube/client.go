@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/reach"
 )
 
 type Bundle struct {
@@ -25,6 +26,9 @@ type Bundle struct {
 	Dynamic   dynamic.Interface
 	Discovery discovery.CachedDiscoveryInterface
 	Mapper    *restmapper.DeferredDiscoveryRESTMapper
+	// Reach hears about every request every client here makes, because they are
+	// all built on one config.
+	Reach     *reach.Sink
 	Ref       api.ContextRef
 	Namespace string
 }
@@ -114,6 +118,8 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	restConfig.QPS = options.QPS
 	restConfig.Burst = options.Burst
 	restConfig.WarningHandler = newWarningLogger(slog.Default())
+	answers := reach.New()
+	restConfig.Wrap(answers.Wrap)
 
 	cs, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
@@ -152,6 +158,7 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 		Dynamic:   dyn,
 		Discovery: cached,
 		Mapper:    mapper,
+		Reach:     answers,
 		Ref:       resolved,
 		Namespace: namespace,
 	}, nil

@@ -13,6 +13,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/reach"
 )
 
 // unreachable is a backend whose cluster can be taken away and given back while
@@ -20,9 +21,16 @@ import (
 type flaky struct {
 	Backend
 
-	mu   sync.Mutex
-	err  error
-	asks int
+	mu    sync.Mutex
+	err   error
+	asks  int
+	heard *reach.Sink
+}
+
+// Reach stands in for the transport under a real client: a test can tell the
+// server what a request came back with, without one having been made.
+func (u *flaky) Reach() *reach.Sink {
+	return u.heard
 }
 
 func (u *flaky) Ping(context.Context) error {
@@ -48,10 +56,15 @@ func (u *flaky) asked() int {
 // test to watch it change its mind.
 func flakyServer(t *testing.T, backend *flaky) *httptest.Server {
 	t.Helper()
+	return flakyServerEvery(t, backend, 20*time.Millisecond)
+}
+
+func flakyServerEvery(t *testing.T, backend *flaky, every time.Duration) *httptest.Server {
+	t.Helper()
 	mgr, _ := testManager(t)
 	backend.Backend = mgr
 	srv := New(&brokenCluster{stubCluster: fixed(mgr), backend: backend}, testAssets(), testToken)
-	srv.pingEvery = 20 * time.Millisecond
+	srv.pingEvery = every
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts
@@ -211,5 +224,76 @@ func TestSwitchingClusterForgetsWhatWasKnown(t *testing.T) {
 
 	if !server.clusterHealth().Reachable {
 		t.Fatal("what was known about the last cluster was said about the next one")
+	}
+}
+
+// The ping is for a cluster nobody is asking anything of. When a user does run
+// into an outage, the window should hear about it then, not up to a ping later.
+const noPingWillArriveInTime = 10 * time.Minute
+
+func TestAWindowHearsAboutAFailedRequestWithoutWaitingForThePing(t *testing.T) {
+	backend := &flaky{heard: reach.New()}
+	ts := flakyServerEvery(t, backend, noPingWillArriveInTime)
+	ctx, conn := openAwkwardFeed(t, ts)
+	if first := nextHealth(ctx, t, conn); !first.Reachable {
+		t.Fatalf("health = %+v, want it reachable to begin with", first)
+	}
+
+	backend.heard.Saw(errors.New("dial tcp 10.0.0.1:6443: connect: connection refused"))
+
+	gone := awaitHealth(ctx, t, conn, false)
+	if !strings.Contains(gone.Reason, "connection refused") {
+		t.Fatalf("reason = %q, want what the request ran into", gone.Reason)
+	}
+}
+
+func TestAWindowHearsTheClusterAnsweringAgainFromTheNextRequestThatWorks(t *testing.T) {
+	backend := &flaky{heard: reach.New()}
+	ts := flakyServerEvery(t, backend, noPingWillArriveInTime)
+	ctx, conn := openAwkwardFeed(t, ts)
+	nextHealth(ctx, t, conn)
+	backend.heard.Saw(errors.New("connection refused"))
+	awaitHealth(ctx, t, conn, false)
+
+	backend.heard.Saw(nil)
+
+	back := awaitHealth(ctx, t, conn, true)
+	if back.Reason != "" {
+		t.Fatalf("reason = %q, want it forgotten once the cluster answered", back.Reason)
+	}
+}
+
+// A backend that reports nothing is what a manager built without a real client
+// looks like. The prober has to carry on asking.
+func TestAClusterWithNothingToReportIsStillProbed(t *testing.T) {
+	backend := &flaky{}
+	ts := flakyServer(t, backend)
+	ctx, conn := openAwkwardFeed(t, ts)
+	nextHealth(ctx, t, conn)
+
+	backend.breaks(errors.New("connection refused"))
+
+	gone := awaitHealth(ctx, t, conn, false)
+	if gone.Reachable {
+		t.Fatalf("health = %+v, want the ping to have found it", gone)
+	}
+}
+
+// noCluster is a spinoza that has not managed to connect to anything yet.
+type noCluster struct {
+	Cluster
+}
+
+func (noCluster) Manager() Backend {
+	return nil
+}
+
+func TestAServerWithNoClusterHasNothingToReport(t *testing.T) {
+	srv := New(noCluster{}, testAssets(), testToken)
+
+	health := srv.reachHealth()
+
+	if !health.Reachable {
+		t.Fatalf("health = %+v, want the benefit of the doubt before a cluster is picked", health)
 	}
 }
