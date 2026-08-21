@@ -9,11 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/sophotechlabs/spinoza/internal/atomicfile"
 )
-
-const dirMode = 0o700
-
-const fileMode = 0o600
 
 const NodeShellKey = "spinoza.nodeshell.v1"
 
@@ -94,39 +92,9 @@ func (s *Store) write(values map[string]string) error {
 	if err != nil {
 		return fmt.Errorf("settings: %w", err)
 	}
-	dir := filepath.Dir(s.path)
-	mkdirErr := os.MkdirAll(dir, dirMode)
-	if mkdirErr != nil {
-		return fmt.Errorf("settings: %w", mkdirErr)
-	}
-	file, createErr := os.CreateTemp(dir, "settings-*.json")
-	if createErr != nil {
-		return fmt.Errorf("settings: %w", createErr)
-	}
-	return s.replace(file, append(body, '\n'))
-}
-
-func (s *Store) replace(file *os.File, body []byte) error {
-	temp := file.Name()
-	_, writeErr := file.Write(body)
-	closeErr := file.Close()
-	if writeErr != nil {
-		_ = os.Remove(temp)
-		return fmt.Errorf("settings: %w", writeErr)
-	}
-	if closeErr != nil {
-		_ = os.Remove(temp)
-		return fmt.Errorf("settings: %w", closeErr)
-	}
-	chmodErr := os.Chmod(temp, fileMode)
-	if chmodErr != nil {
-		_ = os.Remove(temp)
-		return fmt.Errorf("settings: %w", chmodErr)
-	}
-	renameErr := os.Rename(temp, s.path)
-	if renameErr != nil {
-		_ = os.Remove(temp)
-		return fmt.Errorf("settings: %w", renameErr)
+	saveErr := atomicfile.Save(s.path, "settings-*.json", append(body, '\n'))
+	if saveErr != nil {
+		return fmt.Errorf("settings: %w", saveErr)
 	}
 	return nil
 }

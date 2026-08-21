@@ -299,3 +299,51 @@ func TestComparingAKindTheOtherClusterCannotList(t *testing.T) {
 		t.Fatalf("message = %s, want what went wrong", body)
 	}
 }
+
+// deafWriter takes a status and headers but refuses the body, which is what a
+// client that hung up mid-response looks like from here.
+type deafWriter struct {
+	header http.Header
+	status int
+	err    error
+}
+
+func (d *deafWriter) Header() http.Header {
+	if d.header == nil {
+		d.header = http.Header{}
+	}
+	return d.header
+}
+
+func (d *deafWriter) Write([]byte) (int, error) {
+	return 0, d.err
+}
+
+func (d *deafWriter) WriteHeader(status int) {
+	d.status = status
+}
+
+func TestAResponseNobodyIsListeningForIsNotFatal(t *testing.T) {
+	writer := &deafWriter{err: errors.New("client disconnected")}
+
+	writeJSONStatus(writer, http.StatusCreated, api.Build{Version: "v1.11.0"})
+
+	// The status and headers are already on the wire by then, so the only thing
+	// left to do about a body nobody will read is not to fall over.
+	if writer.status != http.StatusCreated {
+		t.Fatalf("status = %d, want it written before the body failed", writer.status)
+	}
+	if writer.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("content type = %q", writer.Header().Get("Content-Type"))
+	}
+}
+
+func TestAnErrorNobodyIsListeningForIsNotFatal(t *testing.T) {
+	writer := &deafWriter{err: errors.New("client disconnected")}
+
+	writeError(writer, http.StatusBadRequest, "version, resource and name are required")
+
+	if writer.status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want the code written before the body failed", writer.status)
+	}
+}

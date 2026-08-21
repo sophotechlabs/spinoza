@@ -208,14 +208,40 @@ func TestTheManagerRefusesAKindAtAVersionItDoesNotServe(t *testing.T) {
 	}
 }
 
+// A helm service with no metadata client cannot read the release secrets at
+// all. That has to come back as a failure rather than as a cluster with nothing
+// installed, which is what a user would otherwise conclude.
 func TestAHelmListThatFailsIsReported(t *testing.T) {
-	mgr := viewManager(t, nil)
+	releases := helm.NewService(
+		k8sfake.NewClientset(),
+		nil,
+		helm.NewRunner("helm"),
+		nil,
+		nil,
+		api.ContextRef{Name: "p-mk1"},
+	)
+	mgr := viewManager(t, releases)
 
-	// The helm binary is not there in a test, so listing has to fail rather than
-	// hand back an empty cluster as though nothing were installed.
 	list, err := mgr.HelmReleases(t.Context())
 
-	if err == nil && len(list.Releases) == 0 && list.Error == "" {
-		t.Fatal("a failed helm list was reported as a cluster with no releases")
+	if err == nil {
+		t.Fatalf("list = %+v, want the failure reported", list)
+	}
+	if list.Releases == nil {
+		t.Fatal("the browser iterates the releases without a guard")
+	}
+}
+
+// The overview asks discovery for the cluster's version, so a manager with
+// discovery wired has to hand it over rather than the nil it uses when there is
+// no cluster yet.
+func TestTheOverviewCarriesTheClusterVersionFromDiscovery(t *testing.T) {
+	mgr := viewManager(t, nil)
+	mgr.UseDiscovery(&stubDiscovery{version: "v1.36.2+k3s1"}, nil)
+
+	got := mgr.Overview(t.Context())
+
+	if got.Version != "v1.36.2+k3s1" {
+		t.Fatalf("version = %q, want what discovery reported", got.Version)
 	}
 }

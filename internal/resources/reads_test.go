@@ -5,21 +5,26 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	authv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/openapi"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
+	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
 func deployAt(namespace, name string) api.ObjectRef {
@@ -409,4 +414,96 @@ func TestAPingGivesUpWhenTheCallerDoes(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want it to stop when the caller did", err)
 	}
+}
+
+// openapiFor answers the one schema request this test cares about and counts
+// how often the document was read, which is how a dropped cache shows itself.
+type openapiFor struct {
+	reads *atomic.Int64
+}
+
+func (o openapiFor) Paths() (map[string]openapi.GroupVersion, error) {
+	return map[string]openapi.GroupVersion{"api/v1": schemaDoc(o)}, nil
+}
+
+type schemaDoc struct {
+	reads *atomic.Int64
+}
+
+func (d schemaDoc) Schema(string) ([]byte, error) {
+	d.reads.Add(1)
+	return []byte(`{"components":{"schemas":{"io.k8s.api.core.v1.Pod":{"type":"object",` +
+		`"x-kubernetes-group-version-kind":[{"group":"","kind":"Pod","version":"v1"}]}}}}`), nil
+}
+
+func (schemaDoc) ServerRelativeURL() string {
+	return ""
+}
+
+// Schemas describe the kinds discovery just re-read, so a refresh that kept the
+// old ones would answer for a cluster that has moved on.
+func TestRefreshingResourcesAlsoDropsTheSchemasItHeld(t *testing.T) {
+	ctx := t.Context()
+	reads := &atomic.Int64{}
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     newClient(t),
+		Clientset:   k8sfake.NewClientset(),
+		Schemas:     jsonschema.NewClient(func() openapi.Client { return openapiFor{reads: reads} }),
+		Descriptors: testDescs(),
+	})
+	mgr.UseDiscovery(&stubDiscovery{results: []discoveryResult{{lists: podList()}}}, nil)
+	pod := jsonschema.GVK{Version: "v1", Kind: "Pod"}
+	if _, err := mgr.Schema(ctx, pod); err != nil {
+		t.Fatalf("first schema read: %v", err)
+	}
+	if _, err := mgr.Schema(ctx, pod); err != nil {
+		t.Fatalf("cached schema read: %v", err)
+	}
+	if reads.Load() != 1 {
+		t.Fatalf("document read %d times, want the second answered from cache", reads.Load())
+	}
+
+	mgr.RefreshResources()
+
+	if _, err := mgr.Schema(ctx, pod); err != nil {
+		t.Fatalf("schema read after refresh: %v", err)
+	}
+	if reads.Load() != 2 {
+		t.Fatalf("document read %d times, want it fetched again after the refresh", reads.Load())
+	}
+}
+
+func TestMetricHistoryComesBackFromPrometheus(t *testing.T) {
+	ctx := t.Context()
+	cs := k8sfake.NewClientset(&corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "monitoring",
+			Name:      "prometheus-operated",
+			Labels:    map[string]string{"operated-prometheus": "true"},
+		},
+		Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Name: "http-web", Port: 9090}}},
+	})
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     newClient(t),
+		Clientset:   cs,
+		Prometheus:  prom.NewClientWithProxy(cs, &rangeProxy{}, prom.Target{}),
+		Descriptors: testDescs(),
+	})
+
+	history, err := mgr.MetricHistory(ctx, "prod", "web", time.Hour)
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if len(history.CPU) == 0 {
+		t.Fatalf("history = %+v, want the points prometheus returned", history)
+	}
+}
+
+// rangeProxy answers a range query the way prometheus does, so the manager's
+// side of the call is what is under test rather than prometheus itself.
+type rangeProxy struct{}
+
+func (*rangeProxy) Get(context.Context, prom.Target, string, map[string]string) ([]byte, error) {
+	return []byte(`{"status":"success","data":{"resultType":"matrix","result":` +
+		`[{"metric":{},"values":[[1785434552,"0.028"],[1785434612,"0.031"]]}]}}`), nil
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ type awkward struct {
 	subscribeErr error
 	logsErr      error
 	selectorErr  error
+	objectYAML   string
 	// hold keeps a build waiting so a test can replace the subscription while
 	// the first one is still being made.
 	hold chan struct{}
@@ -45,6 +47,13 @@ func (a *awkward) Subscribe(
 		return nil, a.subscribeErr
 	}
 	return a.Backend.Subscribe(ctx, group, version, resource, namespace, limit, filters)
+}
+
+func (a *awkward) Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDetail, error) {
+	if a.objectYAML != "" {
+		return api.ObjectDetail{Kind: "Pod", Name: ref.Name, Namespace: ref.Namespace, YAML: a.objectYAML}, nil
+	}
+	return a.Backend.Object(ctx, ref)
 }
 
 func (a *awkward) Logs(ctx context.Context, req logs.Request) (*logs.Stream, error) {
@@ -300,5 +309,91 @@ func TestALogStreamReplacedWhileItWasBeingOpenedIsDropped(t *testing.T) {
 	}
 	if opened > 1 {
 		t.Fatalf("%d streams were opened; the replaced one was not dropped", opened)
+	}
+}
+
+// The object came back from the cluster but its yaml will not parse, so there
+// is nothing to line up against the other context. Saying so beats showing a
+// diff of nothing.
+func TestComparingAnObjectWhoseYamlWillNotParse(t *testing.T) {
+	ts := awkwardServer(t, &awkward{objectYAML: "\tnot: [yaml"})
+
+	resp, body := doRequest(
+		t,
+		http.MethodGet,
+		ts.URL+"/api/compare?version=v1&resource=pods&namespace=prod&name=web&against=p-mk1",
+		nil,
+	)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatalf("a document that will not parse compared fine: %s", body)
+	}
+}
+
+func TestComparingAnObjectRawSkipsTheParsing(t *testing.T) {
+	ts := awkwardServer(t, &awkward{objectYAML: "\tnot: [yaml"})
+
+	resp, _ := doRequest(
+		t,
+		http.MethodGet,
+		ts.URL+"/api/compare?version=v1&resource=pods&namespace=prod&name=web&against=p-mk1&raw=true",
+		nil,
+	)
+
+	// Raw is the escape hatch for exactly this: show me what is there.
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want raw to hand the document over untouched", resp.StatusCode)
+	}
+}
+
+// A batch belongs to the subscription that asked for it. If that subscription
+// has since been replaced, the batch is somebody else's data and must not go
+// out under the new one's name.
+func TestABatchForAReplacedSubscriptionIsNotWritten(t *testing.T) {
+	sess := &wsSession{ctx: t.Context(), tables: map[string]*entry{}, logs: map[string]*entry{}}
+	gen := sess.claim(tables, "s1")
+	sess.claim(tables, "s1")
+
+	events := make(chan resources.Event)
+	close(events)
+	wrote := sess.writeBatch("s1", gen, resources.Event{Kind: "added"}, events)
+
+	if wrote {
+		t.Fatal("a batch was written for a subscription that had been replaced")
+	}
+}
+
+// Draining stops when the subscription's events are closed, rather than
+// spinning on a channel that will never speak again.
+func TestDrainingStopsWhenTheEventsAreClosed(t *testing.T) {
+	events := make(chan resources.Event)
+	close(events)
+
+	done := make(chan struct{})
+	go func() {
+		drainEvents(events)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("draining a closed channel never returned")
+	}
+}
+
+// A line that ended the last batch because it came from another pod is handed
+// over before the channel is read again, or it would be dropped.
+func TestALineHeldBackFromTheLastBatchIsHandedOverFirst(t *testing.T) {
+	sess := &wsSession{ctx: t.Context(), tables: map[string]*entry{}, logs: map[string]*entry{}}
+	held := &logs.Line{Pod: "web-1", Text: "the line that ended the last batch"}
+
+	line, step := sess.nextLine(nil, held, nil)
+
+	if step != relayLine {
+		t.Fatalf("step = %v, want the held line handed over", step)
+	}
+	if line != held {
+		t.Fatalf("line = %+v, want the one that was held back", line)
 	}
 }

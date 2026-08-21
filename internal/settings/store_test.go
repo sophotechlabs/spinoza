@@ -110,8 +110,8 @@ func TestTheStoreKeepsItsFileToItself(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
-	if info.Mode().Perm() != fileMode {
-		t.Fatalf("mode = %v, want %v", info.Mode().Perm(), fileMode)
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v, want %v", info.Mode().Perm(), 0o600)
 	}
 }
 
@@ -129,11 +129,11 @@ func TestAStoreWithoutAFileStillAnswers(t *testing.T) {
 
 func TestUnreadableSettingsAreReported(t *testing.T) {
 	path := tempPath(t)
-	err := os.MkdirAll(filepath.Dir(path), dirMode)
+	err := os.MkdirAll(filepath.Dir(path), 0o700)
 	if err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	writeErr := os.WriteFile(path, []byte("{not json"), fileMode)
+	writeErr := os.WriteFile(path, []byte("{not json"), 0o600)
 	if writeErr != nil {
 		t.Fatalf("write: %v", writeErr)
 	}
@@ -152,7 +152,7 @@ func TestUnreadableSettingsAreReported(t *testing.T) {
 
 func TestADirectoryInPlaceOfTheFileIsReported(t *testing.T) {
 	path := tempPath(t)
-	err := os.MkdirAll(path, dirMode)
+	err := os.MkdirAll(path, 0o700)
 	if err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestADirectoryInPlaceOfTheFileIsReported(t *testing.T) {
 func TestWritingWhereItCannotIsReported(t *testing.T) {
 	dir := t.TempDir()
 	blocked := filepath.Join(dir, "blocked")
-	err := os.WriteFile(blocked, []byte("in the way"), fileMode)
+	err := os.WriteFile(blocked, []byte("in the way"), 0o600)
 	if err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestTheDefaultPathSitsBesideTheOtherState(t *testing.T) {
 func TestSettingsThatCannotReplaceTheFileAreNotKept(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")
-	err := os.Mkdir(path, dirMode)
+	err := os.Mkdir(path, 0o700)
 	if err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestSettingsThatCannotReplaceTheFileAreNotKept(t *testing.T) {
 
 func TestSettingsAreNotWrittenWhereTheDirectoryCannotBeMade(t *testing.T) {
 	blocked := filepath.Join(t.TempDir(), "file")
-	err := os.WriteFile(blocked, []byte("not a directory"), fileMode)
+	err := os.WriteFile(blocked, []byte("not a directory"), 0o600)
 	if err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -280,46 +280,5 @@ func TestAHomelessAccountHasNoDefaultPath(t *testing.T) {
 
 	if err == nil {
 		t.Skip("this platform still finds a config directory without a home")
-	}
-}
-
-func TestAFileThatCannotBeWrittenIsCleanedUp(t *testing.T) {
-	dir := t.TempDir()
-	store := &Store{path: filepath.Join(dir, "settings.json"), values: map[string]string{}}
-	file, err := os.CreateTemp(dir, "settings-*.json")
-	if err != nil {
-		t.Fatalf("temp: %v", err)
-	}
-	closeErr := file.Close()
-	if closeErr != nil {
-		t.Fatalf("close: %v", closeErr)
-	}
-
-	replaceErr := store.replace(file, []byte("{}"))
-
-	if replaceErr == nil {
-		t.Fatal("writing to a closed file reported success")
-	}
-	if _, statErr := os.Stat(file.Name()); statErr == nil {
-		t.Fatal("the half-written file was left behind")
-	}
-}
-
-func TestAFileThatVanishesBeforeItIsSealedIsReported(t *testing.T) {
-	dir := t.TempDir()
-	store := &Store{path: filepath.Join(dir, "settings.json"), values: map[string]string{}}
-	file, err := os.CreateTemp(dir, "settings-*.json")
-	if err != nil {
-		t.Fatalf("temp: %v", err)
-	}
-	removeErr := os.Remove(file.Name())
-	if removeErr != nil {
-		t.Fatalf("remove: %v", removeErr)
-	}
-
-	replaceErr := store.replace(file, []byte("{}"))
-
-	if replaceErr == nil {
-		t.Fatal("sealing a file that is gone reported success")
 	}
 }

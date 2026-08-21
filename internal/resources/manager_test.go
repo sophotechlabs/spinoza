@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -646,6 +647,14 @@ type stubDiscovery struct {
 	invalidated int
 	results     []discoveryResult
 	calls       int
+	version     string
+}
+
+func (s *stubDiscovery) ServerVersion() (*version.Info, error) {
+	if s.version == "" {
+		return &version.Info{}, nil
+	}
+	return &version.Info{GitVersion: s.version}, nil
 }
 
 func (s *stubDiscovery) Invalidate() {

@@ -1,0 +1,87 @@
+package helm
+
+import (
+	"fmt"
+	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	metadatafake "k8s.io/client-go/metadata/fake"
+	k8stesting "k8s.io/client-go/testing"
+)
+
+// pageOf answers a list request with one full page and a token promising more,
+// which is what a namespace holding more helm objects than spinoza will read
+// looks like.
+func pageOf(items int) func(k8stesting.Action) (bool, runtime.Object, error) {
+	return func(k8stesting.Action) (bool, runtime.Object, error) {
+		list := &metav1.List{ListMeta: metav1.ListMeta{Continue: "there-is-more"}}
+		for i := range items {
+			list.Items = append(list.Items, runtime.RawExtension{Object: &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("sh.helm.release.v1.web.v%d", i),
+					Namespace: "prod",
+					Labels:    map[string]string{"owner": "helm"},
+				},
+			}})
+		}
+		return true, list, nil
+	}
+}
+
+func TestReadingStopsAtTheObjectCapAndSaysSo(t *testing.T) {
+	client := metadatafake.NewSimpleMetadataClient(metaScheme())
+	client.PrependReactor("list", "secrets", pageOf(maxObjects))
+
+	page, err := listRefs(t.Context(), client, DriverSecret, secretsGVR, "prod")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	// Without the cap this list follows its continue token forever.
+	if len(page.items) != maxObjects {
+		t.Fatalf("read %d objects, want it to stop at the cap of %d", len(page.items), maxObjects)
+	}
+	if !page.truncated {
+		t.Fatal("a list that stopped early did not say it was truncated")
+	}
+}
+
+func TestAListThatFitsIsNotCalledTruncated(t *testing.T) {
+	client := metadatafake.NewSimpleMetadataClient(metaScheme(),
+		&metav1.PartialObjectMetadata{
+			TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "sh.helm.release.v1.web.v1",
+				Namespace: "prod",
+				Labels:    map[string]string{"owner": "helm"},
+			},
+		})
+
+	page, err := listRefs(t.Context(), client, DriverSecret, secretsGVR, "prod")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if page.truncated {
+		t.Fatal("a list that read everything reported itself truncated")
+	}
+}
+
+// The truncation has to travel up to the caller, because it is what makes the
+// difference between "this cluster has no other releases" and "spinoza stopped
+// looking".
+func TestTruncationTravelsUpToTheWholeRead(t *testing.T) {
+	client := metadatafake.NewSimpleMetadataClient(metaScheme(),
+		&metav1.PartialObjectMetadata{
+			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Namespace"},
+			ObjectMeta: metav1.ObjectMeta{Name: "prod"},
+		})
+	client.PrependReactor("list", "secrets", pageOf(maxObjects))
+
+	page, err := allRefs(t.Context(), client)
+	if err != nil {
+		t.Fatalf("refs: %v", err)
+	}
+	if !page.truncated {
+		t.Fatal("a read that stopped at the cap was reported as complete")
+	}
+}
