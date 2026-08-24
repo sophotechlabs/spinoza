@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.12.0](https://github.com/sophotechlabs/spinoza/compare/v1.11.0...v1.12.0) (2026-08-21)
+
+
+### Features
+
+* **access:** tell a bulk action what the cluster will refuse, row by row ([da9289e](https://github.com/sophotechlabs/spinoza/commit/da9289e0d091eef12436a0caabc3c4dd9ba89aaa))
+* **health:** flip the cluster indicator on a failed request, not on the next ping ([42b31a9](https://github.com/sophotechlabs/spinoza/commit/42b31a9f918fc189a36c057676a22328c2cb9368))
+* **helm:** tell a release's buttons what the cluster will refuse ([687ef61](https://github.com/sophotechlabs/spinoza/commit/687ef615bdd53ef6bab37f71b7587c2b826604ac))
+* **logs:** tail every pod of a workload in one stream ([0a8378d](https://github.com/sophotechlabs/spinoza/commit/0a8378dc27756a1b7e9efbc7f8593c60bbacc307))
+* **rbac:** check gitops actions and split the log tail across pods ([f29407f](https://github.com/sophotechlabs/spinoza/commit/f29407f3f025ea7c7ad219072cdc7e16082a3c03))
+* **rbac:** grey out actions the cluster would refuse ([48ba22e](https://github.com/sophotechlabs/spinoza/commit/48ba22e26bc0841d8855ec100232b618d5ecb79f))
+
+
+### Bug Fixes
+
+* **contexts:** tell every window when the cluster changes, and ask the right question before a drain ([eb56b54](https://github.com/sophotechlabs/spinoza/commit/eb56b545d6f838eb19c9bf334590d19d8de40e87))
+* **kube:** tell helm and kubectl which kubeconfig spinoza was started with ([b0400eb](https://github.com/sophotechlabs/spinoza/commit/b0400ebb4a9db8a6db43ae359eba11a9655f7937))
+* **ui:** say when the cluster stops answering, and refuse an apply that would overwrite blind ([59d5713](https://github.com/sophotechlabs/spinoza/commit/59d5713ff99a1a57deaeb8222a4c33875777a802))
+
+
+### Miscellaneous
+
+* configure coderabbit reviews ([e8898f2](https://github.com/sophotechlabs/spinoza/commit/e8898f279c7b1333502d656872782ca6fdaae49d))
+
+
+### Refactoring
+
+* **stores:** one atomic file write, and cover the paths that only fail on a broken socket ([67a1468](https://github.com/sophotechlabs/spinoza/commit/67a1468a12d44c61a56096c3f66ebba2a04a6f17))
+
+
+### Tests
+
+* cover the cluster ping, helm pagination, and the paths that lose work quietly ([7f7a63a](https://github.com/sophotechlabs/spinoza/commit/7f7a63ad25b2c7f6b5be82fa8ec26343bcd57157))
+* **server:** wait out a feed's opening frames before breaking its socket ([7e5403e](https://github.com/sophotechlabs/spinoza/commit/7e5403e21e42846e63b99f7cee20e03a828ba01e))
+
 ## [1.11.0](https://github.com/sophotechlabs/spinoza/compare/v1.10.0...v1.11.0) (2026-08-20)
 
 
