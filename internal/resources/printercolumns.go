@@ -21,7 +21,13 @@ var crdGVR = schema.GroupVersionResource{
 	Resource: "customresourcedefinitions",
 }
 
-const crdReadTimeout = 5 * time.Second
+const (
+	crdReadTimeout = 5 * time.Second
+	// layoutTTL is how long the answer about a kind is kept. Definitions change
+	// when an operator is upgraded, which is rare, but a read that failed should
+	// not follow a table around for the rest of the session.
+	layoutTTL = time.Minute
+)
 
 // layout is how one kind is shown in a table: the columns, and how to fill a
 // row from an object.
@@ -51,11 +57,38 @@ func (m *Manager) layoutFor(
 	if ours {
 		return builtinLayout(desc.Kind)
 	}
-	declared, ok := m.crdLayout(ctx, gvr)
+	built, ok := shared(ctx, m.layoutStore(gvr), m.now, layoutTTL, func(ctx context.Context) (layout, bool) {
+		declared, found := m.crdLayout(ctx, gvr)
+		if !found {
+			return builtinLayout(desc.Kind), true
+		}
+		return declared, true
+	})
 	if !ok {
 		return builtinLayout(desc.Kind)
 	}
-	return declared
+	return built
+}
+
+func (m *Manager) layoutStore(gvr schema.GroupVersionResource) *recent[layout] {
+	m.layoutMu.Lock()
+	defer m.layoutMu.Unlock()
+	store, ok := m.layouts[gvr]
+	if ok {
+		return store
+	}
+	store = &recent[layout]{}
+	m.layouts[gvr] = store
+	return store
+}
+
+// forgetLayouts drops what every kind said about itself, so that the next table
+// opened asks again. Refreshing the resource list is how a user says the cluster
+// has changed under them.
+func (m *Manager) forgetLayouts() {
+	m.layoutMu.Lock()
+	defer m.layoutMu.Unlock()
+	m.layouts = map[schema.GroupVersionResource]*recent[layout]{}
 }
 
 // crdLayout reads the columns a custom resource asks to be shown by. Every CRD
@@ -203,7 +236,7 @@ func declaredColumnOf(entry any) (*declaredColumn, bool) {
 	}
 	return &declaredColumn{
 		name:   name,
-		render: renderFor(stringAt(fields, "type")),
+		render: renderFor(name, stringAt(fields, "type")),
 		path:   parsed,
 	}, true
 }
@@ -217,14 +250,32 @@ func alreadyShown(path string) bool {
 	return trimmed == ".metadata.creationTimestamp"
 }
 
-// renderFor turns a declared type into the way spinoza draws that cell. Only a
-// date is worth knowing about: it is the difference between a timestamp nobody
-// reads and the ages shown everywhere else.
-func renderFor(declared string) string {
+// renderFor is how spinoza draws a declared column. A date becomes the age shown
+// everywhere else rather than a timestamp nobody reads, and a column that says
+// whether the thing is working is drawn in the color of its answer.
+func renderFor(name, declared string) string {
 	if declared == "date" {
 		return "age"
 	}
+	if working(name) {
+		return "condition"
+	}
 	return ""
+}
+
+// working names the columns that answer whether the resource is doing its job.
+// Kubernetes has one convention for that answer — a condition's status, True or
+// False or Unknown — and these names mean the same whichever kind published
+// them. Columns that mean the opposite, Suspended and Paused among them, are
+// deliberately not here: True is not good news in those, and a green cell would
+// be a lie.
+func working(name string) bool {
+	for _, known := range []string{"Ready", "Healthy", "Available", "Synced", "Established", "Reconciled"} {
+		if strings.EqualFold(name, known) {
+			return true
+		}
+	}
+	return false
 }
 
 func parsePath(name, path string) (*jsonpath.JSONPath, error) {

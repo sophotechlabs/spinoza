@@ -72,7 +72,6 @@ type Event struct {
 }
 
 type Subscription struct {
-	Columns    []api.Column
 	Namespaced bool
 	Rows       []api.Row
 	Total      int
@@ -96,6 +95,13 @@ func (s *Subscription) Limit() int {
 func (s *Subscription) SetLimit(limit int) {
 	s.entry.limit.Store(int64(limitFor(s.stream.kind, limit)))
 	signalResync(s.entry)
+}
+
+// Columns is how the table is drawn now, rather than how it was drawn when the
+// feed opened. A window that stays open picks up a changed definition with its
+// next snapshot.
+func (s *Subscription) Columns() []api.Column {
+	return s.stream.shownColumns()
 }
 
 func (s *Subscription) Snapshot() ([]api.Row, int, error) {
@@ -126,6 +132,8 @@ type Manager struct {
 	now         func() time.Time
 	mu          sync.Mutex
 	streams     map[streamKey]*stream
+	layoutMu    sync.Mutex
+	layouts     map[schema.GroupVersionResource]*recent[layout]
 	building    map[streamKey]*buildGate
 	failures    map[streamKey]buildFailure
 	syncTimeout time.Duration
@@ -215,6 +223,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		descs:      deps.Descriptors,
 		now:        time.Now,
 		streams:    map[streamKey]*stream{},
+		layouts:    map[schema.GroupVersionResource]*recent[layout]{},
 		building:   map[streamKey]*buildGate{},
 		failures:   map[streamKey]buildFailure{},
 
@@ -254,6 +263,7 @@ func (m *Manager) RefreshResources() api.ResourceCatalog {
 		return m.Resources()
 	}
 	m.setCatalog(cats, descs, err)
+	m.forgetLayouts()
 	m.dropVanished(descs)
 	return m.Resources()
 }
@@ -810,7 +820,11 @@ func (s *subscriber) wants(ev Event) bool {
 }
 
 type stream struct {
-	kind     string
+	kind string
+	// A definition can change under a running cluster, so what a table shows is
+	// not fixed when the stream is built. viewMu guards the pair: the columns and
+	// the way a row's cells are filled always change together.
+	viewMu   sync.Mutex
 	columns  []api.Column
 	cells    func(obj *unstructured.Unstructured) []string
 	informer cache.SharedIndexInformer
@@ -845,6 +859,9 @@ func (m *Manager) Subscribe(
 	if err != nil {
 		return nil, err
 	}
+	// Opening a table is the moment to ask again: a definition read that failed
+	// the first time is retried, and one that has changed is picked up.
+	st.useLayout(m.layoutFor(ctx, desc, key.gvr))
 	rows, total, snapErr := st.snapshot(effNs, int(entry.limit.Load()), filters)
 	if snapErr != nil {
 		m.detach(key, st, entry)
@@ -852,7 +869,6 @@ func (m *Manager) Subscribe(
 	}
 
 	return &Subscription{
-		Columns:    st.columns,
 		Namespaced: desc.Namespaced,
 		Rows:       rows,
 		Total:      total,
@@ -1342,7 +1358,7 @@ func (st *stream) keepMatching(
 	limit int,
 	filters []api.RowFilter,
 ) []*unstructured.Unstructured {
-	matcher := matcherFor(st.columns, filters)
+	matcher := matcherFor(st.shownColumns(), filters)
 	if limit <= 0 || !matcher.wanted() {
 		return held
 	}
@@ -1411,13 +1427,36 @@ func toUnstructured(obj any) (*unstructured.Unstructured, bool) {
 	return u, true
 }
 
+// useLayout swaps what this table shows.
+func (st *stream) useLayout(shown layout) {
+	st.viewMu.Lock()
+	defer st.viewMu.Unlock()
+	st.columns = shown.columns
+	st.cells = shown.cells
+}
+
+func (st *stream) shownColumns() []api.Column {
+	st.viewMu.Lock()
+	defer st.viewMu.Unlock()
+	return st.columns
+}
+
+// shownCells takes the reader out from under the lock: filling a row walks the
+// object, and nothing else should wait for that.
+func (st *stream) shownCells(obj *unstructured.Unstructured) []string {
+	st.viewMu.Lock()
+	fill := st.cells
+	st.viewMu.Unlock()
+	return fill(obj)
+}
+
 func (st *stream) row(obj *unstructured.Unstructured) api.Row {
 	return api.Row{
 		UID:        string(obj.GetUID()),
 		Name:       obj.GetName(),
 		Namespace:  obj.GetNamespace(),
 		CreatedAt:  obj.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
-		Cells:      st.cells(obj),
+		Cells:      st.shownCells(obj),
 		Containers: containersFor(obj, st.kind),
 	}
 }

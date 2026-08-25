@@ -223,7 +223,7 @@ func TestSubscribeSeesARealInformerFill(t *testing.T) {
 	if len(rows) == 0 {
 		t.Fatal("a real informer synced with no rows")
 	}
-	if len(sub.Columns) == 0 {
+	if len(sub.Columns()) == 0 {
 		t.Fatal("the subscription carried no columns")
 	}
 }

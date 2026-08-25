@@ -312,11 +312,11 @@ func TestSubscribeSnapshot(t *testing.T) {
 	if !sub.Namespaced {
 		t.Fatal("Namespaced = false, want true")
 	}
-	if len(sub.Columns) != 3 {
-		t.Fatalf("columns = %d, want 3", len(sub.Columns))
+	if len(sub.Columns()) != 3 {
+		t.Fatalf("columns = %d, want 3", len(sub.Columns()))
 	}
-	if sub.Columns[0].Name != "Ready" {
-		t.Fatalf("first column = %q, want Ready", sub.Columns[0].Name)
+	if sub.Columns()[0].Name != "Ready" {
+		t.Fatalf("first column = %q, want Ready", sub.Columns()[0].Name)
 	}
 	if len(sub.Rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(sub.Rows))

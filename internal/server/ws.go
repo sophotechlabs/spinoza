@@ -275,7 +275,7 @@ func snapshotOf(subID string, sub *resources.Subscription, rows []api.Row, total
 	return api.Snapshot{
 		Type:       "snapshot",
 		SubID:      subID,
-		Columns:    columnsOrEmpty(sub.Columns),
+		Columns:    columnsOrEmpty(sub.Columns()),
 		Namespaced: sub.Namespaced,
 		Rows:       rowsOrEmpty(rows),
 		Total:      total,

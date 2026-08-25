@@ -18,7 +18,14 @@ import type {
   VisibilityState,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { Metrics, ObjectRef, ResourceDescriptor, ResourceUsage, Row } from '../lib/types';
+import type {
+  Column,
+  Metrics,
+  ObjectRef,
+  ResourceDescriptor,
+  ResourceUsage,
+  Row,
+} from '../lib/types';
 import {
   useSubColumns,
   useSubError,
@@ -28,7 +35,7 @@ import {
   useSubRows,
   useSubTotal,
 } from '../store/resources';
-import { ratioColor, restartColor, statusColor } from '../lib/status';
+import { conditionColor, ratioColor, restartColor, statusColor } from '../lib/status';
 import { useMetrics } from '../lib/metrics';
 import { cpuFromMilli, memFromMi } from '../lib/units';
 import { useElementWidth } from '../lib/useElementWidth';
@@ -70,12 +77,8 @@ function cellAt(row: Row, index: number): string {
   return row.cells[index];
 }
 
-function renderDataCell(
-  render: string | undefined,
-  value: string,
-  row: Row,
-  now: number,
-): ReactNode {
+function renderDataCell(column: Column, value: string, row: Row, now: number): ReactNode {
+  const render = column.render;
   if (render === 'age') {
     return agoOrDash(value, now);
   }
@@ -91,7 +94,29 @@ function renderDataCell(
   if (render === 'status') {
     return <span className={statusColor(value)}>{value}</span>;
   }
+  if (render === 'condition') {
+    return renderCondition(column.name, value);
+  }
   return value;
+}
+
+// The column's name is the condition it reports on, which is what decides
+// whether True is good news.
+function renderCondition(name: string, value: string): ReactNode {
+  if (!answersACondition(value)) {
+    return value;
+  }
+  return <span className={conditionColor(name, value)}>{value}</span>;
+}
+
+// A column named like a condition may hold something else entirely: the
+// prometheus operator calls a count of ready replicas "Ready". Only the two
+// words a condition answers with are coloured.
+function answersACondition(value: string): boolean {
+  if (value === 'True') {
+    return true;
+  }
+  return value === 'False';
 }
 
 function agoOrDash(value: string, now: number): string {
@@ -357,7 +382,7 @@ export default function ResourceTable({
           id: `cell-${index}`,
           header: column.name,
           size: 130,
-          cell: (info) => renderDataCell(column.render, info.getValue(), info.row.original, now),
+          cell: (info) => renderDataCell(column, info.getValue(), info.row.original, now),
         }),
       );
     });

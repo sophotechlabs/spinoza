@@ -4,14 +4,17 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -381,6 +384,22 @@ func crdServing(t *testing.T, definition *unstructured.Unstructured) (*Manager, 
 	return mgr, cancel
 }
 
+// fluxList is what discovery says about a cluster with flux on it, so that a
+// refresh keeps the kind this test is watching.
+func fluxList() []*metav1.APIResourceList {
+	return []*metav1.APIResourceList{
+		{
+			GroupVersion: "kustomize.toolkit.fluxcd.io/v1",
+			APIResources: []metav1.APIResource{{
+				Name:       "kustomizations",
+				Kind:       "Kustomization",
+				Namespaced: true,
+				Verbs:      metav1.Verbs{"list", "watch"},
+			}},
+		},
+	}
+}
+
 func subscribeToKustomizations(t *testing.T, mgr *Manager) *Subscription {
 	t.Helper()
 	sub, err := mgr.Subscribe(
@@ -407,7 +426,7 @@ func TestAKindSpinozaDoesNotKnowIsShownAsItsDefinitionAsks(t *testing.T) {
 
 	sub := subscribeToKustomizations(t, mgr)
 
-	if got := columnNames(sub.Columns); strings.Join(got, ",") != "Ready,Revision" {
+	if got := columnNames(sub.Columns()); strings.Join(got, ",") != "Ready,Revision" {
 		t.Fatalf("columns = %v, want the ones the definition asks for", got)
 	}
 	if len(sub.Rows) != 1 {
@@ -426,7 +445,7 @@ func TestAKindWhoseDefinitionCannotBeReadIsShownAsBefore(t *testing.T) {
 
 	sub := subscribeToKustomizations(t, mgr)
 
-	if got := columnNames(sub.Columns); strings.Join(got, ",") != "Status" {
+	if got := columnNames(sub.Columns()); strings.Join(got, ",") != "Status" {
 		t.Fatalf("columns = %v, want the single status it has always been", got)
 	}
 	if len(sub.Rows) != 1 {
@@ -446,7 +465,196 @@ func TestAKindSpinozaKnowsKeepsItsOwnTable(t *testing.T) {
 	}
 	t.Cleanup(sub.Close)
 
-	if got := columnNames(sub.Columns); strings.Join(got, ",") != "Ready,Up-to-date,Available" {
+	if got := columnNames(sub.Columns()); strings.Join(got, ",") != "Ready,Up-to-date,Available" {
 		t.Fatalf("columns = %v, want spinoza's own", got)
+	}
+}
+
+// A column that says whether the thing is working is drawn in the color of its
+// answer. The browser knows what True means for a condition; it only has to be
+// told that this cell holds one.
+func TestAColumnThatSaysWhetherItIsWorkingIsDrawnAsACondition(t *testing.T) {
+	for _, name := range []string{"Ready", "Healthy", "Available", "Synced", "Established", "Reconciled"} {
+		t.Run(name, func(t *testing.T) {
+			crd := crdWith("v1", column(name, "string", ".status.ready"))
+
+			shown, ok := layoutOf(crd, "v1")
+
+			if !ok {
+				t.Fatal("a definition with columns was read as having none")
+			}
+			if shown.columns[0].Render != "condition" {
+				t.Fatalf("render = %q, want a condition", shown.columns[0].Render)
+			}
+		})
+	}
+}
+
+// Definitions do not agree on capitals, and the word means the same either way.
+func TestAConditionColumnIsRecognisedWhateverItsCapitals(t *testing.T) {
+	crd := crdWith("v1", column("READY", "string", ".status.ready"))
+
+	shown, _ := layoutOf(crd, "v1")
+
+	if shown.columns[0].Render != "condition" {
+		t.Fatalf("render = %q, want a condition", shown.columns[0].Render)
+	}
+}
+
+// True is not good news in these, and a green cell would be a lie. They are left
+// the color of every other cell.
+func TestAColumnWhereTrueIsNotGoodNewsIsDrawnPlainly(t *testing.T) {
+	for _, name := range []string{"Suspended", "Paused", "Degraded", "Disabled"} {
+		t.Run(name, func(t *testing.T) {
+			crd := crdWith("v1", column(name, "boolean", ".spec.suspend"))
+
+			shown, _ := layoutOf(crd, "v1")
+
+			if shown.columns[0].Render != "" {
+				t.Fatalf("render = %q, want nothing special", shown.columns[0].Render)
+			}
+		})
+	}
+}
+
+// A date is a date even when it is called Ready, which no definition does, but
+// the two rules have to be in some order and the declared type is the surer one.
+func TestADeclaredDateWinsOverTheName(t *testing.T) {
+	crd := crdWith("v1", column("Ready", "date", ".status.readyAt"))
+
+	shown, _ := layoutOf(crd, "v1")
+
+	if shown.columns[0].Render != "age" {
+		t.Fatalf("render = %q, want an age", shown.columns[0].Render)
+	}
+}
+
+// counting builds a cluster that also says how many times its definitions were
+// read, so a test can tell a fresh answer from a remembered one.
+func counting(t *testing.T, definition *unstructured.Unstructured) (*Manager, *atomic.Int64, context.CancelFunc) {
+	t.Helper()
+	kinds := listKinds()
+	kinds[kustomizationGVR] = "KustomizationList"
+	kinds[crdGVR] = "CustomResourceDefinitionList"
+	objects := []runtime.Object{kustomization()}
+	if definition != nil {
+		objects = append(objects, definition)
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, objects...)
+	reads := &atomic.Int64{}
+	dyn.PrependReactor("get", "customresourcedefinitions", func(k8stesting.Action) (bool, runtime.Object, error) {
+		reads.Add(1)
+		return false, nil, nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	descs := testDescs()
+	descs[kustomizationKey] = kustomizationDesc()
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     dyn,
+		Clientset:   k8sfake.NewClientset(),
+		Categories:  []api.Category{{Name: "Flux"}},
+		Descriptors: descs,
+		Limits:      Limits{IdleGrace: time.Minute},
+	})
+	return mgr, reads, cancel
+}
+
+// Definitions are large and change about as often as an operator is upgraded.
+// Opening the same table twice is not a reason to fetch one twice.
+func TestADefinitionIsNotReadAgainForEveryTable(t *testing.T) {
+	crd := crdWith("v1", column("Ready", "string", ".status.ready"))
+	mgr, reads, cancel := counting(t, crd)
+	defer cancel()
+
+	first := subscribeToKustomizations(t, mgr)
+	first.Close()
+	subscribeToKustomizations(t, mgr)
+
+	if reads.Load() != 1 {
+		t.Fatalf("read the definition %d times, want once", reads.Load())
+	}
+}
+
+// A kind spinoza draws itself never has to ask.
+func TestAKindSpinozaKnowsAsksAboutNoDefinition(t *testing.T) {
+	crd := crdWith("v1", column("Ready", "string", ".status.ready"))
+	mgr, reads, cancel := counting(t, crd)
+	defer cancel()
+
+	sub, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "", 0, nil)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+
+	if reads.Load() != 0 {
+		t.Fatalf("read a definition %d times for a kind spinoza draws itself", reads.Load())
+	}
+}
+
+// Refreshing the resource list is how a user says the cluster changed under
+// them, and an operator upgrade is exactly that.
+func TestRefreshingTheResourceListAsksAboutDefinitionsAgain(t *testing.T) {
+	crd := crdWith("v1", column("Ready", "string", ".status.ready"))
+	mgr, reads, cancel := counting(t, crd)
+	defer cancel()
+	mgr.UseDiscovery(&stubDiscovery{results: []discoveryResult{{lists: fluxList()}}}, nil)
+	first := subscribeToKustomizations(t, mgr)
+	first.Close()
+
+	mgr.RefreshResources()
+	subscribeToKustomizations(t, mgr)
+
+	if reads.Load() != 2 {
+		t.Fatalf("read the definition %d times, want it asked about again", reads.Load())
+	}
+}
+
+// A definition that could not be read once must not follow the table around for
+// the rest of the session.
+func TestADefinitionThatCouldNotBeReadIsAskedAboutAgainLater(t *testing.T) {
+	mgr, reads, cancel := counting(t, nil)
+	defer cancel()
+	moment := time.Now()
+	mgr.now = func() time.Time {
+		return moment
+	}
+	first := subscribeToKustomizations(t, mgr)
+	first.Close()
+
+	moment = moment.Add(2 * layoutTTL)
+	subscribeToKustomizations(t, mgr)
+
+	if reads.Load() != 2 {
+		t.Fatalf("read the definition %d times, want the failed one tried again", reads.Load())
+	}
+}
+
+// A window that stays open picks up a changed definition, because its snapshots
+// carry what the table shows now rather than what it showed when it opened.
+func TestAnOpenTablePicksUpAChangedDefinition(t *testing.T) {
+	crd := crdWith("v1", column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
+	mgr, _, cancel := counting(t, crd)
+	defer cancel()
+	watching := subscribeToKustomizations(t, mgr)
+	if got := columnNames(watching.Columns()); strings.Join(got, ",") != "Ready" {
+		t.Fatalf("columns = %v, want the ones it opened with", got)
+	}
+
+	changed := crdWith(
+		"v1",
+		column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`),
+		column("Revision", "string", ".status.lastAppliedRevision"),
+	)
+	_, err := mgr.dyn.Resource(crdGVR).Update(t.Context(), changed, metav1.UpdateOptions{})
+	if err != nil {
+		t.Fatalf("update the definition: %v", err)
+	}
+	mgr.forgetLayouts()
+	opened := subscribeToKustomizations(t, mgr)
+	defer opened.Close()
+
+	if got := columnNames(watching.Columns()); strings.Join(got, ",") != "Ready,Revision" {
+		t.Fatalf("columns = %v, want the window still open to have picked them up", got)
 	}
 }

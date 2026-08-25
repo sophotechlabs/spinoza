@@ -200,6 +200,47 @@ describe('ResourceTable', () => {
     expect(screen.getByText('CrashLoopBackOff').className).toContain('text-error');
   });
 
+  // A custom resource says whether it is working through a condition, and the
+  // column's name is the condition it reports on.
+  it('colors a condition column by its answer', async () => {
+    seed([{ name: 'Ready', render: 'condition' }], true, [
+      makeRow({ uid: 'a', name: 'kustomize-a', namespace: 'flux-system', cells: ['True'] }),
+      makeRow({ uid: 'b', name: 'kustomize-b', namespace: 'flux-system', cells: ['False'] }),
+    ]);
+    renderTable(descriptor, null);
+    await screen.findByRole('button', { name: 'kustomize-a' });
+
+    expect(screen.getByText('True').className).toContain('text-ok');
+    expect(screen.getByText('False').className).toContain('text-error');
+  });
+
+  // Some conditions are bad news when they are true, and the shared rules know
+  // which. A column named after one is coloured the other way round.
+  it('colors a condition that is trouble when true the other way round', async () => {
+    seed([{ name: 'Degraded', render: 'condition' }], true, [
+      makeRow({ uid: 'a', name: 'rollout-a', namespace: 'prod', cells: ['True'] }),
+    ]);
+    renderTable(descriptor, null);
+    await screen.findByRole('button', { name: 'rollout-a' });
+
+    expect(screen.getByText('True').className).toContain('text-error');
+  });
+
+  // A column named like a condition may hold something else entirely: the
+  // prometheus operator calls a count of ready replicas "Ready".
+  it('leaves a condition column alone when the answer is not one', async () => {
+    seed([{ name: 'Ready', render: 'condition' }], true, [
+      makeRow({ uid: 'a', name: 'alertmanager-a', namespace: 'monitoring', cells: ['1'] }),
+    ]);
+    renderTable(descriptor, null);
+    await screen.findByRole('button', { name: 'alertmanager-a' });
+
+    const cell = screen.getByText('1').className;
+    expect(cell).not.toContain('text-ok');
+    expect(cell).not.toContain('text-error');
+    expect(cell).not.toContain('text-fg-muted');
+  });
+
   it('falls back to the cell text when a container column has no container data', async () => {
     seed([{ name: 'Containers', render: 'containers' }], true, [
       makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: ['0/1'] }),
