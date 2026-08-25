@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.13.0](https://github.com/sophotechlabs/spinoza/compare/v1.12.0...v1.13.0) (2026-08-25)
+
+
+### Features
+
+* **tables:** keep declared columns current and color the ones that say if it works ([c76d617](https://github.com/sophotechlabs/spinoza/commit/c76d617078df169fa2fa066902b725c9f39b189c))
+* **tables:** show custom resources the columns their own definitions ask for ([430870e](https://github.com/sophotechlabs/spinoza/commit/430870ea0042130d60f31066711de335a57aaaa6))
+
+
+### Refactoring
+
+* **server:** split the route table and handlers out of one file ([6d6e864](https://github.com/sophotechlabs/spinoza/commit/6d6e8648cf7f3fed82116f3e1e5127e35f078595))
+
 ## [1.12.0](https://github.com/sophotechlabs/spinoza/compare/v1.11.0...v1.12.0) (2026-08-21)
 
 
