@@ -812,6 +812,7 @@ func (s *subscriber) wants(ev Event) bool {
 type stream struct {
 	kind     string
 	columns  []api.Column
+	cells    func(obj *unstructured.Unstructured) []string
 	informer cache.SharedIndexInformer
 	lister   cache.GenericLister
 	cancel   context.CancelFunc
@@ -1140,9 +1141,11 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 		return nil, fmt.Errorf("set transform: %w", transformErr)
 	}
 
+	shown := m.layoutFor(ctx, desc, key.gvr)
 	st := &stream{
 		kind:     desc.Kind,
-		columns:  columnsFor(desc.Kind),
+		columns:  shown.columns,
+		cells:    shown.cells,
 		informer: informer,
 		lister:   gi.Lister(),
 		cancel:   cancel,
@@ -1229,7 +1232,7 @@ func (st *stream) publish(kind string, obj any) {
 		return
 	}
 	st.watchRecovered()
-	st.fanout(Event{Kind: kind, Row: toRow(u, st.kind)})
+	st.fanout(Event{Kind: kind, Row: st.row(u)})
 }
 
 func (st *stream) publishDelete(obj any) {
@@ -1326,7 +1329,7 @@ func (st *stream) snapshot(ns string, limit int, filters []api.RowFilter) ([]api
 	held = newestFirst(st.kind, held, limit)
 	rows := make([]api.Row, 0, len(held))
 	for _, u := range held {
-		rows = append(rows, toRow(u, st.kind))
+		rows = append(rows, st.row(u))
 	}
 	return rows, total, nil
 }
@@ -1345,7 +1348,7 @@ func (st *stream) keepMatching(
 	}
 	kept := make([]*unstructured.Unstructured, 0, len(held))
 	for _, u := range held {
-		if !matcher.matches(toRow(u, st.kind)) {
+		if !matcher.matches(st.row(u)) {
 			continue
 		}
 		kept = append(kept, u)
@@ -1408,14 +1411,14 @@ func toUnstructured(obj any) (*unstructured.Unstructured, bool) {
 	return u, true
 }
 
-func toRow(obj *unstructured.Unstructured, kind string) api.Row {
+func (st *stream) row(obj *unstructured.Unstructured) api.Row {
 	return api.Row{
 		UID:        string(obj.GetUID()),
 		Name:       obj.GetName(),
 		Namespace:  obj.GetNamespace(),
 		CreatedAt:  obj.GetCreationTimestamp().Time.UTC().Format(time.RFC3339),
-		Cells:      cellsFor(obj, kind),
-		Containers: containersFor(obj, kind),
+		Cells:      st.cells(obj),
+		Containers: containersFor(obj, st.kind),
 	}
 }
 

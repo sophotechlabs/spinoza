@@ -19,7 +19,17 @@ const (
 	defaultEventWindow = 100
 )
 
+// columnsFor is the table spinoza keeps for a kind it knows. Anything else is
+// shown a single status, unless the cluster says otherwise: see crdLayout.
 func columnsFor(kind string) []api.Column {
+	found, ok := builtinColumns(kind)
+	if ok {
+		return found
+	}
+	return []api.Column{statusColumn()}
+}
+
+func builtinColumns(kind string) ([]api.Column, bool) {
 	switch kind {
 	case "Pod":
 		return []api.Column{
@@ -27,21 +37,21 @@ func columnsFor(kind string) []api.Column {
 			statusColumn(),
 			{Name: "Restarts", Render: "restarts"},
 			{Name: "Node"},
-		}
+		}, true
 	case "Deployment", "ReplicaSet", "StatefulSet", "ReplicationController":
 		return []api.Column{
 			{Name: readyColumn, Render: "ratio"},
 			{Name: "Up-to-date"},
 			{Name: "Available"},
-		}
+		}, true
 	case "DaemonSet":
-		return cols("Desired", readyColumn, "Available")
+		return cols("Desired", readyColumn, "Available"), true
 	case "Service":
-		return cols("Type", "Cluster-IP", "Ports")
+		return cols("Type", "Cluster-IP", "Ports"), true
 	case "Node":
-		return []api.Column{statusColumn(), {Name: "Roles"}, {Name: "Version"}}
+		return []api.Column{statusColumn(), {Name: "Roles"}, {Name: "Version"}}, true
 	case "Job":
-		return []api.Column{{Name: "Completions", Render: "ratio"}}
+		return []api.Column{{Name: "Completions", Render: "ratio"}}, true
 	case eventKind:
 		return []api.Column{
 			{Name: "Type", Render: "status"},
@@ -50,10 +60,9 @@ func columnsFor(kind string) []api.Column {
 			{Name: "Count"},
 			{Name: "Last seen", Render: "age"},
 			{Name: "Message"},
-		}
-	default:
-		return []api.Column{statusColumn()}
+		}, true
 	}
+	return nil, false
 }
 
 func statusColumn() api.Column {
