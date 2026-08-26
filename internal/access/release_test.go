@@ -9,13 +9,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/helm"
 )
 
-// refusingVerb builds the question key the fake authorizer is looking for:
-// verb, group, resource, subresource. It is built rather than written out so
-// that a map of verbs on secrets does not read as a table of credentials.
-func refusingVerb(verb, resource, reason string) *authorizer {
-	return refusing(map[string]string{verb + "  " + resource + " ": reason})
-}
-
 func askedAbout(auth *authorizer, verb, resource string) (authv1.ResourceAttributes, bool) {
 	for _, one := range auth.questions() {
 		if one.Verb != verb {

@@ -15,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/sophotechlabs/spinoza/internal/access"
 )
 
 func running(name string) *corev1.Pod {
@@ -27,7 +29,7 @@ func running(name string) *corev1.Pod {
 func service(t *testing.T, enabled bool, objs ...runtime.Object) (*Service, *k8sfake.Clientset) {
 	t.Helper()
 	cs := k8sfake.NewClientset(objs...)
-	return NewService(cs, "busybox:1.37", "", func() bool { return enabled }), cs
+	return NewService(cs, "busybox:1.37", "", func() bool { return enabled }, access.New(cs)), cs
 }
 
 // the fake does not fill GenerateName, so name the pod and let the tracker keep it.
@@ -73,7 +75,7 @@ func TestTurningItOnIsSeenWithoutARestart(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	allow(cs, true)
 	on := false
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return on })
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return on }, access.New(cs))
 
 	before := svc.Support(t.Context(), "p-mk1")
 	on = true
@@ -88,7 +90,7 @@ func TestTurningItOnIsSeenWithoutARestart(t *testing.T) {
 }
 
 func TestNoWayToAskLeavesItOff(t *testing.T) {
-	svc := NewService(k8sfake.NewClientset(), "busybox:1.37", "", nil)
+	svc := NewService(k8sfake.NewClientset(), "busybox:1.37", "", nil, nil)
 
 	support := svc.Support(t.Context(), "p-mk1")
 
@@ -343,7 +345,7 @@ func TestItRepeatsWhyTheApiserverSaidNo(t *testing.T) {
 			Reason:  `no RBAC policy matched for user "arch"`,
 		}}, nil
 	})
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true })
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
 
 	support := svc.Support(t.Context(), "p-mk1")
 
@@ -364,7 +366,7 @@ func TestAPodTheClusterRefusesIsReported(t *testing.T) {
 			errors.New("privileged pods are not allowed in this namespace"),
 		)
 	})
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true })
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
 
 	_, err := svc.Start(t.Context(), "p-mk1")
 
@@ -382,7 +384,7 @@ func TestAPodThatNeverStartsIsTakenAwayAgain(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	allow(cs, true)
 	creates(cs, "spinoza-node-shell-slow", corev1.PodPending, "")
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true })
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
 
 	_, err := svc.Start(t.Context(), "p-mk1")
 
@@ -410,7 +412,7 @@ func TestAPodThatCannotBeReadWhileWaitingIsReported(t *testing.T) {
 	cs.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("the connection was reset")
 	})
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true })
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
 
 	_, err := svc.Start(t.Context(), "p-mk1")
 
@@ -426,5 +428,63 @@ func hurry(t *testing.T) func() {
 	pollEvery = 10 * time.Millisecond
 	return func() {
 		startTimeout, pollEvery = oldTimeout, oldPoll
+	}
+}
+
+// The answer comes from the one service that asks the cluster what this user
+// may do, so a panel that opens twice does not ask twice.
+func TestItRemembersWhatTheClusterSaid(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	asked := 0
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		asked++
+		return true, &authv1.SelfSubjectAccessReview{
+			Status: authv1.SubjectAccessReviewStatus{Allowed: true},
+		}, nil
+	})
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
+
+	svc.Support(t.Context(), "p-mk1")
+	svc.Support(t.Context(), "p-mk1")
+
+	if asked != 1 {
+		t.Fatalf("asked the cluster %d times, want the second answered from memory", asked)
+	}
+}
+
+// A question that could not be put is not permission. A node shell is a
+// privileged pod on somebody's host, and this is the one place in spinoza that
+// would rather say it does not know than offer the button anyway.
+func TestAQuestionThatCouldNotBePutLeavesItUnoffered(t *testing.T) {
+	svc, cs := service(t, true)
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &authv1.SelfSubjectAccessReview{
+			Status: authv1.SubjectAccessReviewStatus{
+				Allowed:         false,
+				EvaluationError: "the webhook authorizer did not answer",
+			},
+		}, nil
+	})
+
+	support := svc.Support(t.Context(), "p-mk1")
+
+	if support.Allowed {
+		t.Fatal("an authorizer that could not decide was treated as permission")
+	}
+	if !strings.Contains(support.Reason, "could not check") {
+		t.Fatalf("reason = %q, want it clear that nothing was found out", support.Reason)
+	}
+}
+
+func TestAServiceWithNothingToAskWithSaysSo(t *testing.T) {
+	svc := NewService(k8sfake.NewClientset(), "busybox:1.37", "", func() bool { return true }, nil)
+
+	support := svc.Support(t.Context(), "p-mk1")
+
+	if support.Allowed {
+		t.Fatal("a service that asked nobody offered the shell anyway")
+	}
+	if !strings.Contains(support.Reason, "could not check") {
+		t.Fatalf("reason = %q, want it clear that nothing was asked", support.Reason)
 	}
 }

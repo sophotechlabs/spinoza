@@ -11,9 +11,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
@@ -77,7 +79,7 @@ func newService(t *testing.T, pod *corev1.Pod, runner *stubRunner) *Service {
 			_, _ = client.CoreV1().Pods(pod.Namespace).Update(context.Background(), current, metav1.UpdateOptions{})
 		}
 	}
-	service := NewService(runner, client, "", api.ContextRef{Name: "p-mk1"})
+	service := NewService(runner, client, "", api.ContextRef{Name: "p-mk1"}, access.New(client))
 	service.poll = time.Millisecond
 	service.timeout = 2 * time.Second
 	return service
@@ -262,7 +264,7 @@ func TestEnsureRejectsNamesThatCouldBeReadAsFlags(t *testing.T) {
 }
 
 func TestEnsureReportsAMissingPod(t *testing.T) {
-	service := NewService(&stubRunner{}, k8sfake.NewClientset(), "", api.ContextRef{})
+	service := NewService(&stubRunner{}, k8sfake.NewClientset(), "", api.ContextRef{}, permsOn(k8sfake.NewClientset()))
 	_, err := service.Ensure(context.Background(), request())
 	if err == nil {
 		t.Fatal("expected an error")
@@ -297,7 +299,7 @@ func TestEnsureFailsFastOnAPullFailure(t *testing.T) {
 		}}
 		_, _ = client.CoreV1().Pods(pod.Namespace).UpdateStatus(context.Background(), current, metav1.UpdateOptions{})
 	}
-	service := NewService(runner, client, "", api.ContextRef{})
+	service := NewService(runner, client, "", api.ContextRef{}, access.New(client))
 	service.poll = time.Millisecond
 	service.timeout = 30 * time.Second
 
@@ -326,7 +328,7 @@ func TestEnsureReportsAContainerThatExitsImmediately(t *testing.T) {
 		}}
 		_, _ = client.CoreV1().Pods(pod.Namespace).UpdateStatus(context.Background(), current, metav1.UpdateOptions{})
 	}
-	service := NewService(runner, client, "", api.ContextRef{})
+	service := NewService(runner, client, "", api.ContextRef{}, access.New(client))
 	service.poll = time.Millisecond
 	service.timeout = 2 * time.Second
 
@@ -432,7 +434,7 @@ func TestEnsureReportsAPodThatVanishesWhileWaiting(t *testing.T) {
 	runner.onRun = func() {
 		_ = client.CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
 	}
-	service := NewService(runner, client, "", api.ContextRef{})
+	service := NewService(runner, client, "", api.ContextRef{}, access.New(client))
 	service.poll = time.Millisecond
 	service.timeout = 2 * time.Second
 
@@ -461,8 +463,21 @@ func allowingClient(t *testing.T, allowed bool, reason string) *k8sfake.Clientse
 	return client
 }
 
+// permsOn builds the one thing that asks the cluster what this user may do, on
+// whichever client a test handed over.
+func permsOn(cs kubernetes.Interface) *access.Service {
+	return access.New(cs)
+}
+
+// permitting is a service whose only interesting part is what the cluster says
+// about permission.
+func permitting(t *testing.T, cs kubernetes.Interface) *Service {
+	t.Helper()
+	return NewService(&stubRunner{}, cs, "", api.ContextRef{}, permsOn(cs))
+}
+
 func TestAllowedReportsAPermittedNamespace(t *testing.T) {
-	service := NewService(&stubRunner{}, allowingClient(t, true, ""), "", api.ContextRef{})
+	service := permitting(t, allowingClient(t, true, ""))
 
 	support := service.Allowed(context.Background(), "monitoring", "loki-0")
 	if !support.Allowed {
@@ -474,7 +489,7 @@ func TestAllowedReportsAPermittedNamespace(t *testing.T) {
 }
 
 func TestAllowedReportsARefusalWithItsReason(t *testing.T) {
-	service := NewService(&stubRunner{}, allowingClient(t, false, "no RBAC policy matched"), "", api.ContextRef{})
+	service := permitting(t, allowingClient(t, false, "no RBAC policy matched"))
 
 	support := service.Allowed(context.Background(), "kube-system", "loki-0")
 	if support.Allowed {
@@ -491,7 +506,7 @@ func TestAllowedDefaultsToPermittedWhenTheReviewItselfFails(t *testing.T) {
 		func(k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, errors.New("cannot create selfsubjectaccessreviews")
 		})
-	service := NewService(&stubRunner{}, client, "", api.ContextRef{})
+	service := NewService(&stubRunner{}, client, "", api.ContextRef{}, permsOn(client))
 
 	support := service.Allowed(context.Background(), "monitoring", "loki-0")
 	if !support.Allowed {
@@ -514,7 +529,7 @@ func TestWaitReportsTheLastWaitingReasonOnTimeout(t *testing.T) {
 		}}
 		_, _ = client.CoreV1().Pods(pod.Namespace).UpdateStatus(context.Background(), current, metav1.UpdateOptions{})
 	}
-	service := NewService(runner, client, "", api.ContextRef{})
+	service := NewService(runner, client, "", api.ContextRef{}, access.New(client))
 	service.poll = time.Millisecond
 	service.timeout = 40 * time.Millisecond
 
@@ -714,7 +729,7 @@ func TestEnsureBoundsTheKubectlPatchPhase(t *testing.T) {
 		patchTimeout = previous
 	})
 	runner := &blockingRunner{saw: make(chan error, 1)}
-	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", api.ContextRef{Name: "p-mk1"})
+	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", api.ContextRef{Name: "p-mk1"}, permsOn(k8sfake.NewClientset(runningPod())))
 
 	started := time.Now()
 	_, err := service.Ensure(context.Background(), request())
@@ -733,7 +748,7 @@ func TestEnsureBoundsTheKubectlPatchPhase(t *testing.T) {
 
 func TestEnsureLeavesTheKubectlDeadlineAloneWhenTheCallerIsShorter(t *testing.T) {
 	runner := &blockingRunner{saw: make(chan error, 1)}
-	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", api.ContextRef{Name: "p-mk1"})
+	service := NewService(runner, k8sfake.NewClientset(runningPod()), "", api.ContextRef{Name: "p-mk1"}, permsOn(k8sfake.NewClientset(runningPod())))
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 
@@ -757,7 +772,7 @@ func TestTheKubectlArgsCarryTheContextAndKubeconfig(t *testing.T) {
 	service := NewService(&stubRunner{}, k8sfake.NewClientset(runningPod()), "", api.ContextRef{
 		Name:       "kind-spinoza",
 		Kubeconfig: "/home/arch/.kube/config",
-	})
+	}, permsOn(k8sfake.NewClientset(runningPod())))
 
 	args := service.args(request(), "spinoza-debug-1", "general")
 
@@ -822,5 +837,81 @@ func TestAPodNameThatIsNotOneIsRefused(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("admits accepted a pod name kubernetes would not")
+	}
+}
+
+// A cluster that refuses without saying why used to leave the panel with an
+// empty explanation. The feature says it in its own words instead.
+func TestARefusalWithoutAReasonStillSaysWhat(t *testing.T) {
+	service := permitting(t, allowingClient(t, false, ""))
+
+	support := service.Allowed(context.Background(), "kube-system", "loki-0")
+
+	if support.Allowed {
+		t.Fatal("a refusal was reported as permission")
+	}
+	if !strings.Contains(support.Reason, "ephemeral container") {
+		t.Fatalf("reason = %q, want a sentence when the cluster gave none", support.Reason)
+	}
+}
+
+// The answer comes from the one service that asks the cluster what this user may
+// do, so opening the same prompt twice does not ask twice.
+func TestTheAnswerIsRememberedBetweenPrompts(t *testing.T) {
+	asked := 0
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		asked++
+		return true, &authv1.SelfSubjectAccessReview{
+			Status: authv1.SubjectAccessReviewStatus{Allowed: true},
+		}, nil
+	})
+	service := permitting(t, cs)
+
+	service.Allowed(context.Background(), "monitoring", "loki-0")
+	service.Allowed(context.Background(), "monitoring", "loki-0")
+
+	if asked != 1 {
+		t.Fatalf("asked the cluster %d times, want the second answered from memory", asked)
+	}
+}
+
+// Every pod is its own question, so one remembered answer must not stand in for
+// another pod's.
+func TestAnotherPodIsItsOwnQuestion(t *testing.T) {
+	asked := 0
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		asked++
+		return true, &authv1.SelfSubjectAccessReview{
+			Status: authv1.SubjectAccessReviewStatus{Allowed: true},
+		}, nil
+	})
+	service := permitting(t, cs)
+
+	service.Allowed(context.Background(), "monitoring", "loki-0")
+	service.Allowed(context.Background(), "monitoring", "loki-1")
+
+	if asked != 2 {
+		t.Fatalf("asked the cluster %d times, want each pod asked about", asked)
+	}
+}
+
+// The button is left alone when nothing could be found out: the apiserver is
+// what decides in the end, and it will say so plainly.
+func TestAQuestionThatCouldNotBePutLeavesTheButtonAlone(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("the apiserver would not answer")
+	})
+	service := permitting(t, cs)
+
+	support := service.Allowed(context.Background(), "monitoring", "loki-0")
+
+	if !support.Allowed {
+		t.Fatal("a question that could not be put took the button away")
+	}
+	if !strings.Contains(support.Reason, "could not check") {
+		t.Fatalf("reason = %q, want it clear that nothing was found out", support.Reason)
 	}
 }

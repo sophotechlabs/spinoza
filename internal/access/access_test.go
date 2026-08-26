@@ -88,6 +88,13 @@ func serviceFor(t *testing.T, auth *authorizer) *Service {
 	return New(cs)
 }
 
+// refusingVerb builds the question key the fake authorizer looks for: verb,
+// group, resource, subresource. It is built rather than written out so that a
+// map of verbs on secrets does not read as a table of credentials.
+func refusingVerb(verb, resource, reason string) *authorizer {
+	return refusing(map[string]string{verb + "  " + resource + " ": reason})
+}
+
 func refusing(pairs map[string]string) *authorizer {
 	return &authorizer{refuse: pairs}
 }
@@ -591,5 +598,127 @@ func TestARefusedGitopsPatchIsReported(t *testing.T) {
 
 	if got[Reconcile] != "no reconciling for you" {
 		t.Fatalf("reconcile reason = %q", got[Reconcile])
+	}
+}
+
+// Ask is the way a feature outside the object panel puts a single question:
+// node shells and debug containers both have one to ask.
+func TestAskAnswersOneQuestion(t *testing.T) {
+	service := serviceFor(t, refusing(nil))
+
+	decision := service.Ask(t.Context(), Check{Verb: "create", Resource: "pods", Namespace: "prod"})
+
+	if !decision.Allowed {
+		t.Fatalf("decision = %+v, want it allowed", decision)
+	}
+	if !decision.Answered {
+		t.Fatalf("decision = %+v, want the cluster's answer marked as one", decision)
+	}
+}
+
+func TestAskCarriesTheClustersOwnReasonForARefusal(t *testing.T) {
+	service := serviceFor(t, refusingVerb("create", "pods", "no creating pods in there"))
+
+	decision := service.Ask(t.Context(), Check{Verb: "create", Resource: "pods", Namespace: "prod"})
+
+	if decision.Allowed {
+		t.Fatal("a refusal came back allowed")
+	}
+	if decision.Reason != "no creating pods in there" {
+		t.Fatalf("reason = %q, want the cluster's own words with nothing added", decision.Reason)
+	}
+}
+
+// The difference between "you may" and "nobody could tell me". Most callers
+// treat them the same; the ones that do not need to be able to see it.
+func TestAQuestionThatCouldNotBePutIsNotAnAnswer(t *testing.T) {
+	service := serviceFor(t, &authorizer{broken: true})
+
+	decision := service.Ask(t.Context(), Check{Verb: "create", Resource: "pods", Namespace: "prod"})
+
+	if decision.Answered {
+		t.Fatalf("decision = %+v, want it marked as no answer", decision)
+	}
+	if !decision.Allowed {
+		t.Fatalf("decision = %+v, want a failed question to take nothing away", decision)
+	}
+	if decision.Reason == "" {
+		t.Fatal("a question that could not be put said nothing about why")
+	}
+}
+
+func TestAnAuthorizerWithNoOpinionIsNotAnAnswerEither(t *testing.T) {
+	service := serviceFor(t, &authorizer{unsure: true})
+
+	decision := service.Ask(t.Context(), Check{Verb: "create", Resource: "pods", Namespace: "prod"})
+
+	if decision.Answered {
+		t.Fatalf("decision = %+v, want it marked as no answer", decision)
+	}
+	if decision.Reason == "" {
+		t.Fatal("an authorizer that could not decide said nothing about why")
+	}
+}
+
+func TestAskRemembersWhatItWasTold(t *testing.T) {
+	auth := refusing(nil)
+	service := serviceFor(t, auth)
+	check := Check{Verb: "create", Resource: "pods", Namespace: "prod"}
+
+	service.Ask(t.Context(), check)
+	service.Ask(t.Context(), check)
+
+	if auth.count() != 1 {
+		t.Fatalf("asked %d times, want the second answered from memory", auth.count())
+	}
+}
+
+// A question nobody could answer is not worth remembering: the next attempt
+// should find out rather than repeat what it never learned.
+func TestAQuestionThatCouldNotBePutIsNotRemembered(t *testing.T) {
+	auth := &authorizer{broken: true}
+	service := serviceFor(t, auth)
+	check := Check{Verb: "create", Resource: "pods", Namespace: "prod"}
+
+	service.Ask(t.Context(), check)
+	service.Ask(t.Context(), check)
+
+	if auth.count() != 2 {
+		t.Fatalf("asked %d times, want a failed question tried again", auth.count())
+	}
+}
+
+// One service answers for every feature, so a question the object panel has
+// already put is free for whoever asks it next.
+func TestAskSharesWhatAPanelAlreadyAsked(t *testing.T) {
+	auth := refusing(nil)
+	service := serviceFor(t, auth)
+	service.Review(t.Context(), podRef())
+	asked := auth.count()
+
+	service.Ask(t.Context(), Check{
+		Verb:        "create",
+		Resource:    "pods",
+		Subresource: "exec",
+		Namespace:   "prod",
+		Name:        "web",
+	})
+
+	if auth.count() != asked {
+		t.Fatalf("asked %d then %d, want the panel's answer reused", asked, auth.count())
+	}
+}
+
+// A feature wired up without one asks nothing and stops nobody.
+func TestAskOnAServiceThatIsNotThereAllowsEverything(t *testing.T) {
+	var service *Service
+
+	decision := service.Ask(t.Context(), Check{Verb: "create", Resource: "pods"})
+
+	if !decision.Allowed {
+		t.Fatalf("decision = %+v, want the benefit of the doubt", decision)
+	}
+	if decision.Answered {
+		t.Fatalf("decision = %+v, want it clear that nothing was asked", decision)
 	}
 }

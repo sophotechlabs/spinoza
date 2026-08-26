@@ -25,6 +25,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
@@ -164,7 +165,7 @@ func TestDebugSupportComesFromTheDebugService(t *testing.T) {
 		Dynamic:     newClient(t),
 		Clientset:   cs,
 		Descriptors: testDescs(),
-		Debugger:    debugcontainer.NewService(stubRunner{}, cs, "", api.ContextRef{}),
+		Debugger:    debugcontainer.NewService(stubRunner{}, cs, "", api.ContextRef{}, access.New(cs)),
 	})
 
 	result := mgr.DebugSupport(ctx, "prod", "web-0")
@@ -317,7 +318,7 @@ func TestStartingADebugContainerGoesToTheDebugService(t *testing.T) {
 		Dynamic:     newClient(t),
 		Clientset:   cs,
 		Descriptors: testDescs(),
-		Debugger:    debugcontainer.NewService(stubRunner{}, cs, "", api.ContextRef{}),
+		Debugger:    debugcontainer.NewService(stubRunner{}, cs, "", api.ContextRef{}, access.New(cs)),
 	})
 
 	_, err := mgr.StartDebug(ctx, debugcontainer.Request{Namespace: "prod", Pod: "web-0"})
@@ -692,10 +693,16 @@ func managerWithNodeShells(t *testing.T, cs *k8sfake.Clientset) (*Manager, conte
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	mgr := NewManager(ctx, Deps{
-		Dynamic:    newClient(t),
-		Clientset:  cs,
-		NodeShells: nodeshell.NewService(cs, "busybox:1.37", nodeshell.DefaultNamespace, func() bool { return true }),
-		Limits:     Limits{IdleGrace: time.Millisecond},
+		Dynamic:   newClient(t),
+		Clientset: cs,
+		NodeShells: nodeshell.NewService(
+			cs,
+			"busybox:1.37",
+			nodeshell.DefaultNamespace,
+			func() bool { return true },
+			access.New(cs),
+		),
+		Limits: Limits{IdleGrace: time.Millisecond},
 	})
 	return mgr, cancel
 }

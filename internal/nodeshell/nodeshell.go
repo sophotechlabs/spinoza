@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
@@ -39,16 +39,22 @@ type Service struct {
 	image     string
 	namespace string
 	allow     func() bool
+	perms     *access.Service
 }
 
-func NewService(cs kubernetes.Interface, image, namespace string, allow func() bool) *Service {
+func NewService(
+	cs kubernetes.Interface,
+	image, namespace string,
+	allow func() bool,
+	perms *access.Service,
+) *Service {
 	if namespace == "" {
 		namespace = DefaultNamespace
 	}
 	if allow == nil {
 		allow = func() bool { return false }
 	}
-	return &Service{cs: cs, image: image, namespace: namespace, allow: allow}
+	return &Service{cs: cs, image: image, namespace: namespace, allow: allow, perms: perms}
 }
 
 func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport {
@@ -67,25 +73,26 @@ func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport
 		support.Reason = "no node was named"
 		return support
 	}
-	review := &authv1.SelfSubjectAccessReview{
-		Spec: authv1.SelfSubjectAccessReviewSpec{
-			ResourceAttributes: &authv1.ResourceAttributes{
-				Namespace: s.namespace,
-				Verb:      "create",
-				Resource:  "pods",
-			},
-		},
-	}
-	result, err := s.cs.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, review, metav1.CreateOptions{})
-	if err != nil {
-		support.Reason = "could not check whether pods may be created in " + s.namespace + ": " + err.Error()
+	// A node shell is a privileged pod on somebody's host. Unlike the buttons
+	// elsewhere, one that cannot be asked about is not offered: better to say the
+	// question could not be put than to hand over a shell nobody checked.
+	decision := s.perms.Ask(ctx, access.Check{
+		Verb:      "create",
+		Resource:  "pods",
+		Namespace: s.namespace,
+	})
+	if !decision.Answered {
+		support.Reason = "could not check whether pods may be created in " + s.namespace
+		if decision.Reason != "" {
+			support.Reason += ": " + decision.Reason
+		}
 		return support
 	}
-	support.Allowed = result.Status.Allowed
+	support.Allowed = decision.Allowed
 	if !support.Allowed {
 		support.Reason = "you may not create pods in " + s.namespace
-		if result.Status.Reason != "" {
-			support.Reason = result.Status.Reason
+		if decision.Reason != "" {
+			support.Reason = decision.Reason
 		}
 	}
 	return support

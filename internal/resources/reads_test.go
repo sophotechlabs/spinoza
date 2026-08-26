@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/openapi"
 	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/helm"
@@ -615,5 +616,38 @@ func TestHelmAccessDoesNotAskAboutTheKindTheReleaseIsNotIn(t *testing.T) {
 
 	if len(result.Refused) != 0 {
 		t.Fatalf("refused = %v; a configmap release was refused over secrets", result.Refused)
+	}
+}
+
+// One service answers what this user may do, and the cluster wiring builds it.
+// A manager handed one uses it rather than starting a second, so an answer is
+// remembered whichever feature put the question.
+func TestAManagerUsesThePermissionsItWasHanded(t *testing.T) {
+	handed := access.New(decidingClientset(false, "not for you"))
+	mgr := NewManager(t.Context(), Deps{
+		Dynamic:     newClient(t),
+		Clientset:   decidingClientset(true, ""),
+		Perms:       handed,
+		Descriptors: testDescs(),
+	})
+
+	result := mgr.Access(t.Context(), deployAt("prod", "web"))
+
+	if len(result.Refused) == 0 {
+		t.Fatal("the manager answered from a service of its own rather than the one it was handed")
+	}
+}
+
+func TestAManagerWithoutOneKeepsItsOwn(t *testing.T) {
+	mgr := NewManager(t.Context(), Deps{
+		Dynamic:     newClient(t),
+		Clientset:   decidingClientset(false, "not for you"),
+		Descriptors: testDescs(),
+	})
+
+	result := mgr.Access(t.Context(), deployAt("prod", "web"))
+
+	if len(result.Refused) == 0 {
+		t.Fatal("a manager with no service handed to it asked nobody")
 	}
 }

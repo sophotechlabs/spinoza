@@ -19,6 +19,7 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/nodeshell"
@@ -61,10 +62,16 @@ func nodeShellServer(t *testing.T, cs *k8sfake.Clientset, images *fakeImages, en
 	shell := newFakeShell()
 	shell.greet = "/ # "
 	mgr := resources.NewManager(ctx, resources.Deps{
-		Dynamic:    dyn,
-		Clientset:  cs,
-		Shells:     exec.NewService(shell, images),
-		NodeShells: nodeshell.NewService(cs, "busybox:1.37", nodeshell.DefaultNamespace, func() bool { return enabled }),
+		Dynamic:   dyn,
+		Clientset: cs,
+		Shells:    exec.NewService(shell, images),
+		NodeShells: nodeshell.NewService(
+			cs,
+			"busybox:1.37",
+			nodeshell.DefaultNamespace,
+			func() bool { return enabled },
+			access.New(cs),
+		),
 	})
 	ts := httptest.NewServer(authed(New(fixed(mgr), testAssets(), testToken).Handler()))
 	t.Cleanup(ts.Close)

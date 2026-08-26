@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
@@ -93,12 +93,19 @@ type Service struct {
 	runner  Runner
 	cs      kubernetes.Interface
 	image   string
+	perms   *access.Service
 	kubeRef api.ContextRef
 	timeout time.Duration
 	poll    time.Duration
 }
 
-func NewService(runner Runner, cs kubernetes.Interface, image string, kubeRef api.ContextRef) *Service {
+func NewService(
+	runner Runner,
+	cs kubernetes.Interface,
+	image string,
+	kubeRef api.ContextRef,
+	perms *access.Service,
+) *Service {
 	if image == "" {
 		image = DefaultImage
 	}
@@ -106,6 +113,7 @@ func NewService(runner Runner, cs kubernetes.Interface, image string, kubeRef ap
 		runner:  runner,
 		cs:      cs,
 		image:   image,
+		perms:   perms,
 		kubeRef: kubeRef,
 		timeout: defaultTimeout,
 		poll:    defaultPoll,
@@ -116,26 +124,33 @@ func Supported(profile string) bool {
 	return slices.Contains(profiles, profile)
 }
 
+// Allowed says whether this pod will take a debug container. A question that
+// could not be put leaves the button alone, the way it is everywhere else: the
+// apiserver is what decides in the end.
 func (s *Service) Allowed(ctx context.Context, namespace, pod string) api.DebugSupport {
 	support := api.DebugSupport{Namespace: namespace, Pod: pod, Allowed: true, Image: s.image}
-	review := &authv1.SelfSubjectAccessReview{
-		Spec: authv1.SelfSubjectAccessReviewSpec{
-			ResourceAttributes: &authv1.ResourceAttributes{
-				Namespace:   namespace,
-				Name:        pod,
-				Verb:        "patch",
-				Resource:    "pods",
-				Subresource: "ephemeralcontainers",
-			},
-		},
-	}
-	result, err := s.cs.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, review, metav1.CreateOptions{})
-	if err != nil {
-		support.Reason = "could not check whether ephemeral containers are allowed here: " + err.Error()
+	decision := s.perms.Ask(ctx, access.Check{
+		Verb:        "patch",
+		Resource:    "pods",
+		Subresource: "ephemeralcontainers",
+		Namespace:   namespace,
+		Name:        pod,
+	})
+	if !decision.Answered {
+		support.Reason = "could not check whether ephemeral containers are allowed here"
+		if decision.Reason != "" {
+			support.Reason += ": " + decision.Reason
+		}
 		return support
 	}
-	support.Allowed = result.Status.Allowed
-	support.Reason = result.Status.Reason
+	support.Allowed = decision.Allowed
+	if support.Allowed {
+		return support
+	}
+	support.Reason = "you may not add an ephemeral container to this pod"
+	if decision.Reason != "" {
+		support.Reason = decision.Reason
+	}
 	return support
 }
 

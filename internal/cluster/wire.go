@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/metadata"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/compare"
@@ -158,6 +159,9 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		slog.Warn("discovery came back incomplete", "error", discErr)
 	}
 	slog.Info("connected to a cluster", "context", bundle.Ref.Name, "resourceTypes", len(descs), "categories", len(cats))
+	// One place asks the cluster what this user may do, so that the answer to a
+	// question is remembered whichever feature put it.
+	perms := access.New(bundle.Clientset)
 	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3)
 	forwards := portforward.NewRegistry(
 		ctx,
@@ -174,6 +178,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		bundle.Clientset,
 		options.DebugImage,
 		bundle.Ref,
+		perms,
 	)
 	index := charts.New(ctx, &http.Client{Timeout: 30 * time.Second}, charts.DefaultTTL)
 	meta := metaClient(bundle)
@@ -185,7 +190,13 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		helm.Repositories(helm.RepositoryConfig()),
 		bundle.Ref,
 	)
-	nodeShells := nodeshell.NewService(bundle.Clientset, options.NodeShellImage, options.NodeShellNS, options.NodeShell)
+	nodeShells := nodeshell.NewService(
+		bundle.Clientset,
+		options.NodeShellImage,
+		options.NodeShellNS,
+		options.NodeShell,
+		perms,
+	)
 	promClient := prom.NewClient(bundle.Clientset, promTarget)
 	mgr := resources.NewManager(ctx, resources.Deps{
 		Limits: resources.Limits{
@@ -208,6 +219,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		Helm:        releases,
 		Charts:      index,
 		Prometheus:  promClient,
+		Perms:       perms,
 		Reach:       bundle.Reach,
 		Categories:  cats,
 		Descriptors: descs,

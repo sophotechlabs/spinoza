@@ -196,6 +196,7 @@ type Deps struct {
 	Helm        *helm.Service
 	Prometheus  *prom.Client
 	Charts      *charts.Cache
+	Perms       *access.Service
 	Reach       *reach.Sink
 	Categories  []api.Category
 	Descriptors map[string]api.ResourceDescriptor
@@ -215,7 +216,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		shells:     deps.Shells,
 		debugger:   deps.Debugger,
 		nodeShells: deps.NodeShells,
-		perms:      access.New(deps.Clientset),
+		perms:      permsFor(deps),
 		answers:    deps.Reach,
 		helm:       deps.Helm,
 		prom:       deps.Prometheus,
@@ -229,6 +230,16 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 
 		syncTimeout: limits.SyncTimeout,
 	}
+}
+
+// permsFor takes the one the cluster wiring built, so that every feature shares
+// what has already been asked. A manager built without one — a test, mostly —
+// keeps its own.
+func permsFor(deps Deps) *access.Service {
+	if deps.Perms != nil {
+		return deps.Perms
+	}
+	return access.New(deps.Clientset)
 }
 
 func chartCache(ctx context.Context, provided *charts.Cache) *charts.Cache {
