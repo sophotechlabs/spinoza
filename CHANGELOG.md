@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.14.1](https://github.com/sophotechlabs/spinoza/compare/v1.14.0...v1.14.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **columns:** read a declared column that ranges for every row, not just the first ([0b57602](https://github.com/sophotechlabs/spinoza/commit/0b5760239a329b35322d45a8e5342ac74991066f))
+
+
+### Refactoring
+
+* **logging:** stop quoting what the handler already escapes ([eaedd1f](https://github.com/sophotechlabs/spinoza/commit/eaedd1f09396d80098e5d43c9bbddb677f00b211))
+
+
+### Tests
+
+* **logs:** hold the browser's buffer against the backlog the server asks for ([7e77ac8](https://github.com/sophotechlabs/spinoza/commit/7e77ac8274bbeb3f83e219e9b57197eec33b9c46))
+
 ## [1.14.0](https://github.com/sophotechlabs/spinoza/compare/v1.13.2...v1.14.0) (2026-08-27)
 
 
