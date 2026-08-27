@@ -3,8 +3,8 @@ package resources
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -140,20 +140,31 @@ func cellsFromDeclared(declared []*declaredColumn) func(*unstructured.Unstructur
 
 // declaredColumn is one column a resource definition asks for, ready to read.
 type declaredColumn struct {
-	name   string
-	render string
-	// A parsed path keeps counters on itself while it walks a range expression,
-	// so it is not something two goroutines may read through at once. Rows are
-	// built both by the informer and by whoever is taking a snapshot, which is
-	// exactly two.
-	mu   sync.Mutex
-	path *jsonpath.JSONPath
+	name     string
+	render   string
+	template string
+	// A template that ranges rewrites its own parse tree as it walks it and is
+	// left pointing past the end, so it answers for one object and returns
+	// nothing for every object after. Those are parsed again for each row. Every
+	// other template writes nothing to itself while reading, so one is parsed
+	// here and read through by as many goroutines as ask — rows are filled both
+	// by the informer and by whoever is taking a snapshot.
+	kept *jsonpath.JSONPath
 }
 
 func (c *declaredColumn) read(obj *unstructured.Unstructured) string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	found, err := c.path.FindResults(obj.Object)
+	if c.kept != nil {
+		return valuesFrom(c.kept, obj)
+	}
+	parsed, err := parsePath(c.name, c.template)
+	if err != nil {
+		return ""
+	}
+	return valuesFrom(parsed, obj)
+}
+
+func valuesFrom(path *jsonpath.JSONPath, obj *unstructured.Unstructured) string {
+	found, err := path.FindResults(obj.Object)
 	if err != nil {
 		return ""
 	}
@@ -234,11 +245,45 @@ func declaredColumnOf(entry any) (*declaredColumn, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return &declaredColumn{
-		name:   name,
-		render: renderFor(name, stringAt(fields, "type")),
-		path:   parsed,
-	}, true
+	column := &declaredColumn{
+		name:     name,
+		render:   renderFor(name, stringAt(fields, "type")),
+		template: path,
+	}
+	if !ranges(name, path) {
+		column.kept = parsed
+	}
+	return column, true
+}
+
+// ranges says whether a template walks a range expression, which is the one
+// thing that makes a parsed template good for a single read.
+func ranges(name, path string) bool {
+	tree, err := jsonpath.Parse(name, braced(path))
+	if err != nil {
+		return false
+	}
+	return listRanges(tree.Root)
+}
+
+// listRanges looks through one list of nodes. A template parses into a list of
+// the {…} groups it was written as, and each group is a list of its own, so a
+// range sits one level down. It sits no deeper than that: the parser takes no
+// brace inside a filter or a union, which is where the rest of the nesting is.
+func listRanges(list *jsonpath.ListNode) bool {
+	return slices.ContainsFunc(list.Nodes, nodeRanges)
+}
+
+func nodeRanges(node jsonpath.Node) bool {
+	inner, nested := node.(*jsonpath.ListNode)
+	if nested {
+		return listRanges(inner)
+	}
+	identifier, named := node.(*jsonpath.IdentifierNode)
+	if !named {
+		return false
+	}
+	return identifier.Name == "range"
 }
 
 // alreadyShown names the two fields every table already has a column for.

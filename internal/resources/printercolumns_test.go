@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/util/jsonpath"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -44,6 +45,10 @@ func crdWith(version string, columns ...map[string]any) *unstructured.Unstructur
 func column(name, kind, path string) map[string]any {
 	return map[string]any{"name": name, "type": kind, "jsonPath": path}
 }
+
+// rangingPath is written the way a definition has to write one: the field starts
+// with a dot, so the braces around the range are closed and reopened by hand.
+const rangingPath = `.status.conditions[0].type}{range .status.conditions[*]}{.status}{end`
 
 func kustomization() *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
@@ -322,21 +327,109 @@ func TestAPathAlreadyInBracesIsReadTheSame(t *testing.T) {
 }
 
 // Rows are built by the informer and by whoever is taking a snapshot, so every
-// reader has to get the same answer.
+// reader has to get the same answer. The readers overlap for long enough here
+// that the race detector has something to watch: a parsed template that wrote
+// anything to itself while reading would be caught.
 func TestAColumnCanBeReadFromSeveralGoroutinesAtOnce(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
 	shown, _ := layoutOf(crd, "v1")
 	object := kustomization()
 
 	var group sync.WaitGroup
-	for range 50 {
+	for range 8 {
 		group.Go(func() {
-			if got := shown.cells(object); got[0] != "True" {
-				t.Errorf("cell = %q, want the condition's status", got[0])
+			for range 2000 {
+				if got := shown.cells(object); got[0] != "True" {
+					t.Errorf("cell = %q, want the condition's status", got[0])
+					return
+				}
 			}
 		})
 	}
 	group.Wait()
+}
+
+// A definition may declare a path that ranges — the apiserver takes one as long
+// as it starts with a dot, and prints the same blanks spinoza used to. Walking a
+// range rewrites the parse tree it walks, so a template kept between rows
+// answers for the first object and hands back nothing for every object after.
+func TestAColumnThatRangesAnswersForEveryRowNotJustTheFirst(t *testing.T) {
+	crd := crdWith("v1", column("Conditions", "string", rangingPath))
+	shown, ok := layoutOf(crd, "v1")
+	if !ok {
+		t.Fatal("a definition that ranges was not used at all")
+	}
+	object := kustomization()
+
+	first := shown.cells(object)[0]
+	if first == "" {
+		t.Fatal("the first row was already empty")
+	}
+	for row := range 3 {
+		got := shown.cells(object)[0]
+		if got != first {
+			t.Fatalf("row %d = %q, want %q like the first row", row+2, got, first)
+		}
+	}
+}
+
+// Reading through a kept template costs about a tenth of parsing one again, and
+// a table parses per row without it, so which columns keep theirs is worth
+// holding still.
+func TestAColumnThatDoesNotRangeKeepsItsParsedTemplate(t *testing.T) {
+	made, ok := declaredColumnOf(column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
+	if !ok {
+		t.Fatal("column not made")
+	}
+	if made.kept == nil {
+		t.Fatal("a template that cannot range is parsed again for every row")
+	}
+}
+
+func TestAColumnThatRangesKeepsNothing(t *testing.T) {
+	made, ok := declaredColumnOf(column("Conditions", "string", rangingPath))
+	if !ok {
+		t.Fatal("column not made")
+	}
+	if made.kept != nil {
+		t.Fatal("a template that ranges was kept for the next row")
+	}
+}
+
+// A filter and a union are the two places a template holds paths inside itself,
+// and neither may hold a range: the parser refuses a brace in either. So they
+// are read the ordinary way, parsed once and kept.
+func TestAColumnNamingSeveralFieldsAtOnceIsRead(t *testing.T) {
+	crd := crdWith("v1", column("Named", "string", `.metadata['name','namespace']`))
+	shown, ok := layoutOf(crd, "v1")
+	if !ok {
+		t.Fatal("the definition was not used")
+	}
+	if got := shown.cells(kustomization())[0]; got != "apps, flux-system" {
+		t.Fatalf("cell = %q, want both fields", got)
+	}
+	made, ok := declaredColumnOf(column("Named", "string", `.metadata['name','namespace']`))
+	if !ok {
+		t.Fatal("column not made")
+	}
+	if made.kept == nil {
+		t.Fatal("a union was taken for a template that ranges")
+	}
+}
+
+// A range may only be written where the parser will take a brace, which is
+// nowhere inside a filter or a union. This is what lets the check above look at
+// the top of the tree and no further.
+func TestARangeCannotBeHiddenInsideAFilterOrAUnion(t *testing.T) {
+	hidden := []string{
+		`.a[?(@.b=={range .c[*]}{.d}{end})]`,
+		`.metadata['name',{range .c[*]}{.d}{end}]`,
+	}
+	for _, path := range hidden {
+		if _, err := jsonpath.Parse("probe", braced(path)); err == nil {
+			t.Errorf("%s parsed; a range can sit deeper than the check looks", path)
+		}
+	}
 }
 
 var (
