@@ -37,7 +37,7 @@ import {
 } from '../store/resources';
 import { conditionColor, ratioColor, restartColor, statusColor } from '../lib/status';
 import { useMetrics } from '../lib/metrics';
-import { cpuFromMilli, memFromMi } from '../lib/units';
+import { cpuFromMilli, cpuPair, memFromMi, memPair } from '../lib/units';
 import { useElementWidth } from '../lib/useElementWidth';
 import { useDismissMenu } from '../lib/useDismissMenu';
 import { extraWidths, widthOf } from '../lib/columnFit';
@@ -135,14 +135,29 @@ function metricUsage(kind: string, metrics: Metrics, row: Row): ResourceUsage | 
   return metrics.pods[`${row.namespace}/${row.name}`];
 }
 
+// A node has a ceiling, so the cell says how much of how much. The bar is
+// already the proportion; writing the percentage beside it as well would leave
+// no room for the one number that cannot be worked out by eye.
 function nodeUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
   if (usage === undefined) {
-    return <UsageBar percent={0} label="" />;
+    return <UsageBar percent={0} label="" text="" />;
   }
   if (memory) {
-    return <UsageBar percent={usage.memPercent} label={memFromMi(usage.memoryMi)} />;
+    return (
+      <UsageBar
+        percent={usage.memPercent}
+        label={`${String(usage.memPercent)}% of memory`}
+        text={memPair(usage.memoryMi, usage.memAllocatableMi)}
+      />
+    );
   }
-  return <UsageBar percent={usage.cpuPercent} label={cpuFromMilli(usage.cpuMilli)} />;
+  return (
+    <UsageBar
+      percent={usage.cpuPercent}
+      label={`${String(usage.cpuPercent)}% of cpu`}
+      text={cpuPair(usage.cpuMilli, usage.cpuAllocatableMilli)}
+    />
+  );
 }
 
 function podUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
@@ -392,7 +407,7 @@ export default function ResourceTable({
         columnHelper.accessor((row) => metricKey(activeKind, sample, row, false), {
           id: 'cpu',
           header: 'CPU',
-          size: 110,
+          size: 132,
           sortDescFirst: true,
           sortingFn: byMetric(activeKind, sample, false),
           cell: (info) => renderMetricCell(activeKind, sample, info.row.original, false),
@@ -402,7 +417,7 @@ export default function ResourceTable({
         columnHelper.accessor((row) => metricKey(activeKind, sample, row, true), {
           id: 'memory',
           header: 'Memory',
-          size: 110,
+          size: 132,
           sortDescFirst: true,
           sortingFn: byMetric(activeKind, sample, true),
           cell: (info) => renderMetricCell(activeKind, sample, info.row.original, true),

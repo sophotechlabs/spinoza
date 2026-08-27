@@ -781,6 +781,10 @@ type ResourceUsage struct {
 	MemoryMi   int64 `json:"memoryMi"`
 	CPUPercent int64 `json:"cpuPercent"`
 	MemPercent int64 `json:"memPercent"`
+	// What the node has to give. Only a node has a ceiling of its own, so these
+	// stay zero for a pod, and a percentage is only worth anything beside them.
+	CPUAllocatableMilli int64 `json:"cpuAllocatableMilli"`
+	MemAllocatableMi    int64 `json:"memAllocatableMi"`
 }
 
 type MetricPoint struct {

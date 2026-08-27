@@ -140,6 +140,8 @@ func nodeUsage(
 		if ok {
 			use.CPUPercent = percent(use.CPUMilli, alloc.CPUMilli)
 			use.MemPercent = percent(use.MemoryMi, alloc.MemoryMi)
+			use.CPUAllocatableMilli = alloc.CPUMilli
+			use.MemAllocatableMi = alloc.MemoryMi
 		}
 		out[name] = use
 	}

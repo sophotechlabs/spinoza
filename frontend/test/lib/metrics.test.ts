@@ -12,8 +12,26 @@ import {
 import { anySignal } from '../helpers';
 
 const sample: Metrics = {
-  pods: { 'prod/web': { cpuMilli: 150, memoryMi: 192, cpuPercent: 0, memPercent: 0 } },
-  nodes: { n1: { cpuMilli: 1500, memoryMi: 2048, cpuPercent: 37, memPercent: 25 } },
+  pods: {
+    'prod/web': {
+      cpuMilli: 150,
+      memoryMi: 192,
+      cpuPercent: 0,
+      memPercent: 0,
+      cpuAllocatableMilli: 0,
+      memAllocatableMi: 0,
+    },
+  },
+  nodes: {
+    n1: {
+      cpuMilli: 1500,
+      memoryMi: 2048,
+      cpuPercent: 37,
+      memPercent: 25,
+      cpuAllocatableMilli: 4054,
+      memAllocatableMi: 8192,
+    },
+  },
 };
 
 function stubOk(data: Metrics): ReturnType<typeof vi.fn> {

@@ -214,6 +214,8 @@ describe('parseMetrics', () => {
       memoryMi: 192,
       cpuPercent: 0,
       memPercent: 0,
+      cpuAllocatableMilli: 0,
+      memAllocatableMi: 0,
     });
   });
 

@@ -460,6 +460,8 @@ function parseUsage(item: Record<string, unknown>): ResourceUsage {
     memoryMi: asNumber(item.memoryMi),
     cpuPercent: asNumber(item.cpuPercent),
     memPercent: asNumber(item.memPercent),
+    cpuAllocatableMilli: asNumber(item.cpuAllocatableMilli),
+    memAllocatableMi: asNumber(item.memAllocatableMi),
   };
 }
 

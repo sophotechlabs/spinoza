@@ -26,6 +26,26 @@ export function memFromMi(mem: Mebibytes): string {
   return `${mem}Mi`;
 }
 
+// memPair reads what is used against what there is, with the unit written once:
+// 6.2/15.6Gi rather than 6.2Gi/15.6Gi. A node with no ceiling to report falls
+// back to the amount on its own.
+export function memPair(used: Mebibytes, total: Mebibytes): string {
+  if (total <= 0) {
+    return memFromMi(used);
+  }
+  if (total >= 1024) {
+    return `${(used / 1024).toFixed(1)}/${(total / 1024).toFixed(1)}Gi`;
+  }
+  return `${used}/${total}Mi`;
+}
+
+export function cpuPair(used: Millicores, total: Millicores): string {
+  if (total <= 0) {
+    return cpuFromMilli(used);
+  }
+  return `${used}/${total}m`;
+}
+
 export function memFromBytes(mem: Bytes): string {
   const mib = mem / MIB;
   if (mib >= 1024) {

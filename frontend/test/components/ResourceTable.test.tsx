@@ -445,7 +445,16 @@ describe('ResourceTable', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            pods: { 'prod/pod-a': { cpuMilli: 150, memoryMi: 192, cpuPercent: 0, memPercent: 0 } },
+            pods: {
+              'prod/pod-a': {
+                cpuMilli: 150,
+                memoryMi: 192,
+                cpuPercent: 0,
+                memPercent: 0,
+                cpuAllocatableMilli: 0,
+                memAllocatableMi: 0,
+              },
+            },
             nodes: {},
           }),
       }),
@@ -468,7 +477,16 @@ describe('ResourceTable', () => {
         json: () =>
           Promise.resolve({
             pods: {},
-            nodes: { 'node-1': { cpuMilli: 1500, memoryMi: 2048, cpuPercent: 37, memPercent: 25 } },
+            nodes: {
+              'node-1': {
+                cpuMilli: 1500,
+                memoryMi: 2048,
+                cpuPercent: 37,
+                memPercent: 25,
+                cpuAllocatableMilli: 4054,
+                memAllocatableMi: 8192,
+              },
+            },
           }),
       }),
     );
@@ -478,9 +496,74 @@ describe('ResourceTable', () => {
       makeRow({ uid: 'b', name: 'node-2', namespace: '' }),
     ]);
     renderTable(nodeDescriptor, null);
-    expect(await screen.findByText('37%')).toBeInTheDocument();
-    expect(screen.getByText('25%')).toBeInTheDocument();
-    expect(screen.getAllByText('0%').length).toBeGreaterThan(0);
+
+    // How much of how much, rather than a percentage the bar beside it already
+    // shows. A node with no metrics reported gets an empty cell, not a zero.
+    expect(await screen.findByText('1500/4054m')).toBeInTheDocument();
+    expect(screen.getByText('2.0/8.0Gi')).toBeInTheDocument();
+    expect(screen.queryByText('37%')).not.toBeInTheDocument();
+  });
+
+  // The bar is still the proportion, and the percentage is still readable on
+  // hover for anyone who wants it.
+  it('keeps the percentage on the bar and in its title', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: {},
+            nodes: {
+              'node-1': {
+                cpuMilli: 1500,
+                memoryMi: 2048,
+                cpuPercent: 37,
+                memPercent: 25,
+                cpuAllocatableMilli: 4054,
+                memAllocatableMi: 8192,
+              },
+            },
+          }),
+      }),
+    );
+    const nodeDescriptor = makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false });
+    seed(makeColumns(['Status']), false, [makeRow({ uid: 'a', name: 'node-1', namespace: '' })]);
+    renderTable(nodeDescriptor, null);
+
+    const memory = await screen.findByText('2.0/8.0Gi');
+
+    expect(memory.parentElement).toHaveAttribute('title', '25% of memory');
+  });
+
+  // A node whose ceiling the cluster did not report still says what it is using.
+  it('falls back to the amount when there is no ceiling to read against', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: {},
+            nodes: {
+              'node-1': {
+                cpuMilli: 1500,
+                memoryMi: 2048,
+                cpuPercent: 0,
+                memPercent: 0,
+                cpuAllocatableMilli: 0,
+                memAllocatableMi: 0,
+              },
+            },
+          }),
+      }),
+    );
+    const nodeDescriptor = makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false });
+    seed(makeColumns(['Status']), false, [makeRow({ uid: 'a', name: 'node-1', namespace: '' })]);
+    renderTable(nodeDescriptor, null);
+
+    expect(await screen.findByText('2.0Gi')).toBeInTheDocument();
+    expect(screen.getByText('1500m')).toBeInTheDocument();
   });
 
   it('sorts nodes by cpu, heaviest first', async () => {
@@ -493,8 +576,22 @@ describe('ResourceTable', () => {
           Promise.resolve({
             pods: {},
             nodes: {
-              'node-1': { cpuMilli: 500, memoryMi: 1024, cpuPercent: 12, memPercent: 60 },
-              'node-2': { cpuMilli: 2500, memoryMi: 512, cpuPercent: 80, memPercent: 20 },
+              'node-1': {
+                cpuMilli: 500,
+                memoryMi: 1024,
+                cpuPercent: 12,
+                memPercent: 60,
+                cpuAllocatableMilli: 4167,
+                memAllocatableMi: 1707,
+              },
+              'node-2': {
+                cpuMilli: 2500,
+                memoryMi: 512,
+                cpuPercent: 80,
+                memPercent: 20,
+                cpuAllocatableMilli: 3125,
+                memAllocatableMi: 2560,
+              },
             },
           }),
       }),
@@ -505,7 +602,7 @@ describe('ResourceTable', () => {
       makeRow({ uid: 'b', name: 'node-2', namespace: '' }),
     ]);
     renderTable(nodeDescriptor, null);
-    await screen.findByText('12%');
+    await screen.findByText('500/4167m');
 
     await user.click(screen.getByRole('button', { name: /^CPU/ }));
 
@@ -522,8 +619,22 @@ describe('ResourceTable', () => {
           Promise.resolve({
             pods: {},
             nodes: {
-              'node-1': { cpuMilli: 500, memoryMi: 1024, cpuPercent: 12, memPercent: 60 },
-              'node-2': { cpuMilli: 2500, memoryMi: 512, cpuPercent: 80, memPercent: 20 },
+              'node-1': {
+                cpuMilli: 500,
+                memoryMi: 1024,
+                cpuPercent: 12,
+                memPercent: 60,
+                cpuAllocatableMilli: 4167,
+                memAllocatableMi: 1707,
+              },
+              'node-2': {
+                cpuMilli: 2500,
+                memoryMi: 512,
+                cpuPercent: 80,
+                memPercent: 20,
+                cpuAllocatableMilli: 3125,
+                memAllocatableMi: 2560,
+              },
             },
           }),
       }),
@@ -534,7 +645,7 @@ describe('ResourceTable', () => {
       makeRow({ uid: 'b', name: 'node-2', namespace: '' }),
     ]);
     renderTable(nodeDescriptor, null);
-    await screen.findByText('60%');
+    await screen.findByText('1.0/1.7Gi');
 
     await user.click(screen.getByRole('button', { name: /^Memory/ }));
 
@@ -550,8 +661,22 @@ describe('ResourceTable', () => {
         json: () =>
           Promise.resolve({
             pods: {
-              'prod/pod-a': { cpuMilli: 900, memoryMi: 64, cpuPercent: 0, memPercent: 0 },
-              'prod/pod-b': { cpuMilli: 100, memoryMi: 512, cpuPercent: 0, memPercent: 0 },
+              'prod/pod-a': {
+                cpuMilli: 900,
+                memoryMi: 64,
+                cpuPercent: 0,
+                memPercent: 0,
+                cpuAllocatableMilli: 0,
+                memAllocatableMi: 0,
+              },
+              'prod/pod-b': {
+                cpuMilli: 100,
+                memoryMi: 512,
+                cpuPercent: 0,
+                memPercent: 0,
+                cpuAllocatableMilli: 0,
+                memAllocatableMi: 0,
+              },
             },
             nodes: {},
           }),
@@ -577,7 +702,16 @@ describe('ResourceTable', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            pods: { 'prod/pod-a': { cpuMilli: 150, memoryMi: 192, cpuPercent: 0, memPercent: 0 } },
+            pods: {
+              'prod/pod-a': {
+                cpuMilli: 150,
+                memoryMi: 192,
+                cpuPercent: 0,
+                memPercent: 0,
+                cpuAllocatableMilli: 0,
+                memAllocatableMi: 0,
+              },
+            },
             nodes: {},
           }),
       }),
@@ -607,7 +741,14 @@ describe('ResourceTable', () => {
             json: () =>
               Promise.resolve({
                 pods: {
-                  'prod/pod-a': { cpuMilli: 150, memoryMi: 192, cpuPercent: 0, memPercent: 0 },
+                  'prod/pod-a': {
+                    cpuMilli: 150,
+                    memoryMi: 192,
+                    cpuPercent: 0,
+                    memPercent: 0,
+                    cpuAllocatableMilli: 0,
+                    memAllocatableMi: 0,
+                  },
                 },
                 nodes: {},
               }),

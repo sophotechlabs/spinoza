@@ -391,8 +391,10 @@ ResourceDescriptor.Kind kind string
 ResourceDescriptor.Namespaced namespaced bool
 ResourceDescriptor.Resource resource string
 ResourceDescriptor.Version version string
+ResourceUsage.CPUAllocatableMilli cpuAllocatableMilli int64
 ResourceUsage.CPUMilli cpuMilli int64
 ResourceUsage.CPUPercent cpuPercent int64
+ResourceUsage.MemAllocatableMi memAllocatableMi int64
 ResourceUsage.MemPercent memPercent int64
 ResourceUsage.MemoryMi memoryMi int64
 Row.Cells cells []string

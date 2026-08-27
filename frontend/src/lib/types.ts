@@ -650,6 +650,10 @@ export interface ResourceUsage {
   memoryMi: number;
   cpuPercent: number;
   memPercent: number;
+  // What the node has to give. Only a node has a ceiling of its own, so these
+  // stay zero for a pod.
+  cpuAllocatableMilli: number;
+  memAllocatableMi: number;
 }
 
 export interface Metrics {
