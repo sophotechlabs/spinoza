@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 
+// The server sizes the backlog a stream opens with to fit in here — tailBudget
+// in internal/logs/many.go. Lowering this below that number would throw away
+// part of the history as it arrived, so a Go test fails if it ever does.
 export const MAX_LOG_LINES = 5000;
 
 interface StreamState {

@@ -21,9 +21,10 @@ const (
 	// its own connection to the apiserver, and the caller is told what it got.
 	maxPods = 20
 	// tailBudget is how many lines the whole merged stream may start with. The
-	// browser keeps a buffer of this size, so asking every pod for a full tail
-	// would only fill it with whichever pods answered first and throw the rest
-	// away before anyone saw them.
+	// browser keeps at least this many — MAX_LOG_LINES in
+	// frontend/src/store/logs.ts, which budget_test.go holds against this — so
+	// asking every pod for a full tail would only fill that buffer with whichever
+	// pods answered first and throw the rest away before anyone saw them.
 	tailBudget = 5000
 	// A pod is worth reading with at least this much history behind it.
 	minTail = 50
