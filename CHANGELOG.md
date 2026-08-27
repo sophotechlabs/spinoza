@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.2](https://github.com/sophotechlabs/spinoza/compare/v1.13.1...v1.13.2) (2026-08-27)
+
+
+### CI
+
+* **codeql:** scope the scan to shipped code and pin the escaping it assumes ([6b9879d](https://github.com/sophotechlabs/spinoza/commit/6b9879d5ac83b26380ab09aa5681fc5ecdc1b156))
+
+
+### Tests
+
+* **logs:** wait for the stream to notice a pod left, not for a tick to land ([d375d2e](https://github.com/sophotechlabs/spinoza/commit/d375d2ed0fe3d00d6ee4722311b86e83e2ae4806))
+
 ## [1.13.1](https://github.com/sophotechlabs/spinoza/compare/v1.13.0...v1.13.1) (2026-08-26)
 
 
