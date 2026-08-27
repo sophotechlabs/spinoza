@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -43,10 +42,10 @@ func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 		if !isLocal(r) {
 			slog.Warn(
 				"refused a request that did not look local",
-				"path", strconv.Quote(r.URL.Path),
-				"host", strconv.Quote(r.Host),
-				"origin", strconv.Quote(r.Header.Get("Origin")),
-				"fetchSite", strconv.Quote(r.Header.Get("Sec-Fetch-Site")),
+				"path", r.URL.Path,
+				"host", r.Host,
+				"origin", r.Header.Get("Origin"),
+				"fetchSite", r.Header.Get("Sec-Fetch-Site"),
 			)
 			writeError(w, http.StatusForbidden, "spinoza answers local requests only")
 			return
@@ -54,8 +53,8 @@ func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 		if !publicAsset(r) && !s.authorize(w, r) {
 			slog.Warn(
 				"refused a request without this run's token",
-				"path", strconv.Quote(r.URL.Path),
-				"origin", strconv.Quote(r.Header.Get("Origin")),
+				"path", r.URL.Path,
+				"origin", r.Header.Get("Origin"),
 			)
 			writeError(w, http.StatusUnauthorized, "spinoza needs the token it printed at startup")
 			return
@@ -86,9 +85,9 @@ func finish(recorded *recorder, r *http.Request, started time.Time, caught any) 
 	}
 	slog.Info(
 		"acted on the cluster",
-		"method", strconv.Quote(r.Method),
-		"path", strconv.Quote(r.URL.Path),
-		"query", strconv.Quote(loggableQuery(r)),
+		"method", r.Method,
+		"path", r.URL.Path,
+		"query", loggableQuery(r),
 		"status", recorded.status,
 		"took", time.Since(started).Round(time.Millisecond),
 	)

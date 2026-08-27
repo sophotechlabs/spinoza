@@ -47,7 +47,7 @@ func run() error {
 		_, _ = os.Stdout.WriteString(version.String() + "\n")
 		return nil
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: opts.logLevel})))
+	slog.SetDefault(slog.New(logHandler(os.Stderr, opts.logLevel)))
 	klog.SetSlogLogger(slog.Default())
 
 	addrErr := server.CheckLoopback(opts.addr)
