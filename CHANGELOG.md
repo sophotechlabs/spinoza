@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.14.0](https://github.com/sophotechlabs/spinoza/compare/v1.13.2...v1.14.0) (2026-08-27)
+
+
+### Features
+
+* **nodes:** say how much of how much, not just a percentage ([7e5d198](https://github.com/sophotechlabs/spinoza/commit/7e5d198b36b1af80b4d1e0ebbf50cc98bcdb758c))
+
+
+### Bug Fixes
+
+* **conditions:** stop reading a node's problem detectors as readiness ([07785ae](https://github.com/sophotechlabs/spinoza/commit/07785ae05d97aa7ddb3358434e53a35e73e76df4))
+
 ## [1.13.2](https://github.com/sophotechlabs/spinoza/compare/v1.13.1...v1.13.2) (2026-08-27)
 
 
