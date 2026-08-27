@@ -86,21 +86,60 @@ export function restartColor(value: string): string {
   return 'text-warn';
 }
 
+// A condition's type says nothing about which way round it reads. Ready=True is
+// good news, MemoryPressure=True is bad, and KernelDeadlock=False is a node
+// saying it is fine. Guessing wrongly is not harmless: a GKE node carries two
+// dozen problem-detector conditions that sit at False all day, and reading them
+// as readiness conditions paints a healthy node red twenty times over. So the
+// words spinoza knows decide, and a type it does not recognise is left alone.
 const ALARMING_WHEN_TRUE = [
   'Pressure',
   'Unavailable',
+  'Unhealthy',
   'Degraded',
   'Failed',
   'Failure',
   'Error',
   'Stalled',
   'Disruption',
+  'Deadlock',
+  'Corrupt',
+  'Frequent',
+  'Deprecated',
+  'Exhausted',
+  'Missing',
+  'Shutdown',
+  'ReadOnly',
+  'Evicted',
+  'Lost',
+];
+
+const GOOD_WHEN_TRUE = [
+  'Ready',
+  'Available',
+  'Healthy',
+  'Initialized',
+  'Scheduled',
+  'Progressing',
+  'Established',
+  'Synced',
+  'Reconciled',
+  'Complete',
+  'Succeeded',
+  'Approved',
+  'Accepted',
 ];
 
 const NEITHER_WAY_IS_TROUBLE = ['Reconciling', 'Issuing'];
 
 export function alarmingWhenTrue(type: string): boolean {
   return ALARMING_WHEN_TRUE.some((word) => type.includes(word));
+}
+
+// Asked after alarmingWhenTrue, so that a type naming both — a good thing and a
+// failure of it, as in ReadyReplicasMissing — is read as the trouble it is.
+function goodWhenTrue(type: string): boolean {
+  return GOOD_WHEN_TRUE.some((word) => type.includes(word));
 }
 
 export function conditionColor(type: string, status: string): string {
@@ -110,7 +149,17 @@ export function conditionColor(type: string, status: string): string {
   if (status !== 'True' && status !== 'False') {
     return 'text-fg-muted';
   }
-  if (alarmingWhenTrue(type) === (status === 'True')) {
+  if (alarmingWhenTrue(type)) {
+    return trouble(status === 'True');
+  }
+  if (goodWhenTrue(type)) {
+    return trouble(status === 'False');
+  }
+  return 'text-fg-muted';
+}
+
+function trouble(isTrouble: boolean): string {
+  if (isTrouble) {
     return 'text-error';
   }
   return 'text-ok';
