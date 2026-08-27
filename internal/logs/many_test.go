@@ -716,6 +716,23 @@ func (apiserver *cluster) remove(name string) {
 	})
 }
 
+// waitForAttached waits until the stream is reading the number of pods it
+// should be. Sleeping a few resolve intervals instead is a bet that a tick
+// lands inside the window, and on a loaded machine it does not: the pod comes
+// back before the stream ever noticed it had gone, so there is nothing to read
+// again.
+func waitForAttached(t *testing.T, stream *Stream, want int) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for stream.Attached() != want {
+		select {
+		case <-deadline:
+			t.Fatalf("the stream is reading %d pods, want %d", stream.Attached(), want)
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
 func TestAPodThatComesBackIsReadAgain(t *testing.T) {
 	restore := hurryResolve(t)
 	defer restore()
@@ -737,7 +754,7 @@ func TestAPodThatComesBackIsReadAgain(t *testing.T) {
 	// static pod or a recreated name looks like. Its log has to be read again
 	// rather than treated as something already seen.
 	apiserver.remove("web-0")
-	time.Sleep(3 * resolveEvery)
+	waitForAttached(t, stream, 0)
 	apiserver.add("web-0", "second time")
 
 	found := gather(t, stream, 1)
