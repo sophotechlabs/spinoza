@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.1](https://github.com/sophotechlabs/spinoza/compare/v1.13.0...v1.13.1) (2026-08-26)
+
+
+### Bug Fixes
+
+* **deps:** take echo 4.15.4 for GHSA-vfp3-v2gw-7wfq ([74d41cb](https://github.com/sophotechlabs/spinoza/commit/74d41cb7619cd3d7a58eb74bf9ba535a648184e5))
+
+
+### Refactoring
+
+* **access:** one place asks the cluster what this user may do ([52b4760](https://github.com/sophotechlabs/spinoza/commit/52b4760b01d043503ae2b05bcc578273e86fe8e8))
+
 ## [1.13.0](https://github.com/sophotechlabs/spinoza/compare/v1.12.0...v1.13.0) (2026-08-25)
 
 
