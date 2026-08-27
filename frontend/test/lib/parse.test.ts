@@ -236,6 +236,27 @@ describe('parseMetricHistory', () => {
     expect(history.cpu).toEqual([{ at: 1, value: 0.5 }]);
     expect(history.memory).toEqual([{ at: 2, value: 0 }]);
   });
+
+  it('carries whether spinoza measured it and how far back that reaches', () => {
+    const history = parseMetricHistory({
+      namespace: 'prod',
+      pod: 'web',
+      sampled: true,
+      since: 1785434552000,
+      cpu: [],
+      memory: [],
+    });
+
+    expect(history.sampled).toBe(true);
+    expect(history.since).toBe(1785434552000);
+  });
+
+  it('leaves both out when a metrics database answered', () => {
+    const history = parseMetricHistory({ namespace: 'prod', pod: 'web', cpu: [], memory: [] });
+
+    expect(history.sampled).toBeUndefined();
+    expect(history.since).toBeUndefined();
+  });
 });
 
 describe('parseCatalog', () => {

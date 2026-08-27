@@ -118,6 +118,111 @@ describe('InspectMetrics', () => {
     expect(screen.queryByTestId('metric-chart')).not.toBeInTheDocument();
   });
 
+  it('says out loud when spinoza measured this itself', async () => {
+    stub(history({ source: undefined, sampled: true, since: Date.now() - 12 * 60_000 }));
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+
+    const notice = await screen.findByTestId('sampled-notice');
+    expect(notice).toHaveTextContent('found no Prometheus');
+    expect(notice).toHaveTextContent('every 15 seconds');
+    expect(notice).toHaveTextContent('Collected so far: 12 minutes.');
+  });
+
+  it('says nothing about measuring when a metrics database answered', async () => {
+    stub(history());
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+    await screen.findAllByTestId('metric-chart');
+
+    expect(screen.queryByTestId('sampled-notice')).not.toBeInTheDocument();
+  });
+
+  it('leaves the collected line off until there is something to count', async () => {
+    stub(history({ source: undefined, sampled: true }));
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+
+    const notice = await screen.findByTestId('sampled-notice');
+    expect(notice).not.toHaveTextContent('Collected so far');
+  });
+
+  it('offers only the spans it can reach back to once it is measuring', async () => {
+    stub(history({ source: undefined, sampled: true }));
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+    await screen.findByTestId('sampled-notice');
+
+    const spans = await screen.findByLabelText('Metric range');
+    expect(spans).toHaveTextContent('15m');
+    expect(spans).toHaveTextContent('1h');
+    expect(spans).not.toHaveTextContent('24h');
+  });
+
+  it('drops back to an hour when the span picked is one it cannot reach', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const sampled = String(url).includes('range=24h');
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(history({ source: undefined, sampled })),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+    await screen.findAllByTestId('metric-chart');
+
+    await user.selectOptions(screen.getByLabelText('Metric range'), '24h');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Metric range')).toHaveValue('1h');
+    });
+  });
+
+  it('tells a pod with nothing measured yet apart from one prometheus has forgotten', async () => {
+    stub(history({ source: undefined, sampled: true, cpu: [], memory: [] }));
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+
+    expect(await screen.findByText(/Nothing measured yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/no samples for this pod/)).not.toBeInTheDocument();
+  });
+
+  it('comes back for the readings taken while it is open', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = stub(history({ source: undefined, sampled: true }));
+      render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+      await vi.waitFor(() => {
+        expect(screen.getByTestId('sampled-notice')).toBeInTheDocument();
+      });
+      const before = fetchMock.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not poll a metrics database that already holds the whole span', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = stub(history());
+      render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+      await vi.waitFor(() => {
+        expect(screen.getAllByTestId('metric-chart')).toHaveLength(2);
+      });
+      const before = fetchMock.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+
+      expect(fetchMock.mock.calls.length).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('surfaces a failure instead of an empty chart', async () => {
     vi.stubGlobal(
       'fetch',
@@ -204,6 +309,31 @@ describe('InspectMetrics', () => {
     deferred.settle();
 
     expect(screen.queryByTestId('metric-chart')).not.toBeInTheDocument();
+  });
+
+  it('drops a failure that lands after unmount', () => {
+    const deferred = {
+      settle: () => {
+        return undefined;
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            deferred.settle = () => {
+              reject(new Error('the backend went away'));
+            };
+          }),
+      ),
+    );
+    const view = render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+
+    view.unmount();
+    deferred.settle();
+
+    expect(screen.queryByText('the backend went away')).not.toBeInTheDocument();
   });
 });
 

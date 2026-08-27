@@ -763,6 +763,8 @@ export interface MetricHistory {
   namespace: string;
   pod: string;
   source?: string;
+  sampled?: boolean;
+  since?: number;
   cpu: MetricPoint[];
   memory: MetricPoint[];
 }

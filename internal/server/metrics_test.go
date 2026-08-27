@@ -41,15 +41,24 @@ func TestMetricHistoryRejectsABadRange(t *testing.T) {
 	}
 }
 
-func TestMetricHistoryIsUnavailableWithoutPrometheus(t *testing.T) {
+// Without a metrics database the answer comes from what spinoza measured on the
+// way past, so the endpoint answers rather than refusing — and says which it is.
+func TestMetricHistoryWithoutPrometheusIsMeasuredHere(t *testing.T) {
 	ts := debugServer(t, nil)
 	res, err := http.Get(ts.URL + "/api/metrics/history?namespace=monitoring&pod=loki-0")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
 	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503; a missing Prometheus is not the caller's mistake", res.StatusCode)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200; a missing Prometheus is not the end of the chart", res.StatusCode)
+	}
+	var history api.MetricHistory
+	if decodeErr := json.NewDecoder(res.Body).Decode(&history); decodeErr != nil {
+		t.Fatalf("decode: %v", decodeErr)
+	}
+	if !history.Sampled {
+		t.Fatalf("history = %+v, want it to say spinoza measured this itself", history)
 	}
 }
 

@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MetricHistory, MetricPoint } from '../lib/types';
-import { DEFAULT_RANGE, RANGES, fetchMetricHistory, peak } from '../lib/metricsHistory';
+import {
+  DEFAULT_RANGE,
+  collectedFor,
+  fetchMetricHistory,
+  peak,
+  rangesFor,
+} from '../lib/metricsHistory';
 import type { MetricRange } from '../lib/metricsHistory';
 import { cpuFromCores, memFromBytes } from '../lib/units';
 import { createChart } from '../lib/chart';
@@ -23,6 +29,8 @@ export interface ChartProps {
   format: (value: number) => string;
   metric: 'cpu' | 'memory';
 }
+
+const SAMPLED_REFRESH_MS = 15000;
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -81,6 +89,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
   const [span, setSpan] = useState<MetricRange>(DEFAULT_RANGE);
   const [history, setHistory] = useState<MetricHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sampled, setSampled] = useState(false);
 
   const podKey = `${namespace}/${pod}`;
   const [lastPod, setLastPod] = useState(podKey);
@@ -90,25 +99,49 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
     setError(null);
   }
 
+  const offered = rangesFor(sampled);
+  // A span chosen before the answer said who was measuring may be one spinoza
+  // cannot reach back to, which would leave the control showing nothing.
+  if (!offered.includes(span)) {
+    setSpan(DEFAULT_RANGE);
+  }
+
   useEffect(() => {
     let live = true;
     setError(null);
-    fetchMetricHistory(namespace, pod, span)
-      .then((next) => {
-        if (live) {
+
+    function load() {
+      fetchMetricHistory(namespace, pod, span)
+        .then((next) => {
+          if (!live) {
+            return;
+          }
           setHistory(next);
-        }
-      })
-      .catch((err: unknown) => {
-        if (live) {
+          setSampled(next.sampled === true);
+        })
+        .catch((err: unknown) => {
+          if (!live) {
+            return;
+          }
           setHistory(null);
           setError(errorMessage(err));
-        }
-      });
+        });
+    }
+
+    load();
+    if (!sampled) {
+      return () => {
+        live = false;
+      };
+    }
+    // Readings taken here arrive while the panel is open, so it has to come back
+    // for them. A metrics database already holds the whole span at once.
+    const timer = setInterval(load, SAMPLED_REFRESH_MS);
     return () => {
       live = false;
+      clearInterval(timer);
     };
-  }, [namespace, pod, span]);
+  }, [namespace, pod, span, sampled]);
 
   function handleSpan(event: React.ChangeEvent<HTMLSelectElement>) {
     setSpan(event.target.value as MetricRange);
@@ -117,6 +150,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
   const cpu = history?.cpu ?? [];
   const memory = history?.memory ?? [];
   const empty = history !== null && cpu.length === 0 && memory.length === 0;
+  const collected = collectedFor(history?.since, Date.now());
 
   return (
     <div className="overflow-y-auto p-3 text-xs">
@@ -131,7 +165,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           onChange={handleSpan}
           className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
         >
-          {RANGES.map((name) => (
+          {offered.map((name) => (
             <option key={name} value={name}>
               {name}
             </option>
@@ -142,8 +176,21 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
         )}
       </div>
 
+      {sampled && (
+        <p data-testid="sampled-notice" className="mt-2 text-fg-muted">
+          Spinoza is measuring this itself — it found no Prometheus to ask. It reads the cluster
+          every 15 seconds while this window is open, and remembers nothing between runs.
+          {collected !== '' && <> Collected so far: {collected}.</>}
+        </p>
+      )}
+
       <Announce message={error} urgent className="mt-3 break-words text-error" />
-      {empty && (
+      {empty && sampled && (
+        <p className="mt-3 text-fg-muted">
+          Nothing measured yet. The first readings appear within a few seconds.
+        </p>
+      )}
+      {empty && !sampled && (
         <p className="mt-3 text-fg-muted">
           Prometheus has no samples for this pod over the last {span}.
         </p>

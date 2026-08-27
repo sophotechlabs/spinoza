@@ -35,7 +35,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
-	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
 type stubImages struct {
@@ -126,14 +125,21 @@ func TestStartingADebugContainerSaysItIsUnavailable(t *testing.T) {
 	}
 }
 
-func TestMetricHistorySaysPrometheusIsUnavailable(t *testing.T) {
+// A cluster that measures nothing spinoza can read leaves an empty chart rather
+// than an error: there is nothing wrong, there is just nothing to draw yet.
+func TestMetricHistoryOnAClusterMeasuringNothingIsEmptyNotAnError(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
 
-	_, err := mgr.MetricHistory(context.Background(), "prod", "web-0", time.Hour)
-
-	if !errors.Is(err, prom.ErrUnavailable) {
-		t.Fatalf("error = %v, want the unavailable error", err)
+	history, err := mgr.MetricHistory(context.Background(), "prod", "web-0", time.Hour)
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if !history.Sampled {
+		t.Fatal("the answer did not say where it came from")
+	}
+	if len(history.CPU) != 0 {
+		t.Fatalf("cpu points = %d, want none from a cluster measuring nothing", len(history.CPU))
 	}
 }
 

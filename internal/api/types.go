@@ -793,11 +793,19 @@ type MetricPoint struct {
 }
 
 type MetricHistory struct {
-	Namespace string        `json:"namespace"`
-	Pod       string        `json:"pod"`
-	Source    string        `json:"source,omitempty"`
-	CPU       []MetricPoint `json:"cpu"`
-	Memory    []MetricPoint `json:"memory"`
+	Namespace string `json:"namespace"`
+	Pod       string `json:"pod"`
+	Source    string `json:"source,omitempty"`
+	// Sampled says spinoza took these readings itself, having found no metrics
+	// database to ask. They start when it started and stop when it stops, so a
+	// chart drawn from them has to say where it came from.
+	Sampled bool `json:"sampled,omitempty"`
+	// Since is when the oldest reading in this answer was taken, as unix
+	// milliseconds. It is how far back a sampled chart actually reaches, which
+	// is not the span that was asked for.
+	Since  int64         `json:"since,omitempty"`
+	CPU    []MetricPoint `json:"cpu"`
+	Memory []MetricPoint `json:"memory"`
 }
 
 type Metrics struct {

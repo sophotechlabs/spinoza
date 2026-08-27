@@ -484,6 +484,8 @@ export function parseMetricHistory(body: unknown): MetricHistory {
     namespace: asString(item.namespace),
     pod: asString(item.pod),
     source: optionalString(item.source),
+    sampled: optionalBoolean(item.sampled),
+    since: optionalNumber(item.since),
     cpu: listOf(item.cpu, parseMetricPoint),
     memory: listOf(item.memory, parseMetricPoint),
   };

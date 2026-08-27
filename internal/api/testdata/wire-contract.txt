@@ -286,6 +286,8 @@ MetricHistory.CPU cpu []MetricPoint
 MetricHistory.Memory memory []MetricPoint
 MetricHistory.Namespace namespace string
 MetricHistory.Pod pod string
+MetricHistory.Sampled sampled,omitempty bool
+MetricHistory.Since since,omitempty int64
 MetricHistory.Source source,omitempty string
 MetricPoint.At at int64
 MetricPoint.Value value float64

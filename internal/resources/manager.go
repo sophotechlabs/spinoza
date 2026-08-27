@@ -48,6 +48,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/safe"
+	"github.com/sophotechlabs/spinoza/internal/samples"
 )
 
 const (
@@ -123,6 +124,7 @@ type Manager struct {
 	answers     *reach.Sink
 	helm        *helm.Service
 	prom        *prom.Client
+	samples     *samples.Store
 	disco       kubediscovery.CachedDiscoveryInterface
 	limits      Limits
 	catalog     sync.RWMutex
@@ -220,6 +222,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		answers:    deps.Reach,
 		helm:       deps.Helm,
 		prom:       deps.Prometheus,
+		samples:    samples.New(),
 		cats:       deps.Categories,
 		descs:      deps.Descriptors,
 		now:        time.Now,
@@ -547,11 +550,30 @@ func (m *Manager) RemoveNodeShell(ctx context.Context, pod string) {
 	m.nodeShells.Remove(ctx, pod)
 }
 
+// MetricHistory answers from a metrics database when there is one to ask, and
+// from what spinoza has watched go by when there is not. A database that cannot
+// be reached is the same case as no database: the readings taken here are worth
+// more than an error message, and the answer says which of the two it is.
 func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {
-	if m.prom == nil {
+	if m.prom != nil {
+		history, err := m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
+		if err == nil {
+			return history, nil
+		}
+		if !errors.Is(err, prom.ErrUnavailable) {
+			return api.MetricHistory{}, err
+		}
+	}
+	// A manager built with nothing wired up has no store to read and no clock to
+	// read it with, which is a manager that has not reached a cluster yet.
+	if m.samples == nil {
 		return api.MetricHistory{}, prom.ErrUnavailable
 	}
-	return m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
+	// Reading the metrics is what fills the store, and this may be the only page
+	// open. The read is the cached one every table shares, so asking costs
+	// nothing when something else already has.
+	m.Metrics(ctx)
+	return m.samples.History(namespace, pod, span, m.now()), nil
 }
 
 func (m *Manager) Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error) {
@@ -646,6 +668,9 @@ func withWatched(out api.ResourceCounts, watched map[string]int) api.ResourceCou
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
 	value, ok := shared(ctx, &m.usage, m.now, m.limits.MetricsTTL, func(ctx context.Context) (api.Metrics, bool) {
 		built := metrics.Build(ctx, m.dyn, m.nodeSource())
+		if built.Error == "" {
+			m.samples.Record(m.now(), built.Pods)
+		}
 		return built, built.Error == ""
 	})
 	if !ok {
