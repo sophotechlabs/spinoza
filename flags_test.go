@@ -401,3 +401,68 @@ func TestSettingsRefuseAnArgumentTheyDoNotKnow(t *testing.T) {
 		t.Fatal("settingsFromArgs returned nil error for an unknown flag")
 	}
 }
+
+// The check is on unless somebody turns it off, so it is the default that has
+// to be pinned: this is the one thing spinoza does that leaves the machine.
+func TestTheUpdateCheckIsOnUnlessTurnedOff(t *testing.T) {
+	on, err := parseFlags(nil)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !on.updateCheck {
+		t.Fatal("the update check was off by default")
+	}
+	if on.updateFrom != "" {
+		t.Fatalf("endpoint = %q, want the project's own releases", on.updateFrom)
+	}
+
+	off, err := parseFlags([]string{"-update-check=false"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if off.updateCheck {
+		t.Fatal("-update-check=false left the check on")
+	}
+}
+
+func TestTheUpdateCheckCanBeTurnedOffFromTheEnvironment(t *testing.T) {
+	t.Setenv("SPINOZA_UPDATE_CHECK", "false")
+	t.Setenv("SPINOZA_UPDATE_ENDPOINT", "https://spinoza.tech/api/latest")
+
+	opts, err := parseFlags(nil)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if opts.updateCheck {
+		t.Fatal("the environment did not turn the check off")
+	}
+	if opts.updateFrom != "https://spinoza.tech/api/latest" {
+		t.Fatalf("endpoint = %q", opts.updateFrom)
+	}
+}
+
+func TestNonsenseInTheUpdateEnvironmentLeavesTheCheckOn(t *testing.T) {
+	t.Setenv("SPINOZA_UPDATE_CHECK", "banana")
+
+	opts, err := parseFlags(nil)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if !opts.updateCheck {
+		t.Fatal("an unreadable value turned the check off")
+	}
+}
+
+func TestTheCheckerMatchesWhatWasAskedFor(t *testing.T) {
+	off := updateChecker(settings{updateCheck: false})
+	if off.Status(t.Context()).Reason == "" {
+		t.Fatal("a checker built from --update-check=false said nothing about it")
+	}
+
+	on := updateChecker(settings{updateCheck: true, updateFrom: "http://127.0.0.1:1/latest"})
+	if on.Status(t.Context()).Checked {
+		t.Fatal("a checker pointed at nothing claimed an answer")
+	}
+}

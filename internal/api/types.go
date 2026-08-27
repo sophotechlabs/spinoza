@@ -787,6 +787,21 @@ type ResourceUsage struct {
 	MemAllocatableMi    int64 `json:"memAllocatableMi"`
 }
 
+// UpdateStatus is what spinoza knows about newer releases of itself. It never
+// installs one: Command is the same line the website gives out, shown so that a
+// person can run it if they want to.
+type UpdateStatus struct {
+	// Checked says spinoza got an answer. False means it did not ask, or asked
+	// and got nothing, and Reason says which.
+	Checked   bool   `json:"checked"`
+	Current   string `json:"current"`
+	Latest    string `json:"latest,omitempty"`
+	Available bool   `json:"available"`
+	URL       string `json:"url,omitempty"`
+	Command   string `json:"command,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+}
+
 type MetricPoint struct {
 	At    int64   `json:"at"`
 	Value float64 `json:"value"`

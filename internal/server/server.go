@@ -58,6 +58,7 @@ type Server struct {
 	profiler   bool
 	health     api.ClusterHealth
 	watching   bool
+	updates    Updates
 	pingEvery  time.Duration
 }
 

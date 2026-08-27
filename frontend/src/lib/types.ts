@@ -754,6 +754,16 @@ export interface DebugSupport {
   image: string;
 }
 
+export interface UpdateStatus {
+  checked: boolean;
+  current: string;
+  latest?: string;
+  available: boolean;
+  url?: string;
+  command?: string;
+  reason?: string;
+}
+
 export interface MetricPoint {
   at: number;
   value: number;

@@ -35,6 +35,8 @@ type settings struct {
 	showVersion bool
 	pprof       bool
 	nodeShell   bool
+	updateCheck bool
+	updateFrom  string
 	cluster     cluster.Options
 }
 
@@ -60,6 +62,8 @@ func parseFlags(args []string) (settings, error) {
 	warmConcurrency := flags.Int("warm-concurrency", envInt("SPINOZA_WARM_CONCURRENCY", defaultWarm), "resource types warmed at once for the gitops and flux views")
 	countBudget := flags.Duration("count-budget", envDuration("SPINOZA_COUNT_BUDGET", defaultCountBudget), "total time the sidebar counts may take")
 	countPerType := flags.Duration("count-timeout", envDuration("SPINOZA_COUNT_TIMEOUT", defaultCountPerType), "time one resource type may take to be counted")
+	updateCheck := flags.Bool("update-check", envBoolOr("SPINOZA_UPDATE_CHECK", true), "ask once per run whether a newer spinoza has been released; nothing is installed either way")
+	updateFrom := flags.String("update-endpoint", envOr("SPINOZA_UPDATE_ENDPOINT", ""), "where to ask about releases; the project's own releases when empty")
 	countConcurrency := flags.Int("count-concurrency", envInt("SPINOZA_COUNT_CONCURRENCY", defaultCountConcurrency), "resource types counted at once")
 	err := flags.Parse(args)
 	if errors.Is(err, flag.ErrHelp) {
@@ -80,6 +84,8 @@ func parseFlags(args []string) (settings, error) {
 		showVersion: *showVersion,
 		pprof:       *profiler,
 		nodeShell:   *nodeShell,
+		updateCheck: *updateCheck,
+		updateFrom:  *updateFrom,
 		cluster: cluster.Options{
 			DebugImage:       *debugImage,
 			NodeShellImage:   *nodeShellImage,
@@ -152,6 +158,19 @@ func envDuration(name string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+// envBoolOr is envBool for a setting that is on unless somebody turns it off.
+func envBoolOr(name string, fallback bool) bool {
+	value, present := os.LookupEnv(name)
+	if !present {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}

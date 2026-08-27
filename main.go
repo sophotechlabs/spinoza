@@ -85,6 +85,7 @@ func run() error {
 	srv := server.New(clusters, assets, token)
 	srv.UseProfiler(opts.pprof)
 	srv.UseSettings(store)
+	srv.UseUpdates(updateChecker(opts))
 	httpServer := &http.Server{
 		Addr:              opts.addr,
 		Handler:           srv.Handler(),

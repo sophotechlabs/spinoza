@@ -158,7 +158,7 @@ describe('InspectMetrics', () => {
   it('drops back to an hour when the span picked is one it cannot reach', async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      const sampled = String(url).includes('range=24h');
+      const sampled = url.includes('range=24h');
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(history({ source: undefined, sampled })),

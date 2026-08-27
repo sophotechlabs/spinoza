@@ -40,6 +40,7 @@ import type {
   HelmSupport,
   K8sEvent,
   MetricHistory,
+  UpdateStatus,
   MetricPoint,
   Metrics,
   NodeShellSupport,
@@ -476,6 +477,19 @@ export function parseMetrics(body: unknown): Metrics {
 
 function parseMetricPoint(item: Record<string, unknown>): MetricPoint {
   return { at: asNumber(item.at), value: asNumber(item.value) };
+}
+
+export function parseUpdateStatus(body: unknown): UpdateStatus {
+  const item = asRecord(body);
+  return {
+    checked: asBoolean(item.checked),
+    current: asString(item.current),
+    latest: optionalString(item.latest),
+    available: asBoolean(item.available),
+    url: optionalString(item.url),
+    command: optionalString(item.command),
+    reason: optionalString(item.reason),
+  };
 }
 
 export function parseMetricHistory(body: unknown): MetricHistory {

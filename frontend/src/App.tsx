@@ -11,6 +11,7 @@ import type {
 } from './lib/types';
 import { offline, useResourceFeed } from './lib/feed';
 import { fetchContexts, switchContext } from './lib/contexts';
+import { announceUpdate } from './lib/update';
 import { useContextsStore } from './store/contexts';
 import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
 import type { Selection } from './lib/refs';
@@ -191,6 +192,12 @@ export default function App() {
       live = false;
     };
   }, [contextEpoch]);
+
+  // Asked once, when the window opens. The server does the asking and keeps the
+  // answer for the run, so opening a second window costs nothing.
+  useEffect(() => {
+    void announceUpdate();
+  }, []);
 
   const forgetCluster = useCallback(() => {
     clearRecents();
