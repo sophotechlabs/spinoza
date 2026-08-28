@@ -12,6 +12,7 @@ import type {
 import { offline, useResourceFeed } from './lib/feed';
 import { fetchContexts, switchContext } from './lib/contexts';
 import { announceUpdate } from './lib/update';
+import { watchSettings } from './lib/settingsSync';
 import { useContextsStore } from './store/contexts';
 import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
 import type { Selection } from './lib/refs';
@@ -193,6 +194,8 @@ export default function App() {
   useEffect(() => {
     void announceUpdate();
   }, []);
+
+  useEffect(watchSettings, []);
 
   const forgetCluster = useCallback(() => {
     clearRecents();

@@ -50,6 +50,10 @@ export function stopSaving(): void {
   saving = false;
 }
 
+export function isSaving(): boolean {
+  return saving;
+}
+
 function fromServer(): Map<string, string> | null {
   const raw = window.__SPINOZA_SETTINGS__;
   if (raw === undefined) {
@@ -135,6 +139,59 @@ function schedule(): void {
     timer = null;
     void save();
   }, SAVE_DELAY_MS);
+}
+
+// refresh takes what the server holds now, which is what another window wrote
+// since this one loaded. A window that cannot reach the server keeps what it has.
+export async function refresh(): Promise<boolean> {
+  let body: unknown = null;
+  try {
+    const response = await request(SETTINGS_PATH);
+    if (!response.ok) {
+      return false;
+    }
+    body = await response.json();
+  } catch {
+    return false;
+  }
+  const found = valuesOf(body);
+  if (found === null) {
+    return false;
+  }
+  if (same(cache(), found)) {
+    return false;
+  }
+  replace(found);
+  return true;
+}
+
+function valuesOf(body: unknown): Map<string, string> | null {
+  if (typeof body !== 'object' || body === null) {
+    return null;
+  }
+  const values = (body as { values?: unknown }).values;
+  if (typeof values !== 'object' || values === null) {
+    return null;
+  }
+  const found = new Map<string, string>();
+  for (const [key, value] of Object.entries(values)) {
+    if (typeof value === 'string') {
+      found.set(key, value);
+    }
+  }
+  return found;
+}
+
+function same(held: Map<string, string>, found: Map<string, string>): boolean {
+  if (held.size !== found.size) {
+    return false;
+  }
+  for (const [key, value] of held) {
+    if (found.get(key) !== value) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function save(): Promise<void> {

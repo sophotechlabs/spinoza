@@ -21,6 +21,7 @@ interface ThemeState {
   setSystem: (system: ThemeBase) => void;
   addTheme: (theme: Theme) => void;
   removeTheme: (id: string) => void;
+  adoptStored: () => void;
 }
 
 const preference = readTheme();
@@ -53,6 +54,16 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const resolved = resolveTheme(nextThemes, get().preference, get().system);
     applyTheme(resolved);
     set({ custom: nextCustom, themes: nextThemes, resolved });
+  },
+  // adoptStored takes what is in the settings now, without writing it back. It
+  // is for a change another window made, which is already saved.
+  adoptStored: () => {
+    const nextPreference = readTheme();
+    const nextCustom = readCustomThemes();
+    const nextThemes = [...BUILT_IN_THEMES, ...nextCustom];
+    const resolved = resolveTheme(nextThemes, nextPreference, get().system);
+    applyTheme(resolved);
+    set({ preference: nextPreference, custom: nextCustom, themes: nextThemes, resolved });
   },
   removeTheme: (id) => {
     const nextCustom = get().custom.filter((entry) => entry.id !== id);
