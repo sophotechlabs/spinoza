@@ -412,6 +412,56 @@ func TestBuildCapsTheWarningsItReturns(t *testing.T) {
 	}
 }
 
+func eventPage(names []string, seen, reason string, more bool) *unstructured.UnstructuredList {
+	list := &unstructured.UnstructuredList{}
+	for _, name := range names {
+		list.Items = append(list.Items, *warning(name, reason, "web", seen))
+	}
+	if more {
+		list.SetContinue("more")
+	}
+	return list
+}
+
+func TestBuildWalksPastTheFirstPageOfWarnings(t *testing.T) {
+	dyn := dynClient()
+	pages := 0
+	dyn.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		pages++
+		if pages == 1 {
+			return true, eventPage([]string{"old-a", "old-b"}, "2026-08-11T10:00:00Z", "BackOff", true), nil
+		}
+		return true, eventPage([]string{"newest"}, "2026-08-11T12:00:00Z", "OOMKilled", false), nil
+	})
+
+	got := Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
+
+	if pages != 2 {
+		t.Fatalf("listed %d pages, want both", pages)
+	}
+	if len(got.Warnings) == 0 || got.Warnings[0].Reason != "OOMKilled" {
+		t.Fatalf("the newest warning sat on page two and was lost: %+v", got.Warnings)
+	}
+}
+
+func TestBuildStopsWalkingWarningsAtItsBound(t *testing.T) {
+	dyn := dynClient()
+	pages := 0
+	dyn.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		pages++
+		return true, eventPage([]string{fmt.Sprintf("event-%d", pages)}, "2026-08-11T10:00:00Z", "BackOff", true), nil
+	})
+
+	got := Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
+
+	if pages != warningPages {
+		t.Fatalf("listed %d pages, want the bound of %d", pages, warningPages)
+	}
+	if !strings.Contains(got.Error, "warning events") {
+		t.Fatalf("the walk stopped early without saying so: %q", got.Error)
+	}
+}
+
 func TestBuildSaysWhenEventsCouldNotBeRead(t *testing.T) {
 	dyn := dynClient()
 	dyn.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {

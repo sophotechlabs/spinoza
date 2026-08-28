@@ -28,6 +28,7 @@ const (
 	buildTimeout  = 20 * time.Second
 	probeTimeout  = 5 * time.Second
 	warningWindow = 200
+	warningPages  = 20
 	warningsShown = 25
 )
 
@@ -226,21 +227,39 @@ func warnings(ctx context.Context, dyn dynamic.Interface, descs map[string]api.R
 	bounded, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	opts := metav1.ListOptions{Limit: warningWindow, FieldSelector: "type=Warning"}
-	list, err := dyn.Resource(eventsGVR).List(bounded, opts)
-	failures.Record(eventsKey, err)
-	if err != nil {
-		return out
-	}
-	for i := range list.Items {
-		out = append(out, eventOf(&list.Items[i]))
-	}
-	slices.SortStableFunc(out, func(left, right api.OverviewEvent) int {
-		return seenAt(right.LastSeen).Compare(seenAt(left.LastSeen))
-	})
-	if len(out) > warningsShown {
-		out = out[:warningsShown]
+	for page := range warningPages {
+		list, err := dyn.Resource(eventsGVR).List(bounded, opts)
+		failures.Record(eventsKey, err)
+		if err != nil {
+			return out
+		}
+		for i := range list.Items {
+			out = append(out, eventOf(&list.Items[i]))
+		}
+		out = newestFirst(out)
+		if list.GetContinue() == "" {
+			return out
+		}
+		if page == warningPages-1 {
+			failures.Record(eventsKey, fmt.Errorf(
+				"more than %d warning events, so the newest are taken from the first %d",
+				warningWindow*warningPages, warningWindow*warningPages,
+			))
+			return out
+		}
+		opts.Continue = list.GetContinue()
 	}
 	return out
+}
+
+func newestFirst(events []api.OverviewEvent) []api.OverviewEvent {
+	slices.SortStableFunc(events, func(left, right api.OverviewEvent) int {
+		return seenAt(right.LastSeen).Compare(seenAt(left.LastSeen))
+	})
+	if len(events) > warningsShown {
+		return events[:warningsShown]
+	}
+	return events
 }
 
 func eventOf(obj *unstructured.Unstructured) api.OverviewEvent {
