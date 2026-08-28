@@ -112,8 +112,21 @@ func gather(ctx context.Context, lister Lister, descs []api.ResourceDescriptor) 
 	return out, failures.Message()
 }
 
+func groupOf(apiVersion string) string {
+	group, _, found := strings.Cut(apiVersion, "/")
+	if !found {
+		return ""
+	}
+	return group
+}
+
 func objectKey(obj *unstructured.Unstructured) string {
-	return obj.GetKind() + "/" + obj.GetNamespace() + "/" + obj.GetName()
+	return kindKey(obj.GroupVersionKind().Group, obj.GetKind()) +
+		"/" + obj.GetNamespace() + "/" + obj.GetName()
+}
+
+func kindKey(group, kind string) string {
+	return group + "/" + kind
 }
 
 func index(items []held) map[string]held {
@@ -127,14 +140,14 @@ func index(items []held) map[string]held {
 func kindsOf(items []held) map[string]bool {
 	out := map[string]bool{}
 	for _, item := range items {
-		out[item.obj.GetKind()] = true
+		out[kindKey(item.obj.GroupVersionKind().Group, item.obj.GetKind())] = true
 	}
 	return out
 }
 
 func owned(obj *unstructured.Unstructured, kinds map[string]bool) bool {
 	for _, ref := range obj.GetOwnerReferences() {
-		if kinds[ref.Kind] {
+		if kinds[kindKey(groupOf(ref.APIVersion), ref.Kind)] {
 			return true
 		}
 	}
@@ -143,7 +156,9 @@ func owned(obj *unstructured.Unstructured, kinds map[string]bool) bool {
 
 func ownerOf(item held, byKey map[string]held) (held, bool) {
 	for _, ref := range item.obj.GetOwnerReferences() {
-		found, ok := byKey[ref.Kind+"/"+item.obj.GetNamespace()+"/"+ref.Name]
+		key := kindKey(groupOf(ref.APIVersion), ref.Kind) +
+			"/" + item.obj.GetNamespace() + "/" + ref.Name
+		found, ok := byKey[key]
 		if ok {
 			return found, true
 		}

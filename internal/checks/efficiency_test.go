@@ -239,3 +239,19 @@ func TestAnUnreadableRequestDoesNotCountTowardsTheTotal(t *testing.T) {
 		t.Fatal("an unreadable request produced an overprovisioning finding")
 	}
 }
+
+func TestUsageIgnoresAPodMetricsServerNeverReported(t *testing.T) {
+	owner := replicas(deployment("api", podSpec(container("app", resources("requests", map[string]any{
+		"cpu":    "2",
+		"memory": "128Mi",
+	})))), 2)
+	measured := ownedBy(pod("api-a", podSpec(container("app", nil))), "Deployment", "api")
+	silent := ownedBy(pod("api-b", podSpec(container("app", nil))), "Deployment", "api")
+
+	found := reportWithUsage(t, usageFor([]string{"api-a"}, 40, 90), owner, measured, silent)
+
+	detail := onlyFinding(t, found, "requests-far-above-usage").Detail
+	if detail != "pods request 2000m cpu and use 40m" {
+		t.Fatalf("detail = %q; the unmeasured pod must not drag the mean toward zero", detail)
+	}
+}

@@ -82,8 +82,20 @@ func replicas(obj *unstructured.Unstructured, count int64) *unstructured.Unstruc
 	return obj
 }
 
+func apiVersionFor(kind string) string {
+	group := kindGroups[kind]
+	if group == "" {
+		return "v1"
+	}
+	return group + "/v1"
+}
+
 func ownedBy(obj *unstructured.Unstructured, kind, name string) *unstructured.Unstructured {
-	obj.SetOwnerReferences([]metav1.OwnerReference{{Kind: kind, Name: name, APIVersion: "apps/v1"}})
+	obj.SetOwnerReferences([]metav1.OwnerReference{{
+		APIVersion: apiVersionFor(kind),
+		Kind:       kind,
+		Name:       name,
+	}})
 	return obj
 }
 

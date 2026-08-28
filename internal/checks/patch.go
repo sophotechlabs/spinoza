@@ -7,6 +7,18 @@ import (
 
 const indent = "  "
 
+var yamlEscapes = strings.NewReplacer(
+	`\`, `\\`,
+	`"`, `\"`,
+	"\n", `\n`,
+	"\r", `\r`,
+	"\t", `\t`,
+)
+
+func quoted(value string) string {
+	return `"` + yamlEscapes.Replace(value) + `"`
+}
+
 func nest(path, lines []string) string {
 	out := make([]string, 0, len(path)+len(lines))
 	for depth, key := range path {
@@ -71,7 +83,7 @@ func mountRemovals(subject Subject, volume string, init bool) []string {
 			strings.Repeat(indent, 2)+"volumeMounts:")
 		for _, path := range paths {
 			out = append(out,
-				strings.Repeat(indent, 3)+"- mountPath: "+path,
+				strings.Repeat(indent, 3)+"- mountPath: "+quoted(path),
 				strings.Repeat(indent, 4)+"$patch: delete")
 		}
 	}

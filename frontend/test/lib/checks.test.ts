@@ -164,6 +164,15 @@ describe('fetchChecks', () => {
     });
   });
 
+  it('reads an object with nothing in it at all', async () => {
+    stub({ objects: [{}], groups: [{ id: 'a', findings: [{ ref: 0 }] }] });
+
+    const found = await fetchChecks();
+
+    expect(found.groups[0].findings[0].object.name).toBe('');
+    expect(found.groups[0].findings[0].kind).toBe('');
+  });
+
   it('keeps a report with no groups at all', async () => {
     stub({});
 
@@ -204,7 +213,7 @@ describe('useChecks', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/checks', expect.anything());
   });
 
-  it('refreshes on the interval the settings hold', async () => {
+  it('refreshes on exactly the cadence the settings hold', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetchMock = stub({ groups: [], objects: [], scanned: 0 });
     act(() => {
@@ -212,11 +221,33 @@ describe('useChecks', () => {
     });
 
     renderHook(() => useChecks());
-    await vi.advanceTimersByTimeAsync(16000);
-    const quick = fetchMock.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(16000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(quick);
+    await vi.advanceTimersByTimeAsync(14000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    vi.useRealTimers();
+  });
+
+  it('does not refresh a minute early when the interval is five minutes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = stub({ groups: [], objects: [], scanned: 0 });
+    act(() => {
+      useSettingsStore.getState().setChecksInterval(300);
+    });
+
+    renderHook(() => useChecks());
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(299000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
 

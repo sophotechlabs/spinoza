@@ -74,16 +74,38 @@ func TestMutableImageTagsAreFlagged(t *testing.T) {
 	}
 }
 
-func TestPinnedImagesAreNotFlagged(t *testing.T) {
-	for _, image := range []string{
-		"registry.example/app:1.4.2",
-		"registry.example:5000/app:1.4.2",
-		"registry.example/app@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-	} {
-		found := report(t, deployment("api", podSpec(container("app", map[string]any{"image": image}))))
-		if findingCount(t, found, "image-latest") != 0 {
-			t.Fatalf("%s was reported as mutable", image)
-		}
+func TestAnImageIsJudgedByItsTag(t *testing.T) {
+	cases := []struct {
+		name    string
+		image   string
+		flagged bool
+	}{
+		{name: "a release tag", image: "registry.example/app:1.4.2", flagged: false},
+		{name: "a tag behind a port", image: "registry.example:5000/app:1.4.2", flagged: false},
+		{
+			name:    "a digest",
+			image:   "registry.example/app@sha256:" + strings.Repeat("0", 64),
+			flagged: false,
+		},
+		{name: "latest", image: "registry.example/app:latest", flagged: true},
+		{name: "no tag", image: "registry.example/app", flagged: true},
+		{name: "no registry and no tag", image: "app", flagged: true},
+		{name: "no image at all", image: "", flagged: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			found := report(t, deployment("api", podSpec(container("app", map[string]any{
+				"image": tc.image,
+			}))))
+			got := findingCount(t, found, "image-latest")
+			want := 0
+			if tc.flagged {
+				want = 1
+			}
+			if got != want {
+				t.Fatalf("%s produced %d findings, want %d", tc.image, got, want)
+			}
+		})
 	}
 }
 
@@ -235,5 +257,18 @@ func TestASelectorWithoutMatchLabelsIsSkipped(t *testing.T) {
 
 	if strings.Contains(finding.Patch, "labelSelector") {
 		t.Fatalf("matchExpressions were read as matchLabels:\n%s", finding.Patch)
+	}
+}
+
+func TestASpreadPatchOnAWorkloadWithNoSpecNamesNoSelector(t *testing.T) {
+	owner := workload("Job", "batch", podSpec(container("app", nil)))
+	delete(owner.Object, "spec")
+	first := ownedBy(onNode(pod("batch-a", podSpec(container("app", nil))), "worker-1"), "Job", "batch")
+	second := ownedBy(onNode(pod("batch-b", podSpec(container("app", nil))), "worker-1"), "Job", "batch")
+
+	finding := onlyFinding(t, report(t, owner, first, second), "replicas-one-node")
+
+	if strings.Contains(finding.Patch, "labelSelector") {
+		t.Fatalf("a selector was invented for a workload with no spec:\n%s", finding.Patch)
 	}
 }

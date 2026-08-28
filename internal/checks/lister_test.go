@@ -2,6 +2,7 @@ package checks
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -11,6 +12,7 @@ import (
 )
 
 type fakeLister struct {
+	mu      sync.Mutex
 	objects map[string][]*unstructured.Unstructured
 	errs    map[string]error
 	warmed  int
@@ -34,7 +36,15 @@ func (f *fakeLister) List(_ context.Context, desc api.ResourceDescriptor) ([]*un
 }
 
 func (f *fakeLister) Warm(context.Context, []api.ResourceDescriptor) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.warmed++
+}
+
+func (f *fakeLister) warmCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.warmed
 }
 
 var kindResources = map[string]string{

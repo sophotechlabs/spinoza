@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -179,6 +180,32 @@ func TestAWorkloadsOwnedObjectsAreNotCheckedAgain(t *testing.T) {
 	}
 }
 
+func ownedByGroup(obj *unstructured.Unstructured, apiVersion, kind, name string) *unstructured.Unstructured {
+	obj.SetOwnerReferences([]metav1.OwnerReference{{
+		APIVersion: apiVersion,
+		Kind:       kind,
+		Name:       name,
+	}})
+	return obj
+}
+
+func TestAnOwnerOfTheSameKindInAnotherGroupIsNotTheOwner(t *testing.T) {
+	native := deployment("api", podSpec(container("app", nil)))
+	stranger := ownedByGroup(
+		pod("rogue", podSpec(container("app", withSecurity(map[string]any{"privileged": true})))),
+		"custom.example/v1", "Deployment", "api",
+	)
+
+	found := report(t, native, stranger)
+
+	if found.Scanned != 2 {
+		t.Fatalf("scanned %d, want both: the pod's owner is a Deployment of another group", found.Scanned)
+	}
+	if onlyObject(t, found, "privileged-containers").Kind != "Pod" {
+		t.Fatal("the pod was folded into an unrelated apps/v1 Deployment of the same name")
+	}
+}
+
 func TestAPodOwnedBySomethingSpinozaDoesNotHoldIsStillChecked(t *testing.T) {
 	running := ownedBy(pod("ceph-osd-0", podSpec(container("osd", withSecurity(map[string]any{
 		"privileged": true,
@@ -281,8 +308,8 @@ func TestTheInformersAreWarmedOnce(t *testing.T) {
 
 	Run(t.Context(), lister, descriptors(), api.Metrics{})
 
-	if lister.warmed != 1 {
-		t.Fatalf("warmed %d times, want 1", lister.warmed)
+	if got := lister.warmCount(); got != 1 {
+		t.Fatalf("warmed %d times, want 1", got)
 	}
 }
 
@@ -381,24 +408,31 @@ func TestFindingsAreOrderedTheSameWayEveryRun(t *testing.T) {
 	}
 }
 
-func TestReplicaCountsComeFromTheRightFieldPerKind(t *testing.T) {
-	cases := map[string]int64{
-		"Deployment":            1,
-		"StatefulSet":           1,
-		"ReplicaSet":            1,
-		"ReplicationController": 1,
-		"Job":                   1,
-		"CronJob":               1,
-		"Pod":                   1,
+func TestAKindWithNoCountReportsOneReplica(t *testing.T) {
+	cases := []struct {
+		kind string
+		want int64
+	}{
+		{kind: "Deployment", want: 1},
+		{kind: "StatefulSet", want: 1},
+		{kind: "ReplicaSet", want: 1},
+		{kind: "ReplicationController", want: 1},
+		{kind: "Job", want: 1},
+		{kind: "CronJob", want: 1},
+		{kind: "Pod", want: 1},
+		{kind: "DaemonSet", want: 0},
 	}
-	for kind, want := range cases {
-		obj := workload(kind, "thing", podSpec(container("app", nil)))
-		if kind == "Pod" {
-			obj = pod("thing", podSpec(container("app", nil)))
-		}
-		if got := replicasOf(obj, kind); got != want {
-			t.Fatalf("%s reported %d replicas, want %d", kind, got, want)
-		}
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			obj := workload(tc.kind, "thing", podSpec(container("app", nil)))
+			if tc.kind == "Pod" {
+				obj = pod("thing", podSpec(container("app", nil)))
+			}
+			got := replicasOf(obj, tc.kind)
+			if got != tc.want {
+				t.Fatalf("%s reported %d replicas, want %d", tc.kind, got, tc.want)
+			}
+		})
 	}
 }
 

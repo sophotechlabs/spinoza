@@ -3,6 +3,8 @@ package checks
 import (
 	"strings"
 	"testing"
+
+	"sigs.k8s.io/yaml"
 )
 
 func TestPrivilegedContainerIsFlaggedWithAPatchThatTurnsItOff(t *testing.T) {
@@ -124,7 +126,7 @@ func TestAMountedRuntimeSocketIsFlagged(t *testing.T) {
 		"      containers:\n" +
 		"        - name: app\n" +
 		"          volumeMounts:\n" +
-		"            - mountPath: /var/run/docker.sock\n" +
+		"            - mountPath: \"/var/run/docker.sock\"\n" +
 		"              $patch: delete\n" +
 		"      volumes:\n" +
 		"        - name: sock\n" +
@@ -145,7 +147,7 @@ func TestTheSocketPatchDropsEveryMountOfThatVolume(t *testing.T) {
 	patch := onlyFinding(t, report(t, deployment("api", spec)), "runtime-socket-mounted").Patch
 
 	for _, path := range []string{"/var/run/docker.sock", "/sock", "/init.sock"} {
-		if !strings.Contains(patch, "- mountPath: "+path) {
+		if !strings.Contains(patch, `- mountPath: "`+path+`"`) {
 			t.Fatalf("%s was left mounted:\n%s", path, patch)
 		}
 	}
@@ -155,6 +157,62 @@ func TestTheSocketPatchDropsEveryMountOfThatVolume(t *testing.T) {
 	if !strings.Contains(patch, "initContainers:") {
 		t.Fatalf("the init container's mount was not removed:\n%s", patch)
 	}
+}
+
+func TestASocketPatchSurvivesAMountPathYamlWouldEat(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+	}{
+		{name: "a comment marker after a space", path: "/mnt/my #dir/docker.sock"},
+		{name: "a quote", path: `/mnt/say "hi"/docker.sock`},
+		{name: "a backslash", path: `/mnt/back\slash/docker.sock`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := withSocketVolume(podSpec(container("app", mounting("sock", tc.path))))
+
+			patch := onlyFinding(t, report(t, deployment("api", spec)), "runtime-socket-mounted").Patch
+
+			got := firstMountPath(t, patch)
+			if got != tc.path {
+				t.Fatalf("mountPath round-tripped as %q, want %q\n%s", got, tc.path, patch)
+			}
+		})
+	}
+}
+
+type mountPatch struct {
+	Spec struct {
+		Template struct {
+			Spec struct {
+				Containers []struct {
+					Name         string `json:"name"`
+					VolumeMounts []struct {
+						MountPath string `json:"mountPath"`
+					} `json:"volumeMounts"`
+				} `json:"containers"`
+			} `json:"spec"`
+		} `json:"template"`
+	} `json:"spec"`
+}
+
+func firstMountPath(t *testing.T, patch string) string {
+	t.Helper()
+	var parsed mountPatch
+	err := yaml.Unmarshal([]byte(patch), &parsed)
+	if err != nil {
+		t.Fatalf("the patch is not valid yaml: %v\n%s", err, patch)
+	}
+	containers := parsed.Spec.Template.Spec.Containers
+	if len(containers) == 0 {
+		t.Fatalf("the patch named no container:\n%s", patch)
+	}
+	mounts := containers[0].VolumeMounts
+	if len(mounts) == 0 {
+		t.Fatalf("the patch removed no mount:\n%s", patch)
+	}
+	return mounts[0].MountPath
 }
 
 func TestASocketVolumeNothingMountsDropsOnlyTheVolume(t *testing.T) {
