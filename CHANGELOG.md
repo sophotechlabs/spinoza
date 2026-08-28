@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.17.0](https://github.com/sophotechlabs/spinoza/compare/v1.16.0...v1.17.0) (2026-08-28)
+
+
+### Features
+
+* **cronjob:** suspend, resume and run now ([4664381](https://github.com/sophotechlabs/spinoza/commit/4664381c80c3185b4cd0e51c74adb8164e3894de))
+* **settings:** follow a theme another window chose ([278eaf9](https://github.com/sophotechlabs/spinoza/commit/278eaf94cbaf9fc1f896da511b4aa3c5dbfee15a))
+* **tables:** sort a node metric by how much it has, not only how much it uses ([eebfad9](https://github.com/sophotechlabs/spinoza/commit/eebfad9c9d6ba285f81ae6c021759e1547008c0f))
+
+
+### Bug Fixes
+
+* **build:** give the frontend the same version as the binary ([fb808d4](https://github.com/sophotechlabs/spinoza/commit/fb808d49a9a2490bcc45f3a6c0f21598aa55f63b))
+* **settings:** send only the keys this window changed ([174ab3b](https://github.com/sophotechlabs/spinoza/commit/174ab3bcbbf4a1c27aa2d8e1a5fe905ae01345ac))
+
 ## [1.16.0](https://github.com/sophotechlabs/spinoza/compare/v1.15.0...v1.16.0) (2026-08-28)
 
 
