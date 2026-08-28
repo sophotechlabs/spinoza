@@ -262,6 +262,23 @@ vi.mock('../src/components/ArgoList', () => ({
   ),
 }));
 
+vi.mock('../src/components/Checks', () => ({
+  default: ({ onOpen }: { onOpen: (ref: ObjectRef, kind: string) => void }) => (
+    <button
+      type="button"
+      data-testid="checks"
+      onClick={() => {
+        onOpen(
+          { group: 'apps', version: 'v1', resource: 'deployments', namespace: 'apps', name: 'api' },
+          'Deployment',
+        );
+      }}
+    >
+      open-checked-object
+    </button>
+  ),
+}));
+
 vi.mock('../src/components/ForwardsPanel', () => ({
   default: () => <div data-testid="forwards-panel" />,
 }));
@@ -1990,6 +2007,18 @@ describe('finding your way in by keyboard', () => {
     await user.click(screen.getByRole('button', { name: 'Stay here' }));
 
     expect(screen.queryByText('Spinoza is back in its window')).not.toBeInTheDocument();
+  });
+
+  it('opens the cluster checks and opens the object a finding landed on', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Cluster checks' }));
+    expect(await screen.findByTestId('checks')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'open-checked-object' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('deployments:apps/api');
   });
 
   it('opens the argo graph and targets the inspector from it', async () => {

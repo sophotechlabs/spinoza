@@ -292,6 +292,7 @@ export const VIEWS = [
   'resources',
   'cluster',
   'helm',
+  'checks',
   'gitops',
   'flux-list',
   'flux-roles',
@@ -779,4 +780,34 @@ export interface MetricHistory {
   since?: number;
   cpu: MetricPoint[];
   memory: MetricPoint[];
+}
+
+export type CheckSeverity = 'high' | 'medium' | 'low';
+
+export type CheckCategory = 'security' | 'reliability' | 'efficiency';
+
+export interface CheckFinding {
+  object: ObjectRef;
+  kind: string;
+  container?: string;
+  detail: string;
+  patch?: string;
+}
+
+export interface CheckGroup {
+  id: string;
+  title: string;
+  category: CheckCategory;
+  severity: CheckSeverity;
+  frameworks?: string[];
+  wrong: string;
+  remedy: string;
+  skipped?: string;
+  findings: CheckFinding[];
+}
+
+export interface CheckReport {
+  groups: CheckGroup[];
+  scanned: number;
+  error?: string;
 }

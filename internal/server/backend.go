@@ -66,6 +66,7 @@ type Feeds interface {
 
 type Views interface {
 	Graph(ctx context.Context) api.Graph
+	Checks(ctx context.Context) api.CheckReport
 	Flux(ctx context.Context) api.FluxDashboard
 	Argo(ctx context.Context) api.ArgoDashboard
 	FluxOverview(ctx context.Context) api.FluxOverview

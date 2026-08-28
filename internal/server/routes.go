@@ -43,6 +43,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPost, "/api/helm/upgrade", s.handleHelmUpgrade, false},
 		{http.MethodPost, "/api/helm/install", s.handleHelmInstall, false},
 		{http.MethodGet, "/api/helm", s.handleHelm, false},
+		{http.MethodGet, "/api/checks", s.handleChecks, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false},
 		{http.MethodGet, "/api/flux/overview", s.handleFluxOverview, false},

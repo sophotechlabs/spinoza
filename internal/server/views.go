@@ -10,6 +10,10 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Graph(r.Context()))
 }
 
+func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Checks(r.Context()))
+}
+
 func (s *Server) handleFlux(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Flux(r.Context()))
 }

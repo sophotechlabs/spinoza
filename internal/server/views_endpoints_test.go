@@ -103,6 +103,58 @@ func TestFluxOverviewEndpointAnswersWithoutFlux(t *testing.T) {
 	}
 }
 
+func TestChecksEndpointAuditsThePodsItCanSee(t *testing.T) {
+	ts := dashboardServer(t, newPodObject("prod", "web-0"))
+
+	var found api.CheckReport
+	resp := getJSON(t, ts.URL+"/api/checks", &found)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if found.Scanned != 1 {
+		t.Fatalf("scanned = %d, want the one pod", found.Scanned)
+	}
+	if len(found.Groups) == 0 {
+		t.Fatal("the report carried no checks")
+	}
+	if !flagged(found, "requests-missing", "web-0") {
+		t.Fatal("a pod with no resource requests was not reported")
+	}
+}
+
+func TestChecksEndpointSkipsTheUsageCheckWithoutMetrics(t *testing.T) {
+	ts := dashboardServer(t, newPodObject("prod", "web-0"))
+
+	var found api.CheckReport
+	getJSON(t, ts.URL+"/api/checks", &found)
+
+	for _, group := range found.Groups {
+		if group.ID != "requests-far-above-usage" {
+			continue
+		}
+		if group.Skipped == "" {
+			t.Fatal("the usage check ran on a cluster with no metrics API")
+		}
+		return
+	}
+	t.Fatal("the usage check is missing from the report")
+}
+
+func flagged(found api.CheckReport, id, name string) bool {
+	for _, group := range found.Groups {
+		if group.ID != id {
+			continue
+		}
+		for _, finding := range group.Findings {
+			if finding.Object.Name == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestArgoEndpointAnswersWithoutArgo(t *testing.T) {
 	ts := dashboardServer(t)
 

@@ -28,7 +28,10 @@ interface GitopsEntry {
   label: string;
 }
 
-const TOP_VIEWS: GitopsEntry[] = [{ view: 'helm', label: 'Helm releases' }];
+const TOP_VIEWS: GitopsEntry[] = [
+  { view: 'helm', label: 'Helm releases' },
+  { view: 'checks', label: 'Cluster checks' },
+];
 
 const CLUSTER_CATEGORY = 'Cluster';
 

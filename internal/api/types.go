@@ -817,3 +817,29 @@ type Metrics struct {
 	Nodes map[string]ResourceUsage `json:"nodes"`
 	Error string                   `json:"error,omitempty"`
 }
+
+type CheckFinding struct {
+	Object    ObjectRef `json:"object"`
+	Kind      string    `json:"kind"`
+	Container string    `json:"container,omitempty"`
+	Detail    string    `json:"detail"`
+	Patch     string    `json:"patch,omitempty"`
+}
+
+type CheckGroup struct {
+	ID         string         `json:"id"`
+	Title      string         `json:"title"`
+	Category   string         `json:"category"`
+	Severity   string         `json:"severity"`
+	Frameworks []string       `json:"frameworks,omitempty"`
+	Wrong      string         `json:"wrong"`
+	Remedy     string         `json:"remedy"`
+	Skipped    string         `json:"skipped,omitempty"`
+	Findings   []CheckFinding `json:"findings"`
+}
+
+type CheckReport struct {
+	Groups  []CheckGroup `json:"groups"`
+	Scanned int          `json:"scanned"`
+	Error   string       `json:"error,omitempty"`
+}

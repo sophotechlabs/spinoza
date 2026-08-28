@@ -51,6 +51,7 @@ import FluxList from './components/FluxList';
 import FluxRoles from './components/FluxRoles';
 import ArgoApps from './components/ArgoApps';
 import ArgoList from './components/ArgoList';
+import Checks from './components/Checks';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
@@ -484,6 +485,9 @@ export default function App() {
   }
   if (route.view === 'helm') {
     mainArea = <HelmReleases selected={route.release} onSelect={openRelease} />;
+  }
+  if (route.view === 'checks') {
+    mainArea = <Checks onOpen={openInTable} />;
   }
   if (route.view === 'gitops') {
     mainArea = (

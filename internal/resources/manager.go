@@ -32,6 +32,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/charts"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
@@ -560,6 +561,10 @@ func (m *Manager) Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessa
 
 func (m *Manager) Graph(ctx context.Context) api.Graph {
 	return gitops.Build(ctx, m, m.descriptors())
+}
+
+func (m *Manager) Checks(ctx context.Context) api.CheckReport {
+	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx))
 }
 
 func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
