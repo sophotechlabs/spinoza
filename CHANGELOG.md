@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.16.0](https://github.com/sophotechlabs/spinoza/compare/v1.15.0...v1.16.0) (2026-08-28)
+
+
+### Features
+
+* **update:** add an update button and a switch for the automatic check ([f88b290](https://github.com/sophotechlabs/spinoza/commit/f88b2900a07874e1a19a39647e547d01670a5340))
+
+
+### Bug Fixes
+
+* **settings:** merge on write so two windows do not undo each other ([6b5bcfd](https://github.com/sophotechlabs/spinoza/commit/6b5bcfd52ffbb6c168a4787483d3e1fd444f7601))
+* **update:** refuse an install script that ignores the skip ([3215aa4](https://github.com/sophotechlabs/spinoza/commit/3215aa4e6d792744b2d25808f20d7cd25cf18bdf))
+
+
+### Styles
+
+* shorten the remaining comments ([7222a20](https://github.com/sophotechlabs/spinoza/commit/7222a203962f8b30c9af6d453b311b17fe59437f))
+
 ## [1.15.0](https://github.com/sophotechlabs/spinoza/compare/v1.14.1...v1.15.0) (2026-08-28)
 
 
