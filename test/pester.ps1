@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 
 [CmdletBinding()]
-param([double]$MinimumCoverage = 75)
+param([double]$MinimumCoverage = 80)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -27,6 +27,16 @@ $result = Invoke-Pester -Configuration $config
 
 if ($result.FailedCount -gt 0) {
     throw "pester: $($result.FailedCount) of $($result.TotalCount) tests failed"
+}
+
+if ($result.Result -ne 'Passed') {
+    throw "pester: the run came back $($result.Result), which is how a discovery error hides behind a green test count"
+}
+
+foreach ($container in $result.Containers) {
+    if (-not $container.Passed) {
+        throw "pester: $($container.Item) did not pass discovery"
+    }
 }
 
 $onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
