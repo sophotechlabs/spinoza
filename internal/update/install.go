@@ -1,6 +1,7 @@
 package update
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +18,11 @@ import (
 // Script is the install script the website serves, and the one the command in
 // the toast pipes to a shell.
 const Script = "https://spinoza.tech/install.sh"
+
+// skipApp is what the script has to read for the desktop app to be left alone.
+// A script that does not mention it would install one beside the binary, so it
+// is refused rather than run and cleaned up after.
+const skipApp = "SPINOZA_SKIP_APP"
 
 const (
 	fetchTimeout   = 30 * time.Second
@@ -89,6 +95,9 @@ func (i *Installer) Install(ctx context.Context) error {
 	body, fetchErr := i.fetch(ctx)
 	if fetchErr != nil {
 		return fetchErr
+	}
+	if !bytes.Contains(body, []byte(skipApp)) {
+		return fmt.Errorf("%w: the install script does not take %s", ErrUnsupported, skipApp)
 	}
 	path, saveErr := saveScript(body)
 	if saveErr != nil {
@@ -188,7 +197,7 @@ func runScript(ctx context.Context, script, dir string) ([]byte, error) {
 	cmd.Env = append(
 		os.Environ(),
 		"SPINOZA_INSTALL_DIR="+dir,
-		"SPINOZA_SKIP_APP=1",
+		skipApp+"=1",
 	)
 	return cmd.CombinedOutput()
 }

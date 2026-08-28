@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-const script = "#!/bin/sh\necho installed\n"
+const script = "#!/bin/sh\n# reads SPINOZA_SKIP_APP\necho installed\n"
 
 type call struct {
 	script string
@@ -311,5 +311,22 @@ func TestTheLastLineIsWhatIsReported(t *testing.T) {
 		if got := lastLine([]byte(output)); got != want {
 			t.Errorf("lastLine(%q) = %q, want %q", output, got, want)
 		}
+	}
+}
+
+// The script that comes back has to be one that reads the variable. An older
+// one would install the desktop app beside the binary without saying so.
+func TestAScriptThatDoesNotTakeTheSkipIsRefused(t *testing.T) {
+	var ran call
+	one := installerFor(t, t.TempDir(), &ran, nil)
+	one.script = servingStatus(t, "#!/bin/sh\necho old\n", http.StatusOK).URL
+
+	err := one.Install(context.Background())
+
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("error = %v, want the unsupported error", err)
+	}
+	if ran.dir != "" {
+		t.Fatal("an older script ran anyway")
 	}
 }
