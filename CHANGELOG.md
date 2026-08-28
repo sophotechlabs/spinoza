@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.15.0](https://github.com/sophotechlabs/spinoza/compare/v1.14.1...v1.15.0) (2026-08-28)
+
+
+### Features
+
+* **metrics:** draw a chart from what spinoza measured when there is no Prometheus ([5275939](https://github.com/sophotechlabs/spinoza/commit/52759394c723cd1dc1dc59557586e53ac592b173))
+* **update:** move the release check to spinoza.tech ([344b84f](https://github.com/sophotechlabs/spinoza/commit/344b84f4bd5f9eaf7ac918584b347c67de74ccca))
+* **update:** say when a newer spinoza is out and offer the command that installs it ([1b9fab5](https://github.com/sophotechlabs/spinoza/commit/1b9fab5cfa4815857d454196273860ab5d19b07c))
+
+
+### Bug Fixes
+
+* **metrics:** stop exporting a constant nothing imports ([ce288b8](https://github.com/sophotechlabs/spinoza/commit/ce288b8cef7bc6087a96673c4b6bbcc8a69f23a5))
+
+
+### Styles
+
+* cut the comments back to what the code does not say ([8118e4b](https://github.com/sophotechlabs/spinoza/commit/8118e4be9aed0e9654316c1b10f3dfd11f1767c6))
+* cut the frontend comments back ([b4695ec](https://github.com/sophotechlabs/spinoza/commit/b4695ec1a27fe5f4e9fda62f0268bf6945049576))
+
+
+### Refactoring
+
+* **update:** drop the update-check flags ([8053632](https://github.com/sophotechlabs/spinoza/commit/805363299cac78405ce10ea389982c01187fc430))
+
 ## [1.14.1](https://github.com/sophotechlabs/spinoza/compare/v1.14.0...v1.14.1) (2026-08-27)
 
 
