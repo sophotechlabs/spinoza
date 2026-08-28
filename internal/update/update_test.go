@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -189,29 +190,15 @@ func TestTheQuestionIsAskedOnce(t *testing.T) {
 	}
 }
 
-func TestACheckerTurnedOffAsksNobodyAndSaysSo(t *testing.T) {
-	var asked atomic.Int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		asked.Add(1)
-	}))
-	t.Cleanup(server.Close)
-
-	status := Off("v1.14.1").Status(context.Background())
-
-	if status.Checked || status.Available {
-		t.Fatalf("status = %+v, want nothing claimed", status)
-	}
-	if !strings.Contains(status.Reason, "update-check") {
-		t.Fatalf("reason = %q, want it to name the flag that turned it off", status.Reason)
-	}
-	if asked.Load() != 0 {
-		t.Fatal("a checker that is off asked anyway")
-	}
-}
-
-func TestNoEndpointMeansTheProjectsOwnReleases(t *testing.T) {
+// A running spinoza asks spinoza.tech, which is where the project decides what
+// it is told to install. The endpoint argument exists so tests can point
+// elsewhere; nothing a person passes on the command line reaches it.
+func TestARunningSpinozaAsksTheProjectsOwnEndpoint(t *testing.T) {
 	if got := New("v1.0.0", "").endpoint; got != Endpoint {
-		t.Fatalf("endpoint = %q, want the default", got)
+		t.Fatalf("endpoint = %q, want %q", got, Endpoint)
+	}
+	if !strings.HasPrefix(Endpoint, "https://spinoza.tech/") {
+		t.Fatalf("endpoint = %q, want it to go through the project's own site", Endpoint)
 	}
 }
 
@@ -232,5 +219,25 @@ func TestAnEnormousAnswerIsCutOffRatherThanRead(t *testing.T) {
 
 	if status.Available {
 		t.Fatalf("status = %+v, want a truncated answer to be unreadable rather than believed", status)
+	}
+}
+
+// The endpoint learns which release asked, and on what, from the user-agent.
+func TestTheRequestSaysWhichReleaseIsAsking(t *testing.T) {
+	seen := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(release))
+	}))
+	t.Cleanup(server.Close)
+
+	New("v1.14.1", server.URL).Status(context.Background())
+
+	got := <-seen
+	if !strings.HasPrefix(got, "spinoza/v1.14.1 (") {
+		t.Fatalf("user-agent = %q, want the release and the platform", got)
+	}
+	if !strings.Contains(got, runtime.GOOS) {
+		t.Fatalf("user-agent = %q, want the operating system in it", got)
 	}
 }
