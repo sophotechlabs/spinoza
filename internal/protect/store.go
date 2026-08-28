@@ -14,6 +14,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/atomicfile"
+	"github.com/sophotechlabs/spinoza/internal/clusterid"
 )
 
 type state struct {
@@ -48,37 +49,57 @@ func Open(path string) (*Store, error) {
 	if unmarshalErr != nil {
 		return store, fmt.Errorf("protected clusters %s: %w", path, unmarshalErr)
 	}
-	maps.Copy(store.clusters, saved.Clusters)
+	adopt(store.clusters, saved.Clusters)
 	return store, nil
 }
 
+func adopt(into, saved map[string]bool) {
+	for server, protected := range saved {
+		key := clusterid.Normalize(server)
+		if key == "" {
+			continue
+		}
+		if into[key] {
+			continue
+		}
+		into[key] = protected
+	}
+}
+
 func (s *Store) Verdict(server string) string {
-	if server == "" {
+	key := clusterid.Normalize(server)
+	if key == "" {
 		return api.ProtectionUnknown
 	}
-	s.mu.Lock()
-	protected, decided := s.clusters[server]
-	s.mu.Unlock()
+	protected, decided := s.decision(key)
 	if decided && protected {
 		return api.ProtectionProtected
 	}
 	if decided {
 		return api.ProtectionOpen
 	}
-	if Local(server) {
+	if Local(key) {
 		return api.ProtectionOpen
 	}
 	return api.ProtectionUnknown
 }
 
+func (s *Store) decision(key string) (bool, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	protected, decided := s.clusters[key]
+	return protected, decided
+}
+
 func (s *Store) Set(server string, protected bool) error {
-	if server == "" {
+	key := clusterid.Normalize(server)
+	if key == "" {
 		return errors.New("spinoza is not connected to a cluster")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := maps.Clone(s.clusters)
-	next[server] = protected
+	next[key] = protected
 	err := s.write(next)
 	if err != nil {
 		return err

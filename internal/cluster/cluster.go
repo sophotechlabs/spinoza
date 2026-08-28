@@ -11,6 +11,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 
+	"github.com/sophotechlabs/spinoza/internal/clusterid"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
@@ -207,7 +208,7 @@ func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 	c.manager = opened.manager
 	c.cancel = cancel
 	c.current = opened.ref
-	c.host = opened.host
+	c.host = clusterid.Normalize(opened.host)
 	c.startErr = ""
 	c.mu.Unlock()
 

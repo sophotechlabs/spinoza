@@ -351,3 +351,131 @@ func TestAStoreWithNowhereToWriteKeepsTheAnswerInMemory(t *testing.T) {
 		t.Fatalf("verdict = %q", store.Verdict(remote))
 	}
 }
+
+func writeRaw(t *testing.T, path string, clusters map[string]bool) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	body, err := json.Marshal(map[string]any{"clusters": clusters})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if writeErr := os.WriteFile(path, body, 0o600); writeErr != nil {
+		t.Fatalf("write: %v", writeErr)
+	}
+}
+
+func readRaw(t *testing.T, path string) map[string]bool {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var saved struct {
+		Clusters map[string]bool `json:"clusters"`
+	}
+	if unmarshalErr := json.Unmarshal(body, &saved); unmarshalErr != nil {
+		t.Fatalf("unmarshal: %v", unmarshalErr)
+	}
+	return saved.Clusters
+}
+
+func TestAnAnswerWrittenBeforeTheKeyWasNormalisedIsStillFound(t *testing.T) {
+	path := storePath(t)
+	writeRaw(t, path, map[string]bool{"https://10.0.0.5:6443/": true})
+
+	store := openStore(t, path)
+
+	if store.Verdict(remote) != api.ProtectionProtected {
+		t.Fatalf("verdict = %q, want protected; an older file must not silently lose its answer", store.Verdict(remote))
+	}
+}
+
+func TestTheSameClusterSpeltTwoWaysIsOneAnswer(t *testing.T) {
+	store := openStore(t, storePath(t))
+	if err := store.Set("HTTPS://10.0.0.5:6443/", true); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	if store.Verdict(remote) != api.ProtectionProtected {
+		t.Fatal("a trailing slash and a capital letter made a second cluster out of one")
+	}
+}
+
+func TestWritingAnAnswerLeavesOnlyTheNormalisedKey(t *testing.T) {
+	path := storePath(t)
+	stale := "https://10.0.0.5:6443/"
+	writeRaw(t, path, map[string]bool{stale: true})
+	store := openStore(t, path)
+
+	if err := store.Set(stale, true); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	held := readRaw(t, path)
+	if _, found := held[stale]; found {
+		t.Fatalf("the old key survived the write: %v", held)
+	}
+	if !held[remote] {
+		t.Fatalf("the normalised key was not written: %v", held)
+	}
+}
+
+func TestAClusterBehindARancherPathIsItsOwnAnswer(t *testing.T) {
+	store := openStore(t, storePath(t))
+	one := "https://rancher.example.com/k8s/clusters/c-m-aaaaaaaa"
+	two := "https://rancher.example.com/k8s/clusters/c-m-bbbbbbbb"
+	if err := store.Set(one, true); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	if store.Verdict(two) != api.ProtectionUnknown {
+		t.Fatal("protecting one Rancher cluster answered for another on the same host")
+	}
+}
+
+func TestTwoSpellingsOfOneClusterResolveToProtected(t *testing.T) {
+	path := storePath(t)
+	writeRaw(t, path, map[string]bool{
+		"https://10.0.0.5:6443/": true,
+		"HTTPS://10.0.0.5:6443":  false,
+	})
+
+	store := openStore(t, path)
+
+	if store.Verdict(remote) != api.ProtectionProtected {
+		t.Fatalf("verdict = %q, want protected; a conflict must never quietly open a cluster", store.Verdict(remote))
+	}
+}
+
+func TestAnEmptyKeyInTheFileIsIgnored(t *testing.T) {
+	path := storePath(t)
+	writeRaw(t, path, map[string]bool{"": true, remote: true})
+
+	store := openStore(t, path)
+
+	if store.Verdict("") != api.ProtectionUnknown {
+		t.Fatalf("verdict = %q, want unknown", store.Verdict(""))
+	}
+	if store.Verdict(remote) != api.ProtectionProtected {
+		t.Fatal("a junk key stopped the real ones being read")
+	}
+}
+
+func TestProtectedWinsWhateverOrderTheKeysAreRead(t *testing.T) {
+	protectedFirst := map[string]bool{}
+	adopt(protectedFirst, map[string]bool{"https://10.0.0.5:6443/": true})
+	adopt(protectedFirst, map[string]bool{"HTTPS://10.0.0.5:6443": false})
+
+	openFirst := map[string]bool{}
+	adopt(openFirst, map[string]bool{"HTTPS://10.0.0.5:6443": false})
+	adopt(openFirst, map[string]bool{"https://10.0.0.5:6443/": true})
+
+	if !protectedFirst[remote] {
+		t.Fatal("reading the protected spelling first left the cluster open")
+	}
+	if !openFirst[remote] {
+		t.Fatal("reading the open spelling first left the cluster open")
+	}
+}

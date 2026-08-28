@@ -617,3 +617,25 @@ func TestAClusterThatNeverConnectedIsNotProtected(t *testing.T) {
 		t.Fatalf("protection = %q", cluster.Contexts().Protection)
 	}
 }
+
+func TestTheConnectedHostIsNormalisedBeforeAnythingKeysOnIt(t *testing.T) {
+	protection := newStubProtection()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	build := func(buildCtx context.Context, ref api.ContextRef) (*connection, error) {
+		return &connection{
+			manager: resources.NewManager(buildCtx, resources.Deps{}),
+			ref:     api.ContextRef{Name: "prod"},
+			host:    "HTTPS://Prod.Example.COM:6443/",
+		}, nil
+	}
+	cluster := newCluster(ctx, build, newStubSources(), protection)
+
+	if err := cluster.Protect(true); err != nil {
+		t.Fatalf("protect: %v", err)
+	}
+
+	if !protection.set["https://prod.example.com:6443"] {
+		t.Fatalf("protection keyed on %v, want the normalised api server url", protection.set)
+	}
+}
