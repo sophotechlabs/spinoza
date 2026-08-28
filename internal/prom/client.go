@@ -20,6 +20,7 @@ import (
 
 const (
 	rangePath   = "api/v1/query_range"
+	instantPath = "api/v1/query"
 	defaultPort = "9090"
 	maxPort     = 65535
 	callTimeout = 15 * time.Second
@@ -252,6 +253,63 @@ func (c *Client) Range(ctx context.Context, query string, start, end time.Time, 
 		return nil, err
 	}
 	return decodeRange(raw)
+}
+
+type Sample struct {
+	Labels map[string]string
+	Value  float64
+}
+
+func (c *Client) Instant(ctx context.Context, query string, at time.Time) ([]Sample, error) {
+	target, err := c.Target(ctx)
+	if err != nil {
+		return nil, err
+	}
+	params := map[string]string{
+		"query": query,
+		"time":  strconv.FormatInt(at.Unix(), 10),
+	}
+	raw, err := c.proxy.Get(ctx, target, instantPath, params)
+	if err != nil {
+		c.forget(target)
+		return nil, err
+	}
+	return decodeInstant(raw)
+}
+
+type instantResponse struct {
+	Status string `json:"status"`
+	Error  string `json:"error"`
+	Data   struct {
+		ResultType string `json:"resultType"`
+		Result     []struct {
+			Metric map[string]string `json:"metric"`
+			Value  []any             `json:"value"`
+		} `json:"result"`
+	} `json:"data"`
+}
+
+func decodeInstant(raw []byte) ([]Sample, error) {
+	var body instantResponse
+	err := json.Unmarshal(raw, &body)
+	if err != nil {
+		return nil, fmt.Errorf("prometheus returned an unreadable response: %w", err)
+	}
+	if body.Status != "success" {
+		return nil, fmt.Errorf("prometheus rejected the query: %s", body.Error)
+	}
+	if body.Data.ResultType != "vector" {
+		return nil, fmt.Errorf("prometheus answered with %q, which is not a vector", body.Data.ResultType)
+	}
+	samples := make([]Sample, 0, len(body.Data.Result))
+	for _, entry := range body.Data.Result {
+		point, ok := pointOf(entry.Value)
+		if !ok {
+			continue
+		}
+		samples = append(samples, Sample{Labels: entry.Metric, Value: point.Value})
+	}
+	return samples, nil
 }
 
 type rangeResponse struct {

@@ -68,6 +68,14 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, history)
 }
 
+func (s *Server) handleTrafficSupport(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().TrafficSupport(r.Context()))
+}
+
+func (s *Server) handleTraffic(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().TrafficGraph(r.Context()))
+}
+
 func (s *Server) handleFluxOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().FluxOverview(r.Context()))
 }

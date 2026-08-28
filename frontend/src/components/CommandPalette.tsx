@@ -7,6 +7,7 @@ import { SEARCH_DELAY_MS, searchObjects, worthSearching } from '../lib/search';
 import type { SearchHit } from '../lib/types';
 import { useRecents } from '../store/recents';
 import { useClusterEpoch } from '../store/cluster';
+import { useTrafficSupport } from '../store/traffic';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -37,6 +38,7 @@ export default function CommandPalette({
   close.current = onClose;
   const recents = useRecents();
   const epoch = useClusterEpoch();
+  const traffic = useTrafficSupport();
   const [categories, setCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
@@ -120,7 +122,7 @@ export default function CommandPalette({
   }, [open, query]);
 
   const matches = [
-    ...matchItems(paletteItems(categories, recents), query),
+    ...matchItems(paletteItems(categories, recents, traffic.available), query),
     ...clusterItems(hits, categories),
   ];
   let active = cursor;

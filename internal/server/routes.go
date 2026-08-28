@@ -55,6 +55,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPost, "/api/flux/action", withRef(s.fluxAction), false},
 		{http.MethodPost, "/api/argocd/action", withRef(s.argoAction), false},
 		{http.MethodPost, "/api/action", s.handleAction, false},
+		{http.MethodGet, "/api/traffic/support", s.handleTrafficSupport, false},
+		{http.MethodGet, "/api/traffic", s.handleTraffic, false},
 		{http.MethodGet, "/api/metrics/history", s.handleMetricHistory, false},
 		{http.MethodGet, "/api/metrics", s.handleMetrics, false},
 		{http.MethodGet, "/api/compare", withRef(s.compare), false},

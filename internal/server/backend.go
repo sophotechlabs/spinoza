@@ -68,6 +68,7 @@ type Feeds interface {
 type Views interface {
 	Deliveries
 	Reports
+	Traffic
 }
 
 type Deliveries interface {
@@ -84,6 +85,11 @@ type Reports interface {
 	Issues(ctx context.Context) api.IssueQueue
 	Metrics(ctx context.Context) api.Metrics
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)
+}
+
+type Traffic interface {
+	TrafficSupport(ctx context.Context) api.TrafficSupport
+	TrafficGraph(ctx context.Context) api.TrafficGraph
 }
 
 type Releases interface {

@@ -44,7 +44,7 @@ const recent: ObjectRef = {
 
 describe('paletteItems', () => {
   it('puts recent objects first, then views, then every discovered kind', () => {
-    const items = paletteItems(categories, [recent]);
+    const items = paletteItems(categories, [recent], false);
 
     expect(items[0]).toMatchObject({ kind: 'object', label: 'prod/web-0', hint: 'recent pods' });
     expect(items[1]).toMatchObject({ kind: 'view', label: VIEW_LABELS.cluster });
@@ -59,7 +59,7 @@ describe('paletteItems', () => {
   });
 
   it('names the api group of each kind, and the version alone for core', () => {
-    const items = paletteItems(categories, []);
+    const items = paletteItems(categories, [], false);
     const pod = items.find((item) => item.label === 'Pod');
     const deployment = items.find((item) => item.label === 'Deployment');
 
@@ -68,19 +68,19 @@ describe('paletteItems', () => {
   });
 
   it('drops the namespace from a cluster-scoped recent object', () => {
-    const items = paletteItems([], [{ ...recent, namespace: '', name: 'node-1' }]);
+    const items = paletteItems([], [{ ...recent, namespace: '', name: 'node-1' }], false);
 
     expect(items[0].label).toBe('node-1');
   });
 
   it('carries the kind a recent object belongs to, so its list can be opened', () => {
-    const items = paletteItems(categories, [recent]);
+    const items = paletteItems(categories, [recent], false);
 
     expect(items[0]).toMatchObject({ type: { kind: 'Pod', resource: 'pods' } });
   });
 
   it('carries no kind for a recent object discovery no longer knows', () => {
-    const items = paletteItems(categories, [{ ...recent, resource: 'widgets' }]);
+    const items = paletteItems(categories, [{ ...recent, resource: 'widgets' }], false);
 
     expect(items[0]).toMatchObject({ type: null });
   });
@@ -88,7 +88,7 @@ describe('paletteItems', () => {
 
 describe('the view registry', () => {
   it('offers every registered view, in its own order', () => {
-    const offered = paletteItems(everyCategory, [])
+    const offered = paletteItems(everyCategory, [], true)
       .filter((item) => item.kind === 'view')
       .map((item) => item.view);
 
@@ -124,7 +124,7 @@ describe('clusterItems', () => {
 });
 
 describe('matchItems', () => {
-  const items = paletteItems(categories, [recent]);
+  const items = paletteItems(categories, [recent], false);
 
   it('returns everything for an empty query', () => {
     expect(matchItems(items, '   ')).toHaveLength(items.length);
@@ -140,6 +140,7 @@ describe('matchItems', () => {
         ]),
       ],
       [],
+      false,
     );
 
     const found = matchItems(pods, 'pod')
@@ -164,6 +165,7 @@ describe('matchItems', () => {
         ]),
       ],
       [],
+      false,
     );
 
     const found = matchItems(both, 'pod')
@@ -182,7 +184,7 @@ describe('matchItems', () => {
   });
 
   it('leaves the flux views out of a cluster without flux', () => {
-    const items = paletteItems([makeCategory('Workloads', [makeDescriptor({})])], []);
+    const items = paletteItems([makeCategory('Workloads', [makeDescriptor({})])], [], false);
 
     expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).not.toContain(
       'Flux graph',
@@ -202,6 +204,7 @@ describe('matchItems', () => {
         ]),
       ],
       [],
+      false,
     );
 
     expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).toContain(

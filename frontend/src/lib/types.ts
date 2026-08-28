@@ -306,6 +306,7 @@ export const VIEWS = [
   'argo-apps',
   'argo-graph',
   'argo-list',
+  'traffic',
 ] as const;
 
 export type View = (typeof VIEWS)[number];
@@ -858,6 +859,32 @@ export interface Graph {
   nodes: GraphNode[];
   edges: GraphEdge[];
   error?: string;
+}
+
+export interface TrafficNode {
+  id: string;
+  namespace: string;
+  workload: string;
+}
+
+export interface TrafficEdge {
+  from: string;
+  to: string;
+  rate: number;
+  dropped: number;
+}
+
+export interface TrafficGraph {
+  source: string;
+  nodes: TrafficNode[];
+  edges: TrafficEdge[];
+  error?: string;
+}
+
+export interface TrafficSupport {
+  available: boolean;
+  reason?: string;
+  source?: string;
 }
 
 export interface ExecTarget {

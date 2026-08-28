@@ -65,6 +65,7 @@ import type { Section } from './components/SettingsDialog';
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 const ArgoGraph = lazy(() => import('./components/ArgoGraph'));
 const TopologyGraph = lazy(() => import('./components/TopologyGraph'));
+const Traffic = lazy(() => import('./components/Traffic'));
 
 function releaseIdentity(release: ReleaseRef | null): string {
   if (release === null) {
@@ -529,6 +530,13 @@ export default function App() {
   }
   if (route.view === 'argo-list') {
     mainArea = <ArgoList onSelect={remember} />;
+  }
+  if (route.view === 'traffic') {
+    mainArea = (
+      <Suspense fallback={<Loading what="the traffic graph" />}>
+        <Traffic />
+      </Suspense>
+    );
   }
 
   return (

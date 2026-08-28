@@ -52,6 +52,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/samples"
 	"github.com/sophotechlabs/spinoza/internal/topology"
+	"github.com/sophotechlabs/spinoza/internal/traffic"
 )
 
 const (
@@ -124,6 +125,7 @@ type Manager struct {
 	answers     *reach.Sink
 	helm        *helm.Service
 	prom        *prom.Client
+	traffic     *traffic.Reader
 	samples     *samples.Store
 	disco       kubediscovery.CachedDiscoveryInterface
 	limits      Limits
@@ -222,6 +224,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		answers:    deps.Reach,
 		helm:       deps.Helm,
 		prom:       deps.Prometheus,
+		traffic:    trafficFor(deps),
 		samples:    samples.New(),
 		cats:       deps.Categories,
 		descs:      deps.Descriptors,
@@ -233,6 +236,13 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 
 		syncTimeout: limits.SyncTimeout,
 	}
+}
+
+func trafficFor(deps Deps) *traffic.Reader {
+	if deps.Prometheus == nil {
+		return nil
+	}
+	return traffic.New(deps.Prometheus)
 }
 
 func permsFor(deps Deps) *access.Service {
@@ -657,6 +667,20 @@ func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span
 	// Fills the store, and may be the only page open. Cached, shared with tables.
 	m.Metrics(ctx)
 	return m.samples.History(namespace, pod, span, m.now()), nil
+}
+
+func (m *Manager) TrafficSupport(ctx context.Context) api.TrafficSupport {
+	if m.traffic == nil {
+		return api.TrafficSupport{Reason: "prometheus is not wired up"}
+	}
+	return m.traffic.Support(ctx, m.now())
+}
+
+func (m *Manager) TrafficGraph(ctx context.Context) api.TrafficGraph {
+	if m.traffic == nil {
+		return api.TrafficGraph{Error: "prometheus is not wired up"}
+	}
+	return m.traffic.Graph(ctx, m.now())
 }
 
 func (m *Manager) Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error) {

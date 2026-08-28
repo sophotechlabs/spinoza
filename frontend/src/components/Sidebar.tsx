@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Category, ResourceDescriptor, View } from '../lib/types';
+import type { Category, ResourceDescriptor, TrafficSupport, View } from '../lib/types';
 import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/discovery';
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
@@ -13,6 +13,8 @@ import {
   writeSections,
 } from '../lib/sidebarState';
 import { argoInstalled, fluxInstalled } from '../lib/gitops';
+import { useTrafficProbe } from '../lib/useTrafficProbe';
+import { useTrafficSupport } from '../store/traffic';
 import { kindLabels } from '../lib/kindLabels';
 import type { SidebarSections } from '../lib/sidebarState';
 
@@ -198,6 +200,13 @@ function OverviewButton({ active, onOpen }: { active: boolean; onOpen: () => voi
   );
 }
 
+function trafficTitle(support: TrafficSupport): string | undefined {
+  if (support.available) {
+    return support.source;
+  }
+  return support.reason ?? `Traffic is ${NOT_INSTALLED}`;
+}
+
 function engineMark(found: boolean, open: boolean): string {
   if (!found) {
     return '';
@@ -211,6 +220,8 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   const [categories, setCategories] = useState<Category[]>([]);
   const flux = fluxInstalled(categories);
   const argo = argoInstalled(categories);
+  useTrafficProbe();
+  const traffic = useTrafficSupport();
   const [sections, setSections] = useState<SidebarSections>(() => readSections());
   const [error, setError] = useState<string | null>(null);
   const [countsError, setCountsError] = useState<string | null>(null);
@@ -329,6 +340,18 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
               {entry.label}
             </button>
           ))}
+          <button
+            type="button"
+            disabled={!traffic.available}
+            title={trafficTitle(traffic)}
+            aria-current={current(view === 'traffic')}
+            onClick={() => {
+              onSelectView('traffic');
+            }}
+            className={resourceClass(view === 'traffic', false, !traffic.available)}
+          >
+            Traffic
+          </button>
         </div>
         <div className="mb-1">
           <button

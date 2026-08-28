@@ -17,6 +17,7 @@ export const VIEW_LABELS: Record<View, string> = {
   'argo-apps': 'Argo CD overview',
   'argo-graph': 'Argo CD graph',
   'argo-list': 'Argo CD resources',
+  traffic: 'Traffic graph',
 };
 
 const VIEW_ORDER: View[] = [
@@ -32,6 +33,7 @@ const VIEW_ORDER: View[] = [
   'argo-apps',
   'argo-graph',
   'argo-list',
+  'traffic',
 ];
 
 export type PaletteItem =
@@ -77,7 +79,7 @@ export function clusterItems(hits: SearchHit[], categories: Category[]): Palette
   }));
 }
 
-function offered(categories: Category[]): View[] {
+function offered(categories: Category[], traffic: boolean): View[] {
   const hidden: View[] = [];
   if (!fluxInstalled(categories)) {
     hidden.push(...FLUX_VIEWS);
@@ -85,10 +87,17 @@ function offered(categories: Category[]): View[] {
   if (!argoInstalled(categories)) {
     hidden.push(...ARGO_VIEWS);
   }
+  if (!traffic) {
+    hidden.push('traffic');
+  }
   return VIEW_ORDER.filter((view) => !hidden.includes(view));
 }
 
-export function paletteItems(categories: Category[], recents: ObjectRef[]): PaletteItem[] {
+export function paletteItems(
+  categories: Category[],
+  recents: ObjectRef[],
+  traffic: boolean,
+): PaletteItem[] {
   const items: PaletteItem[] = [];
   for (const ref of recents) {
     items.push({
@@ -100,7 +109,7 @@ export function paletteItems(categories: Category[], recents: ObjectRef[]): Pale
       type: typeFor(categories, ref),
     });
   }
-  for (const view of offered(categories)) {
+  for (const view of offered(categories, traffic)) {
     items.push({ id: `view:${view}`, label: VIEW_LABELS[view], hint: 'view', kind: 'view', view });
   }
   for (const category of categories) {

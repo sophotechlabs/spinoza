@@ -718,6 +718,32 @@ type Graph struct {
 	Error string      `json:"error,omitempty"`
 }
 
+type TrafficNode struct {
+	ID        string `json:"id"`
+	Namespace string `json:"namespace"`
+	Workload  string `json:"workload"`
+}
+
+type TrafficEdge struct {
+	From    string  `json:"from"`
+	To      string  `json:"to"`
+	Rate    float64 `json:"rate"`
+	Dropped float64 `json:"dropped"`
+}
+
+type TrafficGraph struct {
+	Source string        `json:"source"`
+	Nodes  []TrafficNode `json:"nodes"`
+	Edges  []TrafficEdge `json:"edges"`
+	Error  string        `json:"error,omitempty"`
+}
+
+type TrafficSupport struct {
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+	Source    string `json:"source,omitempty"`
+}
+
 type ArgoApp struct {
 	Kind        string `json:"kind"`
 	Automation  string `json:"automation,omitempty"`

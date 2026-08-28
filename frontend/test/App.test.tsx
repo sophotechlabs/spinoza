@@ -262,6 +262,10 @@ vi.mock('../src/components/ArgoGraph', () => ({
   ),
 }));
 
+vi.mock('../src/components/Traffic', () => ({
+  default: () => <div data-testid="traffic-graph">traffic</div>,
+}));
+
 vi.mock('../src/components/ArgoList', () => ({
   default: ({ onSelect }: { onSelect: (ref: ObjectRef) => void }) => (
     <button
@@ -518,6 +522,12 @@ function stubFetch(pods?: number): void {
                 },
               ],
             }),
+        });
+      }
+      if (url.startsWith('/api/traffic/support')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ available: true, source: 'Cilium Hubble' }),
         });
       }
       if (url === '/api/metrics') {
@@ -2095,6 +2105,15 @@ describe('finding your way in by keyboard', () => {
     await user.click(screen.getByRole('button', { name: 'select-issue' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('deployments:web/api');
+  });
+
+  it('opens the traffic graph from the sidebar', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Traffic' }));
+
+    expect(await screen.findByTestId('traffic-graph')).toBeInTheDocument();
   });
 
   it('opens the argo resource list and targets the inspector from it', async () => {

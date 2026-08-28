@@ -65,6 +65,10 @@ import type {
   DataEntry,
   ResourceUsage,
   Row,
+  TrafficEdge,
+  TrafficGraph,
+  TrafficNode,
+  TrafficSupport,
 } from './types';
 import {
   CONTAINER_PHASES,
@@ -494,6 +498,42 @@ export function parseGraph(body: unknown): Graph {
     nodes: listOf(item.nodes, parseGraphNode),
     edges: listOf(item.edges, parseGraphEdge),
     error: optionalString(item.error),
+  };
+}
+
+function parseTrafficNode(item: Record<string, unknown>): TrafficNode {
+  return {
+    id: asString(item.id),
+    namespace: asString(item.namespace),
+    workload: asString(item.workload),
+  };
+}
+
+function parseTrafficEdge(item: Record<string, unknown>): TrafficEdge {
+  return {
+    from: asString(item.from),
+    to: asString(item.to),
+    rate: asNumber(item.rate),
+    dropped: asNumber(item.dropped),
+  };
+}
+
+export function parseTrafficGraph(body: unknown): TrafficGraph {
+  const item = asRecord(body);
+  return {
+    source: asString(item.source),
+    nodes: listOf(item.nodes, parseTrafficNode),
+    edges: listOf(item.edges, parseTrafficEdge),
+    error: optionalString(item.error),
+  };
+}
+
+export function parseTrafficSupport(body: unknown): TrafficSupport {
+  const item = asRecord(body);
+  return {
+    available: item.available === true,
+    reason: optionalString(item.reason),
+    source: optionalString(item.source),
   };
 }
 
