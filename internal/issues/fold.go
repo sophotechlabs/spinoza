@@ -79,14 +79,17 @@ func fold(found []finding, snap *snapshot) api.IssueQueue {
 }
 
 func prune(group []finding) []finding {
-	explained := slices.ContainsFunc(group, func(item finding) bool {
-		return item.kind == kindPod
-	})
-	if !explained {
+	explained := 0
+	for _, item := range group {
+		if item.kind == kindPod && item.severity > explained {
+			explained = item.severity
+		}
+	}
+	if explained == 0 {
 		return group
 	}
 	return slices.DeleteFunc(slices.Clone(group), func(item finding) bool {
-		return item.title == titleShortOfReplicas
+		return item.title == titleShortOfReplicas && item.severity <= explained
 	})
 }
 

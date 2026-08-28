@@ -3,6 +3,7 @@ package issues
 import (
 	"context"
 	"slices"
+	"strings"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -16,6 +17,8 @@ import (
 const maxOwnerDepth = 4
 
 const readConcurrency = 12
+
+const maxFallbackTypes = 25
 
 const (
 	kindPod                   = "Pod"
@@ -230,6 +233,12 @@ func alsoCached(lister Lister, already []api.ResourceDescriptor) []api.ResourceD
 		}
 		seen[keyOf(desc)] = true
 		out = append(out, desc)
+	}
+	slices.SortFunc(out, func(left, right api.ResourceDescriptor) int {
+		return strings.Compare(keyOf(left), keyOf(right))
+	})
+	if len(out) > maxFallbackTypes {
+		return out[:maxFallbackTypes]
 	}
 	return out
 }

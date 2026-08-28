@@ -9,6 +9,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
+const buildBudget = 20 * time.Second
+
 type Lister interface {
 	Lease(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
 	Cached() []api.ResourceDescriptor
@@ -26,7 +28,9 @@ func Build(
 	now func() time.Time,
 ) api.IssueQueue {
 	at := now()
-	snap := collect(ctx, lister, descs)
+	bounded, cancel := context.WithTimeout(ctx, buildBudget)
+	defer cancel()
+	snap := collect(bounded, lister, descs)
 	found := podFindings(snap)
 	reported := map[string]bool{}
 	for _, item := range found {
@@ -36,7 +40,7 @@ func Build(
 	found = append(found, gitopsFindings(snap)...)
 	found = append(found, autoscalerFindings(snap)...)
 	found = append(found, conditionFindings(snap)...)
-	found = append(found, stallFindings(ctx, events, snap, reported, at)...)
+	found = append(found, stallFindings(bounded, events, snap, reported, at)...)
 
 	queue := fold(found, snap)
 	queue.Error = snap.failures.Message()

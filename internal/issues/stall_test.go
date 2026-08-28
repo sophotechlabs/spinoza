@@ -2,6 +2,7 @@ package issues
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -154,13 +155,17 @@ func TestOnlyTheOldestCandidatesAreAskedAbout(t *testing.T) {
 
 	queue := buildWith(t, lister, events, catalog(podDescriptor()))
 
-	if len(events.asked) != stallCandidates {
-		t.Fatalf("asked = %d pods, want the %d oldest", len(events.asked), stallCandidates)
+	asked := events.askedAbout()
+	if len(asked) != stallCandidates {
+		t.Fatalf("asked = %d pods, want the %d oldest", len(asked), stallCandidates)
 	}
 	if len(queue.Rows) != stallCandidates {
 		t.Fatalf("rows = %d, want one per candidate asked about", len(queue.Rows))
 	}
-	if events.asked[0] != "uid-web-24" {
-		t.Fatalf("first asked = %q, want the oldest candidate", events.asked[0])
+	if !slices.Contains(asked, "uid-web-24") {
+		t.Fatalf("asked = %v, want the oldest candidate among them", asked)
+	}
+	if slices.Contains(asked, "uid-web-0") {
+		t.Fatalf("asked = %v, want the newest candidates left out", asked)
 	}
 }

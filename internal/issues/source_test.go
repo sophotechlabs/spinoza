@@ -147,3 +147,23 @@ func TestBuildAsksForTheTimeOnce(t *testing.T) {
 		t.Fatalf("clock reads = %d, want one so every detector judges the same moment", calls)
 	}
 }
+
+func TestOneForbiddenTypeDoesNotSilenceTheRest(t *testing.T) {
+	deployment := deploymentWith("web", map[string]any{
+		"readyReplicas": int64(0),
+		"conditions":    []any{condition("Available", "True", nil)},
+	}, map[string]any{"replicas": int64(2)})
+	lister := &stubLister{
+		items: map[string][]*unstructured.Unstructured{"deployments": {deployment}},
+		errs:  map[string]error{"pods": errors.New("pods is forbidden")},
+	}
+
+	queue := build(t, lister, catalog(podDescriptor(), deploymentDescriptor()))
+
+	if len(queue.Rows) != 1 {
+		t.Fatalf("rows = %+v, want the deployment still judged when pods are refused", queue.Rows)
+	}
+	if queue.Error == "" {
+		t.Fatalf("error = %q, want the refusal still reported alongside the rows", queue.Error)
+	}
+}

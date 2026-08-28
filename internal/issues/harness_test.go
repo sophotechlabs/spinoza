@@ -3,6 +3,7 @@ package issues
 import (
 	"context"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -49,17 +50,28 @@ func (s *stubLister) Cached() []api.ResourceDescriptor {
 }
 
 type stubEvents struct {
+	mu    sync.Mutex
 	byUID map[string][]api.Event
 	err   error
 	asked []string
 }
 
 func (s *stubEvents) Events(_ context.Context, _, uid string) ([]api.Event, error) {
+	s.mu.Lock()
 	s.asked = append(s.asked, uid)
+	s.mu.Unlock()
 	if s.err != nil {
 		return nil, s.err
 	}
 	return s.byUID[uid], nil
+}
+
+func (s *stubEvents) askedAbout() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := slices.Clone(s.asked)
+	slices.Sort(out)
+	return out
 }
 
 func descriptor(group, version, resource, kind string) api.ResourceDescriptor {

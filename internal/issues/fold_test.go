@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -471,9 +472,72 @@ func TestTheOldestStallCandidatesSettleTiesByName(t *testing.T) {
 	buildWith(t, lister, events, catalog(podDescriptor()))
 
 	want := []string{"uid-web-1", "uid-web-2", "uid-web-3"}
-	for index, uid := range want {
-		if events.asked[index] != uid {
-			t.Fatalf("asked = %v, want the tied candidates in name order", events.asked)
-		}
+	if !slices.Equal(events.askedAbout(), want) {
+		t.Fatalf("asked = %v, want the tied candidates settled by name", events.askedAbout())
+	}
+}
+
+func TestAFoldNeverLowersSeverityWhenAMilderFindingExplainsIt(t *testing.T) {
+	stalled := newPod(
+		"web-abc-1",
+		withOwner(kindReplicaSet, "web-abc", "uid-rs"),
+		withPhase(phasePending),
+		withStartTime(testNow.Add(-time.Hour)),
+	)
+	deployment := deploymentWith("web", map[string]any{
+		"readyReplicas": int64(0),
+		"conditions":    []any{condition("Available", "True", nil)},
+	}, map[string]any{"replicas": int64(3)})
+	lister := &stubLister{items: map[string][]*unstructured.Unstructured{
+		"pods":        {stalled},
+		"replicasets": {replicaSet("web-abc", "uid-rs", "uid-web", "4")},
+		"deployments": {deployment},
+	}}
+
+	queue := buildWith(t, lister, &stubEvents{}, catalog(podDescriptor(), replicaSetDescriptor(), deploymentDescriptor()))
+
+	if len(queue.Rows) != 1 {
+		t.Fatalf("rows = %+v, want one folded row", queue.Rows)
+	}
+	if queue.Rows[0].Severity != api.SeverityFatal {
+		t.Fatalf("severity = %q, want fatal; a warning-level guess must not erase the fatal shortfall it sits under",
+			queue.Rows[0].Severity)
+	}
+}
+
+func TestAFoldTakesTheWorstOfWhateverItHolds(t *testing.T) {
+	cases := []struct {
+		name  string
+		group []finding
+		want  string
+	}{
+		{
+			name:  "a fatal among warnings",
+			group: []finding{{severity: severityWarning}, {severity: severityFatal}, {severity: severityWarning}},
+			want:  api.SeverityFatal,
+		},
+		{
+			name:  "a degraded among warnings",
+			group: []finding{{severity: severityWarning}, {severity: severityDegraded}},
+			want:  api.SeverityDegraded,
+		},
+		{
+			name:  "warnings alone",
+			group: []finding{{severity: severityWarning}, {severity: severityWarning}},
+			want:  api.SeverityWarning,
+		},
+		{
+			name:  "the worst arriving first",
+			group: []finding{{severity: severityFatal}, {severity: severityWarning}},
+			want:  api.SeverityFatal,
+		},
+	}
+
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			if got := severityName(worst(item.group)); got != item.want {
+				t.Fatalf("severity = %q, want %q", got, item.want)
+			}
+		})
 	}
 }

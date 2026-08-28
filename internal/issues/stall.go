@@ -4,26 +4,35 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 const detectorStall = "post-bind-stall"
 
 const (
-	stallGrace      = 5 * time.Minute
-	stallCandidates = 20
+	stallGrace       = 5 * time.Minute
+	stallCandidates  = 20
+	stallConcurrency = 8
+	stallBudget      = 5 * time.Second
 )
 
 func stallFindings(ctx context.Context, events Events, snap *snapshot, reported map[string]bool, now time.Time) []finding {
 	candidates := stallCandidatesOf(snap, reported, now)
+	if len(candidates) == 0 {
+		return nil
+	}
+	bounded, cancel := context.WithTimeout(ctx, stallBudget)
+	defer cancel()
+	quiet := quietOnes(bounded, events, candidates)
 	out := []finding{}
 	for _, item := range candidates {
-		found, err := events.Events(ctx, item.obj.GetNamespace(), item.uid())
-		if err != nil || len(found) > 0 {
+		if !quiet[item.uid()] {
 			continue
 		}
 		moved := rolloutOf(snap, item)
@@ -38,8 +47,32 @@ func stallFindings(ctx context.Context, events Events, snap *snapshot, reported 
 			uncertain: true,
 			kind:      kindPod,
 			subject:   item,
-			since:     podSince(item.obj),
+			since:     podBoundAt(item.obj),
 		})
+	}
+	return out
+}
+
+func quietOnes(ctx context.Context, events Events, candidates []object) map[string]bool {
+	quiet := make([]bool, len(candidates))
+	slots := make(chan struct{}, stallConcurrency)
+	var wg sync.WaitGroup
+	for index, item := range candidates {
+		wg.Add(1)
+		go safe.Run("asking what happened to "+item.obj.GetName(), func() {
+			defer wg.Done()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			found, err := events.Events(ctx, item.obj.GetNamespace(), item.uid())
+			quiet[index] = err == nil && len(found) == 0
+		})
+	}
+	wg.Wait()
+	out := map[string]bool{}
+	for index, item := range candidates {
+		if quiet[index] {
+			out[item.uid()] = true
+		}
 	}
 	return out
 }
@@ -53,8 +86,8 @@ func stallCandidatesOf(snap *snapshot, reported map[string]bool, now time.Time) 
 		out = append(out, item)
 	}
 	slices.SortStableFunc(out, func(left, right object) int {
-		if !podSince(left.obj).Equal(podSince(right.obj)) {
-			return podSince(left.obj).Compare(podSince(right.obj))
+		if !podBoundAt(left.obj).Equal(podBoundAt(right.obj)) {
+			return podBoundAt(left.obj).Compare(podBoundAt(right.obj))
 		}
 		return strings.Compare(whereOf(left), whereOf(right))
 	})
@@ -78,7 +111,7 @@ func stalledPod(pod *unstructured.Unstructured, alreadyReported bool, now time.T
 	if anyContainerRunning(pod) {
 		return false
 	}
-	return now.Sub(podSince(pod)) >= stallGrace
+	return now.Sub(podBoundAt(pod)) >= stallGrace
 }
 
 func anyContainerRunning(pod *unstructured.Unstructured) bool {
@@ -102,6 +135,6 @@ func anyContainerRunning(pod *unstructured.Unstructured) bool {
 
 func stallDetail(pod *unstructured.Unstructured, now time.Time) string {
 	node := unstr.String(pod, "spec", "nodeName")
-	waited := now.Sub(podSince(pod)).Round(time.Minute)
+	waited := now.Sub(podBoundAt(pod)).Round(time.Minute)
 	return "bound to " + node + " " + waited.String() + " ago, no container running and no events at all"
 }
