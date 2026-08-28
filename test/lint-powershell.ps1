@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-    [string[]]$Path = @('install.ps1', 'test/smoke.ps1', 'test/install/windows.ps1', 'test/install/functions.ps1', 'test/lint-powershell.ps1')
+    [string[]]$Path = @('install.ps1', 'test/smoke.ps1', 'test/pester.ps1', 'test/install/windows.ps1', 'test/install/install.Tests.ps1', 'test/lint-powershell.ps1')
 )
 
 Set-StrictMode -Version Latest

@@ -33,17 +33,22 @@ function Resolve-Architecture {
     throw "$reported is not supported; see $script:Releases for the other builds"
 }
 
-function Resolve-LatestVersion {
-    $request = [System.Net.HttpWebRequest]::Create("$script:Releases/latest")
+function Get-RedirectLocation {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+    $request = [System.Net.HttpWebRequest]::Create($Uri)
     $request.AllowAutoRedirect = $false
     $request.UserAgent = 'spinoza-install'
     $response = $request.GetResponse()
     try {
-        $location = $response.Headers['Location']
+        return $response.Headers['Location']
     }
     finally {
         $response.Close()
     }
+}
+
+function Resolve-LatestVersion {
+    $location = Get-RedirectLocation -Uri "$script:Releases/latest"
     if ($location -notmatch '/releases/tag/(.+)$') {
         throw "$script:Repo has no published release yet; set SPINOZA_VERSION to pick one"
     }
@@ -112,7 +117,7 @@ function Get-InstallDirectory {
     if ($env:SPINOZA_INSTALL_DIR) {
         return $env:SPINOZA_INSTALL_DIR
     }
-    return (Join-Path $env:LOCALAPPDATA 'Programs\spinoza')
+    return (Join-Path $env:LOCALAPPDATA (Join-Path 'Programs' 'spinoza'))
 }
 
 function Get-InstalledVersion {
@@ -166,27 +171,56 @@ function Test-OnPath {
     return $false
 }
 
-function Add-ToPath {
-    param([Parameter(Mandatory = $true)][string]$Directory)
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
-    try {
-        $current = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
-        if (Test-OnPath -Directory $Directory -Path $current) {
-            return $false
+function Get-UserPath {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $false)
+    if ($null -eq $key) {
+        return [pscustomobject]@{
+            Value = ''
+            Kind  = [Microsoft.Win32.RegistryValueKind]::ExpandString
         }
+    }
+    try {
+        $value = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
         $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
-        if ($current -ne '') {
+        if ($value -ne '') {
             $kind = $key.GetValueKind('Path')
         }
-        $updated = $Directory
-        if ($current.TrimEnd(';') -ne '') {
-            $updated = $current.TrimEnd(';') + ';' + $Directory
+        return [pscustomobject]@{
+            Value = $value
+            Kind  = $kind
         }
-        $key.SetValue('Path', $updated, $kind)
     }
     finally {
         $key.Close()
     }
+}
+
+function Set-UserPath {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value,
+        [Parameter(Mandatory = $true)]$Kind
+    )
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    try {
+        $key.SetValue('Path', $Value, $Kind)
+    }
+    finally {
+        $key.Close()
+    }
+}
+
+function Add-ToPath {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+    $current = Get-UserPath
+    if (Test-OnPath -Directory $Directory -Path $current.Value) {
+        return $false
+    }
+    $updated = $Directory
+    if ($current.Value.TrimEnd(';') -ne '') {
+        $updated = $current.Value.TrimEnd(';') + ';' + $Directory
+    }
+    Set-UserPath -Value $updated -Kind $current.Kind
     return $true
 }
 
@@ -205,7 +239,7 @@ function Install-App {
     Save-Download -Uri "$script:Releases/download/$Version/$asset" -Path (Join-Path $Temp $asset)
     Test-Checksum -Path (Join-Path $Temp $asset) -Name $asset -ListPath (Join-Path $Temp 'checksums.txt')
     Expand-Archive -LiteralPath (Join-Path $Temp $asset) -DestinationPath (Join-Path $Temp 'app') -Force
-    $bundled = Join-Path $Temp 'app\Spinoza.exe'
+    $bundled = Join-Path (Join-Path $Temp 'app') 'Spinoza.exe'
     if (-not (Test-Path -LiteralPath $bundled)) {
         throw 'the app archive did not contain Spinoza.exe'
     }
@@ -219,7 +253,7 @@ function Install-App {
 
 function Add-StartMenuShortcut {
     param([Parameter(Mandatory = $true)][string]$Target)
-    $menu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+    $menu = Join-Path $env:APPDATA (Join-Path 'Microsoft' (Join-Path 'Windows' (Join-Path 'Start Menu' 'Programs')))
     if (-not (Test-Path -LiteralPath $menu)) {
         return
     }
@@ -248,7 +282,7 @@ function Install-Spinoza {
         Save-Download -Uri "$script:Releases/download/$version/checksums.txt" -Path (Join-Path $temp 'checksums.txt')
         Test-Checksum -Path (Join-Path $temp $asset) -Name $asset -ListPath (Join-Path $temp 'checksums.txt')
         Expand-Archive -LiteralPath (Join-Path $temp $asset) -DestinationPath (Join-Path $temp 'unpacked') -Force
-        $unpacked = Join-Path $temp 'unpacked\spinoza.exe'
+        $unpacked = Join-Path (Join-Path $temp 'unpacked') 'spinoza.exe'
         if (-not (Test-Path -LiteralPath $unpacked)) {
             throw 'the archive did not contain a spinoza.exe'
         }

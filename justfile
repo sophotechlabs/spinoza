@@ -182,8 +182,13 @@ package-desktop-linux arch='amd64': (build-desktop-linux arch)
     mkdir -p dist/release
     archive="$PWD/dist/release/spinoza_${version}_linux_{{ arch }}_app.tar.gz"
     rm -f "$archive"
+    reported=$("$built" --version)
+    if [ "$reported" != "$version" ]; then
+        echo "package-desktop-linux: the app reports $reported, not $version"
+        exit 1
+    fi
     tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -cf - -C "$staged" Spinoza spinoza.png LICENSE | gzip -n > "$archive"
-    echo "package-desktop-linux: wrote $archive"
+    echo "package-desktop-linux: wrote $archive, built from an app that reports $reported"
 
 # Wails writes an icns with the retina sizes only; macOS wants the plain ones too
 icns:
@@ -488,6 +493,7 @@ release-dist: deps
     cd dist/release && sha256sum -- *.tar.gz *.zip *.deb *.rpm > checksums.txt
     cd ../..
     just verify-checksums dist/release
+    just verify-archives dist/release
 
 package-linux arch='amd64':
     #!/usr/bin/env bash
@@ -512,6 +518,44 @@ package-linux arch='amd64':
         nfpm package --config packaging/nfpm.yaml --packager "$packager" --target "dist/release/spinoza_${version}_linux_{{ arch }}.${packager}"
     done
     rm -rf dist/nfpm
+
+verify-archives dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    dir='{{ dir }}'
+    checked=0
+    for file in "$dir"/*_windows_*.zip; do
+        want=spinoza.exe
+        case "$file" in
+            *_app.zip)
+                want=Spinoza.exe
+                ;;
+        esac
+        if ! unzip -l "$file" | grep -q " ${want}$"; then
+            echo "verify-archives: $file carries no $want"
+            exit 1
+        fi
+        checked=$((checked + 1))
+    done
+    for file in "$dir"/*_linux_*.tar.gz "$dir"/*_darwin_*.tar.gz; do
+        want=spinoza
+        case "$file" in
+            *_app.tar.gz)
+                want=Spinoza
+                ;;
+        esac
+        if ! tar -tzf "$file" | grep -qx "$want"; then
+            echo "verify-archives: $file carries no $want"
+            exit 1
+        fi
+        checked=$((checked + 1))
+    done
+    if [ "$checked" -eq 0 ]; then
+        echo "verify-archives: $dir holds no archives to check"
+        exit 1
+    fi
+    echo "verify-archives: all $checked archives carry the binary their installer looks for"
 
 verify-checksums dir:
     #!/usr/bin/env bash
@@ -678,11 +722,24 @@ smoke:
 smoke-windows binary='spinoza.exe':
     pwsh -NoProfile -ExecutionPolicy Bypass -File test/smoke.ps1 -Binary "{{ binary }}"
 
+smoke-desktop-windows:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    go build -trimpath -tags desktop -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version" -o Spinoza.exe .
+    reported=$(./Spinoza.exe --version)
+    rm -f Spinoza.exe
+    if [ "$reported" != "$version" ]; then
+        echo "smoke-desktop-windows: the desktop build reports $reported, not $version"
+        exit 1
+    fi
+    echo "smoke-desktop-windows: the desktop build starts and reports $reported"
+
 test-install-windows shell='pwsh':
     {{ shell }} -NoProfile -ExecutionPolicy Bypass -File test/install/windows.ps1
 
 test-ps shell='pwsh':
-    {{ shell }} -NoProfile -ExecutionPolicy Bypass -File test/install/functions.ps1
+    {{ shell }} -NoProfile -ExecutionPolicy Bypass -File test/pester.ps1
 
 lint-ps:
     pwsh -NoProfile -ExecutionPolicy Bypass -File test/lint-powershell.ps1
@@ -741,7 +798,19 @@ test-packaging:
     yq -p xml -o yaml -e '.package.metadata.version == "9.9.9"' "$out/chocolatey/spinoza.nuspec" > /dev/null
     grep -q 'version "9.9.9"' "$out/homebrew/spinoza.rb"
     grep -q '0000000000000000000000000000000000000000000000000000000000000004' "$out/homebrew/spinoza.rb"
-    echo "test-packaging: every manifest rendered with the version and the hashes it was given"
+    yq -e '.bin == "spinoza.exe"' "$out/scoop/spinoza.json" > /dev/null
+    yq -e '.autoupdate.hash.url | test("checksums.txt$")' "$out/scoop/spinoza.json" > /dev/null
+    yq -e '.apiVersion == "krew.googlecontainertools.github.com/v1alpha2"' "$out/krew/spinoza.yaml" > /dev/null
+    yq -e '[.spec.platforms[] | select(.uri and .sha256 and .bin and .selector.matchLabels.os)] | length == 6' "$out/krew/spinoza.yaml" > /dev/null
+    yq -e '.PackageIdentifier == "Sophotech.Spinoza"' "$out/winget/Sophotech.Spinoza.installer.yaml" > /dev/null
+    yq -e '.NestedInstallerFiles[0].RelativeFilePath == "spinoza.exe"' "$out/winget/Sophotech.Spinoza.installer.yaml" > /dev/null
+    yq -e '[.Installers[] | select(.InstallerUrl and .InstallerSha256)] | length == 2' "$out/winget/Sophotech.Spinoza.installer.yaml" > /dev/null
+    for file in "$out"/winget/*.yaml; do
+        yq -e '.ManifestType and .ManifestVersion' "$file" > /dev/null
+    done
+    yq -p xml -o yaml -e '.package.metadata.id == "spinoza"' "$out/chocolatey/spinoza.nuspec" > /dev/null
+    grep -q 'checksumType64 *= *.sha256.' "$out/chocolatey/tools/chocolateyinstall.ps1"
+    echo "test-packaging: every manifest rendered with the fields and hashes its ecosystem needs"
 
 publish-asset pattern:
     #!/usr/bin/env bash
