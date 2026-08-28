@@ -61,6 +61,7 @@ jobs:
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
       - run: just hygiene
       - run: just test-packaging
+      - run: just test-uninstall
 
   docs:
     runs-on: ubuntu-latest

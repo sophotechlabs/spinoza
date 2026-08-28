@@ -380,7 +380,7 @@ workflows:
 hygiene:
     typos
     ec
-    shellcheck install.sh test/install/container.sh packaging/render.sh
+    shellcheck install.sh test/install/container.sh test/install/uninstall.sh packaging/render.sh
     just --unstable --fmt --check
 
 docs:
@@ -650,6 +650,9 @@ test-install:
     fi
     echo "test-install: $image refused to install without curl or wget"
 
+test-uninstall:
+    sh test/install/uninstall.sh install.sh
+
 test-install-host:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -675,6 +678,16 @@ test-install-host:
         exit 1
     fi
     echo "test-install-host: installed $app as a universal binary"
+    SPINOZA_UNINSTALL=1 sh install.sh
+    if [ -e "$HOME/.local/bin/spinoza" ]; then
+        echo "test-install-host: the binary is still there after the uninstall"
+        exit 1
+    fi
+    if [ -d "$app" ]; then
+        echo "test-install-host: $app is still there after the uninstall"
+        exit 1
+    fi
+    echo "test-install-host: uninstalled the binary and the app"
 
 smoke:
     #!/usr/bin/env bash

@@ -5,8 +5,15 @@ repo="sophotechlabs/spinoza"
 releases="https://github.com/$repo/releases"
 
 main() {
-    detect_downloader
     detect_platform
+
+    dir="$(install_dir)"
+    if [ -n "${SPINOZA_UNINSTALL:-}" ]; then
+        uninstall
+        return 0
+    fi
+
+    detect_downloader
 
     version="${SPINOZA_VERSION:-}"
     if [ -z "$version" ]; then
@@ -14,7 +21,6 @@ main() {
     fi
 
     asset="spinoza_${version}_${os}_${arch}.tar.gz"
-    dir="$(install_dir)"
 
     make_temp
     trap cleanup EXIT INT TERM
@@ -56,6 +62,38 @@ main() {
 
     report_path "$dir"
     report_app
+}
+
+uninstall() {
+    removed=""
+    for name in spinoza Spinoza; do
+        if [ -e "$dir/$name" ]; then
+            rm -f "$dir/$name"
+            removed="$removed $name"
+        fi
+    done
+    entry="$HOME/.local/share/applications/spinoza.desktop"
+    if [ -e "$entry" ]; then
+        rm -f "$entry"
+        removed="$removed the desktop entry"
+    fi
+    icon="$HOME/.local/share/icons/hicolor/512x512/apps/spinoza.png"
+    if [ -e "$icon" ]; then
+        rm -f "$icon"
+        removed="$removed the icon"
+    fi
+    for candidate in /Applications "$HOME/Applications"; do
+        if [ -d "$candidate/Spinoza.app" ]; then
+            rm -rf "$candidate/Spinoza.app"
+            removed="$removed $candidate/Spinoza.app"
+        fi
+    done
+    if [ -z "$removed" ]; then
+        echo "Nothing to remove: spinoza is not installed in $dir"
+        return 0
+    fi
+    echo "Removed$removed"
+    echo "Settings and kubeconfigs were left alone"
 }
 
 install_app() {
