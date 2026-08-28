@@ -31,8 +31,7 @@ const (
 	scriptMode     = 0o700
 )
 
-// installable names the systems install.sh knows how to write to. Windows has
-// no path through it at all.
+// installable names the systems install.sh knows how to write to.
 var installable = map[string]bool{"darwin": true, "linux": true}
 
 // Installer replaces the running binary by fetching install.sh and running it

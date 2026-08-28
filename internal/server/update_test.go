@@ -207,7 +207,7 @@ func TestABuildThatCannotReplaceItselfOffersTheCommand(t *testing.T) {
 	if result.Updated {
 		t.Fatal("a build with no installer reported an update")
 	}
-	if result.Command != update.Command {
+	if result.Command != update.InstallCommand() {
 		t.Fatalf("command = %q, want the install line", result.Command)
 	}
 }
@@ -237,7 +237,7 @@ func TestAnUnsupportedInstallOffersTheCommand(t *testing.T) {
 
 	result := postUpdate(t, ts.URL)
 
-	if result.Command != update.Command {
+	if result.Command != update.InstallCommand() {
 		t.Fatalf("command = %q, want the install line", result.Command)
 	}
 	if !strings.Contains(result.Reason, "not writable") {

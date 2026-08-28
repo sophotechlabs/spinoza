@@ -32,11 +32,31 @@ func TestANewerReleaseIsOfferedWithTheCommandThatInstallsIt(t *testing.T) {
 	if status.Latest != "v1.15.0" {
 		t.Fatalf("latest = %q, want the published tag", status.Latest)
 	}
-	if status.Command != Command {
+	if status.Command != InstallCommand() {
 		t.Fatalf("command = %q, want the one the website gives out", status.Command)
 	}
 	if !strings.HasPrefix(status.URL, "https://github.com/") {
 		t.Fatalf("url = %q, want a link to the release", status.URL)
+	}
+}
+
+func TestWindowsIsOfferedThePowerShellCommand(t *testing.T) {
+	if commandFor("windows") != PowerShellCommand {
+		t.Fatalf("command = %q, want the PowerShell one", commandFor("windows"))
+	}
+}
+
+func TestEverythingElseIsOfferedTheShellCommand(t *testing.T) {
+	for _, goos := range []string{"darwin", "linux"} {
+		if commandFor(goos) != Command {
+			t.Fatalf("command on %s = %q, want the shell one", goos, commandFor(goos))
+		}
+	}
+}
+
+func TestTheOfferedCommandFollowsThisBuild(t *testing.T) {
+	if InstallCommand() != commandFor(runtime.GOOS) {
+		t.Fatalf("command = %q, want the one for %s", InstallCommand(), runtime.GOOS)
 	}
 }
 

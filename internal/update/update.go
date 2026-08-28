@@ -19,6 +19,19 @@ const Endpoint = "https://spinoza.tech/api/latest"
 
 const Command = "curl -fsSL https://spinoza.tech/install.sh | sh"
 
+const PowerShellCommand = "irm https://spinoza.tech/install.ps1 | iex"
+
+func InstallCommand() string {
+	return commandFor(runtime.GOOS)
+}
+
+func commandFor(goos string) string {
+	if goos == "windows" {
+		return PowerShellCommand
+	}
+	return Command
+}
+
 const (
 	askTimeout    = 5 * time.Second
 	maxAnswer     = 1 << 20
@@ -89,7 +102,7 @@ func (c *Checker) ask(ctx context.Context) api.UpdateStatus {
 	status.URL = found.URL
 	if newer(found.Tag, c.current) {
 		status.Available = true
-		status.Command = Command
+		status.Command = InstallCommand()
 	}
 	return status
 }

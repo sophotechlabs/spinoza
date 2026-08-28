@@ -76,7 +76,7 @@ func (s *Server) handleInstallUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	installer := s.updateInstaller()
 	if installer == nil {
-		result.Command = update.Command
+		result.Command = update.InstallCommand()
 		result.Reason = update.ErrUnsupported.Error()
 		writeJSON(w, result)
 		return
@@ -89,7 +89,7 @@ func (s *Server) handleInstallUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	result.Reason = err.Error()
 	if errors.Is(err, update.ErrUnsupported) {
-		result.Command = update.Command
+		result.Command = update.InstallCommand()
 	}
 	writeJSON(w, result)
 }
