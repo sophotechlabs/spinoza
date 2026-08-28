@@ -836,7 +836,7 @@ func (m *Manager) Overview(ctx context.Context) api.ClusterOverview {
 }
 
 func (m *Manager) Issues(ctx context.Context) api.IssueQueue {
-	return issues.Build(ctx, m, m, m.descriptors(), m.now)
+	return issues.Build(ctx, m, m, m.descriptors(), m.now, issues.Limits{})
 }
 
 func (m *Manager) versions() overview.Versions {

@@ -12,8 +12,6 @@ import (
 
 const detectorWorkload = "workload-progress"
 
-const notReadyGrace = 2 * time.Minute
-
 const titleShortOfReplicas = "NotEnoughReplicas"
 
 const (
@@ -33,11 +31,11 @@ func WorkloadUnhealthy(obj *unstructured.Unstructured, kind string) bool {
 	return false
 }
 
-func workloadFindings(snap *snapshot, now time.Time) []finding {
+func workloadFindings(snap *snapshot, now time.Time, limits Limits) []finding {
 	out := []finding{}
 	for _, group := range workloadKinds() {
 		for _, item := range snap.of(group.group, group.kind) {
-			found, ok := workloadFinding(snap, item, now)
+			found, ok := workloadFinding(snap, item, now, limits)
 			if !ok {
 				continue
 			}
@@ -63,8 +61,8 @@ func workloadKinds() []kindRef {
 	}
 }
 
-func workloadFinding(snap *snapshot, item object, now time.Time) (finding, bool) {
-	found, ok := workloadSymptom(item.obj, item.desc.Kind, now)
+func workloadFinding(snap *snapshot, item object, now time.Time, limits Limits) (finding, bool) {
+	found, ok := workloadSymptom(item.obj, item.desc.Kind, now, limits)
 	if !ok {
 		return finding{}, false
 	}
@@ -79,11 +77,11 @@ func workloadFinding(snap *snapshot, item object, now time.Time) (finding, bool)
 		changedAt: moved.at,
 		kind:      item.desc.Kind,
 		subject:   item,
-		since:     workloadSince(item.obj),
+		since:     transitionOf(item.obj),
 	}, true
 }
 
-func workloadSymptom(obj *unstructured.Unstructured, kind string, now time.Time) (symptom, bool) {
+func workloadSymptom(obj *unstructured.Unstructured, kind string, now time.Time, limits Limits) (symptom, bool) {
 	if obj.GetDeletionTimestamp() != nil {
 		return symptom{}, false
 	}
@@ -96,7 +94,7 @@ func workloadSymptom(obj *unstructured.Unstructured, kind string, now time.Time)
 	if stalled, ok := progressStalled(obj); ok {
 		return stalled, true
 	}
-	return shortOfReplicas(obj, kind, now)
+	return shortOfReplicas(obj, kind, now, limits)
 }
 
 func replicaFailure(obj *unstructured.Unstructured) (symptom, bool) {
@@ -168,12 +166,12 @@ func progressStalled(obj *unstructured.Unstructured) (symptom, bool) {
 	}, true
 }
 
-func shortOfReplicas(obj *unstructured.Unstructured, kind string, now time.Time) (symptom, bool) {
+func shortOfReplicas(obj *unstructured.Unstructured, kind string, now time.Time, limits Limits) (symptom, bool) {
 	ready, want := replicaCounts(obj, kind)
 	if ready >= want {
 		return symptom{}, false
 	}
-	if now.Sub(workloadSince(obj)) < notReadyGrace {
+	if now.Sub(transitionOf(obj)) < limits.ReadyGrace {
 		return symptom{}, false
 	}
 	severity := severityDegraded
@@ -184,7 +182,7 @@ func shortOfReplicas(obj *unstructured.Unstructured, kind string, now time.Time)
 		severity: severity,
 		title:    titleShortOfReplicas,
 		detail: strconv.FormatInt(ready, 10) + " of " + strconv.FormatInt(want, 10) +
-			" replicas ready for longer than " + notReadyGrace.String(),
+			" replicas ready for longer than " + limits.ReadyGrace.String(),
 		action: "look at the pods it owns",
 	}, true
 }
@@ -194,14 +192,6 @@ func replicaCounts(obj *unstructured.Unstructured, kind string) (ready, want int
 		return unstr.Int(obj, "status", "numberReady"), unstr.Int(obj, "status", "desiredNumberScheduled")
 	}
 	return unstr.Int(obj, "status", "readyReplicas"), unstr.Int(obj, "spec", "replicas")
-}
-
-func workloadSince(obj *unstructured.Unstructured) time.Time {
-	at := transitionOf(obj)
-	if at.IsZero() {
-		return obj.GetCreationTimestamp().Time
-	}
-	return at
 }
 
 func conditionOf(obj *unstructured.Unstructured, name string) (map[string]any, bool) {

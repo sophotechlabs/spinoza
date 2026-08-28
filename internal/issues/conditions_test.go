@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 func certificateDescriptor() api.ResourceDescriptor {
@@ -217,5 +218,59 @@ func TestACustomKindThatOnlySharesANameIsStillJudged(t *testing.T) {
 	row, ok := rowNamed(queue, "train")
 	if !ok || row.Detector != detectorCondition {
 		t.Fatalf("rows = %+v, want a custom Job judged by its conditions", queue.Rows)
+	}
+}
+
+func TestWhichConditionsCountAsBroken(t *testing.T) {
+	cases := []struct {
+		name       string
+		conditions []any
+		want       string
+	}{
+		{name: "no status at all", conditions: nil, want: ""},
+		{name: "ready", conditions: []any{condition("Ready", "True", nil)}, want: ""},
+		{name: "not ready", conditions: []any{condition("Ready", "False", nil)}, want: "Ready"},
+		{name: "ready unknown", conditions: []any{condition("Ready", "Unknown", nil)}, want: "Ready"},
+		{name: "available is read when ready is absent", conditions: []any{condition("Available", "False", nil)}, want: "Available"},
+		{name: "healthy is read when the two above are absent", conditions: []any{condition("Healthy", "False", nil)}, want: "Healthy"},
+		{name: "synced is read last of the positives", conditions: []any{condition("Synced", "False", nil)}, want: "Synced"},
+		{
+			name:       "a ready object is not judged on a later positive",
+			conditions: []any{condition("Ready", "True", nil), condition("Synced", "False", nil)},
+			want:       "",
+		},
+		{name: "stalled", conditions: []any{condition("Stalled", "True", nil)}, want: "Stalled"},
+		{name: "not stalled", conditions: []any{condition("Stalled", "False", nil)}, want: ""},
+		{name: "degraded", conditions: []any{condition("Degraded", "True", nil)}, want: "Degraded"},
+		{name: "failed", conditions: []any{condition("Failed", "True", nil)}, want: "Failed"},
+		{
+			name:       "a vocabulary this fallback does not know",
+			conditions: []any{condition("Established", "False", nil)},
+			want:       "",
+		},
+		{
+			name:       "noise among the conditions",
+			conditions: []any{"not a condition", condition("Ready", "False", nil)},
+			want:       "Ready",
+		},
+	}
+
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			obj := custom("Certificate", "wildcard", map[string]any{"conditions": item.conditions})
+			entry, ok := badCondition(obj)
+			if item.want == "" {
+				if ok {
+					t.Fatalf("condition = %v, want the object judged healthy", entry)
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("condition = none, want %q reported", item.want)
+			}
+			if got := unstr.At(entry, "type"); got != item.want {
+				t.Fatalf("condition = %q, want %q", got, item.want)
+			}
+		})
 	}
 }

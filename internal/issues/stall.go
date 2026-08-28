@@ -15,21 +15,14 @@ import (
 
 const detectorStall = "post-bind-stall"
 
-const (
-	stallGrace       = 5 * time.Minute
-	stallCandidates  = 20
-	stallConcurrency = 8
-	stallBudget      = 5 * time.Second
-)
-
-func stallFindings(ctx context.Context, events Events, snap *snapshot, reported map[string]bool, now time.Time) []finding {
-	candidates := stallCandidatesOf(snap, reported, now)
+func stallFindings(ctx context.Context, events Events, snap *snapshot, reported map[string]bool, now time.Time, limits Limits) []finding {
+	candidates := stallCandidatesOf(snap, reported, now, limits)
 	if len(candidates) == 0 {
 		return nil
 	}
-	bounded, cancel := context.WithTimeout(ctx, stallBudget)
+	bounded, cancel := context.WithTimeout(ctx, limits.StallBudget)
 	defer cancel()
-	quiet := quietOnes(bounded, events, candidates)
+	quiet := quietOnes(bounded, events, candidates, limits)
 	out := []finding{}
 	for _, item := range candidates {
 		if !quiet[item.uid()] {
@@ -53,9 +46,9 @@ func stallFindings(ctx context.Context, events Events, snap *snapshot, reported 
 	return out
 }
 
-func quietOnes(ctx context.Context, events Events, candidates []object) map[string]bool {
+func quietOnes(ctx context.Context, events Events, candidates []object, limits Limits) map[string]bool {
 	quiet := make([]bool, len(candidates))
-	slots := make(chan struct{}, stallConcurrency)
+	slots := make(chan struct{}, limits.StallReader)
 	var wg sync.WaitGroup
 	for index, item := range candidates {
 		wg.Add(1)
@@ -77,10 +70,10 @@ func quietOnes(ctx context.Context, events Events, candidates []object) map[stri
 	return out
 }
 
-func stallCandidatesOf(snap *snapshot, reported map[string]bool, now time.Time) []object {
+func stallCandidatesOf(snap *snapshot, reported map[string]bool, now time.Time, limits Limits) []object {
 	out := []object{}
 	for _, item := range snap.of("", kindPod) {
-		if !stalledPod(item.obj, reported[item.uid()], now) {
+		if !stalledPod(item.obj, reported[item.uid()], now, limits) {
 			continue
 		}
 		out = append(out, item)
@@ -91,13 +84,13 @@ func stallCandidatesOf(snap *snapshot, reported map[string]bool, now time.Time) 
 		}
 		return strings.Compare(whereOf(left), whereOf(right))
 	})
-	if len(out) > stallCandidates {
-		return out[:stallCandidates]
+	if len(out) > limits.Candidates {
+		return out[:limits.Candidates]
 	}
 	return out
 }
 
-func stalledPod(pod *unstructured.Unstructured, alreadyReported bool, now time.Time) bool {
+func stalledPod(pod *unstructured.Unstructured, alreadyReported bool, now time.Time, limits Limits) bool {
 	if alreadyReported || pod.GetDeletionTimestamp() != nil {
 		return false
 	}
@@ -111,7 +104,7 @@ func stalledPod(pod *unstructured.Unstructured, alreadyReported bool, now time.T
 	if anyContainerRunning(pod) {
 		return false
 	}
-	return now.Sub(podBoundAt(pod)) >= stallGrace
+	return now.Sub(podBoundAt(pod)) >= limits.StallGrace
 }
 
 func anyContainerRunning(pod *unstructured.Unstructured) bool {

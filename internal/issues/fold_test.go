@@ -57,8 +57,8 @@ func TestPodsFoldUnderTheirDeployment(t *testing.T) {
 	if row.Folded != 200 {
 		t.Fatalf("folded = %d, want 200", row.Folded)
 	}
-	if len(row.Children) != maxChildren {
-		t.Fatalf("children = %d, want the list capped at %d", len(row.Children), maxChildren)
+	if len(row.Children) != defaultChildren {
+		t.Fatalf("children = %d, want the list capped at %d", len(row.Children), defaultChildren)
 	}
 	if !contains(row.Detail, "200 pods affected") {
 		t.Fatalf("detail = %q, want the count", row.Detail)
@@ -194,23 +194,51 @@ func TestIdenticalRowsSortByTheirIdentity(t *testing.T) {
 }
 
 func TestTheQueueIsCappedAndSaysWhatItDropped(t *testing.T) {
-	pods := make([]*unstructured.Unstructured, 0, maxRows+12)
-	for index := range maxRows + 12 {
+	const room = 3
+	names := []string{"bare-1", "bare-2", "bare-3", "bare-4", "bare-5"}
+	pods := make([]*unstructured.Unstructured, 0, len(names))
+	for _, name := range names {
 		pods = append(pods, newPod(
-			"bare-"+strconv.Itoa(index),
+			name,
 			withStartTime(testNow.Add(-20*time.Minute)),
 			withContainer("app", map[string]any{"waiting": map[string]any{"reason": "CrashLoopBackOff"}}),
 		))
 	}
 	lister := &stubLister{items: itemsOf("pods", pods...)}
+	limits := testLimits()
+	limits.Rows = room
 
-	queue := build(t, lister, catalog(podDescriptor()))
+	queue := buildLimited(t, lister, &stubEvents{}, catalog(podDescriptor()), limits)
 
-	if len(queue.Rows) != maxRows {
-		t.Fatalf("rows = %d, want the cap at %d", len(queue.Rows), maxRows)
+	if len(queue.Rows) != room {
+		t.Fatalf("rows = %d, want the cap at %d", len(queue.Rows), room)
 	}
-	if queue.Dropped != 12 {
-		t.Fatalf("dropped = %d, want 12", queue.Dropped)
+	if queue.Dropped != len(names)-room {
+		t.Fatalf("dropped = %d, want %d", queue.Dropped, len(names)-room)
+	}
+}
+
+func TestTheChildListIsCappedWhileTheCountStaysHonest(t *testing.T) {
+	const shown = 2
+	pods := make([]*unstructured.Unstructured, 0, 6)
+	for index := range 6 {
+		pods = append(pods, ownedCrashLoop("web-abc-"+strconv.Itoa(index), kindReplicaSet, "uid-rs"))
+	}
+	lister := &stubLister{items: map[string][]*unstructured.Unstructured{
+		"pods":        pods,
+		"replicasets": {replicaSet("web-abc", "uid-rs", "uid-web", "4")},
+	}}
+	limits := testLimits()
+	limits.Children = shown
+
+	queue := buildLimited(t, lister, &stubEvents{}, catalog(podDescriptor(), replicaSetDescriptor()), limits)
+
+	row := queue.Rows[0]
+	if len(row.Children) != shown {
+		t.Fatalf("children = %d, want the list capped at %d", len(row.Children), shown)
+	}
+	if row.Folded != 6 {
+		t.Fatalf("folded = %d, want the true count kept while the list is trimmed", row.Folded)
 	}
 }
 

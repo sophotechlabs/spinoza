@@ -10,11 +10,6 @@ import (
 )
 
 const (
-	maxRows     = 200
-	maxChildren = 50
-)
-
-const (
 	severityWarning = iota + 1
 	severityDegraded
 	severityFatal
@@ -52,7 +47,7 @@ func stamp(at time.Time) string {
 	return at.UTC().Format(time.RFC3339)
 }
 
-func fold(found []finding, snap *snapshot) api.IssueQueue {
+func fold(found []finding, snap *snapshot, limits Limits) api.IssueQueue {
 	groups := map[string][]finding{}
 	owners := map[string]object{}
 	order := []string{}
@@ -67,13 +62,13 @@ func fold(found []finding, snap *snapshot) api.IssueQueue {
 	}
 	rows := make([]api.Issue, 0, len(order))
 	for _, key := range order {
-		rows = append(rows, rowOf(owners[key], prune(groups[key])))
+		rows = append(rows, rowOf(owners[key], prune(groups[key]), limits))
 	}
 	rank(rows)
 	dropped := 0
-	if len(rows) > maxRows {
-		dropped = len(rows) - maxRows
-		rows = rows[:maxRows]
+	if len(rows) > limits.Rows {
+		dropped = len(rows) - limits.Rows
+		rows = rows[:limits.Rows]
 	}
 	return api.IssueQueue{Rows: rows, Dropped: dropped}
 }
@@ -93,7 +88,7 @@ func prune(group []finding) []finding {
 	})
 }
 
-func rowOf(owner object, group []finding) api.Issue {
+func rowOf(owner object, group []finding, limits Limits) api.Issue {
 	lead := leadOf(group)
 	children := childrenOf(owner, group)
 	row := api.Issue{
@@ -111,8 +106,8 @@ func rowOf(owner object, group []finding) api.Issue {
 		Since:     stamp(oldest(group)),
 		Folded:    len(children),
 	}
-	if len(children) > maxChildren {
-		row.Children = children[:maxChildren]
+	if len(children) > limits.Children {
+		row.Children = children[:limits.Children]
 		return row
 	}
 	if len(children) > 0 {

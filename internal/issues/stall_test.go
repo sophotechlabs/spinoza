@@ -14,7 +14,7 @@ import (
 
 func buildWith(t *testing.T, lister *stubLister, events *stubEvents, descs map[string]api.ResourceDescriptor) api.IssueQueue {
 	t.Helper()
-	return Build(t.Context(), lister, events, descs, func() time.Time { return testNow })
+	return buildLimited(t, lister, events, descs, testLimits())
 }
 
 func silentPod(name string) *stubLister {
@@ -141,8 +141,8 @@ func TestATerminatingPodIsNotAStall(t *testing.T) {
 }
 
 func TestOnlyTheOldestCandidatesAreAskedAbout(t *testing.T) {
-	pods := make([]*unstructured.Unstructured, 0, stallCandidates+5)
-	for index := range stallCandidates + 5 {
+	pods := make([]*unstructured.Unstructured, 0, defaultCandidates+5)
+	for index := range defaultCandidates + 5 {
 		name := "web-" + strconv.Itoa(index)
 		pods = append(pods, newPod(
 			name,
@@ -156,10 +156,10 @@ func TestOnlyTheOldestCandidatesAreAskedAbout(t *testing.T) {
 	queue := buildWith(t, lister, events, catalog(podDescriptor()))
 
 	asked := events.askedAbout()
-	if len(asked) != stallCandidates {
-		t.Fatalf("asked = %d pods, want the %d oldest", len(asked), stallCandidates)
+	if len(asked) != defaultCandidates {
+		t.Fatalf("asked = %d pods, want the %d oldest", len(asked), defaultCandidates)
 	}
-	if len(queue.Rows) != stallCandidates {
+	if len(queue.Rows) != defaultCandidates {
 		t.Fatalf("rows = %d, want one per candidate asked about", len(queue.Rows))
 	}
 	if !slices.Contains(asked, "uid-web-24") {

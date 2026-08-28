@@ -151,3 +151,20 @@ func TestAConditionWithAnUnreadableTimeIsSkipped(t *testing.T) {
 		t.Fatalf("transition = %v, want the creation time", got)
 	}
 }
+
+func TestAReplicaSetWithNoRevisionAnywhereSaysOnlyThatItRolledOut(t *testing.T) {
+	deployment := deploymentWith("web", map[string]any{}, map[string]any{})
+	replica := newWorkload(kindReplicaSet, "web-abc", "uid-rs", map[string]any{}, map[string]any{})
+	controller := true
+	replica.SetOwnerReferences(ownerReference(kindDeployment, "web", "uid-web", &controller))
+	snap := snapshotOf(
+		object{obj: deployment, desc: deploymentDescriptor()},
+		object{obj: replica, desc: replicaSetDescriptor()},
+	)
+
+	moved := changeOf(snap, snap.byUID["uid-rs"])
+
+	if moved.what != "rolled out" {
+		t.Fatalf("change = %q, want the bare statement when no revision is recorded anywhere", moved.what)
+	}
+}

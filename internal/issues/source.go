@@ -16,10 +16,6 @@ import (
 
 const maxOwnerDepth = 4
 
-const readConcurrency = 12
-
-const maxFallbackTypes = 25
-
 const (
 	kindPod                   = "Pod"
 	kindDeployment            = "Deployment"
@@ -178,11 +174,11 @@ func isFluxGroup(group string) bool {
 	return len(group) > len(fluxSuffix) && group[len(group)-len(fluxSuffix):] == fluxSuffix
 }
 
-func collect(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor) *snapshot {
+func collect(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor, limits Limits) *snapshot {
 	types := wanted(descs)
-	types = append(types, alsoCached(lister, types)...)
+	types = append(types, alsoCached(lister, types, limits)...)
 	snap := newSnapshot()
-	for _, batch := range read(ctx, lister, types, snap.failures) {
+	for _, batch := range read(ctx, lister, types, snap.failures, limits) {
 		snap.hold(batch.desc, batch.items)
 	}
 	return snap
@@ -198,9 +194,10 @@ func read(
 	lister Lister,
 	types []api.ResourceDescriptor,
 	failures *listerr.Collector,
+	limits Limits,
 ) []batch {
 	out := make([]batch, len(types))
-	slots := make(chan struct{}, readConcurrency)
+	slots := make(chan struct{}, limits.Readers)
 	var wg sync.WaitGroup
 	for index, desc := range types {
 		wg.Add(1)
@@ -221,7 +218,7 @@ func read(
 	return out
 }
 
-func alsoCached(lister Lister, already []api.ResourceDescriptor) []api.ResourceDescriptor {
+func alsoCached(lister Lister, already []api.ResourceDescriptor, limits Limits) []api.ResourceDescriptor {
 	seen := map[string]bool{}
 	for _, desc := range already {
 		seen[keyOf(desc)] = true
@@ -237,8 +234,8 @@ func alsoCached(lister Lister, already []api.ResourceDescriptor) []api.ResourceD
 	slices.SortFunc(out, func(left, right api.ResourceDescriptor) int {
 		return strings.Compare(keyOf(left), keyOf(right))
 	})
-	if len(out) > maxFallbackTypes {
-		return out[:maxFallbackTypes]
+	if len(out) > limits.Fallback {
+		return out[:limits.Fallback]
 	}
 	return out
 }

@@ -225,7 +225,27 @@ func condition(kind, status string, extras map[string]any) map[string]any {
 
 func build(t *testing.T, lister *stubLister, descs map[string]api.ResourceDescriptor) api.IssueQueue {
 	t.Helper()
-	return Build(t.Context(), lister, &stubEvents{}, descs, func() time.Time { return testNow })
+	return buildLimited(t, lister, &stubEvents{}, descs, testLimits())
+}
+
+func testLimits() Limits {
+	return Limits{
+		Budget:      2 * time.Second,
+		StallBudget: time.Second,
+		StallGrace:  5 * time.Minute,
+		ReadyGrace:  2 * time.Minute,
+	}
+}
+
+func buildLimited(
+	t *testing.T,
+	lister Lister,
+	events Events,
+	descs map[string]api.ResourceDescriptor,
+	limits Limits,
+) api.IssueQueue {
+	t.Helper()
+	return Build(t.Context(), lister, events, descs, func() time.Time { return testNow }, limits)
 }
 
 func rowNamed(queue api.IssueQueue, name string) (api.Issue, bool) {
@@ -272,4 +292,40 @@ func snapshotOf(items ...object) *snapshot {
 		snap.byOwner[owner] = append(snap.byOwner[owner], item)
 	}
 	return snap
+}
+
+type countingEvents struct {
+	mu   sync.Mutex
+	live int
+	peak int
+}
+
+func (c *countingEvents) Events(_ context.Context, _, _ string) ([]api.Event, error) {
+	c.mu.Lock()
+	c.live++
+	if c.live > c.peak {
+		c.peak = c.live
+	}
+	c.mu.Unlock()
+	time.Sleep(20 * time.Millisecond)
+	c.mu.Lock()
+	c.live--
+	c.mu.Unlock()
+	return []api.Event{{Reason: "Pulling"}}, nil
+}
+
+func (c *countingEvents) highWater() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.peak
+}
+
+func (s *stubLister) leasedResources() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0, len(s.leased))
+	for _, desc := range s.leased {
+		out = append(out, desc.Resource)
+	}
+	return out
 }

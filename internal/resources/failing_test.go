@@ -2,10 +2,15 @@ package resources
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 )
@@ -206,4 +211,43 @@ func TestASecondLeaseReusesTheStreamTheFirstOpened(t *testing.T) {
 	}
 
 	waitForStreams(t, mgr, 1)
+}
+
+func TestALeaseSaysWhenTheApiserverRefuses(t *testing.T) {
+	dyn := newClient(t)
+	dyn.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("deployments is forbidden")
+	})
+	ctx := t.Context()
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     dyn,
+		Clientset:   k8sfake.NewClientset(),
+		Descriptors: testDescs(),
+		Limits:      Limits{SyncTimeout: 50 * time.Millisecond, IdleGrace: time.Millisecond},
+	})
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	_, err := mgr.Lease(ctx, desc)
+
+	if err == nil {
+		t.Fatal("Lease = nil error, want the refusal carried back")
+	}
+	if !strings.Contains(err.Error(), "deployments is forbidden") {
+		t.Fatalf("error = %q, want the apiserver's own words", err.Error())
+	}
+	waitForStreams(t, mgr, 0)
+}
+
+func TestALeaseOfAnEmptyKindComesBackEmpty(t *testing.T) {
+	mgr, cancel := newManagerWithGrace(t, newClient(t), time.Millisecond)
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	found, err := mgr.Lease(t.Context(), desc)
+	if err != nil {
+		t.Fatalf("Lease: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("found = %d objects, want none", len(found))
+	}
 }

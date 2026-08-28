@@ -15,8 +15,9 @@ func TestAListThatFailsIsReportedOnTheQueue(t *testing.T) {
 
 	queue := build(t, lister, catalog(podDescriptor()))
 
-	if queue.Error == "" || !contains(queue.Error, "forbidden") {
-		t.Fatalf("error = %q, want the refusal reported", queue.Error)
+	want := "1 of 1 resource types could not be listed: pods (forbidden)"
+	if queue.Error != want {
+		t.Fatalf("error = %q, want %q", queue.Error, want)
 	}
 }
 
@@ -124,7 +125,7 @@ func TestARefFromAnObjectCarriesItsCoordinates(t *testing.T) {
 func TestTheKindIndexIsKeyedByGroup(t *testing.T) {
 	deployment := deploymentWith("web", map[string]any{}, map[string]any{})
 	lister := &stubLister{items: deploymentItems(deployment)}
-	snap := collect(t.Context(), lister, catalog(deploymentDescriptor()))
+	snap := collect(t.Context(), lister, catalog(deploymentDescriptor()), testLimits().orDefaults())
 
 	if len(snap.of(appsGroup, kindDeployment)) != 1 {
 		t.Fatalf("index = %+v, want the deployment under its group", snap.byKind)
@@ -141,7 +142,7 @@ func TestBuildAsksForTheTimeOnce(t *testing.T) {
 	Build(t.Context(), lister, &stubEvents{}, catalog(podDescriptor()), func() time.Time {
 		calls++
 		return testNow
-	})
+	}, testLimits())
 
 	if calls != 1 {
 		t.Fatalf("clock reads = %d, want one so every detector judges the same moment", calls)
