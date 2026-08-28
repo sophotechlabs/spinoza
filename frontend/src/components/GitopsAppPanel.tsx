@@ -37,6 +37,7 @@ const SEVERITY_CLASS: Record<string, string> = {
 
 interface GitopsAppPanelProps {
   target: ObjectRef | null;
+  active?: boolean;
   onSelectResource: (ref: ObjectRef) => void;
 }
 
@@ -537,8 +538,12 @@ function AppView({ target, app, reload, onSelectResource }: AppViewProps) {
   );
 }
 
-export default function GitopsAppPanel({ target, onSelectResource }: GitopsAppPanelProps) {
-  const { data, error, reload } = useGitopsApp(target);
+export default function GitopsAppPanel({
+  target,
+  active = true,
+  onSelectResource,
+}: GitopsAppPanelProps) {
+  const { data, error, reload } = useGitopsApp(target, active);
 
   if (target === null) {
     return (

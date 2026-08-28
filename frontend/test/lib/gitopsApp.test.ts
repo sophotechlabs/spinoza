@@ -204,6 +204,34 @@ describe('watching one application', () => {
     });
   });
 
+  it('asks for nothing while the panel is not the one showing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(full) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useGitopsApp(ref, false));
+
+    await waitFor(() => {
+      expect(result.current.data).toBeNull();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('starts asking the moment the panel is shown', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(full) });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, rerender } = renderHook(
+      ({ active }: { active: boolean }) => useGitopsApp(ref, active),
+      { initialProps: { active: false } },
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    rerender({ active: true });
+
+    await waitFor(() => {
+      expect(result.current.data?.name).toBe('podinfo');
+    });
+  });
+
   it('holds nothing when there is no object to watch', () => {
     const { result } = renderHook(() => useGitopsApp(null));
 

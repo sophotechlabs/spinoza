@@ -157,14 +157,13 @@ export interface GitopsAppState {
   reload: () => void;
 }
 
-export function useGitopsApp(target: ObjectRef | null): GitopsAppState {
+export function useGitopsApp(target: ObjectRef | null, active = true): GitopsAppState {
   const [data, setData] = useState<GitopsApp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
-    if (target === null) {
-      setData(null);
+    if (target === null || !active) {
       return undefined;
     }
     const wanted = target;
@@ -189,7 +188,7 @@ export function useGitopsApp(target: ObjectRef | null): GitopsAppState {
       mounted = false;
       clearInterval(timer);
     };
-  }, [target, reloads]);
+  }, [target, active, reloads]);
 
   const reload = useCallback(() => {
     setReloads((value) => value + 1);

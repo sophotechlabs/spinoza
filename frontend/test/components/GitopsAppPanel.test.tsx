@@ -125,9 +125,9 @@ function protectedCluster() {
   });
 }
 
-function renderPanel() {
+function renderPanel(active = true) {
   const onSelectResource = vi.fn();
-  render(<GitopsAppPanel target={target} onSelectResource={onSelectResource} />);
+  render(<GitopsAppPanel target={target} active={active} onSelectResource={onSelectResource} />);
   return { onSelectResource };
 }
 
@@ -162,6 +162,16 @@ describe('the per-application panel', () => {
     render(<GitopsAppPanel target={null} onSelectResource={vi.fn()} />);
 
     expect(screen.getByText('Select an Argo application or a Flux applier.')).toBeInTheDocument();
+  });
+
+  it('reads nothing while another panel is the one showing', async () => {
+    const fetchMock = serve(appWith({ resources: [deployment] }));
+    renderPanel(false);
+
+    await waitFor(() => {
+      expect(screen.getByText('Loading the application')).toBeInTheDocument();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('splits configuration from deployment state', async () => {

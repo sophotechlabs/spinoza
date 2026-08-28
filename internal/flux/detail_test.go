@@ -325,3 +325,199 @@ func TestHelmReleaseDetailFallsBackToTheChartRef(t *testing.T) {
 		t.Fatalf("repo = %q", got.Source.Repo)
 	}
 }
+
+// which kinds this package treats as a source
+
+func TestIsSourceRecognisesTheFluxSourceKinds(t *testing.T) {
+	cases := []struct {
+		name string
+		desc api.ResourceDescriptor
+		want bool
+	}{
+		{
+			name: "git repository",
+			desc: api.ResourceDescriptor{Group: "source.toolkit.fluxcd.io", Resource: "gitrepositories"},
+			want: true,
+		},
+		{
+			name: "helm repository",
+			desc: api.ResourceDescriptor{Group: "source.toolkit.fluxcd.io", Resource: "helmrepositories"},
+			want: true,
+		},
+		{
+			name: "oci repository",
+			desc: api.ResourceDescriptor{Group: "source.toolkit.fluxcd.io", Resource: "ocirepositories"},
+			want: true,
+		},
+		{
+			name: "bucket",
+			desc: api.ResourceDescriptor{Group: "source.toolkit.fluxcd.io", Resource: "buckets"},
+			want: true,
+		},
+		{
+			name: "a kustomization is an applier, not a source",
+			desc: kustomizationDesc(),
+			want: false,
+		},
+		{
+			name: "a source-shaped resource in another group",
+			desc: api.ResourceDescriptor{Group: "example.test", Resource: "gitrepositories"},
+			want: false,
+		},
+		{
+			name: "nothing at all",
+			desc: api.ResourceDescriptor{},
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsSource(tc.desc); got != tc.want {
+				t.Fatalf("IsSource(%+v) = %v, want %v", tc.desc, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAFailingFluxObjectIsAsFatalAsItIsInTheQueue(t *testing.T) {
+	obj := appliedKustomization()
+	_ = unstructured.SetNestedSlice(obj.Object, []any{
+		map[string]any{"type": "Ready", "status": "False", "reason": "BuildFailed", "message": "nope"},
+	}, "status", "conditions")
+
+	got := Detail(obj, kustomizationDesc())
+
+	if got.Issues[0].Severity != api.SeverityFatal {
+		t.Fatalf("severity = %q, want %q", got.Issues[0].Severity, api.SeverityFatal)
+	}
+}
+
+// the pure readers, every shape
+
+func TestSplitInventoryIDTakesEveryShapeFluxWrites(t *testing.T) {
+	cases := []struct {
+		name      string
+		id        string
+		namespace string
+		object    string
+		group     string
+		kind      string
+	}{
+		{
+			name: "a grouped resource", id: "web_podinfo_apps_Deployment",
+			namespace: "web", object: "podinfo", group: "apps", kind: "Deployment",
+		},
+		{
+			name: "a core resource writes an empty group", id: "web_podinfo__Service",
+			namespace: "web", object: "podinfo", group: "", kind: "Service",
+		},
+		{
+			name: "a core resource that quotes the empty group", id: "web_podinfo_''_Service",
+			namespace: "web", object: "podinfo", group: "", kind: "Service",
+		},
+		{
+			name: "a cluster-scoped resource has no namespace", id: "_podinfo_rbac.authorization.k8s.io_ClusterRole",
+			namespace: "", object: "podinfo", group: "rbac.authorization.k8s.io", kind: "ClusterRole",
+		},
+		{name: "too few parts", id: "web_podinfo"},
+		{name: "too many parts", id: "a_b_c_d_e"},
+		{name: "nothing at all", id: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			namespace, object, group, kind := splitInventoryID(tc.id)
+
+			if namespace != tc.namespace || object != tc.object {
+				t.Fatalf("namespace/name = %q/%q, want %q/%q", namespace, object, tc.namespace, tc.object)
+			}
+			if group != tc.group || kind != tc.kind {
+				t.Fatalf("group/kind = %q/%q, want %q/%q", group, kind, tc.group, tc.kind)
+			}
+		})
+	}
+}
+
+func TestTheConditionReadersAnswerNothingWhenTheConditionIsNotThere(t *testing.T) {
+	obj := appliedKustomization()
+	unstructured.RemoveNestedField(obj.Object, "status", "conditions")
+
+	if got := conditionStatus(obj, "Ready"); got != "" {
+		t.Fatalf("status = %q, want nothing", got)
+	}
+	if got := conditionMessage(obj, "Reconciling"); got != "" {
+		t.Fatalf("message = %q, want nothing", got)
+	}
+	if got := conditionUpdated(obj, "Ready"); got != "" {
+		t.Fatalf("updated = %q, want nothing", got)
+	}
+}
+
+func TestTheConditionReaderSkipsEntriesItCannotRead(t *testing.T) {
+	obj := appliedKustomization()
+	_ = unstructured.SetNestedSlice(obj.Object, []any{
+		"not a map",
+		map[string]any{"type": "Other", "status": "True"},
+		map[string]any{"type": "Ready", "status": "True", "message": "found it"},
+	}, "status", "conditions")
+
+	if got := conditionMessage(obj, "Ready"); got != "found it" {
+		t.Fatalf("message = %q, want the one past the entries it cannot use", got)
+	}
+}
+
+func TestTheRevisionFallsBackToWhatWasApplied(t *testing.T) {
+	obj := appliedKustomization()
+	unstructured.RemoveNestedField(obj.Object, "status", "lastAttemptedRevision")
+
+	if got := revisionAttempted(obj); got != "main@sha1:abc1234" {
+		t.Fatalf("revision = %q, want the applied one", got)
+	}
+}
+
+func TestFailingCallsOutOnlyTheConditionsThatMeanTrouble(t *testing.T) {
+	cases := []struct {
+		name   string
+		kind   string
+		status string
+		want   bool
+	}{
+		{name: "ready is false", kind: "Ready", status: "False", want: true},
+		{name: "ready is true", kind: "Ready", status: "True", want: false},
+		{name: "ready is unknown", kind: "Ready", status: "Unknown", want: false},
+		{name: "healthy is false", kind: "Healthy", status: "False", want: true},
+		{name: "stalled is true", kind: "Stalled", status: "True", want: true},
+		{name: "stalled is false", kind: "Stalled", status: "False", want: false},
+		{name: "reconciling says nothing about trouble", kind: "Reconciling", status: "True", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := failing(tc.kind, tc.status); got != tc.want {
+				t.Fatalf("failing(%q, %q) = %v, want %v", tc.kind, tc.status, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFailingConditionsSkipsEntriesItCannotRead(t *testing.T) {
+	obj := appliedKustomization()
+	_ = unstructured.SetNestedSlice(obj.Object, []any{
+		"not a map",
+		map[string]any{"type": "Ready", "status": "False", "reason": "BuildFailed", "message": "nope"},
+	}, "status", "conditions")
+
+	found := failingConditions(obj)
+
+	if len(found) != 1 || found[0].Title != "BuildFailed" {
+		t.Fatalf("issues = %+v, want the readable one", found)
+	}
+}
+
+func TestTheRevisionIsNothingWhenTheObjectNeverReconciled(t *testing.T) {
+	obj := appliedKustomization()
+	unstructured.RemoveNestedField(obj.Object, "status", "lastAttemptedRevision")
+	unstructured.RemoveNestedField(obj.Object, "status", "lastAppliedRevision")
+
+	if got := revisionAttempted(obj); got != "" {
+		t.Fatalf("revision = %q, want nothing", got)
+	}
+}

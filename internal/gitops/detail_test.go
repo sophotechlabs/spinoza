@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -453,5 +454,208 @@ func TestDetailKeepsTheVersionTheControllerReported(t *testing.T) {
 
 	if got.Resources[0].Version != "v1beta1" {
 		t.Fatalf("version = %q, want the one the controller reported", got.Resources[0].Version)
+	}
+}
+
+// which resources get read from the cluster, and in what order
+
+func TestABrokenResourceIsReadBeforeADriftedOne(t *testing.T) {
+	resources := []api.GitopsResource{
+		{Kind: "Service", Name: "drifted", Sync: "OutOfSync", Health: "Healthy"},
+		{Kind: "Service", Name: "broken", Sync: "Synced", Health: "Degraded"},
+	}
+
+	order := readingOrder(resources)
+
+	if resources[order[0]].Name != "broken" {
+		t.Fatalf("first read = %q, want the degraded one before the drifted one", resources[order[0]].Name)
+	}
+}
+
+func TestAResourceThatIsBothBrokenAndDriftedGoesFirst(t *testing.T) {
+	resources := []api.GitopsResource{
+		{Kind: "Service", Name: "drifted", Sync: "OutOfSync", Health: "Healthy"},
+		{Kind: "Service", Name: "both", Sync: "OutOfSync", Health: "Degraded"},
+		{Kind: "Service", Name: "fine", Sync: "Synced", Health: "Healthy"},
+	}
+
+	order := readingOrder(resources)
+
+	if resources[order[0]].Name != "both" {
+		t.Fatalf("first read = %q, want the one that is both", resources[order[0]].Name)
+	}
+	if resources[order[2]].Name != "fine" {
+		t.Fatalf("last read = %q, want the healthy one last", resources[order[2]].Name)
+	}
+}
+
+func TestResourcesTheControllerSaysNothingAboutKeepTheirOrder(t *testing.T) {
+	resources := []api.GitopsResource{
+		{Kind: "Service", Name: "first"},
+		{Kind: "Service", Name: "second"},
+	}
+
+	order := readingOrder(resources)
+
+	if resources[order[0]].Name != "first" || resources[order[1]].Name != "second" {
+		t.Fatalf("order = %v, want the list order kept when nothing distinguishes them", order)
+	}
+}
+
+// the events a resource carries
+
+func TestEventsAreAskedForByTheObjectTheyBelongTo(t *testing.T) {
+	client := detailClient(
+		managingApplication(managed("Deployment", "podinfo")),
+		liveDeployment(`{"spec":{"replicas":3}}`),
+	)
+	seen := ""
+	client.PrependReactor("list", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		listing, ok := action.(k8stesting.ListAction)
+		if ok {
+			seen = listing.GetListRestrictions().Fields.String()
+		}
+		return false, nil, nil
+	})
+
+	_, err := Detail(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	want := "involvedObject.kind=Deployment,involvedObject.name=podinfo"
+	if seen != want {
+		t.Fatalf("field selector = %q, want %q so a busy namespace cannot hide them", seen, want)
+	}
+}
+
+func TestEventsAreNotAskedForAResourceThatWasNotReadLive(t *testing.T) {
+	entries := make([]any, 0, maxLiveReads+1)
+	for at := range maxLiveReads + 1 {
+		entries = append(entries, managed("Service", "svc"+string(rune('a'+at))))
+	}
+	client := detailClient(managingApplication(entries...))
+	lists := 0
+	client.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		lists++
+		return false, nil, nil
+	})
+
+	_, err := Detail(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	if lists != maxLiveReads {
+		t.Fatalf("event lists = %d, want one per resource read live, not %d", lists, maxLiveReads+1)
+	}
+}
+
+func TestAResourceWithNoNamespaceIsNotAskedForEvents(t *testing.T) {
+	client := detailClient(managingApplication(map[string]any{
+		"version": "v1", "kind": "Service", "name": "cluster-wide",
+	}))
+	lists := 0
+	client.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		lists++
+		return false, nil, nil
+	})
+
+	_, err := Detail(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	if lists != 0 {
+		t.Fatalf("event lists = %d, want none for a resource with no namespace", lists)
+	}
+}
+
+func TestEventsSurviveANamespaceThatRefusesToListThem(t *testing.T) {
+	client := detailClient(
+		managingApplication(managed("Deployment", "podinfo")),
+		liveDeployment(`{"spec":{"replicas":3}}`),
+	)
+	client.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("events are forbidden here")
+	})
+
+	got, err := Detail(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	if got.Resources[0].Events != nil {
+		t.Fatalf("events = %+v, want none rather than a failed page", got.Resources[0].Events)
+	}
+	if len(got.Resources[0].Drift) != 0 {
+		t.Fatalf("drift = %+v, want the rest of the read to survive", got.Resources[0].Drift)
+	}
+}
+
+// the pure readers behind the source resolution
+
+func TestBranchOfTakesEveryRefFluxAccepts(t *testing.T) {
+	cases := []struct {
+		name string
+		ref  map[string]any
+		want string
+	}{
+		{name: "a branch", ref: map[string]any{"branch": "main"}, want: "main"},
+		{name: "a tag", ref: map[string]any{"tag": "v1.2.3"}, want: "v1.2.3"},
+		{name: "a semver range", ref: map[string]any{"semver": ">=1.0.0"}, want: ">=1.0.0"},
+		{name: "a commit", ref: map[string]any{"commit": "abc1234"}, want: "abc1234"},
+		{name: "an oci tag by name", ref: map[string]any{"name": "latest"}, want: "latest"},
+		{
+			name: "a branch wins over a commit beside it",
+			ref:  map[string]any{"branch": "main", "commit": "abc1234"},
+			want: "main",
+		},
+		{name: "no ref at all", ref: map[string]any{}, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			source := &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "source.toolkit.fluxcd.io/v1",
+				"kind":       "GitRepository",
+				"metadata":   map[string]any{"name": "infra", "namespace": "flux-system"},
+				"spec":       map[string]any{"ref": tc.ref},
+			}}
+
+			if got := branchOf(source); got != tc.want {
+				t.Fatalf("branchOf(%v) = %q, want %q", tc.ref, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIdentifyLeavesAResourceWhoseKindTheClusterDoesNotServe(t *testing.T) {
+	resources := []api.GitopsResource{
+		{Group: "cert-manager.io", Kind: "Certificate", Name: "tls", Version: "v1"},
+	}
+
+	identify(detailDescs(), resources)
+
+	if resources[0].Resource != "" {
+		t.Fatalf("resource = %q, want nothing for a kind the cluster does not serve", resources[0].Resource)
+	}
+	if resources[0].Version != "v1" {
+		t.Fatalf("version = %q, want the one the controller reported", resources[0].Version)
+	}
+}
+
+func TestIdentifyFillsTheVersionOnlyWhenTheControllerLeftItOut(t *testing.T) {
+	resources := []api.GitopsResource{
+		{Group: "apps", Kind: "Deployment", Name: "web"},
+		{Group: "apps", Kind: "Deployment", Name: "api", Version: "v1beta1"},
+	}
+
+	identify(detailDescs(), resources)
+
+	if resources[0].Version != "v1" {
+		t.Fatalf("version = %q, want discovery to fill it in", resources[0].Version)
+	}
+	if resources[1].Version != "v1beta1" {
+		t.Fatalf("version = %q, want the controller's own left alone", resources[1].Version)
 	}
 }

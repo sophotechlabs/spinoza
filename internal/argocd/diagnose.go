@@ -105,7 +105,7 @@ func operationIssue(app *unstructured.Unstructured) []api.GitopsIssue {
 	}
 	message := unstr.String(app, "status", "operationState", "message")
 	return []api.GitopsIssue{{
-		Severity: api.SeverityDegraded,
+		Severity: api.SeverityFatal,
 		Title:    "The last operation " + strings.ToLower(phase),
 		Detail:   detailOf(message),
 		Subject:  "operation",
@@ -116,9 +116,6 @@ func detailOf(message string) string {
 	cause := faults.Cause(message)
 	if cause == "" {
 		return message
-	}
-	if message == "" {
-		return cause
 	}
 	return cause + " — " + message
 }
@@ -175,7 +172,7 @@ func healthIssues(app *unstructured.Unstructured) []api.GitopsIssue {
 
 func healthSeverity(health string) string {
 	if health == degraded {
-		return api.SeverityDegraded
+		return api.SeverityFatal
 	}
-	return api.SeverityWarning
+	return api.SeverityDegraded
 }

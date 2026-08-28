@@ -1,6 +1,9 @@
 package faults
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNamesTheWebhookThatRefused(t *testing.T) {
 	got := Cause(`admission webhook "validate.kyverno.svc-fail" denied the request: policy require-labels`)
@@ -63,5 +66,59 @@ func TestSaysNothingAboutAMessageItDoesNotKnow(t *testing.T) {
 func TestSaysNothingAboutAnEmptyMessage(t *testing.T) {
 	if got := Cause(""); got != "" {
 		t.Fatalf("cause = %q, want nothing", got)
+	}
+}
+
+// which rule wins when a message matches more than one
+
+func TestASpecificRuleBeatsTheGenericOneBehindIt(t *testing.T) {
+	cases := []struct {
+		name    string
+		message string
+		want    string
+	}{
+		{
+			name:    "a named identity beats the bare forbidden",
+			message: `secrets is forbidden: User "system:serviceaccount:argocd:controller" cannot create resource`,
+			want:    "system:serviceaccount:argocd:controller may not write that resource",
+		},
+		{
+			name:    "an oversized annotation beats the immutable-field rule that follows it",
+			message: "metadata.annotations: Too long: must have at most 262144 bytes; field is immutable",
+			want:    "the manifest is too large for the last-applied annotation; sync with server-side apply",
+		},
+		{
+			name:    "a webhook denial beats the hook rule",
+			message: `admission webhook "gate.example.test" denied the request: the hook failed`,
+			want:    "the admission webhook gate.example.test rejected it",
+		},
+		{
+			name:    "a missing namespace beats the schema rule",
+			message: `namespaces "shop" not found: error validating data`,
+			want:    "the destination namespace shop does not exist; add CreateNamespace=true or create it in git",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Cause(tc.message); got != tc.want {
+				t.Fatalf("Cause(%q) = %q, want %q", tc.message, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEveryRuleAnswersWithNoTemplateLeftInIt(t *testing.T) {
+	for _, one := range causes {
+		if strings.Contains(one.cause, "$") && !strings.Contains(one.match.String(), "(") {
+			t.Fatalf("rule %q expands a capture its pattern never takes", one.cause)
+		}
+	}
+}
+
+func TestAMessageLongerThanAnyClusterSendsStillAnswers(t *testing.T) {
+	long := strings.Repeat("something happened. ", 5000) + "Operation terminated"
+
+	if got := Cause(long); got != "the operation was stopped" {
+		t.Fatalf("cause = %q, want the one it knows at the end of a long message", got)
 	}
 }

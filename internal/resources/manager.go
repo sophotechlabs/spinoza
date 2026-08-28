@@ -519,6 +519,9 @@ func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux
 }
 
 func (m *Manager) ArgoAction(ctx context.Context, ref api.ObjectRef, req argocd.Request) (api.ArgoActionResult, error) {
+	if m.dyn == nil {
+		return api.ArgoActionResult{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
+	}
 	return argocd.Do(ctx, m.dyn, ref, req)
 }
 
@@ -703,11 +706,14 @@ func (m *Manager) Topology(ctx context.Context, req topology.Request) api.Graph 
 }
 
 func (m *Manager) GitopsApp(ctx context.Context, ref api.ObjectRef) (api.GitopsApp, error) {
+	if m.dyn == nil {
+		return api.GitopsApp{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
+	}
 	return gitops.Detail(ctx, m.dyn, m.descriptors(), ref)
 }
 
 func (m *Manager) GitopsAppGraph(ctx context.Context, ref api.ObjectRef) (api.Graph, error) {
-	app, err := gitops.Detail(ctx, m.dyn, m.descriptors(), ref)
+	app, err := m.GitopsApp(ctx, ref)
 	if err != nil {
 		return api.Graph{}, err
 	}

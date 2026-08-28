@@ -307,7 +307,7 @@ func failingConditions(obj *unstructured.Unstructured) []api.GitopsIssue {
 		}
 		message := unstr.At(entry, "message")
 		out = append(out, api.GitopsIssue{
-			Severity: api.SeverityDegraded,
+			Severity: api.SeverityFatal,
 			Title:    unstr.At(entry, "reason"),
 			Detail:   withCause(message),
 			Subject:  kind,

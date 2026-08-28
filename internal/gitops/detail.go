@@ -28,8 +28,7 @@ const outOfSync = "OutOfSync"
 const (
 	maxLiveReads    = 25
 	maxEventsPer    = 5
-	maxNamespaces   = 5
-	eventPageSize   = 500
+	eventPageSize   = 50
 	readTimeout     = 15 * time.Second
 	eventsGroupless = ""
 )
@@ -129,26 +128,26 @@ func byKind(descs map[string]api.ResourceDescriptor, kind string) (api.ResourceD
 func enrich(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, app *api.GitopsApp) {
 	identify(descs, app.Resources)
 	order := readingOrder(app.Resources)
-	read := 0
+	read := []int{}
 	for _, at := range order {
-		if read == maxLiveReads {
+		if len(read) == maxLiveReads {
 			break
 		}
-		read++
+		read = append(read, at)
 		live := liveResource(ctx, dyn, descs, app.Resources[at])
 		if live == nil {
 			continue
 		}
 		apply(&app.Resources[at], live)
 	}
-	if len(order) > read {
+	if len(order) > len(read) {
 		app.Issues = append(app.Issues, api.GitopsIssue{
 			Severity: api.SeverityInfo,
-			Title:    fmt.Sprintf("%d of %d managed resources were read from the cluster", read, len(order)),
+			Title:    fmt.Sprintf("%d of %d managed resources were read from the cluster", len(read), len(order)),
 			Detail:   "the rest show what the controller reported",
 		})
 	}
-	attachEvents(ctx, dyn, app)
+	attachEvents(ctx, dyn, app, read)
 }
 
 func identify(descs map[string]api.ResourceDescriptor, resources []api.GitopsResource) {
@@ -177,10 +176,10 @@ func readingOrder(resources []api.GitopsResource) []int {
 
 func interest(resource api.GitopsResource) int {
 	score := 0
-	if resource.Sync != "" && resource.Sync != "Synced" {
+	if resource.Health != "" && resource.Health != "Healthy" {
 		score += 2
 	}
-	if resource.Health != "" && resource.Health != "Healthy" {
+	if resource.Sync != "" && resource.Sync != "Synced" {
 		score++
 	}
 	return score
@@ -232,56 +231,37 @@ func apply(resource *api.GitopsResource, live *unstructured.Unstructured) {
 	}
 }
 
-func attachEvents(ctx context.Context, dyn dynamic.Interface, app *api.GitopsApp) {
-	for _, namespace := range namespacesOf(app.Resources) {
-		found := eventsIn(ctx, dyn, namespace)
-		for at := range app.Resources {
-			resource := &app.Resources[at]
-			if resource.Namespace != namespace {
-				continue
-			}
-			resource.Events = found[resource.Kind+"/"+resource.Name]
-		}
-	}
-}
-
-func namespacesOf(resources []api.GitopsResource) []string {
-	seen := map[string]bool{}
-	out := []string{}
-	for _, one := range resources {
-		if one.Namespace == "" || seen[one.Namespace] {
+func attachEvents(ctx context.Context, dyn dynamic.Interface, app *api.GitopsApp, read []int) {
+	for _, at := range read {
+		resource := &app.Resources[at]
+		if resource.Namespace == "" {
 			continue
 		}
-		seen[one.Namespace] = true
-		out = append(out, one.Namespace)
-		if len(out) == maxNamespaces {
-			return out
-		}
+		resource.Events = eventsFor(ctx, dyn, resource)
 	}
-	return out
 }
 
-func eventsIn(ctx context.Context, dyn dynamic.Interface, namespace string) map[string][]api.Event {
+func eventsFor(ctx context.Context, dyn dynamic.Interface, resource *api.GitopsResource) []api.Event {
 	bounded, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
-	list, err := dyn.Resource(eventsGVR).Namespace(namespace).List(bounded, metav1.ListOptions{Limit: eventPageSize})
+	selector := "involvedObject.kind=" + resource.Kind + ",involvedObject.name=" + resource.Name
+	list, err := dyn.Resource(eventsGVR).Namespace(resource.Namespace).
+		List(bounded, metav1.ListOptions{FieldSelector: selector, Limit: eventPageSize})
 	if err != nil {
 		return nil
 	}
-	out := map[string][]api.Event{}
+	found := make([]api.Event, 0, len(list.Items))
 	for i := range list.Items {
-		item := &list.Items[i]
-		key := unstr.String(item, "involvedObject", "kind") + "/" + unstr.String(item, "involvedObject", "name")
-		out[key] = append(out[key], inspect.EventOf(item))
+		found = append(found, inspect.EventOf(&list.Items[i]))
 	}
-	for key, events := range out {
-		slices.SortStableFunc(events, func(left, right api.Event) int {
-			return strings.Compare(right.LastSeen, left.LastSeen)
-		})
-		if len(events) > maxEventsPer {
-			events = events[:maxEventsPer]
-		}
-		out[key] = events
+	slices.SortStableFunc(found, func(left, right api.Event) int {
+		return strings.Compare(right.LastSeen, left.LastSeen)
+	})
+	if len(found) > maxEventsPer {
+		found = found[:maxEventsPer]
 	}
-	return out
+	if len(found) == 0 {
+		return nil
+	}
+	return found
 }

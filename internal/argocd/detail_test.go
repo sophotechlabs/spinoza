@@ -323,3 +323,36 @@ func TestDetailIgnoresAnOperationStateWithNoPhase(t *testing.T) {
 		t.Fatalf("operation = %+v, want nothing without a phase", got.Operation)
 	}
 }
+
+func TestTheHistorySourceLabelTakesEitherAPathOrAChart(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry map[string]any
+		want  string
+	}{
+		{
+			name:  "a path",
+			entry: map[string]any{"source": map[string]any{"path": "apps/web"}},
+			want:  "apps/web",
+		},
+		{
+			name:  "a chart when there is no path",
+			entry: map[string]any{"source": map[string]any{"chart": "podinfo"}},
+			want:  "podinfo",
+		},
+		{
+			name:  "a path wins over a chart beside it",
+			entry: map[string]any{"source": map[string]any{"path": "apps/web", "chart": "podinfo"}},
+			want:  "apps/web",
+		},
+		{name: "a source that says neither", entry: map[string]any{"source": map[string]any{}}, want: ""},
+		{name: "an entry with no source", entry: map[string]any{}, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sourceLabelOf(tc.entry); got != tc.want {
+				t.Fatalf("sourceLabelOf(%v) = %q, want %q", tc.entry, got, tc.want)
+			}
+		})
+	}
+}

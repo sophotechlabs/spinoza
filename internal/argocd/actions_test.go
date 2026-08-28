@@ -678,3 +678,103 @@ func TestRollbackSkipsHistoryEntriesThatAreNotUsable(t *testing.T) {
 		t.Fatal("the rollback did not reach the entry past the unusable ones")
 	}
 }
+
+// what a refusal says to the person reading it
+
+func TestARefusalReadsAsOneSentence(t *testing.T) {
+	client := actionClient(newApplication())
+
+	_, err := Do(t.Context(), client, applicationRef(), ask(Terminate))
+
+	want := "podinfo has no operation to terminate"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q with no sentinel prefix in front of it", err.Error(), want)
+	}
+}
+
+func TestEveryRefusalNamesTheApplicationAndTheReason(t *testing.T) {
+	cases := []struct {
+		name string
+		app  *unstructured.Unstructured
+		req  Request
+		want string
+	}{
+		{
+			name: "terminate with a finished operation",
+			app:  operating(newApplication(), "Succeeded"),
+			req:  ask(Terminate),
+			want: "podinfo has no operation running; the last one is Succeeded",
+		},
+		{
+			name: "suspend an application that never automated",
+			app:  newApplication(),
+			req:  ask(Suspend),
+			want: "podinfo does not sync itself",
+		},
+		{
+			name: "resume one that already syncs",
+			app:  automating(newApplication(), map[string]any{}),
+			req:  ask(Resume),
+			want: "podinfo already syncs itself",
+		},
+		{
+			name: "roll back while auto-sync is on",
+			app:  automating(withHistory(newApplication(), historyOf(0, "aaaa")), map[string]any{}),
+			req:  Request{Action: Rollback, Revision: 0},
+			want: "podinfo syncs itself; suspend auto-sync before rolling back",
+		},
+		{
+			name: "roll back to a deployment that is not there",
+			app:  withHistory(newApplication(), historyOf(0, "aaaa")),
+			req:  Request{Action: Rollback, Revision: 9},
+			want: "podinfo has no deployment 9 in its history",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Do(t.Context(), actionClient(tc.app), applicationRef(), tc.req)
+
+			if !errors.Is(err, ErrRefused) {
+				t.Fatalf("error = %v, want it to carry the refusal sentinel", err)
+			}
+			if err.Error() != tc.want {
+				t.Fatalf("error = %q, want %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
+// what happens when the cluster ignores the patch
+
+func TestTerminateSaysSoWhenTheOperationKeepsRunning(t *testing.T) {
+	client := actionClient(operating(newApplication(), runningPhase))
+	client.PrependReactor("patch", "applications", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, operating(newApplication(), runningPhase), nil
+	})
+
+	_, err := Do(t.Context(), client, applicationRef(), ask(Terminate))
+
+	if !errors.Is(err, ErrRefused) {
+		t.Fatalf("error = %v, want a refusal when the status patch did not land", err)
+	}
+	want := "this argo cd kept the operation running, so the application crd takes no status patch; " +
+		"terminate it from the argo cd api instead"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestSuspendSaysExactlyWhatAnOldArgoDid(t *testing.T) {
+	client := actionClient(automating(newApplication(), map[string]any{"prune": true}))
+	client.PrependReactor("patch", "applications", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, automating(newApplication(), map[string]any{"prune": true}), nil
+	})
+
+	_, err := Do(t.Context(), client, applicationRef(), ask(Suspend))
+
+	want := "this argo cd ignored automated.enabled, so auto-sync is unchanged; " +
+		"pausing it needs argo cd 2.14 or newer"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}

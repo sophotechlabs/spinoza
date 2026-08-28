@@ -102,11 +102,26 @@ func Do(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, req Reque
 }
 
 func landed(result api.ArgoActionResult, patched *unstructured.Unstructured, action Action) (api.ArgoActionResult, error) {
-	if action != Suspend && action != Resume {
-		return result, nil
+	if action == Suspend || action == Resume {
+		return automationLanded(result, patched, action)
 	}
+	if action == Terminate {
+		return terminationLanded(result, patched)
+	}
+	return result, nil
+}
+
+func automationLanded(result api.ArgoActionResult, patched *unstructured.Unstructured, action Action) (api.ArgoActionResult, error) {
 	if AutoSyncing(patched) != (action == Resume) {
 		return result, refuse("this argo cd ignored automated.enabled, so auto-sync is unchanged; pausing it needs argo cd 2.14 or newer")
+	}
+	return result, nil
+}
+
+func terminationLanded(result api.ArgoActionResult, patched *unstructured.Unstructured) (api.ArgoActionResult, error) {
+	phase := unstr.String(patched, "status", "operationState", "phase")
+	if phase == runningPhase {
+		return result, refuse("this argo cd kept the operation running, so the application crd takes no status patch; terminate it from the argo cd api instead")
 	}
 	return result, nil
 }

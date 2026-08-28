@@ -91,22 +91,78 @@ func compare(declared, live map[string]any, prefix string, out *[]api.FieldDrift
 }
 
 func compareLists(declared, live []any, path string, out *[]api.FieldDrift) {
+	if named(declared) {
+		compareByName(declared, live, path, out)
+		return
+	}
 	if len(declared) != len(live) {
 		*out = append(*out, api.FieldDrift{Path: path, Declared: entries(len(declared)), Live: entries(len(live))})
 		return
 	}
 	for at := range declared {
-		here := fmt.Sprintf("%s[%d]", path, at)
-		wantMap, declaredIsMap := declared[at].(map[string]any)
-		gotMap, liveIsMap := live[at].(map[string]any)
-		if declaredIsMap && liveIsMap {
-			compare(wantMap, gotMap, here, out)
+		compareEntry(declared[at], live[at], fmt.Sprintf("%s[%d]", path, at), out)
+	}
+}
+
+func compareEntry(declared, live any, path string, out *[]api.FieldDrift) {
+	wantMap, declaredIsMap := declared.(map[string]any)
+	gotMap, liveIsMap := live.(map[string]any)
+	if declaredIsMap && liveIsMap {
+		compare(wantMap, gotMap, path, out)
+		return
+	}
+	if text(declared) == text(live) {
+		return
+	}
+	*out = append(*out, api.FieldDrift{Path: path, Declared: text(declared), Live: text(live)})
+}
+
+func named(entries []any) bool {
+	if len(entries) == 0 {
+		return false
+	}
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			return false
+		}
+		if nameOf(entry) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func nameOf(entry map[string]any) string {
+	name, ok := entry["name"].(string)
+	if !ok {
+		return ""
+	}
+	return name
+}
+
+func compareByName(declared, live []any, path string, out *[]api.FieldDrift) {
+	found := map[string]any{}
+	for _, raw := range live {
+		entry, ok := raw.(map[string]any)
+		if !ok {
 			continue
 		}
-		if text(declared[at]) == text(live[at]) {
+		found[nameOf(entry)] = entry
+	}
+	for _, raw := range declared {
+		entry, ok := raw.(map[string]any)
+		if !ok {
 			continue
 		}
-		*out = append(*out, api.FieldDrift{Path: here, Declared: text(declared[at]), Live: text(live[at])})
+		name := nameOf(entry)
+		here := fmt.Sprintf("%s[%s]", path, name)
+		match, present := found[name]
+		if !present {
+			*out = append(*out, api.FieldDrift{Path: here, Declared: text(entry), Live: "not set"})
+			continue
+		}
+		compareEntry(entry, match, here, out)
 	}
 }
 

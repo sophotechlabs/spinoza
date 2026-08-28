@@ -170,7 +170,11 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
   ),
   app: (ctx) => (
     <div className="flex min-h-0 flex-1 flex-col">
-      <GitopsAppPanel target={refOf(ctx.selection)} onSelectResource={ctx.onSelectResource} />
+      <GitopsAppPanel
+        target={refOf(ctx.selection)}
+        active={ctx.open}
+        onSelectResource={ctx.onSelectResource}
+      />
     </div>
   ),
   compare: (ctx) => (

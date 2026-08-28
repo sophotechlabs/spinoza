@@ -46,7 +46,7 @@ func TestConditionsBecomeTypedIssues(t *testing.T) {
 
 	comparison, found := issueAbout(issues, "ComparisonError")
 	if !found || comparison.Severity != api.SeverityDegraded {
-		t.Fatalf("comparison issue = %+v, want an error", comparison)
+		t.Fatalf("comparison issue = %+v, want it degraded", comparison)
 	}
 	if !strings.Contains(comparison.Detail, "repository credentials") {
 		t.Fatalf("detail = %q, want it to say what to do", comparison.Detail)
@@ -186,15 +186,15 @@ func TestBrokenResourcesEachGetAnIssue(t *testing.T) {
 	issues := Detail(app).Issues
 
 	broken, found := issueAbout(issues, "Deployment/podinfo")
-	if !found || broken.Severity != api.SeverityDegraded {
-		t.Fatalf("degraded issue = %+v, want an error", broken)
+	if !found || broken.Severity != api.SeverityFatal {
+		t.Fatalf("degraded issue = %+v, want the same word the issues queue uses", broken)
 	}
 	if broken.Detail != "0/3 ready" {
 		t.Fatalf("detail = %q, want the health message", broken.Detail)
 	}
 	gone, found := issueAbout(issues, "Service/podinfo")
-	if !found || gone.Severity != api.SeverityWarning {
-		t.Fatalf("missing issue = %+v, want a warning", gone)
+	if !found || gone.Severity != api.SeverityDegraded {
+		t.Fatalf("missing issue = %+v, want it ranked under a degraded one", gone)
 	}
 }
 
@@ -265,5 +265,49 @@ func TestAnApplicationBeingDeletedWithNoFinalizersSaysSo(t *testing.T) {
 
 	if !strings.Contains(issue.Detail, "no finalizers left") {
 		t.Fatalf("detail = %q", issue.Detail)
+	}
+}
+
+// the words this page uses are the words the issues queue uses
+
+func TestAFailedOperationIsAsFatalHereAsItIsInTheQueue(t *testing.T) {
+	app := detailed()
+	_ = unstructured.SetNestedField(app.Object, "Failed", "status", "operationState", "phase")
+
+	issue, _ := issueAbout(Detail(app).Issues, "operation")
+
+	if issue.Severity != api.SeverityFatal {
+		t.Fatalf("severity = %q, want %q so one failure reads the same on both surfaces", issue.Severity, api.SeverityFatal)
+	}
+}
+
+func TestEverySeverityComesFromTheSharedVocabulary(t *testing.T) {
+	known := map[string]bool{
+		api.SeverityFatal:    true,
+		api.SeverityDegraded: true,
+		api.SeverityWarning:  true,
+		api.SeverityInfo:     true,
+	}
+	app := detailed()
+	_ = unstructured.SetNestedField(app.Object, "Failed", "status", "operationState", "phase")
+	_ = unstructured.SetNestedField(app.Object, outOfSync, "status", "sync", "status")
+	_ = unstructured.SetNestedSlice(app.Object, []any{
+		map[string]any{"type": "ComparisonError", "message": "nope"},
+		map[string]any{"type": "OrphanedResourceWarning", "message": "stray"},
+		map[string]any{"type": "SomethingElse", "message": "who knows"},
+	}, "status", "conditions")
+	_ = unstructured.SetNestedSlice(app.Object, []any{
+		map[string]any{"kind": "Service", "name": "api", "health": map[string]any{"status": "Missing"}},
+	}, "status", "resources")
+
+	issues := Detail(app).Issues
+
+	if len(issues) < 4 {
+		t.Fatalf("issues = %+v, want the whole spread", issues)
+	}
+	for _, one := range issues {
+		if !known[one.Severity] {
+			t.Fatalf("severity = %q on %q, want one the queue also uses", one.Severity, one.Title)
+		}
 	}
 }

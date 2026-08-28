@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/openapi"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
@@ -544,5 +545,56 @@ func TestAPlainObjectNamesNoConsumers(t *testing.T) {
 
 	if detail.Consumers != nil {
 		t.Fatalf("consumers = %+v, want none for a deployment", detail.Consumers)
+	}
+}
+
+// what these say when nothing is wired up
+
+func TestGitopsAppSaysItIsNotWiredUp(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, Deps{Descriptors: argoDescs()})
+
+	_, err := mgr.GitopsApp(context.Background(), applicationRef())
+
+	want := "spinoza could not do that: no kubernetes client is wired up"
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+func TestGitopsAppGraphSaysItIsNotWiredUp(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, Deps{Descriptors: argoDescs()})
+
+	_, err := mgr.GitopsAppGraph(context.Background(), applicationRef())
+
+	want := "spinoza could not do that: no kubernetes client is wired up"
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+func TestArgoActionSaysItIsNotWiredUp(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, Deps{Descriptors: argoDescs()})
+
+	_, err := mgr.ArgoAction(context.Background(), applicationRef(), argocd.Request{Action: argocd.Refresh})
+
+	want := "spinoza could not do that: no kubernetes client is wired up"
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+func applicationRef() api.ObjectRef {
+	return api.ObjectRef{
+		Group:     "argoproj.io",
+		Version:   "v1alpha1",
+		Resource:  "applications",
+		Namespace: "argocd",
+		Name:      "podinfo",
 	}
 }
