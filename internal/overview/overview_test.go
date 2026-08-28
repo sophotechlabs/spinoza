@@ -18,6 +18,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
+	"github.com/sophotechlabs/spinoza/internal/listerr"
 )
 
 type stubLister struct {
@@ -441,6 +442,29 @@ func TestBuildWalksPastTheFirstPageOfWarnings(t *testing.T) {
 	}
 	if len(got.Warnings) == 0 || got.Warnings[0].Reason != "OOMKilled" {
 		t.Fatalf("the newest warning sat on page two and was lost: %+v", got.Warnings)
+	}
+}
+
+func TestPagingWarningsCountsAsOneAttemptNotOnePerPage(t *testing.T) {
+	dyn := dynClient()
+	pages := 0
+	dyn.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		pages++
+		more := pages < 3
+		return true, eventPage([]string{fmt.Sprintf("e-%d", pages)}, "2026-08-11T10:00:00Z", "BackOff", more), nil
+	})
+	failures := listerr.New()
+	failures.Record("nodes", errors.New("nodes are forbidden"))
+
+	warnings(t.Context(), dyn, fullCatalog(), failures)
+
+	if pages != 3 {
+		t.Fatalf("listed %d pages, want 3", pages)
+	}
+	want := "1 of 2 resource types could not be listed"
+	if !strings.HasPrefix(failures.Message(), want) {
+		t.Fatalf("message = %q, want it to start %q; paging one type must count once",
+			failures.Message(), want)
 	}
 }
 

@@ -227,10 +227,10 @@ func warnings(ctx context.Context, dyn dynamic.Interface, descs map[string]api.R
 	bounded, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	opts := metav1.ListOptions{Limit: warningWindow, FieldSelector: "type=Warning"}
-	for page := range warningPages {
+	for range warningPages {
 		list, err := dyn.Resource(eventsGVR).List(bounded, opts)
-		failures.Record(eventsKey, err)
 		if err != nil {
+			failures.Record(eventsKey, err)
 			return out
 		}
 		for i := range list.Items {
@@ -238,17 +238,15 @@ func warnings(ctx context.Context, dyn dynamic.Interface, descs map[string]api.R
 		}
 		out = newestFirst(out)
 		if list.GetContinue() == "" {
-			return out
-		}
-		if page == warningPages-1 {
-			failures.Record(eventsKey, fmt.Errorf(
-				"more than %d warning events, so the newest are taken from the first %d",
-				warningWindow*warningPages, warningWindow*warningPages,
-			))
+			failures.Record(eventsKey, nil)
 			return out
 		}
 		opts.Continue = list.GetContinue()
 	}
+	failures.Record(eventsKey, fmt.Errorf(
+		"more than %d warning events, so the newest are taken from the first %d",
+		warningWindow*warningPages, warningWindow*warningPages,
+	))
 	return out
 }
 
