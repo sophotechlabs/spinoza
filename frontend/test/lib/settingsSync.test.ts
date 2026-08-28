@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { catchUp, watchSettings } from '../../src/lib/settingsSync';
 import {
   SAVE_DELAY_MS,
+  flush,
   hydrate,
   isSaving,
   readStored,
   startSaving,
   stopSaving,
   storedKeys,
+  writeStored,
 } from '../../src/lib/persist';
 import { useThemeStore } from '../../src/store/theme';
 import { THEME_KEY } from '../../src/lib/theme';
@@ -83,6 +85,17 @@ describe('catchUp', () => {
     await catchUp();
 
     expect(useThemeStore.getState().preference).toBe('borg');
+  });
+
+  // Another window wrote a setting this one has never held at all.
+  it('takes a setting it has never seen', async () => {
+    const grown = held();
+    grown['spinoza.sidebar.v1'] = '{"Cluster":true}';
+    served(grown);
+
+    await catchUp();
+
+    expect(readStored('spinoza.sidebar.v1')).toBe('{"Cluster":true}');
   });
 
   // A window that cannot reach the server keeps what it has rather than
@@ -206,5 +219,19 @@ describe('watchSettings', () => {
     await Promise.resolve();
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('a change this window has not saved yet', () => {
+  it('is not undone by what the server still holds', async () => {
+    startSaving();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    writeStored(THEME_KEY, 'borg');
+    await flush();
+
+    served({ [THEME_KEY]: 'nord' });
+    await catchUp();
+
+    expect(readStored(THEME_KEY)).toBe('borg');
   });
 });

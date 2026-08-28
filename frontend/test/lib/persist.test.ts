@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SAVE_DELAY_MS,
   SETTINGS_PATH,
-  forgetStored,
   hydrate,
   readStored,
   resetStored,
@@ -197,23 +196,90 @@ describe('keeping settings', () => {
     expect(storedKeys()).toEqual([]);
   });
 
-  it('forgets a setting on request', () => {
-    vi.useFakeTimers();
-    const fetchMock = stubFetch();
-    startSaving();
-    writeStored('spinoza.theme.v1', '"nord"');
-
-    forgetStored('spinoza.theme.v1');
-    vi.advanceTimersByTime(SAVE_DELAY_MS);
-
-    expect(readStored('spinoza.theme.v1')).toBeNull();
-    expect(body(fetchMock)).toEqual({});
-  });
-
   it('lists what it holds', () => {
     writeStored('spinoza.theme.v1', '"nord"');
     writeStored('spinoza.sidebar.v1', '{}');
 
     expect(storedKeys().sort()).toEqual(['spinoza.sidebar.v1', 'spinoza.theme.v1']);
+  });
+});
+
+describe('sending only what this window changed', () => {
+  it('leaves out what it never touched', async () => {
+    served({ 'spinoza.theme.v1': '"nord"', 'spinoza.layout.v1': '{"left":200}' });
+    hydrate();
+    const fetchMock = stubFetch();
+    startSaving();
+
+    writeStored('spinoza.theme.v1', '"borg"');
+    await save();
+
+    expect(body(fetchMock)).toEqual({ 'spinoza.theme.v1': '"borg"' });
+  });
+
+  it('sends nothing at all when nothing was written', async () => {
+    served({ 'spinoza.theme.v1': '"nord"' });
+    hydrate();
+    const fetchMock = stubFetch();
+    startSaving();
+
+    await save();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('stops sending a key once the server took it', async () => {
+    const fetchMock = stubFetch();
+    startSaving();
+    writeStored('spinoza.theme.v1', '"borg"');
+    await save();
+
+    await save();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // A refused save has to come round again, or the change is lost quietly.
+  it('keeps a key the server refused', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal('fetch', fetchMock);
+    startSaving();
+    writeStored('spinoza.theme.v1', '"borg"');
+    await save();
+
+    await save();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a key the server never answered about', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('offline'));
+    vi.stubGlobal('fetch', fetchMock);
+    startSaving();
+    writeStored('spinoza.theme.v1', '"borg"');
+    await save();
+
+    await save();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  // Written again while the first request was still out: the newer value has to
+  // follow it rather than being forgotten with the older one.
+  it('keeps a key written again while the save was in flight', async () => {
+    const fetchMock = stubFetch();
+    startSaving();
+    writeStored('spinoza.theme.v1', '"borg"');
+    const inFlight = save();
+
+    writeStored('spinoza.theme.v1', '"nord"');
+    await inFlight;
+    await save();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const second = fetchMock.mock.calls[1][1] as { body: string };
+    expect((JSON.parse(second.body) as { values: Record<string, string> }).values).toEqual({
+      'spinoza.theme.v1': '"nord"',
+    });
   });
 });

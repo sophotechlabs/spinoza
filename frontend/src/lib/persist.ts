@@ -42,6 +42,12 @@ function replace(next: Map<string, string>): void {
 let timer: ReturnType<typeof setTimeout> | null = null;
 let saving = false;
 
+// changed names the keys this window has written and not yet had accepted. Only
+// those are sent: a window open for an hour holds a stale copy of everything it
+// never touched, and putting the whole map back would undo whatever moved in
+// the meantime.
+const changed = new Set<string>();
+
 export function startSaving(): void {
   saving = true;
 }
@@ -105,9 +111,14 @@ export function hydrate(): void {
   }
   const local = fromBrowser();
   replace(local);
-  if (local.size > 0) {
-    void save();
+  if (local.size === 0) {
+    return;
   }
+  // Moving what the browser kept onto the server: all of it is ours to send.
+  for (const key of local.keys()) {
+    changed.add(key);
+  }
+  void save();
 }
 
 export function readStored(key: string): string | null {
@@ -116,11 +127,7 @@ export function readStored(key: string): string | null {
 
 export function writeStored(key: string, value: string): void {
   cache().set(key, value);
-  schedule();
-}
-
-export function forgetStored(key: string): void {
-  cache().delete(key);
+  changed.add(key);
   schedule();
 }
 
@@ -157,6 +164,13 @@ export async function refresh(): Promise<boolean> {
   const found = valuesOf(body);
   if (found === null) {
     return false;
+  }
+  // A key changed here and not yet accepted is newer than the server's copy.
+  for (const key of changed) {
+    const held = cache().get(key);
+    if (held !== undefined) {
+      found.set(key, held);
+    }
   }
   if (same(cache(), found)) {
     return false;
@@ -198,14 +212,43 @@ export function save(): Promise<void> {
   if (!saving) {
     return Promise.resolve();
   }
-  const settings: Settings = { values: Object.fromEntries(cache()) };
+  const sending = pending();
+  if (Object.keys(sending).length === 0) {
+    return Promise.resolve();
+  }
+  const settings: Settings = { values: sending };
   return request(SETTINGS_PATH, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
   })
-    .then(() => undefined)
+    .then((response) => {
+      if (response.ok) {
+        accepted(sending);
+      }
+    })
     .catch(() => undefined);
+}
+
+function pending(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of changed) {
+    const value = cache().get(key);
+    if (value !== undefined) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+// accepted forgets only what went out unchanged. A key written again while the
+// request was in flight stays, so the newer value follows.
+function accepted(sent: Record<string, string>): void {
+  for (const [key, value] of Object.entries(sent)) {
+    if (cache().get(key) === value) {
+      changed.delete(key);
+    }
+  }
 }
 
 export function flush(): Promise<void> {
@@ -218,6 +261,7 @@ export function flush(): Promise<void> {
 
 export function resetStored(): void {
   saving = false;
+  changed.clear();
   replace(new Map<string, string>());
   if (timer !== null) {
     clearTimeout(timer);
