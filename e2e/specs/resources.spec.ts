@@ -3,10 +3,14 @@ import { openResource } from '../harness/app';
 
 test('discovery lists a table for a core type', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
-  await expect(page.getByRole('columnheader', { name: /^Name/ })).toBeVisible();
-  for (const column of ['Namespace', 'Containers', 'Status', 'Restarts', 'Node', 'Age']) {
-    await expect(page.getByRole('columnheader', { name: column })).toBeVisible();
+  const headers = page.locator('main thead th');
+  for (const column of ['Name', 'Namespace', 'Containers', 'Status', 'Restarts', 'Node', 'Age']) {
+    await expect(headers.filter({ hasText: column }).first()).toBeVisible();
   }
+  await expect(headers.filter({ hasText: 'Name' }).first()).toHaveAttribute(
+    'aria-sort',
+    'ascending',
+  );
 });
 
 test('the seeded pods arrive in the table', async ({ page }) => {

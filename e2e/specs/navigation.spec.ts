@@ -74,8 +74,7 @@ test('the page offers a skip link into its content', async ({ page }) => {
 
 test('the resource tree counts what it found', async ({ page }) => {
   await openHome(page);
-  await expect(sidebar(page, /^Pod( \d+)?$/)).toBeVisible();
-  await expect(sidebar(page, /^Deployment( \d+)?$/)).toBeVisible();
-  await expect(sidebar(page, /^CronJob( \d+)?$/)).toBeVisible();
-  await expect(sidebar(page, /^Pod \d+$/)).toBeVisible();
+  await expect(sidebar(page, /^Pod \d/)).toBeVisible();
+  await expect(sidebar(page, /^Deployment \d/)).toBeVisible();
+  await expect(sidebar(page, /^CronJob \d/)).toBeVisible();
 });
