@@ -138,9 +138,8 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(cached)
 
 	resolved := ref
-	// helm and kubectl take a context by name, which only means something
-	// alongside the file it came from. Without the file they look in the default
-	// kubeconfig for a context that may only exist in the one spinoza was given.
+	// helm and kubectl take a context by name, which needs the file it came from;
+	// without it they read the default kubeconfig.
 	if resolved.Kubeconfig == "" {
 		resolved.Kubeconfig = options.Kubeconfig
 	}

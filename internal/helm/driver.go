@@ -13,8 +13,7 @@ func DefaultDriver() string {
 	return DriverSecret
 }
 
-// ReleaseDriver is where the history is actually kept, which the environment
-// can disagree with. A release nobody can find is answered for as a new one.
+// ReleaseDriver is where history actually lives; the environment can disagree.
 func (s *Service) ReleaseDriver(ctx context.Context, namespace, name string) string {
 	if s == nil {
 		return DefaultDriver()

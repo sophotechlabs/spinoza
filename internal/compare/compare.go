@@ -11,7 +11,7 @@ import (
 
 const lastApplied = "kubectl.kubernetes.io/last-applied-configuration"
 
-// what every cluster writes for itself, and nobody authors.
+// Fields every cluster writes for itself.
 var assignedByTheServer = []string{
 	"uid",
 	"resourceVersion",

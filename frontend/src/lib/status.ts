@@ -86,9 +86,8 @@ export function restartColor(value: string): string {
   return 'text-warn';
 }
 
-// Ready=True is good news, MemoryPressure=True is bad, KernelDeadlock=False is
-// a node saying it is fine. A GKE node carries two dozen problem-detector
-// conditions sitting at False all day, so only known words decide.
+// Ready=True is good, KernelDeadlock=False is fine. A GKE node carries two
+// dozen detectors sitting at False, so only known words decide.
 const ALARMING_WHEN_TRUE = [
   'Pressure',
   'Unavailable',
@@ -133,8 +132,7 @@ export function alarmingWhenTrue(type: string): boolean {
   return ALARMING_WHEN_TRUE.some((word) => type.includes(word));
 }
 
-// Asked after alarmingWhenTrue, so a type naming both, as ReadyReplicasMissing
-// does, reads as the trouble.
+// After alarmingWhenTrue, so ReadyReplicasMissing reads as trouble.
 function goodWhenTrue(type: string): boolean {
   return GOOD_WHEN_TRUE.some((word) => type.includes(word));
 }

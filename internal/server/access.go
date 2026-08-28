@@ -51,8 +51,7 @@ func (s *Server) helmAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().HelmAccess(bounded, namespace, query.Get("name")))
 }
 
-// An unnamed object would be asked about by kind, and a kind refusal is not a
-// row refusal.
+// An unnamed object is asked about by kind, which is a different refusal.
 func readable(query api.AccessQuery) error {
 	if query.Capability == "" {
 		return errors.New("capability is required")

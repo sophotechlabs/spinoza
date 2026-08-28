@@ -44,8 +44,7 @@ func column(name, kind, path string) map[string]any {
 	return map[string]any{"name": name, "type": kind, "jsonPath": path}
 }
 
-// A jsonPath must start with a dot, so the braces around a range are closed
-// and reopened by hand.
+// A jsonPath starts with a dot, so a range closes and reopens the braces.
 const rangingPath = `.status.conditions[0].type}{range .status.conditions[*]}{.status}{end`
 
 func kustomization() *unstructured.Unstructured {
@@ -313,8 +312,7 @@ func TestAPathAlreadyInBracesIsReadTheSame(t *testing.T) {
 	}
 }
 
-// The readers overlap long enough for the race detector to catch a template
-// that writes to itself while reading.
+// Overlapping long enough for the race detector.
 func TestAColumnCanBeReadFromSeveralGoroutinesAtOnce(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
 	shown, _ := layoutOf(crd, "v1")
@@ -334,8 +332,7 @@ func TestAColumnCanBeReadFromSeveralGoroutinesAtOnce(t *testing.T) {
 	group.Wait()
 }
 
-// The apiserver accepts a ranging path. Walking a range rewrites the parse
-// tree, so a template kept between rows answers only for the first object.
+// Walking a range rewrites the parse tree, so a kept template answers once.
 func TestAColumnThatRangesAnswersForEveryRowNotJustTheFirst(t *testing.T) {
 	crd := crdWith("v1", column("Conditions", "string", rangingPath))
 	shown, ok := layoutOf(crd, "v1")
@@ -395,8 +392,6 @@ func TestAColumnNamingSeveralFieldsAtOnceIsRead(t *testing.T) {
 	}
 }
 
-// A range needs a brace, which the parser refuses inside a filter or a union.
-// That is what lets the check look one level down and no further.
 func TestARangeCannotBeHiddenInsideAFilterOrAUnion(t *testing.T) {
 	hidden := []string{
 		`.a[?(@.b=={range .c[*]}{.d}{end})]`,

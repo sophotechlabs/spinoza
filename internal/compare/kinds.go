@@ -9,8 +9,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// Kinds matches by namespace and name, or by name alone when each side came
-// from a single namespace.
+// Kinds matches on namespace and name, or name alone for one-namespace reads.
 func Kinds(left, right []*unstructured.Unstructured, byName bool) []api.KindDiff {
 	here := index(left, byName)
 	there := index(right, byName)

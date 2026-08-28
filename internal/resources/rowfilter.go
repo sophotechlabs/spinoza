@@ -15,8 +15,7 @@ const (
 
 var notAlphanumeric = regexp.MustCompile(`[^a-z0-9]`)
 
-// Matches the frontend's key, and filters the cache rather than the rows on
-// screen: the only way to find anything past the newest few.
+// Filters the cache, not the rows on screen: the only way past the newest few.
 func fieldKey(label string) string {
 	return notAlphanumeric.ReplaceAllString(strings.ToLower(label), "")
 }

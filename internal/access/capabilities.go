@@ -107,8 +107,7 @@ func nodeCapabilities(object Check) []capability {
 	cordon := with(object, "patch")
 	return []capability{
 		needs(Cordon, cordon),
-		// Reading pods and cordoning are all or nothing; eviction is per pod, so a
-		// partial drain is a real outcome and the button stays.
+		// Reading pods and cordoning are all or nothing; eviction is per pod.
 		needs(Drain, podCheck("list", "", "", ""), cordon),
 	}
 }
@@ -160,8 +159,8 @@ func (s *Service) answer(ctx context.Context, held []capability) api.Access {
 	return api.Access{Refused: refused}
 }
 
-// ReviewEach asks one capability across many objects. One that means nothing
-// for a kind is never asked about, which is not a refusal.
+// ReviewEach asks one capability of many objects. Not applicable is not
+// refused.
 func (s *Service) ReviewEach(ctx context.Context, name string, refs []api.ObjectRef) api.BulkAccess {
 	wanted := make([][]Check, len(refs))
 	checks := []Check{}

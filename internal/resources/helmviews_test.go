@@ -195,8 +195,7 @@ func TestHelmMethodsReachTheService(t *testing.T) {
 	}
 }
 
-// Resolving to whatever version shares the kind would make a rollback address
-// the wrong API.
+// The wrong version would make a rollback address the wrong API.
 func TestTheManagerRefusesAKindAtAVersionItDoesNotServe(t *testing.T) {
 	mgr := viewManager(t, nil)
 

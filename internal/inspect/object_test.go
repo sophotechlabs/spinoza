@@ -791,8 +791,6 @@ func TestTheRefusalSaysHowToGetGoing(t *testing.T) {
 	}
 }
 
-// An empty resourceVersion is the same as a missing one: an unconditional
-// write.
 func TestAnEmptyResourceVersionIsRefusedToo(t *testing.T) {
 	client := newClient(newPod())
 	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"\"\n")

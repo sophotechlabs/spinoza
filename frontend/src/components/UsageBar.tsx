@@ -3,8 +3,7 @@ import { barColor } from '../lib/metrics';
 interface UsageBarProps {
   percent: number;
   label: string;
-  // The bar is the proportion, so a caller with something better than a
-  // percentage writes it here.
+  // The bar is the proportion; this is the text beside it.
   text?: string;
 }
 

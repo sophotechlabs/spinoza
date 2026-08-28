@@ -22,8 +22,7 @@ import (
 
 const lastAppliedAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
 
-// ErrNoResourceVersion means the apiserver would take the write as
-// unconditional.
+// ErrNoResourceVersion means the write would be unconditional.
 var ErrNoResourceVersion = errors.New(
 	"this document names no resourceVersion, so applying it would overwrite whatever is on the server now; " +
 		"Revert to load the current object, then make the change again",
@@ -136,8 +135,7 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 	}, nil
 }
 
-// A Secret base64-encodes every value; a ConfigMap only binaryData. Both arrive
-// as the same entries.
+// A Secret base64-encodes every value; a ConfigMap only binaryData.
 func dataOf(item *unstructured.Unstructured) []api.DataEntry {
 	switch item.GetKind() {
 	case "Secret":

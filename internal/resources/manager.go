@@ -344,8 +344,7 @@ func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef) error {
 	return inspect.Delete(ctx, m.dyn, ref)
 }
 
-// ListKind reads from the apiserver, not the informer cache, so both sides of
-// a comparison are read the same way.
+// ListKind reads from the apiserver, not the informer cache.
 func (m *Manager) ListKind(ctx context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error) {
 	if m.dyn == nil {
 		return nil, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
@@ -533,8 +532,7 @@ func (m *Manager) RemoveNodeShell(ctx context.Context, pod string) {
 	m.nodeShells.Remove(ctx, pod)
 }
 
-// MetricHistory uses Prometheus when reachable, otherwise spinoza's own
-// readings; the answer says which.
+// MetricHistory uses Prometheus when reachable, otherwise spinoza's readings.
 func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {
 	if m.prom != nil {
 		history, err := m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
@@ -1359,8 +1357,7 @@ func (st *stream) snapshot(ns string, limit int, filters []api.RowFilter) ([]api
 	return rows, total, nil
 }
 
-// A capped stream cuts the newest first, so anything past the cut would be
-// unfindable without this.
+// A capped stream cuts the newest first, so the rest would be unfindable.
 func (st *stream) keepMatching(
 	held []*unstructured.Unstructured,
 	limit int,

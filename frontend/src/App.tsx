@@ -92,8 +92,7 @@ async function adoptContext(name: string): Promise<string> {
   return found.current.name;
 }
 
-// Windowed-ness is remembered per kind: a fresh subscription has no limit yet
-// and would flip the answer back.
+// Remembered per kind: a fresh subscription has no limit and would flip it back.
 function windowKey(windowed: boolean, chips: Chip[]): string {
   if (!windowed) {
     return '';
@@ -214,8 +213,7 @@ export default function App() {
     if (serverContext === contextName) {
       return;
     }
-    // The opening route owns the selection until this window has a context of its
-    // own; reacting here would discard what a deep link named.
+    // The opening route owns the selection until this window has its own context.
     if (contextName === '') {
       return;
     }

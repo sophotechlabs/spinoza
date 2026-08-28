@@ -19,9 +19,8 @@ type Check struct {
 	Name        string
 }
 
-// Decision carries what the cluster answered. Allowed includes a check that
-// could not be put: spinoza never removes a button over a question it failed
-// to ask. Answered tells those apart.
+// Decision carries the cluster's answer. Allowed includes a check that could
+// not be put; Answered tells those apart.
 type Decision struct {
 	Allowed  bool
 	Answered bool
@@ -50,8 +49,8 @@ func New(cs kubernetes.Interface) *Service {
 	return &Service{cs: cs, seen: map[Check]answer{}, now: time.Now, ttl: remembered}
 }
 
-// Fifty nodes share the cluster-wide read a drain needs, and the cache cannot
-// help with answers that have not arrived yet.
+// Fifty nodes share one cluster-wide read, which the cache cannot dedupe while
+// it is still in flight.
 func (s *Service) review(ctx context.Context, checks []Check) []Decision {
 	out := make([]Decision, len(checks))
 	asking := map[Check][]int{}

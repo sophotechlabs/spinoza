@@ -80,8 +80,7 @@ func (m *Manager) forgetLayouts() {
 	m.layouts = map[schema.GroupVersionResource]*recent[layout]{}
 }
 
-// Failure is not fatal: many users cannot read CRDs, and keep the default
-// table.
+// Failure is not fatal: many users cannot read CRDs.
 func (m *Manager) crdLayout(ctx context.Context, gvr schema.GroupVersionResource) (layout, bool) {
 	if m.dyn == nil {
 		return layout{}, false
@@ -126,8 +125,8 @@ type declaredColumn struct {
 	name     string
 	render   string
 	template string
-	// A ranging template rewrites its own parse tree and is spent after one object,
-	// so those are parsed per row. The rest write nothing while reading.
+	// A ranging template rewrites its own parse tree and is spent after one
+	// object; the rest write nothing while reading.
 	kept *jsonpath.JSONPath
 }
 
@@ -239,9 +238,8 @@ func ranges(name, path string) bool {
 	return listRanges(tree.Root)
 }
 
-// A template parses into a list of its {...} groups, each a list of its own, so
-// a range sits one level down. No deeper: the parser rejects a brace inside a
-// filter or a union.
+// A range sits one level down, inside a {...} group. No deeper: the parser
+// rejects a brace in a filter or a union.
 func listRanges(list *jsonpath.ListNode) bool {
 	return slices.ContainsFunc(list.Nodes, nodeRanges)
 }
@@ -276,8 +274,7 @@ func renderFor(name, declared string) string {
 	return ""
 }
 
-// working names columns whose True means healthy. Suspended and Paused are
-// excluded: True is bad news in those.
+// working names columns whose True means healthy; Suspended and Paused are not.
 func working(name string) bool {
 	for _, known := range []string{"Ready", "Healthy", "Available", "Synced", "Established", "Reconciled"} {
 		if strings.EqualFold(name, known) {

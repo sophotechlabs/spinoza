@@ -70,7 +70,7 @@ func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport
 		support.Reason = "no node was named"
 		return support
 	}
-	// Unlike the buttons elsewhere, one that cannot be asked about is not offered.
+	// One that cannot be asked about is not offered, unlike elsewhere.
 	decision := s.perms.Ask(ctx, access.Check{
 		Verb:      "create",
 		Resource:  "pods",

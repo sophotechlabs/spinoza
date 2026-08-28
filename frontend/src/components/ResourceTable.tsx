@@ -107,8 +107,7 @@ function renderCondition(name: string, value: string): ReactNode {
   return <span className={conditionColor(name, value)}>{value}</span>;
 }
 
-// The prometheus operator calls a count of ready replicas "Ready", so only
-// True and False are coloured.
+// A replica count can be named "Ready", so only True and False are coloured.
 function answersACondition(value: string): boolean {
   if (value === 'True') {
     return true;

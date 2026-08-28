@@ -22,8 +22,6 @@ func TestKlogRoutesThroughSlog(t *testing.T) {
 	}
 }
 
-// What stops a newline in a logged value forging a second line is the handler,
-// not the call sites. Tested through the handler spinoza installs.
 func TestTheHandlerEscapesWhatItIsGiven(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(logHandler(&buf, slog.LevelInfo))

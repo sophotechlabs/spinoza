@@ -78,8 +78,7 @@ func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Strea
 	return stream, nil
 }
 
-// Every pod ever read, not only the ones being read now: reopening one whose
-// log ended would resend the whole log.
+// Every pod ever read: reopening one whose log ended would resend it all.
 type attachments struct {
 	mu   sync.Mutex
 	open map[string]func()
@@ -239,8 +238,7 @@ func podsMatching(
 	return found[:maxPods], len(found), nil
 }
 
-// So twenty pods open with a full buffer of all twenty, not of the three that
-// answered first.
+// So twenty pods open with a full buffer, not the three that answered first.
 func share(tail int64, pods int) int64 {
 	if tail <= 0 || pods < 2 {
 		return tail

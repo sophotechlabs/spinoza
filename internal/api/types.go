@@ -489,8 +489,7 @@ type ExecSupport struct {
 	Shell     string `json:"shell"`
 }
 
-// Access carries refusals only. Absent means permitted or unanswerable; both
-// mean let the user try.
+// Access carries refusals only; absent means permitted or unanswerable.
 type Access struct {
 	Refused []Refusal `json:"refused"`
 }
@@ -505,7 +504,7 @@ type AccessQuery struct {
 	Refs       []ObjectRef `json:"refs"`
 }
 
-// BulkAccess names refused objects by their place in the list.
+// BulkAccess indexes refusals by their place in the list asked about.
 type BulkAccess struct {
 	Refused []RowRefusal `json:"refused"`
 }
@@ -796,7 +795,7 @@ type MetricHistory struct {
 	Pod       string `json:"pod"`
 	Source    string `json:"source,omitempty"`
 	Sampled   bool   `json:"sampled,omitempty"`
-	// Unix milliseconds of the oldest reading here, which is not the span asked for.
+	// Unix ms of the oldest reading here, not the span asked for.
 	Since  int64         `json:"since,omitempty"`
 	CPU    []MetricPoint `json:"cpu"`
 	Memory []MetricPoint `json:"memory"`

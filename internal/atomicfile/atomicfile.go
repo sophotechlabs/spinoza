@@ -1,6 +1,5 @@
 // Package atomicfile writes a small file whole or not at all: to a temporary
-// file beside the target, flushed, then renamed over it. A failure anywhere
-// leaves the previous file untouched.
+// file beside the target, then renamed over it.
 package atomicfile
 
 import (
@@ -35,8 +34,6 @@ func New() *Saver {
 	}
 }
 
-// Save writes body at path. The temporary file sits beside the target, so the
-// rename never crosses a filesystem.
 func (s *Saver) Save(path, pattern string, body []byte) error {
 	dir := filepath.Dir(path)
 	err := s.makeDir(dir, dirMode)

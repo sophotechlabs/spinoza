@@ -64,7 +64,6 @@ func TestAReleaseOlderThanYoursIsNotOffered(t *testing.T) {
 	}
 }
 
-// Sorted as text, v1.10.0 falls below v1.9.0.
 func TestVersionsAreComparedAsNumbersNotText(t *testing.T) {
 	checker := New("v1.9.0", serving(t, `{"tag_name":"v1.10.0","html_url":"u"}`).URL)
 
@@ -181,7 +180,7 @@ func TestTheQuestionIsAskedOnce(t *testing.T) {
 	}
 }
 
-// A running spinoza uses Endpoint, and no flag reaches it.
+// No flag reaches it.
 func TestARunningSpinozaAsksTheProjectsOwnEndpoint(t *testing.T) {
 	if got := New("v1.0.0", "").endpoint; got != Endpoint {
 		t.Fatalf("endpoint = %q, want %q", got, Endpoint)

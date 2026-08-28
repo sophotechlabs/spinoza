@@ -40,8 +40,7 @@ type Stream struct {
 	err      error
 }
 
-// Attached and Matched differ when a workload has more pods than spinoza
-// opens.
+// Attached and Matched differ when a workload has more pods than spinoza opens.
 func (s *Stream) Attached() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

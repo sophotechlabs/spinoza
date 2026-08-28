@@ -159,7 +159,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		slog.Warn("discovery came back incomplete", "error", discErr)
 	}
 	slog.Info("connected to a cluster", "context", bundle.Ref.Name, "resourceTypes", len(descs), "categories", len(cats))
-	// Shared, so an answer is remembered whichever feature asked.
+	// Shared, so an answer is reused across features.
 	perms := access.New(bundle.Clientset)
 	schemas := jsonschema.NewClient(bundle.Discovery.OpenAPIV3)
 	forwards := portforward.NewRegistry(

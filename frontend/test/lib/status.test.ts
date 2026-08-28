@@ -190,8 +190,7 @@ describe('which way a condition reads', () => {
     expect(conditionColor('Initialized', 'True')).toBe('text-ok');
   });
 
-  // They sit at False all day on a healthy node; reading them as readiness
-  // painted one red twenty-two times over.
+  // They sit at False on a healthy node; read as readiness, twenty-two went red.
   it('reads a node problem detector the right way round', () => {
     const detectors = [
       'KernelDeadlock',

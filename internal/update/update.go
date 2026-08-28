@@ -1,5 +1,4 @@
-// Package update reports whether a newer spinoza has been published: the
-// version, a link, and the command that installs it.
+// Package update reports whether a newer spinoza has been published.
 package update
 
 import (

@@ -44,8 +44,7 @@ func New() *Store {
 	}
 }
 
-// Record takes a fresh metrics read. It covers every pod the cluster measures,
-// so one absent from it is dropped.
+// Record takes a fresh read; a pod absent from it is dropped.
 func (s *Store) Record(at time.Time, pods map[string]api.ResourceUsage) {
 	if len(pods) == 0 {
 		return

@@ -124,8 +124,7 @@ func Supported(profile string) bool {
 	return slices.Contains(profiles, profile)
 }
 
-// Allowed leaves the button alone when the question could not be put; the
-// apiserver decides in the end.
+// Allowed leaves the button alone when the question could not be put.
 func (s *Service) Allowed(ctx context.Context, namespace, pod string) api.DebugSupport {
 	support := api.DebugSupport{Namespace: namespace, Pod: pod, Allowed: true, Image: s.image}
 	decision := s.perms.Ask(ctx, access.Check{

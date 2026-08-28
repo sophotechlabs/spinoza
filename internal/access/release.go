@@ -14,8 +14,8 @@ const (
 	Uninstall = "uninstall"
 )
 
-// Helm keeps release history in the namespace as a secret or configmap, and
-// nothing works without writing it. Measured against helm v4:
+// Helm keeps release history in the namespace as a secret or configmap.
+// Measured against helm v4:
 //
 //	install    create
 //	upgrade    create, update

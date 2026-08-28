@@ -31,8 +31,7 @@ const (
 	relayStop
 )
 
-// Const on purpose: a feed reads it from a goroutine that outlives the test
-// that started it.
+// Const on purpose: read from a goroutine outliving the test that started it.
 const minResyncInterval = 2 * time.Second
 
 type throttle struct {
@@ -465,9 +464,8 @@ func (sess *wsSession) reportPods(
 	return sess.writeCurrent(streams, subID, gen, now)
 }
 
-// Hands back the line a batch stopped on, so one from another pod is never
-// dropped. A quiet stream still wakes on the tick: the pods being read can
-// change with nothing written.
+// Hands back the line a batch stopped on. A quiet stream still wakes on the
+// tick: the pods being read can change with nothing written.
 func (sess *wsSession) nextLine(
 	stream *logs.Stream,
 	held *logs.Line,

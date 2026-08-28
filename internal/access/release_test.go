@@ -32,7 +32,6 @@ func TestAReleaseNothingIsRefusedForHoldsNothingBack(t *testing.T) {
 	}
 }
 
-// Measured against helm, one refused verb at a time.
 func TestInstallingNeedsToCreateTheReleaseObject(t *testing.T) {
 	service := serviceFor(t, refusingVerb("create", "secrets", "no creating secrets"))
 
