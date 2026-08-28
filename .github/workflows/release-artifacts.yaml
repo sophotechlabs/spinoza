@@ -82,6 +82,9 @@ jobs:
       - version
       - dist
     runs-on: macos-latest
+    concurrency:
+      group: release-checksums
+      cancel-in-progress: false
     permissions:
       contents: write
       id-token: write
@@ -111,6 +114,9 @@ jobs:
       - dist
       - desktop
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-checksums
+      cancel-in-progress: false
     permissions:
       contents: write
       id-token: write
@@ -144,6 +150,9 @@ jobs:
       - desktop
       - desktop-linux
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-checksums
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:

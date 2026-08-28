@@ -36,6 +36,7 @@ jobs:
           restore-keys: windows-
       - run: just deps
       - run: just ci-windows-smoke
+      - run: just smoke-desktop-windows
 
   scripts:
     name: powershell
