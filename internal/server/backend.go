@@ -20,6 +20,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/topology"
 )
 
 type Catalog interface {
@@ -71,6 +72,7 @@ type Views interface {
 
 type Deliveries interface {
 	Graph(ctx context.Context) api.Graph
+	Topology(ctx context.Context, req topology.Request) api.Graph
 	Flux(ctx context.Context) api.FluxDashboard
 	Argo(ctx context.Context) api.ArgoDashboard
 	FluxOverview(ctx context.Context) api.FluxOverview

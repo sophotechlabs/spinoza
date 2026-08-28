@@ -190,6 +190,7 @@ GraphEdge.From from string
 GraphEdge.Kind kind string
 GraphEdge.To to string
 GraphNode.Category category string
+GraphNode.Contains contains int
 GraphNode.Group group string
 GraphNode.ID id string
 GraphNode.Kind kind string
@@ -198,6 +199,7 @@ GraphNode.Namespace namespace string
 GraphNode.Ready ready string
 GraphNode.Resource resource string
 GraphNode.Status status string
+GraphNode.Unhealthy unhealthy int
 GraphNode.Version version string
 Health.Context context string
 Health.Status status string

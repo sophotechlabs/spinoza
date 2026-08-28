@@ -3,9 +3,8 @@ import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import type { Graph, GraphEdgeKind, GraphNode } from '../lib/types';
 import {
-  EDGE_DEPENDS_STROKE,
-  EDGE_MANAGES_STROKE,
-  EDGE_SOURCE_STROKE,
+  EDGE_STROKES,
+  busiestNamespace,
   restyle,
   sameGraph,
   sameTopology,
@@ -48,6 +47,14 @@ const LEGEND: LegendItem[] = [
   { swatch: 'border-edge-emphasis bg-surface-active', label: 'Unknown' },
 ];
 
+function narrowTo(graph: Graph): string {
+  const busiest = busiestNamespace(graph);
+  if (busiest === '') {
+    return 'Narrow the view down.';
+  }
+  return `Pick a namespace — ${busiest} is the biggest.`;
+}
+
 function legendFor(graph: Graph): LegendItem[] {
   if (graph.nodes.some((node) => node.category === 'source')) {
     return [...LEGEND, SOURCE_LEGEND];
@@ -59,12 +66,10 @@ const EDGE_LABELS: Record<GraphEdgeKind, string> = {
   source: 'Source',
   dependsOn: 'Depends on',
   manages: 'Manages',
-};
-
-const EDGE_STROKES: Record<GraphEdgeKind, string> = {
-  source: EDGE_SOURCE_STROKE,
-  dependsOn: EDGE_DEPENDS_STROKE,
-  manages: EDGE_MANAGES_STROKE,
+  owns: 'Owns',
+  routes: 'Routes to',
+  configures: 'Configures',
+  scales: 'Scales',
 };
 
 interface Laid {
@@ -129,10 +134,10 @@ export default function GraphCanvas({
     [onSelect],
   );
 
-  if (overLimit !== null) {
+  if (overLimit !== null && data !== null) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-xs text-fg-muted">
-        {what} has {overLimit} nodes, too many to render.
+        {what} has {overLimit} nodes, too many to render. {narrowTo(data)}
       </div>
     );
   }

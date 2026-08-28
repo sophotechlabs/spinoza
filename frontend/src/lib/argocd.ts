@@ -99,6 +99,8 @@ function nodeOf(app: ArgoApp): GraphNode {
     status: statusOf(app),
     ready: readyOf(app),
     category,
+    contains: 0,
+    unhealthy: 0,
   };
 }
 

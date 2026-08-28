@@ -687,6 +687,8 @@ type GraphNode struct {
 	Status    string `json:"status"`
 	Ready     string `json:"ready"`
 	Category  string `json:"category"`
+	Contains  int    `json:"contains"`
+	Unhealthy int    `json:"unhealthy"`
 }
 
 type GraphEdge struct {

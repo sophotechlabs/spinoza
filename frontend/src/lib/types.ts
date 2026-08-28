@@ -292,6 +292,7 @@ export const VIEWS = [
   'resources',
   'cluster',
   'issues',
+  'topology',
   'helm',
   'checks',
   'gitops',
@@ -693,7 +694,19 @@ export interface Metrics {
   error?: string;
 }
 
-export const GRAPH_NODE_CATEGORIES = ['source', 'applier', 'app', 'managed'] as const;
+export const GRAPH_NODE_CATEGORIES = [
+  'source',
+  'applier',
+  'app',
+  'managed',
+  'workload',
+  'pod',
+  'service',
+  'ingress',
+  'config',
+  'autoscaler',
+  'namespace',
+] as const;
 
 export type GraphNodeCategory = (typeof GRAPH_NODE_CATEGORIES)[number];
 
@@ -708,13 +721,23 @@ export interface GraphNode {
   status: string;
   ready: ReadyState;
   category: GraphNodeCategory;
+  contains: number;
+  unhealthy: number;
 }
 
 export const READY_STATES = ['True', 'False', 'Unknown', ''] as const;
 
 export type ReadyState = (typeof READY_STATES)[number];
 
-export const GRAPH_EDGE_KINDS = ['source', 'dependsOn', 'manages'] as const;
+export const GRAPH_EDGE_KINDS = [
+  'source',
+  'dependsOn',
+  'manages',
+  'owns',
+  'routes',
+  'configures',
+  'scales',
+] as const;
 
 export type GraphEdgeKind = (typeof GRAPH_EDGE_KINDS)[number];
 

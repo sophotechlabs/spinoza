@@ -367,6 +367,137 @@ func TestGraphEndpoint(t *testing.T) {
 	}
 }
 
+func topologyDeployment() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   map[string]any{"name": "api", "namespace": "prod", "uid": "dep-api"},
+		"spec":       map[string]any{"replicas": int64(1)},
+		"status":     map[string]any{"readyReplicas": int64(1)},
+	}}
+}
+
+func topologyPod() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata": map[string]any{
+			"name":      "api-0",
+			"namespace": "prod",
+			"uid":       "pod-api",
+			"ownerReferences": []any{map[string]any{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"name":       "api",
+				"uid":        "dep-api",
+				"controller": true,
+			}},
+		},
+		"status": map[string]any{
+			"phase":      "Running",
+			"conditions": []any{map[string]any{"type": "Ready", "status": "True"}},
+		},
+	}}
+}
+
+func topologyServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	podGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+	deploymentGVR := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+	kinds := map[schema.GroupVersionResource]string{
+		podGVR:        "PodList",
+		deploymentGVR: "DeploymentList",
+	}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		kinds,
+		topologyDeployment(),
+		topologyPod(),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	descs := map[string]api.ResourceDescriptor{
+		discovery.Key("", "v1", "pods"): {
+			Group:      "",
+			Version:    "v1",
+			Resource:   "pods",
+			Kind:       "Pod",
+			Namespaced: true,
+			Category:   "Workloads",
+		},
+		discovery.Key("apps", "v1", "deployments"): {
+			Group:      "apps",
+			Version:    "v1",
+			Resource:   "deployments",
+			Kind:       "Deployment",
+			Namespaced: true,
+			Category:   "Workloads",
+		},
+	}
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: descs})
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func topologyGraph(t *testing.T, ts *httptest.Server, query string) api.Graph {
+	t.Helper()
+	resp, err := http.Get(ts.URL + "/api/topology" + query)
+	if err != nil {
+		t.Fatalf("GET /api/topology%s: %v", query, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var graph api.Graph
+	if err := json.NewDecoder(resp.Body).Decode(&graph); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return graph
+}
+
+func TestTopologyEndpointFoldsByDefault(t *testing.T) {
+	graph := topologyGraph(t, topologyServer(t), "")
+
+	if len(graph.Nodes) != 1 {
+		t.Fatalf("nodes = %d, want 1: the pod folds into its Deployment", len(graph.Nodes))
+	}
+	if graph.Nodes[0].ID != "dep-api" {
+		t.Fatalf("node = %q, want the Deployment", graph.Nodes[0].ID)
+	}
+	if graph.Nodes[0].Contains != 1 {
+		t.Fatalf("the Deployment says it folded %d objects, want 1", graph.Nodes[0].Contains)
+	}
+}
+
+func TestTopologyEndpointOpensWhatTheQueryAsksFor(t *testing.T) {
+	graph := topologyGraph(t, topologyServer(t), "?namespace=prod&expand=dep-api")
+
+	if len(graph.Nodes) != 2 {
+		t.Fatalf("nodes = %d, want 2 once the Deployment is expanded", len(graph.Nodes))
+	}
+	if len(graph.Edges) != 1 {
+		t.Fatalf("edges = %d, want the owns edge", len(graph.Edges))
+	}
+	if graph.Edges[0].Kind != "owns" {
+		t.Fatalf("edge kind = %q, want owns", graph.Edges[0].Kind)
+	}
+}
+
+func TestTopologyEndpointTakesARoot(t *testing.T) {
+	query := "?rootGroup=apps&rootVersion=v1&rootResource=deployments&rootNamespace=prod&rootName=api"
+	graph := topologyGraph(t, topologyServer(t), query)
+
+	if len(graph.Nodes) != 1 {
+		t.Fatalf("nodes = %d, want just the root", len(graph.Nodes))
+	}
+	if graph.Nodes[0].ID != "dep-api" {
+		t.Fatalf("node = %q, want the root", graph.Nodes[0].ID)
+	}
+}
+
 func TestFluxEndpoint(t *testing.T) {
 	gitRepoGVR := schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}
 	kustGVR := schema.GroupVersionResource{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Resource: "kustomizations"}

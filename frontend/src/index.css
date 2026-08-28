@@ -164,6 +164,10 @@
   --graph-edge-source: #0ea5e9;
   --graph-edge-depends: #f59e0b;
   --graph-edge-manages: #525252;
+  --graph-edge-owns: #a78bfa;
+  --graph-edge-routes: #34d399;
+  --graph-edge-configures: #fbbf24;
+  --graph-edge-scales: #f472b6;
 }
 
 :root[data-theme='light'] {
@@ -242,6 +246,10 @@
   --graph-edge-source: #0284c7;
   --graph-edge-depends: #d97706;
   --graph-edge-manages: #a3a3a3;
+  --graph-edge-owns: #7c3aed;
+  --graph-edge-routes: #059669;
+  --graph-edge-configures: #ca8a04;
+  --graph-edge-scales: #db2777;
 }
 
 html {

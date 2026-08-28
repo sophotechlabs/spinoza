@@ -54,7 +54,7 @@ var (
 	propertyLine  = regexp.MustCompile(`^\s+(\w+)(\??): (.+?);?$`)
 	unionProperty = regexp.MustCompile(`(\w+)(\??):`)
 	aliasLine     = regexp.MustCompile(`^export type (\w+) = (.+?);$`)
-	constLine     = regexp.MustCompile(`^export const (\w+) = \[(.*?)\] as const;$`)
+	constList     = regexp.MustCompile(`(?s)export const (\w+) = \[(.*?)\] as const;`)
 	fromConstants = regexp.MustCompile(`^\(typeof (\w+)\)\[number\]$`)
 )
 
@@ -180,10 +180,8 @@ func goShape(kind string) (string, bool) {
 
 func mirrorAliases(source string) map[string]string {
 	constants := map[string]string{}
-	for line := range strings.SplitSeq(source, "\n") {
-		if found := constLine.FindStringSubmatch(line); found != nil {
-			constants[found[1]] = found[2]
-		}
+	for _, found := range constList.FindAllStringSubmatch(source, -1) {
+		constants[found[1]] = oneLine(found[2])
 	}
 	out := map[string]string{}
 	for line := range strings.SplitSeq(source, "\n") {
@@ -198,6 +196,10 @@ func mirrorAliases(source string) map[string]string {
 		out[found[1]] = text
 	}
 	return out
+}
+
+func oneLine(members string) string {
+	return strings.TrimSuffix(strings.Join(strings.Fields(members), " "), ",")
 }
 
 func tsShape(kind string, aliases map[string]string, interfaces map[string][]property, depth int) (string, bool) {

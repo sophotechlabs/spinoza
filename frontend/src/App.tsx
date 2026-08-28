@@ -64,6 +64,7 @@ import type { Section } from './components/SettingsDialog';
 
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 const ArgoGraph = lazy(() => import('./components/ArgoGraph'));
+const TopologyGraph = lazy(() => import('./components/TopologyGraph'));
 
 function releaseIdentity(release: ReleaseRef | null): string {
   if (release === null) {
@@ -73,6 +74,9 @@ function releaseIdentity(release: ReleaseRef | null): string {
 }
 
 function pickerScope(view: View, scope: boolean | null): boolean | null {
+  if (view === 'topology') {
+    return true;
+  }
   if (view !== 'resources') {
     return null;
   }
@@ -486,6 +490,13 @@ export default function App() {
   }
   if (route.view === 'issues') {
     mainArea = <IssueQueue onSelect={remember} />;
+  }
+  if (route.view === 'topology') {
+    mainArea = (
+      <Suspense fallback={<Loading what="graph" />}>
+        <TopologyGraph openedOn={route.selection} onSelect={handleSelectNode} />
+      </Suspense>
+    );
   }
   if (route.view === 'helm') {
     mainArea = <HelmReleases selected={route.release} onSelect={openRelease} />;

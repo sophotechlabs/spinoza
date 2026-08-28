@@ -2,8 +2,11 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/prom"
+	"github.com/sophotechlabs/spinoza/internal/topology"
 )
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
@@ -12,6 +15,32 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Checks(r.Context()))
+}
+
+func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Topology(r.Context(), topologyRequest(r)))
+}
+
+func topologyRequest(r *http.Request) topology.Request {
+	query := r.URL.Query()
+	return topology.Request{
+		Namespace: query.Get("namespace"),
+		Root: api.ObjectRef{
+			Group:     query.Get("rootGroup"),
+			Version:   query.Get("rootVersion"),
+			Resource:  query.Get("rootResource"),
+			Namespace: query.Get("rootNamespace"),
+			Name:      query.Get("rootName"),
+		},
+		Expanded: expandedIDs(query.Get("expand")),
+	}
+}
+
+func expandedIDs(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	return strings.Split(raw, ",")
 }
 
 func (s *Server) handleFlux(w http.ResponseWriter, r *http.Request) {

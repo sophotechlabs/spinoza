@@ -68,6 +68,8 @@ export function makeGraphNode(overrides: Partial<GraphNode>): GraphNode {
     status: 'Ready',
     ready: 'True',
     category: 'source',
+    contains: 0,
+    unhealthy: 0,
   };
   return { ...base, ...overrides };
 }

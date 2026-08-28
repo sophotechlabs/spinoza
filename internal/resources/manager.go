@@ -51,6 +51,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/samples"
+	"github.com/sophotechlabs/spinoza/internal/topology"
 )
 
 const (
@@ -566,6 +567,10 @@ func (m *Manager) Graph(ctx context.Context) api.Graph {
 
 func (m *Manager) Checks(ctx context.Context) api.CheckReport {
 	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx))
+}
+
+func (m *Manager) Topology(ctx context.Context, req topology.Request) api.Graph {
+	return topology.Build(ctx, m, m.descriptors(), req)
 }
 
 func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {

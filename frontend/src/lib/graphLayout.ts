@@ -17,9 +17,15 @@ const NODE_SEPARATION = 28;
 
 const NODE_BASE_CLASS = 'rounded border px-2 py-1 text-[11px] font-mono';
 
-export const EDGE_SOURCE_STROKE = 'var(--graph-edge-source)';
-export const EDGE_DEPENDS_STROKE = 'var(--graph-edge-depends)';
-export const EDGE_MANAGES_STROKE = 'var(--graph-edge-manages)';
+export const EDGE_STROKES: Record<GraphEdgeKind, string> = {
+  source: 'var(--graph-edge-source)',
+  dependsOn: 'var(--graph-edge-depends)',
+  manages: 'var(--graph-edge-manages)',
+  owns: 'var(--graph-edge-owns)',
+  routes: 'var(--graph-edge-routes)',
+  configures: 'var(--graph-edge-configures)',
+  scales: 'var(--graph-edge-scales)',
+};
 
 interface GitopsNodeData {
   label: string;
@@ -63,13 +69,37 @@ function nodeClassName(category: GraphNodeCategory, ready: ReadyState): string {
 }
 
 function edgeStroke(kind: GraphEdgeKind): string {
-  if (kind === 'source') {
-    return EDGE_SOURCE_STROKE;
+  return EDGE_STROKES[kind];
+}
+
+export function busiestNamespace(graph: Graph): string {
+  const tally = new Map<string, number>();
+  for (const node of graph.nodes) {
+    if (node.namespace === '') {
+      continue;
+    }
+    tally.set(node.namespace, (tally.get(node.namespace) ?? 0) + 1);
   }
-  if (kind === 'dependsOn') {
-    return EDGE_DEPENDS_STROKE;
+  let busiest = '';
+  let most = 0;
+  for (const [namespace, count] of tally) {
+    if (count <= most) {
+      continue;
+    }
+    busiest = namespace;
+    most = count;
   }
-  return EDGE_MANAGES_STROKE;
+  return busiest;
+}
+
+export function nodeLabel(node: GraphNode): string {
+  if (node.contains === 0) {
+    return node.name;
+  }
+  if (node.unhealthy === 0) {
+    return `${node.name} ×${String(node.contains)}`;
+  }
+  return `${node.name} ×${String(node.contains)} · ${String(node.unhealthy)} not ready`;
 }
 
 function edgeAnimated(kind: GraphEdgeKind): boolean {
@@ -96,7 +126,7 @@ function toFlowNode(g: LayoutGraph, node: GraphNode): GitopsFlowNode {
   return {
     id: node.id,
     position: layoutPosition(laid),
-    data: { label: node.name, node },
+    data: { label: nodeLabel(node), node },
     className: nodeClassName(node.category, node.ready),
   };
 }
@@ -160,6 +190,12 @@ export function sameGraph(a: Graph, b: Graph): boolean {
     if (node.ready !== other.ready) {
       return false;
     }
+    if (node.contains !== other.contains) {
+      return false;
+    }
+    if (node.unhealthy !== other.unhealthy) {
+      return false;
+    }
     return node.namespace === other.namespace;
   });
 }
@@ -169,7 +205,7 @@ export function restyle(flow: GitopsFlow, graph: Graph): GitopsFlow {
     const next = graph.nodes[index];
     return {
       ...node,
-      data: { label: next.name, node: next },
+      data: { label: nodeLabel(next), node: next },
       className: nodeClassName(next.category, next.ready),
     };
   });

@@ -52,6 +52,8 @@ const stubs = vi.hoisted(
       status: 'Synced Healthy',
       ready: 'True',
       category: 'app',
+      contains: 0,
+      unhealthy: 0,
     },
     podNode: {
       id: 'gn-2',
@@ -64,6 +66,8 @@ const stubs = vi.hoisted(
       status: 'Running',
       ready: 'True',
       category: 'managed',
+      contains: 0,
+      unhealthy: 0,
     },
     node: {
       id: 'gn-1',
@@ -76,6 +80,8 @@ const stubs = vi.hoisted(
       status: 'Ready',
       ready: 'True',
       category: 'app',
+      contains: 0,
+      unhealthy: 0,
     },
     flux: {
       kind: 'Kustomization',
@@ -224,6 +230,20 @@ vi.mock('../src/components/ArgoApps', () => ({
       }}
     >
       select-argo
+    </button>
+  ),
+}));
+
+vi.mock('../src/components/TopologyGraph', () => ({
+  default: ({ onSelect }: { onSelect: (node: GraphNode) => void }) => (
+    <button
+      type="button"
+      data-testid="topology-graph"
+      onClick={() => {
+        onSelect(stubs.podNode);
+      }}
+    >
+      select-topology-node
     </button>
   ),
 }));
@@ -999,6 +1019,18 @@ describe('App', () => {
         'false',
       );
     });
+  });
+
+  it('opens the topology graph and targets the inspector from it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Topology' }));
+    expect(await screen.findByTestId('topology-graph')).toBeInTheDocument();
+    expect(window.location.hash).toContain('view=topology');
+
+    await user.click(screen.getByRole('button', { name: 'select-topology-node' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
   });
 
   it('targets the inspector at a selected graph node', async () => {

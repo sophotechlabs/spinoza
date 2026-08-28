@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import dagre from '@dagrejs/dagre';
 import type { Graph } from '../../src/lib/types';
-import { restyle, sameGraph, sameTopology, statusTone, toFlow } from '../../src/lib/graphLayout';
+import {
+  busiestNamespace,
+  nodeLabel,
+  restyle,
+  sameGraph,
+  sameTopology,
+  statusTone,
+  toFlow,
+} from '../../src/lib/graphLayout';
 import type { GitopsFlowNode } from '../../src/lib/graphLayout';
 import { makeGraphEdge, makeGraphNode } from '../helpers';
 
@@ -302,5 +310,63 @@ describe('restyle', () => {
     expect(restyled.edges).toBe(laid.edges);
     expect(restyled.nodes[0].className).not.toBe(laid.nodes[0].className);
     expect(restyled.nodes[0].data.node.ready).toBe('False');
+  });
+});
+
+describe('nodeLabel', () => {
+  it('is just the name when nothing is folded inside', () => {
+    expect(nodeLabel(makeGraphNode({ name: 'api' }))).toBe('api');
+  });
+
+  it('counts what is folded inside', () => {
+    expect(nodeLabel(makeGraphNode({ name: 'api', contains: 40 }))).toBe('api ×40');
+  });
+
+  it('says how much of what is folded is broken', () => {
+    expect(nodeLabel(makeGraphNode({ name: 'api', contains: 40, unhealthy: 2 }))).toBe(
+      'api ×40 · 2 not ready',
+    );
+  });
+});
+
+describe('busiestNamespace', () => {
+  it('names the namespace holding the most', () => {
+    const graph: Graph = {
+      nodes: [
+        makeGraphNode({ id: 'a', namespace: 'prod' }),
+        makeGraphNode({ id: 'b', namespace: 'prod' }),
+        makeGraphNode({ id: 'c', namespace: 'staging' }),
+      ],
+      edges: [],
+    };
+
+    expect(busiestNamespace(graph)).toBe('prod');
+  });
+
+  it('names nothing when nothing is in a namespace', () => {
+    const graph: Graph = {
+      nodes: [makeGraphNode({ id: 'a', namespace: '' })],
+      edges: [],
+    };
+
+    expect(busiestNamespace(graph)).toBe('');
+  });
+});
+
+describe('a fold that changes size', () => {
+  function one(overrides: Partial<Graph['nodes'][number]>): Graph {
+    return { nodes: [makeGraphNode({ id: 'a', name: 'alpha', ...overrides })], edges: [] };
+  }
+
+  it('is a different graph when the count moves', () => {
+    expect(sameGraph(one({ contains: 3 }), one({ contains: 4 }))).toBe(false);
+  });
+
+  it('is a different graph when what is broken inside moves', () => {
+    expect(sameGraph(one({ contains: 3 }), one({ contains: 3, unhealthy: 1 }))).toBe(false);
+  });
+
+  it('keeps the same layout, so the nodes do not jump', () => {
+    expect(sameTopology(one({ contains: 3 }), one({ contains: 4 }))).toBe(true);
   });
 });

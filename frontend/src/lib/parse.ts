@@ -443,6 +443,8 @@ function parseGraphNode(item: Record<string, unknown>): GraphNode {
     status: asString(item.status),
     ready: oneOf(item.ready, READY_STATES, 'Unknown'),
     category: oneOf(item.category, GRAPH_NODE_CATEGORIES, 'managed'),
+    contains: asNumber(item.contains),
+    unhealthy: asNumber(item.unhealthy),
   };
 }
 
