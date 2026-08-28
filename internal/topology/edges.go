@@ -26,6 +26,8 @@ func (b *builder) link() {
 	listed := b.listed()
 	for _, entry := range listed {
 		b.ownerEdges(entry)
+	}
+	for _, entry := range listed {
 		b.configEdges(entry)
 	}
 	for _, entry := range listed {
@@ -70,18 +72,50 @@ func (b *builder) ownerEdges(entry *object) {
 	}
 }
 
+func (b *builder) templatedByItsController(entry *object) bool {
+	owner, managed := b.controller[entry.node.ID]
+	if !managed {
+		return false
+	}
+	held, known := b.objects[owner]
+	if !known {
+		return false
+	}
+	if held.raw == nil {
+		return false
+	}
+	_, templated := podTemplatePaths[held.node.Kind]
+	return templated
+}
+
 func (b *builder) serviceEdges(entry *object) {
 	selector := stringsOf(unstr.Map(entry.raw, fieldSpec, "selector"))
 	if len(selector) == 0 {
 		return
 	}
-	for _, id := range b.podsByNs[entry.node.Namespace] {
-		pod := b.objects[id]
-		if !selects(selector, pod.raw.GetLabels()) {
+	for _, id := range b.candidates(entry.node.Namespace, selector) {
+		if !selects(selector, b.objects[id].labels) {
 			continue
 		}
 		b.addEdge(entry.node.ID, id, edgeRoutes)
 	}
+}
+
+func (b *builder) candidates(namespace string, selector map[string]string) []string {
+	byPair := b.podsByPair[namespace]
+	var fewest []string
+	first := true
+	for key, value := range selector {
+		holding := byPair[key+"="+value]
+		if len(holding) == 0 {
+			return nil
+		}
+		if first || len(holding) < len(fewest) {
+			fewest = holding
+			first = false
+		}
+	}
+	return fewest
 }
 
 func selects(selector, labels map[string]string) bool {
@@ -159,6 +193,9 @@ func (b *builder) scaleEdges(entry *object) {
 func (b *builder) configEdges(entry *object) {
 	path, ok := podTemplatePaths[entry.node.Kind]
 	if !ok {
+		return
+	}
+	if b.templatedByItsController(entry) {
 		return
 	}
 	spec := mapAt(entry.raw.Object, path...)

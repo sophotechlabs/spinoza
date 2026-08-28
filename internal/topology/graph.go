@@ -84,8 +84,9 @@ type Request struct {
 }
 
 type object struct {
-	node api.GraphNode
-	raw  *unstructured.Unstructured
+	node   api.GraphNode
+	raw    *unstructured.Unstructured
+	labels map[string]string
 }
 
 type builder struct {
@@ -94,6 +95,7 @@ type builder struct {
 	objects    map[string]*object
 	identity   map[string]string
 	podsByNs   map[string][]string
+	podsByPair map[string]map[string][]string
 	controller map[string]string
 	edges      map[string]api.GraphEdge
 	failures   *listerr.Collector
@@ -107,6 +109,7 @@ func Build(ctx context.Context, lister Lister, descs map[string]api.ResourceDesc
 		objects:    map[string]*object{},
 		identity:   map[string]string{},
 		podsByNs:   map[string][]string{},
+		podsByPair: map[string]map[string][]string{},
 		controller: map[string]string{},
 		edges:      map[string]api.GraphEdge{},
 		failures:   listerr.New(),
@@ -190,20 +193,35 @@ func (b *builder) add(obj *unstructured.Unstructured, desc api.ResourceDescripto
 	b.identity[identityKey(desc.Group, desc.Kind, obj.GetNamespace(), obj.GetName())] = id
 	b.namespaces[obj.GetNamespace()] = true
 	if category == categoryPod {
-		b.podsByNs[obj.GetNamespace()] = append(b.podsByNs[obj.GetNamespace()], id)
+		b.indexPod(id, obj)
+	}
+}
+
+func (b *builder) indexPod(id string, obj *unstructured.Unstructured) {
+	namespace := obj.GetNamespace()
+	labels := obj.GetLabels()
+	b.objects[id].labels = labels
+	b.podsByNs[namespace] = append(b.podsByNs[namespace], id)
+	byPair, seen := b.podsByPair[namespace]
+	if !seen {
+		byPair = map[string][]string{}
+		b.podsByPair[namespace] = byPair
+	}
+	for key, value := range labels {
+		pair := key + "=" + value
+		byPair[pair] = append(byPair[pair], id)
 	}
 }
 
 func (b *builder) ensure(group, kind, namespace, name, category, status string) string {
+	desc := b.byKind[group+"/"+kind]
+	if desc.Resource != "" && !desc.Namespaced {
+		namespace = ""
+	}
 	key := identityKey(group, kind, namespace, name)
 	found, ok := b.identity[key]
 	if ok {
 		return found
-	}
-	desc := b.byKind[group+"/"+kind]
-	if desc.Resource != "" && !desc.Namespaced {
-		namespace = ""
-		key = identityKey(group, kind, namespace, name)
 	}
 	b.objects[key] = &object{node: api.GraphNode{
 		ID:        key,
@@ -305,7 +323,7 @@ func notReady(obj *unstructured.Unstructured, kind string) bool {
 	case kindPod:
 		return podNotReady(obj)
 	case kindDeployment, kindStatefulSet, kindReplicaSet, kindReplicationController:
-		return unstr.Int(obj, "status", "readyReplicas") < unstr.Int(obj, fieldSpec, "replicas")
+		return unstr.Int(obj, "status", "readyReplicas") < wantedReplicas(obj)
 	case kindDaemonSet:
 		return unstr.Int(obj, "status", "numberReady") < unstr.Int(obj, "status", "desiredNumberScheduled")
 	case kindJob:
@@ -350,7 +368,7 @@ func statusOf(obj *unstructured.Unstructured, kind string) string {
 	case kindPod:
 		return unstr.String(obj, "status", "phase")
 	case kindDeployment, kindStatefulSet, kindReplicaSet, kindReplicationController:
-		return replicaSummary(unstr.Int(obj, "status", "readyReplicas"), unstr.Int(obj, fieldSpec, "replicas"))
+		return replicaSummary(unstr.Int(obj, "status", "readyReplicas"), wantedReplicas(obj))
 	case kindDaemonSet:
 		return replicaSummary(
 			unstr.Int(obj, "status", "numberReady"),
@@ -359,6 +377,17 @@ func statusOf(obj *unstructured.Unstructured, kind string) string {
 	default:
 		return unstr.ReadySummary(obj)
 	}
+}
+
+func wantedReplicas(obj *unstructured.Unstructured) int64 {
+	wanted, found, err := unstructured.NestedInt64(obj.Object, fieldSpec, "replicas")
+	if err != nil {
+		return 1
+	}
+	if !found {
+		return 1
+	}
+	return wanted
 }
 
 func replicaSummary(ready, wanted int64) string {

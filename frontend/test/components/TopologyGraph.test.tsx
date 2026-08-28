@@ -207,6 +207,106 @@ describe('TopologyGraph', () => {
     expect(await screen.findByText('No workloads found in this cluster.')).toBeInTheDocument();
   });
 
+  it('warns above the graph when only some resource types could be listed', async () => {
+    urlsFor(
+      {},
+      {
+        nodes: [folded],
+        edges: [],
+        error:
+          '1 of 11 resource types could not be listed: ingresses.networking.k8s.io (is forbidden)',
+      },
+    );
+
+    render(<TopologyGraph openedOn={null} />);
+
+    expect(await screen.findByText(/ingresses.networking.k8s.io/)).toBeInTheDocument();
+    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+  });
+
+  it('says the graph could not be loaded when nothing came back at all', async () => {
+    urlsFor(
+      {},
+      {
+        nodes: [],
+        edges: [],
+        error: '11 of 11 resource types could not be listed: pods (is forbidden)',
+      },
+    );
+
+    render(<TopologyGraph openedOn={null} />);
+
+    expect(await screen.findByText('The topology graph could not be loaded')).toBeInTheDocument();
+    expect(screen.getByText(/pods \(is forbidden\)/)).toBeInTheDocument();
+  });
+
+  it('keeps the last graph and says it stopped updating once a poll fails', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ nodes: [folded], edges: [] }),
+          });
+        }
+        return Promise.reject(new Error('the topology endpoint is down'));
+      }),
+    );
+
+    render(<TopologyGraph openedOn={null} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('api ×3 · 1 not ready')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('the topology endpoint is down');
+    expect(screen.getByText('api ×3 · 1 not ready')).toBeInTheDocument();
+  });
+
+  it('says so when the request fails with something that is not an error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('boom'));
+
+    render(<TopologyGraph openedOn={null} />);
+
+    expect(await screen.findByText('topology request failed')).toBeInTheDocument();
+  });
+
+  it('re-asks on the poll interval and redraws what changed', async () => {
+    vi.useFakeTimers();
+    const grown = makeGraphNode({ ...folded, contains: 4, unhealthy: 0, ready: 'True' });
+    let call = 0;
+    const fetchMock = vi.fn(() => {
+      call += 1;
+      const nodes = [folded];
+      if (call > 1) {
+        nodes[0] = grown;
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ nodes, edges: [] }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<TopologyGraph openedOn={null} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('api ×3 · 1 not ready')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByText('api ×4')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+  });
+
   it('says which namespace to narrow to when the fold is still too much', async () => {
     const many = Array.from({ length: 401 }, (_unused, index) =>
       makeGraphNode({ id: `n-${index}`, name: `node-${index}`, namespace: 'prod' }),

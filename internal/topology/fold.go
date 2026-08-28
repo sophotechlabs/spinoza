@@ -27,9 +27,9 @@ func (b *builder) graph(req Request) api.Graph {
 	expanded := setOf(req.Expanded)
 	visible := visibleSet(ids, parents, expanded)
 	if b.crowded(visible) {
-		parents, visible = b.districts(ids, parents, expanded)
+		ids, parents, visible = b.districts(ids, parents, expanded)
 	}
-	nodes := b.nodesFor(parents, visible)
+	nodes := b.nodesFor(ids, parents, visible)
 	edges := b.edgesFor(parents, visible)
 	if req.Root.Name != "" {
 		nodes, edges = b.neighborhood(req.Root, parents, visible, nodes, edges)
@@ -129,14 +129,18 @@ func (b *builder) crowded(visible map[string]bool) bool {
 	if len(visible) <= nodeBudget {
 		return false
 	}
-	return len(b.namespaces) > 1
+	drawn := map[string]bool{}
+	for id := range visible {
+		drawn[b.objects[id].node.Namespace] = true
+	}
+	return len(drawn) > 1
 }
 
 func (b *builder) districts(
 	ids []string,
 	parents map[string]string,
 	expanded map[string]bool,
-) (map[string]string, map[string]bool) {
+) ([]string, map[string]string, map[string]bool) {
 	wider := map[string]string{}
 	maps.Copy(wider, parents)
 	exposed := map[string]bool{}
@@ -153,11 +157,12 @@ func (b *builder) districts(
 			exposed[id] = true
 		}
 	}
-	visible := visibleSet(b.ids(), wider, expanded)
+	withDistricts := b.ids()
+	visible := visibleSet(withDistricts, wider, expanded)
 	for id := range exposed {
 		visible[id] = true
 	}
-	return wider, visible
+	return withDistricts, wider, visible
 }
 
 func (b *builder) district(namespace string) string {
@@ -192,10 +197,10 @@ func namespaceResource(namespace string) string {
 	return "namespaces"
 }
 
-func (b *builder) nodesFor(parents map[string]string, visible map[string]bool) []api.GraphNode {
+func (b *builder) nodesFor(ids []string, parents map[string]string, visible map[string]bool) []api.GraphNode {
 	contains := map[string]int{}
 	unhealthy := map[string]int{}
-	for _, id := range b.ids() {
+	for _, id := range ids {
 		if visible[id] {
 			continue
 		}
@@ -209,7 +214,7 @@ func (b *builder) nodesFor(parents map[string]string, visible map[string]bool) [
 		}
 	}
 	out := make([]api.GraphNode, 0, len(visible))
-	for _, id := range b.ids() {
+	for _, id := range ids {
 		if !visible[id] {
 			continue
 		}

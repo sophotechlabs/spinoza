@@ -171,6 +171,18 @@ func service() *unstructured.Unstructured {
 	}}
 }
 
+func unmatchedService() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Service",
+		"metadata":   meta("nomatch", "prod", "svc-nomatch"),
+		"spec": map[string]any{"selector": map[string]any{
+			"app":  "api",
+			"tier": "nothing-carries-this",
+		}},
+	}}
+}
+
 func headlessService() *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",
@@ -314,6 +326,54 @@ func adopted() *unstructured.Unstructured {
 	}}
 }
 
+func namelessPod() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata":   map[string]any{"name": "no-uid", "namespace": "prod"},
+		"status":     map[string]any{"phase": "Running"},
+	}}
+}
+
+func orphanedByABlankReference() *unstructured.Unstructured {
+	holder := meta("blank-owner", "prod", "pod-10")
+	holder["ownerReferences"] = []any{map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "ReplicaSet",
+		"name":       "gone",
+		"controller": true,
+	}}
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata":   holder,
+		"status": map[string]any{
+			"phase":      "Running",
+			"conditions": []any{map[string]any{"type": "Ready", "status": "True"}},
+		},
+	}}
+}
+
+func aimlessAutoscaler() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "autoscaling/v2",
+		"kind":       "HorizontalPodAutoscaler",
+		"metadata":   meta("aimless", "prod", "hpa-aimless"),
+		"spec":       map[string]any{"scaleTargetRef": map[string]any{"kind": "Deployment"}},
+	}}
+}
+
+func containerlessJob() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "batch/v1",
+		"kind":       "Job",
+		"metadata":   meta("odd-spec", "prod", "job-3"),
+		"spec": map[string]any{"template": map[string]any{"spec": map[string]any{
+			"containers": []any{"not-a-map"},
+		}}},
+	}}
+}
+
 func plainIngress() *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "networking.k8s.io/v1",
@@ -344,6 +404,7 @@ func newClient() *fake.FakeDynamicClient {
 		pod("canary-1", "pod-5", "Running", "True", rolloutOwner, ""),
 		service(),
 		headlessService(),
+		unmatchedService(),
 		ingress(),
 		autoscaler(),
 		cronJob(),
@@ -360,6 +421,10 @@ func newClient() *fake.FakeDynamicClient {
 		}, ""),
 		adopted(),
 		plainIngress(),
+		namelessPod(),
+		orphanedByABlankReference(),
+		aimlessAutoscaler(),
+		containerlessJob(),
 		pod("fleet-1", "pod-8", "Running", "True", fleetOwner, ""),
 		otherDeployment(),
 	)

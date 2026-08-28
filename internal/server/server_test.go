@@ -402,11 +402,9 @@ func topologyPod() *unstructured.Unstructured {
 
 func topologyServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	podGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	deploymentGVR := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 	kinds := map[schema.GroupVersionResource]string{
-		podGVR:        "PodList",
-		deploymentGVR: "DeploymentList",
+		podGVR: "PodList",
+		depGVR: "DeploymentList",
 	}
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),

@@ -2,8 +2,15 @@ package topology
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -65,6 +72,53 @@ func TestACompletedJobPodIsNotABrokenOne(t *testing.T) {
 	}
 	if nightly.Unhealthy != 0 {
 		t.Fatalf("the CronJob reports %d unhealthy inside, want 0", nightly.Unhealthy)
+	}
+}
+
+func TestAnObjectWithNoUIDIsNotDrawn(t *testing.T) {
+	for _, node := range build(t, Request{}).Nodes {
+		if node.Name == "no-uid" {
+			t.Fatal("an object with no uid became a node; the whole graph is keyed on uid")
+		}
+	}
+}
+
+func TestAnOwnerReferenceWithNoUIDOwnsNothing(t *testing.T) {
+	graph := build(t, Request{})
+	nodes := nodesByID(graph)
+
+	orphan, ok := nodes["pod-10"]
+	if !ok {
+		t.Fatal("a pod whose owner reference carries no uid was dropped instead of drawn on its own")
+	}
+	if orphan.Contains != 0 {
+		t.Fatalf("the pod folded %d objects", orphan.Contains)
+	}
+	for key := range edgeSet(graph) {
+		if strings.HasSuffix(key, "|pod-10|owns") {
+			t.Fatalf("an owns edge was drawn from an owner nothing identifies: %q", key)
+		}
+	}
+}
+
+func TestAnAutoscalerThatNamesNoTargetScalesNothing(t *testing.T) {
+	for key := range edgeSet(build(t, Request{})) {
+		if strings.HasPrefix(key, "hpa-aimless|") {
+			t.Fatalf("an autoscaler with no target name grew an edge: %q", key)
+		}
+	}
+}
+
+func TestAContainerThatIsNotAMapConfiguresNothing(t *testing.T) {
+	graph := build(t, Request{})
+
+	if _, ok := nodesByID(graph)["job-3"]; !ok {
+		t.Fatal("a Job whose container list holds junk was dropped instead of drawn")
+	}
+	for key := range edgeSet(graph) {
+		if strings.HasSuffix(key, "|job-3|configures") {
+			t.Fatalf("junk in a container list produced a config edge: %q", key)
+		}
 	}
 }
 
@@ -138,6 +192,31 @@ func TestAServicePointsAtTheWorkloadItsPodsFoldInto(t *testing.T) {
 	}
 	if edges["svc-api|pod-1|routes"] {
 		t.Fatal("the Service still points at a folded pod")
+	}
+}
+
+func TestAServiceOnlyReachesPodsCarryingEveryPairItNames(t *testing.T) {
+	graph := build(t, Request{})
+	edges := edgeSet(graph)
+
+	if !edges["svc-api|dep-api|routes"] {
+		t.Fatal("the Service does not reach the workload whose pods carry its label")
+	}
+	for key := range edges {
+		if strings.HasPrefix(key, "svc-api|cj-nightly") {
+			t.Fatalf("the Service reached a workload whose pods carry no matching label: %q", key)
+		}
+		if strings.HasPrefix(key, "svc-api|pod-4") {
+			t.Fatalf("the Service reached an unlabelled bare pod: %q", key)
+		}
+	}
+}
+
+func TestAServiceNamingALabelNoPodCarriesReachesNothing(t *testing.T) {
+	for key := range edgeSet(build(t, Request{})) {
+		if strings.HasPrefix(key, "svc-nomatch|") {
+			t.Fatalf("a Service whose selector matches no pod grew an edge: %q", key)
+		}
 	}
 }
 
@@ -310,8 +389,41 @@ func TestARootThatIsFoldedResolvesToWhatSwallowedIt(t *testing.T) {
 
 func TestAResourceTypeThatWillNotListIsReported(t *testing.T) {
 	graph := build(t, Request{})
-	if !strings.Contains(graph.Error, "statefulsets") {
-		t.Fatalf("the failed list is not reported: %q", graph.Error)
+
+	want := "1 of 11 resource types could not be listed: statefulsets.apps (list statefulsets failed)"
+	if graph.Error != want {
+		t.Fatalf("error = %q, want %q", graph.Error, want)
+	}
+	if len(graph.Nodes) == 0 {
+		t.Fatal("one resource type failing emptied the whole graph")
+	}
+}
+
+func TestPodsBeingForbiddenLeavesTheWorkloadsStanding(t *testing.T) {
+	dyn := newClient()
+	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("pods is forbidden")
+	})
+	graph := Build(context.Background(), listerFor(dyn), descs(), Request{})
+	nodes := nodesByID(graph)
+
+	if !strings.Contains(graph.Error, "pods (pods is forbidden)") {
+		t.Fatalf("the refused list is not reported: %q", graph.Error)
+	}
+	folded, ok := nodes["dep-api"]
+	if !ok {
+		t.Fatal("the Deployment went missing when its pods could not be read")
+	}
+	if folded.Contains != 1 {
+		t.Fatalf("the Deployment folded %d objects, want just the ReplicaSet it can still see", folded.Contains)
+	}
+	if _, drawn := nodes["svc-api"]; !drawn {
+		t.Fatal("the Service went missing when pods could not be read")
+	}
+	for key := range edgeSet(graph) {
+		if strings.HasPrefix(key, "svc-api|") {
+			t.Fatalf("a Service routed somewhere with no pods to match: %q", key)
+		}
 	}
 }
 
@@ -331,6 +443,98 @@ func TestTheOutputIsSorted(t *testing.T) {
 		}
 		if previous.From == current.From && previous.To > current.To {
 			t.Fatalf("edges not sorted at %d: %q > %q", i, previous.To, current.To)
+		}
+	}
+}
+
+func TestTheBuilderWarmsExactlyWhatItLists(t *testing.T) {
+	spy := &warmSpy{dynLister: listerFor(newClient())}
+
+	Build(context.Background(), spy, descs(), Request{})
+
+	want := map[string]bool{
+		"/v1/pods":                                true,
+		"/v1/services":                            true,
+		"/v1/replicationcontrollers":              true,
+		"apps/v1/deployments":                     true,
+		"apps/v1/replicasets":                     true,
+		"apps/v1/statefulsets":                    true,
+		"apps/v1/daemonsets":                      true,
+		"batch/v1/jobs":                           true,
+		"batch/v1/cronjobs":                       true,
+		"networking.k8s.io/v1/ingresses":          true,
+		"autoscaling/v2/horizontalpodautoscalers": true,
+	}
+	if len(spy.warmed) != len(want) {
+		t.Fatalf("warmed %v, want the %d types the view reads", spy.warmed, len(want))
+	}
+	for _, key := range spy.warmed {
+		if !want[key] {
+			t.Fatalf("warmed %q, which this view never reads: every warm pins a cluster-wide informer", key)
+		}
+	}
+	for key := range want {
+		if !slices.Contains(spy.warmed, key) {
+			t.Fatalf("%q was never warmed, so its first read waits on a cold cache", key)
+		}
+	}
+}
+
+func TestConfigMapsAndSecretsAreNeverListed(t *testing.T) {
+	spy := &warmSpy{dynLister: listerFor(newClient())}
+
+	Build(context.Background(), spy, descs(), Request{})
+
+	for _, key := range spy.warmed {
+		if strings.HasSuffix(key, "/configmaps") || strings.HasSuffix(key, "/secrets") {
+			t.Fatalf("%q was warmed; opening this view would hold every secret in the cluster in memory", key)
+		}
+	}
+}
+
+func labelled(name, uid string, labels map[string]any) *unstructured.Unstructured {
+	holder := meta(name, "prod", uid)
+	holder["labels"] = labels
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata":   holder,
+		"status": map[string]any{
+			"phase":      "Running",
+			"conditions": []any{map[string]any{"type": "Ready", "status": "True"}},
+		},
+	}}
+}
+
+func selecting(pairs map[string]any) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Service",
+		"metadata":   meta("picky", "prod", "svc-picky"),
+		"spec":       map[string]any{"selector": pairs},
+	}}
+}
+
+func TestASelectorNarrowsOnItsRarestLabelThenChecksTheRest(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		listKinds(),
+		selecting(map[string]any{"app": "api", "role": "primary"}),
+		labelled("both", "pod-both", map[string]any{"app": "api", "role": "primary"}),
+		labelled("role-only", "pod-role", map[string]any{"role": "primary"}),
+		labelled("app-only-a", "pod-app-a", map[string]any{"app": "api"}),
+		labelled("app-only-b", "pod-app-b", map[string]any{"app": "api"}),
+	)
+
+	graph := Build(context.Background(), listerFor(dyn), descs(), Request{})
+	edges := edgeSet(graph)
+
+	if !edges["svc-picky|pod-both|routes"] {
+		t.Fatal("the Service does not reach the one pod carrying every pair it names")
+	}
+	for _, missing := range []string{"pod-role", "pod-app-a", "pod-app-b"} {
+		if edges["svc-picky|"+missing+"|routes"] {
+			t.Fatalf("the Service reached %s, which carries only part of its selector", missing)
 		}
 	}
 }

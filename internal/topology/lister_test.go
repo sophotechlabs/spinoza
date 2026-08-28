@@ -33,3 +33,15 @@ func (d *dynLister) List(_ context.Context, desc api.ResourceDescriptor) ([]*uns
 }
 
 func (d *dynLister) Warm(context.Context, []api.ResourceDescriptor) {}
+
+type warmSpy struct {
+	*dynLister
+
+	warmed []string
+}
+
+func (w *warmSpy) Warm(_ context.Context, descs []api.ResourceDescriptor) {
+	for _, desc := range descs {
+		w.warmed = append(w.warmed, desc.Group+"/"+desc.Version+"/"+desc.Resource)
+	}
+}

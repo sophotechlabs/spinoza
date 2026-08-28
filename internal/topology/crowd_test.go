@@ -117,6 +117,25 @@ func TestWhatIsInNoNamespaceGetsItsOwnDistrict(t *testing.T) {
 	}
 }
 
+func TestOpeningANamespaceShowsAllOfIt(t *testing.T) {
+	graph := buildCrowd(t, []string{"a", "b"}, true, Request{Expanded: []string{"namespace/a"}})
+	nodes := nodesByID(graph)
+
+	if _, ok := nodes["a-0"]; !ok {
+		t.Fatal("a Deployment in the namespace that was opened is still folded away")
+	}
+	district, ok := nodes["namespace/a"]
+	if !ok {
+		t.Fatal("the namespace node vanished when it was opened")
+	}
+	if district.Contains != 0 {
+		t.Fatalf("the opened namespace still claims %d hidden objects", district.Contains)
+	}
+	if _, ok := nodes["b-1"]; ok {
+		t.Fatal("opening one namespace opened another")
+	}
+}
+
 func TestOneCrowdedNamespaceHasNothingToFoldInto(t *testing.T) {
 	graph := buildCrowd(t, []string{"a"}, false, Request{Namespace: "a"})
 
