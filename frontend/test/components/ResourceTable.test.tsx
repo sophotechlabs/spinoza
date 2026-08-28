@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Column, ResourceDescriptor, Row } from '../../src/lib/types';
 import ResourceTable from '../../src/components/ResourceTable';
@@ -1540,5 +1540,144 @@ describe('what the row count says', () => {
 
     expect(screen.getByText('newest 1 of 23 matching in the cluster')).toBeInTheDocument();
     useFiltersStore.getState().clear();
+  });
+});
+
+describe('sorting a node by memory', () => {
+  function twoNodes() {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: {},
+            nodes: {
+              'node-small': {
+                cpuMilli: 900,
+                memoryMi: 3072,
+                cpuPercent: 90,
+                memPercent: 75,
+                cpuAllocatableMilli: 1000,
+                memAllocatableMi: 4096,
+              },
+              'node-big': {
+                cpuMilli: 2000,
+                memoryMi: 8192,
+                cpuPercent: 25,
+                memPercent: 25,
+                cpuAllocatableMilli: 8000,
+                memAllocatableMi: 32768,
+              },
+            },
+          }),
+      }),
+    );
+    seed(makeColumns(['Status']), false, [
+      makeRow({ uid: 'a', name: 'node-small', namespace: '' }),
+      makeRow({ uid: 'b', name: 'node-big', namespace: '' }),
+    ]);
+    return makeDescriptor({ resource: 'nodes', kind: 'Node', namespaced: false });
+  }
+
+  function names(): (string | null)[] {
+    return screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => row.textContent);
+  }
+
+  it('walks from most consumed to the biggest node and back to unsorted', async () => {
+    const user = userEvent.setup();
+    renderTable(twoNodes(), null);
+    const header = await screen.findByRole('button', { name: /^Memory/ });
+
+    await user.click(header);
+    await waitFor(() => {
+      expect(names()[0]).toContain('node-small');
+    });
+
+    await user.click(screen.getByRole('button', { name: /^Memory/ }));
+    await waitFor(() => {
+      expect(names()[0]).toContain('node-big');
+    });
+
+    await user.click(screen.getByRole('button', { name: /^Memory/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Memory total/ })).toBeInTheDocument();
+    });
+    expect(names()[0]).toContain('node-big');
+
+    await user.click(screen.getByRole('button', { name: /^Memory total/ }));
+    await waitFor(() => {
+      expect(names()[0]).toContain('node-small');
+    });
+
+    await user.click(screen.getByRole('button', { name: /^Memory total/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Memory$/ })).toBeInTheDocument();
+    });
+  });
+
+  it('says in the header which side of the cell it is ordering by', async () => {
+    const user = userEvent.setup();
+    renderTable(twoNodes(), null);
+    const header = await screen.findByRole('button', { name: /^Memory/ });
+
+    await user.click(header);
+    await user.click(screen.getByRole('button', { name: /^Memory/ }));
+    await user.click(screen.getByRole('button', { name: /^Memory/ }));
+
+    expect(await screen.findByRole('button', { name: /^Memory total/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^CPU/ })).toBeInTheDocument();
+  });
+
+  it('orders by how big the node is on the cpu column too', async () => {
+    const user = userEvent.setup();
+    renderTable(twoNodes(), null);
+    const header = await screen.findByRole('button', { name: /^CPU/ });
+
+    await user.click(header);
+    await user.click(screen.getByRole('button', { name: /^CPU/ }));
+    await user.click(screen.getByRole('button', { name: /^CPU/ }));
+
+    expect(await screen.findByRole('button', { name: /^CPU total/ })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(names()[0]).toContain('node-big');
+    });
+  });
+
+  // A pod has no ceiling to sort by, so its columns keep the plain toggle.
+  it('leaves a pod table with the ordinary two-way sort', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            pods: {
+              'default/web': {
+                cpuMilli: 150,
+                memoryMi: 192,
+                cpuPercent: 0,
+                memPercent: 0,
+                cpuAllocatableMilli: 0,
+                memAllocatableMi: 0,
+              },
+            },
+            nodes: {},
+          }),
+      }),
+    );
+    seed(makeColumns(['Status']), true, [makeRow({ uid: 'a', name: 'web', namespace: 'default' })]);
+    renderTable(makeDescriptor({ resource: 'pods', kind: 'Pod' }), null);
+    const header = await screen.findByRole('button', { name: /^Memory/ });
+
+    await user.click(header);
+    await user.click(screen.getByRole('button', { name: /^Memory/ }));
+    await user.click(screen.getByRole('button', { name: /^Memory/ }));
+
+    expect(screen.queryByRole('button', { name: /^Memory total/ })).not.toBeInTheDocument();
   });
 });

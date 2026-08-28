@@ -4,6 +4,8 @@ import {
   TABLE_STATE_KEY,
   columnLabel,
   emptyTableState,
+  metricHeader,
+  nextMetricSort,
   parseTables,
   readTableState,
   tableKey,
@@ -57,6 +59,7 @@ describe('parseTables', () => {
       sorting: [{ id: 'name', desc: true }],
       visibility: { age: false },
       sizing: { name: 300 },
+      bases: {},
     });
   });
 
@@ -73,6 +76,7 @@ describe('parseTables', () => {
       sorting: [{ id: 'age', desc: false }],
       visibility: { name: true },
       sizing: { age: 40 },
+      bases: {},
     });
   });
 });
@@ -91,6 +95,7 @@ describe('reading and writing a table', () => {
       sorting: [{ id: 'name', desc: false }],
       visibility: { age: false },
       sizing: { name: 200 },
+      bases: {},
     });
 
     expect(readTableState('v1/pods').sorting).toEqual([{ id: 'name', desc: false }]);
@@ -102,8 +107,14 @@ describe('reading and writing a table', () => {
       sorting: [{ id: 'name', desc: true }],
       visibility: {},
       sizing: {},
+      bases: {},
     });
-    writeTableState('v1/nodes', { sorting: [], visibility: { age: false }, sizing: {} });
+    writeTableState('v1/nodes', {
+      sorting: [],
+      visibility: { age: false },
+      sizing: {},
+      bases: {},
+    });
 
     expect(readTableState('v1/pods').sorting).toHaveLength(1);
     expect(readTableState('v1/nodes').sorting).toHaveLength(0);
@@ -143,9 +154,95 @@ describe('reading and writing a table', () => {
   });
 
   it('stores nothing without a resource', () => {
-    writeTableState('', { sorting: [{ id: 'name', desc: true }], visibility: {}, sizing: {} });
+    writeTableState('', {
+      sorting: [{ id: 'name', desc: true }],
+      visibility: {},
+      sizing: {},
+      bases: {},
+    });
 
     expect(readStored(TABLE_STATE_KEY)).toBeNull();
     expect(readTableState('')).toEqual(emptyTableState());
+  });
+});
+
+describe('nextMetricSort', () => {
+  it('starts at most consumed', () => {
+    expect(nextMetricSort('memory', [], 'used')).toEqual({
+      sorting: [{ id: 'memory', desc: true }],
+      basis: 'used',
+    });
+  });
+
+  it('turns most consumed into least consumed', () => {
+    expect(nextMetricSort('memory', [{ id: 'memory', desc: true }], 'used')).toEqual({
+      sorting: [{ id: 'memory', desc: false }],
+      basis: 'used',
+    });
+  });
+
+  // Three clicks reach the biggest node, which is the point of the basis.
+  it('moves to the largest once both directions of used are spent', () => {
+    expect(nextMetricSort('memory', [{ id: 'memory', desc: false }], 'used')).toEqual({
+      sorting: [{ id: 'memory', desc: true }],
+      basis: 'total',
+    });
+  });
+
+  it('turns the largest into the smallest', () => {
+    expect(nextMetricSort('memory', [{ id: 'memory', desc: true }], 'total')).toEqual({
+      sorting: [{ id: 'memory', desc: false }],
+      basis: 'total',
+    });
+  });
+
+  it('comes back round to unsorted', () => {
+    expect(nextMetricSort('memory', [{ id: 'memory', desc: false }], 'total')).toEqual({
+      sorting: [],
+      basis: 'used',
+    });
+  });
+
+  // Sorting a different column and coming back starts the cycle over.
+  it('starts over when another column holds the sort', () => {
+    expect(nextMetricSort('memory', [{ id: 'name', desc: false }], 'total')).toEqual({
+      sorting: [{ id: 'memory', desc: true }],
+      basis: 'used',
+    });
+  });
+});
+
+describe('metricHeader', () => {
+  it('names the column while it sorts on what is used', () => {
+    expect(metricHeader('Memory', true, 'used')).toBe('Memory');
+  });
+
+  it('says so while it sorts on the whole node', () => {
+    expect(metricHeader('Memory', true, 'total')).toBe('Memory total');
+  });
+
+  it('says nothing extra while the column is not sorted', () => {
+    expect(metricHeader('Memory', false, 'total')).toBe('Memory');
+  });
+});
+
+describe('the remembered basis', () => {
+  it('survives a reload', () => {
+    writeTableState('v1/nodes', {
+      sorting: [{ id: 'memory', desc: true }],
+      visibility: {},
+      sizing: {},
+      bases: { memory: 'total' },
+    });
+
+    expect(readTableState('v1/nodes').bases).toEqual({ memory: 'total' });
+  });
+
+  it('takes nothing it does not recognise', () => {
+    const parsed = parseTables(
+      JSON.stringify({ 'v1/nodes': { bases: { memory: 'sideways', cpu: 'total' } } }),
+    );
+
+    expect(parsed['v1/nodes'].bases).toEqual({ cpu: 'total' });
   });
 });

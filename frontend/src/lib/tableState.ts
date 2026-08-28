@@ -5,14 +5,20 @@ import { readStored, writeStored } from './persist';
 
 export const TABLE_STATE_KEY = 'spinoza.tables.v1';
 
+export const METRIC_BASES = ['used', 'total'] as const;
+
+export type MetricBasis = (typeof METRIC_BASES)[number];
+
 export interface TableState {
   sorting: SortingState;
   visibility: VisibilityState;
   sizing: ColumnSizingState;
+  // Which side of a used-of-total cell a metric column sorts on, by column id.
+  bases: Partial<Record<string, MetricBasis>>;
 }
 
 export function emptyTableState(): TableState {
-  return { sorting: [], visibility: {}, sizing: {} };
+  return { sorting: [], visibility: {}, sizing: {}, bases: {} };
 }
 
 export function columnLabel(header: unknown, id: string): string {
@@ -65,6 +71,18 @@ function parseSizing(value: unknown): ColumnSizingState {
   return out;
 }
 
+function parseBases(value: unknown): Partial<Record<string, MetricBasis>> {
+  const out: Partial<Record<string, MetricBasis>> = {};
+  for (const [id, entry] of Object.entries(asRecord(value))) {
+    for (const basis of METRIC_BASES) {
+      if (entry === basis) {
+        out[id] = basis;
+      }
+    }
+  }
+  return out;
+}
+
 export function parseTables(raw: string | null): Record<string, TableState> {
   if (raw === null) {
     return {};
@@ -82,6 +100,7 @@ export function parseTables(raw: string | null): Record<string, TableState> {
       sorting: parseSorting(item.sorting),
       visibility: parseVisibility(item.visibility),
       sizing: parseSizing(item.sizing),
+      bases: parseBases(item.bases),
     };
   }
   return out;
@@ -110,4 +129,34 @@ export function writeTableState(key: string, state: TableState): void {
   const all = readAll();
   all[key] = state;
   writeStored(TABLE_STATE_KEY, JSON.stringify(all));
+}
+
+interface MetricSort {
+  sorting: SortingState;
+  basis: MetricBasis;
+}
+
+// nextMetricSort walks a metric column through its four sorted states and back
+// to none: most consumed, least consumed, largest, smallest.
+export function nextMetricSort(id: string, sorting: SortingState, basis: MetricBasis): MetricSort {
+  const current = sorting.find((entry) => entry.id === id);
+  if (current === undefined) {
+    return { sorting: [{ id, desc: true }], basis: 'used' };
+  }
+  if (current.desc) {
+    return { sorting: [{ id, desc: false }], basis };
+  }
+  if (basis === 'used') {
+    return { sorting: [{ id, desc: true }], basis: 'total' };
+  }
+  return { sorting: [], basis: 'used' };
+}
+
+// A node cell shows how much of how much, so its header says which of the two
+// it is ordering by.
+export function metricHeader(label: string, sorted: boolean, basis: MetricBasis): string {
+  if (sorted && basis === 'total') {
+    return `${label} total`;
+  }
+  return label;
 }

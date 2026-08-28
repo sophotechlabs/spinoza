@@ -9,6 +9,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import type {
+  Column as TanColumn,
   ColumnDef,
   ColumnSizingState,
   Row as TanRow,
@@ -47,7 +48,15 @@ import { fieldsOf, filterRows, parseChip } from '../lib/filterChips';
 import { scopedBy } from '../lib/catalog';
 import { useChips, useFiltersStore } from '../store/filters';
 import { opensRow } from '../lib/rowClick';
-import { columnLabel, readTableState, tableKey, writeTableState } from '../lib/tableState';
+import {
+  columnLabel,
+  metricHeader,
+  nextMetricSort,
+  readTableState,
+  tableKey,
+  writeTableState,
+} from '../lib/tableState';
+import type { MetricBasis } from '../lib/tableState';
 import FilterBar from './FilterBar';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
@@ -174,35 +183,54 @@ function renderMetricCell(kind: string, metrics: Metrics, row: Row, memory: bool
 
 const UNMEASURED = -1;
 
-function metricValue(kind: string, metrics: Metrics, row: Row, memory: boolean): number {
+const METRIC_COLUMNS = ['cpu', 'memory'];
+
+function nodeTotal(usage: ResourceUsage, memory: boolean): number {
+  if (memory) {
+    return usage.memAllocatableMi;
+  }
+  return usage.cpuAllocatableMilli;
+}
+
+function metricValue(
+  kind: string,
+  metrics: Metrics,
+  row: Row,
+  memory: boolean,
+  basis: MetricBasis,
+): number {
   const usage = metricUsage(kind, metrics, row);
   if (usage === undefined) {
     return UNMEASURED;
   }
-  if (kind === 'Node' && memory) {
-    return usage.memPercent;
+  if (kind !== 'Node') {
+    if (memory) {
+      return usage.memoryMi;
+    }
+    return usage.cpuMilli;
   }
-  if (kind === 'Node') {
-    return usage.cpuPercent;
+  if (basis === 'total') {
+    return nodeTotal(usage, memory);
   }
   if (memory) {
-    return usage.memoryMi;
+    return usage.memPercent;
   }
-  return usage.cpuMilli;
+  return usage.cpuPercent;
 }
 
 function metricKey(kind: string, metrics: Metrics, row: Row, memory: boolean): string {
-  return String(metricValue(kind, metrics, row, memory));
+  return String(metricValue(kind, metrics, row, memory, 'used'));
 }
 
 function byMetric(
   kind: string,
   metrics: Metrics,
   memory: boolean,
+  basis: MetricBasis,
 ): (left: TanRow<Row>, right: TanRow<Row>) => number {
   return (left, right) =>
-    metricValue(kind, metrics, left.original, memory) -
-    metricValue(kind, metrics, right.original, memory);
+    metricValue(kind, metrics, left.original, memory, basis) -
+    metricValue(kind, metrics, right.original, memory, basis);
 }
 
 function sortIndicator(dir: false | SortDirection): string {
@@ -278,6 +306,9 @@ export default function ResourceTable({
     () => readTableState(stateKey).visibility,
   );
   const [sizing, setSizing] = useState<ColumnSizingState>(() => readTableState(stateKey).sizing);
+  const [bases, setBases] = useState<Partial<Record<string, MetricBasis>>>(
+    () => readTableState(stateKey).bases,
+  );
   const [selection, setSelection] = useState<RowSelectionState>({});
   const [text, setText] = useState('');
   const [lastResource, setLastResource] = useState(subId);
@@ -287,6 +318,7 @@ export default function ResourceTable({
     setSorting(next.sorting);
     setVisibility(next.visibility);
     setSizing(next.sizing);
+    setBases(next.bases);
     setSelection({});
     setText('');
   }
@@ -297,17 +329,38 @@ export default function ResourceTable({
 
   function changeSorting(next: SortingState) {
     setSorting(next);
-    writeTableState(stateKey, { sorting: next, visibility, sizing });
+    writeTableState(stateKey, { sorting: next, visibility, sizing, bases });
   }
 
   function changeVisibility(next: VisibilityState) {
     setVisibility(next);
-    writeTableState(stateKey, { sorting, visibility: next, sizing });
+    writeTableState(stateKey, { sorting, visibility: next, sizing, bases });
+  }
+
+  // One header, four sorted states: most consumed, least, biggest, smallest.
+  // The label says which, because an arrow alone cannot.
+  function cycleMetric(id: string) {
+    const next = nextMetricSort(id, sorting, bases[id] ?? 'used');
+    const nextBases = { ...bases, [id]: next.basis };
+    setBases(nextBases);
+    setSorting(next.sorting);
+    writeTableState(stateKey, {
+      sorting: next.sorting,
+      visibility,
+      sizing,
+      bases: nextBases,
+    });
+  }
+
+  // A node's metric columns cycle through both sides of the cell; everything
+  // else keeps the table's own two-way toggle.
+  function cyclesBothSides(column: TanColumn<Row>): boolean {
+    return activeKind === 'Node' && METRIC_COLUMNS.includes(column.id);
   }
 
   function changeSizing(next: ColumnSizingState) {
     setSizing(next);
-    writeTableState(stateKey, { sorting, visibility, sizing: next });
+    writeTableState(stateKey, { sorting, visibility, sizing: next, bases });
   }
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const columnsRef = useRef<HTMLDetailsElement | null>(null);
@@ -330,6 +383,7 @@ export default function ResourceTable({
     reload: reloadMetrics,
   } = useMetrics(wantMetrics);
 
+  const sortedIds = useMemo(() => new Set(sorting.map((entry) => entry.id)), [sorting]);
   const columns = useMemo<ColumnDef<Row, string>[]>(() => {
     const defs: ColumnDef<Row, string>[] = [];
     defs.push({
@@ -400,20 +454,20 @@ export default function ResourceTable({
       defs.push(
         columnHelper.accessor((row) => metricKey(activeKind, sample, row, false), {
           id: 'cpu',
-          header: 'CPU',
+          header: metricHeader('CPU', sortedIds.has('cpu'), bases.cpu ?? 'used'),
           size: 132,
           sortDescFirst: true,
-          sortingFn: byMetric(activeKind, sample, false),
+          sortingFn: byMetric(activeKind, sample, false, bases.cpu ?? 'used'),
           cell: (info) => renderMetricCell(activeKind, sample, info.row.original, false),
         }),
       );
       defs.push(
         columnHelper.accessor((row) => metricKey(activeKind, sample, row, true), {
           id: 'memory',
-          header: 'Memory',
+          header: metricHeader('Memory', sortedIds.has('memory'), bases.memory ?? 'used'),
           size: 132,
           sortDescFirst: true,
-          sortingFn: byMetric(activeKind, sample, true),
+          sortingFn: byMetric(activeKind, sample, true, bases.memory ?? 'used'),
           cell: (info) => renderMetricCell(activeKind, sample, info.row.original, true),
         }),
       );
@@ -428,7 +482,7 @@ export default function ResourceTable({
       }),
     );
     return defs;
-  }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics, now]);
+  }, [dataColumns, namespaced, onSelect, activeKind, wantMetrics, metrics, now, bases, sortedIds]);
 
   const visibleRows = useMemo(() => {
     const draft = parseChip(text, fields);
@@ -623,7 +677,13 @@ export default function ResourceTable({
                     {header.column.getCanSort() && (
                       <button
                         type="button"
-                        onClick={header.column.getToggleSortingHandler()}
+                        onClick={
+                          cyclesBothSides(header.column)
+                            ? () => {
+                                cycleMetric(header.column.id);
+                              }
+                            : header.column.getToggleSortingHandler()
+                        }
                         className="flex w-full cursor-pointer items-center truncate font-medium select-none hover:text-fg-strong"
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
