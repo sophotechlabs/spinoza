@@ -1,0 +1,177 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: healthy
+  namespace: e2e
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: healthy
+  template:
+    metadata:
+      labels:
+        app: healthy
+    spec:
+      containers:
+        - name: httpd
+          image: busybox:1.37
+          command: ['sh', '-c', 'mkdir -p /srv && echo e2e > /srv/index.html && httpd -f -p 8080 -h /srv']
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: healthy
+  namespace: e2e
+spec:
+  selector:
+    app: healthy
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatty
+  namespace: e2e
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chatty
+  template:
+    metadata:
+      labels:
+        app: chatty
+    spec:
+      containers:
+        - name: talker
+          image: busybox:1.37
+          command: ['sh', '-c', 'while true; do echo e2e-log-line; sleep 1; done']
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashing
+  namespace: e2e
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crashing
+  template:
+    metadata:
+      labels:
+        app: crashing
+    spec:
+      containers:
+        - name: doomed
+          image: busybox:1.37
+          command: ['sh', '-c', 'exit 1']
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risky
+  namespace: e2e
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: risky
+  template:
+    metadata:
+      labels:
+        app: risky
+    spec:
+      hostPID: true
+      containers:
+        - name: risky
+          image: busybox:latest
+          command: ['sh', '-c', 'sleep 3600']
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+            readOnlyRootFilesystem: false
+            capabilities:
+              add: ['SYS_ADMIN']
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: noshell
+  namespace: e2e
+  labels:
+    app: noshell
+spec:
+  containers:
+    - name: paused
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: secret-sample
+  namespace: e2e
+type: Opaque
+stringData:
+  username: e2e-user
+  password: e2e-password
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-sample
+  namespace: e2e
+data:
+  greeting: hello from e2e
+  tuning: |
+    threads = 4
+    verbose = true
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly
+  namespace: e2e
+spec:
+  schedule: '0 3 * * *'
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: work
+              image: busybox:1.37
+              command: ['sh', '-c', 'echo nightly']
