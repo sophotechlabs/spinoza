@@ -1,5 +1,5 @@
-// Package update asks once per run whether a newer spinoza has been published,
-// and hands back the version, a link and the command that installs it.
+// Package update reports whether a newer spinoza has been published: the
+// version, a link, and the command that installs it.
 package update
 
 import (
@@ -16,10 +16,10 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// Endpoint answers in the shape GitHub's own release API answers in.
+// Endpoint returns GitHub's release API shape.
 const Endpoint = "https://spinoza.tech/api/latest"
 
-// Command is the install line the website gives out.
+// Command is the install line published on the website.
 const Command = "curl -fsSL https://spinoza.tech/install.sh | sh"
 
 const (
@@ -28,13 +28,13 @@ const (
 	releasePrefix = "v"
 )
 
-// answer is the part of a release the endpoint publishes that is read here.
+// answer is the subset of the endpoint's release JSON that is read here.
 type answer struct {
 	Tag string `json:"tag_name"`
 	URL string `json:"html_url"`
 }
 
-// Checker asks once per run.
+// Checker makes one request per run.
 type Checker struct {
 	endpoint string
 	current  string
@@ -56,7 +56,7 @@ func New(current, endpoint string) *Checker {
 	}
 }
 
-// Status answers from the one request this run makes.
+// Status returns the result of that one request.
 func (c *Checker) Status(ctx context.Context) api.UpdateStatus {
 	c.once.Do(func() {
 		c.answer = c.ask(ctx)
@@ -111,7 +111,7 @@ func (c *Checker) fetch(ctx context.Context) (answer, error) {
 	return found, nil
 }
 
-// userAgent is how the endpoint learns which release asked, and on what.
+// userAgent carries the release and platform to the endpoint.
 func userAgent(current string) string {
 	return "spinoza/" + current + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")"
 }
@@ -124,7 +124,7 @@ func (e *statusError) Error() string {
 	return "asking about releases answered " + strconv.Itoa(e.code)
 }
 
-// released says whether a version can be compared. A build made outside a
+// released reports whether a version is comparable. A build made outside a
 // release carries a commit or the word dev.
 func released(version string) bool {
 	if !strings.HasPrefix(version, releasePrefix) {
@@ -133,7 +133,7 @@ func released(version string) bool {
 	return len(parts(version)) == 3
 }
 
-// newer orders tags as versions, so that v1.10.0 is above v1.9.0.
+// newer compares tags numerically, so that v1.10.0 sorts above v1.9.0.
 func newer(candidate, current string) bool {
 	if !released(candidate) {
 		return false

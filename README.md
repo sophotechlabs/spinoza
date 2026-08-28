@@ -76,7 +76,7 @@ Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan b
 - **Exec** over `v5.channel.k8s.io` into xterm. Shell-less images get an ephemeral debug container, on a verdict cached per image digest.
 - **Logs** per container. Pausing follow stops the scroll, not the stream.
 - **Metrics**: metrics-server in the tables, CPU and memory history from Prometheus through the apiserver proxy. `--prometheus namespace/service:port` overrides discovery. With no Prometheus to ask, spinoza samples metrics-server itself while the window is open and says so on the chart.
-- **Update check**: asks GitHub once per run whether a newer release exists, and offers the install command if so. It never installs anything. `--update-check=false` turns it off, `--update-endpoint URL` points it elsewhere.
+- **Update check**: asks spinoza.tech once per run whether a newer release exists, and offers the install command if so. It never installs anything.
 - **Kubeconfigs** added by path, referenced in place, never copied or merged. Contexts grouped per file, listed in `kubeconfigs.json`. `--kubeconfig PATH` replaces the default lookup for one run.
 - **Nine themes**, contrast-gated in CI, plus your own as JSON. Screenshots here are Borg.
 
@@ -84,7 +84,7 @@ Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan b
 
 Binds loopback only; rejects non-local Host or Origin. Every route and both WebSockets require the token minted for that run, as the `X-Spinoza-Token` header, a `token` query parameter, or the cookie the page keeps. `--token-file PATH` writes it at mode 0600. Exits when the last view closes.
 
-Outbound: your apiserver, the chart repos you configured, and one request per run to the GitHub releases API for the update check — `--update-check=false` stops that one.
+Outbound: your apiserver, the chart repos you configured, and one request per run to spinoza.tech asking whether a newer release exists.
 
 ## Develop
 
