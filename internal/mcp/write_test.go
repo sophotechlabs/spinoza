@@ -1,0 +1,374 @@
+package mcp
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/sophotechlabs/spinoza/internal/actions"
+	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/flux"
+)
+
+func writableCluster() *fakeCluster {
+	return &fakeCluster{catalog: catalogOf(
+		descriptor("apps", "v1", "deployments", "Deployment"),
+		descriptor("batch", "v1", "cronjobs", "CronJob"),
+		descriptor("kustomize.toolkit.fluxcd.io", "v1", "kustomizations", "Kustomization"),
+		descriptor("argoproj.io", "v1alpha1", "applications", "Application"),
+	)}
+}
+
+// whether a write tool is offered at all
+
+func TestNoWriteToolExistsUnlessWritesAreAllowed(t *testing.T) {
+	server := serverFor(writableCluster(), Options{})
+
+	for name := range writeToolNames {
+		if _, held := server.tools[name]; held {
+			t.Fatalf("%s is offered on a read-only server", name)
+		}
+	}
+	if len(server.Tools()) == 0 {
+		t.Fatal("a read-only server offers nothing at all")
+	}
+}
+
+func TestAProtectedClusterWithholdsEveryWriteToolEvenWhenAsked(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true, Protected: true})
+
+	for name := range writeToolNames {
+		if _, held := server.tools[name]; held {
+			t.Fatalf("%s is offered on a protected cluster", name)
+		}
+	}
+}
+
+func TestAskingForAWithheldWriteToolSaysWhy(t *testing.T) {
+	server := serverFor(writableCluster(), Options{})
+
+	message := server.unknown("manage_node")
+
+	if !strings.Contains(message, "read-only") {
+		t.Fatalf("message = %q, want the reason rather than a bare not-found", message)
+	}
+	if plain := server.unknown("not_a_tool"); strings.Contains(plain, "read-only") {
+		t.Fatalf("message = %q, want a plain not-found for a name nobody serves", plain)
+	}
+}
+
+func TestEveryWriteToolIsOfferedWhenWritesAreAllowed(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true})
+
+	for name := range writeToolNames {
+		if _, held := server.tools[name]; !held {
+			t.Fatalf("%s is missing from a writable server", name)
+		}
+	}
+}
+
+// rbac
+
+func TestARefusedCapabilityStopsTheWriteAndCarriesTheReason(t *testing.T) {
+	cluster := writableCluster()
+	cluster.refused = api.Access{Refused: []api.Refusal{
+		{Capability: "scale", Reason: "you may not scale apps/deployments here"},
+	}}
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	err := refuses(t, server, "manage_workload", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod",
+		"action": "scale", "replicas": float64(3),
+	})
+
+	if err.Error() != "you may not scale apps/deployments here" {
+		t.Fatalf("error = %q, want the apiserver's own reason", err)
+	}
+	if len(cluster.acted) != 0 {
+		t.Fatalf("the action ran anyway: %v", cluster.acted)
+	}
+}
+
+func TestARefusalOfAnotherCapabilityDoesNotBlockThisOne(t *testing.T) {
+	cluster := writableCluster()
+	cluster.refused = api.Access{Refused: []api.Refusal{{Capability: "delete", Reason: "no"}}}
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	run(t, server, "manage_workload", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod", "action": "restart",
+	})
+
+	if len(cluster.acted) != 1 {
+		t.Fatalf("acted = %v, want the restart to have run", cluster.acted)
+	}
+}
+
+// workloads
+
+func TestScalingCarriesTheReplicaCount(t *testing.T) {
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	run(t, server, "manage_workload", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod",
+		"action": "scale", "replicas": float64(4),
+	})
+
+	if len(cluster.acted) != 1 {
+		t.Fatalf("acted = %v", cluster.acted)
+	}
+	req := cluster.acted[0]
+	if req.Action != actions.Scale || req.Replicas != 4 {
+		t.Fatalf("request = %+v, want a scale to 4", req)
+	}
+	if req.Ref.Resource != "deployments" || req.Ref.Namespace != "prod" {
+		t.Fatalf("ref = %+v", req.Ref)
+	}
+}
+
+func TestScalingWithNoCountIsRefusedRatherThanScalingToZero(t *testing.T) {
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	err := refuses(t, server, "manage_workload", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod", "action": "scale",
+	})
+
+	if !strings.Contains(err.Error(), "replicas is required") {
+		t.Fatalf("error = %q", err)
+	}
+	if len(cluster.acted) != 0 {
+		t.Fatalf("a workload was scaled with no count: %v", cluster.acted)
+	}
+}
+
+func TestScalingToZeroIsAllowedWhenItIsAskedFor(t *testing.T) {
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	run(t, server, "manage_workload", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod",
+		"action": "scale", "replicas": float64(0),
+	})
+
+	if cluster.acted[0].Replicas != 0 {
+		t.Fatalf("replicas = %d, want the zero that was asked for", cluster.acted[0].Replicas)
+	}
+}
+
+func TestAWorkloadActionOutsideTheListIsRefused(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true})
+
+	err := refuses(t, server, "manage_workload", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod", "action": "delete",
+	})
+
+	if !strings.Contains(err.Error(), "scale, restart") {
+		t.Fatalf("error = %q", err)
+	}
+}
+
+// nodes
+
+func TestNodeActionsNameTheNodeAndCarryForce(t *testing.T) {
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	run(t, server, "manage_node", arguments{"name": "worker-1", "action": "drain", "force": true})
+
+	req := cluster.acted[0]
+	if req.Ref.Resource != "nodes" || req.Ref.Name != "worker-1" {
+		t.Fatalf("ref = %+v", req.Ref)
+	}
+	if req.Action != actions.Drain || !req.Force {
+		t.Fatalf("request = %+v, want a forced drain", req)
+	}
+}
+
+func TestDrainingIsAnnotatedAsDestructive(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true})
+
+	if !server.tools["manage_node"].card().Annotations.DestructiveHint {
+		t.Fatal("draining a node is not annotated destructive; a client cannot warn about it")
+	}
+	if server.tools["manage_cronjob"].card().Annotations.DestructiveHint {
+		t.Fatal("suspending a cron job is annotated destructive")
+	}
+}
+
+func TestANodeActionNeedsANameAndAKnownVerb(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true})
+
+	if err := refuses(t, server, "manage_node", arguments{"action": "drain"}); err == nil {
+		t.Fatal("a node action with no name was accepted")
+	}
+	if err := refuses(t, server, "manage_node", arguments{"name": "worker-1", "action": "delete"}); err == nil {
+		t.Fatal("an unknown node verb was accepted")
+	}
+}
+
+// cron jobs
+
+func TestACronJobActionBuildsItsOwnReference(t *testing.T) {
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	run(t, server, "manage_cronjob", arguments{"name": "nightly", "namespace": "prod", "action": "trigger"})
+
+	req := cluster.acted[0]
+	if req.Ref.Group != "batch" || req.Ref.Resource != "cronjobs" {
+		t.Fatalf("ref = %+v", req.Ref)
+	}
+	if req.Action != actions.Trigger {
+		t.Fatalf("action = %q", req.Action)
+	}
+}
+
+func TestACronJobActionNeedsEverything(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true})
+
+	if err := refuses(t, server, "manage_cronjob", arguments{"namespace": "prod", "action": "trigger"}); err == nil {
+		t.Fatal("a cron job action with no name was accepted")
+	}
+	if err := refuses(t, server, "manage_cronjob", arguments{"name": "nightly", "action": "trigger"}); err == nil {
+		t.Fatal("a cron job action with no namespace was accepted")
+	}
+	if err := refuses(t, server, "manage_cronjob", arguments{"name": "n", "namespace": "p", "action": "delete"}); err == nil {
+		t.Fatal("an unknown cron job verb was accepted")
+	}
+}
+
+// gitops
+
+func TestFluxAndArgoGoToDifferentControllers(t *testing.T) {
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	run(t, server, "manage_gitops", arguments{
+		"engine": "flux", "resource": "kustomizations", "name": "apps",
+		"namespace": "flux-system", "action": "reconcile",
+	})
+	run(t, server, "manage_gitops", arguments{
+		"engine": "argo", "resource": "applications", "name": "podinfo",
+		"namespace": "argocd", "action": "sync",
+	})
+
+	if len(cluster.fluxCalls) != 1 || cluster.fluxCalls[0] != flux.Reconcile {
+		t.Fatalf("flux calls = %v", cluster.fluxCalls)
+	}
+	if len(cluster.argoCalls) != 1 || cluster.argoCalls[0].Action != argocd.Sync {
+		t.Fatalf("argo calls = %v", cluster.argoCalls)
+	}
+}
+
+func TestAGitopsCallNeedsAnEngineItKnows(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true})
+
+	err := refuses(t, server, "manage_gitops", arguments{
+		"engine": "spinnaker", "resource": "kustomizations", "name": "apps",
+		"namespace": "flux-system", "action": "reconcile",
+	})
+
+	if !strings.Contains(err.Error(), "flux, argo") {
+		t.Fatalf("error = %q", err)
+	}
+}
+
+func TestAGitopsFailureComesBack(t *testing.T) {
+	cluster := writableCluster()
+	cluster.gitopsErr = errRefused
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	if err := refuses(t, server, "manage_gitops", arguments{
+		"engine": "flux", "resource": "kustomizations", "name": "apps",
+		"namespace": "flux-system", "action": "reconcile",
+	}); !errors.Is(err, errRefused) {
+		t.Fatalf("error = %v", err)
+	}
+	if err := refuses(t, server, "manage_gitops", arguments{
+		"engine": "argo", "resource": "applications", "name": "podinfo",
+		"namespace": "argocd", "action": "sync",
+	}); !errors.Is(err, errRefused) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAGitopsCallNeedsAnActionAndAResourceItCanFind(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true})
+
+	if err := refuses(t, server, "manage_gitops", arguments{
+		"engine": "flux", "resource": "widgets", "name": "apps", "namespace": "x", "action": "reconcile",
+	}); err == nil {
+		t.Fatal("a gitops call named a kind nobody serves and was accepted")
+	}
+	if err := refuses(t, server, "manage_gitops", arguments{
+		"engine": "flux", "resource": "kustomizations", "name": "apps", "namespace": "x",
+	}); err == nil {
+		t.Fatal("a gitops call with no action was accepted")
+	}
+}
+
+// apply
+
+func TestApplyingSendsTheDocumentAndNamesWhatChanged(t *testing.T) {
+	cluster := writableCluster()
+	cluster.detail = api.ObjectDetail{Kind: "Deployment", Name: "web", Namespace: "prod"}
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	result := run(t, server, "apply_resource", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod",
+		"yaml": "spec:\n  replicas: 2\n",
+	})
+
+	if string(cluster.applied) != "spec:\n  replicas: 2\n" {
+		t.Fatalf("applied = %q", cluster.applied)
+	}
+	if result["applied"] != "Deployment/web" {
+		t.Fatalf("applied = %v", result["applied"])
+	}
+}
+
+func TestApplyingIsRefusedWhenEditingIs(t *testing.T) {
+	cluster := writableCluster()
+	cluster.refused = api.Access{Refused: []api.Refusal{{Capability: "edit", Reason: "read-only here"}}}
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	err := refuses(t, server, "apply_resource", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod", "yaml": "spec: {}",
+	})
+
+	if err.Error() != "read-only here" {
+		t.Fatalf("error = %q", err)
+	}
+	if cluster.applied != nil {
+		t.Fatal("the document was applied despite the refusal")
+	}
+}
+
+func TestApplyingNeedsADocumentAndPassesFailuresBack(t *testing.T) {
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	if err := refuses(t, server, "apply_resource", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod",
+	}); !strings.Contains(err.Error(), "yaml is required") {
+		t.Fatalf("error = %v", err)
+	}
+	cluster.applyErr = errRefused
+	if err := refuses(t, server, "apply_resource", arguments{
+		"resource": "deployments", "name": "web", "namespace": "prod", "yaml": "spec: {}",
+	}); !errors.Is(err, errRefused) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAWriteThatFailsCarriesTheApiserverMessage(t *testing.T) {
+	cluster := writableCluster()
+	cluster.actErr = errRefused
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	if err := refuses(t, server, "manage_node", arguments{"name": "worker-1", "action": "cordon"}); !errors.Is(err, errRefused) {
+		t.Fatalf("error = %v", err)
+	}
+}
