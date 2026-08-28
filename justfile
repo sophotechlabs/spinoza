@@ -304,7 +304,7 @@ workflows:
 
 hygiene:
     typos
-    editorconfig-checker
+    ec
     shellcheck install.sh test/install/container.sh
     just --unstable --fmt --check
 
