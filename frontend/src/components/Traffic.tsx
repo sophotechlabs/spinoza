@@ -34,6 +34,14 @@ interface Laid {
   flow: TrafficFlow;
 }
 
+function foldedNote(graph: TrafficGraph): string | null {
+  if (graph.folded !== true) {
+    return null;
+  }
+  const workloads = graph.workloads ?? 0;
+  return `Folded to namespaces: ${String(workloads)} workloads is past the ${String(MAX_NODES)} this graph draws.`;
+}
+
 function layOut(current: Laid | null, graph: TrafficGraph): Laid {
   if (current === null) {
     return { graph, flow: toTrafficFlow(graph) };
@@ -92,6 +100,8 @@ export default function Traffic() {
     return <Loading what="the traffic graph" />;
   }
 
+  const foldNote = foldedNote(laid.graph);
+
   if (laid.flow.nodes.length === 0) {
     if (partial !== null) {
       return <LoadFailure what={WHAT} message={partial} />;
@@ -105,6 +115,14 @@ export default function Traffic() {
     <div className="flex h-full min-h-0 w-full flex-col">
       {error !== null && <StaleBanner what={WHAT} message={error} onRetry={reload} />}
       {partial !== null && <LoadWarning message={partial} />}
+      {foldNote !== null && (
+        <div
+          role="status"
+          className="shrink-0 border-b border-edge bg-surface-raised px-3 py-1.5 text-xs text-fg-muted"
+        >
+          {foldNote}
+        </div>
+      )}
       <div className="relative min-h-0 w-full flex-1">
         <ReactFlow
           nodes={laid.flow.nodes}

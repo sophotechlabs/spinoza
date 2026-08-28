@@ -11,8 +11,8 @@ const NODE_SEPARATION = 28;
 const NODE_CLASS =
   'rounded border px-2 py-1 text-[11px] font-mono truncate border-edge-emphasis bg-surface-active text-fg-strong';
 
-export const EDGE_FLOW_STROKE = 'var(--graph-edge-source)';
-export const EDGE_DROP_STROKE = 'var(--graph-edge-depends)';
+export const EDGE_FLOW_STROKE = 'var(--graph-edge-flow)';
+export const EDGE_DROP_STROKE = 'var(--graph-edge-drop)';
 
 interface TrafficNodeData {
   label: string;
@@ -66,11 +66,18 @@ function layoutPosition(laid: NodeLabel): { x: number; y: number } {
   return { x, y };
 }
 
+export function nodeLabel(node: TrafficNode): string {
+  if (node.workload === '') {
+    return node.namespace;
+  }
+  return node.id;
+}
+
 function toFlowNode(g: LayoutGraph, node: TrafficNode): TrafficFlowNode {
   return {
     id: node.id,
     position: layoutPosition(g.node(node.id)),
-    data: { label: node.id, node },
+    data: { label: nodeLabel(node), node },
     className: NODE_CLASS,
   };
 }

@@ -1,6 +1,9 @@
 package traffic
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 type endpoint struct {
 	namespace string
@@ -19,8 +22,10 @@ type mesh struct {
 }
 
 const (
-	forwarded = "FORWARDED"
-	dropped   = "DROPPED"
+	forwarded   = "FORWARDED"
+	dropped     = "DROPPED"
+	nodeBudget  = 400
+	readTimeout = 20 * time.Second
 )
 
 var cilium = mesh{

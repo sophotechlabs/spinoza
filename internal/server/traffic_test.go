@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -83,6 +84,9 @@ func TestTrafficEndpointsWithoutPrometheus(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", res.StatusCode)
 	}
+	if res.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", res.Header.Get("Content-Type"))
+	}
 	if support.Available {
 		t.Fatal("traffic was offered on a cluster with no prometheus")
 	}
@@ -148,5 +152,48 @@ func TestTrafficSupportNamesTheMissingLabels(t *testing.T) {
 	}
 	if !strings.Contains(support.Reason, "labelsContext") {
 		t.Fatalf("reason = %q, want the cilium configuration line", support.Reason)
+	}
+}
+
+func TestTheTrafficEndpointsRefuseAWrongMethod(t *testing.T) {
+	ts := dashboardServer(t)
+
+	for _, path := range []string{"/api/traffic", "/api/traffic/support"} {
+		t.Run(path, func(t *testing.T) {
+			res, err := http.Post(ts.URL+path, "application/json", http.NoBody)
+			if err != nil {
+				t.Fatalf("post: %v", err)
+			}
+			t.Cleanup(func() { _ = res.Body.Close() })
+			if res.StatusCode != http.StatusMethodNotAllowed {
+				t.Fatalf("status = %d, want 405", res.StatusCode)
+			}
+		})
+	}
+}
+
+func TestTheTrafficGraphFoldsPastTheBudget(t *testing.T) {
+	samples := make([]string, 0, 402)
+	for i := range 402 {
+		samples = append(samples, fmt.Sprintf(
+			`{"metric":{"source_namespace":"team-%d","source_workload":"web-%d",`+
+				`"destination_namespace":"data","destination_workload":"postgres","verdict":"FORWARDED"},`+
+				`"value":[1787933018.510,"1"]}`, i%2, i,
+		))
+	}
+	flows := `{"status":"success","data":{"resultType":"vector","result":[` + strings.Join(samples, ",") + `]}}`
+	ts := trafficServer(t, map[string]string{flowsQuery(t): flows})
+
+	var graph api.TrafficGraph
+	decodeInto(t, ts.URL, "/api/traffic", &graph)
+
+	if !graph.Folded {
+		t.Fatalf("nodes = %d, want the graph folded to namespaces", len(graph.Nodes))
+	}
+	if graph.Workloads != 403 {
+		t.Fatalf("workloads = %d, want the count before folding", graph.Workloads)
+	}
+	if len(graph.Nodes) != 3 {
+		t.Fatalf("districts = %d, want team-0, team-1 and data: %+v", len(graph.Nodes), graph.Nodes)
 	}
 }

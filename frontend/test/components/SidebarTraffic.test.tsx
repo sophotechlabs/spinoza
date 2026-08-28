@@ -149,6 +149,30 @@ describe('the Traffic entry', () => {
     vi.useRealTimers();
   });
 
+  it('does not stack probes on a prometheus that never answers', async () => {
+    vi.useFakeTimers();
+    let asked = 0;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/traffic/support')) {
+        asked += 1;
+        return new Promise(() => undefined);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderSidebar();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150000);
+    });
+
+    expect(asked).toBe(1);
+    vi.useRealTimers();
+  });
+
   it('opens the view and names the mesh once the labels are there', async () => {
     stubFetch({ available: true, source: 'Cilium Hubble' });
     const onSelectView = renderSidebar();

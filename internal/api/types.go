@@ -732,10 +732,12 @@ type TrafficEdge struct {
 }
 
 type TrafficGraph struct {
-	Source string        `json:"source"`
-	Nodes  []TrafficNode `json:"nodes"`
-	Edges  []TrafficEdge `json:"edges"`
-	Error  string        `json:"error,omitempty"`
+	Source    string        `json:"source"`
+	Nodes     []TrafficNode `json:"nodes"`
+	Edges     []TrafficEdge `json:"edges"`
+	Folded    bool          `json:"folded,omitempty"`
+	Workloads int           `json:"workloads,omitempty"`
+	Error     string        `json:"error,omitempty"`
 }
 
 type TrafficSupport struct {

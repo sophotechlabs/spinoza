@@ -4,6 +4,7 @@ import {
   EDGE_DROP_STROKE,
   EDGE_FLOW_STROKE,
   edgeLabel,
+  nodeLabel,
   perSecond,
   restyleTraffic,
   sameTraffic,
@@ -51,12 +52,23 @@ describe('edgeLabel', () => {
   });
 });
 
+describe('nodeLabel', () => {
+  it('names a workload by its namespace and name', () => {
+    expect(nodeLabel({ id: 'apps/web', namespace: 'apps', workload: 'web' })).toBe('apps/web');
+  });
+
+  it('names a folded district by its namespace alone', () => {
+    expect(nodeLabel({ id: 'apps', namespace: 'apps', workload: '' })).toBe('apps');
+  });
+});
+
 describe('toTrafficFlow', () => {
   it('lays every workload out and labels the edge', () => {
     const flow = toTrafficFlow(graph());
 
     expect(flow.nodes.map((node) => node.id)).toEqual(['apps/web', 'apps/api']);
     expect(flow.nodes[0].data.label).toBe('apps/web');
+    expect(nodeLabel(flow.nodes[0].data.node)).toBe('apps/web');
     expect(flow.nodes[0].position.x).toBeTypeOf('number');
     expect(flow.edges).toHaveLength(1);
     expect(flow.edges[0].id).toBe('apps/web->apps/api');

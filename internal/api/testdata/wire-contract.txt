@@ -590,8 +590,10 @@ TrafficEdge.Rate rate float64
 TrafficEdge.To to string
 TrafficGraph.Edges edges []TrafficEdge
 TrafficGraph.Error error,omitempty string
+TrafficGraph.Folded folded,omitempty bool
 TrafficGraph.Nodes nodes []TrafficNode
 TrafficGraph.Source source string
+TrafficGraph.Workloads workloads,omitempty int
 TrafficNode.ID id string
 TrafficNode.Namespace namespace string
 TrafficNode.Workload workload string

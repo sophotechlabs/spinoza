@@ -16,11 +16,12 @@ type Querier interface {
 }
 
 type Reader struct {
-	prom Querier
+	prom   Querier
+	meshes []mesh
 }
 
 func New(client Querier) *Reader {
-	return &Reader{prom: client}
+	return &Reader{prom: client, meshes: meshes}
 }
 
 type state int
@@ -57,7 +58,17 @@ func (r *Reader) Graph(ctx context.Context, at time.Time) api.TrafficGraph {
 		return nothing(sourceFor(found), reasonFor(found))
 	}
 	nodes, edges := build(found.mesh, found.samples)
-	return api.TrafficGraph{Source: found.mesh.name, Nodes: nodes, Edges: edges}
+	if len(nodes) <= nodeBudget {
+		return api.TrafficGraph{Source: found.mesh.name, Nodes: nodes, Edges: edges}
+	}
+	districts, between := foldToNamespaces(nodes, edges)
+	return api.TrafficGraph{
+		Source:    found.mesh.name,
+		Nodes:     districts,
+		Edges:     between,
+		Folded:    true,
+		Workloads: len(nodes),
+	}
 }
 
 func nothing(source, reason string) api.TrafficGraph {
@@ -76,6 +87,33 @@ func reasonFor(found reading) string {
 	return fmt.Sprintf("no service mesh flow metrics were found in Prometheus; spinoza reads %s", meshNames())
 }
 
+func foldToNamespaces(nodes []api.TrafficNode, edges []api.TrafficEdge) ([]api.TrafficNode, []api.TrafficEdge) {
+	district := map[string]string{}
+	kept := map[string]api.TrafficNode{}
+	for _, node := range nodes {
+		id := node.Namespace
+		if id == "" {
+			id = node.ID
+		}
+		district[node.ID] = id
+		kept[id] = api.TrafficNode{ID: id, Namespace: node.Namespace}
+	}
+	between := map[string]api.TrafficEdge{}
+	for _, edge := range edges {
+		from := district[edge.From]
+		to := district[edge.To]
+		key := from + "->" + to
+		folded, seen := between[key]
+		if !seen {
+			folded = api.TrafficEdge{From: from, To: to}
+		}
+		folded.Rate += edge.Rate
+		folded.Dropped += edge.Dropped
+		between[key] = folded
+	}
+	return sortedNodes(kept), sortedEdges(between)
+}
+
 func sourceFor(found reading) string {
 	if found.state == missing {
 		return ""
@@ -84,16 +122,18 @@ func sourceFor(found reading) string {
 }
 
 func (r *Reader) read(ctx context.Context, at time.Time) (reading, error) {
+	bounded, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
 	found := reading{state: missing}
-	for _, entry := range meshes {
-		samples, err := r.prom.Instant(ctx, entry.flows, at)
+	for _, entry := range r.meshes {
+		samples, err := r.prom.Instant(bounded, entry.flows, at)
 		if err != nil {
 			return reading{}, err
 		}
 		if anyLabelled(entry, samples) {
 			return reading{mesh: entry, samples: samples, state: ready}, nil
 		}
-		entryState, err := r.probe(ctx, entry, at)
+		entryState, err := r.probe(bounded, entry, at)
 		if err != nil {
 			return reading{}, err
 		}

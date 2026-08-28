@@ -66,6 +66,7 @@ const (
 	defaultIdleGrace   = 90 * time.Second
 	defaultMetricsTTL  = 5 * time.Second
 	defaultCountsTTL   = 10 * time.Second
+	defaultTrafficTTL  = 10 * time.Second
 	listKindTimeout    = 60 * time.Second
 )
 
@@ -143,6 +144,7 @@ type Manager struct {
 	syncTimeout time.Duration
 	usage       recent[api.Metrics]
 	tally       recent[api.ResourceCounts]
+	meshes      recent[api.TrafficSupport]
 }
 
 type buildGate struct {
@@ -161,6 +163,7 @@ type Limits struct {
 	IdleGrace       time.Duration
 	MetricsTTL      time.Duration
 	CountsTTL       time.Duration
+	TrafficTTL      time.Duration
 	WarmConcurrency int
 	Counts          CountLimits
 	Search          CountLimits
@@ -178,6 +181,9 @@ func (l Limits) orDefaults() Limits {
 	}
 	if l.CountsTTL == 0 {
 		l.CountsTTL = defaultCountsTTL
+	}
+	if l.TrafficTTL == 0 {
+		l.TrafficTTL = defaultTrafficTTL
 	}
 	if l.WarmConcurrency == 0 {
 		l.WarmConcurrency = warmConcurrency
@@ -676,7 +682,14 @@ func (m *Manager) TrafficSupport(ctx context.Context) api.TrafficSupport {
 	if m.traffic == nil {
 		return api.TrafficSupport{Reason: "prometheus is not wired up"}
 	}
-	return m.traffic.Support(ctx, m.now())
+	value, ok := shared(ctx, &m.meshes, m.now, m.limits.TrafficTTL, func(ctx context.Context) (api.TrafficSupport, bool) {
+		support := m.traffic.Support(ctx, m.now())
+		return support, true
+	})
+	if !ok {
+		return api.TrafficSupport{Reason: ctx.Err().Error()}
+	}
+	return value
 }
 
 func (m *Manager) TrafficGraph(ctx context.Context) api.TrafficGraph {

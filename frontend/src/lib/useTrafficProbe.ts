@@ -21,8 +21,13 @@ export function useTrafficProbe(): void {
 
   useEffect(() => {
     let mounted = true;
+    let inFlight = false;
     rememberTrafficSupport({ available: false, reason: CHECKING });
     const load = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       try {
         const support = await fetchTrafficSupport();
         if (mounted) {
@@ -32,6 +37,8 @@ export function useTrafficProbe(): void {
         if (mounted) {
           rememberTrafficSupport({ available: false, reason: probeMessage(err) });
         }
+      } finally {
+        inFlight = false;
       }
     };
     void load();

@@ -183,6 +183,35 @@ describe('Traffic', () => {
   });
 });
 
+describe('a graph the server folded', () => {
+  it('draws the districts and says how many workloads are behind them', async () => {
+    stub(
+      graph({
+        nodes: [
+          { id: 'apps', namespace: 'apps', workload: '' },
+          { id: 'data', namespace: 'data', workload: '' },
+        ],
+        edges: [edge({ from: 'apps', to: 'data' })],
+        folded: true,
+        workloads: 612,
+      }),
+    );
+    render(<Traffic />);
+
+    expect(await screen.findByText('apps')).toBeInTheDocument();
+    expect(screen.getByText('data')).toBeInTheDocument();
+    expect(screen.getByText(/612 workloads is past the 400 this graph draws/)).toBeInTheDocument();
+  });
+
+  it('says nothing about folding when the server sent every workload', async () => {
+    stub(graph());
+    render(<Traffic />);
+    await screen.findByText('apps/web');
+
+    expect(screen.queryByText(/Folded to namespaces/)).not.toBeInTheDocument();
+  });
+});
+
 describe('a poll that brings back the same traffic', () => {
   it('does not lay the workloads out again', async () => {
     vi.useFakeTimers();

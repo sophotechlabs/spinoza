@@ -3,10 +3,15 @@ package prom
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 )
 
 type instantProxy struct {
@@ -164,5 +169,67 @@ func TestInstantReportsDiscoveryFailure(t *testing.T) {
 	_, err := client.Instant(context.Background(), `up`, time.Unix(1, 0))
 	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("got %v, want ErrUnavailable", err)
+	}
+}
+
+// the query as it leaves the process, over a real client and a real socket
+
+func TestInstantSendsTheQueryOverTheServiceProxy(t *testing.T) {
+	var asked string
+	apiserver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[
+			{"metric":{"source_workload":"web"},"value":[1787933018.510,"12.5"]}
+		]}}`))
+	}))
+	t.Cleanup(apiserver.Close)
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: apiserver.URL})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	client := NewClient(cs, Target{Namespace: "monitoring", Service: "prometheus", Port: "9090"})
+
+	samples, instantErr := client.Instant(t.Context(), `sum(rate(x[5m]))`, time.Unix(1787933018, 0))
+
+	if instantErr != nil {
+		t.Fatalf("instant: %v", instantErr)
+	}
+	if len(samples) != 1 {
+		t.Fatalf("samples = %d, want the one the server sent", len(samples))
+	}
+	if samples[0].Labels["source_workload"] != "web" {
+		t.Fatalf("sample = %+v, want its labels kept", samples[0])
+	}
+	if !strings.Contains(asked, "/services/https:prometheus:9090/proxy/api/v1/query") {
+		t.Fatalf("path = %q, want the instant query through the service proxy", asked)
+	}
+	if !strings.Contains(asked, "query=sum%28rate%28x%5B5m%5D%29%29") {
+		t.Fatalf("path = %q, want the PromQL escaped into the query string", asked)
+	}
+	if !strings.Contains(asked, "time=1787933018") {
+		t.Fatalf("path = %q, want the instant passed through", asked)
+	}
+}
+
+func TestInstantReportsAnApiserverThatRefusesToProxy(t *testing.T) {
+	apiserver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"kind":"Status","status":"Failure","reason":"Forbidden","code":403}`))
+	}))
+	t.Cleanup(apiserver.Close)
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: apiserver.URL})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	client := NewClient(cs, Target{Namespace: "monitoring", Service: "prometheus", Port: "9090"})
+
+	_, instantErr := client.Instant(t.Context(), `up`, time.Unix(1, 0))
+
+	if !errors.Is(instantErr, ErrUnavailable) {
+		t.Fatalf("error = %v, want ErrUnavailable", instantErr)
+	}
+	if !strings.Contains(instantErr.Error(), "may not proxy services") {
+		t.Fatalf("error = %q, want the proxy refusal spelled out", instantErr.Error())
 	}
 }

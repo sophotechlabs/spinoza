@@ -20,7 +20,44 @@ describe('fetchTrafficGraph', () => {
     const result = await fetchTrafficGraph();
 
     expect(fetchMock).toHaveBeenCalledWith('/api/traffic', { signal: anySignal() });
-    expect(result).toEqual(graph);
+    expect(result).toEqual({ ...graph, folded: false, workloads: 0, error: undefined });
+  });
+
+  it('reads the fold the server applied', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            source: 'Cilium Hubble',
+            nodes: [{ id: 'apps', namespace: 'apps', workload: '' }],
+            edges: [],
+            folded: true,
+            workloads: 612,
+          }),
+      }),
+    );
+
+    const result = await fetchTrafficGraph();
+
+    expect(result.folded).toBe(true);
+    expect(result.workloads).toBe(612);
+  });
+
+  it('treats a graph with no fold as unfolded', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ source: 'Cilium Hubble', nodes: [], edges: [] }),
+      }),
+    );
+
+    const result = await fetchTrafficGraph();
+
+    expect(result.folded).toBe(false);
+    expect(result.workloads).toBe(0);
   });
 
   it('throws when the response is not ok', async () => {

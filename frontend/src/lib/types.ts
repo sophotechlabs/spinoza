@@ -878,6 +878,8 @@ export interface TrafficGraph {
   source: string;
   nodes: TrafficNode[];
   edges: TrafficEdge[];
+  folded?: boolean;
+  workloads?: number;
   error?: string;
 }
 

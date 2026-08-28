@@ -168,6 +168,8 @@
   --graph-edge-routes: #34d399;
   --graph-edge-configures: #fbbf24;
   --graph-edge-scales: #f472b6;
+  --graph-edge-flow: #0ea5e9;
+  --graph-edge-drop: #f59e0b;
 }
 
 :root[data-theme='light'] {
@@ -250,6 +252,8 @@
   --graph-edge-routes: #059669;
   --graph-edge-configures: #ca8a04;
   --graph-edge-scales: #db2777;
+  --graph-edge-flow: #0284c7;
+  --graph-edge-drop: #d97706;
 }
 
 html {

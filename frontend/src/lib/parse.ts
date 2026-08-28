@@ -524,6 +524,8 @@ export function parseTrafficGraph(body: unknown): TrafficGraph {
     source: asString(item.source),
     nodes: listOf(item.nodes, parseTrafficNode),
     edges: listOf(item.edges, parseTrafficEdge),
+    folded: item.folded === true,
+    workloads: asNumber(item.workloads),
     error: optionalString(item.error),
   };
 }

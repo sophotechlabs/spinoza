@@ -1,0 +1,7 @@
+# Cilium Hubble
+present  count(hubble_flows_processed_total)
+labeled  count(hubble_flows_processed_total{source_workload!="",destination_workload!=""})
+flows    sum by (source_namespace, source_workload, destination_namespace, destination_workload, verdict) (rate(hubble_flows_processed_total[5m]))
+from     source_namespace, source_workload
+to       destination_namespace, destination_workload
+verdict  verdict

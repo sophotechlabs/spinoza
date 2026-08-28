@@ -3,10 +3,12 @@ package traffic
 import (
 	"context"
 	"errors"
-	"strings"
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
@@ -260,11 +262,213 @@ func TestPrometheusFailuresSurface(t *testing.T) {
 	}
 }
 
-func TestMeshNamesListsEveryMesh(t *testing.T) {
-	names := meshNames()
-	for _, entry := range meshes {
-		if !strings.Contains(names, entry.name) {
-			t.Fatalf("%q is missing from %q", entry.name, names)
+// what a crowded cluster gets instead of a refusal
+
+func crowded(pairs int) []prom.Sample {
+	samples := make([]prom.Sample, 0, pairs)
+	for i := range pairs {
+		samples = append(samples, prom.Sample{
+			Labels: map[string]string{
+				"source_namespace":      fmt.Sprintf("team-%d", i%3),
+				"source_workload":       fmt.Sprintf("web-%d", i),
+				"destination_namespace": "data",
+				"destination_workload":  "postgres",
+				"verdict":               forwarded,
+			},
+			Value: 1,
+		})
+	}
+	return samples
+}
+
+func TestAGraphAtTheBudgetIsNotFolded(t *testing.T) {
+	querier := &stubQuerier{answers: map[string][]prom.Sample{cilium.flows: crowded(nodeBudget - 1)}}
+
+	graph := New(querier).Graph(context.Background(), at())
+
+	if graph.Folded {
+		t.Fatalf("a graph of %d workloads was folded", len(graph.Nodes))
+	}
+	if len(graph.Nodes) != nodeBudget {
+		t.Fatalf("nodes = %d, want the %d sources plus the one destination", len(graph.Nodes), nodeBudget-1)
+	}
+	if graph.Workloads != 0 {
+		t.Fatalf("workloads = %d, want it left out when nothing was folded", graph.Workloads)
+	}
+}
+
+func TestPastTheBudgetTheGraphFoldsToNamespaces(t *testing.T) {
+	querier := &stubQuerier{answers: map[string][]prom.Sample{cilium.flows: crowded(nodeBudget + 10)}}
+
+	graph := New(querier).Graph(context.Background(), at())
+
+	if !graph.Folded {
+		t.Fatal("a graph past the budget was not folded")
+	}
+	if graph.Workloads != nodeBudget+11 {
+		t.Fatalf("workloads = %d, want the count before folding", graph.Workloads)
+	}
+	ids := make([]string, 0, len(graph.Nodes))
+	for _, node := range graph.Nodes {
+		ids = append(ids, node.ID)
+	}
+	want := []string{"data", "team-0", "team-1", "team-2"}
+	if !slices.Equal(ids, want) {
+		t.Fatalf("districts = %v, want %v", ids, want)
+	}
+	if len(graph.Edges) != 3 {
+		t.Fatalf("edges = %d, want one per source namespace: %+v", len(graph.Edges), graph.Edges)
+	}
+}
+
+func TestFoldingSumsTheRatesItMerges(t *testing.T) {
+	samples := crowded(nodeBudget + 10)
+	for i := range samples {
+		samples[i].Value = 2
+	}
+	querier := &stubQuerier{answers: map[string][]prom.Sample{cilium.flows: samples}}
+
+	graph := New(querier).Graph(context.Background(), at())
+
+	total := 0.0
+	for _, edge := range graph.Edges {
+		total += edge.Rate
+	}
+	want := float64(2 * (nodeBudget + 10))
+	if total != want {
+		t.Fatalf("folded rate = %v, want the %v the workloads carried", total, want)
+	}
+}
+
+func TestFoldingKeepsAWorkloadWithNoNamespaceApart(t *testing.T) {
+	samples := crowded(nodeBudget + 10)
+	samples = append(samples, prom.Sample{
+		Labels: map[string]string{
+			"source_workload":       "orphan",
+			"destination_namespace": "data",
+			"destination_workload":  "postgres",
+			"verdict":               forwarded,
+		},
+		Value: 1,
+	})
+	querier := &stubQuerier{answers: map[string][]prom.Sample{cilium.flows: samples}}
+
+	graph := New(querier).Graph(context.Background(), at())
+
+	for _, node := range graph.Nodes {
+		if node.ID == "" {
+			t.Fatalf("folding produced a district with no id: %+v", graph.Nodes)
 		}
 	}
+	if !slices.ContainsFunc(graph.Nodes, func(node api.TrafficNode) bool { return node.ID == "/orphan" }) {
+		t.Fatalf("the namespaceless workload lost its identity: %+v", graph.Nodes)
+	}
+}
+
+// a second mesh is a row in the table, and the reader has to reach it
+
+func TestTheReaderFallsThroughToTheNextMesh(t *testing.T) {
+	second := mesh{
+		name:    "Another Mesh",
+		present: "count(other_flows_total)",
+		labeled: `count(other_flows_total{src!=""})`,
+		flows:   "sum by (src, dst, verdict) (rate(other_flows_total[5m]))",
+		from:    endpoint{namespace: "src_ns", workload: "src"},
+		to:      endpoint{namespace: "dst_ns", workload: "dst"},
+		verdict: "verdict",
+		hint:    "add labels to the other mesh",
+	}
+	querier := &stubQuerier{answers: map[string][]prom.Sample{
+		second.flows: {{
+			Labels: map[string]string{
+				"src_ns":  "apps",
+				"src":     "web",
+				"dst_ns":  "data",
+				"dst":     "redis",
+				"verdict": forwarded,
+			},
+			Value: 4,
+		}},
+	}}
+	reader := &Reader{prom: querier, meshes: []mesh{cilium, second}}
+
+	graph := reader.Graph(context.Background(), at())
+
+	if graph.Source != second.name {
+		t.Fatalf("source = %q, want the mesh that answered", graph.Source)
+	}
+	if len(graph.Edges) != 1 {
+		t.Fatalf("edges = %d, want the one the second mesh reported", len(graph.Edges))
+	}
+	if graph.Edges[0].From != "apps/web" {
+		t.Fatalf("edge = %+v, want it read through the second mapping", graph.Edges[0])
+	}
+}
+
+func TestAnUnlabeledFirstMeshIsReportedWhenNoneAnswer(t *testing.T) {
+	second := mesh{
+		name:    "Another Mesh",
+		present: "count(other_flows_total)",
+		labeled: `count(other_flows_total{src!=""})`,
+		flows:   "sum by (src, dst) (rate(other_flows_total[5m]))",
+		from:    endpoint{namespace: "src_ns", workload: "src"},
+		to:      endpoint{namespace: "dst_ns", workload: "dst"},
+		verdict: "verdict",
+		hint:    "add labels to the other mesh",
+	}
+	querier := &stubQuerier{answers: map[string][]prom.Sample{cilium.present: counted(12)}}
+	reader := &Reader{prom: querier, meshes: []mesh{cilium, second}}
+
+	support := reader.Support(context.Background(), at())
+
+	if support.Source != cilium.name {
+		t.Fatalf("source = %q, want the mesh that was at least present", support.Source)
+	}
+	if support.Reason != cilium.hint {
+		t.Fatalf("reason = %q, want that mesh's hint", support.Reason)
+	}
+}
+
+// the read carries its own deadline, so a slow prometheus cannot hold a request open
+
+type deadlineQuerier struct {
+	bounded bool
+	seen    bool
+}
+
+func (d *deadlineQuerier) Instant(ctx context.Context, _ string, _ time.Time) ([]prom.Sample, error) {
+	d.seen = true
+	_, d.bounded = ctx.Deadline()
+	return nil, nil
+}
+
+func TestTheReadBoundsWhateverContextItIsGiven(t *testing.T) {
+	querier := &deadlineQuerier{}
+
+	New(querier).Support(context.Background(), at())
+
+	if !querier.seen {
+		t.Fatal("prometheus was never asked")
+	}
+	if !querier.bounded {
+		t.Fatal("the query ran without a deadline, so a slow prometheus holds the request open")
+	}
+}
+
+func TestACancelledContextStopsTheRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	querier := &contextQuerier{}
+
+	graph := New(querier).Graph(ctx, at())
+
+	if graph.Error == "" {
+		t.Fatal("a canceled read produced no error")
+	}
+}
+
+type contextQuerier struct{}
+
+func (contextQuerier) Instant(ctx context.Context, _ string, _ time.Time) ([]prom.Sample, error) {
+	return nil, ctx.Err()
 }
