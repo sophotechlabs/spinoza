@@ -174,18 +174,18 @@ function Test-OnPath {
 
 function Get-UserPath {
     param([string]$Key = $script:EnvironmentKey)
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($Key, $false)
-    if ($null -eq $key) {
+    $handle = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($Key, $false)
+    if ($null -eq $handle) {
         return [pscustomobject]@{
             Value = ''
             Kind  = [Microsoft.Win32.RegistryValueKind]::ExpandString
         }
     }
     try {
-        $value = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $value = [string]$handle.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
         $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
         if ($value -ne '') {
-            $kind = $key.GetValueKind('Path')
+            $kind = $handle.GetValueKind('Path')
         }
         return [pscustomobject]@{
             Value = $value
@@ -193,7 +193,7 @@ function Get-UserPath {
         }
     }
     finally {
-        $key.Close()
+        $handle.Close()
     }
 }
 

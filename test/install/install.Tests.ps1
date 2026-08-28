@@ -725,3 +725,46 @@ Describe 'running install.ps1 as a script' -Skip:(-not [System.Runtime.InteropSe
         (($said) -join "`n") | Should -Match 'not installed'
     }
 }
+
+# the shape of the script itself
+
+Describe 'the installer source' {
+    BeforeAll {
+        $script:sources = @(
+            (Join-Path $PSScriptRoot '..' '..' 'install.ps1'),
+            (Join-Path $PSScriptRoot '..' 'smoke.ps1'),
+            (Join-Path $PSScriptRoot '..' 'pester.ps1'),
+            (Join-Path $PSScriptRoot 'windows.ps1')
+        )
+    }
+
+    It 'never assigns to a variable a function already took as a parameter' {
+        $shadowed = @()
+        foreach ($source in $script:sources) {
+            $tokens = $null
+            $errors = $null
+            $tree = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $source), [ref]$tokens, [ref]$errors)
+            $functions = $tree.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
+            foreach ($function in $functions) {
+                $parameters = @()
+                if ($function.Body.ParamBlock) {
+                    $parameters = @($function.Body.ParamBlock.Parameters.Name.VariablePath.UserPath)
+                }
+                if ($parameters.Count -eq 0) {
+                    continue
+                }
+                $assignments = $function.Body.FindAll({ $args[0] -is [System.Management.Automation.Language.AssignmentStatementAst] }, $true)
+                foreach ($assignment in $assignments) {
+                    if ($assignment.Left -isnot [System.Management.Automation.Language.VariableExpressionAst]) {
+                        continue
+                    }
+                    $assigned = $assignment.Left.VariablePath.UserPath
+                    if ($parameters -contains $assigned) {
+                        $shadowed += "$(Split-Path -Leaf $source) line $($assignment.Extent.StartLineNumber): $($function.Name) assigns to its own parameter `$$assigned"
+                    }
+                }
+            }
+        }
+        $shadowed -join "`n" | Should -Be ''
+    }
+}

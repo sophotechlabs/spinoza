@@ -8,13 +8,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Script = (Resolve-Path -LiteralPath $Script).Path
+$installer = (Resolve-Path -LiteralPath $Script).Path
 $target = Join-Path ([System.IO.Path]::GetTempPath()) ('spinoza-install-' + [System.Guid]::NewGuid().ToString('N'))
 $before = [string][Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment').GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
 
 $env:SPINOZA_INSTALL_DIR = $target
 try {
-    & $Script
+    & $installer
 
     $binary = Join-Path $target 'spinoza.exe'
     if (-not (Test-Path -LiteralPath $binary)) {
@@ -35,7 +35,7 @@ try {
         throw 'test-install: the install directory was not added to the user PATH'
     }
 
-    $again = & $Script
+    $again = & $installer
     if (-not ($again -match 'Updated spinoza|Installed spinoza')) {
         throw 'test-install: a second run did not report what it did'
     }
