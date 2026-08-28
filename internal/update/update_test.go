@@ -93,6 +93,14 @@ func TestEveryPartOfTheVersionCounts(t *testing.T) {
 	}
 }
 
+func TestAVersionThatIsNotAReleaseIsOlderThanEveryRelease(t *testing.T) {
+	for _, current := range []string{"v1.14.1-7-gce288b8-dirty", "dev", "ce288b8fa1c2", ""} {
+		if !newer("v1.17.0", current) {
+			t.Errorf("newer(v1.17.0, %q) = false, want a release to outrank it", current)
+		}
+	}
+}
+
 func TestAPreReleaseIsNotOffered(t *testing.T) {
 	checker := New("v1.14.1", serving(t, `{"tag_name":"v2.0.0-rc.1","html_url":"u"}`).URL)
 

@@ -146,6 +146,9 @@ func newer(candidate, current string) bool {
 	}
 	left := parts(candidate)
 	right := parts(current)
+	if len(right) != len(left) {
+		return true
+	}
 	for i := range left {
 		if left[i] > right[i] {
 			return true
