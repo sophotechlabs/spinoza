@@ -1002,12 +1002,20 @@ type Metrics struct {
 	Error string                   `json:"error,omitempty"`
 }
 
+type CheckObject struct {
+	Group     string `json:"group"`
+	Version   string `json:"version"`
+	Resource  string `json:"resource"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+}
+
 type CheckFinding struct {
-	Object    ObjectRef `json:"object"`
-	Kind      string    `json:"kind"`
-	Container string    `json:"container,omitempty"`
-	Detail    string    `json:"detail"`
-	Patch     string    `json:"patch,omitempty"`
+	Ref       int    `json:"ref"`
+	Container string `json:"container,omitempty"`
+	Detail    string `json:"detail"`
+	Patch     string `json:"patch,omitempty"`
 }
 
 type CheckGroup struct {
@@ -1019,11 +1027,14 @@ type CheckGroup struct {
 	Wrong      string         `json:"wrong"`
 	Remedy     string         `json:"remedy"`
 	Skipped    string         `json:"skipped,omitempty"`
+	Total      int            `json:"total"`
+	Truncated  bool           `json:"truncated,omitempty"`
 	Findings   []CheckFinding `json:"findings"`
 }
 
 type CheckReport struct {
-	Groups  []CheckGroup `json:"groups"`
-	Scanned int          `json:"scanned"`
-	Error   string       `json:"error,omitempty"`
+	Groups  []CheckGroup  `json:"groups"`
+	Objects []CheckObject `json:"objects"`
+	Scanned int           `json:"scanned"`
+	Error   string        `json:"error,omitempty"`
 }

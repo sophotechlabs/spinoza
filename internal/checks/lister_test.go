@@ -112,6 +112,19 @@ func onlyFinding(t *testing.T, found api.CheckReport, id string) api.CheckFindin
 	return group.Findings[0]
 }
 
+func objectFor(t *testing.T, found api.CheckReport, finding api.CheckFinding) api.CheckObject {
+	t.Helper()
+	if finding.Ref < 0 || finding.Ref >= len(found.Objects) {
+		t.Fatalf("ref %d falls outside the %d objects the report carries", finding.Ref, len(found.Objects))
+	}
+	return found.Objects[finding.Ref]
+}
+
+func onlyObject(t *testing.T, found api.CheckReport, id string) api.CheckObject {
+	t.Helper()
+	return objectFor(t, found, onlyFinding(t, found, id))
+}
+
 func findingCount(t *testing.T, found api.CheckReport, id string) int {
 	t.Helper()
 	return len(groupNamed(t, found, id).Findings)

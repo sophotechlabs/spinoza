@@ -147,7 +147,7 @@ func flagged(found api.CheckReport, id, name string) bool {
 			continue
 		}
 		for _, finding := range group.Findings {
-			if finding.Object.Name == name {
+			if finding.Ref < len(found.Objects) && found.Objects[finding.Ref].Name == name {
 				return true
 			}
 		}

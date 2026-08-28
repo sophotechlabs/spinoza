@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { CheckCategory, CheckFinding, CheckGroup, ObjectRef } from '../lib/types';
+import type { CheckCategory, ObjectRef } from '../lib/types';
+import type { CheckFindingView, CheckGroupView } from '../lib/checks';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -7,6 +8,7 @@ import {
   findingLabel,
   inCategory,
   severityClass,
+  shownLabel,
   totalFindings,
   useChecks,
 } from '../lib/checks';
@@ -25,11 +27,11 @@ function chevron(open: boolean): string {
   return '▸';
 }
 
-function countClass(group: CheckGroup): string {
+function countClass(group: CheckGroupView): string {
   if (group.skipped !== undefined) {
     return 'text-fg-subtle';
   }
-  if (group.findings.length === 0) {
+  if (group.total === 0) {
     return 'text-ok';
   }
   return severityClass(group.severity);
@@ -43,7 +45,7 @@ function Finding({
   finding,
   onOpen,
 }: {
-  finding: CheckFinding;
+  finding: CheckFindingView;
   onOpen: (ref: ObjectRef, kind: string) => void;
 }) {
   return (
@@ -75,7 +77,7 @@ function Group({
   group,
   onOpen,
 }: {
-  group: CheckGroup;
+  group: CheckGroupView;
   onOpen: (ref: ObjectRef, kind: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -110,6 +112,9 @@ function Group({
         <div className="pb-1">
           <p className="px-3 py-1 pl-9 text-fg-muted">{group.wrong}</p>
           <p className="px-3 py-1 pl-9 text-fg-soft">{group.remedy}</p>
+          {group.truncated === true && (
+            <p className="px-3 py-1 pl-9 text-fg-subtle">{shownLabel(group)}</p>
+          )}
           <ul>
             {group.findings.map((finding) => (
               <Finding
@@ -134,7 +139,7 @@ function Category({
   onOpen,
 }: {
   category: CheckCategory;
-  groups: CheckGroup[];
+  groups: CheckGroupView[];
   onOpen: (ref: ObjectRef, kind: string) => void;
 }) {
   if (groups.length === 0) {

@@ -3,6 +3,7 @@ import type {
   CheckCategory,
   CheckFinding,
   CheckGroup,
+  CheckObject,
   CheckReport,
   CheckSeverity,
   ObjectRef,
@@ -11,8 +12,7 @@ import { failure } from './object';
 import { request } from './http';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
-
-const REFRESH_MS = 15000;
+import { useChecksInterval } from '../store/settings';
 
 const SEVERITY_RANK: Record<CheckSeverity, number> = { high: 0, medium: 1, low: 2 };
 
@@ -24,22 +24,55 @@ export const CATEGORY_LABELS: Record<CheckCategory, string> = {
 
 export const CATEGORY_ORDER: CheckCategory[] = ['security', 'reliability', 'efficiency'];
 
-function refOf(raw: unknown): ObjectRef {
-  const item = raw as Partial<ObjectRef> | undefined;
+export interface CheckFindingView {
+  object: ObjectRef;
+  kind: string;
+  container?: string;
+  detail: string;
+  patch?: string;
+}
+
+export type CheckGroupView = Omit<CheckGroup, 'findings'> & { findings: CheckFindingView[] };
+
+export interface CheckReportView {
+  groups: CheckGroupView[];
+  scanned: number;
+  error?: string;
+}
+
+function objectOf(raw: unknown): CheckObject {
+  const item = raw as Partial<CheckObject>;
   return {
-    group: item?.group ?? '',
-    version: item?.version ?? '',
-    resource: item?.resource ?? '',
-    namespace: item?.namespace ?? '',
-    name: item?.name ?? '',
+    group: item.group ?? '',
+    version: item.version ?? '',
+    resource: item.resource ?? '',
+    namespace: item.namespace ?? '',
+    name: item.name ?? '',
+    kind: item.kind ?? '',
   };
 }
 
-function findingOf(raw: unknown): CheckFinding {
+const UNKNOWN: CheckObject = {
+  group: '',
+  version: '',
+  resource: '',
+  namespace: '',
+  name: '',
+  kind: '',
+};
+
+function findingOf(raw: unknown, objects: CheckObject[]): CheckFindingView {
   const item = raw as Partial<CheckFinding>;
+  const held = objects[item.ref ?? -1] ?? UNKNOWN;
   return {
-    object: refOf(item.object),
-    kind: item.kind ?? '',
+    object: {
+      group: held.group,
+      version: held.version,
+      resource: held.resource,
+      namespace: held.namespace,
+      name: held.name,
+    },
+    kind: held.kind,
     container: item.container,
     detail: item.detail ?? '',
     patch: item.patch,
@@ -60,8 +93,9 @@ function severityOf(value: string | undefined): CheckSeverity {
   return 'low';
 }
 
-function groupOf(raw: unknown): CheckGroup {
+function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
   const item = raw as Partial<CheckGroup>;
+  const findings = (item.findings ?? []).map((entry) => findingOf(entry, objects));
   return {
     id: item.id ?? '',
     title: item.title ?? '',
@@ -71,43 +105,47 @@ function groupOf(raw: unknown): CheckGroup {
     wrong: item.wrong ?? '',
     remedy: item.remedy ?? '',
     skipped: item.skipped,
-    findings: (item.findings ?? []).map(findingOf),
+    total: item.total ?? findings.length,
+    truncated: item.truncated,
+    findings,
   };
 }
 
-export async function fetchChecks(): Promise<CheckReport> {
+export async function fetchChecks(): Promise<CheckReportView> {
   const response = await request('/api/checks');
   if (!response.ok) {
     throw await failure(response, `the checks request failed with status ${response.status}`);
   }
   const body = (await response.json()) as Partial<CheckReport>;
+  const objects = (body.objects ?? []).map(objectOf);
   return {
-    groups: (body.groups ?? []).map(groupOf),
+    groups: (body.groups ?? []).map((entry) => groupOf(entry, objects)),
     scanned: body.scanned ?? 0,
     error: body.error,
   };
 }
 
-export function useChecks(): Polled<CheckReport> {
+export function useChecks(): Polled<CheckReportView> {
+  const seconds = useChecksInterval();
   const load = useCallback(() => fetchChecks(), []);
-  return usePoll(load, { intervalMs: REFRESH_MS, fallback: 'the checks request failed' });
+  return usePoll(load, { intervalMs: seconds * 1000, fallback: 'the checks request failed' });
 }
 
-export function totalFindings(report: CheckReport): number {
-  return report.groups.reduce((sum, group) => sum + group.findings.length, 0);
+export function totalFindings(report: CheckReportView): number {
+  return report.groups.reduce((sum, group) => sum + group.total, 0);
 }
 
-export function bySeverity(groups: CheckGroup[]): CheckGroup[] {
+export function bySeverity(groups: CheckGroupView[]): CheckGroupView[] {
   return [...groups].sort((left, right) => {
     const rank = SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity];
     if (rank !== 0) {
       return rank;
     }
-    return right.findings.length - left.findings.length;
+    return right.total - left.total;
   });
 }
 
-export function inCategory(groups: CheckGroup[], category: CheckCategory): CheckGroup[] {
+export function inCategory(groups: CheckGroupView[], category: CheckCategory): CheckGroupView[] {
   return bySeverity(groups.filter((group) => group.category === category));
 }
 
@@ -121,17 +159,24 @@ export function severityClass(severity: CheckSeverity): string {
   return 'text-fg-muted';
 }
 
-export function countLabel(group: CheckGroup): string {
+export function countLabel(group: CheckGroupView): string {
   if (group.skipped !== undefined) {
     return 'no data';
   }
-  if (group.findings.length === 0) {
+  if (group.total === 0) {
     return 'clean';
   }
-  return String(group.findings.length);
+  return String(group.total);
 }
 
-export function findingLabel(finding: CheckFinding): string {
+export function shownLabel(group: CheckGroupView): string {
+  if (group.truncated !== true) {
+    return '';
+  }
+  return `Showing ${String(group.findings.length)} of ${String(group.total)}.`;
+}
+
+export function findingLabel(finding: CheckFindingView): string {
   const parts = [finding.kind, refLabel(finding.object)];
   if (finding.container !== undefined && finding.container !== '') {
     parts.push(`container ${finding.container}`);

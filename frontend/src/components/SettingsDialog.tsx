@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SYSTEM } from '../lib/theme';
 import { validateTheme } from '../lib/customThemes';
-import { LOG_VIEWS, NAMESPACE_STARTS } from '../lib/settings';
-import type { LogView, NamespaceStart } from '../lib/settings';
+import { CHECK_INTERVALS, LOG_VIEWS, NAMESPACE_STARTS } from '../lib/settings';
+import type { CheckInterval, LogView, NamespaceStart } from '../lib/settings';
 import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '../store/theme';
 import {
+  useChecksInterval,
   useLogView,
   useNamespaceStart,
   useNodeShell,
@@ -44,6 +45,16 @@ function versionLabel(version: string): string {
     return '-';
   }
   return version;
+}
+
+function intervalLabel(seconds: CheckInterval): string {
+  if (seconds < 60) {
+    return `${String(seconds)} seconds`;
+  }
+  if (seconds === 60) {
+    return 'every minute';
+  }
+  return `every ${String(seconds / 60)} minutes`;
 }
 
 function startLabel(start: NamespaceStart): string {
@@ -110,6 +121,8 @@ export default function SettingsDialog({
   const cluster = useContextList().current.name;
   const start = useNamespaceStart(cluster);
   const setStart = useSettingsStore((state) => state.setNamespaceStart);
+  const checksInterval = useChecksInterval();
+  const setChecksInterval = useSettingsStore((state) => state.setChecksInterval);
   const nodeShell = useNodeShell();
   const updateCheck = useUpdateCheck();
   const setUpdateCheck = useSettingsStore((state) => state.setUpdateCheck);
@@ -452,6 +465,25 @@ export default function SettingsDialog({
                   {NAMESPACE_STARTS.map((option) => (
                     <option key={option} value={option}>
                       {startLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+              <Row
+                label="Check refresh"
+                hint="How often the cluster audit re-reads what is already in memory. Posture does not change second to second."
+              >
+                <select
+                  aria-label="Check refresh interval"
+                  value={checksInterval}
+                  onChange={(event) => {
+                    setChecksInterval(Number(event.target.value) as CheckInterval);
+                  }}
+                  className="rounded border border-edge-strong bg-surface-raised px-2 py-0.5 text-fg"
+                >
+                  {CHECK_INTERVALS.map((option) => (
+                    <option key={option} value={option}>
+                      {intervalLabel(option)}
                     </option>
                   ))}
                 </select>

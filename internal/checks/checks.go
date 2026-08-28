@@ -21,6 +21,8 @@ const (
 	nsaCisa       = "NSA/CISA"
 
 	noUsage = "metrics-server did not answer, so usage is unknown"
+
+	findingsShown = 200
 )
 
 type scan struct {
@@ -32,7 +34,42 @@ func (sc scan) hasUsage() bool {
 	return len(sc.usage) > 0
 }
 
-type finder func(scan) []api.CheckFinding
+type found struct {
+	subject   Subject
+	container string
+	detail    string
+	patch     string
+}
+
+type objects struct {
+	index map[string]int
+	list  []api.CheckObject
+}
+
+func newObjects() *objects {
+	return &objects{index: map[string]int{}}
+}
+
+func (o *objects) ref(subject Subject) int {
+	key := subject.Kind + "/" + subject.Ref.Namespace + "/" + subject.Ref.Name
+	at, seen := o.index[key]
+	if seen {
+		return at
+	}
+	at = len(o.list)
+	o.index[key] = at
+	o.list = append(o.list, api.CheckObject{
+		Group:     subject.Ref.Group,
+		Version:   subject.Ref.Version,
+		Resource:  subject.Ref.Resource,
+		Namespace: subject.Ref.Namespace,
+		Name:      subject.Ref.Name,
+		Kind:      subject.Kind,
+	})
+	return at
+}
+
+type finder func(scan) []found
 
 type containerRule func(Subject, Container) (string, string)
 
@@ -52,26 +89,21 @@ type check struct {
 	find       finder
 }
 
-func finding(subject Subject, container Container, detail, patch string) api.CheckFinding {
-	return api.CheckFinding{
-		Object:    subject.Ref,
-		Kind:      subject.Kind,
-		Container: container.Name,
-		Detail:    detail,
-		Patch:     patch,
-	}
-}
-
 func overContainers(rule containerRule) finder {
-	return func(sc scan) []api.CheckFinding {
-		out := []api.CheckFinding{}
+	return func(sc scan) []found {
+		out := []found{}
 		for _, subject := range sc.subjects {
 			for _, container := range subject.Containers {
 				detail, patch := rule(subject, container)
 				if detail == "" {
 					continue
 				}
-				out = append(out, finding(subject, container, detail, patch))
+				out = append(out, found{
+					subject:   subject,
+					container: container.Name,
+					detail:    detail,
+					patch:     patch,
+				})
 			}
 		}
 		return out
@@ -79,34 +111,34 @@ func overContainers(rule containerRule) finder {
 }
 
 func overSubjects(rule subjectRule) finder {
-	return func(sc scan) []api.CheckFinding {
-		out := []api.CheckFinding{}
+	return func(sc scan) []found {
+		out := []found{}
 		for _, subject := range sc.subjects {
 			detail, patch := rule(subject)
 			if detail == "" {
 				continue
 			}
-			out = append(out, finding(subject, Container{}, detail, patch))
+			out = append(out, found{subject: subject, detail: detail, patch: patch})
 		}
 		return out
 	}
 }
 
 func overUsage(rule usageRule) finder {
-	return func(sc scan) []api.CheckFinding {
-		out := []api.CheckFinding{}
+	return func(sc scan) []found {
+		out := []found{}
 		for _, subject := range sc.subjects {
 			detail, patch := rule(subject, sc.usage)
 			if detail == "" {
 				continue
 			}
-			out = append(out, finding(subject, Container{}, detail, patch))
+			out = append(out, found{subject: subject, detail: detail, patch: patch})
 		}
 		return out
 	}
 }
 
-func (c check) group(sc scan) api.CheckGroup {
+func (c check) group(sc scan, objs *objects) api.CheckGroup {
 	out := api.CheckGroup{
 		ID:         c.id,
 		Title:      c.title,
@@ -121,7 +153,21 @@ func (c check) group(sc scan) api.CheckGroup {
 		out.Skipped = noUsage
 		return out
 	}
-	out.Findings = c.find(sc)
+	all := c.find(sc)
+	out.Total = len(all)
+	if len(all) > findingsShown {
+		all = all[:findingsShown]
+		out.Truncated = true
+	}
+	out.Findings = make([]api.CheckFinding, 0, len(all))
+	for _, item := range all {
+		out.Findings = append(out.Findings, api.CheckFinding{
+			Ref:       objs.ref(item.subject),
+			Container: item.container,
+			Detail:    item.detail,
+			Patch:     item.patch,
+		})
+	}
 	return out
 }
 
@@ -153,12 +199,14 @@ func Run(
 	items, failure := gather(ctx, lister, wanted)
 	sc := scan{subjects: subjectsOf(items), usage: usage.Pods}
 	checks := registry()
+	objs := newObjects()
 	groups := make([]api.CheckGroup, 0, len(checks))
 	for _, entry := range checks {
-		groups = append(groups, entry.group(sc))
+		groups = append(groups, entry.group(sc, objs))
 	}
 	return api.CheckReport{
 		Groups:  groups,
+		Objects: objs.list,
 		Scanned: len(sc.subjects),
 		Error:   joined(failure, undiscovered(absent)),
 	}

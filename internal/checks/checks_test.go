@@ -2,9 +2,12 @@ package checks
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -55,6 +58,105 @@ func TestOnlySecurityChecksCarryFrameworkLabels(t *testing.T) {
 	}
 }
 
+func manyDeployments(count int) []*unstructured.Unstructured {
+	out := make([]*unstructured.Unstructured, 0, count)
+	for i := range count {
+		out = append(out, deployment(fmt.Sprintf("load-%04d", i), podSpec(container("app", nil))))
+	}
+	return out
+}
+
+func TestAGroupBeyondTheCapKeepsTheRealTotal(t *testing.T) {
+	found := report(t, manyDeployments(findingsShown+40)...)
+	group := groupNamed(t, found, "requests-missing")
+
+	if group.Total != findingsShown+40 {
+		t.Fatalf("total = %d, want %d", group.Total, findingsShown+40)
+	}
+	if len(group.Findings) != findingsShown {
+		t.Fatalf("carried %d findings, want the cap of %d", len(group.Findings), findingsShown)
+	}
+	if !group.Truncated {
+		t.Fatal("a capped group did not say it was truncated")
+	}
+}
+
+func TestAGroupUnderTheCapIsNotMarkedTruncated(t *testing.T) {
+	found := report(t, manyDeployments(3)...)
+	group := groupNamed(t, found, "requests-missing")
+
+	if group.Total != 3 || len(group.Findings) != 3 {
+		t.Fatalf("total = %d, findings = %d, want 3 and 3", group.Total, len(group.Findings))
+	}
+	if group.Truncated {
+		t.Fatal("a group inside the cap claimed truncation")
+	}
+}
+
+func TestACappedGroupKeepsTheFirstFindingsInOrder(t *testing.T) {
+	found := report(t, manyDeployments(findingsShown+40)...)
+	group := groupNamed(t, found, "requests-missing")
+
+	if objectFor(t, found, group.Findings[0]).Name != "load-0000" {
+		t.Fatalf("first kept finding was %s", objectFor(t, found, group.Findings[0]).Name)
+	}
+	last := group.Findings[len(group.Findings)-1]
+	if objectFor(t, found, last).Name != fmt.Sprintf("load-%04d", findingsShown-1) {
+		t.Fatalf("last kept finding was %s", objectFor(t, found, last).Name)
+	}
+}
+
+func TestAnObjectIsListedOnceHoweverManyChecksFlagIt(t *testing.T) {
+	found := report(t, deployment("api", podSpec(container("app", withSecurity(map[string]any{
+		"privileged": true,
+	})))))
+
+	flagged := 0
+	for _, group := range found.Groups {
+		flagged += len(group.Findings)
+	}
+	if flagged < 2 {
+		t.Fatalf("only %d checks fired, so this proves nothing about deduping", flagged)
+	}
+	if len(found.Objects) != 1 {
+		t.Fatalf("the report carries %d objects for one workload", len(found.Objects))
+	}
+}
+
+func TestTheDictionaryHoldsOnlyObjectsAKeptFindingPointsAt(t *testing.T) {
+	found := report(t, manyDeployments(findingsShown+40)...)
+
+	used := map[int]bool{}
+	for _, group := range found.Groups {
+		for _, finding := range group.Findings {
+			used[finding.Ref] = true
+		}
+	}
+	if len(found.Objects) != len(used) {
+		t.Fatalf("%d objects listed but only %d referenced", len(found.Objects), len(used))
+	}
+	if len(found.Objects) > findingsShown {
+		t.Fatalf("%d objects survived a cap of %d", len(found.Objects), findingsShown)
+	}
+}
+
+func TestEveryFindingResolvesToItsOwnObject(t *testing.T) {
+	found := report(
+		t,
+		deployment("api", podSpec(container("app", nil))),
+		pod("standalone", podSpec(container("app", nil))),
+	)
+
+	for _, group := range found.Groups {
+		for _, finding := range group.Findings {
+			object := objectFor(t, found, finding)
+			if object.Name == "" || object.Kind == "" || object.Resource == "" {
+				t.Fatalf("%s resolved to a half-built object: %+v", group.ID, object)
+			}
+		}
+	}
+}
+
 func TestAWorkloadsOwnedObjectsAreNotCheckedAgain(t *testing.T) {
 	owner := deployment("api", podSpec(container("app", withSecurity(map[string]any{
 		"privileged": true,
@@ -71,9 +173,9 @@ func TestAWorkloadsOwnedObjectsAreNotCheckedAgain(t *testing.T) {
 	if found.Scanned != 1 {
 		t.Fatalf("scanned %d objects, want only the Deployment", found.Scanned)
 	}
-	finding := onlyFinding(t, found, "privileged-containers")
-	if finding.Kind != "Deployment" {
-		t.Fatalf("the finding landed on a %s", finding.Kind)
+	landed := onlyObject(t, found, "privileged-containers")
+	if landed.Kind != "Deployment" {
+		t.Fatalf("the finding landed on a %s", landed.Kind)
 	}
 }
 
@@ -87,7 +189,7 @@ func TestAPodOwnedBySomethingSpinozaDoesNotHoldIsStillChecked(t *testing.T) {
 	if found.Scanned != 1 {
 		t.Fatalf("scanned %d objects, want the pod", found.Scanned)
 	}
-	if onlyFinding(t, found, "privileged-containers").Kind != "Pod" {
+	if onlyObject(t, found, "privileged-containers").Kind != "Pod" {
 		t.Fatal("a pod owned by an unknown kind was skipped")
 	}
 }
@@ -270,9 +372,10 @@ func TestFindingsAreOrderedTheSameWayEveryRun(t *testing.T) {
 			t.Fatalf("check %d differs: %s and %s", i, group.ID, other.ID)
 		}
 		for j, finding := range group.Findings {
-			if finding.Object.Name != other.Findings[j].Object.Name {
-				t.Fatalf("%s finding %d differs: %s and %s",
-					group.ID, j, finding.Object.Name, other.Findings[j].Object.Name)
+			left := objectFor(t, first, finding)
+			right := objectFor(t, second, other.Findings[j])
+			if left.Name != right.Name {
+				t.Fatalf("%s finding %d differs: %s and %s", group.ID, j, left.Name, right.Name)
 			}
 		}
 	}

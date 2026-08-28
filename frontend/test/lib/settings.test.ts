@@ -16,6 +16,7 @@ const base: Settings = {
   screenReader: false,
   namespaceStart: 'all',
   namespaceStarts: {},
+  checksInterval: 60,
 };
 
 afterEach(() => {
@@ -154,5 +155,22 @@ describe('the node shell setting', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const sent = fetchMock.mock.calls[0][1]?.body ?? '{}';
     expect(JSON.parse(sent)).toMatchObject({ values: { [NODE_SHELL_KEY]: 'on' } });
+  });
+});
+
+describe('the checks interval', () => {
+  it('defaults to a minute when nothing is stored', () => {
+    expect(parseSettings(null).checksInterval).toBe(60);
+  });
+
+  it('keeps an interval it offers', () => {
+    expect(parseSettings(JSON.stringify({ ...base, checksInterval: 15 })).checksInterval).toBe(15);
+  });
+
+  it('refuses one it does not offer', () => {
+    expect(parseSettings(JSON.stringify({ ...base, checksInterval: 7 })).checksInterval).toBe(60);
+    expect(parseSettings(JSON.stringify({ ...base, checksInterval: 'soon' })).checksInterval).toBe(
+      60,
+    );
   });
 });

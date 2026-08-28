@@ -110,6 +110,31 @@ describe('the settings dialog', () => {
     expect(useNamespaceStore.getState().namespace).toBe('default');
   });
 
+  it('chooses how often the cluster audit refreshes', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+    await user.selectOptions(screen.getByLabelText('Check refresh interval'), '15');
+
+    expect(useSettingsStore.getState().checksInterval).toBe(15);
+  });
+
+  it('offers the refresh interval in words', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useSettingsStore.setState({ checksInterval: 60 });
+    });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+
+    expect(screen.getByLabelText('Check refresh interval')).toHaveValue('60');
+    expect(screen.getByRole('option', { name: 'every minute' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '15 seconds' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'every 5 minutes' })).toBeInTheDocument();
+  });
+
   it('goes back to every namespace when the setting is put back', async () => {
     const user = userEvent.setup();
     act(() => {

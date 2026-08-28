@@ -979,9 +979,17 @@ export type CheckSeverity = 'high' | 'medium' | 'low';
 
 export type CheckCategory = 'security' | 'reliability' | 'efficiency';
 
-export interface CheckFinding {
-  object: ObjectRef;
+export interface CheckObject {
+  group: string;
+  version: string;
+  resource: string;
+  namespace: string;
+  name: string;
   kind: string;
+}
+
+export interface CheckFinding {
+  ref: number;
   container?: string;
   detail: string;
   patch?: string;
@@ -996,11 +1004,14 @@ export interface CheckGroup {
   wrong: string;
   remedy: string;
   skipped?: string;
+  total: number;
+  truncated?: boolean;
   findings: CheckFinding[];
 }
 
 export interface CheckReport {
   groups: CheckGroup[];
+  objects: CheckObject[];
   scanned: number;
   error?: string;
 }

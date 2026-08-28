@@ -68,8 +68,19 @@ func failingDeployment(t *testing.T, loaded *kube.Bundle) {
 	})
 }
 
-func gvrOf(ref api.ObjectRef) schema.GroupVersionResource {
-	return schema.GroupVersionResource{Group: ref.Group, Version: ref.Version, Resource: ref.Resource}
+func gvrOf(object api.CheckObject) schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    object.Group,
+		Version:  object.Version,
+		Resource: object.Resource,
+	}
+}
+
+func objectOf(report api.CheckReport, finding api.CheckFinding) api.CheckObject {
+	if finding.Ref < 0 || finding.Ref >= len(report.Objects) {
+		return api.CheckObject{}
+	}
+	return report.Objects[finding.Ref]
 }
 
 func findingsFor(report api.CheckReport, id string) []api.CheckFinding {
@@ -81,9 +92,10 @@ func findingsFor(report api.CheckReport, id string) []api.CheckFinding {
 	return nil
 }
 
-func auditedHere(findings []api.CheckFinding) bool {
-	for _, finding := range findings {
-		if finding.Object.Namespace == namespace && finding.Object.Name == auditWorkload {
+func auditedHere(report api.CheckReport, id string) bool {
+	for _, finding := range findingsFor(report, id) {
+		object := objectOf(report, finding)
+		if object.Namespace == namespace && object.Name == auditWorkload {
 			return true
 		}
 	}
@@ -111,7 +123,7 @@ func TestChecksAuditARealCluster(t *testing.T) {
 		"requests-missing",
 		"image-latest",
 	} {
-		if !auditedHere(findingsFor(report, id)) {
+		if !auditedHere(report, id) {
 			t.Errorf("%s did not fire on a workload built to trip it", id)
 		}
 	}
@@ -142,11 +154,12 @@ func TestEveryPatchTheAuditOffersIsAcceptedByTheApiServer(t *testing.T) {
 	tried := 0
 	for _, group := range report.Groups {
 		for _, finding := range group.Findings {
-			if finding.Patch == "" || finding.Object.Namespace != namespace {
+			object := objectOf(report, finding)
+			if finding.Patch == "" || object.Namespace != namespace {
 				continue
 			}
 			tried++
-			assertPatchApplies(t, loaded, group.ID, finding)
+			assertPatchApplies(t, loaded, group.ID, object, finding.Patch)
 		}
 	}
 	if tried == 0 {
@@ -155,25 +168,31 @@ func TestEveryPatchTheAuditOffersIsAcceptedByTheApiServer(t *testing.T) {
 	t.Logf("%d patches accepted by the api server", tried)
 }
 
-func assertPatchApplies(t *testing.T, loaded *kube.Bundle, id string, finding api.CheckFinding) {
+func assertPatchApplies(
+	t *testing.T,
+	loaded *kube.Bundle,
+	id string,
+	object api.CheckObject,
+	patch string,
+) {
 	t.Helper()
-	merged, err := yaml.YAMLToJSON([]byte(finding.Patch))
+	merged, err := yaml.YAMLToJSON([]byte(patch))
 	if err != nil {
-		t.Errorf("%s on %s: the patch is not valid yaml: %v", id, finding.Object.Name, err)
+		t.Errorf("%s on %s: the patch is not valid yaml: %v", id, object.Name, err)
 		return
 	}
 	_, err = loaded.Dynamic.
-		Resource(gvrOf(finding.Object)).
-		Namespace(finding.Object.Namespace).
+		Resource(gvrOf(object)).
+		Namespace(object.Namespace).
 		Patch(
 			context.Background(),
-			finding.Object.Name,
+			object.Name,
 			types.StrategicMergePatchType,
 			merged,
 			metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}},
 		)
 	if err != nil {
 		t.Errorf("%s on %s/%s: the api server refused the patch: %v\n%s",
-			id, finding.Object.Namespace, finding.Object.Name, err, finding.Patch)
+			id, object.Namespace, object.Name, err, patch)
 	}
 }

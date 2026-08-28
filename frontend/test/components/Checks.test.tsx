@@ -2,12 +2,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Checks from '../../src/components/Checks';
-import type { CheckFinding, CheckGroup, CheckReport } from '../../src/lib/types';
+import type { CheckFinding, CheckGroup, CheckObject, CheckReport } from '../../src/lib/types';
 
-function makeFinding(name: string, extra: Partial<CheckFinding> = {}): CheckFinding {
-  return {
-    object: { group: 'apps', version: 'v1', resource: 'deployments', namespace: 'apps', name },
+const OBJECTS: CheckObject[] = [
+  {
+    group: 'apps',
+    version: 'v1',
+    resource: 'deployments',
+    namespace: 'apps',
+    name: 'api',
     kind: 'Deployment',
+  },
+];
+
+function makeFinding(extra: Partial<CheckFinding> = {}): CheckFinding {
+  return {
+    ref: 0,
     container: 'app',
     detail: 'securityContext.privileged is true',
     ...extra,
@@ -15,6 +25,7 @@ function makeFinding(name: string, extra: Partial<CheckFinding> = {}): CheckFind
 }
 
 function makeGroup(id: string, extra: Partial<CheckGroup> = {}): CheckGroup {
+  const findings = extra.findings ?? [];
   return {
     id,
     title: 'Privileged containers',
@@ -22,8 +33,9 @@ function makeGroup(id: string, extra: Partial<CheckGroup> = {}): CheckGroup {
     severity: 'high',
     wrong: 'a privileged container holds every capability on the node',
     remedy: 'remove securityContext.privileged',
-    findings: [],
+    total: findings.length,
     ...extra,
+    findings,
   };
 }
 
@@ -36,7 +48,7 @@ function stub(body: unknown, ok = true) {
 
 function show(report: Partial<CheckReport>) {
   const onOpen = vi.fn();
-  stub({ groups: [], scanned: 0, ...report });
+  stub({ groups: [], objects: OBJECTS, scanned: 0, ...report });
   render(<Checks onOpen={onOpen} />);
   return { onOpen };
 }
@@ -47,7 +59,7 @@ afterEach(() => {
 
 describe('Checks', () => {
   it('says it is loading before the first answer', () => {
-    stub({ groups: [], scanned: 0 });
+    stub({ groups: [], objects: OBJECTS, scanned: 0 });
 
     render(<Checks onOpen={vi.fn()} />);
 
@@ -65,7 +77,7 @@ describe('Checks', () => {
   it('counts what it scanned and what it found', async () => {
     show({
       scanned: 12,
-      groups: [makeGroup('privileged-containers', { findings: [makeFinding('api')] })],
+      groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })],
     });
 
     expect(await screen.findByText('1 findings across 12 workloads')).toBeInTheDocument();
@@ -75,7 +87,7 @@ describe('Checks', () => {
     show({
       scanned: 3,
       groups: [
-        makeGroup('privileged-containers', { findings: [makeFinding('api')] }),
+        makeGroup('privileged-containers', { findings: [makeFinding()] }),
         makeGroup('image-latest', {
           title: 'Image tagged :latest',
           category: 'reliability',
@@ -102,7 +114,7 @@ describe('Checks', () => {
       scanned: 1,
       groups: [
         makeGroup('privileged-containers', {
-          findings: [makeFinding('api', { patch: 'spec:\n  privileged: false\n' })],
+          findings: [makeFinding({ patch: 'spec:\n  privileged: false\n' })],
         }),
       ],
     });
@@ -119,9 +131,7 @@ describe('Checks', () => {
     show({
       groups: [
         makeGroup('host-namespaces', {
-          findings: [
-            makeFinding('api', { container: undefined, detail: 'shares the host namespaces' }),
-          ],
+          findings: [makeFinding({ container: undefined, detail: 'shares the host namespaces' })],
         }),
       ],
     });
@@ -131,8 +141,41 @@ describe('Checks', () => {
     expect(screen.getByText('Deployment · apps/api')).toBeInTheDocument();
   });
 
+  it('says how much of a capped group is on screen', async () => {
+    show({
+      scanned: 7072,
+      groups: [
+        makeGroup('limits-missing', { total: 7087, truncated: true, findings: [makeFinding()] }),
+      ],
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(screen.getByText('Showing 1 of 7087.')).toBeInTheDocument();
+  });
+
+  it('counts what the cluster has on the badge, not what fitted in the response', async () => {
+    show({
+      scanned: 7072,
+      groups: [
+        makeGroup('limits-missing', { total: 7087, truncated: true, findings: [makeFinding()] }),
+      ],
+    });
+
+    expect(await screen.findByText('7087')).toBeInTheDocument();
+    expect(screen.getByText('7087 findings across 7072 workloads')).toBeInTheDocument();
+  });
+
+  it('says nothing about truncation on a group that fits', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(screen.queryByText(/Showing/)).not.toBeInTheDocument();
+  });
+
   it('closes a check that was open', async () => {
-    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding('api')] })] });
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
 
     const header = await screen.findByRole('button', { name: /Privileged containers/ });
     await userEvent.click(header);
@@ -142,7 +185,7 @@ describe('Checks', () => {
   });
 
   it('shows no patch when the fix needs a value only the owner knows', async () => {
-    show({ groups: [makeGroup('probes-missing', { findings: [makeFinding('api')] })] });
+    show({ groups: [makeGroup('probes-missing', { findings: [makeFinding()] })] });
 
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
 
@@ -152,7 +195,7 @@ describe('Checks', () => {
 
   it('opens the object a finding landed on', async () => {
     const { onOpen } = show({
-      groups: [makeGroup('privileged-containers', { findings: [makeFinding('api')] })],
+      groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })],
     });
 
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
@@ -206,14 +249,18 @@ describe('Checks', () => {
   it('says when the audit stopped updating', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ groups: [] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ groups: [], objects: [] }),
+      })
       .mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) });
     vi.stubGlobal('fetch', fetchMock);
     vi.useFakeTimers({ shouldAdvanceTime: true });
 
     render(<Checks onOpen={vi.fn()} />);
     await screen.findByText('0 findings across 0 workloads');
-    await vi.advanceTimersByTimeAsync(20000);
+    await vi.advanceTimersByTimeAsync(61000);
 
     await waitFor(() => {
       expect(screen.getByText(/stopped updating/)).toBeInTheDocument();
