@@ -12,7 +12,7 @@ const maxSettingsBytes = 1 << 20
 
 type Settings interface {
 	All() map[string]string
-	Replace(values map[string]string) error
+	Merge(values map[string]string) error
 }
 
 func (s *Server) UseSettings(store Settings) {
@@ -46,7 +46,7 @@ func (s *Server) writeSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "settings must be an object of strings")
 		return
 	}
-	saveErr := s.stored().Replace(wanted.Values)
+	saveErr := s.stored().Merge(wanted.Values)
 	if saveErr != nil {
 		writeError(w, http.StatusInternalServerError, saveErr.Error())
 		return

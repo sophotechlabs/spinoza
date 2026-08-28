@@ -24,18 +24,18 @@ func TestWithoutTheFlagTheStoredSettingDecides(t *testing.T) {
 		t.Fatal("a node shell was allowed before anything turned it on")
 	}
 
-	err := store.Replace(map[string]string{settingsstore.NodeShellKey: "on"})
+	err := store.Merge(map[string]string{settingsstore.NodeShellKey: "on"})
 	if err != nil {
-		t.Fatalf("replace: %v", err)
+		t.Fatalf("merge: %v", err)
 	}
 
 	if !allow() {
 		t.Fatal("turning the setting on did not reach a shell asked for afterwards")
 	}
 
-	off := store.Replace(map[string]string{})
+	off := store.Merge(map[string]string{settingsstore.NodeShellKey: "off"})
 	if off != nil {
-		t.Fatalf("replace: %v", off)
+		t.Fatalf("merge: %v", off)
 	}
 
 	if allow() {
@@ -77,9 +77,9 @@ func TestNowhereToKeepSettingsStillLeavesAStore(t *testing.T) {
 	if store == nil {
 		t.Fatal("settings with nowhere to live left no store at all")
 	}
-	err := store.Replace(map[string]string{settingsstore.NodeShellKey: "on"})
+	err := store.Merge(map[string]string{settingsstore.NodeShellKey: "on"})
 	if err != nil {
-		t.Fatalf("replace: %v", err)
+		t.Fatalf("merge: %v", err)
 	}
 	if !store.On(settingsstore.NodeShellKey) {
 		t.Fatal("a store with nowhere to write forgot what it was told")

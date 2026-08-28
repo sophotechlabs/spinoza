@@ -18,7 +18,7 @@ func (refusingSettings) All() map[string]string {
 	return map[string]string{}
 }
 
-func (refusingSettings) Replace(map[string]string) error {
+func (refusingSettings) Merge(map[string]string) error {
 	return errors.New("the settings file is read-only")
 }
 
@@ -118,9 +118,9 @@ func TestSettingsThatCannotBeWrittenAreReported(t *testing.T) {
 
 func TestThePageCarriesTheSettingsWithIt(t *testing.T) {
 	store := settings.Memory()
-	err := store.Replace(map[string]string{"spinoza.theme.v1": `"nord"`})
+	err := store.Merge(map[string]string{"spinoza.theme.v1": `"nord"`})
 	if err != nil {
-		t.Fatalf("replace: %v", err)
+		t.Fatalf("merge: %v", err)
 	}
 	ts := settingsServer(t, store)
 

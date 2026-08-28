@@ -31,7 +31,7 @@ func TestAFreshStoreHasNothingInIt(t *testing.T) {
 
 func TestOnlyTheWordOnTurnsAKeyOn(t *testing.T) {
 	store := openAt(t, tempPath(t))
-	err := store.Replace(map[string]string{NodeShellKey: "on", "other": "true"})
+	err := store.Merge(map[string]string{NodeShellKey: "on", "other": "true"})
 	if err != nil {
 		t.Fatalf("replace: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestWhatIsWrittenComesBack(t *testing.T) {
 	path := tempPath(t)
 	store := openAt(t, path)
 
-	err := store.Replace(map[string]string{"spinoza.theme.v1": `"nord"`})
+	err := store.Merge(map[string]string{"spinoza.theme.v1": `"nord"`})
 	if err != nil {
 		t.Fatalf("replace: %v", err)
 	}
@@ -61,37 +61,85 @@ func TestWhatIsWrittenComesBack(t *testing.T) {
 	}
 }
 
-func TestReplacingDropsWhatIsNoLongerThere(t *testing.T) {
+func TestMergingKeepsWhatItWasNotGiven(t *testing.T) {
 	path := tempPath(t)
 	store := openAt(t, path)
-	_ = store.Replace(map[string]string{"a": "1", "b": "2"})
+	_ = store.Merge(map[string]string{"a": "1", "b": "2"})
 
-	_ = store.Replace(map[string]string{"a": "1"})
+	_ = store.Merge(map[string]string{"a": "9"})
 
 	values := openAt(t, path).All()
-	if len(values) != 1 || values["a"] != "1" {
-		t.Fatalf("the old key stayed behind: %v", values)
+	if values["a"] != "9" {
+		t.Fatalf("a = %q, want the new value", values["a"])
+	}
+	if values["b"] != "2" {
+		t.Fatalf("b = %q, want the untouched value", values["b"])
 	}
 }
 
-func TestReplacingWithNothingEmptiesTheStore(t *testing.T) {
+func TestMergingNothingChangesNothing(t *testing.T) {
 	path := tempPath(t)
 	store := openAt(t, path)
-	_ = store.Replace(map[string]string{"a": "1"})
+	_ = store.Merge(map[string]string{"a": "1"})
 
-	err := store.Replace(nil)
+	err := store.Merge(nil)
 	if err != nil {
-		t.Fatalf("replace: %v", err)
+		t.Fatalf("merge: %v", err)
 	}
 
-	if len(openAt(t, path).All()) != 0 {
-		t.Fatalf("something survived: %v", openAt(t, path).All())
+	if openAt(t, path).All()["a"] != "1" {
+		t.Fatalf("a was lost: %v", openAt(t, path).All())
+	}
+}
+
+// Two spinozas run at once, each holding a copy taken when it started. The one
+// that writes second must not undo what the first changed.
+func TestAKeyWrittenByAnotherProcessSurvives(t *testing.T) {
+	path := tempPath(t)
+	first := openAt(t, path)
+	second := openAt(t, path)
+	_ = first.Merge(map[string]string{"spinoza.theme.v1": "borg"})
+
+	_ = second.Merge(map[string]string{"spinoza.namespace.v1": "kube-system"})
+
+	values := openAt(t, path).All()
+	if values["spinoza.theme.v1"] != "borg" {
+		t.Fatalf("theme = %q, want the other process's value", values["spinoza.theme.v1"])
+	}
+	if values["spinoza.namespace.v1"] != "kube-system" {
+		t.Fatalf("namespace = %q, want this process's value", values["spinoza.namespace.v1"])
+	}
+}
+
+// A window opened here has to be given what the file holds now, not what this
+// process read when it started.
+func TestAllPicksUpWhatAnotherProcessWrote(t *testing.T) {
+	path := tempPath(t)
+	store := openAt(t, path)
+	_ = store.Merge(map[string]string{"a": "1"})
+	_ = openAt(t, path).Merge(map[string]string{"a": "2"})
+
+	if got := store.All()["a"]; got != "2" {
+		t.Fatalf("a = %q, want what the file holds now", got)
+	}
+}
+
+func TestAnUnreadableFileLeavesWhatIsHeldAlone(t *testing.T) {
+	path := tempPath(t)
+	store := openAt(t, path)
+	_ = store.Merge(map[string]string{"a": "1"})
+	if err := os.WriteFile(path, []byte("not json"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if got := store.All()["a"]; got != "1" {
+		t.Fatalf("a = %q, want the value this process holds", got)
 	}
 }
 
 func TestTheCallerCannotReachInsideTheStore(t *testing.T) {
 	store := openAt(t, tempPath(t))
-	_ = store.Replace(map[string]string{"a": "1"})
+	_ = store.Merge(map[string]string{"a": "1"})
 
 	store.All()["a"] = "tampered"
 
@@ -104,7 +152,7 @@ func TestTheStoreKeepsItsFileToItself(t *testing.T) {
 	path := tempPath(t)
 	store := openAt(t, path)
 
-	_ = store.Replace(map[string]string{"a": "1"})
+	_ = store.Merge(map[string]string{"a": "1"})
 
 	info, err := os.Stat(path)
 	if err != nil {
@@ -118,7 +166,7 @@ func TestTheStoreKeepsItsFileToItself(t *testing.T) {
 func TestAStoreWithoutAFileStillAnswers(t *testing.T) {
 	store := Memory()
 
-	err := store.Replace(map[string]string{"a": "1"})
+	err := store.Merge(map[string]string{"a": "1"})
 	if err != nil {
 		t.Fatalf("replace: %v", err)
 	}
@@ -176,9 +224,9 @@ func TestWritingWhereItCannotIsReported(t *testing.T) {
 		t.Fatal("a path inside a file was accepted for reading")
 	}
 
-	replaceErr := store.Replace(map[string]string{"a": "1"})
+	mergeErr := store.Merge(map[string]string{"a": "1"})
 
-	if replaceErr == nil {
+	if mergeErr == nil {
 		t.Fatal("writing into a file that is not a directory was reported as fine")
 	}
 }
@@ -186,7 +234,7 @@ func TestWritingWhereItCannotIsReported(t *testing.T) {
 func TestTheStoredFileIsPlainJSON(t *testing.T) {
 	path := tempPath(t)
 	store := openAt(t, path)
-	_ = store.Replace(map[string]string{"spinoza.theme.v1": `"nord"`})
+	_ = store.Merge(map[string]string{"spinoza.theme.v1": `"nord"`})
 
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -224,9 +272,9 @@ func TestSettingsThatCannotReplaceTheFileAreNotKept(t *testing.T) {
 	}
 	store := &Store{path: path, values: map[string]string{}}
 
-	replaceErr := store.Replace(map[string]string{"a": "1"})
+	mergeErr := store.Merge(map[string]string{"a": "1"})
 
-	if replaceErr == nil {
+	if mergeErr == nil {
 		t.Fatal("settings that could not replace their file reported success")
 	}
 	if len(store.All()) != 0 {
@@ -249,9 +297,9 @@ func TestSettingsAreNotWrittenWhereTheDirectoryCannotBeMade(t *testing.T) {
 	}
 	store := &Store{path: filepath.Join(blocked, "spinoza", "settings.json"), values: map[string]string{}}
 
-	replaceErr := store.Replace(map[string]string{"a": "1"})
+	mergeErr := store.Merge(map[string]string{"a": "1"})
 
-	if replaceErr == nil {
+	if mergeErr == nil {
 		t.Fatal("settings written under a file reported success")
 	}
 }
@@ -265,9 +313,9 @@ func TestATemporaryFileThatCannotBeMadeIsReported(t *testing.T) {
 	}
 	store := &Store{path: filepath.Join(readOnly, "settings.json"), values: map[string]string{}}
 
-	replaceErr := store.Replace(map[string]string{"a": "1"})
+	mergeErr := store.Merge(map[string]string{"a": "1"})
 
-	if replaceErr == nil {
+	if mergeErr == nil {
 		t.Fatal("a directory that refuses new files reported success")
 	}
 }

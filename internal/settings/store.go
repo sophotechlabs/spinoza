@@ -57,9 +57,12 @@ func Memory() *Store {
 	return &Store{values: map[string]string{}}
 }
 
+// All refreshes from the file first, so a window opened here sees what another
+// spinoza wrote since this one started.
 func (s *Store) All() map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.values = s.onDisk()
 	return maps.Clone(s.values)
 }
 
@@ -69,19 +72,43 @@ func (s *Store) On(key string) bool {
 	return s.values[key] == enabled
 }
 
-func (s *Store) Replace(values map[string]string) error {
+// Merge applies values over what the file holds now. Two spinozas run at once,
+// each holding a copy taken when it started, so writing the whole map back would
+// undo whatever the other changed in between.
+func (s *Store) Merge(values map[string]string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next := maps.Clone(values)
-	if next == nil {
-		next = map[string]string{}
-	}
+	next := s.onDisk()
+	maps.Copy(next, values)
 	err := s.write(next)
 	if err != nil {
 		return err
 	}
 	s.values = next
 	return nil
+}
+
+// onDisk is the file's contents, falling back to what this process holds when
+// the file cannot be read.
+func (s *Store) onDisk() map[string]string {
+	held := maps.Clone(s.values)
+	if held == nil {
+		held = map[string]string{}
+	}
+	if s.path == "" {
+		return held
+	}
+	body, err := os.ReadFile(s.path)
+	if err != nil {
+		return held
+	}
+	var saved state
+	if json.Unmarshal(body, &saved) != nil {
+		return held
+	}
+	found := map[string]string{}
+	maps.Copy(found, saved.Values)
+	return found
 }
 
 func (s *Store) write(values map[string]string) error {
