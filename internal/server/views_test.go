@@ -19,6 +19,7 @@ type stubViews struct {
 	Backend
 
 	overview   api.ClusterOverview
+	issues     api.IssueQueue
 	releases   api.HelmReleases
 	detail     api.HelmReleaseDetail
 	support    api.HelmSupport
@@ -177,6 +178,57 @@ func TestTheOverviewEndpointServesWhatTheBackendBuilt(t *testing.T) {
 	}
 }
 
+func (s *stubViews) Issues(_ context.Context) api.IssueQueue {
+	return s.issues
+}
+
+func TestTheIssuesEndpointServesTheQueueTheBackendBuilt(t *testing.T) {
+	backend := &stubViews{issues: api.IssueQueue{
+		Rows: []api.Issue{{
+			ID:       "pod-startup/uid-web",
+			Severity: api.SeverityFatal,
+			Detector: "pod-startup",
+			Title:    "CrashLoopBackOff",
+			Object:   api.ObjectRef{Version: "v1", Resource: "deployments", Namespace: "web", Name: "api"},
+			Kind:     "Deployment",
+			Folded:   200,
+		}},
+		Dropped: 3,
+	}}
+	ts := stubbedServer(t, backend)
+
+	var got api.IssueQueue
+	resp := getJSON(t, ts.URL+"/api/issues", &got)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if len(got.Rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(got.Rows))
+	}
+	if got.Rows[0].Title != "CrashLoopBackOff" || got.Rows[0].Folded != 200 {
+		t.Fatalf("row = %+v, want the folded crashloop", got.Rows[0])
+	}
+	if got.Dropped != 3 {
+		t.Fatalf("dropped = %d, want 3", got.Dropped)
+	}
+}
+
+func TestTheIssuesEndpointPassesAPartialAnswerThrough(t *testing.T) {
+	backend := &stubViews{issues: api.IssueQueue{Rows: []api.Issue{}, Error: "pods is forbidden"}}
+	ts := stubbedServer(t, backend)
+
+	var got api.IssueQueue
+	resp := getJSON(t, ts.URL+"/api/issues", &got)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200, a partial queue is still an answer", resp.StatusCode)
+	}
+	if got.Error != "pods is forbidden" {
+		t.Fatalf("error = %q, want the failure carried through", got.Error)
+	}
+}
+
 func TestTheOverviewEndpointPassesAPartialAnswerThrough(t *testing.T) {
 	backend := &stubViews{overview: api.ClusterOverview{Error: "nodes is forbidden"}}
 	ts := stubbedServer(t, backend)
@@ -245,7 +297,7 @@ func TestTheHelmEndpointReportsAnInternalFailureAsFiveHundred(t *testing.T) {
 func TestBothViewEndpointsRefuseAnythingButGet(t *testing.T) {
 	ts := stubbedServer(t, &stubViews{})
 
-	for _, path := range []string{"/api/overview", "/api/helm"} {
+	for _, path := range []string{"/api/overview", "/api/issues", "/api/helm"} {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, ts.URL+path, http.NoBody)
 		if err != nil {
 			t.Fatalf("request: %v", err)

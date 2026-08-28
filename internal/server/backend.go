@@ -65,14 +65,23 @@ type Feeds interface {
 }
 
 type Views interface {
+	Deliveries
+	Reports
+}
+
+type Deliveries interface {
 	Graph(ctx context.Context) api.Graph
-	Checks(ctx context.Context) api.CheckReport
 	Flux(ctx context.Context) api.FluxDashboard
 	Argo(ctx context.Context) api.ArgoDashboard
 	FluxOverview(ctx context.Context) api.FluxOverview
+}
+
+type Reports interface {
+	Overview(ctx context.Context) api.ClusterOverview
+	Checks(ctx context.Context) api.CheckReport
+	Issues(ctx context.Context) api.IssueQueue
 	Metrics(ctx context.Context) api.Metrics
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)
-	Overview(ctx context.Context) api.ClusterOverview
 }
 
 type Releases interface {

@@ -47,6 +47,7 @@ import ResourceTable from './components/ResourceTable';
 import PanelLayout from './components/PanelLayout';
 import ClusterOverview from './components/ClusterOverview';
 import HelmReleases from './components/HelmReleases';
+import IssueQueue from './components/IssueQueue';
 import FluxList from './components/FluxList';
 import FluxRoles from './components/FluxRoles';
 import ArgoApps from './components/ArgoApps';
@@ -482,6 +483,9 @@ export default function App() {
   );
   if (route.view === 'cluster') {
     mainArea = <ClusterOverview />;
+  }
+  if (route.view === 'issues') {
+    mainArea = <IssueQueue onSelect={remember} />;
   }
   if (route.view === 'helm') {
     mainArea = <HelmReleases selected={route.release} onSelect={openRelease} />;

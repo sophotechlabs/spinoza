@@ -51,6 +51,10 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Overview(r.Context()))
 }
 
+func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.manager().Issues(r.Context()))
+}
+
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Metrics(r.Context()))
 }

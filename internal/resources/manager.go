@@ -40,6 +40,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/gitops"
 	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
+	"github.com/sophotechlabs/spinoza/internal/issues"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
@@ -680,6 +681,10 @@ func (m *Manager) Overview(ctx context.Context) api.ClusterOverview {
 	return overview.Build(ctx, m.dyn, m.meta, m, m.versions(), m.descriptors())
 }
 
+func (m *Manager) Issues(ctx context.Context) api.IssueQueue {
+	return issues.Build(ctx, m, m, m.descriptors(), m.now)
+}
+
 func (m *Manager) versions() overview.Versions {
 	if m.disco == nil {
 		return nil
@@ -921,9 +926,24 @@ func (m *Manager) List(ctx context.Context, desc api.ResourceDescriptor) ([]*uns
 	if err != nil {
 		return nil, err
 	}
-	objs, listErr := lister.List(labels.Everything())
-	if listErr != nil {
-		return nil, listErr
+	return listAll(lister)
+}
+
+func (m *Manager) Lease(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
+	key := streamKey{gvr: gvr}
+	st, entry, err := m.attach(ctx, key, desc, "", 0)
+	if err != nil {
+		return nil, err
+	}
+	defer m.detach(key, st, entry)
+	return listAll(st.lister)
+}
+
+func listAll(lister cache.GenericLister) ([]*unstructured.Unstructured, error) {
+	objs, err := lister.List(labels.Everything())
+	if err != nil {
+		return nil, err
 	}
 	out := make([]*unstructured.Unstructured, 0, len(objs))
 	for _, obj := range objs {

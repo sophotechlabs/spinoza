@@ -3,8 +3,11 @@ package resources
 import (
 	"context"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/sophotechlabs/spinoza/internal/discovery"
 )
 
 func workload(kind string, spec, status map[string]any) *unstructured.Unstructured {
@@ -160,4 +163,47 @@ func TestCountsWithoutWatchedTypesLeaveFailingAlone(t *testing.T) {
 	if got.Failing != nil {
 		t.Fatalf("failing = %v, want none without a watched type", got.Failing)
 	}
+}
+
+func TestALeasedReadLetsTheStreamGoWhenNobodyIsWatching(t *testing.T) {
+	mgr, cancel := newManagerWithGrace(t, newClient(t, newDeployment("default", "web")), time.Millisecond)
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	found, err := mgr.Lease(t.Context(), desc)
+	if err != nil {
+		t.Fatalf("Lease: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("found = %d objects, want the deployment", len(found))
+	}
+
+	waitForStreams(t, mgr, 0)
+}
+
+func TestAPinnedReadKeepsTheStreamOpen(t *testing.T) {
+	mgr, cancel := newManagerWithGrace(t, newClient(t, newDeployment("default", "web")), time.Millisecond)
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	if _, err := mgr.List(t.Context(), desc); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	waitForStreams(t, mgr, 1)
+}
+
+func TestASecondLeaseReusesTheStreamTheFirstOpened(t *testing.T) {
+	mgr, cancel := newManagerWithGrace(t, newClient(t, newDeployment("default", "web")), time.Minute)
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	if _, err := mgr.Lease(t.Context(), desc); err != nil {
+		t.Fatalf("first Lease: %v", err)
+	}
+	if _, err := mgr.Lease(t.Context(), desc); err != nil {
+		t.Fatalf("second Lease: %v", err)
+	}
+
+	waitForStreams(t, mgr, 1)
 }

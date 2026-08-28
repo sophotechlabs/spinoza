@@ -279,6 +279,26 @@ vi.mock('../src/components/Checks', () => ({
   ),
 }));
 
+vi.mock('../src/components/IssueQueue', () => ({
+  default: ({ onSelect }: { onSelect: (ref: ObjectRef) => void }) => (
+    <button
+      type="button"
+      data-testid="issue-queue"
+      onClick={() => {
+        onSelect({
+          group: 'apps',
+          version: 'v1',
+          resource: 'deployments',
+          namespace: 'web',
+          name: 'api',
+        });
+      }}
+    >
+      select-issue
+    </button>
+  ),
+}));
+
 vi.mock('../src/components/ForwardsPanel', () => ({
   default: () => <div data-testid="forwards-panel" />,
 }));
@@ -2031,6 +2051,18 @@ describe('finding your way in by keyboard', () => {
     await user.click(screen.getByRole('button', { name: 'select-argo-node' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('applications:argocd/root');
+  });
+
+  it('opens the issue queue and targets the inspector from it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Issues' }));
+    expect(await screen.findByTestId('issue-queue')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'select-issue' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('deployments:web/api');
   });
 
   it('opens the argo resource list and targets the inspector from it', async () => {

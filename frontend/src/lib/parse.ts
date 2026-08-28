@@ -38,6 +38,9 @@ import type {
   HelmResource,
   HelmRevision,
   HelmSupport,
+  Issue,
+  IssueChild,
+  IssueQueue,
   K8sEvent,
   MetricHistory,
   UpdateResult,
@@ -68,6 +71,7 @@ import {
   GRAPH_EDGE_KINDS,
   GRAPH_NODE_CATEGORIES,
   READY_STATES,
+  SEVERITIES,
 } from './types';
 import { VERDICTS } from './types';
 import type { Verdict } from './types';
@@ -622,6 +626,44 @@ function parseOverviewEvent(item: Record<string, unknown>): OverviewEvent {
     message: asString(item.message),
     count: asNumber(item.count),
     lastSeen: asString(item.lastSeen),
+  };
+}
+
+function parseIssueChild(item: Record<string, unknown>): IssueChild {
+  return {
+    object: parseObjectRef(asRecord(item.object)),
+    kind: asString(item.kind),
+    severity: oneOf(item.severity, SEVERITIES, 'warning'),
+    detail: asString(item.detail),
+    since: asString(item.since),
+  };
+}
+
+function parseIssue(item: Record<string, unknown>): Issue {
+  return {
+    id: asString(item.id),
+    severity: oneOf(item.severity, SEVERITIES, 'warning'),
+    detector: asString(item.detector),
+    title: asString(item.title),
+    detail: asString(item.detail),
+    action: asString(item.action),
+    change: optionalString(item.change),
+    changedAt: optionalString(item.changedAt),
+    uncertain: optionalBoolean(item.uncertain),
+    object: parseObjectRef(asRecord(item.object)),
+    kind: asString(item.kind),
+    since: asString(item.since),
+    folded: asNumber(item.folded),
+    children: optionalListOf(item.children, parseIssueChild),
+  };
+}
+
+export function parseIssueQueue(body: unknown): IssueQueue {
+  const item = asRecord(body);
+  return {
+    rows: listOf(item.rows, parseIssue),
+    dropped: asNumber(item.dropped),
+    error: optionalString(item.error),
   };
 }
 

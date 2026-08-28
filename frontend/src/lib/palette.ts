@@ -7,6 +7,7 @@ import { argoInstalled, fluxInstalled } from './gitops';
 export const VIEW_LABELS: Record<View, string> = {
   resources: 'Resources',
   cluster: 'Cluster overview',
+  issues: 'Issues',
   helm: 'Helm releases',
   checks: 'Cluster checks',
   'flux-roles': 'Flux overview',
@@ -20,6 +21,7 @@ export const VIEW_LABELS: Record<View, string> = {
 const VIEW_ORDER: View[] = [
   'cluster',
   'resources',
+  'issues',
   'helm',
   'checks',
   'flux-roles',

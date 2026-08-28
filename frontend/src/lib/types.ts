@@ -291,6 +291,7 @@ export type ServerMsg =
 export const VIEWS = [
   'resources',
   'cluster',
+  'issues',
   'helm',
   'checks',
   'gitops',
@@ -521,6 +522,41 @@ export interface ClusterOverview {
   nodes: NodeSummary;
   pods: PodSummary;
   warnings: OverviewEvent[];
+  error?: string;
+}
+
+export const SEVERITIES = ['fatal', 'degraded', 'warning'] as const;
+
+export type Severity = (typeof SEVERITIES)[number];
+
+export interface IssueChild {
+  object: ObjectRef;
+  kind: string;
+  severity: Severity;
+  detail: string;
+  since: string;
+}
+
+export interface Issue {
+  id: string;
+  severity: Severity;
+  detector: string;
+  title: string;
+  detail: string;
+  action: string;
+  change?: string;
+  changedAt?: string;
+  uncertain?: boolean;
+  object: ObjectRef;
+  kind: string;
+  since: string;
+  folded: number;
+  children?: IssueChild[];
+}
+
+export interface IssueQueue {
+  rows: Issue[];
+  dropped: number;
   error?: string;
 }
 

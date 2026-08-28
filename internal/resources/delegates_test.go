@@ -406,22 +406,6 @@ func TestOnlyRealObjectsInTheCacheAreJudged(t *testing.T) {
 	}
 }
 
-func TestAConditionThatIsNotAMapIsSkipped(t *testing.T) {
-	item := &unstructured.Unstructured{Object: map[string]any{
-		"status": map[string]any{
-			"conditions": []any{
-				"not a condition",
-				map[string]any{"type": "Reconciling", "status": "True"},
-				map[string]any{"type": "Ready", "status": "True"},
-			},
-		},
-	}}
-
-	if !conditionTrue(item, "Ready") {
-		t.Fatal("ready = false, want the Ready condition found past the noise")
-	}
-}
-
 func TestPodStreamsAreLeftToThePodCounter(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()

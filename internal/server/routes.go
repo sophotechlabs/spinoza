@@ -33,6 +33,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/resources", s.listResources, false},
 		{http.MethodPost, "/api/resources", s.refreshResources, false},
 		{http.MethodGet, "/api/overview", s.handleOverview, false},
+		{http.MethodGet, "/api/issues", s.handleIssues, false},
 		{http.MethodGet, "/api/helm/support", s.handleHelmSupport, true},
 		{http.MethodGet, "/api/helm/access", s.helmAccess, false},
 		{http.MethodGet, "/api/helm/release", s.handleHelmRelease, false},

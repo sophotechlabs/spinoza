@@ -1,0 +1,166 @@
+package issues
+
+import (
+	"errors"
+	"strconv"
+	"testing"
+	"time"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
+)
+
+func buildWith(t *testing.T, lister *stubLister, events *stubEvents, descs map[string]api.ResourceDescriptor) api.IssueQueue {
+	t.Helper()
+	return Build(t.Context(), lister, events, descs, func() time.Time { return testNow })
+}
+
+func silentPod(name string) *stubLister {
+	pod := newPod(
+		name,
+		withPhase(phasePending),
+		withStartTime(testNow.Add(-10*time.Minute)),
+	)
+	return &stubLister{items: itemsOf("pods", pod)}
+}
+
+func TestAPodThatWentQuietAfterBindingIsReported(t *testing.T) {
+	lister := silentPod("web-1")
+	events := &stubEvents{}
+
+	queue := buildWith(t, lister, events, catalog(podDescriptor()))
+
+	row, ok := rowNamed(queue, "web-1")
+	if !ok || row.Detector != detectorStall {
+		t.Fatalf("row = %+v, want the stall row", row)
+	}
+	if !row.Uncertain {
+		t.Fatalf("row = %+v, want the guess stated as a guess", row)
+	}
+	if !contains(row.Detail, "bound to node-a") || !contains(row.Detail, "no events at all") {
+		t.Fatalf("detail = %q, want what was observed", row.Detail)
+	}
+	if row.Severity != api.SeverityWarning {
+		t.Fatalf("severity = %q, want warning", row.Severity)
+	}
+}
+
+func TestAPodWithEventsIsNotAStall(t *testing.T) {
+	lister := silentPod("web-2")
+	events := &stubEvents{byUID: map[string][]api.Event{
+		"uid-web-2": {{Reason: "Pulling"}},
+	}}
+
+	if queue := buildWith(t, lister, events, catalog(podDescriptor())); len(queue.Rows) != 0 {
+		t.Fatalf("rows = %+v, want none once the kubelet has said something", queue.Rows)
+	}
+}
+
+func TestAnEventLookupThatFailsReportsNothing(t *testing.T) {
+	lister := silentPod("web-3")
+	events := &stubEvents{err: errors.New("forbidden")}
+
+	if queue := buildWith(t, lister, events, catalog(podDescriptor())); len(queue.Rows) != 0 {
+		t.Fatalf("rows = %+v, want silence rather than a guess", queue.Rows)
+	}
+}
+
+func TestAPodInsideTheGraceIsNotAStall(t *testing.T) {
+	pod := newPod("web-4", withPhase(phasePending), withStartTime(testNow.Add(-time.Minute)))
+	lister := &stubLister{items: itemsOf("pods", pod)}
+
+	if queue := buildWith(t, lister, &stubEvents{}, catalog(podDescriptor())); len(queue.Rows) != 0 {
+		t.Fatalf("rows = %+v, want the pod given its grace", queue.Rows)
+	}
+}
+
+func TestAnUnboundPodIsNotAStall(t *testing.T) {
+	pod := newPod(
+		"web-5",
+		withPhase(phasePending),
+		withNode(""),
+		withStartTime(testNow.Add(-time.Hour)),
+	)
+	lister := &stubLister{items: itemsOf("pods", pod)}
+
+	if queue := buildWith(t, lister, &stubEvents{}, catalog(podDescriptor())); len(queue.Rows) != 0 {
+		t.Fatalf("rows = %+v, want an unscheduled pod left to the scheduler", queue.Rows)
+	}
+}
+
+func TestAPodWithARunningContainerIsNotAStall(t *testing.T) {
+	pod := newPod(
+		"web-6",
+		withStartTime(testNow.Add(-time.Hour)),
+		withContainer("app", map[string]any{"running": map[string]any{}}),
+	)
+	lister := &stubLister{items: itemsOf("pods", pod)}
+
+	if queue := buildWith(t, lister, &stubEvents{}, catalog(podDescriptor())); len(queue.Rows) != 0 {
+		t.Fatalf("rows = %+v, want none", queue.Rows)
+	}
+}
+
+func TestAPodAlreadyReportedIsNotAskedAboutAgain(t *testing.T) {
+	pod := newPod(
+		"web-7",
+		withPhase(phasePending),
+		withStartTime(testNow.Add(-time.Hour)),
+		withContainer("app", map[string]any{
+			"waiting": map[string]any{"reason": "ImagePullBackOff"},
+		}),
+	)
+	lister := &stubLister{items: itemsOf("pods", pod)}
+	events := &stubEvents{}
+
+	queue := buildWith(t, lister, events, catalog(podDescriptor()))
+
+	if len(events.asked) != 0 {
+		t.Fatalf("asked = %v, want no event lookup for a pod already explained", events.asked)
+	}
+	row, _ := rowNamed(queue, "web-7")
+	if row.Detector != detectorStartup {
+		t.Fatalf("detector = %q, want the startup detector", row.Detector)
+	}
+}
+
+func TestATerminatingPodIsNotAStall(t *testing.T) {
+	pod := newPod(
+		"web-8",
+		withPhase(phasePending),
+		withStartTime(testNow.Add(-time.Hour)),
+		withDeleted(),
+	)
+	lister := &stubLister{items: itemsOf("pods", pod)}
+
+	if queue := buildWith(t, lister, &stubEvents{}, catalog(podDescriptor())); len(queue.Rows) != 0 {
+		t.Fatalf("rows = %+v, want none", queue.Rows)
+	}
+}
+
+func TestOnlyTheOldestCandidatesAreAskedAbout(t *testing.T) {
+	pods := make([]*unstructured.Unstructured, 0, stallCandidates+5)
+	for index := range stallCandidates + 5 {
+		name := "web-" + strconv.Itoa(index)
+		pods = append(pods, newPod(
+			name,
+			withPhase(phasePending),
+			withStartTime(testNow.Add(-time.Duration(index+10)*time.Minute)),
+		))
+	}
+	lister := &stubLister{items: itemsOf("pods", pods...)}
+	events := &stubEvents{}
+
+	queue := buildWith(t, lister, events, catalog(podDescriptor()))
+
+	if len(events.asked) != stallCandidates {
+		t.Fatalf("asked = %d pods, want the %d oldest", len(events.asked), stallCandidates)
+	}
+	if len(queue.Rows) != stallCandidates {
+		t.Fatalf("rows = %d, want one per candidate asked about", len(queue.Rows))
+	}
+	if events.asked[0] != "uid-web-24" {
+		t.Fatalf("first asked = %q, want the oldest candidate", events.asked[0])
+	}
+}

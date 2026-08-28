@@ -29,6 +29,7 @@ interface GitopsEntry {
 }
 
 const TOP_VIEWS: GitopsEntry[] = [
+  { view: 'issues', label: 'Issues' },
   { view: 'helm', label: 'Helm releases' },
   { view: 'checks', label: 'Cluster checks' },
 ];

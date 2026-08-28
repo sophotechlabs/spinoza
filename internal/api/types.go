@@ -163,6 +163,43 @@ type ClusterOverview struct {
 	Error    string          `json:"error,omitempty"`
 }
 
+const (
+	SeverityFatal    = "fatal"
+	SeverityDegraded = "degraded"
+	SeverityWarning  = "warning"
+)
+
+type IssueChild struct {
+	Object   ObjectRef `json:"object"`
+	Kind     string    `json:"kind"`
+	Severity string    `json:"severity"`
+	Detail   string    `json:"detail"`
+	Since    string    `json:"since"`
+}
+
+type Issue struct {
+	ID        string       `json:"id"`
+	Severity  string       `json:"severity"`
+	Detector  string       `json:"detector"`
+	Title     string       `json:"title"`
+	Detail    string       `json:"detail"`
+	Action    string       `json:"action"`
+	Change    string       `json:"change,omitempty"`
+	ChangedAt string       `json:"changedAt,omitempty"`
+	Uncertain bool         `json:"uncertain,omitempty"`
+	Object    ObjectRef    `json:"object"`
+	Kind      string       `json:"kind"`
+	Since     string       `json:"since"`
+	Folded    int          `json:"folded"`
+	Children  []IssueChild `json:"children,omitempty"`
+}
+
+type IssueQueue struct {
+	Rows    []Issue `json:"rows"`
+	Dropped int     `json:"dropped"`
+	Error   string  `json:"error,omitempty"`
+}
+
 type HelmRelease struct {
 	Name         string     `json:"name"`
 	Namespace    string     `json:"namespace"`
