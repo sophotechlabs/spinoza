@@ -82,8 +82,6 @@ function liveContainers(selection: Selection): ContainerState[] | undefined {
   return selection.row.containers;
 }
 
-// A workload is tailed through its own ref, so the server can read the selector
-// it puts on its pods.
 function workloadOf(
   selection: Selection,
   detail: ObjectDetail,

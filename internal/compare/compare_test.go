@@ -46,8 +46,6 @@ func rendered(t *testing.T, item *unstructured.Unstructured) string {
 	return text
 }
 
-// what a cluster writes for itself, and which of it survives
-
 func TestTheServersOwnFieldsAreDropped(t *testing.T) {
 	text := rendered(t, deployment())
 
@@ -140,8 +138,6 @@ func TestTheSourceIsLeftAlone(t *testing.T) {
 	}
 }
 
-// the two sides meet as text
-
 func TestTwoClustersRenderTheSameManifestIdentically(t *testing.T) {
 	here := deployment()
 	there := deployment()
@@ -177,8 +173,6 @@ func TestKeysComeOutInAStableOrder(t *testing.T) {
 		t.Fatal("two renders of the same object differ, so a diff would be noise")
 	}
 }
-
-// reading and writing the text form
 
 func TestRenderedTakesRawYamlThroughTheSamePath(t *testing.T) {
 	raw, err := YAML(deployment())

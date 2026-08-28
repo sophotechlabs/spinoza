@@ -16,10 +16,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// Endpoint returns GitHub's release API shape.
 const Endpoint = "https://spinoza.tech/api/latest"
 
-// Command is the install line published on the website.
 const Command = "curl -fsSL https://spinoza.tech/install.sh | sh"
 
 const (
@@ -28,13 +26,11 @@ const (
 	releasePrefix = "v"
 )
 
-// answer is the subset of the endpoint's release JSON that is read here.
 type answer struct {
 	Tag string `json:"tag_name"`
 	URL string `json:"html_url"`
 }
 
-// Checker makes one request per run.
 type Checker struct {
 	endpoint string
 	current  string
@@ -44,7 +40,7 @@ type Checker struct {
 	answer api.UpdateStatus
 }
 
-// New takes an endpoint so tests can point elsewhere. Empty means Endpoint.
+// New takes an endpoint for tests; empty means Endpoint.
 func New(current, endpoint string) *Checker {
 	if endpoint == "" {
 		endpoint = Endpoint
@@ -56,7 +52,6 @@ func New(current, endpoint string) *Checker {
 	}
 }
 
-// Status returns the result of that one request.
 func (c *Checker) Status(ctx context.Context) api.UpdateStatus {
 	c.once.Do(func() {
 		c.answer = c.ask(ctx)
@@ -111,7 +106,6 @@ func (c *Checker) fetch(ctx context.Context) (answer, error) {
 	return found, nil
 }
 
-// userAgent carries the release and platform to the endpoint.
 func userAgent(current string) string {
 	return "spinoza/" + current + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")"
 }
@@ -124,8 +118,6 @@ func (e *statusError) Error() string {
 	return "asking about releases answered " + strconv.Itoa(e.code)
 }
 
-// released reports whether a version is comparable. A build made outside a
-// release carries a commit or the word dev.
 func released(version string) bool {
 	if !strings.HasPrefix(version, releasePrefix) {
 		return false
@@ -133,7 +125,7 @@ func released(version string) bool {
 	return len(parts(version)) == 3
 }
 
-// newer compares tags numerically, so that v1.10.0 sorts above v1.9.0.
+// Numeric, so v1.10.0 sorts above v1.9.0.
 func newer(candidate, current string) bool {
 	if !released(candidate) {
 		return false
@@ -151,8 +143,6 @@ func newer(candidate, current string) bool {
 	return false
 }
 
-// parts reads the three numbers out of a tag. A pre-release such as v2.0.0-rc.1
-// is not one.
 func parts(version string) []int {
 	trimmed := strings.TrimPrefix(version, releasePrefix)
 	fields := strings.Split(trimmed, ".")

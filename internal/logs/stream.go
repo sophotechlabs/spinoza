@@ -23,13 +23,9 @@ type Request struct {
 	Container string
 	TailLines int64
 	Follow    bool
-	// Selector tails every pod that carries these labels rather than one named
-	// pod, which is how a whole workload is followed.
-	Selector string
+	Selector  string
 }
 
-// Line carries the pod it came from, so a merged stream can say which of them
-// wrote it. A single-pod stream leaves Pod empty.
 type Line struct {
 	Pod  string
 	Text string
@@ -44,9 +40,8 @@ type Stream struct {
 	err      error
 }
 
-// Attached is how many pods this stream is reading, and Matched how many the
-// selector found. They differ when a workload has more pods than spinoza opens,
-// and both move while a following stream picks up pods that appear later.
+// Attached and Matched differ when a workload has more pods than spinoza
+// opens.
 func (s *Stream) Attached() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

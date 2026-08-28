@@ -22,9 +22,8 @@ import (
 
 const lastAppliedAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
 
-// ErrNoResourceVersion is what a document that names no resourceVersion earns.
-// The apiserver would take it as an unconditional write and overwrite whatever
-// is there now, which is not what editing the object that was loaded means.
+// ErrNoResourceVersion means the apiserver would take the write as
+// unconditional.
 var ErrNoResourceVersion = errors.New(
 	"this document names no resourceVersion, so applying it would overwrite whatever is on the server now; " +
 		"Revert to load the current object, then make the change again",
@@ -137,8 +136,8 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 	}, nil
 }
 
-// A Secret keeps every value base64 encoded; a ConfigMap keeps text in data and
-// base64 only in binaryData. Both arrive as the same entries.
+// A Secret base64-encodes every value; a ConfigMap only binaryData. Both arrive
+// as the same entries.
 func dataOf(item *unstructured.Unstructured) []api.DataEntry {
 	switch item.GetKind() {
 	case "Secret":

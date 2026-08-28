@@ -536,8 +536,6 @@ func helmReleaseNaming(repoNamespace, repoName string) *unstructured.Unstructure
 	}}
 }
 
-// The chart's repository can be gone, or not readable, which is what an upgrade
-// check has to cope with rather than pointing at a repository that is not there.
 func TestAChartWhoseRepositoryIsNotThereHasNoSource(t *testing.T) {
 	_, _, ok := chartSource(helmReleaseNaming("", "missing"), map[string]charts.Repo{})
 

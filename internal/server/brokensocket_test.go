@@ -19,23 +19,16 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// A connection that works and then does not is the one thing a test cannot ask
-// a real socket for. breaking wraps the listener, so every frame the server
-// writes goes through a Write that can be told to start failing — after a
-// given number of frames, so a test can let some through first.
+// breaking wraps the listener so every frame the server writes goes through a
+// Write that can be told to start failing after n frames.
 type breaking struct {
-	writes   atomic.Int64
-	failAt   atomic.Int64
-	accepted atomic.Int64
-	// brokenUpTo is the last connection the break applies to. Anything opened
-	// afterwards is a fresh connection to a server that is still running, which
-	// is how a test asks whether it survived.
+	writes     atomic.Int64
+	failAt     atomic.Int64
+	accepted   atomic.Int64
 	brokenUpTo atomic.Int64
 	failing    atomic.Bool
 }
 
-// after tells the sockets that are open now to fail once n more frames have
-// gone out.
 func (b *breaking) after(n int64) {
 	b.failAt.Store(b.writes.Load() + n)
 	b.brokenUpTo.Store(b.accepted.Load())
@@ -85,9 +78,6 @@ func (l *breakingListener) Accept() (net.Conn, error) {
 	return &breakingConn{Conn: conn, state: l.state, id: l.state.accepted.Add(1)}, nil
 }
 
-// brokenServer hands back the server, the switch that breaks its socket, and
-// the dynamic client behind it, so a test can make the cluster change
-// underneath a subscription that can no longer be written to.
 func brokenServer(t *testing.T) (*httptest.Server, *breaking, dynamic.Interface) {
 	t.Helper()
 	mgr, dyn := testManager(t)
@@ -100,11 +90,9 @@ func brokenServer(t *testing.T) (*httptest.Server, *breaking, dynamic.Interface)
 	return ts, state, dyn
 }
 
-// openBrokenFeed opens a feed and waits out the frames the server sends unasked,
-// so that the next thing it writes is the thing the test asked for. Breaking the
-// socket before that is over breaks whichever greeting frame was still in flight:
-// the write fails, the socket goes, and the message the test then sends is never
-// read — which looks like the server going quiet for no reason.
+// Waits out the unasked-for opening frames. Breaking the socket before they are
+// done breaks whichever greeting was in flight, and the test's own message is
+// then never read.
 func openBrokenFeed(t *testing.T, ts *httptest.Server) (context.Context, *websocket.Conn) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -118,9 +106,6 @@ func openBrokenFeed(t *testing.T, ts *httptest.Server) (context.Context, *websoc
 	return ctx, conn
 }
 
-// greeted reads until every opening frame has arrived. A frame that has been
-// read has been written, so the write count stands still from here until the
-// test asks for something.
 func greeted(ctx context.Context, t *testing.T, conn *websocket.Conn) {
 	t.Helper()
 	seen := map[string]bool{}
@@ -133,9 +118,6 @@ func greeted(ctx context.Context, t *testing.T, conn *websocket.Conn) {
 	}
 }
 
-// stillServing proves the server is alive after a socket failed under it, which
-// is the property that matters: one window going away must not take the process
-// with it.
 func stillServing(t *testing.T, ts *httptest.Server) {
 	t.Helper()
 	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/version", nil)
@@ -172,7 +154,6 @@ func TestAnUpdateThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 		t.Fatalf("type = %q, want a snapshot before the socket breaks", first.Type)
 	}
 
-	// The snapshot got through; the update that follows will not.
 	socket.after(0)
 	_, err := dyn.Resource(depGVR).
 		Namespace("default").
@@ -218,15 +199,10 @@ func TestALogLineThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	stillServing(t, ts)
 }
 
-// The batch of lines got through and the frame that follows it — how many pods
-// are being read — did not. The relay has to stop rather than carry on writing
-// into a socket that is gone.
 func TestThePodCountFrameFailingAfterALogBatchIsSurvived(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
 
-	// Let one more frame through, then break: the log-open frame lands and what
-	// comes after it does not.
 	socket.after(1)
 	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type:      "logs-subscribe",
@@ -257,7 +233,6 @@ func TestAResyncThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 		t.Fatalf("type = %q, want a snapshot first", first.Type)
 	}
 
-	// Raising the limit asks for a fresh snapshot, which is the write that fails.
 	socket.after(0)
 	sendMsg(ctx, t, conn, api.ClientMsg{Type: "more", SubID: "s1", Limit: 200})
 	waitForWrites(t, socket, 1)
@@ -265,8 +240,6 @@ func TestAResyncThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	stillServing(t, ts)
 }
 
-// A feed whose window goes away in the middle of the pause between resyncs has
-// nothing left to write to, and has to give up rather than wait out the pause.
 func TestAFeedWhoseWindowGoesAwayMidPauseStops(t *testing.T) {
 	ts, _, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
@@ -285,7 +258,6 @@ func TestAFeedWhoseWindowGoesAwayMidPauseStops(t *testing.T) {
 
 	sendMsg(ctx, t, conn, api.ClientMsg{Type: "more", SubID: "s1", Limit: 200})
 	readMsg(ctx, t, conn)
-	// A second resync lands inside the pause the first one started.
 	sendMsg(ctx, t, conn, api.ClientMsg{Type: "more", SubID: "s1", Limit: 300})
 	time.Sleep(50 * time.Millisecond)
 	_ = conn.CloseNow()
@@ -293,11 +265,8 @@ func TestAFeedWhoseWindowGoesAwayMidPauseStops(t *testing.T) {
 	stillServing(t, ts)
 }
 
-// Every test in this file counts writes from the moment a feed is open, so what
-// a feed is sent before it asks for anything has to be both known and over. A
-// third opening frame added above would go out while a test believed the server
-// was idle, and would be the frame that got broken instead of the one the test
-// meant to break.
+// Write counting starts once a feed is open, so the opening frames have to be
+// both known and over. A third one added above would be the frame that broke.
 func TestAFeedIsSentItsOpeningFramesAndThenNothing(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
@@ -316,11 +285,7 @@ func TestAFeedIsSentItsOpeningFramesAndThenNothing(t *testing.T) {
 	}
 }
 
-// The other half of why a broken greeting frame is so quiet: the first write a
-// socket refuses is the last one the server attempts on it. Everything the
-// window asks for afterwards goes unanswered, which is correct — but it is also
-// why a test that breaks the wrong frame sees nothing at all rather than a
-// failure.
+// The first write a socket refuses is the last one the server attempts on it.
 func TestNothingMoreIsWrittenToASocketThatHasGone(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)

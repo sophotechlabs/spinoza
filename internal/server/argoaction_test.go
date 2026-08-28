@@ -71,8 +71,6 @@ func storedApplication(t *testing.T, dyn dynamic.Interface) *unstructured.Unstru
 	return got
 }
 
-// what the route does on an open cluster
-
 func TestArgoActionSyncs(t *testing.T) {
 	ts, dyn := argoActionServer(t, false, newArgoApplication())
 
@@ -149,8 +147,6 @@ func TestArgoActionMissingObject(t *testing.T) {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
 }
-
-// what protection changes
 
 func TestSyncOnAProtectedClusterNeedsTheTypedName(t *testing.T) {
 	ts, dyn := argoActionServer(t, true, newArgoApplication())

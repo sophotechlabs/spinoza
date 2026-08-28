@@ -25,13 +25,10 @@ var (
 	startTimeout = 60 * time.Second
 	pollEvery    = 500 * time.Millisecond
 	removeGrace  = int64(0)
-	// A privileged pod must not outlive the session that opened it, even if
-	// spinoza dies without deleting it. The kubelet stops it either way.
+	// The kubelet stops it even if spinoza dies without deleting it.
 	livesFor = int64((2 * time.Hour).Seconds())
 )
 
-// Enter is the argv that leaves the pod behind and lands in the node's own
-// namespaces. The pod is only a way in; everything the shell sees is the host.
 var Enter = []string{"nsenter", "--target", "1", "--mount", "--uts", "--ipc", "--net", "--pid", "--", "sh"}
 
 type Service struct {
@@ -73,9 +70,7 @@ func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport
 		support.Reason = "no node was named"
 		return support
 	}
-	// A node shell is a privileged pod on somebody's host. Unlike the buttons
-	// elsewhere, one that cannot be asked about is not offered: better to say the
-	// question could not be put than to hand over a shell nobody checked.
+	// Unlike the buttons elsewhere, one that cannot be asked about is not offered.
 	decision := s.perms.Ask(ctx, access.Check{
 		Verb:      "create",
 		Resource:  "pods",

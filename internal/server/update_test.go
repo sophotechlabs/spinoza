@@ -20,8 +20,6 @@ func (s *stubUpdates) Status(context.Context) api.UpdateStatus {
 	return s.status
 }
 
-// updateServer is a server with nothing but the update endpoint worth asking
-// about, so that the checker wired into it is what the test is about.
 func updateServer(t *testing.T, checker Updates) *httptest.Server {
 	t.Helper()
 	srv := New(nil, testAssets(), testToken)
@@ -70,8 +68,6 @@ func TestTheUpdateEndpointSaysWhatTheCheckerFound(t *testing.T) {
 	}
 }
 
-// A build with no checker at all still answers: not asking is a state the
-// browser has to be able to draw, not an error.
 func TestTheUpdateEndpointAnswersWithoutAChecker(t *testing.T) {
 	ts := updateServer(t, nil)
 

@@ -37,7 +37,6 @@ func comparedDeployment(replicas int64, uid string) *unstructured.Unstructured {
 	}}
 }
 
-// the reader that talks to another cluster hands back yaml, so the stub does too.
 func rawOf(t *testing.T, item *unstructured.Unstructured) string {
 	t.Helper()
 	raw, err := compare.YAML(item)
@@ -77,8 +76,6 @@ func comparisonFrom(t *testing.T, body []byte) api.Comparison {
 	}
 	return result
 }
-
-// what the two sides come back as
 
 func TestBothSidesComeBackNormalised(t *testing.T) {
 	far := map[string]string{"prod/prod/web": rawOf(t, comparedDeployment(3, "far-uid"))}
@@ -188,8 +185,6 @@ func TestAClusterScopedObjectComparesWithoutANamespace(t *testing.T) {
 		t.Fatalf("a node differing only by uid was not identical:\n%s\n%s", result.Left, result.Right)
 	}
 }
-
-// what it says when the far side cannot answer
 
 func TestAnObjectMissingThereIsSaidPlainly(t *testing.T) {
 	ts, _ := compareServer(t, map[string]string{}, comparedDeployment(3, "near-uid"))

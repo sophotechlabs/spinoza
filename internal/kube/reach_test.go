@@ -41,9 +41,6 @@ users:
 `, server)
 }
 
-// Every client in a bundle is built on one config, so wrapping that config's
-// transport is what makes a failed list, watch or read say something about the
-// cluster without anyone having to remember to report it.
 func TestWhatTheClientsRunIntoIsReported(t *testing.T) {
 	apiserver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -82,8 +79,6 @@ func TestWhatTheClientsRunIntoIsReported(t *testing.T) {
 	}
 }
 
-// The dynamic client is built from the same config as the typed one, and a
-// list is what most of spinoza actually does.
 func TestWhatTheDynamicClientRunsIntoIsReportedToo(t *testing.T) {
 	apiserver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

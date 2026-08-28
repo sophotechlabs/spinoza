@@ -22,11 +22,8 @@ func TestKlogRoutesThroughSlog(t *testing.T) {
 	}
 }
 
-// Everything spinoza logs about a request — a path, a pod name, a panic — comes
-// from somebody who could put a newline in it. What stops that forging a second
-// log line is the handler, not the call sites, so this is the one place the
-// property is worth pinning down — through the handler spinoza installs rather
-// than another one built to look like it.
+// What stops a newline in a logged value forging a second line is the handler,
+// not the call sites. Tested through the handler spinoza installs.
 func TestTheHandlerEscapesWhatItIsGiven(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(logHandler(&buf, slog.LevelInfo))
@@ -42,8 +39,6 @@ func TestTheHandlerEscapesWhatItIsGiven(t *testing.T) {
 	}
 }
 
-// The same for a panic, which arrives with a stack full of newlines and a value
-// somebody else chose.
 func TestAPanicIsLoggedOnOneLine(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(logHandler(&buf, slog.LevelInfo))

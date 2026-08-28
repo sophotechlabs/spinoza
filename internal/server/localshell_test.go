@@ -350,7 +350,6 @@ func TestALocalShellIgnoresATextFrame(t *testing.T) {
 	})
 	conn := dialShell(t, ts, "")
 
-	// The protocol is binary. A text frame is not something to feed to a shell.
 	if err := conn.Write(t.Context(), websocket.MessageText, []byte("hello")); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -369,7 +368,6 @@ func TestALocalShellIgnoresAnEmptyFrame(t *testing.T) {
 	})
 	conn := dialShell(t, ts, "")
 
-	// A frame with no channel byte has nothing to route.
 	if err := conn.Write(t.Context(), websocket.MessageBinary, nil); err != nil {
 		t.Fatalf("write: %v", err)
 	}

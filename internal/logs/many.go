@@ -17,25 +17,16 @@ import (
 )
 
 const (
-	// A workload with more pods than this is tailed in part. Every attachment is
-	// its own connection to the apiserver, and the caller is told what it got.
+	// Above this a workload is tailed in part.
 	maxPods = 20
-	// tailBudget is how many lines the whole merged stream may start with. The
-	// browser keeps at least this many — MAX_LOG_LINES in
-	// frontend/src/store/logs.ts, which budget_test.go holds against this — so
-	// asking every pod for a full tail would only fill that buffer with whichever
-	// pods answered first and throw the rest away before anyone saw them.
+	// tailBudget is the opening size of the merged stream. MAX_LOG_LINES in
+	// frontend/src/store/logs.ts must be at least this; budget_test.go checks it.
 	tailBudget = 5000
-	// A pod is worth reading with at least this much history behind it.
-	minTail = 50
+	minTail    = 50
 )
 
-// While following, pods that appear after the stream opened are picked up, so a
-// rollout does not quietly stop producing output.
 var resolveEvery = 5 * time.Second
 
-// defaultContainer is the annotation kubectl reads to pick a container when a
-// pod has several and nobody said which.
 const defaultContainer = "kubectl.kubernetes.io/default-container"
 
 type podRef struct {
@@ -69,9 +60,7 @@ func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Strea
 		}
 		opened++
 	}
-	// Nothing to read and nothing that will ever be readable is a failed request,
-	// not a silent stream. A pod that is merely still starting is different: a
-	// following stream waits for it rather than giving up.
+	// A pod still starting is different: a following stream waits for it.
 	if opened == 0 && (!req.Follow || permanent(refused)) {
 		cancel()
 		return nil, refused
@@ -89,9 +78,8 @@ func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Strea
 	return stream, nil
 }
 
-// attachments remembers every pod that has been read, not only the ones being
-// read now: a pod whose log ended must not be opened again on the next sweep, or
-// its whole log would arrive a second time.
+// Every pod ever read, not only the ones being read now: reopening one whose
+// log ended would resend the whole log.
 type attachments struct {
 	mu   sync.Mutex
 	open map[string]func()
@@ -119,9 +107,7 @@ func (a *attachments) release(name string) {
 	delete(a.open, name)
 }
 
-// forget takes a pod back out of the record entirely, for when the apiserver
-// would not hand over its log yet. A pod that is still starting says so, and the
-// next sweep has to be free to ask again.
+// The next sweep has to be free to ask again.
 func (a *attachments) forget(name string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -129,8 +115,6 @@ func (a *attachments) forget(name string) {
 	delete(a.seen, name)
 }
 
-// forgetGone drops pods the cluster no longer lists, so a name that comes back
-// later is read again rather than ignored forever.
 func (a *attachments) forgetGone(present []string) {
 	alive := make(map[string]bool, len(present))
 	for _, name := range present {
@@ -166,8 +150,6 @@ func attach(
 	one := req
 	one.Name = name
 	one.Selector = ""
-	// A pod with several containers refuses a log request that names none, so the
-	// one the pod itself points at is used unless the caller chose.
 	if one.Container == "" {
 		one.Container = pod.container
 	}
@@ -257,9 +239,8 @@ func podsMatching(
 	return found[:maxPods], len(found), nil
 }
 
-// share splits the caller's tail across the pods being read, so a workload with
-// twenty pods opens with a full buffer of all twenty rather than a full buffer
-// of the three that answered first.
+// So twenty pods open with a full buffer of all twenty, not of the three that
+// answered first.
 func share(tail int64, pods int) int64 {
 	if tail <= 0 || pods < 2 {
 		return tail
@@ -271,8 +252,7 @@ func share(tail int64, pods int) int64 {
 	return each
 }
 
-// permanent tells a refusal apart from a pod that has not started writing yet.
-// The apiserver answers 400 while a container is being created, and 403 or 404
+// The apiserver answers 400 while a container is being created, 403 or 404
 // when it will not hand the log over at all.
 func permanent(err error) bool {
 	if err == nil {

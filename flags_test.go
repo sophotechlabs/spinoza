@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
+	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
 func TestDefaultsMatchTheDocumentedOnes(t *testing.T) {
@@ -399,5 +400,13 @@ func TestSettingsRefuseAnArgumentTheyDoNotKnow(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("settingsFromArgs returned nil error for an unknown flag")
+	}
+}
+
+func TestTheCheckerCarriesThisBuildsVersion(t *testing.T) {
+	checker := updateChecker()
+
+	if got := checker.Status(t.Context()).Current; got != version.String() {
+		t.Fatalf("current = %q, want this build's version", got)
 	}
 }

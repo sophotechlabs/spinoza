@@ -23,14 +23,9 @@ var crdGVR = schema.GroupVersionResource{
 
 const (
 	crdReadTimeout = 5 * time.Second
-	// layoutTTL is how long the answer about a kind is kept. Definitions change
-	// when an operator is upgraded, which is rare, but a read that failed should
-	// not follow a table around for the rest of the session.
-	layoutTTL = time.Minute
+	layoutTTL      = time.Minute
 )
 
-// layout is how one kind is shown in a table: the columns, and how to fill a
-// row from an object.
 type layout struct {
 	columns []api.Column
 	cells   func(obj *unstructured.Unstructured) []string
@@ -45,9 +40,6 @@ func builtinLayout(kind string) layout {
 	}
 }
 
-// layoutFor is how this kind should be shown. Spinoza's own tables come first,
-// then whatever the resource's own definition asks for, and a single status
-// when there is neither.
 func (m *Manager) layoutFor(
 	ctx context.Context,
 	desc api.ResourceDescriptor,
@@ -82,27 +74,19 @@ func (m *Manager) layoutStore(gvr schema.GroupVersionResource) *recent[layout] {
 	return store
 }
 
-// forgetLayouts drops what every kind said about itself, so that the next table
-// opened asks again. Refreshing the resource list is how a user says the cluster
-// has changed under them.
 func (m *Manager) forgetLayouts() {
 	m.layoutMu.Lock()
 	defer m.layoutMu.Unlock()
 	m.layouts = map[schema.GroupVersionResource]*recent[layout]{}
 }
 
-// crdLayout reads the columns a custom resource asks to be shown by. Every CRD
-// may publish them, and they are what kubectl prints — the author of the kind
-// knows better than a table that can only say whether something is ready.
-//
-// Nothing here may stop a table opening: plenty of users cannot read custom
-// resource definitions at all, and a kind spinoza cannot ask about is simply
-// shown the way it always was.
+// Failure is not fatal: many users cannot read CRDs, and keep the default
+// table.
 func (m *Manager) crdLayout(ctx context.Context, gvr schema.GroupVersionResource) (layout, bool) {
 	if m.dyn == nil {
 		return layout{}, false
 	}
-	// Only what a CRD defines has one. Core kinds are built into the apiserver.
+	// Only CRDs declare them; core kinds are built into the apiserver.
 	if gvr.Group == "" {
 		return layout{}, false
 	}
@@ -138,17 +122,12 @@ func cellsFromDeclared(declared []*declaredColumn) func(*unstructured.Unstructur
 	}
 }
 
-// declaredColumn is one column a resource definition asks for, ready to read.
 type declaredColumn struct {
 	name     string
 	render   string
 	template string
-	// A template that ranges rewrites its own parse tree as it walks it and is
-	// left pointing past the end, so it answers for one object and returns
-	// nothing for every object after. Those are parsed again for each row. Every
-	// other template writes nothing to itself while reading, so one is parsed
-	// here and read through by as many goroutines as ask — rows are filled both
-	// by the informer and by whoever is taking a snapshot.
+	// A ranging template rewrites its own parse tree and is spent after one object,
+	// so those are parsed per row. The rest write nothing while reading.
 	kept *jsonpath.JSONPath
 }
 
@@ -193,8 +172,6 @@ func printerColumnsOf(definition *unstructured.Unstructured, version string) []*
 	return out
 }
 
-// entriesFor finds the printer columns for the version being listed. A
-// definition serves several versions and they need not agree on their columns.
 func entriesFor(definition *unstructured.Unstructured, version string) ([]any, bool) {
 	versions, found, err := unstructured.NestedSlice(definition.Object, "spec", "versions")
 	if err != nil {
@@ -233,8 +210,6 @@ func declaredColumnOf(entry any) (*declaredColumn, bool) {
 	if path == "" {
 		return nil, false
 	}
-	// A column the table already has its own place for, and one kubectl only
-	// shows when asked for a wide table.
 	if alreadyShown(path) {
 		return nil, false
 	}
@@ -256,8 +231,6 @@ func declaredColumnOf(entry any) (*declaredColumn, bool) {
 	return column, true
 }
 
-// ranges says whether a template walks a range expression, which is the one
-// thing that makes a parsed template good for a single read.
 func ranges(name, path string) bool {
 	tree, err := jsonpath.Parse(name, braced(path))
 	if err != nil {
@@ -266,10 +239,9 @@ func ranges(name, path string) bool {
 	return listRanges(tree.Root)
 }
 
-// listRanges looks through one list of nodes. A template parses into a list of
-// the {…} groups it was written as, and each group is a list of its own, so a
-// range sits one level down. It sits no deeper than that: the parser takes no
-// brace inside a filter or a union, which is where the rest of the nesting is.
+// A template parses into a list of its {...} groups, each a list of its own, so
+// a range sits one level down. No deeper: the parser rejects a brace inside a
+// filter or a union.
 func listRanges(list *jsonpath.ListNode) bool {
 	return slices.ContainsFunc(list.Nodes, nodeRanges)
 }
@@ -286,7 +258,6 @@ func nodeRanges(node jsonpath.Node) bool {
 	return identifier.Name == "range"
 }
 
-// alreadyShown names the two fields every table already has a column for.
 func alreadyShown(path string) bool {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == ".metadata.name" {
@@ -295,9 +266,6 @@ func alreadyShown(path string) bool {
 	return trimmed == ".metadata.creationTimestamp"
 }
 
-// renderFor is how spinoza draws a declared column. A date becomes the age shown
-// everywhere else rather than a timestamp nobody reads, and a column that says
-// whether the thing is working is drawn in the color of its answer.
 func renderFor(name, declared string) string {
 	if declared == "date" {
 		return "age"
@@ -308,12 +276,8 @@ func renderFor(name, declared string) string {
 	return ""
 }
 
-// working names the columns that answer whether the resource is doing its job.
-// Kubernetes has one convention for that answer — a condition's status, True or
-// False or Unknown — and these names mean the same whichever kind published
-// them. Columns that mean the opposite, Suspended and Paused among them, are
-// deliberately not here: True is not good news in those, and a green cell would
-// be a lie.
+// working names columns whose True means healthy. Suspended and Paused are
+// excluded: True is bad news in those.
 func working(name string) bool {
 	for _, known := range []string{"Ready", "Healthy", "Available", "Synced", "Established", "Reconciled"} {
 		if strings.EqualFold(name, known) {
@@ -325,8 +289,7 @@ func working(name string) bool {
 
 func parsePath(name, path string) (*jsonpath.JSONPath, error) {
 	parser := jsonpath.New(name)
-	// A definition writes the path the way kubectl takes it on the command line,
-	// without the braces the parser wants.
+	// Definitions write the path without braces, the way kubectl takes it.
 	parser.AllowMissingKeys(true)
 	err := parser.Parse(braced(path))
 	if err != nil {

@@ -232,9 +232,6 @@ func TestARefWithNoKubeconfigFallsBackToTheOneSpinozaWasStartedWith(t *testing.T
 	}
 }
 
-// helm and kubectl are handed this ref and run as child processes. A context
-// name on its own sends them to the default kubeconfig, where a context that
-// only exists in the file spinoza was started with is not there at all.
 func TestTheFileSpinozaWasStartedWithIsNamedOnTheRef(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
 	other := writeKubeconfig(t, otherKubeconfig)
@@ -249,8 +246,6 @@ func TestTheFileSpinozaWasStartedWithIsNamedOnTheRef(t *testing.T) {
 	}
 }
 
-// The file a ref already names is the one it came from, and outranks the file
-// spinoza was started with.
 func TestAFileOnTheRefIsNotReplacedByTheOneSpinozaWasStartedWith(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, validKubeconfig))
 	started := writeKubeconfig(t, twoContextKubeconfig)
@@ -269,8 +264,6 @@ func TestAFileOnTheRefIsNotReplacedByTheOneSpinozaWasStartedWith(t *testing.T) {
 	}
 }
 
-// Started with no file named, spinoza reads the usual chain and so does
-// everything it runs. Naming one file here would cut the others out.
 func TestAStartWithNoFileNamedLeavesTheRefWithoutOne(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, twoContextKubeconfig))
 

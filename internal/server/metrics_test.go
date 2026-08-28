@@ -41,8 +41,6 @@ func TestMetricHistoryRejectsABadRange(t *testing.T) {
 	}
 }
 
-// Without a metrics database the answer comes from what spinoza measured on the
-// way past, so the endpoint answers rather than refusing — and says which it is.
 func TestMetricHistoryWithoutPrometheusIsMeasuredHere(t *testing.T) {
 	ts := debugServer(t, nil)
 	res, err := http.Get(ts.URL + "/api/metrics/history?namespace=monitoring&pod=loki-0")

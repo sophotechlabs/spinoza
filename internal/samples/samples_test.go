@@ -21,9 +21,6 @@ func apps(store *Store, at time.Time) api.MetricHistory {
 	return store.History("flux-system", "apps", time.Hour, at)
 }
 
-// A chart draws cores and bytes, which is what a metrics database reports. The
-// cluster reports millicores and mebibytes, so the two have to meet somewhere
-// and this is where.
 func TestReadingsComeBackInTheUnitsAChartDraws(t *testing.T) {
 	store := New()
 
@@ -55,7 +52,6 @@ func TestAnAnswerSaysItWasMeasuredHere(t *testing.T) {
 	}
 }
 
-// The panel draws a chart from these, and JSON null is not a list.
 func TestAPodNobodyHasMeasuredIsEmptyRatherThanNothing(t *testing.T) {
 	store := New()
 
@@ -72,8 +68,6 @@ func TestAPodNobodyHasMeasuredIsEmptyRatherThanNothing(t *testing.T) {
 	}
 }
 
-// Metrics are read whenever a page asks, which is oftener than the cluster
-// measures anything. The readings in between are the same number again.
 func TestTwoReadsInsideOneIntervalKeepOneReading(t *testing.T) {
 	store := New()
 
@@ -133,8 +127,6 @@ func TestOnlyTheSpanAskedForComesBack(t *testing.T) {
 	}
 }
 
-// Since is how far back the answer reaches, which is what the panel says out
-// loud. It is the oldest reading in this answer, not the oldest one held.
 func TestSinceIsTheOldestReadingInTheAnswer(t *testing.T) {
 	store := New()
 	at := start
@@ -152,8 +144,6 @@ func TestSinceIsTheOldestReadingInTheAnswer(t *testing.T) {
 	}
 }
 
-// The cluster's metrics list every pod it measures, so a pod that is not in a
-// fresh reading has gone rather than been missed.
 func TestAPodThatHasGoneIsForgotten(t *testing.T) {
 	store := New()
 	store.Record(start, map[string]api.ResourceUsage{
@@ -175,8 +165,6 @@ func TestAPodThatHasGoneIsForgotten(t *testing.T) {
 	}
 }
 
-// A read of the cluster that failed comes back with nothing in it, and nothing
-// is not the same answer as "every pod has gone".
 func TestAReadingOfNothingIsNotTakenAsEveryPodLeaving(t *testing.T) {
 	store := New()
 	store.Record(start, reading(100, 100))
@@ -203,9 +191,6 @@ func TestOnlySoManyPodsAreRemembered(t *testing.T) {
 	}
 }
 
-// A pod already being remembered stays remembered even when the cluster is over
-// the limit, so a chart someone is watching does not go blank because pods were
-// created elsewhere.
 func TestAPodAlreadyRememberedKeepsItsPlaceAtTheLimit(t *testing.T) {
 	store := New()
 	store.limit = 2
@@ -222,7 +207,6 @@ func TestAPodAlreadyRememberedKeepsItsPlaceAtTheLimit(t *testing.T) {
 	}
 }
 
-// One goroutine refreshes the metrics while another draws a chart.
 func TestTheStoreIsWrittenAndReadAtOnce(t *testing.T) {
 	store := New()
 	var group sync.WaitGroup

@@ -16,15 +16,11 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// authorizer answers access reviews the way an apiserver does, recording what it
-// was asked so a test can check the question and not only the answer.
 type authorizer struct {
 	mu sync.Mutex
 
 	asked  []authv1.ResourceAttributes
 	refuse map[string]string
-	// byName refuses one object rather than a whole kind, which is what a
-	// resourceNames rule does.
 	byName map[string]string
 	broken bool
 	unsure bool
@@ -74,8 +70,6 @@ func (a *authorizer) count() int {
 	return len(a.questions())
 }
 
-// key names a question the way the tests talk about one: verb, group, resource,
-// subresource.
 func key(attributes authv1.ResourceAttributes) string {
 	parts := []string{attributes.Verb, attributes.Group, attributes.Resource, attributes.Subresource}
 	return strings.Join(parts, " ")
@@ -88,9 +82,8 @@ func serviceFor(t *testing.T, auth *authorizer) *Service {
 	return New(cs)
 }
 
-// refusingVerb builds the question key the fake authorizer looks for: verb,
-// group, resource, subresource. It is built rather than written out so that a
-// map of verbs on secrets does not read as a table of credentials.
+// Built rather than written out so a map of verbs on secrets does not read as
+// a table of credentials.
 func refusingVerb(verb, resource, reason string) *authorizer {
 	return refusing(map[string]string{verb + "  " + resource + " ": reason})
 }
@@ -230,8 +223,6 @@ func TestAWorkloadIsAskedAboutScalingAndItsPodsLogs(t *testing.T) {
 	if !ok {
 		t.Fatalf("the pods' logs were never asked about: %v", questions)
 	}
-	// The workload's own name is not a pod name, so asking with it would be a
-	// different question from the one the log stream will put.
 	if logs.Name != "" {
 		t.Fatalf("logs asked about pod %q, want any pod in the namespace", logs.Name)
 	}
@@ -261,8 +252,6 @@ func TestANodeIsAskedAboutCordonAndTheReadsADrainNeeds(t *testing.T) {
 	if _, ok := questions["patch  nodes "]; !ok {
 		t.Fatalf("cordoning was never asked about: %v", questions)
 	}
-	// A drain reads every pod on the node before it cordons, and that read is
-	// cluster wide because the pods can be anywhere.
 	listing, ok := questions["list  pods "]
 	if !ok {
 		t.Fatalf("the pod list a drain needs was never asked about: %v", questions)
@@ -272,8 +261,6 @@ func TestANodeIsAskedAboutCordonAndTheReadsADrainNeeds(t *testing.T) {
 	}
 }
 
-// Eviction is per pod, and a drain reports each pod separately, so a user who
-// may evict in some namespaces and not others must keep the button.
 func TestANodeIsNotAskedAboutEvictingEverywhere(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)
@@ -285,8 +272,6 @@ func TestANodeIsNotAskedAboutEvictingEverywhere(t *testing.T) {
 	}
 }
 
-// Cordoning and draining both need the same patch, and one object's review puts
-// both questions at once. It is still one question.
 func TestARequirementTwoButtonsShareIsAskedOnce(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)
@@ -338,7 +323,6 @@ func TestTheFirstRefusalIsTheOneReported(t *testing.T) {
 
 	got := reasons(service.Review(t.Context(), nodeRef()))
 
-	// The list comes first, so that is what stopped it.
 	if got[Drain] != "no listing pods" {
 		t.Fatalf("drain reason = %q, want the first requirement that failed", got[Drain])
 	}
@@ -522,7 +506,6 @@ func TestAServiceIsAskedAboutForwardingToItsPods(t *testing.T) {
 	if !ok {
 		t.Fatalf("forwarding was never asked about: %v", asked(auth))
 	}
-	// The forward goes through whichever pod is behind the service.
 	if forward.Name != "" {
 		t.Fatalf("asked about pod %q, want any pod behind the service", forward.Name)
 	}
@@ -543,7 +526,6 @@ func TestAFluxResourceIsAskedAboutPatchingItself(t *testing.T) {
 		Name:      "apps",
 	})
 
-	// Reconcile, Suspend and Resume are all this one patch.
 	if _, ok := asked(auth)["patch kustomize.toolkit.fluxcd.io kustomizations "]; !ok {
 		t.Fatalf("the gitops buttons were never asked about: %v", asked(auth))
 	}
@@ -574,7 +556,6 @@ func TestAnOrdinaryKindIsNotAskedAboutReconciling(t *testing.T) {
 
 	for _, one := range auth.questions() {
 		if one.Verb == "patch" && one.Subresource == "" && one.Resource == "deployments" {
-			// This is the restart question, which a deployment does have.
 			continue
 		}
 		if one.Verb == "patch" && one.Group == "argoproj.io" {
@@ -601,8 +582,6 @@ func TestARefusedGitopsPatchIsReported(t *testing.T) {
 	}
 }
 
-// Ask is the way a feature outside the object panel puts a single question:
-// node shells and debug containers both have one to ask.
 func TestAskAnswersOneQuestion(t *testing.T) {
 	service := serviceFor(t, refusing(nil))
 
@@ -629,8 +608,6 @@ func TestAskCarriesTheClustersOwnReasonForARefusal(t *testing.T) {
 	}
 }
 
-// The difference between "you may" and "nobody could tell me". Most callers
-// treat them the same; the ones that do not need to be able to see it.
 func TestAQuestionThatCouldNotBePutIsNotAnAnswer(t *testing.T) {
 	service := serviceFor(t, &authorizer{broken: true})
 
@@ -673,8 +650,6 @@ func TestAskRemembersWhatItWasTold(t *testing.T) {
 	}
 }
 
-// A question nobody could answer is not worth remembering: the next attempt
-// should find out rather than repeat what it never learned.
 func TestAQuestionThatCouldNotBePutIsNotRemembered(t *testing.T) {
 	auth := &authorizer{broken: true}
 	service := serviceFor(t, auth)
@@ -688,8 +663,6 @@ func TestAQuestionThatCouldNotBePutIsNotRemembered(t *testing.T) {
 	}
 }
 
-// One service answers for every feature, so a question the object panel has
-// already put is free for whoever asks it next.
 func TestAskSharesWhatAPanelAlreadyAsked(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)
@@ -709,7 +682,6 @@ func TestAskSharesWhatAPanelAlreadyAsked(t *testing.T) {
 	}
 }
 
-// A feature wired up without one asks nothing and stops nobody.
 func TestAskOnAServiceThatIsNotThereAllowsEverything(t *testing.T) {
 	var service *Service
 

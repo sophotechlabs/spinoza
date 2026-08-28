@@ -26,8 +26,7 @@ type Bundle struct {
 	Dynamic   dynamic.Interface
 	Discovery discovery.CachedDiscoveryInterface
 	Mapper    *restmapper.DeferredDiscoveryRESTMapper
-	// Reach hears about every request every client here makes, because they are
-	// all built on one config.
+	// Every client here is built on one config, so one sink sees every request.
 	Reach     *reach.Sink
 	Ref       api.ContextRef
 	Namespace string
@@ -139,11 +138,9 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(cached)
 
 	resolved := ref
-	// helm and kubectl are run as child processes and told which context to use
-	// by name. A name is only worth anything alongside the file it came from, so
-	// the ref carries the file spinoza actually read — otherwise those two look
-	// in the default kubeconfig for a context that may only exist in the one
-	// spinoza was started with.
+	// helm and kubectl take a context by name, which only means something
+	// alongside the file it came from. Without the file they look in the default
+	// kubeconfig for a context that may only exist in the one spinoza was given.
 	if resolved.Kubeconfig == "" {
 		resolved.Kubeconfig = options.Kubeconfig
 	}

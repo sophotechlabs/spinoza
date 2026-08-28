@@ -64,8 +64,7 @@ func TestAReleaseOlderThanYoursIsNotOffered(t *testing.T) {
 	}
 }
 
-// v1.10.0 is above v1.9.0. Sorted as text it is below it, which is the mistake
-// this is here to keep out.
+// Sorted as text, v1.10.0 falls below v1.9.0.
 func TestVersionsAreComparedAsNumbersNotText(t *testing.T) {
 	checker := New("v1.9.0", serving(t, `{"tag_name":"v1.10.0","html_url":"u"}`).URL)
 
@@ -95,8 +94,6 @@ func TestEveryPartOfTheVersionCounts(t *testing.T) {
 	}
 }
 
-// A release candidate is a thing somebody chose to try, not a thing to be told
-// about.
 func TestAPreReleaseIsNotOffered(t *testing.T) {
 	checker := New("v1.14.1", serving(t, `{"tag_name":"v2.0.0-rc.1","html_url":"u"}`).URL)
 
@@ -105,8 +102,6 @@ func TestAPreReleaseIsNotOffered(t *testing.T) {
 	}
 }
 
-// A build from a working copy carries a commit, and no commit is newer or older
-// than a version. Saying so beats comparing it to one.
 func TestABuildThatIsNotAReleaseIsNotCompared(t *testing.T) {
 	var asked atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -144,8 +139,6 @@ func TestDevIsNotAVersionEither(t *testing.T) {
 	}
 }
 
-// Nothing about the check is worth interrupting anybody over, so a refusal, a
-// timeout or nonsense in the answer all come back as no update and a reason.
 func TestAnAnswerThatCannotBeReadIsNotAFailure(t *testing.T) {
 	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -170,8 +163,6 @@ func TestAnAnswerThatCannotBeReadIsNotAFailure(t *testing.T) {
 	}
 }
 
-// The version does not change while spinoza is open, and a tool that asks the
-// internet on a timer is doing something nobody asked it to.
 func TestTheQuestionIsAskedOnce(t *testing.T) {
 	var asked atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -190,9 +181,7 @@ func TestTheQuestionIsAskedOnce(t *testing.T) {
 	}
 }
 
-// A running spinoza asks spinoza.tech, which is where the project decides what
-// it is told to install. The endpoint argument exists so tests can point
-// elsewhere; nothing a person passes on the command line reaches it.
+// A running spinoza uses Endpoint, and no flag reaches it.
 func TestARunningSpinozaAsksTheProjectsOwnEndpoint(t *testing.T) {
 	if got := New("v1.0.0", "").endpoint; got != Endpoint {
 		t.Fatalf("endpoint = %q, want %q", got, Endpoint)
@@ -202,8 +191,6 @@ func TestARunningSpinozaAsksTheProjectsOwnEndpoint(t *testing.T) {
 	}
 }
 
-// Answers are read up to a limit, so that whatever is on the other end cannot
-// hand spinoza a gigabyte.
 func TestAnEnormousAnswerIsCutOffRatherThanRead(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"tag_name":"v1.15.0","html_url":"`))
@@ -222,7 +209,6 @@ func TestAnEnormousAnswerIsCutOffRatherThanRead(t *testing.T) {
 	}
 }
 
-// The endpoint learns which release asked, and on what, from the user-agent.
 func TestTheRequestSaysWhichReleaseIsAsking(t *testing.T) {
 	seen := make(chan string, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

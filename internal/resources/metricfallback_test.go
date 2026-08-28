@@ -53,8 +53,6 @@ func measuredCluster(t *testing.T) *fake.FakeDynamicClient {
 	return dyn
 }
 
-// A cluster with no metrics database still measures its own pods, and spinoza
-// watching those go by is worth more than an error where a chart should be.
 func TestMetricHistoryIsMeasuredHereWhenThereIsNoPrometheus(t *testing.T) {
 	mgr := NewManager(t.Context(), Deps{Dynamic: measuredCluster(t), Clientset: k8sfake.NewClientset()})
 
@@ -73,8 +71,6 @@ func TestMetricHistoryIsMeasuredHereWhenThereIsNoPrometheus(t *testing.T) {
 	}
 }
 
-// The panel is often the only page open, so asking it for a chart has to be
-// what starts the measuring.
 func TestAskingForAChartIsWhatTakesTheFirstReading(t *testing.T) {
 	mgr := NewManager(t.Context(), Deps{Dynamic: measuredCluster(t), Clientset: k8sfake.NewClientset()})
 
@@ -87,8 +83,6 @@ func TestAskingForAChartIsWhatTakesTheFirstReading(t *testing.T) {
 	}
 }
 
-// refusingProxy is a prometheus that cannot be reached, which is the same
-// situation as having none at all.
 type refusingProxy struct{}
 
 func (*refusingProxy) Get(context.Context, prom.Target, string, map[string]string) ([]byte, error) {
@@ -112,8 +106,6 @@ func TestMetricHistoryFallsBackWhenPrometheusCannotBeReached(t *testing.T) {
 	}
 }
 
-// An answer prometheus gave that could not be read is a different thing from
-// prometheus not being there, and is worth saying rather than papering over.
 type brokenProxy struct{}
 
 func (*brokenProxy) Get(context.Context, prom.Target, string, map[string]string) ([]byte, error) {

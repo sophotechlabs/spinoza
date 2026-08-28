@@ -195,9 +195,8 @@ func TestHelmMethodsReachTheService(t *testing.T) {
 	}
 }
 
-// A manifest that names a version the cluster does not serve must not be
-// resolved to whatever version happens to share the kind, or a rollback would
-// address the wrong API.
+// Resolving to whatever version shares the kind would make a rollback address
+// the wrong API.
 func TestTheManagerRefusesAKindAtAVersionItDoesNotServe(t *testing.T) {
 	mgr := viewManager(t, nil)
 
@@ -208,9 +207,6 @@ func TestTheManagerRefusesAKindAtAVersionItDoesNotServe(t *testing.T) {
 	}
 }
 
-// A helm service with no metadata client cannot read the release secrets at
-// all. That has to come back as a failure rather than as a cluster with nothing
-// installed, which is what a user would otherwise conclude.
 func TestAHelmListThatFailsIsReported(t *testing.T) {
 	releases := helm.NewService(
 		k8sfake.NewClientset(),
@@ -232,9 +228,6 @@ func TestAHelmListThatFailsIsReported(t *testing.T) {
 	}
 }
 
-// The overview asks discovery for the cluster's version, so a manager with
-// discovery wired has to hand it over rather than the nil it uses when there is
-// no cluster yet.
 func TestTheOverviewCarriesTheClusterVersionFromDiscovery(t *testing.T) {
 	mgr := viewManager(t, nil)
 	mgr.UseDiscovery(&stubDiscovery{version: "v1.36.2+k3s1"}, nil)

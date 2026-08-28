@@ -22,8 +22,6 @@ func namespaceMeta(name string) *metav1.PartialObjectMetadata {
 	}
 }
 
-// the notes a partial read leaves behind
-
 func TestNotesAreJoinedOnlyWhenThereAreTwo(t *testing.T) {
 	if got := joinNotes("", "config maps refused"); got != "config maps refused" {
 		t.Fatalf("notes = %q, want the right one alone", got)
@@ -52,8 +50,6 @@ func TestOnlyTheNewestRevisionOfEachReleaseSurvives(t *testing.T) {
 		t.Fatalf("revision = %d, want 2", kept[0].revision)
 	}
 }
-
-// what a per-namespace walk does when one namespace answers badly
 
 func TestAListFailureThatIsNotForbiddenStopsTheWalk(t *testing.T) {
 	cs := k8sfake.NewClientset(
@@ -107,8 +103,6 @@ func TestTheNamespaceWalkFollowsItsContinueToken(t *testing.T) {
 		t.Fatalf("note = %q, want both namespaces counted", got.Error)
 	}
 }
-
-// the release store, read the long way round
 
 func TestSecretsThatAreNotHelmStorageAreSkipped(t *testing.T) {
 	other := &corev1.Secret{
@@ -193,8 +187,6 @@ func TestAMissingConfigMapBodyIsReported(t *testing.T) {
 		t.Fatal("configMapBody returned nil error for a config map that is not there")
 	}
 }
-
-// upgrades and uninstalls that the helm binary refuses
 
 func TestAnUpgradeReportsWhatHelmSaid(t *testing.T) {
 	cs := k8sfake.NewClientset(helmSecret(release{

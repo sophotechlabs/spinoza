@@ -190,8 +190,6 @@ func TestASelectionQueryNeedsACapability(t *testing.T) {
 	}
 }
 
-// A question without a name is a question about the kind, and a kind that is
-// refused says nothing about the row that was selected.
 func TestASelectionQueryNeedsEveryObjectNamed(t *testing.T) {
 	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
 	body := `{"capability":"delete","refs":[{"version":"v1","resource":"pods","namespace":"prod"}]}`
@@ -283,8 +281,6 @@ func TestSwitchingContextTellsEveryOpenFeed(t *testing.T) {
 	}
 }
 
-// nextContextFrame skips past whatever else the server is saying to find the
-// next word about which cluster it is on.
 func nextContextFrame(ctx context.Context, t *testing.T, conn *websocket.Conn) api.ServerMsg {
 	t.Helper()
 	for range 10 {
@@ -375,7 +371,6 @@ func TestInstallingAChartOnAProtectedClusterNeedsTheName(t *testing.T) {
 	}
 }
 
-// A dry run changes nothing, so it does not ask for the name.
 func TestADryRunInstallGoesStraightThrough(t *testing.T) {
 	mgr, _ := testManager(t)
 	cluster := fixed(mgr)
@@ -432,8 +427,7 @@ func TestComparingAKindTheOtherClusterCannotList(t *testing.T) {
 	}
 }
 
-// deafWriter takes a status and headers but refuses the body, which is what a
-// client that hung up mid-response looks like from here.
+// A client that hung up mid-response.
 type deafWriter struct {
 	header http.Header
 	status int
@@ -460,8 +454,6 @@ func TestAResponseNobodyIsListeningForIsNotFatal(t *testing.T) {
 
 	writeJSONStatus(writer, http.StatusCreated, api.Build{Version: "v1.11.0"})
 
-	// The status and headers are already on the wire by then, so the only thing
-	// left to do about a body nobody will read is not to fall over.
 	if writer.status != http.StatusCreated {
 		t.Fatalf("status = %d, want it written before the body failed", writer.status)
 	}
@@ -509,8 +501,6 @@ func TestHelmAccessHoldsNothingBackWhenEverythingIsAllowed(t *testing.T) {
 	}
 }
 
-// Installing is asking about a release that is not there yet, so the name is
-// optional.
 func TestHelmAccessAnswersWithoutAReleaseName(t *testing.T) {
 	ts := inspectServerWith(t, decidingClient(t, false, "no writing here"), newPod())
 

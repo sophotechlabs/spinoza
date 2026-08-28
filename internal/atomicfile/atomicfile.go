@@ -1,7 +1,6 @@
-// Package atomicfile writes a small file so that a reader never sees half of
-// it: the body goes to a temporary file beside the target, is flushed to disk,
-// and is then renamed over the target in one step. A failure anywhere leaves
-// the previous file exactly as it was and takes the temporary one away.
+// Package atomicfile writes a small file whole or not at all: to a temporary
+// file beside the target, flushed, then renamed over it. A failure anywhere
+// leaves the previous file untouched.
 package atomicfile
 
 import (
@@ -14,8 +13,6 @@ const (
 	fileMode = 0o600
 )
 
-// Saver is the filesystem as this package uses it. Production wires it to os;
-// a test wires it to something that fails where it wants to see what happens.
 type Saver struct {
 	makeDir func(path string, perm os.FileMode) error
 	create  func(dir, pattern string) (*os.File, error)
@@ -38,9 +35,8 @@ func New() *Saver {
 	}
 }
 
-// Save puts body at path, making the directory if it is not there. The pattern
-// names the temporary file, which lives beside the target so the rename never
-// crosses a filesystem.
+// Save writes body at path. The temporary file sits beside the target, so the
+// rename never crosses a filesystem.
 func (s *Saver) Save(path, pattern string, body []byte) error {
 	dir := filepath.Dir(path)
 	err := s.makeDir(dir, dirMode)
@@ -74,8 +70,6 @@ func (s *Saver) replace(file *os.File, path string, body []byte) error {
 	return nil
 }
 
-// fill closes the file whatever happens, because a temporary file that is about
-// to be removed still has to be let go of first.
 func (s *Saver) fill(file *os.File, body []byte) error {
 	defer func() { _ = file.Close() }()
 	_, err := s.write(file, body)
@@ -85,7 +79,6 @@ func (s *Saver) fill(file *os.File, body []byte) error {
 	return s.sync(file)
 }
 
-// Save writes body at path through the real filesystem.
 func Save(path, pattern string, body []byte) error {
 	return New().Save(path, pattern, body)
 }

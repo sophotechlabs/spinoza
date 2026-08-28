@@ -94,13 +94,9 @@ func TestBuild(t *testing.T) {
 	if n2.CPUMilli != 500 || n2.CPUPercent != 0 || n2.MemPercent != 0 {
 		t.Fatalf("node n2 = %+v, want no percent", n2)
 	}
-	// A percentage on its own does not say how much of how much. The ceiling it
-	// was worked out against travels with it, so a table can show both.
 	if n1.CPUAllocatableMilli != 4000 || n1.MemAllocatableMi != 8192 {
 		t.Fatalf("node n1 = %+v, want what the node has to give", n1)
 	}
-	// A node whose allocatable could not be read has no ceiling to report, and
-	// no percentage either.
 	if n2.CPUAllocatableMilli != 0 || n2.MemAllocatableMi != 0 {
 		t.Fatalf("node n2 = %+v, want nothing claimed about a ceiling", n2)
 	}

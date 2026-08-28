@@ -250,8 +250,6 @@ func TestEventsSortKeepsUnparseableStampsLast(t *testing.T) {
 	}
 }
 
-// the pieces an event row is assembled from
-
 func TestEventObjectReadsEitherApiShape(t *testing.T) {
 	cases := []struct {
 		name  string

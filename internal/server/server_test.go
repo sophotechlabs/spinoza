@@ -112,9 +112,6 @@ func readChange(ctx context.Context, t *testing.T, c *websocket.Conn) api.RowCha
 	return msg.Changes[0]
 }
 
-// readMsg skips the frames every feed opens with — which cluster it is on and
-// whether that cluster answers — because they are about the connection rather
-// than about anything a test subscribed to.
 func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg {
 	t.Helper()
 	for {
@@ -126,8 +123,6 @@ func readMsg(ctx context.Context, t *testing.T, c *websocket.Conn) api.ServerMsg
 	}
 }
 
-// openingFrames are what every feed is sent before it has asked for anything:
-// which cluster it is on, and whether that cluster answers.
 var openingFrames = []string{"context", "cluster"}
 
 func aboutTheConnection(kind string) bool {

@@ -21,8 +21,6 @@ func fakeShell(t *testing.T, script string) string {
 	return path
 }
 
-// which PATH counts as one a window server handed over
-
 func TestABareEnvironmentIsRecognised(t *testing.T) {
 	cases := map[string]bool{
 		"/usr/bin:/bin:/usr/sbin:/sbin":            true,
@@ -40,8 +38,6 @@ func TestABareEnvironmentIsRecognised(t *testing.T) {
 		}
 	}
 }
-
-// how the two paths are joined
 
 func TestTheCurrentPathKeepsItsPlaceInFront(t *testing.T) {
 	got := Merge("/usr/bin:/bin", "/opt/homebrew/bin:/usr/bin")
@@ -66,8 +62,6 @@ func TestEmptyEntriesAreDropped(t *testing.T) {
 		t.Fatalf("merged = %q", got)
 	}
 }
-
-// what the login shell reports
 
 func TestTheShellPathIsRead(t *testing.T) {
 	shell := fakeShell(t, `printf %s /opt/homebrew/bin:/usr/bin`)
@@ -113,8 +107,6 @@ func TestAShellThatPrintsNothingIsNotUsed(t *testing.T) {
 		t.Fatalf("error = %v, want it to say the shell reported no PATH", err)
 	}
 }
-
-// what Ensure does to the environment
 
 func TestABarePathPicksUpTheShellDirectories(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")

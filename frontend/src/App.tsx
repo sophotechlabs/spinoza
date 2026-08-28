@@ -92,10 +92,8 @@ async function adoptContext(name: string): Promise<string> {
   return found.current.name;
 }
 
-// The server only applies filters to a table it cuts down, so the chips can
-// always be sent; what this decides is whether changing one is worth a fresh
-// subscription. Whether a kind is windowed is remembered per kind, because a
-// fresh subscription has no limit yet and would otherwise flip the answer back.
+// Windowed-ness is remembered per kind: a fresh subscription has no limit yet
+// and would flip the answer back.
 function windowKey(windowed: boolean, chips: Chip[]): string {
   if (!windowed) {
     return '';
@@ -193,8 +191,6 @@ export default function App() {
     };
   }, [contextEpoch]);
 
-  // Asked once, when the window opens. The server does the asking and keeps the
-  // answer for the run, so opening a second window costs nothing.
   useEffect(() => {
     void announceUpdate();
   }, []);
@@ -211,8 +207,6 @@ export default function App() {
     reconnect();
   }, [reconnect, resetNamespace]);
 
-  // The server says which cluster it is on when a feed opens and whenever the
-  // context changes, so a window that did not do the switching still moves.
   useEffect(() => {
     if (serverContext === '') {
       return;
@@ -220,14 +214,11 @@ export default function App() {
     if (serverContext === contextName) {
       return;
     }
-    // Until this window has settled on a context of its own, the opening route
-    // owns what is selected. Reacting here would throw away what a deep link
-    // named before it had a chance to load.
+    // The opening route owns the selection until this window has a context of its
+    // own; reacting here would discard what a deep link named.
     if (contextName === '') {
       return;
     }
-    // A switch this window is in the middle of making is not news, and the
-    // route it is already writing keeps whatever the link selected.
     if (adopting.current) {
       return;
     }

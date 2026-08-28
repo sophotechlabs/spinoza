@@ -38,8 +38,6 @@ func TestTheDefaultDriverIsSecrets(t *testing.T) {
 	}
 }
 
-// helm reads this from the environment, and spinoza hands the environment
-// straight to it, so a check that ignored it would ask about the wrong kind.
 func TestTheEnvironmentCanAskForConfigMaps(t *testing.T) {
 	t.Setenv(driverEnv, DriverConfigMap)
 
@@ -56,8 +54,6 @@ func TestAnEnvironmentAskingForSomethingElseFallsBackToSecrets(t *testing.T) {
 	}
 }
 
-// The cluster is the authority: a release already kept in configmaps is kept
-// there whatever the environment says.
 func TestAReleaseIsAnsweredForByWhereItIsActuallyKept(t *testing.T) {
 	t.Setenv(driverEnv, "")
 	service := storedIn(DriverConfigMap)
@@ -80,8 +76,6 @@ func TestAReleaseKeptInSecretsIsAnsweredForAsOne(t *testing.T) {
 	}
 }
 
-// An install is a release that is not there yet, so where a new one would go is
-// the only answer available.
 func TestAReleaseThatIsNotThereIsAnsweredForAsANewOne(t *testing.T) {
 	t.Setenv(driverEnv, DriverConfigMap)
 	service := storedIn(DriverSecret)
@@ -137,8 +131,6 @@ func TestAServiceWithNoClientAnswersWithTheDefault(t *testing.T) {
 	}
 }
 
-// A cluster with no helm service at all is what a manager built without one
-// looks like.
 func TestNoHelmServiceAnswersWithTheDefault(t *testing.T) {
 	t.Setenv(driverEnv, "")
 	var service *Service

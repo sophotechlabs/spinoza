@@ -84,7 +84,6 @@ func YAML(item *unstructured.Unstructured) (string, error) {
 	return string(raw), nil
 }
 
-// Rendered takes both sides through the same path, so neither is privileged.
 func Rendered(raw string, keep bool) (string, error) {
 	if keep {
 		return raw, nil

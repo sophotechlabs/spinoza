@@ -15,8 +15,7 @@ type Request struct {
 	Namespace string
 	Pod       string
 	Container string
-	// Command is what runs in the container. Empty means an ordinary shell.
-	Command []string
+	Command   []string
 }
 
 type Size struct {

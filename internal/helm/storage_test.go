@@ -34,8 +34,6 @@ func releaseConfigMap(name, revision string) *corev1.ConfigMap {
 	}
 }
 
-// pagesOf makes the apiserver hand back one item at a time with a continue
-// token, which is what a namespace holding more revisions than a page does.
 func pagesOf(cs *k8sfake.Clientset, resource string, pages [][]runtime.Object) {
 	at := 0
 	cs.PrependReactor("list", resource, func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -80,8 +78,6 @@ func TestEveryPageOfReleaseSecretsIsRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("revisions: %v", err)
 	}
-	// A release whose history spans pages must not lose the pages after the
-	// first, or the history and the rollback list are silently short.
 	if len(found) != 3 {
 		t.Fatalf("found %d revisions, want every page read", len(found))
 	}
@@ -111,8 +107,6 @@ func TestAConfigMapListThatFailsIsReported(t *testing.T) {
 
 	_, err := revisionsIn(t.Context(), cs, "prod", "web")
 
-	// The secrets came back fine, but a release can live in either store, so a
-	// half-read history is worse than saying it could not be read.
 	if err == nil {
 		t.Fatal("a refused configmap list was reported as a complete history")
 	}

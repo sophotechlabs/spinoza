@@ -21,8 +21,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 )
 
-// crdWith builds a resource definition the way the apiserver hands one back,
-// with the columns its author asked to be shown by.
 func crdWith(version string, columns ...map[string]any) *unstructured.Unstructured {
 	entries := make([]any, 0, len(columns))
 	for _, column := range columns {
@@ -46,8 +44,8 @@ func column(name, kind, path string) map[string]any {
 	return map[string]any{"name": name, "type": kind, "jsonPath": path}
 }
 
-// rangingPath is written the way a definition has to write one: the field starts
-// with a dot, so the braces around the range are closed and reopened by hand.
+// A jsonPath must start with a dot, so the braces around a range are closed
+// and reopened by hand.
 const rangingPath = `.status.conditions[0].type}{range .status.conditions[*]}{.status}{end`
 
 func kustomization() *unstructured.Unstructured {
@@ -98,8 +96,6 @@ func TestAResourceIsShownTheColumnsItsDefinitionAsksFor(t *testing.T) {
 	}
 }
 
-// A path into a field the object does not have is not an error: half the
-// columns on a custom resource are empty until something fills them in.
 func TestAColumnPointingAtNothingIsEmpty(t *testing.T) {
 	crd := crdWith("v1", column("Message", "string", ".status.nothing.here"))
 
@@ -129,8 +125,6 @@ func TestAPathThatFindsSeveralValuesJoinsThem(t *testing.T) {
 	}
 }
 
-// kubectl keeps these back until asked for a wide table, and so does spinoza:
-// they are the ones the author thought were too much for a first look.
 func TestAColumnMarkedWideIsLeftOut(t *testing.T) {
 	wide := column("Path", "string", ".spec.path")
 	wide["priority"] = int64(1)
@@ -158,8 +152,6 @@ func TestAWidePriorityWrittenAsANumberIsLeftOutToo(t *testing.T) {
 	}
 }
 
-// Every table already has a name and an age. Showing them again because the
-// definition mentions them would be two of each.
 func TestTheColumnsEveryTableAlreadyHasAreLeftOut(t *testing.T) {
 	crd := crdWith(
 		"v1",
@@ -188,8 +180,6 @@ func TestADefinitionOfNothingButTheUsualColumnsIsNotUsed(t *testing.T) {
 	}
 }
 
-// A date is drawn the way every other age in spinoza is drawn, rather than as a
-// timestamp nobody reads.
 func TestADateColumnIsDrawnAsAnAge(t *testing.T) {
 	crd := crdWith("v1", column("Last run", "date", ".status.lastHandledAt"))
 
@@ -213,8 +203,6 @@ func TestOtherColumnsAreDrawnPlainly(t *testing.T) {
 	}
 }
 
-// A definition serves several versions and they need not agree, so the answer
-// has to be about the version being listed.
 func TestTheColumnsAreTakenFromTheVersionBeingListed(t *testing.T) {
 	crd := crdWith("v1beta2", column("Ready", "string", ".status.ready"))
 
@@ -312,7 +300,6 @@ func TestAColumnMissingWhatItNeedsIsSkipped(t *testing.T) {
 	}
 }
 
-// A path may be written either way round, and definitions in the wild use both.
 func TestAPathAlreadyInBracesIsReadTheSame(t *testing.T) {
 	plain := crdWith("v1", column("Revision", "string", ".status.lastAppliedRevision"))
 	braced := crdWith("v1", column("Revision", "string", "{.status.lastAppliedRevision}"))
@@ -326,10 +313,8 @@ func TestAPathAlreadyInBracesIsReadTheSame(t *testing.T) {
 	}
 }
 
-// Rows are built by the informer and by whoever is taking a snapshot, so every
-// reader has to get the same answer. The readers overlap for long enough here
-// that the race detector has something to watch: a parsed template that wrote
-// anything to itself while reading would be caught.
+// The readers overlap long enough for the race detector to catch a template
+// that writes to itself while reading.
 func TestAColumnCanBeReadFromSeveralGoroutinesAtOnce(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
 	shown, _ := layoutOf(crd, "v1")
@@ -349,10 +334,8 @@ func TestAColumnCanBeReadFromSeveralGoroutinesAtOnce(t *testing.T) {
 	group.Wait()
 }
 
-// A definition may declare a path that ranges — the apiserver takes one as long
-// as it starts with a dot, and prints the same blanks spinoza used to. Walking a
-// range rewrites the parse tree it walks, so a template kept between rows
-// answers for the first object and hands back nothing for every object after.
+// The apiserver accepts a ranging path. Walking a range rewrites the parse
+// tree, so a template kept between rows answers only for the first object.
 func TestAColumnThatRangesAnswersForEveryRowNotJustTheFirst(t *testing.T) {
 	crd := crdWith("v1", column("Conditions", "string", rangingPath))
 	shown, ok := layoutOf(crd, "v1")
@@ -373,9 +356,7 @@ func TestAColumnThatRangesAnswersForEveryRowNotJustTheFirst(t *testing.T) {
 	}
 }
 
-// Reading through a kept template costs about a tenth of parsing one again, and
-// a table parses per row without it, so which columns keep theirs is worth
-// holding still.
+// Reading a kept template costs about a tenth of parsing one again.
 func TestAColumnThatDoesNotRangeKeepsItsParsedTemplate(t *testing.T) {
 	made, ok := declaredColumnOf(column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
 	if !ok {
@@ -396,9 +377,6 @@ func TestAColumnThatRangesKeepsNothing(t *testing.T) {
 	}
 }
 
-// A filter and a union are the two places a template holds paths inside itself,
-// and neither may hold a range: the parser refuses a brace in either. So they
-// are read the ordinary way, parsed once and kept.
 func TestAColumnNamingSeveralFieldsAtOnceIsRead(t *testing.T) {
 	crd := crdWith("v1", column("Named", "string", `.metadata['name','namespace']`))
 	shown, ok := layoutOf(crd, "v1")
@@ -417,9 +395,8 @@ func TestAColumnNamingSeveralFieldsAtOnceIsRead(t *testing.T) {
 	}
 }
 
-// A range may only be written where the parser will take a brace, which is
-// nowhere inside a filter or a union. This is what lets the check above look at
-// the top of the tree and no further.
+// A range needs a brace, which the parser refuses inside a filter or a union.
+// That is what lets the check look one level down and no further.
 func TestARangeCannotBeHiddenInsideAFilterOrAUnion(t *testing.T) {
 	hidden := []string{
 		`.a[?(@.b=={range .c[*]}{.d}{end})]`,
@@ -452,8 +429,6 @@ func kustomizationDesc() api.ResourceDescriptor {
 	}
 }
 
-// crdServing builds a cluster that holds one custom resource and the definition
-// behind it, which is what a real cluster with flux on it looks like.
 func crdServing(t *testing.T, definition *unstructured.Unstructured) (*Manager, context.CancelFunc) {
 	t.Helper()
 	kinds := listKinds()
@@ -477,8 +452,6 @@ func crdServing(t *testing.T, definition *unstructured.Unstructured) (*Manager, 
 	return mgr, cancel
 }
 
-// fluxList is what discovery says about a cluster with flux on it, so that a
-// refresh keeps the kind this test is watching.
 func fluxList() []*metav1.APIResourceList {
 	return []*metav1.APIResourceList{
 		{
@@ -506,8 +479,6 @@ func subscribeToKustomizations(t *testing.T, mgr *Manager) *Subscription {
 	return sub
 }
 
-// The whole point: a kind spinoza has no table for is shown the way its own
-// definition asks, rather than as a single status.
 func TestAKindSpinozaDoesNotKnowIsShownAsItsDefinitionAsks(t *testing.T) {
 	crd := crdWith(
 		"v1",
@@ -530,8 +501,6 @@ func TestAKindSpinozaDoesNotKnowIsShownAsItsDefinitionAsks(t *testing.T) {
 	}
 }
 
-// A cluster whose definitions cannot be read is the common one: plenty of users
-// have no rights on them at all.
 func TestAKindWhoseDefinitionCannotBeReadIsShownAsBefore(t *testing.T) {
 	mgr, cancel := crdServing(t, nil)
 	defer cancel()
@@ -546,7 +515,6 @@ func TestAKindWhoseDefinitionCannotBeReadIsShownAsBefore(t *testing.T) {
 	}
 }
 
-// Spinoza's own tables say more than a definition can, and they are kept.
 func TestAKindSpinozaKnowsKeepsItsOwnTable(t *testing.T) {
 	crd := crdWith("v1", column("Nonsense", "string", ".spec.nonsense"))
 	mgr, cancel := crdServing(t, crd)
@@ -563,9 +531,6 @@ func TestAKindSpinozaKnowsKeepsItsOwnTable(t *testing.T) {
 	}
 }
 
-// A column that says whether the thing is working is drawn in the color of its
-// answer. The browser knows what True means for a condition; it only has to be
-// told that this cell holds one.
 func TestAColumnThatSaysWhetherItIsWorkingIsDrawnAsACondition(t *testing.T) {
 	for _, name := range []string{"Ready", "Healthy", "Available", "Synced", "Established", "Reconciled"} {
 		t.Run(name, func(t *testing.T) {
@@ -583,7 +548,6 @@ func TestAColumnThatSaysWhetherItIsWorkingIsDrawnAsACondition(t *testing.T) {
 	}
 }
 
-// Definitions do not agree on capitals, and the word means the same either way.
 func TestAConditionColumnIsRecognisedWhateverItsCapitals(t *testing.T) {
 	crd := crdWith("v1", column("READY", "string", ".status.ready"))
 
@@ -594,8 +558,6 @@ func TestAConditionColumnIsRecognisedWhateverItsCapitals(t *testing.T) {
 	}
 }
 
-// True is not good news in these, and a green cell would be a lie. They are left
-// the color of every other cell.
 func TestAColumnWhereTrueIsNotGoodNewsIsDrawnPlainly(t *testing.T) {
 	for _, name := range []string{"Suspended", "Paused", "Degraded", "Disabled"} {
 		t.Run(name, func(t *testing.T) {
@@ -610,8 +572,6 @@ func TestAColumnWhereTrueIsNotGoodNewsIsDrawnPlainly(t *testing.T) {
 	}
 }
 
-// A date is a date even when it is called Ready, which no definition does, but
-// the two rules have to be in some order and the declared type is the surer one.
 func TestADeclaredDateWinsOverTheName(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "date", ".status.readyAt"))
 
@@ -622,8 +582,6 @@ func TestADeclaredDateWinsOverTheName(t *testing.T) {
 	}
 }
 
-// counting builds a cluster that also says how many times its definitions were
-// read, so a test can tell a fresh answer from a remembered one.
 func counting(t *testing.T, definition *unstructured.Unstructured) (*Manager, *atomic.Int64, context.CancelFunc) {
 	t.Helper()
 	kinds := listKinds()
@@ -652,8 +610,6 @@ func counting(t *testing.T, definition *unstructured.Unstructured) (*Manager, *a
 	return mgr, reads, cancel
 }
 
-// Definitions are large and change about as often as an operator is upgraded.
-// Opening the same table twice is not a reason to fetch one twice.
 func TestADefinitionIsNotReadAgainForEveryTable(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "string", ".status.ready"))
 	mgr, reads, cancel := counting(t, crd)
@@ -668,7 +624,6 @@ func TestADefinitionIsNotReadAgainForEveryTable(t *testing.T) {
 	}
 }
 
-// A kind spinoza draws itself never has to ask.
 func TestAKindSpinozaKnowsAsksAboutNoDefinition(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "string", ".status.ready"))
 	mgr, reads, cancel := counting(t, crd)
@@ -685,8 +640,6 @@ func TestAKindSpinozaKnowsAsksAboutNoDefinition(t *testing.T) {
 	}
 }
 
-// Refreshing the resource list is how a user says the cluster changed under
-// them, and an operator upgrade is exactly that.
 func TestRefreshingTheResourceListAsksAboutDefinitionsAgain(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "string", ".status.ready"))
 	mgr, reads, cancel := counting(t, crd)
@@ -703,8 +656,6 @@ func TestRefreshingTheResourceListAsksAboutDefinitionsAgain(t *testing.T) {
 	}
 }
 
-// A definition that could not be read once must not follow the table around for
-// the rest of the session.
 func TestADefinitionThatCouldNotBeReadIsAskedAboutAgainLater(t *testing.T) {
 	mgr, reads, cancel := counting(t, nil)
 	defer cancel()
@@ -723,8 +674,6 @@ func TestADefinitionThatCouldNotBeReadIsAskedAboutAgainLater(t *testing.T) {
 	}
 }
 
-// A window that stays open picks up a changed definition, because its snapshots
-// carry what the table shows now rather than what it showed when it opened.
 func TestAnOpenTablePicksUpAChangedDefinition(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
 	mgr, _, cancel := counting(t, crd)

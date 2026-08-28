@@ -851,8 +851,6 @@ func (d *deadlineProber) Alive(ctx context.Context, _, _ string) bool {
 	return true
 }
 
-// the guards around replacing a forward that is already on the move
-
 func TestReplaceIsRefusedOnceTheRegistryIsStopped(t *testing.T) {
 	registry := newTestRegistry(t, newStubRunner(1), &stubResolver{pod: "web", podPort: 8080})
 	registry.StopAll()
@@ -919,8 +917,6 @@ func TestAdoptingIsDroppedForAForwardThatIsGone(t *testing.T) {
 	}
 }
 
-// The pod moved and the forward onto its replacement never came up. Sitting
-// there looking healthy is the one thing it must not do.
 func TestAMoveThatNeverBecomesReadyFails(t *testing.T) {
 	runner := newStubRunner(45123)
 	resolver := &stubResolver{pod: "web-abc", podPort: 8080}
@@ -933,8 +929,6 @@ func TestAMoveThatNeverBecomesReadyFails(t *testing.T) {
 	if _, err := registry.Start(context.Background(), webService(), 8080); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	// hang holds the run open without ever signaling ready, which is a forward
-	// that is starting and never arrives.
 	runner.mu.Lock()
 	runner.hang = true
 	runner.mu.Unlock()

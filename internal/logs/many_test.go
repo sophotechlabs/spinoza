@@ -16,8 +16,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// cluster serves a pod list for the selector and one log body per pod, which is
-// all a merged stream reads.
 type cluster struct {
 	mu       sync.Mutex
 	pods     []string
@@ -76,8 +74,6 @@ func (apiserver *cluster) serveLog(w http.ResponseWriter, r *http.Request) {
 	<-r.Context().Done()
 }
 
-// holdOpen makes every log body stay open the way a real followed log does,
-// which is what keeps a pod counted as being read.
 func (apiserver *cluster) holdOpen() {
 	apiserver.mu.Lock()
 	defer apiserver.mu.Unlock()
@@ -97,7 +93,6 @@ func (apiserver *cluster) add(name string, lines ...string) {
 	apiserver.lines[name] = lines
 }
 
-// askedForTail is the tailLines the apiserver was given for a pod's log.
 func (apiserver *cluster) askedForTail() string {
 	apiserver.mu.Lock()
 	defer apiserver.mu.Unlock()
@@ -688,8 +683,6 @@ func TestManyPodsShareTheTailBetweenThem(t *testing.T) {
 	defer stream.Close()
 	gather(t, stream, 1)
 
-	// Twenty pods asking for 500 lines each would be 10,000 lines into a buffer
-	// that holds 5,000, so most of what was fetched would be dropped unseen.
 	if apiserver.askedForTail() != "250" {
 		t.Fatalf("tailLines = %q, want the budget split across the pods", apiserver.askedForTail())
 	}
@@ -707,7 +700,6 @@ func TestTheTailNeverShrinksBelowSomethingUseful(t *testing.T) {
 	}
 }
 
-// remove takes a pod out of the cluster the way a rollout does.
 func (apiserver *cluster) remove(name string) {
 	apiserver.mu.Lock()
 	defer apiserver.mu.Unlock()
@@ -716,11 +708,6 @@ func (apiserver *cluster) remove(name string) {
 	})
 }
 
-// waitForAttached waits until the stream is reading the number of pods it
-// should be. Sleeping a few resolve intervals instead is a bet that a tick
-// lands inside the window, and on a loaded machine it does not: the pod comes
-// back before the stream ever noticed it had gone, so there is nothing to read
-// again.
 func waitForAttached(t *testing.T, stream *Stream, want int) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)
@@ -750,9 +737,6 @@ func TestAPodThatComesBackIsReadAgain(t *testing.T) {
 	defer stream.Close()
 	gather(t, stream, 1)
 
-	// The pod goes away and a pod of the same name comes back, which is what a
-	// static pod or a recreated name looks like. Its log has to be read again
-	// rather than treated as something already seen.
 	apiserver.remove("web-0")
 	waitForAttached(t, stream, 0)
 	apiserver.add("web-0", "second time")
@@ -783,8 +767,6 @@ func TestTheCapHoldsForPodsThatTurnUpLater(t *testing.T) {
 	defer stream.Close()
 	gather(t, stream, 1)
 
-	// A rollout that adds pods to a workload already at the cap must not open
-	// more connections than the cap allows.
 	for i := maxPods; i < maxPods+5; i++ {
 		apiserver.add(fmt.Sprintf("web-%02d", i), "hello")
 	}

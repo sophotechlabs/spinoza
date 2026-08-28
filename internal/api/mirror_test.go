@@ -40,7 +40,6 @@ var regroupedIntoNestedViewTypes = map[string]bool{
 	"ObjectDetail": true,
 }
 
-// fields whose two sides are deliberately typed differently, with the reason.
 var typedDifferentlyInTypeScript = map[string]string{}
 
 type property struct {
@@ -139,7 +138,6 @@ func goProperties(t *testing.T) map[string][]property {
 	return out
 }
 
-// the shapes a JSON value can take, which is all the two sides have to agree on.
 const (
 	jsonString  = "string"
 	jsonNumber  = "number"
@@ -180,7 +178,6 @@ func goShape(kind string) (string, bool) {
 	return "", false
 }
 
-// aliases resolve a named TypeScript type to the text it stands for.
 func mirrorAliases(source string) map[string]string {
 	constants := map[string]string{}
 	for line := range strings.SplitSeq(source, "\n") {
@@ -238,7 +235,6 @@ func tsShape(kind string, aliases map[string]string, interfaces map[string][]pro
 	return "", false
 }
 
-// a union of string literals is a string on the wire.
 func literals(kind string) bool {
 	arms := strings.Split(kind, "|")
 	for _, arm := range arms {

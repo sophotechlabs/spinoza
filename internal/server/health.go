@@ -9,8 +9,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
-// defaultPingInterval is how often spinoza checks that the cluster still
-// answers. The prober only runs while a window is watching.
 const defaultPingInterval = 10 * time.Second
 
 const clusterPingTimeout = 5 * time.Second
@@ -21,9 +19,7 @@ func (s *Server) pingInterval() time.Duration {
 	return s.pingEvery
 }
 
-// watchCluster keeps one prober running for as long as there is a window to
-// tell. It starts on the first feed and stops when the last one goes, so it
-// inherits that feed's context without dying with it.
+// Inherits the first feed's context without dying with it.
 func (s *Server) watchCluster(ctx context.Context) {
 	s.mu.Lock()
 	if s.watching {
@@ -38,10 +34,7 @@ func (s *Server) watchCluster(ctx context.Context) {
 	})
 }
 
-// pingUntilNobodyIsWatching asks the cluster on a timer, and listens in between
-// for what the requests spinoza is already making came back with. The timer is
-// there for a cluster nobody is asking anything of; the listening is what makes
-// an outage show the moment a user runs into it.
+// The timer covers a cluster nobody is asking anything of.
 func (s *Server) pingUntilNobodyIsWatching(ctx context.Context) {
 	ticker := time.NewTicker(s.pingInterval())
 	defer ticker.Stop()
@@ -66,8 +59,6 @@ func (s *Server) stopWatching() {
 	s.watching = false
 }
 
-// reach is the sink behind the cluster that is current. There is none before a
-// context is picked, and a sink that is not there is never heard from.
 func (s *Server) reach() *reach.Sink {
 	backend := s.manager()
 	if backend == nil {
@@ -111,8 +102,6 @@ func notAnswering(reason string) api.ClusterHealth {
 	return api.ClusterHealth{Type: "cluster", Reachable: false, Reason: reason}
 }
 
-// recordHealth keeps the answer and tells every window when it changed. An
-// unchanged answer is not news.
 func (s *Server) recordHealth(now api.ClusterHealth) {
 	s.mu.Lock()
 	same := s.health == now
@@ -124,14 +113,10 @@ func (s *Server) recordHealth(now api.ClusterHealth) {
 	s.announceHealth()
 }
 
-// assumedHealth is what spinoza says before it has asked anything. A window
-// that has just opened should not be told the cluster is down on no evidence.
 func assumedHealth() api.ClusterHealth {
 	return answering()
 }
 
-// forgetHealth drops what was known about the cluster that was current, so the
-// next window is not told about a different one.
 func (s *Server) forgetHealth() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

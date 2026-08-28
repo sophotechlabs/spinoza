@@ -183,9 +183,6 @@ func endMessage(err error) []byte {
 	return []byte(plainly(err))
 }
 
-// plainly turns the transport's own words into something worth reading. A shell
-// that ends because the connection broke says so; anything spinoza does not
-// recognize is passed through rather than papered over.
 func plainly(err error) string {
 	text := err.Error()
 	switch {

@@ -19,8 +19,7 @@ const (
 	defaultEventWindow = 100
 )
 
-// columnsFor is the table spinoza keeps for a kind it knows. Anything else is
-// shown a single status, unless the cluster says otherwise: see crdLayout.
+// Anything else gets a single status, unless the CRD says otherwise.
 func columnsFor(kind string) []api.Column {
 	found, ok := builtinColumns(kind)
 	if ok {

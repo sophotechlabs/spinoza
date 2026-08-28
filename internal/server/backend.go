@@ -30,9 +30,6 @@ type Catalog interface {
 	Namespaces(ctx context.Context) api.Namespaces
 }
 
-// Liveness is what spinoza can find out about whether the cluster answers: by
-// asking it outright, and from what the requests it is already making came back
-// with.
 type Liveness interface {
 	Ping(ctx context.Context) error
 	Reach() *reach.Sink
@@ -50,8 +47,6 @@ type Objects interface {
 	Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error)
 }
 
-// Permissions is what the cluster would refuse, asked about one object or about
-// a whole selection at once.
 type Permissions interface {
 	Access(ctx context.Context, ref api.ObjectRef) api.Access
 	AccessEach(ctx context.Context, capability string, refs []api.ObjectRef) api.BulkAccess

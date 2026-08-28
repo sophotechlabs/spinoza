@@ -501,8 +501,6 @@ func TestSwitchingClosesOpenSessions(t *testing.T) {
 		t.Fatalf("switch: %d %s", resp.StatusCode, body)
 	}
 
-	// The switch announces the new cluster and then drops the socket, so the
-	// frames that follow are the announcement and the close.
 	for {
 		_, payload, readErr := conn.Read(ctx)
 		if readErr != nil {

@@ -189,9 +189,8 @@ func TestApplyingGoesAheadOnceTheNameMatches(t *testing.T) {
 	}
 }
 
-// interactive access is deliberately outside the protection gate: it is not a
-// one-click irreversible act, and typing the object name before every shell
-// would make the feature unusable. This test records that decision.
+// Interactive access is deliberately outside the protection gate: typing the
+// object name before every shell would make it unusable. Recorded here.
 
 func TestInteractiveAccessIsNotGatedByProtection(t *testing.T) {
 	ts := inspectServer(t, newPod())

@@ -10,9 +10,6 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-// pageOf answers a list request with one full page and a token promising more,
-// which is what a namespace holding more helm objects than spinoza will read
-// looks like.
 func pageOf(items int) func(k8stesting.Action) (bool, runtime.Object, error) {
 	return func(k8stesting.Action) (bool, runtime.Object, error) {
 		list := &metav1.List{ListMeta: metav1.ListMeta{Continue: "there-is-more"}}
@@ -37,7 +34,6 @@ func TestReadingStopsAtTheObjectCapAndSaysSo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	// Without the cap this list follows its continue token forever.
 	if len(page.items) != maxObjects {
 		t.Fatalf("read %d objects, want it to stop at the cap of %d", len(page.items), maxObjects)
 	}
@@ -66,9 +62,6 @@ func TestAListThatFitsIsNotCalledTruncated(t *testing.T) {
 	}
 }
 
-// The truncation has to travel up to the caller, because it is what makes the
-// difference between "this cluster has no other releases" and "spinoza stopped
-// looking".
 func TestTruncationTravelsUpToTheWholeRead(t *testing.T) {
 	client := metadatafake.NewSimpleMetadataClient(metaScheme(),
 		&metav1.PartialObjectMetadata{

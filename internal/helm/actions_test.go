@@ -360,9 +360,6 @@ func TestValuesThatCannotBeMarshalledReadEmpty(t *testing.T) {
 	}
 }
 
-// A context name means nothing without the file it came from. When spinoza was
-// started with one, helm has to be told the same file, or it looks the context
-// up in the default kubeconfig and does not find it.
 func TestAnActionNamesTheKubeconfigTheContextCameFrom(t *testing.T) {
 	runner := &stubRunner{}
 	client := k8sfake.NewClientset(helmSecret(sampleRelease()))
@@ -384,7 +381,6 @@ func TestAnActionNamesTheKubeconfigTheContextCameFrom(t *testing.T) {
 	}
 }
 
-// Started with no file named, helm keeps its own lookup rules.
 func TestAnActionLeavesHelmsOwnLookupAloneWhenNoFileIsNamed(t *testing.T) {
 	runner := &stubRunner{}
 	service := acting(t, runner, helmSecret(sampleRelease()))

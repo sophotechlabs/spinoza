@@ -13,20 +13,14 @@ import (
 
 const (
 	maxAccessBytes = 1 << 20
-	// maxAccessRefs bounds one question: a selection larger than this is asking
-	// the apiserver more than it is worth asking on a click.
-	maxAccessRefs = 500
-	accessTimeout = 10 * time.Second
+	maxAccessRefs  = 500
+	accessTimeout  = 10 * time.Second
 )
 
 func (s *Server) objectAccess(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
 	writeJSON(w, s.manager().Access(r.Context(), ref))
 }
 
-// bulkAccess answers one capability across a selection of rows, which is what
-// the bulk bar needs before it acts on them. A question that cannot be answered
-// in time comes back refusing nothing, the same as everywhere else: spinoza does
-// not stop a user over an answer it failed to get.
 func (s *Server) bulkAccess(w http.ResponseWriter, r *http.Request) {
 	var query api.AccessQuery
 	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAccessBytes)).Decode(&query)
@@ -44,10 +38,7 @@ func (s *Server) bulkAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().AccessEach(bounded, query.Capability, query.Refs))
 }
 
-// helmAccess answers what the cluster would refuse a helm action in one
-// namespace. A release name is optional: without one the question is about
-// installing something that is not there yet, and the answer is about where a
-// new release would be stored.
+// No release name means the question is about installing one.
 func (s *Server) helmAccess(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	namespace := query.Get("namespace")
@@ -60,9 +51,8 @@ func (s *Server) helmAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().HelmAccess(bounded, namespace, query.Get("name")))
 }
 
-// readable holds the answers exact. An object without a name would be asked
-// about by kind alone, and a refusal for the kind is not a refusal for the row
-// that was selected.
+// An unnamed object would be asked about by kind, and a kind refusal is not a
+// row refusal.
 func readable(query api.AccessQuery) error {
 	if query.Capability == "" {
 		return errors.New("capability is required")

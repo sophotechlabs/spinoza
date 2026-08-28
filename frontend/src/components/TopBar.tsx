@@ -30,9 +30,7 @@ function pickerTitle(scoped: boolean | null): string {
   return 'The namespace the resource list shows';
 }
 
-// The dot is about the whole path to the cluster, not just the socket to
-// spinoza. A window that is connected to a server whose cluster stopped
-// answering is showing the last thing it knew, and has to say so.
+// The dot covers the whole path to the cluster, not just the socket to spinoza.
 function statusColor(status: ConnectionStatus, clusterReachable: boolean): string {
   if (status !== 'connected') {
     if (status === 'connecting') {

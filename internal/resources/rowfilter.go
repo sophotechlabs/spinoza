@@ -15,9 +15,8 @@ const (
 
 var notAlphanumeric = regexp.MustCompile(`[^a-z0-9]`)
 
-// fieldKey matches the frontend's, so a chip typed in the browser means the same
-// thing here. The browser filters the rows it holds; this filters the cache the
-// rows are cut from, which is the only way to find anything past the newest few.
+// Matches the frontend's key, and filters the cache rather than the rows on
+// screen: the only way to find anything past the newest few.
 func fieldKey(label string) string {
 	return notAlphanumeric.ReplaceAllString(strings.ToLower(label), "")
 }

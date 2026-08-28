@@ -16,7 +16,6 @@ interface BulkBarProps {
 
 type Pending = 'delete' | 'restart' | null;
 
-// What the cluster said about the selection that is waiting to be confirmed.
 interface Checked {
   refused: string[];
   total: number;
@@ -40,7 +39,7 @@ function objects(count: number): string {
 }
 
 function typedQuestion(count: number, cluster: string): string {
-  return `Deleting ${objects(count)} on ${cluster} in one go — this asks for the cluster name, not an object name.`;
+  return `Deleting ${objects(count)} on ${cluster} in one go. This asks for the cluster name, not an object name.`;
 }
 
 function verbFor(pending: Exclude<Pending, null>): string {
@@ -79,8 +78,6 @@ function summarise(answer: BulkAccess, targets: ObjectRef[]): Checked {
   return { refused, total: targets.length, reason };
 }
 
-// A question the cluster would not answer stops nothing: the same rule the
-// server follows for a check it could not put.
 async function reviewOf(
   capability: Exclude<Pending, null>,
   refs: ObjectRef[],
@@ -92,7 +89,6 @@ async function reviewOf(
   }
 }
 
-// A few rows are worth naming; more than that and the count says it better.
 function some(checked: Checked): string {
   if (checked.refused.length > NAMES_SHOWN) {
     return `${String(checked.refused.length)} of ${String(checked.total)}`;
@@ -110,8 +106,6 @@ function partialNote(checked: Checked | null): string {
   return ` ${some(checked)} will be refused: ${checked.reason}`;
 }
 
-// question is what the bar asks before it acts, once the cluster has had its
-// say. Every row refused is not a question at all.
 function question(pending: Exclude<Pending, null>, checked: Checked | null): string {
   if (checked === null) {
     return 'Checking what the cluster allows…';
@@ -142,7 +136,6 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
   const protectedCluster = list.protection === 'protected';
   const key = selectionKey(targets);
 
-  // A question that was put about one selection means nothing about the next.
   useEffect(() => {
     setConfirming(null);
     setChecked(null);

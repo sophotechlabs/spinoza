@@ -45,8 +45,6 @@ func TestTheDirectoryIsMadeIfItIsNotThere(t *testing.T) {
 	}
 }
 
-// The file holds whatever the caller keeps in it, so nobody else on the machine
-// gets to read it.
 func TestTheFileIsWrittenForItsOwnerOnly(t *testing.T) {
 	path := target(t)
 
@@ -121,8 +119,6 @@ func TestATemporaryFileThatCannotBeMadeIsReported(t *testing.T) {
 	}
 }
 
-// Everything below is about what is left behind when a step fails: the target
-// has to keep whatever it held, and the temporary file must not linger.
 func TestAWriteThatFailsLeavesTheOldFileAndNoLitter(t *testing.T) {
 	path := target(t)
 	if err := Save(path, "state-*.json", []byte("first")); err != nil {
@@ -215,7 +211,6 @@ func TestARenameThatFailsLeavesTheOldFileAndNoLitter(t *testing.T) {
 	}
 }
 
-// A tidy-up that itself fails must not hide the failure that caused it.
 func TestTheOriginalFailureSurvivesATidyUpThatFailsToo(t *testing.T) {
 	saver := New()
 	saver.rename = func(string, string) error {

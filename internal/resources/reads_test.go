@@ -238,8 +238,6 @@ func TestAccessReportsWhatTheClusterRefuses(t *testing.T) {
 	}
 }
 
-// The helm buttons are answered for even when the cluster has no helm service
-// wired up: where a release would be stored does not depend on the binary.
 func TestHelmAccessReportsWhatTheClusterRefuses(t *testing.T) {
 	mgr, cancel := managerWithClientset(t, decidingClientset(false, "not for you"))
 	defer cancel()
@@ -278,9 +276,6 @@ func TestAccessHoldsNothingBackWhenEverythingIsAllowed(t *testing.T) {
 	}
 }
 
-// A manager with nothing wired up is what spinoza has when it was started
-// without helm, without prometheus, or before a cluster answered. Every one of
-// these has to say so rather than panic.
 func TestWhatAManagerWithNothingWiredUpSays(t *testing.T) {
 	mgr := &Manager{}
 	ref := deployAt("prod", "web")
@@ -383,8 +378,8 @@ func TestAClusterThatAnswersIsReachable(t *testing.T) {
 	}
 }
 
-// A cluster that refuses is still a cluster that is there. Treating a refusal
-// as an outage would put every restricted cluster permanently in the red.
+// Treating a refusal as an outage would put every restricted cluster in the
+// red.
 func TestAClusterThatRefusesTheQuestionIsStillReachable(t *testing.T) {
 	refused := apierrors.NewForbidden(
 		schema.GroupResource{Resource: "version"},
@@ -452,8 +447,6 @@ func TestAPingGivesUpWhenTheCallerDoes(t *testing.T) {
 	}
 }
 
-// openapiFor answers the one schema request this test cares about and counts
-// how often the document was read, which is how a dropped cache shows itself.
 type openapiFor struct {
 	reads *atomic.Int64
 }
@@ -476,8 +469,6 @@ func (schemaDoc) ServerRelativeURL() string {
 	return ""
 }
 
-// Schemas describe the kinds discovery just re-read, so a refresh that kept the
-// old ones would answer for a cluster that has moved on.
 func TestRefreshingResourcesAlsoDropsTheSchemasItHeld(t *testing.T) {
 	ctx := t.Context()
 	reads := &atomic.Int64{}
@@ -535,8 +526,6 @@ func TestMetricHistoryComesBackFromPrometheus(t *testing.T) {
 	}
 }
 
-// rangeProxy answers a range query the way prometheus does, so the manager's
-// side of the call is what is under test rather than prometheus itself.
 type rangeProxy struct{}
 
 func (*rangeProxy) Get(context.Context, prom.Target, string, map[string]string) ([]byte, error) {
@@ -544,8 +533,6 @@ func (*rangeProxy) Get(context.Context, prom.Target, string, map[string]string) 
 		`[{"metric":{},"values":[[1785434552,"0.028"],[1785434612,"0.031"]]}]}}`), nil
 }
 
-// refusingResource answers every access review except the ones about one kind,
-// so a test can tell which kind was asked about by what comes back refused.
 func refusingResource(resource string) *k8sfake.Clientset {
 	cs := k8sfake.NewClientset()
 	cs.PrependReactor(
@@ -591,8 +578,6 @@ func releaseConfigMap() *corev1.ConfigMap {
 	}
 }
 
-// A release kept in configmaps is asked about as one. Getting this wrong would
-// grey a button over a kind the release has nothing to do with.
 func TestHelmAccessAsksAboutWhereTheReleaseIsKept(t *testing.T) {
 	cs := refusingResource("configmaps")
 	store := k8sfake.NewClientset(releaseConfigMap())
@@ -619,9 +604,6 @@ func TestHelmAccessDoesNotAskAboutTheKindTheReleaseIsNotIn(t *testing.T) {
 	}
 }
 
-// One service answers what this user may do, and the cluster wiring builds it.
-// A manager handed one uses it rather than starting a second, so an answer is
-// remembered whichever feature put the question.
 func TestAManagerUsesThePermissionsItWasHanded(t *testing.T) {
 	handed := access.New(decidingClientset(false, "not for you"))
 	mgr := NewManager(t.Context(), Deps{

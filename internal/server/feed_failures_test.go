@@ -16,8 +16,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
-// awkward is a backend that behaves like the real one except where a test wants
-// it to fail, so the paths that only run when the cluster says no are reachable.
 type awkward struct {
 	Backend
 
@@ -25,9 +23,7 @@ type awkward struct {
 	logsErr      error
 	selectorErr  error
 	objectYAML   string
-	// hold keeps a build waiting so a test can replace the subscription while
-	// the first one is still being made.
-	hold chan struct{}
+	hold         chan struct{}
 }
 
 func (a *awkward) wait() {
@@ -193,8 +189,6 @@ func TestAFrameForASubscriptionThatIsGoneIsNotWritten(t *testing.T) {
 func TestAFailureForASubscriptionThatIsGoneIsNotWritten(t *testing.T) {
 	sess := &wsSession{ctx: t.Context(), tables: map[string]*entry{}, logs: map[string]*entry{}}
 
-	// Nothing to assert beyond it returning quietly: the session has no
-	// connection, so writing would panic.
 	sess.failCurrent(tables, "missing", 1, errors.New("too late"))
 }
 
@@ -242,9 +236,6 @@ func TestRaisingTheLimitSendsAFreshSnapshot(t *testing.T) {
 	}
 }
 
-// Subscribing again under the same id while the first one is still being built
-// leaves that first subscription with nobody to give it to. It has to be closed
-// rather than left running against the cluster.
 func TestASubscriptionReplacedWhileItWasBeingBuiltIsDropped(t *testing.T) {
 	broken := &awkward{hold: make(chan struct{})}
 	ts := awkwardServer(t, broken)
@@ -308,9 +299,6 @@ func TestALogStreamReplacedWhileItWasBeingOpenedIsDropped(t *testing.T) {
 	}
 }
 
-// The object came back from the cluster but its yaml will not parse, so there
-// is nothing to line up against the other context. Saying so beats showing a
-// diff of nothing.
 func TestComparingAnObjectWhoseYamlWillNotParse(t *testing.T) {
 	ts := awkwardServer(t, &awkward{objectYAML: "\tnot: [yaml"})
 
@@ -336,15 +324,11 @@ func TestComparingAnObjectRawSkipsTheParsing(t *testing.T) {
 		nil,
 	)
 
-	// Raw is the escape hatch for exactly this: show me what is there.
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want raw to hand the document over untouched", resp.StatusCode)
 	}
 }
 
-// A batch belongs to the subscription that asked for it. If that subscription
-// has since been replaced, the batch is somebody else's data and must not go
-// out under the new one's name.
 func TestABatchForAReplacedSubscriptionIsNotWritten(t *testing.T) {
 	sess := &wsSession{ctx: t.Context(), tables: map[string]*entry{}, logs: map[string]*entry{}}
 	gen := sess.claim(tables, "s1")
@@ -359,8 +343,6 @@ func TestABatchForAReplacedSubscriptionIsNotWritten(t *testing.T) {
 	}
 }
 
-// Draining stops when the subscription's events are closed, rather than
-// spinning on a channel that will never speak again.
 func TestDrainingStopsWhenTheEventsAreClosed(t *testing.T) {
 	events := make(chan resources.Event)
 	close(events)
@@ -378,8 +360,6 @@ func TestDrainingStopsWhenTheEventsAreClosed(t *testing.T) {
 	}
 }
 
-// A line that ended the last batch because it came from another pod is handed
-// over before the channel is read again, or it would be dropped.
 func TestALineHeldBackFromTheLastBatchIsHandedOverFirst(t *testing.T) {
 	sess := &wsSession{ctx: t.Context(), tables: map[string]*entry{}, logs: map[string]*entry{}}
 	held := &logs.Line{Pod: "web-1", Text: "the line that ended the last batch"}

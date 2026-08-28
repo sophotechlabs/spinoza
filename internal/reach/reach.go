@@ -1,8 +1,5 @@
-// Package reach keeps what the requests spinoza is already making say about
-// whether the cluster is answering. Every client is built on one transport, so
-// one wrapper sees every list, watch, read and write: a request that came back
-// with nothing is the plainest evidence there is that the cluster is gone, and
-// a reply of any kind — even a refusal — is evidence the other way.
+// Package reach reads cluster health off the requests spinoza already makes.
+// No reply means gone; any reply, refusals included, means answering.
 package reach
 
 import (
@@ -12,9 +9,6 @@ import (
 	"sync"
 )
 
-// Sink holds the last thing the transport saw and tells whoever is listening
-// when that changes. Nothing is ever sent for an answer that repeats the one
-// before it.
 type Sink struct {
 	mu        sync.Mutex
 	answering bool
@@ -22,21 +16,16 @@ type Sink struct {
 	changed   chan struct{}
 }
 
-// New starts out assuming the cluster answers: spinoza has asked it nothing yet,
-// and a window should not be told the worst on no evidence.
 func New() *Sink {
 	return &Sink{answering: true, changed: make(chan struct{}, 1)}
 }
 
-// Wrap is the transport wrapper. It reports what each request came back with
-// and hands the response on untouched.
 func (s *Sink) Wrap(next http.RoundTripper) http.RoundTripper {
 	return &watched{next: next, sink: s}
 }
 
-// Saw records what one request came back with. A request the caller gave up on
-// says nothing about the cluster: a closed window cancels everything it had
-// open, and that is not an outage.
+// Saw records one request's outcome. A canceled request says nothing: a
+// closed window cancels what it had open.
 func (s *Sink) Saw(err error) {
 	if s == nil {
 		return
@@ -51,8 +40,6 @@ func (s *Sink) Saw(err error) {
 	s.record(false, err.Error())
 }
 
-// Changed fires once for every change of mind. A sink nobody wired up never
-// fires, which in a select is the same as not being there.
 func (s *Sink) Changed() <-chan struct{} {
 	if s == nil {
 		return nil
@@ -84,8 +71,7 @@ func (s *Sink) record(answering bool, reason string) {
 	s.tell()
 }
 
-// tell never waits. One pending word that the answer changed is enough, and a
-// request must not be held up to deliver it.
+// One pending notification is enough; a request must not be held up for it.
 func (s *Sink) tell() {
 	select {
 	case s.changed <- struct{}{}:

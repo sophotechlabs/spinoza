@@ -98,9 +98,6 @@ func (s *Subscription) SetLimit(limit int) {
 	signalResync(s.entry)
 }
 
-// Columns is how the table is drawn now, rather than how it was drawn when the
-// feed opened. A window that stays open picks up a changed definition with its
-// next snapshot.
 func (s *Subscription) Columns() []api.Column {
 	return s.stream.shownColumns()
 }
@@ -235,9 +232,6 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 	}
 }
 
-// permsFor takes the one the cluster wiring built, so that every feature shares
-// what has already been asked. A manager built without one — a test, mostly —
-// keeps its own.
 func permsFor(deps Deps) *access.Service {
 	if deps.Perms != nil {
 		return deps.Perms
@@ -350,8 +344,8 @@ func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef) error {
 	return inspect.Delete(ctx, m.dyn, ref)
 }
 
-// ListKind reads every object of one kind straight from the apiserver rather than
-// the informer cache, so both sides of a comparison are read the same way.
+// ListKind reads from the apiserver, not the informer cache, so both sides of
+// a comparison are read the same way.
 func (m *Manager) ListKind(ctx context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error) {
 	if m.dyn == nil {
 		return nil, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
@@ -385,8 +379,6 @@ func (m *Manager) Logs(ctx context.Context, req logs.Request) (*logs.Stream, err
 	return logs.Open(ctx, m.cs, req)
 }
 
-// PodSelector reads the labels a workload puts on the pods it owns, which is how
-// every pod behind a Deployment is followed at once.
 func (m *Manager) PodSelector(ctx context.Context, ref api.ObjectRef) (string, error) {
 	if m.dyn == nil {
 		return "", fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
@@ -438,9 +430,7 @@ func (m *Manager) StopForward(id string) error {
 	return m.forwards.Stop(id)
 }
 
-// Ping asks the apiserver for its version, which is the cheapest question that
-// proves the cluster is answering. A refusal still counts as an answer: the
-// cluster is there, this user just may not read that endpoint.
+// Ping counts a refusal as an answer: the cluster is there.
 func (m *Manager) Ping(ctx context.Context) error {
 	if m.cs == nil {
 		return fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
@@ -461,14 +451,10 @@ func (m *Manager) Ping(ctx context.Context) error {
 	}
 }
 
-// Reach is what the requests already made say about the cluster. It is nil
-// until a client is built on a real config, which is what the tests and the
-// no-cluster case look like.
 func (m *Manager) Reach() *reach.Sink {
 	return m.answers
 }
 
-// answered is true when the apiserver replied at all, even to refuse.
 func answered(err error) bool {
 	if err == nil {
 		return true
@@ -491,9 +477,6 @@ func (m *Manager) AccessEach(ctx context.Context, name string, refs []api.Object
 	return m.perms.ReviewEach(ctx, name, refs)
 }
 
-// HelmAccess answers what the cluster would refuse a helm action in this
-// namespace. An empty name is a release that does not exist yet, which is what
-// an install is.
 func (m *Manager) HelmAccess(ctx context.Context, namespace, name string) api.Access {
 	if m.perms == nil {
 		return api.Access{}
@@ -550,10 +533,8 @@ func (m *Manager) RemoveNodeShell(ctx context.Context, pod string) {
 	m.nodeShells.Remove(ctx, pod)
 }
 
-// MetricHistory answers from a metrics database when there is one to ask, and
-// from what spinoza has watched go by when there is not. A database that cannot
-// be reached is the same case as no database: the readings taken here are worth
-// more than an error message, and the answer says which of the two it is.
+// MetricHistory uses Prometheus when reachable, otherwise spinoza's own
+// readings; the answer says which.
 func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {
 	if m.prom != nil {
 		history, err := m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
@@ -564,14 +545,10 @@ func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span
 			return api.MetricHistory{}, err
 		}
 	}
-	// A manager built with nothing wired up has no store to read and no clock to
-	// read it with, which is a manager that has not reached a cluster yet.
 	if m.samples == nil {
 		return api.MetricHistory{}, prom.ErrUnavailable
 	}
-	// Reading the metrics is what fills the store, and this may be the only page
-	// open. The read is the cached one every table shares, so asking costs
-	// nothing when something else already has.
+	// Fills the store, and may be the only page open. Cached, shared with tables.
 	m.Metrics(ctx)
 	return m.samples.History(namespace, pod, span, m.now()), nil
 }
@@ -857,9 +834,7 @@ func (s *subscriber) wants(ev Event) bool {
 
 type stream struct {
 	kind string
-	// A definition can change under a running cluster, so what a table shows is
-	// not fixed when the stream is built. viewMu guards the pair: the columns and
-	// the way a row's cells are filled always change together.
+	// viewMu guards the pair: columns and cell-filling always change together.
 	viewMu   sync.Mutex
 	columns  []api.Column
 	cells    func(obj *unstructured.Unstructured) []string
@@ -895,8 +870,6 @@ func (m *Manager) Subscribe(
 	if err != nil {
 		return nil, err
 	}
-	// Opening a table is the moment to ask again: a definition read that failed
-	// the first time is retried, and one that has changed is picked up.
 	st.useLayout(m.layoutFor(ctx, desc, key.gvr))
 	rows, total, snapErr := st.snapshot(effNs, int(entry.limit.Load()), filters)
 	if snapErr != nil {
@@ -1386,9 +1359,8 @@ func (st *stream) snapshot(ns string, limit int, filters []api.RowFilter) ([]api
 	return rows, total, nil
 }
 
-// Only a capped stream is filtered here. An uncapped one hands every row to the
-// browser, which filters them itself; a capped one cuts the newest few first, so
-// anything older than the cut would be unfindable without this.
+// A capped stream cuts the newest first, so anything past the cut would be
+// unfindable without this.
 func (st *stream) keepMatching(
 	held []*unstructured.Unstructured,
 	limit int,
@@ -1463,7 +1435,6 @@ func toUnstructured(obj any) (*unstructured.Unstructured, bool) {
 	return u, true
 }
 
-// useLayout swaps what this table shows.
 func (st *stream) useLayout(shown layout) {
 	st.viewMu.Lock()
 	defer st.viewMu.Unlock()
@@ -1477,8 +1448,6 @@ func (st *stream) shownColumns() []api.Column {
 	return st.columns
 }
 
-// shownCells takes the reader out from under the lock: filling a row walks the
-// object, and nothing else should wait for that.
 func (st *stream) shownCells(obj *unstructured.Unstructured) []string {
 	st.viewMu.Lock()
 	fill := st.cells

@@ -41,12 +41,8 @@ type connection struct {
 
 type builder func(ctx context.Context, ref api.ContextRef) (*connection, error)
 
-// reader fetches one object from a context that is not the current one, without
-// starting informers or anything else a full connection carries.
 type reader func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error)
 
-// lister does the same for every object of one kind, which is what a drift report
-// across two clusters is made of.
 type lister func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) ([]*unstructured.Unstructured, error)
 
 type Protection interface {
@@ -168,8 +164,6 @@ func (c *Cluster) useLister(list lister) {
 	c.list = list
 }
 
-// List reads every object of one kind from another context, for the same reason
-// Read exists: the current connection and its caches stay untouched.
 func (c *Cluster) List(
 	ctx context.Context,
 	ref api.ContextRef,
@@ -181,8 +175,8 @@ func (c *Cluster) List(
 	return c.list(ctx, ref, target)
 }
 
-// Read renders one object from another context as yaml. It opens a client for that
-// read alone, so the current connection and its caches are untouched.
+// Read opens a client for that read alone, leaving the current caches
+// untouched.
 func (c *Cluster) Read(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error) {
 	if c.read == nil {
 		return "", fmt.Errorf("%w: reading another context is not wired up", api.ErrInternal)

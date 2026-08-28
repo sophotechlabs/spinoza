@@ -18,8 +18,6 @@ func liveEntry(sess *wsSession, subID string, gen uint64) {
 	sess.mu.Unlock()
 }
 
-// what a batch of row changes turns into on the wire
-
 func TestABatchCarriesEveryChangeThatWasWaiting(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
@@ -131,8 +129,6 @@ func TestABatchForAReplacedSubscriptionIsDropped(t *testing.T) {
 		t.Fatal("writeBatch wrote under a generation that had been replaced")
 	}
 }
-
-// what the relay loop does when its inputs end
 
 func TestTheRelayStopsWhenTheResyncChannelCloses(t *testing.T) {
 	mgr, _ := testManager(t)

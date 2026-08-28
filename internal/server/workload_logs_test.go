@@ -26,8 +26,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
-// talkative is an apiserver that lists the pods of one workload and hands out a
-// log body per pod that stays open, which is what a followed log looks like.
 type talkative struct {
 	mu     sync.Mutex
 	pods   []string
@@ -79,8 +77,6 @@ func (c *talkative) scaleTo(names ...string) {
 	c.pods = names
 }
 
-// stayQuiet gives a pod a log that is open but empty, which is a pod that has
-// nothing to say yet rather than one that is not being read.
 func (c *talkative) stayQuiet(name string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -96,8 +92,6 @@ func (c *talkative) quiet(name string) bool {
 	return c.silent[name]
 }
 
-// known answers with the pod of that name this fake actually has, so what it
-// writes back comes from its own list rather than from the request.
 func (c *talkative) known(name string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -228,8 +222,6 @@ func TestWSSaysWhenAPodJoinsAStreamThatHasGoneQuiet(t *testing.T) {
 		t.Fatalf("opened = %+v, want the one pod there was", opened)
 	}
 
-	// web-1 writes nothing, so only a stream that looks at the pods on its own
-	// will ever say that there are two of them.
 	cluster.scaleTo("web-0", "web-1")
 
 	for {

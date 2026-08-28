@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// which failures came from a kubeconfig credential plugin
-
 func TestTheGkePluginIsNamed(t *testing.T) {
 	err := errors.New(`Get "https://35.204.10.181/api?timeout=30s": getting credentials: ` +
 		`exec: executable /opt/homebrew/share/google-cloud-sdk/bin/gke-gcloud-auth-plugin failed with exit code 1`)
@@ -45,8 +43,6 @@ func TestAMarkerWithNothingAfterItNamesNoPlugin(t *testing.T) {
 		t.Fatalf("plugin = %q, want none", got)
 	}
 }
-
-// what the caller is told when a context cannot be reached
 
 func TestACredentialFailureIsSaidInOneLine(t *testing.T) {
 	err := unreachable("gke_prod", errors.New(

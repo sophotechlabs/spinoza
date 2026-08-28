@@ -65,8 +65,6 @@ func (stubRunner) Run(context.Context, []string) error {
 	return nil
 }
 
-// what a manager says when a capability was never wired up
-
 func TestExecSaysItIsNotWiredUp(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
@@ -125,8 +123,6 @@ func TestStartingADebugContainerSaysItIsUnavailable(t *testing.T) {
 	}
 }
 
-// A cluster that measures nothing spinoza can read leaves an empty chart rather
-// than an error: there is nothing wrong, there is just nothing to draw yet.
 func TestMetricHistoryOnAClusterMeasuringNothingIsEmptyNotAnError(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
@@ -142,8 +138,6 @@ func TestMetricHistoryOnAClusterMeasuringNothingIsEmptyNotAnError(t *testing.T) 
 		t.Fatalf("cpu points = %d, want none from a cluster measuring nothing", len(history.CPU))
 	}
 }
-
-// what a manager does once the capability is there
 
 func TestExecSupportComesFromTheShellService(t *testing.T) {
 	cs := k8sfake.NewClientset()
@@ -181,8 +175,6 @@ func TestDebugSupportComesFromTheDebugService(t *testing.T) {
 	}
 }
 
-// actions, which the manager builds per call
-
 func TestActionScalesThroughTheManager(t *testing.T) {
 	dyn := newClient(t, newDeployment("default", "web"))
 	mgr, cancel := newManager(t, dyn)
@@ -212,8 +204,6 @@ func TestActionScalesThroughTheManager(t *testing.T) {
 		t.Fatalf("replicas = %d, want 3", replicas)
 	}
 }
-
-// the dashboards the manager assembles for the views
 
 func TestFluxOverviewIsBuiltForAClusterWithoutFlux(t *testing.T) {
 	scheme := runtime.NewScheme()
@@ -248,8 +238,6 @@ func TestArgoDashboardIsBuiltForAClusterWithoutArgo(t *testing.T) {
 		t.Fatalf("apps = %d, want none on a cluster without argo", len(dashboard.Apps))
 	}
 }
-
-// the cluster facts the flux overview leans on
 
 func TestServerVersionIsEmptyWithoutDiscovery(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
@@ -374,8 +362,6 @@ func TestHelmReleasesSayTheyAreNotWiredUp(t *testing.T) {
 	}
 }
 
-// which watched kinds are counted as failing
-
 type stubCacheLister struct {
 	objects []runtime.Object
 	err     error
@@ -452,8 +438,6 @@ func TestPodStreamsAreLeftToThePodCounter(t *testing.T) {
 	}
 }
 
-// refreshing a catalog when there is no discovery to refresh
-
 func TestRefreshingWithoutDiscoveryHandsBackWhatIsKnown(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
@@ -475,8 +459,6 @@ func TestAnEmptyDiscoveryCarriesTheReasonWhenThereIsOne(t *testing.T) {
 		t.Fatalf("error = %q, want no reason invented", bare.Error())
 	}
 }
-
-// merging the failing counts the caches know about
 
 func TestWatchedFailuresDoNotOverwriteCountedOnes(t *testing.T) {
 	counted := api.ResourceCounts{
@@ -509,8 +491,6 @@ func TestCountsComeBackEmptyOnceTheCallerHasGoneAway(t *testing.T) {
 		t.Fatalf("counts = %v, want nothing once the caller has gone", counts.Counts)
 	}
 }
-
-// what the manager reports with nothing wired behind it
 
 func TestVersionsAreUnknownWithoutDiscovery(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
@@ -549,8 +529,6 @@ func TestForwardingSaysItIsNotWiredUp(t *testing.T) {
 	}
 }
 
-// event columns for an object that only names itself
-
 func TestAnEventObjectWithNoKindIsJustTheName(t *testing.T) {
 	item := &unstructured.Unstructured{Object: map[string]any{
 		"involvedObject": map[string]any{"name": "web-0"},
@@ -560,8 +538,6 @@ func TestAnEventObjectWithNoKindIsJustTheName(t *testing.T) {
 		t.Fatalf("object = %q, want just the name", got)
 	}
 }
-
-// the flux helm releases the manager looks for
 
 func TestHelmReleasesAreOnlyLookedForInTheFluxKind(t *testing.T) {
 	ctx := t.Context()
@@ -578,10 +554,6 @@ func TestHelmReleasesAreOnlyLookedForInTheFluxKind(t *testing.T) {
 		t.Fatalf("owners = %v, want none when the flux kind was never discovered", owners)
 	}
 }
-
-// what the manager answers when a service was never wired into it. Each of these
-// is what a caller meets on a connection built without that piece, and none of
-// them may be a nil dereference.
 
 func TestTheChartEndpointsSayTheyAreNotWiredUp(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
@@ -667,9 +639,6 @@ func TestAnArgoActionReachesTheObjectItNames(t *testing.T) {
 		t.Fatalf("annotations = %v, want the refresh argo watches for", annotations)
 	}
 }
-
-// the same delegations once the services are actually wired in: the manager must
-// hand the call on, not quietly answer for itself.
 
 func shellClientset(t *testing.T) *k8sfake.Clientset {
 	t.Helper()

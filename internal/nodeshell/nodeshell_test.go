@@ -32,7 +32,6 @@ func service(t *testing.T, enabled bool, objs ...runtime.Object) (*Service, *k8s
 	return NewService(cs, "busybox:1.37", "", func() bool { return enabled }, access.New(cs)), cs
 }
 
-// the fake does not fill GenerateName, so name the pod and let the tracker keep it.
 func creates(cs *k8sfake.Clientset, name string, phase corev1.PodPhase, reason string) {
 	cs.PrependReactor("create", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		create, ok := action.(k8stesting.CreateAction)
@@ -55,8 +54,6 @@ func allow(cs *k8sfake.Clientset, allowed bool) {
 		return true, &authv1.SelfSubjectAccessReview{Status: authv1.SubjectAccessReviewStatus{Allowed: allowed}}, nil
 	})
 }
-
-// what it says before anything is created
 
 func TestItStaysOffUntilItIsTurnedOn(t *testing.T) {
 	svc, _ := service(t, false)
@@ -152,8 +149,6 @@ func TestAReviewThatFailsIsReportedNotSwallowed(t *testing.T) {
 	}
 }
 
-// the pod it lands on the node
-
 func TestThePodJoinsTheHostNamespaces(t *testing.T) {
 	svc, _ := service(t, true)
 
@@ -220,8 +215,6 @@ func TestTheShellEntersTheHostNamespaces(t *testing.T) {
 func contains(list []string, want string) bool {
 	return slices.Contains(list, want)
 }
-
-// starting and stopping
 
 func TestStartWaitsUntilThePodRuns(t *testing.T) {
 	svc, cs := service(t, true)
@@ -431,8 +424,6 @@ func hurry(t *testing.T) func() {
 	}
 }
 
-// The answer comes from the one service that asks the cluster what this user
-// may do, so a panel that opens twice does not ask twice.
 func TestItRemembersWhatTheClusterSaid(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	asked := 0
@@ -452,9 +443,8 @@ func TestItRemembersWhatTheClusterSaid(t *testing.T) {
 	}
 }
 
-// A question that could not be put is not permission. A node shell is a
-// privileged pod on somebody's host, and this is the one place in spinoza that
-// would rather say it does not know than offer the button anyway.
+// The one place in spinoza that would rather say it does not know than offer
+// the button anyway.
 func TestAQuestionThatCouldNotBePutLeavesItUnoffered(t *testing.T) {
 	svc, cs := service(t, true)
 	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {

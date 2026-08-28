@@ -382,8 +382,6 @@ func (failingLister) List(context.Context, api.ResourceDescriptor) ([]*unstructu
 
 func (failingLister) Warm(context.Context, []api.ResourceDescriptor) {}
 
-// the small decisions the overview is assembled from
-
 func TestWantedReplicasFallsBackToOne(t *testing.T) {
 	if got := wantedReplicas(nil); got != 1 {
 		t.Fatalf("wanted = %d, want 1 when the deployment names no replica count", got)
@@ -545,9 +543,6 @@ func TestVerdictNamesAnUnreadySync(t *testing.T) {
 	}
 }
 
-// A Kustomization that names a source which is not in the cluster is a real
-// state — the GitRepository was deleted, or has not been created yet. The
-// overview still has to describe the sync it did find.
 func TestASyncWhoseSourceIsMissingStillNamesTheKind(t *testing.T) {
 	got := overviewFor(
 		t,

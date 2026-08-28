@@ -17,8 +17,6 @@ func secret(data map[string]any) *unstructured.Unstructured {
 	}}
 }
 
-// what the browser is given for a secret
-
 func TestEachKeyArrivesDecoded(t *testing.T) {
 	//nolint:gosec // the fixture is base64 of "admin" and "hunter2", not a credential
 	got := dataOf(secret(map[string]any{
@@ -78,8 +76,6 @@ func TestAValueThatIsNotAStringIsSkipped(t *testing.T) {
 	}
 }
 
-// what other kinds get
-
 func TestKindsWithoutDataCarryNone(t *testing.T) {
 	pod := secret(map[string]any{"a": "YQ=="})
 	pod.SetKind("Pod")
@@ -88,8 +84,6 @@ func TestKindsWithoutDataCarryNone(t *testing.T) {
 		t.Fatal("a pod was given data entries")
 	}
 }
-
-// a configmap keeps its text in the clear, and only binaryData is encoded
 
 func configmap(data, binary map[string]any) *unstructured.Unstructured {
 	item := &unstructured.Unstructured{Object: map[string]any{

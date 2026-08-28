@@ -8,8 +8,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/flux"
 )
 
-// The names the browser knows. Each one stands for a button or a tab, and maps
-// to the request that button would actually make.
 const (
 	Edit        = "edit"
 	Delete      = "delete"
@@ -20,9 +18,7 @@ const (
 	Logs        = "logs"
 	Exec        = "exec"
 	PortForward = "portForward"
-	// Reconcile covers every gitops button on one resource. Suspending, resuming
-	// and reconciling are all the same patch on the same object, so one answer
-	// speaks for all of them.
+	// Reconcile covers suspend and resume too: the same patch, one answer.
 	Reconcile = "reconcile"
 )
 
@@ -32,9 +28,6 @@ const (
 	nodes     = "nodes"
 )
 
-// capability is a button and everything that has to be permitted for it to work.
-// A button with more than one requirement is refused by the first one that is
-// refused.
 type capability struct {
 	name   string
 	checks []Check
@@ -62,8 +55,7 @@ var restartable = map[groupResource]bool{
 	{group: appsGroup, resource: "daemonsets"}:   true,
 }
 
-// ownsPods lists the kinds whose logs are read through the pods they select, so
-// the question is about pods in that namespace rather than about the workload.
+// Logs come from the pods these select, so the question is about pods.
 var ownsPods = map[groupResource]bool{
 	{group: appsGroup, resource: "deployments"}:     true,
 	{group: appsGroup, resource: "statefulsets"}:    true,
@@ -73,9 +65,6 @@ var ownsPods = map[groupResource]bool{
 	{group: "", resource: "replicationcontrollers"}: true,
 }
 
-// capabilitiesFor lists what is worth asking about for this object. The verbs
-// mirror what each action does: scaling patches the scale subresource, a rollout
-// restart patches the workload, draining evicts pods, and so on.
 func capabilitiesFor(ref api.ObjectRef) []capability {
 	here := groupResource{group: ref.Group, resource: ref.Resource}
 	object := Check{Group: ref.Group, Resource: ref.Resource, Namespace: ref.Namespace, Name: ref.Name}
@@ -103,16 +92,13 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 	if ownsPods[here] {
 		held = append(held, needs(Logs, podCheck("get", ref.Namespace, "", "log")))
 	}
-	// A service is forwarded through one of the pods behind it, so the question
-	// is about pods here rather than about the service.
+	// A service forwards through one of its pods, so ask about pods.
 	if here == (groupResource{resource: "services"}) {
 		held = append(held, needs(PortForward, podCheck("create", ref.Namespace, "", "portforward")))
 	}
 	return held
 }
 
-// gitops is true for the kinds whose Reconcile, Suspend, Resume, Sync and
-// Refresh buttons all patch the resource itself.
 func gitops(group string) bool {
 	return flux.IsFluxGroup(group) || argocd.IsArgoGroup(group)
 }
@@ -121,10 +107,8 @@ func nodeCapabilities(object Check) []capability {
 	cordon := with(object, "patch")
 	return []capability{
 		needs(Cordon, cordon),
-		// A drain reads the pods on the node, cordons it, and then evicts them one
-		// at a time. Only the first two are all or nothing. Eviction is per pod and
-		// a partial drain is a real outcome, so a user who may evict in some
-		// namespaces and not others keeps the button and reads the result per pod.
+		// Reading pods and cordoning are all or nothing; eviction is per pod, so a
+		// partial drain is a real outcome and the button stays.
 		needs(Drain, podCheck("list", "", "", ""), cordon),
 	}
 }
@@ -152,14 +136,10 @@ func with(check Check, verb string) Check {
 	return check
 }
 
-// Review answers what this object's buttons would need, and reports only the
-// refusals: a capability the cluster did not object to is simply absent.
 func (s *Service) Review(ctx context.Context, ref api.ObjectRef) api.Access {
 	return s.answer(ctx, capabilitiesFor(ref))
 }
 
-// answer puts every capability's questions in one pass, so the cache and the
-// concurrency limit hold across the whole set.
 func (s *Service) answer(ctx context.Context, held []capability) api.Access {
 	checks := make([]Check, 0, len(held))
 	for _, one := range held {
@@ -180,10 +160,8 @@ func (s *Service) answer(ctx context.Context, held []capability) api.Access {
 	return api.Access{Refused: refused}
 }
 
-// ReviewEach answers one capability across many objects in a single pass, so
-// that the cache and the concurrency limit hold across the whole selection
-// rather than across each object on its own. A capability that means nothing
-// for a kind is not a refusal: it is simply never asked about.
+// ReviewEach asks one capability across many objects. One that means nothing
+// for a kind is never asked about, which is not a refusal.
 func (s *Service) ReviewEach(ctx context.Context, name string, refs []api.ObjectRef) api.BulkAccess {
 	wanted := make([][]Check, len(refs))
 	checks := []Check{}
@@ -229,8 +207,6 @@ func firstRefusal(checks []Check, decisions []Decision) (*Check, string) {
 	return nil, ""
 }
 
-// because falls back to a plain sentence when the cluster refused without
-// saying why, which is what plain RBAC does.
 func because(reason string, check Check) string {
 	if reason != "" {
 		return reason

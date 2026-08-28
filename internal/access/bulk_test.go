@@ -41,8 +41,6 @@ func TestASelectionThatIsPermittedRefusesNothing(t *testing.T) {
 	}
 }
 
-// The whole point of asking per object: a rule that names one object refuses
-// that row and no other.
 func TestOnlyTheRefusedRowsAreNamed(t *testing.T) {
 	auth := refusing(nil)
 	auth.byName = map[string]string{"web-1": "no deleting web-1"}
@@ -74,8 +72,6 @@ func TestEveryRowIsRefusedWhenTheKindIs(t *testing.T) {
 	}
 }
 
-// One object, one question. Asking about every capability a row has would turn a
-// selection of fifty into hundreds of reviews.
 func TestOneQuestionIsPutPerObject(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)
@@ -107,7 +103,6 @@ func TestEachRowIsAskedAboutByName(t *testing.T) {
 	}
 }
 
-// A selection can span namespaces, and a namespace is part of the question.
 func TestARowIsAskedAboutInItsOwnNamespace(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)
@@ -144,8 +139,6 @@ func TestACapabilityAKindDoesNotHaveIsNeverAskedAbout(t *testing.T) {
 	}
 }
 
-// A row that has the capability is still answered when the row beside it does
-// not, which is what keeps the places in the answer lined up with the question.
 func TestRowsWithoutTheCapabilityDoNotShiftTheOthers(t *testing.T) {
 	auth := refusing(nil)
 	auth.byName = map[string]string{"web": "no restarting web"}
@@ -166,8 +159,6 @@ func TestRowsWithoutTheCapabilityDoNotShiftTheOthers(t *testing.T) {
 	}
 }
 
-// The cluster-wide read a drain needs is the same question for every node, so it
-// is asked once and remembered for the rest of the selection.
 func TestAQuestionSharedByTheSelectionIsPutOnce(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)

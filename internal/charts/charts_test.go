@@ -823,8 +823,6 @@ func TestNewerStillRefusesGarbage(t *testing.T) {
 	}
 }
 
-// the host arithmetic behind a bearer challenge
-
 func TestSameRegistryAcceptsWhatBelongsToTheSameSite(t *testing.T) {
 	cases := []struct {
 		name     string

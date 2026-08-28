@@ -20,8 +20,6 @@ const maxLogBatch = 200
 
 const msgError = "error"
 
-// podCountInterval is how often a quiet log stream is asked whether it is still
-// reading the same pods.
 var podCountInterval = 2 * time.Second
 
 type relayStep int
@@ -33,10 +31,8 @@ const (
 	relayStop
 )
 
-// minResyncInterval is the shortest gap between two fresh snapshots on one
-// subscription. A constant on purpose: a feed reads it from a goroutine that
-// outlives the test that started it, so anything a test could write here it
-// would be writing underneath another test's feed.
+// Const on purpose: a feed reads it from a goroutine that outlives the test
+// that started it.
 const minResyncInterval = 2 * time.Second
 
 type throttle struct {
@@ -106,8 +102,6 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer s.views.closed(kind)
 	defer s.forget(sess)
 	sess.mgr = s.manager()
-	// A feed is told which cluster it is on the moment it opens, so a window that
-	// was away while the context changed corrects itself on reconnect.
 	sess.write(ctx, api.ContextChanged{Type: "context", Context: s.cluster.Contexts().Current.Name})
 	sess.write(ctx, s.clusterHealth())
 	s.watchCluster(ctx)
@@ -407,8 +401,6 @@ func (sess *wsSession) buildLogs(msg api.ClientMsg, gen uint64) {
 	sess.relayLogs(msg.SubID, gen, stream)
 }
 
-// selectorFor turns a workload into the labels its pods carry. A request that
-// names no resource, or names pods, is one pod and needs no selector.
 func (sess *wsSession) selectorFor(msg api.ClientMsg) (string, error) {
 	if msg.Resource == "" || msg.Resource == "pods" {
 		return "", nil
@@ -459,9 +451,6 @@ func openedBy(subID string, stream *logs.Stream) api.LogOpened {
 	}
 }
 
-// reportPods says so when the set of pods being read changes, so the count on
-// screen is the one that is true now rather than the one at open. A rollout adds
-// pods to a stream that is already running.
 func (sess *wsSession) reportPods(
 	subID string,
 	gen uint64,
@@ -476,10 +465,9 @@ func (sess *wsSession) reportPods(
 	return sess.writeCurrent(streams, subID, gen, now)
 }
 
-// nextLine hands back the line a batch stopped on before reading the channel
-// again, so a line that belongs to another pod is never dropped between batches.
-// A stream that has gone quiet still wakes on the tick, because the pods being
-// read can change without anything being written.
+// Hands back the line a batch stopped on, so one from another pod is never
+// dropped. A quiet stream still wakes on the tick: the pods being read can
+// change with nothing written.
 func (sess *wsSession) nextLine(
 	stream *logs.Stream,
 	held *logs.Line,
@@ -509,9 +497,6 @@ func endOfLogs(subID string, stream *logs.Stream) any {
 	return api.FeedError{Type: msgError, SubID: subID, Message: err.Error()}
 }
 
-// batchLines gathers what is already queued from the same pod. A line from
-// another pod ends the batch and is handed back, because a batch carries one
-// source for all of its lines.
 func batchLines(lines <-chan logs.Line, first logs.Line) ([]string, *logs.Line) {
 	batch := []string{first.Text}
 	for len(batch) < maxLogBatch {
@@ -611,8 +596,6 @@ func (s *Server) forgetExec(conn *websocket.Conn) {
 	delete(s.terminals, conn)
 }
 
-// announceContext tells every open feed which cluster the server is on, so a
-// window that did not do the switching does not carry on showing the last one.
 func (s *Server) announceContext() {
 	msg := api.ContextChanged{Type: "context", Context: s.cluster.Contexts().Current.Name}
 	for _, sess := range s.openSessions() {

@@ -9,9 +9,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// Kinds pairs the objects of one kind across two contexts. Objects are matched by
-// namespace and name, unless each side was read from a single namespace of its own,
-// where the name alone is what the two have in common.
+// Kinds matches by namespace and name, or by name alone when each side came
+// from a single namespace.
 func Kinds(left, right []*unstructured.Unstructured, byName bool) []api.KindDiff {
 	here := index(left, byName)
 	there := index(right, byName)
@@ -57,8 +56,6 @@ func verdictFor(object *unstructured.Unstructured, verdict string, lines int) ap
 	}
 }
 
-// changedLines counts the lines one side holds that the other does not, which is
-// what the diff on screen ends up highlighting.
 func changedLines(left, right string) int {
 	inRight := map[string]int{}
 	for line := range strings.SplitSeq(right, "\n") {

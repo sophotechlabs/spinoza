@@ -242,8 +242,6 @@ export default function HelmInstallDialog({
   }
 
   const ready = choice !== null && name !== '' && target !== '';
-  // The preview is a dry run, which writes no release object at all, so it is
-  // never the thing a refusal stands in the way of.
   const noInstall = useHelmRefusal(target, '', 'install');
 
   return (

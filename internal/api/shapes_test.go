@@ -4,8 +4,6 @@ import (
 	"testing"
 )
 
-// what a Go field type becomes once it is JSON
-
 func TestEveryGoTypeOnTheWireHasAShape(t *testing.T) {
 	cases := map[string]string{
 		"string":                     jsonString,
@@ -49,8 +47,6 @@ func TestAGoTypeNobodyTaughtItIsRefused(t *testing.T) {
 		}
 	}
 }
-
-// what a TypeScript declaration becomes once it is JSON
 
 func tsTable() (map[string]string, map[string][]property) {
 	aliases := map[string]string{
@@ -113,8 +109,6 @@ func TestATypeScriptDeclarationNobodyDeclaredIsRefused(t *testing.T) {
 	}
 }
 
-// the drift this whole test exists to catch
-
 func TestADriftedFieldIsCaught(t *testing.T) {
 	aliases, interfaces := tsTable()
 	cases := []struct {
@@ -139,8 +133,6 @@ func TestADriftedFieldIsCaught(t *testing.T) {
 		}
 	}
 }
-
-// how the named TypeScript types are resolved
 
 func TestAliasesResolveThroughTheirConstants(t *testing.T) {
 	source := `export const READY_STATES = ['True', 'False', 'Unknown', ''] as const;

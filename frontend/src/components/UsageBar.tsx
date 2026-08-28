@@ -3,9 +3,8 @@ import { barColor } from '../lib/metrics';
 interface UsageBarProps {
   percent: number;
   label: string;
-  // What to write beside the bar. The bar is the proportion, so a caller with
-  // something better to say than a percentage — how much of how much — says it
-  // here instead.
+  // The bar is the proportion, so a caller with something better than a
+  // percentage writes it here.
   text?: string;
 }
 

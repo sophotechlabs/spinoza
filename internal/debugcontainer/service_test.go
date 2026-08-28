@@ -463,14 +463,10 @@ func allowingClient(t *testing.T, allowed bool, reason string) *k8sfake.Clientse
 	return client
 }
 
-// permsOn builds the one thing that asks the cluster what this user may do, on
-// whichever client a test handed over.
 func permsOn(cs kubernetes.Interface) *access.Service {
 	return access.New(cs)
 }
 
-// permitting is a service whose only interesting part is what the cluster says
-// about permission.
 func permitting(t *testing.T, cs kubernetes.Interface) *Service {
 	t.Helper()
 	return NewService(&stubRunner{}, cs, "", api.ContextRef{}, permsOn(cs))
@@ -766,8 +762,6 @@ func TestEnsureLeavesTheKubectlDeadlineAloneWhenTheCallerIsShorter(t *testing.T)
 	}
 }
 
-// the small readings the service makes of a pod
-
 func TestTheKubectlArgsCarryTheContextAndKubeconfig(t *testing.T) {
 	service := NewService(&stubRunner{}, k8sfake.NewClientset(runningPod()), "", api.ContextRef{
 		Name:       "kind-spinoza",
@@ -840,8 +834,6 @@ func TestAPodNameThatIsNotOneIsRefused(t *testing.T) {
 	}
 }
 
-// A cluster that refuses without saying why used to leave the panel with an
-// empty explanation. The feature says it in its own words instead.
 func TestARefusalWithoutAReasonStillSaysWhat(t *testing.T) {
 	service := permitting(t, allowingClient(t, false, ""))
 
@@ -855,8 +847,6 @@ func TestARefusalWithoutAReasonStillSaysWhat(t *testing.T) {
 	}
 }
 
-// The answer comes from the one service that asks the cluster what this user may
-// do, so opening the same prompt twice does not ask twice.
 func TestTheAnswerIsRememberedBetweenPrompts(t *testing.T) {
 	asked := 0
 	cs := k8sfake.NewClientset()
@@ -876,8 +866,6 @@ func TestTheAnswerIsRememberedBetweenPrompts(t *testing.T) {
 	}
 }
 
-// Every pod is its own question, so one remembered answer must not stand in for
-// another pod's.
 func TestAnotherPodIsItsOwnQuestion(t *testing.T) {
 	asked := 0
 	cs := k8sfake.NewClientset()
@@ -897,8 +885,6 @@ func TestAnotherPodIsItsOwnQuestion(t *testing.T) {
 	}
 }
 
-// The button is left alone when nothing could be found out: the apiserver is
-// what decides in the end, and it will say so plainly.
 func TestAQuestionThatCouldNotBePutLeavesTheButtonAlone(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {

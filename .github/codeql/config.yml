@@ -1,17 +1,14 @@
 name: spinoza
 
 # Test code is never shipped, and the regex rules read a matcher like
-# /cilium\.io/ — the name of a button in the sidebar — as a check on a URL host.
+# /cilium\.io/, the name of a sidebar button, as a check on a URL host.
 paths-ignore:
   - frontend/test
 
 query-filters:
-  # Every value spinoza logs about a request goes through slog's TextHandler,
-  # which escapes control characters, so a newline in a path or a pod name comes
-  # out as two characters on one line and cannot forge a second entry. The
-  # safety is a property of the handler set in main.go rather than of any call
-  # site, which is why it is stated once here instead of at a dozen of them.
-  # TestTheHandlerEscapesWhatItIsGiven in logging_test.go is what would fail if
-  # that handler were ever replaced by one that does not escape.
+  # Every logged value goes through slog's TextHandler, which escapes control
+  # characters, so a newline cannot forge a second entry. The property belongs
+  # to the handler set in main.go, not to any call site.
+  # TestTheHandlerEscapesWhatItIsGiven pins it.
   - exclude:
       id: go/log-injection

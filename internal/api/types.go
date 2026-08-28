@@ -489,9 +489,8 @@ type ExecSupport struct {
 	Shell     string `json:"shell"`
 }
 
-// Access carries only what the cluster refuses. Anything absent is either
-// permitted or unanswerable, and both mean the same thing to the browser: let
-// the user try.
+// Access carries refusals only. Absent means permitted or unanswerable; both
+// mean let the user try.
 type Access struct {
 	Refused []Refusal `json:"refused"`
 }
@@ -501,15 +500,12 @@ type Refusal struct {
 	Reason     string `json:"reason"`
 }
 
-// AccessQuery asks one question about a whole selection: what would stand in
-// the way of this capability, object by object.
 type AccessQuery struct {
 	Capability string      `json:"capability"`
 	Refs       []ObjectRef `json:"refs"`
 }
 
-// BulkAccess names only the objects the cluster refuses, by their place in the
-// list that was asked about.
+// BulkAccess names refused objects by their place in the list.
 type BulkAccess struct {
 	Refused []RowRefusal `json:"refused"`
 }
@@ -574,18 +570,12 @@ type ServerMsg struct {
 	Changes    []RowChange `json:"changes,omitempty"`
 }
 
-// ClusterHealth says whether spinoza can reach the cluster's apiserver right
-// now. A window that is connected to spinoza is not the same as a cluster that
-// is answering, and the difference is invisible without this.
 type ClusterHealth struct {
 	Type      string `json:"type"`
 	Reachable bool   `json:"reachable"`
 	Reason    string `json:"reason,omitempty"`
 }
 
-// ContextChanged tells every open feed which cluster the server is on. It is
-// sent when a feed opens and again whenever the context changes, so a window
-// that did not do the switching still finds out.
 type ContextChanged struct {
 	Type    string `json:"type"`
 	Context string `json:"context"`
@@ -781,18 +771,12 @@ type ResourceUsage struct {
 	MemoryMi   int64 `json:"memoryMi"`
 	CPUPercent int64 `json:"cpuPercent"`
 	MemPercent int64 `json:"memPercent"`
-	// What the node has to give. Only a node has a ceiling of its own, so these
-	// stay zero for a pod, and a percentage is only worth anything beside them.
+	// Only a node has a ceiling, so these stay zero for a pod.
 	CPUAllocatableMilli int64 `json:"cpuAllocatableMilli"`
 	MemAllocatableMi    int64 `json:"memAllocatableMi"`
 }
 
-// UpdateStatus is what spinoza knows about newer releases of itself. It never
-// installs one: Command is the same line the website gives out, shown so that a
-// person can run it if they want to.
 type UpdateStatus struct {
-	// Checked says spinoza got an answer. False means it did not ask, or asked
-	// and got nothing, and Reason says which.
 	Checked   bool   `json:"checked"`
 	Current   string `json:"current"`
 	Latest    string `json:"latest,omitempty"`
@@ -811,13 +795,8 @@ type MetricHistory struct {
 	Namespace string `json:"namespace"`
 	Pod       string `json:"pod"`
 	Source    string `json:"source,omitempty"`
-	// Sampled says spinoza took these readings itself, having found no metrics
-	// database to ask. They start when it started and stop when it stops, so a
-	// chart drawn from them has to say where it came from.
-	Sampled bool `json:"sampled,omitempty"`
-	// Since is when the oldest reading in this answer was taken, as unix
-	// milliseconds. It is how far back a sampled chart actually reaches, which
-	// is not the span that was asked for.
+	Sampled   bool   `json:"sampled,omitempty"`
+	// Unix milliseconds of the oldest reading here, which is not the span asked for.
 	Since  int64         `json:"since,omitempty"`
 	CPU    []MetricPoint `json:"cpu"`
 	Memory []MetricPoint `json:"memory"`

@@ -10,8 +10,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// Check is one question for the apiserver: may this user do this verb to this
-// resource here. It is also the cache key, so every field is part of the ask.
 type Check struct {
 	Verb        string
 	Group       string
@@ -21,11 +19,9 @@ type Check struct {
 	Name        string
 }
 
-// Decision is what the cluster answered. Allowed means it did not refuse, which
-// is not quite the same as being permitted: a check that could not be put comes
-// back allowed too, because spinoza never takes a button away over a question it
-// failed to ask. Answered is how to tell those apart, for the few callers that
-// would rather say they could not find out.
+// Decision carries what the cluster answered. Allowed includes a check that
+// could not be put: spinoza never removes a button over a question it failed
+// to ask. Answered tells those apart.
 type Decision struct {
 	Allowed  bool
 	Answered bool
@@ -54,10 +50,8 @@ func New(cs kubernetes.Interface) *Service {
 	return &Service{cs: cs, seen: map[Check]answer{}, now: time.Now, ttl: remembered}
 }
 
-// review answers every check, asking the apiserver only about the ones whose
-// answer is not still fresh. The same question asked twice in one pass is one
-// question: a selection of fifty nodes shares the cluster-wide read a drain
-// needs, and the cache cannot help with answers that have not arrived yet.
+// Fifty nodes share the cluster-wide read a drain needs, and the cache cannot
+// help with answers that have not arrived yet.
 func (s *Service) review(ctx context.Context, checks []Check) []Decision {
 	out := make([]Decision, len(checks))
 	asking := map[Check][]int{}
@@ -87,9 +81,6 @@ func (s *Service) review(ctx context.Context, checks []Check) []Decision {
 	return out
 }
 
-// Ask puts one question and hands back what came of it, with the cluster's own
-// reason and nothing added: a feature that has to explain itself says so in its
-// own words.
 func (s *Service) Ask(ctx context.Context, check Check) Decision {
 	if s == nil {
 		return Decision{Allowed: true}
@@ -117,8 +108,6 @@ func (s *Service) ask(ctx context.Context, check Check) Decision {
 	if err != nil {
 		return Decision{Allowed: true, Reason: err.Error()}
 	}
-	// An authorizer that could not make up its mind is not a refusal either, and
-	// an answer that shaky is not worth remembering.
 	if result.Status.EvaluationError != "" && !result.Status.Allowed {
 		return Decision{Allowed: true, Reason: result.Status.EvaluationError}
 	}

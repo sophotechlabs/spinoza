@@ -791,8 +791,8 @@ func TestTheRefusalSaysHowToGetGoing(t *testing.T) {
 	}
 }
 
-// An empty resourceVersion is the same ask as a missing one: the apiserver
-// treats both as an unconditional write.
+// An empty resourceVersion is the same as a missing one: an unconditional
+// write.
 func TestAnEmptyResourceVersionIsRefusedToo(t *testing.T) {
 	client := newClient(newPod())
 	doc := []byte("apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  namespace: flux-system\n  resourceVersion: \"\"\n")
@@ -810,8 +810,6 @@ func TestAStaleResourceVersionIsTheApiserversToRefuse(t *testing.T) {
 
 	_, err := Apply(context.Background(), client, podRef(), "Pod", doc)
 
-	// Whether an old version still applies is the cluster's call, not spinoza's;
-	// what matters is that spinoza did not silently drop the version.
 	if errors.Is(err, ErrNoResourceVersion) {
 		t.Fatal("a document that names a version was treated as naming none")
 	}

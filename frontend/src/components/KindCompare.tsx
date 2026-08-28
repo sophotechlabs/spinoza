@@ -159,9 +159,6 @@ function visible(result: KindComparison | null, driftOnly: boolean): KindDiff[] 
   return result.objects.filter((object) => object.verdict !== 'same');
 }
 
-// Only reached when nothing is on screen, which means either the two clusters
-// hold none of this kind at all, or every one of them matched and the drift
-// filter took them away.
 function emptyNote(result: KindComparison): string {
   if (result.objects.length === 0) {
     return 'Neither cluster has one of these.';

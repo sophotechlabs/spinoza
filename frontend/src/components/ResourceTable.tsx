@@ -100,8 +100,6 @@ function renderDataCell(column: Column, value: string, row: Row, now: number): R
   return value;
 }
 
-// The column's name is the condition it reports on, which is what decides
-// whether True is good news.
 function renderCondition(name: string, value: string): ReactNode {
   if (!answersACondition(value)) {
     return value;
@@ -109,9 +107,8 @@ function renderCondition(name: string, value: string): ReactNode {
   return <span className={conditionColor(name, value)}>{value}</span>;
 }
 
-// A column named like a condition may hold something else entirely: the
-// prometheus operator calls a count of ready replicas "Ready". Only the two
-// words a condition answers with are coloured.
+// The prometheus operator calls a count of ready replicas "Ready", so only
+// True and False are coloured.
 function answersACondition(value: string): boolean {
   if (value === 'True') {
     return true;
@@ -135,9 +132,7 @@ function metricUsage(kind: string, metrics: Metrics, row: Row): ResourceUsage | 
   return metrics.pods[`${row.namespace}/${row.name}`];
 }
 
-// A node has a ceiling, so the cell says how much of how much. The bar is
-// already the proportion; writing the percentage beside it as well would leave
-// no room for the one number that cannot be worked out by eye.
+// The bar is already the proportion, so the cell says how much of how much.
 function nodeUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
   if (usage === undefined) {
     return <UsageBar percent={0} label="" text="" />;

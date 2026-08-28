@@ -32,8 +32,7 @@ func TestAReleaseNothingIsRefusedForHoldsNothingBack(t *testing.T) {
 	}
 }
 
-// Measured against helm, one refused verb at a time: an install writes the
-// first release object and nothing else.
+// Measured against helm, one refused verb at a time.
 func TestInstallingNeedsToCreateTheReleaseObject(t *testing.T) {
 	service := serviceFor(t, refusingVerb("create", "secrets", "no creating secrets"))
 
@@ -49,7 +48,6 @@ func TestInstallingIsNotRefusedOverAnUpdate(t *testing.T) {
 
 	got := reasons(service.ReviewRelease(t.Context(), "prod", helm.DriverSecret))
 
-	// An install has nothing to supersede, so it never updates anything.
 	if _, refused := got[Install]; refused {
 		t.Fatalf("install was withheld over an update it does not make: %v", got)
 	}
@@ -65,8 +63,6 @@ func TestInstallingIsNotRefusedOverADelete(t *testing.T) {
 	}
 }
 
-// An upgrade writes the new revision and marks the one before it superseded, so
-// either verb refused stops it.
 func TestUpgradingNeedsBothTheCreateAndTheUpdate(t *testing.T) {
 	create := serviceFor(t, refusingVerb("create", "secrets", "no creating secrets"))
 	update := serviceFor(t, refusingVerb("update", "secrets", "no updating secrets"))
@@ -97,8 +93,6 @@ func TestRollingBackNeedsBothTheCreateAndTheUpdate(t *testing.T) {
 	}
 }
 
-// The create comes first, and a user who may do neither is told about the step
-// that stops them first rather than about all of them.
 func TestAnUpgradeIsRefusedByTheFirstVerbItNeeds(t *testing.T) {
 	both := refusing(map[string]string{})
 	both.refuse["create  secrets "] = "no creating secrets"
@@ -112,8 +106,6 @@ func TestAnUpgradeIsRefusedByTheFirstVerbItNeeds(t *testing.T) {
 	}
 }
 
-// An uninstall purges the release objects. It writes nothing first, so only the
-// delete matters.
 func TestUninstallingNeedsToDeleteTheReleaseObject(t *testing.T) {
 	service := serviceFor(t, refusingVerb("delete", "secrets", "no deleting secrets"))
 
@@ -139,7 +131,6 @@ func TestUninstallingIsNotRefusedOverACreate(t *testing.T) {
 	}
 }
 
-// A release kept in configmaps is the same questions about a different kind.
 func TestAReleaseKeptInConfigMapsIsAskedAboutConfigMaps(t *testing.T) {
 	auth := refusing(map[string]string{"create  configmaps ": "no creating configmaps"})
 	service := serviceFor(t, auth)
@@ -154,8 +145,6 @@ func TestAReleaseKeptInConfigMapsIsAskedAboutConfigMaps(t *testing.T) {
 	}
 }
 
-// A driver nobody knows is treated as the one helm falls back to, which is
-// better than asking about nothing at all.
 func TestAnUnknownDriverIsAskedAboutAsASecret(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)
@@ -167,8 +156,6 @@ func TestAnUnknownDriverIsAskedAboutAsASecret(t *testing.T) {
 	}
 }
 
-// The question is about the namespace, not about one object in it: the revision
-// an action is about to write does not exist yet and has no name to ask about.
 func TestAReleaseIsAskedAboutByNamespaceAlone(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)
@@ -185,8 +172,6 @@ func TestAReleaseIsAskedAboutByNamespaceAlone(t *testing.T) {
 	}
 }
 
-// Three verbs, four buttons: the create an install needs is the same question
-// as the create an upgrade needs.
 func TestAReleaseIsThreeQuestions(t *testing.T) {
 	auth := refusing(nil)
 	service := serviceFor(t, auth)

@@ -100,8 +100,8 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
   }
 
   const offered = rangesFor(sampled);
-  // A span chosen before the answer said who was measuring may be one spinoza
-  // cannot reach back to, which would leave the control showing nothing.
+  // A span chosen before the answer arrived may be one spinoza cannot reach
+  // back to, which would leave the control showing nothing.
   if (!offered.includes(span)) {
     setSpan(DEFAULT_RANGE);
   }
@@ -134,8 +134,8 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
         live = false;
       };
     }
-    // Readings taken here arrive while the panel is open, so it has to come back
-    // for them. A metrics database already holds the whole span at once.
+    // Sampled readings arrive while the panel is open. A metrics database
+    // already holds the whole span.
     const timer = setInterval(load, SAMPLED_REFRESH_MS);
     return () => {
       live = false;
@@ -178,7 +178,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
 
       {sampled && (
         <p data-testid="sampled-notice" className="mt-2 text-fg-muted">
-          Spinoza is measuring this itself — it found no Prometheus to ask. It reads the cluster
+          Spinoza is measuring this itself: it found no Prometheus to ask. It reads the cluster
           every 15 seconds while this window is open, and remembers nothing between runs.
           {collected !== '' && <> Collected so far: {collected}.</>}
         </p>

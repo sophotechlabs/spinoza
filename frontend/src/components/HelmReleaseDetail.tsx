@@ -68,9 +68,6 @@ interface TypedConfirm {
   question: string;
 }
 
-// reasonFor is what the button says about itself: what it would do, or why it
-// cannot. A cluster that refuses the action is the more specific answer, so it
-// is the one shown.
 function reasonFor(
   what: string,
   helmReady: boolean,

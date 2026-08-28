@@ -68,8 +68,6 @@ interface InspectLogsProps {
   namespace: string;
   pod: string;
   containers: string[];
-  // Set when the selection is a workload rather than a pod, which tails every
-  // pod behind it at once.
   workload?: { group: string; version: string; resource: string };
   active?: boolean;
   subscribeLogs: (subId: string, request: LogRequest) => void;
@@ -97,9 +95,8 @@ function podsLabel(attached: number, matched: number): string {
   return `${String(attached)} pods`;
 }
 
-// A merged stream that is reading nothing stays open, because pods come back.
-// What is on screen is the last thing they said, and saying so is the whole
-// point: an unchanging buffer otherwise looks like a working one.
+// A merged stream reading nothing stays open, because pods come back. Saying
+// so is the point: an unchanging buffer looks like a working one.
 function readingNothing(pods: {
   attached: number;
   matched: number;

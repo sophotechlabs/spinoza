@@ -124,9 +124,8 @@ func Supported(profile string) bool {
 	return slices.Contains(profiles, profile)
 }
 
-// Allowed says whether this pod will take a debug container. A question that
-// could not be put leaves the button alone, the way it is everywhere else: the
-// apiserver is what decides in the end.
+// Allowed leaves the button alone when the question could not be put; the
+// apiserver decides in the end.
 func (s *Service) Allowed(ctx context.Context, namespace, pod string) api.DebugSupport {
 	support := api.DebugSupport{Namespace: namespace, Pod: pod, Allowed: true, Image: s.image}
 	decision := s.perms.Ask(ctx, access.Check{

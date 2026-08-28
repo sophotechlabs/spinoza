@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// roundTripper is a transport that answers however a test wants it to.
 type roundTripper struct {
 	resp *http.Response
 	err  error
@@ -64,7 +63,6 @@ func TestARequestThatCameBackWithNothingSaysTheClusterIsGone(t *testing.T) {
 	}
 }
 
-// Even a refusal is a reply, and a reply means the cluster is there.
 func TestAReplyOfAnyKindSaysTheClusterIsThere(t *testing.T) {
 	sink := New()
 	_, _ = through(sink, nil, errors.New("connection refused"))
@@ -84,7 +82,6 @@ func TestAReplyOfAnyKindSaysTheClusterIsThere(t *testing.T) {
 	}
 }
 
-// A window that closes cancels everything it had open. That is not an outage.
 func TestARequestTheCallerGaveUpOnIsIgnored(t *testing.T) {
 	sink := New()
 
@@ -99,8 +96,6 @@ func TestARequestTheCallerGaveUpOnIsIgnored(t *testing.T) {
 	}
 }
 
-// A deadline that ran out is the cluster taking longer than spinoza will wait,
-// which is what a window needs to know about.
 func TestARequestThatRanOutOfTimeIsReported(t *testing.T) {
 	sink := New()
 
@@ -143,8 +138,6 @@ func TestADifferentReasonIsSaidAgain(t *testing.T) {
 	}
 }
 
-// The wrapper is on the path of every request, so it must hand back exactly
-// what the transport gave it.
 func TestTheResponseIsHandedOnUntouched(t *testing.T) {
 	sink := New()
 	want := &http.Response{StatusCode: http.StatusTeapot}
@@ -169,8 +162,6 @@ func TestTheErrorIsHandedOnUntouched(t *testing.T) {
 	}
 }
 
-// Nothing may wait on a listener that is not there, or one failing request
-// would hold up every other one behind it.
 func TestNobodyListeningDoesNotHoldUpTheRequest(t *testing.T) {
 	sink := New()
 	done := make(chan struct{})
@@ -202,15 +193,12 @@ func TestManyRequestsAtOnceAgreeOnOneAnswer(t *testing.T) {
 	}
 	group.Wait()
 
-	// Which one landed last is a race; that it is one of the two and readable is
-	// not.
 	answering, reason := sink.State()
 	if answering && reason != "" {
 		t.Fatalf("state = (%v, %q), want the two to agree", answering, reason)
 	}
 }
 
-// A sink nobody wired up stands in for a cluster spinoza has no client for.
 func TestASinkThatIsNotThereIsHarmless(t *testing.T) {
 	var sink *Sink
 
@@ -225,8 +213,6 @@ func TestASinkThatIsNotThereIsHarmless(t *testing.T) {
 	}
 }
 
-// The whole point of wrapping the transport: a real client, one real request,
-// and the sink knows.
 func TestARealRequestThroughARealClientIsSeen(t *testing.T) {
 	sink := New()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

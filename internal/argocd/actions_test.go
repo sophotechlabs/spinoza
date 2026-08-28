@@ -61,8 +61,6 @@ func readBack(t *testing.T, client *fake.FakeDynamicClient) *unstructured.Unstru
 	return got
 }
 
-// what each action writes on the application
-
 func TestSyncAsksTheControllerForAnOperation(t *testing.T) {
 	client := actionClient(newApplication())
 
@@ -135,8 +133,6 @@ func TestRefreshStartsNoSync(t *testing.T) {
 		t.Fatal("refresh queued a sync operation")
 	}
 }
-
-// what it refuses
 
 func TestRejectsANonArgoGroup(t *testing.T) {
 	client := actionClient()
