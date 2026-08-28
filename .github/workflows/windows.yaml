@@ -39,9 +39,17 @@ jobs:
       - run: just smoke-desktop-windows
 
   scripts:
-    name: powershell
-    runs-on: windows-latest
+    name: powershell on ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

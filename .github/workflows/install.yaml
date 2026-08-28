@@ -66,9 +66,17 @@ jobs:
           SPINOZA_VERSION: ${{ inputs.version }}
 
   windows:
-    name: windows, binary and PATH
-    runs-on: windows-latest
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows amd64, binary and PATH
+            runner: windows-latest
+          - name: windows arm64, binary and PATH
+            runner: windows-11-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
