@@ -40,8 +40,24 @@ foreach ($container in $result.Containers) {
 }
 
 $onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
-if ($onWindows -and $result.SkippedCount -gt 0) {
-    throw "pester: $($result.SkippedCount) tests were skipped on windows, where every one of them should run"
+$allowed = 'windows'
+if ($onWindows) {
+    $allowed = 'unix'
+}
+
+$undeclared = @()
+foreach ($test in $result.Tests) {
+    if ($test.Result -ne 'Skipped') {
+        continue
+    }
+    $tags = @($test.Tag) + @($test.Block.Tag)
+    if ($tags -contains $allowed) {
+        continue
+    }
+    $undeclared += $test.ExpandedPath
+}
+if ($undeclared.Count -gt 0) {
+    throw "pester: these tests skipped without being tagged '$allowed', so they stopped running for a reason nobody declared:`n$($undeclared -join "`n")"
 }
 
 $covered = [math]::Round($result.CodeCoverage.CoveragePercent, 1)

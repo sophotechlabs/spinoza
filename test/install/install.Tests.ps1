@@ -245,7 +245,7 @@ Describe 'Get-InstalledVersion' {
             Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
-    It 'reports what the installed binary prints' -Skip:([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+    It 'reports what the installed binary prints' -Tag 'unix' -Skip:([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
         $work = NewWorkspace
         try {
             $stub = Join-Path $work 'spinoza'
@@ -316,7 +316,7 @@ Describe 'Test-OnPath' {
     }
 }
 
-Describe 'the registry the installer writes' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+Describe 'the registry the installer writes' -Tag 'windows' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
     BeforeEach {
         $script:scratch = 'Environment\SpinozaTests\' + [System.Guid]::NewGuid().ToString('N')
     }
@@ -695,7 +695,7 @@ Describe 'Add-StartMenuShortcut' {
         { Add-StartMenuShortcut -Target 'C:\Apps\spinoza\app\Spinoza.exe' } | Should -Not -Throw
         Get-StartMenuShortcut | Should -Be ''
     }
-    It 'writes a shortcut that points at the app' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+    It 'writes a shortcut that points at the app' -Tag 'windows' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
         $menu = Join-Path $script:appdata (Join-Path 'Microsoft' (Join-Path 'Windows' (Join-Path 'Start Menu' 'Programs')))
         New-Item -ItemType Directory -Path $menu -Force | Out-Null
         $target = Join-Path $script:appdata 'Spinoza.exe'
@@ -712,7 +712,7 @@ Describe 'Add-StartMenuShortcut' {
 
 # the entry point a piped install actually runs
 
-Describe 'running install.ps1 as a script' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+Describe 'running install.ps1 as a script' -Tag 'windows' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
     BeforeEach {
         $script:target = NewWorkspace
         $script:installer = Join-Path $PSScriptRoot '..' '..' 'install.ps1'
