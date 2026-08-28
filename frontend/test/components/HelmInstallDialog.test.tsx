@@ -662,9 +662,6 @@ describe('the corners of the install dialog', () => {
   });
 });
 
-// A search that comes back after the user has typed on is about a query nobody
-// is looking at any more, and putting its hits on screen would replace the ones
-// that are.
 describe('HelmInstallDialog and a search that was left behind', () => {
   it('drops the hits for a query that has moved on', async () => {
     const user = userEvent.setup();
@@ -727,8 +724,6 @@ describe('HelmInstallDialog when the cluster refuses', () => {
     expect(install).toHaveAttribute('title', 'no creating secrets in demo');
   });
 
-  // A preview is a dry run. It writes no release object, so a cluster that
-  // refuses the install still lets you see what it would have done.
   it('still previews what would be installed', async () => {
     const user = userEvent.setup();
     const calls = stub({
@@ -772,7 +767,6 @@ describe('HelmInstallDialog when the cluster refuses', () => {
     });
   });
 
-  // The namespace is a field on the form, so the answer has to follow it.
   it('asks again when the namespace is changed', async () => {
     const user = userEvent.setup();
     const calls = stub();

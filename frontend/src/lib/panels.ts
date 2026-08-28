@@ -26,7 +26,6 @@ export interface PanelContext {
   release: ReleaseRef | null;
   kind: ResourceDescriptor | null;
   namespace: string;
-  // Why the cluster would turn this panel's requests down, per capability.
   refused: Partial<Record<Capability, string>>;
 }
 
@@ -36,8 +35,6 @@ export interface PanelDescriptor {
   defaultSide: DockSide;
   hint: string;
   enabled: (ctx: PanelContext) => boolean;
-  // refused answers with the cluster's own words when this panel would only
-  // produce a permission error, and null when there is nothing in the way.
   refused?: (ctx: PanelContext) => string | null;
 }
 
@@ -45,8 +42,6 @@ const SELECT_ROW = 'Select a row to inspect it';
 const SELECT_POD = 'Select a pod to see this';
 const SELECT_LOGGABLE = 'Select a pod, or a workload that owns some, to see logs';
 
-// Kinds that put a selector on the pods they own, so every one of them can be
-// tailed at once.
 const LOGGABLE_WORKLOADS = [
   'Deployment',
   'StatefulSet',

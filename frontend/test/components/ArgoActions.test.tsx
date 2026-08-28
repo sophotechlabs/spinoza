@@ -275,7 +275,7 @@ describe('argo buttons the cluster would refuse', () => {
     useAccessStore.getState().forget();
   });
 
-  it('greys out Sync and Refresh with the cluster’s reason', () => {
+  it("greys out Sync and Refresh with the cluster's reason", () => {
     useAccessStore
       .getState()
       .setRefused(accessKey('p-mk1', target), { reconcile: 'no patching applications' });

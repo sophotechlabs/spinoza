@@ -120,9 +120,6 @@ export async function fetchContexts(): Promise<ContextList> {
   return normalize((await response.json()) as WireContexts);
 }
 
-// contextAnnounced is the server telling this window which cluster it is on.
-// Only a name that differs from what the window believes is worth acting on,
-// and the full list is refetched because protection travels with it.
 export async function contextAnnounced(name: string): Promise<void> {
   if (name === '') {
     return;
@@ -133,8 +130,7 @@ export async function contextAnnounced(name: string): Promise<void> {
   try {
     useContextsStore.getState().setList(await fetchContexts());
   } catch {
-    // A window that cannot reach the server has bigger problems than a stale
-    // context name, and the next reconnect asks again.
+    // The next reconnect asks again.
   }
 }
 

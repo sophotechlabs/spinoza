@@ -8,7 +8,6 @@ export interface PodTarget {
   containers: string[];
 }
 
-// podRef names the pod as an object, which is how the cluster is asked about it.
 export function podRef(pod: PodTarget | null): ObjectRef | null {
   if (pod === null) {
     return null;

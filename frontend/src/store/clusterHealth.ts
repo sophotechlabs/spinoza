@@ -1,9 +1,6 @@
 import { create } from 'zustand';
 
 interface ClusterHealthState {
-  // Whether spinoza can reach the cluster's apiserver. A window connected to
-  // spinoza is not the same as a cluster that answers, and only the server
-  // knows the difference.
   reachable: boolean;
   reason: string;
   report: (reachable: boolean, reason: string) => void;

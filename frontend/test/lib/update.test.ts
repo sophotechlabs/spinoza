@@ -92,8 +92,6 @@ describe('announceUpdate', () => {
     expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 
-  // Nothing about a version check is worth putting an error in front of
-  // somebody who opened spinoza to look at a cluster.
   it('stays quiet when the check itself fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
 

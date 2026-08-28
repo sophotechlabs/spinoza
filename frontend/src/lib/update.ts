@@ -17,9 +17,6 @@ export function updateMessage(status: UpdateStatus): string {
   return `Spinoza ${status.latest} is out. You are running ${status.current}.`;
 }
 
-// announceUpdate says a newer release exists and offers the command that
-// installs it. Spinoza does not run that itself: what it puts on the clipboard
-// is the line the website gives out, and running it stays the person's move.
 export async function announceUpdate(): Promise<void> {
   let status: UpdateStatus;
   try {

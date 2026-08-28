@@ -39,7 +39,6 @@ function detailFor(overrides: Partial<ObjectDetail> = {}): ObjectDetail {
   };
 }
 
-// the node shell button asks about support on mount, which must not eat a queued reply
 const NODE_SHELL_SUPPORT = {
   node: 'worker-1',
   enabled: false,

@@ -21,8 +21,6 @@ function menu(): HTMLDetailsElement {
   return screen.getByTestId('menu');
 }
 
-// which targets count as being outside the menu
-
 function detailsWith(open: boolean): HTMLDetailsElement {
   const element = document.createElement('details');
   element.open = open;
@@ -51,8 +49,6 @@ describe('what counts as a click outside', () => {
     expect(outside(detailsWith(true), null)).toBe(true);
   });
 });
-
-// what closes an open menu
 
 describe('dismissing an open menu', () => {
   it('closes when something else is clicked', () => {

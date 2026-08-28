@@ -183,8 +183,6 @@ export interface PortForward {
   startedAt: string;
 }
 
-// What the cluster says this user may not do to the selected object. Anything
-// absent is either permitted or unanswerable, and both mean: let them try.
 export interface Refusal {
   capability: string;
   reason: string;
@@ -194,8 +192,6 @@ export interface Access {
   refused: Refusal[];
 }
 
-// One question about a whole selection: what would stand in the way of this
-// capability, row by row.
 export interface AccessQuery {
   capability: string;
   refs: ObjectRef[];
@@ -205,7 +201,6 @@ export interface BulkAccess {
   refused: RowRefusal[];
 }
 
-// at is the row's place in the list that was asked about.
 export interface RowRefusal {
   at: number;
   reason: string;
@@ -650,8 +645,7 @@ export interface ResourceUsage {
   memoryMi: number;
   cpuPercent: number;
   memPercent: number;
-  // What the node has to give. Only a node has a ceiling of its own, so these
-  // stay zero for a pod.
+  // Only a node has a ceiling, so these stay zero for a pod.
   cpuAllocatableMilli: number;
   memAllocatableMi: number;
 }

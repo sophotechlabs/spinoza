@@ -190,9 +190,8 @@ describe('which way a condition reads', () => {
     expect(conditionColor('Initialized', 'True')).toBe('text-ok');
   });
 
-  // A GKE node carries two dozen of these. They sit at False all day on a node
-  // with nothing wrong with it, and reading them as readiness conditions is what
-  // painted a healthy node red twenty-two times over.
+  // They sit at False all day on a healthy node; reading them as readiness
+  // painted one red twenty-two times over.
   it('reads a node problem detector the right way round', () => {
     const detectors = [
       'KernelDeadlock',
@@ -220,16 +219,12 @@ describe('which way a condition reads', () => {
     expect(conditionColor('GcfsdUnhealthy', 'True')).toBe('text-error');
   });
 
-  // A type can name a good thing and a failure of it at once. The failure is
-  // what it is reporting, so that is what decides.
   it('lets the trouble win when a type names both', () => {
     expect(conditionColor('ReadyReplicasMissing', 'True')).toBe('text-error');
     expect(conditionColor('ReadyReplicasMissing', 'False')).toBe('text-ok');
     expect(conditionColor('AvailableProbeFailed', 'True')).toBe('text-error');
   });
 
-  // A notice is neither good news nor bad, and a type spinoza has never seen is
-  // not worth a guess. Grey says so; green and red would both be claims.
   it('stays out of it for a condition it does not recognise', () => {
     for (const type of ['KubeletConfigChanged', 'SysctlChanged', 'Swap', 'SomeCustomThing']) {
       expect(conditionColor(type, 'True')).toBe('text-fg-muted');

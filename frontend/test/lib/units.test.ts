@@ -57,8 +57,7 @@ describe('memPair', () => {
     expect(memPair(192, 512)).toBe('192/512Mi');
   });
 
-  // metrics-server knows what a node is using; what it has to give comes from
-  // the node object, which spinoza may not have been able to read.
+  // The ceiling comes from the node object, which spinoza may not have read.
   it('says what is used when there is no ceiling to read against', () => {
     expect(memPair(2048, 0)).toBe('2.0Gi');
   });

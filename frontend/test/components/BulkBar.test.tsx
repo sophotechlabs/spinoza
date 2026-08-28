@@ -39,8 +39,6 @@ function ok(body: unknown) {
   return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
 }
 
-// asked routes the two requests the bar makes: the access question it puts
-// before it acts, and the object calls that follow.
 function asked(access: unknown, onObject: (url: string) => unknown = () => ok({})) {
   return vi.fn((url: string, init?: RequestInit) => {
     void init;
@@ -300,8 +298,6 @@ describe('BulkBar asking what the cluster allows', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
-  // The server never says this, but a browser that trusted it would name the
-  // wrong row or none at all.
   it('ignores a refusal that names no row in the selection', async () => {
     const user = userEvent.setup();
     stub({
@@ -318,8 +314,6 @@ describe('BulkBar asking what the cluster allows', () => {
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument();
   });
 
-  // Refusing to act on an answer that never came would leave a user stuck with
-  // no way to find out why.
   it('stops nothing when the question cannot be put', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
@@ -400,7 +394,7 @@ describe('BulkBar on a protected cluster', () => {
 
     expect(
       await screen.findByText(
-        'Deleting 2 objects on p-mk1 in one go — this asks for the cluster name, not an object name.',
+        'Deleting 2 objects on p-mk1 in one go. This asks for the cluster name, not an object name.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();

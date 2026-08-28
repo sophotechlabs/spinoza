@@ -537,8 +537,6 @@ describe('HelmReleaseDetail when the cluster refuses', () => {
     expect(rollback).toHaveAttribute('title', 'no creating secrets in demo');
   });
 
-  // One refusal is about one action. An upgrade nobody may make says nothing
-  // about uninstalling.
   it('leaves the actions it was not told about alone', async () => {
     stub({ refused: [{ capability: 'upgrade', reason: 'no creating secrets in demo' }] });
     renderDetail();
@@ -573,7 +571,6 @@ describe('HelmReleaseDetail when the cluster refuses', () => {
     });
   });
 
-  // Helm missing is the plainer problem, and it is what stops every button.
   it('says helm is missing before it says the cluster refused', async () => {
     stub({
       support: { available: false, reason: 'helm was not found on PATH', binary: 'helm' },

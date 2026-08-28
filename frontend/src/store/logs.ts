@@ -1,14 +1,10 @@
 import { create } from 'zustand';
 
-// The server sizes the backlog a stream opens with to fit in here — tailBudget
-// in internal/logs/many.go. Lowering this below that number would throw away
-// part of the history as it arrived, so a Go test fails if it ever does.
+// Must be at least tailBudget in internal/logs/many.go, which a Go test checks.
 export const MAX_LOG_LINES = 5000;
 
 interface StreamState {
   lines: string[];
-  // sources sits alongside lines, one entry each, holding the pod a line came
-  // from. A single-pod stream leaves them empty.
   sources: string[];
   dropped: number;
   revision: number;
@@ -16,8 +12,6 @@ interface StreamState {
   resumed: boolean;
   attached: number;
   matched: number;
-  // opened separates a stream that is reading nothing from one that has not
-  // been answered yet: both have no pods, and only one is worth saying.
   opened: boolean;
   error?: string;
 }

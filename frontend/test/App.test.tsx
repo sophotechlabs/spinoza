@@ -2246,8 +2246,6 @@ describe('a cluster this window did not switch to', () => {
 
     render(<App />);
 
-    // The feed announced a different cluster; the window follows it rather than
-    // carrying on showing the last one.
     await waitFor(() => {
       expect(window.location.hash).toContain('context=somewhere-else');
     });
@@ -2284,8 +2282,6 @@ describe('a deep link that names a cluster and an object', () => {
       .applySnapshot('main#0', makeColumns([]), true, [
         makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
       ]);
-    // The context picker fills the store as it mounts, before this window has
-    // settled on a context of its own. That must not read as a switch.
     useContextsStore.getState().setList({
       current: { kubeconfig: '', name: 'kind-dev' },
       kubeconfigs: [],

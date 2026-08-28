@@ -3,9 +3,8 @@ import type { HelmCapability, HelmRefusals } from '../lib/helmAccess';
 import { useContextsStore } from './contexts';
 
 interface HelmAccessState {
-  // Answers by the question they were given for. Two helm views can be open at
-  // once — a release, and the dialog installing another chart beside it — so one
-  // answer at a time would leave whichever asked first showing nothing.
+  // A release panel and an install dialog can be open at once, so one answer at
+  // a time would leave the first showing nothing.
   answers: Record<string, HelmRefusals>;
   setRefused: (key: string, refused: HelmRefusals) => void;
   forget: (key: string) => void;
@@ -37,9 +36,6 @@ export const useHelmAccessStore = create<HelmAccessState>((set) => ({
   },
 }));
 
-// helmAccessKey names the question: this release, in this namespace, on this
-// cluster. An empty release name is an install, which is a question about the
-// namespace alone.
 export function helmAccessKey(context: string, namespace: string, name: string): string {
   if (namespace === '') {
     return '';
@@ -54,8 +50,6 @@ export function useHelmRefusals(namespace: string, name: string): HelmRefusals {
   return answers[key] ?? NONE;
 }
 
-// useHelmRefusal is the reason this helm action is out of reach, or null when
-// nothing is known to stand in the way.
 export function useHelmRefusal(
   namespace: string,
   name: string,

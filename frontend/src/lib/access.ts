@@ -3,8 +3,6 @@ import { failure } from './object';
 import { request } from './http';
 import { parseAccess, parseBulkAccess } from './parse';
 
-// The capabilities the server answers about. Each one stands for a button or a
-// tab, not for a verb.
 export type Capability =
   | 'edit'
   | 'delete'
@@ -25,8 +23,6 @@ export async function fetchAccess(query: string): Promise<Access> {
   return parseAccess(await response.json());
 }
 
-// fetchBulkAccess asks one capability of a whole selection at once, which is
-// how a row that is refused can be told from the rows beside it.
 export async function fetchBulkAccess(
   capability: Capability,
   refs: ObjectRef[],

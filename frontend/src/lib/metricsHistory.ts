@@ -9,9 +9,7 @@ export type MetricRange = (typeof RANGES)[number];
 
 export const DEFAULT_RANGE: MetricRange = '1h';
 
-// What spinoza collects itself reaches back an hour at most, so the longer
-// ranges are not offered: a chart labelled 24h showing eleven minutes says the
-// pod started eleven minutes ago, which is not what happened.
+// Spinoza's own readings reach back an hour at most.
 export const SAMPLED_RANGES: readonly MetricRange[] = ['15m', '1h'];
 
 export function rangesFor(sampled: boolean): readonly MetricRange[] {
@@ -21,9 +19,6 @@ export function rangesFor(sampled: boolean): readonly MetricRange[] {
   return RANGES;
 }
 
-// collectedFor says how long the readings on hand cover, in the words a person
-// would use. It is deliberately not the span asked for — that is the point of
-// showing it.
 export function collectedFor(since: number | undefined, now: number): string {
   if (since === undefined || since <= 0) {
     return '';

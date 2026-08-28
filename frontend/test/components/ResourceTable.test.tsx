@@ -200,8 +200,6 @@ describe('ResourceTable', () => {
     expect(screen.getByText('CrashLoopBackOff').className).toContain('text-error');
   });
 
-  // A custom resource says whether it is working through a condition, and the
-  // column's name is the condition it reports on.
   it('colors a condition column by its answer', async () => {
     seed([{ name: 'Ready', render: 'condition' }], true, [
       makeRow({ uid: 'a', name: 'kustomize-a', namespace: 'flux-system', cells: ['True'] }),
@@ -214,8 +212,6 @@ describe('ResourceTable', () => {
     expect(screen.getByText('False').className).toContain('text-error');
   });
 
-  // Some conditions are bad news when they are true, and the shared rules know
-  // which. A column named after one is coloured the other way round.
   it('colors a condition that is trouble when true the other way round', async () => {
     seed([{ name: 'Degraded', render: 'condition' }], true, [
       makeRow({ uid: 'a', name: 'rollout-a', namespace: 'prod', cells: ['True'] }),
@@ -226,8 +222,6 @@ describe('ResourceTable', () => {
     expect(screen.getByText('True').className).toContain('text-error');
   });
 
-  // A column named like a condition may hold something else entirely: the
-  // prometheus operator calls a count of ready replicas "Ready".
   it('leaves a condition column alone when the answer is not one', async () => {
     seed([{ name: 'Ready', render: 'condition' }], true, [
       makeRow({ uid: 'a', name: 'alertmanager-a', namespace: 'monitoring', cells: ['1'] }),
@@ -497,15 +491,11 @@ describe('ResourceTable', () => {
     ]);
     renderTable(nodeDescriptor, null);
 
-    // How much of how much, rather than a percentage the bar beside it already
-    // shows. A node with no metrics reported gets an empty cell, not a zero.
     expect(await screen.findByText('1500/4054m')).toBeInTheDocument();
     expect(screen.getByText('2.0/8.0Gi')).toBeInTheDocument();
     expect(screen.queryByText('37%')).not.toBeInTheDocument();
   });
 
-  // The bar is still the proportion, and the percentage is still readable on
-  // hover for anyone who wants it.
   it('keeps the percentage on the bar and in its title', async () => {
     vi.stubGlobal(
       'fetch',
@@ -536,7 +526,6 @@ describe('ResourceTable', () => {
     expect(memory.parentElement).toHaveAttribute('title', '25% of memory');
   });
 
-  // A node whose ceiling the cluster did not report still says what it is using.
   it('falls back to the amount when there is no ceiling to read against', async () => {
     vi.stubGlobal(
       'fetch',

@@ -15,7 +15,6 @@ interface LogStream {
   namespace: string;
   name: string;
   container: string;
-  // Naming a workload rather than a pod tails every pod behind it.
   workload?: { group: string; version: string; resource: string };
   enabled: boolean;
   subscribeLogs: (subId: string, request: LogRequest) => void;

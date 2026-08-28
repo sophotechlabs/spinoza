@@ -224,8 +224,7 @@ export function useResourceFeed(): ResourceFeed {
         schedule();
         return;
       }
-      // Runs of lines from the same pod go to the store together; only a change
-      // of pod needs a batch of its own, because the source is per batch.
+      // The source is per batch, so only a change of pod needs a new one.
       const last = waiting.at(-1);
       if (last?.source === source) {
         last.lines.push(...lines);
@@ -276,7 +275,6 @@ export function useResourceFeed(): ResourceFeed {
     }
 
     function knownSub(msg: ServerMsg): boolean {
-      // These belong to the connection, not to a subscription.
       if (msg.type === 'context' || msg.type === 'cluster') {
         return true;
       }

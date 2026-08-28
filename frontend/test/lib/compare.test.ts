@@ -43,8 +43,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// how much of the object moved
-
 describe('counting what differs', () => {
   it('counts nothing for two identical objects', () => {
     expect(differingLines('a\nb\n', 'a\nb\n')).toBe(0);
@@ -75,8 +73,6 @@ describe('naming the sections that moved', () => {
     expect(changedSections('spec:\n  replicas: 3\n', 'spec:\n  replicas: 3\n')).toEqual([]);
   });
 });
-
-// what it asks the server for
 
 describe('asking for a comparison', () => {
   it('names the context and its kubeconfig', async () => {

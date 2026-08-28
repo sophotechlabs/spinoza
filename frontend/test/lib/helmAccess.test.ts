@@ -23,8 +23,6 @@ describe('asking the cluster what it would refuse a helm action', () => {
     });
   });
 
-  // Installing is asking about a release that is not there yet, so there is no
-  // name to ask about.
   it('asks about the namespace alone when there is no release yet', async () => {
     const fetchMock = answers({ refused: [] });
 

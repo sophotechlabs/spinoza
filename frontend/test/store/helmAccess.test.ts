@@ -62,7 +62,6 @@ describe('what the cluster refuses a helm action', () => {
     expect(result.current).toBeNull();
   });
 
-  // The same release name on another cluster is another question entirely.
   it('keeps the answers for one cluster off another', () => {
     useHelmAccessStore.getState().setRefused(releaseKey, { upgrade: 'no creating secrets' });
     onCluster('p-mk2');
@@ -86,8 +85,6 @@ describe('what the cluster refuses a helm action', () => {
     expect(result.current).toEqual({});
   });
 
-  // A release panel and an install dialog can be open together, and each has to
-  // see its own answer.
   it('holds an answer for a release and one for an install at once', () => {
     useHelmAccessStore.getState().setRefused(releaseKey, { uninstall: 'no deleting secrets' });
     useHelmAccessStore.getState().setRefused(installKey, { install: 'no creating secrets' });
@@ -144,8 +141,6 @@ describe('asking when a release is opened', () => {
     });
   });
 
-  // A failed question about one release must not take away what is known about
-  // another.
   it('leaves the other answers alone when one question fails', async () => {
     useHelmAccessStore.getState().setRefused(installKey, { install: 'no creating secrets' });
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));

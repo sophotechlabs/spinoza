@@ -7,9 +7,6 @@ import { useContextsStore } from './contexts';
 export type Refusals = Partial<Record<Capability, string>>;
 
 interface AccessState {
-  // The cluster and object these answers are about. They are never shown for
-  // anything else: a refusal can name the object it is about, and the same
-  // object in another cluster is a different question entirely.
   key: string;
   refused: Refusals;
   setRefused: (key: string, refused: Refusals) => void;
@@ -29,7 +26,6 @@ export const useAccessStore = create<AccessState>((set) => ({
   },
 }));
 
-// accessKey names the question: this object, in this cluster.
 export function accessKey(context: string, ref: ObjectRef | null): string {
   if (ref === null) {
     return '';
@@ -50,8 +46,6 @@ export function useRefusalsFor(ref: ObjectRef | null): Refusals {
   return refused;
 }
 
-// useRefusal is the reason this object's capability is out of reach, or null
-// when nothing is known to stand in the way.
 export function useRefusal(ref: ObjectRef | null, capability: Capability): string | null {
   return useRefusalsFor(ref)[capability] ?? null;
 }

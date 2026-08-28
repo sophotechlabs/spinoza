@@ -26,9 +26,7 @@ export function memFromMi(mem: Mebibytes): string {
   return `${mem}Mi`;
 }
 
-// memPair reads what is used against what there is, with the unit written once:
-// 6.2/15.6Gi rather than 6.2Gi/15.6Gi. A node with no ceiling to report falls
-// back to the amount on its own.
+// 6.2/15.6Gi rather than 6.2Gi/15.6Gi. No ceiling falls back to the amount.
 export function memPair(used: Mebibytes, total: Mebibytes): string {
   if (total <= 0) {
     return memFromMi(used);

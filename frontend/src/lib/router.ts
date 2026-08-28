@@ -25,7 +25,6 @@ export const EMPTY_ROUTE: Route = {
   release: null,
 };
 
-// with nothing named, a route showing a resource is a table and everything else is the overview
 function inferredView(resource: RouteResource | null): View {
   if (resource === null) {
     return 'cluster';
