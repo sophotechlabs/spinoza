@@ -10,7 +10,7 @@ export type MetricRange = (typeof RANGES)[number];
 export const DEFAULT_RANGE: MetricRange = '1h';
 
 // Spinoza's own readings reach back an hour at most.
-export const SAMPLED_RANGES: readonly MetricRange[] = ['15m', '1h'];
+const SAMPLED_RANGES: readonly MetricRange[] = ['15m', '1h'];
 
 export function rangesFor(sampled: boolean): readonly MetricRange[] {
   if (sampled) {
