@@ -1031,7 +1031,14 @@ type CheckGroup struct {
 	Skipped    string         `json:"skipped,omitempty"`
 	Total      int            `json:"total"`
 	Truncated  bool           `json:"truncated,omitempty"`
+	Next       string         `json:"next,omitempty"`
 	Findings   []CheckFinding `json:"findings"`
+}
+
+type CheckPage struct {
+	Findings []CheckFinding `json:"findings"`
+	Objects  []CheckObject  `json:"objects"`
+	Next     string         `json:"next,omitempty"`
 }
 
 type CheckReport struct {

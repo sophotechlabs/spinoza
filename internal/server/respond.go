@@ -12,6 +12,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
 	"github.com/sophotechlabs/spinoza/internal/helm"
@@ -70,15 +71,27 @@ func oversized(err error) bool {
 	return errors.As(err, &tooBig)
 }
 
+func askedForSomethingWrong(err error) bool {
+	for _, sentinel := range []error{
+		checks.ErrNoSuchCheck,
+		inspect.ErrInvalidUID,
+		inspect.ErrNoResourceVersion,
+		gitops.ErrNotAnApplier,
+	} {
+		if errors.Is(err, sentinel) {
+			return true
+		}
+	}
+	return false
+}
+
 func statusFor(err error) int {
 	switch {
 	case errors.Is(err, api.ErrInternal):
 		return http.StatusInternalServerError
 	case oversized(err):
 		return http.StatusRequestEntityTooLarge
-	case errors.Is(err, inspect.ErrInvalidUID):
-		return http.StatusBadRequest
-	case errors.Is(err, inspect.ErrNoResourceVersion):
+	case askedForSomethingWrong(err):
 		return http.StatusBadRequest
 	case errors.Is(err, jsonschema.ErrNoSchema):
 		return http.StatusNotFound
@@ -88,8 +101,6 @@ func statusFor(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, argocd.ErrRefused):
 		return http.StatusConflict
-	case errors.Is(err, gitops.ErrNotAnApplier):
-		return http.StatusBadRequest
 	case errors.Is(err, flux.ErrNoSource):
 		return http.StatusConflict
 	case cannotReachCluster(err):

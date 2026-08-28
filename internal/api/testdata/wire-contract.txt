@@ -39,6 +39,7 @@ CheckGroup.Category category string
 CheckGroup.Findings findings []CheckFinding
 CheckGroup.Frameworks frameworks,omitempty []string
 CheckGroup.ID id string
+CheckGroup.Next next,omitempty string
 CheckGroup.Remedy remedy string
 CheckGroup.Severity severity string
 CheckGroup.Skipped skipped,omitempty string
@@ -52,6 +53,9 @@ CheckObject.Name name string
 CheckObject.Namespace namespace string
 CheckObject.Resource resource string
 CheckObject.Version version string
+CheckPage.Findings findings []CheckFinding
+CheckPage.Next next,omitempty string
+CheckPage.Objects objects []CheckObject
 CheckReport.Error error,omitempty string
 CheckReport.Groups groups []CheckGroup
 CheckReport.Objects objects []CheckObject

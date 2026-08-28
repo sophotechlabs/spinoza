@@ -46,6 +46,38 @@ function stub(body: unknown, ok = true) {
   );
 }
 
+function stubReportThenPages(report: unknown, pages: unknown[], pagesOk = true) {
+  let at = -1;
+  const fetchMock = vi.fn((url: string) => {
+    if (!url.startsWith('/api/checks/findings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(report) });
+    }
+    at += 1;
+    return Promise.resolve({
+      ok: pagesOk,
+      status: pagesOk ? 200 : 500,
+      json: () => Promise.resolve(pages[Math.min(at, pages.length - 1)]),
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+function cappedReport() {
+  return {
+    scanned: 7072,
+    objects: [OBJECTS[0], { ...OBJECTS[0], name: 'web' }, { ...OBJECTS[0], name: 'db' }],
+    groups: [
+      makeGroup('limits-missing', {
+        total: 3,
+        truncated: true,
+        next: 'Y3Vyc29yLTE',
+        findings: [makeFinding()],
+      }),
+    ],
+  };
+}
+
 function show(report: Partial<CheckReport>) {
   const onOpen = vi.fn();
   stub({ groups: [], objects: OBJECTS, scanned: 0, ...report });
@@ -172,6 +204,116 @@ describe('Checks', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
 
     expect(screen.queryByText(/Showing/)).not.toBeInTheDocument();
+  });
+
+  it('offers to load the findings a capped group left behind', async () => {
+    stubReportThenPages(cappedReport(), []);
+    render(<Checks onOpen={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(screen.getByText('Showing 1 of 3.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show 2 more' })).toBeInTheDocument();
+  });
+
+  it('appends the next page and asks the backend for the cursor it was given', async () => {
+    const fetchMock = stubReportThenPages(cappedReport(), [
+      {
+        findings: [{ ref: 0 }],
+        objects: [{ name: 'web', kind: 'Deployment' }],
+        next: 'Y3Vyc29yLTI',
+      },
+    ]);
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+
+    expect(screen.getByText('Showing 2 of 3.')).toBeInTheDocument();
+    const asked = fetchMock.mock.calls.map((call) => call[0]);
+    expect(asked).toContain('/api/checks/findings?check=limits-missing&after=Y3Vyc29yLTE');
+  });
+
+  it('follows the cursor the page returned, not the one the report started with', async () => {
+    const fetchMock = stubReportThenPages(cappedReport(), [
+      {
+        findings: [{ ref: 0 }],
+        objects: [{ name: 'web', kind: 'Deployment' }],
+        next: 'Y3Vyc29yLTI',
+      },
+      { findings: [{ ref: 0 }], objects: [{ name: 'db', kind: 'Deployment' }], next: '' },
+    ]);
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show 1 more' }));
+
+    const asked = fetchMock.mock.calls.map((call) => call[0]);
+    expect(asked).toContain('/api/checks/findings?check=limits-missing&after=Y3Vyc29yLTI');
+  });
+
+  it('stops offering more once every finding is on screen', async () => {
+    stubReportThenPages(cappedReport(), [
+      { findings: [{ ref: 0 }, { ref: 1 }], objects: [{ name: 'web' }, { name: 'db' }], next: '' },
+    ]);
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+
+    expect(screen.queryByRole('button', { name: /Show \d+ more/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Showing/)).not.toBeInTheDocument();
+  });
+
+  it('says so when the failure was not an error object at all', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (!url.startsWith('/api/checks/findings')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(cappedReport()),
+          });
+        }
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- a socket failure need not reject with an Error
+        return Promise.reject('the socket went away');
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('the findings request failed');
+  });
+
+  it('says so when a page could not be fetched and keeps what is already there', async () => {
+    stubReportThenPages(cappedReport(), [{ message: 'the cluster went away' }], false);
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('the cluster went away');
+    expect(screen.getByText('Showing 1 of 3.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show 2 more' })).toBeInTheDocument();
+  });
+
+  it('forgets the pages it loaded when the check is closed again', async () => {
+    stubReportThenPages(cappedReport(), [
+      { findings: [{ ref: 0 }], objects: [{ name: 'web' }], next: '' },
+    ]);
+    render(<Checks onOpen={vi.fn()} />);
+    const header = await screen.findByRole('button', { name: /Privileged containers/ });
+    await userEvent.click(header);
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+
+    await userEvent.click(header);
+    await userEvent.click(header);
+
+    expect(screen.getByText('Showing 1 of 3.')).toBeInTheDocument();
   });
 
   it('closes a check that was open', async () => {

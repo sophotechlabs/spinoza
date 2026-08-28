@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,7 +37,12 @@ func dashboardServer(t *testing.T, objects ...runtime.Object) *httptest.Server {
 	t.Helper()
 	podGVR := schema.GroupVersionResource{Version: "v1", Resource: "pods"}
 	scheme := runtime.NewScheme()
-	kinds := map[schema.GroupVersionResource]string{podGVR: "PodList"}
+	kinds := map[schema.GroupVersionResource]string{
+		podGVR: "PodList",
+		{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "pods"}:  "PodMetricsList",
+		{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "nodes"}: "NodeMetricsList",
+		{Version: "v1", Resource: "nodes"}:                               "NodeList",
+	}
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, kinds, objects...)
 	metaScheme := runtime.NewScheme()
 	if err := metav1.AddMetaToScheme(metaScheme); err != nil {
@@ -139,6 +145,62 @@ func TestChecksEndpointSkipsTheUsageCheckWithoutMetrics(t *testing.T) {
 		return
 	}
 	t.Fatal("the usage check is missing from the report")
+}
+
+func failureFrom(t *testing.T, resp *http.Response) api.Failure {
+	t.Helper()
+	var failure api.Failure
+	err := json.NewDecoder(resp.Body).Decode(&failure)
+	if err != nil {
+		t.Fatalf("decode the refusal body: %v", err)
+	}
+	return failure
+}
+
+func TestCheckFindingsEndpointNeedsACheck(t *testing.T) {
+	ts := dashboardServer(t, newPodObject("prod", "web-0"))
+
+	resp := getJSON(t, ts.URL+"/api/checks/findings", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if got := failureFrom(t, resp).Message; got != "check is required" {
+		t.Fatalf("message = %q", got)
+	}
+}
+
+func TestCheckFindingsEndpointRefusesACheckNobodyRegistered(t *testing.T) {
+	ts := dashboardServer(t, newPodObject("prod", "web-0"))
+
+	resp := getJSON(t, ts.URL+"/api/checks/findings?check=invented", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if got := failureFrom(t, resp).Message; got != "no check goes by that name" {
+		t.Fatalf("message = %q", got)
+	}
+}
+
+func TestCheckFindingsEndpointReturnsThatChecksFindings(t *testing.T) {
+	ts := dashboardServer(t, newPodObject("prod", "web-0"))
+
+	var page api.CheckPage
+	resp := getJSON(t, ts.URL+"/api/checks/findings?check=requests-missing", &page)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if len(page.Findings) == 0 {
+		t.Fatal("the pod with no requests produced no findings")
+	}
+	if len(page.Objects) == 0 {
+		t.Fatal("the page carried findings but no objects to resolve them against")
+	}
+	if page.Next != "" {
+		t.Fatalf("a single-pod cluster offered a cursor: %q", page.Next)
+	}
 }
 
 func flagged(found api.CheckReport, id, name string) bool {

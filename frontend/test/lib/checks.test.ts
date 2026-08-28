@@ -318,8 +318,15 @@ describe('labels', () => {
   it('says how much of a capped group is on screen', () => {
     const capped = viewGroup('a', { findings: [viewFinding('api')], total: 7087, truncated: true });
 
-    expect(shownLabel(capped)).toBe('Showing 1 of 7087.');
-    expect(shownLabel(viewGroup('a', { findings: [viewFinding('api')] }))).toBe('');
+    expect(shownLabel(capped, 1)).toBe('Showing 1 of 7087.');
+    expect(shownLabel(capped, 400)).toBe('Showing 400 of 7087.');
+  });
+
+  it('stops saying it once every finding is on screen', () => {
+    const whole = viewGroup('a', { findings: [viewFinding('api')], total: 7087, truncated: true });
+
+    expect(shownLabel(whole, 7087)).toBe('');
+    expect(shownLabel(viewGroup('a', { findings: [viewFinding('api')] }), 1)).toBe('');
   });
 
   it('names the object a finding landed on', () => {

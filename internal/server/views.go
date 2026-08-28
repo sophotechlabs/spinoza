@@ -13,6 +13,21 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Graph(r.Context()))
 }
 
+func (s *Server) handleCheckPage(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	id := query.Get("check")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "check is required")
+		return
+	}
+	page, err := s.manager().CheckPage(r.Context(), id, query.Get("after"))
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, page)
+}
+
 func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.manager().Checks(r.Context()))
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { CheckCategory, ObjectRef } from '../lib/types';
 import type { CheckFindingView, CheckGroupView } from '../lib/checks';
+import { fetchCheckPage } from '../lib/checks';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -16,8 +17,24 @@ import LoadFailure from './LoadFailure';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
 
+const PAGE_SIZE = 200;
+
 interface ChecksProps {
   onOpen: (ref: ObjectRef, kind: string) => void;
+}
+
+function messageOf(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return 'the findings request failed';
+}
+
+function moreLabel(loading: boolean, left: number): string {
+  if (loading) {
+    return 'Loading';
+  }
+  return `Show ${String(Math.min(left, PAGE_SIZE))} more`;
 }
 
 function chevron(open: boolean): string {
@@ -81,7 +98,36 @@ function Group({
   onOpen: (ref: ObjectRef, kind: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [paged, setPaged] = useState<CheckFindingView[] | null>(null);
+  const [cursor, setCursor] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const empty = group.findings.length === 0;
+  const shown = paged ?? group.findings;
+  const nextCursor = paged === null ? (group.next ?? '') : cursor;
+
+  function toggle() {
+    if (open) {
+      setPaged(null);
+      setCursor('');
+      setFailed(null);
+    }
+    setOpen(!open);
+  }
+
+  async function loadMore() {
+    setLoading(true);
+    setFailed(null);
+    try {
+      const page = await fetchCheckPage(group.id, nextCursor);
+      setPaged([...shown, ...page.findings]);
+      setCursor(page.next);
+    } catch (err: unknown) {
+      setFailed(messageOf(err));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="border-t border-edge">
@@ -89,9 +135,7 @@ function Group({
         type="button"
         disabled={empty}
         aria-expanded={!empty && open}
-        onClick={() => {
-          setOpen(!open);
-        }}
+        onClick={toggle}
         className="flex w-full items-baseline gap-3 px-3 py-1.5 text-left hover:bg-surface-raised disabled:hover:bg-transparent"
       >
         <span aria-hidden="true" className="w-3 shrink-0 text-fg-subtle">
@@ -112,11 +156,11 @@ function Group({
         <div className="pb-1">
           <p className="px-3 py-1 pl-9 text-fg-muted">{group.wrong}</p>
           <p className="px-3 py-1 pl-9 text-fg-soft">{group.remedy}</p>
-          {group.truncated === true && (
-            <p className="px-3 py-1 pl-9 text-fg-subtle">{shownLabel(group)}</p>
+          {shownLabel(group, shown.length) !== '' && (
+            <p className="px-3 py-1 pl-9 text-fg-subtle">{shownLabel(group, shown.length)}</p>
           )}
           <ul>
-            {group.findings.map((finding) => (
+            {shown.map((finding) => (
               <Finding
                 key={`${finding.object.namespace}/${finding.object.name}/${finding.container ?? ''}`}
                 finding={finding}
@@ -124,6 +168,23 @@ function Group({
               />
             ))}
           </ul>
+          {failed !== null && (
+            <p role="alert" className="px-3 py-1 pl-9 text-error">
+              {failed}
+            </p>
+          )}
+          {nextCursor !== '' && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                void loadMore();
+              }}
+              className="mt-1 ml-9 rounded border border-edge-strong px-2 py-0.5 text-fg-soft hover:bg-surface-raised disabled:text-fg-subtle"
+            >
+              {moreLabel(loading, group.total - shown.length)}
+            </button>
+          )}
         </div>
       )}
       {group.skipped !== undefined && (

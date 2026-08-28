@@ -2,10 +2,14 @@ package checks
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"strings"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
+
+var ErrNoSuchCheck = errors.New("no check goes by that name")
 
 const (
 	severityHigh   = "high"
@@ -138,6 +142,53 @@ func overUsage(rule usageRule) finder {
 	}
 }
 
+func findingKey(item found) string {
+	return subjectKey(item.subject) + "\x00" + item.container
+}
+
+func encodeCursor(key string) string {
+	if key == "" {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(key))
+}
+
+func decodeCursor(cursor string) string {
+	if cursor == "" {
+		return ""
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+func (c check) slice(sc scan, objs *objects, after string, limit int) (
+	[]api.CheckFinding, string, int,
+) {
+	all := c.find(sc)
+	out := make([]api.CheckFinding, 0, min(limit, len(all)))
+	last := ""
+	for _, item := range all {
+		key := findingKey(item)
+		if key <= after {
+			continue
+		}
+		if len(out) == limit {
+			return out, encodeCursor(last), len(all)
+		}
+		out = append(out, api.CheckFinding{
+			Ref:       objs.ref(item.subject),
+			Container: item.container,
+			Detail:    item.detail,
+			Patch:     item.patch,
+		})
+		last = key
+	}
+	return out, "", len(all)
+}
+
 func (c check) group(sc scan, objs *objects) api.CheckGroup {
 	out := api.CheckGroup{
 		ID:         c.id,
@@ -153,21 +204,8 @@ func (c check) group(sc scan, objs *objects) api.CheckGroup {
 		out.Skipped = noUsage
 		return out
 	}
-	all := c.find(sc)
-	out.Total = len(all)
-	if len(all) > findingsShown {
-		all = all[:findingsShown]
-		out.Truncated = true
-	}
-	out.Findings = make([]api.CheckFinding, 0, len(all))
-	for _, item := range all {
-		out.Findings = append(out.Findings, api.CheckFinding{
-			Ref:       objs.ref(item.subject),
-			Container: item.container,
-			Detail:    item.detail,
-			Patch:     item.patch,
-		})
-	}
+	out.Findings, out.Next, out.Total = c.slice(sc, objs, "", findingsShown)
+	out.Truncated = out.Next != ""
 	return out
 }
 
@@ -189,15 +227,50 @@ func registry() []check {
 	return out
 }
 
+func Page(
+	ctx context.Context,
+	lister Lister,
+	descs map[string]api.ResourceDescriptor,
+	usage api.Metrics,
+	id string,
+	after string,
+) (api.CheckPage, error) {
+	var wanted check
+	for _, entry := range registry() {
+		if entry.id == id {
+			wanted = entry
+		}
+	}
+	if wanted.id == "" {
+		return api.CheckPage{}, ErrNoSuchCheck
+	}
+	sc, _, _ := survey(ctx, lister, descs, usage)
+	if wanted.needsUsage && !sc.hasUsage() {
+		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
+	}
+	objs := newObjects()
+	found, next, _ := wanted.slice(sc, objs, decodeCursor(after), findingsShown)
+	return api.CheckPage{Findings: found, Objects: objs.list, Next: next}, nil
+}
+
+func survey(
+	ctx context.Context,
+	lister Lister,
+	descs map[string]api.ResourceDescriptor,
+	usage api.Metrics,
+) (scan, string, []string) {
+	wanted, absent := needed(descs)
+	items, failure := gather(ctx, lister, wanted)
+	return scan{subjects: subjectsOf(items), usage: usage.Pods}, failure, absent
+}
+
 func Run(
 	ctx context.Context,
 	lister Lister,
 	descs map[string]api.ResourceDescriptor,
 	usage api.Metrics,
 ) api.CheckReport {
-	wanted, absent := needed(descs)
-	items, failure := gather(ctx, lister, wanted)
-	sc := scan{subjects: subjectsOf(items), usage: usage.Pods}
+	sc, failure, absent := survey(ctx, lister, descs, usage)
 	checks := registry()
 	objs := newObjects()
 	groups := make([]api.CheckGroup, 0, len(checks))

@@ -4,6 +4,7 @@ import type {
   CheckFinding,
   CheckGroup,
   CheckObject,
+  CheckPage,
   CheckReport,
   CheckSeverity,
   ObjectRef,
@@ -33,6 +34,11 @@ export interface CheckFindingView {
 }
 
 export type CheckGroupView = Omit<CheckGroup, 'findings'> & { findings: CheckFindingView[] };
+
+export interface CheckPageView {
+  findings: CheckFindingView[];
+  next: string;
+}
 
 export interface CheckReportView {
   groups: CheckGroupView[];
@@ -107,6 +113,7 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
     skipped: item.skipped,
     total: item.total ?? findings.length,
     truncated: item.truncated,
+    next: item.next,
     findings,
   };
 }
@@ -122,6 +129,20 @@ export async function fetchChecks(): Promise<CheckReportView> {
     groups: (body.groups ?? []).map((entry) => groupOf(entry, objects)),
     scanned: body.scanned ?? 0,
     error: body.error,
+  };
+}
+
+export async function fetchCheckPage(check: string, after: string): Promise<CheckPageView> {
+  const params = new URLSearchParams({ check, after });
+  const response = await request(`/api/checks/findings?${params.toString()}`);
+  if (!response.ok) {
+    throw await failure(response, `the findings request failed with status ${response.status}`);
+  }
+  const body = (await response.json()) as Partial<CheckPage>;
+  const objects = (body.objects ?? []).map(objectOf);
+  return {
+    findings: (body.findings ?? []).map((entry) => findingOf(entry, objects)),
+    next: body.next ?? '',
   };
 }
 
@@ -169,11 +190,11 @@ export function countLabel(group: CheckGroupView): string {
   return String(group.total);
 }
 
-export function shownLabel(group: CheckGroupView): string {
-  if (group.truncated !== true) {
+export function shownLabel(group: CheckGroupView, loaded: number): string {
+  if (loaded >= group.total) {
     return '';
   }
-  return `Showing ${String(group.findings.length)} of ${String(group.total)}.`;
+  return `Showing ${String(loaded)} of ${String(group.total)}.`;
 }
 
 export function findingLabel(finding: CheckFindingView): string {

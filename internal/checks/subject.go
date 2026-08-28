@@ -242,7 +242,11 @@ func subjectOf(item held, placed []Placed) Subject {
 
 func containersOf(spec map[string]any) []Container {
 	out := listedContainers(spec, "initContainers", true)
-	return append(out, listedContainers(spec, "containers", false)...)
+	out = append(out, listedContainers(spec, "containers", false)...)
+	slices.SortFunc(out, func(left, right Container) int {
+		return strings.Compare(left.Name, right.Name)
+	})
+	return out
 }
 
 func listedContainers(spec map[string]any, field string, init bool) []Container {

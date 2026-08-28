@@ -82,6 +82,7 @@ type Deliveries interface {
 type Reports interface {
 	Overview(ctx context.Context) api.ClusterOverview
 	Checks(ctx context.Context) api.CheckReport
+	CheckPage(ctx context.Context, id, after string) (api.CheckPage, error)
 	Issues(ctx context.Context) api.IssueQueue
 	Metrics(ctx context.Context) api.Metrics
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)

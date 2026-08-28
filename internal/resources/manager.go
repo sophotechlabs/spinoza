@@ -710,6 +710,10 @@ func (m *Manager) Graph(ctx context.Context) api.Graph {
 	return gitops.Build(ctx, m, m.descriptors())
 }
 
+func (m *Manager) CheckPage(ctx context.Context, id, after string) (api.CheckPage, error) {
+	return checks.Page(ctx, m, m.descriptors(), m.Metrics(ctx), id, after)
+}
+
 func (m *Manager) Checks(ctx context.Context) api.CheckReport {
 	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx))
 }

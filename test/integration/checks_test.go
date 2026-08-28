@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 )
 
@@ -141,6 +143,58 @@ func TestEveryCheckIsRegisteredOnce(t *testing.T) {
 	}
 	if len(seen) == 0 {
 		t.Fatal("the report carried no checks")
+	}
+}
+
+func TestPagingAChecksFindingsAgainstARealCluster(t *testing.T) {
+	loaded := bundle(t)
+	mgr := manager(t, loaded)
+	failingDeployment(t, loaded)
+
+	report := mgr.Checks(context.Background())
+	group := api.CheckGroup{}
+	for _, one := range report.Groups {
+		if one.ID == "requests-missing" {
+			group = one
+		}
+	}
+	if group.Total == 0 {
+		t.Fatalf("nothing on this cluster is missing requests (%s)", report.Error)
+	}
+
+	page, err := mgr.CheckPage(context.Background(), "requests-missing", "")
+	if err != nil {
+		t.Fatalf("first page: %v", err)
+	}
+	if len(page.Findings) != len(group.Findings) {
+		t.Fatalf("the endpoint sent %d findings, the report sent %d",
+			len(page.Findings), len(group.Findings))
+	}
+	if page.Next != group.Next {
+		t.Fatalf("endpoint cursor %q, report cursor %q", page.Next, group.Next)
+	}
+
+	seen := len(page.Findings)
+	for page.Next != "" {
+		page, err = mgr.CheckPage(context.Background(), "requests-missing", page.Next)
+		if err != nil {
+			t.Fatalf("next page: %v", err)
+		}
+		if len(page.Findings) == 0 {
+			t.Fatal("a cursor pointed at a page with nothing on it")
+		}
+		seen += len(page.Findings)
+	}
+	if seen != group.Total {
+		t.Fatalf("paging surfaced %d findings, the report counted %d", seen, group.Total)
+	}
+}
+
+func TestPagingRefusesACheckThatDoesNotExist(t *testing.T) {
+	_, err := manager(t, bundle(t)).CheckPage(context.Background(), "not-a-real-check", "")
+
+	if !errors.Is(err, checks.ErrNoSuchCheck) {
+		t.Fatalf("error = %v, want ErrNoSuchCheck", err)
 	}
 }
 

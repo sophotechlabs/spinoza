@@ -1008,7 +1008,14 @@ export interface CheckGroup {
   skipped?: string;
   total: number;
   truncated?: boolean;
+  next?: string;
   findings: CheckFinding[];
+}
+
+export interface CheckPage {
+  findings: CheckFinding[];
+  objects: CheckObject[];
+  next?: string;
 }
 
 export interface CheckReport {
