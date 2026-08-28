@@ -13,7 +13,9 @@ export type Capability =
   | 'logs'
   | 'exec'
   | 'portForward'
-  | 'reconcile';
+  | 'reconcile'
+  | 'suspend'
+  | 'trigger';
 
 export async function fetchAccess(query: string): Promise<Access> {
   const response = await request(`/api/access?${query}`);

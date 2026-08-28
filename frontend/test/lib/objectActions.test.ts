@@ -5,7 +5,9 @@ import {
   countBy,
   hasActions,
   isCordoned,
+  isCronJob,
   isNode,
+  isSuspended,
   replicasOf,
   runAction,
 } from '../../src/lib/objectActions';
@@ -55,10 +57,17 @@ describe('which actions a resource takes', () => {
     expect(isNode(ref('metrics.k8s.io', 'nodes'))).toBe(false);
   });
 
+  it('recognises a cron job', () => {
+    expect(isCronJob(ref('batch', 'cronjobs'))).toBe(true);
+    expect(isCronJob(ref('batch', 'jobs'))).toBe(false);
+    expect(isCronJob(ref('', 'cronjobs'))).toBe(false);
+  });
+
   it('shows the panel only for a resource with actions', () => {
     expect(hasActions(ref('apps', 'deployments'))).toBe(true);
     expect(hasActions(ref('apps', 'daemonsets'))).toBe(true);
     expect(hasActions(ref('', 'nodes'))).toBe(true);
+    expect(hasActions(ref('batch', 'cronjobs'))).toBe(true);
     expect(hasActions(ref('', 'configmaps'))).toBe(false);
   });
 });
@@ -191,6 +200,13 @@ describe('reading the detail', () => {
     expect(isCordoned(detail({ node: { schedulable: true } }))).toBe(false);
     expect(isCordoned(detail({}))).toBe(false);
     expect(isCordoned(null)).toBe(false);
+  });
+
+  it('knows a suspended cron job from a running one', () => {
+    expect(isSuspended(detail({ suspended: true }))).toBe(true);
+    expect(isSuspended(detail({ suspended: false }))).toBe(false);
+    expect(isSuspended(detail({}))).toBe(false);
+    expect(isSuspended(null)).toBe(false);
   });
 
   it('counts pods by outcome', () => {

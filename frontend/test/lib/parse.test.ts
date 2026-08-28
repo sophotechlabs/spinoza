@@ -115,7 +115,22 @@ describe('parseObjectDetail', () => {
     expect(detail.pod).toEqual({ containers: ['app', 'sidecar'] });
     expect(detail.workload).toEqual({ replicas: 3 });
     expect(detail.node).toEqual({ schedulable: false });
-    expect(detail.flux).toEqual({ suspended: true, handledAt: 'token' });
+    expect(detail.suspended).toBe(true);
+    expect(detail.flux).toEqual({ handledAt: 'token' });
+  });
+
+  // Suspension is not a flux idea: a cron job carries it too.
+  it('takes a suspended flag with no flux fields beside it', () => {
+    const detail = parseObjectDetail({
+      apiVersion: 'batch/v1',
+      kind: 'CronJob',
+      name: 'nightly',
+      suspended: false,
+      yaml: '',
+    });
+
+    expect(detail.suspended).toBe(false);
+    expect(detail.flux).toBeUndefined();
   });
 
   it('leaves every facet out when the object carries none of them', () => {
@@ -124,6 +139,7 @@ describe('parseObjectDetail', () => {
     expect(detail.pod).toBeUndefined();
     expect(detail.workload).toBeUndefined();
     expect(detail.node).toBeUndefined();
+    expect(detail.suspended).toBeUndefined();
     expect(detail.flux).toBeUndefined();
   });
 

@@ -3,7 +3,8 @@ import { failure, refQuery } from './object';
 import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { parseActionResult } from './parse';
 
-export type ObjectAction = 'scale' | 'restart' | 'cordon' | 'uncordon' | 'drain';
+export type ObjectAction =
+  'scale' | 'restart' | 'cordon' | 'uncordon' | 'drain' | 'suspend' | 'resume' | 'trigger';
 
 const SCALABLE = [
   'apps/deployments',
@@ -30,11 +31,18 @@ export function isNode(ref: ObjectRef): boolean {
   return key(ref) === '/nodes';
 }
 
+export function isCronJob(ref: ObjectRef): boolean {
+  return key(ref) === 'batch/cronjobs';
+}
+
 export function hasActions(ref: ObjectRef): boolean {
   if (canScale(ref)) {
     return true;
   }
   if (canRestart(ref)) {
+    return true;
+  }
+  if (isCronJob(ref)) {
     return true;
   }
   return isNode(ref);
@@ -94,6 +102,10 @@ export function isCordoned(detail: ObjectDetail | null): boolean {
     return false;
   }
   return !node.schedulable;
+}
+
+export function isSuspended(detail: ObjectDetail | null): boolean {
+  return detail?.suspended === true;
 }
 
 export function countBy(result: ActionResult, outcome: string): number {

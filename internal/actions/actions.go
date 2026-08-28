@@ -15,6 +15,8 @@ import (
 const (
 	fieldManager = "spinoza"
 	appsGroup    = "apps"
+	batchGroup   = "batch"
+	specField    = "spec"
 )
 
 type Action string
@@ -25,6 +27,9 @@ const (
 	Cordon   Action = "cordon"
 	Uncordon Action = "uncordon"
 	Drain    Action = "drain"
+	Suspend  Action = "suspend"
+	Resume   Action = "resume"
+	Trigger  Action = "trigger"
 )
 
 var ErrUnsupported = errors.New("action is not supported for this resource")
@@ -46,6 +51,8 @@ var restartable = map[groupResource]bool{
 	{group: appsGroup, resource: "statefulsets"}: true,
 	{group: appsGroup, resource: "daemonsets"}:   true,
 }
+
+var cronJobs = groupResource{group: batchGroup, resource: "cronjobs"}
 
 type Request struct {
 	Ref      api.ObjectRef
@@ -80,6 +87,8 @@ func Supported(ref api.ObjectRef, action Action) bool {
 		return restartable[key]
 	case Cordon, Uncordon, Drain:
 		return key == groupResource{group: "", resource: "nodes"}
+	case Suspend, Resume, Trigger:
+		return key == cronJobs
 	default:
 		return false
 	}
@@ -87,7 +96,7 @@ func Supported(ref api.ObjectRef, action Action) bool {
 
 func known(action Action) bool {
 	switch action {
-	case Scale, Restart, Cordon, Uncordon, Drain:
+	case Scale, Restart, Cordon, Uncordon, Drain, Suspend, Resume, Trigger:
 		return true
 	default:
 		return false
@@ -115,6 +124,12 @@ func (s *Service) Do(ctx context.Context, req Request, now time.Time) (api.Actio
 		return s.setSchedulable(ctx, req.Ref, true)
 	case Drain:
 		return s.drain(ctx, req)
+	case Suspend:
+		return s.setSuspended(ctx, req.Ref, true)
+	case Resume:
+		return s.setSuspended(ctx, req.Ref, false)
+	case Trigger:
+		return s.trigger(ctx, req.Ref, now)
 	default:
 		return api.ActionResult{}, fmt.Errorf("unknown action %q", req.Action)
 	}

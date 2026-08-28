@@ -21,6 +21,8 @@ var (
 	daemonSetGVR  = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
 	nodeGVR       = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
 	configMapGVR  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}
+	cronJobGVR    = schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "cronjobs"}
+	jobGVR        = schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"}
 )
 
 var stamp = time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
@@ -36,6 +38,8 @@ func dynClient(objs ...runtime.Object) *dynamicfake.FakeDynamicClient {
 		daemonSetGVR:  "DaemonSetList",
 		nodeGVR:       "NodeList",
 		configMapGVR:  "ConfigMapList",
+		cronJobGVR:    "CronJobList",
+		jobGVR:        "JobList",
 	}
 	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, objs...)
 }
@@ -123,6 +127,12 @@ func TestSupported(t *testing.T) {
 		{api.ObjectRef{Group: "", Resource: "nodes"}, Drain, true},
 		{api.ObjectRef{Group: "apps", Resource: "deployments"}, Drain, false},
 		{api.ObjectRef{Group: "metrics.k8s.io", Resource: "nodes"}, Cordon, false},
+		{api.ObjectRef{Group: "batch", Resource: "cronjobs"}, Suspend, true},
+		{api.ObjectRef{Group: "batch", Resource: "cronjobs"}, Resume, true},
+		{api.ObjectRef{Group: "batch", Resource: "cronjobs"}, Trigger, true},
+		{api.ObjectRef{Group: "batch", Resource: "jobs"}, Suspend, false},
+		{api.ObjectRef{Group: "batch", Resource: "jobs"}, Trigger, false},
+		{api.ObjectRef{Group: "batch", Resource: "cronjobs"}, Restart, false},
 		{api.ObjectRef{Group: "", Resource: "nodes"}, Action("explode"), false},
 	}
 	for _, tc := range cases {
@@ -169,7 +179,7 @@ func TestDoRejectsAnActionTheResourceDoesNotSupport(t *testing.T) {
 }
 
 func TestKnownCoversEveryAction(t *testing.T) {
-	for _, action := range []Action{Scale, Restart, Cordon, Uncordon, Drain} {
+	for _, action := range []Action{Scale, Restart, Cordon, Uncordon, Drain, Suspend, Resume, Trigger} {
 		if !known(action) {
 			t.Fatalf("known(%s) = false", action)
 		}

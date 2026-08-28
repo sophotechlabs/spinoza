@@ -75,7 +75,6 @@ export interface NodeDetail {
 }
 
 export interface FluxDetail {
-  suspended: boolean;
   handledAt?: string;
 }
 
@@ -154,6 +153,7 @@ export interface ObjectDetail {
   event?: ObjectEvent;
   data?: DataEntry[];
   yaml: string;
+  suspended?: boolean;
   pod?: PodDetail;
   workload?: WorkloadDetail;
   node?: NodeDetail;

@@ -268,9 +268,12 @@ export function parseObjectDetail(body: unknown): ObjectDetail {
     detail.node = { schedulable };
   }
   const suspended = optionalBoolean(item.suspended);
+  if (suspended !== undefined) {
+    detail.suspended = suspended;
+  }
   const handledAt = optionalString(item.handledAt);
-  if (suspended !== undefined || handledAt !== undefined) {
-    detail.flux = { suspended: suspended === true, handledAt };
+  if (handledAt !== undefined) {
+    detail.flux = { handledAt };
   }
   return detail;
 }

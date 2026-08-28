@@ -181,11 +181,7 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
     objectPanel(ctx, (selection, detail) => (
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isFluxObject(detail.apiVersion) && (
-          <InspectActions
-            target={selection.ref}
-            suspended={detail.flux?.suspended}
-            onDone={ctx.reload}
-          />
+          <InspectActions target={selection.ref} suspended={detail.suspended} onDone={ctx.reload} />
         )}
         {isArgoApplication(detail.apiVersion, detail.kind) && (
           <ArgoActions target={selection.ref} onDone={ctx.reload} />

@@ -109,6 +109,16 @@ func nodeRef() api.ObjectRef {
 	return api.ObjectRef{Version: "v1", Resource: "nodes", Name: "node-1"}
 }
 
+func cronJobRef() api.ObjectRef {
+	return api.ObjectRef{
+		Group:     "batch",
+		Version:   "v1",
+		Resource:  "cronjobs",
+		Namespace: "prod",
+		Name:      "nightly",
+	}
+}
+
 func reasons(result api.Access) map[string]string {
 	out := map[string]string{}
 	for _, refusal := range result.Refused {
@@ -578,6 +588,43 @@ func TestARefusedGitopsPatchIsReported(t *testing.T) {
 
 	if got[Reconcile] != "no reconciling for you" {
 		t.Fatalf("reconcile reason = %q", got[Reconcile])
+	}
+}
+
+func TestARefusedCronJobPatchIsReportedAsSuspend(t *testing.T) {
+	service := serviceFor(t, refusing(map[string]string{
+		"patch batch cronjobs ": "no touching the schedule",
+	}))
+
+	got := reasons(service.Review(t.Context(), cronJobRef()))
+
+	if got[Suspend] != "no touching the schedule" {
+		t.Fatalf("suspend reason = %q", got[Suspend])
+	}
+}
+
+// Triggering makes a job, so a cron job the user may patch but not create jobs
+// beside is refused only the trigger.
+func TestTriggerAsksAboutCreatingJobs(t *testing.T) {
+	service := serviceFor(t, refusing(map[string]string{
+		"create batch jobs ": "no creating jobs in prod",
+	}))
+
+	got := reasons(service.Review(t.Context(), cronJobRef()))
+
+	if got[Trigger] != "no creating jobs in prod" {
+		t.Fatalf("trigger reason = %q", got[Trigger])
+	}
+	if _, refused := got[Suspend]; refused {
+		t.Fatalf("suspend was refused too: %v", got)
+	}
+}
+
+func TestAnOrdinaryKindIsNotOfferedSuspend(t *testing.T) {
+	for _, one := range capabilitiesFor(deploymentRef()) {
+		if one.name == Suspend {
+			t.Fatal("a deployment was offered suspend")
+		}
 	}
 }
 

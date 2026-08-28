@@ -22,7 +22,7 @@ func (s *Service) scale(ctx context.Context, req Request) (api.ActionResult, err
 		return api.ActionResult{}, errors.New("replicas must be zero or more")
 	}
 	patch, err := json.Marshal(map[string]any{
-		"spec": map[string]any{"replicas": req.Replicas},
+		specField: map[string]any{"replicas": req.Replicas},
 	})
 	if err != nil {
 		return api.ActionResult{}, err
@@ -47,7 +47,7 @@ func plural(replicas int64) string {
 func (s *Service) restart(ctx context.Context, req Request, now time.Time) (api.ActionResult, error) {
 	stamp := now.UTC().Format(time.RFC3339)
 	patch, err := json.Marshal(map[string]any{
-		"spec": map[string]any{
+		specField: map[string]any{
 			"template": map[string]any{
 				"metadata": map[string]any{
 					"annotations": map[string]any{restartAnnotation: stamp},

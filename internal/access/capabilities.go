@@ -20,13 +20,19 @@ const (
 	PortForward = "portForward"
 	// Reconcile covers suspend and resume too: the same patch, one answer.
 	Reconcile = "reconcile"
+	// Suspend covers resume as well, the same way.
+	Suspend = "suspend"
+	Trigger = "trigger"
 )
 
 const (
-	appsGroup = "apps"
-	pods      = "pods"
-	nodes     = "nodes"
+	appsGroup  = "apps"
+	batchGroup = "batch"
+	pods       = "pods"
+	nodes      = "nodes"
 )
+
+var cronJobs = groupResource{group: batchGroup, resource: "cronjobs"}
 
 type capability struct {
 	name   string
@@ -82,6 +88,19 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 	}
 	if gitops(ref.Group) {
 		held = append(held, needs(Reconcile, with(object, "patch")))
+	}
+	if here == cronJobs {
+		// Triggering creates a job, so that question is about jobs.
+		held = append(
+			held,
+			needs(Suspend, with(object, "patch")),
+			needs(Trigger, Check{
+				Verb:      "create",
+				Group:     batchGroup,
+				Resource:  "jobs",
+				Namespace: ref.Namespace,
+			}),
+		)
 	}
 	if here == (groupResource{resource: nodes}) {
 		held = append(held, nodeCapabilities(object)...)

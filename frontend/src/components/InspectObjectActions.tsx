@@ -5,7 +5,9 @@ import {
   canScale,
   countBy,
   isCordoned,
+  isCronJob,
   isNode,
+  isSuspended,
   replicasOf,
   runAction,
 } from '../lib/objectActions';
@@ -29,6 +31,9 @@ const buttonClass =
 
 const dangerClass =
   'rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint';
+
+const resumeClass =
+  'rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -88,6 +93,8 @@ export default function InspectObjectActions({
   const noRestart = useRefusal(target, 'restart');
   const noCordon = useRefusal(target, 'cordon');
   const noDrain = useRefusal(target, 'drain');
+  const noSuspend = useRefusal(target, 'suspend');
+  const noTrigger = useRefusal(target, 'trigger');
 
   const refKey = refQuery(target);
 
@@ -188,6 +195,7 @@ export default function InspectObjectActions({
 
   const blocked = plan === null ? 0 : countBy(plan, 'blocked');
   const cordoned = isCordoned(detail);
+  const suspended = isSuspended(detail);
   const confirmDisabled = busy || (blocked > 0 && !force);
 
   return (
@@ -251,7 +259,7 @@ export default function InspectObjectActions({
             onClick={() => void run('uncordon')}
             disabled={busy || noCordon !== null}
             title={noCordon ?? undefined}
-            className="rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint"
+            className={resumeClass}
           >
             Uncordon
           </button>
@@ -267,8 +275,46 @@ export default function InspectObjectActions({
             Drain
           </button>
         )}
+        {isCronJob(target) && (
+          <button
+            type="button"
+            onClick={() => {
+              ask('trigger', {}, `Run ${target.name} now? A job is started outside the schedule.`);
+            }}
+            disabled={busy || noTrigger !== null}
+            title={noTrigger ?? undefined}
+            className={buttonClass}
+          >
+            Run now
+          </button>
+        )}
+        {isCronJob(target) && !suspended && (
+          <button
+            type="button"
+            onClick={() => {
+              ask('suspend', {}, `Suspend ${target.name}? No new runs are started.`);
+            }}
+            disabled={busy || noSuspend !== null}
+            title={noSuspend ?? undefined}
+            className={dangerClass}
+          >
+            Suspend
+          </button>
+        )}
+        {isCronJob(target) && suspended && (
+          <button
+            type="button"
+            onClick={() => void run('resume')}
+            disabled={busy || noSuspend !== null}
+            title={noSuspend ?? undefined}
+            className={resumeClass}
+          >
+            Resume
+          </button>
+        )}
         {isNode(target) && <NodeShellButton node={target.name} />}
         {cordoned && <span className="text-warn-muted">cordoned</span>}
+        {suspended && <span className="text-warn-muted">suspended</span>}
         {busy && <span className="text-fg-muted">working</span>}
       </div>
 

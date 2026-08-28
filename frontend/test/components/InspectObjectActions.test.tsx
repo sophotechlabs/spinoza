@@ -18,6 +18,14 @@ const deployment: ObjectRef = {
 
 const daemonSet: ObjectRef = { ...deployment, resource: 'daemonsets' };
 
+const cronJob: ObjectRef = {
+  group: 'batch',
+  version: 'v1',
+  resource: 'cronjobs',
+  namespace: 'shop',
+  name: 'nightly',
+};
+
 const node: ObjectRef = {
   group: '',
   version: 'v1',
@@ -203,6 +211,131 @@ describe('restart', () => {
     render(<InspectObjectActions target={daemonSet} detail={detailFor()} onDone={vi.fn()} />);
 
     expect(screen.queryByLabelText('replicas')).not.toBeInTheDocument();
+  });
+});
+
+describe('cron job actions', () => {
+  it('suspends a running cron job once confirmed', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'suspend', message: 'Suspended nightly.' });
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: false })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Suspend' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByText('Suspended nightly.')).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('action=suspend');
+  });
+
+  it('asks before suspending', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub();
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: false })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Suspend' }));
+
+    expect(screen.getByText(/No new runs are started/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('resumes a suspended cron job without asking', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'resume', message: 'Resumed nightly.' });
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: true })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Resume' }));
+
+    expect(await screen.findByText('Resumed nightly.')).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('action=resume');
+  });
+
+  it('offers only one of the two, and says which state it is in', () => {
+    stub();
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: true })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Suspend' })).not.toBeInTheDocument();
+    expect(screen.getByText('suspended')).toBeInTheDocument();
+  });
+
+  it('starts a run outside the schedule once confirmed', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub({ action: 'trigger', message: 'Started job nightly-1756400000.' });
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: false })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Run now' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByText('Started job nightly-1756400000.')).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('action=trigger');
+  });
+
+  it('asks before starting a run', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub();
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: false })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Run now' }));
+
+    expect(screen.getByText(/outside the schedule/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('offers a run even while the schedule is suspended', () => {
+    stub();
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: true })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Run now' })).toBeEnabled();
+  });
+
+  it('leaves a workload alone', () => {
+    stub();
+    render(<InspectObjectActions target={daemonSet} detail={detailFor()} onDone={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Suspend' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run now' })).not.toBeInTheDocument();
   });
 });
 
@@ -828,6 +961,57 @@ describe('an action the cluster would refuse', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Uncordon' })).toBeDisabled();
+  });
+
+  it('greys out Suspend and says why', () => {
+    stub();
+    useAccessStore
+      .getState()
+      .setRefused(accessKey('p-mk1', cronJob), { suspend: 'no patching cron jobs' });
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: false })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Suspend' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'no patching cron jobs');
+  });
+
+  it('greys out Run now on its own refusal', () => {
+    stub();
+    useAccessStore
+      .getState()
+      .setRefused(accessKey('p-mk1', cronJob), { trigger: 'no creating jobs in prod' });
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: false })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Run now' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Suspend' })).toBeEnabled();
+  });
+
+  it('greys out Resume with the same refusal', () => {
+    stub();
+    useAccessStore
+      .getState()
+      .setRefused(accessKey('p-mk1', cronJob), { suspend: 'no patching cron jobs' });
+    render(
+      <InspectObjectActions
+        target={cronJob}
+        detail={detailFor({ kind: 'CronJob', name: 'nightly', suspended: true })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeDisabled();
   });
 
   it('leaves the buttons alone when the refusals are about another object', () => {

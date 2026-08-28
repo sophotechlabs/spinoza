@@ -48,7 +48,7 @@ func (s *Service) setSchedulable(ctx context.Context, ref api.ObjectRef, schedul
 
 func (s *Service) patchSchedulable(ctx context.Context, ref api.ObjectRef, schedulable bool) error {
 	patch, err := json.Marshal(map[string]any{
-		"spec": map[string]any{"unschedulable": !schedulable},
+		specField: map[string]any{"unschedulable": !schedulable},
 	})
 	if err != nil {
 		return err
