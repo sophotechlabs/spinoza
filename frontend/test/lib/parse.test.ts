@@ -119,7 +119,6 @@ describe('parseObjectDetail', () => {
     expect(detail.flux).toEqual({ handledAt: 'token' });
   });
 
-  // Suspension is not a flux idea: a cron job carries it too.
   it('takes a suspended flag with no flux fields beside it', () => {
     const detail = parseObjectDetail({
       apiVersion: 'batch/v1',

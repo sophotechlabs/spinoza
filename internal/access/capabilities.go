@@ -20,7 +20,7 @@ const (
 	PortForward = "portForward"
 	// Reconcile covers suspend and resume too: the same patch, one answer.
 	Reconcile = "reconcile"
-	// Suspend covers resume as well, the same way.
+	// Suspend covers resume too.
 	Suspend = "suspend"
 	Trigger = "trigger"
 )
@@ -90,7 +90,6 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 		held = append(held, needs(Reconcile, with(object, "patch")))
 	}
 	if here == cronJobs {
-		// Triggering creates a job, so that question is about jobs.
 		held = append(
 			held,
 			needs(Suspend, with(object, "patch")),

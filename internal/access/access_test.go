@@ -603,8 +603,6 @@ func TestARefusedCronJobPatchIsReportedAsSuspend(t *testing.T) {
 	}
 }
 
-// Triggering makes a job, so a cron job the user may patch but not create jobs
-// beside is refused only the trigger.
 func TestTriggerAsksAboutCreatingJobs(t *testing.T) {
 	service := serviceFor(t, refusing(map[string]string{
 		"create batch jobs ": "no creating jobs in prod",

@@ -67,9 +67,7 @@ func (s *Service) jobs(ref api.ObjectRef) dynamic.ResourceInterface {
 	return s.dyn.Resource(jobsGVR).Namespace(ref.Namespace)
 }
 
-// The job is owned by its cron job so deleting one takes the other with it,
-// but not controlled by it: a run started by hand must not count towards the
-// schedule's concurrency or history limits.
+// Owned so it goes with the cron job, uncontrolled so the schedule ignores it.
 func jobFrom(cron *unstructured.Unstructured, now time.Time) (*unstructured.Unstructured, error) {
 	spec, found := unstr.Map(cron, specField, "jobTemplate", specField)
 	if !found {

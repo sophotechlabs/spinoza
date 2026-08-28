@@ -163,8 +163,6 @@ func TestTriggerMakesAJobFromTheTemplate(t *testing.T) {
 	}
 }
 
-// Two runs of the same schedule must not collide, and the name has to say which
-// cron job it came from.
 func TestATriggeredJobIsNamedAfterTheCronJobAndTheMoment(t *testing.T) {
 	client := dynClient(newCronJob(false))
 	service := serviceFor(client, k8sfake.NewClientset())
@@ -199,8 +197,6 @@ func TestATriggeredJobCarriesTheTemplatesLabelsAndAnnotations(t *testing.T) {
 	}
 }
 
-// Owned so it goes when the cron job goes, uncontrolled so the schedule ignores
-// it.
 func TestATriggeredJobIsOwnedByTheCronJobButNotControlledByIt(t *testing.T) {
 	client := dynClient(newCronJob(false))
 	service := serviceFor(client, k8sfake.NewClientset())

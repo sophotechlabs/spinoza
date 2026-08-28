@@ -34,8 +34,11 @@ tidy:
     go mod tidy
 
 build:
-    cd frontend && npm run build
-    go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$(just app-version)" -o spinoza .
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export SPINOZA_VERSION="$(just app-version)"
+    cd frontend && npm run build && cd ..
+    go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$SPINOZA_VERSION" -o spinoza .
 
 stub-assets:
     #!/usr/bin/env bash
@@ -96,6 +99,7 @@ build-desktop:
     #!/usr/bin/env bash
     set -euo pipefail
     version=$(just app-version)
+    export SPINOZA_VERSION="$version"
     numeric=""
     if printf '%s' "$version" | grep -Eq '^v[0-9]+(\.[0-9]+){0,2}([-+].*)?$'; then
         numeric="${version#v}"
@@ -370,6 +374,7 @@ release-dist: deps
     #!/usr/bin/env bash
     set -euo pipefail
     version=$(just app-version)
+    export SPINOZA_VERSION="$version"
     mkdir -p dist/release
     cd frontend && npm run build && cd ..
     tar_sorts=no
