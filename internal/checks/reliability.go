@@ -15,8 +15,8 @@ func reliabilityChecks() []check {
 			title:    "No liveness or readiness probe",
 			category: categoryReliability,
 			severity: severityMedium,
-			wrong:    "Without a readiness probe a pod receives traffic before it can serve it, and without a liveness probe a wedged process is never restarted.",
-			remedy:   "Add a readinessProbe for the endpoint that says the process can serve, and a livenessProbe for the one that says it is still alive.",
+			wrong:    "Without readiness a pod takes traffic before it can serve; without liveness a wedged process is never restarted.",
+			remedy:   "Add a readinessProbe for when it can serve and a livenessProbe for when it is alive.",
 			find:     overContainers(probesMissing),
 		},
 		{
@@ -24,8 +24,8 @@ func reliabilityChecks() []check {
 			title:    "Image tagged :latest",
 			category: categoryReliability,
 			severity: severityMedium,
-			wrong:    "A mutable tag means two pods of the same workload can run different code, and a rollback has nothing to roll back to.",
-			remedy:   "Pin the image to a release tag, or to a digest when the tag itself is republished.",
+			wrong:    "Two pods of the same workload can run different code, and a rollback has no target.",
+			remedy:   "Pin to a release tag, or to a digest when the tag is republished.",
 			find:     overContainers(latestImage),
 		},
 		{
@@ -33,8 +33,8 @@ func reliabilityChecks() []check {
 			title:    "Single-replica Deployment",
 			category: categoryReliability,
 			severity: severityLow,
-			wrong:    "One replica means every node drain, eviction and rollout is downtime for whatever this serves.",
-			remedy:   "Raise spec.replicas to at least 2, and add a PodDisruptionBudget so a drain cannot take both at once.",
+			wrong:    "Every drain, eviction and rollout is downtime.",
+			remedy:   "Raise spec.replicas to at least 2 and add a PodDisruptionBudget.",
 			find:     overSubjects(singleReplica),
 		},
 		{
@@ -42,8 +42,8 @@ func reliabilityChecks() []check {
 			title:    "Every replica on one node",
 			category: categoryReliability,
 			severity: severityMedium,
-			wrong:    "The replicas exist but they share a failure domain, so losing that one node takes the whole workload with it.",
-			remedy:   "Add a topologySpreadConstraint on kubernetes.io/hostname so the scheduler keeps the replicas apart.",
+			wrong:    "The replicas share one failure domain; losing that node takes all of them.",
+			remedy:   "Add a topologySpreadConstraint on kubernetes.io/hostname.",
 			find:     overSubjects(oneNode),
 		},
 	}

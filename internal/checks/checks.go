@@ -2,6 +2,7 @@ package checks
 
 import (
 	"context"
+	"strings"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -19,7 +20,7 @@ const (
 	pssRestricted = "PSS restricted"
 	nsaCisa       = "NSA/CISA"
 
-	noUsage = "metrics-server did not answer, so nothing is known about what these workloads actually use"
+	noUsage = "metrics-server did not answer, so usage is unknown"
 )
 
 type scan struct {
@@ -124,6 +125,17 @@ func (c check) group(sc scan) api.CheckGroup {
 	return out
 }
 
+func joined(parts ...string) string {
+	kept := []string{}
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		kept = append(kept, part)
+	}
+	return strings.Join(kept, "; ")
+}
+
 func registry() []check {
 	out := securityChecks()
 	out = append(out, reliabilityChecks()...)
@@ -137,12 +149,17 @@ func Run(
 	descs map[string]api.ResourceDescriptor,
 	usage api.Metrics,
 ) api.CheckReport {
-	items, failure := gather(ctx, lister, needed(descs))
+	wanted, absent := needed(descs)
+	items, failure := gather(ctx, lister, wanted)
 	sc := scan{subjects: subjectsOf(items), usage: usage.Pods}
 	checks := registry()
 	groups := make([]api.CheckGroup, 0, len(checks))
 	for _, entry := range checks {
 		groups = append(groups, entry.group(sc))
 	}
-	return api.CheckReport{Groups: groups, Scanned: len(sc.subjects), Error: failure}
+	return api.CheckReport{
+		Groups:  groups,
+		Scanned: len(sc.subjects),
+		Error:   joined(failure, undiscovered(absent)),
+	}
 }

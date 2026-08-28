@@ -19,11 +19,73 @@ func nest(path, lines []string) string {
 	return strings.Join(out, "\n") + "\n"
 }
 
-func containerList(container Container) string {
-	if container.Init {
+func containerListName(init bool) string {
+	if init {
 		return "initContainers"
 	}
 	return "containers"
+}
+
+func containerList(container Container) string {
+	return containerListName(container.Init)
+}
+
+func volumeMountPaths(container Container, volume string) []string {
+	listed, ok := container.Spec["volumeMounts"].([]any)
+	if !ok {
+		return nil
+	}
+	out := []string{}
+	for _, entry := range listed {
+		item, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		if stringAt(item, "name") != volume {
+			continue
+		}
+		path := stringAt(item, "mountPath")
+		if path == "" {
+			continue
+		}
+		out = append(out, path)
+	}
+	return out
+}
+
+func mountRemovals(subject Subject, volume string, init bool) []string {
+	out := []string{}
+	for _, container := range subject.Containers {
+		if container.Init != init {
+			continue
+		}
+		paths := volumeMountPaths(container, volume)
+		if len(paths) == 0 {
+			continue
+		}
+		if len(out) == 0 {
+			out = append(out, containerListName(init)+":")
+		}
+		out = append(out,
+			indent+"- name: "+container.Name,
+			strings.Repeat(indent, 2)+"volumeMounts:")
+		for _, path := range paths {
+			out = append(out,
+				strings.Repeat(indent, 3)+"- mountPath: "+path,
+				strings.Repeat(indent, 4)+"$patch: delete")
+		}
+	}
+	return out
+}
+
+func volumePatch(subject Subject, volume string) string {
+	body := mountRemovals(subject, volume, false)
+	body = append(body, mountRemovals(subject, volume, true)...)
+	body = append(body,
+		"volumes:",
+		indent+"- name: "+volume,
+		strings.Repeat(indent, 2)+"$patch: delete")
+	return podPatch(subject, body)
 }
 
 func containerPatch(subject Subject, container Container, body []string) string {

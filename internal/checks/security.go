@@ -44,8 +44,8 @@ func securityChecks() []check {
 			category:   categorySecurity,
 			severity:   severityHigh,
 			frameworks: []string{pssBaseline, nsaCisa},
-			wrong:      "A privileged container holds every capability on the node and can reach the host's devices, so escaping it is escaping the node.",
-			remedy:     "Remove securityContext.privileged and add back only the capabilities the process actually needs.",
+			wrong:      "Holds every capability on the node and can reach its devices.",
+			remedy:     "Drop securityContext.privileged; add back only the capabilities the process needs.",
 			find:       overContainers(privileged),
 		},
 		{
@@ -54,8 +54,8 @@ func securityChecks() []check {
 			category:   categorySecurity,
 			severity:   severityMedium,
 			frameworks: []string{pssRestricted, nsaCisa},
-			wrong:      "A process in the container can gain more privileges than its parent, which is how a setuid binary turns a shell into root.",
-			remedy:     "Set securityContext.allowPrivilegeEscalation to false. It defaults to true when left unset.",
+			wrong:      "A process can gain more privileges than its parent.",
+			remedy:     "Set securityContext.allowPrivilegeEscalation to false; unset defaults to true.",
 			find:       overContainers(escalation),
 		},
 		{
@@ -64,8 +64,8 @@ func securityChecks() []check {
 			category:   categorySecurity,
 			severity:   severityHigh,
 			frameworks: []string{pssBaseline, nsaCisa},
-			wrong:      "The pod sees the node's processes, IPC or network directly, so the isolation between it and everything else on that node is gone.",
-			remedy:     "Set hostPID, hostIPC and hostNetwork to false. Use a Service for connectivity instead of the host's network.",
+			wrong:      "The pod sees the node's processes, IPC or network directly.",
+			remedy:     "Set hostPID, hostIPC and hostNetwork to false; use a Service for connectivity.",
 			find:       overSubjects(hostNamespaces),
 		},
 		{
@@ -74,8 +74,8 @@ func securityChecks() []check {
 			category:   categorySecurity,
 			severity:   severityHigh,
 			frameworks: []string{nsaCisa},
-			wrong:      "The container runtime's socket is the runtime's full API, so anything holding it can start a privileged container on the node.",
-			remedy:     "Remove the hostPath volume. Where the workload needs cluster state, give it a ServiceAccount and read the API server.",
+			wrong:      "The socket is the runtime's full API: anything holding it can start a privileged container.",
+			remedy:     "Remove the hostPath volume; read the API server through a ServiceAccount instead.",
 			find:       overSubjects(runtimeSocket),
 		},
 		{
@@ -84,7 +84,7 @@ func securityChecks() []check {
 			category:   categorySecurity,
 			severity:   severityMedium,
 			frameworks: []string{pssRestricted, nsaCisa},
-			wrong:      "The process runs as uid 0 inside the container, so a break-out lands on the node as root.",
+			wrong:      "The process runs as uid 0, so a break-out lands on the node as root.",
 			remedy:     "Set securityContext.runAsNonRoot to true and give the image a non-zero user.",
 			find:       overContainers(rootUser),
 		},
@@ -94,8 +94,8 @@ func securityChecks() []check {
 			category:   categorySecurity,
 			severity:   severityMedium,
 			frameworks: []string{nsaCisa},
-			wrong:      "The container can rewrite its own binaries, so anything that gets code execution can also persist it.",
-			remedy:     "Set securityContext.readOnlyRootFilesystem to true and mount an emptyDir wherever the process needs to write.",
+			wrong:      "The container can rewrite its own binaries, so code execution can persist.",
+			remedy:     "Set securityContext.readOnlyRootFilesystem to true; mount an emptyDir where the process writes.",
 			find:       overContainers(writableRoot),
 		},
 		{
@@ -104,8 +104,8 @@ func securityChecks() []check {
 			category:   categorySecurity,
 			severity:   severityHigh,
 			frameworks: []string{pssBaseline, nsaCisa},
-			wrong:      "Capabilities beyond the baseline set hand the container parts of root on the node: SYS_ADMIN alone covers mounting and most of what privileged does.",
-			remedy:     "Drop ALL, then add back only what the process needs. Only NET_BIND_SERVICE is within the baseline.",
+			wrong:      "Capabilities beyond the baseline hand the container parts of root.",
+			remedy:     "Drop ALL, then add back what the process needs. Only NET_BIND_SERVICE is baseline.",
 			find:       overContainers(dangerousCapabilities),
 		},
 	}
@@ -121,7 +121,8 @@ func privileged(subject Subject, container Container) (string, string) {
 }
 
 func escalation(subject Subject, container Container) (string, string) {
-	value, set := boolAt(securityContextOf(container.Spec), "allowPrivilegeEscalation")
+	own := securityContextOf(container.Spec)
+	value, set := boolAt(own, "allowPrivilegeEscalation")
 	if set && !value {
 		return "", ""
 	}
@@ -130,6 +131,10 @@ func escalation(subject Subject, container Container) (string, string) {
 		detail = "securityContext.allowPrivilegeEscalation is true"
 	}
 	body := []string{securityBlock, indent + "allowPrivilegeEscalation: false"}
+	elevated, on := boolAt(own, "privileged")
+	if on && elevated {
+		body = append(body, indent+"privileged: false")
+	}
 	return detail, containerPatch(subject, container, body)
 }
 
@@ -156,8 +161,7 @@ func runtimeSocket(subject Subject) (string, string) {
 	if path == "" {
 		return "", ""
 	}
-	body := []string{"volumes:", indent + "- name: " + name, strings.Repeat(indent, 2) + "$patch: delete"}
-	return "volume " + name + " mounts " + path + " from the node", podPatch(subject, body)
+	return "volume " + name + " mounts " + path + " from the node", volumePatch(subject, name)
 }
 
 func mountedSocket(subject Subject) (name, path string) {

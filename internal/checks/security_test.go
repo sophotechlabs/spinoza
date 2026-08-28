@@ -54,6 +54,21 @@ func TestPrivilegeEscalationIsFlaggedWhenUnsetAndWhenTrue(t *testing.T) {
 	}
 }
 
+func TestTheEscalationPatchAlsoDropsPrivilegedWhenItIsSet(t *testing.T) {
+	both := report(t, deployment("api", podSpec(container("app", withSecurity(map[string]any{
+		"privileged": true,
+	})))))
+	patch := onlyFinding(t, both, "privilege-escalation").Patch
+	if !strings.Contains(patch, "privileged: false") {
+		t.Fatalf("the api server refuses this patch on a privileged container:\n%s", patch)
+	}
+
+	plain := report(t, deployment("api", podSpec(container("app", nil))))
+	if strings.Contains(onlyFinding(t, plain, "privilege-escalation").Patch, "privileged") {
+		t.Fatal("privileged was named on a container that never set it")
+	}
+}
+
 func TestHostNamespacesNamesEveryOneShared(t *testing.T) {
 	spec := podSpec(container("app", nil))
 	spec["hostPID"] = true
@@ -81,20 +96,90 @@ func TestAPodSharingNoHostNamespaceIsClean(t *testing.T) {
 	}
 }
 
-func TestAMountedRuntimeSocketIsFlagged(t *testing.T) {
-	spec := podSpec(container("app", nil))
+func mounting(name, path string) map[string]any {
+	return map[string]any{
+		"volumeMounts": []any{map[string]any{"name": name, "mountPath": path}},
+	}
+}
+
+func withSocketVolume(spec map[string]any) map[string]any {
 	spec["volumes"] = []any{
 		map[string]any{"name": "config", "configMap": map[string]any{"name": "settings"}},
 		map[string]any{"name": "sock", "hostPath": map[string]any{"path": "/var/run/docker.sock"}},
 	}
+	return spec
+}
+
+func TestAMountedRuntimeSocketIsFlagged(t *testing.T) {
+	spec := withSocketVolume(podSpec(container("app", mounting("sock", "/var/run/docker.sock"))))
 
 	finding := onlyFinding(t, report(t, deployment("api", spec)), "runtime-socket-mounted")
 
 	if finding.Detail != "volume sock mounts /var/run/docker.sock from the node" {
 		t.Fatalf("detail was %q", finding.Detail)
 	}
-	if !strings.Contains(finding.Patch, "$patch: delete") {
+	want := "spec:\n" +
+		"  template:\n" +
+		"    spec:\n" +
+		"      containers:\n" +
+		"        - name: app\n" +
+		"          volumeMounts:\n" +
+		"            - mountPath: /var/run/docker.sock\n" +
+		"              $patch: delete\n" +
+		"      volumes:\n" +
+		"        - name: sock\n" +
+		"          $patch: delete\n"
+	if finding.Patch != want {
 		t.Fatalf("patch was:\n%s", finding.Patch)
+	}
+}
+
+func TestTheSocketPatchDropsEveryMountOfThatVolume(t *testing.T) {
+	spec := withSocketVolume(podSpec(
+		container("app", mounting("sock", "/var/run/docker.sock")),
+		container("sidecar", mounting("sock", "/sock")),
+		container("other", mounting("config", "/etc/app")),
+	))
+	spec["initContainers"] = []any{container("setup", mounting("sock", "/init.sock"))}
+
+	patch := onlyFinding(t, report(t, deployment("api", spec)), "runtime-socket-mounted").Patch
+
+	for _, path := range []string{"/var/run/docker.sock", "/sock", "/init.sock"} {
+		if !strings.Contains(patch, "- mountPath: "+path) {
+			t.Fatalf("%s was left mounted:\n%s", path, patch)
+		}
+	}
+	if strings.Contains(patch, "/etc/app") {
+		t.Fatalf("a mount of a different volume was removed:\n%s", patch)
+	}
+	if !strings.Contains(patch, "initContainers:") {
+		t.Fatalf("the init container's mount was not removed:\n%s", patch)
+	}
+}
+
+func TestASocketVolumeNothingMountsDropsOnlyTheVolume(t *testing.T) {
+	spec := withSocketVolume(podSpec(container("app", nil)))
+
+	patch := onlyFinding(t, report(t, deployment("api", spec)), "runtime-socket-mounted").Patch
+
+	if strings.Contains(patch, "volumeMounts") {
+		t.Fatalf("a mount was invented for a volume nothing uses:\n%s", patch)
+	}
+	if !strings.Contains(patch, "- name: sock") {
+		t.Fatalf("the volume was not removed:\n%s", patch)
+	}
+}
+
+func TestAnUnreadableVolumeMountListIsSkipped(t *testing.T) {
+	spec := withSocketVolume(podSpec(
+		container("app", map[string]any{"volumeMounts": "not a list"}),
+		container("two", map[string]any{"volumeMounts": []any{"not a mount", map[string]any{"name": "sock"}}}),
+	))
+
+	patch := onlyFinding(t, report(t, deployment("api", spec)), "runtime-socket-mounted").Patch
+
+	if strings.Contains(patch, "volumeMounts") {
+		t.Fatalf("an unreadable mount list reached the patch:\n%s", patch)
 	}
 }
 

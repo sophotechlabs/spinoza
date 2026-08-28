@@ -65,18 +65,33 @@ type held struct {
 	obj  *unstructured.Unstructured
 }
 
-func needed(descs map[string]api.ResourceDescriptor) []api.ResourceDescriptor {
-	out := make([]api.ResourceDescriptor, 0, len(targets))
+func needed(descs map[string]api.ResourceDescriptor) (found []api.ResourceDescriptor, absent []string) {
+	found = make([]api.ResourceDescriptor, 0, len(targets))
 	for _, want := range targets {
-		for _, desc := range descs {
-			if desc.Group != want.group || desc.Resource != want.resource {
-				continue
-			}
-			out = append(out, desc)
-			break
+		desc, ok := matching(descs, want)
+		if !ok {
+			absent = append(absent, want.resource)
+			continue
+		}
+		found = append(found, desc)
+	}
+	return found, absent
+}
+
+func matching(descs map[string]api.ResourceDescriptor, want target) (api.ResourceDescriptor, bool) {
+	for _, desc := range descs {
+		if desc.Group == want.group && desc.Resource == want.resource {
+			return desc, true
 		}
 	}
-	return out
+	return api.ResourceDescriptor{}, false
+}
+
+func undiscovered(absent []string) string {
+	if len(absent) == 0 {
+		return ""
+	}
+	return "not discovered yet, so nothing of these types was audited: " + strings.Join(absent, ", ")
 }
 
 func gather(ctx context.Context, lister Lister, descs []api.ResourceDescriptor) ([]held, string) {

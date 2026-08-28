@@ -2,6 +2,7 @@ package checks
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -184,10 +185,13 @@ func TestTheInformersAreWarmedOnce(t *testing.T) {
 }
 
 func TestOnlyTheKindsTheChecksReadAreWarmed(t *testing.T) {
-	asked := needed(descriptors())
+	asked, absent := needed(descriptors())
 
 	if len(asked) != len(targets) {
 		t.Fatalf("asked for %d types, want %d", len(asked), len(targets))
+	}
+	if len(absent) != 0 {
+		t.Fatalf("reported %v as undiscovered on a full catalog", absent)
 	}
 	for _, desc := range asked {
 		if desc.Resource == "" {
@@ -196,14 +200,50 @@ func TestOnlyTheKindsTheChecksReadAreWarmed(t *testing.T) {
 	}
 }
 
-func TestATypeTheClusterDoesNotServeIsSkipped(t *testing.T) {
+func TestATypeDiscoveryHasNotListedIsNamedInTheReport(t *testing.T) {
 	descs := descriptors()
 	delete(descs, "batch/v1/cronjobs")
 
-	asked := needed(descs)
-
+	asked, absent := needed(descs)
 	if len(asked) != len(targets)-1 {
 		t.Fatalf("asked for %d types, want %d", len(asked), len(targets)-1)
+	}
+	if !slices.Equal(absent, []string{"cronjobs"}) {
+		t.Fatalf("absent was %v", absent)
+	}
+
+	found := Run(t.Context(), newLister(), descs, api.Metrics{})
+	if !strings.Contains(found.Error, "cronjobs") {
+		t.Fatalf("the report did not say cronjobs went unaudited: %q", found.Error)
+	}
+}
+
+func TestAnEmptyCatalogueSaysNothingWasAudited(t *testing.T) {
+	found := Run(t.Context(), newLister(), map[string]api.ResourceDescriptor{}, api.Metrics{})
+
+	if found.Scanned != 0 {
+		t.Fatalf("scanned %d with no catalog", found.Scanned)
+	}
+	if !strings.Contains(found.Error, "not discovered yet") {
+		t.Fatalf("an audit that read nothing reported %q", found.Error)
+	}
+	for _, group := range found.Groups {
+		if len(group.Findings) != 0 {
+			t.Fatalf("%s found something with no catalog", group.ID)
+		}
+	}
+}
+
+func TestAListFailureAndAnAbsentTypeAreBothReported(t *testing.T) {
+	descs := descriptors()
+	delete(descs, "batch/v1/cronjobs")
+	lister := newLister()
+	lister.errs["pods"] = errors.New("pods are forbidden")
+
+	found := Run(t.Context(), lister, descs, api.Metrics{})
+
+	if !strings.Contains(found.Error, "pods") || !strings.Contains(found.Error, "cronjobs") {
+		t.Fatalf("only one of the two problems was reported: %q", found.Error)
 	}
 }
 

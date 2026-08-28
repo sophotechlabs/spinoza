@@ -25,8 +25,8 @@ func efficiencyChecks() []check {
 			title:    "No resource requests",
 			category: categoryEfficiency,
 			severity: severityMedium,
-			wrong:    "The scheduler places a container with no request as if it needed nothing, so a node fills past what it can actually serve.",
-			remedy:   "Set resources.requests.cpu and resources.requests.memory to what the container needs at rest.",
+			wrong:    "The scheduler places it as if it needed nothing, so the node fills past what it can serve.",
+			remedy:   "Set resources.requests.cpu and resources.requests.memory to what it needs at rest.",
 			find:     overContainers(requestsMissing),
 		},
 		{
@@ -34,8 +34,8 @@ func efficiencyChecks() []check {
 			title:    "No resource limits",
 			category: categoryEfficiency,
 			severity: severityLow,
-			wrong:    "A container with no limit can take the whole node, so one runaway process evicts everything sharing it.",
-			remedy:   "Set resources.limits.memory at minimum. A memory limit is what stops a leak from taking the node.",
+			wrong:    "One runaway process can take the node and evict everything on it.",
+			remedy:   "Set resources.limits.memory at minimum; that is what stops a leak.",
 			find:     overContainers(limitsMissing),
 		},
 		{
@@ -43,8 +43,8 @@ func efficiencyChecks() []check {
 			title:    "Limits far above requests",
 			category: categoryEfficiency,
 			severity: severityLow,
-			wrong:    "A limit several times its own request means the node was scheduled for the small number and can be asked for the large one.",
-			remedy:   "Bring the request up to what the container really uses, or the limit down to what it is allowed to reach.",
+			wrong:    "The node was scheduled for the request and can be asked for the limit.",
+			remedy:   "Raise the request to what it uses, or lower the limit.",
 			find:     overContainers(limitsAboveRequests),
 		},
 		{
@@ -53,8 +53,8 @@ func efficiencyChecks() []check {
 			category:   categoryEfficiency,
 			severity:   severityLow,
 			needsUsage: true,
-			wrong:      "The workload reserves capacity it does not use, so the cluster looks full while the nodes sit idle.",
-			remedy:     "Bring the requests down towards measured usage, leaving headroom for the peaks this reading does not show.",
+			wrong:      "Reserved capacity nothing uses: the cluster looks full while nodes sit idle.",
+			remedy:     "Lower the requests towards measured usage, leaving headroom for peaks.",
 			find:       overUsage(requestsAboveUsage),
 		},
 	}
