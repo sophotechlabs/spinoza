@@ -75,6 +75,23 @@ function Get-ListedChecksum {
     return ''
 }
 
+function Get-Sha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return [System.BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $sha.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Test-Checksum {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -85,8 +102,8 @@ function Test-Checksum {
     if ($expected -eq '') {
         throw "$Name is not listed in checksums.txt"
     }
-    $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
-    if ($expected -ne $actual.ToLowerInvariant()) {
+    $actual = Get-Sha256 -Path $Path
+    if ($expected -ne $actual) {
         throw "checksum mismatch for $Name"
     }
 }

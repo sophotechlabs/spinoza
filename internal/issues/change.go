@@ -99,6 +99,14 @@ func generationChange(obj *unstructured.Unstructured) change {
 }
 
 func transitionOf(obj *unstructured.Unstructured) time.Time {
+	newest := newestCondition(obj)
+	if newest.IsZero() {
+		return obj.GetCreationTimestamp().Time
+	}
+	return newest
+}
+
+func newestCondition(obj *unstructured.Unstructured) time.Time {
 	newest := time.Time{}
 	for _, raw := range unstr.Slice(obj, "status", "conditions") {
 		entry, ok := raw.(map[string]any)
@@ -112,9 +120,6 @@ func transitionOf(obj *unstructured.Unstructured) time.Time {
 		if at.After(newest) {
 			newest = at
 		}
-	}
-	if newest.IsZero() {
-		return obj.GetCreationTimestamp().Time
 	}
 	return newest
 }

@@ -45,7 +45,7 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
     $payload = Join-Path $work 'spinoza_v1.16.0_windows_amd64.zip'
     Set-Content -LiteralPath $payload -Value 'not really a zip' -NoNewline
-    $hash = (Get-FileHash -LiteralPath $payload -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-Sha256 -Path $payload
 
     $list = Join-Path $work 'checksums.txt'
     Set-Content -LiteralPath $list -Value @(
