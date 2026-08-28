@@ -604,7 +604,7 @@ func TestAnArgoActionReachesTheObjectItNames(t *testing.T) {
 		Name:      "web",
 	}
 
-	result, err := mgr.ArgoAction(context.Background(), ref, argocd.Refresh)
+	result, err := mgr.ArgoAction(context.Background(), ref, argocd.Request{Action: argocd.Refresh})
 	if err != nil {
 		t.Fatalf("argo action: %v", err)
 	}

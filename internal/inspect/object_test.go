@@ -812,3 +812,210 @@ func TestAStaleResourceVersionIsTheApiserversToRefuse(t *testing.T) {
 		t.Fatal("a document that names a version was treated as naming none")
 	}
 }
+
+func TestAnArgoApplicationThatDoesNotSyncItselfReadsAsSuspended(t *testing.T) {
+	app := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1",
+		"kind":       "Application",
+		"metadata":   map[string]any{"name": "web", "namespace": "argocd"},
+		"spec": map[string]any{
+			"syncPolicy": map[string]any{"automated": map[string]any{"enabled": false}},
+		},
+	}}
+
+	suspended := suspendedOf(app)
+
+	if suspended == nil || !*suspended {
+		t.Fatalf("suspended = %v, want true", suspended)
+	}
+}
+
+func TestAnArgoApplicationThatSyncsItselfReadsAsRunning(t *testing.T) {
+	app := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1",
+		"kind":       "Application",
+		"metadata":   map[string]any{"name": "web", "namespace": "argocd"},
+		"spec": map[string]any{
+			"syncPolicy": map[string]any{"automated": map[string]any{"prune": true}},
+		},
+	}}
+
+	suspended := suspendedOf(app)
+
+	if suspended == nil || *suspended {
+		t.Fatalf("suspended = %v, want false", suspended)
+	}
+}
+
+func TestAnArgoProjectIsNotAnApplication(t *testing.T) {
+	project := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1",
+		"kind":       "AppProject",
+		"metadata":   map[string]any{"name": "default", "namespace": "argocd"},
+	}}
+
+	if suspendedOf(project) != nil {
+		t.Fatal("an appproject reported a suspend state it does not have")
+	}
+}
+
+func TestAFluxOwnedObjectNamesItsKustomization(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"name":      "web",
+			"namespace": "shop",
+			"labels": map[string]any{
+				"kustomize.toolkit.fluxcd.io/name":      "apps",
+				"kustomize.toolkit.fluxcd.io/namespace": "flux-system",
+			},
+		},
+	}}
+
+	owner := managedBy(obj)
+
+	if owner == nil {
+		t.Fatal("a flux-labeled object reported no owner")
+	}
+	if owner.Controller != api.ControllerFlux || owner.Kind != "Kustomization" {
+		t.Fatalf("owner = %+v", owner)
+	}
+	if owner.Ref.Namespace != "flux-system" || owner.Ref.Name != "apps" {
+		t.Fatalf("ref = %+v", owner.Ref)
+	}
+}
+
+func TestAHelmReleaseOwnedObjectNamesIt(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"name":      "web",
+			"namespace": "shop",
+			"labels": map[string]any{
+				"helm.toolkit.fluxcd.io/name":      "podinfo",
+				"helm.toolkit.fluxcd.io/namespace": "flux-system",
+			},
+		},
+	}}
+
+	owner := managedBy(obj)
+
+	if owner == nil || owner.Kind != "HelmRelease" {
+		t.Fatalf("owner = %+v", owner)
+	}
+}
+
+func TestAHalfLabelledObjectNamesNoOwner(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"name":      "web",
+			"namespace": "shop",
+			"labels":    map[string]any{"kustomize.toolkit.fluxcd.io/name": "apps"},
+		},
+	}}
+
+	if managedBy(obj) != nil {
+		t.Fatal("a label with no namespace was read as an owner")
+	}
+}
+
+func TestAnArgoTrackedObjectNamesItsApplication(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"name":      "web",
+			"namespace": "shop",
+			"annotations": map[string]any{
+				"argocd.argoproj.io/tracking-id": "podinfo:apps/Deployment:shop/web",
+			},
+		},
+	}}
+
+	owner := managedBy(obj)
+
+	if owner == nil || owner.Controller != api.ControllerArgo {
+		t.Fatalf("owner = %+v", owner)
+	}
+	if owner.Ref.Name != "podinfo" || owner.Ref.Namespace != "" {
+		t.Fatalf("ref = %+v, want the name alone until it is located", owner.Ref)
+	}
+}
+
+func TestTheGenericInstanceLabelIsNotAnOwner(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"name":      "web",
+			"namespace": "shop",
+			"labels":    map[string]any{"app.kubernetes.io/instance": "podinfo"},
+		},
+	}}
+
+	if managedBy(obj) != nil {
+		t.Fatal("a plain helm install was read as gitops-managed")
+	}
+}
+
+func TestAnUnreadableTrackingIDNamesNoOwner(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"name":        "web",
+			"namespace":   "shop",
+			"annotations": map[string]any{"argocd.argoproj.io/tracking-id": "no-colon-here"},
+		},
+	}}
+
+	if managedBy(obj) != nil {
+		t.Fatal("an unreadable tracking id was read as an owner")
+	}
+}
+
+func TestAFluxObjectNamesTheSourceItReads(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"name": "apps", "namespace": "flux-system"},
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "GitRepository", "name": "flux-system"},
+		},
+	}}
+
+	if got := sourceLabelOf(obj); got != "GitRepository/flux-system" {
+		t.Fatalf("source = %q", got)
+	}
+}
+
+func TestAFluxObjectWithNoSourceNamesNone(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"name": "apps", "namespace": "flux-system"},
+	}}
+
+	if got := sourceLabelOf(obj); got != "" {
+		t.Fatalf("source = %q, want nothing", got)
+	}
+}
+
+func TestAPlainObjectNamesNoSource(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   map[string]any{"name": "web", "namespace": "shop"},
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "GitRepository", "name": "flux-system"},
+		},
+	}}
+
+	if got := sourceLabelOf(obj); got != "" {
+		t.Fatalf("source = %q, want nothing for a non-flux kind", got)
+	}
+}

@@ -45,6 +45,10 @@ function Row({
       <td className="truncate px-2 py-1 text-fg-muted">{orDash(app.project)}</td>
       <td className={`truncate px-2 py-1 ${syncClass(app.sync)}`}>{orDash(app.sync)}</td>
       <td className={`truncate px-2 py-1 ${healthClass(app.health)}`}>{orDash(app.health)}</td>
+      <td className="truncate px-2 py-1 text-fg-muted" title={app.repo}>
+        {orDash(app.repo)}
+      </td>
+      <td className="truncate px-2 py-1 text-fg-muted">{orDash(app.automation ?? '')}</td>
       <td className="truncate px-2 py-1 text-fg-muted">{orDash(app.destination)}</td>
       <td className="truncate px-2 py-1 text-fg-muted" title={app.revision}>
         {orDash(app.revision)}
@@ -60,6 +64,8 @@ const HEADERS = [
   { id: 'project', label: 'Project', width: 'w-32' },
   { id: 'sync', label: 'Sync', width: 'w-24' },
   { id: 'health', label: 'Health', width: 'w-24' },
+  { id: 'repo', label: 'Repository', width: 'w-56' },
+  { id: 'automation', label: 'Automation', width: 'w-40' },
   { id: 'destination', label: 'Destination', width: 'w-40' },
   { id: 'revision', label: 'Revision', width: 'w-40' },
   { id: 'created', label: 'Created', width: 'w-24' },

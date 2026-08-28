@@ -25,7 +25,7 @@ function refKey(ref: ObjectRef): string {
   return `${ref.group}/${ref.version}/${ref.resource}/${ref.namespace}/${ref.name}`;
 }
 
-type Ask = 'apply' | 'delete' | null;
+type Ask = 'apply' | 'delete' | 'owned' | null;
 
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) {
@@ -49,6 +49,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const protectedCluster = useProtectedCluster();
+  const owner = detail.managedBy;
   const noEdit = useRefusal(target, 'edit');
   const noDelete = useRefusal(target, 'delete');
 
@@ -120,11 +121,23 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   }, [asking, wasAsking]);
 
   function askApply() {
+    if (owner !== undefined) {
+      setAsking('owned');
+      return;
+    }
     if (!protectedCluster) {
       void handleApply();
       return;
     }
     setAsking('apply');
+  }
+
+  function acknowledgeOwner() {
+    if (protectedCluster) {
+      setAsking('apply');
+      return;
+    }
+    void handleApply();
   }
 
   async function handleApply() {
@@ -209,6 +222,31 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
         <CopyButton what="YAML" text={draft} />
         {dirty && !stale && <span className="text-fg-muted">unsaved changes</span>}
         {stale && <span className="text-warn">changed on the server, Revert to load it</span>}
+        {asking === 'owned' && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-warn">
+              {owner?.kind} {owner?.ref.namespace}/{owner?.ref.name} will put this back at the next
+              reconcile.
+            </span>
+            <button
+              ref={confirmRef}
+              type="button"
+              onClick={acknowledgeOwner}
+              disabled={busy}
+              className="rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed"
+            >
+              Apply anyway
+            </button>
+            <button
+              type="button"
+              onClick={cancelAsking}
+              disabled={busy}
+              className="rounded border border-edge px-2 py-1 text-fg-muted hover:bg-surface-active disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
         {asking === 'apply' && (
           <ConfirmByName
             open

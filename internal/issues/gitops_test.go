@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -217,5 +218,40 @@ func TestAnApplicationWithoutAFinishTimeFallsBackToItsConditions(t *testing.T) {
 	row, _ := rowNamed(build(t, lister, catalog(argoDescriptor())), "web")
 	if row.Since != testNow.Add(-30*time.Minute).Format(time.RFC3339) {
 		t.Fatalf("since = %q, want the condition transition", row.Since)
+	}
+}
+
+func TestAFailedSyncStatesItsCause(t *testing.T) {
+	obj := argoObject("web", map[string]any{
+		"operationState": map[string]any{
+			"phase":   "Failed",
+			"message": `one or more objects failed to apply, reason: namespaces "shop" not found`,
+		},
+	})
+	lister := &stubLister{items: map[string][]*unstructured.Unstructured{"applications": {obj}}}
+
+	row, ok := rowNamed(build(t, lister, catalog(argoDescriptor())), "web")
+
+	if !ok {
+		t.Fatal("a failed sync raised no row")
+	}
+	if !strings.HasPrefix(row.Detail, "the destination namespace shop does not exist") {
+		t.Fatalf("detail = %q, want the cause first", row.Detail)
+	}
+	if !strings.HasSuffix(row.Detail, "not found") {
+		t.Fatalf("detail = %q, want the raw message kept", row.Detail)
+	}
+}
+
+func TestAFailedSyncWithNoKnownCauseKeepsItsMessage(t *testing.T) {
+	obj := argoObject("web", map[string]any{
+		"operationState": map[string]any{"phase": "Failed", "message": "something odd"},
+	})
+	lister := &stubLister{items: map[string][]*unstructured.Unstructured{"applications": {obj}}}
+
+	row, _ := rowNamed(build(t, lister, catalog(argoDescriptor())), "web")
+
+	if row.Detail != "something odd" {
+		t.Fatalf("detail = %q", row.Detail)
 	}
 }

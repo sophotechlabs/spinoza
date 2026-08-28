@@ -155,18 +155,28 @@ type OverviewEvent struct {
 	LastSeen  string `json:"lastSeen"`
 }
 
+type GitopsController struct {
+	Controller string `json:"controller"`
+	Name       string `json:"name"`
+	Namespace  string `json:"namespace"`
+	Ready      int    `json:"ready"`
+	Wanted     int    `json:"wanted"`
+}
+
 type ClusterOverview struct {
-	Version  string          `json:"version"`
-	Nodes    NodeSummary     `json:"nodes"`
-	Pods     PodSummary      `json:"pods"`
-	Warnings []OverviewEvent `json:"warnings"`
-	Error    string          `json:"error,omitempty"`
+	Version     string             `json:"version"`
+	Nodes       NodeSummary        `json:"nodes"`
+	Pods        PodSummary         `json:"pods"`
+	Warnings    []OverviewEvent    `json:"warnings"`
+	Controllers []GitopsController `json:"controllers,omitempty"`
+	Error       string             `json:"error,omitempty"`
 }
 
 const (
 	SeverityFatal    = "fatal"
 	SeverityDegraded = "degraded"
 	SeverityWarning  = "warning"
+	SeverityInfo     = "info"
 )
 
 type IssueChild struct {
@@ -358,6 +368,11 @@ type ObjectDetail struct {
 	Conditions  []Condition       `json:"conditions,omitempty"`
 	Containers  []string          `json:"containers,omitempty"`
 	Suspended   *bool             `json:"suspended,omitempty"`
+	Terminating bool              `json:"terminating,omitempty"`
+	Finalizers  []string          `json:"finalizers,omitempty"`
+	ManagedBy   *GitopsOwner      `json:"managedBy,omitempty"`
+	Source      string            `json:"source,omitempty"`
+	Consumers   []GitopsOwner     `json:"consumers,omitempty"`
 	Replicas    *int64            `json:"replicas,omitempty"`
 	Schedulable *bool             `json:"schedulable,omitempty"`
 	HandledAt   string            `json:"handledAt,omitempty"`
@@ -705,6 +720,7 @@ type Graph struct {
 
 type ArgoApp struct {
 	Kind        string `json:"kind"`
+	Automation  string `json:"automation,omitempty"`
 	Group       string `json:"group"`
 	Version     string `json:"version"`
 	Resource    string `json:"resource"`
@@ -720,6 +736,109 @@ type ArgoApp struct {
 	Message     string `json:"message"`
 	Owner       string `json:"owner,omitempty"`
 	CreatedAt   string `json:"createdAt"`
+}
+
+const (
+	ControllerArgo = "argocd"
+	ControllerFlux = "flux"
+)
+
+const (
+	SyncModeAuto      = "auto"
+	SyncModeManual    = "manual"
+	SyncModeSuspended = "suspended"
+)
+
+type GitopsOwner struct {
+	Controller string    `json:"controller"`
+	Kind       string    `json:"kind"`
+	Ref        ObjectRef `json:"ref"`
+}
+
+type GitopsSource struct {
+	Repo        string `json:"repo,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Target      string `json:"target,omitempty"`
+	Destination string `json:"destination,omitempty"`
+	Project     string `json:"project,omitempty"`
+	SyncMode    string `json:"syncMode"`
+	Policy      string `json:"policy,omitempty"`
+}
+
+type GitopsState struct {
+	Sync      string `json:"sync,omitempty"`
+	Health    string `json:"health,omitempty"`
+	Revision  string `json:"revision,omitempty"`
+	CreatedAt string `json:"createdAt,omitempty"`
+	SyncedAt  string `json:"syncedAt,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
+type GitopsIssue struct {
+	Severity string `json:"severity"`
+	Title    string `json:"title"`
+	Detail   string `json:"detail,omitempty"`
+	Subject  string `json:"subject,omitempty"`
+}
+
+type FieldDrift struct {
+	Path     string `json:"path"`
+	Declared string `json:"declared"`
+	Live     string `json:"live"`
+}
+
+type GitopsResource struct {
+	Group       string       `json:"group,omitempty"`
+	Version     string       `json:"version,omitempty"`
+	Resource    string       `json:"resource,omitempty"`
+	Kind        string       `json:"kind"`
+	Name        string       `json:"name"`
+	Namespace   string       `json:"namespace,omitempty"`
+	Sync        string       `json:"sync,omitempty"`
+	Health      string       `json:"health,omitempty"`
+	Message     string       `json:"message,omitempty"`
+	Terminating bool         `json:"terminating,omitempty"`
+	Finalizers  []string     `json:"finalizers,omitempty"`
+	Drift       []FieldDrift `json:"drift,omitempty"`
+	DriftNote   string       `json:"driftNote,omitempty"`
+	Events      []Event      `json:"events,omitempty"`
+}
+
+type GitopsDeployment struct {
+	ID          int64  `json:"id"`
+	Revision    string `json:"revision"`
+	Source      string `json:"source,omitempty"`
+	StartedAt   string `json:"startedAt,omitempty"`
+	DeployedAt  string `json:"deployedAt,omitempty"`
+	InitiatedBy string `json:"initiatedBy,omitempty"`
+	Automated   bool   `json:"automated,omitempty"`
+}
+
+type GitopsOperation struct {
+	Phase       string `json:"phase"`
+	Running     bool   `json:"running,omitempty"`
+	Message     string `json:"message,omitempty"`
+	Cause       string `json:"cause,omitempty"`
+	Revision    string `json:"revision,omitempty"`
+	StartedAt   string `json:"startedAt,omitempty"`
+	FinishedAt  string `json:"finishedAt,omitempty"`
+	InitiatedBy string `json:"initiatedBy,omitempty"`
+}
+
+type GitopsApp struct {
+	Ref         ObjectRef          `json:"ref"`
+	Controller  string             `json:"controller"`
+	Terminating bool               `json:"terminating,omitempty"`
+	Kind        string             `json:"kind"`
+	Name        string             `json:"name"`
+	Namespace   string             `json:"namespace"`
+	Source      GitopsSource       `json:"source"`
+	State       GitopsState        `json:"state"`
+	Issues      []GitopsIssue      `json:"issues,omitempty"`
+	Resources   []GitopsResource   `json:"resources,omitempty"`
+	History     []GitopsDeployment `json:"history,omitempty"`
+	Operation   *GitopsOperation   `json:"operation,omitempty"`
+	Error       string             `json:"error,omitempty"`
 }
 
 type ArgoDashboard struct {

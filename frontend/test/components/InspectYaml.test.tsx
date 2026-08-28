@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 interface EditorStubProps {
@@ -53,19 +53,31 @@ function detailFor(yaml: string): ObjectDetail {
   };
 }
 
-function renderYaml(yaml = YAML) {
+function renderYaml(yaml = YAML, detail?: ObjectDetail) {
   const onApplied = vi.fn();
   const onDeleted = vi.fn();
   const view = render(
     <InspectYaml
       target={target}
-      detail={detailFor(yaml)}
+      detail={detail ?? detailFor(yaml)}
       onApplied={onApplied}
       onDeleted={onDeleted}
     />,
   );
   return { onApplied, onDeleted, view };
 }
+
+const ownedBy = {
+  controller: 'argocd',
+  kind: 'Application',
+  ref: {
+    group: 'argoproj.io',
+    version: 'v1alpha1',
+    resource: 'applications',
+    namespace: 'argocd',
+    name: 'podinfo',
+  },
+};
 
 function okResponse(payload: unknown) {
   return { ok: true, json: () => Promise.resolve(payload) };
@@ -458,6 +470,17 @@ describe('InspectYaml on a protected cluster', () => {
     useToastsStore.getState().clear();
   });
 
+  it('asks for the name after the ownership warning is acknowledged', async () => {
+    const user = userEvent.setup();
+    renderYaml(YAML, { ...detailFor(YAML), managedBy: ownedBy });
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await user.click(screen.getByRole('button', { name: 'Apply anyway' }));
+
+    expect(screen.getByText('Applying your changes to Deployment web.')).toBeInTheDocument();
+  });
+
   it('asks for the object name instead of a single click', async () => {
     const user = userEvent.setup();
     renderYaml();
@@ -582,5 +605,77 @@ describe('editing and deleting what the cluster would refuse', () => {
     renderYaml();
 
     expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+  });
+});
+
+describe('applying to an object a gitops controller owns', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  function applied(): boolean {
+    return fetchMock.mock.calls.some((call) => {
+      const options = call[1] as RequestInit | undefined;
+      return options?.method === 'PUT';
+    });
+  }
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue(okResponse(detailFor(YAML)));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('says what will put the change back before applying', async () => {
+    const user = userEvent.setup();
+    renderYaml(YAML, { ...detailFor(YAML), managedBy: ownedBy });
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(
+      screen.getByText('Application argocd/podinfo will put this back at the next reconcile.'),
+    ).toBeInTheDocument();
+    expect(applied()).toBe(false);
+  });
+
+  it('applies once the warning is acknowledged', async () => {
+    const user = userEvent.setup();
+    renderYaml(YAML, { ...detailFor(YAML), managedBy: ownedBy });
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await user.click(screen.getByRole('button', { name: 'Apply anyway' }));
+
+    await waitFor(() => {
+      expect(applied()).toBe(true);
+    });
+  });
+
+  it('drops the change when the warning is cancelled', async () => {
+    const user = userEvent.setup();
+    renderYaml(YAML, { ...detailFor(YAML), managedBy: ownedBy });
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(
+      screen.queryByText('Application argocd/podinfo will put this back at the next reconcile.'),
+    ).not.toBeInTheDocument();
+    expect(applied()).toBe(false);
+  });
+
+  it('leaves an unowned object straight through', async () => {
+    const user = userEvent.setup();
+    renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() => {
+      expect(applied()).toBe(true);
+    });
   });
 });

@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/sophotechlabs/spinoza/internal/faults"
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
@@ -125,7 +126,7 @@ func argoSymptom(obj *unstructured.Unstructured) (symptom, bool) {
 		return symptom{
 			severity: severityFatal,
 			title:    "SyncFailed",
-			detail:   messageOrText(unstr.String(obj, "status", "operationState", "message"), "the last sync did not finish"),
+			detail:   explained(unstr.String(obj, "status", "operationState", "message"), "the last sync did not finish"),
 			action:   "fix the manifest, then sync again",
 		}, true
 	}
@@ -158,7 +159,18 @@ func argoChangedAt(obj *unstructured.Unstructured) time.Time {
 }
 
 func messageOr(entry map[string]any, fallback string) string {
-	return messageOrText(unstr.At(entry, "message"), fallback)
+	return explained(unstr.At(entry, "message"), fallback)
+}
+
+func explained(message, fallback string) string {
+	cause := faults.Cause(message)
+	if cause == "" {
+		return messageOrText(message, fallback)
+	}
+	if message == "" {
+		return cause
+	}
+	return cause + " — " + message
 }
 
 func messageOrText(message, fallback string) string {

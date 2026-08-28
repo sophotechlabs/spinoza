@@ -3,7 +3,7 @@ import { failure, fetchObject, refQuery } from './object';
 import { parseFluxActionResult } from './parse';
 import { request } from './http';
 
-export type FluxAction = 'reconcile' | 'suspend' | 'resume';
+export type FluxAction = 'reconcile' | 'reconcile-with-source' | 'suspend' | 'resume';
 
 const FLUX_GROUP_SUFFIX = '.toolkit.fluxcd.io';
 

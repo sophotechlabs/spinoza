@@ -106,7 +106,9 @@ type ChartRepos interface {
 type Changes interface {
 	Action(ctx context.Context, req actions.Request) (api.ActionResult, error)
 	FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error)
-	ArgoAction(ctx context.Context, ref api.ObjectRef, action argocd.Action) (api.ArgoActionResult, error)
+	ArgoAction(ctx context.Context, ref api.ObjectRef, req argocd.Request) (api.ArgoActionResult, error)
+	GitopsApp(ctx context.Context, ref api.ObjectRef) (api.GitopsApp, error)
+	GitopsAppGraph(ctx context.Context, ref api.ObjectRef) (api.Graph, error)
 }
 
 type Forwarding interface {

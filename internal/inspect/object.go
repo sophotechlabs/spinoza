@@ -17,10 +17,23 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
 const lastAppliedAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
+
+const argoApplication = "Application"
+
+const argoApplications = "applications"
+
+const argoTrackingAnnotation = "argocd.argoproj.io/tracking-id"
+
+var fluxAppliers = map[string]string{
+	"kustomize.toolkit.fluxcd.io": "Kustomization",
+	"helm.toolkit.fluxcd.io":      "HelmRelease",
+}
 
 // ErrNoResourceVersion means the write would be unconditional.
 var ErrNoResourceVersion = errors.New(
@@ -106,8 +119,8 @@ func apiVersionOf(ref api.ObjectRef) string {
 	return ref.Group + "/" + ref.Version
 }
 
-func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
-	clean := sanitize(u)
+func detailOf(source *unstructured.Unstructured) (api.ObjectDetail, error) {
+	clean := sanitize(source)
 	raw, err := yaml.Marshal(clean.Object)
 	if err != nil {
 		return api.ObjectDetail{}, fmt.Errorf("%w: could not render the object as yaml: %w", api.ErrInternal, err)
@@ -125,6 +138,10 @@ func detailOf(u *unstructured.Unstructured) (api.ObjectDetail, error) {
 		Conditions:  conditionsOf(clean),
 		Containers:  containerNames(clean),
 		Suspended:   suspendedOf(clean),
+		Terminating: source.GetDeletionTimestamp() != nil,
+		Finalizers:  source.GetFinalizers(),
+		ManagedBy:   managedBy(source),
+		Source:      sourceLabelOf(source),
 		Replicas:    replicasOf(clean),
 		Schedulable: schedulableOf(clean),
 		HandledAt:   unstr.String(clean, "status", "lastHandledReconcileAt"),
@@ -335,7 +352,63 @@ func transitionOf(m map[string]any) string {
 	return stringField(m, "lastUpdateTime")
 }
 
+func sourceLabelOf(item *unstructured.Unstructured) string {
+	if !flux.IsFluxGroup(item.GroupVersionKind().Group) {
+		return ""
+	}
+	kind, name, _ := flux.SourceRef(item)
+	if kind == "" || name == "" {
+		return ""
+	}
+	return kind + "/" + name
+}
+
+func managedBy(item *unstructured.Unstructured) *api.GitopsOwner {
+	labels := item.GetLabels()
+	for group, kind := range fluxAppliers {
+		name := labels[group+"/name"]
+		namespace := labels[group+"/namespace"]
+		if name == "" || namespace == "" {
+			continue
+		}
+		return &api.GitopsOwner{
+			Controller: api.ControllerFlux,
+			Kind:       kind,
+			Ref: api.ObjectRef{
+				Group:     group,
+				Namespace: namespace,
+				Name:      name,
+			},
+		}
+	}
+	return argoOwner(item)
+}
+
+func argoOwner(item *unstructured.Unstructured) *api.GitopsOwner {
+	tracked := item.GetAnnotations()[argoTrackingAnnotation]
+	if tracked == "" {
+		return nil
+	}
+	name, _, found := strings.Cut(tracked, ":")
+	if !found || name == "" {
+		return nil
+	}
+	return &api.GitopsOwner{
+		Controller: api.ControllerArgo,
+		Kind:       argoApplication,
+		Ref: api.ObjectRef{
+			Group:    argocd.Group,
+			Resource: argoApplications,
+			Name:     name,
+		},
+	}
+}
+
 func suspendedOf(u *unstructured.Unstructured) *bool {
+	if argocd.IsArgoGroup(u.GroupVersionKind().Group) && u.GetKind() == argoApplication {
+		paused := !argocd.AutoSyncing(u)
+		return &paused
+	}
 	value, found, err := unstructured.NestedBool(u.Object, "spec", "suspend")
 	if !found || err != nil {
 		return nil

@@ -47,6 +47,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/checks", s.handleChecks, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false},
 		{http.MethodGet, "/api/topology", s.handleTopology, false},
+		{http.MethodGet, "/api/gitops/app", withRef(s.gitopsApp), false},
+		{http.MethodGet, "/api/gitops/app/graph", withRef(s.gitopsAppGraph), false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false},
 		{http.MethodGet, "/api/flux/overview", s.handleFluxOverview, false},
 		{http.MethodGet, "/api/argocd", s.handleArgo, false},

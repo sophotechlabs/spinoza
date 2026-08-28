@@ -110,6 +110,7 @@ func byName(left, right api.ArgoApp) int {
 func appOf(item *unstructured.Unstructured, desc api.ResourceDescriptor) api.ArgoApp {
 	return api.ArgoApp{
 		Kind:        desc.Kind,
+		Automation:  automationOf(item, desc),
 		Group:       desc.Group,
 		Version:     desc.Version,
 		Resource:    desc.Resource,
@@ -126,6 +127,18 @@ func appOf(item *unstructured.Unstructured, desc api.ResourceDescriptor) api.Arg
 		Owner:       ownerOf(item),
 		CreatedAt:   item.GetCreationTimestamp().UTC().Format("2006-01-02T15:04:05Z"),
 	}
+}
+
+func automationOf(item *unstructured.Unstructured, desc api.ResourceDescriptor) string {
+	if desc.Resource != applications {
+		return ""
+	}
+	mode := syncModeOf(item)
+	policy := policyOf(item)
+	if policy == "" {
+		return mode
+	}
+	return mode + " · " + policy
 }
 
 func revisionOf(item *unstructured.Unstructured) string {

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import InspectOverview from '../../src/components/InspectOverview';
 import type { ContainerState, ObjectDetail } from '../../src/lib/types';
 
@@ -317,5 +318,124 @@ describe('a configmap in the inspect overview', () => {
 
     expect(screen.getByLabelText('log.level')).toHaveValue('debug');
     expect(screen.queryByRole('button', { name: 'Show log.level' })).not.toBeInTheDocument();
+  });
+});
+
+describe('an object a gitops controller owns', () => {
+  const owner = {
+    controller: 'flux',
+    kind: 'Kustomization',
+    ref: {
+      group: 'kustomize.toolkit.fluxcd.io',
+      version: 'v1',
+      resource: 'kustomizations',
+      namespace: 'flux-system',
+      name: 'apps',
+    },
+  };
+
+  it('opens the object that owns it', async () => {
+    const user = userEvent.setup();
+    const onOpenOwner = vi.fn();
+    render(<InspectOverview detail={detail({ managedBy: owner })} onOpenOwner={onOpenOwner} />);
+
+    await user.click(screen.getByRole('button', { name: 'Kustomization flux-system/apps' }));
+
+    expect(onOpenOwner).toHaveBeenCalledWith(owner.ref);
+  });
+
+  it('says a change made here goes back', () => {
+    render(<InspectOverview detail={detail({ managedBy: owner })} onOpenOwner={vi.fn()} />);
+
+    expect(
+      screen.getByText('A change made here goes back when flux next reconciles. Change it in git.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no chip when nothing owns it', () => {
+    render(<InspectOverview detail={detail()} onOpenOwner={vi.fn()} />);
+
+    expect(screen.queryByText('Managed by')).not.toBeInTheDocument();
+  });
+
+  it('shows no chip when there is nowhere to open it', () => {
+    render(<InspectOverview detail={detail({ managedBy: owner })} />);
+
+    expect(screen.queryByText('Managed by')).not.toBeInTheDocument();
+  });
+});
+
+describe('an object that is being deleted', () => {
+  it('says so and names what holds it', () => {
+    render(
+      <InspectOverview
+        detail={detail({ terminating: true, finalizers: ['foregroundDeletion'] })}
+      />,
+    );
+
+    expect(screen.getByText('This object is being deleted.')).toBeInTheDocument();
+    expect(screen.getByText('held by foregroundDeletion')).toBeInTheDocument();
+  });
+
+  it('says nothing about finalizers when there are none', () => {
+    render(<InspectOverview detail={detail({ terminating: true })} />);
+
+    expect(screen.getByText('This object is being deleted.')).toBeInTheDocument();
+    expect(screen.queryByText(/held by/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing at all for an object that is not going away', () => {
+    render(<InspectOverview detail={detail()} />);
+
+    expect(screen.queryByText('This object is being deleted.')).not.toBeInTheDocument();
+  });
+});
+
+describe('a flux source', () => {
+  const consumers = [
+    {
+      controller: 'flux',
+      kind: 'Kustomization',
+      ref: {
+        group: 'kustomize.toolkit.fluxcd.io',
+        version: 'v1',
+        resource: 'kustomizations',
+        namespace: 'flux-system',
+        name: 'apps',
+      },
+    },
+  ];
+
+  it('lists what reads it and says an edit reaches them', () => {
+    render(<InspectOverview detail={detail({ consumers })} onOpenOwner={vi.fn()} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Kustomization flux-system/apps' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('An edit here reaches all of them at the next reconcile.'),
+    ).toBeInTheDocument();
+  });
+
+  it('opens a consumer', async () => {
+    const user = userEvent.setup();
+    const onOpenOwner = vi.fn();
+    render(<InspectOverview detail={detail({ consumers })} onOpenOwner={onOpenOwner} />);
+
+    await user.click(screen.getByRole('button', { name: 'Kustomization flux-system/apps' }));
+
+    expect(onOpenOwner).toHaveBeenCalledWith(consumers[0].ref);
+  });
+
+  it('says nothing when nothing reads it', () => {
+    render(<InspectOverview detail={detail()} onOpenOwner={vi.fn()} />);
+
+    expect(screen.queryByText('Read by')).not.toBeInTheDocument();
+  });
+
+  it('says nothing when there is nowhere to open them', () => {
+    render(<InspectOverview detail={detail({ consumers })} />);
+
+    expect(screen.queryByText('Read by')).not.toBeInTheDocument();
   });
 });

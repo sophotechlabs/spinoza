@@ -3,6 +3,7 @@ import type { Capability } from './access';
 import type { Selection } from './refs';
 import type { PodTarget } from './pods';
 import { readStored, writeStored } from './persist';
+import { isGitopsApp } from './gitopsApp';
 
 export type PanelId =
   | 'overview'
@@ -13,7 +14,8 @@ export type PanelId =
   | 'forwards'
   | 'terminal'
   | 'release'
-  | 'compare';
+  | 'compare'
+  | 'app';
 
 export type DockSide = 'left' | 'right' | 'bottom';
 
@@ -89,6 +91,13 @@ function hasRelease(ctx: PanelContext): boolean {
   return ctx.release !== null;
 }
 
+function isGitopsApplier(ctx: PanelContext): boolean {
+  if (ctx.detail === null) {
+    return false;
+  }
+  return isGitopsApp(ctx.detail.apiVersion, ctx.detail.kind);
+}
+
 export const PANELS: PanelDescriptor[] = [
   {
     id: 'overview',
@@ -141,6 +150,13 @@ export const PANELS: PanelDescriptor[] = [
     defaultSide: 'bottom',
     hint: 'Select a Helm release to inspect it',
     enabled: hasRelease,
+  },
+  {
+    id: 'app',
+    label: 'Application',
+    defaultSide: 'right',
+    hint: 'Select an Argo application, a Kustomization or a HelmRelease',
+    enabled: isGitopsApplier,
   },
 ];
 

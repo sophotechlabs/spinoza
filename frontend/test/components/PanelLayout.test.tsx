@@ -67,6 +67,12 @@ vi.mock('../../src/components/ReleasePanel', () => {
   };
 });
 
+vi.mock('../../src/components/GitopsAppPanel', () => ({
+  default: ({ target }: { target: { name: string } | null }) => (
+    <div data-testid="app-panel">{target === null ? 'no application' : target.name}</div>
+  ),
+}));
+
 import PanelLayout from '../../src/components/PanelLayout';
 import { PLACEMENT_KEY } from '../../src/lib/panels';
 import { usePanelsStore } from '../../src/store/panels';
@@ -762,5 +768,53 @@ describe('a panel the cluster would refuse', () => {
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-disabled', 'false');
     });
+  });
+});
+
+describe('the application panel', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens for an argo application', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/events')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              apiVersion: 'argoproj.io/v1alpha1',
+              kind: 'Application',
+              name: 'podinfo',
+              namespace: 'argocd',
+              uid: 'uid-app',
+              createdAt: '2026-08-18T09:00:00Z',
+              yaml: 'kind: Application\n',
+            }),
+        });
+      }),
+    );
+    renderLayout({
+      selection: {
+        ref: {
+          group: 'argoproj.io',
+          version: 'v1alpha1',
+          resource: 'applications',
+          namespace: 'argocd',
+          name: 'podinfo',
+        },
+        row: makeRow({ uid: 'uid-app', name: 'podinfo', namespace: 'argocd' }),
+      },
+    });
+    const tab = await screen.findByRole('tab', { name: 'Application' });
+
+    await user.click(tab);
+
+    expect(await screen.findByTestId('app-panel')).toHaveTextContent('podinfo');
   });
 });

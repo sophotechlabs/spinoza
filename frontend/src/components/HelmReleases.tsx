@@ -176,6 +176,14 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
                     >
                       {release.name}
                     </button>
+                    {release.fluxRef !== undefined && (
+                      <span
+                        title="Flux installed this release. A helm upgrade here goes back at the next reconcile."
+                        className="ml-1.5 rounded border border-edge-strong px-1 text-[10px] text-fg-muted"
+                      >
+                        Flux
+                      </span>
+                    )}
                   </td>
                   <td className="truncate px-2 py-1 text-fg-muted">{release.namespace}</td>
                   <td className="truncate px-2 py-1 text-fg-soft">{chartLabel(release)}</td>

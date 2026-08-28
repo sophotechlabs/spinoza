@@ -2,6 +2,7 @@ package flux
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -76,7 +77,7 @@ func readBack(t *testing.T, client *fake.FakeDynamicClient) *unstructured.Unstru
 func TestReconcileSetsTheRequestAnnotation(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	_, err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
+	_, err := Do(context.Background(), client, nil, kustomizationRef(), Reconcile, stamp)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -90,7 +91,7 @@ func TestReconcileSetsTheRequestAnnotation(t *testing.T) {
 func TestReconcileLeavesTheSpecAlone(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	_, err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
+	_, err := Do(context.Background(), client, nil, kustomizationRef(), Reconcile, stamp)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -109,7 +110,7 @@ func TestReconcileLeavesTheSpecAlone(t *testing.T) {
 func TestSuspendSetsTheField(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	_, err := Do(context.Background(), client, kustomizationRef(), Suspend, stamp)
+	_, err := Do(context.Background(), client, nil, kustomizationRef(), Suspend, stamp)
 	if err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestSuspendSetsTheField(t *testing.T) {
 func TestResumeClearsTheField(t *testing.T) {
 	client := actionClient(newKustomization(true))
 
-	_, err := Do(context.Background(), client, kustomizationRef(), Resume, stamp)
+	_, err := Do(context.Background(), client, nil, kustomizationRef(), Resume, stamp)
 	if err != nil {
 		t.Fatalf("resume: %v", err)
 	}
@@ -137,7 +138,7 @@ func TestResumeClearsTheField(t *testing.T) {
 func TestSuspendDoesNotAnnotate(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	_, err := Do(context.Background(), client, kustomizationRef(), Suspend, stamp)
+	_, err := Do(context.Background(), client, nil, kustomizationRef(), Suspend, stamp)
 	if err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestClusterScopedTarget(t *testing.T) {
 		Name:     "slack",
 	}
 
-	_, err := Do(context.Background(), client, ref, Suspend, stamp)
+	_, err := Do(context.Background(), client, nil, ref, Suspend, stamp)
 	if err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
@@ -179,7 +180,7 @@ func TestRejectsNonFluxGroup(t *testing.T) {
 	client := actionClient()
 	ref := api.ObjectRef{Group: "apps", Version: "v1", Resource: "deployments", Namespace: "d", Name: "web"}
 
-	_, err := Do(context.Background(), client, ref, Reconcile, stamp)
+	_, err := Do(context.Background(), client, nil, ref, Reconcile, stamp)
 
 	if err == nil {
 		t.Fatalf("expected a non-flux group to be rejected")
@@ -189,7 +190,7 @@ func TestRejectsNonFluxGroup(t *testing.T) {
 func TestRejectsUnknownAction(t *testing.T) {
 	client := actionClient(newKustomization(false))
 
-	_, err := Do(context.Background(), client, kustomizationRef(), Action("explode"), stamp)
+	_, err := Do(context.Background(), client, nil, kustomizationRef(), Action("explode"), stamp)
 
 	if err == nil {
 		t.Fatalf("expected an unknown action to be rejected")
@@ -199,7 +200,7 @@ func TestRejectsUnknownAction(t *testing.T) {
 func TestPropagatesAPIError(t *testing.T) {
 	client := actionClient()
 
-	_, err := Do(context.Background(), client, kustomizationRef(), Reconcile, stamp)
+	_, err := Do(context.Background(), client, nil, kustomizationRef(), Reconcile, stamp)
 
 	if err == nil {
 		t.Fatalf("expected an error patching a missing object")
@@ -222,5 +223,101 @@ func TestIsFluxGroup(t *testing.T) {
 		if got := IsFluxGroup(group); got != want {
 			t.Fatalf("IsFluxGroup(%q) = %v, want %v", group, got, want)
 		}
+	}
+}
+
+func sourceDescs() map[string]api.ResourceDescriptor {
+	return map[string]api.ResourceDescriptor{
+		"gitrepositories": {
+			Group:      "source.toolkit.fluxcd.io",
+			Version:    "v1",
+			Resource:   "gitrepositories",
+			Kind:       "GitRepository",
+			Namespaced: true,
+		},
+	}
+}
+
+func newSource() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "GitRepository",
+		"metadata":   map[string]any{"name": "flux-system", "namespace": "flux-system"},
+		"spec":       map[string]any{"url": "https://example.test/infra"},
+	}}
+}
+
+func sourcedKustomization() *unstructured.Unstructured {
+	obj := newKustomization(false)
+	_ = unstructured.SetNestedMap(obj.Object, map[string]any{
+		"kind": "GitRepository",
+		"name": "flux-system",
+	}, "spec", "sourceRef")
+	return obj
+}
+
+func sourceClient(t *testing.T, objs ...runtime.Object) *fake.FakeDynamicClient {
+	t.Helper()
+	kinds := map[schema.GroupVersionResource]string{
+		kustomizationGVR: "KustomizationList",
+		{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}: "GitRepositoryList",
+	}
+	return fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, objs...)
+}
+
+func TestReconcileWithSourceAsksTheSourceFirst(t *testing.T) {
+	client := sourceClient(t, sourcedKustomization(), newSource())
+
+	result, err := Do(t.Context(), client, sourceDescs(), kustomizationRef(), ReconcileSource, stamp)
+	if err != nil {
+		t.Fatalf("reconcile with source: %v", err)
+	}
+
+	if result.RequestedAt == "" {
+		t.Fatal("no timestamp was reported back to poll on")
+	}
+	source, getErr := client.
+		Resource(schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}).
+		Namespace("flux-system").
+		Get(t.Context(), "flux-system", metav1.GetOptions{})
+	if getErr != nil {
+		t.Fatalf("read the source back: %v", getErr)
+	}
+	if source.GetAnnotations()[reconcileAnnotation] != result.RequestedAt {
+		t.Fatal("the source was not asked to reconcile")
+	}
+	object, _ := client.Resource(kustomizationGVR).Namespace("flux-system").Get(t.Context(), "apps", metav1.GetOptions{})
+	if object.GetAnnotations()[reconcileAnnotation] != result.RequestedAt {
+		t.Fatal("the object itself was not asked to reconcile")
+	}
+}
+
+func TestReconcileWithSourceRefusesAnObjectWithNoSource(t *testing.T) {
+	client := sourceClient(t, newKustomization(false))
+
+	_, err := Do(t.Context(), client, sourceDescs(), kustomizationRef(), ReconcileSource, stamp)
+
+	if !errors.Is(err, ErrNoSource) {
+		t.Fatalf("error = %v, want a refusal", err)
+	}
+}
+
+func TestReconcileWithSourceRefusesASourceKindTheClusterDoesNotServe(t *testing.T) {
+	client := sourceClient(t, sourcedKustomization(), newSource())
+
+	_, err := Do(t.Context(), client, map[string]api.ResourceDescriptor{}, kustomizationRef(), ReconcileSource, stamp)
+
+	if !errors.Is(err, ErrNoSource) {
+		t.Fatalf("error = %v, want a refusal", err)
+	}
+}
+
+func TestReconcileWithSourceReportsAnObjectThatIsNotThere(t *testing.T) {
+	client := sourceClient(t)
+
+	_, err := Do(t.Context(), client, sourceDescs(), kustomizationRef(), ReconcileSource, stamp)
+
+	if err == nil {
+		t.Fatal("expected an error for an object that is not there")
 	}
 }

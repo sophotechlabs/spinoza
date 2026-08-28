@@ -41,7 +41,7 @@ func Events(ctx context.Context, dyn dynamic.Interface, namespace, uid string) (
 	}
 	out := make([]api.Event, 0, len(list.Items))
 	for i := range list.Items {
-		out = append(out, eventOf(&list.Items[i]))
+		out = append(out, EventOf(&list.Items[i]))
 	}
 	sortEvents(out)
 	return out, nil
@@ -68,7 +68,7 @@ func seenAt(stamp string) time.Time {
 	return t
 }
 
-func eventOf(obj *unstructured.Unstructured) api.Event {
+func EventOf(obj *unstructured.Unstructured) api.Event {
 	return api.Event{
 		Type:      unstr.String(obj, "type"),
 		Reason:    unstr.String(obj, "reason"),

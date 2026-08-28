@@ -22,6 +22,8 @@ import type {
   FluxGroup,
   FluxResource,
   Graph,
+  GitopsController,
+  GitopsOwner,
   GraphEdge,
   GraphNode,
   HelmActionResult,
@@ -279,7 +281,37 @@ export function parseObjectDetail(body: unknown): ObjectDetail {
   if (handledAt !== undefined) {
     detail.flux = { handledAt };
   }
+  if (item.terminating === true) {
+    detail.terminating = true;
+    detail.finalizers = asList(item.finalizers).map(asString);
+  }
+  detail.managedBy = parseGitopsOwner(item.managedBy);
+  detail.source = optionalString(item.source);
+  detail.consumers = optionalListOf(item.consumers, parseConsumer);
   return detail;
+}
+
+function parseConsumer(item: Record<string, unknown>): GitopsOwner {
+  const ref = asRecord(item.ref);
+  return {
+    controller: asString(item.controller),
+    kind: asString(item.kind),
+    ref: {
+      group: asString(ref.group),
+      version: asString(ref.version),
+      resource: asString(ref.resource),
+      namespace: asString(ref.namespace),
+      name: asString(ref.name),
+    },
+  };
+}
+
+function parseGitopsOwner(body: unknown): GitopsOwner | undefined {
+  const item = asRecord(body);
+  if (Object.keys(item).length === 0) {
+    return undefined;
+  }
+  return parseConsumer(item);
 }
 
 export function parseEvents(body: unknown): K8sEvent[] {
@@ -676,7 +708,18 @@ export function parseClusterOverview(body: unknown): ClusterOverview {
     nodes: parseNodeSummary(asRecord(item.nodes)),
     pods: parsePodSummary(asRecord(item.pods)),
     warnings: listOf(item.warnings, parseOverviewEvent),
+    controllers: optionalListOf(item.controllers, parseGitopsController),
     error: optionalString(item.error),
+  };
+}
+
+function parseGitopsController(item: Record<string, unknown>): GitopsController {
+  return {
+    controller: asString(item.controller),
+    name: asString(item.name),
+    namespace: asString(item.namespace),
+    ready: asNumber(item.ready),
+    wanted: asNumber(item.wanted),
   };
 }
 

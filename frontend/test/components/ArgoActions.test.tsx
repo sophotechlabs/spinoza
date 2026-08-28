@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ArgoActions from '../../src/components/ArgoActions';
 import type { ObjectRef } from '../../src/lib/types';
@@ -22,15 +22,28 @@ const close = vi.fn(function close(this: HTMLDialogElement) {
   this.open = false;
 });
 
-function renderActions() {
+function renderActions(suspended?: boolean, terminating?: boolean) {
   const onDone = vi.fn();
-  const view = render(<ArgoActions target={target} onDone={onDone} />);
+  const view = render(
+    <ArgoActions target={target} suspended={suspended} terminating={terminating} onDone={onDone} />,
+  );
   return { onDone, view };
+}
+
+async function startSync(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Sync' }));
+  await user.click(screen.getByRole('button', { name: 'Synchronize' }));
 }
 
 function lastCallUrl(): string {
   const mock = globalThis.fetch as ReturnType<typeof vi.fn>;
   return mock.mock.calls[mock.mock.calls.length - 1][0] as string;
+}
+
+function lastCallBody(): unknown {
+  const mock = globalThis.fetch as ReturnType<typeof vi.fn>;
+  const init = mock.mock.calls[mock.mock.calls.length - 1][1] as RequestInit;
+  return JSON.parse(init.body as string);
 }
 
 function openCluster() {
@@ -66,23 +79,165 @@ describe('the argo cd actions on an application', () => {
     vi.unstubAllGlobals();
   });
 
-  it('offers both a sync and a refresh', () => {
+  it('runs the verbs from the keyboard', async () => {
+    renderActions();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+    await waitFor(() => {
+      expect(lastCallUrl()).toContain('action=refresh');
+    });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', bubbles: true }));
+    await waitFor(() => {
+      expect(lastCallUrl()).toContain('action=hard-refresh');
+    });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', bubbles: true }));
+    await waitFor(() => {
+      expect(lastCallUrl()).toContain('action=terminate');
+    });
+  });
+
+  it('opens the sync dialog from the keyboard', async () => {
+    renderActions();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
+
+    expect(await screen.findByRole('button', { name: 'Synchronize' })).toBeInTheDocument();
+  });
+
+  it('leaves the keyboard sync alone while the application is being deleted', () => {
+    renderActions(false, true);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
+
+    expect(screen.queryByRole('button', { name: 'Synchronize' })).not.toBeInTheDocument();
+  });
+
+  it('offers the whole argo verb set', () => {
     renderActions();
 
     expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hard refresh' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Terminate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Suspend auto-sync' })).toBeInTheDocument();
   });
 
-  it('syncs straight away on an open cluster', async () => {
+  it('syncs once the options dialog is confirmed', async () => {
     const user = userEvent.setup();
     const { onDone } = renderActions();
 
-    await user.click(screen.getByRole('button', { name: 'Sync' }));
+    await startSync(user);
 
     expect(lastCallUrl()).toContain('action=sync');
     expect(lastCallUrl()).not.toContain('confirm=');
     expect(await screen.findByText('Sync requested.')).toBeInTheDocument();
     expect(onDone).toHaveBeenCalled();
+  });
+
+  it('sends the options that were ticked', async () => {
+    const user = userEvent.setup();
+    renderActions();
+
+    await user.click(screen.getByRole('button', { name: 'Sync' }));
+    await user.click(screen.getByLabelText(/Prune/));
+    await user.click(screen.getByLabelText(/Server-side apply/));
+    await user.click(screen.getByRole('button', { name: 'Synchronize' }));
+
+    expect(lastCallBody()).toMatchObject({ prune: true, serverSide: true, dryRun: false });
+  });
+
+  it('sends no options when none were ticked', async () => {
+    const user = userEvent.setup();
+    renderActions();
+
+    await startSync(user);
+
+    expect(lastCallBody()).toMatchObject({
+      prune: false,
+      dryRun: false,
+      force: false,
+      replace: false,
+      serverSide: false,
+      applyOnly: false,
+    });
+  });
+
+  it('drops the sync when the dialog is cancelled', async () => {
+    const user = userEvent.setup();
+    renderActions();
+
+    await user.click(screen.getByRole('button', { name: 'Sync' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('asks for the deeper refresh on its own button', async () => {
+    const user = userEvent.setup();
+    renderActions();
+
+    await user.click(screen.getByRole('button', { name: 'Hard refresh' }));
+
+    expect(lastCallUrl()).toContain('action=hard-refresh');
+    expect(await screen.findByText('Hard refresh requested.')).toBeInTheDocument();
+  });
+
+  it('terminates without asking, because it stops a change', async () => {
+    const user = userEvent.setup();
+    renderActions();
+
+    await user.click(screen.getByRole('button', { name: 'Terminate' }));
+
+    expect(lastCallUrl()).toContain('action=terminate');
+    expect(await screen.findByText('Termination requested.')).toBeInTheDocument();
+  });
+
+  it('suspends auto-sync and says what happens to the policy', async () => {
+    const user = userEvent.setup();
+    renderActions(false);
+
+    await user.click(screen.getByRole('button', { name: 'Suspend auto-sync' }));
+
+    expect(lastCallUrl()).toContain('action=suspend');
+    expect(
+      await screen.findByText('Auto-sync off. Prune and self-heal unchanged.'),
+    ).toBeInTheDocument();
+  });
+
+  it('stops the writing verbs while the application is being deleted', () => {
+    renderActions(false, true);
+
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Suspend auto-sync' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Sync' })).toHaveAttribute(
+      'title',
+      'this application is being deleted',
+    );
+  });
+
+  it('leaves refresh and terminate alone while it is being deleted', () => {
+    renderActions(false, true);
+
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Hard refresh' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Terminate' })).toBeEnabled();
+  });
+
+  it('stops resume too while it is being deleted', () => {
+    renderActions(true, true);
+
+    expect(screen.getByRole('button', { name: 'Resume auto-sync' })).toBeDisabled();
+  });
+
+  it('offers resume instead once auto-sync is off', async () => {
+    const user = userEvent.setup();
+    renderActions(true);
+
+    expect(screen.getByText('auto-sync off')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Resume auto-sync' }));
+
+    expect(lastCallUrl()).toContain('action=resume');
+    expect(await screen.findByText('Auto-sync on.')).toBeInTheDocument();
   });
 
   it('refreshes without asking anything', async () => {
@@ -135,7 +290,7 @@ describe('the argo cd actions on a protected cluster', () => {
     const user = userEvent.setup();
     renderActions();
 
-    await user.click(screen.getByRole('button', { name: 'Sync' }));
+    await startSync(user);
 
     expect(
       screen.getByText('Syncing Application podinfo against its repository.'),
@@ -146,7 +301,7 @@ describe('the argo cd actions on a protected cluster', () => {
   it('syncs with the confirmation once it is given', async () => {
     const user = userEvent.setup();
     renderActions();
-    await user.click(screen.getByRole('button', { name: 'Sync' }));
+    await startSync(user);
 
     await user.type(screen.getByLabelText('Name'), 'podinfo');
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
@@ -154,10 +309,53 @@ describe('the argo cd actions on a protected cluster', () => {
     expect(lastCallUrl()).toContain('confirm=podinfo');
   });
 
-  it('drops the question when it is cancelled', async () => {
+  it('keeps the ticked options through the confirmation', async () => {
     const user = userEvent.setup();
     renderActions();
     await user.click(screen.getByRole('button', { name: 'Sync' }));
+    await user.click(screen.getByLabelText(/Prune/));
+    await user.click(screen.getByRole('button', { name: 'Synchronize' }));
+
+    await user.type(screen.getByLabelText('Name'), 'podinfo');
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(lastCallBody()).toMatchObject({ prune: true });
+  });
+
+  it('asks before turning auto-sync off', async () => {
+    const user = userEvent.setup();
+    renderActions(false);
+
+    await user.click(screen.getByRole('button', { name: 'Suspend auto-sync' }));
+
+    expect(screen.getByText('Turning auto-sync off for Application podinfo.')).toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('asks before turning auto-sync back on', async () => {
+    const user = userEvent.setup();
+    renderActions(true);
+
+    await user.click(screen.getByRole('button', { name: 'Resume auto-sync' }));
+
+    expect(
+      screen.getByText('Turning auto-sync back on for Application podinfo.'),
+    ).toBeInTheDocument();
+  });
+
+  it('terminates on one click even here', async () => {
+    const user = userEvent.setup();
+    renderActions();
+
+    await user.click(screen.getByRole('button', { name: 'Terminate' }));
+
+    expect(lastCallUrl()).toContain('action=terminate');
+  });
+
+  it('drops the question when it is cancelled', async () => {
+    const user = userEvent.setup();
+    renderActions();
+    await startSync(user);
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 

@@ -478,3 +478,37 @@ func TestATrackingIDOnlyNamesSomebodyElse(t *testing.T) {
 		})
 	}
 }
+
+func TestTheDashboardNamesHowAnApplicationAutomates(t *testing.T) {
+	app := automating(newApplication(), map[string]any{"prune": true, "selfHeal": true})
+	desc := api.ResourceDescriptor{Group: Group, Version: "v1alpha1", Resource: applications, Kind: "Application"}
+
+	if got := automationOf(app, desc); got != "auto · prune, self-heal" {
+		t.Fatalf("automation = %q", got)
+	}
+}
+
+func TestTheDashboardCallsAPausedApplicationSuspended(t *testing.T) {
+	app := automating(newApplication(), map[string]any{"enabled": false})
+	desc := api.ResourceDescriptor{Group: Group, Version: "v1alpha1", Resource: applications, Kind: "Application"}
+
+	if got := automationOf(app, desc); got != "suspended · neither prune nor self-heal" {
+		t.Fatalf("automation = %q", got)
+	}
+}
+
+func TestTheDashboardCallsAnApplicationWithNoPolicyManual(t *testing.T) {
+	desc := api.ResourceDescriptor{Group: Group, Version: "v1alpha1", Resource: applications, Kind: "Application"}
+
+	if got := automationOf(newApplication(), desc); got != "manual" {
+		t.Fatalf("automation = %q", got)
+	}
+}
+
+func TestTheDashboardLeavesProjectsAndSetsWithoutAPolicy(t *testing.T) {
+	desc := api.ResourceDescriptor{Group: Group, Version: "v1alpha1", Resource: appProjects, Kind: "AppProject"}
+
+	if got := automationOf(newApplication(), desc); got != "" {
+		t.Fatalf("automation = %q, want nothing", got)
+	}
+}

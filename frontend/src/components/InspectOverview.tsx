@@ -1,4 +1,4 @@
-import type { ContainerState, ObjectDetail, ObjectEvent } from '../lib/types';
+import type { ContainerState, ObjectDetail, ObjectEvent, ObjectRef } from '../lib/types';
 import { conditionColor, containerColor } from '../lib/status';
 import CopyButton from './CopyButton';
 import DataEntries from './DataEntries';
@@ -6,6 +6,7 @@ import DataEntries from './DataEntries';
 interface InspectOverviewProps {
   detail: ObjectDetail;
   containers?: ContainerState[];
+  onOpenOwner?: (ref: ObjectRef) => void;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -75,7 +76,71 @@ function messageClass(type: string | undefined): string {
   return 'mt-2 break-words text-fg';
 }
 
-export default function InspectOverview({ detail, containers }: InspectOverviewProps) {
+function ManagedBy({ detail, onOpenOwner }: InspectOverviewProps) {
+  const owner = detail.managedBy;
+  if (owner === undefined || onOpenOwner === undefined) {
+    return null;
+  }
+  return (
+    <Section title="Managed by">
+      <button
+        type="button"
+        onClick={() => {
+          onOpenOwner(owner.ref);
+        }}
+        className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
+      >
+        {owner.kind} {owner.ref.namespace}/{owner.ref.name}
+      </button>
+      <p className="mt-1 text-fg-muted">
+        A change made here goes back when {owner.controller} next reconciles. Change it in git.
+      </p>
+    </Section>
+  );
+}
+
+function Consumers({ detail, onOpenOwner }: InspectOverviewProps) {
+  const consumers = detail.consumers ?? [];
+  if (consumers.length === 0 || onOpenOwner === undefined) {
+    return null;
+  }
+  return (
+    <Section title="Read by">
+      <div className="flex flex-wrap gap-1.5">
+        {consumers.map((one) => (
+          <button
+            key={`${one.ref.namespace}/${one.ref.name}`}
+            type="button"
+            onClick={() => {
+              onOpenOwner(one.ref);
+            }}
+            className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
+          >
+            {one.kind} {one.ref.namespace}/{one.ref.name}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-fg-muted">An edit here reaches all of them at the next reconcile.</p>
+    </Section>
+  );
+}
+
+function Terminating({ detail }: InspectOverviewProps) {
+  if (detail.terminating !== true) {
+    return null;
+  }
+  const finalizers = detail.finalizers ?? [];
+  return (
+    <Section title="Terminating">
+      <p className="text-warn">This object is being deleted.</p>
+      {finalizers.length > 0 && (
+        <p className="mt-1 text-fg-muted">held by {finalizers.join(', ')}</p>
+      )}
+    </Section>
+  );
+}
+
+export default function InspectOverview({ detail, containers, onOpenOwner }: InspectOverviewProps) {
   const labels = entries(detail.labels);
   const annotations = entries(detail.annotations);
   const owners = detail.owners ?? [];
@@ -85,6 +150,9 @@ export default function InspectOverview({ detail, containers }: InspectOverviewP
 
   return (
     <div className="overflow-y-auto text-xs">
+      <Terminating detail={detail} />
+      <ManagedBy detail={detail} onOpenOwner={onOpenOwner} />
+      <Consumers detail={detail} onOpenOwner={onOpenOwner} />
       {detail.event !== undefined && (
         <Section title="Event">
           <Pairs pairs={eventPairs(detail.event)} />

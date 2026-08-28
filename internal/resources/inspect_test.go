@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/openapi"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
@@ -313,5 +314,235 @@ func TestApplyAllowsAnUnknownResourceThrough(t *testing.T) {
 
 	if err != nil && strings.Contains(err.Error(), "kind") {
 		t.Fatalf("a resource missing from discovery was blocked on kind: %v", err)
+	}
+}
+
+func argoDescs() map[string]api.ResourceDescriptor {
+	descs := testDescs()
+	descs[discovery.Key("argoproj.io", "v1alpha1", "applications")] = api.ResourceDescriptor{
+		Group:      "argoproj.io",
+		Version:    "v1alpha1",
+		Resource:   "applications",
+		Kind:       "Application",
+		Namespaced: true,
+	}
+	return descs
+}
+
+func trackedDeployment() *unstructured.Unstructured {
+	obj := newDeployment("flux-system", "web")
+	obj.SetAnnotations(map[string]string{"argocd.argoproj.io/tracking-id": "podinfo:apps/Deployment:flux-system/web"})
+	return obj
+}
+
+func argoApplication(namespace, name string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1",
+		"kind":       "Application",
+		"metadata":   map[string]any{"name": name, "namespace": namespace},
+	}}
+}
+
+func argoManager(t *testing.T, objs ...runtime.Object) *Manager {
+	t.Helper()
+	kinds := listKinds()
+	kinds[schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "applications"}] = "ApplicationList"
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, objs...)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	return NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: argoDescs()})
+}
+
+func TestObjectLocatesTheApplicationThatTracksIt(t *testing.T) {
+	mgr := argoManager(t, trackedDeployment(), argoApplication("argocd", "podinfo"))
+
+	detail, err := mgr.Object(context.Background(), deploymentRef())
+	if err != nil {
+		t.Fatalf("object: %v", err)
+	}
+
+	if detail.ManagedBy == nil {
+		t.Fatal("the tracked deployment reported no owner")
+	}
+	if detail.ManagedBy.Ref.Namespace != "argocd" {
+		t.Fatalf("ref = %+v, want the namespace filled in", detail.ManagedBy.Ref)
+	}
+	if detail.ManagedBy.Ref.Resource != "applications" {
+		t.Fatalf("ref = %+v, want the plural resource filled in", detail.ManagedBy.Ref)
+	}
+}
+
+func TestObjectDropsAnOwnerItCannotFind(t *testing.T) {
+	mgr := argoManager(t, trackedDeployment())
+
+	detail, err := mgr.Object(context.Background(), deploymentRef())
+	if err != nil {
+		t.Fatalf("object: %v", err)
+	}
+
+	if detail.ManagedBy != nil {
+		t.Fatalf("owner = %+v, want none when the application is not there", detail.ManagedBy)
+	}
+}
+
+func TestObjectDropsAnOwnerWhoseKindIsNotInstalled(t *testing.T) {
+	mgr := inspectManager(t, trackedDeployment())
+
+	detail, err := mgr.Object(context.Background(), deploymentRef())
+	if err != nil {
+		t.Fatalf("object: %v", err)
+	}
+
+	if detail.ManagedBy != nil {
+		t.Fatalf("owner = %+v, want none without argo installed", detail.ManagedBy)
+	}
+}
+
+func TestObjectKeepsAFluxOwnerAsLabelled(t *testing.T) {
+	obj := newDeployment("flux-system", "web")
+	obj.SetLabels(map[string]string{
+		"kustomize.toolkit.fluxcd.io/name":      "apps",
+		"kustomize.toolkit.fluxcd.io/namespace": "flux-system",
+	})
+	descs := testDescs()
+	descs[discovery.Key("kustomize.toolkit.fluxcd.io", "v1", "kustomizations")] = api.ResourceDescriptor{
+		Group:      "kustomize.toolkit.fluxcd.io",
+		Version:    "v1",
+		Resource:   "kustomizations",
+		Kind:       "Kustomization",
+		Namespaced: true,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, Deps{Dynamic: newClient(t, obj), Clientset: k8sfake.NewClientset(), Descriptors: descs})
+
+	detail, err := mgr.Object(context.Background(), deploymentRef())
+	if err != nil {
+		t.Fatalf("object: %v", err)
+	}
+
+	if detail.ManagedBy == nil || detail.ManagedBy.Ref.Resource != "kustomizations" {
+		t.Fatalf("owner = %+v", detail.ManagedBy)
+	}
+}
+
+func fluxSourceDescs() map[string]api.ResourceDescriptor {
+	descs := testDescs()
+	descs[discovery.Key("source.toolkit.fluxcd.io", "v1", "gitrepositories")] = api.ResourceDescriptor{
+		Group:      "source.toolkit.fluxcd.io",
+		Version:    "v1",
+		Resource:   "gitrepositories",
+		Kind:       "GitRepository",
+		Namespaced: true,
+	}
+	descs[discovery.Key("kustomize.toolkit.fluxcd.io", "v1", "kustomizations")] = api.ResourceDescriptor{
+		Group:      "kustomize.toolkit.fluxcd.io",
+		Version:    "v1",
+		Resource:   "kustomizations",
+		Kind:       "Kustomization",
+		Namespaced: true,
+	}
+	return descs
+}
+
+func gitRepository() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "source.toolkit.fluxcd.io/v1",
+		"kind":       "GitRepository",
+		"metadata":   map[string]any{"name": "infra", "namespace": "flux-system"},
+		"spec":       map[string]any{"url": "https://example.test/infra"},
+	}}
+}
+
+func consumer(name, sourceName, sourceNamespace string) *unstructured.Unstructured {
+	ref := map[string]any{"kind": "GitRepository", "name": sourceName}
+	if sourceNamespace != "" {
+		ref["namespace"] = sourceNamespace
+	}
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"name": name, "namespace": "flux-system"},
+		"spec":       map[string]any{"sourceRef": ref},
+	}}
+}
+
+func sourceRef() api.ObjectRef {
+	return api.ObjectRef{
+		Group:     "source.toolkit.fluxcd.io",
+		Version:   "v1",
+		Resource:  "gitrepositories",
+		Namespace: "flux-system",
+		Name:      "infra",
+	}
+}
+
+func sourceManager(t *testing.T, objs ...runtime.Object) *Manager {
+	t.Helper()
+	kinds := listKinds()
+	kinds[schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}] = "GitRepositoryList"
+	kinds[schema.GroupVersionResource{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Resource: "kustomizations"}] = "KustomizationList"
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, objs...)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	return NewManager(ctx, Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset(), Descriptors: fluxSourceDescs()})
+}
+
+func TestASourceNamesWhatReadsIt(t *testing.T) {
+	mgr := sourceManager(t, gitRepository(), consumer("apps", "infra", ""), consumer("infra-config", "infra", "flux-system"))
+
+	detail, err := mgr.Object(context.Background(), sourceRef())
+	if err != nil {
+		t.Fatalf("object: %v", err)
+	}
+
+	if len(detail.Consumers) != 2 {
+		t.Fatalf("consumers = %+v, want both kustomizations", detail.Consumers)
+	}
+	if detail.Consumers[0].Ref.Name != "apps" || detail.Consumers[1].Ref.Name != "infra-config" {
+		t.Fatalf("consumers = %+v, want them sorted", detail.Consumers)
+	}
+	if detail.Consumers[0].Kind != "Kustomization" {
+		t.Fatalf("consumer = %+v", detail.Consumers[0])
+	}
+}
+
+func TestASourceIgnoresWhatReadsAnotherSource(t *testing.T) {
+	mgr := sourceManager(t, gitRepository(), consumer("apps", "something-else", ""))
+
+	detail, err := mgr.Object(context.Background(), sourceRef())
+	if err != nil {
+		t.Fatalf("object: %v", err)
+	}
+
+	if len(detail.Consumers) != 0 {
+		t.Fatalf("consumers = %+v, want none", detail.Consumers)
+	}
+}
+
+func TestASourceIgnoresAConsumerInAnotherNamespace(t *testing.T) {
+	other := consumer("apps", "infra", "elsewhere")
+	mgr := sourceManager(t, gitRepository(), other)
+
+	detail, err := mgr.Object(context.Background(), sourceRef())
+	if err != nil {
+		t.Fatalf("object: %v", err)
+	}
+
+	if len(detail.Consumers) != 0 {
+		t.Fatalf("consumers = %+v, want none", detail.Consumers)
+	}
+}
+
+func TestAPlainObjectNamesNoConsumers(t *testing.T) {
+	mgr := sourceManager(t, newDeployment("flux-system", "web"))
+
+	detail, err := mgr.Object(context.Background(), deploymentRef())
+	if err != nil {
+		t.Fatalf("object: %v", err)
+	}
+
+	if detail.Consumers != nil {
+		t.Fatalf("consumers = %+v, want none for a deployment", detail.Consumers)
 	}
 }

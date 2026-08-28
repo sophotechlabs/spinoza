@@ -11,6 +11,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/flux"
+	"github.com/sophotechlabs/spinoza/internal/gitops"
 	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
@@ -82,6 +85,12 @@ func statusFor(err error) int {
 	case errors.Is(err, helm.ErrNoRelease):
 		return http.StatusNotFound
 	case errors.Is(err, helm.ErrFluxManaged):
+		return http.StatusConflict
+	case errors.Is(err, argocd.ErrRefused):
+		return http.StatusConflict
+	case errors.Is(err, gitops.ErrNotAnApplier):
+		return http.StatusBadRequest
+	case errors.Is(err, flux.ErrNoSource):
 		return http.StatusConflict
 	case cannotReachCluster(err):
 		return http.StatusServiceUnavailable

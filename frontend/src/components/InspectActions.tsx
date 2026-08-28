@@ -4,12 +4,17 @@ import { pollReconcile, runFluxAction } from '../lib/fluxActions';
 import type { FluxAction, ReconcileProgress, ReconcileState } from '../lib/fluxActions';
 import Announce from './Announce';
 import { useRefusal } from '../store/access';
+import { useGitopsKeys } from '../lib/gitopsKeys';
 
 interface InspectActionsProps {
   target: ObjectRef;
   suspended?: boolean;
+  terminating?: boolean;
+  sourced?: boolean;
   onDone: () => void;
 }
+
+const TERMINATING = 'this object is being deleted';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -21,6 +26,9 @@ function errorMessage(err: unknown): string {
 function noticeFor(action: FluxAction): string {
   if (action === 'reconcile') {
     return 'Reconciliation requested';
+  }
+  if (action === 'reconcile-with-source') {
+    return 'Source and object asked to reconcile';
   }
   if (action === 'suspend') {
     return 'Suspended.';
@@ -38,7 +46,13 @@ function noticeClass(state: ReconcileState | null): string {
   return 'mt-1.5 break-words text-ok';
 }
 
-export default function InspectActions({ target, suspended, onDone }: InspectActionsProps) {
+export default function InspectActions({
+  target,
+  suspended,
+  terminating,
+  sourced,
+  onDone,
+}: InspectActionsProps) {
   const [busy, setBusy] = useState<FluxAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -72,7 +86,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
       }
       setNotice(noticeFor(action));
       onDone();
-      if (action === 'reconcile' && result.requestedAt !== undefined) {
+      if (action !== 'suspend' && action !== 'resume' && result.requestedAt !== undefined) {
         void watch(result.requestedAt, token);
       }
     } catch (err: unknown) {
@@ -101,7 +115,26 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
   }
 
   const refused = useRefusal(target, 'reconcile');
-  const disabled = busy !== null || refused !== null;
+  const disabled = busy !== null || refused !== null || terminating === true;
+  let blocked = refused;
+  if (terminating === true) {
+    blocked = TERMINATING;
+  }
+
+  useGitopsKeys({
+    sync: () => {
+      if (disabled) {
+        return;
+      }
+      void run('reconcile');
+    },
+    deepRefresh: () => {
+      if (disabled || sourced !== true) {
+        return;
+      }
+      void run('reconcile-with-source');
+    },
+  });
 
   return (
     <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
@@ -110,17 +143,28 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
           type="button"
           onClick={() => void run('reconcile')}
           disabled={disabled}
-          title={refused ?? undefined}
+          title={blocked ?? undefined}
           className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
           Reconcile
         </button>
+        {sourced === true && (
+          <button
+            type="button"
+            onClick={() => void run('reconcile-with-source')}
+            disabled={disabled}
+            title={blocked ?? 'Ask the repository to fetch first, then reconcile this'}
+            className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+          >
+            With source
+          </button>
+        )}
         {suspended === true && (
           <button
             type="button"
             onClick={() => void run('resume')}
             disabled={disabled}
-            title={refused ?? undefined}
+            title={blocked ?? undefined}
             className="rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Resume
@@ -131,7 +175,7 @@ export default function InspectActions({ target, suspended, onDone }: InspectAct
             type="button"
             onClick={() => void run('suspend')}
             disabled={disabled}
-            title={refused ?? undefined}
+            title={blocked ?? undefined}
             className="rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Suspend

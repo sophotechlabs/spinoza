@@ -145,3 +145,31 @@ describe('ArgoList', () => {
     expect(await screen.findByText(/argo is unreachable/)).toBeInTheDocument();
   });
 });
+
+describe('the repository and automation columns', () => {
+  it('shows the repository the controller resolved', async () => {
+    stub({ apps: [makeApp('web')], applicationSets: [], projects: [] });
+    render(<ArgoList onSelect={vi.fn()} />);
+
+    expect(await screen.findByText('https://git/apps')).toBeInTheDocument();
+  });
+
+  it('shows how the application automates itself', async () => {
+    stub({
+      apps: [makeApp('web', { automation: 'auto · prune, self-heal' })],
+      applicationSets: [],
+      projects: [],
+    });
+    render(<ArgoList onSelect={vi.fn()} />);
+
+    expect(await screen.findByText('auto · prune, self-heal')).toBeInTheDocument();
+  });
+
+  it('leaves a dash where a row carries no policy', async () => {
+    stub({ apps: [makeApp('web')], applicationSets: [], projects: [] });
+    render(<ArgoList onSelect={vi.fn()} />);
+
+    await screen.findByText('https://git/apps');
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+  });
+});

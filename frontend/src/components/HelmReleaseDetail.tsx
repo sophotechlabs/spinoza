@@ -215,7 +215,7 @@ export default function HelmReleaseDetail({
           {fluxRef !== undefined && (
             <button
               type="button"
-              title="Flux manages this release, change it there"
+              title="Flux manages this release. A helm upgrade here goes back at the next reconcile."
               onClick={() => {
                 onSelectResource(fluxRef);
               }}

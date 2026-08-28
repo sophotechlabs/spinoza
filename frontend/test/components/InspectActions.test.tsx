@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectActions from '../../src/components/InspectActions';
 import type { ObjectRef } from '../../src/lib/types';
@@ -14,9 +14,17 @@ const target: ObjectRef = {
   name: 'apps',
 };
 
-function renderActions(suspended?: boolean) {
+function renderActions(suspended?: boolean, terminating?: boolean, sourced?: boolean) {
   const onDone = vi.fn();
-  const view = render(<InspectActions target={target} suspended={suspended} onDone={onDone} />);
+  const view = render(
+    <InspectActions
+      target={target}
+      suspended={suspended}
+      terminating={terminating}
+      sourced={sourced}
+      onDone={onDone}
+    />,
+  );
   return { onDone, view };
 }
 
@@ -361,5 +369,101 @@ describe('gitops buttons the cluster would refuse', () => {
     renderActions(false);
 
     expect(screen.getByRole('button', { name: 'Reconcile' })).toBeEnabled();
+  });
+});
+
+describe('a flux object that is being deleted', () => {
+  it('stops every operation and says why', () => {
+    renderActions(false, true);
+
+    const reconcile = screen.getByRole('button', { name: 'Reconcile' });
+    expect(reconcile).toBeDisabled();
+    expect(reconcile).toHaveAttribute('title', 'this object is being deleted');
+    expect(screen.getByRole('button', { name: 'Suspend' })).toBeDisabled();
+  });
+});
+
+describe('reconciling with the source', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ action: 'reconcile-with-source', requestedAt: '' }),
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('offers it only when the object names a source', () => {
+    renderActions(false, false, false);
+
+    expect(screen.queryByRole('button', { name: 'With source' })).not.toBeInTheDocument();
+  });
+
+  it('asks the source and the object together', async () => {
+    const user = userEvent.setup();
+    renderActions(false, false, true);
+
+    await user.click(screen.getByRole('button', { name: 'With source' }));
+
+    expect(lastCallUrl()).toContain('action=reconcile-with-source');
+    expect(await screen.findByText(/Source and object asked to reconcile/)).toBeInTheDocument();
+  });
+});
+
+describe('the flux key bindings', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ action: 'reconcile', requestedAt: '' }),
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reconciles on s', async () => {
+    renderActions();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
+
+    await waitFor(() => {
+      expect(lastCallUrl()).toContain('action=reconcile');
+    });
+  });
+
+  it('reconciles with the source on shift r', async () => {
+    renderActions(false, false, true);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', bubbles: true }));
+
+    await waitFor(() => {
+      expect(lastCallUrl()).toContain('action=reconcile-with-source');
+    });
+  });
+
+  it('leaves shift r alone when the object names no source', () => {
+    renderActions(false, false, false);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', bubbles: true }));
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('leaves the keys alone while the object is being deleted', () => {
+    renderActions(false, true, true);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', bubbles: true }));
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

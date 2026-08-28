@@ -328,7 +328,112 @@ func (m *Manager) descriptors() map[string]api.ResourceDescriptor {
 }
 
 func (m *Manager) Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDetail, error) {
-	return inspect.Get(ctx, m.dyn, ref)
+	detail, err := inspect.Get(ctx, m.dyn, ref)
+	if err != nil {
+		return detail, err
+	}
+	m.locateOwner(ctx, &detail)
+	m.locateConsumers(ctx, ref, &detail)
+	return detail, nil
+}
+
+func (m *Manager) locateConsumers(ctx context.Context, ref api.ObjectRef, detail *api.ObjectDetail) {
+	source, known := m.descriptors()[discovery.Key(ref.Group, ref.Version, ref.Resource)]
+	if !known || !flux.IsSource(source) {
+		return
+	}
+	found := []api.GitopsOwner{}
+	for _, desc := range m.descriptors() {
+		if !flux.Applies(desc) {
+			continue
+		}
+		found = append(found, m.consumersOf(ctx, desc, source.Kind, ref)...)
+	}
+	slices.SortFunc(found, func(left, right api.GitopsOwner) int {
+		return strings.Compare(left.Ref.Namespace+"/"+left.Ref.Name, right.Ref.Namespace+"/"+right.Ref.Name)
+	})
+	detail.Consumers = found
+}
+
+func (m *Manager) consumersOf(ctx context.Context, desc api.ResourceDescriptor, kind string, source api.ObjectRef) []api.GitopsOwner {
+	items, err := m.List(ctx, desc)
+	if err != nil {
+		return nil
+	}
+	out := []api.GitopsOwner{}
+	for _, item := range items {
+		if !reads(item, kind, source) {
+			continue
+		}
+		out = append(out, api.GitopsOwner{
+			Controller: api.ControllerFlux,
+			Kind:       desc.Kind,
+			Ref: api.ObjectRef{
+				Group:     desc.Group,
+				Version:   desc.Version,
+				Resource:  desc.Resource,
+				Namespace: item.GetNamespace(),
+				Name:      item.GetName(),
+			},
+		})
+	}
+	return out
+}
+
+func reads(item *unstructured.Unstructured, kind string, source api.ObjectRef) bool {
+	refKind, refName, refNamespace := flux.SourceRef(item)
+	if refKind != kind || refName != source.Name {
+		return false
+	}
+	if refNamespace == "" {
+		refNamespace = item.GetNamespace()
+	}
+	return refNamespace == source.Namespace
+}
+
+func (m *Manager) locateOwner(ctx context.Context, detail *api.ObjectDetail) {
+	owner := detail.ManagedBy
+	if owner == nil {
+		return
+	}
+	desc, known := m.kindDescriptor(owner.Ref.Group, owner.Kind)
+	if !known {
+		detail.ManagedBy = nil
+		return
+	}
+	owner.Ref.Version = desc.Version
+	owner.Ref.Resource = desc.Resource
+	if owner.Ref.Namespace != "" {
+		return
+	}
+	namespace, found := m.namespaceOf(ctx, desc, owner.Ref.Name)
+	if !found {
+		detail.ManagedBy = nil
+		return
+	}
+	owner.Ref.Namespace = namespace
+}
+
+func (m *Manager) kindDescriptor(group, kind string) (api.ResourceDescriptor, bool) {
+	for _, desc := range m.descriptors() {
+		if desc.Group == group && desc.Kind == kind {
+			return desc, true
+		}
+	}
+	return api.ResourceDescriptor{}, false
+}
+
+func (m *Manager) namespaceOf(ctx context.Context, desc api.ResourceDescriptor, name string) (string, bool) {
+	items, err := m.List(ctx, desc)
+	if err != nil {
+		return "", false
+	}
+	for _, item := range items {
+		if item.GetName() == name {
+			return item.GetNamespace(), true
+		}
+	}
+	return "", false
 }
 
 func (m *Manager) ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error) {
@@ -400,11 +505,11 @@ func (m *Manager) PodSelector(ctx context.Context, ref api.ObjectRef) (string, e
 }
 
 func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error) {
-	return flux.Do(ctx, m.dyn, ref, action, time.Now())
+	return flux.Do(ctx, m.dyn, m.descriptors(), ref, action, time.Now())
 }
 
-func (m *Manager) ArgoAction(ctx context.Context, ref api.ObjectRef, action argocd.Action) (api.ArgoActionResult, error) {
-	return argocd.Do(ctx, m.dyn, ref, action)
+func (m *Manager) ArgoAction(ctx context.Context, ref api.ObjectRef, req argocd.Request) (api.ArgoActionResult, error) {
+	return argocd.Do(ctx, m.dyn, ref, req)
 }
 
 func (m *Manager) Action(ctx context.Context, req actions.Request) (api.ActionResult, error) {
@@ -573,6 +678,18 @@ func (m *Manager) Topology(ctx context.Context, req topology.Request) api.Graph 
 	return topology.Build(ctx, m, m.descriptors(), req)
 }
 
+func (m *Manager) GitopsApp(ctx context.Context, ref api.ObjectRef) (api.GitopsApp, error) {
+	return gitops.Detail(ctx, m.dyn, m.descriptors(), ref)
+}
+
+func (m *Manager) GitopsAppGraph(ctx context.Context, ref api.ObjectRef) (api.Graph, error) {
+	app, err := gitops.Detail(ctx, m.dyn, m.descriptors(), ref)
+	if err != nil {
+		return api.Graph{}, err
+	}
+	return gitops.AppGraph(app), nil
+}
+
 func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
 	return flux.Build(ctx, m, m.descriptors(), m.charts)
 }
@@ -683,7 +800,9 @@ func (c cachedNodes) List(ctx context.Context) ([]*unstructured.Unstructured, er
 }
 
 func (m *Manager) Overview(ctx context.Context) api.ClusterOverview {
-	return overview.Build(ctx, m.dyn, m.meta, m, m.versions(), m.descriptors())
+	out := overview.Build(ctx, m.dyn, m.meta, m, m.versions(), m.descriptors())
+	out.Controllers = gitops.Controllers(ctx, m.cs)
+	return out
 }
 
 func (m *Manager) Issues(ctx context.Context) api.IssueQueue {

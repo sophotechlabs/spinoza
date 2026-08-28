@@ -216,7 +216,16 @@ describe('the shortcut list', () => {
   it('names every binding the hook implements', () => {
     onPlatform(mac);
 
-    expect(shortcuts().map((hotkey) => hotkey.keys)).toEqual(['⌘K', '/', '?', 'Esc']);
+    expect(shortcuts().map((hotkey) => hotkey.keys)).toEqual([
+      '⌘K',
+      '/',
+      '?',
+      'Esc',
+      's',
+      'r',
+      'Shift R',
+      't',
+    ]);
   });
 
   it('spells the palette chord the way the keyboard does', () => {

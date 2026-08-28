@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { NodeSummary, OverviewEvent, PodSummary } from '../lib/types';
+import type { GitopsController, NodeSummary, OverviewEvent, PodSummary } from '../lib/types';
 import { percentOf, useOverview } from '../lib/overview';
 import { cpuFromMilli, memFromMi } from '../lib/units';
 import { ago } from '../lib/time';
@@ -143,6 +143,53 @@ function Warnings({ warnings, now }: { warnings: OverviewEvent[]; now: number })
   );
 }
 
+const CONTROLLER_LABELS: Record<string, string> = {
+  argocd: 'Argo CD',
+  flux: 'Flux',
+};
+
+function controllerLabel(controller: string): string {
+  return CONTROLLER_LABELS[controller] ?? controller;
+}
+
+function controllerClass(one: GitopsController): string {
+  if (one.ready >= one.wanted && one.wanted > 0) {
+    return 'text-ok';
+  }
+  return 'text-error';
+}
+
+function Controllers({ controllers }: { controllers: GitopsController[] }) {
+  if (controllers.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      <h2 className="mt-4 mb-2 text-[11px] tracking-wide text-fg-muted uppercase">
+        GitOps controllers
+      </h2>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {controllers.map((one) => (
+          <div
+            key={`${one.namespace}/${one.name}`}
+            className="rounded border border-edge px-2 py-1.5"
+          >
+            <div className="truncate text-fg-strong" title={`${one.namespace}/${one.name}`}>
+              {one.name}
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-fg-muted">{controllerLabel(one.controller)}</span>
+              <span className={`ml-auto ${controllerClass(one)}`}>
+                {one.ready} of {one.wanted}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function eventKey(warning: OverviewEvent): string {
   return `${warning.namespace}/${warning.object}/${warning.reason}/${warning.lastSeen}`;
 }
@@ -179,6 +226,8 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
             hint="the newest events shown"
           />
         </div>
+
+        <Controllers controllers={data.controllers ?? []} />
 
         <h2 className="mt-4 mb-2 text-[11px] tracking-wide text-fg-muted uppercase">
           Allocatable capacity

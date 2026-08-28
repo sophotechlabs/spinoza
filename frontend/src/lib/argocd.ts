@@ -23,6 +23,7 @@ function appOf(raw: unknown): ArgoApp {
   const item = raw as Partial<ArgoApp>;
   return {
     kind: item.kind ?? '',
+    automation: item.automation,
     group: item.group ?? '',
     version: item.version ?? '',
     resource: item.resource ?? '',

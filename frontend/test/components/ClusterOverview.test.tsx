@@ -231,3 +231,66 @@ describe('ClusterOverview', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThan(before);
   });
 });
+
+describe('the gitops controllers card', () => {
+  it('rolls up both ecosystems', async () => {
+    stub(
+      overview({
+        controllers: [
+          {
+            controller: 'argocd',
+            name: 'argocd-application-controller',
+            namespace: 'argocd',
+            ready: 1,
+            wanted: 1,
+          },
+          {
+            controller: 'flux',
+            name: 'source-controller',
+            namespace: 'flux-system',
+            ready: 1,
+            wanted: 1,
+          },
+        ],
+      }),
+    );
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText('GitOps controllers')).toBeInTheDocument();
+    expect(screen.getByText('argocd-application-controller')).toBeInTheDocument();
+    expect(screen.getByText('Argo CD')).toBeInTheDocument();
+    expect(screen.getByText('Flux')).toBeInTheDocument();
+  });
+
+  it('says how many of each are running', async () => {
+    stub(
+      overview({
+        controllers: [
+          { controller: 'argocd', name: 'argocd-server', namespace: 'argocd', ready: 0, wanted: 2 },
+        ],
+      }),
+    );
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText('0 of 2')).toBeInTheDocument();
+  });
+
+  it('names a controller it does not know', async () => {
+    stub(
+      overview({
+        controllers: [{ controller: 'other', name: 'thing', namespace: 'x', ready: 1, wanted: 1 }],
+      }),
+    );
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText('other')).toBeInTheDocument();
+  });
+
+  it('stays away from a cluster with no gitops', async () => {
+    stub(overview());
+    render(<ClusterOverview />);
+
+    await screen.findByText('Cluster');
+    expect(screen.queryByText('GitOps controllers')).not.toBeInTheDocument();
+  });
+});

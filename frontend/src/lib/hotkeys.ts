@@ -28,7 +28,18 @@ export function shortcuts(): Hotkey[] {
     { keys: '/', description: 'Jump to the resource filter' },
     { keys: '?', description: 'Show this list' },
     { keys: 'Esc', description: 'Close the palette or dialog, then the inspector' },
+    { keys: 's', description: 'Sync or reconcile the selected gitops object' },
+    { keys: 'r', description: 'Refresh the selected Argo application' },
+    { keys: 'Shift R', description: 'Hard refresh it, or reconcile a Flux object with its source' },
+    { keys: 't', description: 'Terminate the operation running on it' },
   ];
+}
+
+export function ignorable(event: KeyboardEvent): boolean {
+  if (held(event)) {
+    return true;
+  }
+  return typing(event.target);
 }
 
 export interface HotkeyActions {

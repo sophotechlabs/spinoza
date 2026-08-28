@@ -569,3 +569,78 @@ describe('parseUpdateResult', () => {
     expect(result.command).toContain('install.sh');
   });
 });
+
+describe('an object detail that carries gitops facts', () => {
+  it('reads the deletion state and what holds it', () => {
+    const detail = parseObjectDetail({
+      terminating: true,
+      finalizers: ['foregroundDeletion'],
+    });
+
+    expect(detail.terminating).toBe(true);
+    expect(detail.finalizers).toEqual(['foregroundDeletion']);
+  });
+
+  it('leaves an object that is not going away unmarked', () => {
+    const detail = parseObjectDetail({});
+
+    expect(detail.terminating).toBeUndefined();
+    expect(detail.finalizers).toBeUndefined();
+  });
+
+  it('reads a deletion with no finalizers left', () => {
+    const detail = parseObjectDetail({ terminating: true });
+
+    expect(detail.terminating).toBe(true);
+    expect(detail.finalizers).toEqual([]);
+  });
+
+  it('reads the controller that owns it', () => {
+    const detail = parseObjectDetail({
+      managedBy: {
+        controller: 'argocd',
+        kind: 'Application',
+        ref: {
+          group: 'argoproj.io',
+          version: 'v1alpha1',
+          resource: 'applications',
+          namespace: 'argocd',
+          name: 'podinfo',
+        },
+      },
+    });
+
+    expect(detail.managedBy?.controller).toBe('argocd');
+    expect(detail.managedBy?.ref.name).toBe('podinfo');
+  });
+
+  it('reads the source a flux object follows', () => {
+    expect(parseObjectDetail({ source: 'GitRepository/flux-system' }).source).toBe(
+      'GitRepository/flux-system',
+    );
+  });
+
+  it('reads the consumers of a source', () => {
+    const detail = parseObjectDetail({
+      consumers: [
+        {
+          controller: 'flux',
+          kind: 'Kustomization',
+          ref: {
+            group: 'kustomize.toolkit.fluxcd.io',
+            version: 'v1',
+            resource: 'kustomizations',
+            namespace: 'flux-system',
+            name: 'apps',
+          },
+        },
+      ],
+    });
+
+    expect(detail.consumers?.[0].ref.name).toBe('apps');
+  });
+
+  it('leaves an unowned object without a chip', () => {
+    expect(parseObjectDetail({}).managedBy).toBeUndefined();
+  });
+});

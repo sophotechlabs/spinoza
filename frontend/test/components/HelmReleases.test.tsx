@@ -443,3 +443,37 @@ describe('what the install dialog starts on', () => {
     expect(await screen.findByTitle('Checking whether helm can be run')).toBeInTheDocument();
   });
 });
+
+describe('a release flux installed', () => {
+  it('carries a badge that says a manual upgrade goes back', async () => {
+    stub({
+      releases: [
+        release({
+          fluxRef: {
+            group: 'helm.toolkit.fluxcd.io',
+            version: 'v2',
+            resource: 'helmreleases',
+            namespace: 'flux-system',
+            name: 'podinfo',
+          },
+        }),
+      ],
+    });
+    render(<HelmReleases onSelect={vi.fn()} selected={null} />);
+
+    const badge = await screen.findByTitle(
+      'Flux installed this release. A helm upgrade here goes back at the next reconcile.',
+    );
+
+    expect(badge).toHaveTextContent('Flux');
+  });
+
+  it('leaves a release nothing owns unbadged', async () => {
+    stub({ releases: [release()] });
+    render(<HelmReleases onSelect={vi.fn()} selected={null} />);
+
+    await screen.findByRole('button', { name: 'podinfo' });
+
+    expect(screen.queryByText('Flux')).not.toBeInTheDocument();
+  });
+});

@@ -37,6 +37,7 @@ import InspectLogs from './InspectLogs';
 import ForwardsPanel from './ForwardsPanel';
 import TerminalTab from './TerminalTab';
 import ReleasePanel from './ReleasePanel';
+import GitopsAppPanel from './GitopsAppPanel';
 import ComparePanel from './ComparePanel';
 import Loading from './Loading';
 
@@ -167,6 +168,11 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
       onClose={ctx.onReleaseClose}
     />
   ),
+  app: (ctx) => (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <GitopsAppPanel target={refOf(ctx.selection)} onSelectResource={ctx.onSelectResource} />
+    </div>
+  ),
   compare: (ctx) => (
     <div className="flex min-h-0 flex-1 flex-col">
       <ComparePanel
@@ -181,10 +187,21 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
     objectPanel(ctx, (selection, detail) => (
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isFluxObject(detail.apiVersion) && (
-          <InspectActions target={selection.ref} suspended={detail.suspended} onDone={ctx.reload} />
+          <InspectActions
+            target={selection.ref}
+            suspended={detail.suspended}
+            terminating={detail.terminating}
+            sourced={detail.source !== undefined}
+            onDone={ctx.reload}
+          />
         )}
         {isArgoApplication(detail.apiVersion, detail.kind) && (
-          <ArgoActions target={selection.ref} onDone={ctx.reload} />
+          <ArgoActions
+            target={selection.ref}
+            suspended={detail.suspended}
+            terminating={detail.terminating}
+            onDone={ctx.reload}
+          />
         )}
         {hasActions(selection.ref) && (
           <InspectObjectActions target={selection.ref} detail={detail} onDone={ctx.reload} />
@@ -196,7 +213,11 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
             ports={detail.ports}
           />
         )}
-        <InspectOverview detail={detail} containers={liveContainers(selection)} />
+        <InspectOverview
+          detail={detail}
+          containers={liveContainers(selection)}
+          onOpenOwner={ctx.onSelectResource}
+        />
       </div>
     )),
   yaml: (ctx) =>

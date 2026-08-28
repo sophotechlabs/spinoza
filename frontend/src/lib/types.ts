@@ -154,6 +154,11 @@ export interface ObjectDetail {
   data?: DataEntry[];
   yaml: string;
   suspended?: boolean;
+  terminating?: boolean;
+  finalizers?: string[];
+  managedBy?: GitopsOwner;
+  source?: string;
+  consumers?: GitopsOwner[];
   pod?: PodDetail;
   workload?: WorkloadDetail;
   node?: NodeDetail;
@@ -311,6 +316,7 @@ export const ARGO_VIEWS: View[] = ['argo-apps', 'argo-graph', 'argo-list'];
 
 export interface ArgoApp {
   kind: string;
+  automation?: string;
   group: string;
   version: string;
   resource: string;
@@ -326,6 +332,98 @@ export interface ArgoApp {
   message: string;
   owner?: string;
   createdAt: string;
+}
+
+export interface GitopsOwner {
+  controller: string;
+  kind: string;
+  ref: ObjectRef;
+}
+
+export interface GitopsSource {
+  repo?: string;
+  path?: string;
+  target?: string;
+  destination?: string;
+  project?: string;
+  syncMode: string;
+  policy?: string;
+}
+
+export interface GitopsState {
+  sync?: string;
+  health?: string;
+  revision?: string;
+  createdAt?: string;
+  syncedAt?: string;
+  message?: string;
+}
+
+export interface GitopsIssue {
+  severity: string;
+  title: string;
+  detail?: string;
+  subject?: string;
+}
+
+export interface FieldDrift {
+  path: string;
+  declared: string;
+  live: string;
+}
+
+export interface GitopsResource {
+  group?: string;
+  version?: string;
+  resource?: string;
+  kind: string;
+  name: string;
+  namespace?: string;
+  sync?: string;
+  health?: string;
+  message?: string;
+  terminating?: boolean;
+  finalizers?: string[];
+  drift?: FieldDrift[];
+  driftNote?: string;
+  events?: K8sEvent[];
+}
+
+export interface GitopsDeployment {
+  id: number;
+  revision: string;
+  source?: string;
+  startedAt?: string;
+  deployedAt?: string;
+  initiatedBy?: string;
+  automated?: boolean;
+}
+
+export interface GitopsOperation {
+  phase: string;
+  running?: boolean;
+  message?: string;
+  cause?: string;
+  revision?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  initiatedBy?: string;
+}
+
+export interface GitopsApp {
+  ref: ObjectRef;
+  controller: string;
+  terminating?: boolean;
+  kind: string;
+  name: string;
+  namespace: string;
+  source: GitopsSource;
+  state: GitopsState;
+  issues?: GitopsIssue[];
+  resources?: GitopsResource[];
+  history?: GitopsDeployment[];
+  operation?: GitopsOperation;
+  error?: string;
 }
 
 export interface ArgoDashboard {
@@ -518,11 +616,20 @@ export interface OverviewEvent {
   lastSeen: string;
 }
 
+export interface GitopsController {
+  controller: string;
+  name: string;
+  namespace: string;
+  ready: number;
+  wanted: number;
+}
+
 export interface ClusterOverview {
   version: string;
   nodes: NodeSummary;
   pods: PodSummary;
   warnings: OverviewEvent[];
+  controllers?: GitopsController[];
   error?: string;
 }
 
