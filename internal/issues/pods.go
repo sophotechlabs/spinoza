@@ -16,6 +16,8 @@ const (
 	phaseSucceeded = "Succeeded"
 )
 
+const titleCrashLoop = "CrashLoopBackOff"
+
 var containerStatusFields = []string{
 	"initContainerStatuses",
 	"containerStatuses",
@@ -118,7 +120,7 @@ func containerSymptomOf(entry map[string]any) (symptom, bool) {
 		return waitingSymptom(name, waiting, entry)
 	}
 	if terminated, isTerminated := state["terminated"].(map[string]any); isTerminated {
-		return terminatedSymptom(name, terminated)
+		return terminatedSymptom(name, terminated, entry)
 	}
 	return symptom{}, false
 }
@@ -127,13 +129,8 @@ func waitingSymptom(name string, waiting, entry map[string]any) (symptom, bool) 
 	reason := unstr.At(waiting, "reason")
 	message := unstr.At(waiting, "message")
 	switch {
-	case reason == "CrashLoopBackOff":
-		return symptom{
-			severity: severityFatal,
-			title:    reason,
-			detail:   crashDetail(name, entry),
-			action:   "read the container's logs",
-		}, true
+	case reason == titleCrashLoop:
+		return crashSymptom(name, entry), true
 	case imageReasons[reason]:
 		return symptom{
 			severity: severityFatal,
@@ -152,17 +149,46 @@ func waitingSymptom(name string, waiting, entry map[string]any) (symptom, bool) 
 	return symptom{}, false
 }
 
-func terminatedSymptom(name string, terminated map[string]any) (symptom, bool) {
+func terminatedSymptom(name string, terminated, entry map[string]any) (symptom, bool) {
 	reason := unstr.At(terminated, "reason")
-	if reason != "OOMKilled" {
+	if reason == "OOMKilled" {
+		return symptom{
+			severity: severityFatal,
+			title:    reason,
+			detail:   "container " + name + " was killed for exceeding its memory limit",
+			action:   "raise the memory limit, or make it hold less",
+		}, true
+	}
+	// A container being backed off reads as terminated for most of the cycle;
+	// the waiting reason is only there between restarts.
+	if !crashing(terminated, entry) {
 		return symptom{}, false
 	}
+	return crashSymptom(name, entry), true
+}
+
+func crashing(terminated, entry map[string]any) bool {
+	code, ok := terminated["exitCode"].(int64)
+	if !ok {
+		return false
+	}
+	if code == 0 {
+		return false
+	}
+	restarts, counted := entry["restartCount"].(int64)
+	if !counted {
+		return false
+	}
+	return restarts > 0
+}
+
+func crashSymptom(name string, entry map[string]any) symptom {
 	return symptom{
 		severity: severityFatal,
-		title:    reason,
-		detail:   "container " + name + " was killed for exceeding its memory limit",
-		action:   "raise the memory limit, or make it hold less",
-	}, true
+		title:    titleCrashLoop,
+		detail:   crashDetail(name, entry),
+		action:   "read the container's logs",
+	}
 }
 
 func crashDetail(name string, entry map[string]any) string {
@@ -240,10 +266,45 @@ func unschedulableSymptom(pod *unstructured.Unstructured) (symptom, bool) {
 }
 
 func podSince(pod *unstructured.Unstructured) time.Time {
-	started := unstr.String(pod, "status", "startTime")
-	at, err := time.Parse(time.RFC3339, started)
+	broke := lastExit(pod)
+	if moved := newestCondition(pod); moved.After(broke) {
+		broke = moved
+	}
+	if !broke.IsZero() {
+		return broke
+	}
+	return podBoundAt(pod)
+}
+
+func podBoundAt(pod *unstructured.Unstructured) time.Time {
+	at, err := time.Parse(time.RFC3339, unstr.String(pod, "status", "startTime"))
 	if err == nil {
 		return at
 	}
 	return pod.GetCreationTimestamp().Time
+}
+
+func lastExit(pod *unstructured.Unstructured) time.Time {
+	newest := time.Time{}
+	for _, field := range containerStatusFields {
+		for _, raw := range unstr.Slice(pod, "status", field) {
+			entry, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			last, hasLast := entry["lastState"].(map[string]any)
+			if !hasLast {
+				continue
+			}
+			terminated, isTerminated := last["terminated"].(map[string]any)
+			if !isTerminated {
+				continue
+			}
+			at, err := time.Parse(time.RFC3339, unstr.At(terminated, "finishedAt"))
+			if err == nil && at.After(newest) {
+				newest = at
+			}
+		}
+	}
+	return newest
 }

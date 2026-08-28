@@ -37,6 +37,48 @@ func TestACrashLoopIsFatalAndNamesTheExitCode(t *testing.T) {
 	}
 }
 
+func TestAContainerBackedOffWhileTerminatedIsACrashLoop(t *testing.T) {
+	pod := newPod("web-6", withContainerEntry(map[string]any{
+		"name":         "app",
+		"restartCount": int64(3),
+		"state": map[string]any{
+			"terminated": map[string]any{"exitCode": int64(1), "reason": "Error"},
+		},
+		"lastState": map[string]any{
+			"terminated": map[string]any{"exitCode": int64(1), "reason": "Error"},
+		},
+	}))
+	lister := &stubLister{items: itemsOf("pods", pod)}
+
+	queue := build(t, lister, catalog(podDescriptor()))
+
+	row, ok := rowNamed(queue, "web-6")
+	if !ok {
+		t.Fatalf("rows = %+v, want the pod that keeps exiting", queue.Rows)
+	}
+	if row.Title != "CrashLoopBackOff" {
+		t.Fatalf("title = %q, want CrashLoopBackOff", row.Title)
+	}
+	if row.Severity != api.SeverityFatal {
+		t.Fatalf("severity = %q, want fatal", row.Severity)
+	}
+}
+
+func TestAContainerThatHasNotRestartedYetIsNotACrashLoop(t *testing.T) {
+	pod := newPod("web-7", withStartTime(testNow.Add(-time.Minute)), withContainerEntry(map[string]any{
+		"name":         "app",
+		"restartCount": int64(0),
+		"state": map[string]any{
+			"terminated": map[string]any{"exitCode": int64(1), "reason": "Error"},
+		},
+	}))
+	lister := &stubLister{items: itemsOf("pods", pod)}
+
+	if rows := build(t, lister, catalog(podDescriptor())).Rows; len(rows) != 0 {
+		t.Fatalf("rows = %+v, want none until it restarts", rows)
+	}
+}
+
 func TestAnImagePullFailureCarriesTheMessage(t *testing.T) {
 	pod := newPod("web-2", withContainer("app", map[string]any{
 		"waiting": map[string]any{"reason": "ImagePullBackOff", "message": "pull access denied"},
@@ -82,7 +124,7 @@ func TestAnOOMKillIsReported(t *testing.T) {
 	}
 }
 
-func TestATerminatedContainerThatIsNotOOMKilledIsNotAnIssue(t *testing.T) {
+func TestAContainerThatFinishedCleanlyIsNotAnIssue(t *testing.T) {
 	pod := newPod(
 		"web-5",
 		withStartTime(testNow.Add(-time.Minute)),
@@ -291,5 +333,52 @@ func TestACrashLoopNamesANonErrorTerminationReason(t *testing.T) {
 	row, _ := rowNamed(queue, "web-18")
 	if !contains(row.Detail, "(OOMKilled)") {
 		t.Fatalf("detail = %q, want the termination reason", row.Detail)
+	}
+}
+
+func TestAPodIsDatedFromWhenItBrokeNotWhenItStarted(t *testing.T) {
+	died := testNow.Add(-90 * time.Second)
+	pod := newPod(
+		"web-old",
+		withStartTime(testNow.Add(-240*time.Hour)),
+		withContainerEntry(map[string]any{
+			"name":  "app",
+			"state": map[string]any{"waiting": map[string]any{"reason": "CrashLoopBackOff"}},
+			"lastState": map[string]any{
+				"terminated": map[string]any{
+					"exitCode":   int64(1),
+					"finishedAt": died.Format(time.RFC3339),
+				},
+			},
+		}),
+	)
+	lister := &stubLister{items: itemsOf("pods", pod)}
+
+	row, _ := rowNamed(build(t, lister, catalog(podDescriptor())), "web-old")
+
+	if row.Since != died.UTC().Format(time.RFC3339) {
+		t.Fatalf("since = %q, want the last exit rather than a pod that ran fine for ten days", row.Since)
+	}
+}
+
+func TestAPodConditionDatesItWhenNothingHasExitedYet(t *testing.T) {
+	pod := newPod(
+		"web-pending",
+		withPhase(phasePending),
+		withNode(""),
+		withStartTime(testNow.Add(-240*time.Hour)),
+		withPodCondition(map[string]any{
+			"type":               "PodScheduled",
+			"status":             "False",
+			"reason":             "Unschedulable",
+			"lastTransitionTime": testNow.Add(-4 * time.Minute).Format(time.RFC3339),
+		}),
+	)
+	lister := &stubLister{items: itemsOf("pods", pod)}
+
+	row, _ := rowNamed(build(t, lister, catalog(podDescriptor())), "web-pending")
+
+	if row.Since != testNow.Add(-4*time.Minute).UTC().Format(time.RFC3339) {
+		t.Fatalf("since = %q, want the scheduling attempt", row.Since)
 	}
 }
