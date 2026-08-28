@@ -56,6 +56,7 @@ function resourceOf(raw: unknown): GitopsResource {
     terminating: item.terminating,
     finalizers: item.finalizers,
     drift: (item.drift ?? []).map(driftOf),
+    driftOwners: item.driftOwners,
     driftNote: item.driftNote,
     events: parseEvents(item.events ?? []),
   };

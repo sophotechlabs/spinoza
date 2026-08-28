@@ -158,17 +158,22 @@ function Drift({ one }: { one: GitopsResource }) {
     return <div className="mt-1 text-fg-muted">{one.driftNote}</div>;
   }
   return (
-    <ul className="mt-1 space-y-0.5">
-      {drift.map((field) => (
-        <li key={field.path} className="font-mono text-fg-soft">
-          <span>{field.path}</span> <span className="text-fg-muted">{field.declared}</span> →{' '}
-          <span className="text-warn">{field.live}</span>
-        </li>
-      ))}
-      {one.driftNote !== undefined && one.driftNote !== '' && (
-        <li className="text-fg-muted">{one.driftNote}</li>
+    <div className="mt-1">
+      {one.driftOwners === true && one.driftNote !== undefined && (
+        <div className="text-fg-muted">{one.driftNote}</div>
       )}
-    </ul>
+      <ul className="space-y-0.5">
+        {drift.map((field) => (
+          <li key={field.path} className="font-mono text-fg-soft">
+            <span>{field.path}</span> <span className="text-fg-muted">{field.declared}</span> →{' '}
+            <span className="text-warn">{field.live}</span>
+          </li>
+        ))}
+        {one.driftOwners !== true && one.driftNote !== undefined && one.driftNote !== '' && (
+          <li className="text-fg-muted">{one.driftNote}</li>
+        )}
+      </ul>
+    </div>
   );
 }
 

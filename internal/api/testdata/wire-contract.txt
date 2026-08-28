@@ -242,6 +242,7 @@ GitopsOwner.Kind kind string
 GitopsOwner.Ref ref ObjectRef
 GitopsResource.Drift drift,omitempty []FieldDrift
 GitopsResource.DriftNote driftNote,omitempty string
+GitopsResource.DriftOwners driftOwners,omitempty bool
 GitopsResource.Events events,omitempty []Event
 GitopsResource.Finalizers finalizers,omitempty []string
 GitopsResource.Group group,omitempty string

@@ -138,7 +138,7 @@ func enrich(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Res
 		if live == nil {
 			continue
 		}
-		apply(&app.Resources[at], live)
+		apply(&app.Resources[at], live, app.Controller)
 	}
 	if len(order) > len(read) {
 		app.Issues = append(app.Issues, api.GitopsIssue{
@@ -216,7 +216,7 @@ func descriptorFor(descs map[string]api.ResourceDescriptor, resource api.GitopsR
 	return api.ResourceDescriptor{}, false
 }
 
-func apply(resource *api.GitopsResource, live *unstructured.Unstructured) {
+func apply(resource *api.GitopsResource, live *unstructured.Unstructured, controller string) {
 	desc := live.GroupVersionKind()
 	resource.Version = desc.Version
 	if live.GetDeletionTimestamp() != nil {
@@ -226,6 +226,10 @@ func apply(resource *api.GitopsResource, live *unstructured.Unstructured) {
 	drift, note := Drift(live)
 	resource.Drift = drift
 	resource.DriftNote = note
+	if note == noDeclaration {
+		resource.Drift, resource.DriftNote = Ownership(live, controller)
+		resource.DriftOwners = len(resource.Drift) > 0
+	}
 	if len(drift) == 0 && note == "" && resource.Sync == outOfSync {
 		resource.DriftNote = "no declared field differs; git may no longer declare this resource"
 	}

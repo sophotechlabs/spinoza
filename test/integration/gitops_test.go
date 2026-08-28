@@ -24,6 +24,8 @@ import (
 
 const gitopsTimeout = 2 * time.Minute
 
+var applyForce = true
+
 var (
 	crdGVR = schema.GroupVersionResource{
 		Group:    "apiextensions.k8s.io",
@@ -422,5 +424,69 @@ func applyDeclaredDeployment(t *testing.T, loaded *kube.Bundle) {
 		Patch(ctx, "declared", types.MergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {
 		t.Fatalf("scale the declared deployment: %v", err)
+	}
+}
+
+// what a server-side apply leaves behind for the drift reader
+
+func TestAServerSideAppliedResourceNamesTheWriterThatTookAField(t *testing.T) {
+	loaded := bundle(t)
+	installApplicationCRD(t, loaded.Dynamic)
+	applySSADeployment(t, loaded)
+	applyApplication(t, loaded.Dynamic, newApplicationObject("ssa", map[string]any{
+		"resources": []any{map[string]any{
+			"group": "apps", "version": "v1", "kind": "Deployment",
+			"name": "server-side", "namespace": namespace, "status": "OutOfSync",
+		}},
+	}))
+	mgr := gitopsManager(t, loaded)
+
+	app, err := mgr.GitopsApp(context.Background(), appRef("ssa"))
+	if err != nil {
+		t.Fatalf("gitops app: %v", err)
+	}
+
+	found, ok := resourceNamed(app, "server-side")
+	if !ok {
+		t.Fatalf("resources = %+v, want the deployment", app.Resources)
+	}
+	if !found.DriftOwners {
+		t.Fatalf("resource = %+v, want the rows marked as owners rather than values", found)
+	}
+	if len(found.Drift) != 1 || found.Drift[0].Path != "spec.replicas" {
+		t.Fatalf("drift = %+v, want the field another writer took", found.Drift)
+	}
+	if found.Drift[0].Declared != "argocd-controller" || found.Drift[0].Live != "kubectl-edit" {
+		t.Fatalf("drift = %+v, want both managers named", found.Drift[0])
+	}
+}
+
+func applySSADeployment(t *testing.T, loaded *kube.Bundle) {
+	t.Helper()
+	ctx := context.Background()
+	manifest := []byte(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"server-side"},` +
+		`"spec":{"replicas":1,"selector":{"matchLabels":{"app":"server-side"}},` +
+		`"template":{"metadata":{"labels":{"app":"server-side"}},` +
+		`"spec":{"containers":[{"name":"pause","image":"registry.k8s.io/pause:3.10"}]}}}}`)
+	_, err := loaded.Clientset.AppsV1().Deployments(namespace).
+		Patch(ctx, "server-side", types.ApplyPatchType, manifest, metav1.PatchOptions{
+			FieldManager: "argocd-controller",
+			Force:        &applyForce,
+		})
+	if err != nil {
+		t.Fatalf("server-side apply the deployment: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = loaded.Clientset.AppsV1().Deployments(namespace).
+			Delete(context.Background(), "server-side", metav1.DeleteOptions{})
+	})
+	taken := []byte(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"server-side"},"spec":{"replicas":3}}`)
+	_, err = loaded.Clientset.AppsV1().Deployments(namespace).
+		Patch(ctx, "server-side", types.ApplyPatchType, taken, metav1.PatchOptions{
+			FieldManager: "kubectl-edit",
+			Force:        &applyForce,
+		})
+	if err != nil {
+		t.Fatalf("take the field with another manager: %v", err)
 	}
 }

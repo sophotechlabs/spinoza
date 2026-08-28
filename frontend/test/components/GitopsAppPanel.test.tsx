@@ -254,6 +254,27 @@ describe('the per-application panel', () => {
     expect(screen.getByText('Scaled')).toBeInTheDocument();
   });
 
+  it('names the writer that took a field on a server-side applied resource', async () => {
+    serve(
+      appWith({
+        resources: [
+          {
+            ...deployment,
+            drift: [{ path: 'spec.replicas', declared: 'argocd-controller', live: 'kubectl-edit' }],
+            driftOwners: true,
+            driftNote: 'this object is applied server-side',
+          },
+        ],
+      }),
+    );
+    renderPanel();
+
+    expect(await screen.findByText('spec.replicas')).toBeInTheDocument();
+    expect(screen.getByText('argocd-controller')).toBeInTheDocument();
+    expect(screen.getByText('kubectl-edit')).toBeInTheDocument();
+    expect(screen.getByText('this object is applied server-side')).toBeInTheDocument();
+  });
+
   it('explains why there is no drift to show', async () => {
     serve(
       appWith({

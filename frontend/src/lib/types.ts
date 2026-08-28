@@ -386,6 +386,7 @@ export interface GitopsResource {
   terminating?: boolean;
   finalizers?: string[];
   drift?: FieldDrift[];
+  driftOwners?: boolean;
   driftNote?: string;
   events?: K8sEvent[];
 }

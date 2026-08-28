@@ -828,6 +828,7 @@ type GitopsResource struct {
 	Terminating bool         `json:"terminating,omitempty"`
 	Finalizers  []string     `json:"finalizers,omitempty"`
 	Drift       []FieldDrift `json:"drift,omitempty"`
+	DriftOwners bool         `json:"driftOwners,omitempty"`
 	DriftNote   string       `json:"driftNote,omitempty"`
 	Events      []Event      `json:"events,omitempty"`
 }

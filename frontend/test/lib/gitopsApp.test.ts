@@ -47,6 +47,7 @@ const full = {
       terminating: true,
       finalizers: ['foregroundDeletion'],
       drift: [{ path: 'spec.replicas', declared: '1', live: '3' }],
+      driftOwners: true,
       driftNote: 'more',
       events: [{ type: 'Warning', reason: 'Failed', message: 'nope', lastSeen: 'now' }],
     },
@@ -91,6 +92,7 @@ describe('reading one application', () => {
       live: '3',
     });
     expect(app.resources?.[0].finalizers).toEqual(['foregroundDeletion']);
+    expect(app.resources?.[0].driftOwners).toBe(true);
     expect(app.resources?.[0].events?.[0].reason).toBe('Failed');
     expect(app.history?.[0].id).toBe(2);
     expect(app.operation?.running).toBe(true);

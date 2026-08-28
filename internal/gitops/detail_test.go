@@ -659,3 +659,96 @@ func TestIdentifyFillsTheVersionOnlyWhenTheControllerLeftItOut(t *testing.T) {
 		t.Fatalf("version = %q, want the controller's own left alone", resources[1].Version)
 	}
 }
+
+// what an application that syncs server-side gets instead of a value diff
+
+func ssaDeployment(managers ...string) *unstructured.Unstructured {
+	live := liveDeployment("")
+	live.SetAnnotations(nil)
+	fields := map[string]string{
+		"argocd-controller":    `{"f:spec":{"f:selector":{}}}`,
+		"kustomize-controller": `{"f:spec":{"f:selector":{}}}`,
+		"kubectl-edit":         `{"f:spec":{"f:replicas":{}}}`,
+	}
+	entries := make([]metav1.ManagedFieldsEntry, 0, len(managers))
+	for _, manager := range managers {
+		entries = append(entries, metav1.ManagedFieldsEntry{
+			Manager:    manager,
+			Operation:  metav1.ManagedFieldsOperationApply,
+			FieldsType: "FieldsV1",
+			FieldsV1:   &metav1.FieldsV1{Raw: []byte(fields[manager])},
+		})
+	}
+	live.SetManagedFields(entries)
+	return live
+}
+
+func TestAServerSideAppliedResourceNamesWhoTookTheField(t *testing.T) {
+	client := detailClient(
+		managingApplication(managed("Deployment", "podinfo")),
+		ssaDeployment("argocd-controller", "kubectl-edit"),
+	)
+
+	got, err := Detail(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	drift := got.Resources[0].Drift
+	if len(drift) != 1 || drift[0].Path != "spec.replicas" {
+		t.Fatalf("drift = %+v, want the field another writer holds", drift)
+	}
+	if drift[0].Declared != "argocd-controller" || drift[0].Live != "kubectl-edit" {
+		t.Fatalf("drift = %+v, want the two managers named", drift[0])
+	}
+	if !strings.Contains(got.Resources[0].DriftNote, "applied server-side") {
+		t.Fatalf("note = %q, want it to say these are owners, not values", got.Resources[0].DriftNote)
+	}
+}
+
+func TestAServerSideAppliedResourceNobodyTookSaysSo(t *testing.T) {
+	client := detailClient(
+		managingApplication(managed("Deployment", "podinfo")),
+		ssaDeployment("argocd-controller"),
+	)
+
+	got, _ := Detail(t.Context(), client, detailDescs(), applicationRef())
+
+	if len(got.Resources[0].Drift) != 0 {
+		t.Fatalf("drift = %+v, want none", got.Resources[0].Drift)
+	}
+	if !strings.Contains(got.Resources[0].DriftNote, "argocd-controller") {
+		t.Fatalf("note = %q, want the controller named as still holding its fields", got.Resources[0].DriftNote)
+	}
+}
+
+func TestAnObjectWithNeitherADeclarationNorAGitopsManagerStillSaysWhy(t *testing.T) {
+	client := detailClient(
+		managingApplication(managed("Deployment", "podinfo")),
+		ssaDeployment("kubectl-edit"),
+	)
+
+	got, _ := Detail(t.Context(), client, detailDescs(), applicationRef())
+
+	if !strings.Contains(got.Resources[0].DriftNote, "no last-applied-configuration") {
+		t.Fatalf("note = %q, want the original explanation", got.Resources[0].DriftNote)
+	}
+}
+
+func TestADeclarationStillWinsOverOwnership(t *testing.T) {
+	live := liveDeployment(`{"spec":{"replicas":1}}`)
+	live.SetManagedFields([]metav1.ManagedFieldsEntry{{
+		Manager:    "argocd-controller",
+		Operation:  metav1.ManagedFieldsOperationApply,
+		FieldsType: "FieldsV1",
+		FieldsV1:   &metav1.FieldsV1{Raw: []byte(`{"f:spec":{"f:replicas":{}}}`)},
+	}})
+	client := detailClient(managingApplication(managed("Deployment", "podinfo")), live)
+
+	got, _ := Detail(t.Context(), client, detailDescs(), applicationRef())
+
+	drift := got.Resources[0].Drift
+	if len(drift) != 1 || drift[0].Declared != "1" || drift[0].Live != "3" {
+		t.Fatalf("drift = %+v, want the value diff, not the ownership one", drift)
+	}
+}
