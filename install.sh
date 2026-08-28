@@ -23,6 +23,7 @@ main() {
     download "$releases/download/$version/$asset" "$temp/$asset"
     download "$releases/download/$version/checksums.txt" "$temp/checksums.txt"
     verify "$temp/$asset" "$asset"
+    attest "$temp/$asset" "$asset"
 
     tar -xzf "$temp/$asset" -C "$temp"
     if [ ! -f "$temp/spinoza" ]; then
@@ -68,6 +69,7 @@ install_app() {
     fi
     download "$releases/download/$version/$app_asset" "$temp/$app_asset"
     verify "$temp/$app_asset" "$app_asset"
+    attest "$temp/$app_asset" "$app_asset"
     unzip -q -o "$temp/$app_asset" -d "$temp/app"
     if [ ! -d "$temp/app/Spinoza.app" ]; then
         die "the app archive did not contain Spinoza.app"
@@ -93,6 +95,7 @@ install_linux_app() {
     fi
     download "$releases/download/$version/$app_asset" "$temp/$app_asset"
     verify "$temp/$app_asset" "$app_asset"
+    attest "$temp/$app_asset" "$app_asset"
     mkdir -p "$temp/app"
     tar -xzf "$temp/$app_asset" -C "$temp/app"
     if [ ! -f "$temp/app/Spinoza" ]; then
@@ -237,6 +240,19 @@ verify() {
     if [ "$expected" != "$actual" ]; then
         die "checksum mismatch for $2"
     fi
+}
+
+attest() {
+    if [ -z "${SPINOZA_VERIFY_ATTESTATION:-}" ]; then
+        return 0
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+        die "SPINOZA_VERIFY_ATTESTATION is set but gh is not on PATH"
+    fi
+    if ! gh attestation verify "$1" --repo "$repo" >/dev/null 2>&1; then
+        die "$2 carries no build provenance signed for $repo"
+    fi
+    echo "Verified the build provenance of $2"
 }
 
 sha256_of() {

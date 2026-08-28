@@ -6,6 +6,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 $script:Repo = 'sophotechlabs/spinoza'
 $script:Releases = "https://github.com/$script:Repo/releases"
+$script:EnvironmentKey = 'Environment'
 
 function Get-OSArchitecture {
     try {
@@ -172,7 +173,8 @@ function Test-OnPath {
 }
 
 function Get-UserPath {
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $false)
+    param([string]$Key = $script:EnvironmentKey)
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($Key, $false)
     if ($null -eq $key) {
         return [pscustomobject]@{
             Value = ''
@@ -199,14 +201,15 @@ function Set-UserPath {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
     param(
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value,
-        [Parameter(Mandatory = $true)]$Kind
+        [Parameter(Mandatory = $true)]$Kind,
+        [string]$Key = $script:EnvironmentKey
     )
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    $handle = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($Key)
     try {
-        $key.SetValue('Path', $Value, $Kind)
+        $handle.SetValue('Path', $Value, $Kind)
     }
     finally {
-        $key.Close()
+        $handle.Close()
     }
 }
 
@@ -224,6 +227,48 @@ function Add-ToPath {
     return $true
 }
 
+function Remove-FromPath {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    param([Parameter(Mandatory = $true)][string]$Directory)
+    $current = Get-UserPath
+    $wanted = $Directory.TrimEnd('\')
+    $kept = @()
+    $removed = $false
+    foreach ($entry in $current.Value -split ';') {
+        if ($entry.Trim() -eq '') {
+            continue
+        }
+        if ($entry.Trim().TrimEnd('\') -eq $wanted) {
+            $removed = $true
+            continue
+        }
+        $kept += $entry
+    }
+    if (-not $removed) {
+        return $false
+    }
+    Set-UserPath -Value ($kept -join ';') -Kind $current.Kind
+    return $true
+}
+
+function Test-Attestation {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    if (-not $env:SPINOZA_VERIFY_ATTESTATION) {
+        return $false
+    }
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        throw 'SPINOZA_VERIFY_ATTESTATION is set but gh is not on PATH'
+    }
+    & gh attestation verify $Path --repo $script:Repo 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Name carries no build provenance signed for $script:Repo"
+    }
+    return $true
+}
+
 function Install-App {
     param(
         [Parameter(Mandatory = $true)][string]$Temp,
@@ -238,6 +283,7 @@ function Install-App {
     }
     Save-Download -Uri "$script:Releases/download/$Version/$asset" -Path (Join-Path $Temp $asset)
     Test-Checksum -Path (Join-Path $Temp $asset) -Name $asset -ListPath (Join-Path $Temp 'checksums.txt')
+    Test-Attestation -Path (Join-Path $Temp $asset) -Name $asset | Out-Null
     Expand-Archive -LiteralPath (Join-Path $Temp $asset) -DestinationPath (Join-Path $Temp 'app') -Force
     $bundled = Join-Path (Join-Path $Temp 'app') 'Spinoza.exe'
     if (-not (Test-Path -LiteralPath $bundled)) {
@@ -249,6 +295,14 @@ function Install-App {
     Install-Binary -Source $bundled -Target $installed
     Add-StartMenuShortcut -Target $installed
     return $true
+}
+
+function Get-StartMenuShortcut {
+    $menu = Join-Path $env:APPDATA (Join-Path 'Microsoft' (Join-Path 'Windows' (Join-Path 'Start Menu' 'Programs')))
+    if (-not (Test-Path -LiteralPath $menu)) {
+        return ''
+    }
+    return (Join-Path $menu 'Spinoza.lnk')
 }
 
 function Add-StartMenuShortcut {
@@ -281,6 +335,9 @@ function Install-Spinoza {
         Save-Download -Uri "$script:Releases/download/$version/$asset" -Path (Join-Path $temp $asset)
         Save-Download -Uri "$script:Releases/download/$version/checksums.txt" -Path (Join-Path $temp 'checksums.txt')
         Test-Checksum -Path (Join-Path $temp $asset) -Name $asset -ListPath (Join-Path $temp 'checksums.txt')
+        if (Test-Attestation -Path (Join-Path $temp $asset) -Name $asset) {
+            Write-Output "Verified the build provenance of $asset"
+        }
         Expand-Archive -LiteralPath (Join-Path $temp $asset) -DestinationPath (Join-Path $temp 'unpacked') -Force
         $unpacked = Join-Path (Join-Path $temp 'unpacked') 'spinoza.exe'
         if (-not (Test-Path -LiteralPath $unpacked)) {
@@ -321,6 +378,45 @@ catch {
     $null = $_
 }
 
+function Uninstall-Spinoza {
+    $directory = Get-InstallDirectory
+    $removed = @()
+    foreach ($name in @('spinoza.exe', 'spinoza.exe.old')) {
+        $binary = Join-Path $directory $name
+        if (Test-Path -LiteralPath $binary) {
+            Remove-Item -LiteralPath $binary -Force
+            $removed += $name
+        }
+    }
+    $app = Join-Path $directory 'app'
+    if (Test-Path -LiteralPath $app) {
+        Remove-Item -LiteralPath $app -Recurse -Force
+        $removed += 'the desktop app'
+    }
+    $shortcut = Get-StartMenuShortcut
+    if ($shortcut -ne '' -and (Test-Path -LiteralPath $shortcut)) {
+        Remove-Item -LiteralPath $shortcut -Force
+        $removed += 'the start menu entry'
+    }
+    if (Remove-FromPath -Directory $directory) {
+        $removed += 'the PATH entry'
+    }
+    if ((Test-Path -LiteralPath $directory) -and -not (Get-ChildItem -LiteralPath $directory -Force)) {
+        Remove-Item -LiteralPath $directory -Force
+    }
+    if ($removed.Count -eq 0) {
+        Write-Output "Nothing to remove: spinoza is not installed in $directory"
+        return
+    }
+    Write-Output "Removed $($removed -join ', ') from $directory"
+    Write-Output 'Settings and kubeconfigs were left alone'
+}
+
 if ($MyInvocation.InvocationName -ne '.') {
-    Install-Spinoza
+    if ($env:SPINOZA_UNINSTALL) {
+        Uninstall-Spinoza
+    }
+    else {
+        Install-Spinoza
+    }
 }

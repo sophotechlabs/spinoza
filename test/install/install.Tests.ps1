@@ -353,13 +353,118 @@ Describe 'Add-StartMenuShortcut' {
     }
 }
 
-Describe 'Get-UserPath' {
-    BeforeAll {
-        $script:onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+Describe 'the registry the installer writes' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+    BeforeEach {
+        $script:scratch = 'Environment\SpinozaTests\' + [System.Guid]::NewGuid().ToString('N')
     }
-    It 'reads the path this account carries, unexpanded' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+    AfterEach {
+        [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($script:scratch, $false)
+    }
+
+    It 'reads back what it wrote' {
+        Set-UserPath -Value 'C:\one;C:\two' -Kind ([Microsoft.Win32.RegistryValueKind]::ExpandString) -Key $script:scratch
+        $read = Get-UserPath -Key $script:scratch
+        $read.Value | Should -Be 'C:\one;C:\two'
+        $read.Kind | Should -Be 'ExpandString'
+    }
+    It 'stores a variable without expanding it, so the path survives the round trip' {
+        Set-UserPath -Value '%USERPROFILE%\bin' -Kind ([Microsoft.Win32.RegistryValueKind]::ExpandString) -Key $script:scratch
+        (Get-UserPath -Key $script:scratch).Value | Should -Be '%USERPROFILE%\bin'
+    }
+    It 'keeps a plain string value plain' {
+        Set-UserPath -Value 'C:\one' -Kind ([Microsoft.Win32.RegistryValueKind]::String) -Key $script:scratch
+        (Get-UserPath -Key $script:scratch).Kind | Should -Be 'String'
+    }
+    It 'creates the key where the account has none' {
+        { Set-UserPath -Value 'C:\one' -Kind ([Microsoft.Win32.RegistryValueKind]::ExpandString) -Key $script:scratch } | Should -Not -Throw
+    }
+    It 'reads an account with no path as empty rather than failing' {
+        $absent = 'Environment\SpinozaTests\' + [System.Guid]::NewGuid().ToString('N')
+        $read = Get-UserPath -Key $absent
+        $read.Value | Should -Be ''
+        $read.Kind | Should -Be 'ExpandString'
+    }
+    It 'reads the real environment key this account carries' {
         $current = Get-UserPath
-        $current.Value | Should -Not -BeNullOrEmpty
         $current.Kind | Should -BeIn @('String', 'ExpandString')
+    }
+}
+
+Describe 'Remove-FromPath' {
+    It 'takes the directory off a path that carries it' {
+        Mock Get-UserPath { [pscustomobject]@{ Value = 'C:\Windows;C:\Apps\spinoza;C:\Other'; Kind = 'ExpandString' } }
+        Mock Set-UserPath { }
+        Remove-FromPath -Directory 'C:\Apps\spinoza' | Should -BeTrue
+        Should -Invoke Set-UserPath -Times 1 -ParameterFilter { $Value -eq 'C:\Windows;C:\Other' }
+    }
+    It 'leaves a path that never carried it alone' {
+        Mock Get-UserPath { [pscustomobject]@{ Value = 'C:\Windows'; Kind = 'ExpandString' } }
+        Mock Set-UserPath { }
+        Remove-FromPath -Directory 'C:\Apps\spinoza' | Should -BeFalse
+        Should -Invoke Set-UserPath -Times 0
+    }
+    It 'takes it off however it was spelled' {
+        Mock Get-UserPath { [pscustomobject]@{ Value = 'C:\Windows;C:\APPS\SPINOZA\'; Kind = 'ExpandString' } }
+        Mock Set-UserPath { }
+        Remove-FromPath -Directory 'C:\Apps\spinoza' | Should -BeTrue
+        Should -Invoke Set-UserPath -Times 1 -ParameterFilter { $Value -eq 'C:\Windows' }
+    }
+    It 'does not leave an empty entry behind the one it took out' {
+        Mock Get-UserPath { [pscustomobject]@{ Value = 'C:\Apps\spinoza'; Kind = 'ExpandString' } }
+        Mock Set-UserPath { }
+        Remove-FromPath -Directory 'C:\Apps\spinoza' | Should -BeTrue
+        Should -Invoke Set-UserPath -Times 1 -ParameterFilter { $Value -eq '' }
+    }
+}
+
+Describe 'Test-Attestation' {
+    AfterEach { Remove-Item -Path Env:\SPINOZA_VERIFY_ATTESTATION -ErrorAction SilentlyContinue }
+
+    It 'checks nothing unless the caller asked for it' {
+        Remove-Item -Path Env:\SPINOZA_VERIFY_ATTESTATION -ErrorAction SilentlyContinue
+        Test-Attestation -Path 'anything' -Name 'spinoza.zip' | Should -BeFalse
+    }
+    It 'refuses to pretend where gh is not installed' {
+        $env:SPINOZA_VERIFY_ATTESTATION = '1'
+        Mock Get-Command { $null } -ParameterFilter { $Name -eq 'gh' }
+        { Test-Attestation -Path 'anything' -Name 'spinoza.zip' } | Should -Throw '*gh is not on PATH*'
+    }
+}
+
+Describe 'Uninstall-Spinoza' {
+    BeforeEach {
+        $script:work = NewWorkspace
+        $env:SPINOZA_INSTALL_DIR = $script:work
+        Mock Remove-FromPath { $true }
+        Mock Get-StartMenuShortcut { '' }
+    }
+    AfterEach {
+        Remove-Item -Path Env:\SPINOZA_INSTALL_DIR -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $script:work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'takes the binary, the app and the path entry away' {
+        Set-Content -LiteralPath (Join-Path $script:work 'spinoza.exe') -Value 'binary' -NoNewline
+        New-Item -ItemType Directory -Path (Join-Path $script:work 'app') -Force | Out-Null
+        $said = (Uninstall-Spinoza) -join "`n"
+        $said | Should -Match 'spinoza\.exe'
+        $said | Should -Match 'the desktop app'
+        $said | Should -Match 'the PATH entry'
+        Test-Path -LiteralPath (Join-Path $script:work 'spinoza.exe') | Should -BeFalse
+        Test-Path -LiteralPath (Join-Path $script:work 'app') | Should -BeFalse
+    }
+    It 'clears a retired copy an interrupted update left behind' {
+        Set-Content -LiteralPath (Join-Path $script:work 'spinoza.exe.old') -Value 'stale' -NoNewline
+        ((Uninstall-Spinoza) -join "`n") | Should -Match 'spinoza\.exe\.old'
+    }
+    It 'says so where there is nothing installed to remove' {
+        Mock Remove-FromPath { $false }
+        ((Uninstall-Spinoza) -join "`n") | Should -Match 'not installed'
+    }
+    It 'leaves the directory where something else still lives in it' {
+        Set-Content -LiteralPath (Join-Path $script:work 'spinoza.exe') -Value 'binary' -NoNewline
+        Set-Content -LiteralPath (Join-Path $script:work 'notes.txt') -Value 'mine' -NoNewline
+        Uninstall-Spinoza | Out-Null
+        Test-Path -LiteralPath (Join-Path $script:work 'notes.txt') | Should -BeTrue
     }
 }

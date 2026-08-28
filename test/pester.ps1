@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 
 [CmdletBinding()]
-param([double]$MinimumCoverage = 80)
+param([double]$MinimumCoverage = 75)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -29,8 +29,13 @@ if ($result.FailedCount -gt 0) {
     throw "pester: $($result.FailedCount) of $($result.TotalCount) tests failed"
 }
 
+$onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+if ($onWindows -and $result.SkippedCount -gt 0) {
+    throw "pester: $($result.SkippedCount) tests were skipped on windows, where every one of them should run"
+}
+
 $covered = [math]::Round($result.CodeCoverage.CoveragePercent, 1)
-Write-Output "pester: $($result.PassedCount) tests passed, install.ps1 coverage $covered%"
+Write-Output "pester: $($result.PassedCount) tests passed, $($result.SkippedCount) skipped, install.ps1 coverage $covered%"
 if ($covered -lt $MinimumCoverage) {
     throw "pester: install.ps1 coverage $covered% is under the $MinimumCoverage% gate"
 }

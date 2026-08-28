@@ -34,6 +34,16 @@ Archives are on the [releases page](https://github.com/sophotechlabs/spinoza/rel
 
 Nothing is code-signed, so Windows SmartScreen warns on first run: More info, then Run anyway.
 
+Set `SPINOZA_VERIFY_ATTESTATION=1` and both installers check the GitHub build provenance of what they downloaded before writing it, which the checksum alone cannot tell you. It needs `gh` installed and signed in, so it is off by default.
+
+To remove it on Windows, in PowerShell:
+
+```powershell
+$env:SPINOZA_UNINSTALL=1; irm https://spinoza.tech/install.ps1 | iex
+```
+
+That takes back the binary, the desktop app, the Start menu entry and the `PATH` entry, and leaves your settings and kubeconfigs alone.
+
 Needs a kubeconfig. Upgrades, rollbacks and debug containers call `helm` and `kubectl`.
 
 ## Every GVR discovery reports
