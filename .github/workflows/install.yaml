@@ -9,6 +9,7 @@ on:
   pull_request:
     paths:
       - install.sh
+      - install.ps1
       - justfile
       - test/install/**
       - .github/workflows/install.yaml
@@ -62,6 +63,27 @@ jobs:
           IMAGE: ${{ matrix.image }}
           SETUP: ${{ matrix.setup }}
           EXPECT: ${{ matrix.expect }}
+          SPINOZA_VERSION: ${{ inputs.version }}
+
+  windows:
+    name: windows, binary and PATH
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just
+      - run: just wait-for-release
+        env:
+          SPINOZA_VERSION: ${{ inputs.version }}
+      - run: just test-install-windows
+        env:
+          SPINOZA_VERSION: ${{ inputs.version }}
+      - run: just test-install-windows powershell
+        env:
           SPINOZA_VERSION: ${{ inputs.version }}
 
   macos:

@@ -105,7 +105,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish:
+  desktop-linux:
     needs:
       - version
       - dist
@@ -113,7 +113,60 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          cache: false
+      - run: just package-desktop-linux amd64
+        env:
+          SPINOZA_VERSION: ${{ needs.version.outputs.tag }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: dist/release/*_linux_amd64_app.tar.gz
+      - run: just publish-desktop-linux
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs:
+      - version
+      - dist
+      - desktop
+      - desktop-linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just
+      - run: |
+          mkdir -p dist/release
+          gh release download "$TAG" --pattern checksums.txt --output dist/release/checksums.txt --clobber
+          just package-manifests
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          SPINOZA_VERSION: ${{ needs.version.outputs.tag }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: just publish-asset '*_packaging.tar.gz'
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: gh release edit "$TAG" --draft=false --latest
         env:
           TAG: ${{ needs.version.outputs.tag }}

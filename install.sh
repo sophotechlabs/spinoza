@@ -44,8 +44,13 @@ main() {
     fi
 
     app_dir=""
-    if [ "$os" = "darwin" ] && [ -z "${SPINOZA_SKIP_APP:-}" ]; then
-        install_app
+    if [ -z "${SPINOZA_SKIP_APP:-}" ]; then
+        if [ "$os" = "darwin" ]; then
+            install_app
+        fi
+        if [ "$os" = "linux" ]; then
+            install_linux_app
+        fi
     fi
 
     report_path "$dir"
@@ -77,6 +82,57 @@ install_app() {
     echo "Could not write the app to /Applications or ~/Applications"
 }
 
+install_linux_app() {
+    app_asset="spinoza_${version}_linux_${arch}_app.tar.gz"
+    if ! listed "$app_asset"; then
+        return 0
+    fi
+    if ! glibc; then
+        echo "Skipped the desktop app: it is built against glibc and this system is not"
+        return 0
+    fi
+    download "$releases/download/$version/$app_asset" "$temp/$app_asset"
+    verify "$temp/$app_asset" "$app_asset"
+    mkdir -p "$temp/app"
+    tar -xzf "$temp/$app_asset" -C "$temp/app"
+    if [ ! -f "$temp/app/Spinoza" ]; then
+        die "the app archive did not contain a Spinoza binary"
+    fi
+    install -m 0755 "$temp/app/Spinoza" "$dir/Spinoza"
+    icons="$HOME/.local/share/icons/hicolor/512x512/apps"
+    mkdir -p "$icons"
+    install -m 0644 "$temp/app/spinoza.png" "$icons/spinoza.png"
+    entries="$HOME/.local/share/applications"
+    mkdir -p "$entries"
+    write_desktop_entry "$entries/spinoza.desktop"
+    app_dir="$entries"
+    echo "Installed the Spinoza app in $dir, with a desktop entry in $entries"
+}
+
+glibc() {
+    if ! command -v ldd >/dev/null 2>&1; then
+        return 1
+    fi
+    if ldd --version 2>&1 | grep -qi musl; then
+        return 1
+    fi
+    return 0
+}
+
+write_desktop_entry() {
+    cat > "$1" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Spinoza
+Comment=Self-hosted Kubernetes GUI
+Exec=$dir/Spinoza
+Icon=spinoza
+Terminal=false
+Categories=Development;
+StartupWMClass=Spinoza
+DESKTOP
+}
+
 try_app_dir() {
     target="$1"
     if ! mkdir -p "$target" 2>/dev/null; then
@@ -103,7 +159,11 @@ report_app() {
     if [ -z "$app_dir" ]; then
         return 0
     fi
-    echo "Open the desktop app with 'open -a Spinoza', or find it in Spotlight"
+    if [ "$os" = "darwin" ]; then
+        echo "Open the desktop app with 'open -a Spinoza', or find it in Spotlight"
+        return 0
+    fi
+    echo "Open the desktop app from your launcher, or run '$dir/Spinoza'"
 }
 
 detect_downloader() {

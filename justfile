@@ -1,5 +1,6 @@
-export PATH := env_var('HOME') + '/go/bin:' + env_var('PATH')
+export PATH := if os() == 'windows' { env_var('PATH') } else { env_var('HOME') + '/go/bin:' + env_var('PATH') }
 
+exe := if os() == 'windows' { '.exe' } else { '' }
 go_pkgs := './internal/... .'
 addr := env_var_or_default('SPINOZA_ADDR', '127.0.0.1:34115')
 ldflags := '-s -w'
@@ -38,7 +39,7 @@ build:
     set -euo pipefail
     export SPINOZA_VERSION="$(just app-version)"
     cd frontend && npm run build && cd ..
-    go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$SPINOZA_VERSION" -o spinoza .
+    go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$SPINOZA_VERSION" -o spinoza{{ exe }} .
 
 stub-assets:
     #!/usr/bin/env bash
@@ -57,7 +58,7 @@ stub-assets:
     HTML
 
 run: build stop
-    ./spinoza
+    ./spinoza{{ exe }}
 
 stop:
     #!/usr/bin/env bash
@@ -118,6 +119,71 @@ build-desktop:
         plutil -lint "$plist"
     fi
     just icns
+
+build-desktop-windows arch='amd64':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    export SPINOZA_VERSION="$version"
+    numeric=""
+    if printf '%s' "$version" | grep -Eq '^v[0-9]+(\.[0-9]+){0,2}([-+].*)?$'; then
+        numeric="${version#v}"
+        numeric="${numeric%%[-+]*}"
+    fi
+    backup=$(mktemp)
+    cp wails.json "$backup"
+    trap 'mv "$backup" wails.json' EXIT
+    if [ -n "$numeric" ]; then
+        export PRODUCT_VERSION="$numeric"
+        yq -i -o=json '.info.productVersion = strenv(PRODUCT_VERSION)' wails.json
+    fi
+    wails build -platform windows/{{ arch }} -tags desktop -skipbindings -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version"
+
+package-desktop-windows arch='amd64': (build-desktop-windows arch)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    built=build/bin/Spinoza.exe
+    if [ ! -f "$built" ]; then
+        echo "package-desktop-windows: $built was not built"
+        exit 1
+    fi
+    staged=$(mktemp -d)
+    trap 'rm -rf "$staged"' EXIT
+    cp "$built" "$staged/Spinoza.exe"
+    cp LICENSE "$staged/LICENSE"
+    mkdir -p dist/release
+    archive="$PWD/dist/release/spinoza_${version}_windows_{{ arch }}_app.zip"
+    rm -f "$archive"
+    (cd "$staged" && zip -q -X "$archive" Spinoza.exe LICENSE)
+    echo "package-desktop-windows: wrote $archive"
+
+build-desktop-linux arch='amd64':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    export SPINOZA_VERSION="$version"
+    wails build -platform linux/{{ arch }} -tags desktop,webkit2_41 -skipbindings -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$version"
+
+package-desktop-linux arch='amd64': (build-desktop-linux arch)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    built=build/bin/Spinoza
+    if [ ! -f "$built" ]; then
+        echo "package-desktop-linux: $built was not built"
+        exit 1
+    fi
+    staged=$(mktemp -d)
+    trap 'rm -rf "$staged"' EXIT
+    cp "$built" "$staged/Spinoza"
+    cp build/appicon.png "$staged/spinoza.png"
+    cp LICENSE "$staged/LICENSE"
+    mkdir -p dist/release
+    archive="$PWD/dist/release/spinoza_${version}_linux_{{ arch }}_app.tar.gz"
+    rm -f "$archive"
+    tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -cf - -C "$staged" Spinoza spinoza.png LICENSE | gzip -n > "$archive"
+    echo "package-desktop-linux: wrote $archive"
 
 # Wails writes an icns with the retina sizes only; macOS wants the plain ones too
 icns:
@@ -268,6 +334,10 @@ cross:
         echo "cross: $target"
         GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 go build -o /dev/null .
     done
+    for target in windows/amd64 windows/arm64; do
+        echo "cross: $target desktop"
+        GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 go build -tags desktop -o /dev/null .
+    done
 
 audit-be:
     govulncheck {{ go_pkgs }}
@@ -305,7 +375,7 @@ workflows:
 hygiene:
     typos
     ec
-    shellcheck install.sh test/install/container.sh
+    shellcheck install.sh test/install/container.sh packaging/render.sh
     just --unstable --fmt --check
 
 docs:
@@ -373,6 +443,7 @@ release-notes:
 release-dist: deps
     #!/usr/bin/env bash
     set -euo pipefail
+    shopt -s nullglob
     version=$(just app-version)
     export SPINOZA_VERSION="$version"
     mkdir -p dist/release
@@ -405,10 +476,42 @@ release-dist: deps
             tar -cf - -C "$out" "$binary" LICENSE | gzip -n > "$archive"
         fi
     done
+    if [ -n "${SPINOZA_SKIP_EXTRAS:-}" ]; then
+        echo "release-dist: SPINOZA_SKIP_EXTRAS is set, so no windows desktop app, deb or rpm"
+    else
+        just package-desktop-windows amd64
+        just package-desktop-windows arm64
+        just package-linux amd64
+        just package-linux arm64
+    fi
     syft scan dir:dist/build --source-name spinoza --source-version "$version" --output "cyclonedx-json=dist/release/spinoza_${version}_sbom.cdx.json"
-    cd dist/release && sha256sum -- *.tar.gz *.zip > checksums.txt
+    cd dist/release && sha256sum -- *.tar.gz *.zip *.deb *.rpm > checksums.txt
     cd ../..
     just verify-checksums dist/release
+
+package-linux arch='amd64':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    numeric="${version#v}"
+    numeric="${numeric%%-*}"
+    if ! printf '%s' "$numeric" | grep -Eq '^[0-9]+(\.[0-9]+){2}$'; then
+        echo "package-linux: $version does not carry a release number, so no deb or rpm was built"
+        exit 0
+    fi
+    binary="dist/build/linux_{{ arch }}/spinoza"
+    if [ ! -f "$binary" ]; then
+        echo "package-linux: $binary is missing, run just release-dist first"
+        exit 1
+    fi
+    export SPINOZA_ARCH='{{ arch }}'
+    export SPINOZA_NUMERIC="$numeric"
+    mkdir -p dist/release dist/nfpm
+    cp "$binary" dist/nfpm/spinoza
+    for packager in deb rpm; do
+        nfpm package --config packaging/nfpm.yaml --packager "$packager" --target "dist/release/spinoza_${version}_linux_{{ arch }}.${packager}"
+    done
+    rm -rf dist/nfpm
 
 verify-checksums dir:
     #!/usr/bin/env bash
@@ -431,7 +534,7 @@ verify-checksums dir:
         exit 1
     fi
     checked=0
-    for file in "$dir"/*.tar.gz "$dir"/*.zip; do
+    for file in "$dir"/*.tar.gz "$dir"/*.zip "$dir"/*.deb "$dir"/*.rpm; do
         if [ ! -f "$file" ]; then
             continue
         fi
@@ -572,6 +675,21 @@ smoke:
     fi
     echo "smoke: $("$binary" --version) answered healthz and served the frontend"
 
+smoke-windows binary='spinoza.exe':
+    pwsh -NoProfile -ExecutionPolicy Bypass -File test/smoke.ps1 -Binary "{{ binary }}"
+
+test-install-windows shell='pwsh':
+    {{ shell }} -NoProfile -ExecutionPolicy Bypass -File test/install/windows.ps1
+
+test-ps shell='pwsh':
+    {{ shell }} -NoProfile -ExecutionPolicy Bypass -File test/install/functions.ps1
+
+lint-ps:
+    pwsh -NoProfile -ExecutionPolicy Bypass -File test/lint-powershell.ps1
+
+ci-windows-smoke: build
+    just smoke-windows
+
 package-desktop: build-desktop
     #!/usr/bin/env bash
     set -euo pipefail
@@ -593,18 +711,59 @@ package-desktop: build-desktop
     codesign --verify --deep "$staged/Spinoza.app"
     ditto -c -k --keepParent "$staged/Spinoza.app" "dist/release/spinoza_${version}_darwin_app.zip"
 
-publish-desktop:
+packaging:
+    SPINOZA_VERSION="$(just app-version)" sh packaging/render.sh
+
+package-manifests:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(just app-version)
+    just packaging
+    mkdir -p dist/release
+    archive="$PWD/dist/release/spinoza_${version}_packaging.tar.gz"
+    rm -f "$archive"
+    tar -cf - -C dist/packaging . | gzip -n > "$archive"
+    echo "package-manifests: wrote $archive"
+
+test-packaging:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=$(mktemp -d)
+    trap 'rm -rf "$out"' EXIT
+    SPINOZA_VERSION=v9.9.9 CHECKSUMS=test/packaging/checksums.txt OUT_DIR="$out" sh packaging/render.sh
+    yq -e '.version == "9.9.9"' "$out/scoop/spinoza.json" > /dev/null
+    yq -e '.architecture["64bit"].hash == "0000000000000000000000000000000000000000000000000000000000000001"' "$out/scoop/spinoza.json" > /dev/null
+    yq -e '.spec.version == "v9.9.9"' "$out/krew/spinoza.yaml" > /dev/null
+    yq -e '.spec.platforms | length == 6' "$out/krew/spinoza.yaml" > /dev/null
+    for file in "$out"/winget/*.yaml; do
+        yq -e '.PackageVersion == "9.9.9"' "$file" > /dev/null
+    done
+    yq -p xml -o yaml -e '.package.metadata.version == "9.9.9"' "$out/chocolatey/spinoza.nuspec" > /dev/null
+    grep -q 'version "9.9.9"' "$out/homebrew/spinoza.rb"
+    grep -q '0000000000000000000000000000000000000000000000000000000000000004' "$out/homebrew/spinoza.rb"
+    echo "test-packaging: every manifest rendered with the version and the hashes it was given"
+
+publish-asset pattern:
     #!/usr/bin/env bash
     set -euo pipefail
     tag="${TAG:?TAG is required}"
-    asset=$(ls dist/release/*_darwin_app.zip)
+    asset=$(ls dist/release/{{ pattern }})
+    name=$(basename "$asset")
     gh release upload "$tag" "$asset" --clobber
     gh release download "$tag" --pattern checksums.txt --output dist/release/checksums.remote.txt --clobber
-    grep -v "_darwin_app.zip$" dist/release/checksums.remote.txt > dist/release/checksums.merged.txt || true
-    (cd dist/release && shasum -a 256 "$(basename "$asset")" >> checksums.merged.txt)
+    grep -v " ${name}$" dist/release/checksums.remote.txt > dist/release/checksums.merged.txt || true
+    if command -v sha256sum > /dev/null; then
+        (cd dist/release && sha256sum "$name" >> checksums.merged.txt)
+    else
+        (cd dist/release && shasum -a 256 "$name" >> checksums.merged.txt)
+    fi
     sort -k2 dist/release/checksums.merged.txt > dist/release/checksums.txt
     just verify-checksums dist/release
     gh release upload "$tag" dist/release/checksums.txt --clobber
+
+publish-desktop: (publish-asset '*_darwin_app.zip')
+
+publish-desktop-linux: (publish-asset '*_linux_amd64_app.tar.gz')
 
 check: lint test
 
@@ -613,5 +772,5 @@ ci: ci-go-build ci-go-test ci-go-lint ci-go-audit ci-fe-lint ci-fe-test ci-fe-au
 rescan: stub-assets audit-be vulns sbom links
 
 clean:
-    rm -f spinoza coverage.out
+    rm -f spinoza spinoza.exe coverage.out
     rm -rf dist frontend/dist frontend/coverage web/dist/assets web/dist/index.html

@@ -53,6 +53,7 @@ jobs:
         with:
           persist-credentials: false
       - run: just hygiene
+      - run: just test-packaging
 
   docs:
     runs-on: docker

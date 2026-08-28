@@ -195,6 +195,10 @@ url = "https://dl.google.com/go/go1.26.6.darwin-amd64.tar.gz"
 checksum = "sha256:5b6c5b556525810463b5c897b50dc7a82d6a3dc0bfaf55d990a7e9f31d6b2318"
 url = "https://dl.google.com/go/go1.26.6.windows-amd64.zip"
 
+[[tools."go:github.com/goreleaser/nfpm/v2/cmd/nfpm"]]
+version = "2.47.0"
+backend = "go:github.com/goreleaser/nfpm/v2/cmd/nfpm"
+
 [[tools."go:github.com/vladopajic/go-test-coverage/v2"]]
 version = "2.19.0"
 backend = "go:github.com/vladopajic/go-test-coverage/v2"

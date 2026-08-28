@@ -1,0 +1,24 @@
+name: spinoza
+arch: ${SPINOZA_ARCH}
+platform: linux
+version: ${SPINOZA_NUMERIC}
+section: utils
+priority: optional
+maintainer: Sophotech s.r.o. <spinoza@sopho.tech>
+description: |
+  Self-hosted Kubernetes GUI.
+  Go backend with client-go informers, React frontend, one binary. Runs as a
+  browser tab or a desktop window, reads your kubeconfig, needs no cluster-side
+  install and no account.
+vendor: Sophotech s.r.o.
+homepage: https://spinoza.tech
+license: FSL-1.1-ALv2
+contents:
+  - src: dist/nfpm/spinoza
+    dst: /usr/bin/spinoza
+    file_info:
+      mode: 0755
+  - src: LICENSE
+    dst: /usr/share/doc/spinoza/copyright
+    file_info:
+      mode: 0644

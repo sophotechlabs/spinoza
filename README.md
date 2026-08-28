@@ -11,11 +11,19 @@ A self-hosted Kubernetes GUI: Go backend with client-go informers, React fronten
 
 ## Install
 
+macOS and Linux:
+
 ```sh
 curl -fsSL https://spinoza.tech/install.sh | sh
 ```
 
-The binary goes to `~/.local/bin`, or `/usr/local/bin` as root; `SPINOZA_INSTALL_DIR` overrides both. Checksums are verified before anything is written. On macOS the desktop app lands in `/Applications`, unless `SPINOZA_SKIP_APP=1`.
+Windows, in PowerShell:
+
+```powershell
+irm https://spinoza.tech/install.ps1 | iex
+```
+
+The binary goes to `~/.local/bin`, or `/usr/local/bin` as root, and on Windows to `%LOCALAPPDATA%\Programs\spinoza`, which is added to your user `PATH`. `SPINOZA_INSTALL_DIR` overrides all three. Checksums are verified before anything is written. The desktop app lands in `/Applications` on macOS, your launcher on Linux, and an `app` subdirectory on Windows, unless `SPINOZA_SKIP_APP=1`.
 
 ```sh
 spinoza --open          # browser
@@ -23,6 +31,8 @@ open -a Spinoza         # desktop window, macOS
 ```
 
 Archives are on the [releases page](https://github.com/sophotechlabs/spinoza/releases): tarballs for Linux and macOS, zips for Windows. `SPINOZA_VERSION=v1.8.1` pins the installer.
+
+Nothing is code-signed, so Windows SmartScreen warns on first run: More info, then Run anyway.
 
 Needs a kubeconfig. Upgrades, rollbacks and debug containers call `helm` and `kubectl`.
 
