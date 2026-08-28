@@ -41,7 +41,8 @@ func benchWorkload(namespace, name string) []*unstructured.Unstructured {
 		"metadata":   meta(name, namespace, name+"-svc"),
 		"spec":       map[string]any{"selector": labels},
 	}}
-	out := []*unstructured.Unstructured{deployment, replicas, service}
+	out := make([]*unstructured.Unstructured, 0, 6)
+	out = append(out, deployment, replicas, service)
 	for index := range 3 {
 		holder := ownedBy(name+"-"+strconv.Itoa(index), namespace, name+"-pod-"+strconv.Itoa(index),
 			"ReplicaSet", name+"-rs", name+"-rs", "apps/v1")

@@ -207,7 +207,7 @@ func TestAServiceOnlyReachesPodsCarryingEveryPairItNames(t *testing.T) {
 			t.Fatalf("the Service reached a workload whose pods carry no matching label: %q", key)
 		}
 		if strings.HasPrefix(key, "svc-api|pod-4") {
-			t.Fatalf("the Service reached an unlabelled bare pod: %q", key)
+			t.Fatalf("the Service reached an unlabeled bare pod: %q", key)
 		}
 	}
 }
@@ -492,7 +492,7 @@ func TestConfigMapsAndSecretsAreNeverListed(t *testing.T) {
 	}
 }
 
-func labelled(name, uid string, labels map[string]any) *unstructured.Unstructured {
+func labeled(name, uid string, labels map[string]any) *unstructured.Unstructured {
 	holder := meta(name, "prod", uid)
 	holder["labels"] = labels
 	return &unstructured.Unstructured{Object: map[string]any{
@@ -520,10 +520,10 @@ func TestASelectorNarrowsOnItsRarestLabelThenChecksTheRest(t *testing.T) {
 		runtime.NewScheme(),
 		listKinds(),
 		selecting(map[string]any{"app": "api", "role": "primary"}),
-		labelled("both", "pod-both", map[string]any{"app": "api", "role": "primary"}),
-		labelled("role-only", "pod-role", map[string]any{"role": "primary"}),
-		labelled("app-only-a", "pod-app-a", map[string]any{"app": "api"}),
-		labelled("app-only-b", "pod-app-b", map[string]any{"app": "api"}),
+		labeled("both", "pod-both", map[string]any{"app": "api", "role": "primary"}),
+		labeled("role-only", "pod-role", map[string]any{"role": "primary"}),
+		labeled("app-only-a", "pod-app-a", map[string]any{"app": "api"}),
+		labeled("app-only-b", "pod-app-b", map[string]any{"app": "api"}),
 	)
 
 	graph := Build(context.Background(), listerFor(dyn), descs(), Request{})

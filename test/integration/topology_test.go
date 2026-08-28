@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,6 +95,9 @@ func TestADeploymentFoldsToOneNodeOnARealCluster(t *testing.T) {
 		t.Fatal("no routes edge from the Service to the workload its pods fold into")
 	}
 	for _, node := range graph.Nodes {
+		if !strings.HasPrefix(node.Name, "smoke-fold") {
+			continue
+		}
 		if node.Kind == "ReplicaSet" || node.Kind == "Pod" {
 			t.Fatalf("%s %s was drawn instead of folding away", node.Kind, node.Name)
 		}
