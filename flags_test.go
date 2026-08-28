@@ -410,3 +410,11 @@ func TestTheCheckerCarriesThisBuildsVersion(t *testing.T) {
 		t.Fatalf("current = %q, want this build's version", got)
 	}
 }
+
+func TestTheInstallerCarriesThisBuildsVersion(t *testing.T) {
+	installer := updateInstaller()
+
+	if installer == nil {
+		t.Fatal("no installer was built for a command-line build")
+	}
+}

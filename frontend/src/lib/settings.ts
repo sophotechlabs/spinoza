@@ -100,3 +100,19 @@ export function writeNodeShell(enabled: boolean): Promise<void> {
   }
   return flush();
 }
+
+export const UPDATE_CHECK_KEY = 'spinoza.update.check.v1';
+
+// On until it is turned off, so a fresh install has never been asked.
+export function readUpdateCheck(): boolean {
+  return readStored(UPDATE_CHECK_KEY) !== OFF;
+}
+
+export function writeUpdateCheck(enabled: boolean): Promise<void> {
+  if (enabled) {
+    writeStored(UPDATE_CHECK_KEY, ON);
+  } else {
+    writeStored(UPDATE_CHECK_KEY, OFF);
+  }
+  return flush();
+}

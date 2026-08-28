@@ -1,12 +1,16 @@
-import type { UpdateStatus } from './types';
+import type { UpdateResult, UpdateStatus } from './types';
 import { copyText } from './clipboard';
 import { failure } from './object';
-import { parseUpdateStatus } from './parse';
+import { parseUpdateResult, parseUpdateStatus } from './parse';
 import { request } from './http';
 import { askToast } from '../store/toasts';
 
+const UPDATE_PATH = '/api/update';
+
+const INSTALL_TIMEOUT_MS = 300000;
+
 export async function fetchUpdateStatus(): Promise<UpdateStatus> {
-  const response = await request('/api/update');
+  const response = await request(UPDATE_PATH);
   if (!response.ok) {
     throw await failure(response, `update check failed with status ${response.status}`);
   }
@@ -37,4 +41,37 @@ export async function announceUpdate(): Promise<void> {
       void copyText('the install command', command);
     },
   });
+}
+
+export async function installUpdate(): Promise<UpdateResult> {
+  const response = await request(UPDATE_PATH, {
+    method: 'POST',
+    timeoutMs: INSTALL_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw await failure(response, `the update failed with status ${response.status}`);
+  }
+  return parseUpdateResult(await response.json());
+}
+
+// updateFailure is for a request that never came back with a result at all.
+export function updateFailure(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return 'the update failed';
+}
+
+// updateOutcome is what the About row says once the button has been pressed.
+export function updateOutcome(result: UpdateResult): string {
+  if (result.updated) {
+    return `Updated to ${String(result.latest)}. Restart spinoza to finish.`;
+  }
+  if (result.command !== undefined && result.command !== '') {
+    return `This build cannot replace itself. Run: ${result.command}`;
+  }
+  if (result.reason !== undefined && result.reason !== '') {
+    return result.reason;
+  }
+  return `${result.current} is the newest release.`;
 }

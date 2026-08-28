@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SYSTEM } from '../lib/theme';
 import { validateTheme } from '../lib/customThemes';
 import { LOG_VIEWS, NAMESPACE_STARTS } from '../lib/settings';
@@ -8,6 +8,7 @@ import {
   useLogView,
   useNamespaceStart,
   useNodeShell,
+  useUpdateCheck,
   useScreenReader,
   useSettingsStore,
 } from '../store/settings';
@@ -17,6 +18,8 @@ import { useNamespaceStore } from '../store/namespace';
 import { shortcuts } from '../lib/hotkeys';
 import { copyText } from '../lib/clipboard';
 import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
+import { installUpdate, updateFailure, updateOutcome } from '../lib/update';
+import Announce from './Announce';
 
 const SECTIONS = [
   'Appearance',
@@ -108,6 +111,21 @@ export default function SettingsDialog({
   const start = useNamespaceStart(cluster);
   const setStart = useSettingsStore((state) => state.setNamespaceStart);
   const nodeShell = useNodeShell();
+  const updateCheck = useUpdateCheck();
+  const setUpdateCheck = useSettingsStore((state) => state.setUpdateCheck);
+  const [updating, setUpdating] = useState(false);
+  const [outcome, setOutcome] = useState<string | null>(null);
+  const update = useCallback(async () => {
+    setUpdating(true);
+    setOutcome(null);
+    try {
+      setOutcome(updateOutcome(await installUpdate()));
+    } catch (err: unknown) {
+      setOutcome(updateFailure(err));
+    } finally {
+      setUpdating(false);
+    }
+  }, []);
   const setNodeShell = useSettingsStore((state) => state.setNodeShell);
   const openOn = useNamespaceStore((state) => state.reset);
   const resetPanels = usePanelsStore((state) => state.reset);
@@ -355,6 +373,35 @@ export default function SettingsDialog({
               </Row>
               <Row label="Backend" hint="Reported by the server this window is talking to.">
                 <span className="font-mono text-fg-soft">{versionLabel(backend)}</span>
+              </Row>
+              <Row
+                label="Update"
+                hint="Fetch the newest release and replace this binary. Spinoza has to be restarted afterwards."
+              >
+                <button
+                  type="button"
+                  disabled={updating}
+                  onClick={() => {
+                    void update();
+                  }}
+                  className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active disabled:opacity-50"
+                >
+                  {updating ? 'Updating...' : 'Update'}
+                </button>
+              </Row>
+              <Announce message={outcome} className="px-1 pb-3 break-words text-fg-muted" />
+              <Row
+                label="Check for updates"
+                hint="Ask once when a window opens whether a newer release has been published."
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Check for updates"
+                  checked={updateCheck}
+                  onChange={(event) => {
+                    void setUpdateCheck(event.target.checked);
+                  }}
+                />
               </Row>
             </>
           )}

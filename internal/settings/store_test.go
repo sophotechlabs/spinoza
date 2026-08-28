@@ -330,3 +330,24 @@ func TestAHomelessAccountHasNoDefaultPath(t *testing.T) {
 		t.Skip("this platform still finds a config directory without a home")
 	}
 }
+
+// A setting that is on until somebody turns it off, which an absent key is not.
+func TestOffIsOnlyTheWordOff(t *testing.T) {
+	store := Memory()
+
+	if store.Off(UpdateCheckKey) {
+		t.Fatal("a key nobody has set was read as turned off")
+	}
+	_ = store.Merge(map[string]string{UpdateCheckKey: "on"})
+	if store.Off(UpdateCheckKey) {
+		t.Fatal("on was read as off")
+	}
+	_ = store.Merge(map[string]string{UpdateCheckKey: "off"})
+	if !store.Off(UpdateCheckKey) {
+		t.Fatal("off was not read as off")
+	}
+	_ = store.Merge(map[string]string{UpdateCheckKey: "no"})
+	if store.Off(UpdateCheckKey) {
+		t.Fatal("something that is not the word off was read as off")
+	}
+}

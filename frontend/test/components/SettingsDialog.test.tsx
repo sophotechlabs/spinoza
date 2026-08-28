@@ -9,7 +9,7 @@ import { usePanelsStore } from '../../src/store/panels';
 import { useNamespaceStore } from '../../src/store/namespace';
 import { DEFAULT_PLACEMENT } from '../../src/lib/panels';
 import { readStored, resetStored, startSaving, stopSaving } from '../../src/lib/persist';
-import { NODE_SHELL_KEY } from '../../src/lib/settings';
+import { NODE_SHELL_KEY, UPDATE_CHECK_KEY } from '../../src/lib/settings';
 
 const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
   this.open = true;
@@ -369,6 +369,131 @@ describe('the keyboard section', () => {
     view.rerender(<SettingsDialog open section="Keyboard" onClose={vi.fn()} />);
 
     expect(screen.getByText('Open the command palette')).toBeInTheDocument();
+  });
+});
+
+function answering(version: unknown, update?: unknown) {
+  const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(update) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(version) });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+describe('the update button', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('says what to do once it has replaced the binary', async () => {
+    const user = userEvent.setup();
+    answering({ version: 'v1.14.1' }, { updated: true, current: 'v1.14.1', latest: 'v1.15.0' });
+    render(<SettingsDialog open section="About" onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    expect(await screen.findByText(/Restart spinoza to finish/)).toBeInTheDocument();
+  });
+
+  it('says when there is nothing newer', async () => {
+    const user = userEvent.setup();
+    answering({ version: 'v1.15.0' }, { updated: false, current: 'v1.15.0', latest: 'v1.15.0' });
+    render(<SettingsDialog open section="About" onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    expect(await screen.findByText('v1.15.0 is the newest release.')).toBeInTheDocument();
+  });
+
+  it('hands over the command when this build cannot replace itself', async () => {
+    const user = userEvent.setup();
+    answering(
+      { version: 'v1.14.1' },
+      {
+        updated: false,
+        current: 'v1.14.1',
+        command: 'curl -fsSL https://spinoza.tech/install.sh | sh',
+      },
+    );
+    render(<SettingsDialog open section="About" onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    expect(await screen.findByText(/install\.sh/)).toBeInTheDocument();
+  });
+
+  it('surfaces a request that never came back', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          return Promise.reject(new Error('the backend went away'));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ version: 'v1' }) });
+      }),
+    );
+    render(<SettingsDialog open section="About" onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    expect(await screen.findByText('the backend went away')).toBeInTheDocument();
+  });
+
+  it('cannot be pressed twice while it is running', async () => {
+    const user = userEvent.setup();
+    let settle = (): void => undefined;
+    const posted = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          posted();
+          return new Promise((resolve) => {
+            settle = () => {
+              resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({ updated: true, current: 'v1', latest: 'v2' }),
+              });
+            };
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ version: 'v1' }) });
+      }),
+    );
+    render(<SettingsDialog open section="About" onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+    const running = await screen.findByRole('button', { name: 'Updating...' });
+    expect(running).toBeDisabled();
+
+    await act(async () => {
+      settle();
+      await Promise.resolve();
+    });
+    expect(posted).toHaveBeenCalledTimes(1);
+  });
+
+  it('remembers whether to check on open', async () => {
+    const user = userEvent.setup();
+    answering({ version: 'v1' });
+    startSaving();
+    render(<SettingsDialog open section="About" onClose={vi.fn()} />);
+
+    await user.click(screen.getByLabelText('Check for updates'));
+
+    await waitFor(() => {
+      expect(readStored(UPDATE_CHECK_KEY)).toBe('off');
+    });
+    await user.click(screen.getByLabelText('Check for updates'));
+    await waitFor(() => {
+      expect(readStored(UPDATE_CHECK_KEY)).toBe('on');
+    });
+    stopSaving();
   });
 });
 

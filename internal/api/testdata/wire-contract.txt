@@ -458,6 +458,11 @@ Snapshot.Total total int
 Snapshot.Type type string
 TerminalSize.Cols cols uint16
 TerminalSize.Rows rows uint16
+UpdateResult.Command command,omitempty string
+UpdateResult.Current current string
+UpdateResult.Latest latest,omitempty string
+UpdateResult.Reason reason,omitempty string
+UpdateResult.Updated updated bool
 UpdateStatus.Available available bool
 UpdateStatus.Checked checked bool
 UpdateStatus.Command command,omitempty string

@@ -1,13 +1,22 @@
 import { create } from 'zustand';
 import type { LogView, NamespaceStart, Settings } from '../lib/settings';
-import { readNodeShell, readSettings, writeNodeShell, writeSettings } from '../lib/settings';
+import {
+  readNodeShell,
+  readSettings,
+  readUpdateCheck,
+  writeNodeShell,
+  writeSettings,
+  writeUpdateCheck,
+} from '../lib/settings';
 
 interface SettingsState extends Settings {
   nodeShell: boolean;
+  updateCheck: boolean;
   setLogView: (logView: LogView) => void;
   setScreenReader: (screenReader: boolean) => void;
   setNamespaceStart: (context: string, namespaceStart: NamespaceStart) => void;
   setNodeShell: (nodeShell: boolean) => Promise<void>;
+  setUpdateCheck: (updateCheck: boolean) => Promise<void>;
 }
 
 const stored = readSettings();
@@ -27,6 +36,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   namespaceStart: stored.namespaceStart,
   namespaceStarts: stored.namespaceStarts,
   nodeShell: readNodeShell(),
+  updateCheck: readUpdateCheck(),
   setLogView: (logView) => {
     writeSettings({ ...saved(get()), logView });
     set({ logView });
@@ -49,6 +59,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await writeNodeShell(nodeShell);
     set({ nodeShell });
   },
+  setUpdateCheck: async (updateCheck) => {
+    await writeUpdateCheck(updateCheck);
+    set({ updateCheck });
+  },
 }));
 
 export function useLogView(): LogView {
@@ -61,6 +75,10 @@ export function useScreenReader(): boolean {
 
 export function useNodeShell(): boolean {
   return useSettingsStore((state) => state.nodeShell);
+}
+
+export function useUpdateCheck(): boolean {
+  return useSettingsStore((state) => state.updateCheck);
 }
 
 export function useNamespaceStart(context: string): NamespaceStart {

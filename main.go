@@ -86,6 +86,7 @@ func run() error {
 	srv.UseProfiler(opts.pprof)
 	srv.UseSettings(store)
 	srv.UseUpdates(updateChecker())
+	srv.UseInstaller(updateInstaller())
 	httpServer := &http.Server{
 		Addr:              opts.addr,
 		Handler:           srv.Handler(),

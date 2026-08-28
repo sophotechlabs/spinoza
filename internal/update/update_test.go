@@ -226,3 +226,30 @@ func TestTheRequestSaysWhichReleaseIsAsking(t *testing.T) {
 		t.Fatalf("user-agent = %q, want the operating system in it", got)
 	}
 }
+
+// The window is told once per run; a button press is a reason to ask again.
+func TestRecheckAsksAgain(t *testing.T) {
+	var asked atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked.Add(1)
+		_, _ = w.Write([]byte(release))
+	}))
+	t.Cleanup(server.Close)
+	checker := New("v1.14.1", server.URL)
+	checker.Status(context.Background())
+
+	status := checker.Recheck(context.Background())
+
+	if asked.Load() != 2 {
+		t.Fatalf("asked %d times, want the recheck to have asked again", asked.Load())
+	}
+	if !status.Available {
+		t.Fatalf("status = %+v, want the newer release", status)
+	}
+	if checker.Status(context.Background()).Latest != "v1.15.0" {
+		t.Fatal("the recheck did not replace what the next reader gets")
+	}
+	if asked.Load() != 2 {
+		t.Fatalf("asked %d times, want the answer kept after a recheck", asked.Load())
+	}
+}

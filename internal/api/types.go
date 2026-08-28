@@ -785,6 +785,17 @@ type UpdateStatus struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+// UpdateResult is what pressing the update button came to. Updated means the
+// binary on disk was replaced and spinoza has to be restarted; Command is the
+// install line for a build that cannot replace itself.
+type UpdateResult struct {
+	Updated bool   `json:"updated"`
+	Current string `json:"current"`
+	Latest  string `json:"latest,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+	Command string `json:"command,omitempty"`
+}
+
 type MetricPoint struct {
 	At    int64   `json:"at"`
 	Value float64 `json:"value"`

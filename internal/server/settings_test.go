@@ -18,6 +18,10 @@ func (refusingSettings) All() map[string]string {
 	return map[string]string{}
 }
 
+func (refusingSettings) Off(string) bool {
+	return false
+}
+
 func (refusingSettings) Merge(map[string]string) error {
 	return errors.New("the settings file is read-only")
 }

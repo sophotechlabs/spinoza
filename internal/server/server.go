@@ -59,6 +59,7 @@ type Server struct {
 	health     api.ClusterHealth
 	watching   bool
 	updates    Updates
+	installer  Installs
 	pingEvery  time.Duration
 }
 

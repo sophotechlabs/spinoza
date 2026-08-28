@@ -35,7 +35,8 @@ type Checker struct {
 	current  string
 	client   *http.Client
 
-	once   sync.Once
+	mu     sync.Mutex
+	asked  bool
 	answer api.UpdateStatus
 }
 
@@ -52,10 +53,24 @@ func New(current, endpoint string) *Checker {
 }
 
 func (c *Checker) Status(ctx context.Context) api.UpdateStatus {
-	c.once.Do(func() {
-		c.answer = c.ask(ctx)
-	})
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.asked {
+		return c.answer
+	}
+	c.answer = c.ask(ctx)
+	c.asked = true
 	return c.answer
+}
+
+// Recheck asks again. Pressing a button is a reason to; opening a window is not.
+func (c *Checker) Recheck(ctx context.Context) api.UpdateStatus {
+	answer := c.ask(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.answer = answer
+	c.asked = true
+	return answer
 }
 
 func (c *Checker) ask(ctx context.Context) api.UpdateStatus {

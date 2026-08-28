@@ -758,6 +758,14 @@ export interface UpdateStatus {
   reason?: string;
 }
 
+export interface UpdateResult {
+  updated: boolean;
+  current: string;
+  latest?: string;
+  reason?: string;
+  command?: string;
+}
+
 export interface MetricPoint {
   at: number;
   value: number;

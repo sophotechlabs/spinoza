@@ -19,6 +19,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/healthz", s.handleHealth, true},
 		{http.MethodGet, "/api/version", handleVersion, true},
 		{http.MethodGet, "/api/update", s.handleUpdate, true},
+		{http.MethodPost, "/api/update", s.handleInstallUpdate, true},
 		{http.MethodGet, "/api/contexts", s.listContexts, true},
 		{http.MethodPost, "/api/contexts", s.switchContext, true},
 		{http.MethodPost, "/api/protection", s.setProtection, true},

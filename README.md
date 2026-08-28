@@ -15,7 +15,7 @@ A self-hosted Kubernetes GUI: Go backend with client-go informers, React fronten
 curl -fsSL https://spinoza.tech/install.sh | sh
 ```
 
-The binary goes to `~/.local/bin`, or `/usr/local/bin` as root; `SPINOZA_INSTALL_DIR` overrides both. Checksums are verified before anything is written. On macOS the desktop app lands in `/Applications`.
+The binary goes to `~/.local/bin`, or `/usr/local/bin` as root; `SPINOZA_INSTALL_DIR` overrides both. Checksums are verified before anything is written. On macOS the desktop app lands in `/Applications`, unless `SPINOZA_SKIP_APP=1`.
 
 ```sh
 spinoza --open          # browser

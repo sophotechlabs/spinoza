@@ -15,7 +15,12 @@ import (
 
 const NodeShellKey = "spinoza.nodeshell.v1"
 
-const enabled = "on"
+const UpdateCheckKey = "spinoza.update.check.v1"
+
+const (
+	enabled  = "on"
+	disabled = "off"
+)
 
 type state struct {
 	Values map[string]string `json:"values"`
@@ -70,6 +75,14 @@ func (s *Store) On(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.values[key] == enabled
+}
+
+// Off is for settings that are on until somebody turns them off, which an
+// absent key never has.
+func (s *Store) Off(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.values[key] == disabled
 }
 
 // Merge applies values over what the file holds now. Two spinozas run at once,

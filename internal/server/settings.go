@@ -12,6 +12,7 @@ const maxSettingsBytes = 1 << 20
 
 type Settings interface {
 	All() map[string]string
+	Off(key string) bool
 	Merge(values map[string]string) error
 }
 

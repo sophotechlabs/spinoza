@@ -44,7 +44,7 @@ main() {
     fi
 
     app_dir=""
-    if [ "$os" = "darwin" ]; then
+    if [ "$os" = "darwin" ] && [ -z "${SPINOZA_SKIP_APP:-}" ]; then
         install_app
     fi
 

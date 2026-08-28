@@ -17,6 +17,7 @@ import {
   parseHelmChartVersions,
   parseHelmReleases,
   parseMetricHistory,
+  parseUpdateResult,
   parseUpdateStatus,
   parseMetrics,
   parseObjectDetail,
@@ -526,5 +527,30 @@ describe('parseUpdateStatus', () => {
     expect(status.available).toBe(true);
     expect(status.latest).toBe('v1.15.0');
     expect(status.command).toContain('install.sh');
+  });
+});
+
+describe('parseUpdateResult', () => {
+  it('fills in what a short answer left out', () => {
+    expect(parseUpdateResult({ current: 'v1.14.1' })).toEqual({
+      updated: false,
+      current: 'v1.14.1',
+      latest: undefined,
+      reason: undefined,
+      command: undefined,
+    });
+  });
+
+  it('keeps the outcome, the release and the command apart', () => {
+    const result = parseUpdateResult({
+      updated: true,
+      current: 'v1.14.1',
+      latest: 'v1.15.0',
+      command: 'curl -fsSL https://spinoza.tech/install.sh | sh',
+    });
+
+    expect(result.updated).toBe(true);
+    expect(result.latest).toBe('v1.15.0');
+    expect(result.command).toContain('install.sh');
   });
 });
