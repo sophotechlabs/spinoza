@@ -38,10 +38,12 @@ func failingDeployment(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	yes := true
 	var noGrace int64
+	keptRevisions := int32(50)
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: auditWorkload},
 		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": auditWorkload}},
+			RevisionHistoryLimit: &keptRevisions,
+			Selector:             &metav1.LabelSelector{MatchLabels: map[string]string{"app": auditWorkload}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": auditWorkload}},
 				Spec: corev1.PodSpec{
@@ -176,7 +178,6 @@ func TestChecksAuditARealCluster(t *testing.T) {
 		"image-not-digest-pinned",
 		"image-from-docker-hub",
 		"no-prestop-hook",
-		"no-progress-deadline",
 		"unbounded-revision-history",
 		"missing-recommended-labels",
 		"ephemeral-storage-unset",

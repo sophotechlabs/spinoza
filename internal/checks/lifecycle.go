@@ -15,7 +15,6 @@ const (
 	recreateShape   = "Recreate"
 	graceField      = "terminationGracePeriodSeconds"
 	revisionHistory = "revisionHistoryLimit"
-	progressField   = "progressDeadlineSeconds"
 )
 
 const (
@@ -173,21 +172,12 @@ func lifecycleChecks() []check {
 			find:     overSubjects(statefulSetNoService),
 		},
 		{
-			id:       "no-progress-deadline",
-			title:    "Rollout never gives up",
-			category: categoryReliability,
-			severity: severityLow,
-			wrong:    "A wedged rollout reports Progressing for ever instead of failing, so nothing downstream can tell it went wrong.",
-			remedy:   "Set spec.progressDeadlineSeconds so a stuck rollout is marked failed.",
-			find:     overSubjects(noProgressDeadline),
-		},
-		{
 			id:       "unbounded-revision-history",
-			title:    "Every old ReplicaSet kept",
+			title:    "More old ReplicaSets kept than anyone rolls back to",
 			category: categoryEfficiency,
 			severity: severityLow,
 			wrong:    "Old ReplicaSets accumulate for the life of the workload and cost API server memory and list time.",
-			remedy:   "Set spec.revisionHistoryLimit to the number of rollbacks you would actually make.",
+			remedy:   "Lower spec.revisionHistoryLimit to the number of rollbacks you would actually make.",
 			find:     overSubjects(unboundedHistory),
 		},
 		{
@@ -541,28 +531,13 @@ func statefulSetNoService(subject Subject) (string, string) {
 	return "spec.serviceName is unset, so the pods get no stable DNS name", ""
 }
 
-func noProgressDeadline(subject Subject) (string, string) {
-	if subject.Kind != deploymentKind {
-		return "", ""
-	}
-	if _, set := numberAt(specAt(subject.Object, specField), progressField); set {
-		return "", ""
-	}
-	return "spec.progressDeadlineSeconds is unset",
-		specPatch([]string{progressField + ": 600"})
-}
-
 func unboundedHistory(subject Subject) (string, string) {
 	if !isSpreadable(subject.Kind) && subject.Kind != "DaemonSet" {
 		return "", ""
 	}
 	kept, set := numberAt(specAt(subject.Object, specField), revisionHistory)
-	if set && kept <= keptRevisions {
+	if !set || kept <= keptRevisions {
 		return "", ""
-	}
-	if !set {
-		return "spec." + revisionHistory + " is unset, which keeps ten",
-			specPatch([]string{revisionHistory + ": 3"})
 	}
 	return "spec." + revisionHistory + " keeps " + strconv.FormatInt(kept, 10) + " old revisions",
 		specPatch([]string{revisionHistory + ": 3"})

@@ -46,7 +46,6 @@ func settledDeployment(pod map[string]any) *unstructured.Unstructured {
 		"type":          "RollingUpdate",
 		"rollingUpdate": map[string]any{"maxUnavailable": int64(1)},
 	}
-	spec[progressField] = int64(600)
 	spec[revisionHistory] = int64(3)
 	return obj
 }
@@ -151,10 +150,6 @@ func TestEveryLifecycleCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 		{
 			id:    "statefulset-no-service-name",
 			trips: workload("StatefulSet", "db", settledPod(nil, settledContainer(nil))),
-		},
-		{
-			id:    "no-progress-deadline",
-			trips: withSpec(settled(), progressField, nil),
 		},
 		{
 			id:    "unbounded-revision-history",
@@ -359,15 +354,15 @@ func TestAStatefulSetThatNamesItsServiceIsAccepted(t *testing.T) {
 	}
 }
 
-func TestTheRevisionHistoryCheckSaysWhetherItIsUnsetOrTooHigh(t *testing.T) {
-	unset := report(t, withSpec(settled(), revisionHistory, nil))
-	if !strings.Contains(onlyFinding(t, unset, "unbounded-revision-history").Detail, "unset") {
-		t.Fatal("an unset revisionHistoryLimit was not reported as unset")
-	}
-
+func TestTheRevisionHistoryCheckNamesTheCountAndLetsTheDefaultAlone(t *testing.T) {
 	high := report(t, withSpec(settled(), revisionHistory, int64(50)))
 	if !strings.Contains(onlyFinding(t, high, "unbounded-revision-history").Detail, "50 old revisions") {
 		t.Fatal("a high revisionHistoryLimit did not name the count")
+	}
+
+	unset := report(t, withSpec(settled(), revisionHistory, nil))
+	if findingCount(t, unset, "unbounded-revision-history") != 0 {
+		t.Fatal("an unset revisionHistoryLimit was reported, but a live apiserver always defaults it to ten")
 	}
 }
 
