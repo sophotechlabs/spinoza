@@ -26,10 +26,9 @@ async function replaceEditor(page: Page, text: string): Promise<void> {
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.press('Delete');
   await page.keyboard.insertText(text);
-  const wanted = text.trim().split('\n')[0];
-  await expect.poll(async () => (await editorText(page)).split('\n')[0], {
-    timeout: 20_000,
-  }).toBe(wanted);
+  await expect
+    .poll(async () => (await editorText(page)).trim(), { timeout: 20_000 })
+    .toBe(text.trim());
 }
 
 test.afterAll(() => {
@@ -96,19 +95,13 @@ test('an edit applied in the browser reaches the apiserver', async ({ page }) =>
   ]);
   await openYaml(page, EDITED);
   await expect.poll(async () => editorText(page), { timeout: 30_000 }).toContain(EDITED);
-  const document = [
-    'apiVersion: v1',
-    'kind: ConfigMap',
-    'metadata:',
-    `  name: ${EDITED}`,
-    `  namespace: ${NAMESPACE}`,
-    'data:',
-    '  before: yes',
-    '  after: also-yes',
-    '',
-  ].join('\n');
+  const document = JSON.stringify({
+    apiVersion: 'v1',
+    kind: 'ConfigMap',
+    metadata: { name: EDITED, namespace: NAMESPACE },
+    data: { before: 'yes', after: 'also-yes' },
+  });
   await replaceEditor(page, document);
-  expect((await editorText(page)).trim()).toBe(document.trim());
   await page.getByRole('button', { name: 'Apply', exact: true }).click();
   const confirmApply = page.getByRole('button', { name: 'Confirm', exact: true });
   if ((await confirmApply.count()) > 0) {

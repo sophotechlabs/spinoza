@@ -1,4 +1,5 @@
 import { expect, test, holdSide, sideAuthed } from '../harness/test';
+import { CONTEXT } from '../harness/paths';
 import type { Browser, Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
@@ -75,7 +76,7 @@ test('a helm spinoza cannot run is not offered as a button that would fail', asy
   const context = await browser.newContext();
   const page = await context.newPage();
   const toolless = await holdSide(browser, 'toolless');
-  await page.goto(sideAuthed('toolless', '#view=helm'));
+  await page.goto(sideAuthed('toolless', `#context=${CONTEXT}&view=helm`));
   await page.waitForLoadState('domcontentloaded');
   await expect(page.getByRole('button', { name: 'Install chart' })).toBeDisabled({
     timeout: 60_000,

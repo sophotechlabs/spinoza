@@ -14,6 +14,8 @@ const GITOPS = join(FIXTURES, 'gitops.yaml');
 
 export const RELEASE = 'e2e-release';
 
+export const DOOMED = 'e2e-doomed';
+
 export function seed(): void {
   kubectl(['apply', '-f', WORKLOADS]);
   kubectl(['apply', '-f', RBAC]);
@@ -48,6 +50,19 @@ export function seedHelm(): void {
     NAMESPACE,
     '--set',
     'greeting=hello from revision two',
+    '--wait',
+    '--timeout',
+    '3m',
+  ]);
+  helm([
+    'upgrade',
+    '--install',
+    DOOMED,
+    CHART,
+    '--namespace',
+    NAMESPACE,
+    '--set',
+    'replicaCount=0',
     '--wait',
     '--timeout',
     '3m',
@@ -135,6 +150,7 @@ export function waitForFixtures(): void {
 
 export function teardown(): void {
   helmSoft(['uninstall', RELEASE, '--namespace', NAMESPACE, '--ignore-not-found']);
+  helmSoft(['uninstall', DOOMED, '--namespace', NAMESPACE, '--ignore-not-found']);
   kubectlSoft(['delete', '-f', PROMETHEUS, '--ignore-not-found', '--wait=false']);
   kubectlSoft(['delete', '-f', GITOPS, '--ignore-not-found', '--wait=false']);
   kubectlSoft(['delete', 'namespace', SCALE_NAMESPACE, '--ignore-not-found', '--wait=false']);

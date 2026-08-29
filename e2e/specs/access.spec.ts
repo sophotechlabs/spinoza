@@ -1,4 +1,5 @@
 import { expect, test, holdSide, sideAuthed } from '../harness/test';
+import { CONTEXT } from '../harness/paths';
 import type { Browser, Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
@@ -59,7 +60,7 @@ test('a metric with no permission to read it is not invented', async ({ browser 
 test('releases a user cannot read are reported as none, not as an empty table', async ({
   browser,
 }) => {
-  const [page, close] = await openReadonly(browser, '#view=helm');
+  const [page, close] = await openReadonly(browser, `#context=${CONTEXT}&view=helm`);
   await expect(page.locator('main')).toContainText('No Helm releases in this cluster.', {
     timeout: 60_000,
   });
@@ -67,7 +68,7 @@ test('releases a user cannot read are reported as none, not as an empty table', 
 });
 
 test('a limited user is told which namespaces refused the read', async ({ browser }) => {
-  const [page, close] = await openReadonly(browser, '#view=helm');
+  const [page, close] = await openReadonly(browser, `#context=${CONTEXT}&view=helm`);
   await expect(page.getByRole('status').filter({ hasText: 'Partial data' })).toContainText(
     'secrets could not be listed cluster-wide',
     { timeout: 60_000 },
