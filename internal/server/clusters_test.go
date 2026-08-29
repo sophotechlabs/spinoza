@@ -461,6 +461,35 @@ func (h *heldTabs) Recolor(_ context.Context, id string, color int) error {
 	return nil
 }
 
+func (h *heldTabs) Rename(_ context.Context, id, label, grouping string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.setErr != nil {
+		return h.setErr
+	}
+	for at, held := range h.tabs {
+		if held.ID == id {
+			h.tabs[at].Label = label
+			h.tabs[at].Grouping = grouping
+		}
+	}
+	return nil
+}
+
+func (h *heldTabs) Reopening(_ context.Context, id string, reopen bool) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.setErr != nil {
+		return h.setErr
+	}
+	for at, held := range h.tabs {
+		if held.ID == id {
+			h.tabs[at].Reopen = reopen
+		}
+	}
+	return nil
+}
+
 func (h *heldTabs) Forget(_ context.Context, id string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -550,7 +579,7 @@ func TestClosingAClusterStopsItReopeningNextTime(t *testing.T) {
 
 func TestTheListSaysWhichClustersWereOpenLastTime(t *testing.T) {
 	ts, open := rememberingServer(t, &fleet{})
-	open.tabs = []history.Tab{{ID: mk2, Context: "p-mk2", Kubeconfig: "/work.yaml"}}
+	open.tabs = []history.Tab{{ID: mk2, Context: "p-mk2", Kubeconfig: "/work.yaml", Reopen: true}}
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
 
@@ -765,4 +794,193 @@ func TestAServerWithNoStoreStartsAnyway(t *testing.T) {
 	srv := New(held, testAssets(), testToken)
 
 	srv.RememberOpen(t.Context())
+}
+
+func namesOf(t *testing.T, body []byte) map[string]api.OpenCluster {
+	t.Helper()
+	found := map[string]api.OpenCluster{}
+	for _, one := range clustersFrom(t, body).Clusters {
+		found[one.Context] = one
+	}
+	return found
+}
+
+func openedFleet(t *testing.T) (*httptest.Server, *heldTabs) {
+	t.Helper()
+	ts, open := rememberingServer(t, &fleet{})
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+	return ts, open
+}
+
+func TestATabCanBeGivenAnotherName(t *testing.T) {
+	ts, _ := openedFleet(t)
+
+	_, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/name?cluster="+urlValue(mk1)+"&label=client+a+prod&grouping=Client+A", nil)
+
+	held := namesOf(t, body)["p-mk1"]
+	if held.Label != "client a prod" {
+		t.Fatalf("label = %q, want the one that was typed", held.Label)
+	}
+	if held.Grouping != "Client A" {
+		t.Fatalf("grouping = %q, want the group it was put in", held.Grouping)
+	}
+}
+
+func TestANameIsTrimmedRatherThanTakenAsTyped(t *testing.T) {
+	ts, _ := openedFleet(t)
+
+	_, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/name?cluster="+urlValue(mk1)+"&label=++prod++", nil)
+
+	if label := namesOf(t, body)["p-mk1"].Label; label != "prod" {
+		t.Fatalf("label = %q, want it trimmed", label)
+	}
+}
+
+func TestANameCanBeTakenBackOff(t *testing.T) {
+	ts, _ := openedFleet(t)
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters/name?cluster="+urlValue(mk1)+"&label=prod", nil)
+
+	_, body := doRequest(t, http.MethodPost, ts.URL+"/api/clusters/name?cluster="+urlValue(mk1), nil)
+
+	if label := namesOf(t, body)["p-mk1"].Label; label != "" {
+		t.Fatalf("label = %q, want the context name back", label)
+	}
+}
+
+func TestANameLongerThanTheStripCanShowIsRefused(t *testing.T) {
+	ts, _ := openedFleet(t)
+
+	resp, _ := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/name?cluster="+urlValue(mk1)+"&label="+strings.Repeat("x", maxLabel+1), nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want a name that long refused", resp.StatusCode)
+	}
+}
+
+func TestRenamingNeedsToKnowWhichTab(t *testing.T) {
+	ts, _ := openedFleet(t)
+
+	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/clusters/name?label=prod", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want it refused without a cluster", resp.StatusCode)
+	}
+}
+
+func TestRenamingWithNowhereToKeepItSaysSo(t *testing.T) {
+	ts := fleetServer(t, &fleet{})
+
+	resp, _ := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/name?cluster="+urlValue(mk1)+"&label=prod", nil)
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want it to say there is nowhere to keep it", resp.StatusCode)
+	}
+}
+
+func TestANameThatCannotBeWrittenIsReported(t *testing.T) {
+	ts, open := openedFleet(t)
+	open.setErr = errors.New("read-only file system")
+
+	resp, _ := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/name?cluster="+urlValue(mk1)+"&label=prod", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a name that was never written reported success")
+	}
+}
+
+func TestATabComesBackNextTimeUnlessItIsToldNotTo(t *testing.T) {
+	ts, _ := openedFleet(t)
+
+	if !namesOf(t, listBody(t, ts))["p-mk1"].Reopen {
+		t.Fatal("a tab that was just opened would not come back")
+	}
+
+	_, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/reopen?cluster="+urlValue(mk1)+"&reopen=false", nil)
+
+	if namesOf(t, body)["p-mk1"].Reopen {
+		t.Fatal("the tab still says it comes back after being told not to")
+	}
+}
+
+func TestATabToldNotToComeBackKeepsThatThroughAReopen(t *testing.T) {
+	ts, open := openedFleet(t)
+	doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/reopen?cluster="+urlValue(mk1)+"&reopen=false", nil)
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters/name?cluster="+urlValue(mk1)+"&label=prod", nil)
+
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+
+	held := open.remembered()[0]
+	if held.Reopen {
+		t.Fatal("opening the cluster again turned reopen back on")
+	}
+	if held.Label != "prod" {
+		t.Fatalf("label = %q, want the name kept through a reopen", held.Label)
+	}
+}
+
+func TestReopenMustBeTrueOrFalse(t *testing.T) {
+	ts, _ := openedFleet(t)
+
+	for _, asked := range []string{"", "maybe", "1"} {
+		resp, _ := doRequest(t, http.MethodPost,
+			ts.URL+"/api/clusters/reopen?cluster="+urlValue(mk1)+"&reopen="+asked, nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("reopen=%q gave status %d, want it refused", asked, resp.StatusCode)
+		}
+	}
+}
+
+func TestReopenNeedsToKnowWhichTab(t *testing.T) {
+	ts, _ := openedFleet(t)
+
+	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/clusters/reopen?reopen=false", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want it refused without a cluster", resp.StatusCode)
+	}
+}
+
+func TestReopenWithNowhereToKeepItSaysSo(t *testing.T) {
+	ts := fleetServer(t, &fleet{})
+
+	resp, _ := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/reopen?cluster="+urlValue(mk1)+"&reopen=false", nil)
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want it to say there is nowhere to keep it", resp.StatusCode)
+	}
+}
+
+func TestAReopenFlagThatCannotBeWrittenIsReported(t *testing.T) {
+	ts, open := openedFleet(t)
+	open.setErr = errors.New("read-only file system")
+
+	resp, _ := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/reopen?cluster="+urlValue(mk1)+"&reopen=false", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a flag that was never written reported success")
+	}
+}
+
+func TestATabToldNotToComeBackIsNotOfferedForReopening(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+	open.tabs = []history.Tab{
+		{ID: mk1, Context: "p-mk1", Reopen: true},
+		{ID: mk2, Context: "p-mk2", Reopen: false},
+	}
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
+
+	offered := clustersFrom(t, body).Remembered
+	if len(offered) != 1 || offered[0].Context != "p-mk1" {
+		t.Fatalf("offered %+v, want only the tab that asked to come back", offered)
+	}
 }

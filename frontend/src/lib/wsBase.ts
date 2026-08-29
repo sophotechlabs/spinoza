@@ -1,4 +1,5 @@
 import { TOKEN_PARAM, authToken } from './http';
+import { onCluster } from './cluster';
 
 function override(): string | null {
   const w = window as unknown as { __SPINOZA_WS_BASE__?: string };
@@ -28,10 +29,11 @@ function separator(path: string): string {
 }
 
 export function wsURL(path: string): string {
+  const named = onCluster(path);
   const token = authToken();
   if (token === null) {
-    return `${origin()}${path}`;
+    return `${origin()}${named}`;
   }
   const param = `${TOKEN_PARAM}=${encodeURIComponent(token)}`;
-  return `${origin()}${path}${separator(path)}${param}`;
+  return `${origin()}${named}${separator(named)}${param}`;
 }

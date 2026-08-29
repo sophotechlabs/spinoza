@@ -161,18 +161,18 @@ describe('the strip of open clusters', () => {
     expect(swatch).toHaveStyle({ backgroundColor: 'var(--cluster-2)' });
   });
 
-  it('offers the whole palette when the swatch is clicked', async () => {
+  it('opens the tab settings when the swatch is clicked', async () => {
     const user = userEvent.setup();
     open(MK1);
     render(<ClusterStrip onShown={vi.fn()} />);
 
     await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
 
-    expect(screen.getByRole('group', { name: 'Colour for p-mk1' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Settings for p-mk1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Colour 8' })).toBeInTheDocument();
   });
 
-  it('puts the palette away when the swatch is clicked again', async () => {
+  it('puts the settings away when the swatch is clicked again', async () => {
     const user = userEvent.setup();
     open(MK1);
     render(<ClusterStrip onShown={vi.fn()} />);
@@ -180,10 +180,10 @@ describe('the strip of open clusters', () => {
 
     await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
 
-    expect(screen.queryByRole('group', { name: 'Colour for p-mk1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Settings for p-mk1' })).not.toBeInTheDocument();
   });
 
-  it('puts the palette away when you click elsewhere', async () => {
+  it('puts the settings away when you click elsewhere', async () => {
     const user = userEvent.setup();
     open(MK1);
     render(<ClusterStrip onShown={vi.fn()} />);
@@ -191,7 +191,7 @@ describe('the strip of open clusters', () => {
 
     await user.click(document.body);
 
-    expect(screen.queryByRole('group', { name: 'Colour for p-mk1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Settings for p-mk1' })).not.toBeInTheDocument();
   });
 
   it('asks the server for the colour that was picked', async () => {
@@ -220,6 +220,87 @@ describe('the strip of open clusters', () => {
     await waitFor(() => {
       expect(useToastsStore.getState().toasts[0].message).toContain('Recolouring p-mk1');
     });
+  });
+
+  it('closes the settings once a name has been saved', async () => {
+    const user = userEvent.setup();
+    stub(true, listOf(MK1));
+    open(MK1);
+    render(<ClusterStrip onShown={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('group', { name: 'Settings for p-mk1' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('groups tabs that were put in a group, and names the run', () => {
+    act(() => {
+      adoptClusters({
+        clusters: [
+          {
+            id: MK1,
+            context: 'p-mk1',
+            active: true,
+            color: 1,
+            grouping: 'Client A',
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+          {
+            id: MK2,
+            context: 'p-mk2',
+            active: false,
+            color: 2,
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+        ],
+        remembered: [],
+      });
+    });
+
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    expect(screen.getByText('Client A')).toBeInTheDocument();
+  });
+
+  it('calls a tab by the name it was given', () => {
+    act(() => {
+      adoptClusters({
+        clusters: [
+          {
+            id: MK1,
+            context: 'p-mk1',
+            active: true,
+            color: 1,
+            label: 'client a prod',
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+          {
+            id: MK2,
+            context: 'p-mk2',
+            active: false,
+            color: 2,
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+        ],
+        remembered: [],
+      });
+    });
+
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'client a prod' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close client a prod' })).toBeInTheDocument();
   });
 
   it('asks before closing a tab with a shell attached', async () => {

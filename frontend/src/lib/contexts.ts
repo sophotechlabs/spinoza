@@ -134,17 +134,6 @@ export async function contextAnnounced(name: string): Promise<void> {
   }
 }
 
-export async function switchContext(
-  entry: Pick<ContextEntry, 'kubeconfig' | 'name'>,
-): Promise<ContextList> {
-  const params = new URLSearchParams({ kubeconfig: entry.kubeconfig, name: entry.name });
-  const response = await request(`/api/contexts?${params.toString()}`, { method: 'POST' });
-  if (!response.ok) {
-    throw await failure(response, `switching context failed with status ${response.status}`);
-  }
-  return normalize((await response.json()) as WireContexts);
-}
-
 export async function addKubeconfig(path: string): Promise<ContextList> {
   const params = new URLSearchParams({ path });
   const response = await request(`/api/kubeconfigs?${params.toString()}`, { method: 'POST' });

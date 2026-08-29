@@ -28,7 +28,6 @@ var writesToTheCluster = map[string]string{
 
 var localOnly = map[string]string{
 	"/api/update":             "installs a spinoza update on this machine",
-	"/api/contexts":           "switches which cluster is looked at",
 	"/api/protection":         "a local flag about a cluster, not a change to it",
 	"/api/kubeconfigs":        "edits this machine's kubeconfig list",
 	"/api/kubeconfigs/picker": "opens a file dialog",
@@ -38,6 +37,8 @@ var localOnly = map[string]string{
 	"/api/clusters":           "opens and closes local connections",
 	"/api/clusters/active":    "picks which open connection is active",
 	"/api/clusters/color":     "a local label for a tab, not a change to the cluster",
+	"/api/clusters/name":      "a local label for a tab, not a change to the cluster",
+	"/api/clusters/reopen":    "whether the tab comes back next time, kept on this machine",
 	"/api/history":            "clears the local record",
 	"/api/view/browser":       "moves the window",
 	"/api/view/desktop":       "moves the window",

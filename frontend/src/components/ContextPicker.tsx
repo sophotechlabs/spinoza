@@ -10,6 +10,7 @@ import { CONTROL } from '../lib/controls';
 import { useDismissMenu } from '../lib/useDismissMenu';
 import KubeconfigDialog from './KubeconfigDialog';
 import ClusterSwatch from './ClusterSwatch';
+import { useActiveTab } from '../store/clusters';
 
 interface ContextPickerProps {
   onSwitched: () => void;
@@ -47,7 +48,10 @@ function current(active: boolean): 'true' | undefined {
   return undefined;
 }
 
-function currentLabel(list: ContextList): string {
+function currentLabel(list: ContextList, named: string): string {
+  if (named !== '') {
+    return named;
+  }
   if (list.current.name === '') {
     return 'no cluster';
   }
@@ -56,6 +60,7 @@ function currentLabel(list: ContextList): string {
 
 export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   const list = useContextList();
+  const named = useActiveTab()?.label ?? '';
   const setList = useContextsStore((state) => state.setList);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -212,7 +217,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   if (groups.length === 0) {
     return (
       <span className="flex items-center gap-2">
-        <span className="font-semibold text-fg-strong">{currentLabel(list)}</span>
+        <span className="font-semibold text-fg-strong">{currentLabel(list, named)}</span>
         {manageButton()}
         {dialog()}
       </span>
@@ -224,11 +229,11 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
       <details ref={menuRef} className="relative">
         <summary
           aria-label="Kubernetes context"
-          title={currentLabel(list)}
+          title={currentLabel(list, named)}
           className={`${CONTROL} max-w-64 cursor-pointer list-none border-edge-strong bg-surface-raised font-semibold text-fg-strong hover:bg-surface-active [&::-webkit-details-marker]:hidden`}
         >
           <ClusterSwatch />
-          <span className="truncate">{currentLabel(list)}</span>
+          <span className="truncate">{currentLabel(list, named)}</span>
           <span aria-hidden="true" className="ml-auto pl-2 text-fg-muted">
             ▾
           </span>

@@ -6,7 +6,7 @@ import (
 )
 
 func tab(id, name string, seen time.Time) Tab {
-	return Tab{ID: id, Context: name, Kubeconfig: "/work.yaml", Seen: seen}
+	return Tab{ID: id, Context: name, Kubeconfig: "/work.yaml", Seen: seen, Reopen: true}
 }
 
 func remember(t *testing.T, store *Store, held Tab) {
@@ -156,5 +156,100 @@ func TestTheTabsOfAnOlderSpinozaSurviveTheMigration(t *testing.T) {
 	}
 	if found := allTabs(t, reopened); len(found) != 0 {
 		t.Fatalf("tabs = %v, want none before anything is opened", found)
+	}
+}
+
+func TestANameAndAGroupSurviveTheRoundTrip(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	remember(t, store, tab(p1, "p-mk1", noon))
+
+	if err := store.Tabs().Rename(t.Context(), p1, "client a prod", "Client A"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+
+	found := allTabs(t, store)[0]
+	if found.Label != "client a prod" || found.Grouping != "Client A" {
+		t.Fatalf("tab = %+v, want the name and group it was given", found)
+	}
+}
+
+func TestWhetherATabComesBackSurvivesTheRoundTrip(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+
+	remember(t, store, tab(p1, "p-mk1", noon))
+
+	if !allTabs(t, store)[0].Reopen {
+		t.Fatal("the flag did not survive being written and read")
+	}
+}
+
+func TestATabWrittenBeforeTheColumnExistedComesBack(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+
+	_, err := store.writes.ExecContext(t.Context(),
+		"INSERT INTO clusters (id, context, kubeconfig, seen) VALUES (?, 'p-mk1', '', 0)", p1)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	if !allTabs(t, store)[0].Reopen {
+		t.Fatal("a tab from before the column existed would not come back")
+	}
+}
+
+func TestATabCanBeToldNotToComeBack(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	remember(t, store, tab(p1, "p-mk1", noon))
+
+	if err := store.Tabs().Reopening(t.Context(), p1, false); err != nil {
+		t.Fatalf("reopening: %v", err)
+	}
+
+	if allTabs(t, store)[0].Reopen {
+		t.Fatal("the tab still says it comes back")
+	}
+}
+
+func TestAStoreWithNowhereToWriteTakesNamesQuietly(t *testing.T) {
+	store, err := Open(t.Context(), "")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	if renameErr := store.Tabs().Rename(t.Context(), p1, "prod", ""); renameErr != nil {
+		t.Fatalf("rename: %v", renameErr)
+	}
+	if reopenErr := store.Tabs().Reopening(t.Context(), p1, false); reopenErr != nil {
+		t.Fatalf("reopening: %v", reopenErr)
+	}
+}
+
+func TestANameThatCannotBeStoredIsReported(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	if _, err := store.writes.ExecContext(t.Context(), "DROP TABLE clusters"); err != nil {
+		t.Fatalf("drop: %v", err)
+	}
+
+	if err := store.Tabs().Rename(t.Context(), p1, "prod", ""); err == nil {
+		t.Fatal("a rename into a missing table reported success")
+	}
+	if err := store.Tabs().Reopening(t.Context(), p1, false); err == nil {
+		t.Fatal("a reopen flag into a missing table reported success")
+	}
+}
+
+func TestTheColumnsAnOlderSpinozaNeverHadArriveEmpty(t *testing.T) {
+	path := dbPath(t)
+	store := openHistory(t, path)
+	remember(t, store, tab(p1, "p-mk1", noon))
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	reopened := openHistory(t, path)
+
+	found := allTabs(t, reopened)[0]
+	if found.Label != "" || found.Grouping != "" {
+		t.Fatalf("tab = %+v, want no name until one is given", found)
 	}
 }

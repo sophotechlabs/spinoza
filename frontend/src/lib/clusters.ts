@@ -9,6 +9,9 @@ interface WireOpenCluster {
   kubeconfig?: string;
   active?: boolean;
   color?: number;
+  label?: string;
+  grouping?: string;
+  reopen?: boolean;
   protection?: string;
   reachable?: boolean;
   reason?: string;
@@ -32,6 +35,9 @@ function openClusterOf(entry: WireOpenCluster): OpenCluster {
     kubeconfig: entry.kubeconfig,
     active: entry.active ?? false,
     color: entry.color ?? 1,
+    label: entry.label,
+    grouping: entry.grouping,
+    reopen: entry.reopen ?? true,
     protection: entry.protection ?? 'unknown',
     reachable: entry.reachable ?? true,
     reason: entry.reason,
@@ -95,6 +101,22 @@ export async function recolorCluster(id: string, color: number): Promise<Cluster
   const params = new URLSearchParams({ cluster: id, color: String(color) });
   const response = await request(`/api/clusters/color?${params.toString()}`, { method: 'POST' });
   return clustersFrom(response, 'changing the colour');
+}
+
+export async function renameCluster(
+  id: string,
+  label: string,
+  grouping: string,
+): Promise<ClusterList> {
+  const params = new URLSearchParams({ cluster: id, label, grouping });
+  const response = await request(`/api/clusters/name?${params.toString()}`, { method: 'POST' });
+  return clustersFrom(response, 'renaming the cluster');
+}
+
+export async function reopenCluster(id: string, reopen: boolean): Promise<ClusterList> {
+  const params = new URLSearchParams({ cluster: id, reopen: String(reopen) });
+  const response = await request(`/api/clusters/reopen?${params.toString()}`, { method: 'POST' });
+  return clustersFrom(response, 'remembering the cluster');
 }
 
 export function stillToOpen(list: ClusterList): RememberedCluster[] {

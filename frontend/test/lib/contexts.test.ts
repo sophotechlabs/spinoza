@@ -9,7 +9,6 @@ import {
   removeKubeconfig,
   sameContext,
   setProtection,
-  switchContext,
 } from '../../src/lib/contexts';
 import type { ContextList } from '../../src/lib/types';
 
@@ -122,23 +121,6 @@ describe('fetchContexts', () => {
     stub({ message: 'kubeconfig is unreadable' }, false, 500);
 
     await expect(fetchContexts()).rejects.toThrow('kubeconfig is unreadable');
-  });
-});
-
-describe('switchContext', () => {
-  it('names the context and the kubeconfig it came from', async () => {
-    const fetchMock = stub(list);
-
-    await switchContext({ kubeconfig: '/work.yaml', name: 'beta' });
-
-    expect(fetchMock.mock.calls[0][0]).toContain('kubeconfig=%2Fwork.yaml');
-    expect(fetchMock.mock.calls[0][0]).toContain('name=beta');
-  });
-
-  it('reports a switch the backend refused', async () => {
-    stub({ message: 'context "gone" does not exist' }, false, 400);
-
-    await expect(switchContext({ kubeconfig: '', name: 'gone' })).rejects.toThrow('does not exist');
   });
 });
 

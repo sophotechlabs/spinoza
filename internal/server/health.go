@@ -147,12 +147,6 @@ func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
 	s.announceHealthOf(id, now)
 }
 
-func (s *Server) forgetHealth() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	clear(s.health)
-}
-
 func (s *Server) forgetHealthOf(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

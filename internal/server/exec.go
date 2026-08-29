@@ -122,7 +122,7 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = socket.CloseNow() }()
-	s.trackExec(socket, clusterOf(r))
+	s.trackExec(socket, s.clusterOf(r))
 	defer s.forgetExec(socket)
 
 	ctx, cancel := context.WithCancel(r.Context())
@@ -176,7 +176,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = socket.CloseNow() }()
-	s.trackExec(socket, clusterOf(r))
+	s.trackExec(socket, s.clusterOf(r))
 	defer s.forgetExec(socket)
 
 	ctx, cancel := context.WithCancel(r.Context())

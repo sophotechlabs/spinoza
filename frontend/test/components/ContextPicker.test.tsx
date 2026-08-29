@@ -5,6 +5,7 @@ import ContextPicker from '../../src/components/ContextPicker';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { expireSession } from '../../src/store/session';
+import { adoptClusters } from '../../src/store/clusters';
 
 async function openMenu(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
   const summary = await screen.findByLabelText('Kubernetes context');
@@ -379,6 +380,31 @@ describe('ContextPicker', () => {
     await Promise.resolve();
 
     expect(screen.queryByText(/too late/)).not.toBeInTheDocument();
+  });
+
+  it('calls the cluster by the name it was given', async () => {
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
+    act(() => {
+      adoptClusters({
+        clusters: [
+          {
+            id: 'https://p-mk1:6443',
+            context: 'p-mk1',
+            active: true,
+            color: 1,
+            label: 'client a prod',
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+        ],
+        remembered: [],
+      });
+    });
+
+    render(<ContextPicker onSwitched={vi.fn()} />);
+
+    expect(await screen.findAllByText('client a prod')).not.toHaveLength(0);
   });
 
   it('opens once while the first open is still going', async () => {

@@ -255,7 +255,7 @@ func TestAFeedIsToldWhichClusterItIsOn(t *testing.T) {
 	}
 }
 
-func TestSwitchingContextTellsEveryOpenFeed(t *testing.T) {
+func TestBringingATabForwardTellsEveryOpenFeed(t *testing.T) {
 	ts := inspectServer(t, newPod())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -267,17 +267,18 @@ func TestSwitchingContextTellsEveryOpenFeed(t *testing.T) {
 	defer func() { _ = conn.CloseNow() }()
 	readAnyMsg(ctx, t, conn)
 
-	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=elsewhere", nil)
+	resp, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/active?cluster="+urlValue("https://p-mk2:6443"), nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
 	}
 
 	told := nextContextFrame(ctx, t, conn)
 	if told.Type != "context" {
-		t.Fatalf("type = %q, want a context frame on the switch", told.Type)
+		t.Fatalf("type = %q, want a context frame when the tab in front changes", told.Type)
 	}
-	if told.Context != "elsewhere" {
-		t.Fatalf("context = %q, want the cluster that was switched to", told.Context)
+	if told.Context == "" {
+		t.Fatalf("frame = %+v, want it to name the cluster now in front", told)
 	}
 }
 

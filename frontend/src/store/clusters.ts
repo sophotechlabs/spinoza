@@ -10,6 +10,9 @@ export interface Tab {
   context: string;
   kubeconfig: string;
   color: number;
+  label: string;
+  grouping: string;
+  reopen: boolean;
   protection: string;
 }
 
@@ -34,6 +37,9 @@ function tabOf(cluster: OpenCluster): Tab {
     context: cluster.context,
     kubeconfig: cluster.kubeconfig ?? '',
     color: cluster.color,
+    label: cluster.label ?? '',
+    grouping: cluster.grouping ?? '',
+    reopen: cluster.reopen,
     protection: cluster.protection,
   };
 }
@@ -97,6 +103,13 @@ function tabOn(tabs: Tab[], cluster: string): Tab | null {
     }
   }
   return null;
+}
+
+export function nameOf(tab: Tab): string {
+  if (tab.label !== '') {
+    return tab.label;
+  }
+  return tab.context;
 }
 
 export function useActiveTab(): Tab | null {

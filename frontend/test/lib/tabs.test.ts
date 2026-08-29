@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { attachedTo, contextOf, forgetTab } from '../../src/lib/tabs';
+import { attachedTo, contextOf, displayName, forgetTab } from '../../src/lib/tabs';
 import { adoptClusters, useClustersStore } from '../../src/store/clusters';
 import { rememberObject, useRecentsStore } from '../../src/store/recents';
 import { rememberCatalog, useCatalogStore } from '../../src/store/catalog';
@@ -109,5 +109,33 @@ describe('what a tab still has attached', () => {
     useTerminalsStore.getState().open('prod', 'web', 'app');
 
     expect(attachedTo(MK2)).toEqual([]);
+  });
+});
+
+describe('the name a tab goes by', () => {
+  beforeEach(() => {
+    useClustersStore.getState().reset();
+  });
+
+  it('is the context it was opened on until someone renames it', () => {
+    adoptClusters(listOf(MK1));
+
+    expect(displayName(useClustersStore.getState().tabs, MK1, 'p-mk1')).toBe('p-mk1');
+  });
+
+  it('is the name that was put on it', () => {
+    adoptClusters(listOf(MK1));
+    const tabs = useClustersStore.getState().tabs.map((tab) => {
+      if (tab.id === MK1) {
+        return { ...tab, label: 'client a prod' };
+      }
+      return tab;
+    });
+
+    expect(displayName(tabs, MK1, 'p-mk1')).toBe('client a prod');
+  });
+
+  it('falls back for a cluster no tab holds', () => {
+    expect(displayName([], MK1, 'p-mk1')).toBe('p-mk1');
   });
 });

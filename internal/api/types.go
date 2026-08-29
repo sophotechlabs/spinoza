@@ -70,6 +70,9 @@ type OpenCluster struct {
 	Kubeconfig string `json:"kubeconfig,omitempty"`
 	Active     bool   `json:"active"`
 	Color      int    `json:"color"`
+	Label      string `json:"label,omitempty"`
+	Grouping   string `json:"grouping,omitempty"`
+	Reopen     bool   `json:"reopen"`
 	Protection string `json:"protection"`
 	Reachable  bool   `json:"reachable"`
 	Reason     string `json:"reason,omitempty"`

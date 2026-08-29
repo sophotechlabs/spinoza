@@ -11,24 +11,6 @@ func (s *Server) listContexts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.cluster.Contexts())
 }
 
-func (s *Server) switchContext(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	name := query.Get("name")
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
-		return
-	}
-	err := s.cluster.Use(api.ContextRef{Kubeconfig: query.Get("kubeconfig"), Name: name})
-	if err != nil {
-		writeAPIError(w, err)
-		return
-	}
-	s.forgetHealth()
-	s.announceContext()
-	s.dropSessions()
-	writeJSON(w, s.cluster.Contexts())
-}
-
 func (s *Server) setProtection(w http.ResponseWriter, r *http.Request) {
 	wanted := r.URL.Query().Get("protected")
 	if wanted != queryTrue && wanted != "false" {

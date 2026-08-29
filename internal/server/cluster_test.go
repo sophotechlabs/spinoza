@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,10 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
-	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -143,12 +139,6 @@ func (s *stubCluster) Protected(string) bool {
 	return s.protection == api.ProtectionProtected
 }
 
-func (s *stubCluster) calls() []api.ContextRef {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]api.ContextRef{}, s.switched...)
-}
-
 func (s *stubCluster) addCalls() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -183,75 +173,6 @@ func TestContextsAreListedWithTheCurrentOne(t *testing.T) {
 	}
 	if list.Current.Name != "p-mk2" {
 		t.Fatalf("current = %q", list.Current.Name)
-	}
-}
-
-func TestSwitchingContextsAsksTheCluster(t *testing.T) {
-	mgr, _ := testManager(t)
-	cluster := fixed(mgr)
-	ts := contextServer(t, cluster)
-
-	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=p-mk1", nil)
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d: %s", resp.StatusCode, body)
-	}
-	if len(cluster.calls()) != 1 || cluster.calls()[0].Name != "p-mk1" {
-		t.Fatalf("switched = %v", cluster.calls())
-	}
-	list := decodeContexts(t, body)
-	if list.Current.Name != "p-mk1" {
-		t.Fatalf("current = %q, want the new context echoed back", list.Current.Name)
-	}
-}
-
-func TestSwitchingCarriesTheKubeconfigTheContextCameFrom(t *testing.T) {
-	mgr, _ := testManager(t)
-	cluster := fixed(mgr)
-	ts := contextServer(t, cluster)
-
-	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=beta&kubeconfig=%2Ftmp%2Fother.yaml", nil)
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d: %s", resp.StatusCode, body)
-	}
-	want := api.ContextRef{Kubeconfig: "/tmp/other.yaml", Name: "beta"}
-	if len(cluster.calls()) != 1 || cluster.calls()[0] != want {
-		t.Fatalf("switched = %v, want %v; two kubeconfigs may hold the same context name", cluster.calls(), want)
-	}
-}
-
-func TestSwitchingRequiresAName(t *testing.T) {
-	mgr, _ := testManager(t)
-	cluster := fixed(mgr)
-	ts := contextServer(t, cluster)
-
-	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/contexts", nil)
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", resp.StatusCode)
-	}
-	if len(cluster.calls()) != 0 {
-		t.Fatalf("switched = %v on a bad request", cluster.calls())
-	}
-}
-
-func TestAFailedSwitchKeepsTheOldContext(t *testing.T) {
-	mgr, _ := testManager(t)
-	cluster := fixed(mgr)
-	cluster.useErr = errors.New("context \"gone\" does not exist")
-	ts := contextServer(t, cluster)
-
-	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=gone", nil)
-
-	if resp.StatusCode == http.StatusOK {
-		t.Fatal("a failed switch reported success")
-	}
-	if !strings.Contains(string(body), "does not exist") {
-		t.Fatalf("body = %s, want the reason", body)
-	}
-	if cluster.Contexts().Current.Name != "p-mk2" {
-		t.Fatalf("current = %q, want the old context kept", cluster.Contexts().Current.Name)
 	}
 }
 
@@ -469,48 +390,6 @@ func decodePicker(t *testing.T, body []byte) api.FilePicker {
 		t.Fatalf("decode %s: %v", body, err)
 	}
 	return support
-}
-
-func TestSwitchingClosesOpenSessions(t *testing.T) {
-	mgr, _ := testManager(t, newDeployment("default", "web"))
-	cluster := fixed(mgr)
-	srv := New(cluster, testAssets(), testToken)
-	ts := httptest.NewServer(authed(srv.Handler()))
-	t.Cleanup(ts.Close)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	t.Cleanup(cancel)
-	conn, _, err := websocket.Dial(ctx, wsURL(ts.URL), nil)
-	if err != nil {
-		t.Fatalf("dial: %v", err)
-	}
-	t.Cleanup(func() { _ = conn.CloseNow() })
-
-	writeErr := wsjson.Write(ctx, conn, api.ClientMsg{
-		Type: "subscribe", SubID: "main", Group: "apps", Version: "v1", Resource: "deployments", Namespace: "default",
-	})
-	if writeErr != nil {
-		t.Fatalf("subscribe: %v", writeErr)
-	}
-	if readMsg(ctx, t, conn).Type != "snapshot" {
-		t.Fatal("expected a snapshot")
-	}
-
-	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=p-mk1", nil)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("switch: %d %s", resp.StatusCode, body)
-	}
-
-	for {
-		_, payload, readErr := conn.Read(ctx)
-		if readErr != nil {
-			return
-		}
-		if !bytes.Contains(payload, []byte(`"type":"context"`)) &&
-			!bytes.Contains(payload, []byte(`"type":"cluster"`)) {
-			t.Fatal("the session survived a context switch; it would stream the old cluster's objects")
-		}
-	}
 }
 
 func TestProtectingTheClusterInUse(t *testing.T) {

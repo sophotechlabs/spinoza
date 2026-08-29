@@ -506,11 +506,14 @@ ObjectRef.Version version string
 OpenCluster.Active active bool
 OpenCluster.Color color int
 OpenCluster.Context context string
+OpenCluster.Grouping grouping,omitempty string
 OpenCluster.ID id string
 OpenCluster.Kubeconfig kubeconfig,omitempty string
+OpenCluster.Label label,omitempty string
 OpenCluster.Protection protection string
 OpenCluster.Reachable reachable bool
 OpenCluster.Reason reason,omitempty string
+OpenCluster.Reopen reopen bool
 OverviewEvent.Count count int64
 OverviewEvent.LastSeen lastSeen string
 OverviewEvent.Message message string

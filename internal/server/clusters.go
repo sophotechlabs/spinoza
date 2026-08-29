@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -22,6 +23,12 @@ const drainStep = 20 * time.Millisecond
 var errNoClusterNamed = errors.New("cluster is required")
 
 var errBadColor = errors.New("color must be a number between 1 and 8")
+
+var errBadReopen = errors.New("reopen must be true or false")
+
+var errNameTooLong = errors.New("a name may be 60 characters at most")
+
+var errNowhereToKeepIt = errors.New("spinoza has nowhere to keep that")
 
 func notOpen(id string) error {
 	if id == "" {
@@ -42,6 +49,9 @@ func (s *Server) clusterList(ctx context.Context) api.ClusterList {
 		opened[i].Reachable = health.Reachable
 		opened[i].Reason = health.Reason
 		opened[i].Color = known[opened[i].ID].Color
+		opened[i].Label = known[opened[i].ID].Label
+		opened[i].Grouping = known[opened[i].ID].Grouping
+		opened[i].Reopen = known[opened[i].ID].Reopen
 	}
 	return api.ClusterList{Clusters: opened, Remembered: s.rememberedTabs(ctx)}
 }
@@ -58,6 +68,9 @@ func (s *Server) rememberedTabs(ctx context.Context) []api.RememberedCluster {
 	}
 	out := make([]api.RememberedCluster, 0, len(found))
 	for _, one := range found {
+		if !one.Reopen {
+			continue
+		}
 		out = append(out, api.RememberedCluster{
 			ID:         one.ID,
 			Context:    one.Context,
@@ -72,13 +85,21 @@ func (s *Server) rememberTab(ctx context.Context, id string, ref api.ContextRef)
 	if held == nil {
 		return
 	}
-	err := held.Remember(ctx, history.Tab{
+	known := s.tabsByID(ctx)
+	tab := history.Tab{
 		ID:         id,
 		Context:    ref.Name,
 		Kubeconfig: ref.Kubeconfig,
 		Seen:       s.instant(),
-		Color:      s.colorFor(ctx, id),
-	})
+		Color:      colorFor(known, id, s.cluster.Opened()),
+		Reopen:     true,
+	}
+	if was, seen := known[id]; seen {
+		tab.Label = was.Label
+		tab.Grouping = was.Grouping
+		tab.Reopen = was.Reopen
+	}
+	err := held.Remember(ctx, tab)
 	if err != nil {
 		slog.Warn("this cluster will not come back next time", "context", ref.Name, "error", err)
 	}
@@ -96,15 +117,14 @@ func (s *Server) RememberOpen(ctx context.Context) {
 	}
 }
 
-// A cluster keeps the color it was given; a new one takes the lowest nobody
-// open is using, so two tabs never look alike at the moment they are opened.
-func (s *Server) colorFor(ctx context.Context, id string) int {
-	known := s.tabsByID(ctx)
+// colorFor keeps the color a cluster was given; a new one takes the lowest
+// nobody open is using, so two tabs never look alike at the moment they open.
+func colorFor(known map[string]history.Tab, id string, open []api.OpenCluster) int {
 	if held, seen := known[id]; seen && held.Color != 0 {
 		return held.Color
 	}
 	taken := map[int]bool{}
-	for _, one := range s.cluster.Opened() {
+	for _, one := range open {
 		taken[known[one.ID].Color] = true
 	}
 	for color := 1; color <= api.ClusterColors; color++ {
@@ -132,6 +152,58 @@ func (s *Server) tabsByID(ctx context.Context) map[string]history.Tab {
 	return known
 }
 
+const maxLabel = 60
+
+func (s *Server) renameCluster(w http.ResponseWriter, r *http.Request) {
+	id := clusterOf(r)
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errNoClusterNamed.Error())
+		return
+	}
+	query := r.URL.Query()
+	label := strings.TrimSpace(query.Get("label"))
+	grouping := strings.TrimSpace(query.Get("grouping"))
+	if len(label) > maxLabel || len(grouping) > maxLabel {
+		writeError(w, http.StatusBadRequest, errNameTooLong.Error())
+		return
+	}
+	held := s.tabs()
+	if held == nil {
+		writeError(w, http.StatusServiceUnavailable, errNowhereToKeepIt.Error())
+		return
+	}
+	err := held.Rename(r.Context(), id, label, grouping)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, s.clusterList(r.Context()))
+}
+
+func (s *Server) reopenCluster(w http.ResponseWriter, r *http.Request) {
+	id := clusterOf(r)
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errNoClusterNamed.Error())
+		return
+	}
+	wanted := r.URL.Query().Get("reopen")
+	if wanted != queryTrue && wanted != "false" {
+		writeError(w, http.StatusBadRequest, errBadReopen.Error())
+		return
+	}
+	held := s.tabs()
+	if held == nil {
+		writeError(w, http.StatusServiceUnavailable, errNowhereToKeepIt.Error())
+		return
+	}
+	err := held.Reopening(r.Context(), id, wanted == queryTrue)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, s.clusterList(r.Context()))
+}
+
 func (s *Server) recolorCluster(w http.ResponseWriter, r *http.Request) {
 	id := clusterOf(r)
 	if id == "" {
@@ -145,7 +217,7 @@ func (s *Server) recolorCluster(w http.ResponseWriter, r *http.Request) {
 	}
 	held := s.tabs()
 	if held == nil {
-		writeError(w, http.StatusServiceUnavailable, "spinoza has nowhere to keep that")
+		writeError(w, http.StatusServiceUnavailable, errNowhereToKeepIt.Error())
 		return
 	}
 	setErr := held.Recolor(r.Context(), id, color)

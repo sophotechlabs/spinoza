@@ -204,18 +204,6 @@ func TestNothingIsClaimedBeforeTheFirstProbe(t *testing.T) {
 	}
 }
 
-func TestSwitchingClusterForgetsWhatWasKnown(t *testing.T) {
-	mgr, _ := testManager(t)
-	server := New(fixed(mgr), testAssets(), testToken)
-	server.recordHealthOf(server.cluster.ID(), api.ClusterHealth{Type: "cluster", Reachable: false, Reason: "gone"})
-
-	server.forgetHealth()
-
-	if !server.clusterHealth().Reachable {
-		t.Fatal("what was known about the last cluster was said about the next one")
-	}
-}
-
 const noPingWillArriveInTime = 10 * time.Minute
 
 func TestAWindowHearsAboutAFailedRequestWithoutWaitingForThePing(t *testing.T) {

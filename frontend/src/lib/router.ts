@@ -162,7 +162,7 @@ export function decodeRoute(hash: string): Route {
   };
 }
 
-export function documentTitle(route: Route): string {
+export function documentTitle(route: Route, cluster = route.context): string {
   const parts: string[] = [];
   if (route.selection !== null) {
     parts.push(route.selection.name);
@@ -176,8 +176,8 @@ export function documentTitle(route: Route): string {
   if (route.view === 'resources' && route.resource !== null) {
     parts.push(route.resource.resource);
   }
-  if (route.context !== '') {
-    parts.push(route.context);
+  if (cluster !== '') {
+    parts.push(cluster);
   }
   if (parts.length === 0) {
     return 'Spinoza';

@@ -46,3 +46,14 @@ export function attachedTo(cluster: string): string[] {
   }
   return held;
 }
+
+// The name a person put on the tab wins over the context it came from; the
+// context name stays the identifier in the address bar.
+export function displayName(tabs: Tab[], cluster: string, fallback: string): string {
+  for (const tab of tabs) {
+    if (tab.id === cluster && tab.label !== '') {
+      return tab.label;
+    }
+  }
+  return fallback;
+}

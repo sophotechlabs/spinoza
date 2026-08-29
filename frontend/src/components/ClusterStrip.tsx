@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { activateCluster, closeCluster, clusterFailure, recolorCluster } from '../lib/clusters';
-import { colorNames, colorVar } from '../lib/clusterColor';
+import { activateCluster, closeCluster, clusterFailure } from '../lib/clusters';
+import { colorVar } from '../lib/clusterColor';
 import { attachedTo, forgetTab } from '../lib/tabs';
-import { useActiveCluster, useClustersStore, useTabs } from '../store/clusters';
+import { nameOf, useActiveCluster, useClustersStore, useTabs } from '../store/clusters';
 import type { Tab } from '../store/clusters';
+import TabMenu from './TabMenu';
 import { useClusterHealthStore } from '../store/clusterHealth';
 import { notifyError } from '../store/toasts';
 
@@ -26,6 +27,20 @@ function showing(open: string, wanted: string): string {
     return '';
   }
   return wanted;
+}
+
+// Tabs sit beside the others in their group, so a run of them reads as one client.
+function inGroups(tabs: Tab[]): { name: string; tabs: Tab[] }[] {
+  const runs: { name: string; tabs: Tab[] }[] = [];
+  for (const tab of [...tabs].sort((a, b) => a.grouping.localeCompare(b.grouping))) {
+    const last = runs.at(-1);
+    if (last?.name === tab.grouping) {
+      last.tabs.push(tab);
+      continue;
+    }
+    runs.push({ name: tab.grouping, tabs: [tab] });
+  }
+  return runs;
 }
 
 function dotLabel(reachable: boolean): string {
@@ -102,77 +117,64 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
     void drop(tab);
   }
 
-  async function paint(tab: Tab, color: number) {
-    setPainting('');
-    try {
-      await recolorCluster(tab.id, color);
-    } catch (err: unknown) {
-      notifyError(`Recolouring ${tab.context}: ${clusterFailure(err, 'the request failed')}`);
-    }
-  }
-
   return (
     <nav
       aria-label="Open clusters"
       className="flex shrink-0 items-end gap-1 border-b border-edge bg-surface px-2 pt-1 text-xs"
     >
-      {tabs.map((tab) => (
-        <span key={tab.id} className={`relative ${tabClass(tab.id === active)}`}>
-          <button
-            type="button"
-            aria-label={`${tab.context} is ${dotLabel(health[tab.id]?.reachable ?? true)}; change its colour`}
-            title={health[tab.id]?.reason ?? 'Change the colour'}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            onClick={() => {
-              setPainting(showing(painting, tab.id));
-            }}
-            style={{ backgroundColor: colorVar(tab.color) }}
-            className={swatchClass(health[tab.id]?.reachable ?? true)}
-          />
-          <button
-            type="button"
-            aria-current={tab.id === active}
-            title={tab.id}
-            onClick={() => void show(tab)}
-            className="truncate"
-          >
-            {tab.context}
-          </button>
-          <button
-            type="button"
-            aria-label={`Close ${tab.context}`}
-            title={`Close ${tab.context}`}
-            disabled={busy}
-            onClick={() => {
-              close(tab);
-            }}
-            className="shrink-0 px-0.5 text-fg-muted hover:text-fg disabled:opacity-50"
-          >
-            ×
-          </button>
-          {painting === tab.id && (
-            <div
-              role="group"
-              aria-label={`Colour for ${tab.context}`}
-              onPointerDown={(event) => {
-                event.stopPropagation();
-              }}
-              className="absolute top-full left-0 z-30 mt-1 flex gap-1 rounded border border-edge-strong bg-surface-raised p-1.5 shadow"
-            >
-              {colorNames().map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  aria-label={`Colour ${String(color)}`}
-                  onClick={() => void paint(tab, color)}
-                  style={{ backgroundColor: colorVar(color) }}
-                  className="h-4 w-4 rounded-sm border border-edge-strong"
-                />
-              ))}
-            </div>
+      {inGroups(tabs).map((run) => (
+        <span key={run.name} className="flex items-end gap-1">
+          {run.name !== '' && (
+            <span className="px-1 pb-1.5 text-[11px] tracking-wide text-fg-muted uppercase">
+              {run.name}
+            </span>
           )}
+          {run.tabs.map((tab) => (
+            <span key={tab.id} className={`relative ${tabClass(tab.id === active)}`}>
+              <button
+                type="button"
+                aria-label={`${nameOf(tab)} is ${dotLabel(health[tab.id]?.reachable ?? true)}; open its settings`}
+                title={health[tab.id]?.reason ?? 'Settings for this tab'}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                }}
+                onClick={() => {
+                  setPainting(showing(painting, tab.id));
+                }}
+                style={{ backgroundColor: colorVar(tab.color) }}
+                className={swatchClass(health[tab.id]?.reachable ?? true)}
+              />
+              <button
+                type="button"
+                aria-current={tab.id === active}
+                title={tab.id}
+                onClick={() => void show(tab)}
+                className="truncate"
+              >
+                {nameOf(tab)}
+              </button>
+              <button
+                type="button"
+                aria-label={`Close ${nameOf(tab)}`}
+                title={`Close ${nameOf(tab)}`}
+                disabled={busy}
+                onClick={() => {
+                  close(tab);
+                }}
+                className="shrink-0 px-0.5 text-fg-muted hover:text-fg disabled:opacity-50"
+              >
+                ×
+              </button>
+              {painting === tab.id && (
+                <TabMenu
+                  tab={tab}
+                  onDone={() => {
+                    setPainting('');
+                  }}
+                />
+              )}
+            </span>
+          ))}
         </span>
       ))}
       {asking !== null && (

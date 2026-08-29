@@ -59,6 +59,8 @@ type Tabs interface {
 	All(ctx context.Context) ([]history.Tab, error)
 	Remember(ctx context.Context, tab history.Tab) error
 	Recolor(ctx context.Context, id string, color int) error
+	Rename(ctx context.Context, id, label, grouping string) error
+	Reopening(ctx context.Context, id string, reopen bool) error
 	Forget(ctx context.Context, id string) error
 }
 

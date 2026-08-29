@@ -6,6 +6,8 @@ import {
   fetchClusters,
   openCluster,
   parseClusters,
+  renameCluster,
+  reopenCluster,
   stillToOpen,
 } from '../../src/lib/clusters';
 import { useClustersStore } from '../../src/store/clusters';
@@ -55,6 +57,9 @@ describe('what the server says is open', () => {
       kubeconfig: undefined,
       active: false,
       color: 1,
+      label: undefined,
+      grouping: undefined,
+      reopen: true,
       protection: 'unknown',
       reachable: true,
       reason: undefined,
@@ -111,6 +116,39 @@ describe('what the server says is open', () => {
 
     expect(calls[0].method).toBe('DELETE');
     expect(calls[0].url).toContain(encodeURIComponent(MK2));
+  });
+
+  it('gives a tab a name and a group', async () => {
+    const calls = stub(oneOpen);
+
+    await renameCluster(MK1, 'client a prod', 'Client A');
+
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].url).toContain('/api/clusters/name');
+    expect(calls[0].url).toContain('label=client+a+prod');
+    expect(calls[0].url).toContain('grouping=Client+A');
+  });
+
+  it('says whether a tab comes back next time', async () => {
+    const calls = stub(oneOpen);
+
+    await reopenCluster(MK1, false);
+
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].url).toContain('/api/clusters/reopen');
+    expect(calls[0].url).toContain('reopen=false');
+  });
+
+  it('says when a name is refused', async () => {
+    stub({ message: 'a name may be 60 characters at most' }, false);
+
+    await expect(renameCluster(MK1, 'x', '')).rejects.toThrow('60 characters');
+  });
+
+  it('says when a reopen flag is refused', async () => {
+    stub({}, false);
+
+    await expect(reopenCluster(MK1, true)).rejects.toThrow('remembering the cluster failed');
   });
 
   it('says which request failed', async () => {

@@ -19,7 +19,7 @@ import {
   useClustersStore,
   useTabs,
 } from './store/clusters';
-import { contextOf } from './lib/tabs';
+import { contextOf, displayName } from './lib/tabs';
 import ClusterStrip from './components/ClusterStrip';
 import { announceUpdate } from './lib/update';
 import { watchSettings } from './lib/settingsSync';
@@ -144,6 +144,7 @@ export default function App() {
   const tabs = useTabs();
   const onCluster = useActiveCluster();
   const contextName = contextOf(tabs, onCluster);
+  const shownAs = displayName(tabs, onCluster, contextName);
   const subSeq = useRef(0);
   const routeRef = useRef(route);
   routeRef.current = route;
@@ -283,8 +284,8 @@ export default function App() {
   }, [contextName, route, replace]);
 
   useEffect(() => {
-    document.title = documentTitle(route);
-  }, [route]);
+    document.title = documentTitle(route, shownAs);
+  }, [route, shownAs]);
 
   useEffect(() => {
     if (onCluster === '') {

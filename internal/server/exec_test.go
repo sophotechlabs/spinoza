@@ -200,7 +200,7 @@ func TestExecStreamsStdoutStdinAndResize(t *testing.T) {
 	}
 }
 
-func TestSwitchingContextsSeversAnOpenTerminal(t *testing.T) {
+func TestClosingAClusterSeversItsOpenTerminal(t *testing.T) {
 	shell := newFakeShell()
 	shell.greet = "$ "
 	ts := execServer(t, exec.NewService(shell, &fakeImages{digest: "sha256:live"}))
@@ -221,15 +221,16 @@ func TestSwitchingContextsSeversAnOpenTerminal(t *testing.T) {
 		}
 	}()
 
-	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/contexts?name=p-mk1", nil)
+	resp, body := doRequest(t, http.MethodDelete,
+		ts.URL+"/api/clusters?cluster="+urlValue("https://p-mk2:6443"), nil)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("switch: %d %s", resp.StatusCode, body)
+		t.Fatalf("close: %d %s", resp.StatusCode, body)
 	}
 
 	select {
 	case <-severed:
 	case <-time.After(5 * time.Second):
-		t.Fatal("the terminal survived a context switch and kept typing into the old cluster")
+		t.Fatal("the terminal survived its cluster closing and kept typing into it")
 	}
 }
 

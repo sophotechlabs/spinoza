@@ -12,6 +12,9 @@ type Tab struct {
 	Kubeconfig string
 	Seen       time.Time
 	Color      int
+	Label      string
+	Grouping   string
+	Reopen     bool
 }
 
 type Tabs struct {
@@ -28,7 +31,8 @@ func (t *Tabs) Remember(ctx context.Context, tab Tab) error {
 		return nil
 	}
 	_, err := db.ExecContext(ctx, upsertCluster,
-		tab.ID, tab.Context, tab.Kubeconfig, tab.Seen.UTC().UnixMilli(), tab.Color)
+		tab.ID, tab.Context, tab.Kubeconfig, tab.Seen.UTC().UnixMilli(), tab.Color,
+		tab.Label, tab.Grouping, tab.Reopen)
 	if err != nil {
 		return fmt.Errorf("history: %w", err)
 	}
@@ -59,6 +63,30 @@ func (t *Tabs) Recolor(ctx context.Context, id string, color int) error {
 	return nil
 }
 
+func (t *Tabs) Rename(ctx context.Context, id, label, grouping string) error {
+	db := t.into.writer()
+	if db == nil {
+		return nil
+	}
+	_, err := db.ExecContext(ctx, renameCluster, label, grouping, id)
+	if err != nil {
+		return fmt.Errorf("history: %w", err)
+	}
+	return nil
+}
+
+func (t *Tabs) Reopening(ctx context.Context, id string, reopen bool) error {
+	db := t.into.writer()
+	if db == nil {
+		return nil
+	}
+	_, err := db.ExecContext(ctx, reopenCluster, reopen, id)
+	if err != nil {
+		return fmt.Errorf("history: %w", err)
+	}
+	return nil
+}
+
 func (t *Tabs) All(ctx context.Context) ([]Tab, error) {
 	db := t.into.reader()
 	if db == nil {
@@ -73,7 +101,8 @@ func (t *Tabs) All(ctx context.Context) ([]Tab, error) {
 	for rows.Next() {
 		var tab Tab
 		var seen int64
-		scanErr := rows.Scan(&tab.ID, &tab.Context, &tab.Kubeconfig, &seen, &tab.Color)
+		scanErr := rows.Scan(&tab.ID, &tab.Context, &tab.Kubeconfig, &seen, &tab.Color,
+			&tab.Label, &tab.Grouping, &tab.Reopen)
 		if scanErr != nil {
 			return nil, fmt.Errorf("history: %w", scanErr)
 		}
