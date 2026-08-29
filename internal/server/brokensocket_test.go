@@ -127,11 +127,12 @@ func TestASnapshotThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
 
+	before := socket.wrote()
 	socket.after(0)
 	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments",
 	})
-	waitForWrites(t, socket, 1)
+	waitForWrites(t, socket, before, 1)
 
 	stillServing(t, ts)
 }
@@ -162,16 +163,15 @@ func TestAnUpdateThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	stillServing(t, ts)
 }
 
-func waitForWrites(t *testing.T, socket *breaking, wanted int64) {
+func waitForWrites(t *testing.T, socket *breaking, from, wanted int64) {
 	t.Helper()
-	start := socket.wrote()
 	deadline := time.After(15 * time.Second)
-	for socket.wrote() < start+wanted {
+	for socket.wrote() < from+wanted {
 		select {
 		case <-deadline:
 			t.Fatalf(
 				"the server is at %d writes, waiting for %d more after %d",
-				socket.wrote(), wanted, start,
+				socket.wrote(), wanted, from,
 			)
 		case <-time.After(10 * time.Millisecond):
 		}
@@ -182,6 +182,7 @@ func TestALogLineThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
 
+	before := socket.wrote()
 	socket.after(0)
 	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type:      "logs-subscribe",
@@ -191,7 +192,7 @@ func TestALogLineThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 		Container: "app",
 		Follow:    true,
 	})
-	waitForWrites(t, socket, 1)
+	waitForWrites(t, socket, before, 1)
 
 	stillServing(t, ts)
 }
@@ -200,6 +201,7 @@ func TestThePodCountFrameFailingAfterALogBatchIsSurvived(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
 
+	before := socket.wrote()
 	socket.after(1)
 	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type:      "logs-subscribe",
@@ -209,7 +211,7 @@ func TestThePodCountFrameFailingAfterALogBatchIsSurvived(t *testing.T) {
 		Container: "app",
 		Follow:    true,
 	})
-	waitForWrites(t, socket, 2)
+	waitForWrites(t, socket, before, 2)
 
 	stillServing(t, ts)
 }
@@ -230,9 +232,10 @@ func TestAResyncThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 		t.Fatalf("type = %q, want a snapshot first", first.Type)
 	}
 
+	before := socket.wrote()
 	socket.after(0)
 	sendMsg(ctx, t, conn, api.ClientMsg{Type: "more", SubID: "s1", Limit: 200})
-	waitForWrites(t, socket, 1)
+	waitForWrites(t, socket, before, 1)
 
 	stillServing(t, ts)
 }
@@ -285,11 +288,12 @@ func TestAFeedIsSentItsOpeningFramesAndThenNothing(t *testing.T) {
 func TestNothingMoreIsWrittenToASocketThatHasGone(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
+	before := socket.wrote()
 	socket.after(0)
 	sendMsg(ctx, t, conn, api.ClientMsg{
 		Type: "subscribe", SubID: "s1", Group: "apps", Version: "v1", Resource: "deployments",
 	})
-	waitForWrites(t, socket, 1)
+	waitForWrites(t, socket, before, 1)
 	refused := socket.wrote()
 
 	_ = wsjson.Write(ctx, conn, api.ClientMsg{
