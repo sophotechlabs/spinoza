@@ -117,7 +117,7 @@ function KindList({
   onSelect: (resource: FluxResource) => void;
 }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto p-3">
+    <div tabIndex={0} className="min-h-0 flex-1 overflow-auto p-3">
       <button type="button" onClick={onBack} className="mb-2 text-xs text-fg-muted hover:text-fg">
         ← Flux Resources
       </button>
@@ -198,7 +198,7 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {notice}
-      <div className="min-h-0 flex-1 overflow-auto p-3">
+      <div tabIndex={0} className="min-h-0 flex-1 overflow-auto p-3">
         {status.data !== null && (
           <div className="mb-5">
             <FluxStatus overview={status.data} />

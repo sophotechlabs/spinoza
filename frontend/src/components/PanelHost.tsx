@@ -237,8 +237,7 @@ export default function PanelHost({
   if (tabs.length === 0) {
     return (
       <div
-        role="tablist"
-        tabIndex={-1}
+        role="group"
         aria-label={`Empty ${SIDE_LABELS[side]} dock`}
         onDragOver={handleDragOver}
         onDragEnter={handleDragEnter}
@@ -252,8 +251,7 @@ export default function PanelHost({
   if (collapsed) {
     return (
       <div
-        role="tablist"
-        tabIndex={-1}
+        role="group"
         aria-label={`Collapsed ${SIDE_LABELS[side]} dock`}
         onDragOver={handleDragOver}
         onDragEnter={handleDragEnter}
@@ -277,8 +275,7 @@ export default function PanelHost({
 
   const strip = (
     <div
-      role="tablist"
-      tabIndex={-1}
+      role="group"
       aria-label={`${SIDE_LABELS[side]} dock`}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
@@ -296,36 +293,43 @@ export default function PanelHost({
       >
         {collapseGlyph(side)}
       </button>
-      {tabs.map((tab, index) => (
-        <button
-          key={tab.id}
-          id={tabId(tab.id)}
-          type="button"
-          role="tab"
-          aria-selected={active === tab.id}
-          aria-controls={panelBodyId(tab.id)}
-          tabIndex={rovingIndex(active === tab.id, index, active)}
-          draggable
-          title={tab.title}
-          aria-disabled={tab.disabled}
-          onDragStart={(event) => {
-            event.dataTransfer.setData(DRAG_TYPE, tab.id);
-            event.dataTransfer.effectAllowed = 'move';
-          }}
-          onKeyDown={(event) => {
-            handleTabKey(event, index);
-          }}
-          onClick={() => {
-            if (tab.disabled) {
-              return;
-            }
-            onActivate(tab.id);
-          }}
-          className={tabClass(active === tab.id, tab.disabled)}
-        >
-          {tab.label}
-        </button>
-      ))}
+      <div
+        role="tablist"
+        tabIndex={-1}
+        aria-label={`${SIDE_LABELS[side]} panels`}
+        className="contents"
+      >
+        {tabs.map((tab, index) => (
+          <button
+            key={tab.id}
+            id={tabId(tab.id)}
+            type="button"
+            role="tab"
+            aria-selected={active === tab.id}
+            aria-controls={panelBodyId(tab.id)}
+            tabIndex={rovingIndex(active === tab.id, index, active)}
+            draggable
+            title={tab.title}
+            aria-disabled={tab.disabled}
+            onDragStart={(event) => {
+              event.dataTransfer.setData(DRAG_TYPE, tab.id);
+              event.dataTransfer.effectAllowed = 'move';
+            }}
+            onKeyDown={(event) => {
+              handleTabKey(event, index);
+            }}
+            onClick={() => {
+              if (tab.disabled) {
+                return;
+              }
+              onActivate(tab.id);
+            }}
+            className={tabClass(active === tab.id, tab.disabled)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
       {active !== null && (
         <span className="ml-auto flex items-center gap-0.5 pl-2">
           {DOCK_SIDES.filter((other) => other !== side).map((other) => (
