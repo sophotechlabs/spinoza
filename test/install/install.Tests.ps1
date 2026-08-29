@@ -1,5 +1,5 @@
 BeforeAll {
-    . (Join-Path $PSScriptRoot '..' '..' 'install.ps1')
+    . (Join-Path (Join-Path (Join-Path $PSScriptRoot '..') '..') 'install.ps1')
 
     $script:OnWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
 
@@ -715,7 +715,7 @@ Describe 'Add-StartMenuShortcut' {
 Describe 'running install.ps1 as a script' -Tag 'windows' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
     BeforeEach {
         $script:target = NewWorkspace
-        $script:installer = Join-Path $PSScriptRoot '..' '..' 'install.ps1'
+        $script:installer = Join-Path (Join-Path (Join-Path $PSScriptRoot '..') '..') 'install.ps1'
     }
     AfterEach { Remove-Item -LiteralPath $script:target -Recurse -Force -ErrorAction SilentlyContinue }
 
@@ -731,11 +731,36 @@ Describe 'running install.ps1 as a script' -Tag 'windows' -Skip:(-not [System.Ru
 Describe 'the installer source' {
     BeforeAll {
         $script:sources = @(
-            (Join-Path $PSScriptRoot '..' '..' 'install.ps1'),
-            (Join-Path $PSScriptRoot '..' 'smoke.ps1'),
-            (Join-Path $PSScriptRoot '..' 'pester.ps1'),
-            (Join-Path $PSScriptRoot 'windows.ps1')
+            (Join-Path (Join-Path (Join-Path $PSScriptRoot '..') '..') 'install.ps1'),
+            (Join-Path (Join-Path $PSScriptRoot '..') 'smoke.ps1'),
+            (Join-Path (Join-Path $PSScriptRoot '..') 'pester.ps1'),
+            (Join-Path $PSScriptRoot 'windows.ps1'),
+            (Join-Path $PSScriptRoot 'install.Tests.ps1')
         )
+    }
+
+    It 'never joins a path with more segments than windows powershell accepts' {
+        $overlong = @()
+        foreach ($source in $script:sources) {
+            $tokens = $null
+            $errors = $null
+            $tree = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $source), [ref]$tokens, [ref]$errors)
+            $calls = $tree.FindAll({ $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true)
+            foreach ($call in $calls) {
+                if ($call.GetCommandName() -ne 'Join-Path') {
+                    continue
+                }
+                $named = $call.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] }
+                if ($named) {
+                    continue
+                }
+                if (($call.CommandElements.Count - 1) -le 2) {
+                    continue
+                }
+                $overlong += "$(Split-Path -Leaf $source) line $($call.Extent.StartLineNumber): Join-Path takes $($call.CommandElements.Count - 1) segments, and 5.1 accepts two"
+            }
+        }
+        $overlong -join "`n" | Should -Be ''
     }
 
     It 'never assigns to a variable a function already took as a parameter' {
