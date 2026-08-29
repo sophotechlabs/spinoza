@@ -19,6 +19,7 @@ import ConfirmByName from './ConfirmByName';
 import NodeShellButton from './NodeShellButton';
 import { useProtectedCluster } from '../store/contexts';
 import { useRefusal } from '../store/access';
+import ClusterBadge from './ClusterBadge';
 
 interface InspectObjectActionsProps {
   target: ObjectRef;
@@ -332,6 +333,7 @@ export default function InspectObjectActions({
       {pending !== null && !pending.typed && (
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-warn-line bg-warn-tint/40 p-2">
           <span className="text-warn-strong">{pending.question}</span>
+          <ClusterBadge />
           <button
             type="button"
             onClick={() => {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -446,6 +447,20 @@ func (h *heldTabs) Remember(_ context.Context, tab history.Tab) error {
 	return nil
 }
 
+func (h *heldTabs) Recolor(_ context.Context, id string, color int) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.setErr != nil {
+		return h.setErr
+	}
+	for at, held := range h.tabs {
+		if held.ID == id {
+			h.tabs[at].Color = color
+		}
+	}
+	return nil
+}
+
 func (h *heldTabs) Forget(_ context.Context, id string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -468,12 +483,41 @@ func (h *heldTabs) remembered() []history.Tab {
 	return append([]history.Tab{}, h.tabs...)
 }
 
+var fleets = map[string]*fleet{}
+
+var servers = map[string]*Server{}
+
+func srvOf(ts *httptest.Server) *Server {
+	return servers[ts.URL]
+}
+
+func heldFleet(ts *httptest.Server) *fleet {
+	return fleets[ts.URL]
+}
+
+func listBody(t *testing.T, ts *httptest.Server) []byte {
+	t.Helper()
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
+	return body
+}
+
+func idOf(open *heldTabs, name string) string {
+	for _, one := range open.remembered() {
+		if one.Context == name {
+			return one.ID
+		}
+	}
+	return ""
+}
+
 func rememberingServer(t *testing.T, held *fleet) (*httptest.Server, *heldTabs) {
 	t.Helper()
 	open := &heldTabs{}
 	srv := New(held, testAssets(), testToken)
 	srv.UseTabs(open)
 	ts := httptest.NewServer(authed(srv.Handler()))
+	fleets[ts.URL] = held
+	servers[ts.URL] = srv
 	t.Cleanup(ts.Close)
 	return ts, open
 }
@@ -556,4 +600,169 @@ func TestAServerWithNoStoreRemembersNothing(t *testing.T) {
 	if len(clustersFrom(t, body).Remembered) != 0 {
 		t.Fatalf("remembered = %s, want none without a store", body)
 	}
+}
+
+func colorsOf(t *testing.T, body []byte) map[string]int {
+	t.Helper()
+	found := map[string]int{}
+	for _, one := range clustersFrom(t, body).Clusters {
+		found[one.Context] = one.Color
+	}
+	return found
+}
+
+func TestTheFirstClusterOpenedGetsTheFirstColor(t *testing.T) {
+	ts, _ := rememberingServer(t, &fleet{})
+
+	_, body := doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+
+	if color := colorsOf(t, body)["p-mk1"]; color != 1 {
+		t.Fatalf("color = %d, want the first one", color)
+	}
+}
+
+func TestTwoOpenClustersNeverLookAlike(t *testing.T) {
+	ts, _ := rememberingServer(t, &fleet{})
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+
+	_, body := doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk2", nil)
+
+	found := colorsOf(t, body)
+	if found["p-mk1"] == found["p-mk2"] {
+		t.Fatalf("both clusters are color %d; two tabs would look the same", found["p-mk1"])
+	}
+}
+
+func TestAClusterKeepsTheColorItWasGiven(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk2", nil)
+	was := colorsOf(t, listBody(t, ts))["p-mk2"]
+	doRequest(t, http.MethodDelete, ts.URL+"/api/clusters?cluster="+urlValue(idOf(open, "p-mk2")), nil)
+	open.tabs = append(open.tabs, history.Tab{ID: mk2, Context: "p-mk2", Color: was})
+
+	_, body := doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk2", nil)
+
+	if now := colorsOf(t, body)["p-mk2"]; now != was {
+		t.Fatalf("color = %d, want the %d it had before it was closed", now, was)
+	}
+}
+
+func TestTheColorsRunOutRatherThanGoingBlank(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+	for color := 1; color <= api.ClusterColors; color++ {
+		id := "https://c" + strconv.Itoa(color) + ":6443"
+		open.tabs = append(open.tabs, history.Tab{ID: id, Color: color})
+		heldFleet(ts).held = append(heldFleet(ts).held, api.OpenCluster{ID: id})
+	}
+
+	_, body := doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk9", nil)
+
+	if color := colorsOf(t, body)["p-mk9"]; color < 1 || color > api.ClusterColors {
+		t.Fatalf("color = %d, want one from the palette even with every color taken", color)
+	}
+}
+
+func TestAColorCanBeChanged(t *testing.T) {
+	ts, _ := rememberingServer(t, &fleet{})
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+	id := clustersFrom(t, listBody(t, ts)).Clusters[0].ID
+
+	_, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/color?cluster="+urlValue(id)+"&color=5", nil)
+
+	if color := colorsOf(t, body)["p-mk1"]; color != 5 {
+		t.Fatalf("color = %d, want the one that was asked for", color)
+	}
+}
+
+func TestAColorOutsideThePaletteIsRefused(t *testing.T) {
+	ts, _ := rememberingServer(t, &fleet{})
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+	id := clustersFrom(t, listBody(t, ts)).Clusters[0].ID
+
+	for _, asked := range []string{"0", "9", "blue", ""} {
+		resp, _ := doRequest(t, http.MethodPost,
+			ts.URL+"/api/clusters/color?cluster="+urlValue(id)+"&color="+asked, nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("color=%q gave status %d, want it refused", asked, resp.StatusCode)
+		}
+	}
+}
+
+func TestRecoloringNeedsToKnowWhichCluster(t *testing.T) {
+	ts, _ := rememberingServer(t, &fleet{})
+
+	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/clusters/color?color=2", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want it refused without a cluster", resp.StatusCode)
+	}
+}
+
+func TestRecoloringWithNowhereToKeepItSaysSo(t *testing.T) {
+	ts := fleetServer(t, &fleet{})
+
+	resp, _ := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/color?cluster="+urlValue(mk1)+"&color=2", nil)
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want it to say there is nowhere to keep it", resp.StatusCode)
+	}
+}
+
+func TestAColorThatCannotBeWrittenIsReported(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+	open.setErr = errors.New("read-only file system")
+
+	resp, _ := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/color?cluster="+urlValue(mk1)+"&color=2", nil)
+
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a color that was never written reported success")
+	}
+}
+
+func TestTheClusterSpinozaStartsOnGetsATabToo(t *testing.T) {
+	held := &fleet{
+		held:   []api.OpenCluster{{ID: mk1, Context: "p-mk1", Kubeconfig: "/work.yaml", Active: true}},
+		active: mk1,
+	}
+	ts, open := rememberingServer(t, held)
+
+	srvOf(ts).RememberOpen(t.Context())
+
+	remembered := open.remembered()
+	if len(remembered) != 1 {
+		t.Fatalf("remembered %d clusters, want the one spinoza started on", len(remembered))
+	}
+	if remembered[0].Color == 0 {
+		t.Fatal("the startup cluster has no color, so its tab would look like an unknown one")
+	}
+	if remembered[0].Kubeconfig != "/work.yaml" {
+		t.Fatalf("remembered %+v, want what it takes to open it again", remembered[0])
+	}
+}
+
+func TestTheStartupClusterKeepsTheColorItAlreadyHad(t *testing.T) {
+	held := &fleet{
+		held:   []api.OpenCluster{{ID: mk1, Context: "p-mk1", Active: true}},
+		active: mk1,
+	}
+	ts, open := rememberingServer(t, held)
+	open.tabs = []history.Tab{{ID: mk1, Context: "p-mk1", Color: 6}}
+
+	srvOf(ts).RememberOpen(t.Context())
+
+	if color := open.remembered()[0].Color; color != 6 {
+		t.Fatalf("color = %d, want the 6 it already had", color)
+	}
+}
+
+func TestAServerWithNoStoreStartsAnyway(t *testing.T) {
+	held := &fleet{held: []api.OpenCluster{{ID: mk1, Context: "p-mk1"}}}
+	srv := New(held, testAssets(), testToken)
+
+	srv.RememberOpen(t.Context())
 }

@@ -1,4 +1,6 @@
 import type { Tab } from '../store/clusters';
+import { useForwardsStore } from '../store/forwards';
+import { useTerminalsStore } from '../store/terminals';
 import { forgetCatalog } from '../store/catalog';
 import { forgetFilters } from '../store/filters';
 import { forgetForwards } from '../store/forwards';
@@ -24,4 +26,23 @@ export function contextOf(tabs: Tab[], cluster: string): string {
     }
   }
   return '';
+}
+
+export function attachedTo(cluster: string): string[] {
+  const held: string[] = [];
+  const shells = useTerminalsStore.getState().byCluster[cluster]?.sessions ?? [];
+  if (shells.length === 1) {
+    held.push('1 shell');
+  }
+  if (shells.length > 1) {
+    held.push(`${String(shells.length)} shells`);
+  }
+  const forwards = useForwardsStore.getState().byCluster[cluster] ?? [];
+  if (forwards.length === 1) {
+    held.push('1 port-forward');
+  }
+  if (forwards.length > 1) {
+    held.push(`${String(forwards.length)} port-forwards`);
+  }
+  return held;
 }

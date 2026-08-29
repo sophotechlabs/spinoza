@@ -37,6 +37,7 @@ var localOnly = map[string]string{
 	"/api/portforward":        "a local tunnel",
 	"/api/clusters":           "opens and closes local connections",
 	"/api/clusters/active":    "picks which open connection is active",
+	"/api/clusters/color":     "a local label for a tab, not a change to the cluster",
 	"/api/history":            "clears the local record",
 	"/api/view/browser":       "moves the window",
 	"/api/view/desktop":       "moves the window",

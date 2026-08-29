@@ -8,6 +8,7 @@ interface WireOpenCluster {
   context?: string;
   kubeconfig?: string;
   active?: boolean;
+  color?: number;
   protection?: string;
   reachable?: boolean;
   reason?: string;
@@ -30,6 +31,7 @@ function openClusterOf(entry: WireOpenCluster): OpenCluster {
     context: entry.context ?? '',
     kubeconfig: entry.kubeconfig,
     active: entry.active ?? false,
+    color: entry.color ?? 1,
     protection: entry.protection ?? 'unknown',
     reachable: entry.reachable ?? true,
     reason: entry.reason,
@@ -87,6 +89,12 @@ export async function closeCluster(id: string): Promise<ClusterList> {
     timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
   });
   return clustersFrom(response, 'closing the cluster');
+}
+
+export async function recolorCluster(id: string, color: number): Promise<ClusterList> {
+  const params = new URLSearchParams({ cluster: id, color: String(color) });
+  const response = await request(`/api/clusters/color?${params.toString()}`, { method: 'POST' });
+  return clustersFrom(response, 'changing the colour');
 }
 
 export function stillToOpen(list: ClusterList): RememberedCluster[] {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ArgoOptions, ArgoResourceRef } from '../lib/argoActions';
+import ClusterBadge from './ClusterBadge';
 
 interface ArgoSyncDialogProps {
   name: string;
@@ -85,8 +86,9 @@ export default function ArgoSyncDialog({ name, resources, onRun, onCancel }: Arg
       onClose={onCancel}
       className="backdrop:bg-black/50 m-auto w-[30rem] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
-      <div className="border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
+      <div className="flex items-center gap-2 border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
         Sync {name}
+        <ClusterBadge />
       </div>
       <div className="p-3 text-xs">
         <p className="text-fg-soft">Syncing {scope(resources)}.</p>

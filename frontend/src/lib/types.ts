@@ -533,6 +533,7 @@ export interface OpenCluster {
   context: string;
   kubeconfig?: string;
   active: boolean;
+  color: number;
   protection: string;
   reachable: boolean;
   reason?: string;

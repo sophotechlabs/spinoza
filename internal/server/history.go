@@ -58,6 +58,7 @@ func (s *Server) UseHistory(store History) {
 type Tabs interface {
 	All(ctx context.Context) ([]history.Tab, error)
 	Remember(ctx context.Context, tab history.Tab) error
+	Recolor(ctx context.Context, id string, color int) error
 	Forget(ctx context.Context, id string) error
 }
 

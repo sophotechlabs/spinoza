@@ -5,6 +5,8 @@ import ClusterStrip from '../../src/components/ClusterStrip';
 import { adoptClusters, useClustersStore } from '../../src/store/clusters';
 import { reportHealth, useClusterHealthStore } from '../../src/store/clusterHealth';
 import { rememberObject, useRecentsStore } from '../../src/store/recents';
+import { useTerminalsStore } from '../../src/store/terminals';
+import { setForwards, useForwardsStore } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
 import { MK1, MK2, listOf } from '../helpers-clusters';
 
@@ -39,6 +41,8 @@ describe('the strip of open clusters', () => {
   beforeEach(() => {
     useClustersStore.getState().reset();
     useClusterHealthStore.getState().reset();
+    useTerminalsStore.getState().reset();
+    useForwardsStore.getState().clear();
     useToastsStore.setState({ toasts: [], history: [] });
   });
 
@@ -82,8 +86,9 @@ describe('the strip of open clusters', () => {
 
     render(<ClusterStrip onShown={vi.fn()} />);
 
-    expect(screen.getByLabelText('not answering')).toHaveAttribute('title', 'no route to host');
-    expect(screen.getByLabelText('answering')).toBeInTheDocument();
+    const down = screen.getByRole('button', { name: /p-mk2 is not answering/ });
+    expect(down).toHaveAttribute('title', 'no route to host');
+    expect(screen.getByRole('button', { name: /p-mk1 is answering/ })).toBeInTheDocument();
   });
 
   it('brings a tab forward when it is clicked', async () => {
@@ -144,6 +149,151 @@ describe('the strip of open clusters', () => {
 
     await waitFor(() => {
       expect(useRecentsStore.getState().byCluster[MK1]).toBeUndefined();
+    });
+  });
+
+  it('wears the colour the server gave it', () => {
+    open(MK1);
+
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    const swatch = screen.getByRole('button', { name: /p-mk2 is answering/ });
+    expect(swatch).toHaveStyle({ backgroundColor: 'var(--cluster-2)' });
+  });
+
+  it('offers the whole palette when the swatch is clicked', async () => {
+    const user = userEvent.setup();
+    open(MK1);
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
+
+    expect(screen.getByRole('group', { name: 'Colour for p-mk1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Colour 8' })).toBeInTheDocument();
+  });
+
+  it('puts the palette away when the swatch is clicked again', async () => {
+    const user = userEvent.setup();
+    open(MK1);
+    render(<ClusterStrip onShown={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
+
+    await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
+
+    expect(screen.queryByRole('group', { name: 'Colour for p-mk1' })).not.toBeInTheDocument();
+  });
+
+  it('puts the palette away when you click elsewhere', async () => {
+    const user = userEvent.setup();
+    open(MK1);
+    render(<ClusterStrip onShown={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
+
+    await user.click(document.body);
+
+    expect(screen.queryByRole('group', { name: 'Colour for p-mk1' })).not.toBeInTheDocument();
+  });
+
+  it('asks the server for the colour that was picked', async () => {
+    const user = userEvent.setup();
+    const calls = stub();
+    open(MK1);
+    render(<ClusterStrip onShown={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
+
+    await user.click(screen.getByRole('button', { name: 'Colour 6' }));
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.url.includes('color=6'))).toBe(true);
+    });
+  });
+
+  it('says so when the colour will not stick', async () => {
+    const user = userEvent.setup();
+    stub(false, { message: 'read-only file system' });
+    open(MK1);
+    render(<ClusterStrip onShown={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
+
+    await user.click(screen.getByRole('button', { name: 'Colour 6' }));
+
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts[0].message).toContain('Recolouring p-mk1');
+    });
+  });
+
+  it('asks before closing a tab with a shell attached', async () => {
+    const user = userEvent.setup();
+    const calls = stub();
+    open(MK1);
+    act(() => {
+      useTerminalsStore.getState().open('prod', 'web', 'app');
+    });
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Close p-mk1' }));
+
+    expect(screen.getByText(/1 shell/)).toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('names every kind of thing that is still attached', async () => {
+    const user = userEvent.setup();
+    stub();
+    open(MK1);
+    act(() => {
+      useTerminalsStore.getState().open('prod', 'web', 'app');
+      useTerminalsStore.getState().open('prod', 'api', 'app');
+      setForwards([
+        {
+          id: '1',
+          kind: 'pods',
+          namespace: 'prod',
+          name: 'web',
+          localPort: 8080,
+          remotePort: 80,
+          state: 'running',
+          startedAt: '2026-08-29T12:00:00Z',
+        },
+      ]);
+    });
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Close p-mk1' }));
+
+    expect(screen.getByText(/2 shells and 1 port-forward/)).toBeInTheDocument();
+  });
+
+  it('keeps the tab open when you say no', async () => {
+    const user = userEvent.setup();
+    const calls = stub();
+    open(MK1);
+    act(() => {
+      useTerminalsStore.getState().open('prod', 'web', 'app');
+    });
+    render(<ClusterStrip onShown={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Close p-mk1' }));
+
+    await user.click(screen.getByRole('button', { name: 'Keep it open' }));
+
+    expect(calls).toHaveLength(0);
+    expect(screen.queryByText(/still has/)).not.toBeInTheDocument();
+  });
+
+  it('closes it once you say so', async () => {
+    const user = userEvent.setup();
+    const calls = stub(true, { clusters: listOf(MK1).clusters.slice(1), remembered: [] });
+    open(MK1);
+    act(() => {
+      useTerminalsStore.getState().open('prod', 'web', 'app');
+    });
+    render(<ClusterStrip onShown={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Close p-mk1' }));
+
+    await user.click(screen.getByRole('button', { name: 'Close it' }));
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.method === 'DELETE')).toBe(true);
     });
   });
 

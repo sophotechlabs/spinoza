@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { contextOf, forgetTab } from '../../src/lib/tabs';
+import { attachedTo, contextOf, forgetTab } from '../../src/lib/tabs';
 import { adoptClusters, useClustersStore } from '../../src/store/clusters';
 import { rememberObject, useRecentsStore } from '../../src/store/recents';
 import { rememberCatalog, useCatalogStore } from '../../src/store/catalog';
@@ -62,5 +62,52 @@ describe('closing a tab', () => {
     expect(useClusterHealthStore.getState().byCluster[MK1]).toBeUndefined();
     expect(useNamespaceStore.getState().byCluster[MK1]).toBeUndefined();
     expect(useTerminalsStore.getState().byCluster[MK1]).toBeUndefined();
+  });
+});
+
+function forward(id: string) {
+  return {
+    id,
+    kind: 'pods',
+    namespace: 'prod',
+    name: 'web',
+    localPort: 8080,
+    remotePort: 80,
+    state: 'running' as const,
+    startedAt: '2026-08-29T12:00:00Z',
+  };
+}
+
+describe('what a tab still has attached', () => {
+  beforeEach(() => {
+    useClustersStore.getState().reset();
+    useTerminalsStore.getState().reset();
+    useForwardsStore.getState().clear();
+    showing(MK1);
+  });
+
+  it('is nothing on a tab you only looked at', () => {
+    expect(attachedTo(MK1)).toEqual([]);
+  });
+
+  it('counts one shell and one forward in the singular', () => {
+    useTerminalsStore.getState().open('prod', 'web', 'app');
+    setForwards([forward('1')]);
+
+    expect(attachedTo(MK1)).toEqual(['1 shell', '1 port-forward']);
+  });
+
+  it('counts several in the plural', () => {
+    useTerminalsStore.getState().open('prod', 'web', 'app');
+    useTerminalsStore.getState().open('prod', 'api', 'app');
+    setForwards([forward('1'), forward('2')]);
+
+    expect(attachedTo(MK1)).toEqual(['2 shells', '2 port-forwards']);
+  });
+
+  it('says nothing about another tab', () => {
+    useTerminalsStore.getState().open('prod', 'web', 'app');
+
+    expect(attachedTo(MK2)).toEqual([]);
   });
 });

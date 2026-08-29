@@ -504,6 +504,7 @@ ObjectRef.Namespace namespace string
 ObjectRef.Resource resource string
 ObjectRef.Version version string
 OpenCluster.Active active bool
+OpenCluster.Color color int
 OpenCluster.Context context string
 OpenCluster.ID id string
 OpenCluster.Kubeconfig kubeconfig,omitempty string

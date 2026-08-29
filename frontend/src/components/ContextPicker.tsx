@@ -9,6 +9,7 @@ import { sessionExpired } from '../store/session';
 import { CONTROL } from '../lib/controls';
 import { useDismissMenu } from '../lib/useDismissMenu';
 import KubeconfigDialog from './KubeconfigDialog';
+import ClusterSwatch from './ClusterSwatch';
 
 interface ContextPickerProps {
   onSwitched: () => void;
@@ -226,6 +227,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
           title={currentLabel(list)}
           className={`${CONTROL} max-w-64 cursor-pointer list-none border-edge-strong bg-surface-raised font-semibold text-fg-strong hover:bg-surface-active [&::-webkit-details-marker]:hidden`}
         >
+          <ClusterSwatch />
           <span className="truncate">{currentLabel(list)}</span>
           <span aria-hidden="true" className="ml-auto pl-2 text-fg-muted">
             ▾

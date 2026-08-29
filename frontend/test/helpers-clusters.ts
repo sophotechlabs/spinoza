@@ -8,8 +8,22 @@ export const MK2 = 'https://p-mk2:6443';
 export function listOf(active: string): ClusterList {
   return {
     clusters: [
-      { id: MK1, context: 'p-mk1', active: active === MK1, protection: 'open', reachable: true },
-      { id: MK2, context: 'p-mk2', active: active === MK2, protection: 'open', reachable: true },
+      {
+        id: MK1,
+        context: 'p-mk1',
+        active: active === MK1,
+        color: 1,
+        protection: 'open',
+        reachable: true,
+      },
+      {
+        id: MK2,
+        context: 'p-mk2',
+        active: active === MK2,
+        color: 2,
+        protection: 'open',
+        reachable: true,
+      },
     ],
     remembered: [],
   };

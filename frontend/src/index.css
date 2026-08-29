@@ -170,6 +170,15 @@
   --graph-edge-scales: #f472b6;
   --graph-edge-flow: #0ea5e9;
   --graph-edge-drop: #f59e0b;
+
+  --cluster-1: oklch(74% 0.15 25);
+  --cluster-2: oklch(74% 0.15 70);
+  --cluster-3: oklch(74% 0.15 115);
+  --cluster-4: oklch(74% 0.15 160);
+  --cluster-5: oklch(74% 0.15 205);
+  --cluster-6: oklch(74% 0.15 250);
+  --cluster-7: oklch(74% 0.15 295);
+  --cluster-8: oklch(74% 0.15 340);
 }
 
 :root[data-theme='light'] {
@@ -254,6 +263,15 @@
   --graph-edge-scales: #db2777;
   --graph-edge-flow: #0284c7;
   --graph-edge-drop: #d97706;
+
+  --cluster-1: oklch(48% 0.16 25);
+  --cluster-2: oklch(48% 0.16 70);
+  --cluster-3: oklch(48% 0.16 115);
+  --cluster-4: oklch(48% 0.16 160);
+  --cluster-5: oklch(48% 0.16 205);
+  --cluster-6: oklch(48% 0.16 250);
+  --cluster-7: oklch(48% 0.16 295);
+  --cluster-8: oklch(48% 0.16 340);
 }
 
 html {

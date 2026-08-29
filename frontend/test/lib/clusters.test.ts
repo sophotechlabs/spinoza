@@ -54,6 +54,7 @@ describe('what the server says is open', () => {
       context: '',
       kubeconfig: undefined,
       active: false,
+      color: 1,
       protection: 'unknown',
       reachable: true,
       reason: undefined,

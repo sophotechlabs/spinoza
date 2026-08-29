@@ -11,6 +11,7 @@ type Tab struct {
 	Context    string
 	Kubeconfig string
 	Seen       time.Time
+	Color      int
 }
 
 type Tabs struct {
@@ -27,7 +28,7 @@ func (t *Tabs) Remember(ctx context.Context, tab Tab) error {
 		return nil
 	}
 	_, err := db.ExecContext(ctx, upsertCluster,
-		tab.ID, tab.Context, tab.Kubeconfig, tab.Seen.UTC().UnixMilli())
+		tab.ID, tab.Context, tab.Kubeconfig, tab.Seen.UTC().UnixMilli(), tab.Color)
 	if err != nil {
 		return fmt.Errorf("history: %w", err)
 	}
@@ -40,6 +41,18 @@ func (t *Tabs) Forget(ctx context.Context, id string) error {
 		return nil
 	}
 	_, err := db.ExecContext(ctx, deleteCluster, id)
+	if err != nil {
+		return fmt.Errorf("history: %w", err)
+	}
+	return nil
+}
+
+func (t *Tabs) Recolor(ctx context.Context, id string, color int) error {
+	db := t.into.writer()
+	if db == nil {
+		return nil
+	}
+	_, err := db.ExecContext(ctx, recolorCluster, color, id)
 	if err != nil {
 		return fmt.Errorf("history: %w", err)
 	}
@@ -60,7 +73,7 @@ func (t *Tabs) All(ctx context.Context) ([]Tab, error) {
 	for rows.Next() {
 		var tab Tab
 		var seen int64
-		scanErr := rows.Scan(&tab.ID, &tab.Context, &tab.Kubeconfig, &seen)
+		scanErr := rows.Scan(&tab.ID, &tab.Context, &tab.Kubeconfig, &seen, &tab.Color)
 		if scanErr != nil {
 			return nil, fmt.Errorf("history: %w", scanErr)
 		}

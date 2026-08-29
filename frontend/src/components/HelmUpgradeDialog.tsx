@@ -6,6 +6,7 @@ import { useProtectedCluster } from '../store/contexts';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import Loading from './Loading';
+import ClusterBadge from './ClusterBadge';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 const ManifestDiff = lazy(() => import('./ManifestDiff'));
@@ -169,8 +170,9 @@ export default function HelmUpgradeDialog({
         />
       )}
       <div className="flex items-center justify-between border-b border-edge px-3 py-2">
-        <h2 className="text-xs font-semibold tracking-wide text-fg-strong uppercase">
+        <h2 className="flex items-center gap-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
           Upgrade {release.name}
+          <ClusterBadge />
         </h2>
         <button
           type="button"

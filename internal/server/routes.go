@@ -82,6 +82,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPost, "/api/clusters", s.openCluster, true},
 		{http.MethodDelete, "/api/clusters", s.closeCluster, true},
 		{http.MethodPost, "/api/clusters/active", s.activateCluster, true},
+		{http.MethodPost, "/api/clusters/color", s.recolorCluster, true},
 		{http.MethodGet, "/api/history", s.readHistory, true},
 		{http.MethodDelete, "/api/history", s.clearHistory, true},
 		{http.MethodGet, "/api/view", s.readView, true},

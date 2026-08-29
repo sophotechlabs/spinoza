@@ -69,10 +69,13 @@ type OpenCluster struct {
 	Context    string `json:"context"`
 	Kubeconfig string `json:"kubeconfig,omitempty"`
 	Active     bool   `json:"active"`
+	Color      int    `json:"color"`
 	Protection string `json:"protection"`
 	Reachable  bool   `json:"reachable"`
 	Reason     string `json:"reason,omitempty"`
 }
+
+const ClusterColors = 8
 
 type RememberedCluster struct {
 	ID         string `json:"id"`

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/coder/websocket"
@@ -20,6 +21,8 @@ const drainStep = 20 * time.Millisecond
 
 var errNoClusterNamed = errors.New("cluster is required")
 
+var errBadColor = errors.New("color must be a number between 1 and 8")
+
 func notOpen(id string) error {
 	if id == "" {
 		return fmt.Errorf("%w: spinoza has no cluster; pick a context that answers", api.ErrNotOpen)
@@ -33,10 +36,12 @@ func (s *Server) listClusters(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) clusterList(ctx context.Context) api.ClusterList {
 	opened := s.cluster.Opened()
+	known := s.tabsByID(ctx)
 	for i := range opened {
 		health := s.healthOfCluster(opened[i].ID)
 		opened[i].Reachable = health.Reachable
 		opened[i].Reason = health.Reason
+		opened[i].Color = known[opened[i].ID].Color
 	}
 	return api.ClusterList{Clusters: opened, Remembered: s.rememberedTabs(ctx)}
 }
@@ -72,10 +77,83 @@ func (s *Server) rememberTab(ctx context.Context, id string, ref api.ContextRef)
 		Context:    ref.Name,
 		Kubeconfig: ref.Kubeconfig,
 		Seen:       s.instant(),
+		Color:      s.colorFor(ctx, id),
 	})
 	if err != nil {
 		slog.Warn("this cluster will not come back next time", "context", ref.Name, "error", err)
 	}
+}
+
+// RememberOpen gives the cluster spinoza started on a tab. It was never opened
+// through the API, so nothing has given it a color or a row to come back from.
+func (s *Server) RememberOpen(ctx context.Context) {
+	known := s.tabsByID(ctx)
+	for _, one := range s.cluster.Opened() {
+		if _, seen := known[one.ID]; seen {
+			continue
+		}
+		s.rememberTab(ctx, one.ID, api.ContextRef{Kubeconfig: one.Kubeconfig, Name: one.Context})
+	}
+}
+
+// A cluster keeps the color it was given; a new one takes the lowest nobody
+// open is using, so two tabs never look alike at the moment they are opened.
+func (s *Server) colorFor(ctx context.Context, id string) int {
+	known := s.tabsByID(ctx)
+	if held, seen := known[id]; seen && held.Color != 0 {
+		return held.Color
+	}
+	taken := map[int]bool{}
+	for _, one := range s.cluster.Opened() {
+		taken[known[one.ID].Color] = true
+	}
+	for color := 1; color <= api.ClusterColors; color++ {
+		if !taken[color] {
+			return color
+		}
+	}
+	return 1
+}
+
+func (s *Server) tabsByID(ctx context.Context) map[string]history.Tab {
+	known := map[string]history.Tab{}
+	held := s.tabs()
+	if held == nil {
+		return known
+	}
+	found, err := held.All(ctx)
+	if err != nil {
+		slog.Warn("the clusters that were open could not be read", "error", err)
+		return known
+	}
+	for _, one := range found {
+		known[one.ID] = one
+	}
+	return known
+}
+
+func (s *Server) recolorCluster(w http.ResponseWriter, r *http.Request) {
+	id := clusterOf(r)
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errNoClusterNamed.Error())
+		return
+	}
+	color, err := strconv.Atoi(r.URL.Query().Get("color"))
+	if err != nil || color < 1 || color > api.ClusterColors {
+		writeError(w, http.StatusBadRequest, errBadColor.Error())
+		return
+	}
+	held := s.tabs()
+	if held == nil {
+		writeError(w, http.StatusServiceUnavailable, "spinoza has nowhere to keep that")
+		return
+	}
+	setErr := held.Recolor(r.Context(), id, color)
+	if setErr != nil {
+		writeAPIError(w, setErr)
+		return
+	}
+	writeJSON(w, s.clusterList(r.Context()))
 }
 
 func (s *Server) forgetTab(ctx context.Context, id string) {

@@ -9,6 +9,7 @@ export interface Tab {
   id: string;
   context: string;
   kubeconfig: string;
+  color: number;
   protection: string;
 }
 
@@ -32,6 +33,7 @@ function tabOf(cluster: OpenCluster): Tab {
     id: cluster.id,
     context: cluster.context,
     kubeconfig: cluster.kubeconfig ?? '',
+    color: cluster.color,
     protection: cluster.protection,
   };
 }
@@ -86,6 +88,19 @@ export const useClustersStore = create<ClustersState>((set, get) => ({
 
 export function useTabs(): Tab[] {
   return useClustersStore((state) => state.tabs);
+}
+
+export function tabOn(tabs: Tab[], cluster: string): Tab | null {
+  for (const tab of tabs) {
+    if (tab.id === cluster) {
+      return tab;
+    }
+  }
+  return null;
+}
+
+export function useActiveTab(): Tab | null {
+  return useClustersStore((state) => tabOn(state.tabs, state.active));
 }
 
 export function useActiveCluster(): string {

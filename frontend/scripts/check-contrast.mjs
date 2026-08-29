@@ -319,8 +319,86 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
+const NON_TEXT = 3;
+
+const APART = 24;
+
+const SURFACES = ['surface', 'surface-raised', 'surface-active'];
+
+function clusterHues(selector) {
+  const found = [];
+  for (const [name, value] of tokens(selector)) {
+    if (name.startsWith('cluster-')) {
+      found.push([name, value]);
+    }
+  }
+  return found;
+}
+
+const clusterVars = {
+  dark: clusterHues(':root {'),
+  light: clusterHues(":root[data-theme='light']"),
+};
+
+const baseSurfaces = {
+  dark: tokens(':root {'),
+  light: tokens(":root[data-theme='light']"),
+};
+
+const everyTheme = [
+  { id: 'dark', base: 'dark', tokens: {} },
+  { id: 'light', base: 'light', tokens: {} },
+  ...shippedThemes(),
+];
+
+const dim = [];
+let checked = 0;
+for (const theme of everyTheme) {
+  const hues = clusterVars[theme.base];
+  if (hues.length === 0) {
+    throw new Error(`no --cluster-* colours for the ${theme.base} base`);
+  }
+  for (const surface of SURFACES) {
+    const behind = theme.tokens?.[surface] ?? baseSurfaces[theme.base].get(surface);
+    if (behind === undefined) {
+      throw new Error(`no --${surface} for ${theme.id}`);
+    }
+    for (const [name, hue] of hues) {
+      checked += 1;
+      const ratio = contrast(anyToRgb(hue), anyToRgb(behind));
+      if (ratio < NON_TEXT) {
+        dim.push(`${theme.id}: --${name} is ${ratio.toFixed(2)}:1 on --${surface}`);
+      }
+    }
+  }
+}
+
+const alike = [];
+for (const [base, hues] of Object.entries(clusterVars)) {
+  for (let a = 0; a < hues.length; a += 1) {
+    for (let b = a + 1; b < hues.length; b += 1) {
+      const one = anyToRgb(hues[a][1]);
+      const two = anyToRgb(hues[b][1]);
+      const gap = Math.max(...one.map((channel, at) => Math.abs(channel - two[at])));
+      if (gap < APART) {
+        alike.push(`${base}: --${hues[a][0]} and --${hues[b][0]} are ${String(gap)} apart`);
+      }
+    }
+  }
+}
+
+if (dim.length > 0 || alike.length > 0) {
+  console.error(`cluster colours below ${String(NON_TEXT)}:1, or too close to each other:`);
+  for (const line of [...dim, ...alike]) {
+    console.error(`  ${line}`);
+  }
+  process.exit(1);
+}
+
 console.log(
   `theme: ${String(fromCss.length)} tokens in step with the css, ` +
     `${String(pairs)} token/background pairs clear AA, ` +
-    `${String(editorChecked)} of them in the editor`,
+    `${String(editorChecked)} of them in the editor, ` +
+    `${String(checked)} cluster colour/surface pairs clear ${String(NON_TEXT)}:1 ` +
+    `across ${String(everyTheme.length)} themes`,
 );

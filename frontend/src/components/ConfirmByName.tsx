@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import ClusterBadge from './ClusterBadge';
 
 interface ConfirmByNameProps {
   open: boolean;
@@ -38,8 +39,9 @@ export default function ConfirmByName({
       onClose={onCancel}
       className="backdrop:bg-black/50 m-auto w-[28rem] rounded border border-warn-line bg-surface p-0 text-fg"
     >
-      <div className="border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-warn uppercase">
+      <div className="flex items-center gap-2 border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-warn uppercase">
         Protected cluster
+        <ClusterBadge />
       </div>
       <div className="p-3 text-xs">
         <p className="text-fg-soft">{what}</p>

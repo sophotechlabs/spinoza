@@ -31,14 +31,16 @@ DELETE FROM audit
 WHERE (? = '' OR cluster = ?)`
 
 const upsertCluster = `
-INSERT INTO clusters (id, context, kubeconfig, seen) VALUES (?, ?, ?, ?)
+INSERT INTO clusters (id, context, kubeconfig, seen, color) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET context = excluded.context,
-	kubeconfig = excluded.kubeconfig, seen = excluded.seen`
+	kubeconfig = excluded.kubeconfig, seen = excluded.seen, color = excluded.color`
+
+const recolorCluster = `UPDATE clusters SET color = ? WHERE id = ?`
 
 const deleteCluster = `DELETE FROM clusters WHERE id = ?`
 
 const selectClusters = `
-SELECT id, context, kubeconfig, seen
+SELECT id, context, kubeconfig, seen, color
 FROM clusters
 ORDER BY seen ASC, id ASC`
 
@@ -67,6 +69,8 @@ CREATE TABLE clusters (
 	kubeconfig TEXT NOT NULL,
 	seen INTEGER NOT NULL
 );
+`, `
+ALTER TABLE clusters ADD COLUMN color INTEGER NOT NULL DEFAULT 0;
 `}
 
 func migrate(ctx context.Context, db *sql.DB) error {

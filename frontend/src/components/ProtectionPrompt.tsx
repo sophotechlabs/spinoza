@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { setProtection } from '../lib/contexts';
 import { useContextList, useContextsStore } from '../store/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
+import ClusterBadge from './ClusterBadge';
 
 function reason(err: unknown): string {
   if (err instanceof Error && err.message !== '') {
@@ -48,8 +49,9 @@ export default function ProtectionPrompt() {
       aria-label="Protect this cluster"
       className="backdrop:bg-black/50 m-auto w-[30rem] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
-      <div className="border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
+      <div className="flex items-center gap-2 border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
         A cluster spinoza has not seen
+        <ClusterBadge />
       </div>
       <div className="p-3 text-xs">
         <p className="text-fg-soft">
