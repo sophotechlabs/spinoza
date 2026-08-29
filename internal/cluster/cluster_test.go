@@ -554,7 +554,7 @@ func TestTheProtectionOfTheClusterInUseIsReported(t *testing.T) {
 	if cluster.Contexts().Protection != api.ProtectionProtected {
 		t.Fatalf("protection = %q, want the verdict for the cluster spinoza connected to", cluster.Contexts().Protection)
 	}
-	if !cluster.Protected() {
+	if !cluster.Protected(cluster.ID()) {
 		t.Fatal("the gate on destructive actions would be open")
 	}
 }
@@ -566,14 +566,14 @@ func TestProtectionFollowsTheClusterNotTheContextName(t *testing.T) {
 	t.Cleanup(cancel)
 	cluster := newCluster(ctx, (&recorder{}).build, newStubSources(), protection, testOpenTimeout)
 
-	if cluster.Protected() {
+	if cluster.Protected(cluster.ID()) {
 		t.Fatal("the default context was protected by another cluster's answer")
 	}
 	if err := cluster.Use(api.ContextRef{Kubeconfig: "/tmp/other.yaml", Name: "p-mk1"}); err != nil {
 		t.Fatalf("use: %v", err)
 	}
 
-	if !cluster.Protected() {
+	if !cluster.Protected(cluster.ID()) {
 		t.Fatal("the same cluster reached through another kubeconfig lost its protection")
 	}
 }
@@ -584,7 +584,7 @@ func TestProtectingRemembersTheClusterInUse(t *testing.T) {
 	t.Cleanup(cancel)
 	cluster := newCluster(ctx, (&recorder{}).build, newStubSources(), protection, testOpenTimeout)
 
-	err := cluster.Protect(true)
+	err := cluster.Protect(cluster.ID(), true)
 	if err != nil {
 		t.Fatalf("protect: %v", err)
 	}
@@ -601,7 +601,7 @@ func TestProtectionThatCannotBeSavedSurfaces(t *testing.T) {
 	t.Cleanup(cancel)
 	cluster := newCluster(ctx, (&recorder{}).build, newStubSources(), protection, testOpenTimeout)
 
-	err := cluster.Protect(true)
+	err := cluster.Protect(cluster.ID(), true)
 
 	if err == nil {
 		t.Fatal("a protection that was never written reported success")
@@ -612,7 +612,7 @@ func TestAClusterThatNeverConnectedIsNotProtected(t *testing.T) {
 	rec := &recorder{failOn: "", failErr: errors.New("kubeconfig is unreadable")}
 	cluster := newCluster(context.Background(), rec.build, newStubSources(), newStubProtection(), testOpenTimeout)
 
-	if cluster.Protected() {
+	if cluster.Protected(cluster.ID()) {
 		t.Fatal("an unconnected cluster reported itself protected")
 	}
 	if cluster.Contexts().Protection != api.ProtectionUnknown {
@@ -633,7 +633,7 @@ func TestTheConnectedHostIsNormalisedBeforeAnythingKeysOnIt(t *testing.T) {
 	}
 	cluster := newCluster(ctx, build, newStubSources(), protection, testOpenTimeout)
 
-	if err := cluster.Protect(true); err != nil {
+	if err := cluster.Protect(cluster.ID(), true); err != nil {
 		t.Fatalf("protect: %v", err)
 	}
 

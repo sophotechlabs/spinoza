@@ -56,7 +56,7 @@ func run() error {
 	server := mcp.New(logReader{Backend: backend}, mcp.Options{
 		Version:    version.String(),
 		Context:    clusters.Current().Name,
-		Protected:  clusters.Protected(),
+		Protected:  clusters.Protected(clusters.ID()),
 		AllowWrite: opts.AllowWrite,
 		Prometheus: mcp.PromFor(clusters.Current(), opts),
 		LogLines:   opts.LogLines,

@@ -162,12 +162,12 @@ func (c *Cluster) ID() string {
 	return c.active
 }
 
-func (c *Cluster) Protect(protected bool) error {
-	return c.protection.Set(c.ID(), protected)
+func (c *Cluster) Protect(cluster string, protected bool) error {
+	return c.protection.Set(cluster, protected)
 }
 
-func (c *Cluster) Protected() bool {
-	return c.protection.Verdict(c.ID()) == api.ProtectionProtected
+func (c *Cluster) Protected(cluster string) bool {
+	return c.protection.Verdict(cluster) == api.ProtectionProtected
 }
 
 func (c *Cluster) AddKubeconfig(path string) error {

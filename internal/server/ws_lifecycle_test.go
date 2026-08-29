@@ -624,7 +624,7 @@ func (c *swappableCluster) RemoveKubeconfig(string) error {
 	return nil
 }
 
-func (c *swappableCluster) Protect(bool) error {
+func (c *swappableCluster) Protect(string, bool) error {
 	return nil
 }
 
@@ -640,7 +640,7 @@ func (c *swappableCluster) List(
 	return nil, errors.New("this stub reads one context")
 }
 
-func (c *swappableCluster) Protected() bool {
+func (c *swappableCluster) Protected(string) bool {
 	return false
 }
 

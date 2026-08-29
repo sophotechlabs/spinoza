@@ -35,7 +35,8 @@ func (s *Server) setProtection(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "protected must be true or false")
 		return
 	}
-	err := s.cluster.Protect(wanted == queryTrue)
+	_, on := s.lookup(clusterOf(r))
+	err := s.cluster.Protect(on, wanted == queryTrue)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -44,7 +45,8 @@ func (s *Server) setProtection(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) unconfirmed(r *http.Request, name string) bool {
-	if !s.cluster.Protected() {
+	_, on := s.lookup(clusterOf(r))
+	if !s.cluster.Protected(on) {
 		return false
 	}
 	return r.URL.Query().Get("confirm") != name

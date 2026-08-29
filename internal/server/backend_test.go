@@ -62,7 +62,7 @@ func (s *stubBackendCluster) RemoveKubeconfig(string) error {
 	return errors.New("this stub reads one kubeconfig")
 }
 
-func (s *stubBackendCluster) Protect(bool) error {
+func (s *stubBackendCluster) Protect(string, bool) error {
 	return errors.New("this stub protects nothing")
 }
 
@@ -78,7 +78,7 @@ func (s *stubBackendCluster) List(
 	return nil, errors.New("this stub reads one context")
 }
 
-func (s *stubBackendCluster) Protected() bool {
+func (s *stubBackendCluster) Protected(string) bool {
 	return s.protected
 }
 

@@ -98,7 +98,7 @@ func (s *stubCluster) RemoveKubeconfig(path string) error {
 	return nil
 }
 
-func (s *stubCluster) Protect(protected bool) error {
+func (s *stubCluster) Protect(_ string, protected bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.protectErr != nil {
@@ -137,7 +137,7 @@ func (s *stubCluster) Read(_ context.Context, ref api.ContextRef, target api.Obj
 	return found, nil
 }
 
-func (s *stubCluster) Protected() bool {
+func (s *stubCluster) Protected(string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.protection == api.ProtectionProtected
@@ -526,7 +526,7 @@ func TestProtectingTheClusterInUse(t *testing.T) {
 	if decodeContexts(t, body).Protection != api.ProtectionProtected {
 		t.Fatalf("protection = %q, want it echoed back", decodeContexts(t, body).Protection)
 	}
-	if !cluster.Protected() {
+	if !cluster.Protected(cluster.ID()) {
 		t.Fatal("the cluster did not come back protected")
 	}
 }
@@ -542,7 +542,7 @@ func TestOpeningTheClusterUpAgain(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
 	}
-	if cluster.Protected() {
+	if cluster.Protected(cluster.ID()) {
 		t.Fatal("the cluster stayed protected")
 	}
 }
