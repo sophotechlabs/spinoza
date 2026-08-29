@@ -372,3 +372,101 @@ func TestAWriteThatFailsCarriesTheApiserverMessage(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestAReplicaCountMustBeAWholeNumber(t *testing.T) {
+	cases := []struct {
+		name     string
+		replicas any
+		fails    string
+	}{
+		{name: "a number", replicas: float64(3)},
+		{name: "zero", replicas: float64(0)},
+		{name: "a number in a string", replicas: "3"},
+		{name: "a word", replicas: "three", fails: "whole number"},
+		{name: "a fraction", replicas: 1.5, fails: "whole number"},
+		{name: "a boolean", replicas: true, fails: "whole number"},
+		{name: "negative", replicas: float64(-1), fails: "negative"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := writableCluster()
+			server := serverFor(cluster, Options{AllowWrite: true})
+			args := arguments{
+				argResource: "deployments", argName: "web", argNamespace: "prod",
+				argAction: "scale", argReplicas: tc.replicas,
+			}
+
+			_, err := server.tools["manage_workload"].run(t.Context(), args)
+
+			if tc.fails != "" {
+				if err == nil {
+					t.Fatalf("%v was accepted and the workload scaled to %d", tc.replicas, cluster.acted[0].Replicas)
+				}
+				if !strings.Contains(err.Error(), tc.fails) {
+					t.Fatalf("error = %q, want it to say %q", err, tc.fails)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("%v was refused: %v", tc.replicas, err)
+			}
+			if cluster.acted[0].Replicas != 3 && cluster.acted[0].Replicas != 0 {
+				t.Fatalf("replicas = %d", cluster.acted[0].Replicas)
+			}
+		})
+	}
+}
+
+func TestEachEngineOnlyTakesItsOwnVerbs(t *testing.T) {
+	cases := []struct {
+		name   string
+		engine string
+		action string
+		fails  bool
+	}{
+		{name: "flux reconciles", engine: "flux", action: "reconcile"},
+		{name: "flux suspends", engine: "flux", action: "suspend"},
+		{name: "flux cannot sync", engine: "flux", action: "sync", fails: true},
+		{name: "argo syncs", engine: "argo", action: "sync"},
+		{name: "argo terminates", engine: "argo", action: "terminate"},
+		{name: "argo cannot reconcile", engine: "argo", action: "reconcile", fails: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := writableCluster()
+			server := serverFor(cluster, Options{AllowWrite: true})
+			args := arguments{
+				argEngine: tc.engine, argResource: "kustomizations", argName: "apps",
+				argNamespace: "flux-system", argAction: tc.action,
+			}
+
+			_, err := server.tools["manage_gitops"].run(t.Context(), args)
+
+			if tc.fails {
+				if err == nil {
+					t.Fatalf("%s accepted %q, which belongs to the other controller", tc.engine, tc.action)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("%s refused its own verb %q: %v", tc.engine, tc.action, err)
+			}
+		})
+	}
+}
+
+func TestAWorkloadActionNamesTheNamespaceItActsIn(t *testing.T) {
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	_, err := server.tools["manage_workload"].run(t.Context(), arguments{
+		argResource: "deployments", argName: "web", argAction: "restart",
+	})
+
+	if err == nil {
+		t.Fatalf("a workload was restarted without naming its namespace: %+v", cluster.acted)
+	}
+	if !strings.Contains(err.Error(), argNamespace) {
+		t.Fatalf("error = %q, want it to name the namespace", err)
+	}
+}

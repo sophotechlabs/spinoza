@@ -11,6 +11,11 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/flux"
 )
 
+var (
+	fluxVerbs = []string{"reconcile", "reconcile-with-source", "suspend", "resume"}
+	argoVerbs = []string{"sync", "refresh", "hard-refresh", "terminate", "suspend", "resume", "rollback"}
+)
+
 var writeToolNames = map[string]bool{
 	"manage_workload": true,
 	"manage_node":     true,
@@ -30,7 +35,7 @@ func (s *Server) registerWrites() {
 			argNamespace: text("Namespace."),
 			argGroup:     text("API group, when ambiguous."),
 			argAction:    choice("What to do.", "scale", "restart"),
-			"replicas":   number("Replica count, for scale."),
+			argReplicas:  number("Replica count, for scale."),
 		},
 		required:   []string{argResource, argName, argNamespace, argAction},
 		writes:     true,
@@ -75,9 +80,9 @@ func (s *Server) registerWrites() {
 			argName:      text("Object name."),
 			argNamespace: text("Namespace."),
 			argGroup:     text("API group, when ambiguous."),
-			argAction: choice("What to do.",
+			argAction: choice("What to do. Flux takes the first four, Argo the rest.",
 				"reconcile", "reconcile-with-source", "suspend", "resume",
-				"sync", "refresh", "hard-refresh", "terminate"),
+				"sync", "refresh", "hard-refresh", "terminate", "rollback"),
 		},
 		required:   []string{"engine", argResource, argName, argNamespace, argAction},
 		writes:     true,
@@ -87,13 +92,13 @@ func (s *Server) registerWrites() {
 	s.register(tool{
 		name:        "apply_resource",
 		title:       "Apply a document",
-		description: "Server-side apply one YAML document over an object that already exists. spinoza is the field manager.",
+		description: "Server-side apply one YAML document over an object that already exists. Read the object with get_resource first and carry its resourceVersion in the document, or the apply is refused rather than overwriting a change someone else made.",
 		properties: map[string]propOf{
 			argResource:  text("Resource or kind the document describes."),
 			argName:      text("Object name."),
 			argNamespace: text("Namespace."),
 			argGroup:     text("API group, when ambiguous."),
-			argYAML:      text("The whole document to apply."),
+			argYAML:      text("The whole document to apply, carrying the resourceVersion get_resource returned."),
 		},
 		required:    []string{argResource, argName, argYAML},
 		writes:      true,
@@ -123,7 +128,7 @@ func (s *Server) act(ctx context.Context, ref api.ObjectRef, req actions.Request
 }
 
 func (s *Server) manageWorkload(ctx context.Context, args arguments) (any, error) {
-	ref, err := args.ref(s.cluster.Resources())
+	ref, err := args.refIn(s.cluster.Resources())
 	if err != nil {
 		return nil, err
 	}
@@ -133,10 +138,14 @@ func (s *Server) manageWorkload(ctx context.Context, args arguments) (any, error
 	}
 	req := actions.Request{Ref: ref, Action: actions.Action(verb)}
 	if verb == "scale" {
-		if _, held := args["replicas"]; !held {
-			return nil, errors.New("replicas is required to scale")
+		replicas, err := args.count(argReplicas)
+		if err != nil {
+			return nil, err
 		}
-		req.Replicas = int64(args.number("replicas", 0))
+		if replicas < 0 {
+			return nil, errors.New("replicas cannot be negative")
+		}
+		req.Replicas = replicas
 	}
 	return s.act(ctx, ref, req, verb)
 }
@@ -180,24 +189,28 @@ func (s *Server) manageCronJob(ctx context.Context, args arguments) (any, error)
 }
 
 func (s *Server) manageGitops(ctx context.Context, args arguments) (any, error) {
-	engine, err := args.oneOf("engine", "flux", "argo")
+	engine, err := args.oneOf(argEngine, "flux", "argo")
 	if err != nil {
 		return nil, err
 	}
-	ref, err := args.ref(s.cluster.Resources())
-	if err != nil {
-		return nil, err
-	}
-	verb, err := args.required(argAction)
+	ref, err := args.refIn(s.cluster.Resources())
 	if err != nil {
 		return nil, err
 	}
 	if engine == "flux" {
+		verb, wrong := args.oneOf(argAction, fluxVerbs...)
+		if wrong != nil {
+			return nil, wrong
+		}
 		result, actErr := s.cluster.FluxAction(ctx, ref, flux.Action(verb))
 		if actErr != nil {
 			return nil, actErr
 		}
 		return map[string]any{"applied": result}, nil
+	}
+	verb, err := args.oneOf(argAction, argoVerbs...)
+	if err != nil {
+		return nil, err
 	}
 	result, actErr := s.cluster.ArgoAction(ctx, ref, argocd.Request{Action: argocd.Action(verb)})
 	if actErr != nil {

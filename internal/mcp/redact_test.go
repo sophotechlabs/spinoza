@@ -217,3 +217,24 @@ func TestAParentKeyIsNotMistakenForAValue(t *testing.T) {
 		t.Fatalf("scrub ate a value that is not a secret: %q", got)
 	}
 }
+
+func TestLabelsAreScrubbedLikeEverythingElse(t *testing.T) {
+	result := scrubMap(map[string]string{
+		"app":          "web",
+		"auth-token":   "not-a-real-value",
+		"release-note": "deployed with password=letmein1",
+	})
+
+	if result["app"] != "web" {
+		t.Fatalf("an ordinary label changed: %q", result["app"])
+	}
+	if result["auth-token"] != hidden {
+		t.Fatalf("a secret-shaped label kept its value: %q", result["auth-token"])
+	}
+	if strings.Contains(result["release-note"], "letmein1") {
+		t.Fatalf("a label value kept a secret: %q", result["release-note"])
+	}
+	if scrubMap(nil) != nil {
+		t.Fatal("no labels became an empty map rather than nothing")
+	}
+}

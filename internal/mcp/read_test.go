@@ -816,3 +816,78 @@ func TestAnObjectWithNoCreationStampCarriesNoAge(t *testing.T) {
 		t.Fatalf("row = %v, want no age when nothing stamped it", rows[0])
 	}
 }
+
+func TestTheResourceVersionComesBackSoAnApplyCanCarryIt(t *testing.T) {
+	cases := []struct {
+		name     string
+		document string
+		want     string
+	}{
+		{
+			name:     "a quoted version",
+			document: "metadata:\n  name: web\n  resourceVersion: \"4021\"\n",
+			want:     "4021",
+		},
+		{
+			name:     "an unquoted version",
+			document: "metadata:\n  resourceVersion: 77\n",
+			want:     "77",
+		},
+		{
+			name:     "a document that states none",
+			document: "metadata:\n  name: web\n",
+			want:     "",
+		},
+		{
+			name:     "no document at all",
+			document: "",
+			want:     "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resourceVersionOf(tc.document); got != tc.want {
+				t.Fatalf("resourceVersion = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestGettingAResourceCarriesItsVersionForTheRoundTrip(t *testing.T) {
+	cluster := &fakeCluster{
+		catalog: catalogOf(descriptor("", "v1", "configmaps", "ConfigMap")),
+		detail: api.ObjectDetail{
+			Kind: "ConfigMap",
+			Name: "settings",
+			YAML: "metadata:\n  name: settings\n  resourceVersion: \"9\"\n",
+		},
+	}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "get_resource", arguments{argResource: "configmaps", argName: "settings"})
+
+	if result["resourceVersion"] != "9" {
+		t.Fatalf("resourceVersion = %v, want the one an apply must carry back", result["resourceVersion"])
+	}
+}
+
+func TestASecretStillGivesUpNoVersionBecauseItGivesUpNoDocument(t *testing.T) {
+	cluster := &fakeCluster{
+		catalog: catalogOf(descriptor("", "v1", "secrets", "Secret")),
+		detail: api.ObjectDetail{
+			Kind: "Secret",
+			Name: "tls",
+			YAML: "metadata:\n  resourceVersion: \"9\"\ndata:\n  password: aHVudGVyMg==\n",
+		},
+	}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "get_resource", arguments{argResource: "secrets", argName: "tls"})
+
+	if result["yaml"] != "" {
+		t.Fatalf("a Secret gave up its document: %q", result["yaml"])
+	}
+	if result["resourceVersion"] != "9" {
+		t.Fatalf("resourceVersion = %v; it is not secret and an apply needs it", result["resourceVersion"])
+	}
+}

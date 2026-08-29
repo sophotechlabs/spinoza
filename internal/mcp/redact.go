@@ -47,6 +47,21 @@ func scrub(text string) string {
 	return longBlob.ReplaceAllString(text, hidden)
 }
 
+func scrubMap(pairs map[string]string) map[string]string {
+	if len(pairs) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(pairs))
+	for key, value := range pairs {
+		if looksSecret(key) {
+			out[key] = hidden
+			continue
+		}
+		out[key] = scrub(value)
+	}
+	return out
+}
+
 func scrubLines(lines []string) []string {
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {

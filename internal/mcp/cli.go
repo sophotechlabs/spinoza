@@ -31,7 +31,7 @@ func (s *Server) Call(ctx context.Context, out io.Writer, name string, pairs []s
 	if err != nil {
 		return err
 	}
-	result, err := found.run(ctx, args)
+	result, err := s.runBounded(ctx, found, args)
 	if err != nil {
 		return err
 	}

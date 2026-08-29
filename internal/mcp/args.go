@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ const (
 	argQuery     = "query"
 	argAction    = "action"
 	argYAML      = "yaml"
+	argReplicas  = "replicas"
+	argEngine    = "engine"
 	keyError     = "error"
 )
 
@@ -67,6 +70,28 @@ func (a arguments) number(key string, fallback int) int {
 	}
 }
 
+func (a arguments) count(key string) (int64, error) {
+	raw, held := a[key]
+	if !held {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	switch value := raw.(type) {
+	case float64:
+		if value != math.Trunc(value) {
+			return 0, fmt.Errorf("%s must be a whole number, not %v", key, value)
+		}
+		return int64(value), nil
+	case string:
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("%s must be a whole number, not %q", key, value)
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("%s must be a whole number", key)
+	}
+}
+
 func (a arguments) flag(key string) bool {
 	raw, held := a[key]
 	if !held {
@@ -113,6 +138,17 @@ func (a arguments) ref(catalog api.ResourceCatalog) (api.ObjectRef, error) {
 		Namespace: a.text(argNamespace),
 		Name:      name,
 	}, nil
+}
+
+func (a arguments) refIn(catalog api.ResourceCatalog) (api.ObjectRef, error) {
+	ref, err := a.ref(catalog)
+	if err != nil {
+		return api.ObjectRef{}, err
+	}
+	if ref.Namespace == "" {
+		return api.ObjectRef{}, fmt.Errorf("%s is required", argNamespace)
+	}
+	return ref, nil
 }
 
 func (a arguments) kind(catalog api.ResourceCatalog) (api.ObjectRef, error) {

@@ -22,6 +22,7 @@ type Settings struct {
 	AllowWrite bool
 	LogLines   int
 	SyncWait   time.Duration
+	CallBudget time.Duration
 	Args       []string
 }
 
@@ -34,6 +35,7 @@ func Parse(argv []string, out io.Writer) (Settings, error) {
 	allowWrite := flags.Bool("allow-write", false, "offer the five tools that change the cluster")
 	logLines := flags.Int("log-lines", defaultLogLines, "most log lines any one tool returns")
 	syncWait := flags.Duration("sync-timeout", 30*time.Second, "how long to wait for an informer cache")
+	callBudget := flags.Duration("call-timeout", defaultCallBudget, "how long any one tool may take")
 	flags.Usage = func() {
 		fmt.Fprintln(out, "spinoza-mcp reads one Kubernetes cluster for an MCP client.")
 		fmt.Fprintln(out, "  spinoza-mcp                    serve MCP on stdin and stdout")
@@ -54,6 +56,7 @@ func Parse(argv []string, out io.Writer) (Settings, error) {
 		AllowWrite: *allowWrite,
 		LogLines:   *logLines,
 		SyncWait:   *syncWait,
+		CallBudget: *callBudget,
 		Args:       flags.Args(),
 	}, nil
 }

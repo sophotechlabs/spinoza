@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Options struct {
@@ -14,9 +15,13 @@ type Options struct {
 	AllowWrite bool
 	Prometheus Prometheus
 	LogLines   int
+	CallBudget time.Duration
 }
 
-const defaultLogLines = 200
+const (
+	defaultLogLines   = 200
+	defaultCallBudget = 60 * time.Second
+)
 
 type Server struct {
 	cluster     Cluster
@@ -27,12 +32,17 @@ type Server struct {
 	protected   bool
 	allowWrites bool
 	logLines    int
+	budget      time.Duration
 }
 
 func New(cluster Cluster, opts Options) *Server {
 	lines := opts.LogLines
 	if lines == 0 {
 		lines = defaultLogLines
+	}
+	budget := opts.CallBudget
+	if budget == 0 {
+		budget = defaultCallBudget
 	}
 	server := &Server{
 		cluster:     cluster,
@@ -43,6 +53,7 @@ func New(cluster Cluster, opts Options) *Server {
 		protected:   opts.Protected,
 		allowWrites: opts.AllowWrite && !opts.Protected,
 		logLines:    lines,
+		budget:      budget,
 	}
 	server.registerReads()
 	server.registerWrites()
@@ -127,7 +138,7 @@ func (s *Server) callTool(ctx context.Context, call request) *response {
 	if !known {
 		return refuse(call.ID, codeInvalidParams, s.unknown(params.Name))
 	}
-	result, err := found.run(ctx, arguments(params.Arguments))
+	result, err := s.runBounded(ctx, found, arguments(params.Arguments))
 	if err != nil {
 		return answer(call.ID, callResult{Content: []content{{Type: "text", Text: err.Error()}}, IsError: true})
 	}
@@ -136,6 +147,19 @@ func (s *Server) callTool(ctx context.Context, call request) *response {
 		return refuse(call.ID, codeInternal, "the result could not be encoded: "+err.Error())
 	}
 	return answer(call.ID, callResult{Content: []content{{Type: "text", Text: string(body)}}})
+}
+
+func (s *Server) runBounded(ctx context.Context, one tool, args arguments) (any, error) {
+	bounded, cancel := context.WithTimeout(ctx, s.budget)
+	defer cancel()
+	result, err := one.run(bounded, args)
+	if err != nil {
+		return nil, err
+	}
+	if bounded.Err() != nil {
+		return nil, fmt.Errorf("%s did not finish within %s", one.name, s.budget)
+	}
+	return result, nil
 }
 
 func (s *Server) unknown(name string) string {

@@ -60,6 +60,7 @@ func run() error {
 		AllowWrite: opts.AllowWrite,
 		Prometheus: mcp.PromFor(clusters.Current(), opts),
 		LogLines:   opts.LogLines,
+		CallBudget: opts.CallBudget,
 	})
 	return server.Dispatch(ctx, opts, os.Stdin, os.Stdout)
 }

@@ -3,9 +3,9 @@ package mcp
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -282,16 +282,17 @@ func (s *Server) getResource(ctx context.Context, args arguments) (any, error) {
 		return nil, err
 	}
 	out := map[string]any{
-		"kind":       detail.Kind,
-		argName:      detail.Name,
-		argNamespace: detail.Namespace,
-		"conditions": detail.Conditions,
-		"containers": detail.Containers,
-		"owners":     detail.Owners,
-		"labels":     detail.Labels,
-		"replicas":   detail.Replicas,
-		"managedBy":  detail.ManagedBy,
-		argYAML:      safeYAML(detail.Kind, detail.YAML),
+		"kind":            detail.Kind,
+		"resourceVersion": resourceVersionOf(detail.YAML),
+		argName:           detail.Name,
+		argNamespace:      detail.Namespace,
+		"conditions":      detail.Conditions,
+		"containers":      detail.Containers,
+		"owners":          detail.Owners,
+		"labels":          scrubMap(detail.Labels),
+		"replicas":        detail.Replicas,
+		"managedBy":       detail.ManagedBy,
+		argYAML:           safeYAML(detail.Kind, detail.YAML),
 	}
 	if len(detail.Data) > 0 {
 		out["dataKeys"] = keysOnly(detail.Data)
@@ -307,6 +308,16 @@ func (s *Server) getResource(ctx context.Context, args arguments) (any, error) {
 		out["events"] = dedupeEvents(events, defaultRows)
 	}
 	return out, nil
+}
+
+var versionLine = regexp.MustCompile(`(?m)^\s*resourceVersion:\s*"?(\d+)"?\s*$`)
+
+func resourceVersionOf(document string) string {
+	found := versionLine.FindStringSubmatch(document)
+	if found == nil {
+		return ""
+	}
+	return found[1]
 }
 
 func (s *Server) events(ctx context.Context, args arguments) (any, error) {
@@ -397,12 +408,9 @@ func (s *Server) podLogs(ctx context.Context, args arguments) (any, error) {
 }
 
 func (s *Server) workloadLogs(ctx context.Context, args arguments) (any, error) {
-	ref, err := args.ref(s.cluster.Resources())
+	ref, err := args.refIn(s.cluster.Resources())
 	if err != nil {
 		return nil, err
-	}
-	if ref.Namespace == "" {
-		return nil, errors.New("namespace is required")
 	}
 	selector, err := s.cluster.PodSelector(ctx, ref)
 	if err != nil {
