@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var noSpread = []string{daemonSetKind, "CronJob", "Pod"}
+var noSpread = []string{daemonSetKind, cronKind, "Pod"}
 
 func reliabilityChecks() []check {
 	return []check{
@@ -65,7 +65,7 @@ func longRunning(subject Subject, container Container) bool {
 	if container.Init {
 		return false
 	}
-	if subject.Kind == "Job" || subject.Kind == "CronJob" {
+	if subject.Kind == jobKind || subject.Kind == cronKind {
 		return false
 	}
 	policy := stringAt(subject.Pod, "restartPolicy")

@@ -28,6 +28,7 @@ type Bundle struct {
 	Mapper    *restmapper.DeferredDiscoveryRESTMapper
 	// Every client here is built on one config, so one sink sees every request.
 	Reach     *reach.Sink
+	Warnings  *WarningSink
 	Ref       api.ContextRef
 	Namespace string
 }
@@ -116,7 +117,8 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	}
 	restConfig.QPS = options.QPS
 	restConfig.Burst = options.Burst
-	restConfig.WarningHandler = newWarningLogger(slog.Default())
+	warnings := newWarningLogger(slog.Default())
+	restConfig.WarningHandler = warnings
 	answers := reach.New()
 	restConfig.Wrap(answers.Wrap)
 
@@ -163,6 +165,7 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 		Discovery: cached,
 		Mapper:    mapper,
 		Reach:     answers,
+		Warnings:  warnings,
 		Ref:       resolved,
 		Namespace: namespace,
 	}, nil

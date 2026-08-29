@@ -417,19 +417,19 @@ describe('the audit filter on the wire', () => {
     expect(params.get('minSeverity')).toBe('high');
   });
 
-  it('asks for the whole cluster only when it is switched on', () => {
-    expect(filterParams({ ...NO_FILTER, wholeCluster: true }).get('wholeCluster')).toBe('1');
+  it('narrows to workloads only when asked, and says nothing otherwise', () => {
     expect(filterParams(NO_FILTER).get('wholeCluster')).toBeNull();
+    expect(filterParams({ ...NO_FILTER, wholeCluster: false }).get('wholeCluster')).toBe('0');
   });
 
   it('carries the filter onto the checks request', async () => {
     stub({ groups: [], objects: [], scanned: 0 });
 
-    await fetchChecks({ ...NO_FILTER, minSeverity: 'medium', wholeCluster: true });
+    await fetchChecks({ ...NO_FILTER, minSeverity: 'medium', wholeCluster: false });
 
     const url = urlOf(0);
     expect(url).toContain('minSeverity=medium');
-    expect(url).toContain('wholeCluster=1');
+    expect(url).toContain('wholeCluster=0');
   });
 
   it('carries the filter onto a findings page as well as the cursor', async () => {

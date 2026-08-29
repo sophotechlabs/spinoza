@@ -42,6 +42,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/inspect"
 	"github.com/sophotechlabs/spinoza/internal/issues"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
+	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/metrics"
 	"github.com/sophotechlabs/spinoza/internal/nodeshell"
@@ -129,6 +130,7 @@ type Manager struct {
 	traffic     *traffic.Reader
 	samples     *samples.Store
 	disco       kubediscovery.CachedDiscoveryInterface
+	warnings    *kube.WarningSink
 	limits      Limits
 	catalog     sync.RWMutex
 	cats        []api.Category
@@ -214,6 +216,7 @@ type Deps struct {
 	Charts      *charts.Cache
 	Perms       *access.Service
 	Reach       *reach.Sink
+	Warnings    *kube.WarningSink
 	Categories  []api.Category
 	Descriptors map[string]api.ResourceDescriptor
 }
@@ -234,6 +237,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		nodeShells: deps.NodeShells,
 		perms:      permsFor(deps),
 		answers:    deps.Reach,
+		warnings:   deps.Warnings,
 		helm:       deps.Helm,
 		prom:       deps.Prometheus,
 		traffic:    trafficFor(deps),
@@ -720,6 +724,27 @@ func (m *Manager) CheckPage(
 	ctx context.Context, id, after string, keep checks.Filter,
 ) (api.CheckPage, error) {
 	return checks.Page(ctx, m, m.descriptors(), m.Metrics(ctx), id, after, keep, m.limits.CheckFindings)
+}
+
+func (m *Manager) Facts() checks.Facts {
+	out := checks.Facts{}
+	if m.disco == nil {
+		return out
+	}
+	if info, err := m.disco.ServerVersion(); err == nil {
+		out.ServerVersion = info.GitVersion
+	}
+	if groups, err := m.disco.ServerGroups(); err == nil {
+		for _, group := range groups.Groups {
+			for _, version := range group.Versions {
+				out.ServedVersions = append(out.ServedVersions, version.GroupVersion)
+			}
+		}
+	}
+	if m.warnings != nil {
+		out.Warnings = m.warnings.Seen()
+	}
+	return out
 }
 
 func (m *Manager) Checks(ctx context.Context, keep checks.Filter) api.CheckReport {

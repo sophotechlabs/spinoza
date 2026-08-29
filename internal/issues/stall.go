@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
@@ -22,9 +23,25 @@ func stallFindings(ctx context.Context, events Events, snap *snapshot, reported 
 	}
 	bounded, cancel := context.WithTimeout(ctx, limits.StallBudget)
 	defer cancel()
-	quiet := quietOnes(bounded, events, candidates, limits)
+	quiet, complained := whatHappened(bounded, events, candidates, limits)
 	out := []finding{}
 	for _, item := range candidates {
+		if said, ok := complained[item.uid()]; ok {
+			moved := rolloutOf(snap, item)
+			out = append(out, finding{
+				detector:  detectorStall,
+				severity:  severityFatal,
+				title:     said.Reason,
+				detail:    said.Message,
+				action:    "fix what the kubelet is complaining about, then let it retry",
+				change:    moved.what,
+				changedAt: moved.at,
+				kind:      kindPod,
+				subject:   item,
+				since:     podBoundAt(item.obj),
+			})
+			continue
+		}
 		if !quiet[item.uid()] {
 			continue
 		}
@@ -46,8 +63,14 @@ func stallFindings(ctx context.Context, events Events, snap *snapshot, reported 
 	return out
 }
 
-func quietOnes(ctx context.Context, events Events, candidates []object, limits Limits) map[string]bool {
-	quiet := make([]bool, len(candidates))
+// A pod that is bound and running nothing has either said nothing at all,
+// which is the kubelet going quiet, or said exactly what is wrong. Both are
+// worth reporting and both come from the one event read.
+func whatHappened(
+	ctx context.Context, events Events, candidates []object, limits Limits,
+) (quiet map[string]bool, complained map[string]api.Event) {
+	quietAt := make([]bool, len(candidates))
+	saidAt := make([]api.Event, len(candidates))
 	slots := make(chan struct{}, limits.StallReader)
 	var wg sync.WaitGroup
 	for index, item := range candidates {
@@ -57,17 +80,41 @@ func quietOnes(ctx context.Context, events Events, candidates []object, limits L
 			slots <- struct{}{}
 			defer func() { <-slots }()
 			found, err := events.Events(ctx, item.obj.GetNamespace(), item.uid())
-			quiet[index] = err == nil && len(found) == 0
+			if err != nil {
+				return
+			}
+			if len(found) == 0 {
+				quietAt[index] = true
+				return
+			}
+			if worst, ok := newestWarning(found); ok {
+				saidAt[index] = worst
+			}
 		})
 	}
 	wg.Wait()
-	out := map[string]bool{}
+	quiet = map[string]bool{}
+	complained = map[string]api.Event{}
 	for index, item := range candidates {
-		if quiet[index] {
-			out[item.uid()] = true
+		if quietAt[index] {
+			quiet[item.uid()] = true
+			continue
+		}
+		if saidAt[index].Reason != "" {
+			complained[item.uid()] = saidAt[index]
 		}
 	}
-	return out
+	return quiet, complained
+}
+
+func newestWarning(found []api.Event) (api.Event, bool) {
+	for _, one := range found {
+		if one.Type != "Warning" || one.Reason == "" {
+			continue
+		}
+		return one, true
+	}
+	return api.Event{}, false
 }
 
 func stallCandidatesOf(snap *snapshot, reported map[string]bool, now time.Time, limits Limits) []object {

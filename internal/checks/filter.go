@@ -25,8 +25,14 @@ func ParseFilter(disabled, namespaces, minSeverity, wholeCluster string) Filter 
 		Disabled:       splitList(disabled),
 		SkipNamespaces: splitList(namespaces),
 		MinSeverity:    knownSeverity(minSeverity),
-		WholeCluster:   wholeCluster == "1" || strings.EqualFold(wholeCluster, "true"),
+		WholeCluster:   !narrowed(wholeCluster),
 	}
+}
+
+// Absence means the whole cluster: a caller that says nothing gets every check.
+// Narrowing to workloads is the thing you have to ask for.
+func narrowed(raw string) bool {
+	return raw == "0" || strings.EqualFold(raw, "false")
 }
 
 func splitList(raw string) []string {

@@ -42,7 +42,7 @@ const DEFAULTS: Settings = {
   checksDisabled: [],
   checksSkipNamespaces: [],
   checksMinSeverity: '',
-  checksWholeCluster: false,
+  checksWholeCluster: true,
 };
 
 function parseStarts(value: unknown): Partial<Record<string, NamespaceStart>> {

@@ -14,7 +14,10 @@ const (
 	detectorTerminating = "terminating"
 	detectorExtension   = "extension"
 	detectorRouting     = "routing"
+	detectorExpiry      = "expiry"
 )
+
+const expiryWarning = 21 * 24 * time.Hour
 
 const (
 	kindNode      = "Node"
@@ -42,7 +45,59 @@ func clusterFindings(snap *snapshot, now time.Time) []finding {
 	out = append(out, terminatingFindings(snap, now)...)
 	out = append(out, definitionFindings(snap)...)
 	out = append(out, routingFindings(snap)...)
+	out = append(out, expiryFindings(snap, now)...)
 	return out
+}
+
+// Anything that publishes status.notAfter is telling you when it stops being
+// valid. cert-manager Certificates do, and so does anything built the same way,
+// which is why this reads the field rather than the kind.
+func expiryFindings(snap *snapshot, now time.Time) []finding {
+	out := []finding{}
+	for _, items := range snap.byKind {
+		for _, item := range items {
+			found, ok := expirySymptom(item.obj, now)
+			if !ok {
+				continue
+			}
+			out = append(out, finding{
+				detector: detectorExpiry,
+				severity: found.severity,
+				title:    found.title,
+				detail:   found.detail,
+				action:   found.action,
+				kind:     item.desc.Kind,
+				subject:  item,
+				since:    item.obj.GetCreationTimestamp().Time,
+			})
+		}
+	}
+	return out
+}
+
+func expirySymptom(obj *unstructured.Unstructured, now time.Time) (symptom, bool) {
+	at, err := time.Parse(time.RFC3339, unstr.String(obj, "status", "notAfter"))
+	if err != nil {
+		return symptom{}, false
+	}
+	left := at.Sub(now)
+	if left > expiryWarning {
+		return symptom{}, false
+	}
+	if left <= 0 {
+		return symptom{
+			severity: severityFatal,
+			title:    "Expired",
+			detail:   "the certificate expired " + left.Abs().Round(time.Hour).String() + " ago",
+			action:   "renew it, and find out why the issuer did not",
+		}, true
+	}
+	return symptom{
+		severity: severityDegraded,
+		title:    "ExpiringSoon",
+		detail:   "the certificate is valid for another " + left.Round(time.Hour).String(),
+		action:   "check the issuer is renewing it",
+	}, true
 }
 
 func definitionFindings(snap *snapshot) []finding {

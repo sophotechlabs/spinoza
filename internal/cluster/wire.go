@@ -220,6 +220,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		Prometheus:  promClient,
 		Perms:       perms,
 		Reach:       bundle.Reach,
+		Warnings:    bundle.Warnings,
 		Categories:  cats,
 		Descriptors: descs,
 	})

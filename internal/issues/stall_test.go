@@ -169,3 +169,51 @@ func TestOnlyTheOldestCandidatesAreAskedAbout(t *testing.T) {
 		t.Fatalf("asked = %v, want the newest candidates left out", asked)
 	}
 }
+
+func TestAPodTheKubeletComplainedAboutIsReportedInItsOwnWords(t *testing.T) {
+	lister := silentPod("web-5")
+	events := &stubEvents{byUID: map[string][]api.Event{
+		"uid-web-5": {{
+			Type:    "Warning",
+			Reason:  "FailedMount",
+			Message: `MountVolume.SetUp failed for volume "creds": secret "api" not found`,
+		}},
+	}}
+
+	queue := buildWith(t, lister, events, catalog(podDescriptor()))
+
+	row, ok := rowNamed(queue, "web-5")
+	if !ok {
+		t.Fatalf("rows = %+v, want the pod reported", queue.Rows)
+	}
+	if row.Title != "FailedMount" {
+		t.Fatalf("title = %q, want the kubelet's own reason", row.Title)
+	}
+	if !contains(row.Detail, `secret "api" not found`) {
+		t.Fatalf("detail = %q, want the kubelet's own message", row.Detail)
+	}
+	if row.Severity != api.SeverityFatal {
+		t.Fatalf("severity = %q, want fatal", row.Severity)
+	}
+	if row.Uncertain {
+		t.Fatal("a message the kubelet sent was reported as a guess")
+	}
+}
+
+func TestTheNewestWarningIsTheOneReported(t *testing.T) {
+	lister := silentPod("web-6")
+	events := &stubEvents{byUID: map[string][]api.Event{
+		"uid-web-6": {
+			{Type: "Normal", Reason: "Scheduled"},
+			{Type: "Warning", Reason: "FailedAttachVolume", Message: "still attaching"},
+			{Type: "Warning", Reason: "FailedMount", Message: "older"},
+		},
+	}}
+
+	queue := buildWith(t, lister, events, catalog(podDescriptor()))
+
+	row, _ := rowNamed(queue, "web-6")
+	if row.Title != "FailedAttachVolume" {
+		t.Fatalf("title = %q, want the first warning the reader was given", row.Title)
+	}
+}

@@ -33,6 +33,7 @@ type scan struct {
 	subjects []Subject
 	usage    map[string]api.ResourceUsage
 	held     *corpus
+	facts    Facts
 }
 
 func (sc scan) hasUsage() bool {
@@ -267,6 +268,7 @@ func registry() []check {
 	out = append(out, referenceChecks()...)
 	out = append(out, rbacChecks()...)
 	out = append(out, objectChecks()...)
+	out = append(out, deprecationChecks()...)
 	return out
 }
 
@@ -324,6 +326,7 @@ func survey(
 		subjects: subjectsOf(items),
 		usage:    usage.Pods,
 		held:     newCorpus(items, names, absent, targetsFor(keep.WholeCluster), unread),
+		facts:    lister.Facts(),
 	}, failure, absent
 }
 

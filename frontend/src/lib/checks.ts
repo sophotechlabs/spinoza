@@ -155,7 +155,7 @@ export const NO_FILTER: ChecksFilter = {
   disabled: [],
   skipNamespaces: [],
   minSeverity: '',
-  wholeCluster: false,
+  wholeCluster: true,
 };
 
 export function fromParams(query: string): ChecksFilter {
@@ -165,7 +165,7 @@ export function fromParams(query: string): ChecksFilter {
     disabled: namesIn(params.get('disabled')),
     skipNamespaces: namesIn(params.get('skipNamespaces')),
     minSeverity: SEVERITY_FLOORS.find((one) => one === floor) ?? '',
-    wholeCluster: params.get('wholeCluster') === '1',
+    wholeCluster: params.get('wholeCluster') !== '0',
   };
 }
 
@@ -187,8 +187,8 @@ export function filterParams(keep: ChecksFilter): URLSearchParams {
   if (keep.minSeverity !== '') {
     params.set('minSeverity', keep.minSeverity);
   }
-  if (keep.wholeCluster) {
-    params.set('wholeCluster', '1');
+  if (!keep.wholeCluster) {
+    params.set('wholeCluster', '0');
   }
   return params;
 }

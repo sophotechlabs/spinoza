@@ -23,6 +23,7 @@ type Lister interface {
 	Warm(ctx context.Context, descs []api.ResourceDescriptor)
 	ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error)
 	Cached() []api.ResourceDescriptor
+	Facts() Facts
 }
 
 type target struct {
@@ -425,7 +426,7 @@ func templatePath(kind string) []string {
 	if kind == "Pod" {
 		return []string{specField}
 	}
-	if kind == "CronJob" {
+	if kind == cronKind {
 		return []string{specField, "jobTemplate", specField, "template", specField}
 	}
 	return []string{specField, "template", specField}

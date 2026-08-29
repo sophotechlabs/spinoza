@@ -32,7 +32,7 @@ func holds(names []string, wanted string) bool {
 // what the filter reads off a query string
 
 func TestAFilterIsReadFromWhatTheBrowserSends(t *testing.T) {
-	keep := ParseFilter("cpu-limit-set, image-latest", "kube-system,flux-system", "medium", "1")
+	keep := ParseFilter("cpu-limit-set, image-latest", "kube-system,flux-system", "medium", "")
 
 	if len(keep.Disabled) != 2 || keep.Disabled[0] != "cpu-limit-set" {
 		t.Fatalf("disabled was %v", keep.Disabled)
@@ -46,6 +46,9 @@ func TestAFilterIsReadFromWhatTheBrowserSends(t *testing.T) {
 	if !keep.WholeCluster {
 		t.Fatal("wholeCluster was not read")
 	}
+	if ParseFilter("", "", "", "0").WholeCluster {
+		t.Fatal("a caller asking for workloads only was still given the whole cluster")
+	}
 }
 
 func TestASeverityNobodyDefinedIsIgnoredRatherThanObeyed(t *testing.T) {
@@ -54,8 +57,8 @@ func TestASeverityNobodyDefinedIsIgnoredRatherThanObeyed(t *testing.T) {
 	if keep.MinSeverity != "" {
 		t.Fatalf("severity was %q, want it dropped", keep.MinSeverity)
 	}
-	if keep.WholeCluster {
-		t.Fatal("an empty wholeCluster was read as true")
+	if !keep.WholeCluster {
+		t.Fatal("a caller that said nothing was narrowed to workloads")
 	}
 }
 

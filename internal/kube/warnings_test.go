@@ -10,7 +10,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-func recorded(t *testing.T) (*warningLogger, *bytes.Buffer) {
+func recorded(t *testing.T) (*WarningSink, *bytes.Buffer) {
 	t.Helper()
 	var out bytes.Buffer
 	handler := slog.NewTextHandler(&out, &slog.HandlerOptions{Level: slog.LevelDebug})
@@ -88,5 +88,32 @@ func TestEveryClientCarriesTheWarningLogger(t *testing.T) {
 
 	if bundle.Config.WarningHandler == nil {
 		t.Fatal("no warning handler, so the apiserver's deprecation notices go through klog as info")
+	}
+}
+
+func TestTheSinkKeepsWhatItSawInOrder(t *testing.T) {
+	sink := newWarningLogger(slog.New(slog.DiscardHandler))
+
+	sink.HandleWarningHeader(deprecationCode, "", "v1 Endpoints is deprecated")
+	sink.HandleWarningHeader(deprecationCode, "", "batch/v1beta1 CronJob is deprecated")
+	sink.HandleWarningHeader(deprecationCode, "", "v1 Endpoints is deprecated")
+
+	seen := sink.Seen()
+	if len(seen) != 2 {
+		t.Fatalf("kept %d warnings, want the two distinct ones", len(seen))
+	}
+	if seen[0] != "batch/v1beta1 CronJob is deprecated" {
+		t.Fatalf("first was %q, want them sorted", seen[0])
+	}
+}
+
+func TestTheSinkKeepsNothingItWasNotToldAbout(t *testing.T) {
+	sink := newWarningLogger(slog.New(slog.DiscardHandler))
+
+	sink.HandleWarningHeader(200, "", "not a deprecation")
+	sink.HandleWarningHeader(deprecationCode, "", "")
+
+	if seen := sink.Seen(); len(seen) != 0 {
+		t.Fatalf("kept %v, want nothing", seen)
 	}
 }

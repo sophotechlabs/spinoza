@@ -350,3 +350,70 @@ func TestAServiceThatSelectsNothingIsNotJudgedOnEndpoints(t *testing.T) {
 		t.Fatal("a selectorless service was asked for endpoints")
 	}
 }
+
+// certificates on their way out
+
+func certificate(name, notAfter string) object {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "cert-manager.io/v1",
+		"kind":       "Certificate",
+		"metadata": map[string]any{
+			"name": name, "namespace": "default", "uid": "uid-" + name,
+			"creationTimestamp": testNow.Add(-time.Hour).Format(time.RFC3339),
+		},
+		"status": map[string]any{"notAfter": notAfter},
+	}}
+	return object{obj: obj, desc: api.ResourceDescriptor{
+		Group: "cert-manager.io", Version: "v1", Resource: "certificates", Kind: "Certificate",
+	}}
+}
+
+func TestACertificateNearingItsEndIsReported(t *testing.T) {
+	snap := snapshotOf(certificate("wildcard", testNow.Add(72*time.Hour).Format(time.RFC3339)))
+
+	found := expiryFindings(snap, testNow)
+
+	if len(found) != 1 || found[0].title != "ExpiringSoon" {
+		t.Fatalf("produced %v", found)
+	}
+	if found[0].severity != severityDegraded {
+		t.Fatalf("severity was %d, want degraded", found[0].severity)
+	}
+}
+
+func TestACertificateAlreadyPastItsEndIsFatal(t *testing.T) {
+	snap := snapshotOf(certificate("wildcard", testNow.Add(-2*time.Hour).Format(time.RFC3339)))
+
+	found := expiryFindings(snap, testNow)
+
+	if len(found) != 1 || found[0].title != "Expired" {
+		t.Fatalf("produced %v", found)
+	}
+	if found[0].severity != severityFatal {
+		t.Fatalf("severity was %d, want fatal", found[0].severity)
+	}
+}
+
+func TestACertificateWithMonthsLeftSaysNothing(t *testing.T) {
+	snap := snapshotOf(certificate("wildcard", testNow.Add(60*24*time.Hour).Format(time.RFC3339)))
+
+	if found := expiryFindings(snap, testNow); len(found) != 0 {
+		t.Fatalf("a certificate with two months left produced %d findings", len(found))
+	}
+}
+
+func TestSomethingWithNoExpiryAtAllIsNotJudgedOnOne(t *testing.T) {
+	snap := snapshotOf(clusterObject(kindNamespace, "live", nil, nil))
+
+	if found := expiryFindings(snap, testNow); len(found) != 0 {
+		t.Fatal("an object publishing no notAfter was judged on its expiry")
+	}
+}
+
+func TestAnUnparsableExpiryIsIgnored(t *testing.T) {
+	snap := snapshotOf(certificate("wildcard", "whenever"))
+
+	if found := expiryFindings(snap, testNow); len(found) != 0 {
+		t.Fatal("an expiry nobody can parse produced a finding")
+	}
+}

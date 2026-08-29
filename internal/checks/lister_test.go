@@ -16,6 +16,7 @@ type fakeLister struct {
 	objects map[string][]*unstructured.Unstructured
 	errs    map[string]error
 	warmed  int
+	facts   Facts
 }
 
 func newLister(objects ...*unstructured.Unstructured) *fakeLister {
@@ -54,6 +55,10 @@ func (f *fakeLister) ListNames(_ context.Context, desc api.ResourceDescriptor) (
 
 func (f *fakeLister) Cached() []api.ResourceDescriptor {
 	return nil
+}
+
+func (f *fakeLister) Facts() Facts {
+	return f.facts
 }
 
 func (f *fakeLister) Warm(context.Context, []api.ResourceDescriptor) {

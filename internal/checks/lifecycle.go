@@ -25,7 +25,7 @@ const (
 
 var probeHandlers = []string{"httpGet", "tcpSocket", "exec", "grpc"}
 
-var batchKinds = []string{"Job", "CronJob"}
+var batchKinds = []string{"Job", cronKind}
 
 const (
 	deploymentKind  = "Deployment"
