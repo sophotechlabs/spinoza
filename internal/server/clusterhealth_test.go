@@ -152,9 +152,10 @@ func TestClosingAClusterForgetsWhatWasKnownAboutIt(t *testing.T) {
 	}
 }
 
-func TestOnlyTheActiveClustersHealthReachesTheBrowser(t *testing.T) {
+func TestABackgroundClustersHealthReachesTheBrowserToo(t *testing.T) {
 	srv, held := twoClusters(t, &pinger{}, &pinger{})
-	sess := &wsSession{ctx: t.Context()}
+	server, client := heldPair(t)
+	sess := &wsSession{conn: server, ctx: t.Context()}
 	srv.track(sess)
 
 	srv.recordHealthOf(mk2, notAnswering("gone"))
@@ -162,8 +163,36 @@ func TestOnlyTheActiveClustersHealthReachesTheBrowser(t *testing.T) {
 	if held.ID() != mk1 {
 		t.Fatalf("active = %q, the fixture moved", held.ID())
 	}
-	if srv.healthOfCluster(mk2).Reachable {
-		t.Fatal("the background cluster's health was not recorded")
+	msg := readAnyMsg(t.Context(), t, client)
+	if msg.Cluster != mk2 {
+		t.Fatalf("frame named %q, want the background cluster; its tab shows the wrong dot otherwise", msg.Cluster)
+	}
+	if msg.Reachable {
+		t.Fatalf("frame = %+v, want the background cluster reported as not answering", msg)
+	}
+}
+
+func TestAFeedIsToldAboutEveryOpenClusterWhenItConnects(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{})
+
+	said := srv.healthOfEveryCluster()
+
+	named := map[string]bool{}
+	for _, one := range said {
+		named[one.Cluster] = true
+	}
+	if !named[mk1] || !named[mk2] {
+		t.Fatalf("opening frames named %v, want every open cluster", named)
+	}
+}
+
+func TestAFeedWithNoClusterStillHearsSomething(t *testing.T) {
+	srv := New(noCluster{}, testAssets(), testToken)
+
+	said := srv.healthOfEveryCluster()
+
+	if len(said) != 1 {
+		t.Fatalf("said %d frames with nothing open, want one so the dot has a state", len(said))
 	}
 }
 

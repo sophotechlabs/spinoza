@@ -103,7 +103,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer s.views.closed(kind)
 	defer s.forget(sess)
 	sess.write(ctx, s.contextFrame())
-	sess.write(ctx, s.clusterHealth())
+	for _, health := range s.healthOfEveryCluster() {
+		sess.write(ctx, health)
+	}
 	s.watchCluster(ctx)
 
 	for {

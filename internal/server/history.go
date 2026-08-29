@@ -55,6 +55,24 @@ func (s *Server) UseHistory(store History) {
 	s.past = store
 }
 
+type Tabs interface {
+	All(ctx context.Context) ([]history.Tab, error)
+	Remember(ctx context.Context, tab history.Tab) error
+	Forget(ctx context.Context, id string) error
+}
+
+func (s *Server) UseTabs(held Tabs) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.open = held
+}
+
+func (s *Server) tabs() Tabs {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.open
+}
+
 func (s *Server) recorder() History {
 	s.mu.Lock()
 	defer s.mu.Unlock()

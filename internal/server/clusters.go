@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/coder/websocket"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/history"
 )
 
 const terminalDrain = 20 * time.Second
@@ -26,17 +28,65 @@ func notOpen(id string) error {
 }
 
 func (s *Server) listClusters(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.clusterList())
+	writeJSON(w, s.clusterList(r.Context()))
 }
 
-func (s *Server) clusterList() api.ClusterList {
+func (s *Server) clusterList(ctx context.Context) api.ClusterList {
 	opened := s.cluster.Opened()
 	for i := range opened {
 		health := s.healthOfCluster(opened[i].ID)
 		opened[i].Reachable = health.Reachable
 		opened[i].Reason = health.Reason
 	}
-	return api.ClusterList{Clusters: opened}
+	return api.ClusterList{Clusters: opened, Remembered: s.rememberedTabs(ctx)}
+}
+
+func (s *Server) rememberedTabs(ctx context.Context) []api.RememberedCluster {
+	held := s.tabs()
+	if held == nil {
+		return []api.RememberedCluster{}
+	}
+	found, err := held.All(ctx)
+	if err != nil {
+		slog.Warn("the clusters that were open could not be read", "error", err)
+		return []api.RememberedCluster{}
+	}
+	out := make([]api.RememberedCluster, 0, len(found))
+	for _, one := range found {
+		out = append(out, api.RememberedCluster{
+			ID:         one.ID,
+			Context:    one.Context,
+			Kubeconfig: one.Kubeconfig,
+		})
+	}
+	return out
+}
+
+func (s *Server) rememberTab(ctx context.Context, id string, ref api.ContextRef) {
+	held := s.tabs()
+	if held == nil {
+		return
+	}
+	err := held.Remember(ctx, history.Tab{
+		ID:         id,
+		Context:    ref.Name,
+		Kubeconfig: ref.Kubeconfig,
+		Seen:       s.instant(),
+	})
+	if err != nil {
+		slog.Warn("this cluster will not come back next time", "context", ref.Name, "error", err)
+	}
+}
+
+func (s *Server) forgetTab(ctx context.Context, id string) {
+	held := s.tabs()
+	if held == nil {
+		return
+	}
+	err := held.Forget(ctx, id)
+	if err != nil {
+		slog.Warn("this cluster will come back next time", "cluster", id, "error", err)
+	}
 }
 
 func (s *Server) openCluster(w http.ResponseWriter, r *http.Request) {
@@ -46,13 +96,15 @@ func (s *Server) openCluster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	_, err := s.cluster.Open(api.ContextRef{Kubeconfig: query.Get("kubeconfig"), Name: name})
+	ref := api.ContextRef{Kubeconfig: query.Get("kubeconfig"), Name: name}
+	id, err := s.cluster.Open(ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
+	s.rememberTab(r.Context(), id, ref)
 	s.announceContext()
-	writeJSON(w, s.clusterList())
+	writeJSON(w, s.clusterList(r.Context()))
 }
 
 func (s *Server) activateCluster(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +119,7 @@ func (s *Server) activateCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.announceContext()
-	writeJSON(w, s.clusterList())
+	writeJSON(w, s.clusterList(r.Context()))
 }
 
 func (s *Server) closeCluster(w http.ResponseWriter, r *http.Request) {
@@ -84,8 +136,9 @@ func (s *Server) closeCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.forgetHealthOf(id)
+	s.forgetTab(r.Context(), id)
 	s.announceContext()
-	writeJSON(w, s.clusterList())
+	writeJSON(w, s.clusterList(r.Context()))
 }
 
 func (s *Server) drainTerminals(ctx context.Context, id string) {

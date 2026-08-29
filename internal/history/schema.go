@@ -30,6 +30,18 @@ const deleteAudit = `
 DELETE FROM audit
 WHERE (? = '' OR cluster = ?)`
 
+const upsertCluster = `
+INSERT INTO clusters (id, context, kubeconfig, seen) VALUES (?, ?, ?, ?)
+ON CONFLICT (id) DO UPDATE SET context = excluded.context,
+	kubeconfig = excluded.kubeconfig, seen = excluded.seen`
+
+const deleteCluster = `DELETE FROM clusters WHERE id = ?`
+
+const selectClusters = `
+SELECT id, context, kubeconfig, seen
+FROM clusters
+ORDER BY seen ASC, id ASC`
+
 var migrations = []string{`
 CREATE TABLE audit (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,6 +60,13 @@ CREATE TABLE audit (
 );
 CREATE INDEX audit_by_time ON audit (at DESC, id DESC);
 CREATE INDEX audit_by_cluster ON audit (cluster, at DESC, id DESC);
+`, `
+CREATE TABLE clusters (
+	id TEXT PRIMARY KEY,
+	context TEXT NOT NULL,
+	kubeconfig TEXT NOT NULL,
+	seen INTEGER NOT NULL
+);
 `}
 
 func migrate(ctx context.Context, db *sql.DB) error {

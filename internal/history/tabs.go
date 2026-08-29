@@ -1,0 +1,74 @@
+package history
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+type Tab struct {
+	ID         string
+	Context    string
+	Kubeconfig string
+	Seen       time.Time
+}
+
+type Tabs struct {
+	into *Store
+}
+
+func (s *Store) Tabs() *Tabs {
+	return &Tabs{into: s}
+}
+
+func (t *Tabs) Remember(ctx context.Context, tab Tab) error {
+	db := t.into.writer()
+	if db == nil {
+		return nil
+	}
+	_, err := db.ExecContext(ctx, upsertCluster,
+		tab.ID, tab.Context, tab.Kubeconfig, tab.Seen.UTC().UnixMilli())
+	if err != nil {
+		return fmt.Errorf("history: %w", err)
+	}
+	return nil
+}
+
+func (t *Tabs) Forget(ctx context.Context, id string) error {
+	db := t.into.writer()
+	if db == nil {
+		return nil
+	}
+	_, err := db.ExecContext(ctx, deleteCluster, id)
+	if err != nil {
+		return fmt.Errorf("history: %w", err)
+	}
+	return nil
+}
+
+func (t *Tabs) All(ctx context.Context) ([]Tab, error) {
+	db := t.into.reader()
+	if db == nil {
+		return []Tab{}, nil
+	}
+	rows, err := db.QueryContext(ctx, selectClusters)
+	if err != nil {
+		return nil, fmt.Errorf("history: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	found := []Tab{}
+	for rows.Next() {
+		var tab Tab
+		var seen int64
+		scanErr := rows.Scan(&tab.ID, &tab.Context, &tab.Kubeconfig, &seen)
+		if scanErr != nil {
+			return nil, fmt.Errorf("history: %w", scanErr)
+		}
+		tab.Seen = time.UnixMilli(seen).UTC()
+		found = append(found, tab)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("history: %w", rows.Err())
+	}
+	return found, nil
+}

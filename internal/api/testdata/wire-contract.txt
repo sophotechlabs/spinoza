@@ -80,6 +80,7 @@ ClusterHealth.Reachable reachable bool
 ClusterHealth.Reason reason,omitempty string
 ClusterHealth.Type type string
 ClusterList.Clusters clusters []OpenCluster
+ClusterList.Remembered remembered []RememberedCluster
 ClusterOverview.Controllers controllers,omitempty []GitopsController
 ClusterOverview.Error error,omitempty string
 ClusterOverview.Nodes nodes NodeSummary
@@ -541,6 +542,9 @@ PortForward.StartedAt startedAt string
 PortForward.State state string
 Refusal.Capability capability string
 Refusal.Reason reason string
+RememberedCluster.Context context string
+RememberedCluster.ID id string
+RememberedCluster.Kubeconfig kubeconfig,omitempty string
 ResourceCatalog.Categories categories []Category
 ResourceCatalog.Error error,omitempty string
 ResourceCounts.Counts counts map[string]int

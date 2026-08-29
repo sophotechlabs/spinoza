@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/history"
 )
 
 type fleet struct {
@@ -347,6 +349,12 @@ func TestClosingTheLastTabLeavesNothingActive(t *testing.T) {
 
 func heldSocket(t *testing.T) *websocket.Conn {
 	t.Helper()
+	server, _ := heldPair(t)
+	return server
+}
+
+func heldPair(t *testing.T) (*websocket.Conn, *websocket.Conn) {
+	t.Helper()
 	got := make(chan *websocket.Conn, 1)
 	fixture := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
@@ -362,7 +370,7 @@ func heldSocket(t *testing.T) *websocket.Conn {
 		t.Fatalf("dial: %v", err)
 	}
 	t.Cleanup(func() { _ = client.CloseNow() })
-	return <-got
+	return <-got, client
 }
 
 func TestAShellOnAClosedClusterIsHungUpBeforeTheConnectionGoes(t *testing.T) {
@@ -402,5 +410,150 @@ func TestALocalShellSurvivesAClusterClosing(t *testing.T) {
 
 	if len(srv.terminalsOn(localShellCluster)) != 1 {
 		t.Fatal("closing a cluster hung up the shell on the laptop, which belongs to no cluster")
+	}
+}
+
+type heldTabs struct {
+	mu      sync.Mutex
+	tabs    []history.Tab
+	allErr  error
+	setErr  error
+	dropErr error
+}
+
+func (h *heldTabs) All(context.Context) ([]history.Tab, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.allErr != nil {
+		return nil, h.allErr
+	}
+	return append([]history.Tab{}, h.tabs...), nil
+}
+
+func (h *heldTabs) Remember(_ context.Context, tab history.Tab) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.setErr != nil {
+		return h.setErr
+	}
+	for at, held := range h.tabs {
+		if held.ID == tab.ID {
+			h.tabs[at] = tab
+			return nil
+		}
+	}
+	h.tabs = append(h.tabs, tab)
+	return nil
+}
+
+func (h *heldTabs) Forget(_ context.Context, id string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.dropErr != nil {
+		return h.dropErr
+	}
+	kept := []history.Tab{}
+	for _, held := range h.tabs {
+		if held.ID != id {
+			kept = append(kept, held)
+		}
+	}
+	h.tabs = kept
+	return nil
+}
+
+func (h *heldTabs) remembered() []history.Tab {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]history.Tab{}, h.tabs...)
+}
+
+func rememberingServer(t *testing.T, held *fleet) (*httptest.Server, *heldTabs) {
+	t.Helper()
+	open := &heldTabs{}
+	srv := New(held, testAssets(), testToken)
+	srv.UseTabs(open)
+	ts := httptest.NewServer(authed(srv.Handler()))
+	t.Cleanup(ts.Close)
+	return ts, open
+}
+
+func TestOpeningAClusterRemembersItForNextTime(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?kubeconfig=%2Fwork.yaml&name=p-mk1", nil)
+
+	held := open.remembered()
+	if len(held) != 1 {
+		t.Fatalf("remembered %d clusters, want the one that was opened", len(held))
+	}
+	if held[0].Context != "p-mk1" || held[0].Kubeconfig != "/work.yaml" {
+		t.Fatalf("remembered %+v, want what it takes to open it again", held[0])
+	}
+}
+
+func TestClosingAClusterStopsItReopeningNextTime(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+	id := open.remembered()[0].ID
+
+	doRequest(t, http.MethodDelete, ts.URL+"/api/clusters?cluster="+urlValue(id), nil)
+
+	if held := open.remembered(); len(held) != 0 {
+		t.Fatalf("remembered %+v after it was closed", held)
+	}
+}
+
+func TestTheListSaysWhichClustersWereOpenLastTime(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+	open.tabs = []history.Tab{{ID: mk2, Context: "p-mk2", Kubeconfig: "/work.yaml"}}
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
+
+	said := clustersFrom(t, body).Remembered
+	if len(said) != 1 || said[0].Context != "p-mk2" {
+		t.Fatalf("remembered = %s, want the tab that was open last time", body)
+	}
+}
+
+func TestAStoreThatCannotBeReadDoesNotStopTheList(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+	open.allErr = errors.New("the file is gone")
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if len(clustersFrom(t, body).Remembered) != 0 {
+		t.Fatalf("remembered = %s, want none when the store could not be read", body)
+	}
+}
+
+func TestAStoreThatCannotBeWrittenDoesNotStopOpening(t *testing.T) {
+	ts, open := rememberingServer(t, &fleet{})
+	open.setErr = errors.New("read-only file system")
+	open.dropErr = errors.New("read-only file system")
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s, want the cluster open even with nowhere to remember it", resp.StatusCode, body)
+	}
+	closed, _ := doRequest(t, http.MethodDelete,
+		ts.URL+"/api/clusters?cluster="+urlValue(clustersFrom(t, body).Clusters[0].ID), nil)
+	if closed.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want the cluster closed even with nowhere to forget it", closed.StatusCode)
+	}
+}
+
+func TestAServerWithNoStoreRemembersNothing(t *testing.T) {
+	ts := fleetServer(t, &fleet{})
+
+	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
+
+	if len(clustersFrom(t, body).Remembered) != 0 {
+		t.Fatalf("remembered = %s, want none without a store", body)
 	}
 }

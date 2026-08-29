@@ -74,8 +74,15 @@ type OpenCluster struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
+type RememberedCluster struct {
+	ID         string `json:"id"`
+	Context    string `json:"context"`
+	Kubeconfig string `json:"kubeconfig,omitempty"`
+}
+
 type ClusterList struct {
-	Clusters []OpenCluster `json:"clusters"`
+	Clusters   []OpenCluster       `json:"clusters"`
+	Remembered []RememberedCluster `json:"remembered"`
 }
 
 type FilePicker struct {

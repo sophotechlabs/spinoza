@@ -173,13 +173,22 @@ func (s *Server) clusterHealth() api.ClusterHealth {
 	return s.healthOfCluster(s.cluster.ID())
 }
 
-func (s *Server) announceHealthOf(id string, health api.ClusterHealth) {
-	if id != s.cluster.ID() {
-		return
-	}
+func (s *Server) announceHealthOf(_ string, health api.ClusterHealth) {
 	for _, sess := range s.openSessions() {
 		sess.write(sess.ctx, health)
 	}
+}
+
+func (s *Server) healthOfEveryCluster() []api.ClusterHealth {
+	open := s.openClusterIDs()
+	if len(open) == 0 {
+		return []api.ClusterHealth{s.clusterHealth()}
+	}
+	out := make([]api.ClusterHealth, 0, len(open))
+	for _, id := range open {
+		out = append(out, s.healthOfCluster(id))
+	}
+	return out
 }
 
 func (s *Server) openSessions() []*wsSession {

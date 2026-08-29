@@ -538,8 +538,15 @@ export interface OpenCluster {
   reason?: string;
 }
 
+export interface RememberedCluster {
+  id: string;
+  context: string;
+  kubeconfig?: string;
+}
+
 export interface ClusterList {
   clusters: OpenCluster[];
+  remembered: RememberedCluster[];
 }
 
 export interface FilePicker {

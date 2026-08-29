@@ -87,6 +87,7 @@ func run() error {
 	past := historyStore(ctx)
 	defer func() { _ = past.Close() }()
 	srv.UseHistory(past)
+	srv.UseTabs(past.Tabs())
 	srv.UseUpdates(updateChecker())
 	srv.UseInstaller(updateInstaller())
 	httpServer := &http.Server{

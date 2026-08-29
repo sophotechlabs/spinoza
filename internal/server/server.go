@@ -79,6 +79,7 @@ type Server struct {
 	updates    Updates
 	installer  Installs
 	past       History
+	open       Tabs
 	now        func() time.Time
 	pingEvery  time.Duration
 }
