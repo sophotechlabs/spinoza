@@ -31,6 +31,28 @@ export async function openResource(
   await settle(page, resource);
 }
 
+export async function openGrouped(
+  page: Page,
+  group: string,
+  resource: string,
+  kind: string,
+  version = 'v1',
+): Promise<void> {
+  await page.goto(
+    authed(`#context=${CONTEXT}&group=${group}&version=${version}&resource=${resource}&kind=${kind}`),
+  );
+  await settle(page, resource);
+}
+
+export async function selectRow(page: Page, name: string): Promise<void> {
+  const row = page.locator('main tbody tr').filter({ hasText: name }).first();
+  await row.waitFor({ state: 'visible', timeout: 60_000 });
+  await row.click();
+  await page
+    .getByRole('tablist', { name: 'right panels' })
+    .waitFor({ state: 'visible', timeout: 60_000 });
+}
+
 export async function openHome(page: Page): Promise<void> {
   await page.goto(authed(''));
   await page.waitForLoadState('domcontentloaded');

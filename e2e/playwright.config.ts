@@ -4,7 +4,10 @@ import { BASE_URL, STORAGE_STATE } from './harness/paths';
 const isCI = process.env.CI !== undefined;
 
 export default defineConfig({
-  testDir: './specs',
+  projects: [
+    { name: 'core', testDir: './specs' },
+    { name: 'full', testDir: './specs-full' },
+  ],
   globalSetup: './harness/globalSetup.ts',
   globalTeardown: './harness/globalTeardown.ts',
   workers: 1,

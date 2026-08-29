@@ -1,5 +1,5 @@
 import { expect, test } from '../harness/test';
-import { openHome, openView } from '../harness/app';
+import { openHome } from '../harness/app';
 
 test('the app reports the health of its own feed', async ({ page }) => {
   await openHome(page);
@@ -28,13 +28,6 @@ test('an integration that is absent is named and disabled, not hidden', async ({
     await expect(button).toBeVisible();
     await expect(button).toBeDisabled();
   }
-});
-
-test('a cluster with no releases says so rather than showing nothing', async ({ page }) => {
-  await openView(page, 'helm');
-  await expect(page.locator('main')).toContainText('No Helm releases in this cluster.', {
-    timeout: 60_000,
-  });
 });
 
 test('a metric with no source is not invented', async ({ page }) => {

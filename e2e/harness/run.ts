@@ -10,6 +10,7 @@ export interface RunResult {
 export interface RunOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
+  input?: string;
 }
 
 export function run(command: string, args: string[], options: RunOptions = {}): RunResult {
@@ -17,6 +18,8 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
     encoding: 'utf8',
     cwd: options.cwd,
     env: { ...process.env, ...options.env },
+    input: options.input,
+    maxBuffer: 64 * 1024 * 1024,
   });
   if (done.error) {
     throw done.error;

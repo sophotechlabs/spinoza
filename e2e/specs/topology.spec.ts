@@ -59,3 +59,14 @@ test('the graph renders rather than staying on its loading state', async ({ page
   await expect(page.locator('main')).not.toContainText('Loading graph', { timeout: 90_000 });
   await expect(page.locator('main svg').first()).toBeVisible();
 });
+
+test('an edge is drawn as a path with real geometry, not a zero-length line', async ({ page }) => {
+  await openView(page, 'topology');
+  await expect
+    .poll(() => page.locator('.react-flow__edge-path').count(), { timeout: 90_000 })
+    .toBeGreaterThan(0);
+  const lengths = await page
+    .locator('.react-flow__edge-path')
+    .evaluateAll((nodes) => nodes.map((node) => (node as SVGPathElement).getTotalLength()));
+  expect(lengths.filter((one) => one === 0)).toHaveLength(0);
+});

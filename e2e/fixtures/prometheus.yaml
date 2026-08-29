@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fake-prom
+  namespace: e2e
+data:
+  buildinfo.json: |
+    {"status":"success","data":{"version":"2.55.0"}}
+  query.json: |
+    {
+      "status": "success",
+      "data": {
+        "resultType": "vector",
+        "result": [
+          {
+            "metric": {
+              "source_namespace": "e2e",
+              "source_workload": "healthy",
+              "destination_namespace": "e2e",
+              "destination_workload": "chatty",
+              "verdict": "FORWARDED"
+            },
+            "value": [1756500000, "12.5"]
+          },
+          {
+            "metric": {
+              "source_namespace": "e2e",
+              "source_workload": "chatty",
+              "destination_namespace": "kube-system",
+              "destination_workload": "coredns",
+              "verdict": "FORWARDED"
+            },
+            "value": [1756500000, "3.25"]
+          },
+          {
+            "metric": {
+              "source_namespace": "e2e",
+              "source_workload": "risky",
+              "destination_namespace": "e2e",
+              "destination_workload": "healthy",
+              "verdict": "DROPPED"
+            },
+            "value": [1756500000, "0.75"]
+          }
+        ]
+      }
+    }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fake-prom
+  namespace: e2e
+  labels:
+    app: fake-prom
+spec:
+  containers:
+    - name: web
+      image: busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          mkdir -p /www/api/v1/status
+          cp /answers/buildinfo.json /www/api/v1/status/buildinfo
+          cp /answers/query.json /www/api/v1/query
+          cp /answers/query.json /www/api/v1/query_range
+          httpd -f -p 9090 -h /www
+      ports:
+        - containerPort: 9090
+      volumeMounts:
+        - name: answers
+          mountPath: /answers
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+  volumes:
+    - name: answers
+      configMap:
+        name: fake-prom
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fake-prom
+  namespace: e2e
+spec:
+  selector:
+    app: fake-prom
+  ports:
+    - port: 9090
+      targetPort: 9090

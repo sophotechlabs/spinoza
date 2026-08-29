@@ -281,7 +281,22 @@ cluster-base: (cluster-up 'base')
 
 cluster-e2e: (cluster-up 'e2e')
 
-cluster-full: (cluster-up 'full')
+cluster-full: (cluster-up 'full') cluster-gitops
+
+[private]
+cluster-gitops:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    helm --kube-context {{ test_context }} repo add fluxcd-community https://fluxcd-community.github.io/helm-charts --force-update
+    helm --kube-context {{ test_context }} repo add argo https://argoproj.github.io/argo-helm --force-update
+    helm --kube-context {{ test_context }} repo update
+    helm --kube-context {{ test_context }} upgrade --install flux fluxcd-community/flux2 \
+        --namespace flux-system --create-namespace --wait --timeout 10m
+    helm --kube-context {{ test_context }} upgrade --install argocd argo/argo-cd \
+        --namespace argocd --create-namespace --wait --timeout 10m \
+        --set dex.enabled=false --set notifications.enabled=false --set applicationSet.enabled=true
+    kubectl --context {{ test_context }} -n flux-system wait --for=condition=Available deployment --all --timeout=10m
+    kubectl --context {{ test_context }} -n argocd wait --for=condition=Available deployment --all --timeout=10m
 
 cluster-down:
     kind delete cluster --name {{ test_cluster }}
@@ -302,7 +317,15 @@ test-integration: cluster-base
     SPINOZA_TEST_CONTEXT={{ test_context }} go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
     go tool cover -func=coverage.integration.out | tail -1
 
-test-e2e: cluster-e2e
+test-e2e: cluster-e2e (e2e-run 'core')
+
+test-e2e-full: cluster-full
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SPINOZA_E2E_TIER=full just e2e-run full
+
+[private]
+e2e-run project:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ ! -d frontend/node_modules ] || [ frontend/package-lock.json -nt frontend/node_modules ]; then
@@ -313,7 +336,7 @@ test-e2e: cluster-e2e
         npm ci
     fi
     npx playwright install chromium
-    npm test
+    npx playwright test --project={{ project }}
 
 test-fe:
     cd frontend && npm run test:coverage

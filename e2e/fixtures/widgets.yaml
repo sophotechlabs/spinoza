@@ -1,0 +1,17 @@
+apiVersion: spinoza.test/v1
+kind: Widget
+metadata:
+  name: cog
+  namespace: e2e
+spec:
+  colour: brass
+  teeth: 12
+---
+apiVersion: spinoza.test/v1
+kind: Widget
+metadata:
+  name: sprocket
+  namespace: e2e
+spec:
+  colour: copper
+  teeth: 30

@@ -1,0 +1,3 @@
+replicaCount: 1
+image: busybox:1.37
+greeting: hello from the chart

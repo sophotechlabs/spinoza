@@ -1,6 +1,7 @@
 import { request } from '@playwright/test';
-import { expect, test } from '../harness/test';
-import { BASE_URL } from '../harness/paths';
+import { statSync } from 'node:fs';
+import { expect, state, test } from '../harness/test';
+import { BASE_URL, TOKEN_FILE } from '../harness/paths';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -54,4 +55,57 @@ test('a non-local Origin header is rejected', async () => {
   });
   expect(response.status()).toBeGreaterThanOrEqual(400);
   await bare.dispose();
+});
+
+test('the token is accepted in the header', async () => {
+  const bare = await request.newContext();
+  const response = await bare.get(`${BASE_URL}/api/version`, {
+    headers: { 'X-Spinoza-Token': state().token },
+  });
+  expect(response.status()).toBe(200);
+  await bare.dispose();
+});
+
+test('the token is accepted in the query, and comes back as a cookie', async () => {
+  const bare = await request.newContext();
+  const response = await bare.get(`${BASE_URL}/api/version?token=${state().token}`);
+  expect(response.status()).toBe(200);
+  const cookies = await bare.storageState();
+  const minted = cookies.cookies.find((one) => one.name === 'spinoza_token');
+  expect(minted?.value).toBe(state().token);
+  expect(minted?.httpOnly).toBe(true);
+  expect(minted?.sameSite).toBe('Strict');
+  await bare.dispose();
+});
+
+test('the cookie the query minted is enough on its own', async () => {
+  const bare = await request.newContext();
+  await bare.get(`${BASE_URL}/api/version?token=${state().token}`);
+  const response = await bare.get(`${BASE_URL}/api/version`);
+  expect(response.status()).toBe(200);
+  await bare.dispose();
+});
+
+test('the favicon is served without a token, and the api is not', async () => {
+  const bare = await request.newContext();
+  const icon = await bare.get(`${BASE_URL}/favicon.svg`);
+  expect(icon.status()).toBe(200);
+  const guarded = await bare.get(`${BASE_URL}/healthz`);
+  expect(guarded.status()).toBe(401);
+  await bare.dispose();
+});
+
+test('the profiler is not mounted unless it was asked for', async () => {
+  const bare = await request.newContext();
+  const response = await bare.get(`${BASE_URL}/debug/pprof/cmdline`, {
+    headers: { 'X-Spinoza-Token': state().token },
+  });
+  const body = await response.text();
+  expect(body).not.toContain('--kubeconfig');
+  await bare.dispose();
+});
+
+test('the token file is readable only by the user that started spinoza', async () => {
+  const mode = statSync(TOKEN_FILE).mode & 0o777;
+  expect(mode.toString(8)).toBe('600');
 });

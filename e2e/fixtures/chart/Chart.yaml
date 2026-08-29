@@ -1,0 +1,6 @@
+apiVersion: v2
+name: spinoza-e2e
+description: A chart the browser suite installs so the Helm views have something to read
+type: application
+version: 0.1.0
+appVersion: '1.0.0'

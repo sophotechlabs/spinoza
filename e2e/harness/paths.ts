@@ -43,3 +43,9 @@ export const ADDR = addr;
 export const BASE_URL = `http://${ADDR}`;
 
 export const BINARY = join(REPO_DIR, 'spinoza');
+
+const sidePort = portFor(cluster) + SESSION_PORT_SPAN;
+
+export function sideAddr(index: number): string {
+  return `127.0.0.1:${sidePort + index}`;
+}

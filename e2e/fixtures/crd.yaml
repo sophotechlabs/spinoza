@@ -1,0 +1,46 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: widgets.spinoza.test
+spec:
+  group: spinoza.test
+  scope: Namespaced
+  names:
+    kind: Widget
+    listKind: WidgetList
+    plural: widgets
+    singular: widget
+    categories:
+      - all
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Colour
+          type: string
+          jsonPath: .spec.colour
+        - name: Teeth
+          type: integer
+          jsonPath: .spec.teeth
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                colour:
+                  type: string
+                teeth:
+                  type: integer
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string

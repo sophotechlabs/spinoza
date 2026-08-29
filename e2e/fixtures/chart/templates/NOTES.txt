@@ -1,0 +1,2 @@
+The spinoza-e2e chart is installed as {{ .Release.Name }} in {{ .Release.Namespace }}.
+It says: {{ .Values.greeting }}

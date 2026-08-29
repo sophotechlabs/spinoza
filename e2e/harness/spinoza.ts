@@ -11,7 +11,12 @@ export function build(): void {
 }
 
 export function stopStale(): void {
-  const holders = run('lsof', ['-ti', `tcp:${ADDR.split(':')[1]}`, '-sTCP:LISTEN']).stdout.trim();
+  freePort(ADDR.split(':')[1]);
+}
+
+export function freePort(port: string): void {
+  const found = run('lsof', ['-ti', `tcp:${port}`, '-sTCP:LISTEN']);
+  const holders = found.stdout.trim();
   if (holders === '') {
     return;
   }
@@ -20,31 +25,66 @@ export function stopStale(): void {
   }
 }
 
+export interface Instance {
+  pid: number;
+  addr: string;
+  baseURL: string;
+  token: string;
+}
+
 export async function start(extra: string[]): Promise<number> {
-  rmSync(TOKEN_FILE, { force: true });
-  const home = join(TMP_DIR, 'home');
-  mkdirSync(home, { recursive: true });
-  const pid = background(BINARY, [
-    '--addr',
-    ADDR,
-    '--kubeconfig',
-    KUBECONFIG,
-    '--token-file',
-    TOKEN_FILE,
-    '--log-level',
-    process.env.SPINOZA_E2E_LOG ?? 'warn',
-    ...extra,
-  ], { env: { HOME: home, XDG_CONFIG_HOME: join(home, '.config') } });
-  await waitFor('spinoza to write its token', 120, 500, () => existsSync(TOKEN_FILE));
+  const started = await launch({
+    addr: ADDR,
+    kubeconfig: KUBECONFIG,
+    tokenFile: TOKEN_FILE,
+    home: join(TMP_DIR, 'home'),
+    extra,
+  });
+  return started.pid;
+}
+
+interface Launch {
+  addr: string;
+  kubeconfig: string;
+  tokenFile: string;
+  home: string;
+  extra: string[];
+}
+
+export async function launch(options: Launch): Promise<Instance> {
+  rmSync(options.tokenFile, { force: true });
+  mkdirSync(options.home, { recursive: true });
+  const pid = background(
+    BINARY,
+    [
+      '--addr',
+      options.addr,
+      '--kubeconfig',
+      options.kubeconfig,
+      '--token-file',
+      options.tokenFile,
+      '--log-level',
+      process.env.SPINOZA_E2E_LOG ?? 'warn',
+      ...options.extra,
+    ],
+    { env: { HOME: options.home, XDG_CONFIG_HOME: join(options.home, '.config') } },
+  );
+  const baseURL = `http://${options.addr}`;
+  await waitFor('spinoza to write its token', 120, 500, () => existsSync(options.tokenFile));
   await waitFor('spinoza to answer', 120, 500, async () => {
     try {
-      const response = await fetch(`${BASE_URL}/`, { redirect: 'manual' });
+      const response = await fetch(`${baseURL}/`, { redirect: 'manual' });
       return response.status > 0;
     } catch {
       return false;
     }
   });
-  return pid;
+  return {
+    pid,
+    addr: options.addr,
+    baseURL,
+    token: readFileSync(options.tokenFile, 'utf8').trim(),
+  };
 }
 
 export function token(): string {
