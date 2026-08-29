@@ -50,3 +50,6 @@ frontend/dist/
 
 # macOS
 .DS_Store
+
+# Merged kind configs
+/.tmp/

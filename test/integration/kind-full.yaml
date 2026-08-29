@@ -1,0 +1,7 @@
+nodes:
+  - role: worker
+    labels:
+      spinoza.test/pool: spread
+  - role: worker
+    labels:
+      spinoza.test/pool: spread

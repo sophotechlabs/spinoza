@@ -5,6 +5,8 @@ go_pkgs := './internal/... .'
 addr := env_var_or_default('SPINOZA_ADDR', '127.0.0.1:34115')
 test_cluster := env_var_or_default('SPINOZA_KIND_CLUSTER', 'spinoza')
 test_context := 'kind-' + test_cluster
+kind_dir := 'test/integration'
+kind_merged := '.tmp/kind'
 registry_host := 'localhost:5001'
 registry_endpoint := 'http://kind-registry:5000'
 ldflags := '-s -w'
@@ -231,32 +233,61 @@ test-be: stub-assets
     go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out {{ go_pkgs }}
     go tool cover -func=coverage.out
 
-test-integration: test-integration-up
+kind-config tier:
     #!/usr/bin/env bash
     set -euo pipefail
-    SPINOZA_TEST_CONTEXT={{ test_context }} go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
-    go tool cover -func=coverage.integration.out | tail -1
+    case '{{ tier }}' in
+        base)
+            chain=('{{ kind_dir }}/kind.yaml')
+            ;;
+        e2e)
+            chain=('{{ kind_dir }}/kind.yaml' '{{ kind_dir }}/kind-e2e.yaml')
+            ;;
+        full)
+            chain=('{{ kind_dir }}/kind.yaml' '{{ kind_dir }}/kind-e2e.yaml' '{{ kind_dir }}/kind-full.yaml')
+            ;;
+        *)
+            echo "kind-config: {{ tier }} is not one of base, e2e, full"
+            exit 1
+            ;;
+    esac
+    mkdir -p {{ kind_merged }}
+    yq eval-all '. as $item ireduce ({}; . *+ $item)' "${chain[@]}" > {{ kind_merged }}/{{ tier }}.yaml
+    echo "kind-config: {{ kind_merged }}/{{ tier }}.yaml is ${chain[*]} merged, $(yq '.nodes | length' {{ kind_merged }}/{{ tier }}.yaml) nodes"
 
-test-integration-up:
+[private]
+cluster-up tier:
     #!/usr/bin/env bash
     set -euo pipefail
+    just kind-config {{ tier }}
+    config={{ kind_merged }}/{{ tier }}.yaml
     if ! kind get clusters | grep -qx {{ test_cluster }}; then
-        kind create cluster --name {{ test_cluster }} --config test/integration/kind.yaml
+        kind create cluster --name {{ test_cluster }} --config "$config" --wait 300s
     fi
-    wanted=$(yq '.nodes | length' test/integration/kind.yaml)
+    wanted=$(yq '.nodes | length' "$config")
     running=$(kind get nodes --name {{ test_cluster }} | wc -l | tr -d ' ')
     if [ "$running" != "$wanted" ]; then
-        echo "cluster {{ test_cluster }} runs $running nodes, not the $wanted in test/integration/kind.yaml; just test-integration-down first"
+        echo "cluster {{ test_cluster }} runs $running nodes, not the $wanted in $config; just cluster-down first"
         exit 1
     fi
-    just test-integration-mirror
+    just cluster-mirror
     kubectl --context {{ test_context }} cluster-info
-    kubectl --context {{ test_context }} apply -f test/integration/metrics-server.yaml
+    kubectl --context {{ test_context }} get nodes -L spinoza.test/pool
+    kubectl --context {{ test_context }} apply -f {{ kind_dir }}/metrics-server.yaml
     kubectl --context {{ test_context }} -n kube-system rollout status deployment/metrics-server --timeout=5m
     kubectl --context {{ test_context }} wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=5m
 
+cluster-base: (cluster-up 'base')
+
+cluster-e2e: (cluster-up 'e2e')
+
+cluster-full: (cluster-up 'full')
+
+cluster-down:
+    kind delete cluster --name {{ test_cluster }}
+
 [private]
-test-integration-mirror:
+cluster-mirror:
     #!/usr/bin/env bash
     set -euo pipefail
     certs="/etc/containerd/certs.d/{{ registry_host }}"
@@ -265,8 +296,24 @@ test-integration-mirror:
         printf '[host."%s"]\n' '{{ registry_endpoint }}' | docker exec -i "$node" cp /dev/stdin "$certs/hosts.toml"
     done
 
-test-integration-down:
-    kind delete cluster --name {{ test_cluster }}
+test-integration: cluster-base
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SPINOZA_TEST_CONTEXT={{ test_context }} go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
+    go tool cover -func=coverage.integration.out | tail -1
+
+test-e2e: cluster-e2e
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d frontend/node_modules ]; then
+        npm --prefix frontend ci
+    fi
+    cd e2e
+    if [ ! -d node_modules ]; then
+        npm ci
+    fi
+    npx playwright install chromium
+    npm test
 
 test-fe:
     cd frontend && npm run test:coverage

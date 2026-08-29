@@ -1,0 +1,4 @@
+nodes:
+  - role: worker
+    labels:
+      spinoza.test/pool: drain

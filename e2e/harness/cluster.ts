@@ -1,15 +1,14 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { CLUSTER, CONTEXT, KUBECONFIG, TMP_DIR } from './paths';
+import { CLUSTER, CONTEXT, KUBECONFIG, REPO_DIR, TMP_DIR } from './paths';
 import { mustRun, run } from './run';
 
 const LOOPBACK = ['127.0.0.1', 'localhost', '0.0.0.0'];
 
 export function ensureCluster(): void {
-  const listed = mustRun('kind', ['get', 'clusters']);
-  if (listed.split('\n').includes(CLUSTER)) {
-    return;
-  }
-  mustRun('kind', ['create', 'cluster', '--name', CLUSTER, '--wait', '120s']);
+  mustRun('just', ['cluster-e2e'], {
+    cwd: REPO_DIR,
+    env: { SPINOZA_KIND_CLUSTER: CLUSTER },
+  });
 }
 
 export function exportKubeconfig(): void {
