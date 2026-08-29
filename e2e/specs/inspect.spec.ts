@@ -84,46 +84,88 @@ test('reverting throws the draft away and puts the live object back', async ({ p
     .toContain('name: config-sample');
 });
 
-test('an edit applied in the browser reaches the apiserver', async ({ page }) => {
+function liveVersion(name: string): string {
+  return kubectl([
+    '-n',
+    NAMESPACE,
+    'get',
+    `configmap/${name}`,
+    '-o',
+    'jsonpath={.metadata.resourceVersion}',
+  ]).trim();
+}
+
+function documentFor(
+  name: string,
+  resourceVersion: string | null,
+  data: Record<string, string>,
+): string {
+  const metadata: Record<string, string> = { name, namespace: NAMESPACE };
+  if (resourceVersion !== null) {
+    metadata.resourceVersion = resourceVersion;
+  }
+  return JSON.stringify({ apiVersion: 'v1', kind: 'ConfigMap', metadata, data });
+}
+
+function alertOf(page: Page) {
+  return page.getByRole('tabpanel', { name: 'YAML' }).getByRole('alert');
+}
+
+function dataOf(name: string, key: string): string {
+  return kubectl([
+    '-n',
+    NAMESPACE,
+    'get',
+    `configmap/${name}`,
+    '-o',
+    `jsonpath={.data.${key}}`,
+  ]).trim();
+}
+
+test('an apply that names no resourceVersion is refused, and the object is left alone', async ({
+  page,
+}) => {
+  kubectl(['-n', NAMESPACE, 'create', 'configmap', EDITED, '--from-literal=before=yes']);
+  await openYaml(page, EDITED);
+  await replaceEditor(page, documentFor(EDITED, null, { before: 'yes', after: 'no-version' }));
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+
+  await expect(alertOf(page)).toContainText('resourceVersion', { timeout: 30_000 });
+  expect(dataOf(EDITED, 'after')).toBe('');
+});
+
+test('an edit that carries the resourceVersion reaches the apiserver', async ({ page }) => {
+  await openYaml(page, EDITED);
+  await replaceEditor(
+    page,
+    documentFor(EDITED, liveVersion(EDITED), { before: 'yes', after: 'also-yes' }),
+  );
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+
+  await expect(alertOf(page)).toBeEmpty({ timeout: 30_000 });
+  await expect.poll(() => dataOf(EDITED, 'after'), { timeout: 60_000 }).toBe('also-yes');
+});
+
+test('an apply built on a read the cluster has moved past is refused', async ({ page }) => {
+  const stale = liveVersion(EDITED);
   kubectl([
     '-n',
     NAMESPACE,
-    'create',
-    'configmap',
-    EDITED,
-    '--from-literal=before=yes',
+    'patch',
+    `configmap/${EDITED}`,
+    '--type=merge',
+    '-p',
+    '{"data":{"moved":"by-kubectl"}}',
   ]);
+  expect(liveVersion(EDITED)).not.toBe(stale);
+
   await openYaml(page, EDITED);
-  await expect.poll(async () => editorText(page), { timeout: 30_000 }).toContain(EDITED);
-  const document = JSON.stringify({
-    apiVersion: 'v1',
-    kind: 'ConfigMap',
-    metadata: { name: EDITED, namespace: NAMESPACE },
-    data: { before: 'yes', after: 'also-yes' },
-  });
-  await replaceEditor(page, document);
+  await replaceEditor(page, documentFor(EDITED, stale, { before: 'yes', after: 'stale-write' }));
   await page.getByRole('button', { name: 'Apply', exact: true }).click();
-  const confirmApply = page.getByRole('button', { name: 'Confirm', exact: true });
-  if ((await confirmApply.count()) > 0) {
-    await confirmApply.first().click();
-  }
-  await expect(page.getByRole('tabpanel', { name: 'YAML' }).getByRole('alert')).toBeEmpty({
-    timeout: 30_000,
-  });
-  await expect
-    .poll(
-      () =>
-        kubectl([
-          '-n',
-          NAMESPACE,
-          'get',
-          `configmap/${EDITED}`,
-          '-o',
-          'jsonpath={.data.after}',
-        ]).trim(),
-      { timeout: 60_000 },
-    )
-    .toBe('also-yes');
+
+  await expect(alertOf(page)).not.toBeEmpty({ timeout: 30_000 });
+  expect(dataOf(EDITED, 'after')).toBe('also-yes');
+  expect(dataOf(EDITED, 'moved')).toBe('by-kubectl');
 });
 
 test('deleting from the drawer takes the object out of the table', async ({ page }) => {

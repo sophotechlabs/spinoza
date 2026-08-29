@@ -143,6 +143,7 @@ export function waitForFixtures(): void {
     NAMESPACE,
     '--for=condition=Ready',
     'pod/noshell',
+    'pod/shellable',
     'pod/fake-prom',
     '--timeout=120s',
   ]);

@@ -48,7 +48,14 @@ async function side(name: string, index: number, kubeconfig: string, extra: stri
 
 export default async function globalSetup(): Promise<void> {
   mkdirSync(TMP_DIR, { recursive: true });
-  for (const name of ['home', 'home-readonly', 'home-toolless', 'home-nowhere', 'home-traffic']) {
+  for (const name of [
+    'home',
+    'home-readonly',
+    'home-toolless',
+    'home-nowhere',
+    'home-traffic',
+    'home-profiled',
+  ]) {
     rmSync(join(TMP_DIR, name), { recursive: true, force: true });
   }
   ensureCluster();
@@ -74,6 +81,7 @@ export default async function globalSetup(): Promise<void> {
   ]);
   const nowhere = await side('nowhere', 3, unreachableKubeconfig(), []);
   const traffic = await side('traffic', 4, KUBECONFIG, ['--prometheus', 'e2e/fake-prom:9090']);
+  const profiled = await side('profiled', 5, KUBECONFIG, ['--pprof']);
   writeFileSync(
     STATE_FILE,
     JSON.stringify(
@@ -81,7 +89,7 @@ export default async function globalSetup(): Promise<void> {
         pid,
         baseURL: BASE_URL,
         token: value,
-        sides: { readonly, toolless, nowhere, traffic },
+        sides: { readonly, toolless, nowhere, traffic, profiled },
       },
       null,
       2,

@@ -141,8 +141,11 @@ test('rolling back to the revision before puts its values back', async ({ page }
 
   await openRelease(page);
   await openTab(page, 'History');
-  const row = panel(page).locator('tbody tr').filter({ hasText: String(target) }).first();
-  await row.getByRole('button', { name: 'Roll back', exact: true }).click();
+  const rollback = panel(page).getByTitle(`Roll back to revision ${String(target)}`, {
+    exact: true,
+  });
+  await expect(rollback).toBeEnabled({ timeout: 30_000 });
+  await rollback.click();
   const confirm = page.getByRole('button', { name: 'Confirm', exact: true });
   if ((await confirm.count()) > 0) {
     await confirm.first().click();

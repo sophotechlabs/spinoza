@@ -1,6 +1,6 @@
 import { request } from '@playwright/test';
 import { statSync } from 'node:fs';
-import { expect, state, test } from '../harness/test';
+import { expect, side, state, test } from '../harness/test';
 import { BASE_URL, TOKEN_FILE } from '../harness/paths';
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -108,4 +108,17 @@ test('the profiler is not mounted unless it was asked for', async () => {
 test('the token file is readable only by the user that started spinoza', async () => {
   const mode = statSync(TOKEN_FILE).mode & 0o777;
   expect(mode.toString(8)).toBe('600');
+});
+
+test('the profiler mounts behind the same token when it is asked for', async () => {
+  const profiled = side('profiled');
+  const bare = await request.newContext();
+  const refused = await bare.get(`${profiled.baseURL}/debug/pprof/cmdline`);
+  expect(refused.status()).toBe(401);
+  const allowed = await bare.get(`${profiled.baseURL}/debug/pprof/cmdline`, {
+    headers: { 'X-Spinoza-Token': profiled.token },
+  });
+  expect(allowed.status()).toBe(200);
+  expect(await allowed.text()).toContain('--kubeconfig');
+  await bare.dispose();
 });

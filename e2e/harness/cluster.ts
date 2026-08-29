@@ -18,8 +18,11 @@ export function ensureCluster(): void {
 
 export function exportKubeconfig(): void {
   mkdirSync(TMP_DIR, { recursive: true });
-  const config = mustRun('kind', ['get', 'kubeconfig', '--name', CLUSTER]);
-  writeFileSync(KUBECONFIG, config, { mode: 0o600 });
+  const args = ['get', 'kubeconfig', '--name', CLUSTER];
+  if (process.env.SPINOZA_KIND_INTERNAL === '1') {
+    args.push('--internal');
+  }
+  writeFileSync(KUBECONFIG, mustRun('kind', args), { mode: 0o600 });
 }
 
 function serverOf(): string {
@@ -42,6 +45,10 @@ function contextsIn(): string[] {
 }
 
 export function refuseAnythingButKind(): void {
+  if (process.env.SPINOZA_KIND_INTERNAL === '1') {
+    refuseAnythingButKindNodes();
+    return;
+  }
   const contexts = contextsIn();
   if (contexts.length !== 1) {
     throw new Error(`the e2e kubeconfig must hold exactly one context, found ${contexts.join(', ')}`);
@@ -53,6 +60,17 @@ export function refuseAnythingButKind(): void {
   const host = new URL(server).hostname;
   if (!LOOPBACK.includes(host)) {
     throw new Error(`refusing to run against ${server}, which is not a local kind cluster`);
+  }
+}
+
+function refuseAnythingButKindNodes(): void {
+  const contexts = contextsIn();
+  if (contexts.length !== 1 || contexts[0] !== CONTEXT) {
+    throw new Error(`the e2e kubeconfig must hold ${CONTEXT}, found ${contexts.join(', ')}`);
+  }
+  const host = new URL(serverOf()).hostname;
+  if (host !== `${CLUSTER}-control-plane`) {
+    throw new Error(`refusing to run against ${host}, which is not this kind cluster's control plane`);
   }
 }
 
