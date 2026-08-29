@@ -8,6 +8,7 @@ import {
   countLabel,
   findingLabel,
   inCategory,
+  originLabel,
   severityClass,
   shownLabel,
   totalFindings,
@@ -80,6 +81,11 @@ function Finding({
         <span className="min-w-0 flex-1 truncate text-fg-muted" title={finding.detail}>
           {finding.detail}
         </span>
+        {originLabel(finding) !== '' && (
+          <span className="shrink-0 rounded border border-edge px-1 text-[10px] text-fg-soft">
+            {originLabel(finding)}
+          </span>
+        )}
       </div>
       {finding.patch !== undefined && (
         <pre className="mt-1 overflow-x-auto rounded border border-edge bg-surface-raised px-2 py-1 text-[11px] text-fg-soft">

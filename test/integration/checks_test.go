@@ -37,6 +37,7 @@ const (
 func failingDeployment(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	yes := true
+	var noGrace int64
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: auditWorkload},
 		Spec: appsv1.DeploymentSpec{
@@ -44,11 +45,24 @@ func failingDeployment(t *testing.T, loaded *kube.Bundle) {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": auditWorkload}},
 				Spec: corev1.PodSpec{
-					HostPID: true,
+					HostPID:                       true,
+					TerminationGracePeriodSeconds: &noGrace,
 					Containers: []corev1.Container{{
 						Name:    "app",
 						Image:   "busybox",
 						Command: []string{"sh", "-c", "sleep 3600"},
+						Ports: []corev1.ContainerPort{{
+							ContainerPort: 8080,
+							HostPort:      8080,
+						}},
+						Env: []corev1.EnvVar{
+							{Name: "DB_PASSWORD", Value: "hunter2"},
+							{Name: "MODE", Value: "a"},
+							{Name: "MODE", Value: "b"},
+						},
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m")},
+						},
 						SecurityContext: &corev1.SecurityContext{
 							Privileged:   &yes,
 							Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"SYS_ADMIN"}},
@@ -56,12 +70,20 @@ func failingDeployment(t *testing.T, loaded *kube.Bundle) {
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      "runtime-sock",
 							MountPath: "/var/run/docker.sock",
+						}, {
+							Name:      "host-etc",
+							MountPath: "/host-etc",
 						}},
 					}},
 					Volumes: []corev1.Volume{{
 						Name: "runtime-sock",
 						VolumeSource: corev1.VolumeSource{
 							HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/docker.sock"},
+						},
+					}, {
+						Name: "host-etc",
+						VolumeSource: corev1.VolumeSource{
+							HostPath: &corev1.HostPathVolumeSource{Path: "/etc"},
 						},
 					}},
 				},
@@ -139,10 +161,98 @@ func TestChecksAuditARealCluster(t *testing.T) {
 		"runtime-socket-mounted",
 		"requests-missing",
 		"image-latest",
+		"seccomp-unset",
+		"capabilities-not-dropped",
+		"net-raw-kept",
+		"sensitive-host-path",
+		"writable-host-mount",
+		"host-ports",
+		"automount-token",
+		"default-service-account",
+		"grace-period-zero",
+		"duplicate-env-keys",
+		"secret-in-env-literal",
+		"cpu-limit-set",
+		"image-not-digest-pinned",
+		"image-from-docker-hub",
+		"no-prestop-hook",
+		"no-progress-deadline",
+		"unbounded-revision-history",
+		"missing-recommended-labels",
+		"ephemeral-storage-unset",
 	} {
 		if !auditedHere(report, id) {
 			t.Errorf("%s did not fire on a workload built to trip it", id)
 		}
+	}
+}
+
+const packagedWorkload = "aaa-packaged-target"
+
+func packagedDeployment(t *testing.T, loaded *kube.Bundle) {
+	t.Helper()
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        packagedWorkload,
+			Annotations: map[string]string{"meta.helm.sh/release-name": "audit-chart"},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": packagedWorkload}},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": packagedWorkload}},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:    "app",
+						Image:   "busybox",
+						Command: []string{"sh", "-c", "sleep 3600"},
+					}},
+				},
+			},
+		},
+	}
+	_, err := loaded.Clientset.AppsV1().Deployments(namespace).Create(
+		context.Background(), deployment, metav1.CreateOptions{},
+	)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		t.Fatalf("create packaged deployment: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = loaded.Clientset.AppsV1().Deployments(namespace).Delete(
+			context.Background(), packagedWorkload, metav1.DeleteOptions{},
+		)
+	})
+}
+
+func positionOf(report api.CheckReport, id, name string) int {
+	for at, finding := range findingsFor(report, id) {
+		if objectOf(report, finding).Name == name {
+			return at
+		}
+	}
+	return -1
+}
+
+func TestYourOwnWorkloadIsListedBeforeOneAPackageInstalled(t *testing.T) {
+	loaded := bundle(t)
+	mgr := manager(t, loaded)
+	failingDeployment(t, loaded)
+	packagedDeployment(t, loaded)
+
+	report := mgr.Checks(context.Background())
+
+	mine := positionOf(report, "requests-missing", auditWorkload)
+	packaged := positionOf(report, "requests-missing", packagedWorkload)
+	if mine < 0 || packaged < 0 {
+		t.Fatalf("requests-missing found %s at %d and %s at %d (%s)",
+			auditWorkload, mine, packagedWorkload, packaged, report.Error)
+	}
+	if mine > packaged {
+		t.Fatalf("%s listed at %d, after the Helm-installed %s at %d, "+
+			"even though it sorts later alphabetically",
+			auditWorkload, mine, packagedWorkload, packaged)
+	}
+	if objectOf(report, findingsFor(report, "requests-missing")[packaged]).ManagedBy != "Helm: audit-chart" {
+		t.Fatal("the packaged workload did not carry the release that installed it")
 	}
 }
 

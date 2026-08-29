@@ -8,6 +8,7 @@ import {
   fetchChecks,
   findingLabel,
   inCategory,
+  originLabel,
   refLabel,
   severityClass,
   shownLabel,
@@ -339,5 +340,48 @@ describe('labels', () => {
 
   it('drops the namespace from a cluster-scoped object', () => {
     expect(refLabel(ref('node-1', ''))).toBe('node-1');
+  });
+});
+
+describe('origin', () => {
+  it('names the release that installed a packaged workload', () => {
+    expect(
+      originLabel(viewFinding('api', { origin: 'packaged', managedBy: 'Flux: podinfo' })),
+    ).toBe('Flux: podinfo');
+  });
+
+  it('calls an unmanaged system workload the cluster', () => {
+    expect(originLabel(viewFinding('kube-proxy', { origin: 'system' }))).toBe('cluster');
+  });
+
+  it('says nothing about a workload you applied yourself', () => {
+    expect(originLabel(viewFinding('api'))).toBe('');
+  });
+
+  it('says nothing when a packaged workload names no release', () => {
+    expect(originLabel(viewFinding('api', { origin: 'packaged', managedBy: '' }))).toBe('');
+  });
+
+  it('carries the origin from the object onto every finding that points at it', async () => {
+    stub({
+      objects: [{ ...wireObject('api'), origin: 'packaged', managedBy: 'Helm: api' }],
+      groups: [{ id: 'privileged-containers', total: 1, findings: [{ ref: 0 }] }],
+    });
+
+    const found = await fetchChecks();
+
+    expect(found.groups[0].findings[0].origin).toBe('packaged');
+    expect(found.groups[0].findings[0].managedBy).toBe('Helm: api');
+  });
+
+  it('refuses an origin the server never sends', async () => {
+    stub({
+      objects: [{ ...wireObject('api'), origin: 'invented' }],
+      groups: [{ id: 'privileged-containers', total: 1, findings: [{ ref: 0 }] }],
+    });
+
+    const found = await fetchChecks();
+
+    expect(found.groups[0].findings[0].origin).toBeUndefined();
   });
 });

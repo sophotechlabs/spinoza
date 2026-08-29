@@ -1061,6 +1061,8 @@ type CheckObject struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
 	Kind      string `json:"kind"`
+	Origin    string `json:"origin,omitempty"`
+	ManagedBy string `json:"managedBy,omitempty"`
 }
 
 type CheckFinding struct {

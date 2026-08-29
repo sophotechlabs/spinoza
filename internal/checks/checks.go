@@ -69,6 +69,8 @@ func (o *objects) ref(subject Subject) int {
 		Namespace: subject.Ref.Namespace,
 		Name:      subject.Ref.Name,
 		Kind:      subject.Kind,
+		Origin:    subject.Origin,
+		ManagedBy: subject.ManagedBy,
 	})
 	return at
 }
@@ -222,7 +224,11 @@ func joined(parts ...string) string {
 
 func registry() []check {
 	out := securityChecks()
+	out = append(out, hardeningChecks()...)
 	out = append(out, reliabilityChecks()...)
+	out = append(out, lifecycleChecks()...)
+	out = append(out, supplyChecks()...)
+	out = append(out, batchChecks()...)
 	out = append(out, efficiencyChecks()...)
 	return out
 }

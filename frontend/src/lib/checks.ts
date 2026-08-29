@@ -4,6 +4,7 @@ import type {
   CheckFinding,
   CheckGroup,
   CheckObject,
+  CheckOrigin,
   CheckPage,
   CheckReport,
   CheckSeverity,
@@ -31,6 +32,8 @@ export interface CheckFindingView {
   container?: string;
   detail: string;
   patch?: string;
+  origin?: CheckOrigin;
+  managedBy?: string;
 }
 
 export type CheckGroupView = Omit<CheckGroup, 'findings'> & { findings: CheckFindingView[] };
@@ -55,6 +58,8 @@ function objectOf(raw: unknown): CheckObject {
     namespace: item.namespace ?? '',
     name: item.name ?? '',
     kind: item.kind ?? '',
+    origin: originOf(item.origin),
+    managedBy: item.managedBy,
   };
 }
 
@@ -82,7 +87,26 @@ function findingOf(raw: unknown, objects: CheckObject[]): CheckFindingView {
     container: item.container,
     detail: item.detail ?? '',
     patch: item.patch,
+    origin: held.origin,
+    managedBy: held.managedBy,
   };
+}
+
+function originOf(value: string | undefined): CheckOrigin | undefined {
+  if (value === 'packaged' || value === 'system') {
+    return value;
+  }
+  return undefined;
+}
+
+export function originLabel(finding: CheckFindingView): string {
+  if (finding.managedBy !== undefined && finding.managedBy !== '') {
+    return finding.managedBy;
+  }
+  if (finding.origin === 'system') {
+    return 'cluster';
+  }
+  return '';
 }
 
 function categoryOf(value: string | undefined): CheckCategory {

@@ -58,6 +58,8 @@ type Subject struct {
 	Containers []Container
 	Replicas   int64
 	Pods       []Placed
+	Origin     string
+	ManagedBy  string
 }
 
 type held struct {
@@ -216,13 +218,15 @@ func subjectsOf(items []held) []Subject {
 }
 
 func subjectKey(subject Subject) string {
-	return subject.Ref.Namespace + "/" + subject.Kind + "/" + subject.Ref.Name
+	return originRank(subject.Origin) + "\x00" +
+		subject.Ref.Namespace + "/" + subject.Kind + "/" + subject.Ref.Name
 }
 
 func subjectOf(item held, placed []Placed) Subject {
 	obj := item.obj
 	kind := obj.GetKind()
 	spec := specAt(obj, templatePath(kind)...)
+	origin, managedBy := originOf(obj)
 	return Subject{
 		Ref: api.ObjectRef{
 			Group:     item.desc.Group,
@@ -237,6 +241,8 @@ func subjectOf(item held, placed []Placed) Subject {
 		Containers: containersOf(spec),
 		Replicas:   replicasOf(obj, kind),
 		Pods:       placed,
+		Origin:     origin,
+		ManagedBy:  managedBy,
 	}
 }
 

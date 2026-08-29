@@ -49,8 +49,10 @@ CheckGroup.Truncated truncated,omitempty bool
 CheckGroup.Wrong wrong string
 CheckObject.Group group string
 CheckObject.Kind kind string
+CheckObject.ManagedBy managedBy,omitempty string
 CheckObject.Name name string
 CheckObject.Namespace namespace string
+CheckObject.Origin origin,omitempty string
 CheckObject.Resource resource string
 CheckObject.Version version string
 CheckPage.Findings findings []CheckFinding

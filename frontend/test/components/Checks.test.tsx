@@ -173,6 +173,30 @@ describe('Checks', () => {
     expect(screen.getByText('Deployment · apps/api')).toBeInTheDocument();
   });
 
+  it('marks a finding on something a package installed, and leaves your own bare', async () => {
+    const onOpen = vi.fn();
+    stub({
+      scanned: 2,
+      objects: [
+        OBJECTS[0],
+        { ...OBJECTS[0], name: 'kube-proxy', namespace: 'kube-system', origin: 'system' },
+        { ...OBJECTS[0], name: 'nginx', origin: 'packaged', managedBy: 'Flux: ingress-nginx' },
+      ],
+      groups: [
+        makeGroup('privileged-containers', {
+          findings: [makeFinding(), makeFinding({ ref: 1 }), makeFinding({ ref: 2 })],
+        }),
+      ],
+    });
+    render(<Checks onOpen={onOpen} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(screen.getByText('Flux: ingress-nginx')).toBeInTheDocument();
+    expect(screen.getByText('cluster')).toBeInTheDocument();
+    expect(screen.getAllByText('Flux: ingress-nginx')).toHaveLength(1);
+  });
+
   it('says how much of a capped group is on screen', async () => {
     show({
       scanned: 7072,

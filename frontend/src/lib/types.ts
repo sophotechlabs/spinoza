@@ -1020,6 +1020,8 @@ export type CheckSeverity = 'high' | 'medium' | 'low';
 
 export type CheckCategory = 'security' | 'reliability' | 'efficiency';
 
+export type CheckOrigin = 'packaged' | 'system';
+
 export interface CheckObject {
   group: string;
   version: string;
@@ -1027,6 +1029,8 @@ export interface CheckObject {
   namespace: string;
   name: string;
   kind: string;
+  origin?: CheckOrigin;
+  managedBy?: string;
 }
 
 export interface CheckFinding {
