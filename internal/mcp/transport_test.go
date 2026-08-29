@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -421,4 +423,116 @@ func TestPrometheusIsSkippedWhenTheSpecIsNonsense(t *testing.T) {
 	if PromFor(api.ContextRef{Name: "nowhere"}, Settings{PromSpec: "not a target"}) != nil {
 		t.Fatal("a Prometheus client was built from a spec that does not parse")
 	}
+}
+
+// a session survives whatever a client sends down it
+
+func TestAMessageTooLargeIsAnsweredRatherThanEndingTheSession(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	huge := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"query":"` +
+		strings.Repeat("x", maxMessage) + `"}}}`
+	in := strings.NewReader(huge + "\n" + `{"jsonrpc":"2.0","id":2,"method":"ping"}` + "\n")
+	var out bytes.Buffer
+
+	if err := server.Serve(context.Background(), in, &out); err != nil {
+		t.Fatalf("an oversized message ended the session: %v", err)
+	}
+
+	body := out.String()
+	if !strings.Contains(body, "larger than this server accepts") {
+		t.Fatalf("the oversized message drew no answer:\n%s", body)
+	}
+	if !strings.Contains(body, `"id":2`) {
+		t.Fatalf("the message after the oversized one was never served:\n%s", body)
+	}
+}
+
+func TestALineLongerThanTheBufferIsStillOneMessage(t *testing.T) {
+	padding := strings.Repeat("y", 200*1024)
+	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping","params":{"pad":"` + padding + `"}}` + "\n")
+	server := serverFor(&fakeCluster{}, Options{})
+	var out bytes.Buffer
+
+	if err := server.Serve(context.Background(), in, &out); err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+
+	if !strings.Contains(out.String(), `"id":1`) {
+		t.Fatalf("a message larger than the read buffer was not reassembled:\n%s", out.String())
+	}
+	if strings.Count(strings.TrimSpace(out.String()), "\n") != 0 {
+		t.Fatalf("one message drew more than one reply:\n%s", out.String())
+	}
+}
+
+func TestALineWithNoNewlineAtTheEndIsStillServed(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	var out bytes.Buffer
+
+	if err := server.Serve(context.Background(), strings.NewReader(`{"jsonrpc":"2.0","id":9,"method":"ping"}`), &out); err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+
+	if !strings.Contains(out.String(), `"id":9`) {
+		t.Fatalf("the last message was dropped for want of a newline:\n%s", out.String())
+	}
+}
+
+func TestASlowToolDoesNotHoldUpTheOnesBehindIt(t *testing.T) {
+	release := make(chan struct{})
+	cluster := &blockingCluster{fakeCluster: &fakeCluster{}, release: release}
+	server := serverFor(cluster, Options{})
+	in := strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_namespaces","arguments":{}}}` + "\n" +
+			`{"jsonrpc":"2.0","id":2,"method":"ping"}` + "\n",
+	)
+	var out lockedBuffer
+
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(context.Background(), in, &out) }()
+
+	deadline := time.After(5 * time.Second)
+	for !strings.Contains(out.read(), `"id":2`) {
+		select {
+		case <-deadline:
+			t.Fatal("the ping never came back while a slow tool was running")
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+	if !strings.Contains(out.read(), `"id":1`) {
+		t.Fatalf("the slow tool never answered:\n%s", out.read())
+	}
+}
+
+type blockingCluster struct {
+	*fakeCluster
+
+	release chan struct{}
+}
+
+func (b *blockingCluster) Namespaces(context.Context) api.Namespaces {
+	<-b.release
+	return api.Namespaces{Names: []string{"prod"}}
+}
+
+type lockedBuffer struct {
+	mu   sync.Mutex
+	body bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.body.Write(p)
+}
+
+func (l *lockedBuffer) read() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.body.String()
 }

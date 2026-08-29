@@ -45,11 +45,12 @@ func (s *Server) registerWrites() {
 	s.register(tool{
 		name:        "manage_node",
 		title:       "Cordon, uncordon or drain a node",
-		description: "Mark a node unschedulable, schedulable again, or evict its pods. Draining moves running workloads.",
+		description: "Mark a node unschedulable, schedulable again, or evict its pods. Draining moves running workloads; pass dryRun to see what it would evict first.",
 		properties: map[string]propOf{
 			argName:   text("Node name."),
 			argAction: choice("What to do.", "cordon", "uncordon", "drain"),
 			"force":   toggle("Evict pods nothing owns, when draining."),
+			"dryRun":  toggle("Draining only: report what would be evicted and change nothing."),
 		},
 		required:    []string{argName, argAction},
 		writes:      true,
@@ -160,7 +161,12 @@ func (s *Server) manageNode(ctx context.Context, args arguments) (any, error) {
 		return nil, err
 	}
 	ref := api.ObjectRef{Version: "v1", Resource: "nodes", Name: name}
-	req := actions.Request{Ref: ref, Action: actions.Action(verb), Force: args.flag("force")}
+	req := actions.Request{
+		Ref:    ref,
+		Action: actions.Action(verb),
+		Force:  args.flag("force"),
+		DryRun: verb == "drain" && args.flag("dryRun"),
+	}
 	return s.act(ctx, ref, req, verb)
 }
 

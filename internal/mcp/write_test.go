@@ -470,3 +470,32 @@ func TestAWorkloadActionNamesTheNamespaceItActsIn(t *testing.T) {
 		t.Fatalf("error = %q, want it to name the namespace", err)
 	}
 }
+
+func TestADryRunOnlyAppliesToDraining(t *testing.T) {
+	cases := []struct {
+		name   string
+		action string
+		dryRun bool
+		want   bool
+	}{
+		{name: "a dry drain", action: "drain", dryRun: true, want: true},
+		{name: "a real drain", action: "drain", dryRun: false, want: false},
+		{name: "cordon ignores it", action: "cordon", dryRun: true, want: false},
+		{name: "uncordon ignores it", action: "uncordon", dryRun: true, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := writableCluster()
+			server := serverFor(cluster, Options{AllowWrite: true})
+
+			run(t, server, "manage_node", arguments{
+				argName: "worker-1", argAction: tc.action, "dryRun": tc.dryRun,
+			})
+
+			if cluster.acted[0].DryRun != tc.want {
+				t.Fatalf("DryRun = %v, want %v: only draining reports a plan without acting",
+					cluster.acted[0].DryRun, tc.want)
+			}
+		})
+	}
+}

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -889,5 +890,66 @@ func TestASecretStillGivesUpNoVersionBecauseItGivesUpNoDocument(t *testing.T) {
 	}
 	if result["resourceVersion"] != "9" {
 		t.Fatalf("resourceVersion = %v; it is not secret and an apply needs it", result["resourceVersion"])
+	}
+}
+
+func TestPromSamplesCrossTheWireWithTheSameNamingAsEveryOtherTool(t *testing.T) {
+	source := &fakeProm{samples: []prom.Sample{
+		{Labels: map[string]string{"job": "kubelet"}, Value: 1},
+	}}
+	server := serverFor(&fakeCluster{}, Options{Prometheus: source})
+
+	result := run(t, server, "query_prometheus", arguments{argQuery: "up"})
+
+	body, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	text := string(body)
+	if strings.Contains(text, `"Labels"`) || strings.Contains(text, `"Value"`) {
+		t.Fatalf("samples carry Go field names rather than wire names: %s", text)
+	}
+	if !strings.Contains(text, `"labels"`) || !strings.Contains(text, `"value"`) {
+		t.Fatalf("samples are missing their wire names: %s", text)
+	}
+}
+
+func TestATailOfZeroFallsBackRatherThanLiftingTheLimit(t *testing.T) {
+	cases := []struct {
+		name string
+		tail any
+		want int64
+	}{
+		{name: "a tail that is asked for", tail: float64(10), want: 10},
+		{name: "zero", tail: float64(0), want: 25},
+		{name: "negative", tail: float64(-5), want: 25},
+		{name: "larger than the cap", tail: float64(9000), want: 25},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := &fakeCluster{lines: []string{"one"}}
+			server := serverFor(cluster, Options{LogLines: 25})
+
+			run(t, server, "get_pod_logs", arguments{
+				argNamespace: "prod", argName: "web-0", "tail": tc.tail,
+			})
+
+			if cluster.lastLogs.TailLines != tc.want {
+				t.Fatalf("TailLines = %d, want %d: zero means every line the apiserver holds",
+					cluster.lastLogs.TailLines, tc.want)
+			}
+		})
+	}
+}
+
+func TestALogReadNeverAsksForEverything(t *testing.T) {
+	cluster := &fakeCluster{lines: []string{"one"}}
+	server := serverFor(cluster, Options{})
+
+	run(t, server, "get_pod_logs", arguments{argNamespace: "prod", argName: "web-0"})
+
+	if cluster.lastLogs.TailLines <= 0 {
+		t.Fatalf("TailLines = %d; a non-positive tail asks the apiserver for the whole history",
+			cluster.lastLogs.TailLines)
 	}
 }

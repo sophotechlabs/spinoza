@@ -14,6 +14,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/logs"
+	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/topology"
 )
 
@@ -431,6 +432,9 @@ func (s *Server) workloadLogs(ctx context.Context, args arguments) (any, error) 
 }
 
 func (s *Server) readLogs(ctx context.Context, req logs.Request) ([]string, error) {
+	if req.TailLines <= 0 {
+		req.TailLines = int64(s.logLines)
+	}
 	req.TailLines = min(req.TailLines, int64(s.logLines))
 	collected, err := s.cluster.LogLines(ctx, req)
 	if err != nil {
@@ -639,6 +643,19 @@ func trimErrors(reported ...string) []string {
 	return out
 }
 
+type series struct {
+	Labels map[string]string `json:"labels"`
+	Value  float64           `json:"value"`
+}
+
+func seriesOf(samples []prom.Sample) []series {
+	out := make([]series, 0, len(samples))
+	for _, one := range samples {
+		out = append(out, series{Labels: one.Labels, Value: one.Value})
+	}
+	return out
+}
+
 func (s *Server) queryProm(ctx context.Context, args arguments) (any, error) {
 	query, err := args.required(argQuery)
 	if err != nil {
@@ -648,5 +665,5 @@ func (s *Server) queryProm(ctx context.Context, args arguments) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{argQuery: query, "samples": samples}, nil
+	return map[string]any{argQuery: query, "samples": seriesOf(samples)}, nil
 }
