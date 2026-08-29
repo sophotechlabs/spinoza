@@ -40,6 +40,12 @@ url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_
 url_api = "https://api.github.com/repos/rhysd/actionlint/releases/assets/384924880"
 provenance = "github-attestations"
 
+[tools.actionlint."platforms.windows-arm64"]
+checksum = "sha256:cadcf7ea4efe3a68728893813643cebe1185e5b1d4be5b96245f65c9a4d5ea41"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_arm64.zip"
+url_api = "https://api.github.com/repos/rhysd/actionlint/releases/assets/384924915"
+provenance = "github-attestations"
+
 [tools.actionlint."platforms.windows-x64"]
 checksum = "sha256:6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9"
 url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_amd64.zip"
@@ -80,6 +86,11 @@ checksum = "sha256:1a013573bbd394341168ea95174790ed44d6fc180f6d16e75c2ebc032f05b
 url = "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.2/ec-darwin-amd64.tar.gz"
 url_api = "https://api.github.com/repos/editorconfig-checker/editorconfig-checker/releases/assets/529790801"
 
+[tools.editorconfig-checker."platforms.windows-arm64"]
+checksum = "sha256:566b10ab05916a314c7be1ba1ce1ce99a349bac5842385177d0b2922e821e4fd"
+url = "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.2/ec-windows-arm64.zip"
+url_api = "https://api.github.com/repos/editorconfig-checker/editorconfig-checker/releases/assets/529790797"
+
 [tools.editorconfig-checker."platforms.windows-x64"]
 checksum = "sha256:ca6879da5ff16101c00432dc1f67f46fba6da229f7d24a715b2fd3be4249f7ab"
 url = "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.2/ec-windows-amd64.zip"
@@ -118,6 +129,11 @@ url_api = "https://api.github.com/repos/orhun/git-cliff/releases/assets/40584988
 checksum = "sha256:6e60ae390d375cecb9d8008c49f0e724a8dfe40390b532ef5501e421d2cc8acb"
 url = "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/orhun/git-cliff/releases/assets/405850193"
+
+[tools.git-cliff."platforms.windows-arm64"]
+checksum = "sha256:03a623191fe575bc0024e2ebc61cc861cebd3ba84b93ff13b002c42e8248cd3f"
+url = "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-aarch64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/orhun/git-cliff/releases/assets/405851996"
 
 [tools.git-cliff."platforms.windows-x64"]
 checksum = "sha256:3ae3a5549e85c7ad5b20192ebcfee4371269deca51255f6f2f2e051c6541f5ca"
@@ -158,6 +174,11 @@ checksum = "sha256:dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952
 url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_x64.tar.gz"
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378332053"
 
+[tools.gitleaks."platforms.windows-arm64"]
+checksum = "sha256:d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip"
+url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378333178"
+
 [tools.gitleaks."platforms.windows-x64"]
 checksum = "sha256:d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
 url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip"
@@ -190,6 +211,10 @@ url = "https://dl.google.com/go/go1.26.6.darwin-arm64.tar.gz"
 [tools.go."platforms.macos-x64"]
 checksum = "sha256:08b65a63f244115121ced6c3b55ad38d801a7442acad5c949a17aad84ae6d684"
 url = "https://dl.google.com/go/go1.26.6.darwin-amd64.tar.gz"
+
+[tools.go."platforms.windows-arm64"]
+checksum = "sha256:06dbe785743d534ef8a469dad88adf7f1b2b438507ccfef9b98e7cf8c97b4b68"
+url = "https://dl.google.com/go/go1.26.6.windows-arm64.zip"
 
 [tools.go."platforms.windows-x64"]
 checksum = "sha256:5b6c5b556525810463b5c897b50dc7a82d6a3dc0bfaf55d990a7e9f31d6b2318"
@@ -255,6 +280,12 @@ url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golan
 url_api = "https://api.github.com/repos/golangci/golangci-lint/releases/assets/413470980"
 provenance = "github-attestations"
 
+[tools.golangci-lint."platforms.windows-arm64"]
+checksum = "sha256:947b9a5bf762d465710b376c156f0184abb2168378b0826af1899e0ee7183742"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-windows-arm64.zip"
+url_api = "https://api.github.com/repos/golangci/golangci-lint/releases/assets/413471050"
+provenance = "github-attestations"
+
 [tools.golangci-lint."platforms.windows-x64"]
 checksum = "sha256:bd42e3ebc8cb4ececb86941983baaf1dc221bbb04d838e94ce63b49cc91e02bb"
 url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-windows-amd64.zip"
@@ -295,6 +326,11 @@ checksum = "sha256:312ed375dcda6d8893b4ca5d517371fef1a50062ebb0b0dbe6bdb4ac2fb57
 url = "https://github.com/anchore/grype/releases/download/v0.117.0/grype_0.117.0_darwin_amd64.tar.gz"
 url_api = "https://api.github.com/repos/anchore/grype/releases/assets/509013346"
 
+[tools.grype."platforms.windows-arm64"]
+checksum = "sha256:7728ee9c06792e62444bd651274e4dd1e30eec02eee1266bb6c9c9d237d0f0cb"
+url = "https://github.com/anchore/grype/releases/download/v0.117.0/grype_0.117.0_windows_amd64.zip"
+url_api = "https://api.github.com/repos/anchore/grype/releases/assets/509013347"
+
 [tools.grype."platforms.windows-x64"]
 checksum = "sha256:7728ee9c06792e62444bd651274e4dd1e30eec02eee1266bb6c9c9d237d0f0cb"
 url = "https://github.com/anchore/grype/releases/download/v0.117.0/grype_0.117.0_windows_amd64.zip"
@@ -327,6 +363,10 @@ url = "https://get.helm.sh/helm-v4.2.2-darwin-arm64.tar.gz"
 [tools.helm."platforms.macos-x64"]
 checksum = "sha256:10c1e36ee8c5f2e2ee25a16599cb03ab74c0953cd889cacb980a49ba4b6574ba"
 url = "https://get.helm.sh/helm-v4.2.2-darwin-amd64.tar.gz"
+
+[tools.helm."platforms.windows-arm64"]
+checksum = "sha256:97dc99144759cbdc1d7a92df25e3e5fe7d31d5411960bb604512ac0cdd6a113d"
+url = "https://get.helm.sh/helm-v4.2.2-windows-arm64.tar.gz"
 
 [tools.helm."platforms.windows-x64"]
 checksum = "sha256:29589dad546f8bcd3a6ad92261fcb4a6c9db4a32f9e4fc4f5212db189553dc60"
@@ -410,6 +450,11 @@ checksum = "sha256:295ac6d0d634c9819c9907df45e3017d1f13166bd13c3404c45e79f7faa47
 url = "https://github.com/kubernetes-sigs/kind/releases/download/v0.32.0/kind-darwin-amd64"
 url_api = "https://api.github.com/repos/kubernetes-sigs/kind/releases/assets/436442366"
 
+[tools.kind."platforms.windows-arm64"]
+checksum = "sha256:0bcb2d1cfedc1912d664014db716937e8a0e843e91c6807b4db2025dbc8989fa"
+url = "https://github.com/kubernetes-sigs/kind/releases/download/v0.32.0/kind-windows-amd64"
+url_api = "https://api.github.com/repos/kubernetes-sigs/kind/releases/assets/436442633"
+
 [tools.kind."platforms.windows-x64"]
 checksum = "sha256:0bcb2d1cfedc1912d664014db716937e8a0e843e91c6807b4db2025dbc8989fa"
 url = "https://github.com/kubernetes-sigs/kind/releases/download/v0.32.0/kind-windows-amd64"
@@ -442,6 +487,10 @@ url = "https://dl.k8s.io/v1.34.1/bin/darwin/arm64/kubectl"
 [tools.kubectl."platforms.macos-x64"]
 checksum = "sha256:bb211f2b31f2b3bc60562b44cc1e3b712a16a98e9072968ba255beb04cefcfdf"
 url = "https://dl.k8s.io/v1.34.1/bin/darwin/amd64/kubectl"
+
+[tools.kubectl."platforms.windows-arm64"]
+checksum = "sha256:9285fa579a261da3ae7acd9153c959807f5b1d5bce2c7e537ec88b00f5035b14"
+url = "https://dl.k8s.io/v1.34.1/bin/windows/arm64/kubectl.exe"
 
 [tools.kubectl."platforms.windows-x64"]
 checksum = "sha256:d118a8ddb0de15ff230189c85f5157e752405eb0ae8fa680d284de094c9a20f0"
@@ -481,6 +530,11 @@ checksum = "sha256:887503a9cff667d322b8d0892b40bf49976eb9507af8483220a3706cdad55
 url = "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/lycheeverse/lychee/releases/assets/409957687"
 
+[tools.lychee."platforms.windows-arm64"]
+checksum = "sha256:32975d1493ee1a975d6bb41e4fb56fe419cb442ded628bb772ba2e614acfacad"
+url = "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/lycheeverse/lychee/releases/assets/409959491"
+
 [tools.lychee."platforms.windows-x64"]
 checksum = "sha256:32975d1493ee1a975d6bb41e4fb56fe419cb442ded628bb772ba2e614acfacad"
 url = "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-pc-windows-msvc.zip"
@@ -513,6 +567,10 @@ url = "https://nodejs.org/dist/v24.19.0/node-v24.19.0-darwin-arm64.tar.gz"
 [tools.node."platforms.macos-x64"]
 checksum = "sha256:d1b5e999db158c62fe8f7267a4476b035d8bd93b1a605bac24a3f0dd166e3316"
 url = "https://nodejs.org/dist/v24.19.0/node-v24.19.0-darwin-x64.tar.gz"
+
+[tools.node."platforms.windows-arm64"]
+checksum = "sha256:8502f4a50b458d4cc38ed8f2001556c2cd239d464920f74017926ccb1e1c157f"
+url = "https://nodejs.org/dist/v24.19.0/node-v24.19.0-win-arm64.zip"
 
 [tools.node."platforms.windows-x64"]
 checksum = "sha256:57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73"
@@ -574,6 +632,14 @@ url_api = "https://api.github.com/repos/google/osv-scanner/releases/assets/50469
 [tools.osv-scanner."platforms.macos-x64".provenance.slsa]
 url = "https://github.com/google/osv-scanner/releases/download/v2.5.0/multiple.intoto.jsonl"
 
+[tools.osv-scanner."platforms.windows-arm64"]
+checksum = "sha256:b8bb8d499e0636e193688c96834a11a8f74e353734053f9641e546d76a0cb857"
+url = "https://github.com/google/osv-scanner/releases/download/v2.5.0/osv-scanner_windows_arm64.exe"
+url_api = "https://api.github.com/repos/google/osv-scanner/releases/assets/504695128"
+
+[tools.osv-scanner."platforms.windows-arm64".provenance.slsa]
+url = "https://github.com/google/osv-scanner/releases/download/v2.5.0/multiple.intoto.jsonl"
+
 [tools.osv-scanner."platforms.windows-x64"]
 checksum = "sha256:4342285bd8be36b9f113468f3eea86e7900befbcd19ca8dc6ac4f0f6cbe7c362"
 url = "https://github.com/google/osv-scanner/releases/download/v2.5.0/osv-scanner_windows_amd64.exe"
@@ -620,6 +686,11 @@ checksum = "sha256:3c89db4edcab7cf1c27bff178882e0f6f27f7afdf54e859fa041fca10febe
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.x86_64.tar.xz"
 url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056930"
 
+[tools.shellcheck."platforms.windows-arm64"]
+checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
+url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056944"
+
 [tools.shellcheck."platforms.windows-x64"]
 checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
@@ -658,6 +729,11 @@ url_api = "https://api.github.com/repos/anchore/syft/releases/assets/508878653"
 checksum = "sha256:cddf9a044145caf0a1a3194d00d1dd51a1666f4814f2919cdb4768a0c062ad95"
 url = "https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_darwin_amd64.tar.gz"
 url_api = "https://api.github.com/repos/anchore/syft/releases/assets/508878649"
+
+[tools.syft."platforms.windows-arm64"]
+checksum = "sha256:fc5ffaeffb993576ece9c791da5a688fb2c8969a1479bbfe58583672c64da336"
+url = "https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_windows_amd64.zip"
+url_api = "https://api.github.com/repos/anchore/syft/releases/assets/508878657"
 
 [tools.syft."platforms.windows-x64"]
 checksum = "sha256:fc5ffaeffb993576ece9c791da5a688fb2c8969a1479bbfe58583672c64da336"
@@ -704,6 +780,12 @@ url = "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.7
 url_api = "https://api.github.com/repos/aquasecurity/trivy/releases/assets/514339388"
 provenance = "cosign"
 
+[tools.trivy."platforms.windows-arm64"]
+checksum = "sha256:94c40e0696e4b907a74b7b2e1438d5d72ebaca83115817407f568a002d520842"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_windows-64bit.zip"
+url_api = "https://api.github.com/repos/aquasecurity/trivy/releases/assets/514339469"
+provenance = "cosign"
+
 [tools.trivy."platforms.windows-x64"]
 checksum = "sha256:94c40e0696e4b907a74b7b2e1438d5d72ebaca83115817407f568a002d520842"
 url = "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_windows-64bit.zip"
@@ -744,10 +826,67 @@ checksum = "sha256:4cecbf653a9fc45f023abf57f4e2e2f6b138c2d2387b09289beacdd3f0ea7
 url = "https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-x86_64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/crate-ci/typos/releases/assets/500259181"
 
+[tools.typos."platforms.windows-arm64"]
+checksum = "sha256:06d3a1b71c282e021671070696a72696d5c60ea485b47dc4f8f1fbcf90144d02"
+url = "https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/crate-ci/typos/releases/assets/500264256"
+
 [tools.typos."platforms.windows-x64"]
 checksum = "sha256:06d3a1b71c282e021671070696a72696d5c60ea485b47dc4f8f1fbcf90144d02"
 url = "https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/crate-ci/typos/releases/assets/500264256"
+
+[[tools.uv]]
+version = "0.10.6"
+backend = "aqua:astral-sh/uv"
+
+[tools.uv."platforms.linux-arm64"]
+checksum = "sha256:7de7aa836fd54ff930fa5e63bc04da35e2fbd72889d6258e153479c44d08b863"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.6/uv-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/361773071"
+provenance = "github-attestations"
+
+[tools.uv."platforms.linux-arm64-musl"]
+checksum = "sha256:7de7aa836fd54ff930fa5e63bc04da35e2fbd72889d6258e153479c44d08b863"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.6/uv-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/361773071"
+provenance = "github-attestations"
+
+[tools.uv."platforms.linux-x64"]
+checksum = "sha256:01d6ce770da88ce6445acb0a8764c8b1634c9f69c728dca68b19fc7a893f72b9"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.6/uv-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/361773154"
+provenance = "github-attestations"
+
+[tools.uv."platforms.linux-x64-musl"]
+checksum = "sha256:01d6ce770da88ce6445acb0a8764c8b1634c9f69c728dca68b19fc7a893f72b9"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.6/uv-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/361773154"
+provenance = "github-attestations"
+
+[tools.uv."platforms.macos-arm64"]
+checksum = "sha256:3993249d8f51deaf34cfce037e57e294e82267ff1f9dc45b7983a17afaf065b4"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.6/uv-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/361773054"
+provenance = "github-attestations"
+
+[tools.uv."platforms.macos-x64"]
+checksum = "sha256:d7647571fb17a5107d4d23cc190418039c157fd7361ddb59bc6f8127a49e3eac"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.6/uv-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/361773143"
+provenance = "github-attestations"
+
+[tools.uv."platforms.windows-arm64"]
+checksum = "sha256:b27eb789f281e398a82197477de727fc8faf08605152115686da2c3cba0d25f7"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.6/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/361773146"
+provenance = "github-attestations"
+
+[tools.uv."platforms.windows-x64"]
+checksum = "sha256:b27eb789f281e398a82197477de727fc8faf08605152115686da2c3cba0d25f7"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.6/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/361773146"
+provenance = "github-attestations"
 
 [[tools.yamllint]]
 version = "1.38.0"
@@ -787,6 +926,11 @@ checksum = "sha256:c93d5e5880c78e22aec4efc1d719751b60f9adc49b2735a8009916581b845
 url = "https://github.com/mikefarah/yq/releases/download/v4.48.1/yq_darwin_amd64"
 url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/303270670"
 
+[tools.yq."platforms.windows-arm64"]
+checksum = "sha256:b8a59f9b93b993fc380905c0002a572a80d70e8eb3f3feb0c60fc517295e32b5"
+url = "https://github.com/mikefarah/yq/releases/download/v4.48.1/yq_windows_arm64.exe"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/303270712"
+
 [tools.yq."platforms.windows-x64"]
 checksum = "sha256:38ae580c6fc7f733cdbade2e32525107468cba7bbdfdb59fe49561d088ffc117"
 url = "https://github.com/mikefarah/yq/releases/download/v4.48.1/yq_windows_amd64.exe"
@@ -824,6 +968,12 @@ provenance = "github-attestations"
 checksum = "sha256:648b72ab9941a7f2a8d65d7b68a8e76cef789538c8df3a3950384d38423375b0"
 url = "https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-x86_64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/zizmorcore/zizmor/releases/assets/498263144"
+provenance = "github-attestations"
+
+[tools.zizmor."platforms.windows-arm64"]
+checksum = "sha256:68a6bc6888f10bf0d53658c75885e7c1b7a0588d4c1fbc3f0ca280ad7324bf06"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/zizmorcore/zizmor/releases/assets/498263142"
 provenance = "github-attestations"
 
 [tools.zizmor."platforms.windows-x64"]
