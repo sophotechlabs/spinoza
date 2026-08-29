@@ -65,12 +65,14 @@ func fold(found []finding, snap *snapshot, limits Limits) api.IssueQueue {
 		rows = append(rows, rowOf(owners[key], prune(groups[key]), limits))
 	}
 	rank(rows)
-	dropped := 0
-	if len(rows) > limits.Rows {
-		dropped = len(rows) - limits.Rows
-		rows = rows[:limits.Rows]
+	return capRows(rows, limits)
+}
+
+func capRows(rows []api.Issue, limits Limits) api.IssueQueue {
+	if len(rows) <= limits.Rows {
+		return api.IssueQueue{Rows: rows, Dropped: 0}
 	}
-	return api.IssueQueue{Rows: rows, Dropped: dropped}
+	return api.IssueQueue{Rows: rows[:limits.Rows], Dropped: len(rows) - limits.Rows}
 }
 
 func prune(group []finding) []finding {

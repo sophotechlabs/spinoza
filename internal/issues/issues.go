@@ -14,7 +14,7 @@ const (
 	defaultStallBudget  = 5 * time.Second
 	defaultStallGrace   = 5 * time.Minute
 	defaultReadyGrace   = 2 * time.Minute
-	defaultRows         = 200
+	defaultRows         = 500
 	defaultChildren     = 50
 	defaultCandidates   = 20
 	defaultFallback     = 25

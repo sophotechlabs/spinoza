@@ -168,3 +168,26 @@ func TestTheFallbackTypeListIsCapped(t *testing.T) {
 		t.Fatalf("leased = %v, want the cap to take the first two of a stable order and drop the rest", leased)
 	}
 }
+
+func TestTheRowCapClearsAClusterWorthOfIssues(t *testing.T) {
+	if defaultRows < 400 {
+		t.Fatalf("defaultRows = %d; a production cluster produced 337 issues in one poll, "+
+			"so a cap this low hides real rows behind a count", defaultRows)
+	}
+}
+
+func TestTheQueueSaysHowManyRowsItDropped(t *testing.T) {
+	rows := make([]api.Issue, defaultRows+7)
+	for i := range rows {
+		rows[i] = api.Issue{Detector: "Unschedulable"}
+	}
+
+	queue := capRows(rows, Limits{Rows: defaultRows})
+
+	if len(queue.Rows) != defaultRows {
+		t.Fatalf("rows = %d, want the cap of %d", len(queue.Rows), defaultRows)
+	}
+	if queue.Dropped != 7 {
+		t.Fatalf("dropped = %d, want 7 so the view can say what is missing", queue.Dropped)
+	}
+}
