@@ -17,6 +17,10 @@ const base: Settings = {
   namespaceStart: 'all',
   namespaceStarts: {},
   checksInterval: 60,
+  checksDisabled: [],
+  checksSkipNamespaces: [],
+  checksMinSeverity: '',
+  checksWholeCluster: false,
 };
 
 afterEach(() => {
@@ -172,5 +176,35 @@ describe('the checks interval', () => {
     expect(parseSettings(JSON.stringify({ ...base, checksInterval: 'soon' })).checksInterval).toBe(
       60,
     );
+  });
+});
+
+describe('the checks filter it remembers', () => {
+  it('keeps the names it was given and drops anything that is not one', () => {
+    const settings = parseSettings(
+      JSON.stringify({
+        ...base,
+        checksDisabled: ['image-latest', 7, '', null],
+        checksSkipNamespaces: 'not-a-list',
+      }),
+    );
+
+    expect(settings.checksDisabled).toEqual(['image-latest']);
+    expect(settings.checksSkipNamespaces).toEqual([]);
+  });
+
+  it('refuses a severity floor nobody defined', () => {
+    const settings = parseSettings(JSON.stringify({ ...base, checksMinSeverity: 'catastrophic' }));
+
+    expect(settings.checksMinSeverity).toBe('');
+  });
+
+  it('carries a floor and a whole-cluster switch it does know', () => {
+    writeSettings({ ...base, checksMinSeverity: 'high', checksWholeCluster: true });
+
+    const settings = readSettings();
+
+    expect(settings.checksMinSeverity).toBe('high');
+    expect(settings.checksWholeCluster).toBe(true);
   });
 });

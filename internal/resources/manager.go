@@ -158,6 +158,8 @@ type buildFailure struct {
 	wait time.Duration
 }
 
+const defaultCheckFindings = 500
+
 type Limits struct {
 	SyncTimeout     time.Duration
 	IdleGrace       time.Duration
@@ -165,11 +167,15 @@ type Limits struct {
 	CountsTTL       time.Duration
 	TrafficTTL      time.Duration
 	WarmConcurrency int
+	CheckFindings   int
 	Counts          CountLimits
 	Search          CountLimits
 }
 
 func (l Limits) orDefaults() Limits {
+	if l.CheckFindings == 0 {
+		l.CheckFindings = defaultCheckFindings
+	}
 	if l.SyncTimeout == 0 {
 		l.SyncTimeout = defaultSyncTimeout
 	}
@@ -710,12 +716,14 @@ func (m *Manager) Graph(ctx context.Context) api.Graph {
 	return gitops.Build(ctx, m, m.descriptors())
 }
 
-func (m *Manager) CheckPage(ctx context.Context, id, after string) (api.CheckPage, error) {
-	return checks.Page(ctx, m, m.descriptors(), m.Metrics(ctx), id, after)
+func (m *Manager) CheckPage(
+	ctx context.Context, id, after string, keep checks.Filter,
+) (api.CheckPage, error) {
+	return checks.Page(ctx, m, m.descriptors(), m.Metrics(ctx), id, after, keep, m.limits.CheckFindings)
 }
 
-func (m *Manager) Checks(ctx context.Context) api.CheckReport {
-	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx))
+func (m *Manager) Checks(ctx context.Context, keep checks.Filter) api.CheckReport {
+	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, m.limits.CheckFindings)
 }
 
 func (m *Manager) Topology(ctx context.Context, req topology.Request) api.Graph {

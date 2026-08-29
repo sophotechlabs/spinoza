@@ -12,7 +12,7 @@ const paged = "requests-missing"
 
 func pageOf(t *testing.T, lister *fakeLister, after string) api.CheckPage {
 	t.Helper()
-	got, err := Page(t.Context(), lister, descriptors(), api.Metrics{}, paged, after)
+	got, err := Page(t.Context(), lister, descriptors(), api.Metrics{}, paged, after, wholeCluster(), 0)
 	if err != nil {
 		t.Fatalf("page after %q: %v", after, err)
 	}
@@ -149,7 +149,7 @@ func TestACursorForAFindingThatIsGoneStillPagesForward(t *testing.T) {
 // what a cursor refuses
 
 func TestAnUnknownCheckIsRefusedByName(t *testing.T) {
-	_, err := Page(t.Context(), newLister(), descriptors(), api.Metrics{}, "not-a-check", "")
+	_, err := Page(t.Context(), newLister(), descriptors(), api.Metrics{}, "not-a-check", "", wholeCluster(), 0)
 
 	if !errors.Is(err, ErrNoSuchCheck) {
 		t.Fatalf("error = %v, want ErrNoSuchCheck", err)
@@ -172,7 +172,7 @@ func TestACursorNobodyIssuedStartsFromTheBeginning(t *testing.T) {
 func TestACheckWithNoUsageDataPagesToNothing(t *testing.T) {
 	got, err := Page(
 		t.Context(), newLister(manyDeployments(3)...), descriptors(), api.Metrics{},
-		"requests-far-above-usage", "",
+		"requests-far-above-usage", "", wholeCluster(), 0,
 	)
 	if err != nil {
 		t.Fatalf("page: %v", err)
@@ -218,7 +218,7 @@ func TestAGroupThatFitsCarriesNoCursor(t *testing.T) {
 func TestTheReportsFirstPageAndTheEndpointsFirstPageAgree(t *testing.T) {
 	objects := manyDeployments(findingsShown + 12)
 	lister := newLister(objects...)
-	fromReport := Run(t.Context(), lister, descriptors(), api.Metrics{})
+	fromReport := Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
 	group := api.CheckGroup{}
 	for _, one := range fromReport.Groups {
 		if one.ID == paged {

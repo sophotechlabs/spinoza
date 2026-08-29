@@ -10,6 +10,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/prom"
@@ -54,12 +55,12 @@ type fakeCluster struct {
 	lastLogs  logs.Request
 }
 
-func (f *fakeCluster) Overview(context.Context) api.ClusterOverview { return f.overview }
-func (f *fakeCluster) Counts(context.Context) api.ResourceCounts    { return f.counts }
-func (f *fakeCluster) Issues(context.Context) api.IssueQueue        { return f.queue }
-func (f *fakeCluster) Checks(context.Context) api.CheckReport       { return f.report }
-func (f *fakeCluster) Resources() api.ResourceCatalog               { return f.catalog }
-func (f *fakeCluster) Namespaces(context.Context) api.Namespaces    { return f.spaces }
+func (f *fakeCluster) Overview(context.Context) api.ClusterOverview          { return f.overview }
+func (f *fakeCluster) Counts(context.Context) api.ResourceCounts             { return f.counts }
+func (f *fakeCluster) Issues(context.Context) api.IssueQueue                 { return f.queue }
+func (f *fakeCluster) Checks(context.Context, checks.Filter) api.CheckReport { return f.report }
+func (f *fakeCluster) Resources() api.ResourceCatalog                        { return f.catalog }
+func (f *fakeCluster) Namespaces(context.Context) api.Namespaces             { return f.spaces }
 
 func (f *fakeCluster) ListKind(_ context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error) {
 	f.lastKind = ref

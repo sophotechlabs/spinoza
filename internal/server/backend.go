@@ -11,6 +11,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
@@ -81,8 +82,8 @@ type Deliveries interface {
 
 type Reports interface {
 	Overview(ctx context.Context) api.ClusterOverview
-	Checks(ctx context.Context) api.CheckReport
-	CheckPage(ctx context.Context, id, after string) (api.CheckPage, error)
+	Checks(ctx context.Context, keep checks.Filter) api.CheckReport
+	CheckPage(ctx context.Context, id, after string, keep checks.Filter) (api.CheckPage, error)
 	Issues(ctx context.Context) api.IssueQueue
 	Metrics(ctx context.Context) api.Metrics
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)

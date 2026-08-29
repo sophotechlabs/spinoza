@@ -17,12 +17,20 @@ export type CheckInterval = (typeof CHECK_INTERVALS)[number];
 
 export const SETTINGS_KEY = 'spinoza.settings.v1';
 
+export const SEVERITY_FLOORS = ['', 'low', 'medium', 'high'] as const;
+
+export type SeverityFloor = (typeof SEVERITY_FLOORS)[number];
+
 export interface Settings {
   logView: LogView;
   screenReader: boolean;
   namespaceStart: NamespaceStart;
   namespaceStarts: Partial<Record<string, NamespaceStart>>;
   checksInterval: CheckInterval;
+  checksDisabled: string[];
+  checksSkipNamespaces: string[];
+  checksMinSeverity: SeverityFloor;
+  checksWholeCluster: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -31,6 +39,10 @@ const DEFAULTS: Settings = {
   namespaceStart: 'all',
   namespaceStarts: {},
   checksInterval: 60,
+  checksDisabled: [],
+  checksSkipNamespaces: [],
+  checksMinSeverity: '',
+  checksWholeCluster: false,
 };
 
 function parseStarts(value: unknown): Partial<Record<string, NamespaceStart>> {
@@ -81,8 +93,25 @@ export function parseSettings(raw: string | null): Settings {
       settings.checksInterval = interval;
     }
   }
+  for (const floor of SEVERITY_FLOORS) {
+    if (stored.checksMinSeverity === floor) {
+      settings.checksMinSeverity = floor;
+    }
+  }
+  if (typeof stored.checksWholeCluster === 'boolean') {
+    settings.checksWholeCluster = stored.checksWholeCluster;
+  }
+  settings.checksDisabled = parseNames(stored.checksDisabled);
+  settings.checksSkipNamespaces = parseNames(stored.checksSkipNamespaces);
   settings.namespaceStarts = parseStarts(stored.namespaceStarts);
   return settings;
+}
+
+function parseNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((entry): entry is string => typeof entry === 'string' && entry !== '');
 }
 
 export function readSettings(): Settings {

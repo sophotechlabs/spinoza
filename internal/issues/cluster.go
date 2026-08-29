@@ -12,13 +12,20 @@ const (
 	detectorNode        = "node"
 	detectorStorage     = "storage"
 	detectorTerminating = "terminating"
+	detectorExtension   = "extension"
+	detectorRouting     = "routing"
 )
 
 const (
 	kindNode      = "Node"
 	kindNamespace = "Namespace"
 	kindClaim     = "PersistentVolumeClaim"
+	kindCRD       = "CustomResourceDefinition"
+	kindService   = "Service"
+	kindEndpoints = "Endpoints"
 )
+
+const apiExtensionsGroup = "apiextensions.k8s.io"
 
 const defaultGraceSeconds = 30
 
@@ -33,7 +40,87 @@ func clusterFindings(snap *snapshot, now time.Time) []finding {
 	out := nodeFindings(snap)
 	out = append(out, claimFindings(snap)...)
 	out = append(out, terminatingFindings(snap, now)...)
+	out = append(out, definitionFindings(snap)...)
+	out = append(out, routingFindings(snap)...)
 	return out
+}
+
+func definitionFindings(snap *snapshot) []finding {
+	out := []finding{}
+	for _, item := range snap.of(apiExtensionsGroup, kindCRD) {
+		entry, ok := conditionOf(item.obj, "Established")
+		if !ok || unstr.At(entry, "status") == conditionTrue {
+			continue
+		}
+		out = append(out, finding{
+			detector: detectorExtension,
+			severity: severityFatal,
+			title:    reasonOr(entry, "NotEstablished"),
+			detail:   messageOr(entry, "the apiserver is not serving this kind, so nothing can create one"),
+			action:   "check the CRD's schema and its conversion webhook",
+			kind:     kindCRD,
+			subject:  item,
+			since:    conditionSince(item.obj, "Established"),
+		})
+	}
+	return out
+}
+
+func routingFindings(snap *snapshot) []finding {
+	filled := endpointNames(snap)
+	out := []finding{}
+	for _, item := range snap.of("", kindService) {
+		if !selectsPods(item.obj) || filled[serviceKey(item.obj)] {
+			continue
+		}
+		out = append(out, finding{
+			detector: detectorRouting,
+			severity: severityFatal,
+			title:    "NoEndpoints",
+			detail:   "the Service selects pods and none of them is ready, so it answers nothing",
+			action:   "look at the pods its selector matches and why none is ready",
+			kind:     kindService,
+			subject:  item,
+			since:    item.obj.GetCreationTimestamp().Time,
+		})
+	}
+	return out
+}
+
+func selectsPods(service *unstructured.Unstructured) bool {
+	selector, found, err := unstructured.NestedMap(service.Object, "spec", "selector")
+	return found && err == nil && len(selector) > 0
+}
+
+func serviceKey(obj *unstructured.Unstructured) string {
+	return obj.GetNamespace() + "/" + obj.GetName()
+}
+
+func endpointNames(snap *snapshot) map[string]bool {
+	out := map[string]bool{}
+	for _, item := range snap.of("", kindEndpoints) {
+		if readyAddresses(item.obj) == 0 {
+			continue
+		}
+		out[serviceKey(item.obj)] = true
+	}
+	return out
+}
+
+func readyAddresses(obj *unstructured.Unstructured) int {
+	total := 0
+	for _, raw := range unstr.Slice(obj, "subsets") {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		listed, isList := entry["addresses"].([]any)
+		if !isList {
+			continue
+		}
+		total += len(listed)
+	}
+	return total
 }
 
 func nodeFindings(snap *snapshot) []finding {

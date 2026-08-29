@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Checks from '../../src/components/Checks';
+import { useSettingsStore } from '../../src/store/settings';
 import type { CheckFinding, CheckGroup, CheckObject, CheckReport } from '../../src/lib/types';
 
 const OBJECTS: CheckObject[] = [
@@ -14,6 +15,13 @@ const OBJECTS: CheckObject[] = [
     kind: 'Deployment',
   },
 ];
+
+function askedFor(target: RequestInfo | URL): string {
+  if (typeof target === 'string') {
+    return target;
+  }
+  return target instanceof URL ? target.href : target.url;
+}
 
 function makeFinding(extra: Partial<CheckFinding> = {}): CheckFinding {
   return {
@@ -87,6 +95,12 @@ function show(report: Partial<CheckReport>) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  useSettingsStore.setState({
+    checksDisabled: [],
+    checksSkipNamespaces: [],
+    checksMinSeverity: '',
+    checksWholeCluster: false,
+  });
 });
 
 describe('Checks', () => {
@@ -432,5 +446,71 @@ describe('Checks', () => {
       expect(screen.getByText(/stopped updating/)).toBeInTheDocument();
     });
     vi.useRealTimers();
+  });
+});
+
+describe('audit controls', () => {
+  it('remembers the severity floor and asks the backend for it', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await screen.findByRole('button', { name: /Privileged containers/ });
+
+    await userEvent.selectOptions(screen.getByLabelText('Lowest severity to show'), 'high');
+
+    expect(useSettingsStore.getState().checksMinSeverity).toBe('high');
+    await waitFor(() => {
+      const urls = vi.mocked(fetch).mock.calls.map((call) => askedFor(call[0]));
+      expect(urls.some((url) => url.includes('minSeverity=high'))).toBe(true);
+    });
+  });
+
+  it('asks for the whole cluster when switched on', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await screen.findByRole('button', { name: /Privileged containers/ });
+
+    await userEvent.click(screen.getByLabelText('Audit the whole cluster'));
+
+    expect(useSettingsStore.getState().checksWholeCluster).toBe(true);
+  });
+
+  it('turns one check off and offers to put it back', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Turn off privileged-containers' }),
+    );
+
+    expect(useSettingsStore.getState().checksDisabled).toEqual(['privileged-containers']);
+    expect(await screen.findByRole('button', { name: /1 turned off/ })).toBeInTheDocument();
+  });
+
+  it('puts every turned-off check back at once', async () => {
+    useSettingsStore.setState({ checksDisabled: ['a', 'b'] });
+    show({ groups: [] });
+
+    await userEvent.click(await screen.findByRole('button', { name: /2 turned off/ }));
+
+    expect(useSettingsStore.getState().checksDisabled).toEqual([]);
+  });
+
+  it('skips the namespaces you name and drops the empty ones', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await screen.findByRole('button', { name: /Privileged containers/ });
+
+    await userEvent.type(screen.getByLabelText('Namespaces to skip'), 'kube-system, ,flux-system');
+
+    expect(useSettingsStore.getState().checksSkipNamespaces).toEqual([
+      'kube-system',
+      'flux-system',
+    ]);
+  });
+
+  it('does not open a check when its off button is pressed', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Turn off privileged-containers' }),
+    );
+
+    expect(screen.queryByText(/holds every capability/)).not.toBeInTheDocument();
   });
 });

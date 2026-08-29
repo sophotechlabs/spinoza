@@ -223,7 +223,7 @@ func TestACheckSaysSoWhenTheClusterNeverReportedWhatItNeeds(t *testing.T) {
 	descs := descriptors()
 	delete(descs, "/v1/nodes")
 
-	found := Run(t.Context(), newLister(), descs, api.Metrics{})
+	found := Run(t.Context(), newLister(), descs, api.Metrics{}, wholeCluster(), 0)
 
 	group := groupNamed(t, found, "node-selector-matches-nothing")
 	if group.Skipped == "" {

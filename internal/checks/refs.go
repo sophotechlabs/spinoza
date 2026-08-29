@@ -177,6 +177,26 @@ func workloadRefChecks() []check {
 func orphanChecks() []check {
 	return []check{
 		{
+			id:       "orphaned-config-map",
+			title:    "ConfigMap nothing names",
+			category: categoryEfficiency,
+			severity: severityLow,
+			needs:    []target{configMapTarget},
+			wrong:    "No workload mounts it and nothing else Spinoza has read mentions it by name. A judgement call: a custom resource Spinoza has not opened, or something outside the cluster, may still name it.",
+			remedy:   "Delete it once you have checked nothing else wants it.",
+			find:     overCorpus(orphanedConfigMaps),
+		},
+		{
+			id:       "orphaned-secret",
+			title:    "Secret nothing names",
+			category: categoryEfficiency,
+			severity: severityLow,
+			needs:    []target{secretTarget},
+			wrong:    "No workload reads it and nothing else Spinoza has read mentions it by name. A judgement call: a custom resource Spinoza has not opened, or something outside the cluster, may still name it.",
+			remedy:   "Delete it once you have checked nothing else wants it.",
+			find:     overCorpus(orphanedSecrets),
+		},
+		{
 			id:       "claim-nothing-mounts",
 			title:    "PersistentVolumeClaim nothing mounts",
 			category: categoryEfficiency,
@@ -576,6 +596,35 @@ func scalerFightsReplicas(subject Subject, held *corpus) (string, string) {
 
 func overCorpus(rule func(scan) []found) finder {
 	return rule
+}
+
+const helmReleasePrefix = "sh.helm.release.v1."
+
+var neverOrphans = []string{"kube-root-ca.crt"}
+
+func orphanedConfigMaps(sc scan) []found {
+	return orphansOf(sc, "configmaps", "ConfigMap")
+}
+
+func orphanedSecrets(sc scan) []found {
+	return orphansOf(sc, "secrets", "Secret")
+}
+
+func orphansOf(sc scan, resource, label string) []found {
+	out := []found{}
+	for _, ref := range sc.held.every(resource) {
+		if slices.Contains(neverOrphans, ref.Name) || strings.HasPrefix(ref.Name, helmReleasePrefix) {
+			continue
+		}
+		if sc.held.mentionedElsewhere(ref.Name) {
+			continue
+		}
+		out = append(out, found{
+			subject: Subject{Ref: ref, Kind: label, Object: emptyObject(ref, label)},
+			detail:  "nothing Spinoza has read names this " + label,
+		})
+	}
+	return out
 }
 
 func unmountedClaims(sc scan) []found {

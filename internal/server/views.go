@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/topology"
 )
@@ -20,7 +21,7 @@ func (s *Server) handleCheckPage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "check is required")
 		return
 	}
-	page, err := s.managerFor(r).CheckPage(r.Context(), id, query.Get("after"))
+	page, err := s.managerFor(r).CheckPage(r.Context(), id, query.Get("after"), checkFilter(r))
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -29,7 +30,17 @@ func (s *Server) handleCheckPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.managerFor(r).Checks(r.Context()))
+	writeJSON(w, s.managerFor(r).Checks(r.Context(), checkFilter(r)))
+}
+
+func checkFilter(r *http.Request) checks.Filter {
+	query := r.URL.Query()
+	return checks.ParseFilter(
+		query.Get("disabled"),
+		query.Get("skipNamespaces"),
+		query.Get("minSeverity"),
+		query.Get("wholeCluster"),
+	)
 }
 
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {

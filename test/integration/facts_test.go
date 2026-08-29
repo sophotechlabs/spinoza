@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 )
 
@@ -183,7 +184,7 @@ func TestTheClusterFactChecksFireOnARealCluster(t *testing.T) {
 		pod.HostPID = true
 	})
 
-	report := mgr.Checks(context.Background())
+	report := mgr.Checks(context.Background(), checks.Filter{WholeCluster: true})
 	if report.Scanned == 0 {
 		t.Fatalf("the audit read nothing (%s)", report.Error)
 	}
@@ -209,7 +210,7 @@ func TestTheClusterFactChecksFireOnARealCluster(t *testing.T) {
 }
 
 func TestACheckSaysWhyItWasSkippedWhenTheClusterHidesWhatItNeeds(t *testing.T) {
-	report := manager(t, bundle(t)).Checks(context.Background())
+	report := manager(t, bundle(t)).Checks(context.Background(), checks.Filter{WholeCluster: true})
 
 	for _, group := range report.Groups {
 		if group.Skipped == "" {

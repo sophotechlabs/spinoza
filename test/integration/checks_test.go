@@ -148,7 +148,7 @@ func TestChecksAuditARealCluster(t *testing.T) {
 	mgr := manager(t, loaded)
 	failingDeployment(t, loaded)
 
-	report := mgr.Checks(context.Background())
+	report := mgr.Checks(context.Background(), checks.Filter{WholeCluster: true})
 
 	if report.Scanned == 0 {
 		t.Fatalf("the audit read nothing (%s)", report.Error)
@@ -239,7 +239,7 @@ func TestYourOwnWorkloadIsListedBeforeOneAPackageInstalled(t *testing.T) {
 	failingDeployment(t, loaded)
 	packagedDeployment(t, loaded)
 
-	report := mgr.Checks(context.Background())
+	report := mgr.Checks(context.Background(), checks.Filter{WholeCluster: true})
 
 	mine := positionOf(report, "requests-missing", auditWorkload)
 	packaged := positionOf(report, "requests-missing", packagedWorkload)
@@ -258,7 +258,7 @@ func TestYourOwnWorkloadIsListedBeforeOneAPackageInstalled(t *testing.T) {
 }
 
 func TestEveryCheckIsRegisteredOnce(t *testing.T) {
-	report := manager(t, bundle(t)).Checks(context.Background())
+	report := manager(t, bundle(t)).Checks(context.Background(), checks.Filter{WholeCluster: true})
 
 	seen := map[string]bool{}
 	for _, group := range report.Groups {
@@ -277,7 +277,7 @@ func TestPagingAChecksFindingsAgainstARealCluster(t *testing.T) {
 	mgr := manager(t, loaded)
 	failingDeployment(t, loaded)
 
-	report := mgr.Checks(context.Background())
+	report := mgr.Checks(context.Background(), checks.Filter{WholeCluster: true})
 	group := api.CheckGroup{}
 	for _, one := range report.Groups {
 		if one.ID == "requests-missing" {
@@ -288,7 +288,7 @@ func TestPagingAChecksFindingsAgainstARealCluster(t *testing.T) {
 		t.Fatalf("nothing on this cluster is missing requests (%s)", report.Error)
 	}
 
-	page, err := mgr.CheckPage(context.Background(), "requests-missing", "")
+	page, err := mgr.CheckPage(context.Background(), "requests-missing", "", checks.Filter{WholeCluster: true})
 	if err != nil {
 		t.Fatalf("first page: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestPagingAChecksFindingsAgainstARealCluster(t *testing.T) {
 
 	seen := len(page.Findings)
 	for page.Next != "" {
-		page, err = mgr.CheckPage(context.Background(), "requests-missing", page.Next)
+		page, err = mgr.CheckPage(context.Background(), "requests-missing", page.Next, checks.Filter{WholeCluster: true})
 		if err != nil {
 			t.Fatalf("next page: %v", err)
 		}
@@ -317,7 +317,7 @@ func TestPagingAChecksFindingsAgainstARealCluster(t *testing.T) {
 }
 
 func TestPagingRefusesACheckThatDoesNotExist(t *testing.T) {
-	_, err := manager(t, bundle(t)).CheckPage(context.Background(), "not-a-real-check", "")
+	_, err := manager(t, bundle(t)).CheckPage(context.Background(), "not-a-real-check", "", checks.Filter{WholeCluster: true})
 
 	if !errors.Is(err, checks.ErrNoSuchCheck) {
 		t.Fatalf("error = %v, want ErrNoSuchCheck", err)
@@ -329,7 +329,7 @@ func TestEveryPatchTheAuditOffersIsAcceptedByTheApiServer(t *testing.T) {
 	mgr := manager(t, loaded)
 	failingDeployment(t, loaded)
 
-	report := mgr.Checks(context.Background())
+	report := mgr.Checks(context.Background(), checks.Filter{WholeCluster: true})
 
 	tried := 0
 	for _, group := range report.Groups {
@@ -439,7 +439,7 @@ func awaitUsageFinding(t *testing.T, mgr *resources.Manager) api.CheckFinding {
 	deadline := time.Now().Add(usageTimeout)
 	var last api.CheckGroup
 	for time.Now().Before(deadline) {
-		report := mgr.Checks(context.Background())
+		report := mgr.Checks(context.Background(), checks.Filter{WholeCluster: true})
 		last = groupOf(report, usageCheck)
 		for _, finding := range last.Findings {
 			object := objectOf(report, finding)
@@ -458,7 +458,7 @@ func TestTheUsageCheckRunsOnceMetricsServerAnswers(t *testing.T) {
 	mgr := manager(t, bundle(t))
 	awaitMetrics(t, mgr)
 
-	group := groupOf(mgr.Checks(context.Background()), usageCheck)
+	group := groupOf(mgr.Checks(context.Background(), checks.Filter{WholeCluster: true}), usageCheck)
 
 	if group.ID != usageCheck {
 		t.Fatalf("the report carries no %s group at all", usageCheck)

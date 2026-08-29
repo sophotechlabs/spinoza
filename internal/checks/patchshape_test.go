@@ -132,8 +132,8 @@ func TestRunLeavesTheCachedObjectsUntouched(t *testing.T) {
 	before := []*unstructured.Unstructured{owner.DeepCopy(), running.DeepCopy()}
 	lister := newLister(owner, running)
 
-	Run(t.Context(), lister, descriptors(), api.Metrics{})
-	Run(t.Context(), lister, descriptors(), api.Metrics{})
+	Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
+	Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
 
 	after := []*unstructured.Unstructured{owner, running}
 	for at := range before {
@@ -149,13 +149,13 @@ func TestTwoAuditsAtOnceDoNotShareState(t *testing.T) {
 		deployment("api", hostileWorkload("api")),
 		pod("standalone", hostileWorkload("standalone")),
 	)
-	first := Run(t.Context(), lister, descriptors(), api.Metrics{})
+	first := Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
 
 	var wg sync.WaitGroup
 	reports := make([]api.CheckReport, 8)
 	for at := range reports {
 		wg.Go(func() {
-			reports[at] = Run(t.Context(), lister, descriptors(), api.Metrics{})
+			reports[at] = Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
 		})
 	}
 	wg.Wait()

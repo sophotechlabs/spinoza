@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -247,5 +248,105 @@ func TestANodeThatReportsNoReadyConditionAtAllSaysNothing(t *testing.T) {
 
 	if found := nodeFindings(snap); len(found) != 0 {
 		t.Fatalf("a node with no conditions yet produced %d findings", len(found))
+	}
+}
+
+// kinds the apiserver will not serve, and services that answer nothing
+
+func crd(name string, conditions []any) object {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": apiExtensionsGroup + "/v1",
+		"kind":       kindCRD,
+		"metadata": map[string]any{
+			"name":              name,
+			"uid":               "uid-" + name,
+			"creationTimestamp": testNow.Add(-time.Hour).Format(time.RFC3339),
+		},
+		"status": map[string]any{"conditions": conditions},
+	}}
+	return object{obj: obj, desc: api.ResourceDescriptor{
+		Group: apiExtensionsGroup, Version: "v1", Resource: "customresourcedefinitions", Kind: kindCRD,
+	}}
+}
+
+func serviceObject(name string, selector map[string]any) object {
+	item := clusterObject(kindService, name, map[string]any{"selector": selector}, nil)
+	item.obj.SetNamespace("default")
+	return item
+}
+
+func endpointsFor(name string, addresses int) object {
+	listed := make([]any, 0, addresses)
+	for at := range addresses {
+		listed = append(listed, map[string]any{"ip": "10.0.0." + strconv.Itoa(at+1)})
+	}
+	item := clusterObject(kindEndpoints, name, nil, nil)
+	item.obj.SetNamespace("default")
+	item.obj.Object["subsets"] = []any{map[string]any{"addresses": listed}}
+	return item
+}
+
+func TestACustomResourceDefinitionTheApiserverRefusedIsFatal(t *testing.T) {
+	snap := snapshotOf(crd("widgets.example.com", []any{
+		condition("Established", conditionFalse, map[string]any{
+			"reason": "SchemaInvalid", "message": "spec.versions[0].schema is invalid",
+		}),
+	}))
+
+	found := definitionFindings(snap)
+
+	if len(found) != 1 || found[0].title != "SchemaInvalid" {
+		t.Fatalf("produced %v", found)
+	}
+	if found[0].severity != severityFatal {
+		t.Fatalf("severity was %d, want fatal", found[0].severity)
+	}
+}
+
+func TestAnEstablishedDefinitionSaysNothing(t *testing.T) {
+	snap := snapshotOf(crd("widgets.example.com", []any{condition("Established", conditionTrue, nil)}))
+
+	if found := definitionFindings(snap); len(found) != 0 {
+		t.Fatalf("an established CRD produced %d findings", len(found))
+	}
+}
+
+func TestADefinitionWithNoConditionsYetIsLeftAlone(t *testing.T) {
+	if found := definitionFindings(snapshotOf(crd("widgets.example.com", nil))); len(found) != 0 {
+		t.Fatal("a CRD the apiserver has not judged yet was reported")
+	}
+}
+
+func TestAServiceWithNoReadyBackendIsFatal(t *testing.T) {
+	snap := snapshotOf(serviceObject("api", map[string]any{"app": "api"}))
+
+	found := routingFindings(snap)
+
+	if len(found) != 1 || found[0].title != "NoEndpoints" {
+		t.Fatalf("produced %v", found)
+	}
+}
+
+func TestAServiceWithABackendSaysNothing(t *testing.T) {
+	snap := snapshotOf(serviceObject("api", map[string]any{"app": "api"}), endpointsFor("api", 2))
+
+	if found := routingFindings(snap); len(found) != 0 {
+		t.Fatalf("a service with endpoints produced %d findings", len(found))
+	}
+}
+
+func TestEndpointsWithNoAddressesDoNotCountAsABackend(t *testing.T) {
+	snap := snapshotOf(serviceObject("api", map[string]any{"app": "api"}), endpointsFor("api", 0))
+
+	if found := routingFindings(snap); len(found) != 1 {
+		t.Fatal("an Endpoints object holding no addresses was read as a backend")
+	}
+}
+
+func TestAServiceThatSelectsNothingIsNotJudgedOnEndpoints(t *testing.T) {
+	external := serviceObject("db", nil)
+
+	if found := routingFindings(snapshotOf(external)); len(found) != 0 {
+		t.Fatal("a selectorless service was asked for endpoints")
 	}
 }

@@ -14,7 +14,9 @@ import { failure } from './object';
 import { request } from './http';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
-import { useChecksInterval } from '../store/settings';
+import { useChecksFilter, useChecksInterval } from '../store/settings';
+import type { SeverityFloor } from './settings';
+import { SEVERITY_FLOORS } from './settings';
 
 const SEVERITY_RANK: Record<CheckSeverity, number> = { high: 0, medium: 1, low: 2 };
 
@@ -142,8 +144,65 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
   };
 }
 
-export async function fetchChecks(): Promise<CheckReportView> {
-  const response = await request('/api/checks');
+export interface ChecksFilter {
+  disabled: string[];
+  skipNamespaces: string[];
+  minSeverity: SeverityFloor;
+  wholeCluster: boolean;
+}
+
+export const NO_FILTER: ChecksFilter = {
+  disabled: [],
+  skipNamespaces: [],
+  minSeverity: '',
+  wholeCluster: false,
+};
+
+export function fromParams(query: string): ChecksFilter {
+  const params = new URLSearchParams(query);
+  const floor = params.get('minSeverity') ?? '';
+  return {
+    disabled: namesIn(params.get('disabled')),
+    skipNamespaces: namesIn(params.get('skipNamespaces')),
+    minSeverity: SEVERITY_FLOORS.find((one) => one === floor) ?? '',
+    wholeCluster: params.get('wholeCluster') === '1',
+  };
+}
+
+function namesIn(raw: string | null): string[] {
+  if (raw === null || raw === '') {
+    return [];
+  }
+  return raw.split(',');
+}
+
+export function filterParams(keep: ChecksFilter): URLSearchParams {
+  const params = new URLSearchParams();
+  if (keep.disabled.length > 0) {
+    params.set('disabled', keep.disabled.join(','));
+  }
+  if (keep.skipNamespaces.length > 0) {
+    params.set('skipNamespaces', keep.skipNamespaces.join(','));
+  }
+  if (keep.minSeverity !== '') {
+    params.set('minSeverity', keep.minSeverity);
+  }
+  if (keep.wholeCluster) {
+    params.set('wholeCluster', '1');
+  }
+  return params;
+}
+
+function withParams(path: string, params: URLSearchParams): string {
+  const query = params.toString();
+  if (query === '') {
+    return path;
+  }
+  return `${path}?${query}`;
+}
+
+export async function fetchChecks(keep: ChecksFilter = NO_FILTER): Promise<CheckReportView> {
+  const response = await request(withParams('/api/checks', filterParams(keep)));
   if (!response.ok) {
     throw await failure(response, `the checks request failed with status ${response.status}`);
   }
@@ -156,8 +215,14 @@ export async function fetchChecks(): Promise<CheckReportView> {
   };
 }
 
-export async function fetchCheckPage(check: string, after: string): Promise<CheckPageView> {
-  const params = new URLSearchParams({ check, after });
+export async function fetchCheckPage(
+  check: string,
+  after: string,
+  keep: ChecksFilter = NO_FILTER,
+): Promise<CheckPageView> {
+  const params = filterParams(keep);
+  params.set('check', check);
+  params.set('after', after);
   const response = await request(`/api/checks/findings?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `the findings request failed with status ${response.status}`);
@@ -172,7 +237,9 @@ export async function fetchCheckPage(check: string, after: string): Promise<Chec
 
 export function useChecks(): Polled<CheckReportView> {
   const seconds = useChecksInterval();
-  const load = useCallback(() => fetchChecks(), []);
+  const keep = useChecksFilter();
+  const query = filterParams(keep).toString();
+  const load = useCallback(() => fetchChecks(fromParams(query)), [query]);
   return usePoll(load, { intervalMs: seconds * 1000, fallback: 'the checks request failed' });
 }
 

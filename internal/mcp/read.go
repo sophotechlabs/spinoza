@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/topology"
@@ -166,7 +167,11 @@ func (s *Server) registerReads() {
 		properties: map[string]propOf{
 			"severity": choice("Keep only this severity.", "high", "medium", "low"),
 			"check":    text("Keep only this check id."),
-			argLimit:   number("How many findings to return. Defaults to 100."),
+			"scope": choice(
+				"How much of the cluster to read. Defaults to everything.",
+				"cluster", "workloads",
+			),
+			argLimit: number("How many findings to return. Defaults to 100."),
 		},
 		run: s.audit,
 	})
@@ -197,7 +202,7 @@ func (s *Server) dashboard(ctx context.Context, _ arguments) (any, error) {
 	overview := s.cluster.Overview(ctx)
 	counts := s.cluster.Counts(ctx)
 	queue := s.cluster.Issues(ctx)
-	report := s.cluster.Checks(ctx)
+	report := s.cluster.Checks(ctx, checks.Filter{WholeCluster: true})
 	return map[string]any{
 		"context":     s.context,
 		"kubernetes":  overview.Version,
@@ -547,7 +552,7 @@ func (s *Server) helmRelease(ctx context.Context, args arguments) (any, error) {
 }
 
 func (s *Server) audit(ctx context.Context, args arguments) (any, error) {
-	report := s.cluster.Checks(ctx)
+	report := s.cluster.Checks(ctx, checks.Filter{WholeCluster: args.text("scope") != "workloads"})
 	severity := args.text("severity")
 	only := args.text("check")
 	limit := args.number(argLimit, defaultRows)

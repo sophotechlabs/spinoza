@@ -52,6 +52,10 @@ func (f *fakeLister) ListNames(_ context.Context, desc api.ResourceDescriptor) (
 	return out, nil
 }
 
+func (f *fakeLister) Cached() []api.ResourceDescriptor {
+	return nil
+}
+
 func (f *fakeLister) Warm(context.Context, []api.ResourceDescriptor) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -143,9 +147,13 @@ func descriptors() map[string]api.ResourceDescriptor {
 	return out
 }
 
+func wholeCluster() Filter {
+	return Filter{WholeCluster: true}
+}
+
 func report(t *testing.T, objects ...*unstructured.Unstructured) api.CheckReport {
 	t.Helper()
-	return Run(t.Context(), newLister(objects...), descriptors(), api.Metrics{})
+	return Run(t.Context(), newLister(objects...), descriptors(), api.Metrics{}, wholeCluster(), 0)
 }
 
 func reportWithUsage(
@@ -154,7 +162,7 @@ func reportWithUsage(
 	objects ...*unstructured.Unstructured,
 ) api.CheckReport {
 	t.Helper()
-	return Run(t.Context(), newLister(objects...), descriptors(), api.Metrics{Pods: usage})
+	return Run(t.Context(), newLister(objects...), descriptors(), api.Metrics{Pods: usage}, wholeCluster(), 0)
 }
 
 func groupNamed(t *testing.T, found api.CheckReport, id string) api.CheckGroup {

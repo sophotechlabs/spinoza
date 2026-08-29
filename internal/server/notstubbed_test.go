@@ -13,6 +13,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
@@ -71,12 +72,12 @@ func (n notStubbed) ArgoAction(_ context.Context, _ api.ObjectRef, _ argocd.Requ
 	return r0, r1
 }
 
-func (n notStubbed) CheckPage(_ context.Context, _, _ string) (r0 api.CheckPage, r1 error) {
+func (n notStubbed) CheckPage(_ context.Context, _, _ string, _ checks.Filter) (r0 api.CheckPage, r1 error) {
 	n.missing("CheckPage")
 	return r0, r1
 }
 
-func (n notStubbed) Checks(_ context.Context) (r0 api.CheckReport) {
+func (n notStubbed) Checks(_ context.Context, _ checks.Filter) (r0 api.CheckReport) {
 	n.missing("Checks")
 	return r0
 }

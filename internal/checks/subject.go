@@ -22,6 +22,7 @@ type Lister interface {
 	List(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
 	Warm(ctx context.Context, descs []api.ResourceDescriptor)
 	ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error)
+	Cached() []api.ResourceDescriptor
 }
 
 type target struct {
@@ -40,11 +41,14 @@ var targets = []target{
 	{group: "batch", resource: "cronjobs"},
 }
 
-var contextTargets = []target{
+var factTargets = []target{
 	{group: "", resource: "nodes"},
 	{group: "", resource: "namespaces"},
 	{group: "", resource: "resourcequotas"},
 	{group: "", resource: "limitranges"},
+}
+
+var contextTargets = []target{
 	{group: "", resource: "services"},
 	{group: "", resource: "serviceaccounts"},
 	{group: "", resource: "configmaps"},
@@ -68,8 +72,16 @@ var nameOnlyTargets = []target{
 }
 
 func allTargets() []target {
+	return targetsFor(true)
+}
+
+func targetsFor(wholeCluster bool) []target {
 	out := make([]target, 0, len(targets)+len(contextTargets)+len(nameOnlyTargets))
 	out = append(out, targets...)
+	out = append(out, factTargets...)
+	if !wholeCluster {
+		return out
+	}
 	out = append(out, contextTargets...)
 	out = append(out, nameOnlyTargets...)
 	return out
@@ -112,8 +124,8 @@ type held struct {
 	obj  *unstructured.Unstructured
 }
 
-func needed(descs map[string]api.ResourceDescriptor) (found []api.ResourceDescriptor, absent []string) {
-	wanted := allTargets()
+func needed(descs map[string]api.ResourceDescriptor, wholeCluster bool) (found []api.ResourceDescriptor, absent []string) {
+	wanted := targetsFor(wholeCluster)
 	found = make([]api.ResourceDescriptor, 0, len(wanted))
 	for _, want := range wanted {
 		desc, ok := matching(descs, want)
@@ -124,6 +136,34 @@ func needed(descs map[string]api.ResourceDescriptor) (found []api.ResourceDescri
 		found = append(found, desc)
 	}
 	return found, absent
+}
+
+const extraWarmKinds = 25
+
+func alsoWarm(lister Lister, already []api.ResourceDescriptor) []api.ResourceDescriptor {
+	seen := map[string]bool{}
+	for _, desc := range already {
+		seen[descKey(desc)] = true
+	}
+	out := []api.ResourceDescriptor{}
+	for _, desc := range lister.Cached() {
+		if seen[descKey(desc)] {
+			continue
+		}
+		seen[descKey(desc)] = true
+		out = append(out, desc)
+	}
+	slices.SortFunc(out, func(left, right api.ResourceDescriptor) int {
+		return strings.Compare(descKey(left), descKey(right))
+	})
+	if len(out) > extraWarmKinds {
+		return out[:extraWarmKinds]
+	}
+	return out
+}
+
+func descKey(desc api.ResourceDescriptor) string {
+	return desc.Group + "/" + desc.Version + "/" + desc.Resource
 }
 
 func isSubjectKind(desc api.ResourceDescriptor) bool {
@@ -151,7 +191,9 @@ func undiscovered(absent []string) string {
 	return "not discovered yet, so nothing of these types was audited: " + strings.Join(absent, ", ")
 }
 
-func gather(ctx context.Context, lister Lister, descs []api.ResourceDescriptor) ([]held, []api.ObjectRef, string) {
+func gather(
+	ctx context.Context, lister Lister, descs []api.ResourceDescriptor,
+) ([]held, []api.ObjectRef, []target, string) {
 	warmed := []api.ResourceDescriptor{}
 	for _, desc := range descs {
 		if isNameOnly(desc) {
@@ -163,26 +205,30 @@ func gather(ctx context.Context, lister Lister, descs []api.ResourceDescriptor) 
 	failures := listerr.New()
 	out := []held{}
 	names := []api.ObjectRef{}
+	unread := []target{}
 	for _, desc := range descs {
 		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 		if isNameOnly(desc) {
 			found, err := lister.ListNames(ctx, desc)
 			failures.Record(gvr.GroupResource().String(), err)
-			if err == nil {
-				names = append(names, found...)
+			if err != nil {
+				unread = append(unread, target{group: desc.Group, resource: desc.Resource})
+				continue
 			}
+			names = append(names, found...)
 			continue
 		}
 		items, err := lister.List(ctx, desc)
 		failures.Record(gvr.GroupResource().String(), err)
 		if err != nil {
+			unread = append(unread, target{group: desc.Group, resource: desc.Resource})
 			continue
 		}
 		for _, item := range items {
 			out = append(out, held{desc: desc, obj: item})
 		}
 	}
-	return out, names, failures.Message()
+	return out, names, unread, failures.Message()
 }
 
 func groupOf(apiVersion string) string {

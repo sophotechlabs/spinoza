@@ -9,6 +9,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/prom"
@@ -19,7 +20,7 @@ type Health interface {
 	Overview(ctx context.Context) api.ClusterOverview
 	Counts(ctx context.Context) api.ResourceCounts
 	Issues(ctx context.Context) api.IssueQueue
-	Checks(ctx context.Context) api.CheckReport
+	Checks(ctx context.Context, keep checks.Filter) api.CheckReport
 }
 
 type Inventory interface {

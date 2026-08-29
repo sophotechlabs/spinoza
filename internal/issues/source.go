@@ -42,20 +42,23 @@ type resourceRef struct {
 }
 
 var coreResources = map[resourceRef]bool{
-	{group: "", resource: "pods"}:                                   true,
-	{group: "", resource: "nodes"}:                                  true,
-	{group: "", resource: "namespaces"}:                             true,
-	{group: "", resource: "persistentvolumeclaims"}:                 true,
-	{group: "apiregistration.k8s.io", resource: "apiservices"}:      true,
-	{group: "", resource: "replicationcontrollers"}:                 true,
-	{group: appsGroup, resource: "deployments"}:                     true,
-	{group: appsGroup, resource: "replicasets"}:                     true,
-	{group: appsGroup, resource: "statefulsets"}:                    true,
-	{group: appsGroup, resource: "daemonsets"}:                      true,
-	{group: batchGroup, resource: "jobs"}:                           true,
-	{group: batchGroup, resource: "cronjobs"}:                       true,
-	{group: autoscalingGroup, resource: "horizontalpodautoscalers"}: true,
-	{group: argoGroup, resource: "applications"}:                    true,
+	{group: "", resource: "pods"}:                                          true,
+	{group: "", resource: "nodes"}:                                         true,
+	{group: "", resource: "namespaces"}:                                    true,
+	{group: "", resource: "persistentvolumeclaims"}:                        true,
+	{group: "apiregistration.k8s.io", resource: "apiservices"}:             true,
+	{group: "apiextensions.k8s.io", resource: "customresourcedefinitions"}: true,
+	{group: "", resource: "services"}:                                      true,
+	{group: "", resource: "endpoints"}:                                     true,
+	{group: "", resource: "replicationcontrollers"}:                        true,
+	{group: appsGroup, resource: "deployments"}:                            true,
+	{group: appsGroup, resource: "replicasets"}:                            true,
+	{group: appsGroup, resource: "statefulsets"}:                           true,
+	{group: appsGroup, resource: "daemonsets"}:                             true,
+	{group: batchGroup, resource: "jobs"}:                                  true,
+	{group: batchGroup, resource: "cronjobs"}:                              true,
+	{group: autoscalingGroup, resource: "horizontalpodautoscalers"}:        true,
+	{group: argoGroup, resource: "applications"}:                           true,
 }
 
 var fluxResources = []string{

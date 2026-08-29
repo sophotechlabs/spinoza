@@ -249,6 +249,26 @@ func TestEveryReferenceCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 			},
 		},
 		{
+			id:      "orphaned-config-map",
+			objects: []*unstructured.Unstructured{configMap("nobody-names-me", map[string]any{"a": "b"})},
+			clean: []*unstructured.Unstructured{
+				configMap("settings", map[string]any{"a": "b"}),
+				labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
+					"envFrom": []any{map[string]any{"configMapRef": map[string]any{"name": "settings"}}},
+				}))),
+			},
+		},
+		{
+			id:      "orphaned-secret",
+			objects: []*unstructured.Unstructured{simple("Secret", "nobody-names-me", testNamespace, nil)},
+			clean: []*unstructured.Unstructured{
+				simple("Secret", "creds", testNamespace, nil),
+				labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
+					"envFrom": []any{map[string]any{"secretRef": map[string]any{"name": "creds"}}},
+				}))),
+			},
+		},
+		{
 			id:      "claim-nothing-mounts",
 			objects: []*unstructured.Unstructured{simple("PersistentVolumeClaim", "spare", testNamespace, map[string]any{})},
 			clean: []*unstructured.Unstructured{
@@ -365,7 +385,7 @@ func TestAReferenceCheckIsSkippedWhenItsKindWasNeverDiscovered(t *testing.T) {
 	descs := descriptors()
 	delete(descs, "/v1/configmaps")
 
-	found := Run(t.Context(), newLister(), descs, api.Metrics{})
+	found := Run(t.Context(), newLister(), descs, api.Metrics{}, wholeCluster(), 0)
 
 	group := groupNamed(t, found, "config-map-missing")
 	if !strings.Contains(group.Skipped, "configmaps") {
@@ -468,5 +488,39 @@ func TestAClusterWithNoNetworkPolicyAtAllIsLeftAlone(t *testing.T) {
 
 	if findingCount(t, found, "no-network-policy") != 0 {
 		t.Fatal("a cluster that uses no NetworkPolicy at all was told off for every workload")
+	}
+}
+
+func TestHelmsOwnReleaseStorageIsNotAnOrphan(t *testing.T) {
+	found := report(t, simple("Secret", helmReleasePrefix+"beyla.v3", testNamespace, nil))
+
+	if findingCount(t, found, "orphaned-secret") != 0 {
+		t.Fatal("a Helm release record was reported as an orphaned Secret")
+	}
+}
+
+func TestTheCaBundleEveryNamespaceGetsIsNotAnOrphan(t *testing.T) {
+	found := report(t, configMap("kube-root-ca.crt", map[string]any{"ca.crt": "..."}))
+
+	if findingCount(t, found, "orphaned-config-map") != 0 {
+		t.Fatal("the CA bundle every namespace gets was reported as an orphan")
+	}
+}
+
+func TestASecretAnythingAtAllNamesIsNotAnOrphan(t *testing.T) {
+	// The name appears nowhere a reference check looks: it is a field on an
+	// unrelated object. The widened search is what a custom resource holding
+	// a secretRef relies on. Proved needed on p-mk1 2026-08-29, where every
+	// remaining orphan was named by a Flux, cert-manager or CNPG resource.
+	namer := simple("Service", "gateway", testNamespace, map[string]any{
+		"selector":        map[string]any{"app": "api"},
+		"externalName":    "tls-cert",
+		"sessionAffinity": "None",
+	})
+
+	found := report(t, simple("Secret", "tls-cert", testNamespace, nil), namer)
+
+	if findingCount(t, found, "orphaned-secret") != 0 {
+		t.Fatal("a Secret named by another object was still reported as an orphan")
 	}
 }

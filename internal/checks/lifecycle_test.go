@@ -519,3 +519,23 @@ func TestAStrategyWithNoRollingUpdateBlockIsIgnored(t *testing.T) {
 		t.Fatal("a strategy with no rollingUpdate block was reported")
 	}
 }
+
+func TestABarePodThatRunsToCompletionKeepsItsRestartPolicy(t *testing.T) {
+	oneShot := pod("importer", podSpecWith(map[string]any{
+		"restartPolicy": "Never",
+	}, container("app", nil)))
+
+	if findingCount(t, report(t, oneShot), "wrong-restart-policy") != 0 {
+		t.Fatal("a bare pod using Never was told to use Always")
+	}
+}
+
+func TestADeploymentThatRefusesToRestartIsStillReported(t *testing.T) {
+	stubborn := deployment("api", podSpecWith(map[string]any{
+		"restartPolicy": "Never",
+	}, container("app", nil)))
+
+	if findingCount(t, report(t, stubborn), "wrong-restart-policy") != 1 {
+		t.Fatal("a Deployment refusing to restart its pods was not reported")
+	}
+}

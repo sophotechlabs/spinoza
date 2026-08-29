@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { CheckInterval, LogView, NamespaceStart, Settings } from '../lib/settings';
+import type {
+  CheckInterval,
+  LogView,
+  NamespaceStart,
+  SeverityFloor,
+  Settings,
+} from '../lib/settings';
 import {
   readNodeShell,
   readSettings,
@@ -16,6 +22,10 @@ interface SettingsState extends Settings {
   setScreenReader: (screenReader: boolean) => void;
   setNamespaceStart: (context: string, namespaceStart: NamespaceStart) => void;
   setChecksInterval: (checksInterval: CheckInterval) => void;
+  setChecksDisabled: (checksDisabled: string[]) => void;
+  setChecksSkipNamespaces: (checksSkipNamespaces: string[]) => void;
+  setChecksMinSeverity: (checksMinSeverity: SeverityFloor) => void;
+  setChecksWholeCluster: (checksWholeCluster: boolean) => void;
   setNodeShell: (nodeShell: boolean) => Promise<void>;
   setUpdateCheck: (updateCheck: boolean) => Promise<void>;
 }
@@ -29,6 +39,10 @@ function saved(state: SettingsState): Settings {
     namespaceStart: state.namespaceStart,
     namespaceStarts: state.namespaceStarts,
     checksInterval: state.checksInterval,
+    checksDisabled: state.checksDisabled,
+    checksSkipNamespaces: state.checksSkipNamespaces,
+    checksMinSeverity: state.checksMinSeverity,
+    checksWholeCluster: state.checksWholeCluster,
   };
 }
 
@@ -38,6 +52,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   namespaceStart: stored.namespaceStart,
   namespaceStarts: stored.namespaceStarts,
   checksInterval: stored.checksInterval,
+  checksDisabled: stored.checksDisabled,
+  checksSkipNamespaces: stored.checksSkipNamespaces,
+  checksMinSeverity: stored.checksMinSeverity,
+  checksWholeCluster: stored.checksWholeCluster,
   nodeShell: readNodeShell(),
   updateCheck: readUpdateCheck(),
   setLogView: (logView) => {
@@ -62,6 +80,22 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     writeSettings({ ...saved(get()), checksInterval });
     set({ checksInterval });
   },
+  setChecksDisabled: (checksDisabled) => {
+    writeSettings({ ...saved(get()), checksDisabled });
+    set({ checksDisabled });
+  },
+  setChecksSkipNamespaces: (checksSkipNamespaces) => {
+    writeSettings({ ...saved(get()), checksSkipNamespaces });
+    set({ checksSkipNamespaces });
+  },
+  setChecksMinSeverity: (checksMinSeverity) => {
+    writeSettings({ ...saved(get()), checksMinSeverity });
+    set({ checksMinSeverity });
+  },
+  setChecksWholeCluster: (checksWholeCluster) => {
+    writeSettings({ ...saved(get()), checksWholeCluster });
+    set({ checksWholeCluster });
+  },
   setNodeShell: async (nodeShell) => {
     await writeNodeShell(nodeShell);
     set({ nodeShell });
@@ -82,6 +116,19 @@ export function useScreenReader(): boolean {
 
 export function useChecksInterval(): CheckInterval {
   return useSettingsStore((state) => state.checksInterval);
+}
+
+export function useChecksFilter(): {
+  disabled: string[];
+  skipNamespaces: string[];
+  minSeverity: SeverityFloor;
+  wholeCluster: boolean;
+} {
+  const disabled = useSettingsStore((state) => state.checksDisabled);
+  const skipNamespaces = useSettingsStore((state) => state.checksSkipNamespaces);
+  const minSeverity = useSettingsStore((state) => state.checksMinSeverity);
+  const wholeCluster = useSettingsStore((state) => state.checksWholeCluster);
+  return { disabled, skipNamespaces, minSeverity, wholeCluster };
 }
 
 export function useNodeShell(): boolean {

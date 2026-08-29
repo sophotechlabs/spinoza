@@ -184,10 +184,10 @@ func decodeCursor(cursor string) string {
 	return string(raw)
 }
 
-func (c check) slice(sc scan, objs *objects, after string, limit int) (
+func (c check) slice(sc scan, objs *objects, after string, limit int, keep Filter) (
 	[]api.CheckFinding, string, int,
 ) {
-	all := c.find(sc)
+	all := kept(c.find(sc), keep)
 	out := make([]api.CheckFinding, 0, min(limit, len(all)))
 	last := ""
 	for _, item := range all {
@@ -209,7 +209,18 @@ func (c check) slice(sc scan, objs *objects, after string, limit int) (
 	return out, "", len(all)
 }
 
-func (c check) group(sc scan, objs *objects) api.CheckGroup {
+func kept(all []found, keep Filter) []found {
+	out := make([]found, 0, len(all))
+	for _, item := range all {
+		if !keep.keeps(item) {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func (c check) group(sc scan, objs *objects, keep Filter, shown int) api.CheckGroup {
 	out := api.CheckGroup{
 		ID:         c.id,
 		Title:      c.title,
@@ -228,7 +239,7 @@ func (c check) group(sc scan, objs *objects) api.CheckGroup {
 		out.Skipped = skippedBecause(missing)
 		return out
 	}
-	out.Findings, out.Next, out.Total = c.slice(sc, objs, "", findingsShown)
+	out.Findings, out.Next, out.Total = c.slice(sc, objs, "", shown, keep)
 	out.Truncated = out.Next != ""
 	return out
 }
@@ -254,6 +265,8 @@ func registry() []check {
 	out = append(out, efficiencyChecks()...)
 	out = append(out, factChecks()...)
 	out = append(out, referenceChecks()...)
+	out = append(out, rbacChecks()...)
+	out = append(out, objectChecks()...)
 	return out
 }
 
@@ -264,6 +277,8 @@ func Page(
 	usage api.Metrics,
 	id string,
 	after string,
+	keep Filter,
+	shown int,
 ) (api.CheckPage, error) {
 	var wanted check
 	for _, entry := range registry() {
@@ -274,7 +289,7 @@ func Page(
 	if wanted.id == "" {
 		return api.CheckPage{}, ErrNoSuchCheck
 	}
-	sc, _, _ := survey(ctx, lister, descs, usage)
+	sc, _, _ := survey(ctx, lister, descs, usage, keep)
 	if wanted.needsUsage && !sc.hasUsage() {
 		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
 	}
@@ -282,8 +297,15 @@ func Page(
 		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
 	}
 	objs := newObjects()
-	found, next, _ := wanted.slice(sc, objs, decodeCursor(after), findingsShown)
+	found, next, _ := wanted.slice(sc, objs, decodeCursor(after), pageSize(shown), keep)
 	return api.CheckPage{Findings: found, Objects: objs.list, Next: next}, nil
+}
+
+func pageSize(shown int) int {
+	if shown <= 0 {
+		return findingsShown
+	}
+	return shown
 }
 
 func survey(
@@ -291,13 +313,17 @@ func survey(
 	lister Lister,
 	descs map[string]api.ResourceDescriptor,
 	usage api.Metrics,
+	keep Filter,
 ) (scan, string, []string) {
-	wanted, absent := needed(descs)
-	items, names, failure := gather(ctx, lister, wanted)
+	wanted, absent := needed(descs, keep.WholeCluster)
+	if keep.WholeCluster {
+		wanted = append(wanted, alsoWarm(lister, wanted)...)
+	}
+	items, names, unread, failure := gather(ctx, lister, wanted)
 	return scan{
 		subjects: subjectsOf(items),
 		usage:    usage.Pods,
-		held:     newCorpus(items, names, absent),
+		held:     newCorpus(items, names, absent, targetsFor(keep.WholeCluster), unread),
 	}, failure, absent
 }
 
@@ -306,13 +332,15 @@ func Run(
 	lister Lister,
 	descs map[string]api.ResourceDescriptor,
 	usage api.Metrics,
+	keep Filter,
+	shown int,
 ) api.CheckReport {
-	sc, failure, absent := survey(ctx, lister, descs, usage)
-	checks := registry()
+	sc, failure, absent := survey(ctx, lister, descs, usage, keep)
+	checks := keep.chosen(registry())
 	objs := newObjects()
 	groups := make([]api.CheckGroup, 0, len(checks))
 	for _, entry := range checks {
-		groups = append(groups, entry.group(sc, objs))
+		groups = append(groups, entry.group(sc, objs, keep, pageSize(shown)))
 	}
 	return api.CheckReport{
 		Groups:  groups,

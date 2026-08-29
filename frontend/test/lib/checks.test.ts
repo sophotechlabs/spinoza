@@ -5,7 +5,10 @@ import {
   CATEGORY_ORDER,
   bySeverity,
   countLabel,
+  NO_FILTER,
+  fetchCheckPage,
   fetchChecks,
+  filterParams,
   findingLabel,
   inCategory,
   originLabel,
@@ -383,5 +386,60 @@ describe('origin', () => {
     const found = await fetchChecks();
 
     expect(found.groups[0].findings[0].origin).toBeUndefined();
+  });
+});
+
+function urlOf(at: number): string {
+  const target = vi.mocked(fetch).mock.calls[at][0];
+  if (typeof target === 'string') {
+    return target;
+  }
+  return target instanceof URL ? target.href : target.url;
+}
+
+describe('the audit filter on the wire', () => {
+  it('sends nothing when nothing is filtered', () => {
+    expect(filterParams(NO_FILTER).toString()).toBe('');
+  });
+
+  it('names the checks that are turned off', () => {
+    const params = filterParams({ ...NO_FILTER, disabled: ['cpu-limit-set', 'image-latest'] });
+    expect(params.get('disabled')).toBe('cpu-limit-set,image-latest');
+  });
+
+  it('names the namespaces to skip and the floor to apply', () => {
+    const params = filterParams({
+      ...NO_FILTER,
+      skipNamespaces: ['kube-system'],
+      minSeverity: 'high',
+    });
+    expect(params.get('skipNamespaces')).toBe('kube-system');
+    expect(params.get('minSeverity')).toBe('high');
+  });
+
+  it('asks for the whole cluster only when it is switched on', () => {
+    expect(filterParams({ ...NO_FILTER, wholeCluster: true }).get('wholeCluster')).toBe('1');
+    expect(filterParams(NO_FILTER).get('wholeCluster')).toBeNull();
+  });
+
+  it('carries the filter onto the checks request', async () => {
+    stub({ groups: [], objects: [], scanned: 0 });
+
+    await fetchChecks({ ...NO_FILTER, minSeverity: 'medium', wholeCluster: true });
+
+    const url = urlOf(0);
+    expect(url).toContain('minSeverity=medium');
+    expect(url).toContain('wholeCluster=1');
+  });
+
+  it('carries the filter onto a findings page as well as the cursor', async () => {
+    stub({ findings: [], objects: [] });
+
+    await fetchCheckPage('image-latest', 'abc', { ...NO_FILTER, skipNamespaces: ['kube-system'] });
+
+    const url = urlOf(0);
+    expect(url).toContain('skipNamespaces=kube-system');
+    expect(url).toContain('check=image-latest');
+    expect(url).toContain('after=abc');
   });
 });

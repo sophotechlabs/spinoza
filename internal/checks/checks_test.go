@@ -293,7 +293,7 @@ func TestAListFailureIsReportedWithoutLosingTheRest(t *testing.T) {
 	})))))
 	lister.errs["pods"] = errors.New("pods are forbidden")
 
-	found := Run(t.Context(), lister, descriptors(), api.Metrics{})
+	found := Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
 
 	if !strings.Contains(found.Error, "pods") {
 		t.Fatalf("the failure was not reported: %q", found.Error)
@@ -306,7 +306,7 @@ func TestAListFailureIsReportedWithoutLosingTheRest(t *testing.T) {
 func TestTheInformersAreWarmedOnce(t *testing.T) {
 	lister := newLister()
 
-	Run(t.Context(), lister, descriptors(), api.Metrics{})
+	Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
 
 	if got := lister.warmCount(); got != 1 {
 		t.Fatalf("warmed %d times, want 1", got)
@@ -314,7 +314,7 @@ func TestTheInformersAreWarmedOnce(t *testing.T) {
 }
 
 func TestOnlyTheKindsTheChecksReadAreWarmed(t *testing.T) {
-	asked, absent := needed(descriptors())
+	asked, absent := needed(descriptors(), true)
 
 	if len(asked) != len(allTargets()) {
 		t.Fatalf("asked for %d types, want %d", len(asked), len(allTargets()))
@@ -333,7 +333,7 @@ func TestATypeDiscoveryHasNotListedIsNamedInTheReport(t *testing.T) {
 	descs := descriptors()
 	delete(descs, "batch/v1/cronjobs")
 
-	asked, absent := needed(descs)
+	asked, absent := needed(descs, true)
 	if len(asked) != len(allTargets())-1 {
 		t.Fatalf("asked for %d types, want %d", len(asked), len(allTargets())-1)
 	}
@@ -341,14 +341,14 @@ func TestATypeDiscoveryHasNotListedIsNamedInTheReport(t *testing.T) {
 		t.Fatalf("absent was %v", absent)
 	}
 
-	found := Run(t.Context(), newLister(), descs, api.Metrics{})
+	found := Run(t.Context(), newLister(), descs, api.Metrics{}, wholeCluster(), 0)
 	if !strings.Contains(found.Error, "cronjobs") {
 		t.Fatalf("the report did not say cronjobs went unaudited: %q", found.Error)
 	}
 }
 
 func TestAnEmptyCatalogueSaysNothingWasAudited(t *testing.T) {
-	found := Run(t.Context(), newLister(), map[string]api.ResourceDescriptor{}, api.Metrics{})
+	found := Run(t.Context(), newLister(), map[string]api.ResourceDescriptor{}, api.Metrics{}, wholeCluster(), 0)
 
 	if found.Scanned != 0 {
 		t.Fatalf("scanned %d with no catalog", found.Scanned)
@@ -369,7 +369,7 @@ func TestAListFailureAndAnAbsentTypeAreBothReported(t *testing.T) {
 	lister := newLister()
 	lister.errs["pods"] = errors.New("pods are forbidden")
 
-	found := Run(t.Context(), lister, descs, api.Metrics{})
+	found := Run(t.Context(), lister, descs, api.Metrics{}, wholeCluster(), 0)
 
 	if !strings.Contains(found.Error, "pods") || !strings.Contains(found.Error, "cronjobs") {
 		t.Fatalf("only one of the two problems was reported: %q", found.Error)
