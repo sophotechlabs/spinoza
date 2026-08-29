@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { ADDR, BASE_URL, BINARY, KUBECONFIG, REPO_DIR, TOKEN_FILE } from './paths';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { ADDR, BASE_URL, BINARY, KUBECONFIG, REPO_DIR, TMP_DIR, TOKEN_FILE } from './paths';
 import { background, mustRun, run, waitFor } from './run';
 
 export function build(): void {
@@ -21,6 +22,8 @@ export function stopStale(): void {
 
 export async function start(extra: string[]): Promise<number> {
   rmSync(TOKEN_FILE, { force: true });
+  const home = join(TMP_DIR, 'home');
+  mkdirSync(home, { recursive: true });
   const pid = background(BINARY, [
     '--addr',
     ADDR,
@@ -29,9 +32,9 @@ export async function start(extra: string[]): Promise<number> {
     '--token-file',
     TOKEN_FILE,
     '--log-level',
-    'warn',
+    process.env.SPINOZA_E2E_LOG ?? 'warn',
     ...extra,
-  ]);
+  ], { env: { HOME: home, XDG_CONFIG_HOME: join(home, '.config') } });
   await waitFor('spinoza to write its token', 120, 500, () => existsSync(TOKEN_FILE));
   await waitFor('spinoza to answer', 120, 500, async () => {
     try {

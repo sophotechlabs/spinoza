@@ -36,6 +36,23 @@ export async function openHome(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded');
 }
 
+export async function expandCategory(page: Page, name: string): Promise<void> {
+  const button = page.getByRole('button', { name: new RegExp(`^${name} \\d+$`) });
+  await button.waitFor({ state: 'visible', timeout: 60_000 });
+  const expanded = await button.getAttribute('aria-expanded');
+  if (expanded === 'true') {
+    return;
+  }
+  await button.click();
+}
+
+export async function ensureDrawer(page: Page): Promise<void> {
+  const show = page.getByRole('button', { name: 'Show the right dock' });
+  if ((await show.count()) > 0) {
+    await show.click();
+  }
+}
+
 export function sidebar(page: Page, label: string | RegExp) {
   if (typeof label === 'string') {
     return page.getByRole('button', { name: label, exact: true });

@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { openSync } from 'node:fs';
 
 export interface RunResult {
   code: number;
@@ -38,9 +39,11 @@ export function mustRun(command: string, args: string[], options: RunOptions = {
 }
 
 export function background(command: string, args: string[], options: RunOptions = {}): number {
+  const log = process.env.SPINOZA_E2E_LOGFILE;
+  const sink = log === undefined ? 'ignore' : openSync(log, 'a');
   const child = spawn(command, args, {
     detached: true,
-    stdio: 'ignore',
+    stdio: log === undefined ? 'ignore' : ['ignore', sink, sink],
     cwd: options.cwd,
     env: { ...process.env, ...options.env },
   });

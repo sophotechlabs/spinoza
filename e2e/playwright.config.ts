@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test';
-import { BASE_URL } from './harness/paths';
+import { BASE_URL, STORAGE_STATE } from './harness/paths';
 
 const isCI = process.env.CI !== undefined;
 
@@ -15,6 +15,7 @@ export default defineConfig({
   reporter: isCI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: BASE_URL,
+    storageState: STORAGE_STATE,
     viewport: { width: 1600, height: 1000 },
     actionTimeout: 20_000,
     trace: 'retain-on-failure',

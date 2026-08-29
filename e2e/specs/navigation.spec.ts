@@ -1,6 +1,6 @@
 import { expect, test } from '../harness/test';
 import { CONTEXT } from '../harness/paths';
-import { openHome, openView, sidebar } from '../harness/app';
+import { expandCategory, openHome, openView, sidebar } from '../harness/app';
 
 const VIEWS = [
   { label: 'Cluster Overview', title: 'kind-spinoza-e2e' },
@@ -74,6 +74,7 @@ test('the page offers a skip link into its content', async ({ page }) => {
 
 test('the resource tree counts what it found', async ({ page }) => {
   await openHome(page);
+  await expandCategory(page, 'Workloads');
   await expect(sidebar(page, /^Pod \d/)).toBeVisible();
   await expect(sidebar(page, /^Deployment \d/)).toBeVisible();
   await expect(sidebar(page, /^CronJob \d/)).toBeVisible();
