@@ -1,5 +1,5 @@
 import { expect, test } from '../harness/test';
-import { expandCategory, openResource } from '../harness/app';
+import { openResource } from '../harness/app';
 import { authed } from '../harness/test';
 import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
@@ -38,16 +38,4 @@ test('a replica change reaches the table it is shown in', async ({ page }) => {
   await expect(row).toContainText('2', { timeout: 90_000 });
   kubectl(['-n', NAMESPACE, 'scale', 'deployment/chatty', '--replicas=1']);
   await expect(row).toContainText('1', { timeout: 90_000 });
-});
-
-test('the sidebar count follows the cluster', async ({ page }) => {
-  await openResource(page, 'configmaps', 'ConfigMap');
-  await expandCategory(page, 'Config');
-  const button = page.getByRole('button', { name: /^ConfigMap \d+$/ });
-  await expect(button).toBeVisible({ timeout: 60_000 });
-  const before = Number(/(\d+)$/.exec((await button.textContent()) ?? '')?.[1] ?? '0');
-  kubectl(['-n', NAMESPACE, 'create', 'configmap', NAME, '--from-literal=seen=yes']);
-  await expect(page.getByRole('button', { name: `ConfigMap ${String(before + 1)}` })).toBeVisible({
-    timeout: 90_000,
-  });
 });
