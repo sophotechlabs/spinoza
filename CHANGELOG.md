@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.20.0](https://github.com/sophotechlabs/spinoza/compare/v1.19.0...v1.20.0) (2026-08-29)
+
+
+### Features
+
+* **checks:** audit RBAC, networking and storage, and choose what the audit reads and shows ([935d363](https://github.com/sophotechlabs/spinoza/commit/935d36366c59fc3dbdec68c7bd9051838e805387))
+
+
+### Bug Fixes
+
+* **ci:** read the whole archive listing so verify-archives stops failing the release ([8f4088f](https://github.com/sophotechlabs/spinoza/commit/8f4088fd839279dd7e380cd680b8e1e4eddc0be8))
+* **themes:** paint the editor from the theme instead of leaving monaco its own greys ([18e7d66](https://github.com/sophotechlabs/spinoza/commit/18e7d66550e44c161d2a7fd91bd640dc7a9ef134))
+
+
+### CI
+
+* **e2e:** run the browser suite on both cluster tiers ([ad38789](https://github.com/sophotechlabs/spinoza/commit/ad387890de8eff56448e828631df04da3bad3121))
+
+
+### Tests
+
+* **e2e:** drive the editor, the write actions and the degradation paths in a browser ([ad9c989](https://github.com/sophotechlabs/spinoza/commit/ad9c989fd5069bf7847fa947ac2c3b114c0eda8b))
+* **e2e:** roll back and uninstall a release, and carry the context in every view link ([983b629](https://github.com/sophotechlabs/spinoza/commit/983b6292fbd359139bec58b7d54191e58cf9a5de))
+* **themes:** check every shipped theme, and the editor colours, for contrast ([63feab2](https://github.com/sophotechlabs/spinoza/commit/63feab27d4c8e5369f8f7bb691dd6a2a20f5b7b6))
+
 ## [1.19.0](https://github.com/sophotechlabs/spinoza/compare/v1.18.0...v1.19.0) (2026-08-29)
 
 
