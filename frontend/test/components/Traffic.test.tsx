@@ -5,6 +5,8 @@ import dagre from '@dagrejs/dagre';
 import type { TrafficEdge, TrafficGraph, TrafficNode } from '../../src/lib/types';
 import type { TrafficFlowNode } from '../../src/lib/trafficLayout';
 
+const fitViewSpy = vi.fn();
+
 vi.mock('@xyflow/react', () => {
   const ReactFlowStub = ({
     nodes,
@@ -31,7 +33,8 @@ vi.mock('@xyflow/react', () => {
   );
   const Background = () => <div data-testid="background" />;
   const Controls = () => <div data-testid="controls" />;
-  return { ReactFlow: ReactFlowStub, Background, Controls };
+  const useReactFlow = () => ({ fitView: fitViewSpy });
+  return { ReactFlow: ReactFlowStub, Background, Controls, useReactFlow };
 });
 
 import Traffic from '../../src/components/Traffic';

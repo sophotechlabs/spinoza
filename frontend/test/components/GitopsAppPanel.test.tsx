@@ -3,7 +3,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { GitopsApp, GraphNode, ObjectRef } from '../../src/lib/types';
 
+const fitViewSpy = vi.fn();
+
 vi.mock('@xyflow/react', () => ({
+  useReactFlow: () => ({ fitView: fitViewSpy }),
   ReactFlow: ({
     nodes,
     onNodeClick,

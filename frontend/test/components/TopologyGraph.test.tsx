@@ -6,6 +6,8 @@ import type { Graph } from '../../src/lib/types';
 import type { GitopsFlowNode } from '../../src/lib/graphLayout';
 import { makeGraphEdge, makeGraphNode } from '../helpers';
 
+const fitViewSpy = vi.fn();
+
 vi.mock('@xyflow/react', () => {
   const ReactFlowStub = ({
     nodes,
@@ -18,7 +20,13 @@ vi.mock('@xyflow/react', () => {
     onNodeClick?: (event: unknown, node: GitopsFlowNode) => void;
     children?: ReactNode;
   }) => (
-    <div data-testid="react-flow" data-edges={edges.length}>
+    <div
+      data-testid="react-flow"
+      data-edges={edges.length}
+      data-sized={
+        nodes.filter((node) => node.width !== undefined && node.height !== undefined).length
+      }
+    >
       {nodes.map((node) => (
         <button
           key={node.id}
@@ -37,7 +45,8 @@ vi.mock('@xyflow/react', () => {
   );
   const Background = () => <div data-testid="background" />;
   const Controls = () => <div data-testid="controls" />;
-  return { ReactFlow: ReactFlowStub, Background, Controls };
+  const useReactFlow = () => ({ fitView: fitViewSpy });
+  return { ReactFlow: ReactFlowStub, Background, Controls, useReactFlow };
 });
 
 import TopologyGraph from '../../src/components/TopologyGraph';
@@ -95,6 +104,7 @@ function urlsFor(graphs: Record<string, Graph>, fallback: Graph): string[] {
 }
 
 afterEach(() => {
+  fitViewSpy.mockClear();
   vi.unstubAllGlobals();
   vi.useRealTimers();
   act(() => {
@@ -379,5 +389,40 @@ describe('TopologyGraph', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Show the whole scope' }));
 
     expect(screen.queryByText('Around deployments/api')).not.toBeInTheDocument();
+  });
+});
+
+describe('the canvas fits itself to the graph it was given', () => {
+  it('fits once the graph has arrived, not only on an empty mount', async () => {
+    urlsFor(
+      {},
+      { nodes: [folded, leaf], edges: [makeGraphEdge({ from: 'dep-api', to: 'svc-api' })] },
+    );
+
+    render(<TopologyGraph openedOn={null} />);
+    await screen.findByText('api ×3 · 1 not ready');
+
+    expect(fitViewSpy).toHaveBeenCalled();
+  });
+
+  it('hands the edges to the canvas rather than dropping them', async () => {
+    urlsFor(
+      {},
+      { nodes: [folded, leaf], edges: [makeGraphEdge({ from: 'dep-api', to: 'svc-api' })] },
+    );
+
+    render(<TopologyGraph openedOn={null} />);
+    await screen.findByText('api ×3 · 1 not ready');
+
+    expect(screen.getByTestId('react-flow').getAttribute('data-edges')).toBe('1');
+  });
+
+  it('gives the canvas nodes an explicit size', async () => {
+    urlsFor({}, { nodes: [folded, leaf], edges: [] });
+
+    render(<TopologyGraph openedOn={null} />);
+    await screen.findByText('api ×3 · 1 not ready');
+
+    expect(screen.getByTestId('react-flow').getAttribute('data-sized')).toBe('2');
   });
 });

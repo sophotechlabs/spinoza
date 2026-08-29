@@ -370,3 +370,62 @@ describe('a fold that changes size', () => {
     expect(sameTopology(one({ contains: 3 }), one({ contains: 4 }))).toBe(true);
   });
 });
+
+describe('flow nodes carry the size the layout assumed', () => {
+  const graph = {
+    nodes: [
+      makeGraphNode({ id: 'a', name: 'a' }),
+      makeGraphNode({ id: 'b', name: 'b' }),
+      makeGraphNode({ id: 'c', name: 'c' }),
+    ],
+    edges: [makeGraphEdge({ from: 'a', to: 'b' }), makeGraphEdge({ from: 'b', to: 'c' })],
+    error: undefined,
+  };
+
+  it('gives every node an explicit width and height', () => {
+    const flow = toFlow(graph);
+
+    expect(flow.nodes).toHaveLength(3);
+    for (const node of flow.nodes) {
+      expect(node.width).toBeGreaterThan(0);
+      expect(node.height).toBeGreaterThan(0);
+    }
+  });
+
+  it('sizes every node the same, so dagre and the canvas agree', () => {
+    const flow = toFlow(graph);
+    const widths = new Set(flow.nodes.map((node) => node.width));
+    const heights = new Set(flow.nodes.map((node) => node.height));
+
+    expect(widths.size).toBe(1);
+    expect(heights.size).toBe(1);
+  });
+
+  it('keeps the size when only styling changes', () => {
+    const flow = toFlow(graph);
+    const restyled = restyle(flow, graph);
+
+    for (const node of restyled.nodes) {
+      expect(node.width).toBe(flow.nodes[0].width);
+      expect(node.height).toBe(flow.nodes[0].height);
+    }
+  });
+
+  it('ranks a connected graph rather than laying it out in one row', () => {
+    const flow = toFlow(graph);
+    const rows = new Set(flow.nodes.map((node) => node.position.y));
+
+    expect(rows.size).toBeGreaterThan(1);
+  });
+
+  it('hands every edge through to the canvas', () => {
+    const flow = toFlow(graph);
+
+    expect(flow.edges).toHaveLength(2);
+    const ids = new Set(flow.nodes.map((node) => node.id));
+    for (const edge of flow.edges) {
+      expect(ids.has(edge.source)).toBe(true);
+      expect(ids.has(edge.target)).toBe(true);
+    }
+  });
+});

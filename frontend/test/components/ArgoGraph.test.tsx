@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event';
 import ArgoGraph from '../../src/components/ArgoGraph';
 import type { ArgoApp, GraphNode } from '../../src/lib/types';
 
+const fitViewSpy = vi.fn();
+
 vi.mock('@xyflow/react', () => ({
+  useReactFlow: () => ({ fitView: fitViewSpy }),
   ReactFlow: ({
     nodes,
     edges,

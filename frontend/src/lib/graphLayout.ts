@@ -126,6 +126,8 @@ function toFlowNode(g: LayoutGraph, node: GraphNode): GitopsFlowNode {
   return {
     id: node.id,
     position: layoutPosition(laid),
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
     data: { label: nodeLabel(node), node },
     className: nodeClassName(node.category, node.ready),
   };
@@ -205,6 +207,8 @@ export function restyle(flow: GitopsFlow, graph: Graph): GitopsFlow {
     const next = graph.nodes[index];
     return {
       ...node,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
       data: { label: nodeLabel(next), node: next },
       className: nodeClassName(next.category, next.ready),
     };

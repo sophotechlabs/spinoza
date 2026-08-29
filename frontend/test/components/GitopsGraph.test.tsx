@@ -7,6 +7,8 @@ import type { Graph, ReadyState } from '../../src/lib/types';
 import type { GitopsFlowNode } from '../../src/lib/graphLayout';
 import { makeGraphEdge, makeGraphNode } from '../helpers';
 
+const fitViewSpy = vi.fn();
+
 vi.mock('@xyflow/react', () => {
   const ReactFlowStub = ({
     nodes,
@@ -40,7 +42,8 @@ vi.mock('@xyflow/react', () => {
   );
   const Background = () => <div data-testid="background" />;
   const Controls = () => <div data-testid="controls" />;
-  return { ReactFlow: ReactFlowStub, Background, Controls };
+  const useReactFlow = () => ({ fitView: fitViewSpy });
+  return { ReactFlow: ReactFlowStub, Background, Controls, useReactFlow };
 });
 
 import GitopsGraph from '../../src/components/GitopsGraph';

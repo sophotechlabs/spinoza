@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { Background, Controls, ReactFlow } from '@xyflow/react';
+import { useCallback, useEffect, useState } from 'react';
+import { Background, Controls, ReactFlow, useReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import type { Graph, GraphEdgeKind, GraphNode } from '../lib/types';
 import {
@@ -20,6 +20,18 @@ import Loading from './Loading';
 const MAX_NODES = 400;
 
 const ALL_EDGE_KINDS: GraphEdgeKind[] = ['source', 'dependsOn', 'manages'];
+
+function shapeOf(flow: GitopsFlow): string {
+  return `${flow.nodes.length}:${flow.edges.length}:${flow.nodes[0]?.id ?? ''}`;
+}
+
+function Refit({ shape }: { shape: string }) {
+  const flow = useReactFlow();
+  useEffect(() => {
+    void flow.fitView();
+  }, [flow, shape]);
+  return null;
+}
 
 interface GraphCanvasProps {
   what: string;
@@ -176,6 +188,7 @@ export default function GraphCanvas({
           onlyRenderVisibleElements
           fitView
         >
+          <Refit shape={shapeOf(flow)} />
           <Background />
           <Controls />
         </ReactFlow>
