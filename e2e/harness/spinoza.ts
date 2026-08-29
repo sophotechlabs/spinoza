@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { ADDR, BASE_URL, BINARY, KUBECONFIG, REPO_DIR, TMP_DIR, TOKEN_FILE } from './paths';
+import { ADDR, BINARY, KUBECONFIG, REPO_DIR, TMP_DIR, TOKEN_FILE } from './paths';
 import { background, mustRun, run, waitFor } from './run';
 
 export function build(): void {

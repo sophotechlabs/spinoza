@@ -1,15 +1,26 @@
-import { expect, test } from '../harness/test';
-import { openGrouped, openHome, openResource, openView, sidebar } from '../harness/app';
+import { authed, expect, test } from '../harness/test';
+import { openHome, openView, sidebar } from '../harness/app';
+import { CONTEXT } from '../harness/paths';
 import { SCALE_CONFIGMAPS, SCALE_NAMESPACE, SCALE_WORKLOADS } from '../harness/fixtures';
 import type { Page } from '@playwright/test';
 
-async function scopeTo(page: Page, namespace: string): Promise<void> {
-  await page.getByRole('combobox', { name: 'Namespace' }).selectOption({ label: namespace });
+async function openScoped(
+  page: Page,
+  group: string,
+  resource: string,
+  kind: string,
+): Promise<void> {
+  const hash =
+    `#context=${CONTEXT}&group=${group}&version=v1&resource=${resource}` +
+    `&kind=${kind}&namespace=${SCALE_NAMESPACE}`;
+  await page.goto(authed(hash));
+  await page.waitForFunction((want) => document.title.startsWith(want), resource, {
+    timeout: 90_000,
+  });
 }
 
 test('a table of thousands of rows still renders a window of them', async ({ page }) => {
-  await openResource(page, 'configmaps', 'ConfigMap');
-  await scopeTo(page, SCALE_NAMESPACE);
+  await openScoped(page, '', 'configmaps', 'ConfigMap');
   await expect(page.locator('main')).toContainText(String(SCALE_CONFIGMAPS), { timeout: 90_000 });
   const rendered = await page.locator('main tbody tr').count();
   expect(rendered).toBeGreaterThan(0);
@@ -17,8 +28,7 @@ test('a table of thousands of rows still renders a window of them', async ({ pag
 });
 
 test('scrolling a virtualised table reaches rows that were never rendered', async ({ page }) => {
-  await openResource(page, 'configmaps', 'ConfigMap');
-  await scopeTo(page, SCALE_NAMESPACE);
+  await openScoped(page, '', 'configmaps', 'ConfigMap');
   const rows = page.locator('main tbody tr');
   await expect(rows.first()).toBeVisible({ timeout: 90_000 });
   const last = `bulk-${String(SCALE_CONFIGMAPS - 1).padStart(4, '0')}`;
@@ -28,8 +38,7 @@ test('scrolling a virtualised table reaches rows that were never rendered', asyn
 });
 
 test('the header survives scrolling through the whole table', async ({ page }) => {
-  await openResource(page, 'configmaps', 'ConfigMap');
-  await scopeTo(page, SCALE_NAMESPACE);
+  await openScoped(page, '', 'configmaps', 'ConfigMap');
   await expect(page.locator('main tbody tr').first()).toBeVisible({ timeout: 90_000 });
   await page.mouse.move(800, 500);
   for (let turn = 0; turn < 40; turn += 1) {
@@ -59,8 +68,7 @@ test('the issue queue stays inside its row cap on a busy cluster', async ({ page
 });
 
 test('a workload table with hundreds of rows still filters to one', async ({ page }) => {
-  await openGrouped(page, 'apps', 'deployments', 'Deployment');
-  await scopeTo(page, SCALE_NAMESPACE);
+  await openScoped(page, 'apps', 'deployments', 'Deployment');
   const rows = page.locator('main tbody tr');
   await expect(rows.first()).toBeVisible({ timeout: 90_000 });
   await page.getByPlaceholder('Filter by name, or field:value').fill('idle-0299');
