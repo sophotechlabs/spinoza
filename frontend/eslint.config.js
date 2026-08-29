@@ -34,6 +34,19 @@ export default tseslint.config(
     },
     rules: {
       ...jsxA11y.flatConfigs.strict.rules,
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+    },
+  },
+  {
+    files: [
+      'src/components/PanelHost.tsx',
+      'src/components/ClusterOverview.tsx',
+      'src/components/FluxRoles.tsx',
+    ],
+    rules: {
       'jsx-a11y/no-noninteractive-tabindex': ['error', { roles: ['tabpanel', 'group'] }],
       'jsx-a11y/no-noninteractive-element-interactions': [
         'error',
@@ -50,10 +63,6 @@ export default tseslint.config(
           ],
         },
       ],
-      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
   {
