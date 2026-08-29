@@ -876,3 +876,130 @@ describe('count alignment', () => {
     expect(text.indexOf('(3)')).toBeLessThan(text.indexOf('12'));
   });
 });
+
+describe('discovery retries itself', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function stubSequence(replies: (() => unknown)[]): () => number {
+    let call = 0;
+    let discoveries = 0;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/resources/counts')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts: {} }) });
+      }
+      if (!url.startsWith('/api/resources')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      discoveries += 1;
+      const reply = replies[Math.min(call, replies.length - 1)];
+      call += 1;
+      return reply();
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return () => discoveries;
+  }
+
+  const refused = () => Promise.reject(new Error('discovery request failed with status 503'));
+  const partial = () =>
+    Promise.resolve({ ok: true, json: () => Promise.resolve({ categories: [], error: 'stale' }) });
+  const good = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+
+  it('clears a transient discovery failure without anyone clicking Retry', async () => {
+    vi.useFakeTimers();
+    stubSequence([refused, good]);
+    renderSidebar({});
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('Discovery failed')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Workloads/ })).toBeInTheDocument();
+  });
+
+  it('retries a catalog that comes back carrying an error', async () => {
+    vi.useFakeTimers();
+    stubSequence([partial, good]);
+    renderSidebar({});
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('stale')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
+  });
+
+  it('backs off and gives up after six attempts, leaving the button', async () => {
+    vi.useFakeTimers();
+    const discoveries = stubSequence([refused]);
+    renderSidebar({});
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(discoveries()).toBe(1);
+
+    for (const delay of [500, 1000, 2000, 4000, 5000, 5000]) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(delay);
+      });
+    }
+    expect(discoveries()).toBe(7);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000);
+    });
+    expect(discoveries()).toBe(7);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('does not let a pending automatic retry undo a successful manual one', async () => {
+    vi.useFakeTimers();
+    stubSequence([refused, refused]);
+    renderSidebar({});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('Discovery failed')).toBeInTheDocument();
+
+    stubSequence([good]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
+  });
+
+  it('drops a scheduled retry when the cluster changes', async () => {
+    vi.useFakeTimers();
+    const discoveries = stubSequence([refused]);
+    const { unmount } = renderSidebar({});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(discoveries()).toBe(1);
+
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(discoveries()).toBe(1);
+  });
+});

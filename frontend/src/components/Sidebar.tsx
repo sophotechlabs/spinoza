@@ -1,5 +1,11 @@
-import { useEffect, useState } from 'react';
-import type { Category, ResourceDescriptor, TrafficSupport, View } from '../lib/types';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  Category,
+  ResourceCatalog,
+  ResourceDescriptor,
+  TrafficSupport,
+  View,
+} from '../lib/types';
 import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/discovery';
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
@@ -53,6 +59,9 @@ const ARGO_VIEWS: GitopsEntry[] = [
 ];
 
 const NOT_INSTALLED = 'not found in this cluster';
+const BASE_DISCOVERY_BACKOFF_MS = 500;
+const MAX_DISCOVERY_BACKOFF_MS = 5000;
+const MAX_DISCOVERY_ATTEMPTS = 6;
 
 function descriptorKey(descriptor: ResourceDescriptor): string {
   return `${descriptor.group}/${descriptor.version}/${descriptor.resource}`;
@@ -229,34 +238,61 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   const [retrying, setRetrying] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [failing, setFailing] = useState<Record<string, number>>({});
+  const discoveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let mounted = true;
+    let attempt = 0;
     setCounts({});
     setFailing({});
     setCountsError(null);
+    const again = () => {
+      if (attempt >= MAX_DISCOVERY_ATTEMPTS) {
+        return;
+      }
+      const delay = Math.min(MAX_DISCOVERY_BACKOFF_MS, BASE_DISCOVERY_BACKOFF_MS * 2 ** attempt);
+      attempt += 1;
+      discoveryTimer.current = setTimeout(() => {
+        discoveryTimer.current = null;
+        void load();
+      }, delay);
+    };
     const load = async () => {
+      let catalog: ResourceCatalog;
       try {
-        const catalog = await fetchResources();
-        if (!mounted) {
-          return;
-        }
-        setCategories(catalog.categories);
-        rememberCatalog(catalog.categories);
-        setError(catalog.error ?? null);
+        catalog = await fetchResources();
       } catch (err: unknown) {
         if (mounted) {
           setError(errorMessage(err, 'discovery request failed'));
+          again();
         }
         return;
+      }
+      if (!mounted) {
+        return;
+      }
+      setCategories(catalog.categories);
+      rememberCatalog(catalog.categories);
+      const failed = catalog.error ?? null;
+      setError(failed);
+      if (failed !== null) {
+        again();
       }
       await loadCounts(() => mounted);
     };
     void load();
     return () => {
       mounted = false;
+      stopDiscoveryRetry();
     };
   }, [epoch]);
+
+  function stopDiscoveryRetry() {
+    if (discoveryTimer.current !== null) {
+      clearTimeout(discoveryTimer.current);
+      discoveryTimer.current = null;
+    }
+  }
 
   async function loadCounts(live: () => boolean) {
     try {
@@ -275,6 +311,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   }
 
   async function retry() {
+    stopDiscoveryRetry();
     setRetrying(true);
     try {
       const catalog = await refreshResources();
