@@ -1,5 +1,72 @@
 # Changelog
 
+## [1.18.0](https://github.com/sophotechlabs/spinoza/compare/v1.17.0...v1.18.0) (2026-08-29)
+
+
+### Features
+
+* **checks:** audit pods and workloads against 15 best-practice checks ([c304b84](https://github.com/sophotechlabs/spinoza/commit/c304b84dfc57693334fc778458cb861bc4a9c227))
+* **checks:** page through every finding a capped group holds back ([b23369d](https://github.com/sophotechlabs/spinoza/commit/b23369d83f681ea6d81faaf20401167c3c001d9d))
+* **gitops:** name the writer that took a field on a server-side applied resource ([dd0bd24](https://github.com/sophotechlabs/spinoza/commit/dd0bd24eaf39001734423234f82628a1e52437e4))
+* **gitops:** the argo write surface, a per-application page, drift and diagnosis ([14a2016](https://github.com/sophotechlabs/spinoza/commit/14a20165096356ffb9b12daa45b80403e07c2e67))
+* **history:** key clusters on a normalised api server url and record what spinoza did ([eea1f66](https://github.com/sophotechlabs/spinoza/commit/eea1f66ba94121ab5eb6ac93e7599d628a404ce8))
+* **history:** record what spinoza changed and show it in its own view ([70baf40](https://github.com/sophotechlabs/spinoza/commit/70baf40ff8b4cf25cda981e132a29239c861b950))
+* **install:** uninstall on macos and linux ([efc858f](https://github.com/sophotechlabs/spinoza/commit/efc858f66f4c2ac96cd685c410d6ca34c1fd6620))
+* **install:** uninstall on windows and check build provenance on request ([31a3bf0](https://github.com/sophotechlabs/spinoza/commit/31a3bf086bc7090b6b6e828d20bef1e76b97945e))
+* **issues:** rank what is broken now into a self-clearing queue ([0f2d08c](https://github.com/sophotechlabs/spinoza/commit/0f2d08cee1cdd664c3511571a861f9546021bc9d))
+* **mcp:** an MCP server and command line over one cluster, in its own binary ([89d8426](https://github.com/sophotechlabs/spinoza/commit/89d842610f8c0e92fe59da581f908b496235f712))
+* **packaging:** windows, the linux desktop app, deb, rpm and channel manifests ([1003450](https://github.com/sophotechlabs/spinoza/commit/1003450bcddbea86fcaacce257198c346ee8971a))
+* **topology:** an ownership graph of the cluster, folded by default ([59a318c](https://github.com/sophotechlabs/spinoza/commit/59a318c4702337f59863be7b33a3e1cf04ef685b))
+* **traffic:** a workload traffic graph from Cilium Hubble metrics ([ad3efd2](https://github.com/sophotechlabs/spinoza/commit/ad3efd26e2df19df574138d7e0b729dc6fc9f982))
+* **update:** offer windows the powershell install command ([6a8d08e](https://github.com/sophotechlabs/spinoza/commit/6a8d08e6a1271ba190c70d3c6ccb169b3ba0e98b))
+
+
+### Bug Fixes
+
+* **a11y:** give the docks a valid role and let the keyboard reach the scrollable panes ([a7068e0](https://github.com/sophotechlabs/spinoza/commit/a7068e0e836f77ee429b78fa3311120030239293))
+* **checks:** emit patches the api server accepts ([7a9b5f6](https://github.com/sophotechlabs/spinoza/commit/7a9b5f6253a3f057b28db314054f22b169f55dd4))
+* **checks:** resolve owners by api group and quote what yaml would eat ([096bb05](https://github.com/sophotechlabs/spinoza/commit/096bb052d47550b2f948f64c72824f6b02d2f55c))
+* **ci:** repair ci ([7fcb02c](https://github.com/sophotechlabs/spinoza/commit/7fcb02cbf54a996eaadcd0d3520b969e78a972d3))
+* **gitops:** verify the terminate patch, key drift by name and stop the hidden panel polling ([1be42b9](https://github.com/sophotechlabs/spinoza/commit/1be42b93e84d80695565a09045dd78ea126daaf6))
+* **install:** compute the checksum without Get-FileHash ([e91bc4d](https://github.com/sophotechlabs/spinoza/commit/e91bc4def4f7862dbce233a9b4f6b57a7bec35ac))
+* **install:** stop a typed parameter swallowing the registry handle ([e04d3c8](https://github.com/sophotechlabs/spinoza/commit/e04d3c8c9e47c89a5bbdcc2c3fbbed93e06842a1))
+* **issues:** bound the stall probe and stop a guess erasing a fatal row ([c325976](https://github.com/sophotechlabs/spinoza/commit/c325976b8867cede2cf5ead07d0fc561a2e4bb16))
+* **issues:** read a crash loop from the terminated state, not just the waiting one ([bd9c4fa](https://github.com/sophotechlabs/spinoza/commit/bd9c4facff8f102fface1f65d292a6e27f948553))
+* **mcp:** keep one bad message from ending the session and stop a slow tool blocking the rest ([db15521](https://github.com/sophotechlabs/spinoza/commit/db15521dcf1b72506311733ebaeebbd303d1de18))
+* **mcp:** refuse a replica count that is not a number, and bound every tool call ([e1cc011](https://github.com/sophotechlabs/spinoza/commit/e1cc011cda321d99b3cbf2e6a27a8cfcb7c434b5))
+* **overview:** count a paged event walk as one listing attempt ([f2348b2](https://github.com/sophotechlabs/spinoza/commit/f2348b27c571c455b24721fbe55a6b501b4bc711))
+* **overview:** page the warning events so the newest 25 really are the newest ([022dd83](https://github.com/sophotechlabs/spinoza/commit/022dd830f389577a47762bd76c367a028d3faae6))
+* **topology:** stop a test owning a shared namespace and lint fixes ([a28029f](https://github.com/sophotechlabs/spinoza/commit/a28029fe64c8375ff00c259c02b72759c99875c9))
+* **traffic:** fold a crowded graph to namespaces and bound the probes ([659ef57](https://github.com/sophotechlabs/spinoza/commit/659ef5756980cff60c58e2aeb60493ec3e917e73))
+* **update:** stop comparing a release against a version that does not parse ([b19be9b](https://github.com/sophotechlabs/spinoza/commit/b19be9bff66263da43d0ebe8726185b331d0bfc4))
+
+
+### CI
+
+* **hygiene:** pin editorconfig-checker through mise instead of the npm wrapper ([cdf326c](https://github.com/sophotechlabs/spinoza/commit/cdf326cceb9f343ed75510d79858311b5e705baf))
+* **windows:** run the installer and its tests on arm64 as well ([10c1947](https://github.com/sophotechlabs/spinoza/commit/10c1947432292d65f3930848205d8329e93e5bae))
+* **windows:** smoke the desktop build and serialise the checksum writers ([1068899](https://github.com/sophotechlabs/spinoza/commit/106889930dd443ac05de044d1b5d2b61add6d863))
+
+
+### Performance
+
+* **checks:** cap findings per group and send each object once ([9702c48](https://github.com/sophotechlabs/spinoza/commit/9702c48297eed741bde4833902aa8b3f02af16f4))
+* **topology:** index pod labels so a namespace of services stops rescanning every pod ([27f18ed](https://github.com/sophotechlabs/spinoza/commit/27f18ede01364f3db865202029fc578556954120))
+
+
+### Tests
+
+* **e2e:** cover live updates, terminals, forwards, inspect and accessibility ([ccbaa62](https://github.com/sophotechlabs/spinoza/commit/ccbaa62f2f7ddcea562e42ea9ad2f836ed96c354))
+* **e2e:** drive the browser UI against a kind cluster ([94cb96e](https://github.com/sophotechlabs/spinoza/commit/94cb96ea9e38913860e41264e045167e936b5226))
+* **e2e:** key the table and tree assertions to the accessible names ([a6d6c63](https://github.com/sophotechlabs/spinoza/commit/a6d6c6347945cfcb48eaea935e6c78b74a0ba1fd))
+* **e2e:** select rows by their name button and drop the overlapping inspect spec ([f1af148](https://github.com/sophotechlabs/spinoza/commit/f1af148dec7a43215c43b8ffd2ea54dbf85ee7a7))
+* **install:** check statically for what windows powershell 5.1 lacks ([51ce068](https://github.com/sophotechlabs/spinoza/commit/51ce068b99719879663b3fa1560903a86a00ccdd))
+* **install:** cover the installer with pester and verify what releases carry ([53f4e2e](https://github.com/sophotechlabs/spinoza/commit/53f4e2e48bd3e8814ebb6b13deaf03991beb39d8))
+* **install:** join paths the way windows powershell 5.1 accepts ([a0e655f](https://github.com/sophotechlabs/spinoza/commit/a0e655fc75a149e2519d76eb03077ee22d383fd3))
+* **install:** let a skip stand only where the platform it names is declared ([8c3c641](https://github.com/sophotechlabs/spinoza/commit/8c3c6410235c4a5a3c464b9ef4612a81dce2884e))
+* **install:** run the real install path instead of mocking my own functions ([b4640e9](https://github.com/sophotechlabs/spinoza/commit/b4640e9f4dd346a15f8e957e863be8f47b62eb68))
+* **issues:** make every budget and cap a test input, and cover them ([2630b80](https://github.com/sophotechlabs/spinoza/commit/2630b80af3c92edea127d1033b7a0beeddbe16a1))
+
 ## [1.17.0](https://github.com/sophotechlabs/spinoza/compare/v1.16.0...v1.17.0) (2026-08-28)
 
 
