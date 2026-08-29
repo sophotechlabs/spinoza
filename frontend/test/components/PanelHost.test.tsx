@@ -427,3 +427,103 @@ describe('the dock tab contract', () => {
     expect(screen.queryAllByRole('tab')).toHaveLength(0);
   });
 });
+
+describe('the tab strip keeps the semantics screen readers rely on', () => {
+  it('names itself a tablist holding tabs, one of them selected', () => {
+    renderHost();
+
+    const strip = screen.getByRole('tablist', { name: 'right panels' });
+    const found = screen.getAllByRole('tab');
+
+    expect(strip).toBeInTheDocument();
+    expect(found).toHaveLength(2);
+    expect(found.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1);
+  });
+
+  it('points each tab at the panel it controls', () => {
+    renderHost();
+
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab.getAttribute('aria-controls')).toBeTruthy();
+    }
+  });
+
+  it('leaves exactly one tab in the tab order, so Tab reaches the strip once', () => {
+    renderHost();
+
+    const reachable = screen
+      .getAllByRole('tab')
+      .filter((tab) => tab.getAttribute('tabindex') === '0');
+
+    expect(reachable).toHaveLength(1);
+    expect(reachable[0].getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('still offers a way in when nothing is selected yet', () => {
+    renderHost({ active: null });
+
+    const reachable = screen
+      .getAllByRole('tab')
+      .filter((tab) => tab.getAttribute('tabindex') === '0');
+
+    expect(reachable).toHaveLength(1);
+  });
+
+  it('moves focus along the strip with the arrow keys, wrapping at both ends', async () => {
+    const user = userEvent.setup();
+    renderHost();
+    const found = screen.getAllByRole('tab');
+    found[0].focus();
+
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(found[1]);
+
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(found[0]);
+
+    await user.keyboard('{ArrowLeft}');
+    expect(document.activeElement).toBe(found[1]);
+  });
+
+  it('jumps to the first and last tab with Home and End', async () => {
+    const user = userEvent.setup();
+    renderHost({ tabs: tabs('overview', 'yaml', 'events') });
+    const found = screen.getAllByRole('tab');
+    found[1].focus();
+
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(found[2]);
+
+    await user.keyboard('{Home}');
+    expect(document.activeElement).toBe(found[0]);
+  });
+
+  it('activates the tab the arrow keys land on, so the panel follows focus', async () => {
+    const user = userEvent.setup();
+    const { onActivate } = renderHost();
+    screen.getAllByRole('tab')[0].focus();
+
+    await user.keyboard('{ArrowRight}');
+
+    expect(onActivate).toHaveBeenCalledWith('yaml');
+  });
+
+  it('lands on a disabled tab without activating it', async () => {
+    const user = userEvent.setup();
+    const withDisabled = tabs('overview', 'yaml');
+    withDisabled[1].disabled = true;
+    const { onActivate } = renderHost({ tabs: withDisabled });
+    screen.getAllByRole('tab')[0].focus();
+
+    await user.keyboard('{ArrowRight}');
+
+    expect(document.activeElement).toBe(screen.getAllByRole('tab')[1]);
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it('an empty dock is a named group rather than an unlabelled box', () => {
+    renderHost({ tabs: [], active: null });
+
+    expect(screen.getByRole('group', { name: 'Empty right dock' })).toBeInTheDocument();
+  });
+});
