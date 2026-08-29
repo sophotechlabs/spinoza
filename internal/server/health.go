@@ -60,7 +60,7 @@ func (s *Server) stopWatching() {
 }
 
 func (s *Server) reach() *reach.Sink {
-	backend := s.manager()
+	backend := s.managerOf("")
 	if backend == nil {
 		return nil
 	}
@@ -84,7 +84,7 @@ func (s *Server) sessionsOpen() int {
 func (s *Server) pingCluster(ctx context.Context) {
 	bounded, cancel := context.WithTimeout(ctx, clusterPingTimeout)
 	defer cancel()
-	s.recordHealth(healthOf(s.manager().Ping(bounded)))
+	s.recordHealth(healthOf(s.managerOf("").Ping(bounded)))
 }
 
 func healthOf(err error) api.ClusterHealth {

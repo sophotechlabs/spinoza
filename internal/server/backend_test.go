@@ -39,7 +39,7 @@ type stubBackendCluster struct {
 	protected bool
 }
 
-func (s *stubBackendCluster) Manager() Backend {
+func (s *stubBackendCluster) Manager(string) Backend {
 	return s.backend
 }
 

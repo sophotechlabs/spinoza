@@ -85,7 +85,7 @@ type brokenCluster struct {
 	backend Backend
 }
 
-func (b *brokenCluster) Manager() Backend {
+func (b *brokenCluster) Manager(string) Backend {
 	return b.backend
 }
 

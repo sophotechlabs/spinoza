@@ -121,7 +121,7 @@ func (s *Server) reachable(entry endpoint) http.HandlerFunc {
 		return entry.handler
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.manager() == nil {
+		if s.managerFor(r) == nil {
 			writeError(w, http.StatusServiceUnavailable, "spinoza has no cluster; pick a context that answers")
 			return
 		}

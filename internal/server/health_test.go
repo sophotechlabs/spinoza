@@ -268,7 +268,7 @@ type noCluster struct {
 	Cluster
 }
 
-func (noCluster) Manager() Backend {
+func (noCluster) Manager(string) Backend {
 	return nil
 }
 

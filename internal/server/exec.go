@@ -56,7 +56,7 @@ func (s *Server) handleExecSupport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
-	support, err := s.manager().ExecSupport(r.Context(), req)
+	support, err := s.managerFor(r).ExecSupport(r.Context(), req)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -71,7 +71,7 @@ func (s *Server) handleDebugSupport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace is required")
 		return
 	}
-	writeJSON(w, s.manager().DebugSupport(r.Context(), namespace, query.Get("pod")))
+	writeJSON(w, s.managerFor(r).DebugSupport(r.Context(), namespace, query.Get("pod")))
 }
 
 func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +86,7 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
-	session, err := s.manager().StartDebug(r.Context(), req)
+	session, err := s.managerFor(r).StartDebug(r.Context(), req)
 	s.record(r, change{
 		verb:   verbDebug,
 		ref:    podRef(req.Namespace, req.Pod),
@@ -107,7 +107,7 @@ func (s *Server) handleNodeShellSupport(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "node is required")
 		return
 	}
-	writeJSON(w, s.manager().NodeShellSupport(r.Context(), node))
+	writeJSON(w, s.managerFor(r).NodeShellSupport(r.Context(), node))
 }
 
 func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
@@ -128,8 +128,9 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
+	backend := s.managerFor(r)
 	conn := &execConn{conn: socket, ctx: ctx}
-	shell, startErr := s.manager().StartNodeShell(ctx, node)
+	shell, startErr := backend.StartNodeShell(ctx, node)
 	s.record(r, change{verb: verbNodeShell, ref: nodeRef(node), kind: kindNode, err: startErr})
 	if startErr != nil {
 		_ = conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
@@ -138,7 +139,7 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		gone, stop := context.WithTimeout(context.WithoutCancel(ctx), removeTimeout)
 		defer stop()
-		s.manager().RemoveNodeShell(gone, shell.Pod)
+		backend.RemoveNodeShell(gone, shell.Pod)
 	}()
 
 	req := exec.Request{
@@ -147,7 +148,7 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 		Container: shell.Container,
 		Command:   nodeshell.Enter,
 	}
-	session, sessionErr := s.manager().StartExec(ctx, req, conn)
+	session, sessionErr := backend.StartExec(ctx, req, conn)
 	if sessionErr != nil {
 		_ = conn.send(ctx, api.ExecChannelError, []byte(sessionErr.Error()))
 		return
@@ -181,8 +182,9 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
+	backend := s.managerFor(r)
 	conn := &execConn{conn: socket, ctx: ctx}
-	session, startErr := s.manager().StartExec(ctx, req, conn)
+	session, startErr := backend.StartExec(ctx, req, conn)
 	s.record(r, change{
 		verb:   verbExec,
 		ref:    podRef(req.Namespace, req.Pod),

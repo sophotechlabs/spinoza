@@ -11,8 +11,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/helm"
 )
 
-func (s *Server) handleHelmSupport(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, s.manager().HelmSupport())
+func (s *Server) handleHelmSupport(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.managerFor(r).HelmSupport())
 }
 
 func (s *Server) handleHelmRelease(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +23,7 @@ func (s *Server) handleHelmRelease(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and name are required")
 		return
 	}
-	detail, err := s.manager().HelmRelease(r.Context(), namespace, name)
+	detail, err := s.managerFor(r).HelmRelease(r.Context(), namespace, name)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -40,12 +40,13 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	action := query.Get("action")
+	backend := s.managerFor(r)
 	if s.unconfirmed(r, name) {
 		refuseUnconfirmed(w, name)
 		return
 	}
 	if action == helm.ActionUninstal {
-		removed, removeErr := s.manager().HelmUninstall(r.Context(), namespace, name)
+		removed, removeErr := backend.HelmUninstall(r.Context(), namespace, name)
 		s.finishHelmAction(w, r, releaseChange(verbUninstall, namespace, name, "", false, removeErr), removed, removeErr)
 		return
 	}
@@ -58,7 +59,7 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "revision must be a number")
 		return
 	}
-	rolled, rollErr := s.manager().HelmRollback(r.Context(), namespace, name, revision)
+	rolled, rollErr := backend.HelmRollback(r.Context(), namespace, name, revision)
 	detail := "to revision " + strconv.FormatInt(revision, 10)
 	s.finishHelmAction(w, r, releaseChange(verbRollback, namespace, name, detail, false, rollErr), rolled, rollErr)
 }
@@ -69,7 +70,7 @@ func (s *Server) handleHelmVersions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "chart is required")
 		return
 	}
-	found, err := s.manager().HelmVersions(r.Context(), chart)
+	found, err := s.managerFor(r).HelmVersions(r.Context(), chart)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -78,7 +79,7 @@ func (s *Server) handleHelmVersions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHelmCharts(w http.ResponseWriter, r *http.Request) {
-	found, err := s.manager().HelmChartSearch(r.Context(), r.URL.Query().Get("query"))
+	found, err := s.managerFor(r).HelmChartSearch(r.Context(), r.URL.Query().Get("query"))
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -95,7 +96,7 @@ func (s *Server) handleHelmChartValues(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "chart, repo and version are required")
 		return
 	}
-	found, err := s.manager().HelmChartValues(r.Context(), helm.ValuesRequest{
+	found, err := s.managerFor(r).HelmChartValues(r.Context(), helm.ValuesRequest{
 		Chart:   chart,
 		Version: wanted,
 		RepoURL: repo,
@@ -139,7 +140,7 @@ func (s *Server) handleHelmInstall(w http.ResponseWriter, r *http.Request) {
 		refuseUnconfirmed(w, dto.Name)
 		return
 	}
-	result, installErr := s.manager().HelmInstall(r.Context(), helm.InstallRequest{
+	result, installErr := s.managerFor(r).HelmInstall(r.Context(), helm.InstallRequest{
 		Namespace:       dto.Namespace,
 		Name:            dto.Name,
 		Chart:           dto.Chart,
@@ -193,7 +194,7 @@ func (s *Server) handleHelmUpgrade(w http.ResponseWriter, r *http.Request) {
 		Values:    dto.Values,
 		DryRun:    dryRun,
 	}
-	result, upgradeErr := s.manager().HelmUpgrade(r.Context(), req)
+	result, upgradeErr := s.managerFor(r).HelmUpgrade(r.Context(), req)
 	s.finishHelmAction(w, r, releaseChange(verbUpgrade, dto.Namespace, dto.Name, dto.Chart+" "+dto.Version, dryRun, upgradeErr), result, upgradeErr)
 }
 
@@ -224,7 +225,7 @@ func (s *Server) finishHelmAction(
 }
 
 func (s *Server) handleHelm(w http.ResponseWriter, r *http.Request) {
-	releases, err := s.manager().HelmReleases(r.Context())
+	releases, err := s.managerFor(r).HelmReleases(r.Context())
 	if err != nil {
 		writeAPIError(w, err)
 		return

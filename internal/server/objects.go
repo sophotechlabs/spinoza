@@ -22,7 +22,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		refuseUnconfirmed(w, req.Ref.Name)
 		return
 	}
-	result, actionErr := s.manager().Action(r.Context(), req)
+	result, actionErr := s.managerFor(r).Action(r.Context(), req)
 	s.record(r, change{
 		verb:   string(req.Action),
 		ref:    req.Ref,
@@ -96,7 +96,7 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "version and kind are required")
 		return
 	}
-	doc, err := s.manager().Schema(r.Context(), jsonschema.GVK{Group: query.Get("group"), Version: apiVersion, Kind: kind})
+	doc, err := s.managerFor(r).Schema(r.Context(), jsonschema.GVK{Group: query.Get("group"), Version: apiVersion, Kind: kind})
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -106,7 +106,7 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	detail, err := s.manager().Object(r.Context(), ref)
+	detail, err := s.managerFor(r).Object(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -124,7 +124,7 @@ func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.Obj
 		writeAPIError(w, readErr)
 		return
 	}
-	detail, err := s.manager().ApplyObject(r.Context(), ref, doc)
+	detail, err := s.managerFor(r).ApplyObject(r.Context(), ref, doc)
 	s.record(r, change{verb: verbApply, ref: ref, kind: detail.Kind, err: err})
 	if err != nil {
 		writeAPIError(w, err)
@@ -138,7 +138,7 @@ func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, ref api.Ob
 		refuseUnconfirmed(w, ref.Name)
 		return
 	}
-	err := s.manager().DeleteObject(r.Context(), ref)
+	err := s.managerFor(r).DeleteObject(r.Context(), ref)
 	s.record(r, change{verb: verbDelete, ref: ref, err: err})
 	if err != nil {
 		writeAPIError(w, err)

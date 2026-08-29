@@ -49,7 +49,7 @@ func run() error {
 			return err
 		}
 	}
-	backend := clusters.Manager()
+	backend := clusters.Manager("")
 	if backend == nil {
 		return errors.New("no cluster answered; name a context with -context")
 	}

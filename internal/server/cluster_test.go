@@ -54,7 +54,7 @@ func fixed(mgr *resources.Manager) *stubCluster {
 	}
 }
 
-func (s *stubCluster) Manager() Backend {
+func (s *stubCluster) Manager(string) Backend {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.mgr

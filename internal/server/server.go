@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	maxDocBytes = 4 << 20
-	queryTrue   = "true"
-	ociScheme   = "oci://"
+	maxDocBytes  = 4 << 20
+	queryTrue    = "true"
+	ociScheme    = "oci://"
+	clusterParam = "cluster"
 )
 
 type Elsewhere interface {
@@ -40,7 +41,7 @@ type Cluster interface {
 	Elsewhere
 	Kubeconfigs
 	Guarded
-	Manager() Backend
+	Manager(id string) Backend
 	Contexts() api.ContextList
 	Use(ref api.ContextRef) error
 	ID() string
@@ -90,8 +91,16 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 	}
 }
 
-func (s *Server) manager() Backend {
-	return s.cluster.Manager()
+func clusterOf(r *http.Request) string {
+	return r.URL.Query().Get(clusterParam)
+}
+
+func (s *Server) managerFor(r *http.Request) Backend {
+	return s.managerOf(clusterOf(r))
+}
+
+func (s *Server) managerOf(id string) Backend {
+	return s.cluster.Manager(id)
 }
 
 func (s *Server) UseFilePicker(picker FilePicker) {

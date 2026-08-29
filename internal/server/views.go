@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Graph(r.Context()))
+	writeJSON(w, s.managerFor(r).Graph(r.Context()))
 }
 
 func (s *Server) handleCheckPage(w http.ResponseWriter, r *http.Request) {
@@ -20,7 +20,7 @@ func (s *Server) handleCheckPage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "check is required")
 		return
 	}
-	page, err := s.manager().CheckPage(r.Context(), id, query.Get("after"))
+	page, err := s.managerFor(r).CheckPage(r.Context(), id, query.Get("after"))
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -29,11 +29,11 @@ func (s *Server) handleCheckPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Checks(r.Context()))
+	writeJSON(w, s.managerFor(r).Checks(r.Context()))
 }
 
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Topology(r.Context(), topologyRequest(r)))
+	writeJSON(w, s.managerFor(r).Topology(r.Context(), topologyRequest(r)))
 }
 
 func topologyRequest(r *http.Request) topology.Request {
@@ -59,7 +59,7 @@ func expandedIDs(raw string) []string {
 }
 
 func (s *Server) handleFlux(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Flux(r.Context()))
+	writeJSON(w, s.managerFor(r).Flux(r.Context()))
 }
 
 func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +75,7 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	history, historyErr := s.manager().MetricHistory(r.Context(), namespace, pod, span)
+	history, historyErr := s.managerFor(r).MetricHistory(r.Context(), namespace, pod, span)
 	if historyErr != nil {
 		writeAPIError(w, historyErr)
 		return
@@ -84,36 +84,36 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTrafficSupport(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().TrafficSupport(r.Context()))
+	writeJSON(w, s.managerFor(r).TrafficSupport(r.Context()))
 }
 
 func (s *Server) handleTraffic(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().TrafficGraph(r.Context()))
+	writeJSON(w, s.managerFor(r).TrafficGraph(r.Context()))
 }
 
 func (s *Server) handleFluxOverview(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().FluxOverview(r.Context()))
+	writeJSON(w, s.managerFor(r).FluxOverview(r.Context()))
 }
 
 func (s *Server) handleArgo(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Argo(r.Context()))
+	writeJSON(w, s.managerFor(r).Argo(r.Context()))
 }
 
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Overview(r.Context()))
+	writeJSON(w, s.managerFor(r).Overview(r.Context()))
 }
 
 func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Issues(r.Context()))
+	writeJSON(w, s.managerFor(r).Issues(r.Context()))
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Metrics(r.Context()))
+	writeJSON(w, s.managerFor(r).Metrics(r.Context()))
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	events, err := s.manager().Events(r.Context(), query.Get("namespace"), query.Get("uid"))
+	events, err := s.managerFor(r).Events(r.Context(), query.Get("namespace"), query.Get("uid"))
 	if err != nil {
 		writeAPIError(w, err)
 		return

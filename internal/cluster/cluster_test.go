@@ -132,7 +132,7 @@ func TestNewBuildsTheDefaultContext(t *testing.T) {
 	if cluster.Current().Name != "default-context" {
 		t.Fatalf("current = %q", cluster.Current().Name)
 	}
-	if cluster.Manager() == nil {
+	if cluster.Manager("") == nil {
 		t.Fatal("no manager after construction")
 	}
 }
@@ -140,14 +140,14 @@ func TestNewBuildsTheDefaultContext(t *testing.T) {
 func TestUseSwapsTheManager(t *testing.T) {
 	rec := &recorder{}
 	cluster := newTestCluster(t, rec)
-	first := cluster.Manager()
+	first := cluster.Manager("")
 
 	err := cluster.Use(api.ContextRef{Name: "p-mk1"})
 	if err != nil {
 		t.Fatalf("use: %v", err)
 	}
 
-	if cluster.Manager() == first {
+	if cluster.Manager("") == first {
 		t.Fatal("the manager was not replaced")
 	}
 	if cluster.Current().Name != "p-mk1" {
@@ -196,14 +196,14 @@ func TestUseCancelsThePreviousManager(t *testing.T) {
 func TestAFailedUseKeepsTheWorkingManager(t *testing.T) {
 	rec := &recorder{failOn: "gone", failErr: errors.New("context \"gone\" does not exist")}
 	cluster := newTestCluster(t, rec)
-	before := cluster.Manager()
+	before := cluster.Manager("")
 
 	err := cluster.Use(api.ContextRef{Name: "gone"})
 
 	if err == nil {
 		t.Fatal("expected the failure to surface")
 	}
-	if cluster.Manager() != before {
+	if cluster.Manager("") != before {
 		t.Fatal("a failed switch replaced the working manager")
 	}
 	if cluster.Current().Name != "default-context" {
@@ -224,7 +224,7 @@ func TestAnUnreachableClusterStillStarts(t *testing.T) {
 	if cluster == nil {
 		t.Fatal("spinoza refused to start without a cluster, so the context picker is unreachable")
 	}
-	if cluster.Manager() != nil {
+	if cluster.Manager("") != nil {
 		t.Fatal("a cluster that never connected handed out a manager")
 	}
 	list := cluster.Contexts()
@@ -245,7 +245,7 @@ func TestPickingAWorkingContextClearsTheStartupFailure(t *testing.T) {
 		t.Fatalf("use: %v", err)
 	}
 
-	if cluster.Manager() == nil {
+	if cluster.Manager("") == nil {
 		t.Fatal("the recovered context handed out no manager")
 	}
 	if cluster.Contexts().Error != "" {
@@ -495,14 +495,14 @@ func TestASupersededSwitchDoesNotStrandItsManager(t *testing.T) {
 	if useErr != nil {
 		t.Fatalf("use fast: %v", useErr)
 	}
-	winner := cluster.Manager()
+	winner := cluster.Manager("")
 
 	close(gated.gates["slow"])
 	if slowErr := <-done; slowErr != nil {
 		t.Fatalf("use slow: %v", slowErr)
 	}
 
-	if cluster.Manager() != winner {
+	if cluster.Manager("") != winner {
 		t.Fatal("a superseded switch replaced the installed manager")
 	}
 }
@@ -510,14 +510,14 @@ func TestASupersededSwitchDoesNotStrandItsManager(t *testing.T) {
 func TestAFailedSwitchKeepsTheWorkingCluster(t *testing.T) {
 	rec := &recorder{failOn: "broken", failErr: errors.New("context \"broken\" lists no resource types")}
 	cluster := newTestCluster(t, rec)
-	working := cluster.Manager()
+	working := cluster.Manager("")
 
 	err := cluster.Use(api.ContextRef{Name: "broken"})
 
 	if err == nil {
 		t.Fatal("switching to an unusable context reported success")
 	}
-	if cluster.Manager() != working {
+	if cluster.Manager("") != working {
 		t.Fatal("the working cluster's manager was replaced by the unusable one")
 	}
 	if cluster.Current().Name != "default-context" {
@@ -637,5 +637,68 @@ func TestTheConnectedHostIsNormalisedBeforeAnythingKeysOnIt(t *testing.T) {
 
 	if !protection.set["https://prod.example.com:6443"] {
 		t.Fatalf("protection keyed on %v, want the normalised api server url", protection.set)
+	}
+}
+
+func TestAskingByTheActiveIdGivesTheSameManager(t *testing.T) {
+	cluster := newTestCluster(t, &recorder{})
+
+	if cluster.Manager(cluster.ID()) != cluster.Manager("") {
+		t.Fatal("naming the connected cluster gave a different manager than asking for the active one")
+	}
+}
+
+func TestAskingForAClusterNobodyOpenedGivesNothing(t *testing.T) {
+	cluster := newTestCluster(t, &recorder{})
+
+	if cluster.Manager("https://nobody-opened-this:6443") != nil {
+		t.Fatal("a cluster that was never opened answered with a manager")
+	}
+}
+
+func TestAnIdIsNormalisedOnTheWayIn(t *testing.T) {
+	cluster := newTestCluster(t, &recorder{})
+
+	if cluster.Manager("HTTPS://Default-Context:6443/") != cluster.Manager("") {
+		t.Fatal("a differently spelt id missed the connection it names")
+	}
+}
+
+func TestOnlyOneClusterStaysOpenAcrossASwitch(t *testing.T) {
+	cluster := newTestCluster(t, &recorder{})
+	if err := cluster.Use(api.ContextRef{Name: "beta"}); err != nil {
+		t.Fatalf("use: %v", err)
+	}
+
+	cluster.mu.Lock()
+	open := len(cluster.open)
+	active := cluster.active
+	cluster.mu.Unlock()
+
+	if open != 1 {
+		t.Fatalf("%d connections open after a switch, want 1 until tabs exist", open)
+	}
+	if active != "https://beta:6443" {
+		t.Fatalf("active = %q, want the cluster just switched to", active)
+	}
+}
+
+func TestSwitchingBackToTheSameClusterKeepsItOpen(t *testing.T) {
+	rec := &recorder{}
+	cluster := newTestCluster(t, rec)
+	first := cluster.Manager("")
+
+	if err := cluster.Use(api.ContextRef{}); err != nil {
+		t.Fatalf("use: %v", err)
+	}
+
+	if cluster.Manager("") == first {
+		t.Fatal("reconnecting to the same cluster reused the old manager; Use rebuilds")
+	}
+	cluster.mu.Lock()
+	open := len(cluster.open)
+	cluster.mu.Unlock()
+	if open != 1 {
+		t.Fatalf("%d connections open, want the replacement to have retired the original", open)
 	}
 }

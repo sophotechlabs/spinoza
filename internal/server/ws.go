@@ -100,7 +100,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.views.opened(kind)
 	defer s.views.closed(kind)
 	defer s.forget(sess)
-	sess.mgr = s.manager()
+	sess.mgr = s.managerFor(r)
 	sess.write(ctx, api.ContextChanged{Type: "context", Context: s.cluster.Contexts().Current.Name})
 	sess.write(ctx, s.clusterHealth())
 	s.watchCluster(ctx)

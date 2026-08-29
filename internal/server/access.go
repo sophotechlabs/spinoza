@@ -18,7 +18,7 @@ const (
 )
 
 func (s *Server) objectAccess(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	writeJSON(w, s.manager().Access(r.Context(), ref))
+	writeJSON(w, s.managerFor(r).Access(r.Context(), ref))
 }
 
 func (s *Server) bulkAccess(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +35,7 @@ func (s *Server) bulkAccess(w http.ResponseWriter, r *http.Request) {
 	}
 	bounded, cancel := context.WithTimeout(r.Context(), accessTimeout)
 	defer cancel()
-	writeJSON(w, s.manager().AccessEach(bounded, query.Capability, query.Refs))
+	writeJSON(w, s.managerFor(r).AccessEach(bounded, query.Capability, query.Refs))
 }
 
 // No release name means the question is about installing one.
@@ -48,7 +48,7 @@ func (s *Server) helmAccess(w http.ResponseWriter, r *http.Request) {
 	}
 	bounded, cancel := context.WithTimeout(r.Context(), accessTimeout)
 	defer cancel()
-	writeJSON(w, s.manager().HelmAccess(bounded, namespace, query.Get("name")))
+	writeJSON(w, s.managerFor(r).HelmAccess(bounded, namespace, query.Get("name")))
 }
 
 // An unnamed object is asked about by kind, which is a different refusal.

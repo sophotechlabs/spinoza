@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Server) gitopsApp(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	app, err := s.manager().GitopsApp(r.Context(), ref)
+	app, err := s.managerFor(r).GitopsApp(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -21,7 +21,7 @@ func (s *Server) gitopsApp(w http.ResponseWriter, r *http.Request, ref api.Objec
 }
 
 func (s *Server) gitopsAppGraph(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	graph, err := s.manager().GitopsAppGraph(r.Context(), ref)
+	graph, err := s.managerFor(r).GitopsAppGraph(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -44,7 +44,7 @@ func argoDetail(req argocd.Request) string {
 
 func (s *Server) fluxAction(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
 	action := flux.Action(r.URL.Query().Get("action"))
-	result, err := s.manager().FluxAction(r.Context(), ref, action)
+	result, err := s.managerFor(r).FluxAction(r.Context(), ref, action)
 	s.record(r, change{verb: string(action), ref: ref, err: err})
 	if err != nil {
 		writeAPIError(w, err)
@@ -90,7 +90,7 @@ func (s *Server) argoAction(w http.ResponseWriter, r *http.Request, ref api.Obje
 		refuseUnconfirmed(w, ref.Name)
 		return
 	}
-	result, actionErr := s.manager().ArgoAction(r.Context(), ref, req)
+	result, actionErr := s.managerFor(r).ArgoAction(r.Context(), ref, req)
 	s.record(r, change{
 		verb:   string(req.Action),
 		ref:    ref,

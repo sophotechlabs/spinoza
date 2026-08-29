@@ -38,7 +38,7 @@ func TestNewStartsWithoutAClusterWhenNothingAnswers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new: %v, want the startup failure kept for the ui instead", err)
 	}
-	if built.Manager() != nil {
+	if built.Manager("") != nil {
 		t.Fatal("a manager appeared with no cluster answering")
 	}
 	if built.Current().Name != "" {

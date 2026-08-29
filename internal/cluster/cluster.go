@@ -38,6 +38,8 @@ type connection struct {
 	manager *resources.Manager
 	ref     api.ContextRef
 	host    string
+	id      string
+	cancel  context.CancelFunc
 }
 
 type builder func(ctx context.Context, ref api.ContextRef) (*connection, error)
@@ -67,17 +69,21 @@ type Cluster struct {
 	protection Protection
 
 	mu        sync.Mutex
-	manager   *resources.Manager
-	cancel    context.CancelFunc
-	current   api.ContextRef
-	host      string
+	open      map[string]*connection
+	active    string
 	startErr  string
 	nextSeq   uint64
 	installed uint64
 }
 
 func newCluster(ctx context.Context, build builder, sources Kubeconfigs, protection Protection) *Cluster {
-	cluster := &Cluster{root: ctx, build: build, sources: sources, protection: protection}
+	cluster := &Cluster{
+		root:       ctx,
+		build:      build,
+		sources:    sources,
+		protection: protection,
+		open:       map[string]*connection{},
+	}
 	err := cluster.use(ctx, api.ContextRef{})
 	if err == nil {
 		return cluster
@@ -89,13 +95,22 @@ func newCluster(ctx context.Context, build builder, sources Kubeconfigs, protect
 	return cluster
 }
 
-func (c *Cluster) Manager() server.Backend {
+func (c *Cluster) Manager(id string) server.Backend {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.manager == nil {
+	held := c.held(id)
+	if held == nil {
 		return nil
 	}
-	return c.manager
+	return held.manager
+}
+
+func (c *Cluster) held(id string) *connection {
+	wanted := id
+	if wanted == "" {
+		wanted = c.active
+	}
+	return c.open[clusterid.Normalize(wanted)]
 }
 
 func (c *Cluster) unreached() string {
@@ -107,7 +122,11 @@ func (c *Cluster) unreached() string {
 func (c *Cluster) Current() api.ContextRef {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.current
+	held := c.held("")
+	if held == nil {
+		return api.ContextRef{}
+	}
+	return held.ref
 }
 
 func (c *Cluster) Contexts() api.ContextList {
@@ -122,7 +141,7 @@ func (c *Cluster) Contexts() api.ContextList {
 func (c *Cluster) ID() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.host
+	return c.active
 }
 
 func (c *Cluster) Protect(protected bool) error {
@@ -197,25 +216,38 @@ func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 		return err
 	}
 
+	opened.id = clusterid.Normalize(opened.host)
+	opened.cancel = cancel
+
 	c.mu.Lock()
 	if seq < c.installed {
 		c.mu.Unlock()
 		cancel()
 		return nil
 	}
-	previous := c.cancel
+	previous := c.retire(opened.id)
 	c.installed = seq
-	c.manager = opened.manager
-	c.cancel = cancel
-	c.current = opened.ref
-	c.host = clusterid.Normalize(opened.host)
+	c.open[opened.id] = opened
+	c.active = opened.id
 	c.startErr = ""
 	c.mu.Unlock()
 
-	if previous != nil {
-		previous()
+	for _, gone := range previous {
+		gone.cancel()
 	}
 	return nil
+}
+
+func (c *Cluster) retire(keep string) []*connection {
+	gone := make([]*connection, 0, len(c.open))
+	for id, held := range c.open {
+		if id == keep {
+			continue
+		}
+		gone = append(gone, held)
+		delete(c.open, id)
+	}
+	return gone
 }
 
 func (c *Cluster) claim() uint64 {

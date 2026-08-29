@@ -17,7 +17,7 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request, ref api.ObjectR
 		return
 	}
 	keep := query.Get("raw") == queryTrue
-	here, err := s.manager().Object(r.Context(), ref)
+	here, err := s.managerFor(r).Object(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -63,7 +63,7 @@ func (s *Server) compareKind(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name the context to compare against")
 		return
 	}
-	here, err := s.manager().ListKind(r.Context(), ref)
+	here, err := s.managerFor(r).ListKind(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return

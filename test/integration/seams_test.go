@@ -183,7 +183,7 @@ func TestNewWiresARealCluster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new: %v", err)
 	}
-	if built.Manager() == nil {
+	if built.Manager("") == nil {
 		t.Fatalf("no manager came up: %s", built.Contexts().Error)
 	}
 	if built.Current().Name != name {

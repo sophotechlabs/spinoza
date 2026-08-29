@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Server) listForwards(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.manager().Forwards())
+	writeJSON(w, s.managerFor(r).Forwards())
 }
 
 func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +27,7 @@ func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "a positive port is required")
 		return
 	}
-	forward, startErr := s.manager().StartForward(r.Context(), target, int32(port))
+	forward, startErr := s.managerFor(r).StartForward(r.Context(), target, int32(port))
 	if startErr != nil {
 		writeAPIError(w, startErr)
 		return
@@ -41,7 +41,7 @@ func (s *Server) stopForward(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "id is required")
 		return
 	}
-	err := s.manager().StopForward(id)
+	err := s.managerFor(r).StopForward(id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
