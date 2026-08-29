@@ -90,7 +90,7 @@ export function useTabs(): Tab[] {
   return useClustersStore((state) => state.tabs);
 }
 
-export function tabOn(tabs: Tab[], cluster: string): Tab | null {
+function tabOn(tabs: Tab[], cluster: string): Tab | null {
   for (const tab of tabs) {
     if (tab.id === cluster) {
       return tab;

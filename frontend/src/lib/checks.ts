@@ -158,7 +158,7 @@ export const NO_FILTER: ChecksFilter = {
   wholeCluster: true,
 };
 
-export function fromParams(query: string): ChecksFilter {
+function fromParams(query: string): ChecksFilter {
   const params = new URLSearchParams(query);
   const floor = params.get('minSeverity') ?? '';
   return {
