@@ -43,9 +43,9 @@ func nodeRef(node string) api.ObjectRef {
 var errBadLimit = errors.New("limit must be a number that is not negative")
 
 type History interface {
-	Record(ctx context.Context, entry history.Entry) error
+	For(cluster string) history.Recorder
 	Recent(ctx context.Context, query history.Query) (history.Page, error)
-	Forget(ctx context.Context) error
+	Forget(ctx context.Context, cluster string) error
 	Reason() string
 }
 
@@ -86,8 +86,8 @@ func (s *Server) record(r *http.Request, made change) {
 	}
 	kept, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), recordTimeout)
 	defer cancel()
-	err := store.Record(kept, history.Entry{
-		Cluster:   s.cluster.ID(),
+	_, on := s.lookup(clusterOf(r))
+	err := store.For(on).Record(kept, history.Entry{
 		At:        s.instant(),
 		Verb:      made.verb,
 		Group:     made.ref.Group,
@@ -133,7 +133,8 @@ func (s *Server) readHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	page, readErr := store.Recent(r.Context(), history.Query{Cluster: s.cluster.ID(), Limit: limit})
+	_, on := s.lookup(clusterOf(r))
+	page, readErr := store.Recent(r.Context(), history.Query{Cluster: on, Limit: limit})
 	if readErr != nil {
 		writeAPIError(w, readErr)
 		return
@@ -187,7 +188,12 @@ func (s *Server) clearHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, api.HistoryOff)
 		return
 	}
-	err := store.Forget(r.Context())
+	_, on := s.lookup(clusterOf(r))
+	if on == "" {
+		writeAPIError(w, notOpen(""))
+		return
+	}
+	err := store.Forget(r.Context(), on)
 	if err != nil {
 		writeAPIError(w, err)
 		return

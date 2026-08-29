@@ -41,15 +41,28 @@ type heldHistory struct {
 	readErr   error
 	forgetErr error
 	forgotten int
+
+	forgotCluster string
 }
 
-func (h *heldHistory) Record(_ context.Context, entry history.Entry) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.recordErr != nil {
-		return h.recordErr
+func (h *heldHistory) For(cluster string) history.Recorder {
+	return heldWriter{into: h, cluster: cluster}
+}
+
+type heldWriter struct {
+	into    *heldHistory
+	cluster string
+}
+
+func (w heldWriter) Record(_ context.Context, entry history.Entry) error {
+	held := w.into
+	held.mu.Lock()
+	defer held.mu.Unlock()
+	if held.recordErr != nil {
+		return held.recordErr
 	}
-	h.entries = append(h.entries, entry)
+	entry.Cluster = w.cluster
+	held.entries = append(held.entries, entry)
 	return nil
 }
 
@@ -69,15 +82,30 @@ func (h *heldHistory) asked() history.Query {
 	return h.lastQuery
 }
 
-func (h *heldHistory) Forget(context.Context) error {
+func (h *heldHistory) Forget(_ context.Context, cluster string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.forgotCluster = cluster
 	if h.forgetErr != nil {
 		return h.forgetErr
 	}
 	h.forgotten++
-	h.entries = nil
+	h.entries = kept(h.entries, cluster)
 	return nil
+}
+
+func kept(held []history.Entry, cluster string) []history.Entry {
+	if cluster == "" {
+		return nil
+	}
+	out := []history.Entry{}
+	for _, one := range held {
+		if one.Cluster == cluster {
+			continue
+		}
+		out = append(out, one)
+	}
+	return out
 }
 
 func (h *heldHistory) Reason() string {
@@ -898,7 +926,7 @@ func TestAnotherClustersHistoryIsNotShown(t *testing.T) {
 		Name:    "somewhere-else",
 		Outcome: api.HistoryDone,
 	}
-	if err := store.Record(t.Context(), elsewhere); err != nil {
+	if err := store.For(elsewhere.Cluster).Record(t.Context(), elsewhere); err != nil {
 		t.Fatalf("record: %v", err)
 	}
 	doRequest(t, http.MethodPost,

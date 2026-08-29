@@ -147,7 +147,7 @@ func TestNowhereToKeepHistoryStillLeavesAStore(t *testing.T) {
 	if store.Reason() == "" {
 		t.Skip("this platform still names a config directory without HOME")
 	}
-	if err := store.Record(t.Context(), history.Entry{Name: "web"}); err != nil {
+	if err := store.For("https://p-mk1:6443").Record(t.Context(), history.Entry{Name: "web"}); err != nil {
 		t.Fatalf("record: %v, want a quiet no-op", err)
 	}
 }

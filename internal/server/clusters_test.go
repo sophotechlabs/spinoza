@@ -29,6 +29,23 @@ type fleet struct {
 	closed      []string
 	closeErr    error
 	backends    map[string]Backend
+	protected   map[string]bool
+}
+
+func (f *fleet) Protect(cluster string, protected bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.protected == nil {
+		f.protected = map[string]bool{}
+	}
+	f.protected[cluster] = protected
+	return nil
+}
+
+func (f *fleet) Protected(cluster string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.protected[cluster]
 }
 
 func (f *fleet) Manager(id string) Backend {

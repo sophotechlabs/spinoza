@@ -10,6 +10,8 @@ const defaultLimit = 200
 
 const maxLimit = 1000
 
+const readers = 4
+
 const insertAudit = `
 INSERT INTO audit (
 	cluster, at, verb, api_group, api_version, resource, kind,
@@ -23,6 +25,10 @@ FROM audit
 WHERE (? = '' OR cluster = ?)
 ORDER BY at DESC, id DESC
 LIMIT ?`
+
+const deleteAudit = `
+DELETE FROM audit
+WHERE (? = '' OR cluster = ?)`
 
 var migrations = []string{`
 CREATE TABLE audit (

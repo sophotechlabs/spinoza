@@ -48,8 +48,27 @@ type Page struct {
 
 type Store struct {
 	mu     sync.Mutex
-	db     *sql.DB
+	writes *sql.DB
+	reads  *sql.DB
 	reason string
+}
+
+type Recorder interface {
+	Record(ctx context.Context, entry Entry) error
+}
+
+type writer struct {
+	into    *Store
+	cluster string
+}
+
+func (s *Store) For(cluster string) Recorder {
+	return writer{into: s, cluster: cluster}
+}
+
+func (w writer) Record(ctx context.Context, entry Entry) error {
+	entry.Cluster = w.cluster
+	return w.into.record(ctx, entry)
 }
 
 func DefaultPath() (string, error) {
@@ -68,13 +87,17 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return unavailable(reasonFor(path, err)), fmt.Errorf("history: %w", err)
 	}
-	db := sql.OpenDB(connector{dsn: path + pragmas})
-	migrateErr := migrate(ctx, db)
+	conn := connector{dsn: path + pragmas}
+	writes := sql.OpenDB(conn)
+	writes.SetMaxOpenConns(1)
+	migrateErr := migrate(ctx, writes)
 	if migrateErr != nil {
-		_ = db.Close()
+		_ = writes.Close()
 		return unavailable(reasonFor(path, migrateErr)), fmt.Errorf("history: %w", migrateErr)
 	}
-	return &Store{db: db}, nil
+	reads := sql.OpenDB(conn)
+	reads.SetMaxOpenConns(readers)
+	return &Store{writes: writes, reads: reads}, nil
 }
 
 type connector struct {
@@ -103,14 +126,20 @@ func (s *Store) Reason() string {
 	return s.reason
 }
 
-func (s *Store) handle() *sql.DB {
+func (s *Store) writer() *sql.DB {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.db
+	return s.writes
 }
 
-func (s *Store) Record(ctx context.Context, entry Entry) error {
-	db := s.handle()
+func (s *Store) reader() *sql.DB {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reads
+}
+
+func (s *Store) record(ctx context.Context, entry Entry) error {
+	db := s.writer()
 	if db == nil {
 		return nil
 	}
@@ -128,7 +157,7 @@ func (s *Store) Record(ctx context.Context, entry Entry) error {
 }
 
 func (s *Store) Recent(ctx context.Context, query Query) (Page, error) {
-	db := s.handle()
+	db := s.reader()
 	if db == nil {
 		return Page{Entries: []Entry{}}, nil
 	}
@@ -181,12 +210,12 @@ func scanEntries(rows *sql.Rows) ([]Entry, error) {
 	return found, nil
 }
 
-func (s *Store) Forget(ctx context.Context) error {
-	db := s.handle()
+func (s *Store) Forget(ctx context.Context, cluster string) error {
+	db := s.writer()
 	if db == nil {
 		return nil
 	}
-	_, err := db.ExecContext(ctx, "DELETE FROM audit")
+	_, err := db.ExecContext(ctx, deleteAudit, cluster, cluster)
 	if err != nil {
 		return fmt.Errorf("history: %w", err)
 	}
@@ -195,15 +224,18 @@ func (s *Store) Forget(ctx context.Context) error {
 
 func (s *Store) Close() error {
 	s.mu.Lock()
-	db := s.db
-	s.db = nil
+	open := []*sql.DB{s.reads, s.writes}
+	s.reads = nil
+	s.writes = nil
 	s.mu.Unlock()
-	if db == nil {
-		return nil
-	}
-	err := db.Close()
-	if err != nil {
-		return fmt.Errorf("history: %w", err)
+	for _, db := range open {
+		if db == nil {
+			continue
+		}
+		err := db.Close()
+		if err != nil {
+			return fmt.Errorf("history: %w", err)
+		}
 	}
 	return nil
 }

@@ -33,8 +33,8 @@ type Kubeconfigs interface {
 }
 
 type Guarded interface {
-	Protect(protected bool) error
-	Protected() bool
+	Protect(cluster string, protected bool) error
+	Protected(cluster string) bool
 }
 
 type Connections interface {

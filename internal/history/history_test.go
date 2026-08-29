@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -51,7 +52,7 @@ func entry(cluster string, at time.Time, name string) Entry {
 
 func record(t *testing.T, store *Store, held Entry) {
 	t.Helper()
-	if err := store.Record(t.Context(), held); err != nil {
+	if err := store.For(held.Cluster).Record(t.Context(), held); err != nil {
 		t.Fatalf("record: %v", err)
 	}
 }
@@ -76,7 +77,7 @@ func names(page Page) []string {
 func pragma(t *testing.T, store *Store, name string) string {
 	t.Helper()
 	var value string
-	err := store.db.QueryRowContext(t.Context(), "PRAGMA "+name).Scan(&value)
+	err := store.reads.QueryRowContext(t.Context(), "PRAGMA "+name).Scan(&value)
 	if err != nil {
 		t.Fatalf("pragma %s: %v", name, err)
 	}
@@ -144,7 +145,7 @@ func TestAStoreWithNowhereToWriteStillWorks(t *testing.T) {
 	if len(recent(t, store, Query{}).Entries) != 0 {
 		t.Fatal("a store with no database returned rows")
 	}
-	if forgetErr := store.Forget(t.Context()); forgetErr != nil {
+	if forgetErr := store.Forget(t.Context(), ""); forgetErr != nil {
 		t.Fatalf("forget: %v", forgetErr)
 	}
 	if closeErr := store.Close(); closeErr != nil {
@@ -199,7 +200,7 @@ func TestACorruptFileDoesNotStopSpinoza(t *testing.T) {
 func TestAFileFromANewerSpinozaIsRefusedRatherThanMigrated(t *testing.T) {
 	path := dbPath(t)
 	store := openHistory(t, path)
-	if _, err := store.db.ExecContext(t.Context(), "PRAGMA user_version = 99"); err != nil {
+	if _, err := store.writes.ExecContext(t.Context(), "PRAGMA user_version = 99"); err != nil {
 		t.Fatalf("bump: %v", err)
 	}
 	if err := store.Close(); err != nil {
@@ -412,7 +413,7 @@ func TestForgettingClearsEverything(t *testing.T) {
 	record(t, store, entry(p1, noon, "web"))
 	record(t, store, entry(p2, noon, "elsewhere"))
 
-	if err := store.Forget(t.Context()); err != nil {
+	if err := store.Forget(t.Context(), ""); err != nil {
 		t.Fatalf("forget: %v", err)
 	}
 
@@ -434,7 +435,7 @@ func TestTwoStoresWritingAtOnceBothLand(t *testing.T) {
 			defer wg.Done()
 			for at := range each {
 				held := entry(p1, noon.Add(time.Duration(at)*time.Second), "web")
-				if err := into.Record(context.Background(), held); err != nil {
+				if err := into.For(p1).Record(context.Background(), held); err != nil {
 					t.Errorf("record: %v", err)
 					return
 				}
@@ -490,29 +491,31 @@ func TestClosingTwiceIsFine(t *testing.T) {
 func TestADatabaseThatStopsAnsweringIsReported(t *testing.T) {
 	store := openHistory(t, dbPath(t))
 	store.mu.Lock()
-	if err := store.db.Close(); err != nil {
-		t.Fatalf("close: %v", err)
+	for _, db := range []*sql.DB{store.writes, store.reads} {
+		if err := db.Close(); err != nil {
+			t.Fatalf("close: %v", err)
+		}
 	}
 	store.mu.Unlock()
 
-	if err := store.Record(t.Context(), entry(p1, noon, "web")); err == nil {
+	if err := store.For(p1).Record(t.Context(), entry(p1, noon, "web")); err == nil {
 		t.Fatal("recording into a closed database reported success")
 	}
 	if _, err := store.Recent(t.Context(), Query{}); err == nil {
 		t.Fatal("reading a closed database reported success")
 	}
-	if err := store.Forget(t.Context()); err == nil {
+	if err := store.Forget(t.Context(), ""); err == nil {
 		t.Fatal("clearing a closed database reported success")
 	}
 }
 
 func TestAnEntryWithNoRoomForItIsReported(t *testing.T) {
 	store := openHistory(t, dbPath(t))
-	if _, err := store.db.ExecContext(t.Context(), "DROP TABLE audit"); err != nil {
+	if _, err := store.writes.ExecContext(t.Context(), "DROP TABLE audit"); err != nil {
 		t.Fatalf("drop: %v", err)
 	}
 
-	if recordErr := store.Record(t.Context(), entry(p1, noon, "web")); recordErr == nil {
+	if recordErr := store.For(p1).Record(t.Context(), entry(p1, noon, "web")); recordErr == nil {
 		t.Fatal("recording into a missing table reported success")
 	}
 	if _, readErr := store.Recent(t.Context(), Query{}); readErr == nil {
@@ -523,7 +526,7 @@ func TestAnEntryWithNoRoomForItIsReported(t *testing.T) {
 func TestAColumnThatChangedShapeIsReported(t *testing.T) {
 	store := openHistory(t, dbPath(t))
 	record(t, store, entry(p1, noon, "web"))
-	if _, err := store.db.ExecContext(t.Context(), "UPDATE audit SET at = 'not a number'"); err != nil {
+	if _, err := store.writes.ExecContext(t.Context(), "UPDATE audit SET at = 'not a number'"); err != nil {
 		t.Fatalf("corrupt: %v", err)
 	}
 
