@@ -3,9 +3,10 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
 import { useClusterHealthStore } from '../../src/store/clusterHealth';
-import { useNamespaceStore } from '../../src/store/namespace';
+import { namespaceNow } from '../../src/store/namespace';
 import type { ObjectRef } from '../../src/lib/types';
 import { notifyOk, useToastsStore } from '../../src/store/toasts';
+import { reportHealth } from '../../src/store/clusterHealth';
 
 const podRef: ObjectRef = {
   group: '',
@@ -290,7 +291,7 @@ describe('the top bar entry points', () => {
 
     await user.selectOptions(picker, 'shop');
 
-    expect(useNamespaceStore.getState().namespace).toBe('shop');
+    expect(namespaceNow()).toBe('shop');
     vi.unstubAllGlobals();
   });
 
@@ -321,7 +322,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('turns the dot red even though the feed is connected', () => {
-    useClusterHealthStore.getState().report(false, 'connection refused');
+    reportHealth('', false, 'connection refused');
 
     const { container } = render(<TopBar status="connected" />);
 
@@ -329,7 +330,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('says so in words, not only in colour', () => {
-    useClusterHealthStore.getState().report(false, 'connection refused');
+    reportHealth('', false, 'connection refused');
 
     render(<TopBar status="connected" />);
 
@@ -337,7 +338,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('carries the reason the cluster gave', () => {
-    useClusterHealthStore.getState().report(false, 'dial tcp 10.0.0.1:6443: connection refused');
+    reportHealth('', false, 'dial tcp 10.0.0.1:6443: connection refused');
 
     render(<TopBar status="connected" />);
 
@@ -349,7 +350,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('still says something useful when no reason came with it', () => {
-    useClusterHealthStore.getState().report(false, '');
+    reportHealth('', false, '');
 
     render(<TopBar status="connected" />);
 
@@ -361,12 +362,12 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('goes back to green when the cluster answers again', () => {
-    useClusterHealthStore.getState().report(false, 'connection refused');
+    reportHealth('', false, 'connection refused');
     const { container, rerender } = render(<TopBar status="connected" />);
     expect(dotFor(container).className).toContain('bg-error-solid');
 
     act(() => {
-      useClusterHealthStore.getState().report(true, '');
+      reportHealth('', true, '');
     });
     rerender(<TopBar status="connected" />);
 
@@ -375,7 +376,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('leaves a disconnected feed reading as disconnected', () => {
-    useClusterHealthStore.getState().report(false, 'connection refused');
+    reportHealth('', false, 'connection refused');
 
     render(<TopBar status="disconnected" />);
 

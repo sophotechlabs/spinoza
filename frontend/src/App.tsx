@@ -10,7 +10,17 @@ import type {
   View,
 } from './lib/types';
 import { offline, useResourceFeed } from './lib/feed';
-import { fetchContexts, switchContext } from './lib/contexts';
+import { fetchContexts } from './lib/contexts';
+import { fetchClusters, openCluster, stillToOpen } from './lib/clusters';
+import {
+  activeOf,
+  rememberRoute,
+  useActiveCluster,
+  useClustersStore,
+  useTabs,
+} from './store/clusters';
+import { contextOf } from './lib/tabs';
+import ClusterStrip from './components/ClusterStrip';
 import { announceUpdate } from './lib/update';
 import { watchSettings } from './lib/settingsSync';
 import { useContextsStore } from './store/contexts';
@@ -18,24 +28,21 @@ import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/route
 import type { Selection } from './lib/refs';
 import { refFromFlux, refFromNode, refFromRow, useRowForRef } from './lib/refs';
 import { bumpClusterEpoch, useClusterEpoch } from './store/cluster';
-import { clearForwards } from './lib/portForward';
 import { focusFilter, useHotkeys } from './lib/hotkeys';
 import { mayDiscard } from './lib/unsaved';
-import { clearRecents, rememberObject } from './store/recents';
-import { clearHistory } from './store/toasts';
+import { rememberObject } from './store/recents';
 import { DEFAULT_NAMESPACE, useNamespace, useNamespaceStore } from './store/namespace';
 import { EVERY_NAMESPACE, ONLY_DEFAULT } from './lib/settings';
 import { namespaceAnswered, useSettingsStore } from './store/settings';
 import { podsIn, worthAsking } from './lib/namespaceOffer';
 import { kindScope } from './lib/catalog';
-import { clearCatalog, useCategories, useCounts } from './store/catalog';
+import { useCategories, useCounts } from './store/catalog';
 import { useSubLimit } from './store/resources';
 import type { Chip } from './lib/filterChips';
 import { chipsKey, nameChips } from './lib/filterChips';
-import { chipsOf, clearFilters, imposeChips, useChips } from './store/filters';
+import { chipsOf, imposeChips, useChips } from './store/filters';
 import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
-import { clearTerminals } from './store/terminals';
 import { revealDetails, revealPanel } from './store/panels';
 import { askToast, notifyError, notifyOk } from './store/toasts';
 import Sidebar from './components/Sidebar';
@@ -96,9 +103,19 @@ function switchFailed(err: unknown): string {
 }
 
 async function adoptContext(name: string): Promise<string> {
-  const found = await switchContext({ name, kubeconfig: '' });
-  useContextsStore.getState().setList(found);
-  return found.current.name;
+  const list = await openCluster('', name);
+  return contextOf(useClustersStore.getState().tabs, activeOf(list.clusters));
+}
+
+async function openRememberedTabs(): Promise<void> {
+  try {
+    const list = await fetchClusters();
+    for (const one of stillToOpen(list)) {
+      await openCluster(one.kubeconfig ?? '', one.context);
+    }
+  } catch {
+    // The picker is how you open one by hand.
+  }
 }
 
 // Remembered per kind: a fresh subscription has no limit and would flip it back.
@@ -124,11 +141,13 @@ export default function App() {
   const feed = useResourceFeed();
   const { route, navigate, replace } = useRouter();
   const contextEpoch = useClusterEpoch();
-  const serverContext = useContextsStore((state) => state.list.current.name);
-  const [contextName, setContextName] = useState('');
+  const tabs = useTabs();
+  const onCluster = useActiveCluster();
+  const contextName = contextOf(tabs, onCluster);
   const subSeq = useRef(0);
   const routeRef = useRef(route);
   routeRef.current = route;
+  const linked = useRef(route.context);
   const adopted = useRef(false);
   const adopting = useRef(false);
   const [subId, setSubId] = useState(FIRST_SUB_ID);
@@ -161,11 +180,10 @@ export default function App() {
   const categories = useCategories();
   const scope = useMemo(() => kindScope(categories, route.resource), [categories, route.resource]);
 
-  const { subscribe, unsubscribe, loadMore, subscribeLogs, unsubscribeLogs, reconnect } = feed;
+  const { subscribe, unsubscribe, loadMore, subscribeLogs, unsubscribeLogs } = feed;
   const namespace = useNamespace();
   const chooseNamespace = useNamespaceStore((state) => state.choose);
   const openOnStart = useNamespaceStore((state) => state.openOn);
-  const resetNamespace = useNamespaceStore((state) => state.reset);
   const counts = useCounts();
   const selectedRow = useRowForRef(subId, active, route.selection);
   const selection = useMemo<Selection | null>(() => {
@@ -183,14 +201,36 @@ export default function App() {
     return () => {
       unsubscribe(subId);
     };
-  }, [active, namespace, subId, subscribe, unsubscribe]);
+  }, [active, namespace, onCluster, subId, subscribe, unsubscribe]);
+
+  const showActiveTab = useCallback(() => {
+    const state = useClustersStore.getState();
+    bumpClusterEpoch();
+    const context = contextOf(state.tabs, state.active);
+    const held = state.routes[state.active];
+    if (held !== undefined) {
+      replace({ ...held, context });
+      return;
+    }
+    replace({ context, view: 'cluster', resource: null, selection: null, release: null });
+  }, [replace]);
+
+  useEffect(() => {
+    void openRememberedTabs().then(() => {
+      if (linked.current !== '') {
+        return;
+      }
+      showActiveTab();
+    });
+    // The tabs that come back decide what is in front, unless a link already named a cluster.
+  }, [showActiveTab]);
 
   useEffect(() => {
     let live = true;
     fetchContexts()
       .then((list) => {
         if (live) {
-          setContextName(list.current.name);
+          useContextsStore.getState().setList(list);
         }
       })
       .catch(() => undefined);
@@ -204,37 +244,6 @@ export default function App() {
   }, []);
 
   useEffect(watchSettings, []);
-
-  const forgetCluster = useCallback(() => {
-    clearRecents();
-    clearHistory();
-    clearTerminals();
-    clearForwards();
-    clearFilters();
-    clearCatalog();
-    resetNamespace();
-    bumpClusterEpoch();
-    reconnect();
-  }, [reconnect, resetNamespace]);
-
-  useEffect(() => {
-    if (serverContext === '') {
-      return;
-    }
-    if (serverContext === contextName) {
-      return;
-    }
-    // The opening route owns the selection until this window has its own context.
-    if (contextName === '') {
-      return;
-    }
-    if (adopting.current) {
-      return;
-    }
-    setContextName(serverContext);
-    forgetCluster();
-    replace({ ...routeRef.current, context: serverContext, selection: null, release: null });
-  }, [serverContext, contextName, forgetCluster, replace]);
 
   useEffect(() => {
     if (contextName === '') {
@@ -251,33 +260,41 @@ export default function App() {
     if (adopting.current) {
       return;
     }
-    if (!adopted.current) {
-      adopted.current = true;
-      adopting.current = true;
-      adoptContext(route.context)
-        .then((name) => {
-          setContextName(name);
-          if (name === route.context) {
-            forgetCluster();
-            return;
-          }
-          replace({ ...route, context: name, selection: null, release: null });
-        })
-        .catch((err: unknown) => {
-          notifyError(`Switching to ${route.context}: ${switchFailed(err)}`);
-          replace({ ...route, context: contextName, selection: null, release: null });
-        })
-        .finally(() => {
-          adopting.current = false;
-        });
+    if (adopted.current) {
       return;
     }
-    replace({ ...route, context: contextName, selection: null, release: null });
-  }, [contextName, route, replace, forgetCluster]);
+    adopted.current = true;
+    adopting.current = true;
+    adoptContext(route.context)
+      .then((name) => {
+        if (name === route.context) {
+          bumpClusterEpoch();
+          return;
+        }
+        replace({ ...route, context: name, selection: null, release: null });
+      })
+      .catch((err: unknown) => {
+        notifyError(`Opening ${route.context}: ${switchFailed(err)}`);
+        replace({ ...route, context: contextName, selection: null, release: null });
+      })
+      .finally(() => {
+        adopting.current = false;
+      });
+  }, [contextName, route, replace]);
 
   useEffect(() => {
     document.title = documentTitle(route);
   }, [route]);
+
+  useEffect(() => {
+    if (onCluster === '') {
+      return;
+    }
+    if (route.context !== contextName) {
+      return;
+    }
+    rememberRoute(onCluster, route);
+  }, [contextName, onCluster, route]);
 
   useEffect(() => {
     if (contextName === '') {
@@ -380,12 +397,6 @@ export default function App() {
       selection: null,
       release: route.release,
     });
-  }
-
-  function handleContextChanged() {
-    navigate({ context: '', view: route.view, resource: null, selection: null, release: null });
-    setContextName('');
-    forgetCluster();
   }
 
   function handleSelectView(next: View) {
@@ -557,7 +568,7 @@ export default function App() {
           status={feed.status}
           scoped={pickerScope(route.view, scope)}
           onReconnect={feed.reconnect}
-          onContextChanged={handleContextChanged}
+          onContextChanged={showActiveTab}
           onOpenPalette={() => {
             setPaletteOpen(true);
           }}
@@ -569,6 +580,9 @@ export default function App() {
             setMoved(true);
           }}
         />
+      </ErrorBoundary>
+      <ErrorBoundary label="The cluster strip">
+        <ClusterStrip onShown={showActiveTab} />
       </ErrorBoundary>
       <ConnectionBanner status={feed.status} attempt={feed.attempt} onReconnect={feed.reconnect} />
       <KubeconfigBanner />
@@ -588,6 +602,7 @@ export default function App() {
           className={`flex min-h-0 min-w-0 flex-1 ${staleClass(stale)}`}
         >
           <PanelLayout
+            key={onCluster}
             selection={selection}
             release={route.release}
             kind={active}

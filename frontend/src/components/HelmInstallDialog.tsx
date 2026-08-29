@@ -5,7 +5,7 @@ import { notifyError, notifyOk } from '../store/toasts';
 import { useProtectedCluster } from '../store/contexts';
 import { useHelmAccess } from '../lib/useHelmAccess';
 import { useHelmRefusal } from '../store/helmAccess';
-import { useNamespaceStore } from '../store/namespace';
+import { useNamespaceNames } from '../store/namespace';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import Loading from './Loading';
@@ -96,7 +96,7 @@ export default function HelmInstallDialog({
   const [error, setError] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
   const protectedCluster = useProtectedCluster();
-  const known = useNamespaceStore((state) => state.names);
+  const known = useNamespaceNames();
   useHelmAccess(target, '');
 
   useEffect(() => {

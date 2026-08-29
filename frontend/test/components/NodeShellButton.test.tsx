@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NodeShellButton from '../../src/components/NodeShellButton';
-import { useTerminalsStore } from '../../src/store/terminals';
+import { terminalsNow, useTerminalsStore } from '../../src/store/terminals';
 import { useSettingsStore } from '../../src/store/settings';
 
 function support(overrides: Record<string, unknown> = {}) {
@@ -60,7 +60,7 @@ describe('the node shell button', () => {
 
     await user.click(button);
 
-    const sessions = useTerminalsStore.getState().sessions;
+    const sessions = terminalsNow();
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toMatchObject({ kind: 'node', pod: 'p-mk1' });
   });
@@ -89,7 +89,7 @@ describe('the node shell button', () => {
     render(<NodeShellButton node="p-mk1" />);
 
     expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
-    expect(useTerminalsStore.getState().sessions).toHaveLength(0);
+    expect(terminalsNow()).toHaveLength(0);
   });
 
   it('asks again when the setting turns node shells on', async () => {

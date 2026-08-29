@@ -1,0 +1,66 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { contextOf, forgetTab } from '../../src/lib/tabs';
+import { adoptClusters, useClustersStore } from '../../src/store/clusters';
+import { rememberObject, useRecentsStore } from '../../src/store/recents';
+import { rememberCatalog, useCatalogStore } from '../../src/store/catalog';
+import { useFiltersStore } from '../../src/store/filters';
+import { setForwards, useForwardsStore } from '../../src/store/forwards';
+import { reportHealth, useClusterHealthStore } from '../../src/store/clusterHealth';
+import { useNamespaceStore } from '../../src/store/namespace';
+import { useTerminalsStore } from '../../src/store/terminals';
+import { makeCategory, makeDescriptor } from '../helpers';
+import { MK1, MK2, listOf, showing } from '../helpers-clusters';
+
+describe('the context a tab shows', () => {
+  beforeEach(() => {
+    useClustersStore.getState().reset();
+  });
+
+  it('is the one the tab was opened on', () => {
+    adoptClusters(listOf(MK1));
+
+    expect(contextOf(useClustersStore.getState().tabs, MK2)).toBe('p-mk2');
+  });
+
+  it('is nothing when no tab has that id', () => {
+    expect(contextOf([], MK1)).toBe('');
+  });
+});
+
+describe('closing a tab', () => {
+  beforeEach(() => {
+    useClustersStore.getState().reset();
+    showing(MK1);
+  });
+
+  it('lets go of everything that belonged to it', () => {
+    rememberObject({ group: '', version: 'v1', resource: 'pods', namespace: 'prod', name: 'web' });
+    rememberCatalog([makeCategory('Workloads', [makeDescriptor({ resource: 'pods' })])]);
+    useFiltersStore.getState().add('/v1/pods', { field: 'name', value: 'web' });
+    setForwards([
+      {
+        id: '1',
+        kind: 'pods',
+        namespace: 'prod',
+        name: 'web',
+        localPort: 8080,
+        remotePort: 80,
+        state: 'running',
+        startedAt: '2026-08-29T12:00:00Z',
+      },
+    ]);
+    reportHealth(MK1, false, 'gone');
+    useNamespaceStore.getState().choose('shop');
+    useTerminalsStore.getState().open('prod', 'web', 'app');
+
+    forgetTab(MK1);
+
+    expect(useRecentsStore.getState().byCluster[MK1]).toBeUndefined();
+    expect(useCatalogStore.getState().categories[MK1]).toBeUndefined();
+    expect(useFiltersStore.getState().byCluster[MK1]).toBeUndefined();
+    expect(useForwardsStore.getState().byCluster[MK1]).toBeUndefined();
+    expect(useClusterHealthStore.getState().byCluster[MK1]).toBeUndefined();
+    expect(useNamespaceStore.getState().byCluster[MK1]).toBeUndefined();
+    expect(useTerminalsStore.getState().byCluster[MK1]).toBeUndefined();
+  });
+});

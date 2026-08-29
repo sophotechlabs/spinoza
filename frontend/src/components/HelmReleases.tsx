@@ -13,7 +13,7 @@ import {
 } from '../lib/helm';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
-import { ALL, DEFAULT_NAMESPACE, useNamespaceStore } from '../store/namespace';
+import { ALL, DEFAULT_NAMESPACE, useNamespace } from '../store/namespace';
 import { bumpHelmEpoch } from '../store/helm';
 import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
@@ -71,7 +71,7 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
   const [installing, setInstalling] = useState(false);
   const now = useNow();
   const support = useHelmSupport();
-  const namespace = useNamespaceStore((state) => state.namespace);
+  const namespace = useNamespace();
 
   if (data === null) {
     if (error !== null) {

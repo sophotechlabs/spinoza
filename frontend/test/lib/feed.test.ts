@@ -1657,7 +1657,7 @@ describe('the server saying whether the cluster answers', () => {
 
     say(socket, false, 'dial tcp 10.0.0.1:6443: connect: connection refused');
 
-    expect(useClusterHealthStore.getState()).toMatchObject({
+    expect(useClusterHealthStore.getState().byCluster['']).toMatchObject({
       reachable: false,
       reason: 'dial tcp 10.0.0.1:6443: connect: connection refused',
     });
@@ -1673,7 +1673,10 @@ describe('the server saying whether the cluster answers', () => {
 
     say(socket, true);
 
-    expect(useClusterHealthStore.getState()).toMatchObject({ reachable: true, reason: '' });
+    expect(useClusterHealthStore.getState().byCluster['']).toMatchObject({
+      reachable: true,
+      reason: '',
+    });
   });
 
   it('takes the frame even though it names no subscription', () => {
@@ -1685,7 +1688,7 @@ describe('the server saying whether the cluster answers', () => {
 
     say(socket, false, 'gone');
 
-    expect(useClusterHealthStore.getState().reachable).toBe(false);
+    expect(useClusterHealthStore.getState().byCluster['']?.reachable).toBe(false);
   });
 });
 

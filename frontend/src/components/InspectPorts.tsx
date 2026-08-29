@@ -3,7 +3,7 @@ import type { ObjectPort, ObjectRef, PortForward } from '../lib/types';
 import { refreshForwards, startForward, stopForward } from '../lib/portForward';
 import { forwardURL, openExternal } from '../lib/openExternal';
 import { notifyError, notifyOk } from '../store/toasts';
-import { useForwardsStore } from '../store/forwards';
+import { useForwards } from '../store/forwards';
 import { useRefusal } from '../store/access';
 import Announce from './Announce';
 
@@ -48,7 +48,7 @@ function forwardFor(
 }
 
 export default function InspectPorts({ target, kind, ports }: InspectPortsProps) {
-  const forwards = useForwardsStore((state) => state.forwards);
+  const forwards = useForwards();
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const noForward = useRefusal(target, 'portForward');

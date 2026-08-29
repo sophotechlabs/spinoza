@@ -1,25 +1,39 @@
 import { create } from 'zustand';
 import { namespaceStart } from './settings';
+import { activeClusterNow, useActiveCluster } from './clusters';
+import type { ByCluster } from './perCluster';
+import { drop, held, put } from './perCluster';
 
 export const ALL = '';
 
 export const DEFAULT_NAMESPACE = 'default';
 
-interface NamespaceState {
+interface Scope {
   namespace: string;
   names: string[];
   touched: boolean;
+}
+
+interface NamespaceState {
+  byCluster: ByCluster<Scope>;
   choose: (namespace: string) => void;
   offer: (names: string[]) => void;
   openOn: (context: string) => void;
+  forget: (cluster: string) => void;
   reset: () => void;
 }
+
+const NO_NAMES: string[] = [];
 
 export function opensOn(context: string): string {
   if (namespaceStart(context) === 'default') {
     return DEFAULT_NAMESPACE;
   }
   return ALL;
+}
+
+function fresh(): Scope {
+  return { namespace: opensOn(''), names: NO_NAMES, touched: false };
 }
 
 export function settle(wanted: string, names: string[]): string {
@@ -32,28 +46,62 @@ export function settle(wanted: string, names: string[]): string {
   return ALL;
 }
 
-export const useNamespaceStore = create<NamespaceState>((set, get) => ({
-  namespace: opensOn(''),
-  names: [],
-  touched: false,
+function change(state: NamespaceState, on: string, next: (scope: Scope) => Scope): NamespaceState {
+  return {
+    ...state,
+    byCluster: put(state.byCluster, on, next(held(state.byCluster, on, fresh()))),
+  };
+}
+
+export const useNamespaceStore = create<NamespaceState>((set) => ({
+  byCluster: {},
   choose: (namespace) => {
-    set({ namespace, touched: true });
+    const on = activeClusterNow();
+    set((state) => change(state, on, (scope) => ({ ...scope, namespace, touched: true })));
   },
   openOn: (context) => {
-    if (get().touched) {
-      return;
-    }
-    set({ namespace: opensOn(context) });
+    const on = activeClusterNow();
+    set((state) =>
+      change(state, on, (scope) => {
+        if (scope.touched) {
+          return scope;
+        }
+        return { ...scope, namespace: opensOn(context) };
+      }),
+    );
   },
   offer: (names) => {
-    const namespace = settle(get().namespace, names);
-    set({ names, namespace });
+    const on = activeClusterNow();
+    set((state) =>
+      change(state, on, (scope) => ({
+        ...scope,
+        names,
+        namespace: settle(scope.namespace, names),
+      })),
+    );
+  },
+  forget: (cluster) => {
+    set((state) => ({ byCluster: drop(state.byCluster, cluster) }));
   },
   reset: () => {
-    set({ namespace: opensOn(''), names: [], touched: false });
+    set({ byCluster: {} });
   },
 }));
 
 export function useNamespace(): string {
-  return useNamespaceStore((state) => state.namespace);
+  const on = useActiveCluster();
+  return useNamespaceStore((state) => held(state.byCluster, on, fresh()).namespace);
+}
+
+export function useNamespaceNames(): string[] {
+  const on = useActiveCluster();
+  return useNamespaceStore((state) => state.byCluster[on]?.names ?? NO_NAMES);
+}
+
+export function namespaceNow(): string {
+  return held(useNamespaceStore.getState().byCluster, activeClusterNow(), fresh()).namespace;
+}
+
+export function forgetNamespace(cluster: string): void {
+  useNamespaceStore.getState().forget(cluster);
 }

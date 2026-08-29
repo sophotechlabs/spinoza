@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ALL, opensOn, useNamespaceStore } from '../../src/store/namespace';
+import {
+  ALL,
+  forgetNamespace,
+  namespaceNow,
+  opensOn,
+  useNamespaceStore,
+} from '../../src/store/namespace';
+import { MK1, MK2, showing } from '../helpers-clusters';
 import { useSettingsStore } from '../../src/store/settings';
 import { resetStored } from '../../src/lib/persist';
 
@@ -7,10 +14,19 @@ function state() {
   return useNamespaceStore.getState();
 }
 
+function scopeOf(cluster = MK1) {
+  return useNamespaceStore.getState().byCluster[cluster];
+}
+
+function namesOf(cluster = MK1): string[] {
+  return scopeOf(cluster)?.names ?? [];
+}
+
 beforeEach(() => {
   resetStored();
   useSettingsStore.setState({ namespaceStart: 'all' });
-  useNamespaceStore.setState({ namespace: ALL, names: [] });
+  useNamespaceStore.getState().reset();
+  showing(MK1);
 });
 
 afterEach(() => {
@@ -20,20 +36,20 @@ afterEach(() => {
 
 describe('the namespace the app works in', () => {
   it('starts on every namespace', () => {
-    expect(state().namespace).toBe(ALL);
+    expect(namespaceNow()).toBe(ALL);
   });
 
   it('keeps what was chosen', () => {
     state().choose('shop');
 
-    expect(state().namespace).toBe('shop');
+    expect(namespaceNow()).toBe('shop');
   });
 
   it('takes the names the cluster reported without narrowing the view', () => {
     state().offer(['default', 'shop']);
 
-    expect(state().names).toEqual(['default', 'shop']);
-    expect(state().namespace).toBe(ALL);
+    expect(namesOf()).toEqual(['default', 'shop']);
+    expect(namespaceNow()).toBe(ALL);
   });
 
   it('widens back out when the kept namespace is not in this cluster', () => {
@@ -41,7 +57,7 @@ describe('the namespace the app works in', () => {
 
     state().offer(['default', 'kube-system']);
 
-    expect(state().namespace).toBe(ALL);
+    expect(namespaceNow()).toBe(ALL);
   });
 
   it('keeps a kept namespace this cluster does have', () => {
@@ -49,7 +65,7 @@ describe('the namespace the app works in', () => {
 
     state().offer(['default', 'shop']);
 
-    expect(state().namespace).toBe('shop');
+    expect(namespaceNow()).toBe('shop');
   });
 });
 
@@ -71,8 +87,8 @@ describe('the namespace a new cluster opens on', () => {
 
     state().reset();
 
-    expect(state().namespace).toBe('default');
-    expect(state().names).toEqual([]);
+    expect(namespaceNow()).toBe('default');
+    expect(namesOf()).toEqual([]);
   });
 });
 
@@ -95,7 +111,7 @@ describe('opening a cluster on its own answer', () => {
 
     state().openOn('gke-prod');
 
-    expect(state().namespace).toBe('default');
+    expect(namespaceNow()).toBe('default');
   });
 
   it('leaves a namespace the user picked alone', () => {
@@ -107,16 +123,34 @@ describe('opening a cluster on its own answer', () => {
 
     state().openOn('gke-prod');
 
-    expect(state().namespace).toBe('shop');
+    expect(namespaceNow()).toBe('shop');
   });
 
-  it('forgets that pick when the cluster changes', () => {
+  it('leaves the pick behind on the tab that made it', () => {
     useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: {} });
     state().choose('shop');
 
-    state().reset();
+    showing(MK2);
     state().openOn('p-mk2');
 
-    expect(state().namespace).toBe(ALL);
+    expect(namespaceNow()).toBe(ALL);
+  });
+
+  it('gives the pick back on the tab that made it', () => {
+    useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: {} });
+    state().choose('shop');
+    showing(MK2);
+
+    showing(MK1);
+
+    expect(namespaceNow()).toBe('shop');
+  });
+
+  it('lets go of a closed tab', () => {
+    state().choose('shop');
+
+    forgetNamespace(MK1);
+
+    expect(namespaceNow()).toBe(ALL);
   });
 });

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { refreshForwards, stopForward, useForwardPolling } from '../lib/portForward';
 import { forwardURL, openExternal } from '../lib/openExternal';
-import { useForwardsStore } from '../store/forwards';
+import { useForwards } from '../store/forwards';
 import { notifyError, notifyOk } from '../store/toasts';
 import StaleBanner from './StaleBanner';
 import CopyButton from './CopyButton';
@@ -27,7 +27,7 @@ interface ForwardsPanelProps {
 }
 
 export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
-  const forwards = useForwardsStore((state) => state.forwards);
+  const forwards = useForwards();
   const [error, setError] = useState<string | null>(null);
   const poll = useForwardPolling(active);
 

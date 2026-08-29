@@ -9,6 +9,13 @@ import { useHelmStore } from '../src/store/helm';
 import { useSessionStore } from '../src/store/session';
 import { useContextsStore } from '../src/store/contexts';
 import { useForwardsStore } from '../src/store/forwards';
+import { useClustersStore } from '../src/store/clusters';
+import { useClusterHealthStore } from '../src/store/clusterHealth';
+import { useNamespaceStore } from '../src/store/namespace';
+import { useFiltersStore } from '../src/store/filters';
+import { useRecentsStore } from '../src/store/recents';
+import { useCatalogStore } from '../src/store/catalog';
+import { useTerminalsStore } from '../src/store/terminals';
 import { hydrate, resetStored } from '../src/lib/persist';
 
 configure({ asyncUtilTimeout: 5000 });
@@ -24,7 +31,14 @@ beforeEach(() => {
   useHelmStore.getState().reset();
   useSessionStore.getState().reset();
   useContextsStore.getState().reset();
-  useForwardsStore.getState().setForwards([]);
+  useForwardsStore.getState().clear();
+  useClustersStore.getState().reset();
+  useClusterHealthStore.getState().reset();
+  useNamespaceStore.getState().reset();
+  useFiltersStore.getState().clear();
+  useRecentsStore.getState().clear();
+  useCatalogStore.getState().clear();
+  useTerminalsStore.getState().reset();
 });
 
 class ResizeObserverStub {

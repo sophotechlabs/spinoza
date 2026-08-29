@@ -10,7 +10,7 @@ import {
   stopForward,
   useForwardPolling,
 } from '../../src/lib/portForward';
-import { useForwardsStore } from '../../src/store/forwards';
+import { forwardsNow, setForwards } from '../../src/store/forwards';
 import type { ObjectRef, PortForward } from '../../src/lib/types';
 import { anySignal } from '../helpers';
 
@@ -42,13 +42,13 @@ function ok(payload: unknown) {
 
 describe('portForward', () => {
   beforeEach(() => {
-    useForwardsStore.setState({ forwards: [] });
+    setForwards([]);
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
-    useForwardsStore.setState({ forwards: [] });
+    setForwards([]);
   });
 
   it('recognises forwardable kinds', () => {
@@ -134,16 +134,16 @@ describe('portForward', () => {
 
     await refreshForwards();
 
-    expect(useForwardsStore.getState().forwards).toHaveLength(1);
+    expect(forwardsNow()).toHaveLength(1);
   });
 
   it('leaves the store alone when the refresh fails', async () => {
-    useForwardsStore.setState({ forwards: [forward()] });
+    setForwards([forward()]);
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
 
     await refreshForwards();
 
-    expect(useForwardsStore.getState().forwards).toHaveLength(1);
+    expect(forwardsNow()).toHaveLength(1);
   });
 
   it('surfaces a list failure to the poller instead of swallowing it', async () => {
@@ -153,11 +153,11 @@ describe('portForward', () => {
   });
 
   it('empties the store when the cluster changes underneath it', () => {
-    useForwardsStore.setState({ forwards: [forward()] });
+    setForwards([forward()]);
 
     clearForwards();
 
-    expect(useForwardsStore.getState().forwards).toHaveLength(0);
+    expect(forwardsNow()).toHaveLength(0);
   });
 
   it('polls while enabled and stops on unmount', async () => {

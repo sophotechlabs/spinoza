@@ -127,7 +127,7 @@ describe('ContextPicker', () => {
     );
   });
 
-  it('switches to the chosen context and tells the app to reconnect', async () => {
+  it('opens the chosen context as a tab and tells the app to show it', async () => {
     const user = userEvent.setup();
     const calls = stubContexts(
       listOf(['p-mk1', 'p-mk2'], 'p-mk2'),
@@ -144,7 +144,7 @@ describe('ContextPicker', () => {
     const post = calls.find((call) => call.method === 'POST');
     expect(post?.url).toContain('name=p-mk1');
     expect(useToastsStore.getState().toasts).toEqual([
-      expect.objectContaining({ tone: 'ok', message: 'Switched to p-mk1' }),
+      expect.objectContaining({ tone: 'ok', message: 'Opened p-mk1' }),
     ]);
   });
 
@@ -175,7 +175,7 @@ describe('ContextPicker', () => {
     expect(post?.url).toContain('kubeconfig=%2Fhome%2Farch%2F.kube%2Fwork.yaml');
   });
 
-  it('reports a switch the server refused and keeps the old context', async () => {
+  it('reports an open the server refused and keeps the old context', async () => {
     const user = userEvent.setup();
     stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
     const onSwitched = vi.fn();
@@ -188,7 +188,7 @@ describe('ContextPicker', () => {
     expect(useToastsStore.getState().toasts).toEqual([
       expect.objectContaining({
         tone: 'error',
-        message: 'Switching to p-mk1: context "gone" does not exist',
+        message: 'Opening p-mk1: context "gone" does not exist',
       }),
     ]);
   });
@@ -324,7 +324,7 @@ describe('ContextPicker', () => {
 
     await pick(user, 'p-mk1');
 
-    expect(await screen.findByText('switching context failed')).toBeInTheDocument();
+    expect(await screen.findByText('opening the cluster failed')).toBeInTheDocument();
   });
 
   it('drops a listing that lands after unmount', () => {
@@ -381,14 +381,42 @@ describe('ContextPicker', () => {
     expect(screen.queryByText(/too late/)).not.toBeInTheDocument();
   });
 
-  it('ignores re-picking the context already in use', async () => {
+  it('opens once while the first open is still going', async () => {
+    const user = userEvent.setup();
+    const posted = vi.fn();
+    let release: ((value: unknown) => void) | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: { method?: string }) => {
+        if (init?.method === 'POST') {
+          posted();
+          return new Promise((resolve) => {
+            release = resolve;
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(listOf(['p-mk1', 'p-mk2'], 'p-mk2')),
+        });
+      }),
+    );
+    render(<ContextPicker onSwitched={vi.fn()} />);
+
+    await pick(user, 'p-mk1');
+    await pick(user, 'p-mk1');
+
+    expect(posted).toHaveBeenCalledTimes(1);
+    expect(release).not.toBeNull();
+  });
+
+  it('re-picking the context in front brings its tab forward', async () => {
     const user = userEvent.setup();
     const calls = stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
     render(<ContextPicker onSwitched={vi.fn()} />);
 
     await pick(user, 'p-mk2');
 
-    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0);
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
   });
 
   it('survives a response with no kubeconfigs field', async () => {

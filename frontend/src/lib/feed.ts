@@ -7,7 +7,7 @@ import type { Chip } from './filterChips';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
 import { contextAnnounced } from './contexts';
-import { useClusterHealthStore } from '../store/clusterHealth';
+import { reportHealth } from '../store/clusterHealth';
 import { wsURL } from './wsBase';
 import { viewKind } from './view';
 import { activeCluster } from './cluster';
@@ -366,7 +366,7 @@ export function useResourceFeed(): ResourceFeed {
           void contextAnnounced(msg.context);
           break;
         case 'cluster':
-          useClusterHealthStore.getState().report(msg.reachable, msg.reason ?? '');
+          reportHealth(msg.cluster ?? '', msg.reachable, msg.reason ?? '');
           break;
         case 'error':
           flush();

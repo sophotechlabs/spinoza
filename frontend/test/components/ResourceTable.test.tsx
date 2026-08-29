@@ -8,6 +8,8 @@ import { makeColumns, makeDescriptor, makeRow } from '../helpers';
 import { readTableState, tableKey } from '../../src/lib/tableState';
 import { useFiltersStore } from '../../src/store/filters';
 import { ALL, useNamespaceStore } from '../../src/store/namespace';
+import { activeClusterNow } from '../../src/store/clusters';
+import type { Chip } from '../../src/lib/filterChips';
 
 const SUB = 's1';
 const descriptor = makeDescriptor({ resource: 'pods', kind: 'Pod' });
@@ -72,6 +74,14 @@ function names(): string[] {
     .map((row) => row.querySelector('button')?.textContent ?? '')
     .filter((name) => name !== '');
 }
+
+describe('a table with no resource picked', () => {
+  it('says to pick one', () => {
+    renderTable(null, null);
+
+    expect(screen.getByText('Select a resource to view.')).toBeInTheDocument();
+  });
+});
 
 describe('ResourceTable', () => {
   beforeEach(() => {
@@ -921,9 +931,7 @@ describe('filter chips', () => {
     expect(
       screen.queryByRole('button', { name: 'Remove the Name coredns filter' }),
     ).not.toBeInTheDocument();
-    expect(useFiltersStore.getState().chips[tableKey(descriptor)]).toEqual([
-      { field: 'name', value: 'coredns' },
-    ]);
+    expect(chipsByKind()[tableKey(descriptor)]).toEqual([{ field: 'name', value: 'coredns' }]);
   });
 
   it('clears the chips and the typed text together', async () => {
@@ -937,7 +945,7 @@ describe('filter chips', () => {
 
     expect(await screen.findByText('web-0')).toBeInTheDocument();
     expect(screen.getByLabelText('Filter')).toHaveValue('');
-    expect(useFiltersStore.getState().chips[tableKey(descriptor)]).toBeUndefined();
+    expect(chipsByKind()[tableKey(descriptor)]).toBeUndefined();
   });
 });
 
@@ -1681,3 +1689,7 @@ describe('sorting a node by memory', () => {
     expect(screen.queryByRole('button', { name: /^Memory total/ })).not.toBeInTheDocument();
   });
 });
+
+function chipsByKind(): Partial<Record<string, Chip[]>> {
+  return useFiltersStore.getState().byCluster[activeClusterNow()] ?? {};
+}

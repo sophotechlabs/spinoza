@@ -5,7 +5,7 @@ import { NAMESPACE_FIELD, fieldFor, labelOf, parseChip } from '../lib/filterChip
 import { suggest } from '../lib/filterSuggest';
 import type { Suggestion } from '../lib/filterSuggest';
 import { useChips, useFiltersStore } from '../store/filters';
-import { ALL, useNamespaceStore } from '../store/namespace';
+import { ALL, useNamespace, useNamespaceNames, useNamespaceStore } from '../store/namespace';
 import { FILTER_INPUT_ID } from '../lib/hotkeys';
 
 interface FilterBarProps {
@@ -55,8 +55,8 @@ export default function FilterBar({ stateKey, fields, rows, text, onText }: Filt
   const chips = useChips(stateKey);
   const add = useFiltersStore((state) => state.add);
   const removeAt = useFiltersStore((state) => state.removeAt);
-  const namespace = useNamespaceStore((state) => state.namespace);
-  const namespaces = useNamespaceStore((state) => state.names);
+  const namespace = useNamespace();
+  const namespaces = useNamespaceNames();
   const choose = useNamespaceStore((state) => state.choose);
   const [cursor, setCursor] = useState(-1);
   const [dismissed, setDismissed] = useState(false);

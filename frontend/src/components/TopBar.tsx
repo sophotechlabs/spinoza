@@ -8,7 +8,7 @@ import ProtectionToggle from './ProtectionToggle';
 import ViewSwitch from './ViewSwitch';
 import { ReconnectIcon } from './icons';
 import { useNamespaces } from '../lib/namespaces';
-import { ALL, useNamespaceStore } from '../store/namespace';
+import { ALL, useNamespace, useNamespaceNames, useNamespaceStore } from '../store/namespace';
 import { useClusterReachable, useClusterUnreachableReason } from '../store/clusterHealth';
 import Wordmark from './Wordmark';
 
@@ -66,8 +66,8 @@ export default function TopBar({
 }: TopBarProps) {
   const clusterReachable = useClusterReachable();
   const unreachableReason = useClusterUnreachableReason();
-  const namespace = useNamespaceStore((state) => state.namespace);
-  const names = useNamespaceStore((state) => state.names);
+  const namespace = useNamespace();
+  const names = useNamespaceNames();
   const choose = useNamespaceStore((state) => state.choose);
   useNamespaces();
 

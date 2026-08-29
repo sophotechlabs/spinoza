@@ -164,7 +164,7 @@ const close = vi.fn(function close(this: HTMLDialogElement) {
 beforeEach(() => {
   useToastsStore.getState().clear();
   useHelmAccessStore.setState({ answers: {} });
-  useNamespaceStore.setState({ names: ['default', 'demo'] });
+  useNamespaceStore.getState().offer(['default', 'demo']);
   showModal.mockClear();
   close.mockClear();
   HTMLDialogElement.prototype.showModal = showModal;
@@ -174,7 +174,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   useContextsStore.getState().reset();
-  useNamespaceStore.setState({ names: [] });
+  useNamespaceStore.getState().offer([]);
 });
 
 describe('HelmInstallDialog', () => {

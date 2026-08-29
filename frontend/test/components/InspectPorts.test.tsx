@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectPorts from '../../src/components/InspectPorts';
-import { useForwardsStore } from '../../src/store/forwards';
+import { forwardsNow, setForwards } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
 import { accessKey, useAccessStore } from '../../src/store/access';
 import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
@@ -78,12 +78,12 @@ function stubStart(localPort: number) {
 
 describe('InspectPorts', () => {
   beforeEach(() => {
-    useForwardsStore.setState({ forwards: [] });
+    setForwards([]);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    useForwardsStore.setState({ forwards: [] });
+    setForwards([]);
     useToastsStore.getState().clear();
   });
 
@@ -211,7 +211,7 @@ describe('InspectPorts', () => {
     render(<InspectPorts target={target} kind="Pod" ports={ports} />);
 
     await waitFor(() => {
-      expect(useForwardsStore.getState().forwards).toHaveLength(1);
+      expect(forwardsNow()).toHaveLength(1);
     });
 
     expect(screen.getAllByRole('button', { name: 'Forward' })).toHaveLength(2);
@@ -226,7 +226,7 @@ describe('InspectPorts', () => {
     render(<InspectPorts target={target} kind="Pod" ports={ports} />);
 
     await waitFor(() => {
-      expect(useForwardsStore.getState().forwards).toHaveLength(2);
+      expect(forwardsNow()).toHaveLength(2);
     });
 
     expect(screen.getAllByRole('button', { name: 'Forward' })).toHaveLength(2);

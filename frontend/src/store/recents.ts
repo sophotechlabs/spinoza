@@ -1,11 +1,17 @@
 import { create } from 'zustand';
 import type { ObjectRef } from '../lib/types';
+import { activeClusterNow, useActiveCluster } from './clusters';
+import type { ByCluster } from './perCluster';
+import { drop, held, put } from './perCluster';
 
 export const MAX_RECENTS = 15;
 
+const NONE: ObjectRef[] = [];
+
 interface RecentsState {
-  recents: ObjectRef[];
+  byCluster: ByCluster<ObjectRef[]>;
   remember: (ref: ObjectRef) => void;
+  forget: (cluster: string) => void;
   clear: () => void;
 }
 
@@ -14,21 +20,26 @@ function keyOf(ref: ObjectRef): string {
 }
 
 export const useRecentsStore = create<RecentsState>((set) => ({
-  recents: [],
+  byCluster: {},
   remember: (ref) => {
+    const on = activeClusterNow();
     set((state) => {
       const key = keyOf(ref);
-      const rest = state.recents.filter((one) => keyOf(one) !== key);
-      return { recents: [ref, ...rest].slice(0, MAX_RECENTS) };
+      const rest = held(state.byCluster, on, NONE).filter((one) => keyOf(one) !== key);
+      return { byCluster: put(state.byCluster, on, [ref, ...rest].slice(0, MAX_RECENTS)) };
     });
   },
+  forget: (cluster) => {
+    set((state) => ({ byCluster: drop(state.byCluster, cluster) }));
+  },
   clear: () => {
-    set({ recents: [] });
+    set({ byCluster: {} });
   },
 }));
 
 export function useRecents(): ObjectRef[] {
-  return useRecentsStore((state) => state.recents);
+  const on = useActiveCluster();
+  return useRecentsStore((state) => held(state.byCluster, on, NONE));
 }
 
 export function rememberObject(ref: ObjectRef): void {
@@ -37,4 +48,8 @@ export function rememberObject(ref: ObjectRef): void {
 
 export function clearRecents(): void {
   useRecentsStore.getState().clear();
+}
+
+export function forgetRecents(cluster: string): void {
+  useRecentsStore.getState().forget(cluster);
 }

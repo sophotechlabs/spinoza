@@ -7,6 +7,7 @@ import { bumpClusterEpoch } from '../../src/store/cluster';
 import { clearCatalog, useCatalogStore } from '../../src/store/catalog';
 import { ARGO_VIEWS, FLUX_VIEWS } from '../../src/lib/types';
 import { anySignal, makeCategory, makeDescriptor, rejectsWith } from '../helpers';
+import { activeClusterNow } from '../../src/store/clusters';
 
 interface RenderOverrides {
   view?: View;
@@ -102,7 +103,7 @@ describe('Sidebar', () => {
 
     await screen.findByRole('button', { name: /Workloads/ });
 
-    expect(useCatalogStore.getState().categories).toEqual(categories);
+    expect(categoriesNow()).toEqual(categories);
   });
 
   it('offers helm releases at the top', () => {
@@ -489,7 +490,7 @@ describe('Sidebar', () => {
 
     expect(await screen.findByText(/Workloads/)).toBeInTheDocument();
     expect(screen.queryByText('Discovery failed')).not.toBeInTheDocument();
-    expect(useCatalogStore.getState().categories).toEqual(categories);
+    expect(categoriesNow()).toEqual(categories);
     const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(call).toEqual(['/api/resources', { method: 'POST', signal: anySignal() }]);
   });
@@ -1003,3 +1004,7 @@ describe('discovery retries itself', () => {
     expect(discoveries()).toBe(1);
   });
 });
+
+function categoriesNow(): Category[] {
+  return useCatalogStore.getState().categories[activeClusterNow()] ?? [];
+}

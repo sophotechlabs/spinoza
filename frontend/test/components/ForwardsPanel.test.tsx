@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ForwardsPanel from '../../src/components/ForwardsPanel';
-import { useForwardsStore } from '../../src/store/forwards';
+import { setForwards } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
 import type { PortForward } from '../../src/lib/types';
 import { anySignal, rejectsWith } from '../helpers';
@@ -30,7 +30,7 @@ function stubList(forwards: PortForward[]) {
 
 describe('ForwardsPanel', () => {
   beforeEach(() => {
-    useForwardsStore.setState({ forwards: [] });
+    setForwards([]);
     useToastsStore.getState().clear();
     vi.stubGlobal(
       'fetch',
@@ -41,7 +41,7 @@ describe('ForwardsPanel', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
-    useForwardsStore.setState({ forwards: [] });
+    setForwards([]);
   });
 
   it('prompts when there is nothing forwarded', () => {
@@ -212,14 +212,14 @@ describe('ForwardsPanel', () => {
 
 describe('copying a forward url', () => {
   it('offers a copy button next to a running forward', async () => {
-    useForwardsStore.setState({ forwards: [forward()] });
+    setForwards([forward()]);
     render(<ForwardsPanel />);
 
     expect(await screen.findByRole('button', { name: 'Copy web forward url' })).toBeInTheDocument();
   });
 
   it('offers nothing to copy for a failed one', () => {
-    useForwardsStore.setState({ forwards: [forward({ state: 'failed', error: 'boom' })] });
+    setForwards([forward({ state: 'failed', error: 'boom' })]);
     render(<ForwardsPanel />);
 
     expect(screen.queryByRole('button', { name: /forward url/ })).not.toBeInTheDocument();

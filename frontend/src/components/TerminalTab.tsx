@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { PodTarget } from '../lib/pods';
 import { firstContainer, podRef } from '../lib/pods';
 import { useLocalShellSupport } from '../lib/useLocalShell';
-import { useTerminalsStore } from '../store/terminals';
+import { useActiveTerminal, useTerminalSessions, useTerminalsStore } from '../store/terminals';
 import { useRefusal } from '../store/access';
 import type { TerminalSession as Session } from '../store/terminals';
 import TerminalSession, { LocalTerminalSession, NodeTerminalSession } from './TerminalSession';
@@ -40,8 +40,8 @@ function closeLabel(session: Session): string {
 }
 
 export default function TerminalTab({ pod }: TerminalTabProps) {
-  const sessions = useTerminalsStore((state) => state.sessions);
-  const active = useTerminalsStore((state) => state.active);
+  const sessions = useTerminalSessions();
+  const active = useActiveTerminal();
   const open = useTerminalsStore((state) => state.open);
   const openLocal = useTerminalsStore((state) => state.openLocal);
   const focus = useTerminalsStore((state) => state.focus);

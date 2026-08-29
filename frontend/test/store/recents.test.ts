@@ -3,28 +3,35 @@ import type { ObjectRef } from '../../src/lib/types';
 import {
   MAX_RECENTS,
   clearRecents,
+  forgetRecents,
   rememberObject,
   useRecentsStore,
 } from '../../src/store/recents';
+import { MK1, MK2, showing } from '../helpers-clusters';
 
 function ref(name: string, namespace = 'prod'): ObjectRef {
   return { group: '', version: 'v1', resource: 'pods', namespace, name };
 }
 
+function names(cluster: string): string[] {
+  return (useRecentsStore.getState().byCluster[cluster] ?? []).map((one) => one.name);
+}
+
 describe('recent objects', () => {
   beforeEach(() => {
     clearRecents();
+    showing(MK1);
   });
 
   it('starts empty', () => {
-    expect(useRecentsStore.getState().recents).toEqual([]);
+    expect(names(MK1)).toEqual([]);
   });
 
   it('puts the newest first', () => {
     rememberObject(ref('a'));
     rememberObject(ref('b'));
 
-    expect(useRecentsStore.getState().recents.map((one) => one.name)).toEqual(['b', 'a']);
+    expect(names(MK1)).toEqual(['b', 'a']);
   });
 
   it('moves a repeat visit back to the front instead of duplicating it', () => {
@@ -32,14 +39,14 @@ describe('recent objects', () => {
     rememberObject(ref('b'));
     rememberObject(ref('a'));
 
-    expect(useRecentsStore.getState().recents.map((one) => one.name)).toEqual(['a', 'b']);
+    expect(names(MK1)).toEqual(['a', 'b']);
   });
 
   it('tells two same-named objects in different namespaces apart', () => {
     rememberObject(ref('web', 'prod'));
     rememberObject(ref('web', 'staging'));
 
-    expect(useRecentsStore.getState().recents).toHaveLength(2);
+    expect(names(MK1)).toHaveLength(2);
   });
 
   it('keeps only the most recent handful', () => {
@@ -47,16 +54,37 @@ describe('recent objects', () => {
       rememberObject(ref(`pod-${String(index)}`));
     }
 
-    const kept = useRecentsStore.getState().recents;
+    const kept = names(MK1);
     expect(kept).toHaveLength(MAX_RECENTS);
-    expect(kept[0].name).toBe(`pod-${String(MAX_RECENTS + 4)}`);
+    expect(kept[0]).toBe(`pod-${String(MAX_RECENTS + 4)}`);
   });
 
-  it('empties when the cluster changes', () => {
+  it("keeps one tab out of another tab's list", () => {
+    rememberObject(ref('a'));
+
+    showing(MK2);
+    rememberObject(ref('b'));
+
+    expect(names(MK1)).toEqual(['a']);
+    expect(names(MK2)).toEqual(['b']);
+  });
+
+  it("lets go of a closed tab's list", () => {
+    rememberObject(ref('a'));
+    showing(MK2);
+    rememberObject(ref('b'));
+
+    forgetRecents(MK1);
+
+    expect(names(MK1)).toEqual([]);
+    expect(names(MK2)).toEqual(['b']);
+  });
+
+  it('empties every tab when the window is torn down', () => {
     rememberObject(ref('a'));
 
     clearRecents();
 
-    expect(useRecentsStore.getState().recents).toEqual([]);
+    expect(useRecentsStore.getState().byCluster).toEqual({});
   });
 });

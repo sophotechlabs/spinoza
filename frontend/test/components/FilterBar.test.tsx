@@ -5,8 +5,10 @@ import { useState } from 'react';
 import FilterBar from '../../src/components/FilterBar';
 import { fieldsOf } from '../../src/lib/filterChips';
 import { useFiltersStore } from '../../src/store/filters';
-import { ALL, useNamespaceStore } from '../../src/store/namespace';
+import { ALL, namespaceNow, useNamespaceStore } from '../../src/store/namespace';
 import { makeRow } from '../helpers';
+import { activeClusterNow } from '../../src/store/clusters';
+import type { Chip } from '../../src/lib/filterChips';
 
 const KEY = '/v1/pods';
 
@@ -15,7 +17,7 @@ const fields = fieldsOf([{ name: 'Status' }], true);
 const clusterFields = fieldsOf([{ name: 'Status' }], false);
 
 function chipsOf() {
-  return useFiltersStore.getState().chips[KEY];
+  return chipsByKind()[KEY];
 }
 
 const rows = [
@@ -139,7 +141,7 @@ describe('FilterBar', () => {
 
     await user.click(screen.getByRole('button', { name: 'Remove the Namespace prod filter' }));
 
-    expect(useNamespaceStore.getState().namespace).toBe(ALL);
+    expect(namespaceNow()).toBe(ALL);
   });
 
   it('changes the namespace scope when one is typed', async () => {
@@ -148,7 +150,7 @@ describe('FilterBar', () => {
 
     await user.type(filterBox(), 'ns:kube-system{Enter}');
 
-    expect(useNamespaceStore.getState().namespace).toBe('kube-system');
+    expect(namespaceNow()).toBe('kube-system');
     expect(chipsOf()).toBeUndefined();
   });
 
@@ -183,12 +185,12 @@ describe('FilterBar', () => {
 describe('completing what is typed', () => {
   beforeEach(() => {
     useFiltersStore.getState().clear();
-    useNamespaceStore.setState({ namespace: ALL, names: ['airbyte', 'airbyte-jobs', 'prod'] });
+    setScope(ALL, ['airbyte', 'airbyte-jobs', 'prod']);
   });
 
   afterEach(() => {
     useFiltersStore.getState().clear();
-    useNamespaceStore.setState({ namespace: ALL, names: [] });
+    setScope(ALL, []);
   });
 
   it('offers nothing until something is typed', () => {
@@ -204,7 +206,7 @@ describe('completing what is typed', () => {
 
     await user.type(filterBox(), 'ns:kube{Enter}');
 
-    expect(useNamespaceStore.getState().namespace).toBe(ALL);
+    expect(namespaceNow()).toBe(ALL);
     expect(filterBox()).toHaveValue('ns:kube');
   });
 
@@ -214,7 +216,7 @@ describe('completing what is typed', () => {
 
     await user.type(filterBox(), 'ns:prod{Enter}');
 
-    expect(useNamespaceStore.getState().namespace).toBe('prod');
+    expect(namespaceNow()).toBe('prod');
   });
 
   it('leaves the arrows and Tab alone while no list is open', async () => {
@@ -287,7 +289,7 @@ describe('completing what is typed', () => {
 
     await user.keyboard('{ArrowDown}{Enter}');
 
-    expect(useNamespaceStore.getState().namespace).toBe('airbyte-jobs');
+    expect(namespaceNow()).toBe('airbyte-jobs');
   });
 
   it('takes the first suggestion on Tab', async () => {
@@ -381,3 +383,12 @@ describe('completing what is typed', () => {
     expect(screen.getByRole('option', { selected: true })).toHaveAttribute('id', active);
   });
 });
+
+function setScope(namespace: string, names: string[]): void {
+  useNamespaceStore.getState().offer(names);
+  useNamespaceStore.getState().choose(namespace);
+}
+
+function chipsByKind(): Partial<Record<string, Chip[]>> {
+  return useFiltersStore.getState().byCluster[activeClusterNow()] ?? {};
+}

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Category, FluxResource, GraphNode, ObjectRef } from '../src/lib/types';
+import type { Category, ClusterList, FluxResource, GraphNode, ObjectRef } from '../src/lib/types';
 
 const feedMocks = vi.hoisted(
   (): {
@@ -419,9 +419,10 @@ import { useContextsStore } from '../src/store/contexts';
 import { clearRecents, rememberObject } from '../src/store/recents';
 
 import { clearCatalog } from '../src/store/catalog';
-import { useFiltersStore } from '../src/store/filters';
+import { chipsOf, useFiltersStore } from '../src/store/filters';
+import { adoptClusters, useClustersStore } from '../src/store/clusters';
 import { usePanelsStore } from '../src/store/panels';
-import { ALL, useNamespaceStore } from '../src/store/namespace';
+import { ALL, namespaceNow, useNamespaceStore } from '../src/store/namespace';
 import { useSettingsStore } from '../src/store/settings';
 import { notifyOk, useToastsStore } from '../src/store/toasts';
 import { bumpClusterEpoch } from '../src/store/cluster';
@@ -515,6 +516,61 @@ function detailFor(url: string) {
   };
 }
 
+export function idFor(context: string): string {
+  return `https://${context}:6443`;
+}
+
+export function bothClusters(active: string): ClusterList {
+  return {
+    clusters: [
+      {
+        id: idFor('kind-dev'),
+        context: 'kind-dev',
+        active: active === 'kind-dev',
+        protection: 'open',
+        reachable: true,
+      },
+      {
+        id: idFor(active),
+        context: active,
+        active: true,
+        protection: 'open',
+        reachable: true,
+      },
+    ],
+    remembered: [],
+  };
+}
+
+function showOther(context: string): void {
+  act(() => {
+    adoptClusters(bothClusters(context));
+    fireEvent.click(screen.getByTestId('context-changed'));
+  });
+}
+
+function showFirstAgain(): void {
+  act(() => {
+    adoptClusters(oneCluster('kind-dev') as ClusterList);
+    fireEvent.click(screen.getByTestId('context-changed'));
+  });
+}
+
+export function oneCluster(context: string): unknown {
+  return {
+    clusters: [
+      {
+        id: idFor(context),
+        context,
+        active: true,
+        protection: 'open',
+        reachable: true,
+      },
+    ],
+    remembered: [],
+  };
+}
+
 function stubFetch(pods?: number): void {
   vi.stubGlobal(
     'fetch',
@@ -525,6 +581,9 @@ function stubFetch(pods?: number): void {
           counts['/v1/pods'] = pods;
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts }) });
+      }
+      if (url.startsWith('/api/clusters')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('kind-dev')) });
       }
       if (url.startsWith('/api/contexts')) {
         return Promise.resolve({
@@ -615,8 +674,9 @@ async function selectDeployment(user: ReturnType<typeof userEvent.setup>): Promi
 
 beforeEach(() => {
   useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: {} });
-  useNamespaceStore.setState({ namespace: ALL, names: [], touched: false });
+  useNamespaceStore.getState().reset();
   clearCatalog();
+  adoptClusters(oneCluster('kind-dev') as ClusterList);
 });
 
 describe('the namespace offer, once per cluster', () => {
@@ -653,7 +713,7 @@ describe('the namespace offer, once per cluster', () => {
     await user.click(strip.getByRole('button', { name: 'Open on default' }));
 
     expect(useSettingsStore.getState().namespaceStarts['kind-dev']).toBe('default');
-    expect(useNamespaceStore.getState().namespace).toBe('default');
+    expect(namespaceNow()).toBe('default');
   });
 
   it('is made once per cluster and never again', async () => {
@@ -705,7 +765,7 @@ describe('the namespace offer, once per cluster', () => {
     await screen.findByLabelText('Namespace');
 
     await waitFor(() => {
-      expect(useNamespaceStore.getState().namespace).toBe('default');
+      expect(namespaceNow()).toBe('default');
     });
   });
 });
@@ -829,7 +889,7 @@ describe('App', () => {
     );
   });
 
-  it('drops the selection when the cluster changes', async () => {
+  it('drops the selection when another tab is shown', async () => {
     useResourcesStore
       .getState()
       .applySnapshot('main#1', makeColumns([]), true, [
@@ -841,14 +901,13 @@ describe('App', () => {
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
 
-    await user.click(screen.getByTestId('context-changed'));
+    showOther('kind-prod');
 
     expect(screen.getByText('Select a row to inspect it.')).toBeInTheDocument();
     expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
   });
 
   it('opens the next cluster on the namespace the settings name', async () => {
-    const user = userEvent.setup();
     useSettingsStore.setState({ namespaceStart: 'default', namespaceStarts: {} });
     render(<App />);
     await screen.findByLabelText('Namespace');
@@ -856,9 +915,25 @@ describe('App', () => {
       useNamespaceStore.getState().choose('kube-system');
     });
 
-    await user.click(screen.getByTestId('context-changed'));
+    showOther('kind-prod');
 
-    expect(useNamespaceStore.getState().namespace).toBe('default');
+    await waitFor(() => {
+      expect(namespaceNow()).toBe('default');
+    });
+  });
+
+  it('gives the namespace back on the tab that chose it', async () => {
+    useSettingsStore.setState({ namespaceStart: 'default', namespaceStarts: {} });
+    render(<App />);
+    await screen.findByLabelText('Namespace');
+    act(() => {
+      useNamespaceStore.getState().choose('kube-system');
+    });
+    showOther('kind-prod');
+
+    showFirstAgain();
+
+    expect(namespaceNow()).toBe('kube-system');
   });
 
   it('asks the feed for a wider window when the table wants more', async () => {
@@ -907,16 +982,28 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /Remove the Namespace/ })).not.toBeInTheDocument();
   });
 
-  it('drops the filter chips when the cluster changes', async () => {
+  it("shows the other tab none of this one's filter chips", async () => {
     const user = userEvent.setup();
     render(<App />);
     await selectPod(user);
     await user.type(await screen.findByLabelText('Filter'), 'web{Enter}');
-    expect(useFiltersStore.getState().chips['/v1/pods']).toHaveLength(1);
+    expect(chipsOf('/v1/pods')).toHaveLength(1);
 
-    await user.click(screen.getByTestId('context-changed'));
+    showOther('kind-prod');
 
-    expect(useFiltersStore.getState().chips).toEqual({});
+    expect(chipsOf('/v1/pods')).toHaveLength(0);
+  });
+
+  it('gives the chips back when you come back to the tab that has them', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.type(await screen.findByLabelText('Filter'), 'web{Enter}');
+    showOther('kind-prod');
+
+    showFirstAgain();
+
+    expect(chipsOf('/v1/pods')).toHaveLength(1);
   });
 
   it('opens the details again when a row is clicked with the panel put away', async () => {
@@ -939,27 +1026,35 @@ describe('App', () => {
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('pods:prod/pod-a');
   });
 
-  it('starts the notification history over when the cluster changes', async () => {
-    const user = userEvent.setup();
+  it('keeps the notification history across a tab, because it belongs to the window', () => {
     render(<App />);
     notifyOk('Deleted Pod web-0');
+
+    showOther('kind-prod');
+
     expect(useToastsStore.getState().history).toHaveLength(1);
-
-    await user.click(screen.getByTestId('context-changed'));
-
-    expect(useToastsStore.getState().history).toHaveLength(0);
   });
 
-  it('unsubscribes the old cluster resource when the cluster changes', async () => {
+  it("lets go of the old tab's rows when another tab is shown", async () => {
     const user = userEvent.setup();
     render(<App />);
     await selectPod(user);
     feedMocks.unsubscribe.mockClear();
 
-    await user.click(screen.getByTestId('context-changed'));
+    showOther('kind-prod');
 
     expect(feedMocks.unsubscribe).toHaveBeenCalledWith('main#1');
-    expect(feedMocks.reconnect).toHaveBeenCalled();
+  });
+
+  it('does not drop the socket when another tab is shown', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    feedMocks.reconnect.mockClear();
+
+    showOther('kind-prod');
+
+    expect(feedMocks.reconnect).not.toHaveBeenCalled();
   });
 
   it('reconnects when the reconnect button is clicked', async () => {
@@ -1217,10 +1312,13 @@ describe('the address bar', () => {
   it('switches to the cluster a link names, and keeps what it selected', async () => {
     let current = 'kind-dev';
     const fetchMock = vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
-      if (url.startsWith('/api/contexts')) {
+      if (url.startsWith('/api/clusters')) {
         if (init?.method === 'POST') {
           current = 'other-cluster';
         }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster(current)) });
+      }
+      if (url.startsWith('/api/contexts')) {
         return Promise.resolve({
           ok: true,
           json: () =>
@@ -1263,12 +1361,15 @@ describe('the address bar', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
-        if (url.startsWith('/api/contexts') && init?.method === 'POST') {
+        if (url.startsWith('/api/clusters') && init?.method === 'POST') {
           return Promise.resolve({
             ok: false,
             status: 400,
             json: () => Promise.resolve({ message: 'context "other-cluster" does not exist' }),
           });
+        }
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('kind-dev')) });
         }
         if (url.startsWith('/api/contexts')) {
           return Promise.resolve({
@@ -1299,11 +1400,14 @@ describe('the address bar', () => {
     let release: ((value: unknown) => void) | null = null;
     const posted = vi.fn();
     const fetchMock = vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
-      if (url.startsWith('/api/contexts') && init?.method === 'POST') {
+      if (url.startsWith('/api/clusters') && init?.method === 'POST') {
         posted();
         return new Promise((resolve) => {
           release = resolve;
         });
+      }
+      if (url.startsWith('/api/clusters')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('kind-dev')) });
       }
       if (url.startsWith('/api/contexts')) {
         return Promise.resolve({
@@ -1349,8 +1453,11 @@ describe('the address bar', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
-        if (url.startsWith('/api/contexts') && init?.method === 'POST') {
+        if (url.startsWith('/api/clusters') && init?.method === 'POST') {
           return rejectNonError();
+        }
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('kind-dev')) });
         }
         if (url.startsWith('/api/contexts')) {
           return Promise.resolve({
@@ -1373,9 +1480,12 @@ describe('the address bar', () => {
     expect(await screen.findAllByText(/switching context failed/)).not.toHaveLength(0);
   });
 
-  it('follows a cluster that changed underneath it, without switching back', async () => {
+  it('stays on its own tab when another window switches cluster', async () => {
     let current = 'kind-dev';
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/clusters')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('kind-dev')) });
+      }
       if (url.startsWith('/api/contexts')) {
         return Promise.resolve({
           ok: true,
@@ -1411,14 +1521,10 @@ describe('the address bar', () => {
     });
 
     await waitFor(() => {
-      expect(window.location.hash).toContain('context=other-cluster');
+      expect(fetchMock).toHaveBeenCalled();
     });
-    expect(window.location.hash).not.toContain('name=pod-a');
-    expect(
-      fetchMock.mock.calls.filter(
-        (call) => (call[1] as { method?: string } | undefined)?.method === 'POST',
-      ),
-    ).toHaveLength(0);
+    expect(window.location.hash).toContain('context=kind-dev');
+    expect(window.location.hash).toContain('name=pod-a');
   });
 
   it('keeps the resource but drops an object from another cluster', async () => {
@@ -1475,6 +1581,22 @@ describe('the address bar', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/clusters')) {
+          return Promise.reject(new Error('offline'));
+        }
+        if (url.startsWith('/api/contexts')) {
+          return Promise.reject(new Error('offline'));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    useClustersStore.getState().reset();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/clusters')) {
+          return Promise.reject(new Error('offline'));
+        }
         if (url.startsWith('/api/contexts')) {
           return Promise.reject(new Error('offline'));
         }
@@ -1492,15 +1614,26 @@ describe('the address bar', () => {
     expect(window.location.hash).not.toContain('context=');
   });
 
-  it('forgets the resource when the cluster changes', async () => {
+  it('opens a fresh tab on nothing in particular', async () => {
     const user = userEvent.setup();
     render(<App />);
     await selectPod(user);
     expect(window.location.hash).toContain('resource=pods');
 
-    await user.click(screen.getByTestId('context-changed'));
+    showOther('kind-prod');
 
     expect(window.location.hash).not.toContain('resource=pods');
+  });
+
+  it('puts you back where you were on the tab you came from', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    showOther('kind-prod');
+
+    showFirstAgain();
+
+    expect(window.location.hash).toContain('resource=pods');
   });
 });
 
@@ -1815,7 +1948,7 @@ describe('the command palette and shortcuts', () => {
     expect(screen.getByRole('status', { name: 'The cluster feed is connected' })).toBeVisible();
   });
 
-  it('forgets recent objects when the cluster changes', async () => {
+  it("shows the other tab none of this one's recent objects", async () => {
     const user = userEvent.setup();
     useResourcesStore
       .getState()
@@ -1826,7 +1959,7 @@ describe('the command palette and shortcuts', () => {
     await selectPod(user);
     await user.click(await screen.findByRole('button', { name: 'pod-a' }));
 
-    await user.click(screen.getByTestId('context-changed'));
+    showOther('kind-prod');
     press('k', { ctrlKey: true });
 
     await screen.findByLabelText(/Search resources/);
@@ -2276,12 +2409,12 @@ describe('the helm release panel', () => {
     expect(screen.getByTestId('helm-releases').dataset.selected).toBe('podinfo');
   });
 
-  it('drops the release when the cluster changes', async () => {
+  it('drops the release when another tab is shown', async () => {
     const user = userEvent.setup();
     render(<App />);
     await openRelease(user);
 
-    await user.click(screen.getByTestId('context-changed'));
+    showOther('kind-prod');
 
     expect(window.location.hash).not.toContain('release=');
   });
@@ -2358,9 +2491,152 @@ describe('a filter on a windowed table', () => {
   });
 });
 
+describe('what a view is still holding when the tab changes', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetStore();
+  });
+
+  it('builds the view again rather than leaving the last cluster on screen', async () => {
+    useResourcesStore
+      .getState()
+      .applySnapshot('main#1', makeColumns([]), true, [
+        makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' }),
+      ]);
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPod(user);
+    await user.click(await screen.findByRole('button', { name: 'pod-a' }));
+    expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
+
+    showOther('kind-prod');
+
+    expect(screen.queryByTestId('inspect-target')).not.toBeInTheDocument();
+  });
+});
+
+describe('the clusters that were open last time', () => {
+  it('opens them again when the window starts', async () => {
+    const opened: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+        if (url.startsWith('/api/clusters') && init?.method === 'POST') {
+          opened.push(url);
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('p-mk2')) });
+        }
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                clusters: [],
+                remembered: [
+                  { id: idFor('p-mk1'), context: 'p-mk1', kubeconfig: '/work.yaml' },
+                  { id: idFor('p-mk2'), context: 'p-mk2' },
+                ],
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(opened).toHaveLength(2);
+    });
+    expect(opened[0]).toContain('kubeconfig=%2Fwork.yaml');
+    expect(opened[1]).toContain('kubeconfig=&');
+  });
+
+  it('shows whichever tab ends up in front', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+        if (url.startsWith('/api/clusters') && init?.method === 'POST') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('p-mk2')) });
+        }
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                clusters: [],
+                remembered: [{ id: idFor('p-mk2'), context: 'p-mk2' }],
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=p-mk2');
+    });
+  });
+
+  it('leaves a link that named a cluster in charge', async () => {
+    openAt('#context=kind-dev&version=v1&resource=pods&kind=Pod');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+        if (url.startsWith('/api/clusters') && init?.method === 'POST') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('kind-dev')) });
+        }
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                clusters: [],
+                remembered: [{ id: idFor('p-mk2'), context: 'p-mk2' }],
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain('resource=pods');
+    });
+    expect(window.location.hash).toContain('context=kind-dev');
+  });
+
+  it('carries on when the list cannot be read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/clusters')) {
+          return Promise.reject(new Error('offline'));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByRole('banner')).toBeInTheDocument();
+  });
+});
+
 describe('a cluster this window did not switch to', () => {
-  it('follows the server and drops what it had selected', async () => {
+  it('leaves this window on the tab it is showing', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/clusters')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(oneCluster('kind-dev')) });
+      }
       if (url.startsWith('/api/contexts')) {
         return Promise.resolve({
           ok: true,
@@ -2390,10 +2666,9 @@ describe('a cluster this window did not switch to', () => {
 
     render(<App />);
 
-    await waitFor(() => {
-      expect(window.location.hash).toContain('context=somewhere-else');
-    });
-    expect(window.location.hash).not.toContain('name=pod-a');
+    expect(await screen.findByTestId('inspect-target')).toBeInTheDocument();
+    expect(window.location.hash).toContain('context=kind-dev');
+    expect(window.location.hash).toContain('name=pod-a');
   });
 });
 

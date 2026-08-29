@@ -1,11 +1,15 @@
 import { create } from 'zustand';
 import type { Category } from '../lib/types';
+import { activeClusterNow, useActiveCluster } from './clusters';
+import type { ByCluster } from './perCluster';
+import { drop, held, put } from './perCluster';
 
 interface CatalogState {
-  categories: Category[];
-  counts: Partial<Record<string, number>>;
+  categories: ByCluster<Category[]>;
+  counts: ByCluster<Partial<Record<string, number>>>;
   remember: (categories: Category[]) => void;
   rememberCounts: (counts: Record<string, number>) => void;
+  forget: (cluster: string) => void;
   clear: () => void;
 }
 
@@ -14,25 +18,35 @@ const NONE: Category[] = [];
 const NO_COUNTS: Partial<Record<string, number>> = {};
 
 export const useCatalogStore = create<CatalogState>((set) => ({
-  categories: NONE,
-  counts: NO_COUNTS,
+  categories: {},
+  counts: {},
   remember: (categories) => {
-    set({ categories });
+    const on = activeClusterNow();
+    set((state) => ({ categories: put(state.categories, on, categories) }));
   },
   rememberCounts: (counts) => {
-    set({ counts });
+    const on = activeClusterNow();
+    set((state) => ({ counts: put(state.counts, on, counts) }));
+  },
+  forget: (cluster) => {
+    set((state) => ({
+      categories: drop(state.categories, cluster),
+      counts: drop(state.counts, cluster),
+    }));
   },
   clear: () => {
-    set({ categories: NONE, counts: NO_COUNTS });
+    set({ categories: {}, counts: {} });
   },
 }));
 
 export function useCategories(): Category[] {
-  return useCatalogStore((state) => state.categories);
+  const on = useActiveCluster();
+  return useCatalogStore((state) => held(state.categories, on, NONE));
 }
 
 export function useCounts(): Partial<Record<string, number>> {
-  return useCatalogStore((state) => state.counts);
+  const on = useActiveCluster();
+  return useCatalogStore((state) => held(state.counts, on, NO_COUNTS));
 }
 
 export function rememberCatalog(categories: Category[]): void {
@@ -45,4 +59,8 @@ export function rememberCounts(counts: Record<string, number>): void {
 
 export function clearCatalog(): void {
   useCatalogStore.getState().clear();
+}
+
+export function forgetCatalog(cluster: string): void {
+  useCatalogStore.getState().forget(cluster);
 }

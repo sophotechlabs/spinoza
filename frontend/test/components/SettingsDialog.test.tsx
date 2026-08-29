@@ -6,7 +6,7 @@ import { useThemeStore } from '../../src/store/theme';
 import { useSettingsStore } from '../../src/store/settings';
 import { useContextsStore } from '../../src/store/contexts';
 import { usePanelsStore } from '../../src/store/panels';
-import { useNamespaceStore } from '../../src/store/namespace';
+import { namespaceNow } from '../../src/store/namespace';
 import { DEFAULT_PLACEMENT } from '../../src/lib/panels';
 import { readStored, resetStored, startSaving, stopSaving } from '../../src/lib/persist';
 import { NODE_SHELL_KEY, UPDATE_CHECK_KEY } from '../../src/lib/settings';
@@ -107,7 +107,7 @@ describe('the settings dialog', () => {
     await user.selectOptions(screen.getByLabelText('Namespace to open on'), 'default');
 
     expect(useSettingsStore.getState().namespaceStart).toBe('default');
-    expect(useNamespaceStore.getState().namespace).toBe('default');
+    expect(namespaceNow()).toBe('default');
   });
 
   it('chooses how often the cluster audit refreshes', async () => {
@@ -146,7 +146,7 @@ describe('the settings dialog', () => {
     await user.selectOptions(screen.getByLabelText('Namespace to open on'), 'all');
 
     expect(useSettingsStore.getState().namespaceStart).toBe('all');
-    expect(useNamespaceStore.getState().namespace).toBe('');
+    expect(namespaceNow()).toBe('');
   });
 
   it('keeps the answer against the cluster it was given on', async () => {

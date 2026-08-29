@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ContextList } from '../lib/types';
-import { contextGroups, fetchContexts, sameContext, switchContext } from '../lib/contexts';
+import { contextGroups, fetchContexts, sameContext } from '../lib/contexts';
+import { openCluster } from '../lib/clusters';
 import type { ContextEntry } from '../lib/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useContextList, useContextsStore } from '../store/contexts';
@@ -124,20 +125,20 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
 
   async function handleChoose(entry: ContextEntry) {
     closeMenu();
-    if (busy || sameContext(entry, list.current)) {
+    if (busy) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const found = await switchContext(entry);
-      setList(found);
-      notifyOk(`Switched to ${found.current.name}`);
+      await openCluster(entry.kubeconfig, entry.name);
+      setList(await fetchContexts());
+      notifyOk(`Opened ${entry.name}`);
       onSwitched();
     } catch (err: unknown) {
-      const message = errorMessage(err, 'switching context failed');
+      const message = errorMessage(err, 'opening the cluster failed');
       setError(message);
-      notifyError(`Switching to ${entry.name}: ${message}`);
+      notifyError(`Opening ${entry.name}: ${message}`);
     } finally {
       setBusy(false);
     }
@@ -259,7 +260,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
           {manageEntry()}
         </div>
       </details>
-      {busy && <span className="text-fg-muted">switching</span>}
+      {busy && <span className="text-fg-muted">opening</span>}
       {error !== null && (
         <span role="status" className="max-w-md truncate text-error">
           {error}

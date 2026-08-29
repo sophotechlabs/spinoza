@@ -1,14 +1,20 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { clearFilters, imposeChips, useFiltersStore } from '../../src/store/filters';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { clearFilters, forgetFilters, imposeChips, useFiltersStore } from '../../src/store/filters';
+import { MK1, MK2, showing } from '../helpers-clusters';
 
 const PODS = '/v1/pods';
 const NODES = '/v1/nodes';
 
-function chipsOf(key: string) {
-  return useFiltersStore.getState().chips[key];
+function chipsOf(key: string, cluster = MK1) {
+  return useFiltersStore.getState().byCluster[cluster]?.[key];
 }
 
 describe('the filter chip store', () => {
+  beforeEach(() => {
+    clearFilters();
+    showing(MK1);
+  });
+
   afterEach(() => {
     clearFilters();
   });
@@ -81,12 +87,40 @@ describe('the filter chip store', () => {
     expect(chipsOf(NODES)).toHaveLength(1);
   });
 
-  it('drops everything when the cluster changes', () => {
+  it('drops every cluster when the window is torn down', () => {
     useFiltersStore.getState().add(PODS, { field: 'name', value: 'web' });
-    useFiltersStore.getState().add(NODES, { field: 'name', value: 'gke' });
 
     clearFilters();
 
-    expect(useFiltersStore.getState().chips).toEqual({});
+    expect(useFiltersStore.getState().byCluster).toEqual({});
+  });
+});
+
+describe('filter chips on another tab', () => {
+  beforeEach(() => {
+    clearFilters();
+    showing(MK1);
+  });
+
+  afterEach(() => {
+    clearFilters();
+  });
+
+  it("are the other tab's own", () => {
+    useFiltersStore.getState().add(PODS, { field: 'name', value: 'web' });
+
+    showing(MK2);
+    useFiltersStore.getState().add(PODS, { field: 'name', value: 'api' });
+
+    expect(chipsOf(PODS)).toEqual([{ field: 'name', value: 'web' }]);
+    expect(chipsOf(PODS, MK2)).toEqual([{ field: 'name', value: 'api' }]);
+  });
+
+  it('go when the tab is closed', () => {
+    useFiltersStore.getState().add(PODS, { field: 'name', value: 'web' });
+
+    forgetFilters(MK1);
+
+    expect(chipsOf(PODS)).toBeUndefined();
   });
 });
