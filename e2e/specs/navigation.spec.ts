@@ -3,7 +3,7 @@ import { CONTEXT } from '../harness/paths';
 import { expandCategory, openHome, openView, sidebar } from '../harness/app';
 
 const VIEWS = [
-  { label: 'Cluster Overview', title: 'kind-spinoza-e2e' },
+  { label: 'Cluster Overview', title: CONTEXT },
   { label: 'Issues', title: 'issues' },
   { label: 'Topology', title: 'topology' },
   { label: 'Helm releases', title: 'helm' },

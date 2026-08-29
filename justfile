@@ -305,11 +305,11 @@ test-integration: cluster-base
 test-e2e: cluster-e2e
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ ! -d frontend/node_modules ]; then
+    if [ ! -d frontend/node_modules ] || [ frontend/package-lock.json -nt frontend/node_modules ]; then
         npm --prefix frontend ci
     fi
     cd e2e
-    if [ ! -d node_modules ]; then
+    if [ ! -d node_modules ] || [ package-lock.json -nt node_modules ]; then
         npm ci
     fi
     npx playwright install chromium
@@ -389,7 +389,16 @@ lint-fe:
     cd frontend && npm run format:check
     cd frontend && npm run contrast
 
-lint: lint-be lint-fe
+lint-e2e:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd e2e
+    if [ ! -d node_modules ] || [ package-lock.json -nt node_modules ]; then
+        npm ci
+    fi
+    npm run typecheck
+
+lint: lint-be lint-fe lint-e2e
 
 fmt-check:
     golangci-lint fmt --diff
@@ -456,9 +465,21 @@ workflows:
 
 hygiene:
     typos
-    ec
-    shellcheck install.sh test/install/container.sh test/install/uninstall.sh packaging/render.sh
+    just editorconfig
+    shellcheck install.sh test/install/container.sh test/install/uninstall.sh \
+        test/install/editorconfig-name.sh packaging/render.sh
     just --unstable --fmt --check
+
+editorconfig:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for name in ec editorconfig-checker; do
+        if command -v "$name" > /dev/null 2>&1; then
+            exec "$name"
+        fi
+    done
+    echo "no editorconfig checker on PATH; looked for ec and editorconfig-checker" >&2
+    exit 1
 
 links:
     lychee --config lychee.toml .
@@ -726,6 +747,7 @@ test-install:
 
 test-uninstall:
     sh test/install/uninstall.sh install.sh
+    sh test/install/editorconfig-name.sh
 
 test-install-host:
     #!/usr/bin/env bash

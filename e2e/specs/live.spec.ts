@@ -2,7 +2,7 @@ import { expect, test } from '../harness/test';
 import { openResource } from '../harness/app';
 import { authed } from '../harness/test';
 import { kubectl } from '../harness/cluster';
-import { NAMESPACE } from '../harness/paths';
+import { CONTEXT, NAMESPACE } from '../harness/paths';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -30,7 +30,7 @@ test('an object deleted in the cluster leaves without a reload', async ({ page }
 });
 
 test('a replica change reaches the table it is shown in', async ({ page }) => {
-  await page.goto(authed('#context=kind-spinoza-e2e&group=apps&version=v1&resource=deployments&kind=Deployment'));
+  await page.goto(authed(`#context=${CONTEXT}&group=apps&version=v1&resource=deployments&kind=Deployment`));
   await page.waitForFunction(() => document.title.startsWith('deployments'), null, { timeout: 60_000 });
   const row = page.locator('main tbody tr').filter({ hasText: 'chatty' }).first();
   await expect(row).toBeVisible({ timeout: 60_000 });

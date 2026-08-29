@@ -1,6 +1,6 @@
 import { test as base } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { BASE_URL, STATE_FILE, STORAGE_STATE } from './paths';
+import { BASE_URL, CONTEXT, STATE_FILE, STORAGE_STATE } from './paths';
 
 interface State {
   pid: number;
@@ -16,13 +16,13 @@ export function authed(hash: string): string {
   return `${BASE_URL}/?token=${state().token}${hash}`;
 }
 
-export const test = base.extend<Record<string, never>, { view: void }>({
+export const test = base.extend<{}, { view: void }>({
   view: [
     async ({ browser }, use) => {
       const context = await browser.newContext({ storageState: STORAGE_STATE });
       const page = await context.newPage();
       await page.goto(
-        authed('#context=kind-spinoza-e2e&version=v1&resource=pods&kind=Pod&namespace=e2e&name=noshell'),
+        authed(`#context=${CONTEXT}&version=v1&resource=pods&kind=Pod&namespace=e2e&name=noshell`),
       );
       await page.waitForLoadState('domcontentloaded');
       const proof = await page.evaluate(async () => {

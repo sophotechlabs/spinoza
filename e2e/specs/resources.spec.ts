@@ -1,5 +1,6 @@
 import { expect, test } from '../harness/test';
 import { openResource } from '../harness/app';
+import { CONTEXT } from '../harness/paths';
 
 test('discovery lists a table for a core type', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
@@ -48,7 +49,7 @@ test('selecting a row deep-links to that object', async ({ page }) => {
 test('a deep link to an object opens it without a click', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
   await page.goto(
-    '/#context=kind-spinoza-e2e&version=v1&resource=pods&kind=Pod&namespace=e2e&name=noshell',
+    `/#context=${CONTEXT}&version=v1&resource=pods&kind=Pod&namespace=e2e&name=noshell`,
   );
   await expect(page).toHaveTitle(/^noshell pods /);
 });
