@@ -752,3 +752,70 @@ func TestADeclarationStillWinsOverOwnership(t *testing.T) {
 		t.Fatalf("drift = %+v, want the value diff, not the ownership one", drift)
 	}
 }
+
+func countingClient(t *testing.T, objs ...runtime.Object) (*fake.FakeDynamicClient, func() int) {
+	t.Helper()
+	client := detailClient(objs...)
+	listed := 0
+	client.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		listed++
+		return false, nil, nil
+	})
+	return client, func() int { return listed }
+}
+
+func TestTheGraphReadDoesNotAskForEvents(t *testing.T) {
+	client, listed := countingClient(
+		t,
+		managingApplication(managed("Deployment", "podinfo")),
+		liveDeployment(`{"spec":{"replicas":3}}`),
+	)
+
+	_, err := Shape(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("shape: %v", err)
+	}
+
+	if listed() != 0 {
+		t.Fatalf("the graph read listed events %d times; the graph draws none of them", listed())
+	}
+}
+
+func TestThePanelReadStillAsksForEvents(t *testing.T) {
+	client, listed := countingClient(
+		t,
+		managingApplication(managed("Deployment", "podinfo")),
+		liveDeployment(`{"spec":{"replicas":3}}`),
+	)
+
+	_, err := Detail(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	if listed() == 0 {
+		t.Fatal("the panel read asked for no events; the panel shows them")
+	}
+}
+
+func TestTheGraphStillKnowsWhetherEachResourceIsReady(t *testing.T) {
+	client := detailClient(
+		managingApplication(managed("Deployment", "podinfo")),
+		liveDeployment(`{"spec":{"replicas":3}}`),
+	)
+
+	shape, err := Shape(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("shape: %v", err)
+	}
+
+	graph := AppGraph(shape)
+	if len(graph.Nodes) < 2 {
+		t.Fatalf("nodes = %d, want the app and what it manages", len(graph.Nodes))
+	}
+	for _, node := range graph.Nodes[1:] {
+		if node.Ready == "" {
+			t.Fatalf("%s has no readiness; skipping events must not skip the live read", node.ID)
+		}
+	}
+}

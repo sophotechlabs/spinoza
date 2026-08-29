@@ -23,7 +23,7 @@ export function useIssues(enabled = true): Polled<IssueQueue> {
 }
 
 export function countBySeverity(rows: Issue[]): Record<Severity, number> {
-  const out: Record<Severity, number> = { fatal: 0, degraded: 0, warning: 0 };
+  const out: Record<Severity, number> = { fatal: 0, degraded: 0, warning: 0, info: 0 };
   for (const row of rows) {
     out[row.severity] += 1;
   }
@@ -37,6 +37,9 @@ export function severityLabel(severity: Severity): string {
   if (severity === 'degraded') {
     return 'Degraded';
   }
+  if (severity === 'info') {
+    return 'Note';
+  }
   return 'Warning';
 }
 
@@ -46,6 +49,9 @@ export function severityClass(severity: Severity): string {
   }
   if (severity === 'degraded') {
     return 'text-warn';
+  }
+  if (severity === 'info') {
+    return 'text-fg-soft';
   }
   return 'text-fg-muted';
 }

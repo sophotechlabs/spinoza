@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -252,7 +253,10 @@ func warnings(ctx context.Context, dyn dynamic.Interface, descs map[string]api.R
 
 func newestFirst(events []api.OverviewEvent) []api.OverviewEvent {
 	slices.SortStableFunc(events, func(left, right api.OverviewEvent) int {
-		return seenAt(right.LastSeen).Compare(seenAt(left.LastSeen))
+		if when := seenAt(right.LastSeen).Compare(seenAt(left.LastSeen)); when != 0 {
+			return when
+		}
+		return strings.Compare(overviewEventKey(left), overviewEventKey(right))
 	})
 	if len(events) > warningsShown {
 		return events[:warningsShown]
@@ -345,4 +349,8 @@ func quantityOf(quantities map[string]any, key string) (resource.Quantity, bool)
 		return resource.Quantity{}, false
 	}
 	return q, true
+}
+
+func overviewEventKey(one api.OverviewEvent) string {
+	return one.Namespace + "\x00" + one.Object + "\x00" + one.Reason + "\x00" + one.Message
 }

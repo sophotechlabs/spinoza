@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -130,7 +131,7 @@ func (h *heldHistory) only(t *testing.T) history.Entry {
 }
 
 type writingBackend struct {
-	Backend
+	notStubbed
 
 	err      error
 	detail   api.ObjectDetail
@@ -956,5 +957,75 @@ func TestAPageFromTheRealStoreSaysWhenItLeftSomethingOut(t *testing.T) {
 	}
 	if !got.More {
 		t.Fatal("the page dropped a row and did not say so")
+	}
+}
+
+func TestEveryStoredHistoryFieldReachesTheWire(t *testing.T) {
+	carriedOnTheRequest := map[string]string{
+		"Cluster": "the client asked about one cluster, so the answer does not repeat it",
+	}
+
+	stored := reflect.TypeFor[history.Entry]()
+	sent := reflect.TypeFor[api.HistoryEntry]()
+	onTheWire := map[string]bool{}
+	for field := range sent.Fields() {
+		onTheWire[field.Name] = true
+	}
+
+	for field := range stored.Fields() {
+		name := field.Name
+		if onTheWire[name] {
+			continue
+		}
+		why, deliberate := carriedOnTheRequest[name]
+		if !deliberate {
+			t.Errorf(
+				"history.Entry.%s never reaches api.HistoryEntry; carry it in entriesOf, "+
+					"or say here why it stays behind", name,
+			)
+			continue
+		}
+		t.Logf("history.Entry.%s stays behind: %s", name, why)
+	}
+}
+
+func TestTheWireCarriesNoHistoryFieldTheStoreCannotFill(t *testing.T) {
+	stored := reflect.TypeFor[history.Entry]()
+	held := map[string]bool{}
+	for field := range stored.Fields() {
+		held[field.Name] = true
+	}
+
+	sent := reflect.TypeFor[api.HistoryEntry]()
+	for field := range sent.Fields() {
+		name := field.Name
+		if !held[name] {
+			t.Errorf("api.HistoryEntry.%s has no field in history.Entry to fill it", name)
+		}
+	}
+}
+
+func TestEntriesOfCarriesEveryValue(t *testing.T) {
+	at := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	one := history.Entry{
+		ID: 7, Cluster: "p-mk2", At: at, Verb: "scale",
+		Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment",
+		Namespace: "audit-probe", Name: "target", Detail: "to 2 replicas",
+		Outcome: "done", Message: "all good",
+	}
+
+	got := entriesOf([]history.Entry{one})
+
+	if len(got) != 1 {
+		t.Fatalf("entries = %d, want 1", len(got))
+	}
+	want := api.HistoryEntry{
+		ID: 7, At: "2026-08-29T12:00:00Z", Verb: "scale",
+		Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment",
+		Namespace: "audit-probe", Name: "target", Detail: "to 2 replicas",
+		Outcome: "done", Message: "all good",
+	}
+	if got[0] != want {
+		t.Fatalf("entry = %+v, want %+v", got[0], want)
 	}
 }

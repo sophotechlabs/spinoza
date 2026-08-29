@@ -364,7 +364,7 @@ export interface GitopsState {
 }
 
 export interface GitopsIssue {
-  severity: string;
+  severity: Severity;
   title: string;
   detail?: string;
   subject?: string;
@@ -673,7 +673,7 @@ export interface ClusterOverview {
   error?: string;
 }
 
-export const SEVERITIES = ['fatal', 'degraded', 'warning'] as const;
+export const SEVERITIES = ['fatal', 'degraded', 'warning', 'info'] as const;
 
 export type Severity = (typeof SEVERITIES)[number];
 

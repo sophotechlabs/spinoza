@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { GitopsApp, GraphNode, ObjectRef } from '../../src/lib/types';
+import type { GitopsApp, GraphNode, ObjectRef, GitopsIssue } from '../../src/lib/types';
 
 const fitViewSpy = vi.fn();
 
@@ -201,7 +201,7 @@ describe('the per-application panel', () => {
       appWith({
         issues: [
           { severity: 'degraded', title: 'The last operation failed', detail: 'because' },
-          { severity: 'odd', title: 'Something else' },
+          { severity: 'info', title: 'Something else' },
         ],
       }),
     );
@@ -210,6 +210,17 @@ describe('the per-application panel', () => {
     expect(await screen.findByText('The last operation failed')).toBeInTheDocument();
     expect(screen.getByText('because')).toBeInTheDocument();
     expect(screen.getByText('Something else')).toBeInTheDocument();
+  });
+
+  it('keeps an issue whose severity the wire invented', async () => {
+    serve(
+      appWith({
+        issues: [{ severity: 'odd', title: 'Something else' } as unknown as GitopsIssue],
+      }),
+    );
+    renderPanel();
+
+    expect(await screen.findByText('Something else')).toBeInTheDocument();
   });
 
   it('falls back to a plain message for a rejection that is not an Error', async () => {

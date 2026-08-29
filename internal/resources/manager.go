@@ -730,7 +730,10 @@ func (m *Manager) GitopsApp(ctx context.Context, ref api.ObjectRef) (api.GitopsA
 }
 
 func (m *Manager) GitopsAppGraph(ctx context.Context, ref api.ObjectRef) (api.Graph, error) {
-	app, err := m.GitopsApp(ctx, ref)
+	if m.dyn == nil {
+		return api.Graph{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
+	}
+	app, err := gitops.Shape(ctx, m.dyn, m.descriptors(), ref)
 	if err != nil {
 		return api.Graph{}, err
 	}

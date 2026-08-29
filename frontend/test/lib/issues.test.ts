@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { Issue } from '../../src/lib/types';
+import { SEVERITIES } from '../../src/lib/types';
 import {
   countBySeverity,
   fetchIssues,
@@ -171,7 +172,23 @@ describe('severity', () => {
       issue({ severity: 'warning' }),
     ]);
 
-    expect(counted).toEqual({ fatal: 1, degraded: 1, warning: 2 });
+    expect(counted).toEqual({ fatal: 1, degraded: 1, warning: 2, info: 0 });
+  });
+
+  it('carries an info bucket, because the wire has four levels and Issues use three', () => {
+    const counted = countBySeverity([issue({ severity: 'info' })]);
+
+    expect(counted.info).toBe(1);
+  });
+
+  it('names and colours every level the wire can send', () => {
+    for (const severity of SEVERITIES) {
+      expect(severityLabel(severity)).not.toBe('');
+      expect(severityClass(severity)).not.toBe('');
+    }
+    expect(severityLabel('info')).toBe('Note');
+    expect(severityLabel('info')).not.toBe(severityLabel('warning'));
+    expect(severityClass('info')).not.toBe(severityClass('warning'));
   });
 });
 

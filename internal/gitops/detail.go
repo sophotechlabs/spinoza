@@ -35,7 +35,26 @@ const (
 
 var eventsGVR = schema.GroupVersionResource{Group: eventsGroupless, Version: "v1", Resource: "events"}
 
+func Shape(
+	ctx context.Context,
+	dyn dynamic.Interface,
+	descs map[string]api.ResourceDescriptor,
+	ref api.ObjectRef,
+) (api.GitopsApp, error) {
+	return detail(ctx, dyn, descs, ref, withoutEvents)
+}
+
 func Detail(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, ref api.ObjectRef) (api.GitopsApp, error) {
+	return detail(ctx, dyn, descs, ref, withEvents)
+}
+
+func detail(
+	ctx context.Context,
+	dyn dynamic.Interface,
+	descs map[string]api.ResourceDescriptor,
+	ref api.ObjectRef,
+	events bool,
+) (api.GitopsApp, error) {
 	desc, known := descs[discovery.Key(ref.Group, ref.Version, ref.Resource)]
 	if !known {
 		return api.GitopsApp{}, fmt.Errorf("%w: %s is not a kind this cluster serves", ErrNotAnApplier, ref.Resource)
@@ -49,7 +68,7 @@ func Detail(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Res
 	}
 	app := build(ctx, dyn, descs, obj, desc)
 	app.Ref = ref
-	enrich(ctx, dyn, descs, &app)
+	enrich(ctx, dyn, descs, &app, events)
 	return app, nil
 }
 
@@ -125,7 +144,18 @@ func byKind(descs map[string]api.ResourceDescriptor, kind string) (api.ResourceD
 	return api.ResourceDescriptor{}, false
 }
 
-func enrich(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, app *api.GitopsApp) {
+const (
+	withEvents    = true
+	withoutEvents = false
+)
+
+func enrich(
+	ctx context.Context,
+	dyn dynamic.Interface,
+	descs map[string]api.ResourceDescriptor,
+	app *api.GitopsApp,
+	events bool,
+) {
 	identify(descs, app.Resources)
 	order := readingOrder(app.Resources)
 	read := []int{}
@@ -147,7 +177,9 @@ func enrich(ctx context.Context, dyn dynamic.Interface, descs map[string]api.Res
 			Detail:   "the rest show what the controller reported",
 		})
 	}
-	attachEvents(ctx, dyn, app, read)
+	if events {
+		attachEvents(ctx, dyn, app, read)
+	}
 }
 
 func identify(descs map[string]api.ResourceDescriptor, resources []api.GitopsResource) {
@@ -259,7 +291,10 @@ func eventsFor(ctx context.Context, dyn dynamic.Interface, resource *api.GitopsR
 		found = append(found, inspect.EventOf(&list.Items[i]))
 	}
 	slices.SortStableFunc(found, func(left, right api.Event) int {
-		return strings.Compare(right.LastSeen, left.LastSeen)
+		if when := strings.Compare(right.LastSeen, left.LastSeen); when != 0 {
+			return when
+		}
+		return strings.Compare(gitopsEventKey(left), gitopsEventKey(right))
 	})
 	if len(found) > maxEventsPer {
 		found = found[:maxEventsPer]
@@ -268,4 +303,8 @@ func eventsFor(ctx context.Context, dyn dynamic.Interface, resource *api.GitopsR
 		return nil
 	}
 	return found
+}
+
+func gitopsEventKey(one api.Event) string {
+	return one.Reason + "\x00" + one.Source + "\x00" + one.Message
 }

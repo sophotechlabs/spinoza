@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,7 +57,10 @@ func eventsFor(dyn dynamic.Interface, namespace string) dynamic.ResourceInterfac
 
 func sortEvents(events []api.Event) {
 	slices.SortStableFunc(events, func(left, right api.Event) int {
-		return seenAt(right.LastSeen).Compare(seenAt(left.LastSeen))
+		if when := seenAt(right.LastSeen).Compare(seenAt(left.LastSeen)); when != 0 {
+			return when
+		}
+		return strings.Compare(eventKey(left), eventKey(right))
 	})
 }
 
@@ -114,4 +118,8 @@ func lastSeenOf(obj *unstructured.Unstructured) string {
 		}
 	}
 	return ""
+}
+
+func eventKey(one api.Event) string {
+	return one.Reason + "\x00" + one.Source + "\x00" + one.Message
 }

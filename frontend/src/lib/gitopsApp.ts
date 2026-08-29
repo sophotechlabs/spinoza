@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { SEVERITIES } from './types';
 import type {
   FieldDrift,
   GitopsApp,
@@ -10,6 +11,7 @@ import type {
   ObjectRef,
 } from './types';
 import { failure, refQuery } from './object';
+import { oneOf } from './wire';
 import { parseEvents, parseGraph } from './parse';
 import { request } from './http';
 import { isArgoApplication } from './argoActions';
@@ -65,7 +67,7 @@ function resourceOf(raw: unknown): GitopsResource {
 function issueOf(raw: unknown): GitopsIssue {
   const item = raw as Partial<GitopsIssue>;
   return {
-    severity: item.severity ?? 'info',
+    severity: oneOf(item.severity, SEVERITIES, 'info'),
     title: item.title ?? '',
     detail: item.detail,
     subject: item.subject,

@@ -844,6 +844,30 @@ func TestTheResourceVersionComesBackSoAnApplyCanCarryIt(t *testing.T) {
 			document: "",
 			want:     "",
 		},
+		{
+			name: "a List, whose own version comes before the object's",
+			document: "apiVersion: v1\nkind: List\n" +
+				"metadata:\n  resourceVersion: \"1\"\n" +
+				"items:\n  - metadata:\n      name: web\n      resourceVersion: \"4021\"\n",
+			want: "1",
+		},
+		{
+			name: "an object carrying an embedded one, whose version must not win",
+			document: "metadata:\n  name: outer\n  resourceVersion: \"9\"\n" +
+				"spec:\n  template:\n    metadata:\n      resourceVersion: \"4021\"\n",
+			want: "9",
+		},
+		{
+			name: "an annotation that merely mentions the field",
+			document: "metadata:\n  name: web\n  annotations:\n" +
+				"    note: |\n      resourceVersion: 4021\n  resourceVersion: \"7\"\n",
+			want: "7",
+		},
+		{
+			name:     "a document that is not YAML at all",
+			document: "{{ not yaml",
+			want:     "",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

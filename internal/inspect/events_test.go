@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 func newEvent(name string, fields map[string]any) *unstructured.Unstructured {
@@ -344,5 +347,57 @@ func TestFirstOfHasNothingToReturn(t *testing.T) {
 
 	if got := firstOf(item, []string{"missing"}, []string{"absent"}); got != "" {
 		t.Fatalf("found = %q, want empty", got)
+	}
+}
+
+func TestEventsAtTheSameInstantKeepOneOrder(t *testing.T) {
+	same := "2026-08-29T12:00:00Z"
+	build := func() []api.Event {
+		return []api.Event{
+			{Reason: "Pulled", Source: "kubelet", Message: "c", LastSeen: same},
+			{Reason: "Created", Source: "kubelet", Message: "a", LastSeen: same},
+			{Reason: "Started", Source: "kubelet", Message: "b", LastSeen: same},
+			{Reason: "Killing", Source: "kubelet", Message: "d", LastSeen: same},
+		}
+	}
+
+	first := build()
+	sortEvents(first)
+
+	for _, order := range [][]int{{3, 2, 1, 0}, {1, 3, 0, 2}, {2, 0, 3, 1}} {
+		shuffled := build()
+		mixed := make([]api.Event, 0, len(order))
+		for _, at := range order {
+			mixed = append(mixed, shuffled[at])
+		}
+		sortEvents(mixed)
+		if !slices.Equal(reasons(mixed), reasons(first)) {
+			t.Fatalf(
+				"the same events arrived in a different order and came out %v, not %v; "+
+					"a tie on lastSeen must not leave the order to whatever the map handed us",
+				reasons(mixed), reasons(first),
+			)
+		}
+	}
+}
+
+func reasons(events []api.Event) []string {
+	out := make([]string, 0, len(events))
+	for _, one := range events {
+		out = append(out, one.Reason)
+	}
+	return out
+}
+
+func TestTheNewestEventStillComesFirst(t *testing.T) {
+	events := []api.Event{
+		{Reason: "Older", LastSeen: "2026-08-29T11:00:00Z"},
+		{Reason: "Newer", LastSeen: "2026-08-29T12:00:00Z"},
+	}
+
+	sortEvents(events)
+
+	if events[0].Reason != "Newer" {
+		t.Fatalf("first = %q, want the newest event", events[0].Reason)
 	}
 }

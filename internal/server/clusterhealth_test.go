@@ -17,7 +17,7 @@ const mk1 = "https://p-mk1:6443"
 const mk2 = "https://p-mk2:6443"
 
 type pinger struct {
-	Backend
+	notStubbed
 
 	err     error
 	sink    *reach.Sink

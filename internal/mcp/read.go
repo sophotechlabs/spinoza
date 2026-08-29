@@ -5,10 +5,11 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -311,14 +312,17 @@ func (s *Server) getResource(ctx context.Context, args arguments) (any, error) {
 	return out, nil
 }
 
-var versionLine = regexp.MustCompile(`(?m)^\s*resourceVersion:\s*"?(\d+)"?\s*$`)
-
 func resourceVersionOf(document string) string {
-	found := versionLine.FindStringSubmatch(document)
-	if found == nil {
+	var parsed struct {
+		Metadata struct {
+			ResourceVersion string `yaml:"resourceVersion"`
+		} `yaml:"metadata"`
+	}
+	err := yaml.Unmarshal([]byte(document), &parsed)
+	if err != nil {
 		return ""
 	}
-	return found[1]
+	return parsed.Metadata.ResourceVersion
 }
 
 func (s *Server) events(ctx context.Context, args arguments) (any, error) {

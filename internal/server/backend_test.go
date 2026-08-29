@@ -14,7 +14,7 @@ import (
 )
 
 type stubCatalog struct {
-	Backend
+	notStubbed
 
 	catalog   api.ResourceCatalog
 	counts    api.ResourceCounts

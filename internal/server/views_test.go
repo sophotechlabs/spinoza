@@ -16,7 +16,7 @@ import (
 )
 
 type stubViews struct {
-	Backend
+	notStubbed
 
 	overview   api.ClusterOverview
 	issues     api.IssueQueue
