@@ -3,6 +3,10 @@ export PATH := if os() == 'windows' { env_var('PATH') } else { env_var('HOME') +
 exe := if os() == 'windows' { '.exe' } else { '' }
 go_pkgs := './internal/... .'
 addr := env_var_or_default('SPINOZA_ADDR', '127.0.0.1:34115')
+test_cluster := env_var_or_default('SPINOZA_KIND_CLUSTER', 'spinoza')
+test_context := 'kind-' + test_cluster
+registry_host := 'localhost:5001'
+registry_endpoint := 'http://kind-registry:5000'
 ldflags := '-s -w'
 version_pkg := 'github.com/sophotechlabs/spinoza/internal/version.value'
 
@@ -227,18 +231,42 @@ test-be: stub-assets
     go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out {{ go_pkgs }}
     go tool cover -func=coverage.out
 
-test-integration:
+test-integration: test-integration-up
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! kind get clusters | grep -qx spinoza; then
-        kind create cluster --name spinoza
-    fi
-    kubectl --context kind-spinoza cluster-info
-    SPINOZA_TEST_CONTEXT=kind-spinoza go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
+    SPINOZA_TEST_CONTEXT={{ test_context }} go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
     go tool cover -func=coverage.integration.out | tail -1
 
+test-integration-up:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! kind get clusters | grep -qx {{ test_cluster }}; then
+        kind create cluster --name {{ test_cluster }} --config test/integration/kind.yaml
+    fi
+    wanted=$(yq '.nodes | length' test/integration/kind.yaml)
+    running=$(kind get nodes --name {{ test_cluster }} | wc -l | tr -d ' ')
+    if [ "$running" != "$wanted" ]; then
+        echo "cluster {{ test_cluster }} runs $running nodes, not the $wanted in test/integration/kind.yaml; just test-integration-down first"
+        exit 1
+    fi
+    just test-integration-mirror
+    kubectl --context {{ test_context }} cluster-info
+    kubectl --context {{ test_context }} apply -f test/integration/metrics-server.yaml
+    kubectl --context {{ test_context }} -n kube-system rollout status deployment/metrics-server --timeout=5m
+    kubectl --context {{ test_context }} wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=5m
+
+[private]
+test-integration-mirror:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    certs="/etc/containerd/certs.d/{{ registry_host }}"
+    for node in $(kind get nodes --name {{ test_cluster }}); do
+        docker exec "$node" mkdir -p "$certs"
+        printf '[host."%s"]\n' '{{ registry_endpoint }}' | docker exec -i "$node" cp /dev/stdin "$certs/hosts.toml"
+    done
+
 test-integration-down:
-    kind delete cluster --name spinoza
+    kind delete cluster --name {{ test_cluster }}
 
 test-fe:
     cd frontend && npm run test:coverage
@@ -369,7 +397,7 @@ sast:
 # e2e/fixtures holds workloads written to be insecure so the checks have
 # something to find; scanning them fails the build on findings we put there.
 vulns:
-    trivy fs --exit-code 1 --scanners secret,misconfig --skip-dirs e2e/fixtures .
+    trivy fs --exit-code 1 --scanners secret,misconfig --skip-dirs e2e/fixtures --skip-files test/integration/metrics-server.yaml .
     osv-scanner scan source --recursive .
 
 workflows:

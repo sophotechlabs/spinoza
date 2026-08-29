@@ -7,10 +7,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,9 +21,18 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/kube"
+	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
 const auditWorkload = "audit-target"
+
+const (
+	usageWorkload = "usage-target"
+	usageCheck    = "requests-far-above-usage"
+	usageRequest  = "512Mi"
+	usageTimeout  = 3 * time.Minute
+	usagePoll     = 5 * time.Second
+)
 
 func failingDeployment(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
@@ -85,13 +96,17 @@ func objectOf(report api.CheckReport, finding api.CheckFinding) api.CheckObject 
 	return report.Objects[finding.Ref]
 }
 
-func findingsFor(report api.CheckReport, id string) []api.CheckFinding {
+func groupOf(report api.CheckReport, id string) api.CheckGroup {
 	for _, group := range report.Groups {
 		if group.ID == id {
-			return group.Findings
+			return group
 		}
 	}
-	return nil
+	return api.CheckGroup{}
+}
+
+func findingsFor(report api.CheckReport, id string) []api.CheckFinding {
+	return groupOf(report, id).Findings
 }
 
 func auditedHere(report api.CheckReport, id string) bool {
@@ -248,5 +263,112 @@ func assertPatchApplies(
 	if err != nil {
 		t.Errorf("%s on %s/%s: the api server refused the patch: %v\n%s",
 			id, object.Namespace, object.Name, err, patch)
+	}
+}
+
+func overprovisionedDeployment(t *testing.T, loaded *kube.Bundle) {
+	t.Helper()
+	replicas := int32(1)
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: usageWorkload},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": usageWorkload}},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": usageWorkload}},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:    "app",
+						Image:   "busybox:1.36",
+						Command: []string{"sh", "-c", "dd if=/dev/zero of=/scratch/blob bs=1M count=8 && sleep 3600"},
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(usageRequest)},
+						},
+						VolumeMounts: []corev1.VolumeMount{{Name: "scratch", MountPath: "/scratch"}},
+					}},
+					Volumes: []corev1.Volume{{
+						Name: "scratch",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory},
+						},
+					}},
+				},
+			},
+		},
+	}
+	_, err := loaded.Clientset.AppsV1().Deployments(namespace).Create(
+		context.Background(), deployment, metav1.CreateOptions{},
+	)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		t.Fatalf("create deployment: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = loaded.Clientset.AppsV1().Deployments(namespace).Delete(
+			context.Background(), usageWorkload, metav1.DeleteOptions{},
+		)
+	})
+}
+
+func awaitMetrics(t *testing.T, mgr *resources.Manager) {
+	t.Helper()
+	deadline := time.Now().Add(usageTimeout)
+	var last api.Metrics
+	for time.Now().Before(deadline) {
+		last = mgr.Metrics(context.Background())
+		if len(last.Pods) > 0 {
+			return
+		}
+		time.Sleep(usagePoll)
+	}
+	t.Fatalf("metrics-server reported usage for no pod within %s (%s)", usageTimeout, last.Error)
+}
+
+func awaitUsageFinding(t *testing.T, mgr *resources.Manager) api.CheckFinding {
+	t.Helper()
+	deadline := time.Now().Add(usageTimeout)
+	var last api.CheckGroup
+	for time.Now().Before(deadline) {
+		report := mgr.Checks(context.Background())
+		last = groupOf(report, usageCheck)
+		for _, finding := range last.Findings {
+			object := objectOf(report, finding)
+			if object.Namespace == namespace && object.Name == usageWorkload {
+				return finding
+			}
+		}
+		time.Sleep(usagePoll)
+	}
+	t.Fatalf("%s never fired on %s within %s; it was skipped with %q and found %d elsewhere",
+		usageCheck, usageWorkload, usageTimeout, last.Skipped, last.Total)
+	return api.CheckFinding{}
+}
+
+func TestTheUsageCheckRunsOnceMetricsServerAnswers(t *testing.T) {
+	mgr := manager(t, bundle(t))
+	awaitMetrics(t, mgr)
+
+	group := groupOf(mgr.Checks(context.Background()), usageCheck)
+
+	if group.ID != usageCheck {
+		t.Fatalf("the report carries no %s group at all", usageCheck)
+	}
+	if group.Skipped != "" {
+		t.Fatalf("skipped = %q, want the check to have run against a real metrics-server", group.Skipped)
+	}
+}
+
+func TestRequestsFarAboveUsageFiresOnAWorkloadBuiltToTripIt(t *testing.T) {
+	loaded := bundle(t)
+	mgr := manager(t, loaded)
+	overprovisionedDeployment(t, loaded)
+
+	finding := awaitUsageFinding(t, mgr)
+
+	want := "pods request " + usageRequest + " memory and use "
+	if !strings.HasPrefix(finding.Detail, want) {
+		t.Fatalf("detail = %q, want it to open with %q", finding.Detail, want)
+	}
+	if finding.Container != "" {
+		t.Fatalf("container = %q, want the finding on the workload rather than one container", finding.Container)
 	}
 }
