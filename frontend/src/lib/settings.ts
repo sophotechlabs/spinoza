@@ -162,7 +162,7 @@ export function writeUpdateCheck(enabled: boolean): Promise<void> {
   return flush();
 }
 
-export const CHECK_RULES_KEY = 'spinoza.checks.rules.v1';
+const CHECK_RULES_KEY = 'spinoza.checks.rules.v1';
 
 export function readCheckRules(): string {
   return readStored(CHECK_RULES_KEY) ?? '';
