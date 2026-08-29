@@ -328,6 +328,7 @@ test-e2e-full: cluster-full
 e2e-run project:
     #!/usr/bin/env bash
     set -euo pipefail
+    export SPINOZA_KIND_CLUSTER='{{ test_cluster }}'
     if [ ! -d frontend/node_modules ] || [ frontend/package-lock.json -nt frontend/node_modules ]; then
         npm --prefix frontend ci
     fi
