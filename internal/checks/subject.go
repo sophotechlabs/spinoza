@@ -21,6 +21,7 @@ const (
 type Lister interface {
 	List(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
 	Warm(ctx context.Context, descs []api.ResourceDescriptor)
+	ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error)
 }
 
 type target struct {
@@ -37,6 +38,50 @@ var targets = []target{
 	{group: "", resource: "replicationcontrollers"},
 	{group: "batch", resource: "jobs"},
 	{group: "batch", resource: "cronjobs"},
+}
+
+var contextTargets = []target{
+	{group: "", resource: "nodes"},
+	{group: "", resource: "namespaces"},
+	{group: "", resource: "resourcequotas"},
+	{group: "", resource: "limitranges"},
+	{group: "", resource: "services"},
+	{group: "", resource: "serviceaccounts"},
+	{group: "", resource: "configmaps"},
+	{group: "", resource: "persistentvolumeclaims"},
+	{group: "networking.k8s.io", resource: "ingresses"},
+	{group: "networking.k8s.io", resource: "ingressclasses"},
+	{group: "networking.k8s.io", resource: "networkpolicies"},
+	{group: "policy", resource: "poddisruptionbudgets"},
+	{group: "autoscaling", resource: "horizontalpodautoscalers"},
+	{group: "storage.k8s.io", resource: "storageclasses"},
+	{group: "scheduling.k8s.io", resource: "priorityclasses"},
+	{group: "node.k8s.io", resource: "runtimeclasses"},
+	{group: "rbac.authorization.k8s.io", resource: "roles"},
+	{group: "rbac.authorization.k8s.io", resource: "rolebindings"},
+	{group: "rbac.authorization.k8s.io", resource: "clusterroles"},
+	{group: "rbac.authorization.k8s.io", resource: "clusterrolebindings"},
+}
+
+var nameOnlyTargets = []target{
+	{group: "", resource: "secrets"},
+}
+
+func allTargets() []target {
+	out := make([]target, 0, len(targets)+len(contextTargets)+len(nameOnlyTargets))
+	out = append(out, targets...)
+	out = append(out, contextTargets...)
+	out = append(out, nameOnlyTargets...)
+	return out
+}
+
+func isNameOnly(desc api.ResourceDescriptor) bool {
+	for _, want := range nameOnlyTargets {
+		if desc.Group == want.group && desc.Resource == want.resource {
+			return true
+		}
+	}
+	return false
 }
 
 type Container struct {
@@ -68,8 +113,9 @@ type held struct {
 }
 
 func needed(descs map[string]api.ResourceDescriptor) (found []api.ResourceDescriptor, absent []string) {
-	found = make([]api.ResourceDescriptor, 0, len(targets))
-	for _, want := range targets {
+	wanted := allTargets()
+	found = make([]api.ResourceDescriptor, 0, len(wanted))
+	for _, want := range wanted {
 		desc, ok := matching(descs, want)
 		if !ok {
 			absent = append(absent, want.resource)
@@ -78,6 +124,15 @@ func needed(descs map[string]api.ResourceDescriptor) (found []api.ResourceDescri
 		found = append(found, desc)
 	}
 	return found, absent
+}
+
+func isSubjectKind(desc api.ResourceDescriptor) bool {
+	for _, want := range targets {
+		if desc.Group == want.group && desc.Resource == want.resource {
+			return true
+		}
+	}
+	return false
 }
 
 func matching(descs map[string]api.ResourceDescriptor, want target) (api.ResourceDescriptor, bool) {
@@ -96,12 +151,28 @@ func undiscovered(absent []string) string {
 	return "not discovered yet, so nothing of these types was audited: " + strings.Join(absent, ", ")
 }
 
-func gather(ctx context.Context, lister Lister, descs []api.ResourceDescriptor) ([]held, string) {
-	lister.Warm(ctx, descs)
+func gather(ctx context.Context, lister Lister, descs []api.ResourceDescriptor) ([]held, []api.ObjectRef, string) {
+	warmed := []api.ResourceDescriptor{}
+	for _, desc := range descs {
+		if isNameOnly(desc) {
+			continue
+		}
+		warmed = append(warmed, desc)
+	}
+	lister.Warm(ctx, warmed)
 	failures := listerr.New()
 	out := []held{}
+	names := []api.ObjectRef{}
 	for _, desc := range descs {
 		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
+		if isNameOnly(desc) {
+			found, err := lister.ListNames(ctx, desc)
+			failures.Record(gvr.GroupResource().String(), err)
+			if err == nil {
+				names = append(names, found...)
+			}
+			continue
+		}
 		items, err := lister.List(ctx, desc)
 		failures.Record(gvr.GroupResource().String(), err)
 		if err != nil {
@@ -111,7 +182,7 @@ func gather(ctx context.Context, lister Lister, descs []api.ResourceDescriptor) 
 			out = append(out, held{desc: desc, obj: item})
 		}
 	}
-	return out, failures.Message()
+	return out, names, failures.Message()
 }
 
 func groupOf(apiVersion string) string {
@@ -206,7 +277,7 @@ func subjectsOf(items []held) []Subject {
 	placed := placedByOwner(items, byKey)
 	out := []Subject{}
 	for _, item := range items {
-		if owned(item.obj, kinds) {
+		if !isSubjectKind(item.desc) || owned(item.obj, kinds) {
 			continue
 		}
 		out = append(out, subjectOf(item, placed[objectKey(item.obj)]))
@@ -275,7 +346,7 @@ func replicasOf(obj *unstructured.Unstructured, kind string) int64 {
 	switch kind {
 	case "Deployment", "StatefulSet", "ReplicaSet", "ReplicationController":
 		return countedOrOne(obj, specField, "replicas")
-	case "DaemonSet":
+	case daemonSetKind:
 		return unstr.Int(obj, "status", "desiredNumberScheduled")
 	case "Job":
 		return countedOrOne(obj, specField, "parallelism")

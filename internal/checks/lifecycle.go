@@ -30,6 +30,8 @@ var batchKinds = []string{"Job", "CronJob"}
 const (
 	deploymentKind  = "Deployment"
 	statefulSetKind = "StatefulSet"
+	daemonSetKind   = "DaemonSet"
+	secretField     = "secret"
 )
 
 var spreadableKinds = []string{deploymentKind, statefulSetKind, "ReplicaSet", "ReplicationController"}
@@ -532,7 +534,7 @@ func statefulSetNoService(subject Subject) (string, string) {
 }
 
 func unboundedHistory(subject Subject) (string, string) {
-	if !isSpreadable(subject.Kind) && subject.Kind != "DaemonSet" {
+	if !isSpreadable(subject.Kind) && subject.Kind != daemonSetKind {
 		return "", ""
 	}
 	kept, set := numberAt(specAt(subject.Object, specField), revisionHistory)

@@ -44,6 +44,9 @@ type resourceRef struct {
 var coreResources = map[resourceRef]bool{
 	{group: "", resource: "pods"}:                                   true,
 	{group: "", resource: "nodes"}:                                  true,
+	{group: "", resource: "namespaces"}:                             true,
+	{group: "", resource: "persistentvolumeclaims"}:                 true,
+	{group: "apiregistration.k8s.io", resource: "apiservices"}:      true,
 	{group: "", resource: "replicationcontrollers"}:                 true,
 	{group: appsGroup, resource: "deployments"}:                     true,
 	{group: appsGroup, resource: "replicasets"}:                     true,

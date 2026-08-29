@@ -13,6 +13,7 @@ const (
 	defaultBudget       = 20 * time.Second
 	defaultStallBudget  = 5 * time.Second
 	defaultStallGrace   = 5 * time.Minute
+	defaultStuckGrace   = 5 * time.Minute
 	defaultReadyGrace   = 2 * time.Minute
 	defaultRows         = 500
 	defaultChildren     = 50
@@ -100,6 +101,7 @@ func Build(
 	found = append(found, gitopsFindings(snap)...)
 	found = append(found, autoscalerFindings(snap)...)
 	found = append(found, conditionFindings(snap)...)
+	found = append(found, clusterFindings(snap, at)...)
 	found = append(found, stallFindings(bounded, events, snap, reported, at, limits)...)
 
 	queue := fold(found, snap, limits)

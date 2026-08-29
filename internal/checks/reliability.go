@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var noSpread = []string{"DaemonSet", "CronJob", "Pod"}
+var noSpread = []string{daemonSetKind, "CronJob", "Pod"}
 
 func reliabilityChecks() []check {
 	return []check{

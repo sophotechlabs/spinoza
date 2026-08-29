@@ -13,7 +13,6 @@ const (
 	alwaysPull        = "Always"
 	latestTag         = "latest"
 	nameLabel         = "app.kubernetes.io/name"
-	legacyAccount     = "serviceAccount"
 	defaultNamespace  = "default"
 	groupOtherBits    = 0o077
 	credentialMinimum = 4
@@ -104,9 +103,9 @@ func supplyChecks() []check {
 			id:         "secret-volume-world-readable",
 			title:      "Secret file readable beyond its owner",
 			category:   categorySecurity,
-			severity:   severityMedium,
+			severity:   severityLow,
 			frameworks: []string{nsaCisa},
-			wrong:      "Any process in the container, whatever user it runs as, can read the secret off disk.",
+			wrong:      "Any process in the container, whatever user it runs as, can read the secret off disk. A judgement call: 0644 is what the apiserver fills in when nobody chooses, so this is true of almost every secret volume until somebody tightens it.",
 			remedy:     "Set the volume's defaultMode to 0400.",
 			find:       overSubjects(secretVolumeReadable),
 		},
@@ -136,15 +135,6 @@ func supplyChecks() []check {
 			wrong:    "The controller creates pods it then cannot find, so it creates them again, for ever.",
 			remedy:   "Make every label in spec.selector.matchLabels appear on the pod template.",
 			find:     overSubjects(selectorMismatch),
-		},
-		{
-			id:       "deprecated-service-account-field",
-			title:    "Deprecated serviceAccount field",
-			category: categoryReliability,
-			severity: severityLow,
-			wrong:    "The field has been deprecated since 1.9 and is ignored when serviceAccountName disagrees with it.",
-			remedy:   "Use serviceAccountName and delete serviceAccount.",
-			find:     overSubjects(deprecatedAccountField),
 		},
 		{
 			id:       "cpu-limit-set",
@@ -351,7 +341,7 @@ func templateLabels(subject Subject) map[string]any {
 }
 
 func selectorMismatch(subject Subject) (string, string) {
-	if !isSpreadable(subject.Kind) && subject.Kind != "DaemonSet" {
+	if !isSpreadable(subject.Kind) && subject.Kind != daemonSetKind {
 		return "", ""
 	}
 	wanted := selectorLabels(subject)
@@ -390,13 +380,6 @@ func selectorLabels(subject Subject) map[string]string {
 		out[key] = text
 	}
 	return out
-}
-
-func deprecatedAccountField(subject Subject) (string, string) {
-	if stringAt(subject.Pod, legacyAccount) == "" {
-		return "", ""
-	}
-	return "the pod spec sets the deprecated serviceAccount field", ""
 }
 
 func cpuLimitSet(_ Subject, container Container) (string, string) {

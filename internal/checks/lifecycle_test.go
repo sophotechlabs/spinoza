@@ -424,6 +424,11 @@ func TestEveryArguableCheckSaysSoInItsOwnText(t *testing.T) {
 		"no-prestop-hook",
 		"grace-period-blocks-drain",
 		"memory-limit-not-request",
+		"pull-policy-not-always",
+		"private-registry-no-pull-secret",
+		"missing-recommended-labels",
+		"cpu-limit-set",
+		"secret-volume-world-readable",
 	}
 	byID := map[string]check{}
 	for _, entry := range registry() {

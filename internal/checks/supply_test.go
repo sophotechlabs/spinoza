@@ -106,12 +106,6 @@ func TestEverySupplyCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 			trips: workload("Deployment", "api", podSpec(sourcedContainer(nil))),
 		},
 		{
-			id: "deprecated-service-account-field",
-			trips: sourced(podSpecWith(map[string]any{
-				legacyAccount: "api",
-			}, sourcedContainer(nil))),
-		},
-		{
 			id: "cpu-limit-set",
 			trips: sourced(podSpec(sourcedContainer(map[string]any{
 				"resources": map[string]any{"limits": map[string]any{cpuName: "500m"}},

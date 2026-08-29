@@ -1100,6 +1100,25 @@ func (m *Manager) List(ctx context.Context, desc api.ResourceDescriptor) ([]*uns
 	return listAll(lister)
 }
 
+func (m *Manager) ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error) {
+	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
+	page, err := m.meta.Resource(gvr).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]api.ObjectRef, 0, len(page.Items))
+	for _, item := range page.Items {
+		out = append(out, api.ObjectRef{
+			Group:     desc.Group,
+			Version:   desc.Version,
+			Resource:  desc.Resource,
+			Namespace: item.Namespace,
+			Name:      item.Name,
+		})
+	}
+	return out, nil
+}
+
 func (m *Manager) Lease(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	key := streamKey{gvr: gvr}

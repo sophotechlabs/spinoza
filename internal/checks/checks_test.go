@@ -316,8 +316,8 @@ func TestTheInformersAreWarmedOnce(t *testing.T) {
 func TestOnlyTheKindsTheChecksReadAreWarmed(t *testing.T) {
 	asked, absent := needed(descriptors())
 
-	if len(asked) != len(targets) {
-		t.Fatalf("asked for %d types, want %d", len(asked), len(targets))
+	if len(asked) != len(allTargets()) {
+		t.Fatalf("asked for %d types, want %d", len(asked), len(allTargets()))
 	}
 	if len(absent) != 0 {
 		t.Fatalf("reported %v as undiscovered on a full catalog", absent)
@@ -334,8 +334,8 @@ func TestATypeDiscoveryHasNotListedIsNamedInTheReport(t *testing.T) {
 	delete(descs, "batch/v1/cronjobs")
 
 	asked, absent := needed(descs)
-	if len(asked) != len(targets)-1 {
-		t.Fatalf("asked for %d types, want %d", len(asked), len(targets)-1)
+	if len(asked) != len(allTargets())-1 {
+		t.Fatalf("asked for %d types, want %d", len(asked), len(allTargets())-1)
 	}
 	if !slices.Equal(absent, []string{"cronjobs"}) {
 		t.Fatalf("absent was %v", absent)

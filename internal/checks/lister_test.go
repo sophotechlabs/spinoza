@@ -35,6 +35,23 @@ func (f *fakeLister) List(_ context.Context, desc api.ResourceDescriptor) ([]*un
 	return f.objects[desc.Resource], nil
 }
 
+func (f *fakeLister) ListNames(_ context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error) {
+	if err, failing := f.errs[desc.Resource]; failing {
+		return nil, err
+	}
+	out := []api.ObjectRef{}
+	for _, obj := range f.objects[desc.Resource] {
+		out = append(out, api.ObjectRef{
+			Group:     desc.Group,
+			Version:   desc.Version,
+			Resource:  desc.Resource,
+			Namespace: obj.GetNamespace(),
+			Name:      obj.GetName(),
+		})
+	}
+	return out, nil
+}
+
 func (f *fakeLister) Warm(context.Context, []api.ResourceDescriptor) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -48,23 +65,61 @@ func (f *fakeLister) warmCount() int {
 }
 
 var kindResources = map[string]string{
-	"Pod":                   "pods",
-	"Deployment":            "deployments",
-	"StatefulSet":           "statefulsets",
-	"DaemonSet":             "daemonsets",
-	"ReplicaSet":            "replicasets",
-	"ReplicationController": "replicationcontrollers",
-	"Job":                   "jobs",
-	"CronJob":               "cronjobs",
+	"Pod":                     "pods",
+	"Deployment":              "deployments",
+	"StatefulSet":             "statefulsets",
+	"DaemonSet":               "daemonsets",
+	"ReplicaSet":              "replicasets",
+	"ReplicationController":   "replicationcontrollers",
+	"Job":                     "jobs",
+	"CronJob":                 "cronjobs",
+	"Node":                    "nodes",
+	"Namespace":               "namespaces",
+	"ResourceQuota":           "resourcequotas",
+	"LimitRange":              "limitranges",
+	"Service":                 "services",
+	"ServiceAccount":          "serviceaccounts",
+	"ConfigMap":               "configmaps",
+	"Secret":                  "secrets",
+	"PersistentVolumeClaim":   "persistentvolumeclaims",
+	"Ingress":                 "ingresses",
+	"IngressClass":            "ingressclasses",
+	"NetworkPolicy":           "networkpolicies",
+	"PodDisruptionBudget":     "poddisruptionbudgets",
+	"HorizontalPodAutoscaler": "horizontalpodautoscalers",
+	"StorageClass":            "storageclasses",
+	"PriorityClass":           "priorityclasses",
+	"RuntimeClass":            "runtimeclasses",
+	"Role":                    "roles",
+	"RoleBinding":             "rolebindings",
+	"ClusterRole":             "clusterroles",
+	"ClusterRoleBinding":      "clusterrolebindings",
+}
+
+var clusterScoped = map[string]bool{
+	"Node": true, "Namespace": true, "IngressClass": true, "StorageClass": true,
+	"PriorityClass": true, "RuntimeClass": true, "ClusterRole": true, "ClusterRoleBinding": true,
 }
 
 var kindGroups = map[string]string{
-	"Deployment":  "apps",
-	"StatefulSet": "apps",
-	"DaemonSet":   "apps",
-	"ReplicaSet":  "apps",
-	"Job":         "batch",
-	"CronJob":     "batch",
+	"Deployment":              "apps",
+	"StatefulSet":             "apps",
+	"DaemonSet":               "apps",
+	"ReplicaSet":              "apps",
+	"Job":                     "batch",
+	"CronJob":                 "batch",
+	"Ingress":                 "networking.k8s.io",
+	"IngressClass":            "networking.k8s.io",
+	"NetworkPolicy":           "networking.k8s.io",
+	"PodDisruptionBudget":     "policy",
+	"HorizontalPodAutoscaler": "autoscaling",
+	"StorageClass":            "storage.k8s.io",
+	"PriorityClass":           "scheduling.k8s.io",
+	"RuntimeClass":            "node.k8s.io",
+	"Role":                    "rbac.authorization.k8s.io",
+	"RoleBinding":             "rbac.authorization.k8s.io",
+	"ClusterRole":             "rbac.authorization.k8s.io",
+	"ClusterRoleBinding":      "rbac.authorization.k8s.io",
 }
 
 func resourceFor(kind string) string {
@@ -81,7 +136,7 @@ func descriptors() map[string]api.ResourceDescriptor {
 			Version:    version,
 			Resource:   resource,
 			Kind:       kind,
-			Namespaced: true,
+			Namespaced: !clusterScoped[kind],
 			Category:   "Workloads",
 		}
 	}

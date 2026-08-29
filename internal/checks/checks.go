@@ -32,6 +32,7 @@ const (
 type scan struct {
 	subjects []Subject
 	usage    map[string]api.ResourceUsage
+	held     *corpus
 }
 
 func (sc scan) hasUsage() bool {
@@ -83,6 +84,8 @@ type subjectRule func(Subject) (string, string)
 
 type usageRule func(Subject, map[string]api.ResourceUsage) (string, string)
 
+type factRule func(Subject, *corpus) (string, string)
+
 type check struct {
 	id         string
 	title      string
@@ -92,6 +95,7 @@ type check struct {
 	wrong      string
 	remedy     string
 	needsUsage bool
+	needs      []target
 	find       finder
 }
 
@@ -121,6 +125,20 @@ func overSubjects(rule subjectRule) finder {
 		out := []found{}
 		for _, subject := range sc.subjects {
 			detail, patch := rule(subject)
+			if detail == "" {
+				continue
+			}
+			out = append(out, found{subject: subject, detail: detail, patch: patch})
+		}
+		return out
+	}
+}
+
+func overFacts(rule factRule) finder {
+	return func(sc scan) []found {
+		out := []found{}
+		for _, subject := range sc.subjects {
+			detail, patch := rule(subject, sc.held)
 			if detail == "" {
 				continue
 			}
@@ -206,6 +224,10 @@ func (c check) group(sc scan, objs *objects) api.CheckGroup {
 		out.Skipped = noUsage
 		return out
 	}
+	if missing := missingResources(c.needs, sc.held); len(missing) > 0 {
+		out.Skipped = skippedBecause(missing)
+		return out
+	}
 	out.Findings, out.Next, out.Total = c.slice(sc, objs, "", findingsShown)
 	out.Truncated = out.Next != ""
 	return out
@@ -230,6 +252,8 @@ func registry() []check {
 	out = append(out, supplyChecks()...)
 	out = append(out, batchChecks()...)
 	out = append(out, efficiencyChecks()...)
+	out = append(out, factChecks()...)
+	out = append(out, referenceChecks()...)
 	return out
 }
 
@@ -254,6 +278,9 @@ func Page(
 	if wanted.needsUsage && !sc.hasUsage() {
 		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
 	}
+	if len(missingResources(wanted.needs, sc.held)) > 0 {
+		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
+	}
 	objs := newObjects()
 	found, next, _ := wanted.slice(sc, objs, decodeCursor(after), findingsShown)
 	return api.CheckPage{Findings: found, Objects: objs.list, Next: next}, nil
@@ -266,8 +293,12 @@ func survey(
 	usage api.Metrics,
 ) (scan, string, []string) {
 	wanted, absent := needed(descs)
-	items, failure := gather(ctx, lister, wanted)
-	return scan{subjects: subjectsOf(items), usage: usage.Pods}, failure, absent
+	items, names, failure := gather(ctx, lister, wanted)
+	return scan{
+		subjects: subjectsOf(items),
+		usage:    usage.Pods,
+		held:     newCorpus(items, names, absent),
+	}, failure, absent
 }
 
 func Run(
