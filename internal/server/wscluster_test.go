@@ -119,12 +119,23 @@ func TestASubscriptionToAClusterThatIsNotOpenIsNotRemembered(t *testing.T) {
 	subscribeOn(ctx, t, conn, "s1", ghost)
 	readMsg(ctx, t, conn)
 
-	sess := onlySession(t, srv)
-	sess.mu.Lock()
-	defer sess.mu.Unlock()
-	if len(sess.tables) != 0 {
-		t.Fatalf("holding %d subscriptions, want a refused one forgotten", len(sess.tables))
+	awaitNothingHeld(t, onlySession(t, srv), tables)
+}
+
+// The error frame is written before the claim is dropped, so the frame arriving
+// says nothing about whether the entry is gone yet.
+func awaitNothingHeld(t *testing.T, sess *wsSession, which feed) {
+	t.Helper()
+	for range 200 {
+		sess.mu.Lock()
+		held := len(sess.entriesOf(which))
+		sess.mu.Unlock()
+		if held == 0 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
+	t.Fatal("a refused subscription was still held")
 }
 
 func onlySession(t *testing.T, srv *Server) *wsSession {
@@ -153,6 +164,15 @@ func TestClosingAClusterStopsOnlyItsSubscriptions(t *testing.T) {
 	doRequest(t, "DELETE", ts.URL+"/api/clusters?cluster="+mk2, nil)
 
 	sess := onlySession(t, srv)
+	for range 200 {
+		sess.mu.Lock()
+		held := len(sess.tables)
+		sess.mu.Unlock()
+		if held == 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	sess.mu.Lock()
 	defer sess.mu.Unlock()
 	if len(sess.tables) != 1 {
@@ -237,12 +257,7 @@ func TestALogStreamToAClusterThatIsNotOpenIsReported(t *testing.T) {
 	if msg.Type != msgError || !strings.Contains(msg.Message, ghost) {
 		t.Fatalf("message = %q/%q, want the cluster that is not open named", msg.Type, msg.Message)
 	}
-	sess := onlySession(t, srv)
-	sess.mu.Lock()
-	defer sess.mu.Unlock()
-	if len(sess.logs) != 0 {
-		t.Fatalf("holding %d streams, want a refused one forgotten", len(sess.logs))
-	}
+	awaitNothingHeld(t, onlySession(t, srv), streams)
 }
 
 func TestAFeedThatOutlivesTheLastClusterSaysSo(t *testing.T) {
