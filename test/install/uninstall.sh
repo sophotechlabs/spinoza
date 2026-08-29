@@ -20,6 +20,8 @@ seed() {
     printf 'entry\n' > "$work/.local/share/applications/spinoza.desktop"
     mkdir -p "$work/.local/share/icons/hicolor/512x512/apps"
     printf 'icon\n' > "$work/.local/share/icons/hicolor/512x512/apps/spinoza.png"
+    mkdir -p "$work/bin/doc/spinoza"
+    printf 'terms\n' > "$work/bin/doc/spinoza/copyright"
     mkdir -p "$work/Applications/Spinoza.app/Contents"
     printf 'bundle\n' > "$work/Applications/Spinoza.app/Contents/Info.plist"
     printf 'mine\n' > "$work/bin/notes.txt"
@@ -37,6 +39,7 @@ for gone in \
     "$work/bin/Spinoza" \
     "$work/.local/share/applications/spinoza.desktop" \
     "$work/.local/share/icons/hicolor/512x512/apps/spinoza.png" \
+    "$work/bin/doc/spinoza/copyright" \
     "$work/Applications/Spinoza.app"
 do
     if [ -e "$gone" ]; then
@@ -48,7 +51,7 @@ if [ ! -f "$work/bin/notes.txt" ]; then
     fail "the uninstall took a file that was not spinoza's"
 fi
 
-for named in spinoza Spinoza "the desktop entry" "the icon" "Spinoza.app"; do
+for named in spinoza Spinoza "the desktop entry" "the icon" "the license" "Spinoza.app"; do
     case "$said" in
         *"$named"*)
             ;;
@@ -75,4 +78,4 @@ case "$again" in
         ;;
 esac
 
-echo "test-uninstall: removed the binary, the app, the desktop entry and the icon, and left everything else"
+echo "test-uninstall: removed the binary, the app, the desktop entry, the icon and the license, and left everything else"

@@ -43,8 +43,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if opts.showVersion {
-		_, _ = os.Stdout.WriteString(version.String() + "\n")
+	if printedNotice(os.Stdout, opts) {
 		return nil
 	}
 	slog.SetDefault(slog.New(logHandler(os.Stderr, opts.logLevel)))

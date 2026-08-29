@@ -43,6 +43,7 @@ main() {
 
     mkdir -p "$dir"
     install -m 0755 "$temp/spinoza" "$dir/spinoza"
+    install_copyright
 
     if [ -n "$previous" ]; then
         echo "Updated spinoza $previous -> $version in $dir"
@@ -81,6 +82,12 @@ uninstall() {
     if [ -e "$icon" ]; then
         rm -f "$icon"
         removed="$removed the icon"
+    fi
+    copyright="$(doc_dir)/copyright"
+    if [ -e "$copyright" ]; then
+        rm -f "$copyright"
+        rmdir "$(doc_dir)" 2>/dev/null || true
+        removed="$removed the license"
     fi
     for candidate in /Applications "$HOME/Applications"; do
         if [ -d "$candidate/Spinoza.app" ]; then
@@ -307,6 +314,27 @@ sha256_of() {
         return 0
     fi
     die "no sha256 tool found, refusing to install unverified"
+}
+
+install_copyright() {
+    if [ ! -f "$temp/LICENSE" ]; then
+        return 0
+    fi
+    docs="$(doc_dir)"
+    mkdir -p "$docs"
+    install -m 0644 "$temp/LICENSE" "$docs/copyright"
+}
+
+doc_dir() {
+    if [ -n "${SPINOZA_INSTALL_DIR:-}" ]; then
+        printf '%s\n' "$SPINOZA_INSTALL_DIR/doc/spinoza"
+        return 0
+    fi
+    if [ "$(id -u)" = 0 ]; then
+        printf '%s\n' /usr/local/share/doc/spinoza
+        return 0
+    fi
+    printf '%s\n' "$HOME/.local/share/doc/spinoza"
 }
 
 install_dir() {

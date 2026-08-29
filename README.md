@@ -137,3 +137,9 @@ Discovery builds a resource catalog. Each subscribed GVR gets a dynamic informer
 The React app is embedded with `embed.FS`. One HTTP and WebSocket server backs both the browser tab and the desktop window, and you move between them mid-session.
 
 Built on client-go v0.36, so Kubernetes 1.35 to 1.37 by skew policy. Runs in production against k3s v1.36.
+
+## License
+
+[FSL-1.1-ALv2](LICENSE): use, modify and redistribute it for anything except a commercial product that competes with Spinoza. Each release turns into Apache 2.0 two years after it ships.
+
+It comes as is, with no warranty of any kind and no liability on Sophotech s.r.o. for what it does. `spinoza --license` prints the full text, the release archives carry it, and the installers leave a copy on disk.

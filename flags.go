@@ -33,6 +33,7 @@ type settings struct {
 	tokenFile   string
 	logLevel    slog.Level
 	showVersion bool
+	showLicense bool
 	pprof       bool
 	nodeShell   bool
 	cluster     cluster.Options
@@ -45,6 +46,7 @@ func parseFlags(args []string) (settings, error) {
 	tokenFile := flags.String("token-file", envOr("SPINOZA_TOKEN_FILE", ""), "write this run's access token to this file (mode 0600) so scripts can read it")
 	logLevel := flags.String("log-level", envOr("SPINOZA_LOG_LEVEL", "info"), "log level: debug, info, warn or error")
 	showVersion := flags.Bool("version", false, "print the version and exit")
+	showLicense := flags.Bool("license", false, "print the license and exit")
 	profiler := flags.Bool("pprof", envBool("SPINOZA_PPROF"), "mount net/http/pprof under /debug/pprof, behind the same auth; off by default")
 	debugImage := flags.String("debug-image", envOr("SPINOZA_DEBUG_IMAGE", debugcontainer.DefaultImage), "image used for debug containers")
 	nodeShell := flags.Bool("node-shell", envBool("SPINOZA_NODE_SHELL"), "allow a root shell on a node, which creates a privileged pod")
@@ -78,6 +80,7 @@ func parseFlags(args []string) (settings, error) {
 		tokenFile:   *tokenFile,
 		logLevel:    level,
 		showVersion: *showVersion,
+		showLicense: *showLicense,
 		pprof:       *profiler,
 		nodeShell:   *nodeShell,
 		cluster: cluster.Options{

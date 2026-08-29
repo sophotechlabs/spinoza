@@ -152,6 +152,17 @@ func TestTheVersionFlagIsCarriedThrough(t *testing.T) {
 	}
 }
 
+func TestTheLicenseFlagIsCarriedThrough(t *testing.T) {
+	opts, err := parseFlags([]string{"-license"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if !opts.showLicense {
+		t.Fatal("license was dropped")
+	}
+}
+
 func TestTheEnvironmentFillsInWhatTheDesktopBundleCannotPass(t *testing.T) {
 	t.Setenv("SPINOZA_ADDR", "127.0.0.1:7777")
 	t.Setenv("SPINOZA_OPEN", "true")

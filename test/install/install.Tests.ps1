@@ -518,6 +518,10 @@ Describe 'installing a release' {
         Install-Spinoza | Out-Null
         Get-Content -LiteralPath (Join-Path $script:target 'spinoza.exe') -Raw | Should -Be 'spinoza v9.9.9'
     }
+    It 'leaves the terms it is licensed under beside the binary' {
+        Install-Spinoza | Out-Null
+        Get-Content -LiteralPath (Join-Path $script:target 'LICENSE.txt') -Raw | Should -Be 'a licence'
+    }
     It 'downloads the asset named for the pinned version and this architecture' {
         Install-Spinoza | Out-Null
         Should -Invoke Invoke-WebRequest -Times 1 -ParameterFilter {
@@ -638,6 +642,7 @@ Describe 'uninstalling after a real install' {
         Install-Spinoza | Out-Null
         $said = (Uninstall-Spinoza) -join "`n"
         $said | Should -Match 'spinoza\.exe'
+        $said | Should -Match 'LICENSE\.txt'
         $said | Should -Match 'the desktop app'
         $said | Should -Match 'the PATH entry'
     }

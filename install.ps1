@@ -134,6 +134,18 @@ function Get-InstalledVersion {
     }
 }
 
+function Install-Copyright {
+    param(
+        [Parameter(Mandatory = $true)][string]$Unpacked,
+        [Parameter(Mandatory = $true)][string]$Directory
+    )
+    $source = Join-Path $Unpacked 'LICENSE'
+    if (-not (Test-Path -LiteralPath $source)) {
+        return
+    }
+    Copy-Item -LiteralPath $source -Destination (Join-Path $Directory 'LICENSE.txt') -Force
+}
+
 function Install-Binary {
     param(
         [Parameter(Mandatory = $true)][string]$Source,
@@ -346,6 +358,7 @@ function Install-Spinoza {
         $previous = Get-InstalledVersion -Path $binary
         New-Item -ItemType Directory -Path $directory -Force | Out-Null
         Install-Binary -Source $unpacked -Target $binary
+        Install-Copyright -Unpacked (Join-Path $temp 'unpacked') -Directory $directory
         if ($previous -ne '') {
             Write-Output "Updated spinoza $previous -> $version in $directory"
         }
@@ -381,7 +394,7 @@ catch {
 function Uninstall-Spinoza {
     $directory = Get-InstallDirectory
     $removed = @()
-    foreach ($name in @('spinoza.exe', 'spinoza.exe.old')) {
+    foreach ($name in @('spinoza.exe', 'spinoza.exe.old', 'LICENSE.txt')) {
         $binary = Join-Path $directory $name
         if (Test-Path -LiteralPath $binary) {
             Remove-Item -LiteralPath $binary -Force

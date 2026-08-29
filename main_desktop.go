@@ -30,7 +30,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/localshell"
 	"github.com/sophotechlabs/spinoza/internal/server"
 	"github.com/sophotechlabs/spinoza/internal/toolpath"
-	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
 const shutdownGrace = 3 * time.Second
@@ -86,8 +85,7 @@ func runDesktop() error {
 	if flagErr != nil {
 		return flagErr
 	}
-	if opts.showVersion {
-		_, _ = os.Stdout.WriteString(version.String() + "\n")
+	if printedNotice(os.Stdout, opts) {
 		return nil
 	}
 	slog.SetDefault(slog.New(logHandler(os.Stderr, opts.logLevel)))
