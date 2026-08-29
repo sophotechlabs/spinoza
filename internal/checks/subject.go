@@ -167,6 +167,17 @@ func descKey(desc api.ResourceDescriptor) string {
 	return desc.Group + "/" + desc.Version + "/" + desc.Resource
 }
 
+func everyDiscovered(descs map[string]api.ResourceDescriptor) []api.ResourceDescriptor {
+	out := make([]api.ResourceDescriptor, 0, len(descs))
+	for _, desc := range descs {
+		out = append(out, desc)
+	}
+	slices.SortFunc(out, func(left, right api.ResourceDescriptor) int {
+		return strings.Compare(descKey(left), descKey(right))
+	})
+	return out
+}
+
 func isSubjectKind(desc api.ResourceDescriptor) bool {
 	for _, want := range targets {
 		if desc.Group == want.group && desc.Resource == want.resource {

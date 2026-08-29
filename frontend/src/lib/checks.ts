@@ -149,6 +149,7 @@ export interface ChecksFilter {
   skipNamespaces: string[];
   minSeverity: SeverityFloor;
   wholeCluster: boolean;
+  everyKind: boolean;
 }
 
 export const NO_FILTER: ChecksFilter = {
@@ -156,6 +157,7 @@ export const NO_FILTER: ChecksFilter = {
   skipNamespaces: [],
   minSeverity: '',
   wholeCluster: true,
+  everyKind: false,
 };
 
 function fromParams(query: string): ChecksFilter {
@@ -166,6 +168,7 @@ function fromParams(query: string): ChecksFilter {
     skipNamespaces: namesIn(params.get('skipNamespaces')),
     minSeverity: SEVERITY_FLOORS.find((one) => one === floor) ?? '',
     wholeCluster: params.get('wholeCluster') !== '0',
+    everyKind: params.get('everyKind') === '1',
   };
 }
 
@@ -189,6 +192,9 @@ export function filterParams(keep: ChecksFilter): URLSearchParams {
   }
   if (!keep.wholeCluster) {
     params.set('wholeCluster', '0');
+  }
+  if (keep.everyKind) {
+    params.set('everyKind', '1');
   }
   return params;
 }

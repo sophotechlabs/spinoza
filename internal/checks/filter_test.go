@@ -32,7 +32,7 @@ func holds(names []string, wanted string) bool {
 // what the filter reads off a query string
 
 func TestAFilterIsReadFromWhatTheBrowserSends(t *testing.T) {
-	keep := ParseFilter("cpu-limit-set, image-latest", "kube-system,flux-system", "medium", "")
+	keep := ParseFilter("cpu-limit-set, image-latest", "kube-system,flux-system", "medium", "", "1")
 
 	if len(keep.Disabled) != 2 || keep.Disabled[0] != "cpu-limit-set" {
 		t.Fatalf("disabled was %v", keep.Disabled)
@@ -46,19 +46,25 @@ func TestAFilterIsReadFromWhatTheBrowserSends(t *testing.T) {
 	if !keep.WholeCluster {
 		t.Fatal("wholeCluster was not read")
 	}
-	if ParseFilter("", "", "", "0").WholeCluster {
+	if !keep.EveryKind {
+		t.Fatal("everyKind was not read")
+	}
+	if ParseFilter("", "", "", "0", "").WholeCluster {
 		t.Fatal("a caller asking for workloads only was still given the whole cluster")
 	}
 }
 
 func TestASeverityNobodyDefinedIsIgnoredRatherThanObeyed(t *testing.T) {
-	keep := ParseFilter("", "", "catastrophic", "")
+	keep := ParseFilter("", "", "catastrophic", "", "")
 
 	if keep.MinSeverity != "" {
 		t.Fatalf("severity was %q, want it dropped", keep.MinSeverity)
 	}
 	if !keep.WholeCluster {
 		t.Fatal("a caller that said nothing was narrowed to workloads")
+	}
+	if keep.EveryKind {
+		t.Fatal("a caller that said nothing was given the expensive read")
 	}
 }
 
@@ -188,5 +194,48 @@ func TestARefusedListingDoesNotSilenceUnrelatedChecks(t *testing.T) {
 
 	if groupNamed(t, report, "image-latest").Total != 1 {
 		t.Fatal("a refused Secret listing silenced a check that never needed one")
+	}
+}
+
+// what nothing-references-this needs before it may say so
+
+func TestTheOrphanChecksWaitForAnExhaustiveRead(t *testing.T) {
+	lister := newLister(configMap("nobody-names-me", map[string]any{"a": "b"}))
+
+	partial := Run(t.Context(), lister, descriptors(), api.Metrics{}, Filter{WholeCluster: true}, 0)
+	group := groupNamed(t, partial, "orphaned-config-map")
+	if group.Skipped == "" {
+		t.Fatal("an orphan check answered without having read every kind")
+	}
+	if !strings.Contains(group.Skipped, "every kind") {
+		t.Fatalf("skipped said %q, want it to name what it is waiting for", group.Skipped)
+	}
+	if group.Total != 0 {
+		t.Fatalf("a skipped orphan check still reported %d findings", group.Total)
+	}
+
+	full := Run(t.Context(), lister, descriptors(), api.Metrics{},
+		Filter{WholeCluster: true, EveryKind: true}, 0)
+	if groupNamed(t, full, "orphaned-config-map").Total != 1 {
+		t.Fatal("the orphan check stayed quiet even after an exhaustive read")
+	}
+}
+
+func TestAnExhaustiveReadAsksForEveryKindDiscoveryReported(t *testing.T) {
+	if len(everyDiscovered(descriptors())) != len(descriptors()) {
+		t.Fatal("the exhaustive read left a discovered kind out")
+	}
+}
+
+func TestAPageOfASkippedOrphanCheckIsEmpty(t *testing.T) {
+	lister := newLister(configMap("nobody-names-me", map[string]any{"a": "b"}))
+
+	page, err := Page(t.Context(), lister, descriptors(), api.Metrics{},
+		"orphaned-config-map", "", Filter{WholeCluster: true}, 0)
+	if err != nil {
+		t.Fatalf("page: %v", err)
+	}
+	if len(page.Findings) != 0 {
+		t.Fatalf("a skipped orphan check paged %d findings", len(page.Findings))
 	}
 }

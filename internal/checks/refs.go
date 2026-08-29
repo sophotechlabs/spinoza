@@ -177,24 +177,26 @@ func workloadRefChecks() []check {
 func orphanChecks() []check {
 	return []check{
 		{
-			id:       "orphaned-config-map",
-			title:    "ConfigMap nothing names",
-			category: categoryEfficiency,
-			severity: severityLow,
-			needs:    []target{configMapTarget},
-			wrong:    "No workload mounts it and nothing else Spinoza has read mentions it by name. A judgement call: a custom resource Spinoza has not opened, or something outside the cluster, may still name it.",
-			remedy:   "Delete it once you have checked nothing else wants it.",
-			find:     overCorpus(orphanedConfigMaps),
+			id:         "orphaned-config-map",
+			title:      "ConfigMap nothing names",
+			category:   categoryEfficiency,
+			severity:   severityLow,
+			needs:      []target{configMapTarget},
+			needsEvery: true,
+			wrong:      "Nothing anywhere in the cluster names it. Something outside the cluster still might, which is the one thing this cannot see.",
+			remedy:     "Delete it once you have checked nothing else wants it.",
+			find:       overCorpus(orphanedConfigMaps),
 		},
 		{
-			id:       "orphaned-secret",
-			title:    "Secret nothing names",
-			category: categoryEfficiency,
-			severity: severityLow,
-			needs:    []target{secretTarget},
-			wrong:    "No workload reads it and nothing else Spinoza has read mentions it by name. A judgement call: a custom resource Spinoza has not opened, or something outside the cluster, may still name it.",
-			remedy:   "Delete it once you have checked nothing else wants it.",
-			find:     overCorpus(orphanedSecrets),
+			id:         "orphaned-secret",
+			title:      "Secret nothing names",
+			category:   categoryEfficiency,
+			severity:   severityLow,
+			needs:      []target{secretTarget},
+			needsEvery: true,
+			wrong:      "Nothing anywhere in the cluster names it. Something outside the cluster still might, which is the one thing this cannot see.",
+			remedy:     "Delete it once you have checked nothing else wants it.",
+			find:       overCorpus(orphanedSecrets),
 		},
 		{
 			id:       "claim-nothing-mounts",
@@ -621,7 +623,7 @@ func orphansOf(sc scan, resource, label string) []found {
 		}
 		out = append(out, found{
 			subject: Subject{Ref: ref, Kind: label, Object: emptyObject(ref, label)},
-			detail:  "nothing Spinoza has read names this " + label,
+			detail:  "nothing in this cluster names this " + label,
 		})
 	}
 	return out

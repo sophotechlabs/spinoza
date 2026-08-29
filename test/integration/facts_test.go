@@ -212,12 +212,40 @@ func TestTheClusterFactChecksFireOnARealCluster(t *testing.T) {
 func TestACheckSaysWhyItWasSkippedWhenTheClusterHidesWhatItNeeds(t *testing.T) {
 	report := manager(t, bundle(t)).Checks(context.Background(), checks.Filter{WholeCluster: true})
 
+	reasons := []string{"metrics-server", "did not report", "every kind has been read"}
 	for _, group := range report.Groups {
 		if group.Skipped == "" {
 			continue
 		}
-		if !strings.Contains(group.Skipped, "metrics-server") && !strings.Contains(group.Skipped, "did not report") {
+		if !containsAny(group.Skipped, reasons) {
 			t.Fatalf("%s was skipped with an unhelpful reason: %q", group.ID, group.Skipped)
 		}
 	}
+}
+
+func TestAskingForEveryKindStopsTheOrphanChecksBeingSkipped(t *testing.T) {
+	loaded := bundle(t)
+	held := manager(t, loaded)
+
+	narrow := held.Checks(context.Background(), checks.Filter{WholeCluster: true})
+	if groupOf(narrow, "orphaned-config-map").Skipped == "" {
+		t.Fatal("orphaned-config-map ran without being asked to read every kind")
+	}
+
+	wide := groupOf(held.Checks(context.Background(), checks.Filter{WholeCluster: true, EveryKind: true}), "orphaned-config-map")
+	if wide.ID == "" {
+		t.Fatal("orphaned-config-map is not in the report at all")
+	}
+	if wide.Skipped != "" {
+		t.Fatalf("orphaned-config-map was still skipped after asking for every kind: %q", wide.Skipped)
+	}
+}
+
+func containsAny(text string, wanted []string) bool {
+	for _, one := range wanted {
+		if strings.Contains(text, one) {
+			return true
+		}
+	}
+	return false
 }

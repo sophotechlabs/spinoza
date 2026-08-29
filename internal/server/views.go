@@ -21,7 +21,7 @@ func (s *Server) handleCheckPage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "check is required")
 		return
 	}
-	page, err := s.managerFor(r).CheckPage(r.Context(), id, query.Get("after"), checkFilter(r))
+	page, err := s.managerFor(r).CheckPage(r.Context(), id, query.Get("after"), s.checkFilter(r))
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -30,17 +30,20 @@ func (s *Server) handleCheckPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.managerFor(r).Checks(r.Context(), checkFilter(r)))
+	writeJSON(w, s.managerFor(r).Checks(r.Context(), s.checkFilter(r)))
 }
 
-func checkFilter(r *http.Request) checks.Filter {
+func (s *Server) checkFilter(r *http.Request) checks.Filter {
 	query := r.URL.Query()
-	return checks.ParseFilter(
+	keep := checks.ParseFilter(
 		query.Get("disabled"),
 		query.Get("skipNamespaces"),
 		query.Get("minSeverity"),
 		query.Get("wholeCluster"),
+		query.Get("everyKind"),
 	)
+	keep.Rules = checks.ParseRules(s.stored().All()[checks.RulesKey])
+	return keep
 }
 
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {

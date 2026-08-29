@@ -110,3 +110,31 @@ func TestAClusterWithNothingToSayReportsNothing(t *testing.T) {
 		}
 	}
 }
+
+// a tripwire, not a guarantee
+
+func TestTheRemovalTableHasBeenLookedAtThisCycle(t *testing.T) {
+	// The table is hand-written from what Kubernetes publishes each release.
+	// Nothing keeps it current, so this fails once the client the repo builds
+	// against has moved far enough past the newest entry that the table is
+	// almost certainly missing a removal. Look at the release notes, add what
+	// is new, and raise the bound.
+	const lookedAtThrough = 32
+
+	newest := 0
+	for _, one := range removals {
+		if one.minor > newest {
+			newest = one.minor
+		}
+	}
+	if newest != lookedAtThrough {
+		t.Fatalf("the newest removal in the table is 1.%d and the table claims to be current "+
+			"through 1.%d; reconcile the two", newest, lookedAtThrough)
+	}
+
+	client := minorOf(clientMinor)
+	if client-newest > 6 {
+		t.Fatalf("this repo builds against 1.%d and the removal table stops at 1.%d; "+
+			"read the release notes since and add what is missing", client, newest)
+	}
+}

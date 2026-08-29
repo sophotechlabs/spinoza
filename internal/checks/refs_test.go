@@ -249,26 +249,6 @@ func TestEveryReferenceCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 			},
 		},
 		{
-			id:      "orphaned-config-map",
-			objects: []*unstructured.Unstructured{configMap("nobody-names-me", map[string]any{"a": "b"})},
-			clean: []*unstructured.Unstructured{
-				configMap("settings", map[string]any{"a": "b"}),
-				labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
-					"envFrom": []any{map[string]any{"configMapRef": map[string]any{"name": "settings"}}},
-				}))),
-			},
-		},
-		{
-			id:      "orphaned-secret",
-			objects: []*unstructured.Unstructured{simple("Secret", "nobody-names-me", testNamespace, nil)},
-			clean: []*unstructured.Unstructured{
-				simple("Secret", "creds", testNamespace, nil),
-				labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
-					"envFrom": []any{map[string]any{"secretRef": map[string]any{"name": "creds"}}},
-				}))),
-			},
-		},
-		{
 			id:      "claim-nothing-mounts",
 			objects: []*unstructured.Unstructured{simple("PersistentVolumeClaim", "spare", testNamespace, map[string]any{})},
 			clean: []*unstructured.Unstructured{
@@ -282,6 +262,9 @@ func TestEveryReferenceCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 
 	registered := map[string]bool{}
 	for _, entry := range referenceChecks() {
+		if entry.needsEvery {
+			continue
+		}
 		registered[entry.id] = true
 	}
 	if len(cases) != len(registered) {
@@ -492,7 +475,7 @@ func TestAClusterWithNoNetworkPolicyAtAllIsLeftAlone(t *testing.T) {
 }
 
 func TestHelmsOwnReleaseStorageIsNotAnOrphan(t *testing.T) {
-	found := report(t, simple("Secret", helmReleasePrefix+"beyla.v3", testNamespace, nil))
+	found := reportEverything(t, simple("Secret", helmReleasePrefix+"beyla.v3", testNamespace, nil))
 
 	if findingCount(t, found, "orphaned-secret") != 0 {
 		t.Fatal("a Helm release record was reported as an orphaned Secret")
@@ -500,7 +483,7 @@ func TestHelmsOwnReleaseStorageIsNotAnOrphan(t *testing.T) {
 }
 
 func TestTheCaBundleEveryNamespaceGetsIsNotAnOrphan(t *testing.T) {
-	found := report(t, configMap("kube-root-ca.crt", map[string]any{"ca.crt": "..."}))
+	found := reportEverything(t, configMap("kube-root-ca.crt", map[string]any{"ca.crt": "..."}))
 
 	if findingCount(t, found, "orphaned-config-map") != 0 {
 		t.Fatal("the CA bundle every namespace gets was reported as an orphan")
@@ -518,9 +501,43 @@ func TestASecretAnythingAtAllNamesIsNotAnOrphan(t *testing.T) {
 		"sessionAffinity": "None",
 	})
 
-	found := report(t, simple("Secret", "tls-cert", testNamespace, nil), namer)
+	found := reportEverything(t, simple("Secret", "tls-cert", testNamespace, nil), namer)
 
 	if findingCount(t, found, "orphaned-secret") != 0 {
 		t.Fatal("a Secret named by another object was still reported as an orphan")
+	}
+}
+
+// the orphan checks, once the read has been exhaustive
+
+func TestAConfigMapNothingNamesIsAnOrphanOnceEveryKindIsRead(t *testing.T) {
+	alone := reportEverything(t, configMap("nobody-names-me", map[string]any{"a": "b"}))
+	if findingCount(t, alone, "orphaned-config-map") != 1 {
+		t.Fatal("a ConfigMap nothing names was not reported")
+	}
+
+	named := reportEverything(t,
+		configMap("settings", map[string]any{"a": "b"}),
+		labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
+			"envFrom": []any{map[string]any{"configMapRef": map[string]any{"name": "settings"}}},
+		}))))
+	if findingCount(t, named, "orphaned-config-map") != 0 {
+		t.Fatal("a ConfigMap a workload reads was reported as an orphan")
+	}
+}
+
+func TestASecretNothingNamesIsAnOrphanOnceEveryKindIsRead(t *testing.T) {
+	alone := reportEverything(t, simple("Secret", "nobody-names-me", testNamespace, nil))
+	if findingCount(t, alone, "orphaned-secret") != 1 {
+		t.Fatal("a Secret nothing names was not reported")
+	}
+
+	named := reportEverything(t,
+		simple("Secret", "creds", testNamespace, nil),
+		labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
+			"envFrom": []any{map[string]any{"secretRef": map[string]any{"name": "creds"}}},
+		}))))
+	if findingCount(t, named, "orphaned-secret") != 0 {
+		t.Fatal("a Secret a workload reads was reported as an orphan")
 	}
 }

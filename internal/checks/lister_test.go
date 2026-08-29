@@ -156,6 +156,15 @@ func wholeCluster() Filter {
 	return Filter{WholeCluster: true}
 }
 
+func everyKind() Filter {
+	return Filter{WholeCluster: true, EveryKind: true}
+}
+
+func reportEverything(t *testing.T, objects ...*unstructured.Unstructured) api.CheckReport {
+	t.Helper()
+	return Run(t.Context(), newLister(objects...), descriptors(), api.Metrics{}, everyKind(), 0)
+}
+
 func report(t *testing.T, objects ...*unstructured.Unstructured) api.CheckReport {
 	t.Helper()
 	return Run(t.Context(), newLister(objects...), descriptors(), api.Metrics{}, wholeCluster(), 0)

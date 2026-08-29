@@ -99,7 +99,9 @@ afterEach(() => {
     checksDisabled: [],
     checksSkipNamespaces: [],
     checksMinSeverity: '',
-    checksWholeCluster: false,
+    checksWholeCluster: true,
+    checksEveryKind: false,
+    checkRules: '',
   });
 });
 
@@ -463,13 +465,55 @@ describe('audit controls', () => {
     });
   });
 
-  it('asks for the whole cluster when switched on', async () => {
+  it('narrows to workloads when the whole-cluster box is cleared', async () => {
     show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
     await screen.findByRole('button', { name: /Privileged containers/ });
 
     await userEvent.click(screen.getByLabelText('Audit the whole cluster'));
 
-    expect(useSettingsStore.getState().checksWholeCluster).toBe(true);
+    expect(useSettingsStore.getState().checksWholeCluster).toBe(false);
+    await waitFor(() => {
+      const urls = vi.mocked(fetch).mock.calls.map((call) => askedFor(call[0]));
+      expect(urls.some((url) => url.includes('wholeCluster=0'))).toBe(true);
+    });
+  });
+
+  it('asks for every kind when told to, and not before', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await screen.findByRole('button', { name: /Privileged containers/ });
+
+    await userEvent.click(screen.getByLabelText('Read every kind'));
+
+    expect(useSettingsStore.getState().checksEveryKind).toBe(true);
+    await waitFor(() => {
+      const urls = vi.mocked(fetch).mock.calls.map((call) => askedFor(call[0]));
+      expect(urls.some((url) => url.includes('everyKind=1'))).toBe(true);
+    });
+  });
+
+  it('saves the rules you wrote and stops offering to', async () => {
+    show({ groups: [] });
+    await screen.findByLabelText('Your own rules');
+
+    const editor = screen.getByLabelText('Your own rules');
+    await userEvent.type(editor, 'rules');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(useSettingsStore.getState().checkRules).toBe('rules');
+    });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('says so when the rules could not be saved', async () => {
+    show({ groups: [] });
+    await screen.findByLabelText('Your own rules');
+    vi.spyOn(useSettingsStore.getState(), 'setCheckRules').mockRejectedValue(new Error('nope'));
+
+    await userEvent.type(screen.getByLabelText('Your own rules'), 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText(/nope/)).toBeInTheDocument();
   });
 
   it('turns one check off and offers to put it back', async () => {

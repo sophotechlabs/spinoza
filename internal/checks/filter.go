@@ -14,19 +14,26 @@ const (
 var severityOrder = []string{severityLow, severityMedium, severityHigh}
 
 type Filter struct {
+	Rules          []UserRule
 	Disabled       []string
 	SkipNamespaces []string
 	MinSeverity    string
 	WholeCluster   bool
+	EveryKind      bool
 }
 
-func ParseFilter(disabled, namespaces, minSeverity, wholeCluster string) Filter {
+func ParseFilter(disabled, namespaces, minSeverity, wholeCluster, everyKind string) Filter {
 	return Filter{
 		Disabled:       splitList(disabled),
 		SkipNamespaces: splitList(namespaces),
 		MinSeverity:    knownSeverity(minSeverity),
 		WholeCluster:   !narrowed(wholeCluster),
+		EveryKind:      asked(everyKind),
 	}
+}
+
+func asked(raw string) bool {
+	return raw == "1" || strings.EqualFold(raw, "true")
 }
 
 // Absence means the whole cluster: a caller that says nothing gets every check.

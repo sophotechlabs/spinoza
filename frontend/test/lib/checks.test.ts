@@ -417,6 +417,11 @@ describe('the audit filter on the wire', () => {
     expect(params.get('minSeverity')).toBe('high');
   });
 
+  it('asks to read every kind only when told to', () => {
+    expect(filterParams(NO_FILTER).get('everyKind')).toBeNull();
+    expect(filterParams({ ...NO_FILTER, everyKind: true }).get('everyKind')).toBe('1');
+  });
+
   it('narrows to workloads only when asked, and says nothing otherwise', () => {
     expect(filterParams(NO_FILTER).get('wholeCluster')).toBeNull();
     expect(filterParams({ ...NO_FILTER, wholeCluster: false }).get('wholeCluster')).toBe('0');

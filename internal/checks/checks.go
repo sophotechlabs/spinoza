@@ -26,14 +26,18 @@ const (
 
 	noUsage = "metrics-server did not answer, so usage is unknown"
 
+	notEveryKind = "not audited: this decides what nothing references, " +
+		"which is only true once every kind has been read"
+
 	findingsShown = 200
 )
 
 type scan struct {
-	subjects []Subject
-	usage    map[string]api.ResourceUsage
-	held     *corpus
-	facts    Facts
+	subjects  []Subject
+	usage     map[string]api.ResourceUsage
+	held      *corpus
+	facts     Facts
+	everyKind bool
 }
 
 func (sc scan) hasUsage() bool {
@@ -96,6 +100,7 @@ type check struct {
 	wrong      string
 	remedy     string
 	needsUsage bool
+	needsEvery bool
 	needs      []target
 	find       finder
 }
@@ -236,6 +241,10 @@ func (c check) group(sc scan, objs *objects, keep Filter, shown int) api.CheckGr
 		out.Skipped = noUsage
 		return out
 	}
+	if c.needsEvery && !sc.everyKind {
+		out.Skipped = notEveryKind
+		return out
+	}
 	if missing := missingResources(c.needs, sc.held); len(missing) > 0 {
 		out.Skipped = skippedBecause(missing)
 		return out
@@ -254,6 +263,10 @@ func joined(parts ...string) string {
 		kept = append(kept, part)
 	}
 	return strings.Join(kept, "; ")
+}
+
+func registryWith(rules []UserRule) []check {
+	return append(registry(), userChecks(rules)...)
 }
 
 func registry() []check {
@@ -283,7 +296,7 @@ func Page(
 	shown int,
 ) (api.CheckPage, error) {
 	var wanted check
-	for _, entry := range registry() {
+	for _, entry := range registryWith(keep.Rules) {
 		if entry.id == id {
 			wanted = entry
 		}
@@ -293,6 +306,9 @@ func Page(
 	}
 	sc, _, _ := survey(ctx, lister, descs, usage, keep)
 	if wanted.needsUsage && !sc.hasUsage() {
+		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
+	}
+	if wanted.needsEvery && !sc.everyKind {
 		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
 	}
 	if len(missingResources(wanted.needs, sc.held)) > 0 {
@@ -318,15 +334,19 @@ func survey(
 	keep Filter,
 ) (scan, string, []string) {
 	wanted, absent := needed(descs, keep.WholeCluster)
-	if keep.WholeCluster {
+	if keep.EveryKind {
+		wanted, absent = everyDiscovered(descs), nil
+	}
+	if keep.WholeCluster && !keep.EveryKind {
 		wanted = append(wanted, alsoWarm(lister, wanted)...)
 	}
 	items, names, unread, failure := gather(ctx, lister, wanted)
 	return scan{
-		subjects: subjectsOf(items),
-		usage:    usage.Pods,
-		held:     newCorpus(items, names, absent, targetsFor(keep.WholeCluster), unread),
-		facts:    lister.Facts(),
+		subjects:  subjectsOf(items),
+		usage:     usage.Pods,
+		held:      newCorpus(items, names, absent, targetsFor(keep.WholeCluster), unread),
+		facts:     lister.Facts(),
+		everyKind: keep.EveryKind,
 	}, failure, absent
 }
 
@@ -339,7 +359,7 @@ func Run(
 	shown int,
 ) api.CheckReport {
 	sc, failure, absent := survey(ctx, lister, descs, usage, keep)
-	checks := keep.chosen(registry())
+	checks := keep.chosen(registryWith(keep.Rules))
 	objs := newObjects()
 	groups := make([]api.CheckGroup, 0, len(checks))
 	for _, entry := range checks {

@@ -214,6 +214,53 @@ function namesFrom(raw: string): string[] {
     .filter((part) => part !== '');
 }
 
+function YourRules() {
+  const saved = useSettingsStore((state) => state.checkRules);
+  const save = useSettingsStore((state) => state.setCheckRules);
+  const [draft, setDraft] = useState(saved);
+  const [failed, setFailed] = useState<string | null>(null);
+  const dirty = draft !== saved;
+
+  return (
+    <details className="shrink-0 border-b border-edge px-3 py-1.5 text-fg-muted">
+      <summary className="cursor-pointer">Your own rules</summary>
+      <p className="py-1 text-fg-soft">
+        A list of {'{ id, match, expr }'} objects. The expression is CEL, with the workload bound to
+        object, and a rule that matches becomes a finding.
+      </p>
+      <textarea
+        aria-label="Your own rules"
+        spellCheck={false}
+        rows={6}
+        className="w-full rounded border border-edge bg-surface px-2 py-1 font-mono text-[11px] text-fg"
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+        }}
+      />
+      <div className="flex items-center gap-3 py-1">
+        <button
+          type="button"
+          disabled={!dirty}
+          className="rounded border border-edge px-2 py-0.5 text-fg-strong disabled:text-fg-subtle"
+          onClick={() => {
+            save(draft)
+              .then(() => {
+                setFailed(null);
+              })
+              .catch((reason: unknown) => {
+                setFailed(String(reason));
+              });
+          }}
+        >
+          Save
+        </button>
+        {failed !== null && <span className="text-warn">{failed}</span>}
+      </div>
+    </details>
+  );
+}
+
 function AuditControls() {
   const floor = useSettingsStore((state) => state.checksMinSeverity);
   const setFloor = useSettingsStore((state) => state.setChecksMinSeverity);
@@ -222,6 +269,8 @@ function AuditControls() {
   const skipped = useSettingsStore((state) => state.checksSkipNamespaces);
   const setSkipped = useSettingsStore((state) => state.setChecksSkipNamespaces);
   const [typing, setTyping] = useState(skipped.join(','));
+  const everyKind = useSettingsStore((state) => state.checksEveryKind);
+  const setEveryKind = useSettingsStore((state) => state.setChecksEveryKind);
   const off = useSettingsStore((state) => state.checksDisabled);
   const setOff = useSettingsStore((state) => state.setChecksDisabled);
 
@@ -265,6 +314,19 @@ function AuditControls() {
           }}
         />
         Audit the whole cluster
+      </label>
+      <label
+        className="flex items-center gap-1.5"
+        title="Reads every kind the cluster reports, which is slow on a large one"
+      >
+        <input
+          type="checkbox"
+          checked={everyKind}
+          onChange={(event) => {
+            setEveryKind(event.target.checked);
+          }}
+        />
+        Read every kind
       </label>
       {off.length > 0 && (
         <button
@@ -344,6 +406,7 @@ export default function Checks({ onOpen }: ChecksProps) {
         </p>
       )}
       <AuditControls />
+      <YourRules />
       <div className="flex shrink-0 items-baseline gap-3 border-b border-edge px-3 py-1.5 text-fg-muted">
         <span className="min-w-0 flex-1">{scannedLabel(data.scanned, totalFindings(data))}</span>
         <span className="w-16 shrink-0 text-right">Severity</span>

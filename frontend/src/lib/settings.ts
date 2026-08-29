@@ -31,6 +31,7 @@ export interface Settings {
   checksSkipNamespaces: string[];
   checksMinSeverity: SeverityFloor;
   checksWholeCluster: boolean;
+  checksEveryKind: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -43,6 +44,7 @@ const DEFAULTS: Settings = {
   checksSkipNamespaces: [],
   checksMinSeverity: '',
   checksWholeCluster: true,
+  checksEveryKind: false,
 };
 
 function parseStarts(value: unknown): Partial<Record<string, NamespaceStart>> {
@@ -101,6 +103,9 @@ export function parseSettings(raw: string | null): Settings {
   if (typeof stored.checksWholeCluster === 'boolean') {
     settings.checksWholeCluster = stored.checksWholeCluster;
   }
+  if (typeof stored.checksEveryKind === 'boolean') {
+    settings.checksEveryKind = stored.checksEveryKind;
+  }
   settings.checksDisabled = parseNames(stored.checksDisabled);
   settings.checksSkipNamespaces = parseNames(stored.checksSkipNamespaces);
   settings.namespaceStarts = parseStarts(stored.namespaceStarts);
@@ -154,5 +159,16 @@ export function writeUpdateCheck(enabled: boolean): Promise<void> {
   } else {
     writeStored(UPDATE_CHECK_KEY, OFF);
   }
+  return flush();
+}
+
+export const CHECK_RULES_KEY = 'spinoza.checks.rules.v1';
+
+export function readCheckRules(): string {
+  return readStored(CHECK_RULES_KEY) ?? '';
+}
+
+export function writeCheckRules(rules: string): Promise<void> {
+  writeStored(CHECK_RULES_KEY, rules);
   return flush();
 }

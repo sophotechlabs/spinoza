@@ -193,6 +193,28 @@ func (sess *wsSession) failCurrent(which feed, subID string, gen uint64, err err
 	sess.writeLocked(sess.ctx, api.FeedError{Type: msgError, SubID: subID, Message: err.Error()})
 }
 
+// The client must not be told a subscription was refused while the session is
+// still holding it: a reader that acts on the error frame can look and find the
+// entry there. Forgetting and announcing happen in that order, under one claim
+// on the generation, so a resubscribe in between is left alone.
+func (sess *wsSession) failAndForget(which feed, subID string, gen uint64, err error) {
+	sess.mu.Lock()
+	held, ok := sess.entriesOf(which)[subID]
+	current := ok && held.gen == gen
+	if current {
+		delete(sess.entriesOf(which), subID)
+	}
+	sess.mu.Unlock()
+	if !current {
+		return
+	}
+	stop(held)
+	sess.writeMu.Lock()
+	defer sess.writeMu.Unlock()
+	slog.Warn("a feed could not be opened", "subId", subID, "error", err)
+	sess.writeLocked(sess.ctx, api.FeedError{Type: msgError, SubID: subID, Message: err.Error()})
+}
+
 func (sess *wsSession) drop(which feed, subID string) {
 	sess.mu.Lock()
 	held, ok := sess.entriesOf(which)[subID]
@@ -232,8 +254,7 @@ func (sess *wsSession) subscribe(msg api.ClientMsg) {
 	backend, on := sess.lookup(msg.Cluster)
 	gen := sess.claim(tables, msg.SubID, on)
 	if backend == nil {
-		sess.failCurrent(tables, msg.SubID, gen, notOpen(msg.Cluster))
-		sess.drop(tables, msg.SubID)
+		sess.failAndForget(tables, msg.SubID, gen, notOpen(msg.Cluster))
 		return
 	}
 	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(backend, msg, gen) })
@@ -382,8 +403,7 @@ func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 	backend, on := sess.lookup(msg.Cluster)
 	gen := sess.claim(streams, msg.SubID, on)
 	if backend == nil {
-		sess.failCurrent(streams, msg.SubID, gen, notOpen(msg.Cluster))
-		sess.drop(streams, msg.SubID)
+		sess.failAndForget(streams, msg.SubID, gen, notOpen(msg.Cluster))
 		return
 	}
 	safe.Go("opening the log stream "+msg.SubID, func() { sess.buildLogs(backend, msg, gen) })

@@ -9,15 +9,18 @@ import type {
 import {
   readNodeShell,
   readSettings,
+  readCheckRules,
   readUpdateCheck,
   writeNodeShell,
   writeSettings,
+  writeCheckRules,
   writeUpdateCheck,
 } from '../lib/settings';
 
 interface SettingsState extends Settings {
   nodeShell: boolean;
   updateCheck: boolean;
+  checkRules: string;
   setLogView: (logView: LogView) => void;
   setScreenReader: (screenReader: boolean) => void;
   setNamespaceStart: (context: string, namespaceStart: NamespaceStart) => void;
@@ -26,8 +29,10 @@ interface SettingsState extends Settings {
   setChecksSkipNamespaces: (checksSkipNamespaces: string[]) => void;
   setChecksMinSeverity: (checksMinSeverity: SeverityFloor) => void;
   setChecksWholeCluster: (checksWholeCluster: boolean) => void;
+  setChecksEveryKind: (checksEveryKind: boolean) => void;
   setNodeShell: (nodeShell: boolean) => Promise<void>;
   setUpdateCheck: (updateCheck: boolean) => Promise<void>;
+  setCheckRules: (checkRules: string) => Promise<void>;
 }
 
 const stored = readSettings();
@@ -43,6 +48,7 @@ function saved(state: SettingsState): Settings {
     checksSkipNamespaces: state.checksSkipNamespaces,
     checksMinSeverity: state.checksMinSeverity,
     checksWholeCluster: state.checksWholeCluster,
+    checksEveryKind: state.checksEveryKind,
   };
 }
 
@@ -56,8 +62,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   checksSkipNamespaces: stored.checksSkipNamespaces,
   checksMinSeverity: stored.checksMinSeverity,
   checksWholeCluster: stored.checksWholeCluster,
+  checksEveryKind: stored.checksEveryKind,
   nodeShell: readNodeShell(),
   updateCheck: readUpdateCheck(),
+  checkRules: readCheckRules(),
   setLogView: (logView) => {
     writeSettings({ ...saved(get()), logView });
     set({ logView });
@@ -96,6 +104,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     writeSettings({ ...saved(get()), checksWholeCluster });
     set({ checksWholeCluster });
   },
+  setChecksEveryKind: (checksEveryKind) => {
+    writeSettings({ ...saved(get()), checksEveryKind });
+    set({ checksEveryKind });
+  },
   setNodeShell: async (nodeShell) => {
     await writeNodeShell(nodeShell);
     set({ nodeShell });
@@ -103,6 +115,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setUpdateCheck: async (updateCheck) => {
     await writeUpdateCheck(updateCheck);
     set({ updateCheck });
+  },
+  setCheckRules: async (checkRules) => {
+    await writeCheckRules(checkRules);
+    set({ checkRules });
   },
 }));
 
@@ -123,12 +139,14 @@ export function useChecksFilter(): {
   skipNamespaces: string[];
   minSeverity: SeverityFloor;
   wholeCluster: boolean;
+  everyKind: boolean;
 } {
   const disabled = useSettingsStore((state) => state.checksDisabled);
   const skipNamespaces = useSettingsStore((state) => state.checksSkipNamespaces);
   const minSeverity = useSettingsStore((state) => state.checksMinSeverity);
   const wholeCluster = useSettingsStore((state) => state.checksWholeCluster);
-  return { disabled, skipNamespaces, minSeverity, wholeCluster };
+  const everyKind = useSettingsStore((state) => state.checksEveryKind);
+  return { disabled, skipNamespaces, minSeverity, wholeCluster, everyKind };
 }
 
 export function useNodeShell(): boolean {

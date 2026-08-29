@@ -21,6 +21,7 @@ const base: Settings = {
   checksSkipNamespaces: [],
   checksMinSeverity: '',
   checksWholeCluster: false,
+  checksEveryKind: false,
 };
 
 afterEach(() => {
