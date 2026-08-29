@@ -3,6 +3,7 @@ import { openView } from '../harness/app';
 import { helm } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 import { DOOMED, RELEASE } from '../harness/fixtures';
+import { NEXT_VERSION } from '../harness/charts';
 import type { Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
@@ -51,10 +52,13 @@ test('the count is the number helm itself would report', async ({ page }) => {
   );
 });
 
-test('a chart no repository carries is said to be unknown, not guessed at', async ({ page }) => {
+test('the newest version the repo offers is reported beside the installed one', async ({
+  page,
+}) => {
   await openView(page, 'helm');
   const row = page.locator('main tbody tr').filter({ hasText: RELEASE }).first();
-  await expect(row).toContainText('no chart repository knows this chart', { timeout: 60_000 });
+  await expect(row).toContainText(NEXT_VERSION, { timeout: 60_000 });
+  await expect(row).not.toContainText('no chart repository knows this chart');
 });
 
 test('the table names what helm itself records about a release', async ({ page }) => {

@@ -49,3 +49,11 @@ const sidePort = portFor(cluster) + SESSION_PORT_SPAN;
 export function sideAddr(index: number): string {
   return `127.0.0.1:${sidePort + index}`;
 }
+
+export const CHART_PORT = sidePort + SESSION_PORT_SPAN;
+
+export const CHART_HOST = process.env.SPINOZA_E2E_CHART_HOST ?? 'localtest.me';
+
+export const CHART_REPO = `http://${CHART_HOST}:${String(CHART_PORT)}`;
+
+export const CHART_DIR = join(TMP_DIR, 'charts');

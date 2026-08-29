@@ -4,6 +4,7 @@ import { BASE_URL, STATE_FILE, STORAGE_STATE, TMP_DIR, sideAddr } from './paths'
 import { KUBECONFIG } from './paths';
 import { ensureCluster, exportKubeconfig, readonlyKubeconfig, refuseAnythingButKind } from './cluster';
 import { seed, seedGitops, seedHelm, seedScale, waitForFixtures } from './fixtures';
+import { packageCharts, serveCharts, writeRepositoryConfig } from './charts';
 import { build, freePort, launch, start, stopStale, token } from './spinoza';
 import type { Instance } from './spinoza';
 
@@ -69,6 +70,9 @@ export default async function globalSetup(): Promise<void> {
   seedHelm();
   waitForFixtures();
   build();
+  packageCharts();
+  writeRepositoryConfig();
+  const charts = await serveCharts();
   stopStale();
   const pid = await start(['--node-shell']);
   const value = token();
@@ -89,6 +93,7 @@ export default async function globalSetup(): Promise<void> {
         pid,
         baseURL: BASE_URL,
         token: value,
+        charts,
         sides: { readonly, toolless, nowhere, traffic, profiled },
       },
       null,

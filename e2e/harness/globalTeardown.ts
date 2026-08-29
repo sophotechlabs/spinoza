@@ -6,6 +6,7 @@ import { stop } from './spinoza';
 
 interface Stopping {
   pid: number;
+  charts?: number;
   sides?: Record<string, { pid: number }>;
 }
 
@@ -15,6 +16,9 @@ export default function globalTeardown(): void {
     stop(state.pid);
     for (const one of Object.values(state.sides ?? {})) {
       stop(one.pid);
+    }
+    if (state.charts !== undefined) {
+      stop(state.charts);
     }
   }
   if (process.env.SPINOZA_E2E_KEEP === '1') {
