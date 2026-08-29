@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.19.0](https://github.com/sophotechlabs/spinoza/compare/v1.18.0...v1.19.0) (2026-08-29)
+
+
+### Features
+
+* **checks:** 53 more checks, and your own workloads ranked above packaged ones ([1709f34](https://github.com/sophotechlabs/spinoza/commit/1709f3488f99f2a68d28e73334d46aa911f4923d))
+* **checks:** decide schedulability and references against the live cluster ([8ff9681](https://github.com/sophotechlabs/spinoza/commit/8ff9681e43ce8da132956268d60966a767b15549))
+* **clusters:** open several clusters as tabs, each keeping its own state ([86a379d](https://github.com/sophotechlabs/spinoza/commit/86a379dd8608f2c43b2acc9befc2df7c3f5a05b7))
+* **clusters:** open, list, activate and close a cluster over the api ([cf27a65](https://github.com/sophotechlabs/spinoza/commit/cf27a65df482ac6f26187b1cdf5ece1f16788c75))
+* **clusters:** remember which clusters were open and report every one's health ([5095e9e](https://github.com/sophotechlabs/spinoza/commit/5095e9e5abc5f24e10e1db4a3aa1715dd6448b51))
+* **clusters:** send every request and subscription to the cluster it is for ([09220ac](https://github.com/sophotechlabs/spinoza/commit/09220aca658bc77dfdf0478ad5cc15ce3cd3b9b1))
+* **clusters:** track health per cluster instead of assuming the rest are fine ([c6693f2](https://github.com/sophotechlabs/spinoza/commit/c6693f229a6584f8763b0351e8af238a14e29ab3))
+* **history:** give each cluster its own writer and keep one file honest between them ([79dbb71](https://github.com/sophotechlabs/spinoza/commit/79dbb71495fcd26353f159dcc493955401e1dfbc))
+* **license:** print the terms with --license and lay them down on install ([e58e66e](https://github.com/sophotechlabs/spinoza/commit/e58e66e164ab48a37b7e3455ea100ca364affe91))
+
+
+### Bug Fixes
+
+* **checks:** drop two rules a live apiserver can never trip ([60bbc9a](https://github.com/sophotechlabs/spinoza/commit/60bbc9a4b84bf39d970592635e3b7291b09af51c))
+* **ci:** scope knip away from the hand-mirrored wire contract ([c7c0af9](https://github.com/sophotechlabs/spinoza/commit/c7c0af92641f17dfab0249672c283e5402bca1e8))
+* **clusters:** check protection on the cluster being written to ([ff41d58](https://github.com/sophotechlabs/spinoza/commit/ff41d58b6ba992fa625308512c71c2e0cf599b8a))
+* **graph:** size flow nodes and refit the canvas so edges draw ([79dee50](https://github.com/sophotechlabs/spinoza/commit/79dee509294ab8fe04f417f9c72ef48b61126e6a))
+* **issues:** raise the row cap above what a real cluster produces ([68c8302](https://github.com/sophotechlabs/spinoza/commit/68c83020593eda0c90bcf8a4c3dec643125ad074))
+* **mise:** pin uv so the pipx-backed tools resolve ([312b556](https://github.com/sophotechlabs/spinoza/commit/312b556dcf09a6229667871bfa88bbc7144ce6bf))
+* **sidebar:** retry discovery automatically after a transient failure ([319377f](https://github.com/sophotechlabs/spinoza/commit/319377f2b30bf447152b6d9c402adab170db2ddc))
+* **spinoza:** close the act-now findings from the speedrun review ([658875d](https://github.com/sophotechlabs/spinoza/commit/658875d1706be854841fea6f9b5eded1309e1c13))
+
+
+### Miscellaneous
+
+* **deps:** drop markdownlint-cli2 and the npm backend with it ([ed9b565](https://github.com/sophotechlabs/spinoza/commit/ed9b565b1a73a7e12cf5f6233e919ecc63721c85))
+
+
+### Refactoring
+
+* **clusters:** resolve the backend per request and key connections by id ([d528c74](https://github.com/sophotechlabs/spinoza/commit/d528c74e4a1f8b0b0b2f695f1e72c761446091c0))
+
+
+### Tests
+
+* **e2e:** extend e2e suite ([cf6c8cd](https://github.com/sophotechlabs/spinoza/commit/cf6c8cd43fa941e0e2ecdf8298eb129252709506))
+* **install:** assert the container install lays down the copyright ([0ebc187](https://github.com/sophotechlabs/spinoza/commit/0ebc1873b0f2254f0d5dc745a67e37b5578ecb17))
+* **integration:** configure kind for testing ([1dabce9](https://github.com/sophotechlabs/spinoza/commit/1dabce9329c34fecf373473565b00cb67d46825c))
+* **kind:** layer the e2e and full cluster specs onto the base one ([47c754b](https://github.com/sophotechlabs/spinoza/commit/47c754b302a6a265a458ccb1e7f0476b48b515bc))
+* **mcp:** drive the five write tools against a real apiserver ([5dd77c1](https://github.com/sophotechlabs/spinoza/commit/5dd77c180d496853312ba48173e6b928c906ae08))
+* **server:** take the write baseline before provoking the write ([a857c39](https://github.com/sophotechlabs/spinoza/commit/a857c39b663ccc985aa351a0907d0118697b85ff))
+
 ## [1.18.0](https://github.com/sophotechlabs/spinoza/compare/v1.17.0...v1.18.0) (2026-08-29)
 
 
