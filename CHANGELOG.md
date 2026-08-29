@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.21.0](https://github.com/sophotechlabs/spinoza/compare/v1.20.0...v1.21.0) (2026-08-29)
+
+
+### Features
+
+* **checks:** warn about APIs a release removes, watch certificates ([bb2e7d0](https://github.com/sophotechlabs/spinoza/commit/bb2e7d0464414128915676c9adff60ef3d1f7e3d))
+* **checks:** write own checks as CEL expressions ([d183aa8](https://github.com/sophotechlabs/spinoza/commit/d183aa8829fecc9040b22875a3b9a8127a000b48))
+* **clusters:** give every tab a colour and name the cluster before anything destructive ([e1f6c4e](https://github.com/sophotechlabs/spinoza/commit/e1f6c4e766fba09aa63e609eb7f61459355ccec1))
+* **clusters:** name a tab, group it, and choose whether it comes back ([425d1b8](https://github.com/sophotechlabs/spinoza/commit/425d1b8696c66811c30d5a2ed112dd0d9b1a068a))
+
+
+### Bug Fixes
+
+* **clusters:** give the cluster spinoza starts on a tab of its own ([ba93a77](https://github.com/sophotechlabs/spinoza/commit/ba93a778c690d06af3bdb283250830665871d1c1))
+* **e2e:** lint fixes ([ba4b627](https://github.com/sophotechlabs/spinoza/commit/ba4b627055d43c6b5ec2249de2291b15d00e8b46))
+* **lint:** scope the a11y relaxations to the three files that need them ([cf8b442](https://github.com/sophotechlabs/spinoza/commit/cf8b44295f8cb588cb31ffa78e155634659c63fb))
+* **prom:** refuse a range query that matched more than one series ([a0f616d](https://github.com/sophotechlabs/spinoza/commit/a0f616d8a507e6f0442ca8859dcba731086280c3))
+* **traffic:** read how many flow series carry labels, not whether any do ([b627fb3](https://github.com/sophotechlabs/spinoza/commit/b627fb3a582b19264ebffc15420e44484549a777))
+
+
+### Miscellaneous
+
+* **frontend:** stop exporting a checks key only its own file uses ([62b8c94](https://github.com/sophotechlabs/spinoza/commit/62b8c947ba8e4ae8402827f3aeab7a098328a313))
+* **frontend:** stop exporting two helpers only their own file uses ([0acf655](https://github.com/sophotechlabs/spinoza/commit/0acf6550136d766576ee29de0dc008bcd6000905))
+
+
+### CI
+
+* **e2e:** run the browser suite on forgejo ([d825d23](https://github.com/sophotechlabs/spinoza/commit/d825d2382cd6105027eed3c51c90e5ad3e09d55b))
+* **hooks:** catch unused exports before the push instead of in CI ([f5da3fe](https://github.com/sophotechlabs/spinoza/commit/f5da3feb4a148f39ecc341328075c69f66870ac6))
+
+
+### Performance
+
+* **podcount:** keep the probe page a filtered count already paid for ([2ee7033](https://github.com/sophotechlabs/spinoza/commit/2ee703357f2bea00f1292814b6864ff95926a6cc))
+
+
+### Tests
+
+* **e2e:** drive flux, argo and a cluster at scale, and the paths behind a refusal ([129aaab](https://github.com/sophotechlabs/spinoza/commit/129aaab2b3f5e8f3197439075dba9678425fb8f5))
+* **e2e:** give the suite a real chart repository to read ([a7d5067](https://github.com/sophotechlabs/spinoza/commit/a7d506760de4f439447a3bcf29fc841d79fb20b8))
+* **e2e:** hand the harness the cluster name the recipe made ([1b1e890](https://github.com/sophotechlabs/spinoza/commit/1b1e89054fae1ae0dd44b8626d6503e369fa0ba6))
+* **panels:** pin the tab strip semantics every docked view renders through ([f6fe12b](https://github.com/sophotechlabs/spinoza/commit/f6fe12bc9ec4d48a944f7317e2c0bd548c98d444))
+
 ## [1.20.0](https://github.com/sophotechlabs/spinoza/compare/v1.19.0...v1.20.0) (2026-08-29)
 
 
