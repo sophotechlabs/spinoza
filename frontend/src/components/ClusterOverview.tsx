@@ -214,7 +214,12 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
     <div className="flex h-full min-h-0 flex-col text-xs">
       {notice}
       {data.error !== undefined && <LoadWarning message={data.error} />}
-      <div tabIndex={0} className="min-h-0 flex-1 overflow-auto p-3">
+      <div
+        role="group"
+        aria-label="Cluster overview"
+        tabIndex={0}
+        className="min-h-0 flex-1 overflow-auto p-3"
+      >
         <h2 className="mb-2 text-[11px] tracking-wide text-fg-muted uppercase">Cluster</h2>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <Tile label="Kubernetes" value={versionOf(data.version)} />

@@ -34,6 +34,22 @@ export default tseslint.config(
     },
     rules: {
       ...jsxA11y.flatConfigs.strict.rules,
+      'jsx-a11y/no-noninteractive-tabindex': ['error', { roles: ['tabpanel', 'group'] }],
+      'jsx-a11y/no-noninteractive-element-interactions': [
+        'error',
+        {
+          handlers: [
+            'onClick',
+            'onError',
+            'onLoad',
+            'onMouseDown',
+            'onMouseUp',
+            'onKeyPress',
+            'onKeyDown',
+            'onKeyUp',
+          ],
+        },
+      ],
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',

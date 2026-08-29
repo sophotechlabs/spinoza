@@ -158,7 +158,7 @@ function renderLayout(overrides: Partial<Parameters<typeof PanelLayout>[0]> = {}
 }
 
 function dockStrip(side: 'left' | 'right' | 'bottom'): HTMLElement {
-  return screen.getByRole('tablist', { name: `${side} dock` });
+  return screen.getByRole('group', { name: `${side} dock` });
 }
 
 const PANEL_TYPE = 'application/x-spinoza-panel';

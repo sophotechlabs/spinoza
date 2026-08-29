@@ -48,6 +48,10 @@ function parentOf(node: HTMLElement): HTMLElement {
   return parent;
 }
 
+function dockStrip(side: DockSide = 'right'): HTMLElement {
+  return screen.getByRole('group', { name: `${side} dock` });
+}
+
 describe('PanelHost', () => {
   it('renders one tab per docked panel', () => {
     renderHost();
@@ -123,7 +127,7 @@ describe('PanelHost', () => {
 
   it('accepts a panel dropped on the tab strip', () => {
     const { onMove } = renderHost({ side: 'bottom' });
-    const strip = parentOf(screen.getByRole('tab', { name: 'Overview' }));
+    const strip = dockStrip('bottom');
 
     fireEvent.dragOver(strip, { dataTransfer: dataTransfer({ [PANEL_TYPE]: 'metrics' }) });
     fireEvent.drop(strip, { dataTransfer: dataTransfer({ [PANEL_TYPE]: 'metrics' }) });
@@ -133,7 +137,7 @@ describe('PanelHost', () => {
 
   it('ignores a drag that carries something else', () => {
     const { onMove } = renderHost();
-    const strip = parentOf(screen.getByRole('tab', { name: 'Overview' }));
+    const strip = dockStrip();
 
     fireEvent.dragOver(strip, { dataTransfer: dataTransfer({ 'text/plain': 'hello' }) });
     fireEvent.drop(strip, { dataTransfer: dataTransfer({ 'text/plain': 'hello' }) });
@@ -143,7 +147,7 @@ describe('PanelHost', () => {
 
   it('clears the drop highlight when the drag leaves', () => {
     renderHost();
-    const strip = parentOf(screen.getByRole('tab', { name: 'Overview' }));
+    const strip = dockStrip();
 
     fireEvent.dragOver(strip, { dataTransfer: dataTransfer({ [PANEL_TYPE]: 'metrics' }) });
     expect(strip.className).toContain('bg-surface-active');
@@ -155,7 +159,7 @@ describe('PanelHost', () => {
 
   it('holds the drop highlight while the drag crosses a tab inside the strip', () => {
     renderHost();
-    const strip = parentOf(screen.getByRole('tab', { name: 'Overview' }));
+    const strip = dockStrip();
     const transfer = dataTransfer({ [PANEL_TYPE]: 'metrics' });
 
     fireEvent.dragEnter(strip, { dataTransfer: transfer });
@@ -171,7 +175,7 @@ describe('PanelHost', () => {
 
   it('ignores a dragenter carrying something else', () => {
     renderHost();
-    const strip = parentOf(screen.getByRole('tab', { name: 'Overview' }));
+    const strip = dockStrip();
 
     fireEvent.dragEnter(strip, { dataTransfer: dataTransfer({ 'text/plain': 'hello' }) });
 
@@ -194,7 +198,7 @@ describe('PanelHost', () => {
     const user = userEvent.setup();
     const { onMove } = renderHost();
     await user.click(screen.getByRole('button', { name: 'Hide the right dock' }));
-    const strip = parentOf(screen.getByRole('button', { name: 'Show the right dock' }));
+    const strip = screen.getByRole('group', { name: 'Collapsed right dock' });
 
     fireEvent.dragOver(strip, { dataTransfer: dataTransfer({ [PANEL_TYPE]: 'terminal' }) });
     fireEvent.drop(strip, { dataTransfer: dataTransfer({ [PANEL_TYPE]: 'terminal' }) });
@@ -419,7 +423,7 @@ describe('the dock tab contract', () => {
   it('names an empty dock so a drop target is still findable', () => {
     renderHost({ tabs: [], active: null });
 
-    expect(screen.getByRole('tablist', { name: 'Empty right dock' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Empty right dock' })).toBeInTheDocument();
     expect(screen.queryAllByRole('tab')).toHaveLength(0);
   });
 });

@@ -366,8 +366,10 @@ sast_excluded := 'go.lang.security.audit.net.cookie-missing-secure.cookie-missin
 sast:
     semgrep scan --config .semgrep --config p/golang --config p/typescript --config p/react --exclude-rule {{ sast_excluded }} --error --quiet
 
+# e2e/fixtures holds workloads written to be insecure so the checks have
+# something to find; scanning them fails the build on findings we put there.
 vulns:
-    trivy fs --exit-code 1 --scanners secret,misconfig .
+    trivy fs --exit-code 1 --scanners secret,misconfig --skip-dirs e2e/fixtures .
     osv-scanner scan source --recursive .
 
 workflows:
@@ -393,7 +395,7 @@ sbom:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p dist
-    syft scan dir:. --source-name spinoza --output cyclonedx-json=dist/sbom.cdx.json
+    syft scan dir:. --source-name spinoza --exclude './frontend/node_modules/**' --output cyclonedx-json=dist/sbom.cdx.json
     grype sbom:dist/sbom.cdx.json --fail-on medium
 
 commits:

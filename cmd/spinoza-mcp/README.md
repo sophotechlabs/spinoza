@@ -8,13 +8,13 @@ the app itself.
 
 ## Build
 
-```
+```sh
 go build -o spinoza-mcp ./cmd/spinoza-mcp
 ```
 
 ## Use it as a command
 
-```
+```sh
 spinoza-mcp tools                                   # what it offers
 spinoza-mcp call get_dashboard                      # run one tool
 spinoza-mcp call get_resource resource=deployments name=web namespace=prod
@@ -30,7 +30,7 @@ It speaks MCP over stdin and stdout, which is what local clients expect.
 
 Claude Code:
 
-```
+```sh
 claude mcp add spinoza -- /path/to/spinoza-mcp -context p-mk1
 ```
 
@@ -68,7 +68,7 @@ shape in their own config file:
 ## Flags
 
 | Flag | What it does |
-|---|---|
+| --- | --- |
 | `-context` | Which kubeconfig context to read. The current one when empty |
 | `-kubeconfig` | Which kubeconfig. The usual lookup rules when empty |
 | `-allow-write` | Offer the five tools that change the cluster |
