@@ -239,6 +239,49 @@ func TestDecodeRangeEmptyResult(t *testing.T) {
 	}
 }
 
+func TestDecodeRangeRefusesToAnswerForOneOfManySeries(t *testing.T) {
+	twoSeries := `{"status":"success","data":{"result":[
+		{"metric":{"pod":"a"},"values":[[1785434552,"0.028"]]},
+		{"metric":{"pod":"b"},"values":[[1785434552,"9.999"]]}
+	]}}`
+
+	_, err := decodeRange([]byte(twoSeries))
+
+	if err == nil {
+		t.Fatal("two series came back and the range answered as though there were one")
+	}
+	if !strings.Contains(err.Error(), "aggregate") {
+		t.Fatalf("error = %q, want it to say how to fix the query", err)
+	}
+}
+
+func TestDecodeRangeStillAnswersForASingleSeries(t *testing.T) {
+	oneSeries := `{"status":"success","data":{"result":[
+		{"metric":{"pod":"a"},"values":[[1785434552,"0.028"],[1785434612,"0.031"]]}
+	]}}`
+
+	points, err := decodeRange([]byte(oneSeries))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(points) != 2 {
+		t.Fatalf("points = %d, want both", len(points))
+	}
+}
+
+func TestTheQueriesThatUseRangeAggregateToOneSeries(t *testing.T) {
+	for name, query := range map[string]string{"cpu": cpuQuery, "memory": memoryQuery} {
+		t.Run(name, func(t *testing.T) {
+			if !strings.HasPrefix(query, "sum(") {
+				t.Fatalf(
+					"%s does not aggregate, so a pod with several containers would make "+
+						"the range refuse: %s", name, query,
+				)
+			}
+		})
+	}
+}
+
 func TestDecodeRangeRejectsAnError(t *testing.T) {
 	_, err := decodeRange([]byte(`{"status":"error","error":"parse error"}`))
 	if err == nil {

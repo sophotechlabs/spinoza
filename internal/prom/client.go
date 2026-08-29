@@ -334,6 +334,13 @@ func decodeRange(raw []byte) ([]api.MetricPoint, error) {
 	if len(body.Data.Result) == 0 {
 		return []api.MetricPoint{}, nil
 	}
+	if len(body.Data.Result) > 1 {
+		return nil, fmt.Errorf(
+			"the query matched %d series and a range answers with one; aggregate it, "+
+				"with sum() or max() over the labels you do not want",
+			len(body.Data.Result),
+		)
+	}
 	values := body.Data.Result[0].Values
 	points := make([]api.MetricPoint, 0, len(values))
 	for _, pair := range values {
