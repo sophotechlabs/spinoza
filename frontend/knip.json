@@ -2,6 +2,12 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": ["test/**/*.test.{ts,tsx}"],
   "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}"],
-  "ignoreExportsUsedInFile": { "interface": true, "type": true },
-  "ignoreDependencies": ["tailwindcss"]
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  },
+  "ignoreDependencies": ["tailwindcss"],
+  "ignoreIssues": {
+    "src/lib/types.ts": ["types"]
+  }
 }
