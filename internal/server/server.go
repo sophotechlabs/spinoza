@@ -26,15 +26,24 @@ type Elsewhere interface {
 	List(ctx context.Context, ref api.ContextRef, target api.ObjectRef) ([]*unstructured.Unstructured, error)
 }
 
+type Kubeconfigs interface {
+	AddKubeconfig(path string) error
+	RemoveKubeconfig(path string) error
+}
+
+type Guarded interface {
+	Protect(protected bool) error
+	Protected() bool
+}
+
 type Cluster interface {
 	Elsewhere
+	Kubeconfigs
+	Guarded
 	Manager() Backend
 	Contexts() api.ContextList
 	Use(ref api.ContextRef) error
-	AddKubeconfig(path string) error
-	RemoveKubeconfig(path string) error
-	Protect(protected bool) error
-	Protected() bool
+	ID() string
 }
 
 type FilePicker func(ctx context.Context) (string, error)
@@ -60,6 +69,8 @@ type Server struct {
 	watching   bool
 	updates    Updates
 	installer  Installs
+	past       History
+	now        func() time.Time
 	pingEvery  time.Duration
 }
 
@@ -73,6 +84,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		sessions:  map[*wsSession]struct{}{},
 		terminals: map[*websocket.Conn]struct{}{},
 		health:    assumedHealth(),
+		now:       time.Now,
 		pingEvery: defaultPingInterval,
 		views:     views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}

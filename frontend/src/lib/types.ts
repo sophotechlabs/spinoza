@@ -300,6 +300,7 @@ export const VIEWS = [
   'topology',
   'helm',
   'checks',
+  'history',
   'gitops',
   'flux-list',
   'flux-roles',
@@ -557,6 +558,27 @@ export interface ViewState {
 
 export interface ViewSwitch {
   switched: boolean;
+  reason?: string;
+}
+
+export interface HistoryEntry {
+  id: number;
+  at: string;
+  verb: string;
+  group?: string;
+  version?: string;
+  resource?: string;
+  kind?: string;
+  namespace?: string;
+  name: string;
+  detail?: string;
+  outcome: string;
+  message?: string;
+}
+
+export interface History {
+  entries: HistoryEntry[];
+  more?: boolean;
   reason?: string;
 }
 

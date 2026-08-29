@@ -201,3 +201,7 @@ func TestCountsCarryTheirReasonsThroughTheHandler(t *testing.T) {
 		t.Fatalf("errors = %v, want the reason carried to the browser", counts.Errors)
 	}
 }
+
+func (s *stubBackendCluster) ID() string {
+	return "https://p-mk1:6443"
+}

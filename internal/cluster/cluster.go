@@ -115,22 +115,22 @@ func (c *Cluster) Contexts() api.ContextList {
 		Current:     c.Current(),
 		Error:       c.unreached(),
 		Kubeconfigs: c.sources.List(),
-		Protection:  c.protection.Verdict(c.server()),
+		Protection:  c.protection.Verdict(c.ID()),
 	}
 }
 
-func (c *Cluster) server() string {
+func (c *Cluster) ID() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.host
 }
 
 func (c *Cluster) Protect(protected bool) error {
-	return c.protection.Set(c.server(), protected)
+	return c.protection.Set(c.ID(), protected)
 }
 
 func (c *Cluster) Protected() bool {
-	return c.protection.Verdict(c.server()) == api.ProtectionProtected
+	return c.protection.Verdict(c.ID()) == api.ProtectionProtected
 }
 
 func (c *Cluster) AddKubeconfig(path string) error {

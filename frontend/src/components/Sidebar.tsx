@@ -35,6 +35,7 @@ const TOP_VIEWS: GitopsEntry[] = [
   { view: 'topology', label: 'Topology' },
   { view: 'helm', label: 'Helm releases' },
   { view: 'checks', label: 'Cluster checks' },
+  { view: 'history', label: 'History' },
 ];
 
 const CLUSTER_CATEGORY = 'Cluster';

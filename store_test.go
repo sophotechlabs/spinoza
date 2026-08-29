@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sophotechlabs/spinoza/internal/history"
 	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
 )
 
@@ -110,5 +111,69 @@ func TestUnreadableSettingsStillLeaveAStore(t *testing.T) {
 	}
 	if store.On(settingsstore.NodeShellKey) {
 		t.Fatal("settings that cannot be read turned a node shell on")
+	}
+}
+
+func TestHistoryIsKeptInTheUsualPlace(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	store := historyStore(t.Context())
+	t.Cleanup(func() { _ = store.Close() })
+
+	if store.Reason() != "" {
+		t.Fatalf("reason = %q, want a store that records", store.Reason())
+	}
+	path, err := history.DefaultPath()
+	if err != nil {
+		t.Fatalf("path: %v", err)
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		t.Fatalf("the history file was not created at %s: %v", path, statErr)
+	}
+}
+
+func TestNowhereToKeepHistoryStillLeavesAStore(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	store := historyStore(t.Context())
+	t.Cleanup(func() { _ = store.Close() })
+
+	if store == nil {
+		t.Fatal("history with nowhere to live left no store at all")
+	}
+	if store.Reason() == "" {
+		t.Skip("this platform still names a config directory without HOME")
+	}
+	if err := store.Record(t.Context(), history.Entry{Name: "web"}); err != nil {
+		t.Fatalf("record: %v, want a quiet no-op", err)
+	}
+}
+
+func TestAHistoryFileThatCannotBeReadStillLeavesAStore(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	path, err := history.DefaultPath()
+	if err != nil {
+		t.Fatalf("path: %v", err)
+	}
+	if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o700); mkdirErr != nil {
+		t.Fatalf("mkdir: %v", mkdirErr)
+	}
+	if writeErr := os.WriteFile(path, []byte("not a database"), 0o600); writeErr != nil {
+		t.Fatalf("write: %v", writeErr)
+	}
+
+	store := historyStore(t.Context())
+	t.Cleanup(func() { _ = store.Close() })
+
+	if store == nil {
+		t.Fatal("a broken history file left no store at all")
+	}
+	if store.Reason() == "" {
+		t.Fatal("a broken history file was reported as recording")
 	}
 }

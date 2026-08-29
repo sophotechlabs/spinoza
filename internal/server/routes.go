@@ -78,6 +78,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/exec", s.handleExec, false},
 		{http.MethodGet, "/api/nodeshell/support", s.handleNodeShellSupport, false},
 		{http.MethodGet, "/api/nodeshell", s.handleNodeShell, false},
+		{http.MethodGet, "/api/history", s.readHistory, true},
+		{http.MethodDelete, "/api/history", s.clearHistory, true},
 		{http.MethodGet, "/api/view", s.readView, true},
 		{http.MethodPost, "/api/view/browser", s.toBrowser, true},
 		{http.MethodPost, "/api/view/desktop", s.toDesktop, true},

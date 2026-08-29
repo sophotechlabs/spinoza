@@ -97,6 +97,35 @@ type ViewSwitch struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
+const (
+	HistoryDone    = "done"
+	HistoryRefused = "refused"
+	HistoryFailed  = OutcomeFailed
+)
+
+const HistoryOff = "spinoza is not recording what it does"
+
+type HistoryEntry struct {
+	ID        int64  `json:"id"`
+	At        string `json:"at"`
+	Verb      string `json:"verb"`
+	Group     string `json:"group,omitempty"`
+	Version   string `json:"version,omitempty"`
+	Resource  string `json:"resource,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name"`
+	Detail    string `json:"detail,omitempty"`
+	Outcome   string `json:"outcome"`
+	Message   string `json:"message,omitempty"`
+}
+
+type History struct {
+	Entries []HistoryEntry `json:"entries"`
+	More    bool           `json:"more,omitempty"`
+	Reason  string         `json:"reason,omitempty"`
+}
+
 type Settings struct {
 	Values map[string]string `json:"values"`
 }

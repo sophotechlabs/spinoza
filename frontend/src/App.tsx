@@ -53,6 +53,7 @@ import FluxRoles from './components/FluxRoles';
 import ArgoApps from './components/ArgoApps';
 import ArgoList from './components/ArgoList';
 import Checks from './components/Checks';
+import History from './components/History';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
@@ -504,6 +505,9 @@ export default function App() {
   }
   if (route.view === 'checks') {
     mainArea = <Checks onOpen={openInTable} />;
+  }
+  if (route.view === 'history') {
+    mainArea = <History onOpen={remember} />;
   }
   if (route.view === 'gitops') {
     mainArea = (

@@ -711,3 +711,7 @@ func TestMoreIgnoresAFeedThatCannotBeWidened(t *testing.T) {
 type stubStoppable struct{}
 
 func (stubStoppable) Close() {}
+
+func (c *swappableCluster) ID() string {
+	return "https://swappable:6443"
+}

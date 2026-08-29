@@ -281,3 +281,7 @@ func TestAServerWithNoClusterHasNothingToReport(t *testing.T) {
 		t.Fatalf("health = %+v, want the benefit of the doubt before a cluster is picked", health)
 	}
 }
+
+func (noCluster) ID() string {
+	return ""
+}

@@ -23,11 +23,32 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, actionErr := s.manager().Action(r.Context(), req)
+	s.record(r, change{
+		verb:   string(req.Action),
+		ref:    req.Ref,
+		detail: actionDetail(req),
+		dryRun: req.DryRun,
+		err:    actionErr,
+	})
 	if actionErr != nil {
 		writeAPIError(w, actionErr)
 		return
 	}
 	writeJSON(w, result)
+}
+
+func actionDetail(req actions.Request) string {
+	if req.Action != actions.Scale {
+		return ""
+	}
+	return "to " + strconv.FormatInt(req.Replicas, 10) + replicaWord(req.Replicas)
+}
+
+func replicaWord(replicas int64) string {
+	if replicas == 1 {
+		return " replica"
+	}
+	return " replicas"
 }
 
 func guarded(req actions.Request) bool {
@@ -104,6 +125,7 @@ func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.Obj
 		return
 	}
 	detail, err := s.manager().ApplyObject(r.Context(), ref, doc)
+	s.record(r, change{verb: verbApply, ref: ref, kind: detail.Kind, err: err})
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -117,6 +139,7 @@ func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, ref api.Ob
 		return
 	}
 	err := s.manager().DeleteObject(r.Context(), ref)
+	s.record(r, change{verb: verbDelete, ref: ref, err: err})
 	if err != nil {
 		writeAPIError(w, err)
 		return

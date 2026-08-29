@@ -46,7 +46,7 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if action == helm.ActionUninstal {
 		removed, removeErr := s.manager().HelmUninstall(r.Context(), namespace, name)
-		s.finishHelmAction(w, removed, removeErr)
+		s.finishHelmAction(w, r, releaseChange(verbUninstall, namespace, name, "", false, removeErr), removed, removeErr)
 		return
 	}
 	if action != helm.ActionRollback {
@@ -59,7 +59,8 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rolled, rollErr := s.manager().HelmRollback(r.Context(), namespace, name, revision)
-	s.finishHelmAction(w, rolled, rollErr)
+	detail := "to revision " + strconv.FormatInt(revision, 10)
+	s.finishHelmAction(w, r, releaseChange(verbRollback, namespace, name, detail, false, rollErr), rolled, rollErr)
 }
 
 func (s *Server) handleHelmVersions(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +150,7 @@ func (s *Server) handleHelmInstall(w http.ResponseWriter, r *http.Request) {
 		CreateNamespace: dto.CreateNamespace,
 		DryRun:          dryRun,
 	})
-	s.finishHelmAction(w, result, installErr)
+	s.finishHelmAction(w, r, releaseChange(verbInstall, dto.Namespace, dto.Name, dto.Chart+" "+dto.Version, dryRun, installErr), result, installErr)
 }
 
 type helmUpgradeBody struct {
@@ -193,10 +194,28 @@ func (s *Server) handleHelmUpgrade(w http.ResponseWriter, r *http.Request) {
 		DryRun:    dryRun,
 	}
 	result, upgradeErr := s.manager().HelmUpgrade(r.Context(), req)
-	s.finishHelmAction(w, result, upgradeErr)
+	s.finishHelmAction(w, r, releaseChange(verbUpgrade, dto.Namespace, dto.Name, dto.Chart+" "+dto.Version, dryRun, upgradeErr), result, upgradeErr)
 }
 
-func (s *Server) finishHelmAction(w http.ResponseWriter, result api.HelmActionResult, err error) {
+func releaseChange(verb, namespace, name, detail string, dryRun bool, err error) change {
+	return change{
+		verb:   verb,
+		ref:    api.ObjectRef{Namespace: namespace, Name: name},
+		kind:   kindRelease,
+		detail: detail,
+		dryRun: dryRun,
+		err:    err,
+	}
+}
+
+func (s *Server) finishHelmAction(
+	w http.ResponseWriter,
+	r *http.Request,
+	made change,
+	result api.HelmActionResult,
+	err error,
+) {
+	s.record(r, made)
 	if err != nil {
 		writeAPIError(w, err)
 		return

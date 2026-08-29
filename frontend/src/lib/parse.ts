@@ -19,6 +19,8 @@ import type {
   FluxOverview,
   FluxSync,
   FluxUsage,
+  History,
+  HistoryEntry,
   FluxGroup,
   FluxResource,
   Graph,
@@ -912,5 +914,31 @@ export function parseHelmReleases(body: unknown): HelmReleases {
   return {
     releases: listOf(item.releases, parseHelmRelease),
     error: optionalString(item.error),
+  };
+}
+
+function parseHistoryEntry(item: Record<string, unknown>): HistoryEntry {
+  return {
+    id: asNumber(item.id),
+    at: asString(item.at),
+    verb: asString(item.verb),
+    group: optionalString(item.group),
+    version: optionalString(item.version),
+    resource: optionalString(item.resource),
+    kind: optionalString(item.kind),
+    namespace: optionalString(item.namespace),
+    name: asString(item.name),
+    detail: optionalString(item.detail),
+    outcome: asString(item.outcome),
+    message: optionalString(item.message),
+  };
+}
+
+export function parseHistory(body: unknown): History {
+  const item = asRecord(body);
+  return {
+    entries: listOf(item.entries, parseHistoryEntry),
+    more: optionalBoolean(item.more),
+    reason: optionalString(item.reason),
   };
 }

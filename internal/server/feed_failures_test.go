@@ -373,3 +373,7 @@ func TestALineHeldBackFromTheLastBatchIsHandedOverFirst(t *testing.T) {
 		t.Fatalf("line = %+v, want the one that was held back", line)
 	}
 }
+
+func (b *brokenCluster) ID() string {
+	return "https://broken:6443"
+}

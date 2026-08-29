@@ -574,3 +574,7 @@ func TestProtectionThatCannotBeSavedIsReported(t *testing.T) {
 		t.Fatalf("body = %s, want the reason", body)
 	}
 }
+
+func (s *stubCluster) ID() string {
+	return "https://" + s.current.Name + ":6443"
+}

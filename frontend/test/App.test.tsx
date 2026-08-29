@@ -266,6 +266,26 @@ vi.mock('../src/components/Traffic', () => ({
   default: () => <div data-testid="traffic-graph">traffic</div>,
 }));
 
+vi.mock('../src/components/History', () => ({
+  default: ({ onOpen }: { onOpen: (ref: ObjectRef) => void }) => (
+    <button
+      type="button"
+      data-testid="history"
+      onClick={() => {
+        onOpen({
+          group: 'apps',
+          version: 'v1',
+          resource: 'deployments',
+          namespace: 'apps',
+          name: 'api',
+        });
+      }}
+    >
+      select-history-object
+    </button>
+  ),
+}));
+
 vi.mock('../src/components/ArgoList', () => ({
   default: ({ onSelect }: { onSelect: (ref: ObjectRef) => void }) => (
     <button
@@ -2105,6 +2125,18 @@ describe('finding your way in by keyboard', () => {
     await user.click(screen.getByRole('button', { name: 'select-issue' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('deployments:web/api');
+  });
+
+  it('opens history from the sidebar and targets the inspector from it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'History' }));
+    expect(await screen.findByTestId('history')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'select-history-object' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('deployments:apps/api');
   });
 
   it('opens the traffic graph from the sidebar', async () => {

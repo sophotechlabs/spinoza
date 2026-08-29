@@ -131,6 +131,9 @@ func runDesktop() error {
 	srv := server.New(clusters, assets, token)
 	srv.UseProfiler(opts.pprof)
 	srv.UseSettings(store)
+	past := historyStore(ctx)
+	defer func() { _ = past.Close() }()
+	srv.UseHistory(past)
 	srv.UseUpdates(updateChecker())
 	srv.UseLocalShell(func(cols, rows uint16) (server.LocalShell, error) {
 		session, err := localshell.Start(context.Background(), localshell.Options{

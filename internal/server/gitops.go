@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
@@ -28,8 +29,23 @@ func (s *Server) gitopsAppGraph(w http.ResponseWriter, r *http.Request, ref api.
 	writeJSON(w, graph)
 }
 
+func argoDetail(req argocd.Request) string {
+	if req.Action == argocd.Rollback {
+		return "to revision " + strconv.FormatInt(req.Revision, 10)
+	}
+	if len(req.Resources) > 0 {
+		return strconv.Itoa(len(req.Resources)) + " selected resources"
+	}
+	if req.Prune {
+		return "with prune"
+	}
+	return ""
+}
+
 func (s *Server) fluxAction(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	result, err := s.manager().FluxAction(r.Context(), ref, flux.Action(r.URL.Query().Get("action")))
+	action := flux.Action(r.URL.Query().Get("action"))
+	result, err := s.manager().FluxAction(r.Context(), ref, action)
+	s.record(r, change{verb: string(action), ref: ref, err: err})
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -75,6 +91,13 @@ func (s *Server) argoAction(w http.ResponseWriter, r *http.Request, ref api.Obje
 		return
 	}
 	result, actionErr := s.manager().ArgoAction(r.Context(), ref, req)
+	s.record(r, change{
+		verb:   string(req.Action),
+		ref:    ref,
+		detail: argoDetail(req),
+		dryRun: dto.DryRun,
+		err:    actionErr,
+	})
 	if actionErr != nil {
 		writeAPIError(w, actionErr)
 		return

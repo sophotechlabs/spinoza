@@ -36,6 +36,20 @@ func execRequest(r *http.Request) exec.Request {
 	}
 }
 
+func containerDetail(container string) string {
+	if container == "" {
+		return ""
+	}
+	return "into " + container
+}
+
+func debugDetail(req debugcontainer.Request) string {
+	if req.Profile == "" {
+		return containerDetail(req.Container)
+	}
+	return "with the " + req.Profile + " profile"
+}
+
 func (s *Server) handleExecSupport(w http.ResponseWriter, r *http.Request) {
 	req := execRequest(r)
 	if req.Namespace == "" || req.Pod == "" {
@@ -73,6 +87,13 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session, err := s.manager().StartDebug(r.Context(), req)
+	s.record(r, change{
+		verb:   verbDebug,
+		ref:    podRef(req.Namespace, req.Pod),
+		kind:   kindPod,
+		detail: debugDetail(req),
+		err:    err,
+	})
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -109,6 +130,7 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 
 	conn := &execConn{conn: socket, ctx: ctx}
 	shell, startErr := s.manager().StartNodeShell(ctx, node)
+	s.record(r, change{verb: verbNodeShell, ref: nodeRef(node), kind: kindNode, err: startErr})
 	if startErr != nil {
 		_ = conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
 		return
@@ -161,6 +183,13 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 
 	conn := &execConn{conn: socket, ctx: ctx}
 	session, startErr := s.manager().StartExec(ctx, req, conn)
+	s.record(r, change{
+		verb:   verbExec,
+		ref:    podRef(req.Namespace, req.Pod),
+		kind:   kindPod,
+		detail: containerDetail(req.Container),
+		err:    startErr,
+	})
 	if startErr != nil {
 		_ = conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
 		return
