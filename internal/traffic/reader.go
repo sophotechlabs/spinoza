@@ -130,7 +130,7 @@ func (r *Reader) read(ctx context.Context, at time.Time) (reading, error) {
 		if err != nil {
 			return reading{}, err
 		}
-		if anyLabelled(entry, samples) {
+		if anyLabeled(entry, samples) {
 			return reading{mesh: entry, samples: samples, state: ready}, nil
 		}
 		entryState, err := r.probe(bounded, entry, at)
@@ -152,20 +152,37 @@ func (r *Reader) probe(ctx context.Context, entry mesh, at time.Time) (state, er
 	if err != nil {
 		return missing, err
 	}
-	if len(labeled) > 0 {
-		return ready, nil
-	}
 	present, err := r.prom.Instant(ctx, entry.present, at)
 	if err != nil {
 		return missing, err
 	}
-	if len(present) > 0 {
-		return unlabeled, nil
+	carrying := seriesCount(labeled)
+	total := max(seriesCount(present), carrying)
+	if total == 0 {
+		return missing, nil
 	}
-	return missing, nil
+	if mostlyLabeled(carrying, total) {
+		return ready, nil
+	}
+	return unlabeled, nil
 }
 
-func anyLabelled(entry mesh, samples []prom.Sample) bool {
+func seriesCount(samples []prom.Sample) float64 {
+	total := 0.0
+	for _, sample := range samples {
+		total += sample.Value
+	}
+	return total
+}
+
+func mostlyLabeled(labeled, present float64) bool {
+	if labeled == 0 {
+		return false
+	}
+	return labeled*2 > present
+}
+
+func anyLabeled(entry mesh, samples []prom.Sample) bool {
 	for _, sample := range samples {
 		_, ok := edgeEnds(entry, sample)
 		if ok {

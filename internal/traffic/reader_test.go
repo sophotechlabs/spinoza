@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,7 +169,7 @@ func TestGraphAndSupportSayWhatToConfigure(t *testing.T) {
 	}
 }
 
-func TestLabelledButIdleIsAvailable(t *testing.T) {
+func TestLabeledButIdleIsAvailable(t *testing.T) {
 	querier := &stubQuerier{answers: map[string][]prom.Sample{
 		cilium.labeled: counted(4),
 	}}
@@ -471,4 +472,61 @@ type contextQuerier struct{}
 
 func (contextQuerier) Instant(ctx context.Context, _ string, _ time.Time) ([]prom.Sample, error) {
 	return nil, ctx.Err()
+}
+
+func TestAClusterMidRolloutIsNotCalledReady(t *testing.T) {
+	querier := &stubQuerier{answers: map[string][]prom.Sample{
+		cilium.present: counted(302),
+		cilium.labeled: counted(12),
+	}}
+	reader := New(querier)
+
+	support := reader.Support(context.Background(), at())
+
+	if support.Available {
+		t.Fatal(
+			"12 labeled series out of 302 was called ready; one restarted agent would draw " +
+				"a near-empty graph with nothing saying why",
+		)
+	}
+	if !strings.Contains(support.Reason, "labelsContext") {
+		t.Fatalf("reason = %q, want it to name the fix", support.Reason)
+	}
+}
+
+func TestAClusterThatFinishedItsRolloutIsReady(t *testing.T) {
+	querier := &stubQuerier{answers: map[string][]prom.Sample{
+		cilium.present: counted(302),
+		cilium.labeled: counted(195),
+	}}
+	reader := New(querier)
+
+	support := reader.Support(context.Background(), at())
+
+	if !support.Available {
+		t.Fatalf(
+			"195 of 302 series carry workload labels, which is what p-mk2 answered once its "+
+				"agent restarted, and it was reported unavailable: %q", support.Reason,
+		)
+	}
+}
+
+func TestFlowsWithNoLabelsAtAllStaySeparateFromNoFlows(t *testing.T) {
+	unlabeled := &stubQuerier{answers: map[string][]prom.Sample{
+		cilium.present: counted(12),
+	}}
+	nothing := &stubQuerier{answers: map[string][]prom.Sample{}}
+
+	first := New(unlabeled).Support(context.Background(), at())
+	second := New(nothing).Support(context.Background(), at())
+
+	if first.Available || second.Available {
+		t.Fatal("a cluster with no workload labels was reported available")
+	}
+	if first.Reason == second.Reason {
+		t.Fatalf(
+			"a cluster exporting unlabeled flows and one exporting none read the same: %q",
+			first.Reason,
+		)
+	}
 }
