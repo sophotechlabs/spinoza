@@ -8,6 +8,11 @@ import { useLogsStore } from '../../src/store/logs';
 import { useContextsStore } from '../../src/store/contexts';
 import { useClusterHealthStore } from '../../src/store/clusterHealth';
 import { makeColumns, makeDescriptor, makeRow } from '../helpers';
+import { setActiveCluster } from '../../src/lib/cluster';
+
+const mk1 = 'https://p-mk1:6443';
+
+const mk2 = 'https://p-mk2:6443';
 
 async function flushDeltas(): Promise<void> {
   await act(async () => {
@@ -1681,5 +1686,104 @@ describe('the server saying whether the cluster answers', () => {
     say(socket, false, 'gone');
 
     expect(useClusterHealthStore.getState().reachable).toBe(false);
+  });
+});
+
+describe('which cluster a subscription is for', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    resetStore();
+  });
+
+  afterEach(() => {
+    setActiveCluster('');
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    resetStore();
+  });
+
+  it('says nothing about the cluster while only one is open', () => {
+    const socket = openFeedFor('main');
+
+    expect(sentMessages(socket)[0]).not.toHaveProperty('cluster');
+  });
+
+  it('names the cluster the window is looking at', () => {
+    setActiveCluster(mk2);
+
+    const socket = openFeedFor('main');
+
+    expect(sentMessages(socket)[0]).toMatchObject({ subId: 'main', cluster: mk2 });
+  });
+
+  it('names the cluster on a log stream too', () => {
+    setActiveCluster(mk2);
+    const { result } = renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      result.current.subscribeLogs('l1', logRequest);
+    });
+
+    expect(sentMessages(socket)[0]).toMatchObject({ subId: 'l1', cluster: mk2 });
+  });
+
+  it('replays a subscription on the cluster it was made for, not the one now in front', () => {
+    vi.useFakeTimers();
+    setActiveCluster(mk2);
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+    });
+    act(() => {
+      result.current.subscribe('main', descriptor, 'prod', []);
+    });
+    setActiveCluster(mk1);
+
+    act(() => {
+      first.onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    const second = FakeWebSocket.instances[1];
+    act(() => {
+      openSocket(second);
+    });
+
+    expect(sentMessages(second)[0]).toMatchObject({ subId: 'main', cluster: mk2 });
+  });
+
+  it('replays a log stream on the cluster it was opened for', () => {
+    vi.useFakeTimers();
+    setActiveCluster(mk2);
+    const { result } = renderHook(() => useResourceFeed());
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(first);
+    });
+    act(() => {
+      result.current.subscribeLogs('l1', logRequest);
+    });
+    setActiveCluster(mk1);
+
+    act(() => {
+      first.onclose?.(new CloseEvent('close'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    const second = FakeWebSocket.instances[1];
+    act(() => {
+      openSocket(second);
+    });
+
+    expect(sentMessages(second)[0]).toMatchObject({ subId: 'l1', cluster: mk2 });
   });
 });

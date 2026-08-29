@@ -104,11 +104,22 @@ func clusterOf(r *http.Request) string {
 }
 
 func (s *Server) managerFor(r *http.Request) Backend {
-	return s.managerOf(clusterOf(r))
+	backend, _ := s.lookup(clusterOf(r))
+	return backend
 }
 
 func (s *Server) managerOf(id string) Backend {
 	return s.cluster.Manager(id)
+}
+
+type clusterLookup func(id string) (Backend, string)
+
+func (s *Server) lookup(id string) (Backend, string) {
+	on := id
+	if on == "" {
+		on = s.cluster.ID()
+	}
+	return s.managerOf(on), on
 }
 
 func (s *Server) UseFilePicker(picker FilePicker) {

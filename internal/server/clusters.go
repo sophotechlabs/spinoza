@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -16,6 +17,13 @@ const terminalDrain = 20 * time.Second
 const drainStep = 20 * time.Millisecond
 
 var errNoClusterNamed = errors.New("cluster is required")
+
+func notOpen(id string) error {
+	if id == "" {
+		return fmt.Errorf("%w: spinoza has no cluster; pick a context that answers", api.ErrNotOpen)
+	}
+	return fmt.Errorf("%w: %s", api.ErrNotOpen, id)
+}
 
 func (s *Server) listClusters(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.clusterList())
@@ -69,6 +77,7 @@ func (s *Server) closeCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.drainTerminals(r.Context(), id)
+	s.dropSubscriptionsOn(id)
 	err := s.cluster.Close(id)
 	if err != nil {
 		writeAPIError(w, err)

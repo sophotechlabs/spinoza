@@ -249,6 +249,7 @@ export type ClientMsg =
   | {
       type: 'subscribe';
       subId: string;
+      cluster?: string;
       group: string;
       version: string;
       resource: string;
@@ -261,6 +262,7 @@ export type ClientMsg =
   | {
       type: 'logs-subscribe';
       subId: string;
+      cluster?: string;
       namespace: string;
       name: string;
       container: string;
@@ -289,7 +291,7 @@ export type ServerMsg =
   | { type: 'log'; subId: string; lines: string[]; source?: string }
   | { type: 'log-open'; subId: string; attached: number; matched: number }
   | { type: 'log-end'; subId: string }
-  | { type: 'context'; subId: string; context: string }
+  | { type: 'context'; subId: string; cluster?: string; context: string }
   | { type: 'cluster'; subId: string; cluster?: string; reachable: boolean; reason?: string }
   | { type: 'error'; subId: string; message: string };
 

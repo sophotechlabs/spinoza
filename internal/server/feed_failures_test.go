@@ -331,8 +331,8 @@ func TestComparingAnObjectRawSkipsTheParsing(t *testing.T) {
 
 func TestABatchForAReplacedSubscriptionIsNotWritten(t *testing.T) {
 	sess := &wsSession{ctx: t.Context(), tables: map[string]*entry{}, logs: map[string]*entry{}}
-	gen := sess.claim(tables, "s1")
-	sess.claim(tables, "s1")
+	gen := sess.claim(tables, "s1", mk1)
+	sess.claim(tables, "s1", mk1)
 
 	events := make(chan resources.Event)
 	close(events)

@@ -1,4 +1,5 @@
 import { expireSession } from '../store/session';
+import { onCluster } from './cluster';
 
 export const REQUEST_TIMEOUT_MS = 15000;
 export const SLOW_REQUEST_TIMEOUT_MS = 120000;
@@ -58,7 +59,10 @@ export async function request(url: string, options: RequestOptions = {}): Promis
     limit = timeoutMs;
   }
   try {
-    const response = await fetch(url, { ...withToken(init), signal: AbortSignal.timeout(limit) });
+    const response = await fetch(onCluster(url), {
+      ...withToken(init),
+      signal: AbortSignal.timeout(limit),
+    });
     if (response.status === UNAUTHORIZED) {
       expireSession();
     }

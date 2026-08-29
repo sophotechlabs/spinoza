@@ -60,6 +60,7 @@ CheckReport.Error error,omitempty string
 CheckReport.Groups groups []CheckGroup
 CheckReport.Objects objects []CheckObject
 CheckReport.Scanned scanned int
+ClientMsg.Cluster cluster,omitempty string
 ClientMsg.Container container string
 ClientMsg.Filters filters,omitempty []RowFilter
 ClientMsg.Follow follow bool
@@ -103,6 +104,7 @@ ContainerState.Ready ready bool
 ContainerState.Reason reason,omitempty string
 ContainerState.Restarts restarts int64
 ContainerState.State state string
+ContextChanged.Cluster cluster,omitempty string
 ContextChanged.Context context string
 ContextChanged.Type type string
 ContextList.Current current ContextRef

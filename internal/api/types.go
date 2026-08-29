@@ -633,6 +633,7 @@ type RowFilter struct {
 type ClientMsg struct {
 	Type      string      `json:"type"`
 	SubID     string      `json:"subId"`
+	Cluster   string      `json:"cluster,omitempty"`
 	Group     string      `json:"group"`
 	Version   string      `json:"version"`
 	Resource  string      `json:"resource"`
@@ -676,6 +677,7 @@ type ClusterHealth struct {
 
 type ContextChanged struct {
 	Type    string `json:"type"`
+	Cluster string `json:"cluster,omitempty"`
 	Context string `json:"context"`
 }
 

@@ -10,6 +10,7 @@ import { contextAnnounced } from './contexts';
 import { useClusterHealthStore } from '../store/clusterHealth';
 import { wsURL } from './wsBase';
 import { viewKind } from './view';
+import { activeCluster } from './cluster';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -28,6 +29,12 @@ interface Subscription {
   namespace: string;
   limit: number;
   filters: Chip[];
+  cluster: string;
+}
+
+interface LogSubscription {
+  request: LogRequest;
+  cluster: string;
 }
 
 export interface ResourceFeed {
@@ -51,8 +58,12 @@ const MAX_BACKOFF_MS = 5000;
 const OPEN_STATE = 1;
 export const DELTA_FLUSH_MS = 100;
 
+type SubscribeMsg = Extract<ClientMsg, { type: 'subscribe' }>;
+
+type LogsSubscribeMsg = Extract<ClientMsg, { type: 'logs-subscribe' }>;
+
 function subscribeMsg(subId: string, sub: Subscription): ClientMsg {
-  return {
+  const msg: SubscribeMsg = {
     type: 'subscribe',
     subId,
     group: sub.descriptor.group,
@@ -62,10 +73,15 @@ function subscribeMsg(subId: string, sub: Subscription): ClientMsg {
     limit: sub.limit,
     filters: sub.filters,
   };
+  if (sub.cluster !== '') {
+    msg.cluster = sub.cluster;
+  }
+  return msg;
 }
 
-function logsMsg(subId: string, request: LogRequest): ClientMsg {
-  return {
+function logsMsg(subId: string, held: LogSubscription): ClientMsg {
+  const request = held.request;
+  const msg: LogsSubscribeMsg = {
     type: 'logs-subscribe',
     subId,
     namespace: request.namespace,
@@ -77,6 +93,10 @@ function logsMsg(subId: string, request: LogRequest): ClientMsg {
     version: request.version,
     resource: request.resource,
   };
+  if (held.cluster !== '') {
+    msg.cluster = held.cluster;
+  }
+  return msg;
 }
 
 function send(socket: WebSocket, msg: ClientMsg): void {
@@ -173,7 +193,7 @@ export function useResourceFeed(): ResourceFeed {
   const [attempt, setAttempt] = useState(0);
   const socketRef = useRef<WebSocket | null>(null);
   const subsRef = useRef<Map<string, Subscription>>(new Map());
-  const logSubsRef = useRef<Map<string, LogRequest>>(new Map());
+  const logSubsRef = useRef<Map<string, LogSubscription>>(new Map());
   const reconnectRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -268,9 +288,9 @@ export function useResourceFeed(): ResourceFeed {
       for (const [subId, sub] of subsRef.current) {
         send(socket, subscribeMsg(subId, sub));
       }
-      for (const [subId, request] of logSubsRef.current) {
+      for (const [subId, held] of logSubsRef.current) {
         logs.resumeStream(subId);
-        send(socket, logsMsg(subId, request));
+        send(socket, logsMsg(subId, held));
       }
     }
 
@@ -435,7 +455,13 @@ export function useResourceFeed(): ResourceFeed {
 
   const subscribe = useCallback(
     (subId: string, descriptor: ResourceDescriptor, namespace: string, filters: Chip[]) => {
-      const sub: Subscription = { descriptor, namespace, limit: 0, filters };
+      const sub: Subscription = {
+        descriptor,
+        namespace,
+        limit: 0,
+        filters,
+        cluster: activeCluster(),
+      };
       subsRef.current.set(subId, sub);
       const socket = socketRef.current;
       if (canSend(socket)) {
@@ -467,11 +493,12 @@ export function useResourceFeed(): ResourceFeed {
   }, []);
 
   const subscribeLogs = useCallback((subId: string, request: LogRequest) => {
-    logSubsRef.current.set(subId, request);
+    const held: LogSubscription = { request, cluster: activeCluster() };
+    logSubsRef.current.set(subId, held);
     useLogsStore.getState().startStream(subId);
     const socket = socketRef.current;
     if (canSend(socket)) {
-      send(socket, logsMsg(subId, request));
+      send(socket, logsMsg(subId, held));
     }
   }, []);
 

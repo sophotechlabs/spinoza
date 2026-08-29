@@ -75,6 +75,7 @@ type stoppable interface {
 type entry struct {
 	resource stoppable
 	gen      uint64
+	cluster  string
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +92,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	sess := &wsSession{
 		conn:   conn,
 		ctx:    ctx,
+		lookup: s.lookup,
 		tables: map[string]*entry{},
 		logs:   map[string]*entry{},
 	}
@@ -100,8 +102,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.views.opened(kind)
 	defer s.views.closed(kind)
 	defer s.forget(sess)
-	sess.mgr = s.managerFor(r)
-	sess.write(ctx, api.ContextChanged{Type: "context", Context: s.cluster.Contexts().Current.Name})
+	sess.write(ctx, s.contextFrame())
 	sess.write(ctx, s.clusterHealth())
 	s.watchCluster(ctx)
 
@@ -118,7 +119,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 type wsSession struct {
 	conn    *websocket.Conn
 	ctx     context.Context
-	mgr     Backend
+	lookup  clusterLookup
 	mu      sync.Mutex
 	tables  map[string]*entry
 	logs    map[string]*entry
@@ -133,12 +134,12 @@ func (sess *wsSession) entriesOf(which feed) map[string]*entry {
 	return sess.tables
 }
 
-func (sess *wsSession) claim(which feed, subID string) uint64 {
+func (sess *wsSession) claim(which feed, subID, cluster string) uint64 {
 	sess.mu.Lock()
 	previous, existed := sess.entriesOf(which)[subID]
 	sess.nextGen++
 	gen := sess.nextGen
-	sess.entriesOf(which)[subID] = &entry{gen: gen}
+	sess.entriesOf(which)[subID] = &entry{gen: gen, cluster: cluster}
 	sess.mu.Unlock()
 	if existed {
 		stop(previous)
@@ -226,8 +227,14 @@ func (sess *wsSession) handle(msg api.ClientMsg) {
 }
 
 func (sess *wsSession) subscribe(msg api.ClientMsg) {
-	gen := sess.claim(tables, msg.SubID)
-	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(msg, gen) })
+	backend, on := sess.lookup(msg.Cluster)
+	gen := sess.claim(tables, msg.SubID, on)
+	if backend == nil {
+		sess.failCurrent(tables, msg.SubID, gen, notOpen(msg.Cluster))
+		sess.drop(tables, msg.SubID)
+		return
+	}
+	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(backend, msg, gen) })
 }
 
 type resizable interface {
@@ -248,8 +255,8 @@ func (sess *wsSession) more(msg api.ClientMsg) {
 	sub.SetLimit(msg.Limit)
 }
 
-func (sess *wsSession) buildSub(msg api.ClientMsg, gen uint64) {
-	sub, err := sess.mgr.Subscribe(
+func (sess *wsSession) buildSub(backend Backend, msg api.ClientMsg, gen uint64) {
+	sub, err := backend.Subscribe(
 		sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit, msg.Filters,
 	)
 	if err != nil {
@@ -370,17 +377,23 @@ func drainEvents(events <-chan resources.Event) {
 }
 
 func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
-	gen := sess.claim(streams, msg.SubID)
-	safe.Go("opening the log stream "+msg.SubID, func() { sess.buildLogs(msg, gen) })
+	backend, on := sess.lookup(msg.Cluster)
+	gen := sess.claim(streams, msg.SubID, on)
+	if backend == nil {
+		sess.failCurrent(streams, msg.SubID, gen, notOpen(msg.Cluster))
+		sess.drop(streams, msg.SubID)
+		return
+	}
+	safe.Go("opening the log stream "+msg.SubID, func() { sess.buildLogs(backend, msg, gen) })
 }
 
-func (sess *wsSession) buildLogs(msg api.ClientMsg, gen uint64) {
-	selector, selErr := sess.selectorFor(msg)
+func (sess *wsSession) buildLogs(backend Backend, msg api.ClientMsg, gen uint64) {
+	selector, selErr := sess.selectorFor(backend, msg)
 	if selErr != nil {
 		sess.failCurrent(streams, msg.SubID, gen, selErr)
 		return
 	}
-	stream, err := sess.mgr.Logs(sess.ctx, logs.Request{
+	stream, err := backend.Logs(sess.ctx, logs.Request{
 		Namespace: msg.Namespace,
 		Name:      msg.Name,
 		Container: msg.Container,
@@ -400,11 +413,11 @@ func (sess *wsSession) buildLogs(msg api.ClientMsg, gen uint64) {
 	sess.relayLogs(msg.SubID, gen, stream)
 }
 
-func (sess *wsSession) selectorFor(msg api.ClientMsg) (string, error) {
+func (sess *wsSession) selectorFor(backend Backend, msg api.ClientMsg) (string, error) {
 	if msg.Resource == "" || msg.Resource == "pods" {
 		return "", nil
 	}
-	return sess.mgr.PodSelector(sess.ctx, api.ObjectRef{
+	return backend.PodSelector(sess.ctx, api.ObjectRef{
 		Group:     msg.Group,
 		Version:   msg.Version,
 		Resource:  msg.Resource,
@@ -606,10 +619,42 @@ func (s *Server) forgetExec(conn *websocket.Conn) {
 	delete(s.terminals, conn)
 }
 
+func (s *Server) contextFrame() api.ContextChanged {
+	return api.ContextChanged{
+		Type:    "context",
+		Cluster: s.cluster.ID(),
+		Context: s.cluster.Contexts().Current.Name,
+	}
+}
+
 func (s *Server) announceContext() {
-	msg := api.ContextChanged{Type: "context", Context: s.cluster.Contexts().Current.Name}
+	msg := s.contextFrame()
 	for _, sess := range s.openSessions() {
 		sess.write(sess.ctx, msg)
+	}
+}
+
+func (s *Server) dropSubscriptionsOn(cluster string) {
+	for _, sess := range s.openSessions() {
+		sess.dropOn(cluster)
+	}
+}
+
+func (sess *wsSession) dropOn(cluster string) {
+	sess.mu.Lock()
+	gone := make([]*entry, 0, len(sess.tables)+len(sess.logs))
+	for _, which := range []feed{tables, streams} {
+		for subID, held := range sess.entriesOf(which) {
+			if held.cluster != cluster {
+				continue
+			}
+			gone = append(gone, held)
+			delete(sess.entriesOf(which), subID)
+		}
+	}
+	sess.mu.Unlock()
+	for _, held := range gone {
+		stop(held)
 	}
 }
 

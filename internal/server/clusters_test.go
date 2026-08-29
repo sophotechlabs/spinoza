@@ -34,6 +34,9 @@ type fleet struct {
 func (f *fleet) Manager(id string) Backend {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if id == "" {
+		id = f.active
+	}
 	return f.backends[id]
 }
 
