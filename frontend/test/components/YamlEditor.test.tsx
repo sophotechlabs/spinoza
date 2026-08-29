@@ -131,12 +131,14 @@ describe('YamlEditor', () => {
     );
 
     expect(screen.getByTestId('theme')).toHaveTextContent('spinoza-solarized');
-    expect(defineEditorTheme).toHaveBeenCalledWith({
-      name: 'spinoza-solarized',
-      base: 'light',
-      background: '#fdf6e3',
-      foreground: '#657b83',
-    });
+    expect(defineEditorTheme).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'spinoza-solarized',
+        base: 'light',
+        background: '#fdf6e3',
+        foreground: '#657b83',
+      }),
+    );
 
     act(() => {
       useThemeStore.getState().removeTheme('solarized');
@@ -155,6 +157,8 @@ describe('YamlEditor', () => {
       base: 'dark',
       background: '#0a0a0a',
       foreground: '#d4d4d4',
+      colors: {},
+      rules: [],
     });
   });
 });

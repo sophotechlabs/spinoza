@@ -114,4 +114,82 @@ describe('the colours monaco gets for a theme', () => {
 
     expect(spec.background).toBe('#101010');
   });
+
+  it('leaves the editor chrome to monaco when the theme sets no tokens', () => {
+    const spec = editorTheme({ id: 'dark', name: 'Dark', base: 'dark' });
+
+    expect(spec.colors).toEqual({});
+    expect(spec.rules).toEqual([]);
+  });
+
+  it('paints the line numbers and gutter from the tokens the theme sets', () => {
+    const spec = editorTheme({
+      id: 'nordish',
+      name: 'Nordish',
+      base: 'dark',
+      tokens: {
+        surface: '#2e3440',
+        'surface-raised': '#3b4252',
+        fg: '#e5e9f0',
+        'fg-strong': '#eceff4',
+        'fg-muted': '#b8c3d4',
+      },
+    });
+
+    expect(spec.colors['editorLineNumber.foreground']).toBe('#b8c3d4');
+    expect(spec.colors['editorLineNumber.activeForeground']).toBe('#eceff4');
+    expect(spec.colors['editorGutter.background']).toBe('#2e3440');
+    expect(spec.colors['editorWidget.background']).toBe('#3b4252');
+  });
+
+  it('colours the syntax from the palette the theme already tuned', () => {
+    const spec = editorTheme({
+      id: 'nordish',
+      name: 'Nordish',
+      base: 'dark',
+      tokens: {
+        surface: '#2e3440',
+        fg: '#e5e9f0',
+        'ansi-green': '#a3be8c',
+        'ansi-blue': '#81a1c1',
+      },
+    });
+
+    expect(spec.rules).toContainEqual({ token: 'string', foreground: 'a3be8c' });
+    expect(spec.rules).toContainEqual({ token: 'keyword', foreground: '81a1c1' });
+  });
+
+  it('refuses a token that would be unreadable and uses the foreground instead', () => {
+    const spec = editorTheme({
+      id: 'dim',
+      name: 'Dim',
+      base: 'dark',
+      tokens: { surface: '#2e3440', fg: '#e5e9f0', 'fg-muted': '#3a4050' },
+    });
+
+    expect(spec.colors['editorLineNumber.foreground']).toBe('#e5e9f0');
+  });
+
+  it('skips a token that is not a colour rather than handing monaco nonsense', () => {
+    const spec = editorTheme({
+      id: 'broken',
+      name: 'Broken',
+      base: 'dark',
+      tokens: { surface: '#2e3440', fg: '#e5e9f0', 'fg-muted': 'not-a-colour' },
+    });
+
+    expect(spec.colors['editorLineNumber.foreground']).toBeUndefined();
+  });
+
+  it('keeps the token when there is no readable background to judge it against', () => {
+    const spec = editorTheme({
+      id: 'odd',
+      name: 'Odd',
+      base: 'dark',
+      tokens: { 'fg-muted': '#b8c3d4' },
+      canvas: { terminalForeground: 'not-a-colour' },
+    });
+
+    expect(spec.colors['editorLineNumber.foreground']).toBe('#b8c3d4');
+  });
 });

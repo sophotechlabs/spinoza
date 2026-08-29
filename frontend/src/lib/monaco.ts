@@ -50,10 +50,11 @@ export function defineEditorTheme(spec: EditorTheme): void {
   monaco.editor.defineTheme(spec.name, {
     base: monacoBase(spec.base),
     inherit: true,
-    rules: [],
+    rules: spec.rules,
     colors: {
       'editor.background': spec.background,
       'editor.foreground': spec.foreground,
+      ...spec.colors,
     },
   });
 }
