@@ -650,7 +650,8 @@ verify-archives dir:
                 want=Spinoza.exe
                 ;;
         esac
-        if ! unzip -l "$file" | grep -q " ${want}$"; then
+        listing=$(unzip -l "$file")
+        if ! printf '%s\n' "$listing" | grep -q " ${want}$"; then
             echo "verify-archives: $file carries no $want"
             exit 1
         fi
@@ -663,7 +664,8 @@ verify-archives dir:
                 want=Spinoza
                 ;;
         esac
-        if ! tar -tzf "$file" | grep -qx "$want"; then
+        listing=$(tar -tzf "$file")
+        if ! printf '%s\n' "$listing" | grep -qx "$want"; then
             echo "verify-archives: $file carries no $want"
             exit 1
         fi
@@ -674,6 +676,39 @@ verify-archives dir:
         exit 1
     fi
     echo "verify-archives: all $checked archives carry the binary their installer looks for"
+
+test-verify-archives:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=$(mktemp -d)
+    trap 'rm -rf "$out"' EXIT
+    cli="$out/cli"
+    app="$out/app"
+    release="$out/release"
+    mkdir -p "$cli" "$app" "$release"
+    head -c 1048576 /dev/urandom > "$cli/spinoza"
+    cp "$cli/spinoza" "$cli/spinoza.exe"
+    cp "$cli/spinoza" "$app/Spinoza"
+    cp "$cli/spinoza" "$app/Spinoza.exe"
+    cp LICENSE "$cli/LICENSE"
+    cp LICENSE "$app/LICENSE"
+    tar -cf - -C "$cli" spinoza LICENSE | gzip -n > "$release/spinoza_v9.9.9_linux_amd64.tar.gz"
+    tar -cf - -C "$cli" spinoza LICENSE | gzip -n > "$release/spinoza_v9.9.9_darwin_arm64.tar.gz"
+    tar -cf - -C "$app" Spinoza LICENSE | gzip -n > "$release/spinoza_v9.9.9_linux_amd64_app.tar.gz"
+    if command -v zip > /dev/null 2>&1; then
+        (cd "$cli" && zip -q -X "$release/spinoza_v9.9.9_windows_amd64.zip" spinoza.exe LICENSE)
+        (cd "$app" && zip -q -X "$release/spinoza_v9.9.9_windows_amd64_app.zip" Spinoza.exe LICENSE)
+    else
+        (cd "$cli" && python3 -m zipfile -c "$release/spinoza_v9.9.9_windows_amd64.zip" spinoza.exe LICENSE)
+        (cd "$app" && python3 -m zipfile -c "$release/spinoza_v9.9.9_windows_amd64_app.zip" Spinoza.exe LICENSE)
+    fi
+    just verify-archives "$release"
+    tar -cf - -C "$cli" LICENSE | gzip -n > "$release/spinoza_v9.9.9_linux_amd64.tar.gz"
+    if just verify-archives "$release" > /dev/null 2>&1; then
+        echo "test-verify-archives: a tarball that lost its binary still passed"
+        exit 1
+    fi
+    echo "test-verify-archives: the check reads a whole listing and still fails an archive that lost its binary"
 
 verify-checksums dir:
     #!/usr/bin/env bash

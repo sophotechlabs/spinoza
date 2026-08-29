@@ -54,6 +54,7 @@ jobs:
           persist-credentials: false
       - run: just hygiene
       - run: just test-packaging
+      - run: just test-verify-archives
       - run: just test-uninstall
 
   sbom:
