@@ -129,6 +129,20 @@ func (s *Server) clusterHealth() api.ClusterHealth {
 	return s.health
 }
 
+func (s *Server) forgetHealthOf(id string) {
+	if id != s.cluster.ID() {
+		return
+	}
+	s.forgetHealth()
+}
+
+func (s *Server) healthOfCluster(id string) api.ClusterHealth {
+	if id == s.cluster.ID() {
+		return s.clusterHealth()
+	}
+	return assumedHealth()
+}
+
 func (s *Server) announceHealth() {
 	health := s.clusterHealth()
 	for _, sess := range s.openSessions() {

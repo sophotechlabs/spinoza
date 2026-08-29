@@ -37,14 +37,22 @@ type Guarded interface {
 	Protected() bool
 }
 
+type Connections interface {
+	Manager(id string) Backend
+	Open(ref api.ContextRef) (string, error)
+	Close(id string) error
+	Activate(id string) error
+	Opened() []api.OpenCluster
+	ID() string
+}
+
 type Cluster interface {
 	Elsewhere
 	Kubeconfigs
 	Guarded
-	Manager(id string) Backend
+	Connections
 	Contexts() api.ContextList
 	Use(ref api.ContextRef) error
-	ID() string
 }
 
 type FilePicker func(ctx context.Context) (string, error)
@@ -64,7 +72,7 @@ type Server struct {
 	browser    BrowserOpener
 	views      views
 	sessions   map[*wsSession]struct{}
-	terminals  map[*websocket.Conn]struct{}
+	terminals  map[*websocket.Conn]string
 	profiler   bool
 	health     api.ClusterHealth
 	watching   bool
@@ -83,7 +91,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		token:     token,
 		settings:  settings.Memory(),
 		sessions:  map[*wsSession]struct{}{},
-		terminals: map[*websocket.Conn]struct{}{},
+		terminals: map[*websocket.Conn]string{},
 		health:    assumedHealth(),
 		now:       time.Now,
 		pingEvery: defaultPingInterval,

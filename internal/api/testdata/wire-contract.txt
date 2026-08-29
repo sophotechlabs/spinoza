@@ -72,9 +72,11 @@ ClientMsg.SubID subId string
 ClientMsg.TailLines tailLines int64
 ClientMsg.Type type string
 ClientMsg.Version version string
+ClusterHealth.Cluster cluster,omitempty string
 ClusterHealth.Reachable reachable bool
 ClusterHealth.Reason reason,omitempty string
 ClusterHealth.Type type string
+ClusterList.Clusters clusters []OpenCluster
 ClusterOverview.Controllers controllers,omitempty []GitopsController
 ClusterOverview.Error error,omitempty string
 ClusterOverview.Nodes nodes NodeSummary
@@ -496,6 +498,13 @@ ObjectRef.Name name string
 ObjectRef.Namespace namespace string
 ObjectRef.Resource resource string
 ObjectRef.Version version string
+OpenCluster.Active active bool
+OpenCluster.Context context string
+OpenCluster.ID id string
+OpenCluster.Kubeconfig kubeconfig,omitempty string
+OpenCluster.Protection protection string
+OpenCluster.Reachable reachable bool
+OpenCluster.Reason reason,omitempty string
 OverviewEvent.Count count int64
 OverviewEvent.LastSeen lastSeen string
 OverviewEvent.Message message string
@@ -578,6 +587,7 @@ SearchResults.Hits hits []SearchHit
 SearchResults.Truncated truncated bool
 ServerMsg.Attached attached,omitempty int
 ServerMsg.Changes changes,omitempty []RowChange
+ServerMsg.Cluster cluster,omitempty string
 ServerMsg.Columns columns,omitempty []Column
 ServerMsg.Context context,omitempty string
 ServerMsg.Limit limit,omitempty int

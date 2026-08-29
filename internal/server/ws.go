@@ -582,10 +582,22 @@ func (s *Server) forget(sess *wsSession) {
 	delete(s.sessions, sess)
 }
 
-func (s *Server) trackExec(conn *websocket.Conn) {
+func (s *Server) trackExec(conn *websocket.Conn, cluster string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.terminals[conn] = struct{}{}
+	s.terminals[conn] = cluster
+}
+
+func (s *Server) terminalsOn(cluster string) []*websocket.Conn {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	open := make([]*websocket.Conn, 0, len(s.terminals))
+	for conn, on := range s.terminals {
+		if on == cluster {
+			open = append(open, conn)
+		}
+	}
+	return open
 }
 
 func (s *Server) forgetExec(conn *websocket.Conn) {
@@ -612,7 +624,7 @@ func (s *Server) dropSessions() {
 		shells = append(shells, conn)
 	}
 	s.sessions = map[*wsSession]struct{}{}
-	s.terminals = map[*websocket.Conn]struct{}{}
+	s.terminals = map[*websocket.Conn]string{}
 	s.mu.Unlock()
 	for _, sess := range open {
 		_ = sess.conn.Close(websocket.StatusGoingAway, "context changed")

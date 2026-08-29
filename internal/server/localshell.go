@@ -14,6 +14,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
+const localShellCluster = "\x00local"
+
 const noLocalShell = "a shell on this machine is only available in the desktop app"
 
 type LocalShell interface {
@@ -70,7 +72,7 @@ func (s *Server) handleLocalShell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = socket.CloseNow() }()
-	s.trackExec(socket)
+	s.trackExec(socket, localShellCluster)
 	defer s.forgetExec(socket)
 
 	ctx, cancel := context.WithCancel(r.Context())

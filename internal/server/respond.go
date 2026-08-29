@@ -93,6 +93,8 @@ func statusFor(err error) int {
 		return http.StatusRequestEntityTooLarge
 	case askedForSomethingWrong(err):
 		return http.StatusBadRequest
+	case errors.Is(err, api.ErrNotOpen):
+		return http.StatusNotFound
 	case errors.Is(err, jsonschema.ErrNoSchema):
 		return http.StatusNotFound
 	case errors.Is(err, helm.ErrNoRelease):

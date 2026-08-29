@@ -715,3 +715,19 @@ func (stubStoppable) Close() {}
 func (c *swappableCluster) ID() string {
 	return "https://swappable:6443"
 }
+
+func (c *swappableCluster) Open(api.ContextRef) (string, error) {
+	return c.ID(), nil
+}
+
+func (c *swappableCluster) Activate(string) error {
+	return nil
+}
+
+func (c *swappableCluster) Opened() []api.OpenCluster {
+	return []api.OpenCluster{{ID: c.ID(), Active: true, Protection: api.ProtectionUnknown}}
+}
+
+func (c *swappableCluster) Close(string) error {
+	return nil
+}

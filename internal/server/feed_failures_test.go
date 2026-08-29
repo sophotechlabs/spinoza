@@ -377,3 +377,19 @@ func TestALineHeldBackFromTheLastBatchIsHandedOverFirst(t *testing.T) {
 func (b *brokenCluster) ID() string {
 	return "https://broken:6443"
 }
+
+func (b *brokenCluster) Open(api.ContextRef) (string, error) {
+	return b.ID(), nil
+}
+
+func (b *brokenCluster) Activate(string) error {
+	return nil
+}
+
+func (b *brokenCluster) Opened() []api.OpenCluster {
+	return []api.OpenCluster{{ID: b.ID(), Active: true, Protection: api.ProtectionUnknown}}
+}
+
+func (b *brokenCluster) Close(string) error {
+	return nil
+}

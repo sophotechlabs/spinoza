@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/clusterid"
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/server"
 )
 
@@ -32,6 +35,7 @@ type Options struct {
 	CountBudget      time.Duration
 	CountPerType     time.Duration
 	CountConcurrency int
+	OpenTimeout      time.Duration
 }
 
 type connection struct {
@@ -68,6 +72,8 @@ type Cluster struct {
 	sources    Kubeconfigs
 	protection Protection
 
+	openWithin time.Duration
+
 	mu        sync.Mutex
 	open      map[string]*connection
 	active    string
@@ -76,12 +82,24 @@ type Cluster struct {
 	installed uint64
 }
 
-func newCluster(ctx context.Context, build builder, sources Kubeconfigs, protection Protection) *Cluster {
+const defaultOpenTimeout = 30 * time.Second
+
+func newCluster(
+	ctx context.Context,
+	build builder,
+	sources Kubeconfigs,
+	protection Protection,
+	openWithin time.Duration,
+) *Cluster {
+	if openWithin <= 0 {
+		openWithin = defaultOpenTimeout
+	}
 	cluster := &Cluster{
 		root:       ctx,
 		build:      build,
 		sources:    sources,
 		protection: protection,
+		openWithin: openWithin,
 		open:       map[string]*connection{},
 	}
 	err := cluster.use(ctx, api.ContextRef{})
@@ -209,20 +227,15 @@ func (c *Cluster) Use(ref api.ContextRef) error {
 
 func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 	seq := c.claim()
-	ctx, cancel := context.WithCancel(root)
-	opened, err := c.build(ctx, ref)
+	opened, err := c.dial(root, ref)
 	if err != nil {
-		cancel()
 		return err
 	}
-
-	opened.id = clusterid.Normalize(opened.host)
-	opened.cancel = cancel
 
 	c.mu.Lock()
 	if seq < c.installed {
 		c.mu.Unlock()
-		cancel()
+		opened.cancel()
 		return nil
 	}
 	previous := c.retire(opened.id)
@@ -248,6 +261,114 @@ func (c *Cluster) retire(keep string) []*connection {
 		delete(c.open, id)
 	}
 	return gone
+}
+
+func (c *Cluster) Open(ref api.ContextRef) (string, error) {
+	opened, err := c.dial(c.root, ref)
+	if err != nil {
+		return "", err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	already, held := c.open[opened.id]
+	if held {
+		c.active = already.id
+		opened.cancel()
+		return already.id, nil
+	}
+	c.open[opened.id] = opened
+	c.active = opened.id
+	c.startErr = ""
+	return opened.id, nil
+}
+
+func (c *Cluster) Close(id string) error {
+	key := clusterid.Normalize(id)
+	c.mu.Lock()
+	held := c.open[key]
+	if held == nil {
+		c.mu.Unlock()
+		return fmt.Errorf("%w: no cluster %s is open", api.ErrNotOpen, key)
+	}
+	delete(c.open, key)
+	if c.active == key {
+		c.active = c.firstOpen()
+	}
+	c.mu.Unlock()
+	held.cancel()
+	return nil
+}
+
+func (c *Cluster) firstOpen() string {
+	ids := make([]string, 0, len(c.open))
+	for id := range c.open {
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+	slices.Sort(ids)
+	return ids[0]
+}
+
+func (c *Cluster) Activate(id string) error {
+	key := clusterid.Normalize(id)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.open[key] == nil {
+		return fmt.Errorf("%w: no cluster %s is open", api.ErrNotOpen, key)
+	}
+	c.active = key
+	return nil
+}
+
+func (c *Cluster) Opened() []api.OpenCluster {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]api.OpenCluster, 0, len(c.open))
+	for id, held := range c.open {
+		out = append(out, api.OpenCluster{
+			ID:         id,
+			Context:    held.ref.Name,
+			Kubeconfig: held.ref.Kubeconfig,
+			Active:     id == c.active,
+			Protection: c.protection.Verdict(id),
+		})
+	}
+	slices.SortFunc(out, func(left, right api.OpenCluster) int {
+		return strings.Compare(left.ID, right.ID)
+	})
+	return out
+}
+
+// dial builds a connection, bounded, so an apiserver that never answers is an
+// error rather than a handler that never returns.
+func (c *Cluster) dial(root context.Context, ref api.ContextRef) (*connection, error) {
+	ctx, cancel := context.WithCancel(root)
+	type built struct {
+		conn *connection
+		err  error
+	}
+	done := make(chan built, 1)
+	safe.Go("opening "+ref.Name, func() {
+		conn, err := c.build(ctx, ref)
+		done <- built{conn: conn, err: err}
+	})
+	timer := time.NewTimer(c.openWithin)
+	defer timer.Stop()
+	select {
+	case answer := <-done:
+		if answer.err != nil {
+			cancel()
+			return nil, answer.err
+		}
+		answer.conn.id = clusterid.Normalize(answer.conn.host)
+		answer.conn.cancel = cancel
+		return answer.conn, nil
+	case <-timer.C:
+		cancel()
+		return nil, fmt.Errorf("context %q did not answer within %s", ref.Name, c.openWithin)
+	}
 }
 
 func (c *Cluster) claim() uint64 {

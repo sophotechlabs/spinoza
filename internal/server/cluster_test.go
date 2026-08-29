@@ -578,3 +578,19 @@ func TestProtectionThatCannotBeSavedIsReported(t *testing.T) {
 func (s *stubCluster) ID() string {
 	return "https://" + s.current.Name + ":6443"
 }
+
+func (s *stubCluster) Open(api.ContextRef) (string, error) {
+	return s.ID(), nil
+}
+
+func (s *stubCluster) Activate(string) error {
+	return nil
+}
+
+func (s *stubCluster) Opened() []api.OpenCluster {
+	return []api.OpenCluster{{ID: s.ID(), Active: true, Protection: api.ProtectionUnknown}}
+}
+
+func (s *stubCluster) Close(string) error {
+	return nil
+}

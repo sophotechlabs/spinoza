@@ -285,3 +285,19 @@ func TestAServerWithNoClusterHasNothingToReport(t *testing.T) {
 func (noCluster) ID() string {
 	return ""
 }
+
+func (noCluster) Open(api.ContextRef) (string, error) {
+	return "", errors.New("this stub connects to nothing")
+}
+
+func (noCluster) Activate(string) error {
+	return errors.New("this stub connects to nothing")
+}
+
+func (noCluster) Opened() []api.OpenCluster {
+	return nil
+}
+
+func (noCluster) Close(string) error {
+	return errors.New("this stub connects to nothing")
+}

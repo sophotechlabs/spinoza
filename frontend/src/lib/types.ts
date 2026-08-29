@@ -290,7 +290,7 @@ export type ServerMsg =
   | { type: 'log-open'; subId: string; attached: number; matched: number }
   | { type: 'log-end'; subId: string }
   | { type: 'context'; subId: string; context: string }
-  | { type: 'cluster'; subId: string; reachable: boolean; reason?: string }
+  | { type: 'cluster'; subId: string; cluster?: string; reachable: boolean; reason?: string }
   | { type: 'error'; subId: string; message: string };
 
 export const VIEWS = [
@@ -524,6 +524,20 @@ export interface ContextList {
   error?: string;
   kubeconfigs: Kubeconfig[];
   protection: Protection;
+}
+
+export interface OpenCluster {
+  id: string;
+  context: string;
+  kubeconfig?: string;
+  active: boolean;
+  protection: string;
+  reachable: boolean;
+  reason?: string;
+}
+
+export interface ClusterList {
+  clusters: OpenCluster[];
 }
 
 export interface FilePicker {

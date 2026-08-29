@@ -43,7 +43,7 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 			return nil, err
 		}
 		return &connection{manager: manager, ref: bundle.Ref, host: bundle.Config.Host}, nil
-	}, sources, openProtection())
+	}, sources, openProtection(), options.OpenTimeout)
 	cluster.useReader(readerFor(options))
 	cluster.useLister(listerFor(options))
 	return cluster, nil

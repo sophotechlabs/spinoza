@@ -205,3 +205,19 @@ func TestCountsCarryTheirReasonsThroughTheHandler(t *testing.T) {
 func (s *stubBackendCluster) ID() string {
 	return "https://p-mk1:6443"
 }
+
+func (s *stubBackendCluster) Open(api.ContextRef) (string, error) {
+	return s.ID(), nil
+}
+
+func (s *stubBackendCluster) Activate(string) error {
+	return nil
+}
+
+func (s *stubBackendCluster) Opened() []api.OpenCluster {
+	return []api.OpenCluster{{ID: s.ID(), Active: true, Protection: api.ProtectionUnknown}}
+}
+
+func (s *stubBackendCluster) Close(string) error {
+	return nil
+}

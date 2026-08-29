@@ -2,6 +2,8 @@ package api
 
 import "errors"
 
+var ErrNotOpen = errors.New("that cluster is not open")
+
 var ErrInternal = errors.New("spinoza could not do that")
 
 type Health struct {
@@ -60,6 +62,20 @@ type ContextList struct {
 	Error       string       `json:"error,omitempty"`
 	Kubeconfigs []Kubeconfig `json:"kubeconfigs"`
 	Protection  string       `json:"protection"`
+}
+
+type OpenCluster struct {
+	ID         string `json:"id"`
+	Context    string `json:"context"`
+	Kubeconfig string `json:"kubeconfig,omitempty"`
+	Active     bool   `json:"active"`
+	Protection string `json:"protection"`
+	Reachable  bool   `json:"reachable"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+type ClusterList struct {
+	Clusters []OpenCluster `json:"clusters"`
 }
 
 type FilePicker struct {
@@ -645,6 +661,7 @@ type ServerMsg struct {
 	Matched    int         `json:"matched,omitempty"`
 	Message    string      `json:"message,omitempty"`
 	Context    string      `json:"context,omitempty"`
+	Cluster    string      `json:"cluster,omitempty"`
 	Reachable  bool        `json:"reachable,omitempty"`
 	Reason     string      `json:"reason,omitempty"`
 	Changes    []RowChange `json:"changes,omitempty"`
@@ -652,6 +669,7 @@ type ServerMsg struct {
 
 type ClusterHealth struct {
 	Type      string `json:"type"`
+	Cluster   string `json:"cluster,omitempty"`
 	Reachable bool   `json:"reachable"`
 	Reason    string `json:"reason,omitempty"`
 }
