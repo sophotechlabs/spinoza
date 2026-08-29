@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 const AA = 4.5;
 
@@ -67,6 +67,57 @@ function tokens(selector) {
     match = pattern.exec(body);
   }
   return found;
+}
+
+function pairsFromSource(constName, arity) {
+  const source = readFileSync(new URL('../src/lib/themeColors.ts', import.meta.url), 'utf8');
+  const block = new RegExp(`const ${constName}[^=]*= \\[([\\s\\S]*?)\\];`).exec(source);
+  if (block === null) {
+    throw new Error(`${constName} not found in src/lib/themeColors.ts`);
+  }
+  const rows = [];
+  for (const entry of block[1].matchAll(/\[([^\]]*)\]/g)) {
+    const parts = [...entry[1].matchAll(/'([^']*)'/g)].map((one) => one[1]);
+    if (parts.length !== arity) {
+      throw new Error(
+        `${constName} row has ${String(parts.length)} entries, expected ${String(arity)}`,
+      );
+    }
+    rows.push(parts);
+  }
+  if (rows.length === 0) {
+    throw new Error(`${constName} in src/lib/themeColors.ts is empty`);
+  }
+  return rows;
+}
+
+function editorPairs() {
+  const pairs = [];
+  for (const [key, token, behind] of pairsFromSource('EDITOR_TEXT', 3)) {
+    pairs.push({ key, token, behind });
+  }
+  for (const [rule, token] of pairsFromSource('EDITOR_RULES', 2)) {
+    let named = rule;
+    if (named === '') {
+      named = 'default';
+    }
+    pairs.push({ key: `rule ${named}`, token, behind: 'surface' });
+  }
+  return pairs;
+}
+
+const EDITOR_PAIRS = editorPairs();
+
+function hexToRgb(value) {
+  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(value);
+  if (short !== null) {
+    return [1, 2, 3].map((at) => parseInt(short[at] + short[at], 16));
+  }
+  const long = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(value);
+  if (long === null) {
+    return null;
+  }
+  return [1, 2, 3].map((at) => parseInt(long[at], 16));
 }
 
 function oklchToRgb(value) {
@@ -151,8 +202,94 @@ if (missing.length > 0 || extra.length > 0) {
   process.exit(1);
 }
 
+function anyToRgb(value) {
+  const hex = hexToRgb(value.trim());
+  if (hex !== null) {
+    return hex;
+  }
+  return oklchToRgb(value);
+}
+
+const BASE_TOKENS = {
+  dark: tokens(':root {'),
+  light: tokens(":root[data-theme='light']"),
+};
+
+function shippedThemes() {
+  const dir = new URL('../themes/', import.meta.url);
+  const found = [];
+  for (const name of readdirSync(dir).sort()) {
+    if (!name.endsWith('.json')) {
+      continue;
+    }
+    found.push(JSON.parse(readFileSync(new URL(name, dir), 'utf8')));
+  }
+  if (found.length === 0) {
+    throw new Error('no themes in frontend/themes');
+  }
+  return found;
+}
+
+function resolverFor(theme) {
+  const base = BASE_TOKENS[theme.base];
+  if (base === undefined) {
+    throw new Error(`${theme.name} has base ${String(theme.base)}, which is not dark or light`);
+  }
+  return (token) => {
+    const own = theme.tokens?.[token];
+    if (own !== undefined) {
+      return anyToRgb(own);
+    }
+    const inherited = base.get(token);
+    if (inherited === undefined) {
+      return null;
+    }
+    return anyToRgb(inherited);
+  };
+}
+
 const failures = [];
 let pairs = 0;
+let editorChecked = 0;
+
+for (const theme of shippedThemes()) {
+  const resolve = resolverFor(theme);
+  for (const token of CONTENT_TOKENS) {
+    const ink = resolve(token);
+    if (ink === null) {
+      continue;
+    }
+    for (const name of backgroundsFor(token)) {
+      const paper = resolve(name);
+      if (paper === null) {
+        continue;
+      }
+      pairs += 1;
+      const ratio = contrast(ink, paper);
+      if (ratio < AA) {
+        failures.push(`${theme.name}: --${token} is ${ratio.toFixed(2)}:1 on --${name}`);
+      }
+    }
+  }
+  for (const { key, token, behind } of EDITOR_PAIRS) {
+    const ink = resolve(token);
+    if (ink === null) {
+      continue;
+    }
+    const paper = resolve(behind);
+    if (paper === null) {
+      continue;
+    }
+    editorChecked += 1;
+    const ratio = contrast(ink, paper);
+    if (ratio < AA) {
+      failures.push(
+        `${theme.name}: editor ${key} takes --${token}, ${ratio.toFixed(2)}:1 on --${behind}`,
+      );
+    }
+  }
+}
+
 for (const theme of THEMES) {
   const values = tokens(theme.selector);
   for (const token of CONTENT_TOKENS) {
@@ -184,5 +321,6 @@ if (failures.length > 0) {
 
 console.log(
   `theme: ${String(fromCss.length)} tokens in step with the css, ` +
-    `${String(pairs)} token/background pairs clear AA`,
+    `${String(pairs)} token/background pairs clear AA, ` +
+    `${String(editorChecked)} of them in the editor`,
 );
