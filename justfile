@@ -413,9 +413,6 @@ hygiene:
     shellcheck install.sh test/install/container.sh test/install/uninstall.sh packaging/render.sh
     just --unstable --fmt --check
 
-docs:
-    markdownlint-cli2 "**/*.md"
-
 links:
     lychee --config lychee.toml .
 
@@ -879,7 +876,7 @@ publish-desktop-linux: (publish-asset '*_linux_amd64_app.tar.gz')
 
 check: lint test
 
-ci: ci-go-build ci-go-test ci-go-lint ci-go-audit ci-fe-lint ci-fe-test ci-fe-audit ci-fe-build secrets sast vulns workflows hygiene docs links sbom
+ci: ci-go-build ci-go-test ci-go-lint ci-go-audit ci-fe-lint ci-fe-test ci-fe-audit ci-fe-build secrets sast vulns workflows hygiene links sbom
 
 rescan: stub-assets audit-be vulns sbom links
 

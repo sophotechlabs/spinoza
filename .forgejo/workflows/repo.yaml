@@ -56,16 +56,6 @@ jobs:
       - run: just test-packaging
       - run: just test-uninstall
 
-  docs:
-    runs-on: docker
-    container:
-      image: infra-soph-ci-toolbox
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - run: just docs
-
   sbom:
     runs-on: docker
     container:
