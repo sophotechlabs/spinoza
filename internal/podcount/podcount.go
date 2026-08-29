@@ -23,7 +23,7 @@ type Result struct {
 
 func Count(ctx context.Context, client metadata.Interface, selector string) (Result, error) {
 	probe, err := client.Resource(podsGVR).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
-		Limit:         probeLimit,
+		Limit:         probeSize(selector),
 		FieldSelector: selector,
 	})
 	if err != nil {
@@ -36,13 +36,29 @@ func Count(ctx context.Context, client metadata.Interface, selector string) (Res
 	if probe.GetContinue() == "" {
 		return Result{Total: len(probe.Items), Complete: true}, nil
 	}
-	return walk(ctx, client, selector)
+	return walk(ctx, client, selector, len(probe.Items), probe.GetContinue())
 }
 
-func walk(ctx context.Context, client metadata.Interface, selector string) (Result, error) {
-	total := 0
-	opts := metav1.ListOptions{Limit: pageSize, FieldSelector: selector}
-	for page := range maxPages {
+func probeSize(selector string) int64 {
+	if selector == "" {
+		return probeLimit
+	}
+	return pageSize
+}
+
+func walk(
+	ctx context.Context,
+	client metadata.Interface,
+	selector string,
+	counted int,
+	from string,
+) (Result, error) {
+	total := counted
+	opts := metav1.ListOptions{Limit: pageSize, FieldSelector: selector, Continue: from}
+	for range maxPages {
+		if total >= Limit() {
+			return Result{Total: Limit(), Complete: false}, nil
+		}
 		list, err := client.Resource(podsGVR).Namespace(metav1.NamespaceAll).List(ctx, opts)
 		if err != nil {
 			return Result{}, err
@@ -51,10 +67,10 @@ func walk(ctx context.Context, client metadata.Interface, selector string) (Resu
 		if list.GetContinue() == "" {
 			return Result{Total: total, Complete: true}, nil
 		}
-		if page == maxPages-1 {
-			return Result{Total: total, Complete: false}, nil
-		}
 		opts.Continue = list.GetContinue()
+	}
+	if total > Limit() {
+		total = Limit()
 	}
 	return Result{Total: total, Complete: false}, nil
 }
