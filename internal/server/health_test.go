@@ -207,7 +207,7 @@ func TestNothingIsClaimedBeforeTheFirstProbe(t *testing.T) {
 func TestSwitchingClusterForgetsWhatWasKnown(t *testing.T) {
 	mgr, _ := testManager(t)
 	server := New(fixed(mgr), testAssets(), testToken)
-	server.recordHealth(api.ClusterHealth{Type: "cluster", Reachable: false, Reason: "gone"})
+	server.recordHealthOf(server.cluster.ID(), api.ClusterHealth{Type: "cluster", Reachable: false, Reason: "gone"})
 
 	server.forgetHealth()
 
@@ -275,7 +275,7 @@ func (noCluster) Manager(string) Backend {
 func TestAServerWithNoClusterHasNothingToReport(t *testing.T) {
 	srv := New(noCluster{}, testAssets(), testToken)
 
-	health := srv.reachHealth()
+	health := srv.clusterHealth()
 
 	if !health.Reachable {
 		t.Fatalf("health = %+v, want the benefit of the doubt before a cluster is picked", health)

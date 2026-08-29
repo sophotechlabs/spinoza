@@ -1,0 +1,206 @@
+package server
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/reach"
+)
+
+const mk1 = "https://p-mk1:6443"
+
+const mk2 = "https://p-mk2:6443"
+
+type pinger struct {
+	Backend
+
+	err     error
+	sink    *reach.Sink
+	entered chan string
+	release chan struct{}
+	id      string
+}
+
+func (p *pinger) Ping(context.Context) error {
+	if p.entered != nil {
+		p.entered <- p.id
+		<-p.release
+	}
+	return p.err
+}
+
+func (p *pinger) Reach() *reach.Sink {
+	return p.sink
+}
+
+func twoClusters(t *testing.T, first, second Backend) (*Server, *fleet) {
+	t.Helper()
+	held := &fleet{
+		held: []api.OpenCluster{
+			{ID: mk1, Context: "p-mk1", Active: true},
+			{ID: mk2, Context: "p-mk2"},
+		},
+		active:   mk1,
+		backends: map[string]Backend{mk1: first, mk2: second},
+	}
+	return New(held, testAssets(), testToken), held
+}
+
+func TestOneClusterGoingDownDoesNotCondemnTheOther(t *testing.T) {
+	srv, _ := twoClusters(t,
+		&pinger{},
+		&pinger{err: errors.New("no route to host")})
+
+	srv.pingEveryCluster(t.Context())
+
+	if !srv.healthOfCluster(mk1).Reachable {
+		t.Fatal("the cluster that answered was marked unreachable")
+	}
+	down := srv.healthOfCluster(mk2)
+	if down.Reachable {
+		t.Fatal("the cluster that refused was reported as answering")
+	}
+	if down.Reason != "no route to host" {
+		t.Fatalf("reason = %q, want what the cluster said", down.Reason)
+	}
+	if down.Cluster != mk2 {
+		t.Fatalf("cluster = %q, want the frame to name which one it is about", down.Cluster)
+	}
+}
+
+func TestTheClusterListReportsEachClustersOwnHealth(t *testing.T) {
+	srv, _ := twoClusters(t,
+		&pinger{},
+		&pinger{err: errors.New("i/o timeout")})
+	ts := httptest.NewServer(authed(srv.Handler()))
+	t.Cleanup(ts.Close)
+	srv.pingEveryCluster(t.Context())
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
+
+	byID := map[string]api.OpenCluster{}
+	for _, one := range clustersFrom(t, body).Clusters {
+		byID[one.ID] = one
+	}
+	if !byID[mk1].Reachable {
+		t.Fatalf("list = %s, want the healthy cluster reachable", body)
+	}
+	if byID[mk2].Reachable {
+		t.Fatalf("list = %s, want the unreachable cluster reported as such", body)
+	}
+	if byID[mk2].Reason != "i/o timeout" {
+		t.Fatalf("reason = %q, want the cluster's own words on the row", byID[mk2].Reason)
+	}
+}
+
+func TestAClusterNobodyHasPingedGetsTheBenefitOfTheDoubt(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{})
+
+	if !srv.healthOfCluster(mk2).Reachable {
+		t.Fatal("a cluster was called unreachable before anything asked it")
+	}
+}
+
+func TestEveryClusterIsAskedAtOnce(t *testing.T) {
+	entered := make(chan string, 2)
+	release := make(chan struct{})
+	srv, _ := twoClusters(t,
+		&pinger{id: mk1, entered: entered, release: release},
+		&pinger{id: mk2, entered: entered, release: release})
+
+	done := make(chan struct{})
+	go func() {
+		srv.pingEveryCluster(t.Context())
+		close(done)
+	}()
+
+	seen := map[string]bool{}
+	for range 2 {
+		select {
+		case id := <-entered:
+			seen[id] = true
+		case <-time.After(5 * time.Second):
+			t.Fatal("only one cluster was asked; a slow cluster blocks the rest")
+		}
+	}
+	close(release)
+	<-done
+
+	if !seen[mk1] || !seen[mk2] {
+		t.Fatalf("asked %v, want both before either answered", seen)
+	}
+}
+
+func TestClosingAClusterForgetsWhatWasKnownAboutIt(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{err: errors.New("gone")})
+	ts := httptest.NewServer(authed(srv.Handler()))
+	t.Cleanup(ts.Close)
+	srv.pingEveryCluster(t.Context())
+	if srv.healthOfCluster(mk2).Reachable {
+		t.Fatal("the fixture did not record the cluster as down")
+	}
+
+	doRequest(t, http.MethodDelete, ts.URL+"/api/clusters?cluster="+mk2, nil)
+
+	if !srv.healthOfCluster(mk2).Reachable {
+		t.Fatal("what was known about a closed cluster outlived it")
+	}
+}
+
+func TestOnlyTheActiveClustersHealthReachesTheBrowser(t *testing.T) {
+	srv, held := twoClusters(t, &pinger{}, &pinger{})
+	sess := &wsSession{ctx: t.Context()}
+	srv.track(sess)
+
+	srv.recordHealthOf(mk2, notAnswering("gone"))
+
+	if held.ID() != mk1 {
+		t.Fatalf("active = %q, the fixture moved", held.ID())
+	}
+	if srv.healthOfCluster(mk2).Reachable {
+		t.Fatal("the background cluster's health was not recorded")
+	}
+}
+
+func TestAFailedRequestIsHeardWithoutWaitingForAPing(t *testing.T) {
+	sink := reach.New()
+	srv, _ := twoClusters(t, &pinger{sink: sink}, &pinger{})
+	watchers := newSinkWatchers(srv)
+	t.Cleanup(watchers.stopAll)
+
+	watchers.follow(t.Context(), []string{mk1, mk2})
+
+	if watchers.watching() != 1 {
+		t.Fatalf("watching %d sinks, want only the cluster that has one", watchers.watching())
+	}
+	sink.Saw(errors.New("connection refused"))
+	deadline := time.After(5 * time.Second)
+	for srv.healthOfCluster(mk1).Reachable {
+		select {
+		case <-deadline:
+			t.Fatal("a failed request never reached the health state")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if srv.healthOfCluster(mk1).Reason != "connection refused" {
+		t.Fatalf("reason = %q, want what the failing request said", srv.healthOfCluster(mk1).Reason)
+	}
+}
+
+func TestASinkWatcherStopsWhenItsClusterCloses(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{sink: reach.New()}, &pinger{sink: reach.New()})
+	watchers := newSinkWatchers(srv)
+	t.Cleanup(watchers.stopAll)
+	watchers.follow(t.Context(), []string{mk1, mk2})
+
+	watchers.follow(t.Context(), []string{mk1})
+
+	if watchers.watching() != 1 {
+		t.Fatalf("watching %d sinks after one closed, want 1", watchers.watching())
+	}
+}

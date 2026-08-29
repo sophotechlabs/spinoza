@@ -28,10 +28,13 @@ type fleet struct {
 	activated   []string
 	closed      []string
 	closeErr    error
+	backends    map[string]Backend
 }
 
-func (f *fleet) Manager(string) Backend {
-	return nil
+func (f *fleet) Manager(id string) Backend {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.backends[id]
 }
 
 func (f *fleet) ID() string {

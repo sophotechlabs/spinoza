@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -29,7 +30,7 @@ func (s *Server) watchCluster(ctx context.Context) {
 	s.watching = true
 	s.mu.Unlock()
 	outlives := context.WithoutCancel(ctx)
-	safe.Go("watching whether the cluster answers", func() {
+	safe.Go("watching whether the clusters answer", func() {
 		s.pingUntilNobodyIsWatching(outlives)
 	})
 }
@@ -38,17 +39,22 @@ func (s *Server) watchCluster(ctx context.Context) {
 func (s *Server) pingUntilNobodyIsWatching(ctx context.Context) {
 	ticker := time.NewTicker(s.pingInterval())
 	defer ticker.Stop()
-	s.pingCluster(ctx)
+	watched := newSinkWatchers(s)
+	defer watched.stopAll()
+	s.pingEveryCluster(ctx)
+	watched.follow(ctx, s.openClusterIDs())
 	for {
 		select {
+		case <-ctx.Done():
+			s.stopWatching()
+			return
 		case <-ticker.C:
 			if s.sessionsOpen() == 0 {
 				s.stopWatching()
 				return
 			}
-			s.pingCluster(ctx)
-		case <-s.reach().Changed():
-			s.recordHealth(s.reachHealth())
+			s.pingEveryCluster(ctx)
+			watched.follow(ctx, s.openClusterIDs())
 		}
 	}
 }
@@ -59,32 +65,49 @@ func (s *Server) stopWatching() {
 	s.watching = false
 }
 
-func (s *Server) reach() *reach.Sink {
-	backend := s.managerOf("")
+func (s *Server) openClusterIDs() []string {
+	opened := s.cluster.Opened()
+	ids := make([]string, 0, len(opened))
+	for _, one := range opened {
+		ids = append(ids, one.ID)
+	}
+	return ids
+}
+
+func (s *Server) pingEveryCluster(ctx context.Context) {
+	var asking sync.WaitGroup
+	for _, id := range s.openClusterIDs() {
+		asking.Add(1)
+		go func(id string) {
+			defer asking.Done()
+			s.pingOne(ctx, id)
+		}(id)
+	}
+	asking.Wait()
+}
+
+func (s *Server) pingOne(ctx context.Context, id string) {
+	backend := s.managerOf(id)
+	if backend == nil {
+		return
+	}
+	bounded, cancel := context.WithTimeout(ctx, clusterPingTimeout)
+	defer cancel()
+	s.recordHealthOf(id, healthOf(backend.Ping(bounded)))
+}
+
+func (s *Server) sinkOf(id string) *reach.Sink {
+	backend := s.managerOf(id)
 	if backend == nil {
 		return nil
 	}
 	return backend.Reach()
 }
 
-func (s *Server) reachHealth() api.ClusterHealth {
-	alive, reason := s.reach().State()
-	if alive {
-		return answering()
-	}
-	return notAnswering(reason)
-}
-
 func (s *Server) sessionsOpen() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.sessions)
-}
-
-func (s *Server) pingCluster(ctx context.Context) {
-	bounded, cancel := context.WithTimeout(ctx, clusterPingTimeout)
-	defer cancel()
-	s.recordHealth(healthOf(s.managerOf("").Ping(bounded)))
 }
 
 func healthOf(err error) api.ClusterHealth {
@@ -102,49 +125,58 @@ func notAnswering(reason string) api.ClusterHealth {
 	return api.ClusterHealth{Type: "cluster", Reachable: false, Reason: reason}
 }
 
-func (s *Server) recordHealth(now api.ClusterHealth) {
-	s.mu.Lock()
-	same := s.health == now
-	s.health = now
-	s.mu.Unlock()
-	if same {
-		return
-	}
-	s.announceHealth()
+func assumedHealthOf(id string) api.ClusterHealth {
+	health := answering()
+	health.Cluster = id
+	return health
 }
 
-func assumedHealth() api.ClusterHealth {
-	return answering()
+func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
+	now.Cluster = id
+	was := assumedHealthOf(id)
+	s.mu.Lock()
+	held, known := s.health[id]
+	if known {
+		was = held
+	}
+	s.health[id] = now
+	s.mu.Unlock()
+	if was == now {
+		return
+	}
+	s.announceHealthOf(id, now)
 }
 
 func (s *Server) forgetHealth() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.health = assumedHealth()
-}
-
-func (s *Server) clusterHealth() api.ClusterHealth {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.health
+	clear(s.health)
 }
 
 func (s *Server) forgetHealthOf(id string) {
-	if id != s.cluster.ID() {
-		return
-	}
-	s.forgetHealth()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.health, id)
 }
 
 func (s *Server) healthOfCluster(id string) api.ClusterHealth {
-	if id == s.cluster.ID() {
-		return s.clusterHealth()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	held, known := s.health[id]
+	if !known {
+		return assumedHealthOf(id)
 	}
-	return assumedHealth()
+	return held
 }
 
-func (s *Server) announceHealth() {
-	health := s.clusterHealth()
+func (s *Server) clusterHealth() api.ClusterHealth {
+	return s.healthOfCluster(s.cluster.ID())
+}
+
+func (s *Server) announceHealthOf(id string, health api.ClusterHealth) {
+	if id != s.cluster.ID() {
+		return
+	}
 	for _, sess := range s.openSessions() {
 		sess.write(sess.ctx, health)
 	}
