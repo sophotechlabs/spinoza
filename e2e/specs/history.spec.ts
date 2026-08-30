@@ -7,9 +7,11 @@ test.describe.configure({ mode: 'serial' });
 
 test('the view says what it is for', async ({ page }) => {
   await openView(page, 'history');
-  await expect(page.locator('main')).toContainText('What spinoza did on this cluster', {
-    timeout: 60_000,
-  });
+  const showing = page.getByRole('combobox', { name: 'What to show' });
+  await expect(showing).toBeVisible({ timeout: 60_000 });
+  await expect(showing).toContainText('What I did');
+  await expect(showing).toContainText('What changed');
+  await expect(page.getByRole('combobox', { name: 'What to record' })).toBeVisible();
 });
 
 test('a write made in the browser turns up in the history', async ({ page }) => {
@@ -55,9 +57,8 @@ test('clearing the history empties it and says so', async ({ page }) => {
   const clear = page.getByRole('button', { name: 'Clear', exact: true });
   await expect(clear).toBeEnabled();
   await clear.click();
-  await expect(page.locator('main')).toContainText(
-    'Spinoza has not changed anything on this cluster yet.',
-    { timeout: 30_000 },
-  );
+  await expect(page.locator('main')).toContainText('There is nothing here yet.', {
+    timeout: 30_000,
+  });
   await expect(clear).toBeDisabled();
 });
