@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { HelmRelease, HelmReleaseDetail as Detail } from '../../src/lib/types';
 import HelmReleaseDetail from '../../src/components/HelmReleaseDetail';
 import { useToastsStore } from '../../src/store/toasts';
+import { capabilities } from '../helpers';
 import { useContextsStore } from '../../src/store/contexts';
 import { useHelmStore } from '../../src/store/helm';
 import { useHelmAccessStore } from '../../src/store/helmAccess';
@@ -101,10 +102,15 @@ function stub(options: Stubs = {}) {
   const calls: { url: string; method: string }[] = [];
   const fetchMock = vi.fn((url: string, init?: { method?: string }) => {
     calls.push({ url, method: init?.method ?? 'GET' });
-    if (url.startsWith('/api/helm/support')) {
+    if (url.startsWith('/api/capabilities')) {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve(options.support ?? { available: true, binary: 'helm' }),
+        json: () =>
+          Promise.resolve(
+            capabilities({
+              helm: options.support ?? { available: true, reason: undefined, binary: 'helm' },
+            }),
+          ),
       });
     }
     if (url.startsWith('/api/helm/access')) {

@@ -11,10 +11,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/helm"
 )
 
-func (s *Server) handleHelmSupport(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.managerFor(r).HelmSupport())
-}
-
 func (s *Server) handleHelmRelease(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	namespace := query.Get("namespace")

@@ -453,7 +453,7 @@ import { useSettingsStore } from '../src/store/settings';
 import { notifyOk, useToastsStore } from '../src/store/toasts';
 import { bumpClusterEpoch } from '../src/store/cluster';
 import { setUnsaved } from '../src/lib/unsaved';
-import { makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
+import { capabilities, makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
 
 const podDescriptor = makeDescriptor({
   group: '',
@@ -635,10 +635,15 @@ function stubFetch(pods?: number): void {
             }),
         });
       }
-      if (url.startsWith('/api/traffic/support')) {
+      if (url.startsWith('/api/capabilities')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ available: true, source: 'Cilium Hubble' }),
+          json: () =>
+            Promise.resolve(
+              capabilities({
+                traffic: { available: true, reason: undefined, source: 'Cilium Hubble' },
+              }),
+            ),
         });
       }
       if (url === '/api/metrics') {

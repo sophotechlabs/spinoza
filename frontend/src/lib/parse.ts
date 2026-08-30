@@ -3,6 +3,7 @@ import type {
   ActionResult,
   ArgoActionResult,
   BulkAccess,
+  Capabilities,
   Category,
   ClusterOverview,
   Column,
@@ -851,6 +852,15 @@ export function parseHelmSupport(body: unknown): HelmSupport {
     available: asBoolean(item.available),
     reason: optionalString(item.reason),
     binary: asString(item.binary),
+  };
+}
+
+export function parseCapabilities(body: unknown): Capabilities {
+  const item = asRecord(body);
+  return {
+    helm: parseHelmSupport(item.helm),
+    traffic: parseTrafficSupport(item.traffic),
+    localShell: parseLocalShell(item.localShell),
   };
 }
 

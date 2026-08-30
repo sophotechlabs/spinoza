@@ -15,10 +15,11 @@ vi.mock('../../src/components/TerminalSession', () => ({
 }));
 
 import TerminalTab from '../../src/components/TerminalTab';
-import { terminalTitle } from '../../src/lib/shell';
 import type { PodTarget } from '../../src/lib/pods';
 import { useTerminalsStore } from '../../src/store/terminals';
 import { accessKey, useAccessStore } from '../../src/store/access';
+import { terminalTitle } from '../../src/lib/shell';
+import { capabilities } from '../helpers';
 import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 import { podRef } from '../../src/lib/pods';
 
@@ -37,7 +38,12 @@ function visible(): HTMLElement[] {
 function stubSupport(available: boolean, reason?: string) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ available, reason }) })),
+    vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(capabilities({ localShell: { available, reason } })),
+      }),
+    ),
   );
 }
 

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { HelmRelease, HelmReleases as Releases } from '../../src/lib/types';
+import type { HelmRelease, HelmReleases as Releases, HelmSupport } from '../../src/lib/types';
 import HelmReleases from '../../src/components/HelmReleases';
 import { useNamespaceStore } from '../../src/store/namespace';
+import { capabilities } from '../helpers';
 
 function release(patch: Partial<HelmRelease> = {}): HelmRelease {
   return {
@@ -256,12 +257,16 @@ describe('HelmReleases', () => {
 });
 
 describe('installing from the releases view', () => {
-  function stubWith(support: unknown): void {
+  function stubWith(support: HelmSupport): void {
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
-        if (url.startsWith('/api/helm/support')) {
-          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(support) });
+        if (url.startsWith('/api/capabilities')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(capabilities({ helm: support })),
+          });
         }
         if (url.startsWith('/api/helm/charts')) {
           return Promise.resolve({
@@ -324,11 +329,11 @@ describe('what the install dialog starts on', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
-        if (url.startsWith('/api/helm/support')) {
+        if (url.startsWith('/api/capabilities')) {
           return Promise.resolve({
             ok: true,
             status: 200,
-            json: () => Promise.resolve({ available: true, binary: 'helm' }),
+            json: () => Promise.resolve(capabilities()),
           });
         }
         if (url.startsWith('/api/helm/charts')) {
@@ -427,7 +432,7 @@ describe('what the install dialog starts on', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
-        if (url.startsWith('/api/helm/support')) {
+        if (url.startsWith('/api/capabilities')) {
           return new Promise(() => undefined);
         }
         return Promise.resolve({

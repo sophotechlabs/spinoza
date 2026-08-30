@@ -24,7 +24,7 @@ import {
   useHelmReleases,
 } from '../../src/lib/helm';
 import { bumpHelmEpoch } from '../../src/store/helm';
-import { anySignal } from '../helpers';
+import { anySignal, capabilities } from '../helpers';
 
 const payload = {
   releases: [
@@ -263,7 +263,10 @@ describe('whether helm can act', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ available: false, reason: 'not on PATH', binary: 'helm' }),
+        json: () =>
+          Promise.resolve(
+            capabilities({ helm: { available: false, reason: 'not on PATH', binary: 'helm' } }),
+          ),
       }),
     );
 
@@ -276,7 +279,7 @@ describe('whether helm can act', () => {
   it('reports a failed check', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
 
-    await expect(fetchHelmSupport()).rejects.toThrow('helm support request failed with status 503');
+    await expect(fetchHelmSupport()).rejects.toThrow('capabilities request failed with status 503');
   });
 });
 
@@ -571,7 +574,7 @@ describe('the helm support hook', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ available: true, binary: 'helm' }),
+        json: () => Promise.resolve(capabilities()),
       }),
     );
 

@@ -621,6 +621,12 @@ export interface LocalShell {
   reason?: string;
 }
 
+export interface Capabilities {
+  helm: HelmSupport;
+  traffic: TrafficSupport;
+  localShell: LocalShell;
+}
+
 export interface TerminalSize {
   cols: number;
   rows: number;

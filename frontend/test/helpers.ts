@@ -1,5 +1,6 @@
 import { expect, vi } from 'vitest';
 import type {
+  Capabilities,
   Category,
   Column,
   FluxResource,
@@ -142,4 +143,13 @@ export function emitSystemDark(matches: boolean): void {
   for (const listener of mediaListeners) {
     listener(event);
   }
+}
+
+export function capabilities(patch: Partial<Capabilities> = {}): Capabilities {
+  return {
+    helm: { available: true, reason: undefined, binary: 'helm' },
+    traffic: { available: false, reason: 'no prometheus', source: undefined },
+    localShell: { available: false, reason: 'desktop only' },
+    ...patch,
+  };
 }

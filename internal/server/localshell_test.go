@@ -93,12 +93,12 @@ func shellServer(t *testing.T, open LocalShellOpener) *httptest.Server {
 
 func decodeLocalShell(t *testing.T, body []byte) api.LocalShell {
 	t.Helper()
-	var support api.LocalShell
-	err := json.Unmarshal(body, &support)
+	var found api.Capabilities
+	err := json.Unmarshal(body, &found)
 	if err != nil {
 		t.Fatalf("decode %s: %v", body, err)
 	}
-	return support
+	return found.LocalShell
 }
 
 func dialShell(t *testing.T, ts *httptest.Server, query string) *websocket.Conn {
@@ -142,7 +142,7 @@ func sendShellFrame(t *testing.T, conn *websocket.Conn, channel byte, payload []
 func TestABrowserTabIsToldTheLocalShellIsDesktopOnly(t *testing.T) {
 	ts := shellServer(t, nil)
 
-	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/shell/support", nil)
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/capabilities", nil)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
@@ -161,7 +161,7 @@ func TestTheDesktopWindowIsOfferedALocalShell(t *testing.T) {
 		return newStubShell(), nil
 	})
 
-	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/shell/support", nil)
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/capabilities", nil)
 
 	if !decodeLocalShell(t, body).Available {
 		t.Fatalf("the desktop window was refused a shell: %s", body)

@@ -79,8 +79,9 @@ func decodeInto(t *testing.T, base, path string, into any) *http.Response {
 func TestTrafficEndpointsWithoutPrometheus(t *testing.T) {
 	ts := dashboardServer(t)
 
-	var support api.TrafficSupport
-	res := decodeInto(t, ts.URL, "/api/traffic/support", &support)
+	var found api.Capabilities
+	res := decodeInto(t, ts.URL, "/api/capabilities", &found)
+	support := found.Traffic
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", res.StatusCode)
 	}
@@ -111,8 +112,9 @@ func TestTrafficEndpointsServeTheGraph(t *testing.T) {
 	]}}`
 	ts := trafficServer(t, map[string]string{flowsQuery(t): flows})
 
-	var support api.TrafficSupport
-	decodeInto(t, ts.URL, "/api/traffic/support", &support)
+	var found api.Capabilities
+	decodeInto(t, ts.URL, "/api/capabilities", &found)
+	support := found.Traffic
 	if !support.Available {
 		t.Fatalf("traffic was refused: %q", support.Reason)
 	}
@@ -145,8 +147,9 @@ func TestTrafficSupportNamesTheMissingLabels(t *testing.T) {
 		`count(hubble_flows_processed_total)`: present,
 	})
 
-	var support api.TrafficSupport
-	decodeInto(t, ts.URL, "/api/traffic/support", &support)
+	var found api.Capabilities
+	decodeInto(t, ts.URL, "/api/capabilities", &found)
+	support := found.Traffic
 	if support.Available {
 		t.Fatal("unlabelled metrics were offered as a graph")
 	}
@@ -158,7 +161,7 @@ func TestTrafficSupportNamesTheMissingLabels(t *testing.T) {
 func TestTheTrafficEndpointsRefuseAWrongMethod(t *testing.T) {
 	ts := dashboardServer(t)
 
-	for _, path := range []string{"/api/traffic", "/api/traffic/support"} {
+	for _, path := range []string{"/api/traffic", "/api/capabilities"} {
 		t.Run(path, func(t *testing.T) {
 			res, err := http.Post(ts.URL+path, "application/json", http.NoBody)
 			if err != nil {

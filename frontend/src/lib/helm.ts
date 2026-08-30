@@ -20,8 +20,8 @@ import {
   parseHelmChartVersions,
   parseHelmReleaseDetail,
   parseHelmReleases,
-  parseHelmSupport,
 } from './parse';
+import { fetchCapabilities } from './capabilities';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 
@@ -139,11 +139,7 @@ export async function fetchHelmRelease(
 }
 
 export async function fetchHelmSupport(): Promise<HelmSupport> {
-  const response = await request('/api/helm/support');
-  if (!response.ok) {
-    throw await failure(response, `helm support request failed with status ${response.status}`);
-  }
-  return parseHelmSupport(await response.json());
+  return (await fetchCapabilities()).helm;
 }
 
 export async function rollbackRelease(

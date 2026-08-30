@@ -1,7 +1,8 @@
 import type { ExecSupport, ExecTarget, LocalShell, NodeShellSupport } from './types';
 import { failure } from './object';
 import { request } from './http';
-import { parseExecSupport, parseLocalShell, parseNodeShellSupport } from './parse';
+import { parseExecSupport, parseNodeShellSupport } from './parse';
+import { fetchCapabilities } from './capabilities';
 import { wsURL } from './wsBase';
 
 export const CHANNEL_STDIN = 0x00;
@@ -52,11 +53,7 @@ export async function fetchExecSupport(target: ExecTarget): Promise<ExecSupport>
 }
 
 export async function fetchLocalShellSupport(): Promise<LocalShell> {
-  const response = await request('/api/shell/support');
-  if (!response.ok) {
-    throw await failure(response, `local shell support failed with status ${response.status}`);
-  }
-  return parseLocalShell(await response.json());
+  return (await fetchCapabilities()).localShell;
 }
 
 export function frame(channel: number, payload: Uint8Array): Uint8Array {

@@ -32,6 +32,9 @@ Baseline.Findings findings,omitempty int
 Baseline.TakenAt takenAt,omitempty string
 Build.Version version string
 BulkAccess.Refused refused []RowRefusal
+Capabilities.Helm helm HelmSupport
+Capabilities.LocalShell localShell LocalShell
+Capabilities.Traffic traffic TrafficSupport
 Category.Name name string
 Category.Resources resources []ResourceDescriptor
 CheckFinding.Container container,omitempty string

@@ -1,13 +1,10 @@
 import type { TrafficGraph, TrafficSupport } from './types';
 import { request } from './http';
-import { parseTrafficGraph, parseTrafficSupport } from './parse';
+import { parseTrafficGraph } from './parse';
+import { fetchCapabilities } from './capabilities';
 
 export async function fetchTrafficSupport(): Promise<TrafficSupport> {
-  const response = await request('/api/traffic/support');
-  if (!response.ok) {
-    throw new Error(`traffic support request failed with status ${response.status}`);
-  }
-  return parseTrafficSupport(await response.json());
+  return (await fetchCapabilities()).traffic;
 }
 
 export async function fetchTrafficGraph(): Promise<TrafficGraph> {

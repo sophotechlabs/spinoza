@@ -19,6 +19,7 @@ import {
 } from '../../src/lib/exec';
 import type { ExecEnd } from '../../src/lib/exec';
 import type { ExecTarget } from '../../src/lib/types';
+import { capabilities } from '../helpers';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -389,7 +390,13 @@ describe('the shell on this machine', () => {
   it('reports whether the desktop app offers one', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ available: true }) })),
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(capabilities({ localShell: { available: true, reason: undefined } })),
+        }),
+      ),
     );
 
     await expect(fetchLocalShellSupport()).resolves.toEqual({
@@ -404,7 +411,7 @@ describe('the shell on this machine', () => {
       vi.fn(() =>
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ available: false, reason: 'desktop only' }),
+          json: () => Promise.resolve(capabilities()),
         }),
       ),
     );
@@ -423,7 +430,7 @@ describe('the shell on this machine', () => {
       ),
     );
 
-    await expect(fetchLocalShellSupport()).rejects.toThrow('no');
+    await expect(fetchLocalShellSupport()).rejects.toThrow('capabilities request failed');
   });
 });
 

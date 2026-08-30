@@ -26,6 +26,7 @@ type stubViews struct {
 	releases   api.HelmReleases
 	detail     api.HelmReleaseDetail
 	support    api.HelmSupport
+	traffic    api.TrafficSupport
 	helmErr    error
 	detailErr  error
 	actionErr  error
@@ -81,6 +82,10 @@ func (s *stubViews) HelmRelease(_ context.Context, namespace, name string) (api.
 
 func (s *stubViews) HelmSupport() api.HelmSupport {
 	return s.support
+}
+
+func (s *stubViews) TrafficSupport(context.Context) api.TrafficSupport {
+	return s.traffic
 }
 
 func (s *stubViews) HelmRollback(_ context.Context, _, _ string, revision int64) (api.HelmActionResult, error) {
@@ -458,8 +463,9 @@ func TestTheSupportEndpointSaysWhetherHelmIsThere(t *testing.T) {
 	backend := &stubViews{support: api.HelmSupport{Available: false, Reason: "helm was not found on PATH", Binary: "helm"}}
 	ts := stubbedServer(t, backend)
 
-	var got api.HelmSupport
-	resp := getJSON(t, ts.URL+"/api/helm/support", &got)
+	var found api.Capabilities
+	resp := getJSON(t, ts.URL+"/api/capabilities", &found)
+	got := found.Helm
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
@@ -469,6 +475,50 @@ func TestTheSupportEndpointSaysWhetherHelmIsThere(t *testing.T) {
 	}
 	if got.Reason == "" {
 		t.Fatal("support gave no reason")
+	}
+}
+
+func TestCapabilitiesComeBackInOneAnswer(t *testing.T) {
+	backend := &stubViews{
+		support: api.HelmSupport{Available: true, Binary: "helm"},
+		traffic: api.TrafficSupport{Available: true, Source: "Cilium Hubble"},
+	}
+	ts := stubbedServer(t, backend)
+
+	var found api.Capabilities
+	resp := getJSON(t, ts.URL+"/api/capabilities", &found)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if !found.Helm.Available || found.Helm.Binary != "helm" {
+		t.Fatalf("helm = %+v, want the backend's answer", found.Helm)
+	}
+	if !found.Traffic.Available || found.Traffic.Source != "Cilium Hubble" {
+		t.Fatalf("traffic = %+v, want the backend's answer", found.Traffic)
+	}
+	if found.LocalShell.Available {
+		t.Fatal("a browser tab was offered a shell on the machine")
+	}
+	if found.LocalShell.Reason == "" {
+		t.Fatal("the shell refusal gave no reason")
+	}
+}
+
+func TestCapabilitiesAnswerWithoutACluster(t *testing.T) {
+	ts := clusterServer(t, &stubBackendCluster{backend: nil})
+
+	var found api.Capabilities
+	resp := getJSON(t, ts.URL+"/api/capabilities", &found)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want the probe to answer without a cluster", resp.StatusCode)
+	}
+	if found.Helm.Available || found.Traffic.Available {
+		t.Fatalf("a cluster-less spinoza offered %+v", found)
+	}
+	if found.Helm.Reason == "" || found.Traffic.Reason == "" {
+		t.Fatalf("no reason was given for either: %+v", found)
 	}
 }
 

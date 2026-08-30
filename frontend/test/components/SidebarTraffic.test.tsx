@@ -5,7 +5,7 @@ import type { Category, TrafficSupport, View } from '../../src/lib/types';
 import Sidebar from '../../src/components/Sidebar';
 import { clearCatalog } from '../../src/store/catalog';
 import { useTrafficStore } from '../../src/store/traffic';
-import { makeCategory, makeDescriptor, rejectsWith } from '../helpers';
+import { capabilities, makeCategory, makeDescriptor, rejectsWith } from '../helpers';
 
 const categories: Category[] = [
   makeCategory('Workloads', [
@@ -15,11 +15,14 @@ const categories: Category[] = [
 
 function stubFetch(support: TrafficSupport | Error): void {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
-    if (url.startsWith('/api/traffic/support')) {
+    if (url.startsWith('/api/capabilities')) {
       if (support instanceof Error) {
         return Promise.reject(support);
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(support) });
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(capabilities({ traffic: support })),
+      });
     }
     if (url.startsWith('/api/resources/counts')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts: {} }) });
@@ -72,7 +75,7 @@ describe('the Traffic entry', () => {
 
   it('reports a non-error rejection with a plain message', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.startsWith('/api/traffic/support')) {
+      if (url.startsWith('/api/capabilities')) {
         return rejectsWith('boom')();
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
@@ -90,12 +93,17 @@ describe('the Traffic entry', () => {
       answer = () => {
         resolve({
           ok: true,
-          json: () => Promise.resolve({ available: true, source: 'Cilium Hubble' }),
+          json: () =>
+            Promise.resolve(
+              capabilities({
+                traffic: { available: true, reason: undefined, source: 'Cilium Hubble' },
+              }),
+            ),
         });
       };
     });
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.startsWith('/api/traffic/support')) {
+      if (url.startsWith('/api/capabilities')) {
         return held;
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
@@ -121,14 +129,19 @@ describe('the Traffic entry', () => {
     vi.useFakeTimers();
     let call = 0;
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.startsWith('/api/traffic/support')) {
+      if (url.startsWith('/api/capabilities')) {
         call += 1;
         if (call === 1) {
           return rejectsWith(new Error('traffic support request failed with status 503'))();
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ available: true, source: 'Cilium Hubble' }),
+          json: () =>
+            Promise.resolve(
+              capabilities({
+                traffic: { available: true, reason: undefined, source: 'Cilium Hubble' },
+              }),
+            ),
         });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
@@ -153,7 +166,7 @@ describe('the Traffic entry', () => {
     vi.useFakeTimers();
     let asked = 0;
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.startsWith('/api/traffic/support')) {
+      if (url.startsWith('/api/capabilities')) {
         asked += 1;
         return new Promise(() => undefined);
       }

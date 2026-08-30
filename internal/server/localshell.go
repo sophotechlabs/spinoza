@@ -39,14 +39,6 @@ func (s *Server) localShellOpener() LocalShellOpener {
 	return s.localShell
 }
 
-func (s *Server) handleLocalShellSupport(w http.ResponseWriter, r *http.Request) {
-	if s.localShellOpener() == nil {
-		writeJSON(w, api.LocalShell{Reason: noLocalShell})
-		return
-	}
-	writeJSON(w, api.LocalShell{Available: true})
-}
-
 func shellSize(r *http.Request) (uint16, uint16) {
 	query := r.URL.Query()
 	return dimension(query.Get("cols"), 80), dimension(query.Get("rows"), 24)

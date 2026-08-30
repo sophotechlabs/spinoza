@@ -173,6 +173,12 @@ type LocalShell struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+type Capabilities struct {
+	Helm       HelmSupport    `json:"helm"`
+	Traffic    TrafficSupport `json:"traffic"`
+	LocalShell LocalShell     `json:"localShell"`
+}
+
 type TerminalSize struct {
 	Cols uint16 `json:"cols"`
 	Rows uint16 `json:"rows"`
