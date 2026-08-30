@@ -275,6 +275,7 @@ type Issue struct {
 type IssueQueue struct {
 	Rows    []Issue `json:"rows"`
 	Dropped int     `json:"dropped"`
+	Next    string  `json:"next,omitempty"`
 	Error   string  `json:"error,omitempty"`
 }
 

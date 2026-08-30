@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Issue } from '../../src/lib/types';
 import { SEVERITIES } from '../../src/lib/types';
 import {
@@ -10,8 +10,9 @@ import {
   severityClass,
   severityLabel,
   useIssues,
+  usePagedIssues,
 } from '../../src/lib/issues';
-import { anySignal } from '../helpers';
+import { anySignal, rejectsWith } from '../helpers';
 
 function issue(patch: Partial<Issue> = {}): Issue {
   return {
@@ -228,5 +229,211 @@ describe('the fold', () => {
 
   it('reports nothing hidden when a row has no child list at all', () => {
     expect(hiddenChildren(issue({ folded: 0, children: undefined }))).toBe(0);
+  });
+});
+
+function pagesStub(pages: Record<string, unknown>): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn((url: string) => {
+    const after = new URL(url, 'http://localhost').searchParams.get('after') ?? '';
+    const body = pages[after];
+    if (body === undefined) {
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+describe('usePagedIssues', () => {
+  it('joins the pages it has been asked for onto the first one', async () => {
+    pagesStub({
+      '': { rows: [issue({ id: 'one' })], dropped: 0, next: 'c1' },
+      c1: { rows: [issue({ id: 'two' })], dropped: 0, next: 'c2' },
+      c2: { rows: [issue({ id: 'three' })], dropped: 0 },
+    });
+
+    const { result } = renderHook(() => usePagedIssues());
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(1);
+    });
+
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['one', 'two']);
+    });
+
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['one', 'two', 'three']);
+    });
+    expect(result.current.more).toBe('');
+  });
+
+  it('drops the tail when the first page no longer ends where it did', async () => {
+    let head = { rows: [issue({ id: 'one' })], dropped: 0, next: 'c1' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const after = new URL(url, 'http://localhost').searchParams.get('after') ?? '';
+        if (after === '') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(head) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ rows: [issue({ id: 'tail' })], dropped: 0 }),
+        });
+      }),
+    );
+
+    const { result } = renderHook(() => usePagedIssues());
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(1);
+    });
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['one', 'tail']);
+    });
+
+    head = { rows: [issue({ id: 'worse' })], dropped: 0, next: 'c9' };
+    act(() => {
+      result.current.reload();
+    });
+
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['worse']);
+    });
+    expect(result.current.more).toBe('c9');
+  });
+
+  it('asks the fleet endpoint for its pages when the fleet queue is showing', async () => {
+    const fetchMock = pagesStub({
+      '': { rows: [issue({ id: 'one' })], dropped: 0, next: 'c1' },
+      c1: { rows: [issue({ id: 'two' })], dropped: 0 },
+    });
+
+    const { result } = renderHook(() => usePagedIssues(true, true));
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(1);
+    });
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(2);
+    });
+
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toContain(
+      '/api/issues/fleet?after=c1',
+    );
+  });
+
+  it('ignores a second ask while the first is still in the air', async () => {
+    let landed: (body: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const after = new URL(url, 'http://localhost').searchParams.get('after') ?? '';
+        if (after === '') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ rows: [issue({ id: 'one' })], dropped: 0, next: 'c1' }),
+          });
+        }
+        return new Promise((resolve) => {
+          landed = (body) => {
+            resolve({ ok: true, json: () => Promise.resolve(body) });
+          };
+        });
+      }),
+    );
+
+    const { result } = renderHook(() => usePagedIssues());
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(1);
+    });
+    act(() => {
+      result.current.loadMore();
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.loadingMore).toBe(true);
+    });
+
+    act(() => {
+      landed({ rows: [issue({ id: 'two' })], dropped: 0 });
+    });
+
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['one', 'two']);
+    });
+  });
+
+  it('does nothing when there is no more to ask for', async () => {
+    const fetchMock = pagesStub({ '': { rows: [issue({ id: 'one' })], dropped: 0 } });
+
+    const { result } = renderHook(() => usePagedIssues());
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(1);
+    });
+    const before = fetchMock.mock.calls.length;
+
+    act(() => {
+      result.current.loadMore();
+    });
+
+    expect(fetchMock.mock.calls).toHaveLength(before);
+    expect(result.current.moreError).toBe('');
+  });
+
+  it('reports a page that will not load and keeps the ask available', async () => {
+    pagesStub({ '': { rows: [issue({ id: 'one' })], dropped: 0, next: 'c1' } });
+
+    const { result } = renderHook(() => usePagedIssues());
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(1);
+    });
+    act(() => {
+      result.current.loadMore();
+    });
+
+    await waitFor(() => {
+      expect(result.current.moreError).toMatch(/status 404/);
+    });
+    expect(result.current.more).toBe('c1');
+  });
+
+  it('reports a rejection that is not an error as a failed request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const after = new URL(url, 'http://localhost').searchParams.get('after') ?? '';
+        if (after === '') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ rows: [issue({ id: 'one' })], dropped: 0, next: 'c1' }),
+          });
+        }
+        return rejectsWith('not an Error')();
+      }),
+    );
+
+    const { result } = renderHook(() => usePagedIssues());
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(1);
+    });
+    act(() => {
+      result.current.loadMore();
+    });
+
+    await waitFor(() => {
+      expect(result.current.moreError).toBe('issues request failed');
+    });
   });
 });

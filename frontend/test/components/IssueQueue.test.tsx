@@ -75,7 +75,64 @@ afterEach(() => {
   useIssuesStore.setState({ fleet: false });
 });
 
+function pagedStub(pages: Record<string, Queue | undefined>): string[] {
+  const asked: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      asked.push(url);
+      const after = new URL(url, 'http://localhost').searchParams.get('after') ?? '';
+      const body = pages[after];
+      if (body === undefined) {
+        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+    }),
+  );
+  return asked;
+}
+
 describe('IssueQueue', () => {
+  it('leaves the rest of the queue behind a button until it is asked for', async () => {
+    pagedStub({
+      '': queue({ rows: [issue()], next: 'cursor-1' }),
+      'cursor-1': queue({ rows: [issue({ id: 'second', title: 'ImagePullBackOff' })] }),
+    });
+
+    render(<IssueQueue />);
+    expect(await screen.findByText('CrashLoopBackOff')).toBeInTheDocument();
+    expect(screen.queryByText('ImagePullBackOff')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+
+    expect(await screen.findByText('ImagePullBackOff')).toBeInTheDocument();
+    expect(screen.getByText('CrashLoopBackOff')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('offers nothing more when the queue fits on one page', async () => {
+    stub(queue());
+
+    render(<IssueQueue />);
+
+    expect(await screen.findByText('CrashLoopBackOff')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+  });
+
+  it('says so when the rest of the queue will not load', async () => {
+    pagedStub({ '': queue({ rows: [issue()], next: 'cursor-1' }) });
+
+    render(<IssueQueue />);
+    expect(await screen.findByText('CrashLoopBackOff')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+
+    expect(await screen.findByText(/issues request failed with status 404/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show more' })).toBeInTheDocument();
+  });
+
   it('waits for the first answer', () => {
     vi.stubGlobal(
       'fetch',

@@ -720,6 +720,7 @@ export interface Issue {
 export interface IssueQueue {
   rows: Issue[];
   dropped: number;
+  next?: string;
   error?: string;
 }
 

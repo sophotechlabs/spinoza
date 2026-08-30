@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"testing"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/helm"
+	"github.com/sophotechlabs/spinoza/internal/issues"
 )
 
 type stubViews struct {
@@ -211,6 +214,75 @@ func TestTheIssuesEndpointServesTheQueueTheBackendBuilt(t *testing.T) {
 	}
 	if got.Dropped != 3 {
 		t.Fatalf("dropped = %d, want 3", got.Dropped)
+	}
+}
+
+func manyIssues(count int) api.IssueQueue {
+	queue := api.IssueQueue{}
+	for at := range count {
+		queue.Rows = append(queue.Rows, api.Issue{
+			ID:       "uid-" + strconv.Itoa(at),
+			Severity: api.SeverityWarning,
+			Title:    "noisy",
+			Object:   api.ObjectRef{Version: "v1", Resource: "pods", Namespace: "web", Name: "p" + strconv.Itoa(at)},
+			Kind:     "Pod",
+		})
+	}
+	issues.Rank(queue.Rows)
+	return queue
+}
+
+func TestTheIssuesEndpointHandsOutOnePageAtATime(t *testing.T) {
+	ts := stubbedServer(t, &stubViews{issues: manyIssues(issues.Shown + 3)})
+
+	var first api.IssueQueue
+	getJSON(t, ts.URL+"/api/issues", &first)
+
+	if len(first.Rows) != issues.Shown {
+		t.Fatalf("rows = %d, want one page of %d", len(first.Rows), issues.Shown)
+	}
+	if first.Next == "" {
+		t.Fatal("a queue longer than a page offered no cursor for the rest")
+	}
+
+	var rest api.IssueQueue
+	getJSON(t, ts.URL+"/api/issues?after="+first.Next, &rest)
+
+	if len(rest.Rows) != 3 {
+		t.Fatalf("the rest carries %d rows, want 3", len(rest.Rows))
+	}
+	if rest.Next != "" {
+		t.Fatalf("the last page still offers %q", rest.Next)
+	}
+	if rest.Rows[0].ID == first.Rows[len(first.Rows)-1].ID {
+		t.Fatal("the second page repeats the row the first one ended on")
+	}
+}
+
+func TestAskingForABiggerPageGetsOne(t *testing.T) {
+	ts := stubbedServer(t, &stubViews{issues: manyIssues(issues.Shown + 3)})
+
+	var got api.IssueQueue
+	getJSON(t, ts.URL+"/api/issues?shown=100", &got)
+
+	if len(got.Rows) != issues.Shown+3 {
+		t.Fatalf("rows = %d, want the whole queue", len(got.Rows))
+	}
+	if got.Next != "" {
+		t.Fatalf("a page holding the whole queue still offers %q", got.Next)
+	}
+}
+
+func TestANonsensePageSizeFallsBackToOnePage(t *testing.T) {
+	ts := stubbedServer(t, &stubViews{issues: manyIssues(issues.Shown + 3)})
+
+	for _, raw := range []string{"", "banana", "-5", "0"} {
+		var got api.IssueQueue
+		getJSON(t, ts.URL+"/api/issues?shown="+url.QueryEscape(raw), &got)
+
+		if len(got.Rows) != issues.Shown {
+			t.Fatalf("shown=%q gave %d rows, want one page of %d", raw, len(got.Rows), issues.Shown)
+		}
 	}
 }
 

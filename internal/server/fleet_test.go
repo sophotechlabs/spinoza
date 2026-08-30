@@ -138,7 +138,7 @@ func TestTheMergedQueueStopsAtTheSameCapOneClusterDoes(t *testing.T) {
 	}
 	ts := queueServer(t, first, second)
 
-	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet", nil)
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet?shown=1000", nil)
 
 	merged := fleetFrom(t, body)
 	if len(merged.Rows) != issues.MaxRows {
@@ -146,6 +146,49 @@ func TestTheMergedQueueStopsAtTheSameCapOneClusterDoes(t *testing.T) {
 	}
 	if merged.Dropped != issues.MaxRows {
 		t.Fatalf("dropped = %d, want the rest counted", merged.Dropped)
+	}
+	if merged.Next != "" {
+		t.Fatalf("a page holding the whole cap still offers %q", merged.Next)
+	}
+}
+
+func TestTheFleetQueueHandsOutOnePageAtATime(t *testing.T) {
+	first := api.IssueQueue{}
+	second := api.IssueQueue{}
+	for at := range issues.Shown {
+		first.Rows = append(first.Rows, issue("a"+itoa(at), api.SeverityWarning))
+		second.Rows = append(second.Rows, issue("b"+itoa(at), api.SeverityWarning))
+	}
+	ts := queueServer(t, first, second)
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet", nil)
+
+	merged := fleetFrom(t, body)
+	if len(merged.Rows) != issues.Shown {
+		t.Fatalf("rows = %d, want one page of %d", len(merged.Rows), issues.Shown)
+	}
+	if merged.Next == "" {
+		t.Fatal("a queue twice a page long offered no cursor for the rest")
+	}
+
+	_, rest := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet?after="+merged.Next, nil)
+
+	tail := fleetFrom(t, rest)
+	if len(tail.Rows) != issues.Shown {
+		t.Fatalf("the second page carries %d rows, want %d", len(tail.Rows), issues.Shown)
+	}
+	if tail.Next != "" {
+		t.Fatalf("the last page still offers %q", tail.Next)
+	}
+	seen := map[string]bool{}
+	for _, row := range append(merged.Rows, tail.Rows...) {
+		if seen[row.Cluster+"/"+row.ID] {
+			t.Fatalf("row %q came back on both pages", row.ID)
+		}
+		seen[row.Cluster+"/"+row.ID] = true
+	}
+	if len(seen) != 2*issues.Shown {
+		t.Fatalf("the two pages carried %d distinct rows, want %d", len(seen), 2*issues.Shown)
 	}
 }
 

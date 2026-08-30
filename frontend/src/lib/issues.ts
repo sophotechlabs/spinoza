@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Issue, IssueQueue, Severity } from './types';
 import { request } from './http';
 import { parseIssueQueue } from './parse';
@@ -28,6 +29,68 @@ export function useIssues(enabled = true, fleet = false): Polled<IssueQueue> {
     enabled,
     fallback: 'issues request failed',
   });
+}
+
+async function fetchIssuePage(after: string, fleet: boolean): Promise<IssueQueue> {
+  const path = fleet ? '/api/issues/fleet' : '/api/issues';
+  return queueFrom(`${path}?after=${encodeURIComponent(after)}`);
+}
+
+export interface PagedIssues extends Polled<IssueQueue> {
+  rows: Issue[];
+  more: string;
+  loadingMore: boolean;
+  moreError: string;
+  loadMore: () => void;
+}
+
+export function usePagedIssues(enabled = true, fleet = false): PagedIssues {
+  const polled = useIssues(enabled, fleet);
+  const [tail, setTail] = useState<Issue[]>([]);
+  const [builtOn, setBuiltOn] = useState('');
+  const [next, setNext] = useState('');
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState('');
+
+  const head = polled.data?.next ?? '';
+  const first = polled.data?.rows ?? [];
+  const joined = builtOn === head;
+  let rows = first;
+  let more = head;
+  if (joined) {
+    rows = [...first, ...tail];
+    more = next;
+  }
+
+  function loadMore() {
+    if (more === '' || loadingMore) {
+      return;
+    }
+    setLoadingMore(true);
+    setMoreError('');
+    fetchIssuePage(more, fleet)
+      .then((page) => {
+        if (joined) {
+          setTail((current) => [...current, ...page.rows]);
+        } else {
+          setTail(page.rows);
+          setBuiltOn(head);
+        }
+        setNext(page.next ?? '');
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof Error) {
+          setMoreError(reason.message);
+          return;
+        }
+        setMoreError('issues request failed');
+      })
+      .finally(() => {
+        setLoadingMore(false);
+      });
+  }
+
+  return { ...polled, rows, more, loadingMore, moreError, loadMore };
 }
 
 export function countBySeverity(rows: Issue[]): Record<Severity, number> {

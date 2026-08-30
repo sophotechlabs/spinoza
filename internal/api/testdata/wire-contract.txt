@@ -413,6 +413,7 @@ IssueChild.Severity severity string
 IssueChild.Since since string
 IssueQueue.Dropped dropped int
 IssueQueue.Error error,omitempty string
+IssueQueue.Next next,omitempty string
 IssueQueue.Rows rows []Issue
 KindComparison.Differs differs int
 KindComparison.LeftContext leftContext string

@@ -2,10 +2,12 @@ package server
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/checks"
+	"github.com/sophotechlabs/spinoza/internal/issues"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/topology"
 )
@@ -129,7 +131,27 @@ func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
 	for at := range queue.Rows {
 		queue.Rows[at].Cluster = on
 	}
-	writeJSON(w, queue)
+	writeJSON(w, pagedQueue(queue, r))
+}
+
+func pagedQueue(queue api.IssueQueue, r *http.Request) api.IssueQueue {
+	query := r.URL.Query()
+	rows, next := issues.Page(
+		queue.Rows,
+		issues.DecodeCursor(query.Get("after")),
+		issues.PageSize(shownOf(query.Get("shown"))),
+	)
+	queue.Rows = rows
+	queue.Next = next
+	return queue
+}
+
+func shownOf(raw string) int {
+	asked, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0
+	}
+	return asked
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {

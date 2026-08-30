@@ -7,7 +7,7 @@ import {
   hiddenChildren,
   severityClass,
   severityLabel,
-  useIssues,
+  usePagedIssues,
 } from '../lib/issues';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
@@ -193,12 +193,22 @@ function Row({
   );
 }
 
+function moreLabel(loading: boolean): string {
+  if (loading) {
+    return 'Loading…';
+  }
+  return 'Show more';
+}
+
 export default function IssueQueue({ active = true, onSelect, onSelectOn }: IssueQueueProps) {
   const several = useTabStrip();
   const fleet = useFleetIssues();
   const setFleet = useIssuesStore((state) => state.setFleet);
   const showing = fleet && several;
-  const { data, error, reload } = useIssues(active, showing);
+  const { data, error, reload, rows, more, loadingMore, moreError, loadMore } = usePagedIssues(
+    active,
+    showing,
+  );
   const [opened, setOpened] = useState<Record<string, boolean>>({});
   const now = useNow();
 
@@ -246,12 +256,12 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
             </label>
           )}
         </div>
-        <Tally rows={data.rows} />
+        <Tally rows={rows} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
-        {data.rows.length === 0 && <p className="p-3 text-fg-muted">{emptyWord(showing)}</p>}
+        {rows.length === 0 && <p className="p-3 text-fg-muted">{emptyWord(showing)}</p>}
         <ul>
-          {data.rows.map((row) => (
+          {rows.map((row) => (
             <Row
               key={row.id}
               row={row}
@@ -267,9 +277,20 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
             />
           ))}
         </ul>
+        {more !== '' && (
+          <button
+            type="button"
+            disabled={loadingMore}
+            onClick={loadMore}
+            className="w-full border-t border-edge p-2 text-fg-muted hover:text-fg-strong disabled:text-fg-faint"
+          >
+            {moreLabel(loadingMore)}
+          </button>
+        )}
+        {moreError !== '' && <p className="p-3 text-error">{moreError}</p>}
         {data.dropped > 0 && (
           <p className="p-3 text-fg-muted">
-            {data.dropped} more rows are not shown; the queue stops at the {data.rows.length} worst.
+            {data.dropped} more rows are not shown; the queue stops at the {rows.length} worst.
           </p>
         )}
       </div>

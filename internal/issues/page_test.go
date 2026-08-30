@@ -1,0 +1,224 @@
+package issues
+
+import (
+	"slices"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
+)
+
+func rowsAcrossEveryOrderingField() []api.Issue {
+	severities := []string{api.SeverityWarning, api.SeverityDegraded, api.SeverityFatal, "info"}
+	folded := []int{0, 3, 50}
+	when := []string{
+		"",
+		testNow.Add(-time.Hour).UTC().Format(time.RFC3339),
+		testNow.UTC().Format(time.RFC3339),
+	}
+	clusters := []string{"alpha", "beta"}
+	out := []api.Issue{}
+	for _, severity := range severities {
+		for _, fold := range folded {
+			for _, since := range when {
+				for _, cluster := range clusters {
+					out = append(out, api.Issue{
+						ID:       cluster + "/" + severity + "/" + strconv.Itoa(fold) + "/" + since,
+						Severity: severity,
+						Folded:   fold,
+						Since:    since,
+						Cluster:  cluster,
+					})
+				}
+			}
+		}
+	}
+	return out
+}
+
+func TestTheCursorKeyOrdersRowsTheWayRankDoes(t *testing.T) {
+	rows := rowsAcrossEveryOrderingField()
+	Rank(rows)
+
+	for at := 1; at < len(rows); at++ {
+		before := issueKey(rows[at-1])
+		after := issueKey(rows[at])
+		if before >= after {
+			t.Fatalf(
+				"row %d sorts before row %d but its key does not: %q >= %q",
+				at-1, at, before, after,
+			)
+		}
+	}
+}
+
+func TestPagingWalksTheWholeQueueInOrder(t *testing.T) {
+	rows := rowsAcrossEveryOrderingField()
+	Rank(rows)
+
+	walked := []api.Issue{}
+	cursor := ""
+	for range len(rows) {
+		page, next := Page(rows, DecodeCursor(cursor), 7)
+		walked = append(walked, page...)
+		if next == "" {
+			break
+		}
+		cursor = next
+	}
+
+	if len(walked) != len(rows) {
+		t.Fatalf("walked %d rows, queue holds %d", len(walked), len(rows))
+	}
+	for at := range rows {
+		if walked[at].ID != rows[at].ID {
+			t.Fatalf("row %d is %q, ranked order has %q", at, walked[at].ID, rows[at].ID)
+		}
+	}
+}
+
+func TestEveryPageButTheLastIsFull(t *testing.T) {
+	rows := rowsAcrossEveryOrderingField()
+	Rank(rows)
+
+	cursor := ""
+	pages := 0
+	for {
+		page, next := Page(rows, DecodeCursor(cursor), 7)
+		pages++
+		if next == "" {
+			if len(page) > 7 {
+				t.Fatalf("last page carries %d rows, the limit is 7", len(page))
+			}
+			break
+		}
+		if len(page) != 7 {
+			t.Fatalf("page %d carries %d rows, the limit is 7", pages, len(page))
+		}
+		cursor = next
+	}
+	if pages != (len(rows)+6)/7 {
+		t.Fatalf("walked %d pages, %d rows at 7 a page needs %d", pages, len(rows), (len(rows)+6)/7)
+	}
+}
+
+func TestAPageBigEnoughForTheQueueEndsIt(t *testing.T) {
+	rows := rowsAcrossEveryOrderingField()
+	Rank(rows)
+
+	page, next := Page(rows, "", len(rows)+1)
+
+	if len(page) != len(rows) {
+		t.Fatalf("page carries %d of %d rows", len(page), len(rows))
+	}
+	if next != "" {
+		t.Fatalf("a page holding the whole queue still offers %q", next)
+	}
+}
+
+func TestAnEmptyQueuePagesToNothing(t *testing.T) {
+	page, next := Page(nil, "", Shown)
+
+	if len(page) != 0 {
+		t.Fatalf("an empty queue paged to %d rows", len(page))
+	}
+	if next != "" {
+		t.Fatalf("an empty queue offers %q", next)
+	}
+}
+
+func TestARowClearingBeforeTheNextPageDoesNotSkipItsNeighbour(t *testing.T) {
+	rows := rowsAcrossEveryOrderingField()
+	Rank(rows)
+	first, next := Page(rows, "", 7)
+	if next == "" {
+		t.Fatal("the fixture is too small to have a second page")
+	}
+
+	shorter := slices.Delete(slices.Clone(rows), 0, 1)
+	second, _ := Page(shorter, DecodeCursor(next), 7)
+
+	if len(second) == 0 {
+		t.Fatal("the second page came back empty")
+	}
+	if second[0].ID != rows[len(first)].ID {
+		t.Fatalf(
+			"the row after the boundary is %q, a row clearing above it made it %q",
+			rows[len(first)].ID, second[0].ID,
+		)
+	}
+}
+
+func TestGarbageInTheCursorStartsFromTheTop(t *testing.T) {
+	rows := rowsAcrossEveryOrderingField()
+	Rank(rows)
+
+	page, _ := Page(rows, DecodeCursor("not base64 at all!!"), 3)
+
+	if len(page) != 3 {
+		t.Fatalf("page carries %d rows", len(page))
+	}
+	if page[0].ID != rows[0].ID {
+		t.Fatalf("page starts at %q, the queue starts at %q", page[0].ID, rows[0].ID)
+	}
+}
+
+func TestAnEmptyCursorEncodesToNothing(t *testing.T) {
+	if EncodeCursor("") != "" {
+		t.Fatalf("an empty key encoded to %q", EncodeCursor(""))
+	}
+	if DecodeCursor("") != "" {
+		t.Fatalf("an empty cursor decoded to %q", DecodeCursor(""))
+	}
+}
+
+func TestPageSizeFallsBackToWhatOnePageShows(t *testing.T) {
+	if PageSize(0) != Shown {
+		t.Fatalf("an unset size gave %d, one page shows %d", PageSize(0), Shown)
+	}
+	if PageSize(-4) != Shown {
+		t.Fatalf("a negative size gave %d, one page shows %d", PageSize(-4), Shown)
+	}
+	if PageSize(9) != 9 {
+		t.Fatalf("a size of 9 gave %d", PageSize(9))
+	}
+}
+
+func TestCountDownStaysInsideItsWidth(t *testing.T) {
+	cases := []struct {
+		value int
+		want  string
+	}{
+		{value: 0, want: "999"},
+		{value: 1, want: "998"},
+		{value: 999, want: "000"},
+		{value: -7, want: "999"},
+		{value: 4000, want: "000"},
+	}
+	for _, one := range cases {
+		got := countDown(one.value, 999)
+		if got != one.want {
+			t.Fatalf("countDown(%d, 999) = %q, want %q", one.value, got, one.want)
+		}
+	}
+}
+
+func TestATimeNobodyStampedCountsAsTheOldest(t *testing.T) {
+	if secondsOf(time.Time{}) != 0 {
+		t.Fatalf("an unstamped time counted as %d seconds", secondsOf(time.Time{}))
+	}
+	stamped := time.Unix(1700000000, 0)
+	if secondsOf(stamped) != 1700000000 {
+		t.Fatalf("a stamped time counted as %d seconds", secondsOf(stamped))
+	}
+}
+
+func TestAFoldCountPastTheCeilingStillOutranksASmallOne(t *testing.T) {
+	huge := api.Issue{ID: "huge", Severity: api.SeverityWarning, Folded: foldCeiling + 10}
+	modest := api.Issue{ID: "modest", Severity: api.SeverityWarning, Folded: 1}
+
+	if issueKey(huge) >= issueKey(modest) {
+		t.Fatalf("a fold count past the ceiling wrapped and sorted below a fold of 1")
+	}
+}

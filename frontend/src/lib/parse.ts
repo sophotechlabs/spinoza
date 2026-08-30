@@ -742,6 +742,7 @@ export function parseIssueQueue(body: unknown): IssueQueue {
   return {
     rows: listOf(item.rows, parseIssue),
     dropped: asNumber(item.dropped),
+    next: optionalString(item.next),
     error: optionalString(item.error),
   };
 }

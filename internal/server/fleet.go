@@ -18,7 +18,7 @@ type clusterQueue struct {
 }
 
 func (s *Server) fleetIssues(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, mergeQueues(s.everyClustersIssues(r.Context())))
+	writeJSON(w, pagedQueue(mergeQueues(s.everyClustersIssues(r.Context())), r))
 }
 
 func (s *Server) everyClustersIssues(ctx context.Context) []clusterQueue {
