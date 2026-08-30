@@ -533,7 +533,7 @@ export function parseTrafficGraph(body: unknown): TrafficGraph {
   };
 }
 
-export function parseTrafficSupport(body: unknown): TrafficSupport {
+function parseTrafficSupport(body: unknown): TrafficSupport {
   const item = asRecord(body);
   return {
     available: item.available === true,
@@ -643,7 +643,7 @@ export function parseExecSupport(body: unknown): ExecSupport {
   };
 }
 
-export function parseLocalShell(body: unknown): LocalShell {
+function parseLocalShell(body: unknown): LocalShell {
   const item = asRecord(body);
   return {
     available: item.available === true,
@@ -846,7 +846,7 @@ export function parseHelmReleaseDetail(body: unknown): HelmReleaseDetail {
   };
 }
 
-export function parseHelmSupport(body: unknown): HelmSupport {
+function parseHelmSupport(body: unknown): HelmSupport {
   const item = asRecord(body);
   return {
     available: asBoolean(item.available),

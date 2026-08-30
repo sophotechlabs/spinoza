@@ -15,6 +15,7 @@
     "format:check": "prettier --check .",
     "contrast": "node scripts/check-contrast.mjs",
     "knip": "knip",
+    "knip:production": "knip --production --include files",
     "depcheck": "depcheck",
     "madge": "madge --circular --extensions ts,tsx src",
     "typecov": "type-coverage --at-least 99 --strict --ignore-files 'src/vite-env.d.ts'"

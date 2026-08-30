@@ -525,6 +525,7 @@ audit-be:
 
 audit-fe:
     cd frontend && npm run knip
+    cd frontend && npm run knip:production
     cd frontend && npm run depcheck
     cd frontend && npm run madge
     cd frontend && npm run typecov

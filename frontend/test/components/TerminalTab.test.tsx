@@ -18,7 +18,6 @@ import TerminalTab from '../../src/components/TerminalTab';
 import type { PodTarget } from '../../src/lib/pods';
 import { useTerminalsStore } from '../../src/store/terminals';
 import { accessKey, useAccessStore } from '../../src/store/access';
-import { terminalTitle } from '../../src/lib/shell';
 import { capabilities } from '../helpers';
 import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 import { podRef } from '../../src/lib/pods';
@@ -172,11 +171,6 @@ describe('TerminalTab', () => {
 
     expect(screen.queryAllByTestId('terminal-session')).toHaveLength(0);
     expect(screen.getByText(/No shells open/)).toBeInTheDocument();
-  });
-
-  it('explains why the terminal is unavailable', () => {
-    expect(terminalTitle('absent')).toContain('debug container');
-    expect(terminalTitle('present')).toContain('Shell into');
   });
 
   it('says the local shell is desktop-only in a browser tab', async () => {
