@@ -1,5 +1,63 @@
 # Changelog
 
+## [1.22.0](https://github.com/sophotechlabs/spinoza/compare/v1.21.0...v1.22.0) (2026-08-30)
+
+
+### Features
+
+* **checks:** make the findings a work list — mute, a baseline to compare against, and per-namespace ([7d3bdbd](https://github.com/sophotechlabs/spinoza/commit/7d3bdbd4790d0e575aa3ec4f06c579b666e72d86))
+* **checks:** rank each finding by how far the problem actually reaches ([0dd4370](https://github.com/sophotechlabs/spinoza/commit/0dd4370a5f94e96397cf11a2fd9198ccf61f528b))
+* **checks:** read the custom resources, and only when a check needs them ([bcd2b92](https://github.com/sophotechlabs/spinoza/commit/bcd2b924079d302fe1af5ba77e9c8a489fd46880))
+* **checks:** tell a leftover from something a controller reads ([5753086](https://github.com/sophotechlabs/spinoza/commit/5753086969b272b37b6ffdad80f9668a0baf61af))
+* **fleet:** checks, search, releases and GitOps across every open cluster ([4b815eb](https://github.com/sophotechlabs/spinoza/commit/4b815eb0e19f15e22b59dc175fa379403c70eef9))
+* **issues:** hand the queue out a page at a time, keyed on the sort order ([cd5fc9f](https://github.com/sophotechlabs/spinoza/commit/cd5fc9f2f143e29c369e0d9ae8cbee887354fc0a))
+* **just:** filter every test suite by name and by path ([c77f7ef](https://github.com/sophotechlabs/spinoza/commit/c77f7ef392d70bd019d0e7661af2698649cd404c))
+* **spinoza:** one Issues queue across every open cluster, and a timeline of what the cluster does ([a6a0a73](https://github.com/sophotechlabs/spinoza/commit/a6a0a73e35b818c2daec59973a33ea92ef99c989))
+
+
+### Bug Fixes
+
+* **ci:** break the checks import cycle, and stop exporting what nothing imports ([fa00b3e](https://github.com/sophotechlabs/spinoza/commit/fa00b3ec8d1c34334ea7b71b18c9e5ff1a4ed684))
+* **clusters:** key the namespace answer on the cluster, and let the strip scroll ([1e88a6a](https://github.com/sophotechlabs/spinoza/commit/1e88a6afb3c63fe862012bc0581fb1e772464a19))
+* e2e test ([5fc0e34](https://github.com/sophotechlabs/spinoza/commit/5fc0e34bc4a8b72960c9d7a2b0c8639300f59e6e))
+* **frontend:** check what production actually reaches with knip ([903b09a](https://github.com/sophotechlabs/spinoza/commit/903b09a2fcadebcab3da73b3ff4fc5ef74d250c2))
+* **lint:** check a marshal, convert two identical structs, and stop shadowing net/url ([f0f7abf](https://github.com/sophotechlabs/spinoza/commit/f0f7abf9a655a47dec49f2a06e17b2884c4510c3))
+* **themes:** warn when an imported theme would make the editor unreadable ([9187c45](https://github.com/sophotechlabs/spinoza/commit/9187c45e7db46b4bb823814bf37e8ec4a3d700a0))
+
+
+### Miscellaneous
+
+* lint fix ([92634f3](https://github.com/sophotechlabs/spinoza/commit/92634f3e3601ddfada104fced3d09eb890c020fd))
+
+
+### CI
+
+* update e2e setup ([bc18f76](https://github.com/sophotechlabs/spinoza/commit/bc18f76bea139e6eb4fdd09f36e215d9f4564a76))
+
+
+### Refactoring
+
+* **frontend:** put one graph shell behind the gitops and traffic canvases ([afd26ff](https://github.com/sophotechlabs/spinoza/commit/afd26ff6d7987ff7b6f8d0c9404b2cbfbca4cb66))
+* **server:** answer helm, traffic and shell support in one capability probe ([ebf88ea](https://github.com/sophotechlabs/spinoza/commit/ebf88eaff9abf6bfffdb2f80a5b3a3882ab6ddda))
+
+
+### Performance
+
+* **overview:** stop walking the cluster to count each pod phase ([a0ac93d](https://github.com/sophotechlabs/spinoza/commit/a0ac93d67bfb60e8b9af04e25e20da840d0c13d5))
+* **resources:** let a one-off List release its informer ([20ddc37](https://github.com/sophotechlabs/spinoza/commit/20ddc37219f7ed7f296be1c3c0b11453f2736860))
+
+
+### Tests
+
+* **e2e:** assert the history copy the app actually renders ([3ddaa99](https://github.com/sophotechlabs/spinoza/commit/3ddaa99f357b9b4d88a9eede802ba83a3790492a))
+* **e2e:** assert the upgrade renders its manifest before applying it ([3f0d537](https://github.com/sophotechlabs/spinoza/commit/3f0d5372b4525e59cd986a641fd5864e760f7dfe))
+* **e2e:** open a second live cluster and switch between them ([e9c8cd7](https://github.com/sophotechlabs/spinoza/commit/e9c8cd7037d8392600bcf7a0879de6b53e2db82f))
+* **e2e:** upgrade a release, install from a repo, resize a shell, and open a second cluster ([6cc3632](https://github.com/sophotechlabs/spinoza/commit/6cc3632364ae8f3367c677b2665ac18967063992))
+* **history:** cover every read and write that fails ([932f8aa](https://github.com/sophotechlabs/spinoza/commit/932f8aad54d08a0fd8358c785b020fe0fb0005c1))
+* **mcp:** put cmd/spinoza-mcp inside every Go gate ([2c81e3e](https://github.com/sophotechlabs/spinoza/commit/2c81e3e7705bad8cb661cabe5f4573b4f4078207))
+* **shots:** capture the site's screenshots against a seeded two-cluster setup ([96ee074](https://github.com/sophotechlabs/spinoza/commit/96ee074b62ae352028dbbb56d0b7203e48d41eea))
+* **shots:** capture the site's screenshots, and wait for dialogs instead of sampling ([70800eb](https://github.com/sophotechlabs/spinoza/commit/70800eb6e3e26b70d39e0661cea923a4a5aefaf4))
+
 ## [1.21.0](https://github.com/sophotechlabs/spinoza/compare/v1.20.0...v1.21.0) (2026-08-29)
 
 
