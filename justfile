@@ -229,8 +229,15 @@ dev-api: stub-assets
 dev-web:
     cd frontend && npm run dev
 
-test-be: stub-assets
-    go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out {{ go_pkgs }}
+test-be name='' pkgs=go_pkgs: stub-assets
+    #!/usr/bin/env bash
+    set -euo pipefail
+    name={{ quote(name) }}
+    if [ -n "$name" ]; then
+        go test -race -shuffle=on -run "$name" {{ pkgs }}
+        exit 0
+    fi
+    go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out {{ pkgs }}
     go tool cover -func=coverage.out
 
 kind-config tier:
@@ -326,26 +333,32 @@ cluster-mirror:
         printf '[host."%s"]\n' '{{ registry_endpoint }}' | docker exec -i "$node" cp /dev/stdin "$certs/hosts.toml"
     done
 
-test-integration: cluster-base
+test-integration name='': cluster-base
     #!/usr/bin/env bash
     set -euo pipefail
-    SPINOZA_TEST_CONTEXT={{ test_context }} go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
+    export SPINOZA_TEST_CONTEXT={{ test_context }}
+    name={{ quote(name) }}
+    if [ -n "$name" ]; then
+        go test -tags integration -count=1 -timeout 15m -run "$name" ./test/integration/...
+        exit 0
+    fi
+    go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
     go tool cover -func=coverage.integration.out | tail -1
 
-test-e2e: cluster-e2e (e2e-run 'core')
+test-e2e name='' spec='': cluster-e2e (e2e-run 'core' name spec)
 
-shots: cluster-down cluster-e2e cluster-second
+shots name='' spec='': cluster-down cluster-e2e cluster-second
     #!/usr/bin/env bash
     set -euo pipefail
-    SPINOZA_E2E_TIER=shots just e2e-run shots
+    SPINOZA_E2E_TIER=shots just e2e-run shots {{ quote(name) }} {{ quote(spec) }}
 
-test-e2e-full: cluster-full
+test-e2e-full name='' spec='': cluster-full
     #!/usr/bin/env bash
     set -euo pipefail
-    SPINOZA_E2E_TIER=full just e2e-run full
+    SPINOZA_E2E_TIER=full just e2e-run full {{ quote(name) }} {{ quote(spec) }}
 
 [private]
-e2e-run project:
+e2e-run project name='' spec='':
     #!/usr/bin/env bash
     set -euo pipefail
     export SPINOZA_KIND_CLUSTER='{{ test_cluster }}'
@@ -357,15 +370,50 @@ e2e-run project:
         npm ci
     fi
     npx playwright install chromium
-    npx playwright test --project={{ project }}
+    run=(test --project={{ project }})
+    spec={{ quote(spec) }}
+    if [ -n "$spec" ]; then
+        run+=("$spec")
+    fi
+    name={{ quote(name) }}
+    if [ -n "$name" ]; then
+        run+=(--grep "$name")
+    fi
+    npx playwright "${run[@]}"
 
-test-fe:
-    cd frontend && npm run test:coverage
+test-fe name='' spec='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d frontend/node_modules ] || [ frontend/package-lock.json -nt frontend/node_modules ]; then
+        npm --prefix frontend ci
+    fi
+    cd frontend
+    name={{ quote(name) }}
+    spec={{ quote(spec) }}
+    if [ -z "$name" ] && [ -z "$spec" ]; then
+        npm run test:coverage
+        exit 0
+    fi
+    run=(run)
+    if [ -n "$spec" ]; then
+        run+=("$spec")
+    fi
+    if [ -n "$name" ]; then
+        run+=(-t "$name")
+    fi
+    npx vitest "${run[@]}"
 
 test: test-be test-fe
 
-test-repeat: stub-assets
-    go test -race -shuffle=on -count=5 {{ go_pkgs }}
+test-repeat name='' pkgs=go_pkgs: stub-assets
+    #!/usr/bin/env bash
+    set -euo pipefail
+    name={{ quote(name) }}
+    if [ -n "$name" ]; then
+        go test -race -shuffle=on -count=5 -run "$name" {{ pkgs }}
+        exit 0
+    fi
+    go test -race -shuffle=on -count=5 {{ pkgs }}
 
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml

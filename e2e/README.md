@@ -16,6 +16,20 @@ Both bring their own cluster, build the binary and install Chromium. `SPINOZA_KI
 the cluster name, which is how several checkouts share one machine without colliding — the listen
 ports are derived from it.
 
+Both take an optional test name and an optional spec path, so a single test can be re-run without
+sitting through the tier:
+
+```sh
+just test-e2e 'the view says what it is for'                              # by name, anywhere
+just test-e2e '' specs/history.spec.ts                                    # one file
+just test-e2e 'clearing the history' specs/history.spec.ts                # both
+```
+
+The name is a `--grep` pattern and the path is passed to Playwright as-is. The cluster is reused
+when it is already up, so a second filtered run costs seconds. Mind that a spec written to run
+after its neighbours may fail alone, or pass alone and fail in the tier — `history` reads what
+earlier specs wrote. When a filtered run disagrees with a full one, the full one is right.
+
 ## Five spinozas, not one
 
 Most specs drive the main instance. Four more start beside it, each crippled a different way, so the

@@ -128,6 +128,18 @@ Vite serves its own `index.html` without the token, so open `http://localhost:51
 
 The binary embeds the built frontend; `just stub-assets` writes a placeholder for the Go-only recipes.
 
+Every test recipe takes an optional test name and an optional path, so you can re-run one test
+instead of a suite:
+
+```sh
+just test-be TestScaleRejectsNegative ./internal/actions/...
+just test-fe 'renders the empty state' test/components/History.test.tsx
+just test-e2e 'the view says what it is for' specs/history.spec.ts
+```
+
+Either argument can be given alone. A filtered Go run writes no coverage profile, so it cannot
+leave a partial one behind for `cover-gate`.
+
 `just check` before pushing. `just ci` runs everything CI does: cross-compilation, the coverage gate, `govulncheck`, dead-code and unused-dependency checks, a bundle-size budget, secret scanning and SAST.
 
 ## Architecture
