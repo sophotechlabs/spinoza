@@ -91,11 +91,24 @@ describe('paletteItems', () => {
 
 describe('the view registry', () => {
   it('offers every registered view, in its own order', () => {
+    act(() => {
+      showing(MK1);
+    });
+
     const offered = paletteItems(everyCategory, [], true)
       .filter((item) => item.kind === 'view')
       .map((item) => item.view);
 
     expect([...offered].sort()).toEqual([...VIEWS].sort());
+    useClustersStore.getState().reset();
+  });
+
+  it('does not offer the fleet view with one cluster open', () => {
+    const offered = paletteItems(everyCategory, [], true)
+      .filter((item) => item.kind === 'view')
+      .map((item) => item.view);
+
+    expect(offered).not.toContain('fleet');
   });
 
   it('labels every registered view', () => {

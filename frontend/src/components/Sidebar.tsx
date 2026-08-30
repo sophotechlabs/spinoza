@@ -23,6 +23,7 @@ import { useTrafficProbe } from '../lib/useTrafficProbe';
 import { useTrafficSupport } from '../store/traffic';
 import { kindLabels } from '../lib/kindLabels';
 import type { SidebarSections } from '../lib/sidebarState';
+import { useTabStrip } from '../store/clusters';
 
 interface SidebarProps {
   view: View;
@@ -226,6 +227,7 @@ function engineMark(found: boolean, open: boolean): string {
 
 export default function Sidebar({ view, activeResource, onSelect, onSelectView }: SidebarProps) {
   const epoch = useClusterEpoch();
+  const several = useTabStrip();
   const { size: width, startResize, nudge } = useSidebarWidth();
   const [categories, setCategories] = useState<Category[]>([]);
   const flux = fluxInstalled(categories);
@@ -364,6 +366,18 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                 onSelectView('cluster');
               }}
             />
+          )}
+          {several && (
+            <button
+              type="button"
+              aria-current={current(view === 'fleet')}
+              onClick={() => {
+                onSelectView('fleet');
+              }}
+              className={resourceClass(view === 'fleet')}
+            >
+              Fleet
+            </button>
           )}
           {TOP_VIEWS.map((entry) => (
             <button

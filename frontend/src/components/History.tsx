@@ -11,12 +11,17 @@ import {
   recordFailure,
   refOf,
   scopeLabel,
+  cursorOf,
+  fetchHistory,
   foldRepeats,
+  olderFailure,
+  reachable,
   repeatLabel,
   sourceLabel,
   targetLabel,
   wasText,
   useHistory,
+  useMemory,
   verbLabel,
   when,
 } from '../lib/history';
@@ -180,9 +185,12 @@ function nothingYet(source: HistorySource): string {
 export default function History({ onOpen }: HistoryProps) {
   const [source, setSource] = useState<HistorySource>('all');
   const [fleet, setFleet] = useState(false);
+  const [older, setOlder] = useState<HistoryEntry[]>([]);
+  const [reaching, setReaching] = useState(false);
   const several = useTabStrip();
   const showing = fleet && several;
   const { data, error, reload } = useHistory({ source, fleet: showing });
+  const held = useMemory();
   const [clearing, setClearing] = useState(false);
   const now = useNow();
 
@@ -193,6 +201,20 @@ export default function History({ onOpen }: HistoryProps) {
       );
     }
     return <Loading what="history" />;
+  }
+
+  const page = data;
+
+  async function reachBack() {
+    setReaching(true);
+    try {
+      const next = await fetchHistory({ source, fleet: showing, after: cursorOf(page, older) });
+      setOlder((have) => [...have, ...next.entries]);
+    } catch (err: unknown) {
+      notifyError(olderFailure(err));
+    } finally {
+      setReaching(false);
+    }
   }
 
   async function handleClear() {
@@ -244,7 +266,14 @@ export default function History({ onOpen }: HistoryProps) {
           </label>
         )}
         <Recording />
-        {data.more && <span className="text-fg-muted">showing the newest {HISTORY_LIMIT}</span>}
+        {data.more && older.length === 0 && (
+          <span className="text-fg-muted">showing the newest {HISTORY_LIMIT}</span>
+        )}
+        {held.data !== null && (
+          <span className="text-fg-muted" title="what spinoza is holding while it watches">
+            {held.data.heapMi} MB held
+          </span>
+        )}
         {(data.dropped ?? 0) > 0 && (
           <span className="text-warn">
             {data.dropped} changes came in faster than they could be written and were not kept
@@ -279,7 +308,7 @@ export default function History({ onOpen }: HistoryProps) {
               </tr>
             </thead>
             <tbody>
-              {foldRepeats(data.entries).map((folded) => (
+              {foldRepeats([...data.entries, ...older]).map((folded) => (
                 <Row
                   key={`${folded.entry.source}-${String(folded.entry.id)}`}
                   folded={folded}
@@ -290,6 +319,18 @@ export default function History({ onOpen }: HistoryProps) {
               ))}
             </tbody>
           </table>
+          {reachable(data, older) && (
+            <button
+              type="button"
+              disabled={reaching}
+              onClick={() => {
+                void reachBack();
+              }}
+              className={`${CONTROL} m-2 border-edge-strong text-fg-soft hover:bg-surface-active disabled:opacity-50`}
+            >
+              {reaching ? 'Reaching back…' : 'Show older'}
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -426,4 +426,95 @@ describe('History', () => {
 
     expect(await screen.findByText('unknown')).toBeTruthy();
   });
+  it('says what spinoza is holding while it watches', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/memory')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ heapMi: 325, sysMi: 689 }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry()] }),
+        });
+      }),
+    );
+
+    render(<History onOpen={vi.fn()} />);
+
+    expect(await screen.findByText('325 MB held')).toBeTruthy();
+  });
+
+  it('offers nothing older when the page holds everything', async () => {
+    stub({ entries: [entry()] });
+
+    render(<History onOpen={vi.fn()} />);
+
+    await screen.findByText('web');
+    expect(screen.queryByRole('button', { name: 'Show older' })).toBeNull();
+  });
+
+  it('reaches further back when there is more', async () => {
+    const user = userEvent.setup();
+    const calls = vi.fn((url: string) => {
+      if (url.includes('after=')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry({ id: 9, name: 'older-one' })], next: 8 }),
+        });
+      }
+      if (url.includes('/api/memory')) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ entries: [entry()], more: true, next: 40 }),
+      });
+    });
+    vi.stubGlobal('fetch', calls);
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.click(screen.getByRole('button', { name: 'Show older' }));
+
+    expect(await screen.findByText('older-one')).toBeTruthy();
+    expect(calls.mock.calls.some((call) => call[0].includes('after=40'))).toBe(true);
+  });
+
+  it('says so when reaching back fails', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('after=')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'the store went away' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry()], more: true, next: 40 }),
+        });
+      }),
+    );
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.click(screen.getByRole('button', { name: 'Show older' }));
+
+    await waitFor(() => {
+      const said = useToastsStore.getState().toasts.map((toast) => toast.message);
+      expect(said.some((message) => message.includes('Reaching further back'))).toBe(true);
+    });
+  });
 });

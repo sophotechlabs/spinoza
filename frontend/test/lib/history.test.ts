@@ -9,7 +9,11 @@ import {
   outcomeLabel,
   refOf,
   scopeLabel,
+  cursorOf,
+  fetchMemory,
   foldRepeats,
+  olderFailure,
+  reachable,
   recordFailure,
   repeatLabel,
   sourceLabel,
@@ -388,5 +392,59 @@ describe('when', () => {
   it('says nothing for a stamp it cannot read', () => {
     expect(when('not a time', noon)).toBe('');
     expect(when('', noon)).toBe('');
+  });
+});
+
+describe('reaching back through the pages', () => {
+  it('starts from the cursor the newest page ended on', () => {
+    expect(cursorOf({ entries: [], next: 40 }, [])).toBe(40);
+  });
+
+  it('continues from the last row it already holds', () => {
+    expect(cursorOf({ entries: [], next: 40 }, [entry({ id: 9 })])).toBe(9);
+  });
+
+  it('says there is nothing to reach when the page named no cursor', () => {
+    expect(reachable({ entries: [] }, [])).toBe(false);
+  });
+
+  it('offers to reach back while the first page said there was more', () => {
+    expect(reachable({ entries: [], more: true, next: 40 }, [])).toBe(true);
+  });
+
+  it('stops offering once a page came back short', () => {
+    expect(reachable({ entries: [], more: true, next: 40 }, [entry({ id: 9 })])).toBe(false);
+  });
+
+  it('says what failed when reaching back does', () => {
+    expect(olderFailure(new Error('the store went away'))).toBe(
+      'Reaching further back: the store went away',
+    );
+    expect(olderFailure('nope')).toBe('Reaching further back failed');
+  });
+});
+
+describe('what spinoza is holding', () => {
+  it('reads the numbers back', async () => {
+    stub({ heapMi: 325, sysMi: 689 });
+
+    const got = await fetchMemory();
+
+    expect(got.heapMi).toBe(325);
+    expect(got.sysMi).toBe(689);
+  });
+
+  it('fills in what the server left out', async () => {
+    stub({});
+
+    const got = await fetchMemory();
+
+    expect(got.heapMi).toBe(0);
+  });
+
+  it('reports a failure with its status', async () => {
+    stub({}, false, 500);
+
+    await expect(fetchMemory()).rejects.toThrow();
   });
 });

@@ -7,7 +7,8 @@ import { bumpClusterEpoch } from '../../src/store/cluster';
 import { clearCatalog, useCatalogStore } from '../../src/store/catalog';
 import { ARGO_VIEWS, FLUX_VIEWS } from '../../src/lib/types';
 import { anySignal, makeCategory, makeDescriptor, rejectsWith } from '../helpers';
-import { activeClusterNow } from '../../src/store/clusters';
+import { activeClusterNow, useClustersStore } from '../../src/store/clusters';
+import { MK1, showing } from '../helpers-clusters';
 
 interface RenderOverrides {
   view?: View;
@@ -1002,6 +1003,37 @@ describe('discovery retries itself', () => {
       await vi.advanceTimersByTimeAsync(10000);
     });
     expect(discoveries()).toBe(1);
+  });
+});
+
+describe('the fleet entry', () => {
+  it('is offered only once a second cluster is open', async () => {
+    stubCatalog([]);
+    renderSidebar();
+    await screen.findByRole('button', { name: 'Issues' });
+    expect(screen.queryByRole('button', { name: 'Fleet' })).toBeNull();
+
+    act(() => {
+      showing(MK1);
+    });
+
+    expect(await screen.findByRole('button', { name: 'Fleet' })).toBeTruthy();
+    useClustersStore.getState().reset();
+  });
+
+  it('opens the fleet view when it is picked', async () => {
+    const user = userEvent.setup();
+    const onSelectView = vi.fn();
+    stubCatalog([]);
+    act(() => {
+      showing(MK1);
+    });
+    renderSidebar({ onSelectView });
+
+    await user.click(await screen.findByRole('button', { name: 'Fleet' }));
+
+    expect(onSelectView).toHaveBeenCalledWith('fleet');
+    useClustersStore.getState().reset();
   });
 });
 

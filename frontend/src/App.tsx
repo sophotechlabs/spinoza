@@ -25,6 +25,7 @@ import { announceUpdate } from './lib/update';
 import { watchSettings } from './lib/settingsSync';
 import { useContextsStore } from './store/contexts';
 import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
+import type { Route } from './lib/router';
 import type { Selection } from './lib/refs';
 import { refFromFlux, refFromNode, refFromRow, useRowForRef } from './lib/refs';
 import { bumpClusterEpoch, useClusterEpoch } from './store/cluster';
@@ -61,6 +62,7 @@ import ArgoApps from './components/ArgoApps';
 import ArgoList from './components/ArgoList';
 import Checks from './components/Checks';
 import History from './components/History';
+import Fleet from './components/Fleet';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
@@ -94,6 +96,10 @@ function pickerScope(view: View, scope: boolean | null): boolean | null {
 
 const FIRST_SUB_ID = 'main#0';
 const MAIN_ID = 'content';
+
+function blankRoute(context: string): Route {
+  return { context, view: 'cluster', resource: null, selection: null, release: null };
+}
 
 function switchFailed(err: unknown): string {
   if (err instanceof Error) {
@@ -213,7 +219,7 @@ export default function App() {
       replace({ ...held, context });
       return;
     }
-    replace({ context, view: 'cluster', resource: null, selection: null, release: null });
+    replace(blankRoute(context));
   }, [replace]);
 
   useEffect(() => {
@@ -443,6 +449,18 @@ export default function App() {
     });
   }
 
+  // Picking a cluster in the fleet view is the same move as clicking its tab:
+  // go there and show what that cluster was last showing.
+  function goToCluster(cluster: string) {
+    if (cluster === onCluster) {
+      return;
+    }
+    if (!mayDiscard()) {
+      return;
+    }
+    void switchTo(cluster, null);
+  }
+
   function openFound(found: PaletteOpen) {
     if (!mayDiscard()) {
       return;
@@ -491,23 +509,30 @@ export default function App() {
     void switchTo(cluster, ref);
   }
 
-  async function switchTo(cluster: string, ref: ObjectRef) {
+  // A ref means "take me to that object on that cluster"; no ref means "take me
+  // to that cluster", which is whatever it was last showing.
+  async function switchTo(cluster: string, ref: ObjectRef | null) {
     const state = useClustersStore.getState();
     state.focus(cluster);
     bumpClusterEpoch();
-    rememberObject(ref);
-    revealDetails();
-    replace({
-      context: contextOf(state.tabs, cluster),
-      view: 'issues',
-      resource: null,
-      selection: ref,
-      release: null,
-    });
+    const context = contextOf(state.tabs, cluster);
+    if (ref === null) {
+      replace(state.routes[cluster] ?? blankRoute(context));
+    } else {
+      rememberObject(ref);
+      revealDetails();
+      replace({
+        context,
+        view: 'issues',
+        resource: null,
+        selection: ref,
+        release: null,
+      });
+    }
     try {
       await activateCluster(cluster);
     } catch (err: unknown) {
-      notifyError(`Switching to ${contextOf(state.tabs, cluster)}: ${switchFailed(err)}`);
+      notifyError(`Switching to ${context}: ${switchFailed(err)}`);
     }
   }
 
@@ -556,6 +581,9 @@ export default function App() {
   }
   if (route.view === 'history') {
     mainArea = <History onOpen={remember} />;
+  }
+  if (route.view === 'fleet') {
+    mainArea = <Fleet onPick={goToCluster} />;
   }
   if (route.view === 'gitops') {
     mainArea = (

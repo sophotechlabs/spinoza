@@ -323,6 +323,20 @@ vi.mock('../src/components/Checks', () => ({
   ),
 }));
 
+vi.mock('../src/components/Fleet', () => ({
+  default: ({ onPick }: { onPick: (cluster: string) => void }) => (
+    <button
+      type="button"
+      data-testid="fleet"
+      onClick={() => {
+        onPick('https://kind-dev:6443');
+      }}
+    >
+      pick-cluster
+    </button>
+  ),
+}));
+
 vi.mock('../src/components/IssueQueue', () => ({
   default: ({
     onSelect,
@@ -1883,6 +1897,69 @@ describe('the command palette and shortcuts', () => {
     await waitFor(() => {
       expect(window.location.hash).toContain('context=kind-dev');
     });
+  });
+
+  it('goes to a cluster picked in the fleet view, and shows what it was showing', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(bothClusters('other-cluster')),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    openAt('#context=other-cluster&view=fleet');
+    render(<App />);
+    await screen.findByRole('button', { name: 'kind-dev' });
+
+    await user.click(await screen.findByTestId('fleet'));
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=kind-dev');
+    });
+  });
+
+  it('stays put when the cluster picked in the fleet view is the one it is on', async () => {
+    const user = userEvent.setup();
+    stubFetch();
+    openAt('#context=kind-dev&view=fleet');
+    render(<App />);
+    await screen.findByTestId('fleet');
+
+    await user.click(screen.getByTestId('fleet'));
+
+    expect(window.location.hash).toContain('view=fleet');
+  });
+
+  it('keeps an unsaved draft rather than following a fleet pick', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(bothClusters('other-cluster')),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    openAt('#context=other-cluster&view=fleet');
+    render(<App />);
+    await screen.findByRole('button', { name: 'kind-dev' });
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+
+    await user.click(screen.getByTestId('fleet'));
+
+    expect(window.location.hash).toContain('context=other-cluster');
+    setUnsaved(false);
   });
 
   it('switches view from the palette', async () => {

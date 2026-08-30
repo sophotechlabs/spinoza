@@ -1,4 +1,4 @@
-import type { History, HistoryEntry, ObjectRef } from './types';
+import type { History, HistoryEntry, Memory, ObjectRef } from './types';
 import { request } from './http';
 import { failure } from './object';
 import { clock } from './time';
@@ -37,6 +37,25 @@ export async function fetchHistory(ask: HistoryAsk = {}): Promise<History> {
     throw await failure(response, `history request failed with status ${response.status}`);
   }
   return parseHistory(await response.json());
+}
+
+export async function fetchMemory(): Promise<Memory> {
+  const response = await request('/api/memory');
+  if (!response.ok) {
+    throw new Error(`memory request failed with status ${response.status}`);
+  }
+  const body = (await response.json()) as Partial<Memory>;
+  return { heapMi: body.heapMi ?? 0, sysMi: body.sysMi ?? 0 };
+}
+
+const MEMORY_POLL_MS = 20000;
+
+export function useMemory(enabled = true): Polled<Memory> {
+  return usePoll(fetchMemory, {
+    intervalMs: MEMORY_POLL_MS,
+    enabled,
+    fallback: 'memory request failed',
+  });
 }
 
 export function useHistory(ask: HistoryAsk = {}, enabled = true): Polled<History> {
@@ -79,6 +98,35 @@ function sameObject(left: HistoryEntry, right: HistoryEntry): boolean {
     return false;
   }
   return left.name === right.name && left.namespace === right.namespace;
+}
+
+// The cursor is where the newest page ended, or where the last page reached
+// back to, so asking again always moves further back rather than repeating.
+export function cursorOf(page: History, older: HistoryEntry[]): number {
+  const last = older.at(-1);
+  if (last !== undefined) {
+    return last.id;
+  }
+  return page.next ?? 0;
+}
+
+// There is more to reach only while a page came back full and the last one
+// still said so; an empty answer ends it.
+export function reachable(page: History, older: HistoryEntry[]): boolean {
+  if (cursorOf(page, older) === 0) {
+    return false;
+  }
+  if (older.length === 0) {
+    return page.more === true;
+  }
+  return older.length % HISTORY_LIMIT === 0;
+}
+
+export function olderFailure(err: unknown): string {
+  if (err instanceof Error) {
+    return `Reaching further back: ${err.message}`;
+  }
+  return 'Reaching further back failed';
 }
 
 export function repeatLabel(folded: FoldedEntry): string {

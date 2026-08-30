@@ -168,6 +168,11 @@ type History struct {
 	Reason  string         `json:"reason,omitempty"`
 }
 
+type Memory struct {
+	HeapMi int64 `json:"heapMi"`
+	SysMi  int64 `json:"sysMi"`
+}
+
 type Settings struct {
 	Values map[string]string `json:"values"`
 }
@@ -248,6 +253,55 @@ type ClusterOverview struct {
 	Warnings    []OverviewEvent    `json:"warnings"`
 	Controllers []GitopsController `json:"controllers,omitempty"`
 	Error       string             `json:"error,omitempty"`
+}
+
+// FleetCluster is one cluster's line in the fleet overview: what a person
+// scanning several clusters needs before deciding which one to open.
+type FleetCluster struct {
+	Cluster  string      `json:"cluster"`
+	Context  string      `json:"context"`
+	Version  string      `json:"version"`
+	Nodes    NodeSummary `json:"nodes"`
+	Pods     PodSummary  `json:"pods"`
+	Warnings int         `json:"warnings"`
+	Reason   string      `json:"reason,omitempty"`
+}
+
+// FleetKind is one resource type across the fleet: how many exist and how many
+// are unhealthy, per cluster and in total.
+type FleetKind struct {
+	Key        string         `json:"key"`
+	Total      int            `json:"total"`
+	Failing    int            `json:"failing,omitempty"`
+	PerCluster map[string]int `json:"perCluster"`
+}
+
+type FleetInventory struct {
+	Kinds []FleetKind `json:"kinds"`
+	Error string      `json:"error,omitempty"`
+}
+
+// FleetImage is one container image and everywhere it runs. Images are the
+// thing a fleet drifts on that nothing else surfaces.
+type FleetImage struct {
+	Image    string   `json:"image"`
+	Repo     string   `json:"repo"`
+	Tag      string   `json:"tag,omitempty"`
+	Pods     int      `json:"pods"`
+	Clusters []string `json:"clusters"`
+	Skew     []string `json:"skew,omitempty"`
+}
+
+type FleetImages struct {
+	Images []FleetImage `json:"images"`
+	Error  string       `json:"error,omitempty"`
+}
+
+type FleetOverview struct {
+	Clusters []FleetCluster `json:"clusters"`
+	Nodes    NodeSummary    `json:"nodes"`
+	Pods     PodSummary     `json:"pods"`
+	Error    string         `json:"error,omitempty"`
 }
 
 const (
@@ -1183,6 +1237,7 @@ type CheckPage struct {
 
 type Baseline struct {
 	TakenAt  string `json:"takenAt,omitempty"`
+	Cluster  string `json:"cluster,omitempty"`
 	Findings int    `json:"findings,omitempty"`
 	Checks   int    `json:"checks,omitempty"`
 }
@@ -1213,6 +1268,10 @@ type CheckReport struct {
 	Objects    []CheckObject    `json:"objects"`
 	Namespaces []NamespaceCount `json:"namespaces,omitempty"`
 	Baseline   string           `json:"baseline,omitempty"`
-	Scanned    int              `json:"scanned"`
-	Error      string           `json:"error,omitempty"`
+	// BaselineFrom names the cluster a baseline was taken on when that is not
+	// this one. Comparing two clusters is a fair thing to want; being told
+	// nine thousand findings are new without being told why is not.
+	BaselineFrom string `json:"baselineFrom,omitempty"`
+	Scanned      int    `json:"scanned"`
+	Error        string `json:"error,omitempty"`
 }

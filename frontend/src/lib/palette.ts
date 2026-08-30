@@ -1,5 +1,5 @@
 import type { Category, ObjectRef, ResourceDescriptor, SearchHit, View } from './types';
-import { ARGO_VIEWS, FLUX_VIEWS } from './types';
+import { ARGO_VIEWS, FLEET_VIEWS, FLUX_VIEWS } from './types';
 import { refOf } from './search';
 import { typeFor } from './catalog';
 import { argoInstalled, fluxInstalled } from './gitops';
@@ -21,9 +21,11 @@ export const VIEW_LABELS: Record<View, string> = {
   'argo-graph': 'Argo CD graph',
   'argo-list': 'Argo CD resources',
   traffic: 'Traffic graph',
+  fleet: 'Fleet',
 };
 
 const VIEW_ORDER: View[] = [
+  'fleet',
   'cluster',
   'resources',
   'issues',
@@ -105,6 +107,9 @@ function offered(categories: Category[], traffic: boolean): View[] {
   }
   if (!traffic) {
     hidden.push('traffic');
+  }
+  if (useClustersStore.getState().tabs.length < 2) {
+    hidden.push(...FLEET_VIEWS);
   }
   return VIEW_ORDER.filter((view) => !hidden.includes(view));
 }

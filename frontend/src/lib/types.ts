@@ -310,6 +310,7 @@ export const VIEWS = [
   'argo-graph',
   'argo-list',
   'traffic',
+  'fleet',
 ] as const;
 
 export type View = (typeof VIEWS)[number];
@@ -317,6 +318,10 @@ export type View = (typeof VIEWS)[number];
 export const FLUX_VIEWS: View[] = ['flux-roles', 'gitops', 'flux-list'];
 
 export const ARGO_VIEWS: View[] = ['argo-apps', 'argo-graph', 'argo-list'];
+
+// The fleet view only means anything with more than one cluster open, so it is
+// hidden the way the GitOps views are hidden when their controller is absent.
+export const FLEET_VIEWS: View[] = ['fleet'];
 
 export interface ArgoApp {
   kind: string;
@@ -614,6 +619,54 @@ export interface History {
   dropped?: number;
   next?: number;
   reason?: string;
+}
+
+export interface Memory {
+  heapMi: number;
+  sysMi: number;
+}
+
+export interface FleetCluster {
+  cluster: string;
+  context: string;
+  version: string;
+  nodes: NodeSummary;
+  pods: PodSummary;
+  warnings: number;
+  reason?: string;
+}
+
+export interface FleetOverview {
+  clusters: FleetCluster[];
+  nodes: NodeSummary;
+  pods: PodSummary;
+  error?: string;
+}
+
+export interface FleetKind {
+  key: string;
+  total: number;
+  failing?: number;
+  perCluster: Record<string, number>;
+}
+
+export interface FleetInventory {
+  kinds: FleetKind[];
+  error?: string;
+}
+
+export interface FleetImage {
+  image: string;
+  repo: string;
+  tag?: string;
+  pods: number;
+  clusters: string[];
+  skew?: string[];
+}
+
+export interface FleetImages {
+  images: FleetImage[];
+  error?: string;
 }
 
 export interface Settings {
@@ -1129,6 +1182,7 @@ export interface NamespaceCount {
 
 export interface Baseline {
   takenAt?: string;
+  cluster?: string;
   findings?: number;
   checks?: number;
 }
@@ -1165,6 +1219,7 @@ export interface CheckReport {
   objects: CheckObject[];
   namespaces?: NamespaceCount[];
   baseline?: string;
+  baselineFrom?: string;
   scanned: number;
   error?: string;
 }
