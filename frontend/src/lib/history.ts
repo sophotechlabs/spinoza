@@ -1,9 +1,9 @@
-import type { History, HistoryEntry, ObjectRef } from './types';
+import type { History, HistoryEntry, Memory, ObjectRef } from './types';
 import { request } from './http';
 import { failure } from './object';
 import { clock } from './time';
 import { parseHistory } from './parse';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 
@@ -15,10 +15,22 @@ export const SOURCES = ['all', 'change', 'action'] as const;
 
 export type HistorySource = (typeof SOURCES)[number];
 
-export async function fetchHistory(source: HistorySource = 'all', after = ''): Promise<History> {
-  const params = new URLSearchParams({ limit: String(HISTORY_LIMIT), source });
-  if (after !== '') {
-    params.set('after', after);
+export interface HistoryAsk {
+  source?: HistorySource;
+  after?: number;
+  fleet?: boolean;
+}
+
+export async function fetchHistory(ask: HistoryAsk = {}): Promise<History> {
+  const params = new URLSearchParams({
+    limit: String(HISTORY_LIMIT),
+    source: ask.source ?? 'all',
+  });
+  if (ask.after !== undefined && ask.after > 0) {
+    params.set('after', String(ask.after));
+  }
+  if (ask.fleet === true) {
+    params.set('fleet', 'true');
   }
   const response = await request(`/api/history?${params.toString()}`);
   if (!response.ok) {
@@ -27,8 +39,28 @@ export async function fetchHistory(source: HistorySource = 'all', after = ''): P
   return parseHistory(await response.json());
 }
 
-function useHistory(source: HistorySource = 'all', enabled = true): Polled<History> {
-  const read = useCallback(async () => fetchHistory(source), [source]);
+export async function fetchMemory(): Promise<Memory> {
+  const response = await request('/api/memory');
+  if (!response.ok) {
+    throw new Error(`memory request failed with status ${response.status}`);
+  }
+  const body = (await response.json()) as Partial<Memory>;
+  return { heapMi: body.heapMi ?? 0, sysMi: body.sysMi ?? 0 };
+}
+
+const MEMORY_POLL_MS = 20000;
+
+export function useMemory(enabled = true): Polled<Memory> {
+  return usePoll(fetchMemory, {
+    intervalMs: MEMORY_POLL_MS,
+    enabled,
+    fallback: 'memory request failed',
+  });
+}
+
+export function useHistory(ask: HistoryAsk = {}, enabled = true): Polled<History> {
+  const { source, fleet } = ask;
+  const read = useCallback(async () => fetchHistory({ source, fleet }), [source, fleet]);
   return usePoll(read, {
     intervalMs: HISTORY_POLL_MS,
     enabled,
@@ -36,61 +68,72 @@ function useHistory(source: HistorySource = 'all', enabled = true): Polled<Histo
   });
 }
 
-export interface PagedHistory extends Polled<History> {
-  entries: HistoryEntry[];
-  more: string;
-  loadingMore: boolean;
-  moreError: string;
-  loadMore: () => void;
+// A cluster can write a page of changes in seconds, so repeats of one object
+// fold into a single row the way the issue queue folds its children.
+export function foldRepeats(entries: HistoryEntry[]): FoldedEntry[] {
+  const out: FoldedEntry[] = [];
+  for (const entry of entries) {
+    const last = out.at(-1);
+    if (last !== undefined && sameObject(last.entry, entry)) {
+      last.repeats += 1;
+      last.oldest = entry;
+      continue;
+    }
+    out.push({ entry, repeats: 1, oldest: entry });
+  }
+  return out;
 }
 
-export function usePagedHistory(source: HistorySource = 'all', enabled = true): PagedHistory {
-  const polled = useHistory(source, enabled);
-  const [tail, setTail] = useState<HistoryEntry[]>([]);
-  const [builtOn, setBuiltOn] = useState('');
-  const [next, setNext] = useState('');
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [moreError, setMoreError] = useState('');
+export interface FoldedEntry {
+  entry: HistoryEntry;
+  repeats: number;
+  oldest: HistoryEntry;
+}
 
-  const head = polled.data?.next ?? '';
-  const first = polled.data?.entries ?? [];
-  const joined = builtOn === head;
-  let entries = first;
-  let more = head;
-  if (joined) {
-    entries = [...first, ...tail];
-    more = next;
+function sameObject(left: HistoryEntry, right: HistoryEntry): boolean {
+  if (left.source !== right.source || left.source !== 'change') {
+    return false;
   }
-
-  function loadMore() {
-    if (more === '' || loadingMore) {
-      return;
-    }
-    setLoadingMore(true);
-    setMoreError('');
-    fetchHistory(source, more)
-      .then((page) => {
-        if (joined) {
-          setTail((current) => [...current, ...page.entries]);
-        } else {
-          setTail(page.entries);
-          setBuiltOn(head);
-        }
-        setNext(page.next ?? '');
-      })
-      .catch((reason: unknown) => {
-        if (reason instanceof Error) {
-          setMoreError(reason.message);
-          return;
-        }
-        setMoreError('history request failed');
-      })
-      .finally(() => {
-        setLoadingMore(false);
-      });
+  if (left.cluster !== right.cluster) {
+    return false;
   }
+  return left.name === right.name && left.namespace === right.namespace;
+}
 
-  return { ...polled, entries, more, loadingMore, moreError, loadMore };
+// The cursor is where the newest page ended, or where the last page reached
+// back to, so asking again always moves further back rather than repeating.
+export function cursorOf(page: History, older: HistoryEntry[]): number {
+  const last = older.at(-1);
+  if (last !== undefined) {
+    return last.id;
+  }
+  return page.next ?? 0;
+}
+
+// There is more to reach only while a page came back full and the last one
+// still said so; an empty answer ends it.
+export function reachable(page: History, older: HistoryEntry[]): boolean {
+  if (cursorOf(page, older) === 0) {
+    return false;
+  }
+  if (older.length === 0) {
+    return page.more === true;
+  }
+  return older.length % HISTORY_LIMIT === 0;
+}
+
+export function olderFailure(err: unknown): string {
+  if (err instanceof Error) {
+    return `Reaching further back: ${err.message}`;
+  }
+  return 'Reaching further back failed';
+}
+
+export function repeatLabel(folded: FoldedEntry): string {
+  if (folded.repeats < 2) {
+    return '';
+  }
+  return `changed ${String(folded.repeats)} times`;
 }
 
 export function sourceLabel(source: HistorySource): string {
@@ -194,9 +237,25 @@ export function refOf(entry: HistoryEntry): ObjectRef | null {
   };
 }
 
+// A change says what it moved from, so the row reads as a move rather than a
+// snapshot. Something that went has nothing to move to, so it shows what was
+// there instead of an arrow pointing at nothing.
+export function wasText(entry: HistoryEntry): string {
+  if (entry.was === undefined || entry.was === '') {
+    return '';
+  }
+  if (entry.verb === 'removed') {
+    return '';
+  }
+  return `${entry.was} → `;
+}
+
 export function detailText(entry: HistoryEntry): string {
   if (entry.message !== undefined && entry.message !== '') {
     return entry.message;
+  }
+  if (entry.verb === 'removed' && entry.was !== undefined && entry.was !== '') {
+    return entry.was;
   }
   return entry.detail ?? '';
 }

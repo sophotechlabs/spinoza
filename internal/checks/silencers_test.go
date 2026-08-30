@@ -161,7 +161,7 @@ func TestASilencedFindingIsStillCountedAndStillInTheBaseline(t *testing.T) {
 // what the editor is told about a silencing rule
 
 func TestASilencingRuleNamingNoRealCheckIsNamedAsAFault(t *testing.T) {
-	faults := Faults(`[{"id":"typo","silences":"privilged-containers","expr":"true","reason":"x"}]`)
+	faults := Faults(`[{"id":"typo","silences":"no-such-check","expr":"true","reason":"x"}]`)
 
 	if len(faults) != 1 || !strings.Contains(faults[0].Reason, "no check goes by the name") {
 		t.Fatalf("reported %v", faults)
