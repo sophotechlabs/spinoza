@@ -159,6 +159,7 @@ func readyNode(node *unstructured.Unstructured) bool {
 
 type phaseProbe struct {
 	label    string
+	field    string
 	selector string
 	into     *int
 }
@@ -178,17 +179,17 @@ func podSummary(
 		return summary
 	}
 	probes := []phaseProbe{
-		{label: "pods", selector: "", into: &summary.Total},
-		{label: "running pods", selector: "status.phase=Running", into: &summary.Running},
-		{label: "pending pods", selector: "status.phase=Pending", into: &summary.Pending},
-		{label: "failed pods", selector: "status.phase=Failed", into: &summary.Failed},
-		{label: "succeeded pods", selector: "status.phase=Succeeded", into: &summary.Succeeded},
+		{label: "pods", field: "total", selector: "", into: &summary.Total},
+		{label: "running pods", field: "running", selector: "status.phase=Running", into: &summary.Running},
+		{label: "pending pods", field: "pending", selector: "status.phase=Pending", into: &summary.Pending},
+		{label: "failed pods", field: "failed", selector: "status.phase=Failed", into: &summary.Failed},
+		{label: "succeeded pods", field: "succeeded", selector: "status.phase=Succeeded", into: &summary.Succeeded},
 	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	broken := false
-	partial := false
+	capped := map[string]int{}
 	for _, probe := range probes {
 		wg.Add(1)
 		go safe.Run("counting "+probe.label, func() {
@@ -204,19 +205,42 @@ func podSummary(
 				return
 			}
 			if !got.Complete {
-				partial = true
+				capped[probe.field] = got.Total
 			}
 			*probe.into = got.Total
 		})
 	}
 	wg.Wait()
 	summary.Known = !broken
-	if partial {
+	summary.Capped = cappedFields(probes, capped)
+	if len(summary.Capped) > 0 {
 		failures.Record(podsKey, fmt.Errorf(
-			"more than %d pods, so the tally stops there", podcount.Limit(),
+			"more than %d pods in %s, so the tally stops there",
+			lowestCap(capped), strings.Join(summary.Capped, ", "),
 		))
 	}
 	return summary
+}
+
+func cappedFields(probes []phaseProbe, capped map[string]int) []string {
+	out := []string{}
+	for _, probe := range probes {
+		_, stopped := capped[probe.field]
+		if stopped {
+			out = append(out, probe.field)
+		}
+	}
+	return out
+}
+
+func lowestCap(capped map[string]int) int {
+	lowest := 0
+	for _, at := range capped {
+		if lowest == 0 || at < lowest {
+			lowest = at
+		}
+	}
+	return lowest
 }
 
 func warnings(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, failures *listerr.Collector) []api.OverviewEvent {

@@ -659,6 +659,7 @@ export interface PodSummary {
   failed: number;
   succeeded: number;
   known: boolean;
+  capped: string[];
 }
 
 export interface OverviewEvent {

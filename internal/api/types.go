@@ -205,12 +205,13 @@ type NodeSummary struct {
 }
 
 type PodSummary struct {
-	Total     int  `json:"total"`
-	Running   int  `json:"running"`
-	Pending   int  `json:"pending"`
-	Failed    int  `json:"failed"`
-	Succeeded int  `json:"succeeded"`
-	Known     bool `json:"known"`
+	Total     int      `json:"total"`
+	Running   int      `json:"running"`
+	Pending   int      `json:"pending"`
+	Failed    int      `json:"failed"`
+	Succeeded int      `json:"succeeded"`
+	Known     bool     `json:"known"`
+	Capped    []string `json:"capped"`
 }
 
 type OverviewEvent struct {

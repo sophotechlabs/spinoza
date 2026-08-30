@@ -693,6 +693,7 @@ function parsePodSummary(item: Record<string, unknown>): PodSummary {
     failed: asNumber(item.failed),
     succeeded: asNumber(item.succeeded),
     known: asBoolean(item.known),
+    capped: stringList(item.capped),
   };
 }
 

@@ -16,7 +16,7 @@ function overview(patch: Partial<Overview> = {}): Overview {
       memUsedMi: 8192,
       usageKnown: true,
     },
-    pods: { total: 40, running: 38, pending: 1, failed: 1, succeeded: 0, known: true },
+    pods: { total: 40, running: 38, pending: 1, failed: 1, succeeded: 0, known: true, capped: [] },
     warnings: [],
     ...patch,
   };
@@ -91,10 +91,59 @@ describe('ClusterOverview', () => {
     expect(screen.getByText('40')).toBeInTheDocument();
   });
 
+  it('marks a phase whose tally stopped at a page', async () => {
+    stub(
+      overview({
+        pods: {
+          total: 40,
+          running: 38,
+          pending: 1,
+          failed: 1,
+          succeeded: 500,
+          known: true,
+          capped: ['succeeded'],
+        },
+      }),
+    );
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText(/500\+ succeeded/)).toBeInTheDocument();
+    expect(screen.getByText(/38 running/)).toBeInTheDocument();
+    expect(screen.getByText('40')).toBeInTheDocument();
+  });
+
+  it('marks the total when the whole tally stopped at a page', async () => {
+    stub(
+      overview({
+        pods: {
+          total: 10000,
+          running: 500,
+          pending: 0,
+          failed: 0,
+          succeeded: 0,
+          known: true,
+          capped: ['total', 'running'],
+        },
+      }),
+    );
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText('10000+')).toBeInTheDocument();
+    expect(screen.getByText(/500\+ running/)).toBeInTheDocument();
+  });
+
   it('says so when the pod tally could not be taken', async () => {
     stub(
       overview({
-        pods: { total: 0, running: 0, pending: 0, failed: 0, succeeded: 0, known: false },
+        pods: {
+          total: 0,
+          running: 0,
+          pending: 0,
+          failed: 0,
+          succeeded: 0,
+          known: false,
+          capped: [],
+        },
       }),
     );
     render(<ClusterOverview />);

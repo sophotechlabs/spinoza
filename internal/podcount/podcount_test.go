@@ -97,7 +97,34 @@ func TestANegativeRemainingCountIsIgnored(t *testing.T) {
 	}
 }
 
-func TestAFilteredCountWalksThePagesTheApiserverGives(t *testing.T) {
+func TestAFilteredCountStopsAfterOnePage(t *testing.T) {
+	dyn := client()
+	calls := answerPages(dyn, [][]runtime.RawExtension{
+		pods(500),
+		pods(500),
+		pods(7),
+	}, nil)
+
+	got, err := Count(context.Background(), dyn, "status.phase=Running")
+	if err != nil {
+		t.Fatalf("count: %v", err)
+	}
+
+	if got.Total != 500 {
+		t.Fatalf("total = %d, want the one page it read", got.Total)
+	}
+	if got.Complete {
+		t.Fatal("a count that stopped at one page claimed to be complete")
+	}
+	if len(*calls) != 1 {
+		t.Fatalf("list calls = %d, want just the one page", len(*calls))
+	}
+	if (*calls)[0].fields != "status.phase=Running" {
+		t.Fatalf("selector = %q, want it on the probe", (*calls)[0].fields)
+	}
+}
+
+func TestAnUnfilteredCountWalksWhenTheServerSizesNothing(t *testing.T) {
 	dyn := client()
 	calls := answerPages(dyn, [][]runtime.RawExtension{
 		pods(1),
@@ -105,7 +132,7 @@ func TestAFilteredCountWalksThePagesTheApiserverGives(t *testing.T) {
 		pods(7),
 	}, nil)
 
-	got, err := Count(context.Background(), dyn, "status.phase=Running")
+	got, err := Count(context.Background(), dyn, "")
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
@@ -118,31 +145,6 @@ func TestAFilteredCountWalksThePagesTheApiserverGives(t *testing.T) {
 	}
 	if len(*calls) != 3 {
 		t.Fatalf("list calls = %d, want the probe plus two pages", len(*calls))
-	}
-	if (*calls)[0].fields != "status.phase=Running" {
-		t.Fatalf("selector = %q, want it on the probe", (*calls)[0].fields)
-	}
-}
-
-func TestAFilteredCountStopsShortOfForever(t *testing.T) {
-	dyn := client()
-	pages := make([][]runtime.RawExtension, 0, maxPages+5)
-	pages = append(pages, pods(1))
-	for range maxPages + 4 {
-		pages = append(pages, pods(500))
-	}
-	answerPages(dyn, pages, nil)
-
-	got, err := Count(context.Background(), dyn, "status.phase=Running")
-	if err != nil {
-		t.Fatalf("count: %v", err)
-	}
-
-	if got.Complete {
-		t.Fatal("a count that gave up early claimed to be complete")
-	}
-	if got.Total != Limit() {
-		t.Fatalf("total = %d, want the %d it managed to read", got.Total, Limit())
 	}
 }
 
@@ -192,7 +194,7 @@ func TestAPageThatFailsMidWalkIsReported(t *testing.T) {
 		return true, nil, errors.New("the continue token expired")
 	})
 
-	_, err := Count(context.Background(), dyn, "status.phase=Running")
+	_, err := Count(context.Background(), dyn, "")
 
 	if err == nil {
 		t.Fatal("a failed page reported success")
@@ -217,21 +219,22 @@ func TestAnUnfilteredProbeStillTrustsTheServersCount(t *testing.T) {
 	}
 }
 
-func TestAFilteredCountStopsAtTheCeilingItAdvertises(t *testing.T) {
+func TestAnUnfilteredWalkStopsAtTheCeilingItAdvertises(t *testing.T) {
 	dyn := client()
-	pages := make([][]runtime.RawExtension, 40)
-	for at := range pages {
-		pages[at] = pods(500)
+	pages := make([][]runtime.RawExtension, 0, maxPages+5)
+	pages = append(pages, pods(1))
+	for range maxPages + 4 {
+		pages = append(pages, pods(500))
 	}
 	answerPages(dyn, pages, nil)
 
-	got, err := Count(context.Background(), dyn, "status.phase=Running")
+	got, err := Count(context.Background(), dyn, "")
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
 
 	if got.Complete {
-		t.Fatal("a count that stopped early claimed to be complete")
+		t.Fatal("a count that gave up early claimed to be complete")
 	}
 	if got.Total != Limit() {
 		t.Fatalf("total = %d, want exactly the %d it advertises", got.Total, Limit())

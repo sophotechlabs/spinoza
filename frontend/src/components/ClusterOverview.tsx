@@ -36,15 +36,22 @@ function nodeHint(nodes: NodeSummary): string {
   return parts.join(', ');
 }
 
+function podCount(pods: PodSummary, field: string, value: number): string {
+  if (pods.capped.includes(field)) {
+    return `${String(value)}+`;
+  }
+  return String(value);
+}
+
 function podHint(pods: PodSummary): string {
   if (!pods.known) {
     return 'the tally could not be taken';
   }
   return [
-    `${String(pods.running)} running`,
-    `${String(pods.pending)} pending`,
-    `${String(pods.failed)} failed`,
-    `${String(pods.succeeded)} succeeded`,
+    `${podCount(pods, 'running', pods.running)} running`,
+    `${podCount(pods, 'pending', pods.pending)} pending`,
+    `${podCount(pods, 'failed', pods.failed)} failed`,
+    `${podCount(pods, 'succeeded', pods.succeeded)} succeeded`,
   ].join(', ');
 }
 
@@ -52,7 +59,7 @@ function podTotal(pods: PodSummary): string {
   if (!pods.known) {
     return '-';
   }
-  return String(pods.total);
+  return podCount(pods, 'total', pods.total);
 }
 
 function versionOf(version: string): string {

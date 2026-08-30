@@ -36,6 +36,9 @@ func Count(ctx context.Context, client metadata.Interface, selector string) (Res
 	if probe.GetContinue() == "" {
 		return Result{Total: len(probe.Items), Complete: true}, nil
 	}
+	if selector != "" {
+		return Result{Total: len(probe.Items), Complete: false}, nil
+	}
 	return walk(ctx, client, selector, len(probe.Items), probe.GetContinue())
 }
 
@@ -56,9 +59,6 @@ func walk(
 	total := counted
 	opts := metav1.ListOptions{Limit: pageSize, FieldSelector: selector, Continue: from}
 	for range maxPages {
-		if total >= Limit() {
-			return Result{Total: Limit(), Complete: false}, nil
-		}
 		list, err := client.Resource(podsGVR).Namespace(metav1.NamespaceAll).List(ctx, opts)
 		if err != nil {
 			return Result{}, err

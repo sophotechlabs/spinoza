@@ -272,6 +272,74 @@ func TestBuildSaysWhenTheNodeListFailed(t *testing.T) {
 	}
 }
 
+func answerCappedPods(meta *metadatafake.FakeMetadataClient, capped map[string]bool) {
+	meta.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		list, ok := action.(k8stesting.ListAction)
+		if !ok {
+			return false, nil, nil
+		}
+		selector := list.GetListRestrictions().Fields.String()
+		out := &metav1.List{Items: make([]runtime.RawExtension, 500)}
+		for at := range out.Items {
+			out.Items[at] = runtime.RawExtension{Object: &metav1.PartialObjectMetadata{}}
+		}
+		if capped[selector] {
+			out.Continue = "there-is-more"
+			return true, out, nil
+		}
+		out.Items = out.Items[:1]
+		return true, out, nil
+	})
+}
+
+func TestBuildNamesThePhasesWhoseTallyStoppedAtAPage(t *testing.T) {
+	meta := metaClient()
+	answerCappedPods(meta, map[string]bool{"status.phase=Succeeded": true})
+
+	got := Build(context.Background(), dynClient(), meta, &stubLister{}, nil, fullCatalog())
+
+	if len(got.Pods.Capped) != 1 || got.Pods.Capped[0] != "succeeded" {
+		t.Fatalf("capped = %v, want just the succeeded phase", got.Pods.Capped)
+	}
+	if got.Pods.Succeeded != 500 {
+		t.Fatalf("succeeded = %d, want the page it read", got.Pods.Succeeded)
+	}
+	if !strings.Contains(got.Error, "more than 500 pods in succeeded") {
+		t.Fatalf("error = %q, want the phase and the page size named", got.Error)
+	}
+}
+
+func TestBuildNamesEveryPhaseThatStoppedShort(t *testing.T) {
+	meta := metaClient()
+	answerCappedPods(meta, map[string]bool{
+		"status.phase=Running": true,
+		"status.phase=Failed":  true,
+	})
+
+	got := Build(context.Background(), dynClient(), meta, &stubLister{}, nil, fullCatalog())
+
+	if len(got.Pods.Capped) != 2 {
+		t.Fatalf("capped = %v, want both phases", got.Pods.Capped)
+	}
+	if got.Pods.Capped[0] != "running" || got.Pods.Capped[1] != "failed" {
+		t.Fatalf("capped = %v, want them in the order the summary lists them", got.Pods.Capped)
+	}
+}
+
+func TestBuildLeavesCappedEmptyWhenEveryTallyIsExact(t *testing.T) {
+	meta := metaClient()
+	answerCappedPods(meta, map[string]bool{})
+
+	got := Build(context.Background(), dynClient(), meta, &stubLister{}, nil, fullCatalog())
+
+	if len(got.Pods.Capped) != 0 {
+		t.Fatalf("capped = %v, want nothing", got.Pods.Capped)
+	}
+	if strings.Contains(got.Error, "the tally stops there") {
+		t.Fatalf("error = %q, want no partial notice", got.Error)
+	}
+}
+
 func TestBuildCountsPodsByPhase(t *testing.T) {
 	meta := metaClient()
 	answerPods(meta, map[string]int{
