@@ -82,6 +82,11 @@ func (n notStubbed) CheckFingerprint(_ context.Context, _ checks.Filter) (r0 che
 	return r0
 }
 
+func (n notStubbed) CheckExport(_ context.Context, _ checks.Filter) (r0 api.CheckReport) {
+	n.missing("CheckExport")
+	return r0
+}
+
 func (n notStubbed) Checks(_ context.Context, _ checks.Filter) (r0 api.CheckReport) {
 	n.missing("Checks")
 	return r0

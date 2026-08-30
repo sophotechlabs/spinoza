@@ -1081,6 +1081,7 @@ export interface CheckGroup {
   muted?: number;
   new?: number;
   fixed?: number;
+  gone?: string[];
   baselined?: boolean;
   measured?: boolean;
   truncated?: boolean;

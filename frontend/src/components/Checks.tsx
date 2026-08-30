@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CheckCategory, Mute, NamespaceCount, ObjectRef, RuleFault } from '../lib/types';
 import type { CheckFindingView, CheckGroupView } from '../lib/checks';
 import { fetchCheckPage } from '../lib/checks';
@@ -8,6 +8,8 @@ import {
   changeLabel,
   clearBaseline,
   countLabel,
+  exportChecks,
+  fetchMutes,
   findingLabel,
   inCategory,
   muteFinding,
@@ -24,7 +26,7 @@ import {
   useChecks,
 } from '../lib/checks';
 import type { SeverityFloor } from '../lib/settings';
-import { useSettingsStore } from '../store/settings';
+import { useChecksFilter, useSettingsStore } from '../store/settings';
 import LoadFailure from './LoadFailure';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
@@ -194,6 +196,9 @@ function MuteControl({
   onChanged: () => void;
   onFailed: (message: string) => void;
 }) {
+  if (finding.mutedBy === 'convention') {
+    return <span className="shrink-0 text-fg-subtle">silenced</span>;
+  }
   if (finding.muted) {
     return (
       <button
@@ -392,6 +397,7 @@ function Group({
           {shownLabel(group, shown.length) !== '' && (
             <p className="px-3 py-1 pl-9 text-fg-subtle">{shownLabel(group, shown.length)}</p>
           )}
+          <Gone gone={group.gone ?? []} />
           <ul>
             {shown.map((finding) => (
               <Finding
@@ -427,6 +433,29 @@ function Group({
       )}
     </div>
   );
+}
+
+function Gone({ gone }: { gone: string[] }) {
+  if (gone.length === 0) {
+    return null;
+  }
+  return (
+    <details className="px-3 py-1 pl-9 text-fg-subtle">
+      <summary className="cursor-pointer">{goneLabel(gone.length)}</summary>
+      <ul className="py-1">
+        {gone.map((one) => (
+          <li key={one}>{one}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function goneLabel(count: number): string {
+  if (count === 1) {
+    return 'One that was here at the baseline and is not now';
+  }
+  return `${String(count)} that were here at the baseline and are not now`;
 }
 
 function namesFrom(raw: string): string[] {
@@ -565,6 +594,94 @@ function faultLabel(fault: RuleFault): string {
   return `${fault.id}: ${fault.reason}`;
 }
 
+function saveAs(name: string, body: Blob): void {
+  const url = URL.createObjectURL(body);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function MutesPanel({ audit, onChanged }: { audit: unknown; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [mutes, setMutes] = useState<Mute[] | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  // Reloaded whenever the audit is, so muting something in the list below shows
+  // up here without the panel having to be closed and opened again.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    fetchMutes()
+      .then((found) => {
+        setMutes(found);
+        setFailed(null);
+      })
+      .catch((err: unknown) => {
+        setFailed(messageOf(err));
+      });
+  }, [open, audit]);
+
+  return (
+    <details
+      className="shrink-0 border-b border-edge px-3 py-1.5 text-fg-muted"
+      onToggle={(event) => {
+        setOpen(event.currentTarget.open);
+      }}
+    >
+      <summary className="cursor-pointer">What you have muted</summary>
+      {failed !== null && <p className="py-1 text-warn">{failed}</p>}
+      {mutes !== null && mutes.length === 0 && (
+        <p className="py-1 text-fg-soft">You have not muted anything on this cluster.</p>
+      )}
+      <ul className="py-1">
+        {(mutes ?? []).map((mute) => (
+          <li key={muteKey(mute)} className="flex items-baseline gap-3 py-0.5">
+            <span className="min-w-0 flex-1 truncate" title={muteScopeLabel(mute)}>
+              {mute.check} · {muteScopeLabel(mute)}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-fg-soft">{mute.reason}</span>
+            <span className="shrink-0 text-fg-subtle">{mute.at}</span>
+            <button
+              type="button"
+              aria-label={`Unmute ${muteKey(mute)}`}
+              className="shrink-0 text-fg-soft hover:underline"
+              onClick={() => {
+                unmuteFinding(mute)
+                  .then((left) => {
+                    setMutes(left);
+                    onChanged();
+                  })
+                  .catch((err: unknown) => {
+                    setFailed(messageOf(err));
+                  });
+              }}
+            >
+              unmute
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function muteKey(mute: Mute): string {
+  return [mute.check, mute.namespace ?? '', mute.ref ?? ''].join('|');
+}
+
+function muteScopeLabel(mute: Mute): string {
+  if (mute.ref !== undefined && mute.ref !== '') {
+    return mute.ref;
+  }
+  if (mute.namespace !== undefined && mute.namespace !== '') {
+    return `everything in ${mute.namespace}`;
+  }
+  return 'everywhere';
+}
+
 function BaselineBar({ baseline, onChanged }: { baseline: string; onChanged: () => void }) {
   const onlyNew = useSettingsStore((state) => state.checksOnlyNew);
   const setOnlyNew = useSettingsStore((state) => state.setChecksOnlyNew);
@@ -635,9 +752,45 @@ function BaselineBar({ baseline, onChanged }: { baseline: string; onChanged: () 
         />
         Show what is muted
       </label>
+      <ExportButton onFailed={setFailed} />
       {failed !== null && <span className="text-warn">{failed}</span>}
     </div>
   );
+}
+
+function ExportButton({ onFailed }: { onFailed: (message: string) => void }) {
+  const keep = useChecksFilter();
+  const [working, setWorking] = useState(false);
+
+  return (
+    <button
+      type="button"
+      disabled={working}
+      className="rounded border border-edge px-2 py-0.5 text-fg-soft disabled:text-fg-subtle"
+      onClick={() => {
+        setWorking(true);
+        exportChecks(keep)
+          .then((body) => {
+            saveAs('spinoza-checks.csv', body);
+          })
+          .catch((err: unknown) => {
+            onFailed(messageOf(err));
+          })
+          .finally(() => {
+            setWorking(false);
+          });
+      }}
+    >
+      {exportLabel(working)}
+    </button>
+  );
+}
+
+function exportLabel(working: boolean): string {
+  if (working) {
+    return 'Working';
+  }
+  return 'Export';
 }
 
 function Namespaces({ counts }: { counts: NamespaceCount[] }) {
@@ -828,6 +981,7 @@ export default function Checks({ onOpen }: ChecksProps) {
       )}
       <AuditControls />
       <BaselineBar baseline={data.baseline} onChanged={reload} />
+      <MutesPanel audit={data} onChanged={reload} />
       <Namespaces counts={data.namespaces} />
       <YourRules />
       <div className="flex shrink-0 items-baseline gap-3 border-b border-edge px-3 py-1.5 text-fg-muted">

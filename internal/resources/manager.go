@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -754,6 +755,15 @@ func (m *Manager) Checks(ctx context.Context, keep checks.Filter) api.CheckRepor
 	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, m.limits.CheckFindings)
 }
 
+// everyFinding is the cap for a caller that has to see all of them. The audit
+// is written to page, so an export that stopped at the page size would be a
+// truncation nobody was told about.
+const everyFinding = math.MaxInt32
+
+func (m *Manager) CheckExport(ctx context.Context, keep checks.Filter) api.CheckReport {
+	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, everyFinding)
+}
+
 func (m *Manager) CheckFingerprint(ctx context.Context, keep checks.Filter) checks.Baseline {
 	return checks.Fingerprint(ctx, m, m.descriptors(), m.Metrics(ctx), keep)
 }
@@ -1146,20 +1156,27 @@ func (m *Manager) List(ctx context.Context, desc api.ResourceDescriptor) ([]*uns
 	return m.Lease(ctx, desc)
 }
 
-func (m *Manager) ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error) {
+// ListNames reads metadata only. A secret's contents never leave the apiserver
+// on this path; what comes back is the name, whether something owns it, and
+// which operator says it manages it.
+func (m *Manager) ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]checks.Named, error) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	page, err := m.meta.Resource(gvr).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]api.ObjectRef, 0, len(page.Items))
+	out := make([]checks.Named, 0, len(page.Items))
 	for _, item := range page.Items {
-		out = append(out, api.ObjectRef{
-			Group:     desc.Group,
-			Version:   desc.Version,
-			Resource:  desc.Resource,
-			Namespace: item.Namespace,
-			Name:      item.Name,
+		out = append(out, checks.Named{
+			Ref: api.ObjectRef{
+				Group:     desc.Group,
+				Version:   desc.Version,
+				Resource:  desc.Resource,
+				Namespace: item.Namespace,
+				Name:      item.Name,
+			},
+			Owned:   len(item.OwnerReferences) > 0,
+			Manager: checks.ManagerOf(item.Labels),
 		})
 	}
 	return out, nil

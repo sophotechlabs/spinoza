@@ -37,18 +37,22 @@ func (f *fakeLister) List(_ context.Context, desc api.ResourceDescriptor) ([]*un
 	return f.objects[desc.Resource], nil
 }
 
-func (f *fakeLister) ListNames(_ context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error) {
+func (f *fakeLister) ListNames(_ context.Context, desc api.ResourceDescriptor) ([]Named, error) {
 	if err, failing := f.errs[desc.Resource]; failing {
 		return nil, err
 	}
-	out := []api.ObjectRef{}
+	out := []Named{}
 	for _, obj := range f.objects[desc.Resource] {
-		out = append(out, api.ObjectRef{
-			Group:     desc.Group,
-			Version:   desc.Version,
-			Resource:  desc.Resource,
-			Namespace: obj.GetNamespace(),
-			Name:      obj.GetName(),
+		out = append(out, Named{
+			Ref: api.ObjectRef{
+				Group:     desc.Group,
+				Version:   desc.Version,
+				Resource:  desc.Resource,
+				Namespace: obj.GetNamespace(),
+				Name:      obj.GetName(),
+			},
+			Owned:   len(obj.GetOwnerReferences()) > 0,
+			Manager: ManagerOf(obj.GetLabels()),
 		})
 	}
 	return out, nil

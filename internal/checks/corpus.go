@@ -11,30 +11,30 @@ import (
 
 type corpus struct {
 	byResource map[target][]*unstructured.Unstructured
-	names      map[target]map[string]bool
+	names      map[target]map[string]Named
 	absent     map[target]bool
 	unread     []target
 	mentioned  map[string]int
 }
 
 func newCorpus(
-	items []held, names []api.ObjectRef, absent []string, asked, unread []target, mentions map[string]int,
+	items []held, names []Named, absent []string, asked, unread []target, mentions map[string]int,
 ) *corpus {
 	out := &corpus{
 		byResource: map[target][]*unstructured.Unstructured{},
-		names:      map[target]map[string]bool{},
+		names:      map[target]map[string]Named{},
 		absent:     map[target]bool{},
 	}
 	for _, item := range items {
 		key := target{group: item.desc.Group, resource: item.desc.Resource}
 		out.byResource[key] = append(out.byResource[key], item.obj)
 	}
-	for _, ref := range names {
-		key := target{group: ref.Group, resource: ref.Resource}
+	for _, found := range names {
+		key := target{group: found.Ref.Group, resource: found.Ref.Resource}
 		if out.names[key] == nil {
-			out.names[key] = map[string]bool{}
+			out.names[key] = map[string]Named{}
 		}
-		out.names[key][ref.Namespace+"/"+ref.Name] = true
+		out.names[key][found.Ref.Namespace+"/"+found.Ref.Name] = found
 	}
 	out.mentioned = mentionedStrings(items)
 	for name, seen := range mentions {
@@ -83,8 +83,9 @@ func (c *corpus) refused() string {
 
 func mentionedStrings(items []held) map[string]int {
 	out := map[string]int{}
+	here := map[string]bool{}
 	for _, item := range items {
-		here := map[string]bool{}
+		clear(here)
 		gatherStrings(item.obj.Object, here)
 		delete(here, item.obj.GetName())
 		for name := range here {
@@ -131,7 +132,8 @@ func (c *corpus) has(group, resource string) bool {
 func (c *corpus) named(group, resource, namespace, name string) bool {
 	key := target{group: group, resource: resource}
 	if held, ok := c.names[key]; ok {
-		return held[namespace+"/"+name]
+		_, found := held[namespace+"/"+name]
+		return found
 	}
 	for _, obj := range c.of(group, resource) {
 		if obj.GetName() != name {
@@ -145,18 +147,14 @@ func (c *corpus) named(group, resource, namespace, name string) bool {
 	return false
 }
 
-func (c *corpus) every(resource string) []api.ObjectRef {
-	out := []api.ObjectRef{}
+func (c *corpus) every(resource string) []Named {
+	out := []Named{}
 	for key, held := range c.names {
 		if key.resource != resource {
 			continue
 		}
-		for name := range held {
-			namespace, short, _ := strings.Cut(name, "/")
-			out = append(out, api.ObjectRef{
-				Group: key.group, Version: "v1", Resource: key.resource,
-				Namespace: namespace, Name: short,
-			})
+		for _, found := range held {
+			out = append(out, found)
 		}
 	}
 	for key, held := range c.byResource {
@@ -164,14 +162,15 @@ func (c *corpus) every(resource string) []api.ObjectRef {
 			continue
 		}
 		for _, obj := range held {
-			out = append(out, api.ObjectRef{
+			ref := api.ObjectRef{
 				Group: key.group, Version: "v1", Resource: key.resource,
 				Namespace: obj.GetNamespace(), Name: obj.GetName(),
-			})
+			}
+			out = append(out, namedOf(ref, obj))
 		}
 	}
-	slices.SortFunc(out, func(left, right api.ObjectRef) int {
-		return strings.Compare(left.Namespace+"/"+left.Name, right.Namespace+"/"+right.Name)
+	slices.SortFunc(out, func(left, right Named) int {
+		return strings.Compare(left.Ref.Namespace+"/"+left.Ref.Name, right.Ref.Namespace+"/"+right.Ref.Name)
 	})
 	return out
 }

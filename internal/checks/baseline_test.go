@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -113,7 +114,7 @@ func TestAnAuditOfOneNamespaceCountsNothingFixed(t *testing.T) {
 // what a baseline refuses to guess
 
 func TestACheckTheBaselineNeverRanReportsNothingAsNew(t *testing.T) {
-	base := Baseline{TakenAt: "2026-08-01T00:00:00Z", Checks: []string{"something-else"}, Keys: map[string]bool{}}
+	base := Baseline{TakenAt: "2026-08-01T00:00:00Z", Checks: []string{"something-else"}, Keys: map[string]string{}}
 
 	report := against(t, base, privilegedDeployment("api"))
 
@@ -144,6 +145,86 @@ func TestTheReportSaysWhenItsBaselineWasTaken(t *testing.T) {
 
 	if report := against(t, base, privilegedDeployment("api")); report.Baseline != base.TakenAt {
 		t.Fatalf("the report named %q as its baseline", report.Baseline)
+	}
+}
+
+func TestWhatWentAwaySinceTheBaselineIsNamed(t *testing.T) {
+	base := fingerprintOfCluster(t, privilegedDeployment("api"), privilegedDeployment("web"))
+
+	report := against(t, base, privilegedDeployment("api"))
+
+	group := groupNamed(t, report, privilegedCheck)
+	if len(group.Gone) != 1 {
+		t.Fatalf("named %v, want the one that went away", group.Gone)
+	}
+	if !strings.Contains(group.Gone[0], "web") {
+		t.Fatalf("named %q, want the workload that is no longer there", group.Gone[0])
+	}
+	if group.Fixed != 1 {
+		t.Fatalf("counted %d fixed beside %d named", group.Fixed, len(group.Gone))
+	}
+}
+
+func TestMutingSomethingDoesNotMakeItLookGone(t *testing.T) {
+	base := fingerprintOfCluster(t, privilegedDeployment("api"), privilegedDeployment("web"))
+	keep := wholeCluster()
+	keep.Base = &base
+	keep.Mutes = []Mute{{Check: privilegedCheck, Ref: deploymentRef("api", testNamespace)}}
+
+	report := Run(t.Context(), newLister(
+		privilegedDeployment("api"), privilegedDeployment("web"),
+	), descriptors(), api.Metrics{}, keep, 0)
+
+	if gone := groupNamed(t, report, privilegedCheck).Gone; len(gone) != 0 {
+		t.Fatalf("muting one finding named %v as gone", gone)
+	}
+}
+
+func TestNothingWentAwayWhenNothingChanged(t *testing.T) {
+	same := privilegedDeployment("api")
+
+	report := against(t, fingerprintOfCluster(t, same), same)
+
+	if gone := groupNamed(t, report, privilegedCheck).Gone; len(gone) != 0 {
+		t.Fatalf("named %v as gone although nothing changed", gone)
+	}
+}
+
+func TestAnAuditOfOneNamespaceNamesNothingAsGone(t *testing.T) {
+	base := fingerprintOfCluster(t,
+		privilegedDeployment("api"), inNamespace(privilegedDeployment("agent"), "kube-system"))
+	keep := wholeCluster()
+	keep.Base = &base
+	keep.Namespace = testNamespace
+
+	report := Run(t.Context(), newLister(
+		privilegedDeployment("api"), inNamespace(privilegedDeployment("agent"), "kube-system"),
+	), descriptors(), api.Metrics{}, keep, 0)
+
+	if gone := groupNamed(t, report, privilegedCheck).Gone; len(gone) != 0 {
+		t.Fatalf("looking at one namespace named %v as gone from the rest of the cluster", gone)
+	}
+}
+
+func TestAnAuditOfTheWorkloadsAloneCountsNothingFixed(t *testing.T) {
+	base := fingerprintOfCluster(t, privilegedDeployment("api"))
+	keep := Filter{Base: &base}
+
+	report := Run(t.Context(), newLister(privilegedDeployment("api")), descriptors(), api.Metrics{}, keep, 0)
+
+	group := groupNamed(t, report, privilegedCheck)
+	if group.Fixed != 0 || len(group.Gone) != 0 {
+		t.Fatalf("narrowing to the workloads reported %d fixed and %v gone", group.Fixed, group.Gone)
+	}
+}
+
+func TestACheckTheBaselineNeverRanNamesNothingAsGone(t *testing.T) {
+	base := Baseline{TakenAt: "2026-08-01T00:00:00Z", Checks: []string{"something-else"}, Keys: map[string]string{}}
+
+	report := against(t, base, privilegedDeployment("api"))
+
+	if gone := groupNamed(t, report, privilegedCheck).Gone; len(gone) != 0 {
+		t.Fatalf("a check the baseline never ran named %v as gone", gone)
 	}
 }
 

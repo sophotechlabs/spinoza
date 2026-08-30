@@ -584,6 +584,295 @@ describe('a check that reads live measurement', () => {
   });
 });
 
+describe('what you have muted', () => {
+  function withMutes(mutes: unknown[]) {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method ?? 'GET', body: bodyIn(init) });
+        if (url.startsWith('/api/checks/mutes')) {
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ mutes }) });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    return calls;
+  }
+
+  it('reads them only once the panel is opened', async () => {
+    const calls = withMutes([]);
+    await screen.findByText(/Privileged containers/);
+
+    expect(calls.some((call) => call.url === '/api/checks/mutes')).toBe(false);
+    await userEvent.click(screen.getByText('What you have muted'));
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.url === '/api/checks/mutes')).toBe(true);
+    });
+  });
+
+  it('says so when nothing is muted', async () => {
+    withMutes([]);
+
+    await userEvent.click(await screen.findByText('What you have muted'));
+
+    expect(
+      await screen.findByText('You have not muted anything on this cluster.'),
+    ).toBeInTheDocument();
+  });
+
+  it('says what each mute covers, why, and when', async () => {
+    withMutes([
+      {
+        check: 'runs-as-root',
+        namespace: 'kube-system',
+        reason: 'it needs the host',
+        at: '2026-08-30',
+      },
+      {
+        check: 'privileged-containers',
+        ref: 'apps/v1/deployments/apps/api',
+        reason: 'known',
+        at: '2026-08-29',
+      },
+      { check: 'image-latest', reason: 'everywhere', at: '2026-08-28' },
+    ]);
+
+    await userEvent.click(await screen.findByText('What you have muted'));
+
+    expect(await screen.findByText(/everything in kube-system/)).toBeInTheDocument();
+    expect(screen.getByText(/apps\/v1\/deployments\/apps\/api/)).toBeInTheDocument();
+    expect(screen.getByText(/image-latest · everywhere/)).toBeInTheDocument();
+    expect(screen.getByText('2026-08-30')).toBeInTheDocument();
+  });
+
+  it('removes one when asked', async () => {
+    const calls = withMutes([
+      {
+        check: 'runs-as-root',
+        namespace: 'kube-system',
+        reason: 'it needs the host',
+        at: '2026-08-30',
+      },
+    ]);
+
+    await userEvent.click(await screen.findByText('What you have muted'));
+    await userEvent.click(await screen.findByRole('button', { name: /^Unmute runs-as-root/ }));
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.method === 'DELETE')).toBe(true);
+    });
+    expect(calls.find((call) => call.method === 'DELETE')?.body).toEqual({
+      check: 'runs-as-root',
+      namespace: 'kube-system',
+      reason: 'it needs the host',
+      at: '2026-08-30',
+    });
+  });
+
+  it('says so when one could not be removed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/checks/mutes') && init?.method === 'DELETE') {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'the settings file is read only' }),
+          });
+        }
+        if (url.startsWith('/api/checks/mutes')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                mutes: [{ check: 'runs-as-root', namespace: 'kube-system', at: '2026-08-30' }],
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+
+    await userEvent.click(await screen.findByText('What you have muted'));
+    await userEvent.click(await screen.findByRole('button', { name: /^Unmute runs-as-root/ }));
+
+    expect(await screen.findByText('the settings file is read only')).toBeInTheDocument();
+  });
+
+  it('says so when they could not be read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/mutes')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'the settings file is unreadable' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+
+    await userEvent.click(await screen.findByText('What you have muted'));
+
+    expect(await screen.findByText('the settings file is unreadable')).toBeInTheDocument();
+  });
+});
+
+describe('what the audit silenced itself', () => {
+  it('offers no undo, because nobody decided it', async () => {
+    answers({
+      groups: [
+        group({
+          muted: 1,
+          findings: [finding({ muted: true, mutedBy: 'convention', reason: 'it is read by k3s' })],
+        }),
+      ],
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(screen.getByText('silenced')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Unmute Deployment/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/it is read by k3s/)).toBeInTheDocument();
+  });
+});
+
+describe('what went away since the baseline', () => {
+  it('names them rather than only counting them', async () => {
+    answers({
+      groups: [
+        group({
+          baselined: true,
+          fixed: 2,
+          gone: ['Deployment apps/web', 'Deployment apps/worker'],
+        }),
+      ],
+      baseline: '2026-08-29T00:00:00Z',
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+    await userEvent.click(screen.getByText('2 that were here at the baseline and are not now'));
+
+    expect(screen.getByText('Deployment apps/web')).toBeInTheDocument();
+    expect(screen.getByText('Deployment apps/worker')).toBeInTheDocument();
+  });
+
+  it('counts one on its own properly', async () => {
+    answers({
+      groups: [group({ baselined: true, fixed: 1, gone: ['Deployment apps/web'] })],
+      baseline: '2026-08-29T00:00:00Z',
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(
+      screen.getByText('One that was here at the baseline and is not now'),
+    ).toBeInTheDocument();
+  });
+
+  it('stays out of the way when nothing went away', async () => {
+    answers({ groups: [group({ baselined: true })], baseline: '2026-08-29T00:00:00Z' });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(screen.queryByText(/at the baseline and/)).not.toBeInTheDocument();
+  });
+});
+
+describe('exporting the audit', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('asks for the file under the filter the view is showing', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        calls.push(url);
+        if (url.startsWith('/api/checks/export')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            blob: () => Promise.resolve(new Blob(['a,b'])),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    useSettingsStore.setState({ checksMinSeverity: 'high' });
+    render(<Checks onOpen={vi.fn()} />);
+    const button = await screen.findByRole('button', { name: 'Export' });
+
+    const click = vi.fn();
+    const link = document.createElement('a');
+    link.click = click;
+    vi.spyOn(document, 'createElement').mockReturnValue(link);
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:x', revokeObjectURL: vi.fn() });
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      expect(calls.some((url) => url.startsWith('/api/checks/export'))).toBe(true);
+    });
+    expect(calls.find((url) => url.startsWith('/api/checks/export'))).toContain('minSeverity=high');
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('says so when the export failed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/export')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'the audit could not be written' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Export' }));
+
+    expect(await screen.findByText('the audit could not be written')).toBeInTheDocument();
+  });
+});
+
 describe('the namespace summary', () => {
   const namespaces = [
     { namespace: 'prod', total: 40, high: 12, medium: 20, low: 8 },

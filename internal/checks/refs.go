@@ -15,7 +15,7 @@ var (
 	serviceTarget   = target{group: "", resource: "services"}
 	accountTarget   = target{group: "", resource: "serviceaccounts"}
 	configMapTarget = target{group: "", resource: "configmaps"}
-	secretTarget    = target{group: "", resource: "secrets"}
+	secretTarget    = target{group: "", resource: secretsResource}
 	claimTarget     = target{group: "", resource: "persistentvolumeclaims"}
 	ingressTarget   = target{group: networkGroup, resource: "ingresses"}
 	classTarget     = target{group: networkGroup, resource: "ingressclasses"}
@@ -329,7 +329,7 @@ func configMapMissing(subject Subject, held *corpus) (string, string) {
 }
 
 func secretMissing(subject Subject, held *corpus) (string, string) {
-	return missingReference(subject, held, secretField, "secrets", "Secret")
+	return missingReference(subject, held, secretField, secretsResource, "Secret")
 }
 
 func missingReference(subject Subject, held *corpus, field, resource, label string) (string, string) {
@@ -600,30 +600,24 @@ func overCorpus(rule func(scan) []found) finder {
 	return rule
 }
 
-const helmReleasePrefix = "sh.helm.release.v1."
-
-var neverOrphans = []string{"kube-root-ca.crt"}
-
 func orphanedConfigMaps(sc scan) []found {
-	return orphansOf(sc, "configmaps", "ConfigMap")
+	return orphansOf(sc, configMapsResource, "ConfigMap")
 }
 
 func orphanedSecrets(sc scan) []found {
-	return orphansOf(sc, "secrets", "Secret")
+	return orphansOf(sc, secretsResource, "Secret")
 }
 
 func orphansOf(sc scan, resource, label string) []found {
 	out := []found{}
-	for _, ref := range sc.held.every(resource) {
-		if slices.Contains(neverOrphans, ref.Name) || strings.HasPrefix(ref.Name, helmReleasePrefix) {
-			continue
-		}
-		if sc.held.mentionedElsewhere(ref.Name) {
+	for _, held := range sc.held.every(resource) {
+		if sc.held.mentionedElsewhere(held.Ref.Name) {
 			continue
 		}
 		out = append(out, found{
-			subject: Subject{Ref: ref, Kind: label, Object: emptyObject(ref, label)},
-			detail:  "nothing in this cluster names this " + label,
+			subject:    Subject{Ref: held.Ref, Kind: label, Object: emptyObject(held.Ref, label)},
+			detail:     "nothing in this cluster names this " + label,
+			convention: consumedBy(resource, held),
 		})
 	}
 	return out
@@ -639,13 +633,15 @@ func unmountedClaims(sc scan) []found {
 		generated = append(generated, claimTemplatePrefixes(subject)...)
 	}
 	out := []found{}
-	for _, ref := range sc.held.every("persistentvolumeclaims") {
+	for _, held := range sc.held.every("persistentvolumeclaims") {
+		ref := held.Ref
 		if mounted[ref.Namespace+"/"+ref.Name] || fromClaimTemplate(ref.Namespace+"/"+ref.Name, generated) {
 			continue
 		}
 		out = append(out, found{
-			subject: Subject{Ref: ref, Kind: "PersistentVolumeClaim", Object: emptyObject(ref, "PersistentVolumeClaim")},
-			detail:  "no pod in this cluster mounts this claim",
+			subject:    Subject{Ref: ref, Kind: "PersistentVolumeClaim", Object: emptyObject(ref, "PersistentVolumeClaim")},
+			detail:     "no pod in this cluster mounts this claim",
+			convention: consumedBy("persistentvolumeclaims", held),
 		})
 	}
 	return out

@@ -1121,6 +1121,7 @@ type CheckGroup struct {
 	Muted      int            `json:"muted,omitempty"`
 	NewCount   int            `json:"new,omitempty"`
 	Fixed      int            `json:"fixed,omitempty"`
+	Gone       []string       `json:"gone,omitempty"`
 	Baselined  bool           `json:"baselined,omitempty"`
 	Measured   bool           `json:"measured,omitempty"`
 	Truncated  bool           `json:"truncated,omitempty"`

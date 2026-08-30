@@ -27,7 +27,7 @@ type Lister interface {
 	// every one of them in a cache costs more than a gigabyte on a large one.
 	Scan(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
 	Warm(ctx context.Context, descs []api.ResourceDescriptor)
-	ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error)
+	ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]Named, error)
 	Cached() []api.ResourceDescriptor
 	Facts() Facts
 }
@@ -75,7 +75,7 @@ var contextTargets = []target{
 }
 
 var nameOnlyTargets = []target{
-	{group: "", resource: "secrets"},
+	{group: "", resource: secretsResource},
 }
 
 func allTargets() []target {
@@ -231,7 +231,7 @@ func undiscovered(absent []string) string {
 
 func gather(
 	ctx context.Context, lister Lister, descs []api.ResourceDescriptor,
-) ([]held, []api.ObjectRef, []target, map[string]int, string) {
+) ([]held, []Named, []target, map[string]int, string) {
 	warmed := []api.ResourceDescriptor{}
 	for _, desc := range descs {
 		if isNameOnly(desc) || borrowed(desc) {
@@ -243,7 +243,7 @@ func gather(
 	mentions, refused := scanMentions(ctx, lister, descs)
 	failures := listerr.New()
 	out := []held{}
-	names := []api.ObjectRef{}
+	names := []Named{}
 	unread := refused
 	for _, desc := range descs {
 		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
@@ -324,10 +324,14 @@ func scanMentions(
 	return out, refused
 }
 
+// countMentions reuses one set across the whole kind. Allocating a fresh one
+// per object is where the memory went on a large cluster: two thousand objects
+// each building a map of every string in themselves.
 func countMentions(items []*unstructured.Unstructured) map[string]int {
 	out := map[string]int{}
+	here := map[string]bool{}
 	for _, obj := range items {
-		here := map[string]bool{}
+		clear(here)
 		gatherStrings(obj.Object, here)
 		delete(here, obj.GetName())
 		for name := range here {

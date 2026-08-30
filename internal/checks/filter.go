@@ -45,7 +45,7 @@ func ParseFilter(query url.Values) Filter {
 // part of it cannot be subtracted from a baseline taken over all of it: the
 // difference is the filter, not work anybody did.
 func (f Filter) narrows() bool {
-	return f.Namespace != "" || len(f.SkipNamespaces) > 0 || f.OnlyNew
+	return f.Namespace != "" || len(f.SkipNamespaces) > 0 || f.OnlyNew || !f.WholeCluster
 }
 
 func (f Filter) fixedSince(id string, found int) int {
@@ -53,6 +53,13 @@ func (f Filter) fixedSince(id string, found int) int {
 		return 0
 	}
 	return f.Base.fixed(id, found)
+}
+
+func (f Filter) goneSince(id string, here map[string]bool) []string {
+	if f.narrows() {
+		return nil
+	}
+	return f.Base.gone(id, here)
 }
 
 func (f Filter) takenAt() string {

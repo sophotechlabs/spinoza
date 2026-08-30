@@ -48,6 +48,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPost, "/api/checks/baseline", s.takeBaseline, false},
 		{http.MethodDelete, "/api/checks/baseline", s.clearBaseline, false},
 		{http.MethodPost, "/api/checks/rules/faults", s.checkRules, false},
+		{http.MethodGet, "/api/checks/export", s.exportChecks, false},
 		{http.MethodGet, "/api/checks/mutes", s.readMutes, false},
 		{http.MethodPost, "/api/checks/mutes", s.muteFinding, false},
 		{http.MethodDelete, "/api/checks/mutes", s.unmuteFinding, false},

@@ -54,7 +54,10 @@ type found struct {
 	container string
 	detail    string
 	patch     string
-	severity  string
+	// convention is why this finding is not the leftover it looks like: an
+	// owner, a manager, or something known to read it without naming it.
+	convention string
+	severity   string
 }
 
 type objects struct {
@@ -214,26 +217,37 @@ type tally struct {
 	total int
 	muted int
 	fresh int
+	// here is every fingerprint this audit produced, so what the baseline holds
+	// and this audit does not can be named.
+	here map[string]bool
 }
 
 func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 	all := c.ranked(c.find(sc))
 	out := make([]marked, 0, len(all))
 	count := tally{}
+	here := map[string]bool{}
 	for _, item := range all {
 		if !keep.keeps(item) {
 			continue
 		}
 		count.found++
+		// Recorded before anything can drop the finding from the page: a muted
+		// finding is still here, and a baseline told otherwise would report it
+		// as work somebody did.
+		key := c.id + "\x00" + fingerprintOf(identityOf(c.id, item))
+		here[key] = true
 		by, muted := keep.mutes(c.id, item)
+		if !muted && item.convention != "" {
+			by, muted = Mute{Check: c.id, Reason: item.convention}, true
+		}
 		if muted {
 			count.muted++
 			if !keep.ShowMuted {
 				continue
 			}
 		}
-		fresh := c.comparable() && keep.Base.covers(c.id) &&
-			!keep.Base.has(fingerprintOf(identityOf(c.id, item)))
+		fresh := c.comparable() && keep.Base.covers(c.id) && !keep.Base.has(key)
 		if fresh {
 			count.fresh++
 		}
@@ -243,12 +257,16 @@ func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 		out = append(out, marked{found: item, muted: muted, by: by, fresh: fresh})
 	}
 	count.total = len(out)
+	count.here = here
 	return out, count
 }
 
 func mutedBy(item marked) string {
 	if !item.muted {
 		return ""
+	}
+	if item.convention != "" {
+		return ScopeConvention
 	}
 	return scopeOf(item.by)
 }
@@ -341,6 +359,7 @@ func (c check) group(sc scan, objs *objects, spread *namespaces, keep Filter, sh
 	out.Total, out.Muted, out.NewCount = count.total, count.muted, count.fresh
 	if c.comparable() {
 		out.Fixed = keep.fixedSince(c.id, count.found)
+		out.Gone = keep.goneSince(c.id, count.here)
 		out.Baselined = keep.Base.covers(c.id)
 	}
 	out.Measured = !c.comparable()
@@ -460,6 +479,13 @@ func Run(
 	spread := newNamespaces()
 	groups := make([]api.CheckGroup, 0, len(checks))
 	for _, entry := range checks {
+		if ctx.Err() != nil {
+			return api.CheckReport{
+				Groups:  []api.CheckGroup{},
+				Objects: []api.CheckObject{},
+				Error:   "the audit was stopped before it finished",
+			}
+		}
 		groups = append(groups, entry.group(sc, objs, spread, keep, pageSize(shown)))
 	}
 	return api.CheckReport{

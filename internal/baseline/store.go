@@ -26,10 +26,10 @@ const maxBytes = 64 << 20
 const nameLength = 16
 
 type stored struct {
-	TakenAt string         `json:"takenAt"`
-	Checks  []string       `json:"checks"`
-	Counts  map[string]int `json:"counts"`
-	Keys    []string       `json:"keys"`
+	TakenAt string            `json:"takenAt"`
+	Checks  []string          `json:"checks"`
+	Counts  map[string]int    `json:"counts"`
+	Keys    map[string]string `json:"keys"`
 }
 
 // Store keeps one baseline per cluster, as a file of its own. It is deliberately
@@ -76,9 +76,9 @@ func (s *Store) Load(cluster string) (checks.Baseline, bool) {
 	if json.Unmarshal(body, &held) != nil {
 		return checks.Baseline{}, false
 	}
-	keys := make(map[string]bool, len(held.Keys))
-	for _, key := range held.Keys {
-		keys[key] = true
+	keys := held.Keys
+	if keys == nil {
+		keys = map[string]string{}
 	}
 	return checks.Baseline{
 		TakenAt: held.TakenAt,
@@ -127,9 +127,5 @@ func (s *Store) Clear(cluster string) error {
 }
 
 func flatten(taken checks.Baseline) stored {
-	keys := make([]string, 0, len(taken.Keys))
-	for key := range taken.Keys {
-		keys = append(keys, key)
-	}
-	return stored{TakenAt: taken.TakenAt, Checks: taken.Checks, Counts: taken.Counts, Keys: keys}
+	return stored{TakenAt: taken.TakenAt, Checks: taken.Checks, Counts: taken.Counts, Keys: taken.Keys}
 }

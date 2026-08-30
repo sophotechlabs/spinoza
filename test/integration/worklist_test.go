@@ -76,6 +76,57 @@ func TestABaselineOfThisClusterLeavesNothingNew(t *testing.T) {
 	}
 }
 
+func TestWhatTheClusterOwnsOrManagesIsNotCalledALeftover(t *testing.T) {
+	keep := checks.Filter{WholeCluster: true, ShowMuted: true}
+	report := manager(t, bundle(t)).Checks(context.Background(), keep)
+
+	group := groupOf(report, "orphaned-secret")
+	if group.Skipped != "" {
+		t.Skipf("the orphan check stood down: %s", group.Skipped)
+	}
+	silenced := 0
+	for _, finding := range group.Findings {
+		if finding.MutedBy != checks.ScopeConvention {
+			continue
+		}
+		silenced++
+		if finding.Reason == "" {
+			t.Fatalf("a secret was silenced with no reason: %+v", report.Objects[finding.Ref])
+		}
+	}
+	if silenced == 0 {
+		t.Fatal("no secret on this cluster was recognised as owned, managed, or read by convention")
+	}
+}
+
+func TestAnAuditStoppedPartWaySaysSo(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	report := manager(t, bundle(t)).Checks(ctx, checks.Filter{WholeCluster: true})
+
+	if len(report.Groups) != 0 {
+		t.Fatalf("a stopped audit answered with %d groups", len(report.Groups))
+	}
+}
+
+func TestTheExportCarriesTheWholeAuditNotJustAPage(t *testing.T) {
+	held := manager(t, bundle(t))
+	keep := checks.Filter{WholeCluster: true}
+	report := held.Checks(context.Background(), keep)
+
+	whole := held.CheckExport(context.Background(), keep)
+
+	for _, group := range whole.Groups {
+		if len(group.Findings) != group.Total {
+			t.Fatalf("%s exported %d of %d findings", group.ID, len(group.Findings), group.Total)
+		}
+	}
+	if len(whole.Groups) != len(report.Groups) {
+		t.Fatalf("the export carried %d groups and the view %d", len(whole.Groups), len(report.Groups))
+	}
+}
+
 func TestTheNamespaceSummaryAddsUpToWhatTheChecksFound(t *testing.T) {
 	report := manager(t, bundle(t)).Checks(context.Background(), checks.Filter{WholeCluster: true})
 

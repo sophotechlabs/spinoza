@@ -71,6 +71,9 @@ const (
 	ScopeObject    = "object"
 	ScopeNamespace = "namespace"
 	ScopeCheck     = "check"
+	// ScopeConvention is the audit silencing itself: the object is read by
+	// something that never names it. Nobody decided this, so nobody can undo it.
+	ScopeConvention = "convention"
 )
 
 func silences(mute Mute, id string, item found) bool {
@@ -112,6 +115,23 @@ func identityOf(id string, item found) string {
 		ref.Name = generated
 	}
 	return strings.Join([]string{id, RefKey(ref), item.container}, "\x00")
+}
+
+// labelOf is how a finding reads once the object it was about may be gone: the
+// kind and where it lived, which is all a baseline can honestly keep.
+func labelOf(item found) string {
+	parts := []string{item.subject.Kind, refLabel(item.subject.Ref)}
+	if item.container != "" {
+		parts = append(parts, "container "+item.container)
+	}
+	return strings.Join(parts, " ")
+}
+
+func refLabel(ref api.ObjectRef) string {
+	if ref.Namespace == "" {
+		return ref.Name
+	}
+	return ref.Namespace + "/" + ref.Name
 }
 
 func generatedName(subject Subject) string {

@@ -123,6 +123,11 @@ func TestTheRemovalTableHasBeenLookedAtThisCycle(t *testing.T) {
 	// against has moved far enough past the newest entry that the table is
 	// almost certainly missing a removal. Look at the release notes, add what
 	// is new, and raise the bound.
+	//
+	// Checked against kubernetes.io/docs/reference/using-api/deprecation-guide
+	// on 2026-08-30, with the docs offering v1.37: that page still lists v1.32
+	// as the newest release to have stopped serving anything, so the table is
+	// current and nothing was missing for 1.33 through 1.36.
 	const lookedAtThrough = 32
 
 	newest := 0

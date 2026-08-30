@@ -475,7 +475,7 @@ func TestAClusterWithNoNetworkPolicyAtAllIsLeftAlone(t *testing.T) {
 }
 
 func TestHelmsOwnReleaseStorageIsNotAnOrphan(t *testing.T) {
-	found := reportEverything(t, simple("Secret", helmReleasePrefix+"beyla.v3", testNamespace, nil))
+	found := reportEverything(t, simple("Secret", "sh.helm.release.v1.beyla.v3", testNamespace, nil))
 
 	if findingCount(t, found, "orphaned-secret") != 0 {
 		t.Fatal("a Helm release record was reported as an orphaned Secret")

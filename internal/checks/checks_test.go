@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -479,5 +480,34 @@ func TestATemplateThatIsNotAMapProducesNoContainers(t *testing.T) {
 	}
 	if findingCount(t, found, "privilege-escalation") != 0 {
 		t.Fatal("an unreadable pod template produced container findings")
+	}
+}
+
+// what a stopped audit does
+
+func TestAnAuditThatWasStoppedSaysSoRatherThanAnsweringHalfway(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	report := Run(ctx, newLister(deployment("api", podSpec(container("app", nil)))),
+		descriptors(), api.Metrics{}, wholeCluster(), 0)
+
+	if len(report.Groups) != 0 {
+		t.Fatalf("a stopped audit answered with %d groups", len(report.Groups))
+	}
+	if !strings.Contains(report.Error, "stopped") {
+		t.Fatalf("the report said %q", report.Error)
+	}
+}
+
+func TestAStoppedFingerprintIsEmptyRatherThanPartial(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	base := Fingerprint(ctx, newLister(deployment("api", podSpec(container("app", nil)))),
+		descriptors(), api.Metrics{}, wholeCluster())
+
+	if len(base.Checks) != 0 || len(base.Keys) != 0 {
+		t.Fatalf("a stopped fingerprint kept %d checks and %d findings", len(base.Checks), len(base.Keys))
 	}
 }

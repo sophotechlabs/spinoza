@@ -87,6 +87,7 @@ type Reports interface {
 	Checks(ctx context.Context, keep checks.Filter) api.CheckReport
 	CheckPage(ctx context.Context, id, after string, keep checks.Filter) (api.CheckPage, error)
 	CheckFingerprint(ctx context.Context, keep checks.Filter) checks.Baseline
+	CheckExport(ctx context.Context, keep checks.Filter) api.CheckReport
 	Issues(ctx context.Context) api.IssueQueue
 	Metrics(ctx context.Context) api.Metrics
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)

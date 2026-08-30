@@ -3,6 +3,7 @@ package checks
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -15,7 +16,9 @@ type Baseline struct {
 	TakenAt string
 	Checks  []string
 	Counts  map[string]int
-	Keys    map[string]bool
+	// Keys maps a finding's fingerprint to what it was about, so a finding
+	// that has since gone can be named rather than only counted.
+	Keys map[string]string
 }
 
 func (b *Baseline) covers(id string) bool {
@@ -27,7 +30,28 @@ func (b *Baseline) covers(id string) bool {
 
 // has is only ever asked after covers said yes, so there is no nil to guard.
 func (b *Baseline) has(key string) bool {
-	return b.Keys[key]
+	_, found := b.Keys[key]
+	return found
+}
+
+// gone names what the baseline held for this check and this audit no longer
+// finds. A check the baseline never ran names nothing rather than guessing.
+func (b *Baseline) gone(id string, here map[string]bool) []string {
+	if !b.covers(id) {
+		return nil
+	}
+	out := []string{}
+	for key, label := range b.Keys {
+		if !strings.HasPrefix(key, id+"\x00") {
+			continue
+		}
+		if here[key] {
+			continue
+		}
+		out = append(out, label)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // fixed is what the baseline counted for a check that this audit no longer
@@ -59,8 +83,11 @@ func Fingerprint(
 		EveryKind:    keep.EveryKind,
 	}
 	sc, _, _ := survey(ctx, lister, descs, usage, wide)
-	out := Baseline{Checks: []string{}, Counts: map[string]int{}, Keys: map[string]bool{}}
+	out := Baseline{Checks: []string{}, Counts: map[string]int{}, Keys: map[string]string{}}
 	for _, entry := range registryWith(wide.Rules) {
+		if ctx.Err() != nil {
+			return Baseline{Checks: []string{}, Counts: map[string]int{}, Keys: map[string]string{}}
+		}
 		if entry.standsDown(sc) != "" || !entry.comparable() {
 			continue
 		}
@@ -68,7 +95,7 @@ func Fingerprint(
 		out.Checks = append(out.Checks, entry.id)
 		out.Counts[entry.id] = len(found)
 		for _, item := range found {
-			out.Keys[fingerprintOf(identityOf(entry.id, item))] = true
+			out.Keys[entry.id+"\x00"+fingerprintOf(identityOf(entry.id, item))] = labelOf(item)
 		}
 	}
 	return out

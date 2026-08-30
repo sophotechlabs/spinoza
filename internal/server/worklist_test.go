@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -72,6 +73,32 @@ func bodyOf(t *testing.T, resp *http.Response, into any) {
 	if err := json.NewDecoder(resp.Body).Decode(into); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+}
+
+func getRaw(t *testing.T, url string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
+	if err != nil {
+		t.Fatalf("request %s: %v", url, err)
+	}
+	resp, sendErr := http.DefaultClient.Do(req)
+	if sendErr != nil {
+		t.Fatalf("GET %s: %v", url, sendErr)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp
+}
+
+func readCSV(t *testing.T, resp *http.Response) [][]string {
+	t.Helper()
+	rows, err := csv.NewReader(resp.Body).ReadAll()
+	if err != nil {
+		t.Fatalf("read the csv: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("the export carried no rows at all")
+	}
+	return rows
 }
 
 func checksReport(t *testing.T, url string) api.CheckReport {
@@ -298,6 +325,52 @@ func TestARuleListTooLargeToReadIsRefused(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+// the audit as a file
+
+func TestTheExportCarriesEveryFindingAsARow(t *testing.T) {
+	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
+
+	resp := getRaw(t, ts.URL+"/api/checks/export")
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/csv") {
+		t.Fatalf("Content-Type = %q", got)
+	}
+	if got := resp.Header.Get("Content-Disposition"); !strings.Contains(got, "spinoza-checks.csv") {
+		t.Fatalf("Content-Disposition = %q", got)
+	}
+	rows := readCSV(t, resp)
+	if rows[0][0] != "check" || rows[0][8] != "detail" {
+		t.Fatalf("the header row was %v", rows[0])
+	}
+	found := false
+	for _, row := range rows[1:] {
+		if row[0] == "requests-missing" && row[6] == "web-0" && row[5] == "prod" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no row for the pod the audit reported, in %d rows", len(rows)-1)
+	}
+}
+
+func TestTheExportObeysTheFilterTheViewIsShowing(t *testing.T) {
+	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"), newPodObject("staging", "web-1"))
+
+	rows := readCSV(t, getRaw(t, ts.URL+"/api/checks/export?namespace=prod"))
+
+	for _, row := range rows[1:] {
+		if row[5] != "prod" {
+			t.Fatalf("a row for %s came back from an export of prod", row[5])
+		}
+	}
+	if len(rows) < 2 {
+		t.Fatal("an export of one namespace carried nothing at all")
 	}
 }
 

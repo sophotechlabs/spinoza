@@ -51,6 +51,7 @@ CheckGroup.Category category string
 CheckGroup.Findings findings []CheckFinding
 CheckGroup.Fixed fixed,omitempty int
 CheckGroup.Frameworks frameworks,omitempty []string
+CheckGroup.Gone gone,omitempty []string
 CheckGroup.ID id string
 CheckGroup.Measured measured,omitempty bool
 CheckGroup.Muted muted,omitempty int

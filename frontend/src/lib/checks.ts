@@ -172,6 +172,7 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
     muted: item.muted,
     new: item.new,
     fixed: item.fixed,
+    gone: item.gone,
     baselined: item.baselined,
     measured: item.measured,
     truncated: item.truncated,
@@ -325,6 +326,26 @@ export function takeBaseline(): Promise<string> {
 
 export function clearBaseline(): Promise<string> {
   return sendBaseline('DELETE');
+}
+
+export async function fetchMutes(): Promise<Mute[]> {
+  const response = await request('/api/checks/mutes');
+  if (!response.ok) {
+    throw await failure(response, `the mutes request failed with status ${response.status}`);
+  }
+  const body = (await response.json()) as Partial<Mutes>;
+  return body.mutes ?? [];
+}
+
+// The audit is built fresh for an export: what a browser holds stops at the
+// findings it shows, so building the file here would truncate every capped
+// check without saying so.
+export async function exportChecks(keep: ChecksFilter): Promise<Blob> {
+  const response = await request(withParams('/api/checks/export', filterParams(keep)));
+  if (!response.ok) {
+    throw await failure(response, `the export failed with status ${response.status}`);
+  }
+  return response.blob();
 }
 
 export async function ruleFaults(rules: string): Promise<RuleFault[]> {

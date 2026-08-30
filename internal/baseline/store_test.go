@@ -16,7 +16,10 @@ func taken() checks.Baseline {
 		TakenAt: "2026-08-30T00:00:00Z",
 		Checks:  []string{"privileged-containers"},
 		Counts:  map[string]int{"privileged-containers": 2},
-		Keys:    map[string]bool{"aaaaaaaaaaa": true, "bbbbbbbbbbb": true},
+		Keys: map[string]string{
+			"privileged-containers\x00aaaaaaaaaaa": "Deployment apps/api",
+			"privileged-containers\x00bbbbbbbbbbb": "Deployment apps/web",
+		},
 	}
 }
 
@@ -41,7 +44,7 @@ func TestABaselineComesBackAsItWasSaved(t *testing.T) {
 	if back.TakenAt != taken().TakenAt || back.Counts["privileged-containers"] != 2 {
 		t.Fatalf("read back %+v", back)
 	}
-	if !back.Keys["aaaaaaaaaaa"] || len(back.Keys) != 2 {
+	if back.Keys["privileged-containers\x00aaaaaaaaaaa"] != "Deployment apps/api" || len(back.Keys) != 2 {
 		t.Fatalf("read back %d keys: %v", len(back.Keys), back.Keys)
 	}
 }
@@ -125,9 +128,9 @@ func TestAFileThatIsNotABaselineIsIgnoredRatherThanObeyed(t *testing.T) {
 
 func TestMoreFindingsThanOneBaselineHoldsIsRefused(t *testing.T) {
 	huge := taken()
-	huge.Keys = make(map[string]bool, maxKeys+1)
+	huge.Keys = make(map[string]string, maxKeys+1)
 	for at := range maxKeys + 1 {
-		huge.Keys[strconv.Itoa(at)] = true
+		huge.Keys[strconv.Itoa(at)] = "Deployment apps/api"
 	}
 
 	if err := store(t).Save(cluster, huge); err == nil {
