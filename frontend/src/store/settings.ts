@@ -24,7 +24,7 @@ interface SettingsState extends Settings {
   checkRules: string;
   setLogView: (logView: LogView) => void;
   setScreenReader: (screenReader: boolean) => void;
-  setNamespaceStart: (context: string, namespaceStart: NamespaceStart) => void;
+  setNamespaceStart: (cluster: string, namespaceStart: NamespaceStart) => void;
   setChecksInterval: (checksInterval: CheckInterval) => void;
   setChecksDisabled: (checksDisabled: string[]) => void;
   setChecksSkipNamespaces: (checksSkipNamespaces: string[]) => void;
@@ -84,13 +84,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     writeSettings({ ...saved(get()), screenReader });
     set({ screenReader });
   },
-  setNamespaceStart: (context, namespaceStart) => {
-    if (context === '') {
+  setNamespaceStart: (cluster, namespaceStart) => {
+    if (cluster === '') {
       writeSettings({ ...saved(get()), namespaceStart });
       set({ namespaceStart });
       return;
     }
-    const namespaceStarts = { ...get().namespaceStarts, [context]: namespaceStart };
+    const namespaceStarts = { ...get().namespaceStarts, [cluster]: namespaceStart };
     writeSettings({ ...saved(get()), namespaceStarts });
     set({ namespaceStarts });
   },
@@ -194,15 +194,33 @@ export function useNamespaceStart(context: string): NamespaceStart {
   return fallback;
 }
 
-export function namespaceStart(context: string): NamespaceStart {
+export function namespaceStart(cluster: string, context = ''): NamespaceStart {
   const state = useSettingsStore.getState();
-  const held = state.namespaceStarts[context];
+  const held = answerFor(state.namespaceStarts, cluster, context);
   if (held !== undefined) {
     return held;
   }
   return state.namespaceStart;
 }
 
-export function namespaceAnswered(context: string): boolean {
-  return useSettingsStore.getState().namespaceStarts[context] !== undefined;
+// The answer is kept against the cluster now. One written before that, against
+// a context name, still counts until the next answer replaces it.
+function answerFor(
+  starts: Partial<Record<string, NamespaceStart>>,
+  cluster: string,
+  context: string,
+): NamespaceStart | undefined {
+  const own = starts[cluster];
+  if (own !== undefined) {
+    return own;
+  }
+  if (context === '') {
+    return undefined;
+  }
+  return starts[context];
+}
+
+export function namespaceAnswered(cluster: string, context = ''): boolean {
+  const starts = useSettingsStore.getState().namespaceStarts;
+  return answerFor(starts, cluster, context) !== undefined;
 }

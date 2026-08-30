@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { attachedTo, contextOf, displayName, forgetTab } from '../../src/lib/tabs';
+import { attachedTo, contextOf, displayName, forgetTab, tabWidth } from '../../src/lib/tabs';
 import { adoptClusters, useClustersStore } from '../../src/store/clusters';
 import { rememberObject, useRecentsStore } from '../../src/store/recents';
 import { rememberCatalog, useCatalogStore } from '../../src/store/catalog';
@@ -137,5 +137,17 @@ describe('the name a tab goes by', () => {
 
   it('falls back for a cluster no tab holds', () => {
     expect(displayName([], MK1, 'p-mk1')).toBe('p-mk1');
+  });
+});
+
+describe('how much room a tab gets', () => {
+  it('leaves it the full width while the strip has room', () => {
+    expect(tabWidth(2)).toBe('max-w-56');
+    expect(tabWidth(6)).toBe('max-w-56');
+  });
+
+  it('gives up label width before the strip grows the window', () => {
+    expect(tabWidth(7)).toBe('max-w-32');
+    expect(tabWidth(20)).toBe('max-w-32');
   });
 });

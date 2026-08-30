@@ -7,7 +7,7 @@ import {
   useNamespaceStore,
 } from '../../src/store/namespace';
 import { MK1, MK2, showing } from '../helpers-clusters';
-import { useSettingsStore } from '../../src/store/settings';
+import { namespaceAnswered, useSettingsStore } from '../../src/store/settings';
 import { resetStored } from '../../src/lib/persist';
 
 function state() {
@@ -152,5 +152,52 @@ describe('opening a cluster on its own answer', () => {
     forgetNamespace(MK1);
 
     expect(namespaceNow()).toBe(ALL);
+  });
+});
+
+describe('the answer about which namespace a cluster opens on', () => {
+  beforeEach(() => {
+    resetStored();
+    useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: {} });
+    useNamespaceStore.getState().reset();
+    showing(MK1);
+  });
+
+  it('is kept against the cluster, not the context that reached it', () => {
+    useSettingsStore.getState().setNamespaceStart(MK1, 'default');
+
+    expect(useSettingsStore.getState().namespaceStarts[MK1]).toBe('default');
+    expect(namespaceAnswered(MK1)).toBe(true);
+    expect(opensOn(MK1)).toBe('default');
+  });
+
+  it('still counts an answer written against a context name before the move', () => {
+    useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: { 'p-mk1': 'default' } });
+
+    expect(namespaceAnswered(MK1, 'p-mk1')).toBe(true);
+    expect(opensOn(MK1, 'p-mk1')).toBe('default');
+  });
+
+  it("does not take another cluster's old answer", () => {
+    useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: { 'p-mk1': 'default' } });
+
+    expect(namespaceAnswered(MK2, 'p-mk2')).toBe(false);
+    expect(opensOn(MK2, 'p-mk2')).toBe(ALL);
+  });
+
+  it("lets the cluster's own answer win over the older one", () => {
+    useSettingsStore.setState({
+      namespaceStart: 'all',
+      namespaceStarts: { 'p-mk1': 'default', [MK1]: 'all' },
+    });
+
+    expect(opensOn(MK1, 'p-mk1')).toBe(ALL);
+  });
+
+  it('shares one answer between two contexts on the same cluster', () => {
+    useSettingsStore.getState().setNamespaceStart(MK1, 'default');
+
+    expect(opensOn(MK1, 'p-mk1')).toBe('default');
+    expect(opensOn(MK1, 'p-mk1-admin')).toBe('default');
   });
 });

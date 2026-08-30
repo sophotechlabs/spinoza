@@ -718,7 +718,7 @@ describe('the namespace offer, once per cluster', () => {
 
     await user.click(strip.getByRole('button', { name: 'Open on default' }));
 
-    expect(useSettingsStore.getState().namespaceStarts['kind-dev']).toBe('default');
+    expect(useSettingsStore.getState().namespaceStarts[idFor('kind-dev')]).toBe('default');
     expect(namespaceNow()).toBe('default');
   });
 
@@ -733,7 +733,7 @@ describe('the namespace offer, once per cluster', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(useSettingsStore.getState().namespaceStarts['kind-dev']).toBe('all');
+      expect(useSettingsStore.getState().namespaceStarts[idFor('kind-dev')]).toBe('all');
     });
     const strip = within(screen.getByLabelText('Latest notifications'));
     expect(strip.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
@@ -748,7 +748,7 @@ describe('the namespace offer, once per cluster', () => {
 
     const quiet = within(screen.getByLabelText('Latest notifications'));
     expect(quiet.queryByRole('button', { name: 'Open on default' })).not.toBeInTheDocument();
-    expect(useSettingsStore.getState().namespaceStarts['kind-dev']).toBeUndefined();
+    expect(useSettingsStore.getState().namespaceStarts[idFor('kind-dev')]).toBeUndefined();
   });
 
   it('stays quiet for a cluster that already has an answer', async () => {

@@ -25,8 +25,8 @@ interface NamespaceState {
 
 const NO_NAMES: string[] = [];
 
-export function opensOn(context: string): string {
-  if (namespaceStart(context) === 'default') {
+export function opensOn(cluster: string, context = ''): string {
+  if (namespaceStart(cluster, context) === 'default') {
     return DEFAULT_NAMESPACE;
   }
   return ALL;
@@ -66,7 +66,7 @@ export const useNamespaceStore = create<NamespaceState>((set) => ({
         if (scope.touched) {
           return scope;
         }
-        return { ...scope, namespace: opensOn(context) };
+        return { ...scope, namespace: opensOn(on, context) };
       }),
     );
   },

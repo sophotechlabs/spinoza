@@ -313,21 +313,21 @@ export default function App() {
   }, [releaseKey]);
 
   useEffect(() => {
-    if (!worthAsking(contextName, counts, namespaceAnswered(contextName))) {
+    if (!worthAsking(onCluster, counts, namespaceAnswered(onCluster, contextName))) {
       return;
     }
-    useSettingsStore.getState().setNamespaceStart(contextName, EVERY_NAMESPACE);
+    useSettingsStore.getState().setNamespaceStart(onCluster, EVERY_NAMESPACE);
     askToast(
-      `Watching every namespace on ${contextName} holds all ${String(podsIn(counts))} pods in memory here.`,
+      `Watching every namespace on ${shownAs} holds all ${String(podsIn(counts))} pods in memory here.`,
       {
         label: 'Open on default',
         run: () => {
-          useSettingsStore.getState().setNamespaceStart(contextName, ONLY_DEFAULT);
+          useSettingsStore.getState().setNamespaceStart(onCluster, ONLY_DEFAULT);
           chooseNamespace(DEFAULT_NAMESPACE);
         },
       },
     );
-  }, [chooseNamespace, contextName, counts]);
+  }, [chooseNamespace, contextName, counts, onCluster, shownAs]);
 
   const [wasDown, setWasDown] = useState(false);
   useEffect(() => {

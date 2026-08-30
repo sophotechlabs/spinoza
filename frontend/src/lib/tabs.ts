@@ -57,3 +57,14 @@ export function displayName(tabs: Tab[], cluster: string, fallback: string): str
   }
   return fallback;
 }
+
+// Past a handful of tabs the strip scrolls rather than growing the window, and
+// each tab gives up label width first. The cap is legibility, not memory.
+const ROOMY = 6;
+
+export function tabWidth(open: number): string {
+  if (open > ROOMY) {
+    return 'max-w-32';
+  }
+  return 'max-w-56';
+}

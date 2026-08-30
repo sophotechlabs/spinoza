@@ -390,4 +390,12 @@ describe('the strip of open clusters', () => {
       expect(useToastsStore.getState().toasts[0].message).toContain('Closing p-mk2');
     });
   });
+
+  it('scrolls rather than wrapping once the tabs stop fitting', () => {
+    open(MK1);
+
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    expect(screen.getByRole('navigation')).toHaveClass('overflow-x-auto');
+  });
 });

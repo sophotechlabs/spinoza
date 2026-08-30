@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { activateCluster, closeCluster, clusterFailure } from '../lib/clusters';
 import { colorVar } from '../lib/clusterColor';
-import { attachedTo, forgetTab } from '../lib/tabs';
+import { attachedTo, forgetTab, tabWidth } from '../lib/tabs';
 import { nameOf, useActiveCluster, useClustersStore, useTabs } from '../store/clusters';
 import type { Tab } from '../store/clusters';
 import TabMenu from './TabMenu';
@@ -12,14 +12,14 @@ interface ClusterStripProps {
   onShown: () => void;
 }
 
-const TAB =
-  'flex items-center gap-1.5 rounded-t border-x border-t px-2 py-1 whitespace-nowrap max-w-56';
+const TAB = 'flex shrink-0 items-center gap-1.5 rounded-t border-x border-t px-2 py-1';
 
-function tabClass(active: boolean): string {
+function tabClass(active: boolean, open: number): string {
+  const room = tabWidth(open);
   if (active) {
-    return `${TAB} border-edge-strong bg-surface-raised text-fg-strong`;
+    return `${TAB} ${room} border-edge-strong bg-surface-raised text-fg-strong`;
   }
-  return `${TAB} border-edge bg-surface text-fg-soft hover:bg-surface-active`;
+  return `${TAB} ${room} border-edge bg-surface text-fg-soft hover:bg-surface-active`;
 }
 
 function showing(open: string, wanted: string): string {
@@ -120,17 +120,17 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
   return (
     <nav
       aria-label="Open clusters"
-      className="flex shrink-0 items-end gap-1 border-b border-edge bg-surface px-2 pt-1 text-xs"
+      className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-edge bg-surface px-2 pt-1 text-xs"
     >
       {inGroups(tabs).map((run) => (
-        <span key={run.name} className="flex items-end gap-1">
+        <span key={run.name} className="flex shrink-0 items-end gap-1">
           {run.name !== '' && (
             <span className="px-1 pb-1.5 text-[11px] tracking-wide text-fg-muted uppercase">
               {run.name}
             </span>
           )}
           {run.tabs.map((tab) => (
-            <span key={tab.id} className={`relative ${tabClass(tab.id === active)}`}>
+            <span key={tab.id} className={`relative ${tabClass(tab.id === active, tabs.length)}`}>
               <button
                 type="button"
                 aria-label={`${nameOf(tab)} is ${dotLabel(health[tab.id]?.reachable ?? true)}; open its settings`}
