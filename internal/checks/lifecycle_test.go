@@ -406,45 +406,6 @@ func TestListsAndFieldsOfTheWrongShapeAreSkippedByTheLifecycleChecks(t *testing.
 	}
 }
 
-func TestEveryJudgementCallShipsAtLowSeverity(t *testing.T) {
-	for _, entry := range registry() {
-		if !strings.Contains(entry.wrong, "judgement call") {
-			continue
-		}
-		if entry.severity != severityLow {
-			t.Fatalf("%s calls itself a judgement call but ships at %s", entry.id, entry.severity)
-		}
-	}
-}
-
-func TestEveryArguableCheckSaysSoInItsOwnText(t *testing.T) {
-	arguable := []string{
-		"automount-token",
-		"default-service-account",
-		"no-prestop-hook",
-		"grace-period-blocks-drain",
-		"memory-limit-not-request",
-		"pull-policy-not-always",
-		"private-registry-no-pull-secret",
-		"missing-recommended-labels",
-		"cpu-limit-set",
-		"secret-volume-world-readable",
-	}
-	byID := map[string]check{}
-	for _, entry := range registry() {
-		byID[entry.id] = entry
-	}
-	for _, id := range arguable {
-		entry, ok := byID[id]
-		if !ok {
-			t.Fatalf("%s is not registered", id)
-		}
-		if !strings.Contains(entry.wrong, "judgement call") {
-			t.Fatalf("%s does not tell the reader it is a judgement call", id)
-		}
-	}
-}
-
 // numbers that arrive as floats, and probes of every handler kind
 
 func TestPortsAndProbeValuesDecodedAsFloatsAreStillRead(t *testing.T) {

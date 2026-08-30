@@ -416,21 +416,6 @@ func TestNamingAnAccountThatIsNotTheDefaultIsAccepted(t *testing.T) {
 	}
 }
 
-func TestTheJudgementCallsShipAtLowSeverity(t *testing.T) {
-	arguable := map[string]bool{"automount-token": true, "default-service-account": true}
-	for _, entry := range hardeningChecks() {
-		if !arguable[entry.id] {
-			continue
-		}
-		if entry.severity != severityLow {
-			t.Fatalf("%s is %s, want %s because it is a judgement call", entry.id, entry.severity, severityLow)
-		}
-		if !strings.Contains(entry.wrong, "judgement call") {
-			t.Fatalf("%s does not say in its own text that it is a judgement call", entry.id)
-		}
-	}
-}
-
 // what the readers do with a spec that is the wrong shape
 
 func TestListsHoldingSomethingOtherThanObjectsAreSkipped(t *testing.T) {

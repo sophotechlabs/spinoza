@@ -14,6 +14,9 @@ import (
 // baseline instead of as thousands of new findings.
 type Baseline struct {
 	TakenAt string
+	// Cluster is where it was taken, which is only interesting once a baseline
+	// has been carried from one cluster to another.
+	Cluster string
 	Checks  []string
 	Counts  map[string]int
 	// Keys maps a finding's fingerprint to what it was about, so a finding

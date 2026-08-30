@@ -25,6 +25,16 @@ type UserRule struct {
 	Expr     string `json:"expr"`
 	Wrong    string `json:"wrong"`
 	Remedy   string `json:"remedy"`
+	// Silences names a check this rule quietens instead of adding one of its
+	// own. Where the expression matches, that check's finding is reported as
+	// silenced with Reason, the same way the audit silences what an operator
+	// reads without naming it.
+	Silences string `json:"silences,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+func (r UserRule) silencer() bool {
+	return r.Silences != ""
 }
 
 const userRuleObject = ScopeObject
@@ -89,12 +99,42 @@ func (r UserRule) faults(at int) []RuleFault {
 	if _, err := compileRule(r.Expr); err != nil {
 		return []RuleFault{{ID: name, Reason: "the expression did not compile: " + err.Error()}}
 	}
+	if r.silencer() && !isCheck(r.Silences) {
+		return []RuleFault{{ID: name, Reason: "no check goes by the name " + r.Silences}}
+	}
+	if r.silencer() && r.Reason == "" {
+		return []RuleFault{{ID: name, Reason: "a rule that silences a check has to say why"}}
+	}
 	return nil
+}
+
+func isCheck(id string) bool {
+	for _, entry := range registry() {
+		if entry.id == id {
+			return true
+		}
+	}
+	return false
+}
+
+// Silencers are the rules that quieten a check rather than add one. They are
+// kept apart from the rest so the registry only ever holds checks.
+func Silencers(rules []UserRule) []UserRule {
+	out := []UserRule{}
+	for _, one := range rules {
+		if one.silencer() {
+			out = append(out, one)
+		}
+	}
+	return out
 }
 
 func userChecks(rules []UserRule) []check {
 	out := make([]check, 0, len(rules))
 	for _, one := range rules {
+		if one.silencer() {
+			continue
+		}
 		out = append(out, one.asCheck())
 	}
 	return out
@@ -191,6 +231,21 @@ func judgeWith(rule UserRule, program cel.Program) subjectRule {
 		}
 		return "matches " + rule.ID, ""
 	}
+}
+
+// holds runs the rule against one object. A rule that cannot be compiled, or
+// that errors on this object, holds for nothing: a broken silencer must not
+// quieten a check by accident.
+func (r UserRule) holds(subject Subject) bool {
+	program, err := compileRule(r.Expr)
+	if err != nil {
+		return false
+	}
+	value, _, evalErr := program.Eval(map[string]any{userRuleObject: subject.Object.Object})
+	if evalErr != nil {
+		return false
+	}
+	return truthy(value)
 }
 
 func (r UserRule) matches(subject Subject) bool {

@@ -63,6 +63,7 @@ export interface CheckReportView {
   groups: CheckGroupView[];
   namespaces: NamespaceCount[];
   baseline: string;
+  baselineFrom: string;
   scanned: number;
   error?: string;
 }
@@ -269,6 +270,7 @@ export async function fetchChecks(
     groups: (body.groups ?? []).map((entry) => groupOf(entry, objects)),
     namespaces: body.namespaces ?? [],
     baseline: body.baseline ?? '',
+    baselineFrom: body.baselineFrom ?? '',
     scanned: body.scanned ?? 0,
     error: body.error,
   };
@@ -329,6 +331,30 @@ async function sendBaseline(method: string): Promise<string> {
 
 export function takeBaseline(): Promise<string> {
   return sendBaseline('POST');
+}
+
+export async function saveBaselineFile(): Promise<Blob> {
+  const response = await request('/api/checks/baseline/file', {
+    timeoutMs: BASELINE_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw await failure(response, `the baseline could not be saved (${String(response.status)})`);
+  }
+  return response.blob();
+}
+
+export async function loadBaselineFile(body: string): Promise<string> {
+  const response = await request('/api/checks/baseline/file', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    timeoutMs: BASELINE_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw await failure(response, `the baseline could not be loaded (${String(response.status)})`);
+  }
+  const held = (await response.json()) as Partial<Baseline>;
+  return held.takenAt ?? '';
 }
 
 export function clearBaseline(): Promise<string> {

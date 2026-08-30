@@ -214,6 +214,7 @@ func hardeningChecks() []check {
 		},
 		{
 			id:         "automount-token",
+			arguable:   true,
 			title:      "Service account token mounted",
 			category:   categorySecurity,
 			severity:   severityLow,
@@ -224,6 +225,7 @@ func hardeningChecks() []check {
 		},
 		{
 			id:         "default-service-account",
+			arguable:   true,
 			title:      "Default service account used",
 			category:   categorySecurity,
 			severity:   severityLow,

@@ -63,6 +63,7 @@ func supplyChecks() []check {
 		},
 		{
 			id:       "pull-policy-not-always",
+			arguable: true,
 			title:    "Mutable tag not pulled every time",
 			category: categoryReliability,
 			severity: severityLow,
@@ -72,6 +73,7 @@ func supplyChecks() []check {
 		},
 		{
 			id:       "private-registry-no-pull-secret",
+			arguable: true,
 			title:    "Private registry with no pull secret",
 			category: categoryReliability,
 			severity: severityLow,
@@ -101,6 +103,7 @@ func supplyChecks() []check {
 		},
 		{
 			id:         "secret-volume-world-readable",
+			arguable:   true,
 			title:      "Secret file readable beyond its owner",
 			category:   categorySecurity,
 			severity:   severityLow,
@@ -120,6 +123,7 @@ func supplyChecks() []check {
 		},
 		{
 			id:       "missing-recommended-labels",
+			arguable: true,
 			title:    "No app.kubernetes.io/name",
 			category: categoryReliability,
 			severity: severityLow,
@@ -138,6 +142,7 @@ func supplyChecks() []check {
 		},
 		{
 			id:       "cpu-limit-set",
+			arguable: true,
 			title:    "CPU limit set",
 			category: categoryEfficiency,
 			severity: severityLow,

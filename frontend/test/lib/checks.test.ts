@@ -66,7 +66,7 @@ function viewGroup(id: string, extra: Partial<CheckGroupView> = {}): CheckGroupV
 }
 
 function viewReport(groups: CheckGroupView[]): CheckReportView {
-  return { groups, namespaces: [], baseline: '', scanned: groups.length };
+  return { groups, namespaces: [], baseline: '', baselineFrom: '', scanned: groups.length };
 }
 
 function stub(body: unknown, ok = true, status = 200) {
@@ -188,6 +188,7 @@ describe('fetchChecks', () => {
       groups: [],
       namespaces: [],
       baseline: '',
+      baselineFrom: '',
       scanned: 0,
       error: undefined,
     });

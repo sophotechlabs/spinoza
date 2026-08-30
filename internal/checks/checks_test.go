@@ -511,3 +511,43 @@ func TestAStoppedFingerprintIsEmptyRatherThanPartial(t *testing.T) {
 		t.Fatalf("a stopped fingerprint kept %d checks and %d findings", len(base.Checks), len(base.Keys))
 	}
 }
+
+// what a check that is a judgement call owes the reader
+
+func TestEveryJudgementCallShipsAtLowSeverityAndSaysSo(t *testing.T) {
+	for _, entry := range registry() {
+		if !entry.arguable {
+			continue
+		}
+		if entry.severity != severityLow {
+			t.Errorf("%s calls itself a judgement call but ships at %s", entry.id, entry.severity)
+		}
+		if !strings.Contains(entry.wrong, "judgement call") {
+			t.Errorf("%s is marked a judgement call and does not tell the reader so", entry.id)
+		}
+	}
+}
+
+func TestNoCheckCallsItselfAJudgementCallWithoutBeingOne(t *testing.T) {
+	for _, entry := range registry() {
+		if !strings.Contains(entry.wrong, "judgement call") {
+			continue
+		}
+		if !entry.arguable {
+			t.Errorf("%s says it is a judgement call in its text and is not marked one", entry.id)
+		}
+	}
+}
+
+func TestTheJudgementCallsAreTheOnesWeThinkTheyAre(t *testing.T) {
+	found := []string{}
+	for _, entry := range registry() {
+		if entry.arguable {
+			found = append(found, entry.id)
+		}
+	}
+
+	if len(found) == 0 {
+		t.Fatal("no check is marked a judgement call, so neither test above proves anything")
+	}
+}

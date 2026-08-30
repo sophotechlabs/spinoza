@@ -120,6 +120,7 @@ func workloadRefChecks() []check {
 		},
 		{
 			id:       "no-service-selects-it",
+			arguable: true,
 			title:    "Nothing routes to this workload",
 			category: categoryReliability,
 			severity: severityLow,
@@ -200,6 +201,7 @@ func orphanChecks() []check {
 		},
 		{
 			id:       "claim-nothing-mounts",
+			arguable: true,
 			title:    "PersistentVolumeClaim nothing mounts",
 			category: categoryEfficiency,
 			severity: severityLow,

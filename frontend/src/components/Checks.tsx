@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CheckCategory, Mute, NamespaceCount, ObjectRef, RuleFault } from '../lib/types';
 import type { CheckFindingView, CheckGroupView } from '../lib/checks';
 import { fetchCheckPage } from '../lib/checks';
@@ -15,8 +15,10 @@ import {
   muteFinding,
   mutedLabel,
   originLabel,
+  loadBaselineFile,
   refKeyOf,
   ruleFaults,
+  saveBaselineFile,
   severityClass,
   severityReason,
   shownLabel,
@@ -37,9 +39,12 @@ const PAGE_SIZE = 200;
 
 const NAMESPACES_SHOWN = 20;
 
-function baselineLabel(baseline: string): string {
+function baselineLabel(baseline: string, from: string): string {
   if (baseline === '') {
     return 'No baseline taken, so nothing is marked new.';
+  }
+  if (from !== '') {
+    return `Comparing against ${baseline.slice(0, 10)}, taken on ${from}.`;
   }
   return `Comparing against ${baseline.slice(0, 10)}.`;
 }
@@ -218,8 +223,8 @@ function MuteControl({
   onChanged: () => void;
   onFailed: (message: string) => void;
 }) {
-  if (finding.mutedBy === 'convention') {
-    return <span className="shrink-0 text-fg-subtle">silenced</span>;
+  if (finding.mutedBy === 'convention' || finding.mutedBy === 'rule') {
+    return <span className="shrink-0 text-fg-subtle">{silencedLabel(finding.mutedBy)}</span>;
   }
   if (finding.muted) {
     return (
@@ -309,6 +314,13 @@ function MuteReason({
       {failed !== null && <span className="text-warn">{failed}</span>}
     </div>
   );
+}
+
+function silencedLabel(by: string): string {
+  if (by === 'rule') {
+    return 'by a rule';
+  }
+  return 'silenced';
 }
 
 type MuteScope = 'object' | 'namespace' | 'check';
@@ -508,8 +520,9 @@ function YourRules() {
       <summary className="cursor-pointer">Your own rules</summary>
       <p className="py-1 text-fg-soft">
         A list of {'{ id, match, expr }'} objects. The expression is CEL, with the workload bound to
-        object, and a rule that matches becomes a finding. Copy the list to keep it in a repository,
-        and paste one back here to use it on another cluster.
+        object, and a rule that matches becomes a finding. Give a rule {'{ silences, reason }'}{' '}
+        instead and it quietens that check where it matches, saying why. Copy the list to keep it in
+        a repository, and paste one back here to use it on another cluster.
       </p>
       <textarea
         aria-label="Your own rules"
@@ -704,7 +717,15 @@ function muteScopeLabel(mute: Mute): string {
   return 'everywhere';
 }
 
-function BaselineBar({ baseline, onChanged }: { baseline: string; onChanged: () => void }) {
+function BaselineBar({
+  baseline,
+  from,
+  onChanged,
+}: {
+  baseline: string;
+  from: string;
+  onChanged: () => void;
+}) {
   const onlyNew = useSettingsStore((state) => state.checksOnlyNew);
   const setOnlyNew = useSettingsStore((state) => state.setChecksOnlyNew);
   const showMuted = useSettingsStore((state) => state.checksShowMuted);
@@ -729,7 +750,7 @@ function BaselineBar({ baseline, onChanged }: { baseline: string; onChanged: () 
 
   return (
     <div className="flex shrink-0 items-center gap-4 border-b border-edge px-3 py-1.5 text-fg-muted">
-      <span>{baselineLabel(baseline)}</span>
+      <span>{baselineLabel(baseline, from)}</span>
       <button
         type="button"
         disabled={working}
@@ -774,9 +795,74 @@ function BaselineBar({ baseline, onChanged }: { baseline: string; onChanged: () 
         />
         Show what is muted
       </label>
+      <BaselineFile baseline={baseline} onChanged={onChanged} onFailed={setFailed} />
       <ExportButton onFailed={setFailed} />
       {failed !== null && <span className="text-warn">{failed}</span>}
     </div>
+  );
+}
+
+function BaselineFile({
+  baseline,
+  onChanged,
+  onFailed,
+}: {
+  baseline: string;
+  onChanged: () => void;
+  onFailed: (message: string) => void;
+}) {
+  const pick = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      {baseline !== '' && (
+        <button
+          type="button"
+          className="rounded border border-edge px-2 py-0.5 text-fg-soft"
+          onClick={() => {
+            saveBaselineFile()
+              .then((body) => {
+                saveAs('spinoza-baseline.json', body);
+              })
+              .catch((err: unknown) => {
+                onFailed(messageOf(err));
+              });
+          }}
+        >
+          Save it to a file
+        </button>
+      )}
+      <button
+        type="button"
+        className="rounded border border-edge px-2 py-0.5 text-fg-soft"
+        onClick={() => {
+          pick.current?.click();
+        }}
+      >
+        Load one from a file
+      </button>
+      <input
+        ref={pick}
+        type="file"
+        accept="application/json"
+        aria-label="A baseline to load"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file === undefined) {
+            return;
+          }
+          file
+            .text()
+            .then(loadBaselineFile)
+            .then(onChanged)
+            .catch((err: unknown) => {
+              onFailed(messageOf(err));
+            });
+        }}
+      />
+    </>
   );
 }
 
@@ -1005,7 +1091,7 @@ export default function Checks({ onOpen }: ChecksProps) {
         </p>
       )}
       <AuditControls />
-      <BaselineBar baseline={data.baseline} onChanged={reload} />
+      <BaselineBar baseline={data.baseline} from={data.baselineFrom} onChanged={reload} />
       <MutesPanel audit={data} onChanged={reload} />
       <Namespaces counts={data.namespaces} />
       <YourRules />

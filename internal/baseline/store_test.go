@@ -209,3 +209,71 @@ func TestTheDefaultDirectorySitsBesideTheSettings(t *testing.T) {
 		t.Fatalf("the default directory is %q", dir)
 	}
 }
+
+// what a baseline survives being carried somewhere else
+
+func TestABaselineComesBackFromTheFileItWasWrittenTo(t *testing.T) {
+	body, err := Encode(taken())
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+
+	back, decodeErr := Decode(body)
+
+	if decodeErr != nil {
+		t.Fatalf("decode: %v", decodeErr)
+	}
+	if back.TakenAt != taken().TakenAt || len(back.Keys) != 2 {
+		t.Fatalf("read back %+v", back)
+	}
+}
+
+func TestABaselineRemembersWhichClusterItWasTakenOn(t *testing.T) {
+	mine := taken()
+	mine.Cluster = cluster
+	body, err := Encode(mine)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+
+	back, decodeErr := Decode(body)
+
+	if decodeErr != nil {
+		t.Fatalf("decode: %v", decodeErr)
+	}
+	if back.Cluster != cluster {
+		t.Fatalf("the baseline came back naming %q", back.Cluster)
+	}
+}
+
+func TestSomethingThatIsNotABaselineIsRefusedRatherThanStored(t *testing.T) {
+	cases := []struct{ name, body string }{
+		{"not json", "{{{"},
+		{"an empty object", "{}"},
+		{"a baseline with no checks", `{"takenAt":"2026-08-30T00:00:00Z","checks":[]}`},
+		{"a baseline with no day", `{"checks":["a"]}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Decode([]byte(tc.body)); err == nil {
+				t.Fatal("it was read as a baseline")
+			}
+		})
+	}
+}
+
+func TestABaselineTooLargeToBeOneIsRefused(t *testing.T) {
+	if _, err := Decode(make([]byte, maxBytes+1)); err == nil {
+		t.Fatal("a body past the cap was read as a baseline")
+	}
+}
+
+func TestABaselineWithNoFingerprintsStillReads(t *testing.T) {
+	back, err := Decode([]byte(`{"takenAt":"2026-08-30T00:00:00Z","checks":["a"]}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if back.Keys == nil {
+		t.Fatal("a baseline with no fingerprints came back with a nil set to look them up in")
+	}
+}

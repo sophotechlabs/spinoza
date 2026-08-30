@@ -16,6 +16,7 @@ var severityOrder = []string{severityLow, severityMedium, severityHigh}
 
 type Filter struct {
 	Rules          []UserRule
+	Silencers      []UserRule
 	Mutes          []Mute
 	Base           *Baseline
 	Disabled       []string
@@ -69,6 +70,15 @@ func (f Filter) takenAt() string {
 	return f.Base.TakenAt
 }
 
+// takenFrom names the cluster the baseline came from, which the server leaves
+// set only when it is not the one being audited.
+func (f Filter) takenFrom() string {
+	if f.Base == nil {
+		return ""
+	}
+	return f.Base.Cluster
+}
+
 func asked(raw string) bool {
 	return raw == "1" || strings.EqualFold(raw, "true")
 }
@@ -120,6 +130,25 @@ func (f Filter) keeps(item found) bool {
 		return true
 	}
 	return f.Namespace == item.subject.Ref.Namespace
+}
+
+// silenced answers whether a rule of your own quietens this finding, and what
+// the rule said. A rule that errors on one object leaves it alone rather than
+// taking the audit down.
+func (f Filter) silenced(id string, item found) (Mute, bool) {
+	for _, one := range f.Silencers {
+		if one.Silences != id {
+			continue
+		}
+		if !one.matches(item.subject) {
+			continue
+		}
+		if !one.holds(item.subject) {
+			continue
+		}
+		return Mute{Check: id, Reason: one.Reason}, true
+	}
+	return Mute{}, false
 }
 
 // mutes answers whether you have already decided about this finding, and what

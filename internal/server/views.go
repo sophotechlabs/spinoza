@@ -45,8 +45,14 @@ func (s *Server) checkFilterOn(r *http.Request, cluster string) checks.Filter {
 	keep := checks.ParseFilter(r.URL.Query())
 	held := s.stored().All()
 	keep.Rules = checks.ParseRules(held[checks.RulesKey])
+	keep.Silencers = checks.Silencers(keep.Rules)
 	keep.Mutes = checks.ParseMutes(held[checks.MutesKey], cluster)
 	if taken, ok := s.baselines().Load(cluster); ok {
+		// A baseline taken here needs no explaining; one carried from elsewhere
+		// does, and the view says where it came from.
+		if taken.Cluster == cluster {
+			taken.Cluster = ""
+		}
 		keep.Base = &taken
 	}
 	return keep

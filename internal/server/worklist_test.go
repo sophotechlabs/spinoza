@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -73,6 +74,20 @@ func bodyOf(t *testing.T, resp *http.Response, into any) {
 	if err := json.NewDecoder(resp.Body).Decode(into); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+}
+
+func sendBody(t *testing.T, method, url string, body []byte) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), method, url, bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("request %s: %v", url, err)
+	}
+	resp, sendErr := http.DefaultClient.Do(req)
+	if sendErr != nil {
+		t.Fatalf("%s %s: %v", method, url, sendErr)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp
 }
 
 func getRaw(t *testing.T, url string) *http.Response {
@@ -371,6 +386,98 @@ func TestTheExportObeysTheFilterTheViewIsShowing(t *testing.T) {
 	}
 	if len(rows) < 2 {
 		t.Fatal("an export of one namespace carried nothing at all")
+	}
+}
+
+// carrying a baseline somewhere else
+
+func TestTheBaselineCanBeSavedToAFileAndTakenBack(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	srv.UseBaselines(newHeldBaselines())
+	send(t, http.MethodPost, ts.URL+"/api/checks/baseline", nil)
+
+	resp := getRaw(t, ts.URL+"/api/checks/baseline/file")
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Disposition"); !strings.Contains(got, "spinoza-baseline.json") {
+		t.Fatalf("Content-Disposition = %q", got)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	send(t, http.MethodDelete, ts.URL+"/api/checks/baseline", nil)
+	back := sendBody(t, http.MethodPut, ts.URL+"/api/checks/baseline/file", body)
+
+	if back.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", back.StatusCode)
+	}
+	var taken api.Baseline
+	bodyOf(t, back, &taken)
+	if taken.TakenAt == "" || taken.Findings == 0 {
+		t.Fatalf("the baseline came back as %+v", taken)
+	}
+	if report := checksReport(t, ts.URL+"/api/checks"); report.Baseline != taken.TakenAt {
+		t.Fatalf("the report names %q as its baseline", report.Baseline)
+	}
+}
+
+func TestABaselineTakenHereNamesThisCluster(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	srv.UseBaselines(newHeldBaselines())
+
+	resp := send(t, http.MethodPost, ts.URL+"/api/checks/baseline", nil)
+
+	var taken api.Baseline
+	bodyOf(t, resp, &taken)
+	if taken.Cluster == "" {
+		t.Fatal("a baseline taken here does not say which cluster it came from")
+	}
+}
+
+func TestSavingABaselineNobodyTookIsRefused(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	srv.UseBaselines(newHeldBaselines())
+
+	resp := getRaw(t, ts.URL+"/api/checks/baseline/file")
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestAFileThatIsNotABaselineIsRefused(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	srv.UseBaselines(newHeldBaselines())
+
+	resp := sendBody(t, http.MethodPut, ts.URL+"/api/checks/baseline/file", []byte("{{{"))
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if report := checksReport(t, ts.URL+"/api/checks"); report.Baseline != "" {
+		t.Fatalf("a refused file left %q as the baseline", report.Baseline)
+	}
+}
+
+func TestABaselineThatCannotBeKeptOnLoadIsReported(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	held := newHeldBaselines()
+	srv.UseBaselines(held)
+	send(t, http.MethodPost, ts.URL+"/api/checks/baseline", nil)
+	body, err := io.ReadAll(getRaw(t, ts.URL+"/api/checks/baseline/file").Body)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	held.saveErr = errors.New("the disk is full")
+
+	resp := sendBody(t, http.MethodPut, ts.URL+"/api/checks/baseline/file", body)
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 

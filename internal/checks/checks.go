@@ -110,8 +110,12 @@ type check struct {
 	remedy     string
 	needsUsage bool
 	needsEvery bool
-	needs      []target
-	find       finder
+	// arguable says a reasonable operator could leave this as it is. Such a
+	// check ships at low severity and says so in its own words, which the
+	// registry test holds it to.
+	arguable bool
+	needs    []target
+	find     finder
 }
 
 func overContainers(rule containerRule) finder {
@@ -204,9 +208,10 @@ func decodeCursor(cursor string) string {
 type marked struct {
 	found
 
-	muted bool
-	by    Mute
-	fresh bool
+	muted  bool
+	by     Mute
+	fresh  bool
+	byRule bool
 }
 
 type tally struct {
@@ -238,6 +243,11 @@ func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 		key := c.id + "\x00" + fingerprintOf(identityOf(c.id, item))
 		here[key] = true
 		by, muted := keep.mutes(c.id, item)
+		rule := false
+		if !muted {
+			by, muted = keep.silenced(c.id, item)
+			rule = muted
+		}
 		if !muted && item.convention != "" {
 			by, muted = Mute{Check: c.id, Reason: item.convention}, true
 		}
@@ -254,7 +264,7 @@ func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 		if keep.OnlyNew && !fresh {
 			continue
 		}
-		out = append(out, marked{found: item, muted: muted, by: by, fresh: fresh})
+		out = append(out, marked{found: item, muted: muted, by: by, fresh: fresh, byRule: rule})
 	}
 	count.total = len(out)
 	count.here = here
@@ -264,6 +274,9 @@ func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 func mutedBy(item marked) string {
 	if !item.muted {
 		return ""
+	}
+	if item.byRule {
+		return ScopeRule
 	}
 	if item.convention != "" {
 		return ScopeConvention
@@ -489,11 +502,12 @@ func Run(
 		groups = append(groups, entry.group(sc, objs, spread, keep, pageSize(shown)))
 	}
 	return api.CheckReport{
-		Groups:     groups,
-		Objects:    objs.list,
-		Namespaces: spread.sorted(),
-		Baseline:   keep.takenAt(),
-		Scanned:    len(sc.subjects),
-		Error:      joined(failure, undiscovered(absent)),
+		Groups:       groups,
+		Objects:      objs.list,
+		Namespaces:   spread.sorted(),
+		Baseline:     keep.takenAt(),
+		BaselineFrom: keep.takenFrom(),
+		Scanned:      len(sc.subjects),
+		Error:        joined(failure, undiscovered(absent)),
 	}
 }

@@ -67,6 +67,7 @@ func lifecycleChecks() []check {
 		},
 		{
 			id:       "no-prestop-hook",
+			arguable: true,
 			title:    "No preStop hook",
 			category: categoryReliability,
 			severity: severityLow,
@@ -85,6 +86,7 @@ func lifecycleChecks() []check {
 		},
 		{
 			id:       "grace-period-blocks-drain",
+			arguable: true,
 			title:    "Shutdown long enough to hold up a drain",
 			category: categoryReliability,
 			severity: severityLow,
@@ -112,6 +114,7 @@ func lifecycleChecks() []check {
 		},
 		{
 			id:       "memory-limit-not-request",
+			arguable: true,
 			title:    "Memory limit above its request",
 			category: categoryEfficiency,
 			severity: severityLow,

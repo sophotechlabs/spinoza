@@ -74,6 +74,9 @@ const (
 	// ScopeConvention is the audit silencing itself: the object is read by
 	// something that never names it. Nobody decided this, so nobody can undo it.
 	ScopeConvention = "convention"
+	// ScopeRule is a rule of your own quietening a check. It is undone by
+	// changing the rule, not by unmuting the finding.
+	ScopeRule = "rule"
 )
 
 func silences(mute Mute, id string, item found) bool {

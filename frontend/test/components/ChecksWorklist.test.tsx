@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Checks from '../../src/components/Checks';
 import { useSettingsStore } from '../../src/store/settings';
@@ -289,6 +289,24 @@ describe('the baseline', () => {
         calls.some((call) => call.url === '/api/checks/baseline' && call.method === 'DELETE'),
       ).toBe(true);
     });
+  });
+
+  it('says when the baseline was taken on another cluster', async () => {
+    answers({
+      groups: [group()],
+      baseline: '2026-08-29T00:00:00Z',
+      baselineFrom: 'https://10.10.0.1:6443',
+    });
+
+    expect(
+      await screen.findByText(/Comparing against 2026-08-29, taken on https:\/\/10\.10\.0\.1:6443/),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing about a cluster when the baseline is this one', async () => {
+    answers({ groups: [group()], baseline: '2026-08-29T00:00:00Z' });
+
+    expect(await screen.findByText('Comparing against 2026-08-29.')).toBeInTheDocument();
   });
 
   it('says what moved since the baseline', async () => {
@@ -870,6 +888,212 @@ describe('exporting the audit', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Export' }));
 
     expect(await screen.findByText('the audit could not be written')).toBeInTheDocument();
+  });
+});
+
+describe('a finding a rule of your own silenced', () => {
+  it('says a rule did it, and offers no undo', async () => {
+    answers({
+      groups: [
+        group({
+          muted: 1,
+          findings: [
+            finding({ muted: true, mutedBy: 'rule', reason: 'a node agent is meant to be' }),
+          ],
+        }),
+      ],
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(screen.getByText('by a rule')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Unmute Deployment/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/a node agent is meant to be/)).toBeInTheDocument();
+  });
+});
+
+describe('carrying a baseline to another cluster', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('offers to save one only once there is one', async () => {
+    answers({ groups: [group()] });
+
+    await screen.findByText(/No baseline taken/);
+    expect(screen.queryByRole('button', { name: 'Save it to a file' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load one from a file' })).toBeInTheDocument();
+  });
+
+  it('saves the one it has', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        calls.push(url);
+        if (url.startsWith('/api/checks/baseline/file')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            blob: () => Promise.resolve(new Blob(['{}'])),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              groups: [group()],
+              objects: OBJECTS,
+              namespaces: [],
+              baseline: '2026-08-29T00:00:00Z',
+              scanned: 1,
+            }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    const button = await screen.findByRole('button', { name: 'Save it to a file' });
+    const click = vi.fn();
+    const link = document.createElement('a');
+    link.click = click;
+    vi.spyOn(document, 'createElement').mockReturnValue(link);
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:x', revokeObjectURL: vi.fn() });
+
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      expect(click).toHaveBeenCalled();
+    });
+    expect(link.download).toBe('spinoza-baseline.json');
+  });
+
+  it('loads one that was picked', async () => {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method ?? 'GET', body: init?.body ?? null });
+        if (url.startsWith('/api/checks/baseline/file')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ takenAt: '2026-08-28T00:00:00Z' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await screen.findByText(/No baseline taken/);
+
+    const file = new File(['{"takenAt":"2026-08-28T00:00:00Z","checks":["a"]}'], 'b.json', {
+      type: 'application/json',
+    });
+    await userEvent.upload(screen.getByLabelText('A baseline to load'), file);
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.method === 'PUT')).toBe(true);
+    });
+    expect(calls.find((call) => call.method === 'PUT')?.body).toContain('2026-08-28');
+  });
+
+  it('opens the picker when asked', async () => {
+    answers({ groups: [group()] });
+    await screen.findByText(/No baseline taken/);
+    const click = vi.fn();
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(click);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Load one from a file' }));
+
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('does nothing when the picker was closed without a file', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        calls.push(url);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await screen.findByText(/No baseline taken/);
+
+    fireEvent.change(screen.getByLabelText('A baseline to load'), { target: { files: [] } });
+
+    expect(calls.some((url) => url.startsWith('/api/checks/baseline/file'))).toBe(false);
+  });
+
+  it('says so when the file was not a baseline', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/baseline/file')) {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: () => Promise.resolve({ message: 'this is not a baseline' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await screen.findByText(/No baseline taken/);
+
+    const file = new File(['nonsense'], 'b.json', { type: 'application/json' });
+    await userEvent.upload(screen.getByLabelText('A baseline to load'), file);
+
+    expect(await screen.findByText('this is not a baseline')).toBeInTheDocument();
+  });
+
+  it('says so when the one it has could not be saved', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/baseline/file')) {
+          return Promise.resolve({
+            ok: false,
+            status: 404,
+            json: () => Promise.resolve({ message: 'no baseline has been taken' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              groups: [group()],
+              objects: OBJECTS,
+              namespaces: [],
+              baseline: '2026-08-29T00:00:00Z',
+              scanned: 1,
+            }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Save it to a file' }));
+
+    expect(await screen.findByText('no baseline has been taken')).toBeInTheDocument();
   });
 });
 

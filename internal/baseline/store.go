@@ -26,6 +26,9 @@ const maxBytes = 64 << 20
 const nameLength = 16
 
 type stored struct {
+	// Cluster is where the baseline was taken, kept so one handed to another
+	// cluster says whose it was rather than pretending to be its own.
+	Cluster string            `json:"cluster,omitempty"`
 	TakenAt string            `json:"takenAt"`
 	Checks  []string          `json:"checks"`
 	Counts  map[string]int    `json:"counts"`
@@ -82,6 +85,7 @@ func (s *Store) Load(cluster string) (checks.Baseline, bool) {
 	}
 	return checks.Baseline{
 		TakenAt: held.TakenAt,
+		Cluster: held.Cluster,
 		Checks:  held.Checks,
 		Counts:  held.Counts,
 		Keys:    keys,
@@ -127,5 +131,48 @@ func (s *Store) Clear(cluster string) error {
 }
 
 func flatten(taken checks.Baseline) stored {
-	return stored{TakenAt: taken.TakenAt, Checks: taken.Checks, Counts: taken.Counts, Keys: taken.Keys}
+	return stored{
+		Cluster: taken.Cluster,
+		TakenAt: taken.TakenAt,
+		Checks:  taken.Checks,
+		Counts:  taken.Counts,
+		Keys:    taken.Keys,
+	}
+}
+
+// Encode writes a baseline the way it is kept on disk, so one can be handed to
+// somebody else or kept in a repository.
+func Encode(taken checks.Baseline) ([]byte, error) {
+	body, err := json.Marshal(flatten(taken))
+	if err != nil {
+		return nil, fmt.Errorf("baselines: %w", err)
+	}
+	return body, nil
+}
+
+// Decode reads one back. Anything that is not a baseline is refused rather
+// than stored: a file that turns out to be empty would quietly report every
+// finding in the cluster as new.
+func Decode(body []byte) (checks.Baseline, error) {
+	if len(body) > maxBytes {
+		return checks.Baseline{}, fmt.Errorf("baselines: %d bytes is more than one baseline holds", len(body))
+	}
+	var held stored
+	if err := json.Unmarshal(body, &held); err != nil {
+		return checks.Baseline{}, fmt.Errorf("baselines: this is not a baseline: %w", err)
+	}
+	if held.TakenAt == "" || len(held.Checks) == 0 {
+		return checks.Baseline{}, errors.New("baselines: this file names no checks and no day it was taken")
+	}
+	keys := held.Keys
+	if keys == nil {
+		keys = map[string]string{}
+	}
+	return checks.Baseline{
+		TakenAt: held.TakenAt,
+		Cluster: held.Cluster,
+		Checks:  held.Checks,
+		Counts:  held.Counts,
+		Keys:    keys,
+	}, nil
 }
