@@ -235,3 +235,25 @@ func TestCountDoesNotProbeForPodsThatWereNotAskedAbout(t *testing.T) {
 		t.Fatalf("failing = %v, want nothing", counts.Failing)
 	}
 }
+
+func TestThePodsTallyIsMarkedAsCountedByPhase(t *testing.T) {
+	dyn := podClient(t)
+	answerUnhealthy(dyn, []runtime.Object{podObject("crashing"), podObject("pending")}, nil)
+
+	counts := Count(context.Background(), dyn, []api.ResourceDescriptor{podDesc()}, CountLimits{})
+
+	if len(counts.ByPhase) != 1 || counts.ByPhase[0] != podsKey {
+		t.Fatalf("byPhase = %v, want the pods key named as counted by phase", counts.ByPhase)
+	}
+}
+
+func TestNothingIsMarkedByPhaseWhenNoPodIsFailing(t *testing.T) {
+	dyn := podClient(t)
+	answerUnhealthy(dyn, nil, nil)
+
+	counts := Count(context.Background(), dyn, []api.ResourceDescriptor{podDesc()}, CountLimits{})
+
+	if len(counts.ByPhase) != 0 {
+		t.Fatalf("byPhase = %v, want nothing marked", counts.ByPhase)
+	}
+}

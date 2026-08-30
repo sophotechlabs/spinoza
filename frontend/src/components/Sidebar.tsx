@@ -127,22 +127,35 @@ function byPopulated(
   return [...populated, ...empty];
 }
 
-function kindTitle(kind: string, total: number | undefined, failing: number | undefined): string {
+function failingWord(byPhase: boolean): string {
+  if (byPhase) {
+    return 'not Running or Succeeded';
+  }
+  return 'not ready';
+}
+
+function kindTitle(
+  kind: string,
+  total: number | undefined,
+  failing: number | undefined,
+  byPhase: boolean,
+): string {
   if (failing === undefined) {
     return kind;
   }
+  const word = failingWord(byPhase);
   const totalLabel = countLabel(total);
   if (totalLabel === '' || totalLabel === '-') {
-    return `${kind}: ${String(failing)} not ready`;
+    return `${kind}: ${String(failing)} ${word}`;
   }
-  return `${kind}: ${String(failing)} of ${totalLabel} not ready`;
+  return `${kind}: ${String(failing)} of ${totalLabel} ${word}`;
 }
 
-function failingNote(failing: number | undefined): string {
+function failingNote(failing: number | undefined, byPhase: boolean): string {
   if (failing === undefined) {
     return '';
   }
-  return `, ${String(failing)} not ready`;
+  return `, ${String(failing)} ${failingWord(byPhase)}`;
 }
 
 function failingBadge(failing: number | undefined): string {
@@ -240,6 +253,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   const [retrying, setRetrying] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [failing, setFailing] = useState<Record<string, number>>({});
+  const [byPhase, setByPhase] = useState<string[]>([]);
   const discoveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -247,6 +261,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     let attempt = 0;
     setCounts({});
     setFailing({});
+    setByPhase([]);
     setCountsError(null);
     const again = () => {
       if (attempt >= MAX_DISCOVERY_ATTEMPTS) {
@@ -303,6 +318,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
         setCounts(tally.counts);
         rememberCounts(tally.counts);
         setFailing(tally.failing ?? {});
+        setByPhase(tally.byPhase ?? []);
         setCountsError(null);
       }
     } catch (err: unknown) {
@@ -548,6 +564,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                         labels[descriptorKey(resource)],
                         counts[descriptorKey(resource)],
                         failing[descriptorKey(resource)],
+                        byPhase.includes(descriptorKey(resource)),
                       )}
                       className={resourceClass(
                         isActive(activeResource, resource),
@@ -564,7 +581,10 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                         )}
                         <span>{countLabel(counts[descriptorKey(resource)])}</span>
                         <span className="sr-only">
-                          {failingNote(failing[descriptorKey(resource)])}
+                          {failingNote(
+                            failing[descriptorKey(resource)],
+                            byPhase.includes(descriptorKey(resource)),
+                          )}
                         </span>
                       </span>
                     </button>
@@ -606,6 +626,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                   labels[descriptorKey(resource)],
                                   counts[descriptorKey(resource)],
                                   failing[descriptorKey(resource)],
+                                  byPhase.includes(descriptorKey(resource)),
                                 )}
                                 className={resourceClass(
                                   isActive(activeResource, resource),
@@ -622,7 +643,10 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                   )}
                                   <span>{countLabel(counts[descriptorKey(resource)])}</span>
                                   <span className="sr-only">
-                                    {failingNote(failing[descriptorKey(resource)])}
+                                    {failingNote(
+                                      failing[descriptorKey(resource)],
+                                      byPhase.includes(descriptorKey(resource)),
+                                    )}
                                   </span>
                                 </span>
                               </button>

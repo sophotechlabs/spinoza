@@ -73,11 +73,21 @@ func Count(
 		})
 	}
 	wg.Wait()
+	failing := failingPods(bounded, client, descs, limits)
 	return api.ResourceCounts{
 		Counts:  counts,
-		Failing: failingPods(bounded, client, descs, limits),
+		Failing: failing,
+		ByPhase: phaseCounted(failing),
 		Errors:  reasons,
 	}
+}
+
+func phaseCounted(failing map[string]int) []string {
+	_, counted := failing[podsKey]
+	if !counted {
+		return nil
+	}
+	return []string{podsKey}
 }
 
 const podsKey = "/v1/pods"

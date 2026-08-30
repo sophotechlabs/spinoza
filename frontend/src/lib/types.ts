@@ -696,6 +696,7 @@ export interface PickedFile {
 export interface ResourceCounts {
   counts: Record<string, number>;
   failing?: Record<string, number>;
+  byPhase?: string[];
   errors?: Record<string, string>;
 }
 

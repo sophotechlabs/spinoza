@@ -639,6 +639,7 @@ RememberedCluster.ID id string
 RememberedCluster.Kubeconfig kubeconfig,omitempty string
 ResourceCatalog.Categories categories []Category
 ResourceCatalog.Error error,omitempty string
+ResourceCounts.ByPhase byPhase,omitempty []string
 ResourceCounts.Counts counts map[string]int
 ResourceCounts.Errors errors,omitempty map[string]string
 ResourceCounts.Failing failing,omitempty map[string]int

@@ -42,10 +42,14 @@ function stubFetch(
   categories: Category[],
   counts: Record<string, number> = {},
   failing?: Record<string, number>,
+  byPhase?: string[],
 ): void {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url.startsWith('/api/resources/counts')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts, failing }) });
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ counts, failing, byPhase }),
+      });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
   });
@@ -826,6 +830,32 @@ describe('pods that are not running', () => {
     const pods = await screen.findByRole('button', { name: /^Pod/ });
     expect(pods).toHaveAttribute('title', 'Pod: 3 not ready');
     expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
+  });
+
+  it('says what a phase-counted tally actually counted, so a crashloop is not implied', async () => {
+    stubFetch(categories, { '/v1/pods': 12, 'apps/v1/deployments': 4 }, { '/v1/pods': 3 }, [
+      '/v1/pods',
+    ]);
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const pods = await screen.findByRole('button', { name: /^Pod/ });
+    expect(pods).toHaveAttribute('title', 'Pod: 3 of 12 not Running or Succeeded');
+    expect(pods).toHaveTextContent('3 not Running or Succeeded');
+  });
+
+  it('keeps saying not ready for a kind counted off a warm cache', async () => {
+    stubFetch(
+      categories,
+      { '/v1/pods': 12, 'apps/v1/deployments': 4 },
+      { 'apps/v1/deployments': 2 },
+      ['/v1/pods'],
+    );
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const deployments = await screen.findByRole('button', { name: /^Deployment/ });
+    expect(deployments).toHaveAttribute('title', 'Deployment: 2 of 4 not ready');
   });
 
   it('leaves a healthy kind alone', async () => {
