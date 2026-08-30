@@ -53,6 +53,27 @@ function dockStrip(side: DockSide = 'right'): HTMLElement {
 }
 
 describe('PanelHost', () => {
+  it('lets the tablist own tabs and nothing else', () => {
+    renderHost({ side: 'right', tabs: tabs('overview', 'yaml', 'logs') });
+
+    const list = screen.getByRole('tablist', { name: 'right panels' });
+    const owned = Array.from(list.children);
+
+    expect(owned).toHaveLength(3);
+    for (const child of owned) {
+      expect(child.getAttribute('role')).toBe('tab');
+    }
+  });
+
+  it('keeps the collapse control outside the tablist', () => {
+    renderHost();
+
+    const collapse = screen.getByRole('button', { name: 'Hide the right dock' });
+    const list = screen.getByRole('tablist', { name: 'right panels' });
+
+    expect(list.contains(collapse)).toBe(false);
+  });
+
   it('renders one tab per docked panel', () => {
     renderHost();
 
