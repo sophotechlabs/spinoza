@@ -1143,11 +1143,7 @@ func (m *Manager) attach(
 }
 
 func (m *Manager) List(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
-	lister, err := m.pinnedLister(ctx, desc)
-	if err != nil {
-		return nil, err
-	}
-	return listAll(lister)
+	return m.Lease(ctx, desc)
 }
 
 func (m *Manager) ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error) {

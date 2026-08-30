@@ -993,6 +993,38 @@ func TestARefreshStopsAStreamWhoseResourceTypeIsGone(t *testing.T) {
 	}
 }
 
+func TestListLetsItsInformerGoOnceTheReadIsDone(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	found, err := mgr.List(context.Background(), desc)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("found = %d objects, want the one deployment", len(found))
+	}
+
+	waitForStreams(t, mgr, 0)
+}
+
+func TestListKeepsTheInformerAWarmedKindNeeds(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+	mgr.Warm(context.Background(), []api.ResourceDescriptor{desc})
+
+	_, err := mgr.List(context.Background(), desc)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	if streamCount(mgr) != 1 {
+		t.Fatalf("streams = %d, want the warmed informer kept", streamCount(mgr))
+	}
+}
+
 func TestUnpinLetsAWarmedInformerGo(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()
