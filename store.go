@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/baseline"
 	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
 	"github.com/sophotechlabs/spinoza/internal/store"
@@ -49,5 +50,11 @@ func allowNodeShell(flagged bool, held *settingsstore.Store) func() bool {
 	}
 	return func() bool {
 		return held.On(settingsstore.NodeShellKey)
+	}
+}
+
+func customColumns(store *settingsstore.Store) func() map[string][]api.CustomColumn {
+	return func() map[string][]api.CustomColumn {
+		return api.ParseColumns(store.All()[settingsstore.ColumnsKey])
 	}
 }

@@ -142,6 +142,7 @@ type Manager struct {
 	streams     map[streamKey]*stream
 	layoutMu    sync.Mutex
 	layouts     map[schema.GroupVersionResource]*recent[layout]
+	columns     Columns
 	surveys     *checks.Surveys
 	building    map[streamKey]*buildGate
 	failures    map[streamKey]buildFailure
@@ -224,6 +225,7 @@ type Deps struct {
 	Warnings    *kube.WarningSink
 	Categories  []api.Category
 	Descriptors map[string]api.ResourceDescriptor
+	Columns     Columns
 }
 
 func NewManager(ctx context.Context, deps Deps) *Manager {
@@ -252,6 +254,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		now:        time.Now,
 		streams:    map[streamKey]*stream{},
 		layouts:    map[schema.GroupVersionResource]*recent[layout]{},
+		columns:    deps.Columns,
 		surveys:    checks.NewSurveys(time.Now),
 		building:   map[streamKey]*buildGate{},
 		failures:   map[streamKey]buildFailure{},

@@ -1,4 +1,5 @@
 import { flush, readStored, writeStored } from './persist';
+import type { CustomColumn } from './types';
 export const LOG_VIEWS = ['pretty', 'raw'] as const;
 
 export type LogView = (typeof LOG_VIEWS)[number];
@@ -158,6 +159,59 @@ export function writeNodeShell(enabled: boolean): Promise<void> {
   } else {
     writeStored(NODE_SHELL_KEY, OFF);
   }
+  return flush();
+}
+
+export const COLUMNS_KEY = 'spinoza.columns.v1';
+
+export function readColumns(): Record<string, CustomColumn[]> {
+  const raw = readStored(COLUMNS_KEY);
+  if (raw === null || raw === '') {
+    return {};
+  }
+  let held: unknown;
+  try {
+    held = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (held === null || typeof held !== 'object' || Array.isArray(held)) {
+    return {};
+  }
+  const out: Record<string, CustomColumn[]> = {};
+  for (const [key, value] of Object.entries(held)) {
+    out[key] = columnsIn(value);
+  }
+  return out;
+}
+
+function columnsIn(value: unknown): CustomColumn[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: CustomColumn[] = [];
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object') {
+      continue;
+    }
+    const one = entry as Record<string, unknown>;
+    if (typeof one.name !== 'string' || typeof one.path !== 'string') {
+      continue;
+    }
+    out.push({ name: one.name, path: one.path });
+  }
+  return out;
+}
+
+export function writeColumns(held: Record<string, CustomColumn[]>): Promise<void> {
+  const kept: Record<string, CustomColumn[]> = {};
+  for (const [key, columns] of Object.entries(held)) {
+    if (columns.length === 0) {
+      continue;
+    }
+    kept[key] = columns;
+  }
+  writeStored(COLUMNS_KEY, JSON.stringify(kept));
   return flush();
 }
 

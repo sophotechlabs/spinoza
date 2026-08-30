@@ -6,7 +6,12 @@ import type {
   TrafficSupport,
   View,
 } from '../lib/types';
-import { fetchResourceCounts, fetchResources, refreshResources } from '../lib/discovery';
+import {
+  descriptorKey,
+  fetchResourceCounts,
+  fetchResources,
+  refreshResources,
+} from '../lib/discovery';
 import { groupByApiGroup, isNested } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 import { useClusterEpoch } from '../store/cluster';
@@ -63,10 +68,6 @@ const NOT_INSTALLED = 'not found in this cluster';
 const BASE_DISCOVERY_BACKOFF_MS = 500;
 const MAX_DISCOVERY_BACKOFF_MS = 5000;
 const MAX_DISCOVERY_ATTEMPTS = 6;
-
-function descriptorKey(descriptor: ResourceDescriptor): string {
-  return `${descriptor.group}/${descriptor.version}/${descriptor.resource}`;
-}
 
 function isActive(active: ResourceDescriptor | null, descriptor: ResourceDescriptor): boolean {
   if (active === null) {

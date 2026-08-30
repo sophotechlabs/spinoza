@@ -7,6 +7,11 @@ export interface ResourceDescriptor {
   category: string;
 }
 
+export interface CustomColumn {
+  name: string;
+  path: string;
+}
+
 export interface Category {
   name: string;
   resources: ResourceDescriptor[];

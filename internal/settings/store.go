@@ -17,6 +17,8 @@ const NodeShellKey = "spinoza.nodeshell.v1"
 
 const UpdateCheckKey = "spinoza.update.check.v1"
 
+const ColumnsKey = "spinoza.columns.v1"
+
 const (
 	enabled  = "on"
 	disabled = "off"

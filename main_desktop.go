@@ -98,6 +98,7 @@ func runDesktop() error {
 
 	store := settingsStore()
 	opts.cluster.NodeShell = allowNodeShell(opts.nodeShell, store)
+	opts.cluster.Columns = customColumns(store)
 
 	clusters, err := cluster.New(ctx, opts.cluster)
 	if err != nil {

@@ -25,6 +25,11 @@ type ResourceDescriptor struct {
 	Category   string `json:"category"`
 }
 
+type CustomColumn struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 type Category struct {
 	Name      string               `json:"name"`
 	Resources []ResourceDescriptor `json:"resources"`

@@ -223,6 +223,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		Warnings:    bundle.Warnings,
 		Categories:  cats,
 		Descriptors: descs,
+		Columns:     options.Columns,
 	})
 	mgr.UseDiscovery(bundle.Discovery, discErr)
 	return mgr, bundle, nil

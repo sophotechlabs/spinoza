@@ -21,10 +21,12 @@ import { copyText } from '../lib/clipboard';
 import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
 import { installUpdate, updateFailure, updateOutcome } from '../lib/update';
 import Announce from './Announce';
+import ColumnSettings from './ColumnSettings';
 
 const SECTIONS = [
   'Appearance',
   'Cluster',
+  'Columns',
   'Logs',
   'Terminal',
   'Panels',
@@ -503,6 +505,7 @@ export default function SettingsDialog({
               </Row>
             </>
           )}
+          {section === 'Columns' && <ColumnSettings />}
           {section === 'Panels' && (
             <Row label="Dock layout" hint="Put every panel and dock back where it started.">
               <button

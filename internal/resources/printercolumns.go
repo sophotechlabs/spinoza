@@ -45,9 +45,10 @@ func (m *Manager) layoutFor(
 	desc api.ResourceDescriptor,
 	gvr schema.GroupVersionResource,
 ) layout {
+	custom := m.customFor(desc)
 	_, ours := builtinColumns(desc.Kind)
 	if ours {
-		return builtinLayout(desc.Kind)
+		return withCustom(builtinLayout(desc.Kind), custom)
 	}
 	built, ok := shared(ctx, m.layoutStore(gvr), m.now, layoutTTL, func(ctx context.Context) (layout, bool) {
 		declared, found := m.crdLayout(ctx, gvr)
@@ -57,9 +58,9 @@ func (m *Manager) layoutFor(
 		return declared, true
 	})
 	if !ok {
-		return builtinLayout(desc.Kind)
+		return withCustom(builtinLayout(desc.Kind), custom)
 	}
-	return built
+	return withCustom(built, custom)
 }
 
 func (m *Manager) layoutStore(gvr schema.GroupVersionResource) *recent[layout] {

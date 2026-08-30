@@ -1,4 +1,4 @@
-import type { ResourceCatalog, ResourceCounts } from './types';
+import type { ResourceCatalog, ResourceCounts, ResourceDescriptor } from './types';
 import { request } from './http';
 import { parseCatalog, parseCounts } from './parse';
 
@@ -24,4 +24,8 @@ export async function fetchResourceCounts(): Promise<ResourceCounts> {
     throw new Error(`resource counts request failed with status ${response.status}`);
   }
   return parseCounts(await response.json());
+}
+
+export function descriptorKey(descriptor: ResourceDescriptor): string {
+  return `${descriptor.group}/${descriptor.version}/${descriptor.resource}`;
 }

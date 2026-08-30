@@ -1,11 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readStored, resetStored, startSaving, stopSaving } from '../../src/lib/persist';
 import {
+  readStored,
+  resetStored,
+  startSaving,
+  stopSaving,
+  writeStored,
+} from '../../src/lib/persist';
+import {
+  COLUMNS_KEY,
   NODE_SHELL_KEY,
   SETTINGS_KEY,
   parseSettings,
+  readColumns,
   readNodeShell,
   readSettings,
+  writeColumns,
   writeNodeShell,
   writeSettings,
 } from '../../src/lib/settings';
@@ -210,5 +219,58 @@ describe('the checks filter it remembers', () => {
 
     expect(settings.checksMinSeverity).toBe('high');
     expect(settings.checksWholeCluster).toBe(true);
+  });
+});
+
+describe('custom columns', () => {
+  afterEach(() => {
+    resetStored();
+  });
+
+  it('reads back what was written', async () => {
+    await writeColumns({ '/v1/pods': [{ name: 'App', path: '.metadata.labels.app' }] });
+
+    expect(readColumns()).toEqual({
+      '/v1/pods': [{ name: 'App', path: '.metadata.labels.app' }],
+    });
+  });
+
+  it('drops a kind whose last column was removed', async () => {
+    await writeColumns({ '/v1/pods': [{ name: 'App', path: '.a' }], 'apps/v1/deployments': [] });
+
+    expect(Object.keys(readColumns())).toEqual(['/v1/pods']);
+  });
+
+  it('reads nothing when nothing was written', () => {
+    expect(readColumns()).toEqual({});
+  });
+
+  it('reads anything that is not columns as none', () => {
+    for (const raw of ['not json', '[]', 'null', '42', '"text"']) {
+      writeStored(COLUMNS_KEY, raw);
+      expect(readColumns()).toEqual({});
+    }
+  });
+
+  it('skips entries that are not a name and a path', () => {
+    writeStored(
+      COLUMNS_KEY,
+      JSON.stringify({
+        '/v1/pods': [
+          { name: 'App', path: '.a' },
+          { name: 'NoPath' },
+          { path: '.b' },
+          null,
+          'text',
+          42,
+        ],
+        'apps/v1/deployments': 'not a list',
+      }),
+    );
+
+    expect(readColumns()).toEqual({
+      '/v1/pods': [{ name: 'App', path: '.a' }],
+      'apps/v1/deployments': [],
+    });
   });
 });

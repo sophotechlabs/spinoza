@@ -138,6 +138,8 @@ ContextList.Kubeconfigs kubeconfigs []Kubeconfig
 ContextList.Protection protection string
 ContextRef.Kubeconfig kubeconfig string
 ContextRef.Name name string
+CustomColumn.Name name string
+CustomColumn.Path path string
 DataEntry.Binary binary,omitempty bool
 DataEntry.Bytes bytes int
 DataEntry.Key key string

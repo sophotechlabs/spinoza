@@ -15,6 +15,7 @@ const KEYS = [
   'spinoza.settings.v1',
   'spinoza.painted.v1',
   'spinoza.nodeshell.v1',
+  'spinoza.columns.v1',
   'spinoza.update.check.v1',
 ];
 
