@@ -78,6 +78,7 @@ export default async function globalSetup(): Promise<void> {
   seed();
   if (process.env.SPINOZA_E2E_TIER === 'shots') {
     installFlux();
+    exportSecondKubeconfig();
   }
   if (process.env.SPINOZA_E2E_TIER === 'full') {
     exportSecondKubeconfig();

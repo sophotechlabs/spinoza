@@ -1,9 +1,9 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test } from '../harness/test';
+import { authed, expect, test } from '../harness/test';
 import { openGrouped, openHome, openResource, openView, selectRow } from '../harness/app';
 import { kubectl, kubectlSoft } from '../harness/cluster';
-import { E2E_DIR } from '../harness/paths';
+import { CONTEXT, E2E_DIR, SECOND_CONTEXT, SECOND_KUBECONFIG } from '../harness/paths';
 import type { Page } from '@playwright/test';
 
 const OUT = join(E2E_DIR, 'shots', 'out');
@@ -40,13 +40,6 @@ test.beforeAll(() => {
 });
 
 test.afterAll(() => {
-  kubectlSoft([
-    'delete',
-    '-f',
-    'https://github.com/fluxcd/flux2/releases/latest/download/install.yaml',
-    '--ignore-not-found',
-    '--timeout=180s',
-  ]);
   for (const namespace of ['storefront', 'payments', 'platform', 'observability']) {
     kubectlSoft(['delete', 'namespace', namespace, '--ignore-not-found', '--timeout=180s']);
   }
@@ -150,7 +143,13 @@ test('best-practice checks', async ({ page }) => {
 });
 
 test('the ownership graph', async ({ page }) => {
-  await openView(page, 'topology');
+  await page.goto(
+    authed(
+      `#context=${CONTEXT}&view=topology&group=apps&version=v1&resource=deployments` +
+        '&kind=Deployment&namespace=storefront&name=web',
+    ),
+  );
+  await page.waitForLoadState('domcontentloaded');
   await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 90_000 });
   await page.waitForTimeout(3_000);
   await page
@@ -226,6 +225,29 @@ test('the plan before a drain runs', async ({ page }) => {
     timeout: 60_000,
   });
   await shoot(page, 'drain-plan');
+});
+
+test('two clusters side by side', async ({ page }) => {
+  await openHome(page);
+  const opened = await page.evaluate(
+    async ([path, name]) => {
+      await fetch(`/api/kubeconfigs?path=${encodeURIComponent(path)}`, { method: 'POST' });
+      const query = `name=${encodeURIComponent(name)}&kubeconfig=${encodeURIComponent(path)}`;
+      const response = await fetch(`/api/clusters?${query}`, { method: 'POST' });
+      return response.status;
+    },
+    [SECOND_KUBECONFIG, SECOND_CONTEXT],
+  );
+  expect(opened).toBeLessThan(400);
+  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
+  await openResource(page, 'configmaps', 'ConfigMap');
+  await selectRow(page, 'storefront-config');
+  const compare = page.getByRole('tab', { name: 'Compare', exact: true });
+  await expect(compare).toBeEnabled({ timeout: 60_000 });
+  await compare.click();
+  await page.waitForTimeout(3_000);
+  await shoot(page, 'compare');
 });
 
 test('what spinoza changed', async ({ page }) => {

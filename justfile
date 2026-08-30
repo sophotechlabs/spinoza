@@ -264,6 +264,7 @@ cluster-up tier:
     if ! kind get clusters | grep -qx {{ test_cluster }}; then
         kind create cluster --name {{ test_cluster }} --config "$config" --wait 300s
     fi
+    kind export kubeconfig --name {{ test_cluster }}
     wanted=$(yq '.nodes | length' "$config")
     running=$(kind get nodes --name {{ test_cluster }} | wc -l | tr -d ' ')
     if [ "$running" != "$wanted" ]; then
@@ -333,7 +334,7 @@ test-integration: cluster-base
 
 test-e2e: cluster-e2e (e2e-run 'core')
 
-shots: cluster-e2e
+shots: cluster-down cluster-e2e cluster-second
     #!/usr/bin/env bash
     set -euo pipefail
     SPINOZA_E2E_TIER=shots just e2e-run shots
