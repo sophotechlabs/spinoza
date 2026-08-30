@@ -103,10 +103,7 @@ func cellsText(cells []string) string {
 	if len(cells) == 0 {
 		return "[]"
 	}
-	text, err := json.Marshal(cells)
-	if err != nil {
-		return "[]"
-	}
+	text, _ := json.Marshal(cells)
 	return string(text)
 }
 
