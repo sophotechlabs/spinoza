@@ -15,6 +15,7 @@ import (
 
 type stubBackend struct {
 	server.Backend
+
 	stream *logs.Stream
 	err    error
 }
