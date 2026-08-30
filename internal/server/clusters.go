@@ -81,6 +81,11 @@ func (s *Server) rememberedTabs(ctx context.Context) []api.RememberedCluster {
 	return out
 }
 
+// A tab is remembered on a context the request cannot cancel: the page often
+// navigates the moment a cluster opens, and a write that dies with the request
+// leaves a cluster that opened fine but never comes back.
+const rememberTimeout = 10 * time.Second
+
 func (s *Server) rememberTab(ctx context.Context, id string, ref api.ContextRef) {
 	held := s.tabs()
 	if held == nil {
@@ -174,12 +179,14 @@ func (s *Server) renameCluster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, errNowhereToKeepIt.Error())
 		return
 	}
-	err := held.Rename(r.Context(), id, label, grouping)
+	kept, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), rememberTimeout)
+	defer cancel()
+	err := held.Rename(kept, id, label, grouping)
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
-	writeJSON(w, s.clusterList(r.Context()))
+	writeJSON(w, s.clusterList(kept))
 }
 
 func (s *Server) reopenCluster(w http.ResponseWriter, r *http.Request) {
@@ -198,12 +205,14 @@ func (s *Server) reopenCluster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, errNowhereToKeepIt.Error())
 		return
 	}
-	err := held.Reopening(r.Context(), id, wanted == queryTrue)
+	kept, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), rememberTimeout)
+	defer cancel()
+	err := held.Reopening(kept, id, wanted == queryTrue)
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
-	writeJSON(w, s.clusterList(r.Context()))
+	writeJSON(w, s.clusterList(kept))
 }
 
 func (s *Server) recolorCluster(w http.ResponseWriter, r *http.Request) {
@@ -222,12 +231,14 @@ func (s *Server) recolorCluster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, errNowhereToKeepIt.Error())
 		return
 	}
-	setErr := held.Recolor(r.Context(), id, color)
+	kept, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), rememberTimeout)
+	defer cancel()
+	setErr := held.Recolor(kept, id, color)
 	if setErr != nil {
 		writeAPIError(w, setErr)
 		return
 	}
-	writeJSON(w, s.clusterList(r.Context()))
+	writeJSON(w, s.clusterList(kept))
 }
 
 func (s *Server) forgetTab(ctx context.Context, id string) {
@@ -254,9 +265,11 @@ func (s *Server) openCluster(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, err)
 		return
 	}
-	s.rememberTab(r.Context(), id, ref)
+	kept, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), rememberTimeout)
+	defer cancel()
+	s.rememberTab(kept, id, ref)
 	s.announceContext()
-	writeJSON(w, s.clusterList(r.Context()))
+	writeJSON(w, s.clusterList(kept))
 }
 
 func (s *Server) activateCluster(w http.ResponseWriter, r *http.Request) {

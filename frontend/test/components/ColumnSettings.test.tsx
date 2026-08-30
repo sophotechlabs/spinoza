@@ -5,7 +5,7 @@ import ColumnSettings from '../../src/components/ColumnSettings';
 import { clearCatalog, rememberCatalog } from '../../src/store/catalog';
 import { readColumns, writeColumns } from '../../src/lib/settings';
 import { resetStored } from '../../src/lib/persist';
-import { makeCategory, makeDescriptor } from '../helpers';
+import { makeCategory, makeDescriptor, rejectsWith } from '../helpers';
 
 function seedCatalog(): void {
   rememberCatalog([
@@ -111,11 +111,72 @@ describe('ColumnSettings', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
   });
 
-  it('says so when nothing has been discovered yet', () => {
+  it('reads the cluster itself rather than waiting for another view to do it', async () => {
     clearCatalog();
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            categories: [
+              {
+                name: 'Workloads',
+                resources: [
+                  {
+                    group: '',
+                    version: 'v1',
+                    resource: 'pods',
+                    kind: 'Pod',
+                    namespaced: true,
+                    category: 'Workloads',
+                  },
+                ],
+              },
+            ],
+          }),
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
 
     render(<ColumnSettings />);
 
-    expect(screen.getByText('No kinds discovered yet.')).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'Pod' })).toBeInTheDocument();
+  });
+
+  it('says why when the cluster cannot be read', async () => {
+    clearCatalog();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({}) })),
+    );
+
+    render(<ColumnSettings />);
+
+    expect(await screen.findByText(/status 503/)).toBeInTheDocument();
+  });
+
+  it('says something even when the failure is not an error', async () => {
+    clearCatalog();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => rejectsWith('not an Error')()),
+    );
+
+    render(<ColumnSettings />);
+
+    expect(await screen.findByText('the discovery request failed')).toBeInTheDocument();
+  });
+
+  it('waits rather than claiming there is nothing', () => {
+    clearCatalog();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => undefined)),
+    );
+
+    render(<ColumnSettings />);
+
+    expect(screen.getByText('Reading what this cluster has…')).toBeInTheDocument();
   });
 });

@@ -998,3 +998,45 @@ func TestATabToldNotToComeBackIsNotOfferedForReopening(t *testing.T) {
 		t.Fatalf("offered %+v, want only the tab that asked to come back", offered)
 	}
 }
+
+func TestATabWriteOutlivesTheRequestThatAskedForIt(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{})
+	tabs := &heldTabs{}
+	srv.UseTabs(tabs)
+
+	gone, walkAway := context.WithCancel(context.Background())
+	req, reqErr := http.NewRequestWithContext(gone, http.MethodPost, "http://spinoza.test/api/clusters?name=p-mk1", http.NoBody)
+	if reqErr != nil {
+		t.Fatalf("request: %v", reqErr)
+	}
+	kept, cancel := context.WithTimeout(context.WithoutCancel(req.Context()), rememberTimeout)
+	defer cancel()
+	walkAway()
+
+	if kept.Err() != nil {
+		t.Fatalf("the kept context died with the request: %v", kept.Err())
+	}
+	srv.rememberTab(kept, mk1, api.ContextRef{Name: "p-mk1"})
+
+	if len(tabs.remembered()) == 0 {
+		t.Fatal("the tab was not written, so the cluster will not come back next time")
+	}
+}
+
+func TestTheKeptContextStillGivesUpEventually(t *testing.T) {
+	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://spinoza.test/api/clusters", http.NoBody)
+	if reqErr != nil {
+		t.Fatalf("request: %v", reqErr)
+	}
+
+	kept, cancel := context.WithTimeout(context.WithoutCancel(req.Context()), rememberTimeout)
+	defer cancel()
+
+	deadline, ok := kept.Deadline()
+	if !ok {
+		t.Fatal("a kept context with no deadline would hold a write open forever")
+	}
+	if time.Until(deadline) > rememberTimeout {
+		t.Fatalf("deadline is %s away, want no more than %s", time.Until(deadline), rememberTimeout)
+	}
+}

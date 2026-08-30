@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CustomColumn, ResourceDescriptor } from '../lib/types';
 import { descriptorKey } from '../lib/discovery';
-import { useCategories } from '../store/catalog';
+import { rememberCatalog, useCategories } from '../store/catalog';
+import { fetchResources } from '../lib/discovery';
 import { readColumns, writeColumns } from '../lib/settings';
 
 const MAX_COLUMNS = 8;
@@ -24,6 +25,8 @@ function kindLabel(resource: ResourceDescriptor): string {
 
 export default function ColumnSettings() {
   const kinds = everyKind(useCategories());
+  const [looking, setLooking] = useState(false);
+  const [failed, setFailed] = useState('');
   const [held, setHeld] = useState<Record<string, CustomColumn[]>>(() => readColumns());
   const [kind, setKind] = useState('');
   const [name, setName] = useState('');
@@ -33,6 +36,27 @@ export default function ColumnSettings() {
     kind === '' ? (kinds[0] ?? null) : (kinds.find((one) => descriptorKey(one) === kind) ?? null);
   const key = chosen === null ? '' : descriptorKey(chosen);
   const columns = held[key] ?? [];
+
+  useEffect(() => {
+    if (kinds.length > 0 || looking) {
+      return;
+    }
+    setLooking(true);
+    fetchResources()
+      .then((catalog) => {
+        rememberCatalog(catalog.categories);
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof Error) {
+          setFailed(reason.message);
+          return;
+        }
+        setFailed('the discovery request failed');
+      })
+      .finally(() => {
+        setLooking(false);
+      });
+  }, [kinds.length, looking]);
 
   function save(next: Record<string, CustomColumn[]>) {
     setHeld(next);
@@ -54,7 +78,10 @@ export default function ColumnSettings() {
   }
 
   if (kinds.length === 0) {
-    return <p className="px-1 py-3 text-fg-muted">No kinds discovered yet.</p>;
+    if (failed !== '') {
+      return <p className="px-1 py-3 text-error">{failed}</p>;
+    }
+    return <p className="px-1 py-3 text-fg-muted">Reading what this cluster has…</p>;
   }
 
   return (

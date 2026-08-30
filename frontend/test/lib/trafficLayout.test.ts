@@ -220,12 +220,12 @@ describe('a dense graph', () => {
     );
   });
 
-  it('stops animating and labelling once it is dense', () => {
+  it('stops animating once it is dense but keeps the rate on every edge', () => {
     const flow = toTrafficFlow(graphOf(MAX_EDGES + 1));
 
     for (const edge of flow.edges) {
       expect(edge.animated).toBe(false);
-      expect(edge.label).toBeUndefined();
+      expect(edge.label).not.toBeUndefined();
     }
   });
 });

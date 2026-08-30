@@ -83,17 +83,15 @@ function toFlowNode(g: LayoutGraph, node: TrafficNode): TrafficFlowNode {
 }
 
 function toFlowEdge(edge: TrafficEdge, dense: boolean): Edge {
-  const drawn: Edge = {
+  return {
     id: `${edge.from}->${edge.to}`,
     source: edge.from,
     target: edge.to,
     animated: !dense,
+    label: edgeLabel(edge),
+    labelStyle: { fontSize: 10 },
     style: { stroke: edgeStroke(edge) },
   };
-  if (dense) {
-    return drawn;
-  }
-  return { ...drawn, label: edgeLabel(edge), labelStyle: { fontSize: 10 } };
 }
 
 export function sameTrafficShape(a: TrafficGraph, b: TrafficGraph): boolean {
