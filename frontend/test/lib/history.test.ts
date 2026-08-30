@@ -9,10 +9,13 @@ import {
   outcomeLabel,
   refOf,
   scopeLabel,
+  foldRepeats,
   recordFailure,
+  repeatLabel,
   sourceLabel,
   targetLabel,
   verbLabel,
+  wasText,
   when,
 } from '../../src/lib/history';
 import type { History, HistoryEntry } from '../../src/lib/types';
@@ -135,7 +138,7 @@ describe('fetchHistory', () => {
   it('asks for only what it was told to', async () => {
     const fetcher = stub({ entries: [] });
 
-    await fetchHistory('change');
+    await fetchHistory({ source: 'change' });
 
     expect(fetcher.mock.calls[0][0]).toContain('source=change');
   });
@@ -143,7 +146,7 @@ describe('fetchHistory', () => {
   it('carries how many changes were not kept', async () => {
     stub({ entries: [], dropped: 12 });
 
-    const got = await fetchHistory('change');
+    const got = await fetchHistory({ source: 'change' });
 
     expect(got.dropped).toBe(12);
   });
@@ -158,6 +161,118 @@ describe('recordFailure', () => {
 
   it('says what failed when there is no why', () => {
     expect(recordFailure('nope')).toBe('Changing what is recorded failed');
+  });
+});
+
+describe('folding repeats', () => {
+  it('keeps one row per object and counts the rest', () => {
+    const folded = foldRepeats([
+      entry({ id: 3, source: 'change', name: 'calico-node', namespace: 'kube-system' }),
+      entry({ id: 2, source: 'change', name: 'calico-node', namespace: 'kube-system' }),
+      entry({ id: 1, source: 'change', name: 'calico-node', namespace: 'kube-system' }),
+    ]);
+
+    expect(folded).toHaveLength(1);
+    expect(folded[0].repeats).toBe(3);
+    expect(folded[0].entry.id).toBe(3);
+    expect(folded[0].oldest.id).toBe(1);
+  });
+
+  it('does not fold two different objects together', () => {
+    const folded = foldRepeats([
+      entry({ id: 2, source: 'change', name: 'calico-node' }),
+      entry({ id: 1, source: 'change', name: 'netd' }),
+    ]);
+
+    expect(folded).toHaveLength(2);
+  });
+
+  it('does not fold the same name on two clusters', () => {
+    const folded = foldRepeats([
+      entry({ id: 2, source: 'change', name: 'calico-node', cluster: 'one' }),
+      entry({ id: 1, source: 'change', name: 'calico-node', cluster: 'two' }),
+    ]);
+
+    expect(folded).toHaveLength(2);
+  });
+
+  it('never folds what spinoza did', () => {
+    const folded = foldRepeats([
+      entry({ id: 2, source: 'action', name: 'web' }),
+      entry({ id: 1, source: 'action', name: 'web' }),
+    ]);
+
+    expect(folded).toHaveLength(2);
+  });
+
+  it('says nothing about a row that stands alone', () => {
+    const folded = foldRepeats([entry({ source: 'change', name: 'web' })]);
+
+    expect(repeatLabel(folded[0])).toBe('');
+  });
+
+  it('counts the repeats in words', () => {
+    const folded = foldRepeats([
+      entry({ id: 2, source: 'change', name: 'web' }),
+      entry({ id: 1, source: 'change', name: 'web' }),
+    ]);
+
+    expect(repeatLabel(folded[0])).toBe('changed 2 times');
+  });
+});
+
+describe('what a change moved from', () => {
+  it('reads as a move when there is a before', () => {
+    expect(wasText(entry({ was: '2/2 · Running' }))).toBe('2/2 · Running → ');
+  });
+
+  it('says nothing when there is not', () => {
+    expect(wasText(entry())).toBe('');
+    expect(wasText(entry({ was: '' }))).toBe('');
+  });
+
+  it('points at nothing for something that went', () => {
+    expect(wasText(entry({ verb: 'removed', was: '1/1 · Running' }))).toBe('');
+  });
+
+  it('shows what was there for something that went', () => {
+    expect(detailText(entry({ verb: 'removed', was: '1/1 · Running', detail: '' }))).toBe(
+      '1/1 · Running',
+    );
+  });
+});
+
+describe('asking for a page', () => {
+  it('continues below a cursor', async () => {
+    const fetcher = stub({ entries: [] });
+
+    await fetchHistory({ after: 40 });
+
+    expect(fetcher.mock.calls[0][0]).toContain('after=40');
+  });
+
+  it('leaves the cursor out when there is none', async () => {
+    const fetcher = stub({ entries: [] });
+
+    await fetchHistory({ after: 0 });
+
+    expect(fetcher.mock.calls[0][0]).not.toContain('after=');
+  });
+
+  it('asks for every cluster when told to', async () => {
+    const fetcher = stub({ entries: [] });
+
+    await fetchHistory({ fleet: true });
+
+    expect(fetcher.mock.calls[0][0]).toContain('fleet=true');
+  });
+
+  it('asks for one cluster otherwise', async () => {
+    const fetcher = stub({ entries: [] });
+
+    await fetchHistory({});
+
+    expect(fetcher.mock.calls[0][0]).not.toContain('fleet=');
   });
 });
 

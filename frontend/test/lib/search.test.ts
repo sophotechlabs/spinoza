@@ -97,3 +97,34 @@ describe('searchObjects', () => {
     await expect(searchObjects('airbyte')).rejects.toThrow('no cluster');
   });
 });
+
+describe('searching every open cluster', () => {
+  it('asks the fleet route when told to', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ hits: [] }),
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    await searchObjects('web', true);
+
+    expect(fetcher.mock.calls[0][0]).toContain('/api/search/fleet');
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the cluster a hit came from', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ hits: [{ name: 'api', cluster: 'https://p-mk1:6443', kind: 'Pod' }] }),
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    const got = await searchObjects('api', true);
+
+    expect(got.hits[0].cluster).toBe('https://p-mk1:6443');
+    vi.unstubAllGlobals();
+  });
+});

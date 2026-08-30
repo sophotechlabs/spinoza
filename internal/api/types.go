@@ -103,6 +103,7 @@ type Namespaces struct {
 }
 
 type SearchHit struct {
+	Cluster   string `json:"cluster,omitempty"`
 	Group     string `json:"group"`
 	Version   string `json:"version"`
 	Resource  string `json:"resource"`
@@ -144,6 +145,7 @@ const (
 type HistoryEntry struct {
 	ID        int64  `json:"id"`
 	Source    string `json:"source"`
+	Cluster   string `json:"cluster,omitempty"`
 	At        string `json:"at"`
 	Verb      string `json:"verb"`
 	Group     string `json:"group,omitempty"`
@@ -153,6 +155,7 @@ type HistoryEntry struct {
 	Namespace string `json:"namespace,omitempty"`
 	Name      string `json:"name"`
 	Detail    string `json:"detail,omitempty"`
+	Was       string `json:"was,omitempty"`
 	Outcome   string `json:"outcome"`
 	Message   string `json:"message,omitempty"`
 }
@@ -161,6 +164,7 @@ type History struct {
 	Entries []HistoryEntry `json:"entries"`
 	More    bool           `json:"more,omitempty"`
 	Dropped int            `json:"dropped,omitempty"`
+	Next    int64          `json:"next,omitempty"`
 	Reason  string         `json:"reason,omitempty"`
 }
 
@@ -287,6 +291,8 @@ type IssueQueue struct {
 }
 
 type HelmRelease struct {
+	Cluster      string     `json:"cluster,omitempty"`
+	Skew         string     `json:"skew,omitempty"`
 	Name         string     `json:"name"`
 	Namespace    string     `json:"namespace"`
 	Chart        string     `json:"chart"`
@@ -1027,6 +1033,37 @@ type FluxOverview struct {
 	Error        string           `json:"error,omitempty"`
 }
 
+const (
+	EngineFlux = ControllerFlux
+	EngineArgo = ControllerArgo
+)
+
+// FleetApp is one delivery object on one cluster, whichever engine manages it.
+// Spread is how many clusters carry an app of that name, which is what makes
+// the same app on three clusters legible as one thing.
+type FleetApp struct {
+	Cluster   string `json:"cluster"`
+	Engine    string `json:"engine"`
+	Kind      string `json:"kind"`
+	Group     string `json:"group"`
+	Version   string `json:"version"`
+	Resource  string `json:"resource"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Ready     string `json:"ready"`
+	Sync      string `json:"sync,omitempty"`
+	Revision  string `json:"revision,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Message   string `json:"message,omitempty"`
+	Suspended bool   `json:"suspended,omitempty"`
+	Spread    int    `json:"spread,omitempty"`
+}
+
+type FleetGitops struct {
+	Apps  []FleetApp `json:"apps"`
+	Error string     `json:"error,omitempty"`
+}
+
 type FluxDashboard struct {
 	Groups []FluxGroup `json:"groups"`
 	Error  string      `json:"error,omitempty"`
@@ -1086,6 +1123,7 @@ type Metrics struct {
 }
 
 type CheckObject struct {
+	Cluster   string `json:"cluster,omitempty"`
 	Group     string `json:"group"`
 	Version   string `json:"version"`
 	Resource  string `json:"resource"`

@@ -36,11 +36,17 @@ func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) checkFilter(r *http.Request) checks.Filter {
+	return s.checkFilterOn(r, s.clusterKey(r))
+}
+
+// Mutes and baselines are filed per cluster, so a fleet report asks each one
+// with its own, rather than one cluster's silences hiding another's findings.
+func (s *Server) checkFilterOn(r *http.Request, cluster string) checks.Filter {
 	keep := checks.ParseFilter(r.URL.Query())
 	held := s.stored().All()
 	keep.Rules = checks.ParseRules(held[checks.RulesKey])
-	keep.Mutes = checks.ParseMutes(held[checks.MutesKey], s.clusterKey(r))
-	if taken, ok := s.baselines().Load(s.clusterKey(r)); ok {
+	keep.Mutes = checks.ParseMutes(held[checks.MutesKey], cluster)
+	if taken, ok := s.baselines().Load(cluster); ok {
 		keep.Base = &taken
 	}
 	return keep

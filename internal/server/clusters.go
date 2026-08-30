@@ -13,7 +13,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
-	"github.com/sophotechlabs/spinoza/internal/history"
+	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
 const terminalDrain = 20 * time.Second
@@ -87,7 +87,7 @@ func (s *Server) rememberTab(ctx context.Context, id string, ref api.ContextRef)
 		return
 	}
 	known := s.tabsByID(ctx)
-	tab := history.Tab{
+	tab := store.Tab{
 		ID:         id,
 		Context:    ref.Name,
 		Kubeconfig: ref.Kubeconfig,
@@ -121,7 +121,7 @@ func (s *Server) RememberOpen(ctx context.Context) {
 
 // colorFor keeps the color a cluster was given; a new one takes the lowest
 // nobody open is using, so two tabs never look alike at the moment they open.
-func colorFor(known map[string]history.Tab, id string, open []api.OpenCluster) int {
+func colorFor(known map[string]store.Tab, id string, open []api.OpenCluster) int {
 	if held, seen := known[id]; seen && held.Color != 0 {
 		return held.Color
 	}
@@ -137,8 +137,8 @@ func colorFor(known map[string]history.Tab, id string, open []api.OpenCluster) i
 	return 1
 }
 
-func (s *Server) tabsByID(ctx context.Context) map[string]history.Tab {
-	known := map[string]history.Tab{}
+func (s *Server) tabsByID(ctx context.Context) map[string]store.Tab {
+	known := map[string]store.Tab{}
 	held := s.tabs()
 	if held == nil {
 		return known

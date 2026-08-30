@@ -447,6 +447,11 @@ export default function App() {
     if (!mayDiscard()) {
       return;
     }
+    // A hit from another cluster is only useful if opening it goes there.
+    if (found.cluster !== undefined && found.cluster !== '' && found.cluster !== onCluster) {
+      void switchTo(found.cluster, found.ref);
+      return;
+    }
     rememberObject(found.ref);
     revealDetails();
     if (found.type === null) {

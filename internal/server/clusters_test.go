@@ -16,7 +16,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
-	"github.com/sophotechlabs/spinoza/internal/history"
+	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
 type fleet struct {
@@ -416,22 +416,22 @@ func TestALocalShellSurvivesAClusterClosing(t *testing.T) {
 
 type heldTabs struct {
 	mu      sync.Mutex
-	tabs    []history.Tab
+	tabs    []store.Tab
 	allErr  error
 	setErr  error
 	dropErr error
 }
 
-func (h *heldTabs) All(context.Context) ([]history.Tab, error) {
+func (h *heldTabs) All(context.Context) ([]store.Tab, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.allErr != nil {
 		return nil, h.allErr
 	}
-	return append([]history.Tab{}, h.tabs...), nil
+	return append([]store.Tab{}, h.tabs...), nil
 }
 
-func (h *heldTabs) Remember(_ context.Context, tab history.Tab) error {
+func (h *heldTabs) Remember(_ context.Context, tab store.Tab) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.setErr != nil {
@@ -510,7 +510,7 @@ func (h *heldTabs) Forget(_ context.Context, id string) error {
 	if h.dropErr != nil {
 		return h.dropErr
 	}
-	kept := []history.Tab{}
+	kept := []store.Tab{}
 	for _, held := range h.tabs {
 		if held.ID != id {
 			kept = append(kept, held)
@@ -520,10 +520,10 @@ func (h *heldTabs) Forget(_ context.Context, id string) error {
 	return nil
 }
 
-func (h *heldTabs) remembered() []history.Tab {
+func (h *heldTabs) remembered() []store.Tab {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return append([]history.Tab{}, h.tabs...)
+	return append([]store.Tab{}, h.tabs...)
 }
 
 var fleets = map[string]*fleet{}
@@ -593,7 +593,7 @@ func TestClosingAClusterStopsItReopeningNextTime(t *testing.T) {
 
 func TestTheListSaysWhichClustersWereOpenLastTime(t *testing.T) {
 	ts, open := rememberingServer(t, &fleet{})
-	open.tabs = []history.Tab{{ID: mk2, Context: "p-mk2", Kubeconfig: "/work.yaml", Reopen: true}}
+	open.tabs = []store.Tab{{ID: mk2, Context: "p-mk2", Kubeconfig: "/work.yaml", Reopen: true}}
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
 
@@ -613,7 +613,7 @@ func TestAStoreThatCannotBeReadDoesNotStopTheList(t *testing.T) {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
 	}
 	if len(clustersFrom(t, body).Remembered) != 0 {
-		t.Fatalf("remembered = %s, want none when the store could not be read", body)
+		t.Fatalf("remembered = %s, want none when the held could not be read", body)
 	}
 }
 
@@ -641,7 +641,7 @@ func TestAServerWithNoStoreRemembersNothing(t *testing.T) {
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
 
 	if len(clustersFrom(t, body).Remembered) != 0 {
-		t.Fatalf("remembered = %s, want none without a store", body)
+		t.Fatalf("remembered = %s, want none without a held", body)
 	}
 }
 
@@ -682,7 +682,7 @@ func TestAClusterKeepsTheColorItWasGiven(t *testing.T) {
 	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk2", nil)
 	was := colorsOf(t, listBody(t, ts))["p-mk2"]
 	doRequest(t, http.MethodDelete, ts.URL+"/api/clusters?cluster="+urlValue(idOf(open, "p-mk2")), nil)
-	open.tabs = append(open.tabs, history.Tab{ID: mk2, Context: "p-mk2", Color: was})
+	open.tabs = append(open.tabs, store.Tab{ID: mk2, Context: "p-mk2", Color: was})
 
 	_, body := doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk2", nil)
 
@@ -695,7 +695,7 @@ func TestTheColorsRunOutRatherThanGoingBlank(t *testing.T) {
 	ts, open := rememberingServer(t, &fleet{})
 	for color := 1; color <= api.ClusterColors; color++ {
 		id := "https://c" + strconv.Itoa(color) + ":6443"
-		open.tabs = append(open.tabs, history.Tab{ID: id, Color: color})
+		open.tabs = append(open.tabs, store.Tab{ID: id, Color: color})
 		heldFleet(ts).held = append(heldFleet(ts).held, api.OpenCluster{ID: id})
 	}
 
@@ -794,7 +794,7 @@ func TestTheStartupClusterKeepsTheColorItAlreadyHad(t *testing.T) {
 		active: mk1,
 	}
 	ts, open := rememberingServer(t, held)
-	open.tabs = []history.Tab{{ID: mk1, Context: "p-mk1", Color: 6}}
+	open.tabs = []store.Tab{{ID: mk1, Context: "p-mk1", Color: 6}}
 
 	srvOf(ts).RememberOpen(t.Context())
 
@@ -986,7 +986,7 @@ func TestAReopenFlagThatCannotBeWrittenIsReported(t *testing.T) {
 
 func TestATabToldNotToComeBackIsNotOfferedForReopening(t *testing.T) {
 	ts, open := rememberingServer(t, &fleet{})
-	open.tabs = []history.Tab{
+	open.tabs = []store.Tab{
 		{ID: mk1, Context: "p-mk1", Reopen: true},
 		{ID: mk2, Context: "p-mk2", Reopen: false},
 	}

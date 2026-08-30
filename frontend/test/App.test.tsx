@@ -1841,6 +1841,50 @@ describe('the command palette and shortcuts', () => {
     expect(screen.getByLabelText('Namespace')).toHaveValue('');
   });
 
+  it('opens a search hit from another cluster on that cluster', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/clusters')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(bothClusters('other-cluster')),
+        });
+      }
+      if (url.startsWith('/api/search')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              hits: [{ ...clusterHit, cluster: idFor('kind-dev') }],
+              truncated: false,
+            }),
+        });
+      }
+      if (url.startsWith('/api/contexts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              current: { kubeconfig: '', name: 'other-cluster' },
+              kubeconfigs: [],
+              protection: 'open',
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    press('k', { ctrlKey: true });
+    await user.type(await screen.findByLabelText(/Search resources/), 'airbyte');
+    await user.click(await screen.findByRole('button', { name: /airbyte-server/ }));
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=kind-dev');
+    });
+  });
+
   it('switches view from the palette', async () => {
     const user = userEvent.setup();
     render(<App />);

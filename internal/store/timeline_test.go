@@ -1,4 +1,4 @@
-package history
+package store
 
 import (
 	"strings"
@@ -305,7 +305,7 @@ func TestAChangeColumnThatChangedShapeIsReported(t *testing.T) {
 	if err == nil {
 		t.Fatal("a change that could not be read came back as a silent zero")
 	}
-	if !strings.Contains(err.Error(), "history") {
+	if !strings.Contains(err.Error(), "store") {
 		t.Fatalf("error = %q, want it to say what it was doing", err.Error())
 	}
 }
@@ -374,5 +374,54 @@ func TestRecordingIntoAMissingTableIsReported(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("recording against a missing table reported success")
+	}
+}
+
+func TestAChangeRemembersWhatItMovedFrom(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	one := change(noon, "web")
+	one.Was = []string{"2/2", "Running"}
+
+	noteOne(t, store, p1, one)
+
+	found, err := store.Changed(t.Context(), Query{})
+	if err != nil {
+		t.Fatalf("changed: %v", err)
+	}
+	if len(found.Rows[0].Was) != 2 || found.Rows[0].Was[1] != "Running" {
+		t.Fatalf("was = %v", found.Rows[0].Was)
+	}
+}
+
+func TestAPageOfChangesContinuesBelowTheCursor(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	noteOne(t, store, p1, change(noon.Add(-2*time.Minute), "oldest"))
+	noteOne(t, store, p1, change(noon.Add(-time.Minute), "middle"))
+	noteOne(t, store, p1, change(noon, "newest"))
+	first, err := store.Changed(t.Context(), Query{Limit: 1})
+	if err != nil {
+		t.Fatalf("changed: %v", err)
+	}
+
+	next, nextErr := store.Changed(t.Context(), Query{Limit: 1, After: first.Rows[0].ID})
+
+	if nextErr != nil {
+		t.Fatalf("changed: %v", nextErr)
+	}
+	if next.Rows[0].Name != "middle" {
+		t.Fatalf("the next page started at %s", next.Rows[0].Name)
+	}
+}
+
+func TestTheLastPageSaysThereIsNoMore(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	noteOne(t, store, p1, change(noon, "only"))
+
+	found, err := store.Changed(t.Context(), Query{Limit: 10})
+	if err != nil {
+		t.Fatalf("changed: %v", err)
+	}
+	if found.More {
+		t.Fatal("a page that held everything said there was more")
 	}
 }

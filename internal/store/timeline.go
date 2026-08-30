@@ -1,4 +1,4 @@
-package history
+package store
 
 import (
 	"context"
@@ -28,6 +28,7 @@ type Change struct {
 	Name      string
 	UID       string
 	Cells     []string
+	Was       []string
 }
 
 type Changes struct {
@@ -70,7 +71,7 @@ func (s *Store) note(ctx context.Context, changes []Change) error {
 	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	writeErr := insertChanges(ctx, tx, changes)
 	if writeErr != nil {
@@ -79,7 +80,7 @@ func (s *Store) note(ctx context.Context, changes []Change) error {
 	}
 	commitErr := tx.Commit()
 	if commitErr != nil {
-		return fmt.Errorf("history: %w", commitErr)
+		return fmt.Errorf("store: %w", commitErr)
 	}
 	return nil
 }
@@ -90,10 +91,10 @@ func insertChanges(ctx context.Context, tx *sql.Tx, changes []Change) error {
 			ctx, insertChange,
 			one.Cluster, one.At.UTC().UnixMilli(), one.Verb,
 			one.Group, one.Version, one.Resource, one.Kind,
-			one.Namespace, one.Name, one.UID, cellsText(one.Cells),
+			one.Namespace, one.Name, one.UID, cellsText(one.Cells), cellsText(one.Was),
 		)
 		if err != nil {
-			return fmt.Errorf("history: %w", err)
+			return fmt.Errorf("store: %w", err)
 		}
 	}
 	return nil
@@ -125,9 +126,11 @@ func (s *Store) Changed(ctx context.Context, query Query) (Changes, error) {
 		return Changes{Rows: []Change{}}, nil
 	}
 	limit := limitOf(query.Limit)
-	rows, err := db.QueryContext(ctx, selectChanges, query.Cluster, query.Cluster, limit+1)
+	rows, err := db.QueryContext(
+		ctx, selectChanges, query.Cluster, query.Cluster, query.After, query.After, limit+1,
+	)
 	if err != nil {
-		return Changes{}, fmt.Errorf("history: %w", err)
+		return Changes{}, fmt.Errorf("store: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	found, scanErr := scanChanges(rows)
@@ -146,20 +149,22 @@ func scanChanges(rows *sql.Rows) ([]Change, error) {
 		var one Change
 		var at int64
 		var cells string
+		var was string
 		err := rows.Scan(
 			&one.ID, &one.Cluster, &at, &one.Verb,
 			&one.Group, &one.Version, &one.Resource, &one.Kind,
-			&one.Namespace, &one.Name, &one.UID, &cells,
+			&one.Namespace, &one.Name, &one.UID, &cells, &was,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("history: %w", err)
+			return nil, fmt.Errorf("store: %w", err)
 		}
 		one.At = time.UnixMilli(at).UTC()
 		one.Cells = cellsOf(cells)
+		one.Was = cellsOf(was)
 		found = append(found, one)
 	}
 	if rows.Err() != nil {
-		return nil, fmt.Errorf("history: %w", rows.Err())
+		return nil, fmt.Errorf("store: %w", rows.Err())
 	}
 	return found, nil
 }
@@ -175,7 +180,7 @@ func (s *Store) Prune(ctx context.Context, keep Retention, now time.Time) error 
 		cutoff := now.UTC().AddDate(0, 0, -keep.Days).UnixMilli()
 		_, err := db.ExecContext(ctx, deleteChangesBefore, cutoff)
 		if err != nil {
-			return fmt.Errorf("history: %w", err)
+			return fmt.Errorf("store: %w", err)
 		}
 	}
 	if keep.Rows <= 0 {
@@ -192,7 +197,7 @@ func (s *Store) capRows(ctx context.Context, db *sql.DB, rows int) error {
 	}
 	_, cutErr := db.ExecContext(ctx, deleteChangesBelow, oldest)
 	if cutErr != nil {
-		return fmt.Errorf("history: %w", cutErr)
+		return fmt.Errorf("store: %w", cutErr)
 	}
 	return nil
 }
@@ -201,5 +206,5 @@ func nothingToCap(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
-	return fmt.Errorf("history: %w", err)
+	return fmt.Errorf("store: %w", err)
 }

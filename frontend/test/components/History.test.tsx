@@ -350,4 +350,80 @@ describe('History', () => {
       expect(said.some((message) => message.includes('Changing what is recorded'))).toBe(true);
     });
   });
+  it('folds repeated changes to one object into a single row', async () => {
+    stub({
+      entries: [
+        entry({ id: 3, source: 'change', verb: 'changed', name: 'calico-node', detail: '94/94' }),
+        entry({ id: 2, source: 'change', verb: 'changed', name: 'calico-node', detail: '94/93' }),
+      ],
+    });
+
+    render(<History onOpen={vi.fn()} />);
+
+    expect(await screen.findByText(/changed 2 times/)).toBeTruthy();
+  });
+
+  it('shows what a change moved from', async () => {
+    stub({
+      entries: [entry({ source: 'change', verb: 'changed', detail: '1/3', was: '3/3' })],
+    });
+
+    render(<History onOpen={vi.fn()} />);
+
+    expect(await screen.findByText(/3\/3 →/)).toBeTruthy();
+  });
+
+  it('offers nothing to roll up when one cluster is open', async () => {
+    stub({ entries: [entry()] });
+
+    render(<History onOpen={vi.fn()} />);
+
+    await screen.findByText('web');
+    expect(screen.queryByLabelText('Every open cluster')).toBeNull();
+  });
+
+  it('rolls up every open cluster when asked', async () => {
+    const user = userEvent.setup();
+    const calls = stub({ entries: [entry()] });
+    act(() => {
+      showing(MK1);
+    });
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.click(screen.getByLabelText('Every open cluster'));
+
+    await waitFor(() => {
+      expect(calls.mock.calls.some((call) => call[0].includes('fleet=true'))).toBe(true);
+    });
+  });
+
+  it('names the cluster on every row once it is rolling up', async () => {
+    const user = userEvent.setup();
+    stub({ entries: [entry({ cluster: MK1 })] });
+    act(() => {
+      showing(MK1);
+    });
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.click(screen.getByLabelText('Every open cluster'));
+
+    expect(await screen.findByText('Cluster')).toBeTruthy();
+    expect(await screen.findByText('p-mk1')).toBeTruthy();
+  });
+
+  it('says so when a row is on a cluster that is gone', async () => {
+    const user = userEvent.setup();
+    stub({ entries: [entry({ cluster: 'https://gone:6443' })] });
+    act(() => {
+      showing(MK1);
+    });
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.click(screen.getByLabelText('Every open cluster'));
+
+    expect(await screen.findByText('unknown')).toBeTruthy();
+  });
 });

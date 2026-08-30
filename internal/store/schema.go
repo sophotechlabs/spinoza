@@ -1,4 +1,4 @@
-package history
+package store
 
 import (
 	"context"
@@ -33,14 +33,14 @@ WHERE (? = '' OR cluster = ?)`
 const insertChange = `
 INSERT INTO changes (
 	cluster, at, verb, api_group, api_version, resource, kind,
-	namespace, name, uid, cells
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	namespace, name, uid, cells, was
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 const selectChanges = `
 SELECT id, cluster, at, verb, api_group, api_version, resource, kind,
-	namespace, name, uid, cells
+	namespace, name, uid, cells, was
 FROM changes
-WHERE (? = '' OR cluster = ?)
+WHERE (? = '' OR cluster = ?) AND (? = 0 OR id < ?)
 ORDER BY at DESC, id DESC
 LIMIT ?`
 
@@ -124,6 +124,8 @@ CREATE TABLE changes (
 CREATE INDEX changes_by_time ON changes (at DESC, id DESC);
 CREATE INDEX changes_by_cluster ON changes (cluster, at DESC, id DESC);
 ALTER TABLE clusters ADD COLUMN timeline TEXT NOT NULL DEFAULT '';
+`, `
+ALTER TABLE changes ADD COLUMN was TEXT NOT NULL DEFAULT '[]';
 `}
 
 func migrate(ctx context.Context, db *sql.DB) error {
@@ -155,21 +157,21 @@ func schemaVersion(ctx context.Context, db *sql.DB) (int, error) {
 func apply(ctx context.Context, db *sql.DB, statements string, version int) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	_, execErr := tx.ExecContext(ctx, statements)
 	if execErr != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("history: %w", execErr)
+		return fmt.Errorf("store: %w", execErr)
 	}
 	_, versionErr := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", version))
 	if versionErr != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("history: %w", versionErr)
+		return fmt.Errorf("store: %w", versionErr)
 	}
 	commitErr := tx.Commit()
 	if commitErr != nil {
-		return fmt.Errorf("history: %w", commitErr)
+		return fmt.Errorf("store: %w", commitErr)
 	}
 	return nil
 }

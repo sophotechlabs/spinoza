@@ -934,6 +934,7 @@ function parseHistoryEntry(item: Record<string, unknown>): HistoryEntry {
   return {
     id: asNumber(item.id),
     source: asString(item.source),
+    cluster: optionalString(item.cluster),
     at: asString(item.at),
     verb: asString(item.verb),
     group: optionalString(item.group),
@@ -943,6 +944,7 @@ function parseHistoryEntry(item: Record<string, unknown>): HistoryEntry {
     namespace: optionalString(item.namespace),
     name: asString(item.name),
     detail: optionalString(item.detail),
+    was: optionalString(item.was),
     outcome: asString(item.outcome),
     message: optionalString(item.message),
   };
@@ -954,6 +956,7 @@ export function parseHistory(body: unknown): History {
     entries: listOf(item.entries, parseHistoryEntry),
     more: optionalBoolean(item.more),
     dropped: optionalNumber(item.dropped),
+    next: optionalNumber(item.next),
     reason: optionalString(item.reason),
   };
 }

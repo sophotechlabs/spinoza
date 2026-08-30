@@ -243,3 +243,48 @@ func TestTheShapeOfARowFollowsItsContainers(t *testing.T) {
 		t.Fatal("a restart went unnoticed")
 	}
 }
+
+func TestAChangeSaysWhatTheRowMovedFrom(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+
+	held, st := startRecording(t, mgr)
+
+	st.publish("modified", scaledTo(t, 9))
+
+	found := held.await(t, 1)
+	if len(found[0].Was) == 0 {
+		t.Fatal("a change came back with nothing to compare against")
+	}
+	if found[0].Was[0] == found[0].Cells[0] {
+		t.Fatalf("it moved from %v to %v", found[0].Was, found[0].Cells)
+	}
+}
+
+func TestSomethingSeenForTheFirstTimeHasNothingToCompareAgainst(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+
+	held, st := startRecording(t, mgr)
+
+	st.publish("added", newDeployment("default", "api"))
+
+	found := held.await(t, 1)
+	if len(found[0].Was) != 0 {
+		t.Fatalf("a new object claimed to have moved from %v", found[0].Was)
+	}
+}
+
+func TestADeletionSaysWhatWasThereBeforeIt(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+
+	held, st := startRecording(t, mgr)
+
+	st.publishDelete(newDeployment("default", "web"))
+
+	found := held.await(t, 1)
+	if len(found[0].Was) == 0 {
+		t.Fatal("a deletion said nothing about what was deleted")
+	}
+}

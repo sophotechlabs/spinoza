@@ -30,6 +30,8 @@ import { useChecksFilter, useSettingsStore } from '../store/settings';
 import LoadFailure from './LoadFailure';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
+import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters';
+import { colorVar } from '../lib/clusterColor';
 
 const PAGE_SIZE = 200;
 
@@ -108,6 +110,23 @@ function scannedLabel(scanned: number, findings: number, namespace: string): str
   return `${String(findings)} findings across ${String(scanned)} workloads`;
 }
 
+function OnCluster({ cluster }: { cluster: string }) {
+  const tab = useClustersStore((state) => tabOn(state.tabs, cluster));
+  if (tab === null) {
+    return <span className="shrink-0 text-fg-faint">unknown</span>;
+  }
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 text-fg-muted">
+      <span
+        aria-hidden="true"
+        style={{ backgroundColor: colorVar(tab.color) }}
+        className="h-2 w-2 shrink-0 rounded-sm"
+      />
+      {nameOf(tab)}
+    </span>
+  );
+}
+
 function Finding({
   finding,
   check,
@@ -134,6 +153,9 @@ function Finding({
         >
           {findingLabel(finding)}
         </button>
+        {finding.cluster !== undefined && finding.cluster !== '' && (
+          <OnCluster cluster={finding.cluster} />
+        )}
         <span className="min-w-0 flex-1 truncate text-fg-muted" title={finding.detail}>
           {finding.detail}
         </span>
@@ -959,7 +981,10 @@ function Category({
 }
 
 export default function Checks({ onOpen }: ChecksProps) {
-  const { data, error, stale, reload } = useChecks();
+  const several = useTabStrip();
+  const [fleet, setFleet] = useState(false);
+  const showing = fleet && several;
+  const { data, error, stale, reload } = useChecks(showing);
   const namespace = useSettingsStore((state) => state.checksNamespace);
 
   if (data === null) {
@@ -988,6 +1013,18 @@ export default function Checks({ onOpen }: ChecksProps) {
         <span className="min-w-0 flex-1">
           {scannedLabel(data.scanned, totalFindings(data), namespace)}
         </span>
+        {several && (
+          <label className="flex shrink-0 items-center gap-1.5 text-fg-soft">
+            <input
+              type="checkbox"
+              checked={fleet}
+              onChange={(event) => {
+                setFleet(event.target.checked);
+              }}
+            />
+            Every open cluster
+          </label>
+        )}
         <span className="w-16 shrink-0 text-right">Severity</span>
         <span className="w-16 shrink-0 text-right">Findings</span>
       </div>

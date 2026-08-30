@@ -15,6 +15,7 @@ function hitOf(raw: unknown): SearchHit {
     kind: item.kind ?? '',
     namespace: item.namespace ?? '',
     name: item.name ?? '',
+    cluster: item.cluster,
   };
 }
 
@@ -32,9 +33,10 @@ export function refOf(hit: SearchHit): ObjectRef {
   };
 }
 
-export async function searchObjects(query: string): Promise<SearchResults> {
+export async function searchObjects(query: string, fleet = false): Promise<SearchResults> {
   const params = new URLSearchParams({ q: query.trim() });
-  const response = await request(`/api/search?${params.toString()}`);
+  const where = fleet ? '/api/search/fleet' : '/api/search';
+  const response = await request(`${where}?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `search failed with status ${response.status}`);
   }

@@ -539,3 +539,51 @@ describe('severityReason', () => {
     expect(reason).toBe('high for this object');
   });
 });
+
+describe('checks across the fleet', () => {
+  it('asks the fleet route when told to', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ groups: [], objects: [] }),
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    await fetchChecks(NO_FILTER, true);
+
+    expect(fetcher.mock.calls[0][0]).toContain('/api/checks/fleet');
+    vi.unstubAllGlobals();
+  });
+
+  it('asks the single-cluster route otherwise', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ groups: [], objects: [] }),
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    await fetchChecks(NO_FILTER);
+
+    expect(fetcher.mock.calls[0][0]).not.toContain('/fleet');
+    vi.unstubAllGlobals();
+  });
+
+  it('carries the cluster from the object onto the finding', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          groups: [{ id: 'limits-missing', findings: [{ ref: 0, detail: 'no limits' }] }],
+          objects: [{ name: 'api', namespace: 'web', kind: 'Pod', cluster: 'https://p-mk1:6443' }],
+        }),
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    const got = await fetchChecks(NO_FILTER, true);
+
+    expect(got.groups[0].findings[0].cluster).toBe('https://p-mk1:6443');
+    vi.unstubAllGlobals();
+  });
+});

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
-	"github.com/sophotechlabs/spinoza/internal/history"
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
 const (
@@ -71,9 +71,9 @@ func kindsNamed(name string) ([]resources.Kind, bool) {
 // A recording holds the informer's callback away from the disk: the callback
 // hands over a change and returns, and one goroutine writes them in batches.
 type recording struct {
-	into    history.Noter
+	into    store.Noter
 	prune   func(ctx context.Context)
-	queue   chan history.Change
+	queue   chan store.Change
 	stop    chan struct{}
 	stopped chan struct{}
 	once    sync.Once
@@ -92,8 +92,8 @@ func (t *recording) Note(note resources.Note) {
 	}
 }
 
-func noteOf(note resources.Note) history.Change {
-	return history.Change{
+func noteOf(note resources.Note) store.Change {
+	return store.Change{
 		At:        note.At,
 		Verb:      note.Verb,
 		Group:     note.Group,
@@ -104,6 +104,7 @@ func noteOf(note resources.Note) history.Change {
 		Name:      note.Name,
 		UID:       note.UID,
 		Cells:     note.Cells,
+		Was:       note.Was,
 	}
 }
 
@@ -120,8 +121,8 @@ func (t *recording) run(ctx context.Context) {
 	}
 }
 
-func (t *recording) fill(first history.Change) []history.Change {
-	batch := make([]history.Change, 0, timelineBatch)
+func (t *recording) fill(first store.Change) []store.Change {
+	batch := make([]store.Change, 0, timelineBatch)
 	batch = append(batch, first)
 	for len(batch) < timelineBatch {
 		select {
@@ -134,7 +135,7 @@ func (t *recording) fill(first history.Change) []history.Change {
 	return batch
 }
 
-func (t *recording) write(ctx context.Context, batch []history.Change) {
+func (t *recording) write(ctx context.Context, batch []store.Change) {
 	writing, cancel := context.WithTimeout(ctx, timelineWrite)
 	defer cancel()
 	err := t.into.Note(writing, batch)
@@ -194,14 +195,14 @@ func (s *Server) startRecording(ctx context.Context, id, name string) {
 		s.stopRecording(id)
 		return
 	}
-	store := s.recorder()
+	past := s.recorder()
 	backend := s.managerOf(id)
-	if store == nil || backend == nil {
+	if past == nil || backend == nil {
 		return
 	}
 	held := &recording{
-		into:    store.Timeline(id),
-		queue:   make(chan history.Change, timelineQueue),
+		into:    past.Timeline(id),
+		queue:   make(chan store.Change, timelineQueue),
 		stop:    make(chan struct{}),
 		stopped: make(chan struct{}),
 	}
@@ -218,11 +219,11 @@ func (s *Server) startRecording(ctx context.Context, id, name string) {
 }
 
 func (s *Server) pruneTimeline(ctx context.Context) {
-	store := s.recorder()
-	if store == nil {
+	past := s.recorder()
+	if past == nil {
 		return
 	}
-	err := store.Prune(ctx, history.Retention{Days: s.keepDays(), Rows: timelineRows}, s.instant())
+	err := past.Prune(ctx, store.Retention{Days: s.keepDays(), Rows: timelineRows}, s.instant())
 	if err != nil {
 		slog.Warn("the timeline could not be trimmed", "error", err)
 	}
@@ -284,17 +285,22 @@ func (s *Server) recordCluster(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.clusterList(r.Context()))
 }
 
-func (s *Server) readChanges(w http.ResponseWriter, r *http.Request, limit int) (api.History, bool) {
-	_, on := s.lookup(clusterOf(r))
-	page, readErr := s.recorder().Changed(r.Context(), history.Query{Cluster: on, Limit: limit})
+func (s *Server) readChanges(
+	w http.ResponseWriter, r *http.Request, limit int, after int64, on string,
+) (api.History, bool) {
+	page, readErr := s.recorder().Changed(
+		r.Context(), store.Query{Cluster: on, Limit: limit, After: after},
+	)
 	if readErr != nil {
 		writeAPIError(w, readErr)
 		return api.History{}, false
 	}
+	rows := changesOf(page.Rows)
 	return api.History{
-		Entries: changesOf(page.Rows),
+		Entries: rows,
 		More:    page.More,
 		Dropped: s.droppedOn(on),
+		Next:    nextOf(rows),
 	}, true
 }
 
@@ -306,12 +312,13 @@ func (s *Server) droppedOn(id string) int {
 	return int(held.dropped.Load())
 }
 
-func changesOf(held []history.Change) []api.HistoryEntry {
+func changesOf(held []store.Change) []api.HistoryEntry {
 	out := make([]api.HistoryEntry, 0, len(held))
 	for _, one := range held {
 		out = append(out, api.HistoryEntry{
 			ID:        one.ID,
 			Source:    api.HistoryChange,
+			Cluster:   one.Cluster,
 			At:        one.At.UTC().Format(time.RFC3339),
 			Verb:      one.Verb,
 			Group:     one.Group,
@@ -321,6 +328,7 @@ func changesOf(held []history.Change) []api.HistoryEntry {
 			Namespace: one.Namespace,
 			Name:      one.Name,
 			Detail:    strings.Join(one.Cells, " · "),
+			Was:       strings.Join(one.Was, " · "),
 			Outcome:   api.HistoryDone,
 		})
 	}

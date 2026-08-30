@@ -38,6 +38,7 @@ export const CATEGORY_ORDER: CheckCategory[] = ['security', 'reliability', 'effi
 
 export interface CheckFindingView {
   object: ObjectRef;
+  cluster?: string;
   kind: string;
   container?: string;
   detail: string;
@@ -77,6 +78,7 @@ function objectOf(raw: unknown): CheckObject {
     kind: item.kind ?? '',
     origin: originOf(item.origin),
     managedBy: item.managedBy,
+    cluster: item.cluster,
   };
 }
 
@@ -100,6 +102,7 @@ function findingOf(raw: unknown, objects: CheckObject[]): CheckFindingView {
       namespace: held.namespace,
       name: held.name,
     },
+    cluster: held.cluster,
     kind: held.kind,
     container: item.container,
     detail: item.detail ?? '',
@@ -251,8 +254,12 @@ function withParams(path: string, params: URLSearchParams): string {
   return `${path}?${query}`;
 }
 
-export async function fetchChecks(keep: ChecksFilter = NO_FILTER): Promise<CheckReportView> {
-  const response = await request(withParams('/api/checks', filterParams(keep)));
+export async function fetchChecks(
+  keep: ChecksFilter = NO_FILTER,
+  fleet = false,
+): Promise<CheckReportView> {
+  const where = fleet ? '/api/checks/fleet' : '/api/checks';
+  const response = await request(withParams(where, filterParams(keep)));
   if (!response.ok) {
     throw await failure(response, `the checks request failed with status ${response.status}`);
   }
@@ -367,11 +374,11 @@ export function refKeyOf(object: ObjectRef): string {
   return [object.group, object.version, object.resource, object.namespace, object.name].join('/');
 }
 
-export function useChecks(): Polled<CheckReportView> {
+export function useChecks(fleet = false): Polled<CheckReportView> {
   const seconds = useChecksInterval();
   const keep = useChecksFilter();
   const query = filterParams(keep).toString();
-  const load = useCallback(() => fetchChecks(fromParams(query)), [query]);
+  const load = useCallback(() => fetchChecks(fromParams(query), fleet), [query, fleet]);
   return usePoll(load, { intervalMs: seconds * 1000, fallback: 'the checks request failed' });
 }
 

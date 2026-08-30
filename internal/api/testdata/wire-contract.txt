@@ -64,6 +64,7 @@ CheckGroup.Title title string
 CheckGroup.Total total int
 CheckGroup.Truncated truncated,omitempty bool
 CheckGroup.Wrong wrong string
+CheckObject.Cluster cluster,omitempty string
 CheckObject.Group group string
 CheckObject.Kind kind string
 CheckObject.ManagedBy managedBy,omitempty string
@@ -170,6 +171,23 @@ FieldDrift.Live live string
 FieldDrift.Path path string
 FilePicker.Available available bool
 FilePicker.Reason reason,omitempty string
+FleetApp.Cluster cluster string
+FleetApp.Engine engine string
+FleetApp.Group group string
+FleetApp.Kind kind string
+FleetApp.Message message,omitempty string
+FleetApp.Name name string
+FleetApp.Namespace namespace string
+FleetApp.Ready ready string
+FleetApp.Resource resource string
+FleetApp.Revision revision,omitempty string
+FleetApp.Source source,omitempty string
+FleetApp.Spread spread,omitempty int
+FleetApp.Suspended suspended,omitempty bool
+FleetApp.Sync sync,omitempty string
+FleetApp.Version version string
+FleetGitops.Apps apps []FleetApp
+FleetGitops.Error error,omitempty string
 FluxActionResult.Action action string
 FluxActionResult.RequestedAt requestedAt,omitempty string
 FluxController.Name name string
@@ -338,6 +356,7 @@ HelmChartVersions.Repos repos []HelmRepoVersions
 HelmRelease.AppVersion appVersion string
 HelmRelease.Chart chart string
 HelmRelease.ChartVersion chartVersion string
+HelmRelease.Cluster cluster,omitempty string
 HelmRelease.Description description,omitempty string
 HelmRelease.FluxRef fluxRef,omitempty *ObjectRef
 HelmRelease.Latest latest,omitempty string
@@ -345,6 +364,7 @@ HelmRelease.Name name string
 HelmRelease.Namespace namespace string
 HelmRelease.Outdated outdated,omitempty bool
 HelmRelease.Revision revision int64
+HelmRelease.Skew skew,omitempty string
 HelmRelease.Status status string
 HelmRelease.Updated updated string
 HelmReleaseDetail.Driver driver string
@@ -381,8 +401,10 @@ HelmSupport.Reason reason,omitempty string
 History.Dropped dropped,omitempty int
 History.Entries entries []HistoryEntry
 History.More more,omitempty bool
+History.Next next,omitempty int64
 History.Reason reason,omitempty string
 HistoryEntry.At at string
+HistoryEntry.Cluster cluster,omitempty string
 HistoryEntry.Detail detail,omitempty string
 HistoryEntry.Group group,omitempty string
 HistoryEntry.ID id int64
@@ -395,6 +417,7 @@ HistoryEntry.Resource resource,omitempty string
 HistoryEntry.Source source string
 HistoryEntry.Verb verb string
 HistoryEntry.Version version,omitempty string
+HistoryEntry.Was was,omitempty string
 Issue.Action action string
 Issue.Change change,omitempty string
 Issue.ChangedAt changedAt,omitempty string
@@ -627,6 +650,7 @@ RowRefusal.Reason reason string
 RuleFault.ID id string
 RuleFault.Reason reason string
 RuleFaults.Faults faults []RuleFault
+SearchHit.Cluster cluster,omitempty string
 SearchHit.Group group string
 SearchHit.Kind kind string
 SearchHit.Name name string

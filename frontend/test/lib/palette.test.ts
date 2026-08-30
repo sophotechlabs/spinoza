@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { act } from '@testing-library/react';
+import { useClustersStore } from '../../src/store/clusters';
+import { MK1, showing } from '../helpers-clusters';
 import type { ObjectRef } from '../../src/lib/types';
 import { VIEW_LABELS, clusterItems, matchItems, paletteItems } from '../../src/lib/palette';
 import { makeCategory, makeDescriptor } from '../helpers';
@@ -210,5 +213,40 @@ describe('matchItems', () => {
     expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).toContain(
       'Flux graph',
     );
+  });
+});
+
+describe('a hit from another cluster', () => {
+  it('says which cluster beside the kind', () => {
+    act(() => {
+      showing(MK1);
+    });
+
+    const items = clusterItems(
+      [
+        {
+          cluster: MK1,
+          group: '',
+          version: 'v1',
+          resource: 'pods',
+          kind: 'Pod',
+          namespace: 'web',
+          name: 'api',
+        },
+      ],
+      [],
+    );
+
+    expect(items[0].hint).toBe('pod · p-mk1');
+    useClustersStore.getState().reset();
+  });
+
+  it('says only the kind when the hit names no cluster', () => {
+    const items = clusterItems(
+      [{ group: '', version: 'v1', resource: 'pods', kind: 'Pod', namespace: 'web', name: 'api' }],
+      [],
+    );
+
+    expect(items[0].hint).toBe('pod');
   });
 });

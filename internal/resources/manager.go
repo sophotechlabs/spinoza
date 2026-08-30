@@ -1072,7 +1072,7 @@ type stream struct {
 	// seenMu guards the last row written per object, which is what decides
 	// whether a change is worth recording.
 	seenMu sync.Mutex
-	seen   map[string]uint64
+	seen   map[string]held
 	// viewMu guards the pair: columns and cell-filling always change together.
 	viewMu   sync.Mutex
 	columns  []api.Column

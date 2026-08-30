@@ -565,6 +565,7 @@ export interface Namespaces {
 }
 
 export interface SearchHit {
+  cluster?: string;
   group: string;
   version: string;
   resource: string;
@@ -592,6 +593,7 @@ export interface ViewSwitch {
 export interface HistoryEntry {
   id: number;
   source: string;
+  cluster?: string;
   at: string;
   verb: string;
   group?: string;
@@ -601,6 +603,7 @@ export interface HistoryEntry {
   namespace?: string;
   name: string;
   detail?: string;
+  was?: string;
   outcome: string;
   message?: string;
 }
@@ -609,6 +612,7 @@ export interface History {
   entries: HistoryEntry[];
   more?: boolean;
   dropped?: number;
+  next?: number;
   reason?: string;
 }
 
@@ -737,6 +741,8 @@ export interface ReleaseRef {
 }
 
 export interface HelmRelease {
+  cluster?: string;
+  skew?: string;
   name: string;
   namespace: string;
   chart: string;
@@ -841,6 +847,29 @@ export interface FluxGroup {
   reporting: number;
   total: number;
   resources: FluxResource[];
+}
+
+export interface FleetApp {
+  cluster: string;
+  engine: string;
+  kind: string;
+  group: string;
+  version: string;
+  resource: string;
+  name: string;
+  namespace: string;
+  ready: string;
+  sync?: string;
+  revision?: string;
+  source?: string;
+  message?: string;
+  suspended?: boolean;
+  spread?: number;
+}
+
+export interface FleetGitops {
+  apps: FleetApp[];
+  error?: string;
 }
 
 export interface FluxDashboard {
@@ -1046,6 +1075,7 @@ export type CheckCategory = 'security' | 'reliability' | 'efficiency';
 export type CheckOrigin = 'packaged' | 'system';
 
 export interface CheckObject {
+  cluster?: string;
   group: string;
   version: string;
   resource: string;

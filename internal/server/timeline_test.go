@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
-	"github.com/sophotechlabs/spinoza/internal/history"
 	"github.com/sophotechlabs/spinoza/internal/resources"
+	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
 type taped struct {
@@ -56,29 +56,29 @@ func (r *taped) stops() int {
 
 func tapingServer(t *testing.T, backend Backend) (*Server, *heldHistory, *heldTabs) {
 	t.Helper()
-	held := &fleet{
+	open := &fleet{
 		held:     []api.OpenCluster{{ID: mk1, Context: "p-mk1", Active: true}},
 		active:   mk1,
 		backends: map[string]Backend{mk1: backend},
 	}
-	srv := New(held, testAssets(), testToken)
-	store := &heldHistory{}
-	tabs := &heldTabs{tabs: []history.Tab{{ID: mk1, Context: "p-mk1"}}}
-	srv.UseHistory(store)
+	srv := New(open, testAssets(), testToken)
+	held := &heldHistory{}
+	tabs := &heldTabs{tabs: []store.Tab{{ID: mk1, Context: "p-mk1"}}}
+	srv.UseHistory(held)
 	srv.UseTabs(tabs)
-	return srv, store, tabs
+	return srv, held, tabs
 }
 
-func awaitNoted(t *testing.T, store *heldHistory, want int) []history.Change {
+func awaitNoted(t *testing.T, held *heldHistory, want int) []store.Change {
 	t.Helper()
 	for range 200 {
-		found := store.noted()
+		found := held.noted()
 		if len(found) >= want {
 			return found
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Fatalf("wanted %d changes written, got %d", want, len(store.noted()))
+	t.Fatalf("wanted %d changes written, got %d", want, len(held.noted()))
 	return nil
 }
 
@@ -109,7 +109,7 @@ func TestTheWideSetIsMoreThanTheWorkloadOne(t *testing.T) {
 
 func TestAChangeReachesTheStoreWithoutHoldingUpTheInformer(t *testing.T) {
 	backend := &taped{}
-	srv, store, _ := tapingServer(t, backend)
+	srv, held, _ := tapingServer(t, backend)
 	srv.startRecording(t.Context(), mk1, timelineWorkloads)
 	defer srv.stopRecording(mk1)
 
@@ -118,7 +118,7 @@ func TestAChangeReachesTheStoreWithoutHoldingUpTheInformer(t *testing.T) {
 		Namespace: "web", Name: "api-1", UID: "uid-1", Cells: []string{"1/1", "Running"},
 	})
 
-	found := awaitNoted(t, store, 1)
+	found := awaitNoted(t, held, 1)
 	if found[0].Name != "api-1" || found[0].Cluster != mk1 {
 		t.Fatalf("the change was written as %+v", found[0])
 	}
@@ -126,7 +126,7 @@ func TestAChangeReachesTheStoreWithoutHoldingUpTheInformer(t *testing.T) {
 
 func TestChangesArriveInOneBatchRatherThanOneWriteEach(t *testing.T) {
 	backend := &taped{}
-	srv, store, _ := tapingServer(t, backend)
+	srv, held, _ := tapingServer(t, backend)
 	srv.startRecording(t.Context(), mk1, timelineWorkloads)
 	defer srv.stopRecording(mk1)
 
@@ -135,23 +135,23 @@ func TestChangesArriveInOneBatchRatherThanOneWriteEach(t *testing.T) {
 		into.Note(resources.Note{At: time.Now(), Verb: resources.Added, Name: "pod", UID: string(rune('a' + at))})
 	}
 
-	awaitNoted(t, store, 20)
+	awaitNoted(t, held, 20)
 }
 
 func TestTheTimelineIsTrimmedAsItIsWrittenTo(t *testing.T) {
 	backend := &taped{}
-	srv, store, _ := tapingServer(t, backend)
+	srv, held, _ := tapingServer(t, backend)
 
 	srv.startRecording(t.Context(), mk1, timelineWorkloads)
 	defer srv.stopRecording(mk1)
 
 	for range 200 {
-		if len(store.trims()) > 0 {
+		if len(held.trims()) > 0 {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	trims := store.trims()
+	trims := held.trims()
 	if len(trims) == 0 {
 		t.Fatal("nothing was trimmed when recording started")
 	}
@@ -283,7 +283,7 @@ func TestATabThatWasNotRecordingStaysQuiet(t *testing.T) {
 
 func TestATabWhoseClusterIsNotOpenIsSkipped(t *testing.T) {
 	srv, _, tabs := tapingServer(t, &taped{})
-	tabs.tabs = append(tabs.tabs, history.Tab{ID: mk2, Context: "p-mk2", Timeline: timelineWorkloads})
+	tabs.tabs = append(tabs.tabs, store.Tab{ID: mk2, Context: "p-mk2", Timeline: timelineWorkloads})
 
 	srv.StartRecordings(t.Context())
 
@@ -387,7 +387,7 @@ func TestARecordingThatCannotBeRememberedIsNotStarted(t *testing.T) {
 }
 
 func TestChangesTheTimelineCouldNotKeepUpWithAreCounted(t *testing.T) {
-	held := &recording{queue: make(chan history.Change, 1)}
+	held := &recording{queue: make(chan store.Change, 1)}
 
 	held.Note(resources.Note{Name: "first"})
 	held.Note(resources.Note{Name: "second"})
@@ -397,10 +397,10 @@ func TestChangesTheTimelineCouldNotKeepUpWithAreCounted(t *testing.T) {
 	}
 }
 
-func mergingServer(t *testing.T, store *heldHistory) *httptest.Server {
+func mergingServer(t *testing.T, held *heldHistory) *httptest.Server {
 	t.Helper()
 	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
-	srv.UseHistory(store)
+	srv.UseHistory(held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts
@@ -409,12 +409,12 @@ func mergingServer(t *testing.T, store *heldHistory) *httptest.Server {
 func bothKinds() *heldHistory {
 	at := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	return &heldHistory{
-		page: history.Page{Entries: []history.Entry{
+		page: store.Page{Entries: []store.Entry{
 			{ID: 1, At: at.Add(2 * time.Minute), Verb: "scale", Name: "web", Outcome: api.HistoryDone},
 		}},
-		changePage: history.Changes{Rows: []history.Change{
-			{ID: 1, At: at.Add(time.Minute), Verb: history.Changed, Name: "web-1", Cells: []string{"1/1", "Running"}},
-			{ID: 2, At: at, Verb: history.Added, Name: "web-2"},
+		changePage: store.Changes{Rows: []store.Change{
+			{ID: 1, At: at.Add(time.Minute), Verb: store.Changed, Name: "web-1", Cells: []string{"1/1", "Running"}},
+			{ID: 2, At: at, Verb: store.Added, Name: "web-2"},
 		}},
 	}
 }
@@ -542,8 +542,8 @@ func TestTheActionReadFailingIsReportedEvenWhenChangesRead(t *testing.T) {
 func TestTwoRowsStampedTheSameInstantStillHaveAnOrder(t *testing.T) {
 	at := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	held := &heldHistory{
-		page: history.Page{Entries: []history.Entry{{ID: 1, At: at, Name: "did"}}},
-		changePage: history.Changes{Rows: []history.Change{
+		page: store.Page{Entries: []store.Entry{{ID: 1, At: at, Name: "did"}}},
+		changePage: store.Changes{Rows: []store.Change{
 			{ID: 2, At: at, Name: "changed-late"},
 			{ID: 1, At: at, Name: "changed-early"},
 		}},
@@ -557,5 +557,109 @@ func TestTwoRowsStampedTheSameInstantStillHaveAnOrder(t *testing.T) {
 	}
 	if got.Entries[1].Name != "changed-late" {
 		t.Fatalf("two changes at one instant came back as %+v", got.Entries[1:])
+	}
+}
+
+func TestAChangeRowSaysWhatItMovedFrom(t *testing.T) {
+	held := bothKinds()
+	held.changePage.Rows[0].Was = []string{"2/2", "Running"}
+	ts := mergingServer(t, held)
+
+	got := askHistory(t, ts, "?source=change")
+
+	if got.Entries[0].Was != "2/2 · Running" {
+		t.Fatalf("was = %q", got.Entries[0].Was)
+	}
+}
+
+func TestEveryHistoryRowSaysWhichClusterItIsOn(t *testing.T) {
+	held := bothKinds()
+	held.page.Entries[0].Cluster = mk1
+	held.changePage.Rows[0].Cluster = mk2
+	ts := mergingServer(t, held)
+
+	got := askHistory(t, ts, "")
+
+	on := map[string]bool{}
+	for _, one := range got.Entries {
+		on[one.Cluster] = true
+	}
+	if !on[mk1] || !on[mk2] {
+		t.Fatalf("clusters = %+v", on)
+	}
+}
+
+func TestTheFleetRollupAsksTheStoreForEveryCluster(t *testing.T) {
+	held := bothKinds()
+	ts := mergingServer(t, held)
+
+	askHistory(t, ts, "?fleet=true&source=change")
+
+	if held.asked().Cluster != "" {
+		t.Fatalf("it asked for %q, want every cluster", held.asked().Cluster)
+	}
+}
+
+func TestOneClustersHistoryStillAsksForThatCluster(t *testing.T) {
+	held := bothKinds()
+	ts := mergingServer(t, held)
+
+	askHistory(t, ts, "?source=change")
+
+	if held.asked().Cluster == "" {
+		t.Fatalf("it asked for every cluster when one was meant")
+	}
+}
+
+func TestAPageOfChangesCanBeContinued(t *testing.T) {
+	held := bothKinds()
+	ts := mergingServer(t, held)
+
+	askHistory(t, ts, "?source=change&after=40")
+
+	if held.asked().After != 40 {
+		t.Fatalf("after = %d", held.asked().After)
+	}
+}
+
+func TestAContinuedPageSaysWhereItEnded(t *testing.T) {
+	ts := mergingServer(t, bothKinds())
+
+	got := askHistory(t, ts, "?source=change")
+
+	if got.Next != 2 {
+		t.Fatalf("next = %d, want the oldest change on the page", got.Next)
+	}
+}
+
+func TestAContinuedPageLeavesTheActionsAlone(t *testing.T) {
+	ts := mergingServer(t, bothKinds())
+
+	got := askHistory(t, ts, "?after=1")
+
+	for _, one := range got.Entries {
+		if one.Source == api.HistoryAction {
+			t.Fatalf("an action came back on a continued page: %+v", one)
+		}
+	}
+}
+
+func TestACursorThatIsNotANumberIsRefused(t *testing.T) {
+	ts := mergingServer(t, bothKinds())
+
+	resp, _ := doRequest(t, http.MethodGet, ts.URL+"/api/history?after=soon", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}
+
+func TestACursorBelowZeroIsRefused(t *testing.T) {
+	ts := mergingServer(t, bothKinds())
+
+	resp, _ := doRequest(t, http.MethodGet, ts.URL+"/api/history?after=-4", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d", resp.StatusCode)
 	}
 }

@@ -1,4 +1,4 @@
-package history
+package store
 
 import (
 	"context"
@@ -106,7 +106,7 @@ func TestTheDefaultPathNeedsAConfigDirectory(t *testing.T) {
 	if err == nil {
 		t.Skip("this platform still names a config directory without HOME")
 	}
-	if !strings.Contains(err.Error(), "history") {
+	if !strings.Contains(err.Error(), "store") {
 		t.Fatalf("error = %q, want it to say what it was doing", err.Error())
 	}
 }
@@ -535,7 +535,7 @@ func TestAColumnThatChangedShapeIsReported(t *testing.T) {
 	if err == nil {
 		t.Fatal("a row that could not be read came back as a silent zero")
 	}
-	if !strings.Contains(err.Error(), "history") {
+	if !strings.Contains(err.Error(), "store") {
 		t.Fatalf("error = %q, want it to say what it was doing", err.Error())
 	}
 }

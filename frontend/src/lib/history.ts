@@ -15,8 +15,23 @@ export const SOURCES = ['all', 'change', 'action'] as const;
 
 export type HistorySource = (typeof SOURCES)[number];
 
-export async function fetchHistory(source: HistorySource = 'all'): Promise<History> {
-  const params = new URLSearchParams({ limit: String(HISTORY_LIMIT), source });
+export interface HistoryAsk {
+  source?: HistorySource;
+  after?: number;
+  fleet?: boolean;
+}
+
+export async function fetchHistory(ask: HistoryAsk = {}): Promise<History> {
+  const params = new URLSearchParams({
+    limit: String(HISTORY_LIMIT),
+    source: ask.source ?? 'all',
+  });
+  if (ask.after !== undefined && ask.after > 0) {
+    params.set('after', String(ask.after));
+  }
+  if (ask.fleet === true) {
+    params.set('fleet', 'true');
+  }
   const response = await request(`/api/history?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `history request failed with status ${response.status}`);
@@ -24,13 +39,53 @@ export async function fetchHistory(source: HistorySource = 'all'): Promise<Histo
   return parseHistory(await response.json());
 }
 
-export function useHistory(source: HistorySource = 'all', enabled = true): Polled<History> {
-  const read = useCallback(async () => fetchHistory(source), [source]);
+export function useHistory(ask: HistoryAsk = {}, enabled = true): Polled<History> {
+  const { source, fleet } = ask;
+  const read = useCallback(async () => fetchHistory({ source, fleet }), [source, fleet]);
   return usePoll(read, {
     intervalMs: HISTORY_POLL_MS,
     enabled,
     fallback: 'history request failed',
   });
+}
+
+// A cluster can write a page of changes in seconds, so repeats of one object
+// fold into a single row the way the issue queue folds its children.
+export function foldRepeats(entries: HistoryEntry[]): FoldedEntry[] {
+  const out: FoldedEntry[] = [];
+  for (const entry of entries) {
+    const last = out.at(-1);
+    if (last !== undefined && sameObject(last.entry, entry)) {
+      last.repeats += 1;
+      last.oldest = entry;
+      continue;
+    }
+    out.push({ entry, repeats: 1, oldest: entry });
+  }
+  return out;
+}
+
+export interface FoldedEntry {
+  entry: HistoryEntry;
+  repeats: number;
+  oldest: HistoryEntry;
+}
+
+function sameObject(left: HistoryEntry, right: HistoryEntry): boolean {
+  if (left.source !== right.source || left.source !== 'change') {
+    return false;
+  }
+  if (left.cluster !== right.cluster) {
+    return false;
+  }
+  return left.name === right.name && left.namespace === right.namespace;
+}
+
+export function repeatLabel(folded: FoldedEntry): string {
+  if (folded.repeats < 2) {
+    return '';
+  }
+  return `changed ${String(folded.repeats)} times`;
 }
 
 export function sourceLabel(source: HistorySource): string {
@@ -134,9 +189,25 @@ export function refOf(entry: HistoryEntry): ObjectRef | null {
   };
 }
 
+// A change says what it moved from, so the row reads as a move rather than a
+// snapshot. Something that went has nothing to move to, so it shows what was
+// there instead of an arrow pointing at nothing.
+export function wasText(entry: HistoryEntry): string {
+  if (entry.was === undefined || entry.was === '') {
+    return '';
+  }
+  if (entry.verb === 'removed') {
+    return '';
+  }
+  return `${entry.was} → `;
+}
+
 export function detailText(entry: HistoryEntry): string {
   if (entry.message !== undefined && entry.message !== '') {
     return entry.message;
+  }
+  if (entry.verb === 'removed' && entry.was !== undefined && entry.was !== '') {
+    return entry.was;
   }
   return entry.detail ?? '';
 }

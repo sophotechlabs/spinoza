@@ -8,6 +8,7 @@ import type { SearchHit } from '../lib/types';
 import { useRecents } from '../store/recents';
 import { useClusterEpoch } from '../store/cluster';
 import { useTrafficSupport } from '../store/traffic';
+import { useTabStrip } from '../store/clusters';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -37,6 +38,7 @@ export default function CommandPalette({
   const close = useRef(onClose);
   close.current = onClose;
   const recents = useRecents();
+  const several = useTabStrip();
   const epoch = useClusterEpoch();
   const traffic = useTrafficSupport();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -102,7 +104,7 @@ export default function CommandPalette({
     asked.current += 1;
     const mine = asked.current;
     const timer = setTimeout(() => {
-      searchObjects(query)
+      searchObjects(query, several)
         .then((found) => {
           if (asked.current !== mine) {
             return;
@@ -119,7 +121,7 @@ export default function CommandPalette({
     return () => {
       clearTimeout(timer);
     };
-  }, [open, query]);
+  }, [open, query, several]);
 
   const matches = [
     ...matchItems(paletteItems(categories, recents, traffic.available), query),
@@ -140,7 +142,12 @@ export default function CommandPalette({
       onSelectResource(item.descriptor);
       return;
     }
-    onOpenObject({ ref: item.ref, type: item.type, filter: query.trim() });
+    onOpenObject({
+      ref: item.ref,
+      type: item.type,
+      filter: query.trim(),
+      cluster: item.cluster,
+    });
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {

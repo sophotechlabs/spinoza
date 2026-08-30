@@ -1,4 +1,4 @@
-package history
+package store
 
 import (
 	"context"
@@ -39,6 +39,9 @@ type Entry struct {
 type Query struct {
 	Cluster string
 	Limit   int
+	// After is the id a page continues below, so a reader can reach older rows
+	// on a cluster that writes faster than one page holds.
+	After int64
 }
 
 type Page struct {
@@ -74,7 +77,7 @@ func (w writer) Record(ctx context.Context, entry Entry) error {
 func DefaultPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("history: %w", err)
+		return "", fmt.Errorf("store: %w", err)
 	}
 	return filepath.Join(dir, "spinoza", "history.db"), nil
 }
@@ -85,7 +88,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	err := os.MkdirAll(filepath.Dir(path), 0o700)
 	if err != nil {
-		return unavailable(reasonFor(path, err)), fmt.Errorf("history: %w", err)
+		return unavailable(reasonFor(path, err)), fmt.Errorf("store: %w", err)
 	}
 	conn := connector{dsn: path + pragmas}
 	writes := sql.OpenDB(conn)
@@ -93,7 +96,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	migrateErr := migrate(ctx, writes)
 	if migrateErr != nil {
 		_ = writes.Close()
-		return unavailable(reasonFor(path, migrateErr)), fmt.Errorf("history: %w", migrateErr)
+		return unavailable(reasonFor(path, migrateErr)), fmt.Errorf("store: %w", migrateErr)
 	}
 	reads := sql.OpenDB(conn)
 	reads.SetMaxOpenConns(readers)
@@ -151,7 +154,7 @@ func (s *Store) record(ctx context.Context, entry Entry) error {
 		entry.Detail, entry.Outcome, entry.Message,
 	)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	return nil
 }
@@ -164,7 +167,7 @@ func (s *Store) Recent(ctx context.Context, query Query) (Page, error) {
 	limit := limitOf(query.Limit)
 	rows, err := db.QueryContext(ctx, selectAudit, query.Cluster, query.Cluster, limit+1)
 	if err != nil {
-		return Page{}, fmt.Errorf("history: %w", err)
+		return Page{}, fmt.Errorf("store: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	found, scanErr := scanEntries(rows)
@@ -209,13 +212,13 @@ func scanEntries(rows *sql.Rows) ([]Entry, error) {
 			&entry.Detail, &entry.Outcome, &entry.Message,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("history: %w", err)
+			return nil, fmt.Errorf("store: %w", err)
 		}
 		entry.At = time.UnixMilli(at).UTC()
 		found = append(found, entry)
 	}
 	if rows.Err() != nil {
-		return nil, fmt.Errorf("history: %w", rows.Err())
+		return nil, fmt.Errorf("store: %w", rows.Err())
 	}
 	return found, nil
 }
@@ -227,11 +230,11 @@ func (s *Store) Forget(ctx context.Context, cluster string) error {
 	}
 	_, err := db.ExecContext(ctx, deleteAudit, cluster, cluster)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	_, changesErr := db.ExecContext(ctx, deleteChanges, cluster, cluster)
 	if changesErr != nil {
-		return fmt.Errorf("history: %w", changesErr)
+		return fmt.Errorf("store: %w", changesErr)
 	}
 	return nil
 }
@@ -248,7 +251,7 @@ func (s *Store) Close() error {
 		}
 		err := db.Close()
 		if err != nil {
-			return fmt.Errorf("history: %w", err)
+			return fmt.Errorf("store: %w", err)
 		}
 	}
 	return nil

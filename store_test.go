@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/checks"
-	"github.com/sophotechlabs/spinoza/internal/history"
 	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
+	pastore "github.com/sophotechlabs/spinoza/internal/store"
 )
 
 func TestTheFlagAloneAllowsANodeShell(t *testing.T) {
@@ -152,7 +152,7 @@ func TestHistoryIsKeptInTheUsualPlace(t *testing.T) {
 	if store.Reason() != "" {
 		t.Fatalf("reason = %q, want a store that records", store.Reason())
 	}
-	path, err := history.DefaultPath()
+	path, err := pastore.DefaultPath()
 	if err != nil {
 		t.Fatalf("path: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestNowhereToKeepHistoryStillLeavesAStore(t *testing.T) {
 	if store.Reason() == "" {
 		t.Skip("this platform still names a config directory without HOME")
 	}
-	if err := store.For("https://p-mk1:6443").Record(t.Context(), history.Entry{Name: "web"}); err != nil {
+	if err := store.For("https://p-mk1:6443").Record(t.Context(), pastore.Entry{Name: "web"}); err != nil {
 		t.Fatalf("record: %v, want a quiet no-op", err)
 	}
 }
@@ -183,7 +183,7 @@ func TestAHistoryFileThatCannotBeReadStillLeavesAStore(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	path, err := history.DefaultPath()
+	path, err := pastore.DefaultPath()
 	if err != nil {
 		t.Fatalf("path: %v", err)
 	}

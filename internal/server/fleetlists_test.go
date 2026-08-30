@@ -1,0 +1,365 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/checks"
+)
+
+type listing struct {
+	notStubbed
+
+	hits     api.SearchResults
+	releases api.HelmReleases
+	relErr   error
+	report   api.CheckReport
+	flux     api.FluxDashboard
+	argo     api.ArgoDashboard
+}
+
+func (l *listing) Search(context.Context, string) api.SearchResults {
+	return l.hits
+}
+
+func (l *listing) HelmReleases(context.Context) (api.HelmReleases, error) {
+	return l.releases, l.relErr
+}
+
+func (l *listing) Checks(context.Context, checks.Filter) api.CheckReport {
+	return l.report
+}
+
+func (l *listing) Flux(context.Context) api.FluxDashboard {
+	return l.flux
+}
+
+func (l *listing) Argo(context.Context) api.ArgoDashboard {
+	return l.argo
+}
+
+func listServer(t *testing.T, first, second Backend) *httptest.Server {
+	t.Helper()
+	held := &fleet{
+		held: []api.OpenCluster{
+			{ID: mk1, Context: "p-mk1", Active: true},
+			{ID: mk2, Context: "p-mk2"},
+		},
+		active:   mk1,
+		backends: map[string]Backend{mk1: first, mk2: second},
+	}
+	srv := New(held, testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func hit(name string) api.SearchHit {
+	return api.SearchHit{Version: "v1", Resource: "pods", Kind: "Pod", Namespace: "web", Name: name}
+}
+
+func TestSearchReachesEveryOpenCluster(t *testing.T) {
+	ts := listServer(t,
+		&listing{hits: api.SearchResults{Hits: []api.SearchHit{hit("api")}}},
+		&listing{hits: api.SearchResults{Hits: []api.SearchHit{hit("worker")}}})
+
+	var got api.SearchResults
+	readFleet(t, ts, "/api/search/fleet?q=a", &got)
+
+	if len(got.Hits) != 2 {
+		t.Fatalf("hits = %d, want both clusters", len(got.Hits))
+	}
+}
+
+func TestEverySearchHitSaysWhichClusterItIsOn(t *testing.T) {
+	ts := listServer(t,
+		&listing{hits: api.SearchResults{Hits: []api.SearchHit{hit("api")}}},
+		&listing{hits: api.SearchResults{Hits: []api.SearchHit{hit("worker")}}})
+
+	var got api.SearchResults
+	readFleet(t, ts, "/api/search/fleet?q=a", &got)
+
+	for _, one := range got.Hits {
+		if one.Cluster == "" {
+			t.Fatalf("a hit came back with no cluster: %+v", one)
+		}
+	}
+}
+
+func TestASearchThatFailedOnOneClusterNamesIt(t *testing.T) {
+	ts := listServer(t,
+		&listing{hits: api.SearchResults{Hits: []api.SearchHit{hit("api")}}},
+		&listing{hits: api.SearchResults{Errors: map[string]string{"pods": "forbidden"}}})
+
+	var got api.SearchResults
+	readFleet(t, ts, "/api/search/fleet?q=a", &got)
+
+	if len(got.Errors) != 1 {
+		t.Fatalf("errors = %+v", got.Errors)
+	}
+	for where := range got.Errors {
+		if where != "p-mk2: pods" {
+			t.Fatalf("the failure was filed under %q", where)
+		}
+	}
+}
+
+func release(chart, version string) api.HelmRelease {
+	return api.HelmRelease{Name: chart, Namespace: "default", Chart: chart, ChartVersion: version}
+}
+
+func TestTheFleetReleaseListHoldsEveryCluster(t *testing.T) {
+	ts := listServer(t,
+		&listing{releases: api.HelmReleases{Releases: []api.HelmRelease{release("loki", "6.1.0")}}},
+		&listing{releases: api.HelmReleases{Releases: []api.HelmRelease{release("loki", "6.2.0")}}})
+
+	var got api.HelmReleases
+	readFleet(t, ts, "/api/helm/fleet", &got)
+
+	if len(got.Releases) != 2 {
+		t.Fatalf("releases = %d", len(got.Releases))
+	}
+}
+
+func TestTheSameChartAtTwoVersionsIsMarkedAsSkew(t *testing.T) {
+	ts := listServer(t,
+		&listing{releases: api.HelmReleases{Releases: []api.HelmRelease{release("loki", "6.1.0")}}},
+		&listing{releases: api.HelmReleases{Releases: []api.HelmRelease{release("loki", "6.2.0")}}})
+
+	var got api.HelmReleases
+	readFleet(t, ts, "/api/helm/fleet", &got)
+
+	for _, one := range got.Releases {
+		if one.Skew != "6.1.0 · 6.2.0" {
+			t.Fatalf("skew = %q on %s", one.Skew, one.Cluster)
+		}
+	}
+}
+
+func TestAChartAtOneVersionEverywhereIsNotSkew(t *testing.T) {
+	ts := listServer(t,
+		&listing{releases: api.HelmReleases{Releases: []api.HelmRelease{release("loki", "6.1.0")}}},
+		&listing{releases: api.HelmReleases{Releases: []api.HelmRelease{release("loki", "6.1.0")}}})
+
+	var got api.HelmReleases
+	readFleet(t, ts, "/api/helm/fleet", &got)
+
+	for _, one := range got.Releases {
+		if one.Skew != "" {
+			t.Fatalf("skew = %q where every cluster agrees", one.Skew)
+		}
+	}
+}
+
+func TestAClusterWhoseReleasesCouldNotBeReadIsNamed(t *testing.T) {
+	ts := listServer(t,
+		&listing{releases: api.HelmReleases{Releases: []api.HelmRelease{release("loki", "6.1.0")}}},
+		&listing{relErr: errors.New("helm is not installed")})
+
+	var got api.HelmReleases
+	readFleet(t, ts, "/api/helm/fleet", &got)
+
+	if got.Error != "p-mk2: helm is not installed" {
+		t.Fatalf("error = %q", got.Error)
+	}
+}
+
+func readFleet(t *testing.T, ts *httptest.Server, path string, into any) {
+	t.Helper()
+	resp, body := doRequest(t, http.MethodGet, ts.URL+path, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if err := json.Unmarshal(body, into); err != nil {
+		t.Fatalf("decode: %v: %s", err, body)
+	}
+}
+
+func group(id string, refs ...int) api.CheckGroup {
+	findings := make([]api.CheckFinding, 0, len(refs))
+	for _, ref := range refs {
+		findings = append(findings, api.CheckFinding{Ref: ref, Detail: "no limits set"})
+	}
+	return api.CheckGroup{ID: id, Title: id, Severity: "high", Total: len(refs), Findings: findings}
+}
+
+func object(name string) api.CheckObject {
+	return api.CheckObject{Version: "v1", Resource: "pods", Namespace: "web", Name: name, Kind: "Pod"}
+}
+
+func reportOf(name string, ids ...string) api.CheckReport {
+	held := api.CheckReport{Objects: []api.CheckObject{object(name)}, Scanned: 1}
+	for _, id := range ids {
+		held.Groups = append(held.Groups, group(id, 0))
+	}
+	return held
+}
+
+func TestOneRuleAcrossTheFleetIsOneRow(t *testing.T) {
+	ts := listServer(t,
+		&listing{report: reportOf("api", "limits-missing")},
+		&listing{report: reportOf("worker", "limits-missing")})
+
+	var got api.CheckReport
+	readFleet(t, ts, "/api/checks/fleet", &got)
+
+	if len(got.Groups) != 1 {
+		t.Fatalf("groups = %d, want the rule folded into one", len(got.Groups))
+	}
+	if got.Groups[0].Total != 2 {
+		t.Fatalf("total = %d, want both clusters counted", got.Groups[0].Total)
+	}
+}
+
+func TestAFleetFindingStillPointsAtItsOwnObject(t *testing.T) {
+	ts := listServer(t,
+		&listing{report: reportOf("api", "limits-missing")},
+		&listing{report: reportOf("worker", "limits-missing")})
+
+	var got api.CheckReport
+	readFleet(t, ts, "/api/checks/fleet", &got)
+
+	found := got.Groups[0].Findings
+	if len(found) != 2 {
+		t.Fatalf("findings = %d", len(found))
+	}
+	names := []string{got.Objects[found[0].Ref].Name, got.Objects[found[1].Ref].Name}
+	if names[0] == names[1] {
+		t.Fatalf("both findings point at %q, so the refs did not move", names[0])
+	}
+}
+
+func TestEveryCheckedObjectSaysWhichClusterItIsOn(t *testing.T) {
+	ts := listServer(t,
+		&listing{report: reportOf("api", "limits-missing")},
+		&listing{report: reportOf("worker", "limits-missing")})
+
+	var got api.CheckReport
+	readFleet(t, ts, "/api/checks/fleet", &got)
+
+	for _, one := range got.Objects {
+		if one.Cluster == "" {
+			t.Fatalf("an object came back with no cluster: %+v", one)
+		}
+	}
+}
+
+func TestARuleOnlyOneClusterReportedStillLands(t *testing.T) {
+	ts := listServer(t,
+		&listing{report: reportOf("api", "limits-missing")},
+		&listing{report: reportOf("worker", "limits-missing", "runs-as-root")})
+
+	var got api.CheckReport
+	readFleet(t, ts, "/api/checks/fleet", &got)
+
+	if len(got.Groups) != 2 {
+		t.Fatalf("groups = %d, want the rule nobody else reported kept", len(got.Groups))
+	}
+}
+
+func TestWhatEachClusterScannedIsCountedTogether(t *testing.T) {
+	ts := listServer(t,
+		&listing{report: reportOf("api", "limits-missing")},
+		&listing{report: reportOf("worker", "limits-missing")})
+
+	var got api.CheckReport
+	readFleet(t, ts, "/api/checks/fleet", &got)
+
+	if got.Scanned != 2 {
+		t.Fatalf("scanned = %d", got.Scanned)
+	}
+}
+
+func TestAClusterThatCouldNotBeCheckedIsNamed(t *testing.T) {
+	failed := reportOf("worker", "limits-missing")
+	failed.Error = "3 of 8 resource types could not be listed"
+	ts := listServer(t, &listing{report: reportOf("api", "limits-missing")}, &listing{report: failed})
+
+	var got api.CheckReport
+	readFleet(t, ts, "/api/checks/fleet", &got)
+
+	if got.Error != "p-mk2: 3 of 8 resource types could not be listed" {
+		t.Fatalf("error = %q", got.Error)
+	}
+}
+
+func fluxOne(name string) api.FluxDashboard {
+	return api.FluxDashboard{Groups: []api.FluxGroup{{
+		Name: "Kustomizations",
+		Resources: []api.FluxResource{{
+			Kind: "Kustomization", Group: "kustomize.toolkit.fluxcd.io", Version: "v1",
+			Resource: "kustomizations", Name: name, Namespace: "flux-system", Ready: "True",
+		}},
+	}}}
+}
+
+func argoOne(name string) api.ArgoDashboard {
+	return api.ArgoDashboard{Apps: []api.ArgoApp{{
+		Kind: "Application", Group: "argoproj.io", Version: "v1alpha1", Resource: "applications",
+		Name: name, Namespace: "argocd", Sync: "Synced", Health: "Healthy",
+	}}}
+}
+
+func TestBothEnginesLandInOneFleetList(t *testing.T) {
+	ts := listServer(t,
+		&listing{flux: fluxOne("platform")},
+		&listing{argo: argoOne("root")})
+
+	var got api.FleetGitops
+	readFleet(t, ts, "/api/gitops/fleet", &got)
+
+	if len(got.Apps) != 2 {
+		t.Fatalf("apps = %d, want one from each engine", len(got.Apps))
+	}
+	engines := map[string]bool{}
+	for _, one := range got.Apps {
+		engines[one.Engine] = true
+	}
+	if !engines[api.EngineFlux] || !engines[api.EngineArgo] {
+		t.Fatalf("engines = %+v", engines)
+	}
+}
+
+func TestAnAppOnTwoClustersSaysHowFarItSpreads(t *testing.T) {
+	ts := listServer(t, &listing{flux: fluxOne("platform")}, &listing{flux: fluxOne("platform")})
+
+	var got api.FleetGitops
+	readFleet(t, ts, "/api/gitops/fleet", &got)
+
+	for _, one := range got.Apps {
+		if one.Spread != 2 {
+			t.Fatalf("spread = %d on %s", one.Spread, one.Cluster)
+		}
+	}
+}
+
+func TestAnAppOnOneClusterSaysSo(t *testing.T) {
+	ts := listServer(t, &listing{flux: fluxOne("platform")}, &listing{flux: fluxOne("other")})
+
+	var got api.FleetGitops
+	readFleet(t, ts, "/api/gitops/fleet", &got)
+
+	for _, one := range got.Apps {
+		if one.Spread != 1 {
+			t.Fatalf("spread = %d on %s", one.Spread, one.Name)
+		}
+	}
+}
+
+func TestAGitopsEngineThatFailedIsNamed(t *testing.T) {
+	ts := listServer(t,
+		&listing{flux: fluxOne("platform")},
+		&listing{argo: api.ArgoDashboard{Error: "argocd is not installed"}})
+
+	var got api.FleetGitops
+	readFleet(t, ts, "/api/gitops/fleet", &got)
+
+	if got.Error != "p-mk2: argocd is not installed" {
+		t.Fatalf("error = %q", got.Error)
+	}
+}

@@ -30,6 +30,7 @@ type Note struct {
 	Name      string
 	UID       string
 	Cells     []string
+	Was       []string
 }
 
 // Timeline takes what changed. It is called from the informer's own callback,
@@ -116,7 +117,7 @@ func (st *stream) note(verb string, obj *unstructured.Unstructured, row api.Row)
 	if into == nil {
 		return
 	}
-	fresh := st.rowIsNew(verb, row)
+	was, fresh := st.rowIsNew(verb, row)
 	if !fresh {
 		return
 	}
@@ -138,6 +139,7 @@ func (st *stream) note(verb string, obj *unstructured.Unstructured, row api.Row)
 		Name:      obj.GetName(),
 		UID:       string(obj.GetUID()),
 		Cells:     row.Cells,
+		Was:       was,
 	})
 }
 
@@ -149,23 +151,39 @@ func (st *stream) delivered() bool {
 	return (*handler).HasSynced()
 }
 
-func (st *stream) rowIsNew(verb string, row api.Row) bool {
+// rowIsNew answers whether the row moved, and hands back what it moved from,
+// so a change can say "2/3 to 1/3" rather than only where it landed.
+func (st *stream) rowIsNew(verb string, row api.Row) ([]string, bool) {
 	st.seenMu.Lock()
 	defer st.seenMu.Unlock()
 	if verb == Removed {
+		last, known := st.seen[row.UID]
 		delete(st.seen, row.UID)
-		return true
+		if !known {
+			return nil, true
+		}
+		return last.cells, true
+	}
+	if st.seen == nil {
+		st.seen = map[string]held{}
 	}
 	shape := shapeOf(row)
-	if st.seen == nil {
-		st.seen = map[string]uint64{}
-	}
 	was, known := st.seen[row.UID]
-	st.seen[row.UID] = shape
+	st.seen[row.UID] = held{shape: shape, cells: row.Cells}
 	if !known {
-		return true
+		return nil, true
 	}
-	return was != shape
+	if was.shape == shape {
+		return nil, false
+	}
+	return was.cells, true
+}
+
+// held is the last row written for an object: the digest decides whether the
+// next one is worth writing, the cells are what it changed from.
+type held struct {
+	shape uint64
+	cells []string
 }
 
 func shapeOf(row api.Row) uint64 {

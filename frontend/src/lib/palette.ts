@@ -3,6 +3,8 @@ import { ARGO_VIEWS, FLUX_VIEWS } from './types';
 import { refOf } from './search';
 import { typeFor } from './catalog';
 import { argoInstalled, fluxInstalled } from './gitops';
+import { useClustersStore } from '../store/clusters';
+import { contextOf } from './tabs';
 
 export const VIEW_LABELS: Record<View, string> = {
   resources: 'Resources',
@@ -47,6 +49,7 @@ export type PaletteItem =
       hint: string;
       kind: 'object';
       ref: ObjectRef;
+      cluster?: string;
       type: ResourceDescriptor | null;
     };
 
@@ -54,6 +57,7 @@ export interface PaletteOpen {
   ref: ObjectRef;
   type: ResourceDescriptor | null;
   filter: string;
+  cluster?: string;
 }
 
 function groupLabel(descriptor: ResourceDescriptor): string {
@@ -72,13 +76,23 @@ function refLabel(ref: ObjectRef): string {
 
 export function clusterItems(hits: SearchHit[], categories: Category[]): PaletteItem[] {
   return hits.map((hit) => ({
-    id: `found:${hit.group}/${hit.version}/${hit.resource}/${hit.namespace}/${hit.name}`,
+    id: `found:${hit.cluster ?? ''}/${hit.group}/${hit.version}/${hit.resource}/${hit.namespace}/${hit.name}`,
     label: refLabel(refOf(hit)),
-    hint: hit.kind.toLowerCase(),
+    hint: hintFor(hit),
     kind: 'object' as const,
     ref: refOf(hit),
+    cluster: hit.cluster,
     type: typeFor(categories, hit),
   }));
+}
+
+// A hit from another cluster is only useful if the row says which one, so the
+// hint carries it beside the kind.
+function hintFor(hit: SearchHit): string {
+  if (hit.cluster === undefined || hit.cluster === '') {
+    return hit.kind.toLowerCase();
+  }
+  return `${hit.kind.toLowerCase()} · ${contextOf(useClustersStore.getState().tabs, hit.cluster)}`;
 }
 
 function offered(categories: Category[], traffic: boolean): View[] {

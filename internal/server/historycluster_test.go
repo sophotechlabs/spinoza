@@ -7,18 +7,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sophotechlabs/spinoza/internal/history"
+	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
 func recordingFleet(t *testing.T) (*httptest.Server, *heldHistory) {
 	t.Helper()
 	srv, _ := twoClusters(t, &writingBackend{}, &writingBackend{})
-	store := &heldHistory{}
+	held := &heldHistory{}
 	srv.now = func() time.Time { return recordedAt }
-	srv.UseHistory(store)
+	srv.UseHistory(held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
-	return ts, store
+	return ts, held
 }
 
 func restart(t *testing.T, ts *httptest.Server, cluster string) {
@@ -32,37 +32,37 @@ func restart(t *testing.T, ts *httptest.Server, cluster string) {
 }
 
 func TestWhatWasDoneToAnotherClusterIsRecordedAgainstThatCluster(t *testing.T) {
-	ts, store := recordingFleet(t)
+	ts, held := recordingFleet(t)
 
 	restart(t, ts, mk2)
 
-	if held := store.only(t); held.Cluster != mk2 {
+	if held := held.only(t); held.Cluster != mk2 {
 		t.Fatalf("recorded against %q, want the cluster the action was for", held.Cluster)
 	}
 }
 
 func TestWhatWasDoneWithNoClusterNamedIsRecordedAgainstTheActiveOne(t *testing.T) {
-	ts, store := recordingFleet(t)
+	ts, held := recordingFleet(t)
 
 	restart(t, ts, "")
 
-	if held := store.only(t); held.Cluster != mk1 {
+	if held := held.only(t); held.Cluster != mk1 {
 		t.Fatalf("recorded against %q, want the active cluster", held.Cluster)
 	}
 }
 
 func TestHistoryIsReadForTheClusterTheTabIsShowing(t *testing.T) {
-	ts, store := recordingFleet(t)
+	ts, held := recordingFleet(t)
 
 	doRequest(t, http.MethodGet, ts.URL+"/api/history?cluster="+urlValue(mk2), nil)
 
-	if asked := store.asked(); asked.Cluster != mk2 {
+	if asked := held.asked(); asked.Cluster != mk2 {
 		t.Fatalf("asked for %q, want the cluster the tab is showing", asked.Cluster)
 	}
 }
 
 func TestClearingHistoryLeavesTheOtherClustersAlone(t *testing.T) {
-	ts, store := recordingFleet(t)
+	ts, held := recordingFleet(t)
 	restart(t, ts, mk1)
 	restart(t, ts, mk2)
 
@@ -71,26 +71,26 @@ func TestClearingHistoryLeavesTheOtherClustersAlone(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d: %s", resp.StatusCode, body)
 	}
-	held := store.recorded()
-	if len(held) != 1 || held[0].Cluster != mk1 {
-		t.Fatalf("kept %+v, want only the cluster that was not cleared", held)
+	kept := held.recorded()
+	if len(kept) != 1 || kept[0].Cluster != mk1 {
+		t.Fatalf("kept %+v, want only the cluster that was not cleared", kept)
 	}
 }
 
 func TestClearingHistoryNamesTheClusterItClears(t *testing.T) {
-	ts, store := recordingFleet(t)
+	ts, held := recordingFleet(t)
 
 	doRequest(t, http.MethodDelete, ts.URL+"/api/history?cluster="+urlValue(mk2), nil)
 
-	if store.forgotCluster != mk2 {
-		t.Fatalf("cleared %q, want the cluster asked for; an empty one clears every cluster", store.forgotCluster)
+	if held.forgotCluster != mk2 {
+		t.Fatalf("cleared %q, want the cluster asked for; an empty one clears every cluster", held.forgotCluster)
 	}
 }
 
 func TestClearingHistoryWithNoClusterOpenIsRefused(t *testing.T) {
 	srv := New(noCluster{}, testAssets(), testToken)
-	store := &heldHistory{entries: []history.Entry{{Cluster: mk1, Name: "web"}}}
-	srv.UseHistory(store)
+	held := &heldHistory{entries: []store.Entry{{Cluster: mk1, Name: "web"}}}
+	srv.UseHistory(held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 
@@ -99,7 +99,7 @@ func TestClearingHistoryWithNoClusterOpenIsRefused(t *testing.T) {
 	if resp.StatusCode == http.StatusNoContent {
 		t.Fatal("history was cleared with no cluster to clear it for; that wipes every cluster")
 	}
-	if len(store.recorded()) != 1 {
+	if len(held.recorded()) != 1 {
 		t.Fatal("another cluster's history was cleared by a window with no cluster of its own")
 	}
 }

@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Checks from '../../src/components/Checks';
 import { useSettingsStore } from '../../src/store/settings';
+import { useClustersStore } from '../../src/store/clusters';
+import { MK1, showing } from '../helpers-clusters';
 import type { CheckFinding, CheckGroup, CheckObject, CheckReport } from '../../src/lib/types';
 
 const OBJECTS: CheckObject[] = [
@@ -49,10 +51,16 @@ function makeGroup(id: string, extra: Partial<CheckGroup> = {}): CheckGroup {
 }
 
 function stub(body: unknown, ok = true) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) })),
-  );
+  const fetcher = vi.fn((url: string) => {
+    void url;
+    return Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) });
+  });
+  vi.stubGlobal('fetch', fetcher);
+  return fetcher;
+}
+
+function asked(fetcher: ReturnType<typeof stub>): string[] {
+  return fetcher.mock.calls.map((call) => call[0]);
 }
 
 function stubReportThenPages(report: unknown, pages: unknown[], pagesOk = true) {
@@ -557,6 +565,65 @@ describe('audit controls', () => {
     );
 
     expect(screen.queryByText(/holds every capability/)).not.toBeInTheDocument();
+  });
+  it('widens to every open cluster when asked', async () => {
+    const user = userEvent.setup();
+    const calls = stub({ groups: [], objects: OBJECTS, scanned: 0 });
+    act(() => {
+      showing(MK1);
+    });
+
+    render(<Checks onOpen={vi.fn()} />);
+    await screen.findByText('Severity');
+    await user.click(screen.getByLabelText('Every open cluster'));
+
+    await waitFor(() => {
+      expect(asked(calls).some((url) => url.includes('/api/checks/fleet'))).toBe(true);
+    });
+    useClustersStore.getState().reset();
+  });
+
+  it('names the cluster a fleet finding is on', async () => {
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      scanned: 1,
+      objects: [{ ...OBJECTS[0], cluster: MK1 }],
+      groups: [makeGroup('limits-missing', { total: 1, findings: [makeFinding()] })],
+    });
+
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(await screen.findByText('p-mk1')).toBeTruthy();
+    useClustersStore.getState().reset();
+  });
+
+  it('says so when a fleet finding is on a cluster that is gone', async () => {
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      scanned: 1,
+      objects: [{ ...OBJECTS[0], cluster: 'https://gone:6443' }],
+      groups: [makeGroup('limits-missing', { total: 1, findings: [makeFinding()] })],
+    });
+
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+
+    expect(await screen.findByText('unknown')).toBeTruthy();
+    useClustersStore.getState().reset();
+  });
+
+  it('offers nothing to widen when one cluster is open', async () => {
+    stub({ groups: [], objects: OBJECTS, scanned: 0 });
+
+    render(<Checks onOpen={vi.fn()} />);
+
+    await screen.findByText('Severity');
+    expect(screen.queryByLabelText('Every open cluster')).toBeNull();
   });
 });
 

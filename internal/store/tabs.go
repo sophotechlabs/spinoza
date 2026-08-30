@@ -1,4 +1,4 @@
-package history
+package store
 
 import (
 	"context"
@@ -35,7 +35,7 @@ func (t *Tabs) Remember(ctx context.Context, tab Tab) error {
 		tab.ID, tab.Context, tab.Kubeconfig, tab.Seen.UTC().UnixMilli(), tab.Color,
 		tab.Label, tab.Grouping, tab.Reopen)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	return nil
 }
@@ -47,7 +47,7 @@ func (t *Tabs) Forget(ctx context.Context, id string) error {
 	}
 	_, err := db.ExecContext(ctx, deleteCluster, id)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	return nil
 }
@@ -59,7 +59,7 @@ func (t *Tabs) Recolor(ctx context.Context, id string, color int) error {
 	}
 	_, err := db.ExecContext(ctx, recolorCluster, color, id)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	return nil
 }
@@ -71,7 +71,7 @@ func (t *Tabs) Rename(ctx context.Context, id, label, grouping string) error {
 	}
 	_, err := db.ExecContext(ctx, renameCluster, label, grouping, id)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	return nil
 }
@@ -83,7 +83,7 @@ func (t *Tabs) Reopening(ctx context.Context, id string, reopen bool) error {
 	}
 	_, err := db.ExecContext(ctx, reopenCluster, reopen, id)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	return nil
 }
@@ -95,7 +95,7 @@ func (t *Tabs) Recording(ctx context.Context, id, kinds string) error {
 	}
 	_, err := db.ExecContext(ctx, recordCluster, kinds, id)
 	if err != nil {
-		return fmt.Errorf("history: %w", err)
+		return fmt.Errorf("store: %w", err)
 	}
 	return nil
 }
@@ -107,7 +107,7 @@ func (t *Tabs) All(ctx context.Context) ([]Tab, error) {
 	}
 	rows, err := db.QueryContext(ctx, selectClusters)
 	if err != nil {
-		return nil, fmt.Errorf("history: %w", err)
+		return nil, fmt.Errorf("store: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	found := []Tab{}
@@ -117,13 +117,13 @@ func (t *Tabs) All(ctx context.Context) ([]Tab, error) {
 		scanErr := rows.Scan(&tab.ID, &tab.Context, &tab.Kubeconfig, &seen, &tab.Color,
 			&tab.Label, &tab.Grouping, &tab.Reopen, &tab.Timeline)
 		if scanErr != nil {
-			return nil, fmt.Errorf("history: %w", scanErr)
+			return nil, fmt.Errorf("store: %w", scanErr)
 		}
 		tab.Seen = time.UnixMilli(seen).UTC()
 		found = append(found, tab)
 	}
 	if rows.Err() != nil {
-		return nil, fmt.Errorf("history: %w", rows.Err())
+		return nil, fmt.Errorf("store: %w", rows.Err())
 	}
 	return found, nil
 }
