@@ -30,6 +30,30 @@ const deleteAudit = `
 DELETE FROM audit
 WHERE (? = '' OR cluster = ?)`
 
+const insertChange = `
+INSERT INTO changes (
+	cluster, at, verb, api_group, api_version, resource, kind,
+	namespace, name, uid, cells
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+const selectChanges = `
+SELECT id, cluster, at, verb, api_group, api_version, resource, kind,
+	namespace, name, uid, cells
+FROM changes
+WHERE (? = '' OR cluster = ?)
+ORDER BY at DESC, id DESC
+LIMIT ?`
+
+const deleteChanges = `
+DELETE FROM changes
+WHERE (? = '' OR cluster = ?)`
+
+const deleteChangesBefore = `DELETE FROM changes WHERE at < ?`
+
+const oldestChangeKept = `SELECT id FROM changes ORDER BY id DESC LIMIT 1 OFFSET ?`
+
+const deleteChangesBelow = `DELETE FROM changes WHERE id <= ?`
+
 const upsertCluster = `
 INSERT INTO clusters (id, context, kubeconfig, seen, color, label, grouping, reopen)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -44,8 +68,10 @@ const reopenCluster = `UPDATE clusters SET reopen = ? WHERE id = ?`
 
 const deleteCluster = `DELETE FROM clusters WHERE id = ?`
 
+const recordCluster = `UPDATE clusters SET timeline = ? WHERE id = ?`
+
 const selectClusters = `
-SELECT id, context, kubeconfig, seen, color, label, grouping, reopen
+SELECT id, context, kubeconfig, seen, color, label, grouping, reopen, timeline
 FROM clusters
 ORDER BY seen ASC, id ASC`
 
@@ -80,6 +106,24 @@ ALTER TABLE clusters ADD COLUMN color INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE clusters ADD COLUMN label TEXT NOT NULL DEFAULT '';
 ALTER TABLE clusters ADD COLUMN grouping TEXT NOT NULL DEFAULT '';
 ALTER TABLE clusters ADD COLUMN reopen INTEGER NOT NULL DEFAULT 1;
+`, `
+CREATE TABLE changes (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	cluster TEXT NOT NULL,
+	at INTEGER NOT NULL,
+	verb TEXT NOT NULL,
+	api_group TEXT NOT NULL,
+	api_version TEXT NOT NULL,
+	resource TEXT NOT NULL,
+	kind TEXT NOT NULL,
+	namespace TEXT NOT NULL,
+	name TEXT NOT NULL,
+	uid TEXT NOT NULL,
+	cells TEXT NOT NULL
+);
+CREATE INDEX changes_by_time ON changes (at DESC, id DESC);
+CREATE INDEX changes_by_cluster ON changes (cluster, at DESC, id DESC);
+ALTER TABLE clusters ADD COLUMN timeline TEXT NOT NULL DEFAULT '';
 `}
 
 func migrate(ctx context.Context, db *sql.DB) error {

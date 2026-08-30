@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import History from '../../src/components/History';
 import type { HistoryEntry } from '../../src/lib/types';
+import { useClustersStore } from '../../src/store/clusters';
+import { useToastsStore } from '../../src/store/toasts';
+import { MK1, showing } from '../helpers-clusters';
 
 function entry(extra: Partial<HistoryEntry> = {}): HistoryEntry {
   return {
     id: 1,
+    source: 'action',
     at: '2026-08-29T09:30:00Z',
     verb: 'delete',
     name: 'web',
@@ -32,6 +36,8 @@ function stub(body: unknown, ok = true, status = 200) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  useClustersStore.getState().reset();
+  useToastsStore.setState({ toasts: [], history: [] });
 });
 
 describe('History', () => {
@@ -62,9 +68,7 @@ describe('History', () => {
 
     render(<History onOpen={vi.fn()} />);
 
-    expect(
-      await screen.findByText('Spinoza has not changed anything on this cluster yet.'),
-    ).toBeTruthy();
+    expect(await screen.findByText('There is nothing here yet.')).toBeTruthy();
   });
 
   it('says when it is showing only the newest page', async () => {
@@ -214,7 +218,136 @@ describe('History', () => {
 
     render(<History onOpen={vi.fn()} />);
 
-    await screen.findByText('Spinoza has not changed anything on this cluster yet.');
+    await screen.findByText('There is nothing here yet.');
     expect(screen.getByRole('button', { name: 'Clear' }).hasAttribute('disabled')).toBe(true);
+  });
+  it('shows what spinoza did and what the cluster did together', async () => {
+    stub({
+      entries: [
+        entry(),
+        entry({ id: 2, source: 'change', verb: 'changed', name: 'web-1', detail: '1/1 · Running' }),
+      ],
+    });
+
+    render(<History onOpen={vi.fn()} />);
+
+    expect(await screen.findByText('web-1')).toBeTruthy();
+    expect(screen.getByText('changed')).toBeTruthy();
+    expect(screen.getByText('1/1 · Running')).toBeTruthy();
+  });
+
+  it('asks for only what changed when that is what is picked', async () => {
+    const calls = stub({ entries: [entry()] });
+    const user = userEvent.setup();
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.selectOptions(screen.getByLabelText('What to show'), 'change');
+
+    await waitFor(() => {
+      expect(calls.mock.calls.some((call) => call[0].includes('source=change'))).toBe(true);
+    });
+  });
+
+  it('leaves the outcome blank on something the cluster did', async () => {
+    stub({ entries: [entry({ source: 'change', verb: 'added', outcome: 'done' })] });
+
+    render(<History onOpen={vi.fn()} />);
+
+    await screen.findByText('appeared');
+    expect(screen.queryByText('Done')).toBeNull();
+  });
+
+  it('says when changes came in faster than they could be kept', async () => {
+    stub({ entries: [entry()], dropped: 40 });
+
+    render(<History onOpen={vi.fn()} />);
+
+    expect(await screen.findByText(/40 changes came in faster/)).toBeTruthy();
+  });
+
+  it('says the cluster has been quiet when only changes are shown', async () => {
+    const user = userEvent.setup();
+    stub({ entries: [] });
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('There is nothing here yet.');
+
+    await user.selectOptions(screen.getByLabelText('What to show'), 'change');
+
+    expect(
+      await screen.findByText(
+        'Nothing has changed on this cluster since spinoza started watching it.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('says spinoza has done nothing when only its own actions are shown', async () => {
+    const user = userEvent.setup();
+    stub({ entries: [] });
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('There is nothing here yet.');
+
+    await user.selectOptions(screen.getByLabelText('What to show'), 'action');
+
+    expect(
+      await screen.findByText('Spinoza has not changed anything on this cluster yet.'),
+    ).toBeTruthy();
+  });
+  it('offers nothing to record when no cluster is open', async () => {
+    stub({ entries: [entry()] });
+
+    render(<History onOpen={vi.fn()} />);
+
+    await screen.findByText('web');
+    expect(screen.queryByLabelText('What to record')).toBeNull();
+  });
+
+  it('asks the server to start recording the open cluster', async () => {
+    const user = userEvent.setup();
+    const calls = stub({ entries: [entry()] });
+    act(() => {
+      showing(MK1);
+    });
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.selectOptions(screen.getByLabelText('What to record'), 'workloads');
+
+    await waitFor(() => {
+      expect(calls.mock.calls.some((call) => call[0].includes('kinds=workloads'))).toBe(true);
+    });
+  });
+
+  it('says so when the server will not record it', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/clusters/timeline')) {
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            json: () => Promise.resolve({ message: 'nowhere to keep that' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry()] }),
+        });
+      }),
+    );
+    act(() => {
+      showing(MK1);
+    });
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.selectOptions(screen.getByLabelText('What to record'), 'workloads');
+
+    await waitFor(() => {
+      const said = useToastsStore.getState().toasts.map((toast) => toast.message);
+      expect(said.some((message) => message.includes('Changing what is recorded'))).toBe(true);
+    });
   });
 });

@@ -13,6 +13,7 @@ export interface Tab {
   label: string;
   grouping: string;
   reopen: boolean;
+  timeline: string;
   protection: string;
 }
 
@@ -40,6 +41,7 @@ function tabOf(cluster: OpenCluster): Tab {
     label: cluster.label ?? '',
     grouping: cluster.grouping ?? '',
     reopen: cluster.reopen,
+    timeline: cluster.timeline ?? '',
     protection: cluster.protection,
   };
 }
@@ -96,7 +98,7 @@ export function useTabs(): Tab[] {
   return useClustersStore((state) => state.tabs);
 }
 
-function tabOn(tabs: Tab[], cluster: string): Tab | null {
+export function tabOn(tabs: Tab[], cluster: string): Tab | null {
   for (const tab of tabs) {
     if (tab.id === cluster) {
       return tab;

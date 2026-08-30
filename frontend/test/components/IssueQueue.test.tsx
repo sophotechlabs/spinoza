@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Issue, IssueQueue as Queue } from '../../src/lib/types';
 import IssueQueue from '../../src/components/IssueQueue';
+import { useClustersStore } from '../../src/store/clusters';
+import { useIssuesStore } from '../../src/store/issues';
+import { MK1, MK2, showing } from '../helpers-clusters';
 
 function child(name: string) {
   return {
@@ -46,9 +49,30 @@ function stub(data: Queue): void {
   );
 }
 
+function stubEach(own: Queue, fleet: Queue): string[] {
+  const asked: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      asked.push(url);
+      const body = url.includes('/fleet') ? fleet : own;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+    }),
+  );
+  return asked;
+}
+
+function twoOpen(): void {
+  act(() => {
+    showing(MK1);
+  });
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  useClustersStore.getState().reset();
+  useIssuesStore.setState({ fleet: false });
 });
 
 describe('IssueQueue', () => {
@@ -289,6 +313,137 @@ describe('IssueQueue', () => {
     render(<IssueQueue />);
 
     expect(await screen.findByTitle(detail)).toBeInTheDocument();
+  });
+
+  it('offers nothing to switch to when only one cluster is open', async () => {
+    stub(queue());
+
+    render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+
+    expect(screen.queryByLabelText('Every open cluster')).not.toBeInTheDocument();
+  });
+
+  it('offers the whole fleet once a second cluster is open', async () => {
+    stub(queue());
+    twoOpen();
+
+    render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+
+    expect(screen.getByLabelText('Every open cluster')).not.toBeChecked();
+  });
+
+  it('asks for the merged queue once the fleet is asked for', async () => {
+    const asked = stubEach(queue(), queue({ rows: [issue({ id: 'other', cluster: MK2 })] }));
+    twoOpen();
+
+    render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+    fireEvent.click(screen.getByLabelText('Every open cluster'));
+
+    await waitFor(() => {
+      expect(asked.some((url) => url.includes('/api/issues/fleet'))).toBe(true);
+    });
+  });
+
+  it('says which cluster each row is on', async () => {
+    stubEach(queue(), queue({ rows: [issue({ cluster: MK2 })] }));
+    twoOpen();
+
+    render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+    fireEvent.click(screen.getByLabelText('Every open cluster'));
+
+    expect(await screen.findByText('p-mk2')).toBeInTheDocument();
+  });
+
+  it('leaves the cluster blank for a row from one that is no longer open', async () => {
+    stubEach(queue(), queue({ rows: [issue({ cluster: 'https://gone:6443' })] }));
+    twoOpen();
+
+    render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+    fireEvent.click(screen.getByLabelText('Every open cluster'));
+
+    expect(await screen.findByText('unknown')).toBeInTheDocument();
+  });
+
+  it('sends a row on another cluster to whoever can switch there', async () => {
+    stubEach(queue(), queue({ rows: [issue({ cluster: MK2 })] }));
+    twoOpen();
+    const onSelectOn = vi.fn();
+
+    render(<IssueQueue onSelectOn={onSelectOn} />);
+    await screen.findByText('CrashLoopBackOff');
+    fireEvent.click(screen.getByLabelText('Every open cluster'));
+    await screen.findByText('p-mk2');
+    fireEvent.click(screen.getByText('api'));
+
+    expect(onSelectOn).toHaveBeenCalledWith(
+      MK2,
+      expect.objectContaining({ resource: 'deployments', name: 'api' }),
+    );
+  });
+
+  it('selects a row that says no cluster the ordinary way', async () => {
+    stubEach(queue(), queue({ rows: [issue()] }));
+    twoOpen();
+    const onSelect = vi.fn();
+    const onSelectOn = vi.fn();
+
+    render(<IssueQueue onSelect={onSelect} onSelectOn={onSelectOn} />);
+    await screen.findByText('CrashLoopBackOff');
+    fireEvent.click(screen.getByLabelText('Every open cluster'));
+    await screen.findByText('unknown');
+    fireEvent.click(screen.getByText('api'));
+
+    expect(onSelectOn).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'api' }));
+  });
+
+  it('says the whole fleet is fine when nothing is broken anywhere', async () => {
+    stubEach(queue(), queue({ rows: [] }));
+    twoOpen();
+
+    render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+    fireEvent.click(screen.getByLabelText('Every open cluster'));
+
+    expect(
+      await screen.findByText('Nothing is broken in any open cluster right now.'),
+    ).toBeInTheDocument();
+  });
+
+  it('goes back to this cluster when the fleet is turned off again', async () => {
+    stubEach(queue(), queue({ rows: [issue({ id: 'elsewhere', cluster: MK2 })] }));
+    twoOpen();
+
+    render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+    const toggle = screen.getByLabelText('Every open cluster');
+    fireEvent.click(toggle);
+    await screen.findByText('p-mk2');
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(screen.queryByText('p-mk2')).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps the fleet in view when the cluster underneath it changes', async () => {
+    stubEach(queue(), queue({ rows: [issue({ cluster: MK2 })] }));
+    twoOpen();
+    const { unmount } = render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+    fireEvent.click(screen.getByLabelText('Every open cluster'));
+    await screen.findByText('p-mk2');
+    unmount();
+
+    render(<IssueQueue />);
+
+    expect(await screen.findByLabelText('Every open cluster')).toBeChecked();
   });
 
   it('stays quiet while the view is hidden', () => {

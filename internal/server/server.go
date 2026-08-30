@@ -81,6 +81,7 @@ type Server struct {
 	installer  Installs
 	past       History
 	open       Tabs
+	taping     map[string]*recording
 	now        func() time.Time
 	pingEvery  time.Duration
 }
@@ -96,6 +97,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		sessions:  map[*wsSession]struct{}{},
 		terminals: map[*websocket.Conn]string{},
 		health:    map[string]api.ClusterHealth{},
+		taping:    map[string]*recording{},
 		now:       time.Now,
 		pingEvery: defaultPingInterval,
 		views:     views{grace: defaultIdleGrace, await: defaultBrowserAwait},

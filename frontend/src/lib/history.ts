@@ -3,6 +3,7 @@ import { request } from './http';
 import { failure } from './object';
 import { clock } from './time';
 import { parseHistory } from './parse';
+import { useCallback } from 'react';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 
@@ -10,8 +11,12 @@ const HISTORY_POLL_MS = 15000;
 
 export const HISTORY_LIMIT = 200;
 
-export async function fetchHistory(): Promise<History> {
-  const params = new URLSearchParams({ limit: String(HISTORY_LIMIT) });
+export const SOURCES = ['all', 'change', 'action'] as const;
+
+export type HistorySource = (typeof SOURCES)[number];
+
+export async function fetchHistory(source: HistorySource = 'all'): Promise<History> {
+  const params = new URLSearchParams({ limit: String(HISTORY_LIMIT), source });
   const response = await request(`/api/history?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `history request failed with status ${response.status}`);
@@ -19,12 +24,36 @@ export async function fetchHistory(): Promise<History> {
   return parseHistory(await response.json());
 }
 
-export function useHistory(enabled = true): Polled<History> {
-  return usePoll(fetchHistory, {
+export function useHistory(source: HistorySource = 'all', enabled = true): Polled<History> {
+  const read = useCallback(async () => fetchHistory(source), [source]);
+  return usePoll(read, {
     intervalMs: HISTORY_POLL_MS,
     enabled,
     fallback: 'history request failed',
   });
+}
+
+export function sourceLabel(source: HistorySource): string {
+  if (source === 'change') {
+    return 'What changed';
+  }
+  if (source === 'action') {
+    return 'What I did';
+  }
+  return 'Everything';
+}
+
+export function verbLabel(entry: HistoryEntry): string {
+  if (entry.source !== 'change') {
+    return entry.verb;
+  }
+  if (entry.verb === 'added') {
+    return 'appeared';
+  }
+  if (entry.verb === 'removed') {
+    return 'went';
+  }
+  return 'changed';
 }
 
 export async function forgetHistory(): Promise<void> {
@@ -110,6 +139,13 @@ export function detailText(entry: HistoryEntry): string {
     return entry.message;
   }
   return entry.detail ?? '';
+}
+
+export function recordFailure(err: unknown): string {
+  if (err instanceof Error) {
+    return `Changing what is recorded: ${err.message}`;
+  }
+  return 'Changing what is recorded failed';
 }
 
 export function clearFailure(err: unknown): string {

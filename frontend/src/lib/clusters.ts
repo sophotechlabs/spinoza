@@ -12,6 +12,7 @@ interface WireOpenCluster {
   label?: string;
   grouping?: string;
   reopen?: boolean;
+  timeline?: string;
   protection?: string;
   reachable?: boolean;
   reason?: string;
@@ -38,6 +39,7 @@ function openClusterOf(entry: WireOpenCluster): OpenCluster {
     label: entry.label,
     grouping: entry.grouping,
     reopen: entry.reopen ?? true,
+    timeline: entry.timeline,
     protection: entry.protection ?? 'unknown',
     reachable: entry.reachable ?? true,
     reason: entry.reason,
@@ -95,6 +97,12 @@ export async function closeCluster(id: string): Promise<ClusterList> {
     timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
   });
   return clustersFrom(response, 'closing the cluster');
+}
+
+export async function recordCluster(id: string, kinds: string): Promise<ClusterList> {
+  const params = new URLSearchParams({ cluster: id, kinds });
+  const response = await request(`/api/clusters/timeline?${params.toString()}`, { method: 'POST' });
+  return clustersFrom(response, 'changing what is recorded');
 }
 
 export async function recolorCluster(id: string, color: number): Promise<ClusterList> {

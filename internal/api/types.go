@@ -73,6 +73,7 @@ type OpenCluster struct {
 	Label      string `json:"label,omitempty"`
 	Grouping   string `json:"grouping,omitempty"`
 	Reopen     bool   `json:"reopen"`
+	Timeline   string `json:"timeline,omitempty"`
 	Protection string `json:"protection"`
 	Reachable  bool   `json:"reachable"`
 	Reason     string `json:"reason,omitempty"`
@@ -134,8 +135,15 @@ const (
 
 const HistoryOff = "spinoza is not recording what it does"
 
+const (
+	HistoryAll    = "all"
+	HistoryAction = "action"
+	HistoryChange = "change"
+)
+
 type HistoryEntry struct {
 	ID        int64  `json:"id"`
+	Source    string `json:"source"`
 	At        string `json:"at"`
 	Verb      string `json:"verb"`
 	Group     string `json:"group,omitempty"`
@@ -152,6 +160,7 @@ type HistoryEntry struct {
 type History struct {
 	Entries []HistoryEntry `json:"entries"`
 	More    bool           `json:"more,omitempty"`
+	Dropped int            `json:"dropped,omitempty"`
 	Reason  string         `json:"reason,omitempty"`
 }
 
@@ -247,6 +256,7 @@ type IssueChild struct {
 
 type Issue struct {
 	ID        string       `json:"id"`
+	Cluster   string       `json:"cluster,omitempty"`
 	Severity  string       `json:"severity"`
 	Detector  string       `json:"detector"`
 	Title     string       `json:"title"`
@@ -1083,6 +1093,7 @@ type CheckFinding struct {
 	Container string `json:"container,omitempty"`
 	Detail    string `json:"detail"`
 	Patch     string `json:"patch,omitempty"`
+	Severity  string `json:"severity"`
 	New       bool   `json:"new,omitempty"`
 	Muted     bool   `json:"muted,omitempty"`
 	MutedBy   string `json:"mutedBy,omitempty"`
@@ -1103,6 +1114,7 @@ type CheckGroup struct {
 	NewCount   int            `json:"new,omitempty"`
 	Fixed      int            `json:"fixed,omitempty"`
 	Baselined  bool           `json:"baselined,omitempty"`
+	Measured   bool           `json:"measured,omitempty"`
 	Truncated  bool           `json:"truncated,omitempty"`
 	Next       string         `json:"next,omitempty"`
 	Findings   []CheckFinding `json:"findings"`
@@ -1134,6 +1146,15 @@ type Mute struct {
 	Ref       string `json:"ref,omitempty"`
 	Reason    string `json:"reason,omitempty"`
 	At        string `json:"at,omitempty"`
+}
+
+type RuleFault struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+type RuleFaults struct {
+	Faults []RuleFault `json:"faults"`
 }
 
 type Mutes struct {

@@ -324,23 +324,49 @@ vi.mock('../src/components/Checks', () => ({
 }));
 
 vi.mock('../src/components/IssueQueue', () => ({
-  default: ({ onSelect }: { onSelect: (ref: ObjectRef) => void }) => (
-    <button
-      type="button"
-      data-testid="issue-queue"
-      onClick={() => {
-        onSelect({
-          group: 'apps',
-          version: 'v1',
-          resource: 'deployments',
-          namespace: 'web',
-          name: 'api',
-        });
-      }}
-    >
-      select-issue
-    </button>
-  ),
+  default: ({
+    onSelect,
+    onSelectOn,
+  }: {
+    onSelect: (ref: ObjectRef) => void;
+    onSelectOn: (cluster: string, ref: ObjectRef) => void;
+  }) => {
+    const ref = {
+      group: 'apps',
+      version: 'v1',
+      resource: 'deployments',
+      namespace: 'web',
+      name: 'api',
+    };
+    return (
+      <div data-testid="issue-queue">
+        <button
+          type="button"
+          onClick={() => {
+            onSelect(ref);
+          }}
+        >
+          select-issue
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSelectOn('https://kind-dev:6443', ref);
+          }}
+        >
+          select-issue-on-first
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSelectOn('https://other-cluster:6443', ref);
+          }}
+        >
+          select-issue-on-second
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock('../src/components/ForwardsPanel', () => ({
@@ -2094,6 +2120,20 @@ describe('navigating away from an unsaved draft', () => {
     expect(screen.getByTestId('inspect-target')).toBeInTheDocument();
   });
 
+  it('stays put rather than switching cluster for an issue with a draft open', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await selectPodA(user);
+    await user.click(await screen.findByRole('button', { name: 'Issues' }));
+    await screen.findByTestId('issue-queue');
+    setUnsaved(true);
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+
+    await user.click(screen.getByRole('button', { name: 'select-issue-on-second' }));
+
+    expect(window.location.hash).toContain('context=kind-dev');
+  });
+
   it('lets go once you agree', async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -2264,6 +2304,86 @@ describe('finding your way in by keyboard', () => {
     await user.click(screen.getByRole('button', { name: 'select-issue' }));
 
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('deployments:web/api');
+  });
+
+  it('keeps the cluster it is on when the issue is on that cluster', async () => {
+    const user = userEvent.setup();
+    stubFetch();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Issues' }));
+    await screen.findByTestId('issue-queue');
+
+    await user.click(screen.getByRole('button', { name: 'select-issue-on-first' }));
+
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('deployments:web/api');
+    expect(window.location.hash).toContain('context=kind-dev');
+  });
+
+  it('switches cluster for an issue that is on another one', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/clusters/active')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(bothClusters('other-cluster')),
+        });
+      }
+      if (url.startsWith('/api/clusters')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(bothClusters('other-cluster')),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Issues' }));
+    await screen.findByTestId('issue-queue');
+
+    await user.click(screen.getByRole('button', { name: 'select-issue-on-first' }));
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain('context=kind-dev');
+    });
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('deployments:web/api');
+    const posts = fetchMock.mock.calls.filter(
+      (call) => (call[1] as { method?: string } | undefined)?.method === 'POST',
+    );
+    expect(posts[0][0]).toContain('cluster=https%3A%2F%2Fkind-dev%3A6443');
+  });
+
+  it("says so when switching to the issue's cluster fails", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+        if (url.startsWith('/api/clusters/active') && init?.method === 'POST') {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'the cluster stopped answering' }),
+          });
+        }
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(bothClusters('other-cluster')),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Issues' }));
+    await screen.findByTestId('issue-queue');
+
+    await user.click(screen.getByRole('button', { name: 'select-issue-on-first' }));
+
+    await waitFor(() => {
+      const said = useToastsStore.getState().toasts.map((toast) => toast.message);
+      expect(said.some((message) => message.includes('Switching to kind-dev'))).toBe(true);
+    });
   });
 
   it('opens history from the sidebar and targets the inspector from it', async () => {

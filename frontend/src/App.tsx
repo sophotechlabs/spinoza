@@ -11,7 +11,7 @@ import type {
 } from './lib/types';
 import { offline, useResourceFeed } from './lib/feed';
 import { fetchContexts } from './lib/contexts';
-import { fetchClusters, openCluster, stillToOpen } from './lib/clusters';
+import { activateCluster, fetchClusters, openCluster, stillToOpen } from './lib/clusters';
 import {
   activeOf,
   rememberRoute,
@@ -475,6 +475,37 @@ export default function App() {
     loadMore(subId, limit);
   }
 
+  function showOn(cluster: string, ref: ObjectRef) {
+    if (cluster === onCluster) {
+      remember(ref);
+      return;
+    }
+    if (!mayDiscard()) {
+      return;
+    }
+    void switchTo(cluster, ref);
+  }
+
+  async function switchTo(cluster: string, ref: ObjectRef) {
+    const state = useClustersStore.getState();
+    state.focus(cluster);
+    bumpClusterEpoch();
+    rememberObject(ref);
+    revealDetails();
+    replace({
+      context: contextOf(state.tabs, cluster),
+      view: 'issues',
+      resource: null,
+      selection: ref,
+      release: null,
+    });
+    try {
+      await activateCluster(cluster);
+    } catch (err: unknown) {
+      notifyError(`Switching to ${contextOf(state.tabs, cluster)}: ${switchFailed(err)}`);
+    }
+  }
+
   function handleSelectRow(row: Row) {
     remember(refFromRow(active, row));
   }
@@ -503,7 +534,7 @@ export default function App() {
     mainArea = <ClusterOverview />;
   }
   if (route.view === 'issues') {
-    mainArea = <IssueQueue onSelect={remember} />;
+    mainArea = <IssueQueue onSelect={remember} onSelectOn={showOn} />;
   }
   if (route.view === 'topology') {
     mainArea = (

@@ -6,6 +6,7 @@ import {
   fetchClusters,
   openCluster,
   parseClusters,
+  recordCluster,
   renameCluster,
   reopenCluster,
   stillToOpen,
@@ -60,6 +61,7 @@ describe('what the server says is open', () => {
       label: undefined,
       grouping: undefined,
       reopen: true,
+      timeline: undefined,
       protection: 'unknown',
       reachable: true,
       reason: undefined,
@@ -149,6 +151,22 @@ describe('what the server says is open', () => {
     stub({}, false);
 
     await expect(reopenCluster(MK1, true)).rejects.toThrow('remembering the cluster failed');
+  });
+
+  it('asks the server to record what a cluster does', async () => {
+    const calls = stub(oneOpen);
+
+    await recordCluster(MK1, 'workloads');
+
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].url).toContain('/api/clusters/timeline');
+    expect(calls[0].url).toContain('kinds=workloads');
+  });
+
+  it('says so when what to record could not be stored', async () => {
+    stub({}, false);
+
+    await expect(recordCluster(MK1, 'workloads')).rejects.toThrow('changing what is recorded');
   });
 
   it('says which request failed', async () => {

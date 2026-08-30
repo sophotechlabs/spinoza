@@ -35,6 +35,7 @@ function tabOf(overrides: Partial<Tab> = {}): Tab {
     label: '',
     grouping: '',
     reopen: true,
+    timeline: '',
     protection: 'open',
     ...overrides,
   };

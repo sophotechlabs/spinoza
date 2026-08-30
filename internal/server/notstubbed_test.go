@@ -257,6 +257,14 @@ func (n notStubbed) PodSelector(_ context.Context, _ api.ObjectRef) (r0 string, 
 	return r0, r1
 }
 
+func (n notStubbed) Record(_ context.Context, _ resources.Timeline, _ []resources.Kind) {
+	n.missing("Record")
+}
+
+func (n notStubbed) StopRecording() {
+	n.missing("StopRecording")
+}
+
 func (n notStubbed) Reach() (r0 *reach.Sink) {
 	n.missing("Reach")
 	return r0

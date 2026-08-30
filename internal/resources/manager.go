@@ -147,6 +147,9 @@ type Manager struct {
 	usage       recent[api.Metrics]
 	tally       recent[api.ResourceCounts]
 	meshes      recent[api.TrafficSupport]
+	noteMu      sync.Mutex
+	notes       Timeline
+	noted       map[schema.GroupVersionResource]struct{}
 }
 
 type buildGate struct {
@@ -1052,7 +1055,14 @@ func (s *subscriber) wants(ev Event) bool {
 }
 
 type stream struct {
-	kind string
+	kind    string
+	gvr     schema.GroupVersionResource
+	owner   *Manager
+	handler atomic.Pointer[cache.ResourceEventHandlerRegistration]
+	// seenMu guards the last row written per object, which is what decides
+	// whether a change is worth recording.
+	seenMu sync.Mutex
+	seen   map[string]uint64
 	// viewMu guards the pair: columns and cell-filling always change together.
 	viewMu   sync.Mutex
 	columns  []api.Column
@@ -1155,6 +1165,21 @@ func (m *Manager) ListNames(ctx context.Context, desc api.ResourceDescriptor) ([
 			Namespace: item.Namespace,
 			Name:      item.Name,
 		})
+	}
+	return out, nil
+}
+
+// Scan reads a kind straight from the apiserver. Nothing caches what comes
+// back, so it is freed as soon as the caller is done with it.
+func (m *Manager) Scan(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
+	page, err := m.dyn.Resource(gvr).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*unstructured.Unstructured, 0, len(page.Items))
+	for at := range page.Items {
+		out = append(out, &page.Items[at])
 	}
 	return out, nil
 }
@@ -1422,6 +1447,8 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 	shown := m.layoutFor(ctx, desc, key.gvr)
 	st := &stream{
 		kind:     desc.Kind,
+		gvr:      key.gvr,
+		owner:    m,
 		columns:  shown.columns,
 		cells:    shown.cells,
 		informer: informer,
@@ -1448,7 +1475,7 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 		return nil, fmt.Errorf("set watch error handler: %w", watchErr)
 	}
 
-	_, handlerErr := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	handler, handlerErr := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
 			safe.Run("an added "+desc.Kind, func() { st.publish("added", obj) })
 		},
@@ -1463,6 +1490,7 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 		cancel()
 		return nil, fmt.Errorf("add event handler: %w", handlerErr)
 	}
+	st.handler.Store(&handler)
 
 	factory.Start(streamCtx.Done())
 	syncCtx, cancelSync := context.WithTimeout(ctx, m.syncTimeout)
@@ -1505,21 +1533,31 @@ func syncFailure(key streamKey, timeout time.Duration, reason string) error {
 }
 
 func (st *stream) publish(kind string, obj any) {
-	u, ok := toUnstructured(obj)
+	item, ok := toUnstructured(obj)
 	if !ok {
 		return
 	}
 	st.watchRecovered()
-	st.fanout(Event{Kind: kind, Row: st.row(u)})
+	row := st.row(item)
+	st.note(noteVerb(kind), item, row)
+	st.fanout(Event{Kind: kind, Row: row})
+}
+
+func noteVerb(kind string) string {
+	if kind == "added" {
+		return Added
+	}
+	return Changed
 }
 
 func (st *stream) publishDelete(obj any) {
-	u, ok := toUnstructured(obj)
+	item, ok := toUnstructured(obj)
 	if !ok {
 		return
 	}
 	st.watchRecovered()
-	st.fanout(Event{Kind: "deleted", UID: string(u.GetUID())})
+	st.note(Removed, item, api.Row{UID: string(item.GetUID())})
+	st.fanout(Event{Kind: "deleted", UID: string(item.GetUID())})
 }
 
 func (st *stream) fanout(ev Event) {

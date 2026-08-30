@@ -2,18 +2,25 @@ import { useState } from 'react';
 import type { HistoryEntry, ObjectRef } from '../lib/types';
 import {
   HISTORY_LIMIT,
+  SOURCES,
   clearFailure,
   detailText,
   forgetHistory,
   outcomeClass,
   outcomeLabel,
+  recordFailure,
   refOf,
   scopeLabel,
+  sourceLabel,
   targetLabel,
   useHistory,
+  verbLabel,
   when,
 } from '../lib/history';
+import type { HistorySource } from '../lib/history';
 import { CONTROL } from '../lib/controls';
+import { recordCluster } from '../lib/clusters';
+import { useActiveTab } from '../store/clusters';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useNow } from '../lib/useNow';
 import LoadWarning from './LoadWarning';
@@ -65,13 +72,13 @@ function Row({
       <td className="truncate px-2 py-1 text-fg-muted" title={entry.at}>
         {when(entry.at, now)}
       </td>
-      <td className="truncate px-2 py-1 text-fg-soft">{entry.verb}</td>
+      <td className="truncate px-2 py-1 text-fg-soft">{verbLabel(entry)}</td>
       <td className="truncate px-2 py-1">
         <Target entry={entry} onOpen={onOpen} />
       </td>
       <td className="truncate px-2 py-1 text-fg-muted">{scopeLabel(entry)}</td>
       <td className={`truncate px-2 py-1 ${outcomeClass(entry.outcome)}`}>
-        {outcomeLabel(entry.outcome)}
+        {entry.source === 'change' ? '' : outcomeLabel(entry.outcome)}
       </td>
       <td className="truncate px-2 py-1 text-fg-muted" title={detailText(entry)}>
         {detailText(entry)}
@@ -80,8 +87,66 @@ function Row({
   );
 }
 
+const KIND_SETS = [
+  { id: '', label: 'Recording nothing' },
+  { id: 'workloads', label: 'Recording workloads' },
+  { id: 'wide', label: 'Recording workloads, network and GitOps' },
+];
+
+function Recording() {
+  const tab = useActiveTab();
+  const [busy, setBusy] = useState(false);
+  if (tab === null) {
+    return null;
+  }
+  const on = tab.id;
+
+  async function change(kinds: string) {
+    setBusy(true);
+    try {
+      await recordCluster(on, kinds);
+    } catch (err: unknown) {
+      notifyError(recordFailure(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <label className="flex items-center gap-1.5 text-fg-soft">
+      <span className="sr-only">What to record</span>
+      <select
+        aria-label="What to record"
+        value={tab.timeline}
+        disabled={busy}
+        onChange={(event) => {
+          void change(event.target.value);
+        }}
+        className={`${CONTROL} border-edge-strong bg-surface text-fg-soft`}
+      >
+        {KIND_SETS.map((one) => (
+          <option key={one.id} value={one.id}>
+            {one.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function nothingYet(source: HistorySource): string {
+  if (source === 'change') {
+    return 'Nothing has changed on this cluster since spinoza started watching it.';
+  }
+  if (source === 'action') {
+    return 'Spinoza has not changed anything on this cluster yet.';
+  }
+  return 'There is nothing here yet.';
+}
+
 export default function History({ onOpen }: HistoryProps) {
-  const { data, error, reload } = useHistory();
+  const [source, setSource] = useState<HistorySource>('all');
+  const { data, error, reload } = useHistory(source);
   const [clearing, setClearing] = useState(false);
   const now = useNow();
 
@@ -113,8 +178,30 @@ export default function History({ onOpen }: HistoryProps) {
       {error !== null && <StaleBanner what="History" message={error} onRetry={reload} />}
       {notRecording !== '' && <LoadWarning message={notRecording} />}
       <div className="flex shrink-0 items-center gap-2 border-b border-edge px-2 py-1.5">
-        <span className="text-fg-soft">What spinoza did on this cluster</span>
+        <label className="flex items-center gap-1.5 text-fg-soft">
+          Showing
+          <select
+            aria-label="What to show"
+            value={source}
+            onChange={(event) => {
+              setSource(event.target.value as HistorySource);
+            }}
+            className={`${CONTROL} border-edge-strong bg-surface text-fg-soft`}
+          >
+            {SOURCES.map((one) => (
+              <option key={one} value={one}>
+                {sourceLabel(one)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Recording />
         {data.more && <span className="text-fg-muted">showing the newest {HISTORY_LIMIT}</span>}
+        {(data.dropped ?? 0) > 0 && (
+          <span className="text-warn">
+            {data.dropped} changes came in faster than they could be written and were not kept
+          </span>
+        )}
         <button
           type="button"
           disabled={clearing || data.entries.length === 0}
@@ -128,7 +215,7 @@ export default function History({ onOpen }: HistoryProps) {
       </div>
       {data.entries.length === 0 && (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
-          Spinoza has not changed anything on this cluster yet.
+          {nothingYet(source)}
         </div>
       )}
       {data.entries.length > 0 && (

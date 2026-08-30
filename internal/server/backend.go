@@ -64,6 +64,8 @@ type Feeds interface {
 	) (*resources.Subscription, error)
 	Logs(ctx context.Context, req logs.Request) (*logs.Stream, error)
 	PodSelector(ctx context.Context, ref api.ObjectRef) (string, error)
+	Record(ctx context.Context, into resources.Timeline, kinds []resources.Kind)
+	StopRecording()
 }
 
 type Views interface {

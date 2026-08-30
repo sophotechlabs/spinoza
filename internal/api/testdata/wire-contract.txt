@@ -42,12 +42,14 @@ CheckFinding.New new,omitempty bool
 CheckFinding.Patch patch,omitempty string
 CheckFinding.Reason reason,omitempty string
 CheckFinding.Ref ref int
+CheckFinding.Severity severity string
 CheckGroup.Baselined baselined,omitempty bool
 CheckGroup.Category category string
 CheckGroup.Findings findings []CheckFinding
 CheckGroup.Fixed fixed,omitempty int
 CheckGroup.Frameworks frameworks,omitempty []string
 CheckGroup.ID id string
+CheckGroup.Measured measured,omitempty bool
 CheckGroup.Muted muted,omitempty int
 CheckGroup.NewCount new,omitempty int
 CheckGroup.Next next,omitempty string
@@ -372,6 +374,7 @@ HelmRevision.Updated updated string
 HelmSupport.Available available bool
 HelmSupport.Binary binary string
 HelmSupport.Reason reason,omitempty string
+History.Dropped dropped,omitempty int
 History.Entries entries []HistoryEntry
 History.More more,omitempty bool
 History.Reason reason,omitempty string
@@ -385,12 +388,14 @@ HistoryEntry.Name name string
 HistoryEntry.Namespace namespace,omitempty string
 HistoryEntry.Outcome outcome string
 HistoryEntry.Resource resource,omitempty string
+HistoryEntry.Source source string
 HistoryEntry.Verb verb string
 HistoryEntry.Version version,omitempty string
 Issue.Action action string
 Issue.Change change,omitempty string
 Issue.ChangedAt changedAt,omitempty string
 Issue.Children children,omitempty []IssueChild
+Issue.Cluster cluster,omitempty string
 Issue.Detail detail string
 Issue.Detector detector string
 Issue.Folded folded int
@@ -538,6 +543,7 @@ OpenCluster.Protection protection string
 OpenCluster.Reachable reachable bool
 OpenCluster.Reason reason,omitempty string
 OpenCluster.Reopen reopen bool
+OpenCluster.Timeline timeline,omitempty string
 OverviewEvent.Count count int64
 OverviewEvent.LastSeen lastSeen string
 OverviewEvent.Message message string
@@ -612,6 +618,9 @@ RowFilter.Field field string
 RowFilter.Value value string
 RowRefusal.At at int
 RowRefusal.Reason reason string
+RuleFault.ID id string
+RuleFault.Reason reason string
+RuleFaults.Faults faults []RuleFault
 SearchHit.Group group string
 SearchHit.Kind kind string
 SearchHit.Name name string

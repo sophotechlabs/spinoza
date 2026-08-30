@@ -9,7 +9,10 @@ import {
   outcomeLabel,
   refOf,
   scopeLabel,
+  recordFailure,
+  sourceLabel,
   targetLabel,
+  verbLabel,
   when,
 } from '../../src/lib/history';
 import type { History, HistoryEntry } from '../../src/lib/types';
@@ -18,6 +21,7 @@ import { clock } from '../../src/lib/time';
 function entry(extra: Partial<HistoryEntry> = {}): HistoryEntry {
   return {
     id: 1,
+    source: 'action',
     at: '2026-08-29T09:30:00Z',
     verb: 'delete',
     name: 'web',
@@ -99,7 +103,9 @@ describe('scopeLabel', () => {
 describe('fetchHistory', () => {
   it('asks for the newest page and parses it', async () => {
     const body: History = {
-      entries: [{ id: 4, at: 'now', verb: 'apply', name: 'web', outcome: 'done' }],
+      entries: [
+        { id: 4, source: 'action', at: 'now', verb: 'apply', name: 'web', outcome: 'done' },
+      ],
       more: true,
     };
     const fetcher = stub(body);
@@ -116,6 +122,60 @@ describe('fetchHistory', () => {
     stub({ message: 'no' }, false, 500);
 
     await expect(fetchHistory()).rejects.toThrow();
+  });
+
+  it('asks for everything unless told otherwise', async () => {
+    const fetcher = stub({ entries: [] });
+
+    await fetchHistory();
+
+    expect(fetcher.mock.calls[0][0]).toContain('source=all');
+  });
+
+  it('asks for only what it was told to', async () => {
+    const fetcher = stub({ entries: [] });
+
+    await fetchHistory('change');
+
+    expect(fetcher.mock.calls[0][0]).toContain('source=change');
+  });
+
+  it('carries how many changes were not kept', async () => {
+    stub({ entries: [], dropped: 12 });
+
+    const got = await fetchHistory('change');
+
+    expect(got.dropped).toBe(12);
+  });
+});
+
+describe('recordFailure', () => {
+  it('says what failed and why', () => {
+    expect(recordFailure(new Error('nowhere to keep that'))).toBe(
+      'Changing what is recorded: nowhere to keep that',
+    );
+  });
+
+  it('says what failed when there is no why', () => {
+    expect(recordFailure('nope')).toBe('Changing what is recorded failed');
+  });
+});
+
+describe('what a row is called', () => {
+  it('names each filter', () => {
+    expect(sourceLabel('all')).toBe('Everything');
+    expect(sourceLabel('change')).toBe('What changed');
+    expect(sourceLabel('action')).toBe('What I did');
+  });
+
+  it('leaves what spinoza did in its own words', () => {
+    expect(verbLabel(entry({ verb: 'delete' }))).toBe('delete');
+  });
+
+  it('says what the cluster did in plain words', () => {
+    expect(verbLabel(entry({ source: 'change', verb: 'added' }))).toBe('appeared');
+    expect(verbLabel(entry({ source: 'change', verb: 'removed' }))).toBe('went');
+    expect(verbLabel(entry({ source: 'change', verb: 'changed' }))).toBe('changed');
   });
 });
 

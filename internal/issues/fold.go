@@ -221,19 +221,30 @@ func whereOfRef(ref api.ObjectRef) string {
 	return ref.Namespace + "/" + ref.Name
 }
 
+// Rank is the queue's order: worst first. Exported because merging several
+// clusters into one queue has to order them the same way one cluster is ordered.
+func Rank(rows []api.Issue) {
+	slices.SortStableFunc(rows, worstFirst)
+}
+
+func worstFirst(left, right api.Issue) int {
+	if severityRank(left.Severity) != severityRank(right.Severity) {
+		return severityRank(right.Severity) - severityRank(left.Severity)
+	}
+	if left.Folded != right.Folded {
+		return right.Folded - left.Folded
+	}
+	if !seenAt(left.Since).Equal(seenAt(right.Since)) {
+		return seenAt(right.Since).Compare(seenAt(left.Since))
+	}
+	if left.Cluster != right.Cluster {
+		return strings.Compare(left.Cluster, right.Cluster)
+	}
+	return strings.Compare(left.ID, right.ID)
+}
+
 func rank(rows []api.Issue) {
-	slices.SortStableFunc(rows, func(left, right api.Issue) int {
-		if severityRank(left.Severity) != severityRank(right.Severity) {
-			return severityRank(right.Severity) - severityRank(left.Severity)
-		}
-		if left.Folded != right.Folded {
-			return right.Folded - left.Folded
-		}
-		if !seenAt(left.Since).Equal(seenAt(right.Since)) {
-			return seenAt(right.Since).Compare(seenAt(left.Since))
-		}
-		return strings.Compare(left.ID, right.ID)
-	})
+	Rank(rows)
 }
 
 func severityRank(name string) int {

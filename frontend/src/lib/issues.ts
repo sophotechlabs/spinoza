@@ -7,15 +7,23 @@ import type { Polled } from './usePoll';
 const ISSUES_POLL_MS = 5000;
 
 export async function fetchIssues(): Promise<IssueQueue> {
-  const response = await request('/api/issues');
+  return queueFrom('/api/issues');
+}
+
+export async function fetchFleetIssues(): Promise<IssueQueue> {
+  return queueFrom('/api/issues/fleet');
+}
+
+async function queueFrom(path: string): Promise<IssueQueue> {
+  const response = await request(path);
   if (!response.ok) {
     throw new Error(`issues request failed with status ${response.status}`);
   }
   return parseIssueQueue(await response.json());
 }
 
-export function useIssues(enabled = true): Polled<IssueQueue> {
-  return usePoll(fetchIssues, {
+export function useIssues(enabled = true, fleet = false): Polled<IssueQueue> {
+  return usePoll(fleet ? fetchFleetIssues : fetchIssues, {
     intervalMs: ISSUES_POLL_MS,
     enabled,
     fallback: 'issues request failed',

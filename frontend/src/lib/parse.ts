@@ -720,6 +720,7 @@ function parseIssueChild(item: Record<string, unknown>): IssueChild {
 function parseIssue(item: Record<string, unknown>): Issue {
   return {
     id: asString(item.id),
+    cluster: optionalString(item.cluster),
     severity: oneOf(item.severity, SEVERITIES, 'warning'),
     detector: asString(item.detector),
     title: asString(item.title),
@@ -920,6 +921,7 @@ export function parseHelmReleases(body: unknown): HelmReleases {
 function parseHistoryEntry(item: Record<string, unknown>): HistoryEntry {
   return {
     id: asNumber(item.id),
+    source: asString(item.source),
     at: asString(item.at),
     verb: asString(item.verb),
     group: optionalString(item.group),
@@ -939,6 +941,7 @@ export function parseHistory(body: unknown): History {
   return {
     entries: listOf(item.entries, parseHistoryEntry),
     more: optionalBoolean(item.more),
+    dropped: optionalNumber(item.dropped),
     reason: optionalString(item.reason),
   };
 }

@@ -124,7 +124,12 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.managerFor(r).Issues(r.Context()))
+	queue := s.managerFor(r).Issues(r.Context())
+	on := s.clusterOf(r)
+	for at := range queue.Rows {
+		queue.Rows[at].Cluster = on
+	}
+	writeJSON(w, queue)
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {

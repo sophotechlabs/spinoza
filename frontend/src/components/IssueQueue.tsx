@@ -15,10 +15,14 @@ import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
+import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters';
+import { colorVar } from '../lib/clusterColor';
+import { useFleetIssues, useIssuesStore } from '../store/issues';
 
 interface IssueQueueProps {
   active?: boolean;
   onSelect?: (ref: ObjectRef) => void;
+  onSelectOn?: (cluster: string, ref: ObjectRef) => void;
 }
 
 const SEVERITY_ORDER: Severity[] = ['fatal', 'degraded', 'warning'];
@@ -45,6 +49,23 @@ function Where({ object, kind }: { object: ObjectRef; kind: string }) {
         {object.namespace !== '' && ` · ${object.namespace}`}
       </span>
     </>
+  );
+}
+
+function OnCluster({ cluster }: { cluster: string }) {
+  const tab = useClustersStore((state) => tabOn(state.tabs, cluster));
+  if (tab === null) {
+    return <span className="w-32 shrink-0 text-fg-faint">unknown</span>;
+  }
+  return (
+    <span className="flex w-32 shrink-0 items-center gap-1.5 truncate text-fg-muted">
+      <span
+        aria-hidden="true"
+        style={{ backgroundColor: colorVar(tab.color) }}
+        className="h-2 w-2 shrink-0 rounded-sm"
+      />
+      <span className="truncate">{nameOf(tab)}</span>
+    </span>
   );
 }
 
@@ -92,6 +113,13 @@ function Children({ row, now }: { row: Issue; now: number }) {
   );
 }
 
+function emptyWord(fleet: boolean): string {
+  if (fleet) {
+    return 'Nothing is broken in any open cluster right now.';
+  }
+  return 'Nothing is broken in this cluster right now.';
+}
+
 function childKey(child: IssueChild): string {
   return `${child.object.namespace}/${child.object.resource}/${child.object.name}`;
 }
@@ -100,12 +128,14 @@ function Row({
   row,
   now,
   open,
+  fleet,
   onToggle,
   onSelect,
 }: {
   row: Issue;
   now: number;
   open: boolean;
+  fleet: boolean;
   onToggle: () => void;
   onSelect?: (ref: ObjectRef) => void;
 }) {
@@ -116,6 +146,7 @@ function Row({
         <span className={`w-20 shrink-0 ${severityClass(row.severity)}`}>
           {severityLabel(row.severity)}
         </span>
+        {fleet && <OnCluster cluster={row.cluster ?? ''} />}
         <button
           type="button"
           className="w-56 shrink-0 truncate text-left"
@@ -162,10 +193,22 @@ function Row({
   );
 }
 
-export default function IssueQueue({ active = true, onSelect }: IssueQueueProps) {
-  const { data, error, reload } = useIssues(active);
+export default function IssueQueue({ active = true, onSelect, onSelectOn }: IssueQueueProps) {
+  const several = useTabStrip();
+  const fleet = useFleetIssues();
+  const setFleet = useIssuesStore((state) => state.setFleet);
+  const showing = fleet && several;
+  const { data, error, reload } = useIssues(active, showing);
   const [opened, setOpened] = useState<Record<string, boolean>>({});
   const now = useNow();
+
+  function pick(row: Issue) {
+    if (showing && row.cluster !== undefined && row.cluster !== '') {
+      onSelectOn?.(row.cluster, row.object);
+      return;
+    }
+    onSelect?.(row.object);
+  }
 
   if (data === null) {
     if (error !== null) {
@@ -188,13 +231,25 @@ export default function IssueQueue({ active = true, onSelect }: IssueQueueProps)
       {notice}
       {data.error !== undefined && <LoadWarning message={data.error} />}
       <div className="flex items-center justify-between border-b border-edge px-2 py-1.5">
-        <h2 className="text-[11px] tracking-wide text-fg-muted uppercase">Issues</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-[11px] tracking-wide text-fg-muted uppercase">Issues</h2>
+          {several && (
+            <label className="flex items-center gap-1.5 text-fg-soft">
+              <input
+                type="checkbox"
+                checked={fleet}
+                onChange={(event) => {
+                  setFleet(event.target.checked);
+                }}
+              />
+              Every open cluster
+            </label>
+          )}
+        </div>
         <Tally rows={data.rows} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
-        {data.rows.length === 0 && (
-          <p className="p-3 text-fg-muted">Nothing is broken in this cluster right now.</p>
-        )}
+        {data.rows.length === 0 && <p className="p-3 text-fg-muted">{emptyWord(showing)}</p>}
         <ul>
           {data.rows.map((row) => (
             <Row
@@ -205,7 +260,10 @@ export default function IssueQueue({ active = true, onSelect }: IssueQueueProps)
               onToggle={() => {
                 toggle(row.id);
               }}
-              onSelect={onSelect}
+              fleet={showing}
+              onSelect={() => {
+                pick(row);
+              }}
             />
           ))}
         </ul>

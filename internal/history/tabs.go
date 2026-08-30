@@ -15,6 +15,7 @@ type Tab struct {
 	Label      string
 	Grouping   string
 	Reopen     bool
+	Timeline   string
 }
 
 type Tabs struct {
@@ -87,6 +88,18 @@ func (t *Tabs) Reopening(ctx context.Context, id string, reopen bool) error {
 	return nil
 }
 
+func (t *Tabs) Recording(ctx context.Context, id, kinds string) error {
+	db := t.into.writer()
+	if db == nil {
+		return nil
+	}
+	_, err := db.ExecContext(ctx, recordCluster, kinds, id)
+	if err != nil {
+		return fmt.Errorf("history: %w", err)
+	}
+	return nil
+}
+
 func (t *Tabs) All(ctx context.Context) ([]Tab, error) {
 	db := t.into.reader()
 	if db == nil {
@@ -102,7 +115,7 @@ func (t *Tabs) All(ctx context.Context) ([]Tab, error) {
 		var tab Tab
 		var seen int64
 		scanErr := rows.Scan(&tab.ID, &tab.Context, &tab.Kubeconfig, &seen, &tab.Color,
-			&tab.Label, &tab.Grouping, &tab.Reopen)
+			&tab.Label, &tab.Grouping, &tab.Reopen, &tab.Timeline)
 		if scanErr != nil {
 			return nil, fmt.Errorf("history: %w", scanErr)
 		}

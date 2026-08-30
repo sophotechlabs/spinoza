@@ -490,6 +490,20 @@ func (h *heldTabs) Reopening(_ context.Context, id string, reopen bool) error {
 	return nil
 }
 
+func (h *heldTabs) Recording(_ context.Context, id, kinds string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.setErr != nil {
+		return h.setErr
+	}
+	for at, held := range h.tabs {
+		if held.ID == id {
+			h.tabs[at].Timeline = kinds
+		}
+	}
+	return nil
+}
+
 func (h *heldTabs) Forget(_ context.Context, id string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()

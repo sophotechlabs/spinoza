@@ -161,13 +161,7 @@ func (s *Store) Recent(ctx context.Context, query Query) (Page, error) {
 	if db == nil {
 		return Page{Entries: []Entry{}}, nil
 	}
-	limit := query.Limit
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
+	limit := limitOf(query.Limit)
 	rows, err := db.QueryContext(ctx, selectAudit, query.Cluster, query.Cluster, limit+1)
 	if err != nil {
 		return Page{}, fmt.Errorf("history: %w", err)
@@ -178,6 +172,22 @@ func (s *Store) Recent(ctx context.Context, query Query) (Page, error) {
 		return Page{}, scanErr
 	}
 	return pageOf(found, limit), nil
+}
+
+// Limit is what the store will actually return for what was asked for, so a
+// caller merging two of its answers can hold the same cap.
+func Limit(asked int) int {
+	return limitOf(asked)
+}
+
+func limitOf(asked int) int {
+	if asked <= 0 {
+		return defaultLimit
+	}
+	if asked > maxLimit {
+		return maxLimit
+	}
+	return asked
 }
 
 func pageOf(found []Entry, limit int) Page {
@@ -218,6 +228,10 @@ func (s *Store) Forget(ctx context.Context, cluster string) error {
 	_, err := db.ExecContext(ctx, deleteAudit, cluster, cluster)
 	if err != nil {
 		return fmt.Errorf("history: %w", err)
+	}
+	_, changesErr := db.ExecContext(ctx, deleteChanges, cluster, cluster)
+	if changesErr != nil {
+		return fmt.Errorf("history: %w", changesErr)
 	}
 	return nil
 }

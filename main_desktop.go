@@ -135,6 +135,7 @@ func runDesktop() error {
 	srv.UseHistory(past)
 	srv.UseTabs(past.Tabs())
 	srv.RememberOpen(ctx)
+	srv.StartRecordings(ctx)
 	srv.UseUpdates(updateChecker())
 	srv.UseLocalShell(func(cols, rows uint16) (server.LocalShell, error) {
 		session, err := localshell.Start(context.Background(), localshell.Options{

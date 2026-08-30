@@ -44,6 +44,11 @@ type heldHistory struct {
 	forgotten int
 
 	forgotCluster string
+
+	changes    []history.Change
+	changePage history.Changes
+	changeErr  error
+	pruned     []history.Retention
 }
 
 func (h *heldHistory) For(cluster string) history.Recorder {
@@ -65,6 +70,58 @@ func (w heldWriter) Record(_ context.Context, entry history.Entry) error {
 	entry.Cluster = w.cluster
 	held.entries = append(held.entries, entry)
 	return nil
+}
+
+func (h *heldHistory) Timeline(cluster string) history.Noter {
+	return heldNoter{into: h, cluster: cluster}
+}
+
+type heldNoter struct {
+	into    *heldHistory
+	cluster string
+}
+
+func (w heldNoter) Note(_ context.Context, changes []history.Change) error {
+	held := w.into
+	held.mu.Lock()
+	defer held.mu.Unlock()
+	if held.recordErr != nil {
+		return held.recordErr
+	}
+	for _, one := range changes {
+		one.Cluster = w.cluster
+		held.changes = append(held.changes, one)
+	}
+	return nil
+}
+
+func (h *heldHistory) Changed(_ context.Context, query history.Query) (history.Changes, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.lastQuery = query
+	if h.changeErr != nil {
+		return history.Changes{}, h.changeErr
+	}
+	return h.changePage, nil
+}
+
+func (h *heldHistory) Prune(_ context.Context, keep history.Retention, _ time.Time) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.pruned = append(h.pruned, keep)
+	return nil
+}
+
+func (h *heldHistory) noted() []history.Change {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]history.Change{}, h.changes...)
+}
+
+func (h *heldHistory) trims() []history.Retention {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]history.Retention{}, h.pruned...)
 }
 
 func (h *heldHistory) Recent(_ context.Context, query history.Query) (history.Page, error) {
@@ -990,6 +1047,10 @@ func TestEveryStoredHistoryFieldReachesTheWire(t *testing.T) {
 }
 
 func TestTheWireCarriesNoHistoryFieldTheStoreCannotFill(t *testing.T) {
+	saidByTheReader := map[string]string{
+		"Source": "which of the two tables the row came from, which is not a column in either",
+	}
+
 	stored := reflect.TypeFor[history.Entry]()
 	held := map[string]bool{}
 	for field := range stored.Fields() {
@@ -999,9 +1060,15 @@ func TestTheWireCarriesNoHistoryFieldTheStoreCannotFill(t *testing.T) {
 	sent := reflect.TypeFor[api.HistoryEntry]()
 	for field := range sent.Fields() {
 		name := field.Name
-		if !held[name] {
-			t.Errorf("api.HistoryEntry.%s has no field in history.Entry to fill it", name)
+		if held[name] {
+			continue
 		}
+		why, deliberate := saidByTheReader[name]
+		if !deliberate {
+			t.Errorf("api.HistoryEntry.%s has no field in history.Entry to fill it", name)
+			continue
+		}
+		t.Logf("api.HistoryEntry.%s is filled by the reader: %s", name, why)
 	}
 }
 
@@ -1020,7 +1087,7 @@ func TestEntriesOfCarriesEveryValue(t *testing.T) {
 		t.Fatalf("entries = %d, want 1", len(got))
 	}
 	want := api.HistoryEntry{
-		ID: 7, At: "2026-08-29T12:00:00Z", Verb: "scale",
+		ID: 7, Source: api.HistoryAction, At: "2026-08-29T12:00:00Z", Verb: "scale",
 		Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment",
 		Namespace: "audit-probe", Name: "target", Detail: "to 2 replicas",
 		Outcome: "done", Message: "all good",

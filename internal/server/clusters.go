@@ -52,6 +52,7 @@ func (s *Server) clusterList(ctx context.Context) api.ClusterList {
 		opened[i].Label = known[opened[i].ID].Label
 		opened[i].Grouping = known[opened[i].ID].Grouping
 		opened[i].Reopen = known[opened[i].ID].Reopen
+		opened[i].Timeline = known[opened[i].ID].Timeline
 	}
 	return api.ClusterList{Clusters: opened, Remembered: s.rememberedTabs(ctx)}
 }
@@ -98,6 +99,7 @@ func (s *Server) rememberTab(ctx context.Context, id string, ref api.ContextRef)
 		tab.Label = was.Label
 		tab.Grouping = was.Grouping
 		tab.Reopen = was.Reopen
+		tab.Timeline = was.Timeline
 	}
 	err := held.Remember(ctx, tab)
 	if err != nil {
@@ -278,6 +280,7 @@ func (s *Server) closeCluster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errNoClusterNamed.Error())
 		return
 	}
+	s.stopRecording(id)
 	s.drainTerminals(r.Context(), id)
 	s.dropSubscriptionsOn(id)
 	err := s.cluster.Close(id)

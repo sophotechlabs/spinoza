@@ -537,6 +537,7 @@ export interface OpenCluster {
   label?: string;
   grouping?: string;
   reopen: boolean;
+  timeline?: string;
   protection: string;
   reachable: boolean;
   reason?: string;
@@ -590,6 +591,7 @@ export interface ViewSwitch {
 
 export interface HistoryEntry {
   id: number;
+  source: string;
   at: string;
   verb: string;
   group?: string;
@@ -606,6 +608,7 @@ export interface HistoryEntry {
 export interface History {
   entries: HistoryEntry[];
   more?: boolean;
+  dropped?: number;
   reason?: string;
 }
 
@@ -698,6 +701,7 @@ export interface IssueChild {
 
 export interface Issue {
   id: string;
+  cluster?: string;
   severity: Severity;
   detector: string;
   title: string;
@@ -1049,6 +1053,7 @@ export interface CheckFinding {
   container?: string;
   detail: string;
   patch?: string;
+  severity: CheckSeverity;
   new?: boolean;
   muted?: boolean;
   mutedBy?: string;
@@ -1069,6 +1074,7 @@ export interface CheckGroup {
   new?: number;
   fixed?: number;
   baselined?: boolean;
+  measured?: boolean;
   truncated?: boolean;
   next?: string;
   findings: CheckFinding[];
@@ -1094,6 +1100,15 @@ export interface Mute {
   ref?: string;
   reason?: string;
   at?: string;
+}
+
+export interface RuleFault {
+  id: string;
+  reason: string;
+}
+
+export interface RuleFaults {
+  faults: RuleFault[];
 }
 
 export interface Mutes {
