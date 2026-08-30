@@ -117,7 +117,7 @@ function fromDocument(name: string): string {
   return window.getComputedStyle(document.documentElement).getPropertyValue(`--${name}`);
 }
 
-export const EDITOR_PAIRS: { token: string; behind: string; where: string }[] = [
+const EDITOR_PAIRS: { token: string; behind: string; where: string }[] = [
   { token: 'fg-muted', behind: 'surface', where: 'the editor line numbers' },
   { token: 'fg-strong', behind: 'surface', where: 'the editor cursor' },
   { token: 'fg', behind: 'surface-raised', where: 'the editor popups' },

@@ -10,7 +10,7 @@ export async function fetchIssues(): Promise<IssueQueue> {
   return queueFrom('/api/issues');
 }
 
-export async function fetchFleetIssues(): Promise<IssueQueue> {
+async function fetchFleetIssues(): Promise<IssueQueue> {
   return queueFrom('/api/issues/fleet');
 }
 

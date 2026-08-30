@@ -46,7 +46,7 @@ func TestABaselineComesBackAsItWasSaved(t *testing.T) {
 	}
 }
 
-func TestOneClusterCannotReadAnothersBaseline(t *testing.T) {
+func TestOneClusterCannotReadAnotherClusterBaseline(t *testing.T) {
 	held := store(t)
 	if err := held.Save(cluster, taken()); err != nil {
 		t.Fatalf("save: %v", err)

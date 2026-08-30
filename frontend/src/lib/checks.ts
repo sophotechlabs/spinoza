@@ -21,7 +21,7 @@ import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 import { useChecksFilter, useChecksInterval } from '../store/settings';
-import type { SeverityFloor } from './settings';
+import type { ChecksFilter } from '../store/settings';
 import { SEVERITY_FLOORS } from './settings';
 
 const BASELINE_TIMEOUT_MS = SLOW_REQUEST_TIMEOUT_MS;
@@ -178,17 +178,6 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
     next: item.next,
     findings,
   };
-}
-
-export interface ChecksFilter {
-  disabled: string[];
-  skipNamespaces: string[];
-  namespace: string;
-  minSeverity: SeverityFloor;
-  wholeCluster: boolean;
-  everyKind: boolean;
-  onlyNew: boolean;
-  showMuted: boolean;
 }
 
 export const NO_FILTER: ChecksFilter = {

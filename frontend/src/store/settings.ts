@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { ChecksFilter } from '../lib/checks';
 import type {
   CheckInterval,
   LogView,
@@ -154,6 +153,17 @@ export function useScreenReader(): boolean {
 
 export function useChecksInterval(): CheckInterval {
   return useSettingsStore((state) => state.checksInterval);
+}
+
+export interface ChecksFilter {
+  disabled: string[];
+  skipNamespaces: string[];
+  namespace: string;
+  minSeverity: SeverityFloor;
+  wholeCluster: boolean;
+  everyKind: boolean;
+  onlyNew: boolean;
+  showMuted: boolean;
 }
 
 export function useChecksFilter(): ChecksFilter {
