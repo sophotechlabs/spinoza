@@ -69,6 +69,7 @@ export default async function globalSetup(): Promise<void> {
     'home-nowhere',
     'home-traffic',
     'home-profiled',
+    'home-guarded',
   ]) {
     rmSync(join(TMP_DIR, name), { recursive: true, force: true });
   }
@@ -105,6 +106,7 @@ export default async function globalSetup(): Promise<void> {
   const nowhere = await side('nowhere', 3, unreachableKubeconfig(), []);
   const traffic = await side('traffic', 4, KUBECONFIG, ['--prometheus', 'e2e/fake-prom:9090']);
   const profiled = await side('profiled', 5, KUBECONFIG, ['--pprof']);
+  const guarded = await side('guarded', 6, KUBECONFIG, []);
   writeFileSync(
     STATE_FILE,
     JSON.stringify(
@@ -113,7 +115,7 @@ export default async function globalSetup(): Promise<void> {
         baseURL: BASE_URL,
         token: value,
         charts,
-        sides: { readonly, toolless, nowhere, traffic, profiled },
+        sides: { readonly, toolless, nowhere, traffic, profiled, guarded },
       },
       null,
       2,

@@ -1,17 +1,18 @@
 import { expect, test, holdSide, sideAuthed } from '../harness/test';
+import type { Held } from '../harness/keepalive';
 import { CONTEXT } from '../harness/paths';
 import type { Browser, Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
 
-let release: () => Promise<void>;
+let release: Held;
 
-test.beforeAll(async ({ browser }: { browser: Browser }) => {
-  release = await holdSide(browser, 'nowhere');
+test.beforeAll(() => {
+  release = holdSide('nowhere');
 });
 
 test.afterAll(async () => {
-  await release();
+  await release.close();
 });
 
 async function openNowhere(browser: Browser, hash: string): Promise<[Page, () => Promise<void>]> {
@@ -75,12 +76,12 @@ test('the views that need a cluster are the ones that go quiet', async ({ browse
 test('a helm spinoza cannot run is not offered as a button that would fail', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
-  const toolless = await holdSide(browser, 'toolless');
+  const toolless = holdSide('toolless');
   await page.goto(sideAuthed('toolless', `#context=${CONTEXT}&view=helm`));
   await page.waitForLoadState('domcontentloaded');
   await expect(page.getByRole('button', { name: 'Install chart' })).toBeDisabled({
     timeout: 60_000,
   });
   await context.close();
-  await toolless();
+  await toolless.close();
 });

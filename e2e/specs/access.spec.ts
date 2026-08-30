@@ -1,17 +1,18 @@
 import { expect, test, holdSide, sideAuthed } from '../harness/test';
+import type { Held } from '../harness/keepalive';
 import { CONTEXT } from '../harness/paths';
 import type { Browser, Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
 
-let release: () => Promise<void>;
+let release: Held;
 
-test.beforeAll(async ({ browser }: { browser: Browser }) => {
-  release = await holdSide(browser, 'readonly');
+test.beforeAll(() => {
+  release = holdSide('readonly');
 });
 
 test.afterAll(async () => {
-  await release();
+  await release.close();
 });
 
 async function openReadonly(browser: Browser, hash: string): Promise<[Page, () => Promise<void>]> {
