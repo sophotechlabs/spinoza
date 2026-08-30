@@ -166,14 +166,6 @@ test('helm releases', async ({ page }) => {
   await shoot(page, 'helm-releases');
 });
 
-test('inspecting a live object', async ({ page }) => {
-  await openResource(page, 'configmaps', 'ConfigMap');
-  await selectRow(page, 'storefront-config');
-  await page.getByRole('tab', { name: 'YAML', exact: true }).click();
-  await expect(page.locator('.monaco-editor').first()).toBeVisible({ timeout: 90_000 });
-  await shoot(page, 'inspect-yaml');
-});
-
 test('forwarding a port', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
   const row = page
@@ -266,4 +258,12 @@ test('what spinoza changed', async ({ page }) => {
   await openView(page, 'history');
   await expect(page.locator('main')).toBeVisible({ timeout: 90_000 });
   await shoot(page, 'history');
+});
+
+test('inspecting a live object', async ({ page }) => {
+  await openResource(page, 'configmaps', 'ConfigMap');
+  await selectRow(page, 'storefront-config');
+  await page.getByRole('tab', { name: 'YAML', exact: true }).click();
+  await expect(page.locator('.monaco-editor').first()).toBeVisible({ timeout: 90_000 });
+  await shoot(page, 'inspect-yaml');
 });
