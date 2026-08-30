@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Background, Controls, ReactFlow, useReactFlow } from '@xyflow/react';
+import { useCallback, useEffect } from 'react';
+import { useReactFlow } from '@xyflow/react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import type { Graph, GraphEdgeKind, GraphNode } from '../lib/types';
 import {
@@ -11,13 +11,9 @@ import {
   toFlow,
 } from '../lib/graphLayout';
 import type { GitopsFlow, GitopsFlowNode } from '../lib/graphLayout';
-import LoadWarning from './LoadWarning';
-import LoadFailure from './LoadFailure';
-import StaleBanner from './StaleBanner';
-import { useResolvedTheme } from '../store/theme';
-import Loading from './Loading';
-
-const MAX_NODES = 400;
+import { useLaidOut } from '../lib/graphState';
+import type { Laid } from '../lib/graphState';
+import GraphShell from './GraphShell';
 
 const ALL_EDGE_KINDS: GraphEdgeKind[] = ['source', 'dependsOn', 'manages'];
 
@@ -67,7 +63,10 @@ function narrowTo(graph: Graph): string {
   return `Pick a namespace — ${busiest} is the biggest.`;
 }
 
-function legendFor(graph: Graph): LegendItem[] {
+function legendFor(graph: Graph | null): LegendItem[] {
+  if (graph === null) {
+    return LEGEND;
+  }
   if (graph.nodes.some((node) => node.category === 'source')) {
     return [...LEGEND, SOURCE_LEGEND];
   }
@@ -84,12 +83,7 @@ const EDGE_LABELS: Record<GraphEdgeKind, string> = {
   scales: 'Scales',
 };
 
-interface Laid {
-  graph: Graph;
-  flow: GitopsFlow;
-}
-
-function layOut(current: Laid | null, graph: Graph): Laid {
+function layOut(current: Laid<Graph, GitopsFlow> | null, graph: Graph): Laid<Graph, GitopsFlow> {
   if (current === null) {
     return { graph, flow: toFlow(graph) };
   }
@@ -111,31 +105,7 @@ export default function GraphCanvas({
   onRetry,
   onSelect,
 }: GraphCanvasProps) {
-  const resolvedTheme = useResolvedTheme();
-  const [laid, setLaid] = useState<Laid | null>(null);
-
-  let partial: string | null = null;
-  let overLimit: number | null = null;
-  if (data !== null) {
-    partial = data.error ?? null;
-    if (data.nodes.length > MAX_NODES) {
-      overLimit = data.nodes.length;
-    }
-  }
-
-  if (data !== null && overLimit === null) {
-    const next = layOut(laid, data);
-    if (next !== laid) {
-      setLaid(next);
-    }
-  }
-
-  let flow: GitopsFlow | null = null;
-  let legend = LEGEND;
-  if (laid !== null) {
-    flow = laid.flow;
-    legend = legendFor(laid.graph);
-  }
+  const { laid, partial, overLimit } = useLaidOut<Graph, GitopsFlow>(data, layOut);
 
   const handleNodeClick = useCallback<NodeMouseHandler<GitopsFlowNode>>(
     (_event, node) => {
@@ -146,54 +116,39 @@ export default function GraphCanvas({
     [onSelect],
   );
 
+  let tooMany = null;
   if (overLimit !== null && data !== null) {
-    return (
-      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-fg-muted">
+    tooMany = (
+      <>
         {what} has {overLimit} nodes, too many to render. {narrowTo(data)}
-      </div>
+      </>
     );
   }
 
-  if (flow === null) {
-    if (error !== null) {
-      return (
-        <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
-      );
-    }
-    return <Loading what="graph" />;
+  let flow: GitopsFlow | null = null;
+  if (laid !== null) {
+    flow = laid.flow;
   }
 
-  if (flow.nodes.length === 0) {
-    if (partial !== null) {
-      return <LoadFailure what={what} message={partial} />;
-    }
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">{empty}</div>
-    );
+  let refit = null;
+  if (flow !== null) {
+    refit = <Refit shape={shapeOf(flow)} />;
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      {error !== null && <StaleBanner what={what} message={error} onRetry={onRetry} />}
-      {partial !== null && <LoadWarning message={partial} />}
-      <div className="relative min-h-0 w-full flex-1">
-        <ReactFlow
-          nodes={flow.nodes}
-          edges={flow.edges}
-          onNodeClick={handleNodeClick}
-          colorMode={resolvedTheme.base}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-          onlyRenderVisibleElements
-          fitView
-        >
-          <Refit shape={shapeOf(flow)} />
-          <Background />
-          <Controls />
-        </ReactFlow>
-        <div className="pointer-events-none absolute top-2 right-2 z-10 rounded border border-edge bg-surface-raised/90 px-2 py-1.5 text-[11px] text-fg-soft">
-          {legend.map((item) => (
+    <GraphShell<GitopsFlowNode>
+      what={what}
+      loading="graph"
+      empty={empty}
+      flow={flow}
+      error={error}
+      partial={partial}
+      overLimit={tooMany}
+      onRetry={onRetry}
+      onNodeClick={handleNodeClick}
+      legend={
+        <>
+          {legendFor(laid?.graph ?? null).map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
               <span className={`h-2.5 w-2.5 rounded border ${item.swatch}`} />
               {item.label}
@@ -208,8 +163,10 @@ export default function GraphCanvas({
               {EDGE_LABELS[kind]}
             </div>
           ))}
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {refit}
+    </GraphShell>
   );
 }

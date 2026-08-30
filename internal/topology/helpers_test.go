@@ -52,13 +52,13 @@ func condition(kind, status string) map[string]any {
 // the numbers this package and the canvas both depend on
 
 func TestTheNodeBudgetIsTheCanvasCap(t *testing.T) {
-	source, err := os.ReadFile("../../frontend/src/components/GraphCanvas.tsx")
+	source, err := os.ReadFile("../../frontend/src/lib/graphState.ts")
 	if err != nil {
-		t.Fatalf("read the canvas: %v", err)
+		t.Fatalf("read the graph state: %v", err)
 	}
 	found := regexp.MustCompile(`MAX_NODES = (\d+)`).FindSubmatch(source)
 	if found == nil {
-		t.Fatal("the canvas no longer declares MAX_NODES; the two limits cannot be compared")
+		t.Fatal("the graph state no longer declares MAX_NODES; the two limits cannot be compared")
 	}
 	refuses, err := strconv.Atoi(string(found[1]))
 	if err != nil {

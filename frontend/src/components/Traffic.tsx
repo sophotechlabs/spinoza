@@ -1,5 +1,3 @@
-import { useState } from 'react';
-import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { TrafficGraph } from '../lib/types';
 import { fetchTrafficGraph } from '../lib/traffic';
 import { usePoll } from '../lib/usePoll';
@@ -11,15 +9,12 @@ import {
   sameTrafficShape,
   toTrafficFlow,
 } from '../lib/trafficLayout';
-import type { TrafficFlow } from '../lib/trafficLayout';
-import { useResolvedTheme } from '../store/theme';
-import LoadFailure from './LoadFailure';
-import LoadWarning from './LoadWarning';
-import Loading from './Loading';
-import StaleBanner from './StaleBanner';
+import type { TrafficFlow, TrafficFlowNode } from '../lib/trafficLayout';
+import { MAX_NODES, useLaidOut } from '../lib/graphState';
+import type { Laid } from '../lib/graphState';
+import GraphShell from './GraphShell';
 
 const POLL_INTERVAL_MS = 5000;
-const MAX_NODES = 400;
 
 const WHAT = 'The traffic graph';
 const EMPTY = 'No workload-to-workload traffic in the last five minutes.';
@@ -29,11 +24,6 @@ const LEGEND = [
   { stroke: EDGE_DROP_STROKE, label: 'Some flows dropped' },
 ];
 
-interface Laid {
-  graph: TrafficGraph;
-  flow: TrafficFlow;
-}
-
 function foldedNote(graph: TrafficGraph): string | null {
   if (graph.folded !== true) {
     return null;
@@ -42,7 +32,10 @@ function foldedNote(graph: TrafficGraph): string | null {
   return `Folded to namespaces: ${String(workloads)} workloads is past the ${String(MAX_NODES)} this graph draws.`;
 }
 
-function layOut(current: Laid | null, graph: TrafficGraph): Laid {
+function layOut(
+  current: Laid<TrafficGraph, TrafficFlow> | null,
+  graph: TrafficGraph,
+): Laid<TrafficGraph, TrafficFlow> {
   if (current === null) {
     return { graph, flow: toTrafficFlow(graph) };
   }
@@ -56,97 +49,62 @@ function layOut(current: Laid | null, graph: TrafficGraph): Laid {
 }
 
 export default function Traffic() {
-  const resolvedTheme = useResolvedTheme();
   const { data, error, reload } = usePoll(fetchTrafficGraph, {
     intervalMs: POLL_INTERVAL_MS,
     fallback: 'traffic graph request failed',
   });
-  const [laid, setLaid] = useState<Laid | null>(null);
+  const { laid, partial, overLimit } = useLaidOut<TrafficGraph, TrafficFlow>(data, layOut);
 
-  let partial: string | null = null;
-  let overLimit: number | null = null;
-  if (data !== null) {
-    partial = data.error ?? null;
-    if (data.nodes.length > MAX_NODES) {
-      overLimit = data.nodes.length;
-    }
-  }
-
-  if (data === null && laid !== null) {
-    setLaid(null);
-  }
-
-  if (data !== null && overLimit === null) {
-    const next = layOut(laid, data);
-    if (next !== laid) {
-      setLaid(next);
-    }
-  }
-
+  let tooMany = null;
   if (overLimit !== null) {
-    return (
-      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-fg-muted">
+    tooMany = (
+      <>
         {WHAT} has {overLimit} workloads, too many to render.
-      </div>
+      </>
     );
   }
 
-  if (laid === null) {
-    if (error !== null) {
-      return (
-        <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
-      );
-    }
-    return <Loading what="the traffic graph" />;
-  }
-
-  const foldNote = foldedNote(laid.graph);
-
-  if (laid.flow.nodes.length === 0) {
-    if (partial !== null) {
-      return <LoadFailure what={WHAT} message={partial} />;
-    }
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-fg-muted">{EMPTY}</div>
-    );
-  }
-
-  return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      {error !== null && <StaleBanner what={WHAT} message={error} onRetry={reload} />}
-      {partial !== null && <LoadWarning message={partial} />}
-      {foldNote !== null && (
+  let flow: TrafficFlow | null = null;
+  let banner = null;
+  let source = '';
+  if (laid !== null) {
+    flow = laid.flow;
+    source = laid.graph.source;
+    const note = foldedNote(laid.graph);
+    if (note !== null) {
+      banner = (
         <div
           role="status"
           className="shrink-0 border-b border-edge bg-surface-raised px-3 py-1.5 text-xs text-fg-muted"
         >
-          {foldNote}
+          {note}
         </div>
-      )}
-      <div className="relative min-h-0 w-full flex-1">
-        <ReactFlow
-          nodes={laid.flow.nodes}
-          edges={laid.flow.edges}
-          colorMode={resolvedTheme.base}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-          onlyRenderVisibleElements
-          fitView
-        >
-          <Background />
-          <Controls />
-        </ReactFlow>
-        <div className="pointer-events-none absolute top-2 right-2 z-10 rounded border border-edge bg-surface-raised/90 px-2 py-1.5 text-[11px] text-fg-soft">
-          <div className="mb-1 font-semibold text-fg">{laid.graph.source}</div>
+      );
+    }
+  }
+
+  return (
+    <GraphShell<TrafficFlowNode>
+      what={WHAT}
+      loading="the traffic graph"
+      empty={EMPTY}
+      flow={flow}
+      error={error}
+      partial={partial}
+      overLimit={tooMany}
+      onRetry={reload}
+      banner={banner}
+      legend={
+        <>
+          <div className="mb-1 font-semibold text-fg">{source}</div>
           {LEGEND.map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
               <span className="h-0.5 w-2.5 rounded" style={{ backgroundColor: item.stroke }} />
               {item.label}
             </div>
           ))}
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }
