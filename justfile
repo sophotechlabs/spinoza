@@ -1,7 +1,7 @@
 export PATH := if os() == 'windows' { env_var('PATH') } else { env_var('HOME') + '/go/bin:' + env_var('PATH') }
 
 exe := if os() == 'windows' { '.exe' } else { '' }
-go_pkgs := './internal/... .'
+go_pkgs := './internal/... ./cmd/... .'
 addr := env_var_or_default('SPINOZA_ADDR', '127.0.0.1:34115')
 test_cluster := env_var_or_default('SPINOZA_KIND_CLUSTER', 'spinoza')
 test_context := 'kind-' + test_cluster

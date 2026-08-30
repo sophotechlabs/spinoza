@@ -4,6 +4,7 @@ local-prefix: github.com/sophotechlabs/spinoza
 exclude:
   paths:
     - ^main\.go$
+    - ^cmd/spinoza-mcp/main\.go$
     - ^main_desktop\.go$
     - ^internal/cluster/wire\.go$
     - ^assets_embed\.go$
