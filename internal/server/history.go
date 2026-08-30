@@ -54,6 +54,7 @@ type History interface {
 	Recent(ctx context.Context, query store.Query) (store.Page, error)
 	Changed(ctx context.Context, query store.Query) (store.Changes, error)
 	Prune(ctx context.Context, keep store.Retention, now time.Time) error
+	PruneAudit(ctx context.Context, keep store.Retention, now time.Time) error
 	Forget(ctx context.Context, cluster string) error
 	Reason() string
 }

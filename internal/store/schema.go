@@ -44,6 +44,12 @@ WHERE (? = '' OR cluster = ?) AND (? = 0 OR id < ?)
 ORDER BY at DESC, id DESC
 LIMIT ?`
 
+const deleteAuditBefore = `DELETE FROM audit WHERE at < ?`
+
+const oldestAuditKept = `SELECT id FROM audit ORDER BY id DESC LIMIT 1 OFFSET ?`
+
+const deleteAuditBelow = `DELETE FROM audit WHERE id <= ?`
+
 const deleteChanges = `
 DELETE FROM changes
 WHERE (? = '' OR cluster = ?)`

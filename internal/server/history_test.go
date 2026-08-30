@@ -45,10 +45,11 @@ type heldHistory struct {
 
 	forgotCluster string
 
-	changes    []store.Change
-	changePage store.Changes
-	changeErr  error
-	pruned     []store.Retention
+	changes     []store.Change
+	changePage  store.Changes
+	changeErr   error
+	pruned      []store.Retention
+	prunedAudit []store.Retention
 }
 
 func (h *heldHistory) For(cluster string) store.Recorder {
@@ -112,6 +113,13 @@ func (h *heldHistory) Prune(_ context.Context, keep store.Retention, _ time.Time
 	return nil
 }
 
+func (h *heldHistory) PruneAudit(_ context.Context, keep store.Retention, _ time.Time) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.prunedAudit = append(h.prunedAudit, keep)
+	return nil
+}
+
 func (h *heldHistory) noted() []store.Change {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -122,6 +130,12 @@ func (h *heldHistory) trims() []store.Retention {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return append([]store.Retention{}, h.pruned...)
+}
+
+func (h *heldHistory) auditTrims() []store.Retention {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]store.Retention{}, h.prunedAudit...)
 }
 
 func (h *heldHistory) Recent(_ context.Context, query store.Query) (store.Page, error) {

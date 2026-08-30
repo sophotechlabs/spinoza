@@ -28,6 +28,8 @@ const (
 	timelineRows     = 200000
 	timelineDays     = 7
 	timelineMaxDays  = 90
+	auditRows        = 50000
+	auditDays        = 90
 	pruneEvery       = 2000
 	timelineWrite    = 15 * time.Second
 	timelineDaysKey  = "timelineDays"
@@ -226,6 +228,10 @@ func (s *Server) pruneTimeline(ctx context.Context) {
 	err := past.Prune(ctx, store.Retention{Days: s.keepDays(), Rows: timelineRows}, s.instant())
 	if err != nil {
 		slog.Warn("the timeline could not be trimmed", "error", err)
+	}
+	auditErr := past.PruneAudit(ctx, store.Retention{Days: auditDays, Rows: auditRows}, s.instant())
+	if auditErr != nil {
+		slog.Warn("the audit could not be trimmed", "error", auditErr)
 	}
 }
 

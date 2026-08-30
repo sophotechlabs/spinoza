@@ -169,16 +169,42 @@ func scanChanges(rows *sql.Rows) ([]Change, error) {
 	return found, nil
 }
 
+type trimmable struct {
+	before string
+	oldest string
+	below  string
+}
+
+var timelineTrim = trimmable{
+	before: deleteChangesBefore,
+	oldest: oldestChangeKept,
+	below:  deleteChangesBelow,
+}
+
+var auditTrim = trimmable{
+	before: deleteAuditBefore,
+	oldest: oldestAuditKept,
+	below:  deleteAuditBelow,
+}
+
 // Prune is the disk control: a day window a person can reason about, and a row
 // cap that holds on a cluster nobody has measured.
 func (s *Store) Prune(ctx context.Context, keep Retention, now time.Time) error {
+	return s.trim(ctx, timelineTrim, keep, now)
+}
+
+func (s *Store) PruneAudit(ctx context.Context, keep Retention, now time.Time) error {
+	return s.trim(ctx, auditTrim, keep, now)
+}
+
+func (s *Store) trim(ctx context.Context, table trimmable, keep Retention, now time.Time) error {
 	db := s.writer()
 	if db == nil {
 		return nil
 	}
 	if keep.Days > 0 {
 		cutoff := now.UTC().AddDate(0, 0, -keep.Days).UnixMilli()
-		_, err := db.ExecContext(ctx, deleteChangesBefore, cutoff)
+		_, err := db.ExecContext(ctx, table.before, cutoff)
 		if err != nil {
 			return fmt.Errorf("store: %w", err)
 		}
@@ -186,16 +212,16 @@ func (s *Store) Prune(ctx context.Context, keep Retention, now time.Time) error 
 	if keep.Rows <= 0 {
 		return nil
 	}
-	return s.capRows(ctx, db, keep.Rows)
+	return s.capRows(ctx, db, table, keep.Rows)
 }
 
-func (s *Store) capRows(ctx context.Context, db *sql.DB, rows int) error {
+func (s *Store) capRows(ctx context.Context, db *sql.DB, table trimmable, rows int) error {
 	var oldest int64
-	err := db.QueryRowContext(ctx, oldestChangeKept, rows).Scan(&oldest)
+	err := db.QueryRowContext(ctx, table.oldest, rows).Scan(&oldest)
 	if err != nil {
 		return nothingToCap(err)
 	}
-	_, cutErr := db.ExecContext(ctx, deleteChangesBelow, oldest)
+	_, cutErr := db.ExecContext(ctx, table.below, oldest)
 	if cutErr != nil {
 		return fmt.Errorf("store: %w", cutErr)
 	}

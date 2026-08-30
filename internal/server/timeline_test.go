@@ -160,6 +160,29 @@ func TestTheTimelineIsTrimmedAsItIsWrittenTo(t *testing.T) {
 	}
 }
 
+func TestTheAuditIsBoundedByTheSamePassThatTrimsTheTimeline(t *testing.T) {
+	backend := &taped{}
+	srv, store, _ := tapingServer(t, backend)
+
+	srv.startRecording(t.Context(), mk1, timelineWorkloads)
+	defer srv.stopRecording(mk1)
+
+	for range 200 {
+		if len(store.auditTrims()) > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	trims := store.auditTrims()
+	if len(trims) == 0 {
+		t.Fatal("the audit was never trimmed, so it grows without bound")
+	}
+	if trims[0].Days != auditDays || trims[0].Rows != auditRows {
+		t.Fatalf("it trimmed the audit to %+v", trims[0])
+	}
+}
+
 func TestHowLongToKeepTheTimelineComesFromTheSettings(t *testing.T) {
 	srv, _, _ := tapingServer(t, &taped{})
 	err := srv.stored().Merge(map[string]string{timelineDaysKey: "30"})
