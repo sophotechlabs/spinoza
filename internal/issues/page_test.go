@@ -18,7 +18,7 @@ func rowsAcrossEveryOrderingField() []api.Issue {
 		testNow.UTC().Format(time.RFC3339),
 	}
 	clusters := []string{"alpha", "beta"}
-	out := []api.Issue{}
+	out := make([]api.Issue, 0, len(severities)*len(folded)*len(when)*len(clusters))
 	for _, severity := range severities {
 		for _, fold := range folded {
 			for _, since := range when {
@@ -59,7 +59,7 @@ func TestPagingWalksTheWholeQueueInOrder(t *testing.T) {
 
 	walked := []api.Issue{}
 	cursor := ""
-	for range len(rows) {
+	for range rows {
 		page, next := Page(rows, DecodeCursor(cursor), 7)
 		walked = append(walked, page...)
 		if next == "" {

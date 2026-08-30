@@ -133,20 +133,20 @@ func (s *stubViews) HelmReleases(context.Context) (api.HelmReleases, error) {
 	return s.releases, nil
 }
 
-func getJSON(t *testing.T, url string, into any) *http.Response {
+func getJSON(t *testing.T, at string, into any) *http.Response {
 	t.Helper()
-	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
+	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, at, http.NoBody)
 	if reqErr != nil {
-		t.Fatalf("request %s: %v", url, reqErr)
+		t.Fatalf("request %s: %v", at, reqErr)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("GET %s: %v", url, err)
+		t.Fatalf("GET %s: %v", at, err)
 	}
 	t.Cleanup(func() { _ = resp.Body.Close() })
 	if resp.StatusCode == http.StatusOK && into != nil {
 		if decodeErr := json.NewDecoder(resp.Body).Decode(into); decodeErr != nil {
-			t.Fatalf("decode %s: %v", url, decodeErr)
+			t.Fatalf("decode %s: %v", at, decodeErr)
 		}
 	}
 	return resp
@@ -390,15 +390,15 @@ func TestBothViewEndpointsRefuseAnythingButGet(t *testing.T) {
 	}
 }
 
-func post(t *testing.T, url string) *http.Response {
+func post(t *testing.T, at string) *http.Response {
 	t.Helper()
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, at, http.NoBody)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
 	resp, doErr := http.DefaultClient.Do(req)
 	if doErr != nil {
-		t.Fatalf("POST %s: %v", url, doErr)
+		t.Fatalf("POST %s: %v", at, doErr)
 	}
 	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp

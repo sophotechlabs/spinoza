@@ -27,7 +27,7 @@ type faultyConnector struct {
 }
 
 func (c faultyConnector) Connect(context.Context) (driver.Conn, error) {
-	return faultyConn{arm: c.arm, execs: c.execs}, nil
+	return faultyConn(c), nil
 }
 
 func (c faultyConnector) Driver() driver.Driver {
@@ -46,7 +46,7 @@ type faultyConn struct {
 }
 
 func (c faultyConn) Prepare(string) (driver.Stmt, error) {
-	return faultyStmt{arm: c.arm, execs: c.execs}, nil
+	return faultyStmt(c), nil
 }
 
 func (c faultyConn) Close() error {
