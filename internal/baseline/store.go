@@ -32,6 +32,7 @@ type stored struct {
 	TakenAt string            `json:"takenAt"`
 	Checks  []string          `json:"checks"`
 	Counts  map[string]int    `json:"counts"`
+	Scanned int               `json:"scanned,omitempty"`
 	Keys    map[string]string `json:"keys"`
 }
 
@@ -88,6 +89,7 @@ func (s *Store) Load(cluster string) (checks.Baseline, bool) {
 		Cluster: held.Cluster,
 		Checks:  held.Checks,
 		Counts:  held.Counts,
+		Scanned: held.Scanned,
 		Keys:    keys,
 	}, true
 }
@@ -136,6 +138,7 @@ func flatten(taken checks.Baseline) stored {
 		TakenAt: taken.TakenAt,
 		Checks:  taken.Checks,
 		Counts:  taken.Counts,
+		Scanned: taken.Scanned,
 		Keys:    taken.Keys,
 	}
 }
@@ -173,6 +176,7 @@ func Decode(body []byte) (checks.Baseline, error) {
 		Cluster: held.Cluster,
 		Checks:  held.Checks,
 		Counts:  held.Counts,
+		Scanned: held.Scanned,
 		Keys:    keys,
 	}, nil
 }

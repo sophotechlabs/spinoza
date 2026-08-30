@@ -50,17 +50,36 @@ func (f Filter) narrows() bool {
 }
 
 func (f Filter) fixedSince(id string, found int) int {
-	if f.narrows() {
+	if f.narrows() || f.foreign() {
 		return 0
 	}
 	return f.Base.fixed(id, found)
 }
 
 func (f Filter) goneSince(id string, here map[string]bool) []string {
-	if f.narrows() {
+	if f.narrows() || f.foreign() {
 		return nil
 	}
 	return f.Base.gone(id, here)
+}
+
+// countedBefore is what the baseline found for this check, which is the only
+// comparison that survives being carried to another cluster.
+func (f Filter) countedBefore(id string) (int, bool) {
+	if f.narrows() {
+		return 0, false
+	}
+	if f.Base == nil {
+		return 0, false
+	}
+	return f.Base.counted(id)
+}
+
+func (f Filter) scannedBefore() int {
+	if f.Base == nil {
+		return 0
+	}
+	return f.Base.Scanned
 }
 
 func (f Filter) takenAt() string {
@@ -68,6 +87,13 @@ func (f Filter) takenAt() string {
 		return ""
 	}
 	return f.Base.TakenAt
+}
+
+// foreign says the baseline was taken somewhere else. Two clusters run
+// different objects, so a finding here is "new" against a baseline there
+// whatever anybody did; the counts are what can honestly be compared.
+func (f Filter) foreign() bool {
+	return f.takenFrom() != ""
 }
 
 // takenFrom names the cluster the baseline came from, which the server leaves

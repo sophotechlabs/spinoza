@@ -324,3 +324,103 @@ func TestAFingerprintLeavesOutTheChecksThatStoodDown(t *testing.T) {
 		}
 	}
 }
+
+// what survives being carried to another cluster
+
+func fromElsewhere(t *testing.T, objects ...*unstructured.Unstructured) Baseline {
+	t.Helper()
+	base := fingerprintOfCluster(t, objects...)
+	base.Cluster = "https://somewhere.else"
+	base.TakenAt = "2026-08-29T00:00:00Z"
+	return base
+}
+
+func TestABaselineFromAnotherClusterMarksNothingNew(t *testing.T) {
+	base := fromElsewhere(t, privilegedDeployment("api"))
+	keep := wholeCluster()
+	keep.Base = &base
+
+	report := Run(t.Context(), newLister(
+		privilegedDeployment("something-else-entirely"),
+	), descriptors(), api.Metrics{}, keep, 0)
+
+	group := groupNamed(t, report, privilegedCheck)
+	if group.NewCount != 0 {
+		t.Fatalf("%d findings were called new against another cluster's baseline", group.NewCount)
+	}
+	if group.Fixed != 0 || len(group.Gone) != 0 {
+		t.Fatalf("another cluster's baseline reported %d fixed and %v gone", group.Fixed, group.Gone)
+	}
+}
+
+func TestABaselineFromAnotherClusterStillSaysWhatEachCheckFound(t *testing.T) {
+	base := fromElsewhere(t, privilegedDeployment("api"), privilegedDeployment("web"))
+	keep := wholeCluster()
+	keep.Base = &base
+
+	report := Run(t.Context(), newLister(
+		privilegedDeployment("only-one"),
+	), descriptors(), api.Metrics{}, keep, 0)
+
+	group := groupNamed(t, report, privilegedCheck)
+	if !group.Ran {
+		t.Fatal("the baseline ran this check and the report does not say so")
+	}
+	if group.Was != 2 {
+		t.Fatalf("the baseline counted %d, want the two it found", group.Was)
+	}
+	if group.Total != 1 {
+		t.Fatalf("this cluster reported %d, want the one it has", group.Total)
+	}
+}
+
+func TestACheckTheBaselineNeverRanSaysItWasNotAsked(t *testing.T) {
+	base := Baseline{
+		TakenAt: "2026-08-29T00:00:00Z",
+		Cluster: "https://somewhere.else",
+		Checks:  []string{"something-else"},
+		Counts:  map[string]int{},
+		Keys:    map[string]string{},
+	}
+	keep := wholeCluster()
+	keep.Base = &base
+
+	report := Run(t.Context(), newLister(privilegedDeployment("api")), descriptors(), api.Metrics{}, keep, 0)
+
+	if group := groupNamed(t, report, privilegedCheck); group.Ran {
+		t.Fatal("a check the baseline never ran was reported as having a count of nought")
+	}
+}
+
+func TestTheReportSaysHowManyWorkloadsTheBaselineSaw(t *testing.T) {
+	base := fromElsewhere(t, privilegedDeployment("api"), privilegedDeployment("web"))
+	keep := wholeCluster()
+	keep.Base = &base
+
+	report := Run(t.Context(), newLister(privilegedDeployment("one")), descriptors(), api.Metrics{}, keep, 0)
+
+	if report.WasScanned != 2 {
+		t.Fatalf("the report says the baseline saw %d workloads, want the two it did", report.WasScanned)
+	}
+	if report.Scanned != 1 {
+		t.Fatalf("the report says this cluster has %d workloads", report.Scanned)
+	}
+}
+
+func TestABaselineOfThisClusterStillDiffsFindingByFinding(t *testing.T) {
+	base := fingerprintOfCluster(t, privilegedDeployment("api"), privilegedDeployment("web"))
+	keep := wholeCluster()
+	keep.Base = &base
+
+	report := Run(t.Context(), newLister(
+		privilegedDeployment("api"), privilegedDeployment("fresh"),
+	), descriptors(), api.Metrics{}, keep, 0)
+
+	group := groupNamed(t, report, privilegedCheck)
+	if group.NewCount != 1 || len(group.Gone) != 1 {
+		t.Fatalf("its own baseline reported %d new and %v gone", group.NewCount, group.Gone)
+	}
+	if group.Was != 2 {
+		t.Fatalf("its own baseline counted %d", group.Was)
+	}
+}

@@ -1247,24 +1247,29 @@ type CheckFinding struct {
 }
 
 type CheckGroup struct {
-	ID         string         `json:"id"`
-	Title      string         `json:"title"`
-	Category   string         `json:"category"`
-	Severity   string         `json:"severity"`
-	Frameworks []string       `json:"frameworks,omitempty"`
-	Wrong      string         `json:"wrong"`
-	Remedy     string         `json:"remedy"`
-	Skipped    string         `json:"skipped,omitempty"`
-	Total      int            `json:"total"`
-	Muted      int            `json:"muted,omitempty"`
-	NewCount   int            `json:"new,omitempty"`
-	Fixed      int            `json:"fixed,omitempty"`
-	Gone       []string       `json:"gone,omitempty"`
-	Baselined  bool           `json:"baselined,omitempty"`
-	Measured   bool           `json:"measured,omitempty"`
-	Truncated  bool           `json:"truncated,omitempty"`
-	Next       string         `json:"next,omitempty"`
-	Findings   []CheckFinding `json:"findings"`
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Category   string   `json:"category"`
+	Severity   string   `json:"severity"`
+	Frameworks []string `json:"frameworks,omitempty"`
+	Wrong      string   `json:"wrong"`
+	Remedy     string   `json:"remedy"`
+	Skipped    string   `json:"skipped,omitempty"`
+	Total      int      `json:"total"`
+	Muted      int      `json:"muted,omitempty"`
+	NewCount   int      `json:"new,omitempty"`
+	Fixed      int      `json:"fixed,omitempty"`
+	Gone       []string `json:"gone,omitempty"`
+	Baselined  bool     `json:"baselined,omitempty"`
+	// Was is what this check found when the baseline was taken, and Ran says
+	// the baseline ran it at all — nought findings and never asked are not the
+	// same thing.
+	Was       int            `json:"was,omitempty"`
+	Ran       bool           `json:"ran,omitempty"`
+	Measured  bool           `json:"measured,omitempty"`
+	Truncated bool           `json:"truncated,omitempty"`
+	Next      string         `json:"next,omitempty"`
+	Findings  []CheckFinding `json:"findings"`
 }
 
 type NamespaceCount struct {
@@ -1318,6 +1323,9 @@ type CheckReport struct {
 	// this one. Comparing two clusters is a fair thing to want; being told
 	// nine thousand findings are new without being told why is not.
 	BaselineFrom string `json:"baselineFrom,omitempty"`
-	Scanned      int    `json:"scanned"`
-	Error        string `json:"error,omitempty"`
+	// WasScanned is how many workloads the baseline saw, so a count taken on a
+	// cluster of a different size can be read per workload.
+	WasScanned int    `json:"wasScanned,omitempty"`
+	Scanned    int    `json:"scanned"`
+	Error      string `json:"error,omitempty"`
 }

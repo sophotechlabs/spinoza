@@ -58,12 +58,14 @@ CheckGroup.Measured measured,omitempty bool
 CheckGroup.Muted muted,omitempty int
 CheckGroup.NewCount new,omitempty int
 CheckGroup.Next next,omitempty string
+CheckGroup.Ran ran,omitempty bool
 CheckGroup.Remedy remedy string
 CheckGroup.Severity severity string
 CheckGroup.Skipped skipped,omitempty string
 CheckGroup.Title title string
 CheckGroup.Total total int
 CheckGroup.Truncated truncated,omitempty bool
+CheckGroup.Was was,omitempty int
 CheckGroup.Wrong wrong string
 CheckObject.Cluster cluster,omitempty string
 CheckObject.Group group string
@@ -84,6 +86,7 @@ CheckReport.Groups groups []CheckGroup
 CheckReport.Namespaces namespaces,omitempty []NamespaceCount
 CheckReport.Objects objects []CheckObject
 CheckReport.Scanned scanned int
+CheckReport.WasScanned wasScanned,omitempty int
 ClientMsg.Cluster cluster,omitempty string
 ClientMsg.Container container string
 ClientMsg.Filters filters,omitempty []RowFilter

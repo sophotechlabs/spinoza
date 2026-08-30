@@ -1209,6 +1209,8 @@ export interface CheckGroup {
   fixed?: number;
   gone?: string[];
   baselined?: boolean;
+  was?: number;
+  ran?: boolean;
   measured?: boolean;
   truncated?: boolean;
   next?: string;
@@ -1263,6 +1265,7 @@ export interface CheckReport {
   namespaces?: NamespaceCount[];
   baseline?: string;
   baselineFrom?: string;
+  wasScanned?: number;
   scanned: number;
   error?: string;
 }

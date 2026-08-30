@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckCategory, Mute, NamespaceCount, ObjectRef, RuleFault } from '../lib/types';
-import type { CheckFindingView, CheckGroupView } from '../lib/checks';
+import type { CheckFindingView, CheckGroupView, CheckReportView } from '../lib/checks';
 import { fetchCheckPage } from '../lib/checks';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
   changeLabel,
   clearBaseline,
+  driftLabel,
   countLabel,
   exportChecks,
   fetchMutes,
@@ -39,14 +40,19 @@ const PAGE_SIZE = 200;
 
 const NAMESPACES_SHOWN = 20;
 
-function baselineLabel(baseline: string, from: string): string {
-  if (baseline === '') {
+function baselineLabel(report: CheckReportView): string {
+  if (report.baseline === '') {
     return 'No baseline taken, so nothing is marked new.';
   }
-  if (from !== '') {
-    return `Comparing against ${baseline.slice(0, 10)}, taken on ${from}.`;
+  const day = report.baseline.slice(0, 10);
+  if (report.baselineFrom === '') {
+    return `Comparing against ${day}.`;
   }
-  return `Comparing against ${baseline.slice(0, 10)}.`;
+  return (
+    `Comparing against ${report.baselineFrom}, ${day}: ` +
+    `${String(report.wasScanned)} workloads there, ${String(report.scanned)} here. ` +
+    `Different objects, so counts rather than what is new.`
+  );
 }
 
 function takeLabel(baseline: string, working: boolean): string {
@@ -347,14 +353,29 @@ function refFor(scope: MuteScope, finding: CheckFindingView): Partial<Mute> {
   return { ref: refKeyOf(finding.object) };
 }
 
+// A baseline from another cluster names different objects, so the group says
+// how many each cluster found rather than which findings are new.
+function driftOrChange(group: CheckGroupView, report: CheckReportView): string {
+  if (report.baseline === '') {
+    return '';
+  }
+  if (report.baselineFrom === '') {
+    return changeLabel(group);
+  }
+  if (group.measured === true) {
+    return 'measured, not compared';
+  }
+  return driftLabel(group, report.scanned, report.wasScanned);
+}
+
 function Group({
   group,
-  baseline,
+  report,
   onOpen,
   onChanged,
 }: {
   group: CheckGroupView;
-  baseline: string;
+  report: CheckReportView;
   onOpen: (ref: ObjectRef, kind: string) => void;
   onChanged: () => void;
 }) {
@@ -404,8 +425,8 @@ function Group({
             {!empty && chevron(open)}
           </span>
           <span className="min-w-0 flex-1 truncate text-fg-strong">{group.title}</span>
-          {changeLabel(group, baseline) !== '' && (
-            <span className="shrink-0 text-[11px] text-warn">{changeLabel(group, baseline)}</span>
+          {driftOrChange(group, report) !== '' && (
+            <span className="shrink-0 text-[11px] text-warn">{driftOrChange(group, report)}</span>
           )}
           {mutedLabel(group) !== '' && (
             <span className="shrink-0 text-[11px] text-fg-subtle">{mutedLabel(group)}</span>
@@ -717,15 +738,8 @@ function muteScopeLabel(mute: Mute): string {
   return 'everywhere';
 }
 
-function BaselineBar({
-  baseline,
-  from,
-  onChanged,
-}: {
-  baseline: string;
-  from: string;
-  onChanged: () => void;
-}) {
+function BaselineBar({ report, onChanged }: { report: CheckReportView; onChanged: () => void }) {
+  const baseline = report.baseline;
   const onlyNew = useSettingsStore((state) => state.checksOnlyNew);
   const setOnlyNew = useSettingsStore((state) => state.setChecksOnlyNew);
   const showMuted = useSettingsStore((state) => state.checksShowMuted);
@@ -750,7 +764,7 @@ function BaselineBar({
 
   return (
     <div className="flex shrink-0 items-center gap-4 border-b border-edge px-3 py-1.5 text-fg-muted">
-      <span>{baselineLabel(baseline, from)}</span>
+      <span>{baselineLabel(report)}</span>
       <button
         type="button"
         disabled={working}
@@ -1035,13 +1049,13 @@ function TurnOff({ id }: { id: string }) {
 function Category({
   category,
   groups,
-  baseline,
+  report,
   onOpen,
   onChanged,
 }: {
   category: CheckCategory;
   groups: CheckGroupView[];
-  baseline: string;
+  report: CheckReportView;
   onOpen: (ref: ObjectRef, kind: string) => void;
   onChanged: () => void;
 }) {
@@ -1054,13 +1068,7 @@ function Category({
         {CATEGORY_LABELS[category]}
       </h2>
       {groups.map((group) => (
-        <Group
-          key={group.id}
-          group={group}
-          baseline={baseline}
-          onOpen={onOpen}
-          onChanged={onChanged}
-        />
+        <Group key={group.id} group={group} report={report} onOpen={onOpen} onChanged={onChanged} />
       ))}
     </section>
   );
@@ -1091,7 +1099,7 @@ export default function Checks({ onOpen }: ChecksProps) {
         </p>
       )}
       <AuditControls />
-      <BaselineBar baseline={data.baseline} from={data.baselineFrom} onChanged={reload} />
+      <BaselineBar report={data} onChanged={reload} />
       <MutesPanel audit={data} onChanged={reload} />
       <Namespaces counts={data.namespaces} />
       <YourRules />
@@ -1120,7 +1128,7 @@ export default function Checks({ onOpen }: ChecksProps) {
             key={category}
             category={category}
             groups={inCategory(data.groups, category)}
-            baseline={data.baseline}
+            report={data}
             onOpen={onOpen}
             onChanged={reload}
           />

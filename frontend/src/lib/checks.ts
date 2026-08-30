@@ -64,6 +64,7 @@ export interface CheckReportView {
   namespaces: NamespaceCount[];
   baseline: string;
   baselineFrom: string;
+  wasScanned: number;
   scanned: number;
   error?: string;
 }
@@ -178,6 +179,8 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
     fixed: item.fixed,
     gone: item.gone,
     baselined: item.baselined,
+    was: item.was,
+    ran: item.ran,
     measured: item.measured,
     truncated: item.truncated,
     next: item.next,
@@ -271,6 +274,7 @@ export async function fetchChecks(
     namespaces: body.namespaces ?? [],
     baseline: body.baseline ?? '',
     baselineFrom: body.baselineFrom ?? '',
+    wasScanned: body.wasScanned ?? 0,
     scanned: body.scanned ?? 0,
     error: body.error,
   };
@@ -446,12 +450,33 @@ export function countLabel(group: CheckGroupView): string {
   return String(group.total);
 }
 
-// changeLabel says what moved since the baseline. A check the baseline never ran
-// says so, rather than reporting every one of its findings as new.
-export function changeLabel(group: CheckGroupView, baseline: string): string {
-  if (baseline === '') {
+// driftLabel is how a check reads against a baseline taken on another cluster.
+// The objects are different there, so what a finding is doing on this one is a
+// count against a count, read per workload because the clusters are not the
+// same size.
+export function driftLabel(group: CheckGroupView, here: number, there: number): string {
+  if (group.ran !== true) {
+    return 'not in the baseline';
+  }
+  const was = group.was ?? 0;
+  if (was === 0 && group.total === 0) {
+    return 'clean on both';
+  }
+  return `${String(was)} there, ${String(group.total)} here${perWorkload(was, group.total, here, there)}`;
+}
+
+function perWorkload(was: number, now: number, here: number, there: number): string {
+  if (here === 0 || there === 0 || was === 0) {
     return '';
   }
+  const ratio = now / here / (was / there);
+  return ` (${ratio.toFixed(1)}× per workload)`;
+}
+
+// changeLabel says what moved since a baseline of this same cluster. A check the
+// baseline never ran says so, rather than reporting every one of its findings as
+// new. Only called once there is a baseline to compare against.
+export function changeLabel(group: CheckGroupView): string {
   if (group.measured === true) {
     return 'measured, not compared';
   }

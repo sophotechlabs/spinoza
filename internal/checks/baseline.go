@@ -19,9 +19,22 @@ type Baseline struct {
 	Cluster string
 	Checks  []string
 	Counts  map[string]int
+	// Scanned is how many workloads the audit saw. Two clusters are compared
+	// per workload or not at all: a count from a cluster nine times the size
+	// says nothing on its own.
+	Scanned int
 	// Keys maps a finding's fingerprint to what it was about, so a finding
 	// that has since gone can be named rather than only counted.
 	Keys map[string]string
+}
+
+// counted is what this check found when the baseline was taken, and whether
+// the baseline ran it at all.
+func (b *Baseline) counted(id string) (int, bool) {
+	if !b.covers(id) {
+		return 0, false
+	}
+	return b.Counts[id], true
 }
 
 func (b *Baseline) covers(id string) bool {
@@ -86,7 +99,12 @@ func Fingerprint(
 		EveryKind:    keep.EveryKind,
 	}
 	sc, _, _ := survey(ctx, lister, descs, usage, wide)
-	out := Baseline{Checks: []string{}, Counts: map[string]int{}, Keys: map[string]string{}}
+	out := Baseline{
+		Checks:  []string{},
+		Counts:  map[string]int{},
+		Keys:    map[string]string{},
+		Scanned: len(sc.subjects),
+	}
 	for _, entry := range registryWith(wide.Rules) {
 		if ctx.Err() != nil {
 			return Baseline{Checks: []string{}, Counts: map[string]int{}, Keys: map[string]string{}}

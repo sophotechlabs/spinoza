@@ -291,16 +291,68 @@ describe('the baseline', () => {
     });
   });
 
-  it('says when the baseline was taken on another cluster', async () => {
+  it('says which cluster a foreign baseline came from and how big each is', async () => {
     answers({
       groups: [group()],
       baseline: '2026-08-29T00:00:00Z',
       baselineFrom: 'https://10.10.0.1:6443',
+      wasScanned: 396,
+      scanned: 2284,
     });
 
-    expect(
-      await screen.findByText(/Comparing against 2026-08-29, taken on https:\/\/10\.10\.0\.1:6443/),
-    ).toBeInTheDocument();
+    const bar = await screen.findByText(
+      /Comparing against https:\/\/10\.10\.0\.1:6443, 2026-08-29/,
+    );
+    expect(bar).toHaveTextContent('396 workloads there, 2284 here');
+    expect(bar).toHaveTextContent('counts rather than what is new');
+  });
+
+  it('counts a check on both clusters instead of calling its findings new', async () => {
+    answers({
+      groups: [group({ ran: true, was: 450, total: 4268 })],
+      baseline: '2026-08-29T00:00:00Z',
+      baselineFrom: 'https://10.10.0.1:6443',
+      wasScanned: 396,
+      scanned: 2284,
+    });
+
+    expect(await screen.findByText('450 there, 4268 here (1.6× per workload)')).toBeInTheDocument();
+  });
+
+  it('says a check the foreign baseline never ran was not in it', async () => {
+    answers({
+      groups: [group()],
+      baseline: '2026-08-29T00:00:00Z',
+      baselineFrom: 'https://10.10.0.1:6443',
+      wasScanned: 396,
+      scanned: 2284,
+    });
+
+    expect(await screen.findByText('not in the baseline')).toBeInTheDocument();
+  });
+
+  it('says a check both clusters are clean on', async () => {
+    answers({
+      groups: [group({ ran: true, was: 0, total: 0, findings: [] })],
+      baseline: '2026-08-29T00:00:00Z',
+      baselineFrom: 'https://10.10.0.1:6443',
+      wasScanned: 396,
+      scanned: 2284,
+    });
+
+    expect(await screen.findByText('clean on both')).toBeInTheDocument();
+  });
+
+  it('leaves a measured check out of a cross-cluster comparison too', async () => {
+    answers({
+      groups: [group({ measured: true, ran: true, was: 3 })],
+      baseline: '2026-08-29T00:00:00Z',
+      baselineFrom: 'https://10.10.0.1:6443',
+      wasScanned: 396,
+      scanned: 2284,
+    });
+
+    expect(await screen.findByText('measured, not compared')).toBeInTheDocument();
   });
 
   it('says nothing about a cluster when the baseline is this one', async () => {

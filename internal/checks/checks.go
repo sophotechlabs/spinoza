@@ -257,7 +257,7 @@ func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 				continue
 			}
 		}
-		fresh := c.comparable() && keep.Base.covers(c.id) && !keep.Base.has(key)
+		fresh := c.comparable() && !keep.foreign() && keep.Base.covers(c.id) && !keep.Base.has(key)
 		if fresh {
 			count.fresh++
 		}
@@ -374,6 +374,9 @@ func (c check) group(sc scan, objs *objects, spread *namespaces, keep Filter, sh
 		out.Fixed = keep.fixedSince(c.id, count.found)
 		out.Gone = keep.goneSince(c.id, count.here)
 		out.Baselined = keep.Base.covers(c.id)
+		if was, ran := keep.countedBefore(c.id); ran {
+			out.Was, out.Ran = was, true
+		}
 	}
 	out.Measured = !c.comparable()
 	out.Truncated = out.Next != ""
@@ -531,6 +534,7 @@ func (s *Surveys) Run(
 		Namespaces:   spread.sorted(),
 		Baseline:     keep.takenAt(),
 		BaselineFrom: keep.takenFrom(),
+		WasScanned:   keep.scannedBefore(),
 		Scanned:      len(sc.subjects),
 		Error:        joined(failure, undiscovered(absent)),
 	}

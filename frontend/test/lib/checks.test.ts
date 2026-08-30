@@ -5,6 +5,7 @@ import {
   CATEGORY_ORDER,
   bySeverity,
   countLabel,
+  driftLabel,
   NO_FILTER,
   fetchCheckPage,
   fetchChecks,
@@ -66,7 +67,14 @@ function viewGroup(id: string, extra: Partial<CheckGroupView> = {}): CheckGroupV
 }
 
 function viewReport(groups: CheckGroupView[]): CheckReportView {
-  return { groups, namespaces: [], baseline: '', baselineFrom: '', scanned: groups.length };
+  return {
+    groups,
+    namespaces: [],
+    baseline: '',
+    baselineFrom: '',
+    wasScanned: 0,
+    scanned: groups.length,
+  };
 }
 
 function stub(body: unknown, ok = true, status = 200) {
@@ -189,6 +197,7 @@ describe('fetchChecks', () => {
       namespaces: [],
       baseline: '',
       baselineFrom: '',
+      wasScanned: 0,
       scanned: 0,
       error: undefined,
     });
@@ -586,5 +595,36 @@ describe('checks across the fleet', () => {
 
     expect(got.groups[0].findings[0].cluster).toBe('https://p-mk1:6443');
     vi.unstubAllGlobals();
+  });
+});
+
+describe('driftLabel', () => {
+  function counted(extra: Partial<CheckGroupView>): CheckGroupView {
+    return viewGroup('privileged-containers', { ran: true, ...extra });
+  }
+
+  it('counts each cluster and reads the difference per workload', () => {
+    expect(driftLabel(counted({ was: 450, total: 4268 }), 2284, 396)).toBe(
+      '450 there, 4268 here (1.6× per workload)',
+    );
+  });
+
+  it('says a check the baseline never ran was not in it', () => {
+    expect(driftLabel(viewGroup('privileged-containers', {}), 2284, 396)).toBe(
+      'not in the baseline',
+    );
+  });
+
+  it('says so when neither cluster found anything', () => {
+    expect(driftLabel(counted({ was: 0, total: 0 }), 2284, 396)).toBe('clean on both');
+  });
+
+  it('leaves the ratio out when the baseline found none of this', () => {
+    expect(driftLabel(counted({ was: 0, total: 12 }), 2284, 396)).toBe('0 there, 12 here');
+  });
+
+  it('leaves the ratio out when neither cluster scanned anything', () => {
+    expect(driftLabel(counted({ was: 3, total: 4 }), 0, 396)).toBe('3 there, 4 here');
+    expect(driftLabel(counted({ was: 3, total: 4 }), 2284, 0)).toBe('3 there, 4 here');
   });
 });
