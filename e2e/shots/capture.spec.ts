@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { authed, expect, test } from '../harness/test';
 import { openGrouped, openHome, openResource, openView, selectRow } from '../harness/app';
 import { kubectl, kubectlSoft } from '../harness/cluster';
+import { mustRun } from '../harness/run';
 import { CONTEXT, E2E_DIR, SECOND_CONTEXT, SECOND_KUBECONFIG } from '../harness/paths';
 import type { Page } from '@playwright/test';
 
@@ -219,7 +220,28 @@ test('the plan before a drain runs', async ({ page }) => {
   await shoot(page, 'drain-plan');
 });
 
+function onSecond(args: string[]): string {
+  return mustRun('kubectl', [
+    '--kubeconfig',
+    SECOND_KUBECONFIG,
+    '--context',
+    SECOND_CONTEXT,
+    ...args,
+  ]);
+}
+
 test('two clusters side by side', async ({ page }) => {
+  onSecond(['apply', '-f', join(FIXTURES, 'namespaces.yaml')]);
+  onSecond(['apply', '-f', join(FIXTURES, 'storefront.yaml')]);
+  onSecond([
+    '-n',
+    'storefront',
+    'patch',
+    'configmap/storefront-config',
+    '--type=merge',
+    '-p',
+    '{"data":{"CHECKOUT_URL":"https://checkout.staging.internal","FEATURE_WISHLIST":"false"}}',
+  ]);
   await openHome(page);
   const opened = await page.evaluate(
     async ([path, name]) => {
@@ -238,8 +260,24 @@ test('two clusters side by side', async ({ page }) => {
   const compare = page.getByRole('tab', { name: 'Compare', exact: true });
   await expect(compare).toBeEnabled({ timeout: 60_000 });
   await compare.click();
-  await page.waitForTimeout(3_000);
+  const against = page.locator('#compare-context');
+  await expect(against).toBeVisible({ timeout: 60_000 });
+  await against.selectOption({ label: SECOND_CONTEXT });
+  await page.locator('#compare-scope').selectOption('object');
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  const result = page.getByRole('tabpanel', { name: 'Compare' });
+  await expect(result).toContainText(`against ${SECOND_CONTEXT}`, { timeout: 60_000 });
+  await expect(result).not.toContainText('Loading the diff', { timeout: 60_000 });
+  await page.waitForTimeout(2_000);
   await shoot(page, 'compare');
+
+  await page.locator('#compare-scope').selectOption('kind');
+  await page.locator('#compare-namespace').fill('storefront');
+  await page.getByRole('button', { name: /^Compare every / }).click();
+  await expect(result).toContainText('storefront-config', { timeout: 60_000 });
+  await expect(result).not.toContainText('the comparison', { timeout: 60_000 });
+  await page.waitForTimeout(3_000);
+  await shoot(page, 'kind-compare');
 });
 
 test('what spinoza changed', async ({ page }) => {
@@ -261,6 +299,7 @@ test('what spinoza changed', async ({ page }) => {
 });
 
 test('inspecting a live object', async ({ page }) => {
+  test.setTimeout(180_000);
   await openResource(page, 'configmaps', 'ConfigMap');
   await selectRow(page, 'storefront-config');
   await page.getByRole('tab', { name: 'YAML', exact: true }).click();
