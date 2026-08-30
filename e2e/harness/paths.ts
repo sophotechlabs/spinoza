@@ -57,3 +57,7 @@ export const CHART_HOST = process.env.SPINOZA_E2E_CHART_HOST ?? 'localtest.me';
 export const CHART_REPO = `http://${CHART_HOST}:${String(CHART_PORT)}`;
 
 export const CHART_DIR = join(TMP_DIR, 'charts');
+
+export const NOWHERE_KUBECONFIG = join(TMP_DIR, 'kubeconfig-nowhere');
+
+export const NOWHERE_CONTEXT = 'nowhere';

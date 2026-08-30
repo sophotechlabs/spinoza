@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CHART_DIR, CHART_PORT, CHART_REPO, E2E_DIR, TMP_DIR } from './paths';
 import { background, mustRun, waitFor } from './run';
@@ -61,6 +61,12 @@ export function writeRepositoryConfig(): void {
     ].join('\n'),
     { mode: 0o600 },
   );
+}
+
+export function writeRepositoryCache(): void {
+  const dir = join(TMP_DIR, 'home', '.cache', 'helm', 'repository');
+  mkdirSync(dir, { recursive: true });
+  copyFileSync(join(CHART_DIR, 'index.yaml'), join(dir, `${REPO_NAME}-index.yaml`));
 }
 
 export async function serveCharts(): Promise<number> {

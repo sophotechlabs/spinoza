@@ -1,6 +1,7 @@
 import { join } from 'node:path';
-import { E2E_DIR, NAMESPACE } from './paths';
+import { CONTEXT, E2E_DIR, KUBECONFIG, NAMESPACE } from './paths';
 import { helm, helmSoft, kubectl, kubectlApply, kubectlSoft } from './cluster';
+import { run } from './run';
 
 const FIXTURES = join(E2E_DIR, 'fixtures');
 
@@ -16,7 +17,37 @@ export const RELEASE = 'e2e-release';
 
 export const DOOMED = 'e2e-doomed';
 
+function phaseOf(namespace: string): string {
+  const found = run('kubectl', [
+    '--kubeconfig',
+    KUBECONFIG,
+    '--context',
+    CONTEXT,
+    'get',
+    `namespace/${namespace}`,
+    '-o',
+    'jsonpath={.status.phase}',
+  ]);
+  if (found.code !== 0) {
+    return '';
+  }
+  return found.stdout.trim();
+}
+
+export function awaitNamespaceSettled(namespace: string): void {
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    if (phaseOf(namespace) !== 'Terminating') {
+      return;
+    }
+    run('sleep', ['1']);
+  }
+  throw new Error(`namespace ${namespace} was still terminating after three minutes`);
+}
+
 export function seed(): void {
+  for (const namespace of [NAMESPACE, 'e2e-gitops', 'e2e-scale']) {
+    awaitNamespaceSettled(namespace);
+  }
   kubectl(['apply', '-f', WORKLOADS]);
   kubectl(['apply', '-f', RBAC]);
   kubectl(['apply', '-f', PROMETHEUS]);

@@ -3,8 +3,8 @@ import { openView } from '../harness/app';
 import { helm } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 import { DOOMED, RELEASE } from '../harness/fixtures';
-import { NEXT_VERSION } from '../harness/charts';
-import type { Page } from '@playwright/test';
+import { NEXT_VERSION, REPO_NAME } from '../harness/charts';
+import type { Locator, Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -25,6 +25,27 @@ async function openRelease(page: Page): Promise<void> {
 
 function panel(page: Page) {
   return page.getByRole('tabpanel', { name: 'Release' });
+}
+
+async function previewed(dialog: Locator): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const alert = (await dialog.getByRole('alert').innerText()).trim();
+        if (alert !== '') {
+          return alert;
+        }
+        const ready = await dialog
+          .getByRole('button', { name: `Upgrade to ${NEXT_VERSION}` })
+          .count();
+        if (ready > 0) {
+          return 'ready';
+        }
+        return '';
+      },
+      { timeout: 120_000 },
+    )
+    .toBe('ready');
 }
 
 async function openTab(page: Page, name: string): Promise<void> {
@@ -185,4 +206,65 @@ test('uninstalling asks first, and then the release is gone', async ({ page }) =
     .not.toContain(DOOMED);
   await openView(page, 'helm');
   await expect(page.locator('main tbody')).not.toContainText(DOOMED, { timeout: 60_000 });
+});
+
+test('a chart the repo offers is searchable and installable from the dialog', async ({ page }) => {
+  await openView(page, 'helm');
+  await page.getByRole('button', { name: 'Install chart' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Install a chart' });
+  await dialog.getByRole('searchbox', { name: 'Search charts' }).fill('spinoza');
+  await expect(dialog).toContainText('1 charts', { timeout: 60_000 });
+  await expect(
+    dialog.getByRole('button', { name: `spinoza-e2e ${NEXT_VERSION} from ${REPO_NAME}` }),
+  ).toBeVisible();
+});
+
+test('the upgrade dialog offers the version the repo carries, not the one installed', async ({
+  page,
+}) => {
+  await openRelease(page);
+  await panel(page).getByRole('button', { name: 'Upgrade', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: `Upgrade ${RELEASE}` });
+  const versions = dialog.getByRole('combobox', { name: 'Chart version' });
+  await expect(versions.locator(`option[value$=":${NEXT_VERSION}"]`)).toHaveCount(1, {
+    timeout: 60_000,
+  });
+  await expect(dialog).toContainText('from 0.1.0');
+});
+
+test('going through with the upgrade moves the release onto the new chart', async ({ page }) => {
+  const before = JSON.parse(
+    helm(['list', '--namespace', NAMESPACE, '--filter', RELEASE, '-o', 'json']),
+  ) as { chart: string }[];
+  expect(before[0].chart).toContain('0.1.0');
+
+  await openRelease(page);
+  await panel(page).getByRole('button', { name: 'Upgrade', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: `Upgrade ${RELEASE}` });
+  const versions = dialog.getByRole('combobox', { name: 'Chart version' });
+  await expect(versions.locator(`option[value$=":${NEXT_VERSION}"]`)).toHaveCount(1, {
+    timeout: 60_000,
+  });
+  await versions.selectOption({ label: NEXT_VERSION });
+  const preview = dialog.getByRole('button', { name: 'Preview', exact: true });
+  await expect(preview).toBeEnabled({ timeout: 30_000 });
+  await preview.click();
+  await previewed(dialog);
+  await dialog.getByRole('button', { name: `Upgrade to ${NEXT_VERSION}` }).click();
+  const confirm = dialog.getByRole('button', { name: 'Confirm', exact: true });
+  if ((await confirm.count()) > 0) {
+    await confirm.first().click();
+  }
+
+  await expect
+    .poll(
+      () =>
+        (
+          JSON.parse(
+            helm(['list', '--namespace', NAMESPACE, '--filter', RELEASE, '-o', 'json']),
+          ) as { chart: string }[]
+        )[0].chart,
+      { timeout: 120_000 },
+    )
+    .toContain(NEXT_VERSION);
 });

@@ -122,3 +122,48 @@ test('a shell on this machine is refused in the browser and says why', async ({ 
     { timeout: 30_000 },
   );
 });
+
+test('the shell learns its new size when the window changes', async ({ page }) => {
+  test.setTimeout(240_000);
+  await openTerminal(page, 'shellable');
+  await page.getByRole('button', { name: 'Shell in shellable' }).click();
+  const screen = page.locator('.xterm-screen').first();
+  await expect(screen).toBeVisible({ timeout: 60_000 });
+
+  async function askSize(): Promise<string> {
+    await screen.click();
+    await page.keyboard.type('stty size');
+    await page.keyboard.press('Enter');
+    let seen = '';
+    await expect
+      .poll(
+        async () => {
+          const rows = await page.locator('.xterm-rows').first().innerText();
+          const sizes = rows.split('\n').filter((line) => /^\s*\d+ \d+\s*$/.test(line));
+          seen = sizes.at(-1)?.trim() ?? '';
+          return seen;
+        },
+        { timeout: 60_000 },
+      )
+      .not.toBe('');
+    return seen;
+  }
+
+  const before = await askSize();
+  expect(before).toMatch(/^\d+ \d+$/);
+
+  await page.setViewportSize({ width: 820, height: 620 });
+  await expect
+    .poll(
+      async () => {
+        await screen.click();
+        await page.keyboard.type('stty size');
+        await page.keyboard.press('Enter');
+        const rows = await page.locator('.xterm-rows').first().innerText();
+        const sizes = rows.split('\n').filter((line) => /^\s*\d+ \d+\s*$/.test(line));
+        return sizes.at(-1)?.trim() ?? '';
+      },
+      { timeout: 120_000 },
+    )
+    .not.toBe(before);
+});
