@@ -21,6 +21,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
+	"github.com/sophotechlabs/spinoza/internal/rbac"
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 	"github.com/sophotechlabs/spinoza/internal/topology"
@@ -268,6 +269,11 @@ func (n notStubbed) Record(_ context.Context, _ resources.Timeline, _ []resource
 
 func (n notStubbed) StopRecording() {
 	n.missing("StopRecording")
+}
+
+func (n notStubbed) RBACIndex(_ context.Context) (r0 rbac.Index) {
+	n.missing("RBACIndex")
+	return r0
 }
 
 func (n notStubbed) Reach() (r0 *reach.Sink) {

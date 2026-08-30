@@ -178,6 +178,46 @@ type Memory struct {
 	SysMi  int64 `json:"sysMi"`
 }
 
+// RBACRule is one policy rule as written, so a reader can see the wildcard
+// rather than only its consequence.
+type RBACRule struct {
+	Verbs     []string `json:"verbs,omitempty"`
+	Groups    []string `json:"groups,omitempty"`
+	Resources []string `json:"resources,omitempty"`
+	Names     []string `json:"names,omitempty"`
+	URLs      []string `json:"urls,omitempty"`
+}
+
+// RBACGrant is one binding's contribution to a subject. An empty namespace
+// means the grant applies everywhere.
+type RBACGrant struct {
+	Binding     string     `json:"binding"`
+	BindingKind string     `json:"bindingKind"`
+	Role        string     `json:"role"`
+	RoleKind    string     `json:"roleKind"`
+	Namespace   string     `json:"namespace,omitempty"`
+	Rules       []RBACRule `json:"rules,omitempty"`
+	Missing     bool       `json:"missing,omitempty"`
+	Aggregated  bool       `json:"aggregated,omitempty"`
+}
+
+type RBACSubject struct {
+	Kind       string      `json:"kind"`
+	Name       string      `json:"name"`
+	Namespace  string      `json:"namespace,omitempty"`
+	Label      string      `json:"label"`
+	Powers     []string    `json:"powers,omitempty"`
+	Namespaces []string    `json:"namespaces,omitempty"`
+	Grants     []RBACGrant `json:"grants"`
+}
+
+type RBACIndex struct {
+	Subjects []RBACSubject `json:"subjects"`
+	Absent   []string      `json:"absent,omitempty"`
+	Dropped  int           `json:"dropped,omitempty"`
+	Error    string        `json:"error,omitempty"`
+}
+
 type Settings struct {
 	Values map[string]string `json:"values"`
 }

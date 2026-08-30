@@ -19,6 +19,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
+	"github.com/sophotechlabs/spinoza/internal/rbac"
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 	"github.com/sophotechlabs/spinoza/internal/topology"
@@ -49,7 +50,10 @@ type Objects interface {
 	Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error)
 }
 
+// Permissions is both directions of the same question: may I, which the
+// apiserver answers, and who may, which only the bindings can.
 type Permissions interface {
+	RBACIndex(ctx context.Context) rbac.Index
 	Access(ctx context.Context, ref api.ObjectRef) api.Access
 	AccessEach(ctx context.Context, capability string, refs []api.ObjectRef) api.BulkAccess
 	HelmAccess(ctx context.Context, namespace, name string) api.Access

@@ -22,6 +22,7 @@ export const VIEW_LABELS: Record<View, string> = {
   'argo-list': 'Argo CD resources',
   traffic: 'Traffic graph',
   fleet: 'Fleet',
+  rbac: 'Who can do what',
 };
 
 const VIEW_ORDER: View[] = [
@@ -40,6 +41,7 @@ const VIEW_ORDER: View[] = [
   'argo-graph',
   'argo-list',
   'traffic',
+  'rbac',
 ];
 
 export type PaletteItem =

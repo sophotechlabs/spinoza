@@ -77,6 +77,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/metrics", s.handleMetrics, false},
 		{http.MethodGet, "/api/compare", withRef(s.compare), false},
 		{http.MethodGet, "/api/compare/kind", s.compareKind, false},
+		{http.MethodGet, "/api/rbac/who", s.handleRBACWho, false},
+		{http.MethodGet, "/api/rbac", s.handleRBAC, false},
 		{http.MethodGet, "/api/access", withRef(s.objectAccess), false},
 		{http.MethodPost, "/api/access", s.bulkAccess, false},
 		{http.MethodGet, "/api/object", withRef(s.getObject), false},

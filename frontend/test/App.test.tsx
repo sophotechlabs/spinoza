@@ -323,6 +323,10 @@ vi.mock('../src/components/Checks', () => ({
   ),
 }));
 
+vi.mock('../src/components/Rbac', () => ({
+  default: () => <div data-testid="rbac" />,
+}));
+
 vi.mock('../src/components/Fleet', () => ({
   default: ({ onPick }: { onPick: (cluster: string) => void }) => (
     <button
@@ -2510,6 +2514,15 @@ describe('finding your way in by keyboard', () => {
       const said = useToastsStore.getState().toasts.map((toast) => toast.message);
       expect(said.some((message) => message.includes('Switching to kind-dev'))).toBe(true);
     });
+  });
+
+  it('opens the permission index from the sidebar', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Who can do what' }));
+
+    expect(await screen.findByTestId('rbac')).toBeInTheDocument();
   });
 
   it('opens history from the sidebar and targets the inspector from it', async () => {

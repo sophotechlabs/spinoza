@@ -316,6 +316,7 @@ export const VIEWS = [
   'argo-list',
   'traffic',
   'fleet',
+  'rbac',
 ] as const;
 
 export type View = (typeof VIEWS)[number];
@@ -671,6 +672,42 @@ export interface FleetImage {
 
 export interface FleetImages {
   images: FleetImage[];
+  error?: string;
+}
+
+export interface RBACRule {
+  verbs?: string[];
+  groups?: string[];
+  resources?: string[];
+  names?: string[];
+  urls?: string[];
+}
+
+export interface RBACGrant {
+  binding: string;
+  bindingKind: string;
+  role: string;
+  roleKind: string;
+  namespace?: string;
+  rules?: RBACRule[];
+  missing?: boolean;
+  aggregated?: boolean;
+}
+
+export interface RBACSubject {
+  kind: string;
+  name: string;
+  namespace?: string;
+  label: string;
+  powers?: string[];
+  namespaces?: string[];
+  grants: RBACGrant[];
+}
+
+export interface RBACIndex {
+  subjects: RBACSubject[];
+  absent?: string[];
+  dropped?: number;
   error?: string;
 }
 

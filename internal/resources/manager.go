@@ -50,6 +50,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/overview"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
+	"github.com/sophotechlabs/spinoza/internal/rbac"
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/samples"
@@ -733,6 +734,13 @@ func (m *Manager) CheckPage(
 	ctx context.Context, id, after string, keep checks.Filter,
 ) (api.CheckPage, error) {
 	return m.surveys.Page(ctx, m, m.descriptors(), m.Metrics(ctx), id, after, keep, m.limits.CheckFindings)
+}
+
+// RBACIndex answers who may do what on this cluster. It is built fresh: the
+// bindings are small beside the workloads, and a stale answer about who holds
+// the keys is worse than a slow one.
+func (m *Manager) RBACIndex(ctx context.Context) rbac.Index {
+	return rbac.Read(ctx, m, m.descriptors())
 }
 
 func (m *Manager) Facts() checks.Facts {

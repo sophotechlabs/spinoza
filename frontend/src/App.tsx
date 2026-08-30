@@ -63,6 +63,7 @@ import ArgoList from './components/ArgoList';
 import Checks from './components/Checks';
 import History from './components/History';
 import Fleet from './components/Fleet';
+import Rbac from './components/Rbac';
 import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
@@ -584,6 +585,9 @@ export default function App() {
   }
   if (route.view === 'fleet') {
     mainArea = <Fleet onPick={goToCluster} />;
+  }
+  if (route.view === 'rbac') {
+    mainArea = <Rbac />;
   }
   if (route.view === 'gitops') {
     mainArea = (

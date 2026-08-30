@@ -47,6 +47,7 @@ const TOP_VIEWS: GitopsEntry[] = [
   { view: 'topology', label: 'Topology' },
   { view: 'helm', label: 'Helm releases' },
   { view: 'checks', label: 'Cluster checks' },
+  { view: 'rbac', label: 'Who can do what' },
   { view: 'history', label: 'History' },
 ];
 
