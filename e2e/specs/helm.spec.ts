@@ -232,6 +232,24 @@ test('the upgrade dialog offers the version the repo carries, not the one instal
   await expect(dialog).toContainText('from 0.1.0');
 });
 
+test('an upgrade renders the manifest it would apply before applying it', async ({ page }) => {
+  await openRelease(page);
+  await panel(page).getByRole('button', { name: 'Upgrade', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: `Upgrade ${RELEASE}` });
+  const versions = dialog.getByRole('combobox', { name: 'Chart version' });
+  await expect(versions.locator(`option[value$=":${NEXT_VERSION}"]`)).toHaveCount(1, {
+    timeout: 60_000,
+  });
+  await versions.selectOption({ label: NEXT_VERSION });
+  const preview = dialog.getByRole('button', { name: 'Preview', exact: true });
+  await expect(preview).toBeEnabled({ timeout: 30_000 });
+  await preview.click();
+
+  await previewed(dialog);
+  await expect(dialog.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
+  await expect(dialog.locator('.monaco-diff-editor').first()).toBeVisible({ timeout: 60_000 });
+});
+
 test('going through with the upgrade moves the release onto the new chart', async ({ page }) => {
   const before = JSON.parse(
     helm(['list', '--namespace', NAMESPACE, '--filter', RELEASE, '-o', 'json']),
