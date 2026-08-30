@@ -206,6 +206,126 @@ describe('the fleet view', () => {
     expect(await screen.findByText(/the images went away/)).toBeTruthy();
   });
 
+  it('lists the releases and the drift between them', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      '/api/overview/fleet': { clusters: [], nodes: nodes(0, 0), pods: pods(0, 0, false) },
+      '/api/helm/fleet': {
+        releases: [
+          {
+            cluster: MK1,
+            name: 'loki',
+            namespace: 'monitoring',
+            chart: 'loki',
+            chartVersion: '6.1.0',
+            appVersion: '3',
+            revision: 1,
+            status: 'deployed',
+            updated: '',
+            skew: '6.1.0 · 6.2.0',
+          },
+        ],
+      },
+    });
+    render(<Fleet onPick={vi.fn()} />);
+    await screen.findByText('Everything open');
+
+    await user.click(screen.getByRole('button', { name: 'Releases' }));
+
+    expect(await screen.findByText('loki')).toBeTruthy();
+    expect(screen.getByText('loki is at 6.1.0 · 6.2.0')).toBeTruthy();
+  });
+
+  it('says how far a delivered app spreads', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      '/api/overview/fleet': { clusters: [], nodes: nodes(0, 0), pods: pods(0, 0, false) },
+      '/api/gitops/fleet': {
+        apps: [
+          {
+            cluster: MK1,
+            engine: 'flux',
+            kind: 'Kustomization',
+            group: '',
+            version: 'v1',
+            resource: 'kustomizations',
+            name: 'platform',
+            namespace: 'flux-system',
+            ready: 'True',
+            spread: 2,
+          },
+        ],
+      },
+    });
+    render(<Fleet onPick={vi.fn()} />);
+    await screen.findByText('Everything open');
+
+    await user.click(screen.getByRole('button', { name: 'Delivery' }));
+
+    expect(await screen.findByText('platform')).toBeTruthy();
+    expect(screen.getByText('everywhere')).toBeTruthy();
+  });
+
+  it('says so when the releases cannot be read', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      showing(MK1);
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/helm/fleet')) {
+          return Promise.reject(new Error('helm went away'));
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ clusters: [], nodes: nodes(0, 0), pods: pods(0, 0, false) }),
+        });
+      }),
+    );
+    render(<Fleet onPick={vi.fn()} />);
+    await screen.findByText('Everything open');
+
+    await user.click(screen.getByRole('button', { name: 'Releases' }));
+
+    expect(await screen.findByText(/helm went away/)).toBeTruthy();
+  });
+
+  it('says so when the delivery cannot be read', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      showing(MK1);
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/gitops/fleet')) {
+          return Promise.reject(new Error('delivery went away'));
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ clusters: [], nodes: nodes(0, 0), pods: pods(0, 0, false) }),
+        });
+      }),
+    );
+    render(<Fleet onPick={vi.fn()} />);
+    await screen.findByText('Everything open');
+
+    await user.click(screen.getByRole('button', { name: 'Delivery' }));
+
+    expect(await screen.findByText(/delivery went away/)).toBeTruthy();
+  });
+
   it('says so when the fleet cannot be read at all', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
 

@@ -1,4 +1,12 @@
-import type { FleetImages, FleetInventory, FleetOverview, NodeSummary, PodSummary } from './types';
+import type {
+  FleetGitops,
+  FleetImages,
+  FleetInventory,
+  FleetOverview,
+  HelmReleases,
+  NodeSummary,
+  PodSummary,
+} from './types';
 import { request } from './http';
 import { failure } from './object';
 import { usePoll } from './usePoll';
@@ -35,6 +43,32 @@ export async function fetchFleetInventory(): Promise<FleetInventory> {
 export async function fetchFleetImages(): Promise<FleetImages> {
   const body = await readFleet<Partial<FleetImages>>('/api/images/fleet', 'the fleet images');
   return { images: body.images ?? [], error: body.error };
+}
+
+export async function fetchFleetReleases(): Promise<HelmReleases> {
+  const body = await readFleet<Partial<HelmReleases>>('/api/helm/fleet', 'the fleet releases');
+  return { releases: body.releases ?? [], error: body.error };
+}
+
+export async function fetchFleetGitops(): Promise<FleetGitops> {
+  const body = await readFleet<Partial<FleetGitops>>('/api/gitops/fleet', 'the fleet delivery');
+  return { apps: body.apps ?? [], error: body.error };
+}
+
+export function useFleetReleases(enabled = true): Polled<HelmReleases> {
+  return usePoll(fetchFleetReleases, {
+    intervalMs: FLEET_POLL_MS,
+    enabled,
+    fallback: 'the fleet releases failed',
+  });
+}
+
+export function useFleetGitops(enabled = true): Polled<FleetGitops> {
+  return usePoll(fetchFleetGitops, {
+    intervalMs: FLEET_POLL_MS,
+    enabled,
+    fallback: 'the fleet delivery failed',
+  });
 }
 
 export function useFleetOverview(enabled = true): Polled<FleetOverview> {
@@ -96,6 +130,18 @@ export function shortKey(key: string): string {
 
 // An image on more than one cluster with more than one tag is drift; anything
 // else is just an image, and the row says nothing.
+// An app on every open cluster is the normal case and says nothing; one that is
+// missing somewhere is the thing worth seeing.
+export function spreadLabel(spread: number | undefined, open: number): string {
+  if (spread === undefined || open < 2) {
+    return '';
+  }
+  if (spread >= open) {
+    return 'everywhere';
+  }
+  return `${String(spread)} of ${String(open)}`;
+}
+
 export function skewLabel(tags: string[] | undefined): string {
   if (tags === undefined || tags.length < 2) {
     return '';

@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  fetchFleetGitops,
   fetchFleetImages,
   fetchFleetInventory,
   fetchFleetOverview,
+  fetchFleetReleases,
   nodesLabel,
   podsLabel,
   shortKey,
   skewLabel,
+  spreadLabel,
 } from '../../src/lib/fleet';
 
 function stub(body: unknown, ok = true, status = 200) {
@@ -118,5 +121,61 @@ describe('what the rows say', () => {
   it('says nothing when a repo runs at one tag or none', () => {
     expect(skewLabel(['1.27'])).toBe('');
     expect(skewLabel(undefined)).toBe('');
+  });
+});
+
+describe('the fleet releases and delivery', () => {
+  it('reads the releases back', async () => {
+    stub({ releases: [{ name: 'loki', namespace: 'monitoring' }] });
+
+    expect((await fetchFleetReleases()).releases).toHaveLength(1);
+  });
+
+  it('fills in an empty release answer', async () => {
+    stub({});
+
+    expect((await fetchFleetReleases()).releases).toEqual([]);
+  });
+
+  it('reports a release failure', async () => {
+    stub({}, false, 500);
+
+    await expect(fetchFleetReleases()).rejects.toThrow();
+  });
+
+  it('reads the delivered apps back', async () => {
+    stub({ apps: [{ name: 'platform', cluster: 'a' }] });
+
+    expect((await fetchFleetGitops()).apps).toHaveLength(1);
+  });
+
+  it('fills in an empty delivery answer', async () => {
+    stub({});
+
+    expect((await fetchFleetGitops()).apps).toEqual([]);
+  });
+
+  it('reports a delivery failure', async () => {
+    stub({}, false, 500);
+
+    await expect(fetchFleetGitops()).rejects.toThrow();
+  });
+});
+
+describe('how far an app spreads', () => {
+  it('says everywhere when it is on every open cluster', () => {
+    expect(spreadLabel(3, 3)).toBe('everywhere');
+  });
+
+  it('says how many of how many when it is not', () => {
+    expect(spreadLabel(2, 3)).toBe('2 of 3');
+  });
+
+  it('says nothing with one cluster open', () => {
+    expect(spreadLabel(1, 1)).toBe('');
+  });
+
+  it('says nothing when the server did not count', () => {
+    expect(spreadLabel(undefined, 3)).toBe('');
   });
 });

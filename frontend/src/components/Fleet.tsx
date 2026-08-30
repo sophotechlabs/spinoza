@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import type { FleetCluster, FleetImage, FleetKind } from '../lib/types';
+import type { FleetApp, FleetCluster, FleetImage, FleetKind, HelmRelease } from '../lib/types';
 import {
   nodesLabel,
   podsLabel,
   shortKey,
   skewLabel,
+  spreadLabel,
+  useFleetGitops,
+  useFleetReleases,
   useFleetImages,
   useFleetInventory,
   useFleetOverview,
@@ -23,6 +26,8 @@ interface FleetProps {
 const TABS = [
   { id: 'clusters', label: 'Clusters' },
   { id: 'inventory', label: 'What is on them' },
+  { id: 'releases', label: 'Releases' },
+  { id: 'delivery', label: 'Delivery' },
   { id: 'images', label: 'Images' },
 ] as const;
 
@@ -192,6 +197,85 @@ function Image({ image }: { image: FleetImage }) {
   );
 }
 
+function Releases() {
+  const { data, error } = useFleetReleases();
+  if (data === null) {
+    if (error !== null) {
+      return <LoadFailure what="The fleet releases" message={error} />;
+    }
+    return <Loading what="the fleet releases" />;
+  }
+  return (
+    <div className="min-h-0 flex-1 overflow-auto">
+      {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
+      <ul>
+        {data.releases.map((one) => (
+          <Release key={`${one.cluster ?? ''}/${one.namespace}/${one.name}`} one={one} />
+        ))}
+      </ul>
+      {data.releases.length === 0 && <p className="p-3 text-fg-muted">No releases installed.</p>}
+    </div>
+  );
+}
+
+function Release({ one }: { one: HelmRelease }) {
+  return (
+    <li className="flex items-baseline gap-3 border-b border-edge px-2 py-1">
+      <span className="w-56 shrink-0 truncate text-fg-strong" title={one.name}>
+        {one.name}
+      </span>
+      <span className="w-40 shrink-0 truncate text-fg-muted">{one.namespace}</span>
+      <span className="w-32 shrink-0 truncate text-fg-soft">{one.chartVersion}</span>
+      <span className="w-40 shrink-0">
+        <Swatch cluster={one.cluster ?? ''} />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-warn" title={one.skew}>
+        {one.skew !== undefined && one.skew !== '' && `${one.chart} is at ${one.skew}`}
+      </span>
+    </li>
+  );
+}
+
+function Delivery() {
+  const open = useClustersStore((state) => state.tabs.length);
+  const { data, error } = useFleetGitops();
+  if (data === null) {
+    if (error !== null) {
+      return <LoadFailure what="The fleet delivery" message={error} />;
+    }
+    return <Loading what="the fleet delivery" />;
+  }
+  return (
+    <div className="min-h-0 flex-1 overflow-auto">
+      {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
+      <ul>
+        {data.apps.map((app) => (
+          <App key={`${app.cluster}/${app.namespace}/${app.name}`} app={app} open={open} />
+        ))}
+      </ul>
+      {data.apps.length === 0 && <p className="p-3 text-fg-muted">Nothing is delivered here.</p>}
+    </div>
+  );
+}
+
+function App({ app, open }: { app: FleetApp; open: number }) {
+  const spread = spreadLabel(app.spread, open);
+  return (
+    <li className="flex items-baseline gap-3 border-b border-edge px-2 py-1">
+      <span className="w-56 shrink-0 truncate text-fg-strong" title={app.name}>
+        {app.name}
+      </span>
+      <span className="w-20 shrink-0 truncate text-fg-muted">{app.engine}</span>
+      <span className="w-40 shrink-0 truncate text-fg-muted">{app.namespace}</span>
+      <span className="w-40 shrink-0">
+        <Swatch cluster={app.cluster} />
+      </span>
+      <span className="w-24 shrink-0 truncate text-fg-soft">{app.ready}</span>
+      <span className="min-w-0 flex-1 truncate text-fg-muted">{spread}</span>
+    </li>
+  );
+}
+
 export default function Fleet({ onPick }: FleetProps) {
   const [pane, setPane] = useState<Pane>('clusters');
   return (
@@ -213,6 +297,8 @@ export default function Fleet({ onPick }: FleetProps) {
       </div>
       {pane === 'clusters' && <Clusters onPick={onPick} />}
       {pane === 'inventory' && <Inventory />}
+      {pane === 'releases' && <Releases />}
+      {pane === 'delivery' && <Delivery />}
       {pane === 'images' && <Images />}
     </div>
   );
