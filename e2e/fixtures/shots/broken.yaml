@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-importer
+  namespace: storefront
+  labels:
+    app.kubernetes.io/name: legacy-importer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: legacy-importer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: legacy-importer
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: importer
+          image: nginx:latest
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            allowPrivilegeEscalation: true
+          volumeMounts:
+            - name: docker
+              mountPath: /var/run/docker.sock
+      volumes:
+        - name: docker
+          hostPath:
+            path: /var/run/docker.sock
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reconciler
+  namespace: payments
+  labels:
+    app.kubernetes.io/name: reconciler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: reconciler
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: reconciler
+    spec:
+      containers:
+        - name: reconciler
+          image: registry.k8s.io/does-not-exist:v9
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report-builder
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: report-builder
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: report-builder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: report-builder
+    spec:
+      containers:
+        - name: builder
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: "64"
+              memory: 512Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-shipper
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: log-shipper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: log-shipper
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: log-shipper
+    spec:
+      containers:
+        - name: shipper
+          image: busybox:1.37
+          command: ['sh', '-c', 'echo "cannot reach collector:4317"; exit 1']
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi

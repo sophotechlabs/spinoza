@@ -172,9 +172,7 @@ test('rolling back to the revision before puts its values back', async ({ page }
   await expect(rollback).toBeEnabled({ timeout: 30_000 });
   await rollback.click();
   const confirm = page.getByRole('button', { name: 'Confirm', exact: true });
-  if ((await confirm.count()) > 0) {
-    await confirm.first().click();
-  }
+  await confirm.first().click({ timeout: 5_000 }).catch(() => undefined);
 
   await expect
     .poll(() => helm(['get', 'values', RELEASE, '--namespace', NAMESPACE]), { timeout: 90_000 })
@@ -270,9 +268,7 @@ test('going through with the upgrade moves the release onto the new chart', asyn
   await previewed(dialog);
   await dialog.getByRole('button', { name: `Upgrade to ${NEXT_VERSION}` }).click();
   const confirm = dialog.getByRole('button', { name: 'Confirm', exact: true });
-  if ((await confirm.count()) > 0) {
-    await confirm.first().click();
-  }
+  await confirm.first().click({ timeout: 5_000 }).catch(() => undefined);
 
   await expect
     .poll(

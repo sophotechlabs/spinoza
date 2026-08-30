@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storefront-config
+  namespace: storefront
+data:
+  CHECKOUT_URL: https://checkout.internal
+  FEATURE_WISHLIST: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: storefront
+  labels:
+    app.kubernetes.io/name: web
+    app.kubernetes.io/part-of: storefront
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+        app.kubernetes.io/part-of: storefront
+    spec:
+      containers:
+        - name: web
+          image: registry.k8s.io/pause:3.10
+          envFrom:
+            - configMapRef:
+                name: storefront-config
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: storefront
+spec:
+  selector:
+    app.kubernetes.io/name: web
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue
+  namespace: storefront
+  labels:
+    app.kubernetes.io/name: catalogue
+    app.kubernetes.io/part-of: storefront
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: catalogue
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: catalogue
+        app.kubernetes.io/part-of: storefront
+    spec:
+      containers:
+        - name: catalogue
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue
+  namespace: storefront
+spec:
+  selector:
+    app.kubernetes.io/name: catalogue
+  ports:
+    - port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: storefront
+  namespace: storefront
+spec:
+  rules:
+    - host: shop.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80

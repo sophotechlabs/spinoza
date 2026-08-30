@@ -172,9 +172,7 @@ test('deleting from the drawer takes the object out of the table', async ({ page
   await openYaml(page, EDITED);
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   const confirm = page.getByRole('button', { name: 'Confirm', exact: true });
-  if ((await confirm.count()) > 0) {
-    await confirm.first().click();
-  }
+  await confirm.first().click({ timeout: 5_000 }).catch(() => undefined);
   await expect
     .poll(
       () =>

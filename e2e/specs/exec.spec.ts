@@ -29,11 +29,13 @@ test('opening a shell puts a live terminal on the screen', async ({ page }) => {
 test('what is typed into the shell runs in the container', async ({ page }) => {
   await openTerminal(page, 'shellable');
   const open = page.getByRole('button', { name: 'Shell in shellable' });
-  if ((await open.count()) > 0) {
+  const screen = page.locator('.xterm-screen').first();
+  await expect(open.or(screen).first()).toBeVisible({ timeout: 60_000 });
+  if (await open.isVisible()) {
     await open.click();
   }
-  await expect(page.locator('.xterm-screen').first()).toBeVisible({ timeout: 60_000 });
-  await page.locator('.xterm-screen').first().click();
+  await expect(screen).toBeVisible({ timeout: 60_000 });
+  await screen.click();
   await page.keyboard.type('echo shell-reached-the-container');
   await page.keyboard.press('Enter');
   await expect

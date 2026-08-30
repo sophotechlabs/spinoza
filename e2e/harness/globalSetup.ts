@@ -9,7 +9,14 @@ import {
   readonlyKubeconfig,
   refuseAnythingButKind,
 } from './cluster';
-import { seed, seedGitops, seedHelm, seedScale, waitForFixtures } from './fixtures';
+import {
+  installFlux,
+  seed,
+  seedGitops,
+  seedHelm,
+  seedScale,
+  waitForFixtures,
+} from './fixtures';
 import { packageCharts, serveCharts, writeRepositoryCache, writeRepositoryConfig } from './charts';
 import { build, freePort, launch, start, stopStale, token } from './spinoza';
 import type { Instance } from './spinoza';
@@ -69,6 +76,9 @@ export default async function globalSetup(): Promise<void> {
   exportKubeconfig();
   refuseAnythingButKind();
   seed();
+  if (process.env.SPINOZA_E2E_TIER === 'shots') {
+    installFlux();
+  }
   if (process.env.SPINOZA_E2E_TIER === 'full') {
     exportSecondKubeconfig();
     seedGitops();

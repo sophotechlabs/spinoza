@@ -23,9 +23,7 @@ async function openWorkload(page: Page, name: string): Promise<void> {
 async function press(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name, exact: true }).click();
   const confirm = page.getByRole('button', { name: 'Confirm', exact: true });
-  if ((await confirm.count()) > 0) {
-    await confirm.first().click();
-  }
+  await confirm.first().click({ timeout: 5_000 }).catch(() => undefined);
 }
 
 async function openNode(page: Page, name: string): Promise<void> {

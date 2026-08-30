@@ -333,6 +333,11 @@ test-integration: cluster-base
 
 test-e2e: cluster-e2e (e2e-run 'core')
 
+shots: cluster-e2e
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SPINOZA_E2E_TIER=shots just e2e-run shots
+
 test-e2e-full: cluster-full
     #!/usr/bin/env bash
     set -euo pipefail

@@ -7,6 +7,11 @@ export default defineConfig({
   projects: [
     { name: 'core', testDir: './specs' },
     { name: 'full', testDir: './specs-full' },
+    {
+      name: 'shots',
+      testDir: './shots',
+      use: { viewport: { width: 1780, height: 1000 }, deviceScaleFactor: 2 },
+    },
   ],
   globalSetup: './harness/globalSetup.ts',
   globalTeardown: './harness/globalTeardown.ts',

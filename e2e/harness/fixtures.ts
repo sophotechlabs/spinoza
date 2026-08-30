@@ -100,6 +100,30 @@ export function seedHelm(): void {
   ]);
 }
 
+export function installFlux(): void {
+  kubectl([
+    'apply',
+    '-f',
+    'https://github.com/fluxcd/flux2/releases/latest/download/install.yaml',
+  ]);
+  kubectl([
+    'wait',
+    '--for=condition=Established',
+    'crd/gitrepositories.source.toolkit.fluxcd.io',
+    'crd/kustomizations.kustomize.toolkit.fluxcd.io',
+    '--timeout=180s',
+  ]);
+  kubectl([
+    '-n',
+    'flux-system',
+    'wait',
+    '--for=condition=Available',
+    'deployment',
+    '--all',
+    '--timeout=300s',
+  ]);
+}
+
 export function seedGitops(): void {
   kubectl(['apply', '-f', GITOPS]);
 }

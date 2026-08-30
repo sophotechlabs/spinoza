@@ -70,9 +70,7 @@ export async function expandCategory(page: Page, name: string): Promise<void> {
 
 export async function ensureDrawer(page: Page): Promise<void> {
   const show = page.getByRole('button', { name: 'Show the right dock' });
-  if ((await show.count()) > 0) {
-    await show.click();
-  }
+  await show.click({ timeout: 2_000 }).catch(() => undefined);
 }
 
 export function sidebar(page: Page, label: string | RegExp) {

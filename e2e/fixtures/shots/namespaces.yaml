@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: storefront
+  labels:
+    team: retail
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payments
+  labels:
+    team: finance
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform
+  labels:
+    team: platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    team: platform
