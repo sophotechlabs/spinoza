@@ -1,4 +1,5 @@
 import type { ViewState, ViewSwitch } from './types';
+import { VIEWS } from './types';
 import { failure } from './object';
 import { request } from './http';
 
@@ -9,6 +10,7 @@ export const BROWSER = 'browser';
 declare global {
   interface Window {
     __SPINOZA_VIEW__?: string;
+    __SPINOZA_START__?: { view?: string; context?: string };
   }
 }
 
@@ -21,6 +23,31 @@ export function viewKind(): string {
 
 export function inDesktopWindow(): boolean {
   return viewKind() === DESKTOP;
+}
+
+// A window with no address bar cannot be pointed at a route, so a run may name
+// one to open on. It only applies when nothing else has asked: a hash the user
+// arrived with always wins, and a view this build does not know is dropped.
+export function startRoute(): string {
+  if (window.location.hash !== '') {
+    return '';
+  }
+  const asked = window.__SPINOZA_START__;
+  if (asked === undefined) {
+    return '';
+  }
+  const params = new URLSearchParams();
+  if (typeof asked.context === 'string' && asked.context !== '') {
+    params.set('context', asked.context);
+  }
+  if (typeof asked.view === 'string' && (VIEWS as readonly string[]).includes(asked.view)) {
+    params.set('view', asked.view);
+  }
+  const query = params.toString();
+  if (query === '') {
+    return '';
+  }
+  return `#${query}`;
 }
 
 export async function fetchView(): Promise<ViewState> {

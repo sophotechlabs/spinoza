@@ -36,6 +36,7 @@ type settings struct {
 	showLicense bool
 	pprof       bool
 	nodeShell   bool
+	startView   string
 	cluster     cluster.Options
 }
 
@@ -56,6 +57,8 @@ func parseFlags(args []string) (settings, error) {
 	helmBinary := flags.String("helm", envOr("SPINOZA_HELM", helm.DefaultBinary), "helm binary used to roll back and uninstall releases")
 	promSpec := flags.String("prometheus", envOr("SPINOZA_PROMETHEUS", ""), "prometheus service as namespace/service:port; discovered when empty")
 	kubeconfig := flags.String("kubeconfig", envOr("SPINOZA_KUBECONFIG", ""), "kubeconfig to read; the usual lookup rules when empty")
+	startView := flags.String("view", envOr("SPINOZA_START_VIEW", ""), "view to open on when nothing else asks for one")
+	startContext := flags.String("context", envOr("SPINOZA_START_CONTEXT", ""), "kubeconfig context to open on start; the current one when empty")
 	clientQPS := flags.Float64("qps", envFloat("SPINOZA_QPS", defaultQPS), "apiserver requests per second this client allows itself")
 	clientBurst := flags.Int("burst", envInt("SPINOZA_BURST", defaultBurst), "apiserver requests this client may burst to")
 	syncTimeout := flags.Duration("sync-timeout", envDuration("SPINOZA_SYNC_TIMEOUT", defaultSync), "how long one resource type may take to fill its cache")
@@ -83,6 +86,7 @@ func parseFlags(args []string) (settings, error) {
 		showLicense: *showLicense,
 		pprof:       *profiler,
 		nodeShell:   *nodeShell,
+		startView:   *startView,
 		cluster: cluster.Options{
 			DebugImage:       *debugImage,
 			NodeShellImage:   *nodeShellImage,
@@ -91,6 +95,7 @@ func parseFlags(args []string) (settings, error) {
 			HelmBinary:       *helmBinary,
 			PromSpec:         *promSpec,
 			Kubeconfig:       *kubeconfig,
+			Context:          *startContext,
 			ClientQPS:        float32(*clientQPS),
 			ClientBurst:      *clientBurst,
 			SyncTimeout:      *syncTimeout,

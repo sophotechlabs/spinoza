@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -56,7 +55,19 @@ func (v *views) patience() time.Duration {
 }
 
 func ViewScript(kind string) string {
-	return "<script>window.__SPINOZA_VIEW__=" + strconv.Quote(kind) + ";</script>"
+	return "<script>window.__SPINOZA_VIEW__=" + scriptValue(kind) + ";</script>"
+}
+
+// StartScript names the view and context to open on when nothing else has
+// asked for one. A window with no address bar cannot be pointed at a route, so
+// this is how a run reaches one without somebody clicking. The page drops a
+// view it does not know, so a name it does not know lands on the default.
+func StartScript(view, context string) string {
+	if view == "" && context == "" {
+		return ""
+	}
+	return "<script>window.__SPINOZA_START__={view:" + scriptValue(view) +
+		",context:" + scriptValue(context) + "};</script>"
 }
 
 func viewOf(r *http.Request) string {

@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -33,7 +32,7 @@ func SettingsScript(values map[string]string) string {
 	if err != nil {
 		return ""
 	}
-	return "<script>window.__SPINOZA_SETTINGS__=" + strconv.Quote(string(body)) + ";</script>"
+	return "<script>window.__SPINOZA_SETTINGS__=" + scriptValue(string(body)) + ";</script>"
 }
 
 func (s *Server) readSettings(w http.ResponseWriter, r *http.Request) {

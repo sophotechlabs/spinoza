@@ -77,6 +77,7 @@ type Server struct {
 	profiler   bool
 	health     map[string]api.ClusterHealth
 	misses     map[string]int
+	start      startRoute
 	watching   bool
 	updates    Updates
 	installer  Installs

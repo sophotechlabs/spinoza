@@ -29,6 +29,7 @@ type Options struct {
 	HelmBinary       string
 	PromSpec         string
 	Kubeconfig       string
+	Context          string
 	ClientQPS        float32
 	ClientBurst      int
 	SyncTimeout      time.Duration

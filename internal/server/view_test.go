@@ -330,3 +330,55 @@ func TestThePageSaysWhichViewItIs(t *testing.T) {
 		t.Fatalf("the page does not say it is a browser view: %s", body)
 	}
 }
+
+func TestNoStartRouteInjectsNothing(t *testing.T) {
+	if StartScript("", "") != "" {
+		t.Fatalf("an unset start route emitted %q", StartScript("", ""))
+	}
+}
+
+func TestAStartRouteNamesTheViewAndContext(t *testing.T) {
+	got := StartScript("traffic", "p-mk1")
+
+	if !strings.Contains(got, `view:"traffic"`) {
+		t.Fatalf("script = %q, want the view named", got)
+	}
+	if !strings.Contains(got, `context:"p-mk1"`) {
+		t.Fatalf("script = %q, want the context named", got)
+	}
+}
+
+func TestAStartRouteCannotCarryScriptOutOfItsQuotes(t *testing.T) {
+	got := StartScript(`</script><script>stolen()`, `"; drop()`)
+
+	if strings.Count(got, "</script>") != 1 {
+		t.Fatalf("script = %q, want the only closing tag to be its own", got)
+	}
+}
+
+func TestSettingsCannotCarryScriptOutOfTheirQuotes(t *testing.T) {
+	got := SettingsScript(map[string]string{
+		"spinoza.columns.v1": `[{"name":"</script><script>stolen()</script>","path":".a"}]`,
+	})
+
+	if strings.Count(got, "</script>") != 1 {
+		t.Fatalf("script = %q, want the only closing tag to be its own", got)
+	}
+}
+
+func TestATokenCannotCarryScriptOutOfItsQuotes(t *testing.T) {
+	got := TokenScript(`</script><script>stolen()`)
+
+	if strings.Count(got, "</script>") != 1 {
+		t.Fatalf("script = %q, want the only closing tag to be its own", got)
+	}
+}
+
+func TestOnlyOneHalfOfTheStartRouteIsEnough(t *testing.T) {
+	if StartScript("traffic", "") == "" {
+		t.Fatal("a view with no context emitted nothing")
+	}
+	if StartScript("", "p-mk1") == "" {
+		t.Fatal("a context with no view emitted nothing")
+	}
+}

@@ -83,6 +83,7 @@ func run() error {
 	}
 
 	srv := server.New(clusters, assets, token)
+	srv.StartOn(opts.startView, opts.cluster.Context)
 	srv.UseProfiler(opts.pprof)
 	srv.UseSettings(store)
 	srv.UseBaselines(baselineStore())

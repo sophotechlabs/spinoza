@@ -4,6 +4,7 @@ import Root from './Root';
 import './index.css';
 import { TOKEN_PARAM } from './lib/http';
 import { startSaving } from './lib/persist';
+import { startRoute } from './lib/view';
 
 function stripToken(): void {
   const injected = window as unknown as { __SPINOZA_TOKEN__?: string };
@@ -23,12 +24,21 @@ function stripToken(): void {
   window.history.replaceState(null, '', window.location.pathname + search + window.location.hash);
 }
 
+function applyStart(): void {
+  const wanted = startRoute();
+  if (wanted === '') {
+    return;
+  }
+  window.history.replaceState(null, '', window.location.pathname + window.location.search + wanted);
+}
+
 const el = document.getElementById('root');
 if (!el) {
   throw new Error('root element missing');
 }
 
 stripToken();
+applyStart();
 startSaving();
 
 createRoot(el).render(

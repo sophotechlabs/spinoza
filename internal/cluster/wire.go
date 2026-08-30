@@ -46,6 +46,12 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 	}, sources, openProtection(), options.OpenTimeout)
 	cluster.useReader(readerFor(options))
 	cluster.useLister(listerFor(options))
+	if options.Context != "" {
+		useErr := cluster.Use(api.ContextRef{Name: options.Context})
+		if useErr != nil {
+			return cluster, useErr
+		}
+	}
 	return cluster, nil
 }
 
