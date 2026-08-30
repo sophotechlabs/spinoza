@@ -14,6 +14,7 @@ import {
   originLabel,
   refLabel,
   severityClass,
+  severityReason,
   shownLabel,
   totalFindings,
   useChecks,
@@ -42,6 +43,7 @@ function viewFinding(name: string, extra: Partial<CheckFindingView> = {}): Check
     object: ref(name),
     kind: 'Deployment',
     detail: 'securityContext.privileged is true',
+    severity: 'high',
     fresh: false,
     muted: false,
     ...extra,
@@ -454,5 +456,86 @@ describe('the audit filter on the wire', () => {
     expect(url).toContain('skipNamespaces=kube-system');
     expect(url).toContain('check=image-latest');
     expect(url).toContain('after=abc');
+  });
+});
+
+describe('a finding carries its own severity', () => {
+  it('takes the level the backend derived for that object', async () => {
+    stub({
+      objects: [
+        {
+          group: 'apps',
+          version: 'v1',
+          resource: 'deployments',
+          namespace: 'prod',
+          name: 'api',
+          kind: 'Deployment',
+        },
+      ],
+      groups: [
+        {
+          id: 'run-as-root',
+          category: 'security',
+          severity: 'high',
+          findings: [{ ref: 0, detail: 'runs as root', severity: 'medium' }],
+        },
+      ],
+    });
+
+    const found = await fetchChecks();
+
+    expect(found.groups[0].findings[0].severity).toBe('medium');
+    expect(found.groups[0].severity).toBe('high');
+  });
+
+  it('falls back rather than trusting a level the wire invented', async () => {
+    stub({
+      objects: [
+        {
+          group: 'apps',
+          version: 'v1',
+          resource: 'deployments',
+          namespace: 'prod',
+          name: 'api',
+          kind: 'Deployment',
+        },
+      ],
+      groups: [
+        {
+          id: 'run-as-root',
+          category: 'security',
+          severity: 'high',
+          findings: [{ ref: 0, detail: 'runs as root', severity: 'apocalyptic' }],
+        },
+      ],
+    });
+
+    const found = await fetchChecks();
+
+    expect(found.groups[0].findings[0].severity).toBe('low');
+  });
+});
+
+describe('severityReason', () => {
+  it('says a cluster component is not yours to change', () => {
+    const reason = severityReason(viewFinding('cilium', { severity: 'low', origin: 'system' }));
+
+    expect(reason).toContain('low');
+    expect(reason).toContain('do not own');
+  });
+
+  it('names the chart that installed a packaged workload', () => {
+    const reason = severityReason(
+      viewFinding('loki', { severity: 'medium', origin: 'packaged', managedBy: 'Flux: loki' }),
+    );
+
+    expect(reason).toContain('Flux: loki');
+    expect(reason).toContain('values');
+  });
+
+  it('says only the level for a workload of your own', () => {
+    const reason = severityReason(viewFinding('api', { severity: 'high' }));
+
+    expect(reason).toBe('high for this object');
   });
 });

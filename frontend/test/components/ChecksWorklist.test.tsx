@@ -24,7 +24,7 @@ function bodyIn(init?: RequestInit): unknown {
 }
 
 function finding(extra: Partial<CheckFinding> = {}): CheckFinding {
-  return { ref: 0, detail: 'securityContext.privileged is true', ...extra };
+  return { ref: 0, detail: 'securityContext.privileged is true', severity: 'high', ...extra };
 }
 
 function group(extra: Partial<CheckGroup> = {}): CheckGroup {
@@ -362,6 +362,225 @@ describe('the baseline', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Take a baseline' }));
 
     expect(await screen.findByText('the disk is full')).toBeInTheDocument();
+  });
+});
+
+describe('your own rules', () => {
+  const onCleanup: (() => void)[] = [];
+
+  afterEach(() => {
+    while (onCleanup.length > 0) {
+      onCleanup.pop()?.();
+    }
+  });
+
+  function faultsAnswer(faults: unknown[]) {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method ?? 'GET', body: init?.body ?? null });
+        if (url.startsWith('/api/checks/rules/faults')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ faults }),
+          });
+        }
+        if (url.startsWith('/api/settings')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ values: {} }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    return calls;
+  }
+
+  function afterSave(save: (rules: string) => Promise<void>) {
+    onCleanup.push(() => {
+      useSettingsStore.setState({ setCheckRules: save });
+    });
+  }
+
+  async function openRules() {
+    await userEvent.click(await screen.findByText('Your own rules'));
+    return screen.getByRole('textbox', { name: 'Your own rules' });
+  }
+
+  it('says every rule reads when the server finds nothing wrong', async () => {
+    faultsAnswer([]);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(await screen.findByText('Every rule reads.')).toBeInTheDocument();
+  });
+
+  it('names the rule that does not compile', async () => {
+    faultsAnswer([{ id: 'broken', reason: 'the expression did not compile: syntax error' }]);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(
+      await screen.findByText('broken: the expression did not compile: syntax error'),
+    ).toBeInTheDocument();
+  });
+
+  it('reports a fault about the list itself without a name in front of it', async () => {
+    faultsAnswer([{ id: '', reason: 'this is not a list of rules' }]);
+
+    const box = await openRules();
+    await userEvent.type(box, 'nonsense');
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(await screen.findByText('this is not a list of rules')).toBeInTheDocument();
+  });
+
+  it('refuses to save a rule list the server would refuse', async () => {
+    const calls = faultsAnswer([{ id: 'broken', reason: 'the expression did not compile' }]);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.url.startsWith('/api/checks/rules/faults'))).toBe(true);
+    });
+    expect(useSettingsStore.getState().checkRules).toBe('');
+  });
+
+  it('saves a rule list that reads', async () => {
+    faultsAnswer([]);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(useSettingsStore.getState().checkRules).toBe('x');
+    });
+  });
+
+  it('says so when the rules read but could not be saved', async () => {
+    faultsAnswer([]);
+    const save = useSettingsStore.getState().setCheckRules;
+    useSettingsStore.setState({
+      setCheckRules: () => Promise.reject(new Error('the settings file is read only')),
+    });
+    afterSave(save);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('the settings file is read only')).toBeInTheDocument();
+  });
+
+  it('copies the rules so they can be kept somewhere else', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    faultsAnswer([]);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('x');
+    });
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+  });
+
+  it('says so when the rules could not be copied', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: () => Promise.reject(new Error('no')) } });
+    faultsAnswer([]);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(await screen.findByText('the rules could not be copied')).toBeInTheDocument();
+  });
+
+  it('says so when saving could not even read the rules back', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/rules/faults')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'the rules could not be read' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('the rules could not be read')).toBeInTheDocument();
+    expect(useSettingsStore.getState().checkRules).toBe('');
+  });
+
+  it('says so when the check itself could not be run', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/rules/faults')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'the rules could not be read' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+
+    const box = await openRules();
+    await userEvent.type(box, 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(await screen.findByText('the rules could not be read')).toBeInTheDocument();
+  });
+});
+
+describe('a check that reads live measurement', () => {
+  it('says it is measured rather than comparing it', async () => {
+    answers({
+      groups: [group({ measured: true })],
+      baseline: '2026-08-29T00:00:00Z',
+    });
+
+    expect(await screen.findByText('measured, not compared')).toBeInTheDocument();
   });
 });
 

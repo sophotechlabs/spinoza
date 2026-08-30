@@ -29,6 +29,8 @@ const (
 	notEveryKind = "not audited: this decides what nothing references, " +
 		"which is only true once every kind has been read"
 
+	readsCustom = "Every built-in kind and every custom resource was read to decide this."
+
 	findingsShown = 200
 )
 
@@ -38,6 +40,9 @@ type scan struct {
 	held      *corpus
 	facts     Facts
 	everyKind bool
+	// custom says every kind outside the Kubernetes API groups was read, which
+	// is what "nothing references this" needs before it can be said at all.
+	custom bool
 }
 
 func (sc scan) hasUsage() bool {
@@ -49,6 +54,7 @@ type found struct {
 	container string
 	detail    string
 	patch     string
+	severity  string
 }
 
 type objects struct {
@@ -169,7 +175,7 @@ func overUsage(rule usageRule) finder {
 }
 
 func findingKey(item found) string {
-	return subjectKey(item.subject) + "\x00" + item.container
+	return rankOf(item.severity) + "\x00" + subjectKey(item.subject) + "\x00" + item.container
 }
 
 func encodeCursor(key string) string {
@@ -211,7 +217,7 @@ type tally struct {
 }
 
 func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
-	all := c.find(sc)
+	all := c.ranked(c.find(sc))
 	out := make([]marked, 0, len(all))
 	count := tally{}
 	for _, item := range all {
@@ -226,7 +232,8 @@ func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 				continue
 			}
 		}
-		fresh := keep.Base.covers(c.id) && !keep.Base.has(fingerprintOf(identityOf(c.id, item)))
+		fresh := c.comparable() && keep.Base.covers(c.id) &&
+			!keep.Base.has(fingerprintOf(identityOf(c.id, item)))
 		if fresh {
 			count.fresh++
 		}
@@ -262,6 +269,7 @@ func page(all []marked, objs *objects, after string, limit int) ([]api.CheckFind
 			Container: item.container,
 			Detail:    item.detail,
 			Patch:     item.patch,
+			Severity:  item.severity,
 			New:       item.fresh,
 			Muted:     item.muted,
 			MutedBy:   mutedBy(item),
@@ -272,14 +280,40 @@ func page(all []marked, objs *objects, after string, limit int) ([]api.CheckFind
 	return out, ""
 }
 
+// wantsCorpus says some check in this audit decides what nothing references,
+// which is the only reason to read every custom resource in the cluster. With
+// the orphan checks turned off or under the severity floor, reading a hundred
+// custom kinds each time would buy nothing.
+func wantsCorpus(keep Filter) bool {
+	for _, entry := range keep.chosen(registryWith(keep.Rules)) {
+		if entry.needsEvery {
+			return true
+		}
+	}
+	return false
+}
+
+// comparable says a finding of this check means the same thing on two different
+// days. A check that reads live measurement does not: its findings appear and
+// go with load, so calling them new would report the weather as work.
+func (c check) comparable() bool {
+	return !c.needsUsage
+}
+
 // standsDown is why a check reported nothing, which is never the same as
 // finding nothing.
 func (c check) standsDown(sc scan) string {
 	if c.needsUsage && !sc.hasUsage() {
 		return noUsage
 	}
-	if c.needsEvery && !sc.everyKind {
-		return notEveryKind
+	if c.needsEvery {
+		if !sc.custom {
+			return notEveryKind
+		}
+		if refused := sc.held.refused(); refused != "" {
+			return "not audited: the cluster would not let this read " + refused +
+				", and what nothing references cannot be decided from part of it"
+		}
 	}
 	if missing := missingResources(c.needs, sc.held); len(missing) > 0 {
 		return skippedBecause(missing)
@@ -305,8 +339,11 @@ func (c check) group(sc scan, objs *objects, spread *namespaces, keep Filter, sh
 	all, count := c.matching(sc, keep)
 	out.Findings, out.Next = page(all, objs, "", shown)
 	out.Total, out.Muted, out.NewCount = count.total, count.muted, count.fresh
-	out.Fixed = keep.fixedSince(c.id, count.found)
-	out.Baselined = keep.Base.covers(c.id)
+	if c.comparable() {
+		out.Fixed = keep.fixedSince(c.id, count.found)
+		out.Baselined = keep.Base.covers(c.id)
+	}
+	out.Measured = !c.comparable()
 	out.Truncated = out.Next != ""
 	spread.add(c.severity, all)
 	return out
@@ -387,19 +424,25 @@ func survey(
 	keep Filter,
 ) (scan, string, []string) {
 	wanted, absent := needed(descs, keep.WholeCluster)
+	custom := false
 	if keep.EveryKind {
-		wanted, absent = everyDiscovered(descs), nil
+		wanted, absent, custom = everyDiscovered(descs), nil, true
 	}
 	if keep.WholeCluster && !keep.EveryKind {
+		if wantsCorpus(keep) {
+			wanted = append(wanted, customKinds(descs)...)
+			custom = true
+		}
 		wanted = append(wanted, alsoWarm(lister, wanted)...)
 	}
-	items, names, unread, failure := gather(ctx, lister, wanted)
+	items, names, unread, mentions, failure := gather(ctx, lister, wanted)
 	return scan{
 		subjects:  subjectsOf(items),
 		usage:     usage.Pods,
-		held:      newCorpus(items, names, absent, targetsFor(keep.WholeCluster), unread),
+		held:      newCorpus(items, names, absent, targetsFor(keep.WholeCluster), unread, mentions),
 		facts:     lister.Facts(),
 		everyKind: keep.EveryKind,
+		custom:    custom,
 	}, failure, absent
 }
 

@@ -28,6 +28,7 @@ function makeFinding(extra: Partial<CheckFinding> = {}): CheckFinding {
     ref: 0,
     container: 'app',
     detail: 'securityContext.privileged is true',
+    severity: 'high',
     ...extra,
   };
 }
@@ -556,5 +557,43 @@ describe('audit controls', () => {
     );
 
     expect(screen.queryByText(/holds every capability/)).not.toBeInTheDocument();
+  });
+});
+
+describe('a finding shows how much it matters here', () => {
+  it("shows the severity derived for the object, not the check's", async () => {
+    show({
+      groups: [
+        makeGroup('privileged-containers', {
+          severity: 'high',
+          findings: [makeFinding({ severity: 'low' })],
+        }),
+      ],
+    });
+    await screen.findByText('Privileged containers');
+
+    await userEvent.click(screen.getByRole('button', { name: /Privileged containers/ }));
+
+    expect(await screen.findByText('low')).toBeInTheDocument();
+  });
+
+  it('explains a level that was softened because the object is not yours', async () => {
+    stub({
+      groups: [
+        makeGroup('privileged-containers', {
+          severity: 'high',
+          findings: [makeFinding({ severity: 'low' })],
+        }),
+      ],
+      objects: [{ ...OBJECTS[0], namespace: 'kube-system', name: 'cilium', origin: 'system' }],
+      scanned: 1,
+    });
+    render(<Checks onOpen={vi.fn()} />);
+    await screen.findByText('Privileged containers');
+    await userEvent.click(screen.getByRole('button', { name: /Privileged containers/ }));
+
+    const badge = await screen.findByText('low');
+
+    expect(badge.getAttribute('title')).toContain('do not own');
   });
 });

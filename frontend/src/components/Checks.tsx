@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CheckCategory, Mute, NamespaceCount, ObjectRef } from '../lib/types';
+import type { CheckCategory, Mute, NamespaceCount, ObjectRef, RuleFault } from '../lib/types';
 import type { CheckFindingView, CheckGroupView } from '../lib/checks';
 import { fetchCheckPage } from '../lib/checks';
 import {
@@ -14,7 +14,9 @@ import {
   mutedLabel,
   originLabel,
   refKeyOf,
+  ruleFaults,
   severityClass,
+  severityReason,
   shownLabel,
   takeBaseline,
   totalFindings,
@@ -139,6 +141,12 @@ function Finding({
             {originLabel(finding)}
           </span>
         )}
+        <span
+          title={severityReason(finding)}
+          className={`w-16 shrink-0 text-right text-[11px] ${severityClass(finding.severity)}`}
+        >
+          {finding.severity}
+        </span>
         <MuteControl
           finding={finding}
           check={check}
@@ -433,14 +441,24 @@ function YourRules() {
   const save = useSettingsStore((state) => state.setCheckRules);
   const [draft, setDraft] = useState(saved);
   const [failed, setFailed] = useState<string | null>(null);
+  const [faults, setFaults] = useState<RuleFault[] | null>(null);
+  const [copied, setCopied] = useState(false);
   const dirty = draft !== saved;
+
+  function check(): Promise<RuleFault[]> {
+    return ruleFaults(draft).then((found) => {
+      setFaults(found);
+      return found;
+    });
+  }
 
   return (
     <details className="shrink-0 border-b border-edge px-3 py-1.5 text-fg-muted">
       <summary className="cursor-pointer">Your own rules</summary>
       <p className="py-1 text-fg-soft">
         A list of {'{ id, match, expr }'} objects. The expression is CEL, with the workload bound to
-        object, and a rule that matches becomes a finding.
+        object, and a rule that matches becomes a finding. Copy the list to keep it in a repository,
+        and paste one back here to use it on another cluster.
       </p>
       <textarea
         aria-label="Your own rules"
@@ -450,6 +468,8 @@ function YourRules() {
         value={draft}
         onChange={(event) => {
           setDraft(event.target.value);
+          setFaults(null);
+          setCopied(false);
         }}
       />
       <div className="flex items-center gap-3 py-1">
@@ -458,21 +478,91 @@ function YourRules() {
           disabled={!dirty}
           className="rounded border border-edge px-2 py-0.5 text-fg-strong disabled:text-fg-subtle"
           onClick={() => {
-            save(draft)
-              .then(() => {
-                setFailed(null);
+            check()
+              .then((found) => {
+                if (found.length > 0) {
+                  return;
+                }
+                save(draft)
+                  .then(() => {
+                    setFailed(null);
+                  })
+                  .catch((reason: unknown) => {
+                    setFailed(messageOf(reason));
+                  });
               })
               .catch((reason: unknown) => {
-                setFailed(String(reason));
+                setFailed(messageOf(reason));
               });
           }}
         >
           Save
         </button>
+        <button
+          type="button"
+          className="rounded border border-edge px-2 py-0.5 text-fg-soft"
+          onClick={() => {
+            void check().catch((reason: unknown) => {
+              setFailed(messageOf(reason));
+            });
+          }}
+        >
+          Check
+        </button>
+        <button
+          type="button"
+          disabled={draft === ''}
+          className="rounded border border-edge px-2 py-0.5 text-fg-soft disabled:text-fg-subtle"
+          onClick={() => {
+            navigator.clipboard
+              .writeText(draft)
+              .then(() => {
+                setCopied(true);
+              })
+              .catch(() => {
+                setFailed('the rules could not be copied');
+              });
+          }}
+        >
+          {copyLabel(copied)}
+        </button>
         {failed !== null && <span className="text-warn">{failed}</span>}
       </div>
+      <RuleFaults faults={faults} />
     </details>
   );
+}
+
+function copyLabel(copied: boolean): string {
+  if (copied) {
+    return 'Copied';
+  }
+  return 'Copy';
+}
+
+function RuleFaults({ faults }: { faults: RuleFault[] | null }) {
+  if (faults === null) {
+    return null;
+  }
+  if (faults.length === 0) {
+    return <p className="py-1 text-ok">Every rule reads.</p>;
+  }
+  return (
+    <ul className="py-1">
+      {faults.map((fault) => (
+        <li key={fault.id + fault.reason} className="text-warn">
+          {faultLabel(fault)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function faultLabel(fault: RuleFault): string {
+  if (fault.id === '') {
+    return fault.reason;
+  }
+  return `${fault.id}: ${fault.reason}`;
 }
 
 function BaselineBar({ baseline, onChanged }: { baseline: string; onChanged: () => void }) {

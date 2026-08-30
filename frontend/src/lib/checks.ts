@@ -11,6 +11,8 @@ import type {
   Baseline,
   Mute,
   Mutes,
+  RuleFault,
+  RuleFaults,
   NamespaceCount,
   ObjectRef,
 } from './types';
@@ -40,6 +42,7 @@ export interface CheckFindingView {
   container?: string;
   detail: string;
   patch?: string;
+  severity: CheckSeverity;
   origin?: CheckOrigin;
   managedBy?: string;
   fresh: boolean;
@@ -101,6 +104,7 @@ function findingOf(raw: unknown, objects: CheckObject[]): CheckFindingView {
     container: item.container,
     detail: item.detail ?? '',
     patch: item.patch,
+    severity: severityOf(item.severity),
     origin: held.origin,
     managedBy: held.managedBy,
     fresh: item.new === true,
@@ -125,6 +129,17 @@ export function originLabel(finding: CheckFindingView): string {
     return 'cluster';
   }
   return '';
+}
+
+export function severityReason(finding: CheckFindingView): string {
+  const parts = [`${finding.severity} for this object`];
+  if (finding.origin === 'system') {
+    parts.push('a cluster component, which you do not own');
+  }
+  if (finding.origin === 'packaged') {
+    parts.push(`installed by ${finding.managedBy ?? 'a chart'}, so you change it through values`);
+  }
+  return parts.join(' — ');
 }
 
 function categoryOf(value: string | undefined): CheckCategory {
@@ -158,6 +173,7 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
     new: item.new,
     fixed: item.fixed,
     baselined: item.baselined,
+    measured: item.measured,
     truncated: item.truncated,
     next: item.next,
     findings,
@@ -322,6 +338,19 @@ export function clearBaseline(): Promise<string> {
   return sendBaseline('DELETE');
 }
 
+export async function ruleFaults(rules: string): Promise<RuleFault[]> {
+  const response = await request('/api/checks/rules/faults', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: rules,
+  });
+  if (!response.ok) {
+    throw await failure(response, `the rules request failed with status ${response.status}`);
+  }
+  const body = (await response.json()) as Partial<RuleFaults>;
+  return body.faults ?? [];
+}
+
 // The ref a mute needs to name one object, which is the shape the audit files
 // them under on the other side.
 export function refKeyOf(object: ObjectRef): string {
@@ -379,6 +408,9 @@ export function countLabel(group: CheckGroupView): string {
 export function changeLabel(group: CheckGroupView, baseline: string): string {
   if (baseline === '') {
     return '';
+  }
+  if (group.measured === true) {
+    return 'measured, not compared';
   }
   if (group.baselined !== true) {
     return 'not in the baseline';
