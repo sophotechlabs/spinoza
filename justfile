@@ -281,7 +281,16 @@ cluster-base: (cluster-up 'base')
 
 cluster-e2e: (cluster-up 'e2e')
 
-cluster-full: (cluster-up 'full') cluster-gitops
+cluster-full: (cluster-up 'full') cluster-gitops cluster-second
+
+[private]
+cluster-second:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! kind get clusters | grep -qx {{ test_cluster }}-second; then
+        kind create cluster --name {{ test_cluster }}-second --wait 300s
+    fi
+    kubectl --context kind-{{ test_cluster }}-second cluster-info
 
 [private]
 cluster-gitops:
@@ -299,7 +308,12 @@ cluster-gitops:
     kubectl --context {{ test_context }} -n argocd wait --for=condition=Available deployment --all --timeout=10m
 
 cluster-down:
+    #!/usr/bin/env bash
+    set -euo pipefail
     kind delete cluster --name {{ test_cluster }}
+    if kind get clusters | grep -qx {{ test_cluster }}-second; then
+        kind delete cluster --name {{ test_cluster }}-second
+    fi
 
 [private]
 cluster-mirror:

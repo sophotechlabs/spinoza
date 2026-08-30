@@ -2,7 +2,13 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BASE_URL, NOWHERE_KUBECONFIG, STATE_FILE, STORAGE_STATE, TMP_DIR, sideAddr } from './paths';
 import { KUBECONFIG } from './paths';
-import { ensureCluster, exportKubeconfig, readonlyKubeconfig, refuseAnythingButKind } from './cluster';
+import {
+  ensureCluster,
+  exportKubeconfig,
+  exportSecondKubeconfig,
+  readonlyKubeconfig,
+  refuseAnythingButKind,
+} from './cluster';
 import { seed, seedGitops, seedHelm, seedScale, waitForFixtures } from './fixtures';
 import { packageCharts, serveCharts, writeRepositoryCache, writeRepositoryConfig } from './charts';
 import { build, freePort, launch, start, stopStale, token } from './spinoza';
@@ -64,6 +70,7 @@ export default async function globalSetup(): Promise<void> {
   refuseAnythingButKind();
   seed();
   if (process.env.SPINOZA_E2E_TIER === 'full') {
+    exportSecondKubeconfig();
     seedGitops();
     seedScale();
   }

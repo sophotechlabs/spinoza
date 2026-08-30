@@ -61,3 +61,9 @@ export const CHART_DIR = join(TMP_DIR, 'charts');
 export const NOWHERE_KUBECONFIG = join(TMP_DIR, 'kubeconfig-nowhere');
 
 export const NOWHERE_CONTEXT = 'nowhere';
+
+export const SECOND_CLUSTER = `${CLUSTER}-second`;
+
+export const SECOND_CONTEXT = `kind-${SECOND_CLUSTER}`;
+
+export const SECOND_KUBECONFIG = join(TMP_DIR, 'kubeconfig-second');

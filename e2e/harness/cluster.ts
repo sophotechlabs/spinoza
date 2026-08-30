@@ -1,6 +1,15 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CLUSTER, CONTEXT, KUBECONFIG, NAMESPACE, REPO_DIR, TMP_DIR } from './paths';
+import {
+  CLUSTER,
+  CONTEXT,
+  KUBECONFIG,
+  NAMESPACE,
+  REPO_DIR,
+  SECOND_CLUSTER,
+  SECOND_KUBECONFIG,
+  TMP_DIR,
+} from './paths';
 import { mustRun, run } from './run';
 
 const LOOPBACK = ['127.0.0.1', 'localhost', '0.0.0.0'];
@@ -164,4 +173,25 @@ export function pauseContainer(name: string): void {
 
 export function unpauseContainer(name: string): void {
   run('docker', ['unpause', name]);
+}
+
+export function exportSecondKubeconfig(): void {
+  const args = ['get', 'kubeconfig', '--name', SECOND_CLUSTER];
+  if (process.env.SPINOZA_KIND_INTERNAL === '1') {
+    args.push('--internal');
+  }
+  writeFileSync(SECOND_KUBECONFIG, mustRun('kind', args), { mode: 0o600 });
+  const server = mustRun('kubectl', [
+    '--kubeconfig',
+    SECOND_KUBECONFIG,
+    'config',
+    'view',
+    '--minify',
+    '-o',
+    'jsonpath={.clusters[0].cluster.server}',
+  ]).trim();
+  const host = new URL(server).hostname;
+  if (!LOOPBACK.includes(host) && host !== `${SECOND_CLUSTER}-control-plane`) {
+    throw new Error(`refusing the second cluster at ${server}, which is not a local kind cluster`);
+  }
 }
