@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.23.0](https://github.com/sophotechlabs/spinoza/compare/v1.22.0...v1.23.0) (2026-08-30)
+
+
+### Features
+
+* **checks:** compare a baseline from another cluster by count, not by finding ([db7ae52](https://github.com/sophotechlabs/spinoza/commit/db7ae52abf86a189b32caa25440e8c4917dbef5f))
+* **checks:** let a rule of your own quieten a check, and carry a baseline between clusters ([709be32](https://github.com/sophotechlabs/spinoza/commit/709be324a9070c38c5055de4a7fb014c6f92b709))
+* **fleet:** a fleet view, and reach older history from the timeline ([3a06124](https://github.com/sophotechlabs/spinoza/commit/3a06124e3d1ba4bd650de7005f8fa6f153f5a544))
+* **fleet:** reach the release and delivery lists from the fleet view ([b8aea75](https://github.com/sophotechlabs/spinoza/commit/b8aea752ed342c50d7a4a2b01ec71eef534ac502))
+* **issues:** sort by date, page the audit half, and calm the traffic graph and the cluster dot ([12cb34a](https://github.com/sophotechlabs/spinoza/commit/12cb34a60da78e1b66695d224bee8580a658b804))
+* **rbac:** answer who can do what on a cluster, not only what I can ([89f6bfb](https://github.com/sophotechlabs/spinoza/commit/89f6bfb0322b524b0432d3998d53fba80befff21))
+* **resources:** add columns of your own from any field, label or annotation ([5933880](https://github.com/sophotechlabs/spinoza/commit/5933880679c777efd26c80bdb35660c13765d3c7))
+* **store:** bound the audit the way the timeline is bounded ([4e71403](https://github.com/sophotechlabs/spinoza/commit/4e7140333a65efcec788c67b6dc8bc7556efb104))
+
+
+### Bug Fixes
+
+* **checks:** drop the paging hook nothing calls, and a name typos rejects ([ce0b349](https://github.com/sophotechlabs/spinoza/commit/ce0b349c5a73370e8743dc7f3584cf28640093a3))
+* **sidebar:** say the pods tally counts phases, not readiness ([df8d083](https://github.com/sophotechlabs/spinoza/commit/df8d0838d5a5055c7bfd4af5885c88e29a64f1bc))
+
+
+### Documentation
+
+* **readme:** the checks, clusters, issues, topology and history it never mentioned ([743a72e](https://github.com/sophotechlabs/spinoza/commit/743a72e32ec2733bce76a06c542b9429a7c49299))
+
+
+### Performance
+
+* **checks:** let a page reuse the survey the report just built ([0774f32](https://github.com/sophotechlabs/spinoza/commit/0774f32a4d402dae006984f0b24da03ebbe5b812))
+
+
+### Tests
+
+* **checks:** hold every registered check to leaving the cache alone ([b65be21](https://github.com/sophotechlabs/spinoza/commit/b65be216c2e4ab2e03a248a3942810e96886dc82))
+* **e2e:** hold a view from the harness, and prove the protected apply gate ([e95007e](https://github.com/sophotechlabs/spinoza/commit/e95007e35bb339b8ed81929fdc2a3cf0ad02aa56))
+* **panels:** pin the dock tablist to owning tabs and nothing else ([04c80d5](https://github.com/sophotechlabs/spinoza/commit/04c80d5b93e99d32dcf989208885ae6404d63b14))
+* **protect:** hold every spelling a real file carries across the rewrite ([cd6bd28](https://github.com/sophotechlabs/spinoza/commit/cd6bd283dbfbcfd44472e2ca801a2882e7a90670))
+* **store:** time the insert the write path waits on ([652c1ec](https://github.com/sophotechlabs/spinoza/commit/652c1ec3695c40c202b9aca24fefcdc720fe81df))
+
 ## [1.22.0](https://github.com/sophotechlabs/spinoza/compare/v1.21.0...v1.22.0) (2026-08-30)
 
 
