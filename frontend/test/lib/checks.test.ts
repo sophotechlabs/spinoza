@@ -42,6 +42,8 @@ function viewFinding(name: string, extra: Partial<CheckFindingView> = {}): Check
     object: ref(name),
     kind: 'Deployment',
     detail: 'securityContext.privileged is true',
+    fresh: false,
+    muted: false,
     ...extra,
   };
 }
@@ -62,7 +64,7 @@ function viewGroup(id: string, extra: Partial<CheckGroupView> = {}): CheckGroupV
 }
 
 function viewReport(groups: CheckGroupView[]): CheckReportView {
-  return { groups, scanned: groups.length };
+  return { groups, namespaces: [], baseline: '', scanned: groups.length };
 }
 
 function stub(body: unknown, ok = true, status = 200) {
@@ -180,7 +182,13 @@ describe('fetchChecks', () => {
   it('keeps a report with no groups at all', async () => {
     stub({});
 
-    expect(await fetchChecks()).toEqual({ groups: [], scanned: 0, error: undefined });
+    expect(await fetchChecks()).toEqual({
+      groups: [],
+      namespaces: [],
+      baseline: '',
+      scanned: 0,
+      error: undefined,
+    });
   });
 
   it('refuses a category and a severity it does not know', async () => {

@@ -34,16 +34,22 @@ func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) checkFilter(r *http.Request) checks.Filter {
-	query := r.URL.Query()
-	keep := checks.ParseFilter(
-		query.Get("disabled"),
-		query.Get("skipNamespaces"),
-		query.Get("minSeverity"),
-		query.Get("wholeCluster"),
-		query.Get("everyKind"),
-	)
-	keep.Rules = checks.ParseRules(s.stored().All()[checks.RulesKey])
+	keep := checks.ParseFilter(r.URL.Query())
+	held := s.stored().All()
+	keep.Rules = checks.ParseRules(held[checks.RulesKey])
+	keep.Mutes = checks.ParseMutes(held[checks.MutesKey], s.clusterKey(r))
+	if taken, ok := s.baselines().Load(s.clusterKey(r)); ok {
+		keep.Base = &taken
+	}
 	return keep
+}
+
+// clusterKey is what mutes and baselines are filed under. A request that named
+// no cluster still means one, so the resolved id is used rather than the empty
+// string a single-cluster window sends.
+func (s *Server) clusterKey(r *http.Request) string {
+	_, on := s.lookup(clusterOf(r))
+	return on
 }
 
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {

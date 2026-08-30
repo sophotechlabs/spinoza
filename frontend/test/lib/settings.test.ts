@@ -22,6 +22,9 @@ const base: Settings = {
   checksMinSeverity: '',
   checksWholeCluster: false,
   checksEveryKind: false,
+  checksNamespace: '',
+  checksOnlyNew: false,
+  checksShowMuted: false,
 };
 
 afterEach(() => {

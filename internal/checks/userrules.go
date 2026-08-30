@@ -26,7 +26,7 @@ type UserRule struct {
 	Remedy   string `json:"remedy"`
 }
 
-const userRuleObject = "object"
+const userRuleObject = ScopeObject
 
 // RulesKey is where the settings store holds the rules you wrote yourself.
 const RulesKey = "spinoza.checks.rules.v1"

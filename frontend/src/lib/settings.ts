@@ -32,6 +32,9 @@ export interface Settings {
   checksMinSeverity: SeverityFloor;
   checksWholeCluster: boolean;
   checksEveryKind: boolean;
+  checksNamespace: string;
+  checksOnlyNew: boolean;
+  checksShowMuted: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -45,6 +48,9 @@ const DEFAULTS: Settings = {
   checksMinSeverity: '',
   checksWholeCluster: true,
   checksEveryKind: false,
+  checksNamespace: '',
+  checksOnlyNew: false,
+  checksShowMuted: false,
 };
 
 function parseStarts(value: unknown): Partial<Record<string, NamespaceStart>> {
@@ -105,6 +111,15 @@ export function parseSettings(raw: string | null): Settings {
   }
   if (typeof stored.checksEveryKind === 'boolean') {
     settings.checksEveryKind = stored.checksEveryKind;
+  }
+  if (typeof stored.checksOnlyNew === 'boolean') {
+    settings.checksOnlyNew = stored.checksOnlyNew;
+  }
+  if (typeof stored.checksShowMuted === 'boolean') {
+    settings.checksShowMuted = stored.checksShowMuted;
+  }
+  if (typeof stored.checksNamespace === 'string') {
+    settings.checksNamespace = stored.checksNamespace;
   }
   settings.checksDisabled = parseNames(stored.checksDisabled);
   settings.checksSkipNamespaces = parseNames(stored.checksSkipNamespaces);

@@ -68,6 +68,7 @@ type Server struct {
 	picker     FilePicker
 	localShell LocalShellOpener
 	settings   Settings
+	baseline   Baselines
 	window     Window
 	browser    BrowserOpener
 	views      views
@@ -91,6 +92,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		files:     http.FileServerFS(assets),
 		token:     token,
 		settings:  settings.Memory(),
+		baseline:  noBaselines{},
 		sessions:  map[*wsSession]struct{}{},
 		terminals: map[*websocket.Conn]string{},
 		health:    map[string]api.ClusterHealth{},

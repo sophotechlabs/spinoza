@@ -751,6 +751,10 @@ func (m *Manager) Checks(ctx context.Context, keep checks.Filter) api.CheckRepor
 	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, m.limits.CheckFindings)
 }
 
+func (m *Manager) CheckFingerprint(ctx context.Context, keep checks.Filter) checks.Baseline {
+	return checks.Fingerprint(ctx, m, m.descriptors(), m.Metrics(ctx), keep)
+}
+
 func (m *Manager) Topology(ctx context.Context, req topology.Request) api.Graph {
 	return topology.Build(ctx, m, m.descriptors(), req)
 }

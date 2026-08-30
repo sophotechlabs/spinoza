@@ -190,43 +190,104 @@ func decodeCursor(cursor string) string {
 	return string(raw)
 }
 
-func (c check) slice(sc scan, objs *objects, after string, limit int, keep Filter) (
-	[]api.CheckFinding, string, int,
-) {
-	all := kept(c.find(sc), keep)
+// marked is a finding with what the filter decided about it: whether a mute
+// covers it, and whether the baseline had seen it before.
+type marked struct {
+	found
+
+	muted bool
+	by    Mute
+	fresh bool
+}
+
+type tally struct {
+	// found is everything the check produced in the part of the cluster being
+	// looked at, before muting and before only-new. It is the number a baseline
+	// count can honestly be compared against.
+	found int
+	total int
+	muted int
+	fresh int
+}
+
+func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
+	all := c.find(sc)
+	out := make([]marked, 0, len(all))
+	count := tally{}
+	for _, item := range all {
+		if !keep.keeps(item) {
+			continue
+		}
+		count.found++
+		by, muted := keep.mutes(c.id, item)
+		if muted {
+			count.muted++
+			if !keep.ShowMuted {
+				continue
+			}
+		}
+		fresh := keep.Base.covers(c.id) && !keep.Base.has(fingerprintOf(identityOf(c.id, item)))
+		if fresh {
+			count.fresh++
+		}
+		if keep.OnlyNew && !fresh {
+			continue
+		}
+		out = append(out, marked{found: item, muted: muted, by: by, fresh: fresh})
+	}
+	count.total = len(out)
+	return out, count
+}
+
+func mutedBy(item marked) string {
+	if !item.muted {
+		return ""
+	}
+	return scopeOf(item.by)
+}
+
+func page(all []marked, objs *objects, after string, limit int) ([]api.CheckFinding, string) {
 	out := make([]api.CheckFinding, 0, min(limit, len(all)))
 	last := ""
 	for _, item := range all {
-		key := findingKey(item)
+		key := findingKey(item.found)
 		if key <= after {
 			continue
 		}
 		if len(out) == limit {
-			return out, encodeCursor(last), len(all)
+			return out, encodeCursor(last)
 		}
 		out = append(out, api.CheckFinding{
 			Ref:       objs.ref(item.subject),
 			Container: item.container,
 			Detail:    item.detail,
 			Patch:     item.patch,
+			New:       item.fresh,
+			Muted:     item.muted,
+			MutedBy:   mutedBy(item),
+			Reason:    item.by.Reason,
 		})
 		last = key
 	}
-	return out, "", len(all)
+	return out, ""
 }
 
-func kept(all []found, keep Filter) []found {
-	out := make([]found, 0, len(all))
-	for _, item := range all {
-		if !keep.keeps(item) {
-			continue
-		}
-		out = append(out, item)
+// standsDown is why a check reported nothing, which is never the same as
+// finding nothing.
+func (c check) standsDown(sc scan) string {
+	if c.needsUsage && !sc.hasUsage() {
+		return noUsage
 	}
-	return out
+	if c.needsEvery && !sc.everyKind {
+		return notEveryKind
+	}
+	if missing := missingResources(c.needs, sc.held); len(missing) > 0 {
+		return skippedBecause(missing)
+	}
+	return ""
 }
 
-func (c check) group(sc scan, objs *objects, keep Filter, shown int) api.CheckGroup {
+func (c check) group(sc scan, objs *objects, spread *namespaces, keep Filter, shown int) api.CheckGroup {
 	out := api.CheckGroup{
 		ID:         c.id,
 		Title:      c.title,
@@ -237,20 +298,17 @@ func (c check) group(sc scan, objs *objects, keep Filter, shown int) api.CheckGr
 		Remedy:     c.remedy,
 		Findings:   []api.CheckFinding{},
 	}
-	if c.needsUsage && !sc.hasUsage() {
-		out.Skipped = noUsage
+	if down := c.standsDown(sc); down != "" {
+		out.Skipped = down
 		return out
 	}
-	if c.needsEvery && !sc.everyKind {
-		out.Skipped = notEveryKind
-		return out
-	}
-	if missing := missingResources(c.needs, sc.held); len(missing) > 0 {
-		out.Skipped = skippedBecause(missing)
-		return out
-	}
-	out.Findings, out.Next, out.Total = c.slice(sc, objs, "", shown, keep)
+	all, count := c.matching(sc, keep)
+	out.Findings, out.Next = page(all, objs, "", shown)
+	out.Total, out.Muted, out.NewCount = count.total, count.muted, count.fresh
+	out.Fixed = keep.fixedSince(c.id, count.found)
+	out.Baselined = keep.Base.covers(c.id)
 	out.Truncated = out.Next != ""
+	spread.add(c.severity, all)
 	return out
 }
 
@@ -305,17 +363,12 @@ func Page(
 		return api.CheckPage{}, ErrNoSuchCheck
 	}
 	sc, _, _ := survey(ctx, lister, descs, usage, keep)
-	if wanted.needsUsage && !sc.hasUsage() {
-		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
-	}
-	if wanted.needsEvery && !sc.everyKind {
-		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
-	}
-	if len(missingResources(wanted.needs, sc.held)) > 0 {
+	if wanted.standsDown(sc) != "" {
 		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
 	}
 	objs := newObjects()
-	found, next, _ := wanted.slice(sc, objs, decodeCursor(after), pageSize(shown), keep)
+	all, _ := wanted.matching(sc, keep)
+	found, next := page(all, objs, decodeCursor(after), pageSize(shown))
 	return api.CheckPage{Findings: found, Objects: objs.list, Next: next}, nil
 }
 
@@ -361,14 +414,17 @@ func Run(
 	sc, failure, absent := survey(ctx, lister, descs, usage, keep)
 	checks := keep.chosen(registryWith(keep.Rules))
 	objs := newObjects()
+	spread := newNamespaces()
 	groups := make([]api.CheckGroup, 0, len(checks))
 	for _, entry := range checks {
-		groups = append(groups, entry.group(sc, objs, keep, pageSize(shown)))
+		groups = append(groups, entry.group(sc, objs, spread, keep, pageSize(shown)))
 	}
 	return api.CheckReport{
-		Groups:  groups,
-		Objects: objs.list,
-		Scanned: len(sc.subjects),
-		Error:   joined(failure, undiscovered(absent)),
+		Groups:     groups,
+		Objects:    objs.list,
+		Namespaces: spread.sorted(),
+		Baseline:   keep.takenAt(),
+		Scanned:    len(sc.subjects),
+		Error:      joined(failure, undiscovered(absent)),
 	}
 }

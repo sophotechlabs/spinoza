@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/history"
 	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
 )
@@ -111,6 +112,32 @@ func TestUnreadableSettingsStillLeaveAStore(t *testing.T) {
 	}
 	if store.On(settingsstore.NodeShellKey) {
 		t.Fatal("settings that cannot be read turned a node shell on")
+	}
+}
+
+func TestBaselinesAreKeptBesideTheSettings(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	store := baselineStore()
+
+	if err := store.Save("https://one.example", checks.Baseline{TakenAt: "2026-08-30T00:00:00Z"}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if _, ok := store.Load("https://one.example"); !ok {
+		t.Fatal("a baseline saved through the store could not be read back")
+	}
+}
+
+func TestNowhereToKeepBaselinesStillLeavesAStore(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	store := baselineStore()
+
+	if _, ok := store.Load("https://one.example"); ok {
+		t.Fatal("a store with nowhere to write produced a baseline")
 	}
 }
 

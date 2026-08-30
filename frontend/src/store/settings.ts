@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ChecksFilter } from '../lib/checks';
 import type {
   CheckInterval,
   LogView,
@@ -30,6 +31,9 @@ interface SettingsState extends Settings {
   setChecksMinSeverity: (checksMinSeverity: SeverityFloor) => void;
   setChecksWholeCluster: (checksWholeCluster: boolean) => void;
   setChecksEveryKind: (checksEveryKind: boolean) => void;
+  setChecksNamespace: (checksNamespace: string) => void;
+  setChecksOnlyNew: (checksOnlyNew: boolean) => void;
+  setChecksShowMuted: (checksShowMuted: boolean) => void;
   setNodeShell: (nodeShell: boolean) => Promise<void>;
   setUpdateCheck: (updateCheck: boolean) => Promise<void>;
   setCheckRules: (checkRules: string) => Promise<void>;
@@ -49,6 +53,9 @@ function saved(state: SettingsState): Settings {
     checksMinSeverity: state.checksMinSeverity,
     checksWholeCluster: state.checksWholeCluster,
     checksEveryKind: state.checksEveryKind,
+    checksNamespace: state.checksNamespace,
+    checksOnlyNew: state.checksOnlyNew,
+    checksShowMuted: state.checksShowMuted,
   };
 }
 
@@ -63,6 +70,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   checksMinSeverity: stored.checksMinSeverity,
   checksWholeCluster: stored.checksWholeCluster,
   checksEveryKind: stored.checksEveryKind,
+  checksNamespace: stored.checksNamespace,
+  checksOnlyNew: stored.checksOnlyNew,
+  checksShowMuted: stored.checksShowMuted,
   nodeShell: readNodeShell(),
   updateCheck: readUpdateCheck(),
   checkRules: readCheckRules(),
@@ -108,6 +118,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     writeSettings({ ...saved(get()), checksEveryKind });
     set({ checksEveryKind });
   },
+  setChecksNamespace: (checksNamespace) => {
+    writeSettings({ ...saved(get()), checksNamespace });
+    set({ checksNamespace });
+  },
+  setChecksOnlyNew: (checksOnlyNew) => {
+    writeSettings({ ...saved(get()), checksOnlyNew });
+    set({ checksOnlyNew });
+  },
+  setChecksShowMuted: (checksShowMuted) => {
+    writeSettings({ ...saved(get()), checksShowMuted });
+    set({ checksShowMuted });
+  },
   setNodeShell: async (nodeShell) => {
     await writeNodeShell(nodeShell);
     set({ nodeShell });
@@ -134,19 +156,25 @@ export function useChecksInterval(): CheckInterval {
   return useSettingsStore((state) => state.checksInterval);
 }
 
-export function useChecksFilter(): {
-  disabled: string[];
-  skipNamespaces: string[];
-  minSeverity: SeverityFloor;
-  wholeCluster: boolean;
-  everyKind: boolean;
-} {
+export function useChecksFilter(): ChecksFilter {
   const disabled = useSettingsStore((state) => state.checksDisabled);
   const skipNamespaces = useSettingsStore((state) => state.checksSkipNamespaces);
+  const namespace = useSettingsStore((state) => state.checksNamespace);
   const minSeverity = useSettingsStore((state) => state.checksMinSeverity);
   const wholeCluster = useSettingsStore((state) => state.checksWholeCluster);
   const everyKind = useSettingsStore((state) => state.checksEveryKind);
-  return { disabled, skipNamespaces, minSeverity, wholeCluster, everyKind };
+  const onlyNew = useSettingsStore((state) => state.checksOnlyNew);
+  const showMuted = useSettingsStore((state) => state.checksShowMuted);
+  return {
+    disabled,
+    skipNamespaces,
+    namespace,
+    minSeverity,
+    wholeCluster,
+    everyKind,
+    onlyNew,
+    showMuted,
+  };
 }
 
 export function useNodeShell(): boolean {

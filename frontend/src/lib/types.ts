@@ -1049,6 +1049,10 @@ export interface CheckFinding {
   container?: string;
   detail: string;
   patch?: string;
+  new?: boolean;
+  muted?: boolean;
+  mutedBy?: string;
+  reason?: string;
 }
 
 export interface CheckGroup {
@@ -1061,9 +1065,39 @@ export interface CheckGroup {
   remedy: string;
   skipped?: string;
   total: number;
+  muted?: number;
+  new?: number;
+  fixed?: number;
+  baselined?: boolean;
   truncated?: boolean;
   next?: string;
   findings: CheckFinding[];
+}
+
+export interface NamespaceCount {
+  namespace: string;
+  total: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface Baseline {
+  takenAt?: string;
+  findings?: number;
+  checks?: number;
+}
+
+export interface Mute {
+  check: string;
+  namespace?: string;
+  ref?: string;
+  reason?: string;
+  at?: string;
+}
+
+export interface Mutes {
+  mutes: Mute[];
 }
 
 export interface CheckPage {
@@ -1075,6 +1109,8 @@ export interface CheckPage {
 export interface CheckReport {
   groups: CheckGroup[];
   objects: CheckObject[];
+  namespaces?: NamespaceCount[];
+  baseline?: string;
   scanned: number;
   error?: string;
 }

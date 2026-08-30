@@ -2,6 +2,7 @@ package checks
 
 import (
 	"errors"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -32,7 +33,15 @@ func holds(names []string, wanted string) bool {
 // what the filter reads off a query string
 
 func TestAFilterIsReadFromWhatTheBrowserSends(t *testing.T) {
-	keep := ParseFilter("cpu-limit-set, image-latest", "kube-system,flux-system", "medium", "", "1")
+	keep := ParseFilter(url.Values{
+		"disabled":       {"cpu-limit-set, image-latest"},
+		"skipNamespaces": {"kube-system,flux-system"},
+		"namespace":      {"prod"},
+		"minSeverity":    {"medium"},
+		"everyKind":      {"1"},
+		"onlyNew":        {"1"},
+		"showMuted":      {"true"},
+	})
 
 	if len(keep.Disabled) != 2 || keep.Disabled[0] != "cpu-limit-set" {
 		t.Fatalf("disabled was %v", keep.Disabled)
@@ -49,13 +58,19 @@ func TestAFilterIsReadFromWhatTheBrowserSends(t *testing.T) {
 	if !keep.EveryKind {
 		t.Fatal("everyKind was not read")
 	}
-	if ParseFilter("", "", "", "0", "").WholeCluster {
+	if keep.Namespace != "prod" {
+		t.Fatalf("namespace was %q", keep.Namespace)
+	}
+	if !keep.OnlyNew || !keep.ShowMuted {
+		t.Fatalf("onlyNew was %v and showMuted was %v", keep.OnlyNew, keep.ShowMuted)
+	}
+	if ParseFilter(url.Values{"wholeCluster": {"0"}}).WholeCluster {
 		t.Fatal("a caller asking for workloads only was still given the whole cluster")
 	}
 }
 
 func TestASeverityNobodyDefinedIsIgnoredRatherThanObeyed(t *testing.T) {
-	keep := ParseFilter("", "", "catastrophic", "", "")
+	keep := ParseFilter(url.Values{"minSeverity": {"catastrophic"}})
 
 	if keep.MinSeverity != "" {
 		t.Fatalf("severity was %q, want it dropped", keep.MinSeverity)

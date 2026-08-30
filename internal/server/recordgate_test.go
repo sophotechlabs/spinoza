@@ -43,6 +43,8 @@ var localOnly = map[string]string{
 	"/api/view/browser":       "moves the window",
 	"/api/view/desktop":       "moves the window",
 	"/api/settings":           "writes local settings",
+	"/api/checks/mutes":       "records what you have decided about, on this machine",
+	"/api/checks/baseline":    "keeps a past audit here to compare the next one against",
 }
 
 func mutatingPaths(t *testing.T) []string {

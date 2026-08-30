@@ -77,6 +77,11 @@ func (n notStubbed) CheckPage(_ context.Context, _, _ string, _ checks.Filter) (
 	return r0, r1
 }
 
+func (n notStubbed) CheckFingerprint(_ context.Context, _ checks.Filter) (r0 checks.Baseline) {
+	n.missing("CheckFingerprint")
+	return r0
+}
+
 func (n notStubbed) Checks(_ context.Context, _ checks.Filter) (r0 api.CheckReport) {
 	n.missing("Checks")
 	return r0

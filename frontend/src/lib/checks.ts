@@ -8,15 +8,21 @@ import type {
   CheckPage,
   CheckReport,
   CheckSeverity,
+  Baseline,
+  Mute,
+  Mutes,
+  NamespaceCount,
   ObjectRef,
 } from './types';
 import { failure } from './object';
-import { request } from './http';
+import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 import { useChecksFilter, useChecksInterval } from '../store/settings';
 import type { SeverityFloor } from './settings';
 import { SEVERITY_FLOORS } from './settings';
+
+const BASELINE_TIMEOUT_MS = SLOW_REQUEST_TIMEOUT_MS;
 
 const SEVERITY_RANK: Record<CheckSeverity, number> = { high: 0, medium: 1, low: 2 };
 
@@ -36,6 +42,10 @@ export interface CheckFindingView {
   patch?: string;
   origin?: CheckOrigin;
   managedBy?: string;
+  fresh: boolean;
+  muted: boolean;
+  mutedBy?: string;
+  reason?: string;
 }
 
 export type CheckGroupView = Omit<CheckGroup, 'findings'> & { findings: CheckFindingView[] };
@@ -47,6 +57,8 @@ export interface CheckPageView {
 
 export interface CheckReportView {
   groups: CheckGroupView[];
+  namespaces: NamespaceCount[];
+  baseline: string;
   scanned: number;
   error?: string;
 }
@@ -91,6 +103,10 @@ function findingOf(raw: unknown, objects: CheckObject[]): CheckFindingView {
     patch: item.patch,
     origin: held.origin,
     managedBy: held.managedBy,
+    fresh: item.new === true,
+    muted: item.muted === true,
+    mutedBy: item.mutedBy,
+    reason: item.reason,
   };
 }
 
@@ -138,6 +154,10 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
     remedy: item.remedy ?? '',
     skipped: item.skipped,
     total: item.total ?? findings.length,
+    muted: item.muted,
+    new: item.new,
+    fixed: item.fixed,
+    baselined: item.baselined,
     truncated: item.truncated,
     next: item.next,
     findings,
@@ -147,17 +167,23 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
 export interface ChecksFilter {
   disabled: string[];
   skipNamespaces: string[];
+  namespace: string;
   minSeverity: SeverityFloor;
   wholeCluster: boolean;
   everyKind: boolean;
+  onlyNew: boolean;
+  showMuted: boolean;
 }
 
 export const NO_FILTER: ChecksFilter = {
   disabled: [],
   skipNamespaces: [],
+  namespace: '',
   minSeverity: '',
   wholeCluster: true,
   everyKind: false,
+  onlyNew: false,
+  showMuted: false,
 };
 
 function fromParams(query: string): ChecksFilter {
@@ -167,8 +193,11 @@ function fromParams(query: string): ChecksFilter {
     disabled: namesIn(params.get('disabled')),
     skipNamespaces: namesIn(params.get('skipNamespaces')),
     minSeverity: SEVERITY_FLOORS.find((one) => one === floor) ?? '',
+    namespace: params.get('namespace') ?? '',
     wholeCluster: params.get('wholeCluster') !== '0',
     everyKind: params.get('everyKind') === '1',
+    onlyNew: params.get('onlyNew') === '1',
+    showMuted: params.get('showMuted') === '1',
   };
 }
 
@@ -196,6 +225,15 @@ export function filterParams(keep: ChecksFilter): URLSearchParams {
   if (keep.everyKind) {
     params.set('everyKind', '1');
   }
+  if (keep.namespace !== '') {
+    params.set('namespace', keep.namespace);
+  }
+  if (keep.onlyNew) {
+    params.set('onlyNew', '1');
+  }
+  if (keep.showMuted) {
+    params.set('showMuted', '1');
+  }
   return params;
 }
 
@@ -216,6 +254,8 @@ export async function fetchChecks(keep: ChecksFilter = NO_FILTER): Promise<Check
   const objects = (body.objects ?? []).map(objectOf);
   return {
     groups: (body.groups ?? []).map((entry) => groupOf(entry, objects)),
+    namespaces: body.namespaces ?? [],
+    baseline: body.baseline ?? '',
     scanned: body.scanned ?? 0,
     error: body.error,
   };
@@ -239,6 +279,53 @@ export async function fetchCheckPage(
     findings: (body.findings ?? []).map((entry) => findingOf(entry, objects)),
     next: body.next ?? '',
   };
+}
+
+async function sendMute(method: string, mute: Mute): Promise<Mute[]> {
+  const response = await request('/api/checks/mutes', {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(mute),
+  });
+  if (!response.ok) {
+    throw await failure(response, `the mute request failed with status ${response.status}`);
+  }
+  const body = (await response.json()) as Partial<Mutes>;
+  return body.mutes ?? [];
+}
+
+export function muteFinding(mute: Mute): Promise<Mute[]> {
+  return sendMute('POST', mute);
+}
+
+export function unmuteFinding(mute: Mute): Promise<Mute[]> {
+  return sendMute('DELETE', mute);
+}
+
+async function sendBaseline(method: string): Promise<string> {
+  const response = await request('/api/checks/baseline', {
+    method,
+    timeoutMs: BASELINE_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw await failure(response, `the baseline request failed with status ${response.status}`);
+  }
+  const body = (await response.json()) as Partial<Baseline>;
+  return body.takenAt ?? '';
+}
+
+export function takeBaseline(): Promise<string> {
+  return sendBaseline('POST');
+}
+
+export function clearBaseline(): Promise<string> {
+  return sendBaseline('DELETE');
+}
+
+// The ref a mute needs to name one object, which is the shape the audit files
+// them under on the other side.
+export function refKeyOf(object: ObjectRef): string {
+  return [object.group, object.version, object.resource, object.namespace, object.name].join('/');
 }
 
 export function useChecks(): Polled<CheckReportView> {
@@ -285,6 +372,33 @@ export function countLabel(group: CheckGroupView): string {
     return 'clean';
   }
   return String(group.total);
+}
+
+// changeLabel says what moved since the baseline. A check the baseline never ran
+// says so, rather than reporting every one of its findings as new.
+export function changeLabel(group: CheckGroupView, baseline: string): string {
+  if (baseline === '') {
+    return '';
+  }
+  if (group.baselined !== true) {
+    return 'not in the baseline';
+  }
+  const parts: string[] = [];
+  if ((group.new ?? 0) > 0) {
+    parts.push(`${String(group.new)} new`);
+  }
+  if ((group.fixed ?? 0) > 0) {
+    parts.push(`${String(group.fixed)} fixed`);
+  }
+  return parts.join(' · ');
+}
+
+export function mutedLabel(group: CheckGroupView): string {
+  const muted = group.muted ?? 0;
+  if (muted === 0) {
+    return '';
+  }
+  return `${String(muted)} muted`;
 }
 
 export function shownLabel(group: CheckGroupView, loaded: number): string {

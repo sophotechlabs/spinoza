@@ -35,6 +35,12 @@ func podDescriptors() map[string]api.ResourceDescriptor {
 
 func dashboardServer(t *testing.T, objects ...runtime.Object) *httptest.Server {
 	t.Helper()
+	ts, _ := dashboardPair(t, objects...)
+	return ts
+}
+
+func dashboardPair(t *testing.T, objects ...runtime.Object) (*httptest.Server, *Server) {
+	t.Helper()
 	podGVR := schema.GroupVersionResource{Version: "v1", Resource: "pods"}
 	scheme := runtime.NewScheme()
 	kinds := map[schema.GroupVersionResource]string{
@@ -59,7 +65,7 @@ func dashboardServer(t *testing.T, objects ...runtime.Object) *httptest.Server {
 	srv := New(fixed(mgr), testAssets(), testToken)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, srv
 }
 
 func metaFor(objects []runtime.Object) []runtime.Object {

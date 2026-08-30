@@ -84,6 +84,7 @@ func run() error {
 	srv := server.New(clusters, assets, token)
 	srv.UseProfiler(opts.pprof)
 	srv.UseSettings(store)
+	srv.UseBaselines(baselineStore())
 	past := historyStore(ctx)
 	defer func() { _ = past.Close() }()
 	srv.UseHistory(past)

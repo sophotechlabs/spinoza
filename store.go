@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/sophotechlabs/spinoza/internal/baseline"
 	"github.com/sophotechlabs/spinoza/internal/history"
 	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
 )
@@ -19,6 +20,15 @@ func settingsStore() *settingsstore.Store {
 		slog.Warn("the stored settings could not be read", "error", openErr)
 	}
 	return store
+}
+
+func baselineStore() *baseline.Store {
+	dir, err := baseline.DefaultDir()
+	if err != nil {
+		slog.Warn("audit baselines will not be kept", "error", err)
+		return baseline.Open("")
+	}
+	return baseline.Open(dir)
 }
 
 func historyStore(ctx context.Context) *history.Store {

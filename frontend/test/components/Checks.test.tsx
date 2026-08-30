@@ -381,7 +381,7 @@ describe('Checks', () => {
     });
 
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
-    await userEvent.click(screen.getByRole('button', { name: /apps\/api/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Deployment · apps\/api/ }));
 
     expect(onOpen).toHaveBeenCalledWith(
       { group: 'apps', version: 'v1', resource: 'deployments', namespace: 'apps', name: 'api' },

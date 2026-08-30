@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"net/url"
 	"slices"
 	"strings"
 )
@@ -15,21 +16,50 @@ var severityOrder = []string{severityLow, severityMedium, severityHigh}
 
 type Filter struct {
 	Rules          []UserRule
+	Mutes          []Mute
+	Base           *Baseline
 	Disabled       []string
 	SkipNamespaces []string
+	Namespace      string
 	MinSeverity    string
 	WholeCluster   bool
 	EveryKind      bool
+	OnlyNew        bool
+	ShowMuted      bool
 }
 
-func ParseFilter(disabled, namespaces, minSeverity, wholeCluster, everyKind string) Filter {
+func ParseFilter(query url.Values) Filter {
 	return Filter{
-		Disabled:       splitList(disabled),
-		SkipNamespaces: splitList(namespaces),
-		MinSeverity:    knownSeverity(minSeverity),
-		WholeCluster:   !narrowed(wholeCluster),
-		EveryKind:      asked(everyKind),
+		Disabled:       splitList(query.Get("disabled")),
+		SkipNamespaces: splitList(query.Get("skipNamespaces")),
+		Namespace:      strings.TrimSpace(query.Get("namespace")),
+		MinSeverity:    knownSeverity(query.Get("minSeverity")),
+		WholeCluster:   !narrowed(query.Get("wholeCluster")),
+		EveryKind:      asked(query.Get("everyKind")),
+		OnlyNew:        asked(query.Get("onlyNew")),
+		ShowMuted:      asked(query.Get("showMuted")),
 	}
+}
+
+// narrows says the audit is looking at part of the cluster. A count taken from
+// part of it cannot be subtracted from a baseline taken over all of it: the
+// difference is the filter, not work anybody did.
+func (f Filter) narrows() bool {
+	return f.Namespace != "" || len(f.SkipNamespaces) > 0 || f.OnlyNew
+}
+
+func (f Filter) fixedSince(id string, found int) int {
+	if f.narrows() {
+		return 0
+	}
+	return f.Base.fixed(id, found)
+}
+
+func (f Filter) takenAt() string {
+	if f.Base == nil {
+		return ""
+	}
+	return f.Base.TakenAt
 }
 
 func asked(raw string) bool {
@@ -76,7 +106,24 @@ func (f Filter) severeEnough(severity string) bool {
 }
 
 func (f Filter) keeps(item found) bool {
-	return !slices.Contains(f.SkipNamespaces, item.subject.Ref.Namespace)
+	if slices.Contains(f.SkipNamespaces, item.subject.Ref.Namespace) {
+		return false
+	}
+	if f.Namespace == "" {
+		return true
+	}
+	return f.Namespace == item.subject.Ref.Namespace
+}
+
+// mutes answers whether you have already decided about this finding, and what
+// you said at the time.
+func (f Filter) mutes(id string, item found) (Mute, bool) {
+	for _, one := range f.Mutes {
+		if silences(one, id, item) {
+			return one, true
+		}
+	}
+	return Mute{}, false
 }
 
 func (f Filter) chosen(all []check) []check {

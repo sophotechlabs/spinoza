@@ -1083,6 +1083,10 @@ type CheckFinding struct {
 	Container string `json:"container,omitempty"`
 	Detail    string `json:"detail"`
 	Patch     string `json:"patch,omitempty"`
+	New       bool   `json:"new,omitempty"`
+	Muted     bool   `json:"muted,omitempty"`
+	MutedBy   string `json:"mutedBy,omitempty"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 type CheckGroup struct {
@@ -1095,9 +1099,21 @@ type CheckGroup struct {
 	Remedy     string         `json:"remedy"`
 	Skipped    string         `json:"skipped,omitempty"`
 	Total      int            `json:"total"`
+	Muted      int            `json:"muted,omitempty"`
+	NewCount   int            `json:"new,omitempty"`
+	Fixed      int            `json:"fixed,omitempty"`
+	Baselined  bool           `json:"baselined,omitempty"`
 	Truncated  bool           `json:"truncated,omitempty"`
 	Next       string         `json:"next,omitempty"`
 	Findings   []CheckFinding `json:"findings"`
+}
+
+type NamespaceCount struct {
+	Namespace string `json:"namespace"`
+	Total     int    `json:"total"`
+	High      int    `json:"high"`
+	Medium    int    `json:"medium"`
+	Low       int    `json:"low"`
 }
 
 type CheckPage struct {
@@ -1106,9 +1122,29 @@ type CheckPage struct {
 	Next     string         `json:"next,omitempty"`
 }
 
+type Baseline struct {
+	TakenAt  string `json:"takenAt,omitempty"`
+	Findings int    `json:"findings,omitempty"`
+	Checks   int    `json:"checks,omitempty"`
+}
+
+type Mute struct {
+	Check     string `json:"check"`
+	Namespace string `json:"namespace,omitempty"`
+	Ref       string `json:"ref,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	At        string `json:"at,omitempty"`
+}
+
+type Mutes struct {
+	Mutes []Mute `json:"mutes"`
+}
+
 type CheckReport struct {
-	Groups  []CheckGroup  `json:"groups"`
-	Objects []CheckObject `json:"objects"`
-	Scanned int           `json:"scanned"`
-	Error   string        `json:"error,omitempty"`
+	Groups     []CheckGroup     `json:"groups"`
+	Objects    []CheckObject    `json:"objects"`
+	Namespaces []NamespaceCount `json:"namespaces,omitempty"`
+	Baseline   string           `json:"baseline,omitempty"`
+	Scanned    int              `json:"scanned"`
+	Error      string           `json:"error,omitempty"`
 }

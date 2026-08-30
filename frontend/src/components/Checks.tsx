@@ -1,17 +1,24 @@
 import { useState } from 'react';
-import type { CheckCategory, ObjectRef } from '../lib/types';
+import type { CheckCategory, Mute, NamespaceCount, ObjectRef } from '../lib/types';
 import type { CheckFindingView, CheckGroupView } from '../lib/checks';
 import { fetchCheckPage } from '../lib/checks';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
+  changeLabel,
+  clearBaseline,
   countLabel,
   findingLabel,
   inCategory,
+  muteFinding,
+  mutedLabel,
   originLabel,
+  refKeyOf,
   severityClass,
   shownLabel,
+  takeBaseline,
   totalFindings,
+  unmuteFinding,
   useChecks,
 } from '../lib/checks';
 import type { SeverityFloor } from '../lib/settings';
@@ -21,6 +28,39 @@ import StaleBanner from './StaleBanner';
 import Loading from './Loading';
 
 const PAGE_SIZE = 200;
+
+const NAMESPACES_SHOWN = 20;
+
+function baselineLabel(baseline: string): string {
+  if (baseline === '') {
+    return 'No baseline taken, so nothing is marked new.';
+  }
+  return `Comparing against ${baseline.slice(0, 10)}.`;
+}
+
+function takeLabel(baseline: string, working: boolean): string {
+  if (working) {
+    return 'Working';
+  }
+  if (baseline === '') {
+    return 'Take a baseline';
+  }
+  return 'Take a new one';
+}
+
+function namespacesLabel(counts: NamespaceCount[], picked: string): string {
+  if (picked !== '') {
+    return `Showing ${picked} only`;
+  }
+  return `${String(counts.length)} namespaces with findings`;
+}
+
+function pickedNext(picked: string, namespace: string): string {
+  if (picked === namespace) {
+    return '';
+  }
+  return namespace;
+}
 
 interface ChecksProps {
   onOpen: (ref: ObjectRef, kind: string) => void;
@@ -57,17 +97,27 @@ function countClass(group: CheckGroupView): string {
   return severityClass(group.severity);
 }
 
-function scannedLabel(scanned: number, findings: number): string {
+function scannedLabel(scanned: number, findings: number, namespace: string): string {
+  if (namespace !== '') {
+    return `${String(findings)} findings in ${namespace}`;
+  }
   return `${String(findings)} findings across ${String(scanned)} workloads`;
 }
 
 function Finding({
   finding,
+  check,
   onOpen,
+  onChanged,
 }: {
   finding: CheckFindingView;
+  check: string;
   onOpen: (ref: ObjectRef, kind: string) => void;
+  onChanged: () => void;
 }) {
+  const [asking, setAsking] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
   return (
     <li className="border-t border-edge px-3 py-1.5 pl-9">
       <div className="flex items-baseline gap-3">
@@ -83,12 +133,35 @@ function Finding({
         <span className="min-w-0 flex-1 truncate text-fg-muted" title={finding.detail}>
           {finding.detail}
         </span>
+        {finding.fresh && <span className="shrink-0 text-[10px] text-warn">new</span>}
         {originLabel(finding) !== '' && (
           <span className="shrink-0 rounded border border-edge px-1 text-[10px] text-fg-soft">
             {originLabel(finding)}
           </span>
         )}
+        <MuteControl
+          finding={finding}
+          check={check}
+          asking={asking}
+          onAsk={setAsking}
+          onChanged={onChanged}
+          onFailed={setFailed}
+        />
       </div>
+      {failed !== null && <p className="pt-0.5 text-[11px] text-warn">{failed}</p>}
+      {finding.muted && finding.reason !== undefined && finding.reason !== '' && (
+        <p className="pt-0.5 text-[11px] text-fg-subtle">muted: {finding.reason}</p>
+      )}
+      {asking && !finding.muted && (
+        <MuteReason
+          check={check}
+          finding={finding}
+          onDone={() => {
+            setAsking(false);
+            onChanged();
+          }}
+        />
+      )}
       {finding.patch !== undefined && (
         <pre className="mt-1 overflow-x-auto rounded border border-edge bg-surface-raised px-2 py-1 text-[11px] text-fg-soft">
           {finding.patch}
@@ -98,12 +171,145 @@ function Finding({
   );
 }
 
+function MuteControl({
+  finding,
+  check,
+  asking,
+  onAsk,
+  onChanged,
+  onFailed,
+}: {
+  finding: CheckFindingView;
+  check: string;
+  asking: boolean;
+  onAsk: (asking: boolean) => void;
+  onChanged: () => void;
+  onFailed: (message: string) => void;
+}) {
+  if (finding.muted) {
+    return (
+      <button
+        type="button"
+        aria-label={`Unmute ${findingLabel(finding)}`}
+        className="shrink-0 text-fg-soft hover:underline"
+        onClick={() => {
+          unmuteFinding({ check, ...refFor(scopeOf(finding), finding) })
+            .then(onChanged)
+            .catch((err: unknown) => {
+              onFailed(messageOf(err));
+            });
+        }}
+      >
+        unmute
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      aria-label={`Mute ${findingLabel(finding)}`}
+      className="shrink-0 text-fg-soft hover:underline"
+      onClick={() => {
+        onAsk(!asking);
+      }}
+    >
+      mute
+    </button>
+  );
+}
+
+function MuteReason({
+  check,
+  finding,
+  onDone,
+}: {
+  check: string;
+  finding: CheckFindingView;
+  onDone: () => void;
+}) {
+  const [reason, setReason] = useState('');
+  const [failed, setFailed] = useState<string | null>(null);
+
+  function save(scope: MuteScope) {
+    const mute = { check, reason, ...refFor(scope, finding) };
+    muteFinding(mute)
+      .then(onDone)
+      .catch((err: unknown) => {
+        setFailed(messageOf(err));
+      });
+  }
+
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <input
+        type="text"
+        aria-label="Why this one is being muted"
+        placeholder="why you have decided about this"
+        className="w-72 rounded border border-edge bg-surface px-1 py-0.5 text-fg"
+        value={reason}
+        onChange={(event) => {
+          setReason(event.target.value);
+        }}
+      />
+      <button
+        type="button"
+        className="rounded border border-edge px-2 py-0.5 text-fg-strong"
+        onClick={() => {
+          save('object');
+        }}
+      >
+        Mute this one
+      </button>
+      {finding.object.namespace !== '' && (
+        <button
+          type="button"
+          className="rounded border border-edge px-2 py-0.5 text-fg-soft"
+          onClick={() => {
+            save('namespace');
+          }}
+        >
+          Mute in {finding.object.namespace}
+        </button>
+      )}
+      {failed !== null && <span className="text-warn">{failed}</span>}
+    </div>
+  );
+}
+
+type MuteScope = 'object' | 'namespace' | 'check';
+
+// A finding muted by its namespace has to be unmuted the same way, or the undo
+// removes a mute that was never made and leaves the one that was.
+function scopeOf(finding: CheckFindingView): MuteScope {
+  if (finding.mutedBy === 'namespace') {
+    return 'namespace';
+  }
+  if (finding.mutedBy === 'check') {
+    return 'check';
+  }
+  return 'object';
+}
+
+function refFor(scope: MuteScope, finding: CheckFindingView): Partial<Mute> {
+  if (scope === 'namespace') {
+    return { namespace: finding.object.namespace };
+  }
+  if (scope === 'check') {
+    return {};
+  }
+  return { ref: refKeyOf(finding.object) };
+}
+
 function Group({
   group,
+  baseline,
   onOpen,
+  onChanged,
 }: {
   group: CheckGroupView;
+  baseline: string;
   onOpen: (ref: ObjectRef, kind: string) => void;
+  onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [paged, setPaged] = useState<CheckFindingView[] | null>(null);
@@ -151,6 +357,12 @@ function Group({
             {!empty && chevron(open)}
           </span>
           <span className="min-w-0 flex-1 truncate text-fg-strong">{group.title}</span>
+          {changeLabel(group, baseline) !== '' && (
+            <span className="shrink-0 text-[11px] text-warn">{changeLabel(group, baseline)}</span>
+          )}
+          {mutedLabel(group) !== '' && (
+            <span className="shrink-0 text-[11px] text-fg-subtle">{mutedLabel(group)}</span>
+          )}
           {(group.frameworks ?? []).map((framework) => (
             <span key={framework} className="shrink-0 text-[11px] text-fg-subtle">
               {framework}
@@ -177,7 +389,9 @@ function Group({
               <Finding
                 key={`${finding.object.namespace}/${finding.object.name}/${finding.container ?? ''}`}
                 finding={finding}
+                check={group.id}
                 onOpen={onOpen}
+                onChanged={onChanged}
               />
             ))}
           </ul>
@@ -257,6 +471,112 @@ function YourRules() {
         </button>
         {failed !== null && <span className="text-warn">{failed}</span>}
       </div>
+    </details>
+  );
+}
+
+function BaselineBar({ baseline, onChanged }: { baseline: string; onChanged: () => void }) {
+  const onlyNew = useSettingsStore((state) => state.checksOnlyNew);
+  const setOnlyNew = useSettingsStore((state) => state.setChecksOnlyNew);
+  const showMuted = useSettingsStore((state) => state.checksShowMuted);
+  const setShowMuted = useSettingsStore((state) => state.setChecksShowMuted);
+  const [working, setWorking] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  function run(action: () => Promise<string>) {
+    setWorking(true);
+    setFailed(null);
+    action()
+      .then(() => {
+        onChanged();
+      })
+      .catch((err: unknown) => {
+        setFailed(messageOf(err));
+      })
+      .finally(() => {
+        setWorking(false);
+      });
+  }
+
+  return (
+    <div className="flex shrink-0 items-center gap-4 border-b border-edge px-3 py-1.5 text-fg-muted">
+      <span>{baselineLabel(baseline)}</span>
+      <button
+        type="button"
+        disabled={working}
+        className="rounded border border-edge px-2 py-0.5 text-fg-strong disabled:text-fg-subtle"
+        onClick={() => {
+          run(takeBaseline);
+        }}
+      >
+        {takeLabel(baseline, working)}
+      </button>
+      {baseline !== '' && (
+        <>
+          <button
+            type="button"
+            disabled={working}
+            className="hover:underline disabled:text-fg-subtle"
+            onClick={() => {
+              run(clearBaseline);
+            }}
+          >
+            forget it
+          </button>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={onlyNew}
+              onChange={(event) => {
+                setOnlyNew(event.target.checked);
+              }}
+            />
+            Only what is new
+          </label>
+        </>
+      )}
+      <label className="flex items-center gap-1.5">
+        <input
+          type="checkbox"
+          checked={showMuted}
+          onChange={(event) => {
+            setShowMuted(event.target.checked);
+          }}
+        />
+        Show what is muted
+      </label>
+      {failed !== null && <span className="text-warn">{failed}</span>}
+    </div>
+  );
+}
+
+function Namespaces({ counts }: { counts: NamespaceCount[] }) {
+  const picked = useSettingsStore((state) => state.checksNamespace);
+  const setPicked = useSettingsStore((state) => state.setChecksNamespace);
+  if (counts.length === 0) {
+    return null;
+  }
+
+  return (
+    <details className="shrink-0 border-b border-edge px-3 py-1.5 text-fg-muted">
+      <summary className="cursor-pointer">{namespacesLabel(counts, picked)}</summary>
+      <ul className="py-1">
+        {counts.slice(0, NAMESPACES_SHOWN).map((entry) => (
+          <li key={entry.namespace} className="flex items-baseline gap-3 py-0.5">
+            <button
+              type="button"
+              className="min-w-0 flex-1 truncate text-left text-fg-strong hover:underline"
+              onClick={() => {
+                setPicked(pickedNext(picked, entry.namespace));
+              }}
+            >
+              {entry.namespace}
+            </button>
+            <span className="w-16 shrink-0 text-right text-error">{entry.high}</span>
+            <span className="w-16 shrink-0 text-right text-fg-soft">{entry.total}</span>
+          </li>
+        ))}
+      </ul>
     </details>
   );
 }
@@ -364,11 +684,15 @@ function TurnOff({ id }: { id: string }) {
 function Category({
   category,
   groups,
+  baseline,
   onOpen,
+  onChanged,
 }: {
   category: CheckCategory;
   groups: CheckGroupView[];
+  baseline: string;
   onOpen: (ref: ObjectRef, kind: string) => void;
+  onChanged: () => void;
 }) {
   if (groups.length === 0) {
     return null;
@@ -379,7 +703,13 @@ function Category({
         {CATEGORY_LABELS[category]}
       </h2>
       {groups.map((group) => (
-        <Group key={group.id} group={group} onOpen={onOpen} />
+        <Group
+          key={group.id}
+          group={group}
+          baseline={baseline}
+          onOpen={onOpen}
+          onChanged={onChanged}
+        />
       ))}
     </section>
   );
@@ -387,6 +717,7 @@ function Category({
 
 export default function Checks({ onOpen }: ChecksProps) {
   const { data, error, stale, reload } = useChecks();
+  const namespace = useSettingsStore((state) => state.checksNamespace);
 
   if (data === null) {
     if (error !== null) {
@@ -406,9 +737,13 @@ export default function Checks({ onOpen }: ChecksProps) {
         </p>
       )}
       <AuditControls />
+      <BaselineBar baseline={data.baseline} onChanged={reload} />
+      <Namespaces counts={data.namespaces} />
       <YourRules />
       <div className="flex shrink-0 items-baseline gap-3 border-b border-edge px-3 py-1.5 text-fg-muted">
-        <span className="min-w-0 flex-1">{scannedLabel(data.scanned, totalFindings(data))}</span>
+        <span className="min-w-0 flex-1">
+          {scannedLabel(data.scanned, totalFindings(data), namespace)}
+        </span>
         <span className="w-16 shrink-0 text-right">Severity</span>
         <span className="w-16 shrink-0 text-right">Findings</span>
       </div>
@@ -418,7 +753,9 @@ export default function Checks({ onOpen }: ChecksProps) {
             key={category}
             category={category}
             groups={inCategory(data.groups, category)}
+            baseline={data.baseline}
             onOpen={onOpen}
+            onChanged={reload}
           />
         ))}
       </div>
