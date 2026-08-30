@@ -49,7 +49,7 @@ describe('closing a tab', () => {
         startedAt: '2026-08-29T12:00:00Z',
       },
     ]);
-    reportHealth(MK1, false, 'gone');
+    reportHealth(MK1, false, false, 'gone');
     useNamespaceStore.getState().choose('shop');
     useTerminalsStore.getState().open('prod', 'web', 'app');
 

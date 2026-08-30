@@ -23,7 +23,7 @@ describe('what is known about the cluster', () => {
   });
 
   it('takes the reason the server gives', () => {
-    reportHealth(MK1, false, 'connection refused');
+    reportHealth(MK1, false, false, 'connection refused');
 
     const { result } = renderHook(() => useClusterUnreachableReason());
 
@@ -32,23 +32,23 @@ describe('what is known about the cluster', () => {
   });
 
   it('clears the reason when the cluster answers again', () => {
-    reportHealth(MK1, false, 'connection refused');
+    reportHealth(MK1, false, false, 'connection refused');
 
-    reportHealth(MK1, true, '');
+    reportHealth(MK1, true, false, '');
 
     expect(renderHook(() => useClusterUnreachableReason()).result.current).toBe('');
     expect(renderHook(() => useClusterReachable()).result.current).toBe(true);
   });
 
   it('reports the tab in front, not another tab', () => {
-    reportHealth(MK2, false, 'gone');
+    reportHealth(MK2, false, false, 'gone');
 
     expect(renderHook(() => useClusterReachable()).result.current).toBe(true);
     expect(renderHook(() => useReachable(MK2)).result.current).toBe(false);
   });
 
   it('lets go of a closed tab', () => {
-    reportHealth(MK2, false, 'gone');
+    reportHealth(MK2, false, false, 'gone');
 
     forgetHealth(MK2);
 
@@ -56,7 +56,7 @@ describe('what is known about the cluster', () => {
   });
 
   it('forgets everything on reset', () => {
-    reportHealth(MK1, false, 'gone');
+    reportHealth(MK1, false, false, 'gone');
 
     useClusterHealthStore.getState().reset();
 

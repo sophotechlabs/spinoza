@@ -63,7 +63,7 @@ func mergeQueues(found []clusterQueue) api.IssueQueue {
 			trouble = append(trouble, one.context+": "+one.queue.Error)
 		}
 	}
-	issues.Rank(merged.Rows)
+	issues.Rank(merged.Rows, issues.ByWorst)
 	if len(merged.Rows) > issues.MaxRows {
 		merged.Dropped += len(merged.Rows) - issues.MaxRows
 		merged.Rows = merged.Rows[:issues.MaxRows]

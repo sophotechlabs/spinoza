@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { Issue, IssueQueue, Severity } from './types';
 import { request } from './http';
 import { parseIssueQueue } from './parse';
@@ -7,12 +7,29 @@ import type { Polled } from './usePoll';
 
 const ISSUES_POLL_MS = 5000;
 
-export async function fetchIssues(): Promise<IssueQueue> {
-  return queueFrom('/api/issues');
+export const ISSUE_ORDERS = ['worst', 'newest', 'oldest'] as const;
+
+export type IssueOrder = (typeof ISSUE_ORDERS)[number];
+
+export function orderLabel(order: IssueOrder): string {
+  if (order === 'newest') {
+    return 'Newest first';
+  }
+  if (order === 'oldest') {
+    return 'Oldest first';
+  }
+  return 'Worst first';
 }
 
-async function fetchFleetIssues(): Promise<IssueQueue> {
-  return queueFrom('/api/issues/fleet');
+function queuePath(fleet: boolean): string {
+  if (fleet) {
+    return '/api/issues/fleet';
+  }
+  return '/api/issues';
+}
+
+export async function fetchIssues(order: IssueOrder = 'worst'): Promise<IssueQueue> {
+  return queueFrom(`/api/issues?sort=${order}`);
 }
 
 async function queueFrom(path: string): Promise<IssueQueue> {
@@ -23,17 +40,28 @@ async function queueFrom(path: string): Promise<IssueQueue> {
   return parseIssueQueue(await response.json());
 }
 
-export function useIssues(enabled = true, fleet = false): Polled<IssueQueue> {
-  return usePoll(fleet ? fetchFleetIssues : fetchIssues, {
+export function useIssues(
+  enabled = true,
+  fleet = false,
+  order: IssueOrder = 'worst',
+): Polled<IssueQueue> {
+  const read = useCallback(
+    async () => queueFrom(`${queuePath(fleet)}?sort=${order}`),
+    [fleet, order],
+  );
+  return usePoll(read, {
     intervalMs: ISSUES_POLL_MS,
     enabled,
     fallback: 'issues request failed',
   });
 }
 
-async function fetchIssuePage(after: string, fleet: boolean): Promise<IssueQueue> {
-  const path = fleet ? '/api/issues/fleet' : '/api/issues';
-  return queueFrom(`${path}?after=${encodeURIComponent(after)}`);
+async function fetchIssuePage(
+  after: string,
+  fleet: boolean,
+  order: IssueOrder,
+): Promise<IssueQueue> {
+  return queueFrom(`${queuePath(fleet)}?sort=${order}&after=${encodeURIComponent(after)}`);
 }
 
 export interface PagedIssues extends Polled<IssueQueue> {
@@ -44,8 +72,12 @@ export interface PagedIssues extends Polled<IssueQueue> {
   loadMore: () => void;
 }
 
-export function usePagedIssues(enabled = true, fleet = false): PagedIssues {
-  const polled = useIssues(enabled, fleet);
+export function usePagedIssues(
+  enabled = true,
+  fleet = false,
+  order: IssueOrder = 'worst',
+): PagedIssues {
+  const polled = useIssues(enabled, fleet, order);
   const [tail, setTail] = useState<Issue[]>([]);
   const [builtOn, setBuiltOn] = useState('');
   const [next, setNext] = useState('');
@@ -68,7 +100,7 @@ export function usePagedIssues(enabled = true, fleet = false): PagedIssues {
     }
     setLoadingMore(true);
     setMoreError('');
-    fetchIssuePage(more, fleet)
+    fetchIssuePage(more, fleet, order)
       .then((page) => {
         if (joined) {
           setTail((current) => [...current, ...page.rows]);

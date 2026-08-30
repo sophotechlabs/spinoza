@@ -144,10 +144,13 @@ func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
 
 func pagedQueue(queue api.IssueQueue, r *http.Request) api.IssueQueue {
 	query := r.URL.Query()
+	order := issues.OrderOf(query.Get("sort"))
+	issues.Rank(queue.Rows, order)
 	rows, next := issues.Page(
 		queue.Rows,
 		issues.DecodeCursor(query.Get("after")),
 		issues.PageSize(shownOf(query.Get("shown"))),
+		order,
 	)
 	queue.Rows = rows
 	queue.Next = next

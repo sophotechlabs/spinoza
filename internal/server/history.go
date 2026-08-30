@@ -181,7 +181,12 @@ func (s *Server) readHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, afterErr.Error())
 		return
 	}
-	found, ok := s.historyFrom(w, r, source, limit, after, fleet)
+	afterAction, actionErr := historyAfterAction(r)
+	if actionErr != nil {
+		writeError(w, http.StatusBadRequest, actionErr.Error())
+		return
+	}
+	found, ok := s.historyFrom(w, r, source, limit, cursors{changes: after, actions: afterAction}, fleet)
 	if !ok {
 		return
 	}
@@ -189,31 +194,30 @@ func (s *Server) readHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, found)
 }
 
-// Paging is on the changes half only: the audit is one row per thing a person
-// did, and nobody has filled a page of it. A cluster fills a page of changes in
-// seconds, so that half needs a way to reach older rows.
-// Paging is on the changes half only: the audit is one row per thing a person
-// did, and nobody has filled a page of it. A cluster fills a page of changes in
-// seconds, so that half needs a way to reach older rows.
+// Each half carries its own cursor, because the two tables have independent id
+// sequences and one number cannot bound both. A merged page then reaches older
+// rows on both sides rather than dropping the audit half after page one.
+type cursors struct {
+	changes int64
+	actions int64
+}
+
 func (s *Server) historyFrom(
-	w http.ResponseWriter, r *http.Request, source string, limit int, after int64, fleet bool,
+	w http.ResponseWriter, r *http.Request, source string, limit int, from cursors, fleet bool,
 ) (api.History, bool) {
 	on := s.historyScope(r, fleet)
 	if source == api.HistoryAction {
-		return s.readActions(w, r, limit, on)
+		return s.readActions(w, r, limit, from.actions, on)
 	}
-	changes, ok := s.readChanges(w, r, limit, after, on)
+	changes, ok := s.readChanges(w, r, limit, from.changes, on)
 	if !ok || source == api.HistoryChange {
 		return changes, ok
 	}
-	if after != 0 {
-		return changes, true
-	}
-	actions, actionsOk := s.readActions(w, r, limit, on)
+	actions, actionsOk := s.readActions(w, r, limit, from.actions, on)
 	if !actionsOk {
 		return api.History{}, false
 	}
-	return merged(actions, changes, store.Limit(limit)), true
+	return merged(actions, changes, from, store.Limit(limit)), true
 }
 
 // An empty cluster is what the store reads as "every cluster", so the fleet
@@ -227,9 +231,11 @@ func (s *Server) historyScope(r *http.Request, fleet bool) string {
 }
 
 func (s *Server) readActions(
-	w http.ResponseWriter, r *http.Request, limit int, on string,
+	w http.ResponseWriter, r *http.Request, limit int, after int64, on string,
 ) (api.History, bool) {
-	page, err := s.recorder().Recent(r.Context(), store.Query{Cluster: on, Limit: limit})
+	page, err := s.recorder().Recent(
+		r.Context(), store.Query{Cluster: on, Limit: limit, AfterAction: after},
+	)
 	if err != nil {
 		writeAPIError(w, err)
 		return api.History{}, false
@@ -238,7 +244,15 @@ func (s *Server) readActions(
 }
 
 func historyAfter(r *http.Request) (int64, error) {
-	raw := r.URL.Query().Get("after")
+	return rowCursor(r, "after")
+}
+
+func historyAfterAction(r *http.Request) (int64, error) {
+	return rowCursor(r, "afterAction")
+}
+
+func rowCursor(r *http.Request, name string) (int64, error) {
+	raw := r.URL.Query().Get(name)
 	if raw == "" {
 		return 0, nil
 	}
@@ -255,7 +269,7 @@ func historyAfter(r *http.Request) (int64, error) {
 // The two halves are ordered the same way one of them is, and the cap holds
 // across the merge, so asking for everything cannot return more than asking for
 // one side.
-func merged(actions, changes api.History, limit int) api.History {
+func merged(actions, changes api.History, from cursors, limit int) api.History {
 	rows := make([]api.HistoryEntry, 0, len(actions.Entries)+len(changes.Entries))
 	rows = append(rows, actions.Entries...)
 	rows = append(rows, changes.Entries...)
@@ -265,18 +279,24 @@ func merged(actions, changes api.History, limit int) api.History {
 		rows = rows[:limit]
 		more = true
 	}
-	return api.History{Entries: rows, More: more, Dropped: changes.Dropped, Next: nextOf(rows)}
+	return api.History{
+		Entries:    rows,
+		More:       more,
+		Dropped:    changes.Dropped,
+		Next:       lastOf(rows, api.HistoryChange, from.changes),
+		NextAction: lastOf(rows, api.HistoryAction, from.actions),
+	}
 }
 
-// The cursor is the last change on the page, so a merged page still knows
-// where its changes half ended.
-func nextOf(rows []api.HistoryEntry) int64 {
+// A half whose rows were all outranked on this page keeps the cursor it came
+// in with, so the next page does not read them again.
+func lastOf(rows []api.HistoryEntry, source string, held int64) int64 {
 	for _, row := range slices.Backward(rows) {
-		if row.Source == api.HistoryChange {
+		if row.Source == source {
 			return row.ID
 		}
 	}
-	return 0
+	return held
 }
 
 func newestFirst(left, right api.HistoryEntry) int {

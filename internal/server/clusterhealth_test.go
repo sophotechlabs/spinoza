@@ -51,12 +51,21 @@ func twoClusters(t *testing.T, first, second Backend) (*Server, *fleet) {
 	return New(held, testAssets(), testToken), held
 }
 
+// A missed ping is a wobble until enough of them stack up, so a fixture that
+// wants the settled answer has to miss that many.
+func pingUntilSettled(t *testing.T, srv *Server) {
+	t.Helper()
+	for range missesBeforeUnreachable {
+		srv.pingEveryCluster(t.Context())
+	}
+}
+
 func TestOneClusterGoingDownDoesNotCondemnTheOther(t *testing.T) {
 	srv, _ := twoClusters(t,
 		&pinger{},
 		&pinger{err: errors.New("no route to host")})
 
-	srv.pingEveryCluster(t.Context())
+	pingUntilSettled(t, srv)
 
 	if !srv.healthOfCluster(mk1).Reachable {
 		t.Fatal("the cluster that answered was marked unreachable")
@@ -79,7 +88,7 @@ func TestTheClusterListReportsEachClustersOwnHealth(t *testing.T) {
 		&pinger{err: errors.New("i/o timeout")})
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
-	srv.pingEveryCluster(t.Context())
+	pingUntilSettled(t, srv)
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
 
@@ -140,7 +149,7 @@ func TestClosingAClusterForgetsWhatWasKnownAboutIt(t *testing.T) {
 	srv, _ := twoClusters(t, &pinger{}, &pinger{err: errors.New("gone")})
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
-	srv.pingEveryCluster(t.Context())
+	pingUntilSettled(t, srv)
 	if srv.healthOfCluster(mk2).Reachable {
 		t.Fatal("the fixture did not record the cluster as down")
 	}
@@ -231,5 +240,60 @@ func TestASinkWatcherStopsWhenItsClusterCloses(t *testing.T) {
 
 	if watchers.watching() != 1 {
 		t.Fatalf("watching %d sinks after one closed, want 1", watchers.watching())
+	}
+}
+
+func TestOneMissedPingReadsAsAWobbleNotAnOutage(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{err: errors.New("no route to host")})
+
+	srv.pingEveryCluster(t.Context())
+
+	held := srv.healthOfCluster(mk2)
+	if !held.Reachable {
+		t.Fatal("a single missed ping was reported as the cluster being gone")
+	}
+	if !held.Wobbling {
+		t.Fatal("a single missed ping was reported as nothing at all")
+	}
+	if held.Reason != "no route to host" {
+		t.Fatalf("reason = %q, want what the cluster said", held.Reason)
+	}
+}
+
+func TestEnoughMissedPingsIsAnOutage(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{err: errors.New("no route to host")})
+
+	pingUntilSettled(t, srv)
+
+	held := srv.healthOfCluster(mk2)
+	if held.Reachable {
+		t.Fatalf("%d missed pings still read as answering", missesBeforeUnreachable)
+	}
+	if held.Wobbling {
+		t.Fatal("a settled outage is still reported as a wobble")
+	}
+}
+
+func TestAClusterThatAnswersAgainStopsWobbling(t *testing.T) {
+	flaky := &pinger{err: errors.New("no route to host")}
+	srv, _ := twoClusters(t, &pinger{}, flaky)
+
+	srv.pingEveryCluster(t.Context())
+	flaky.err = nil
+	srv.pingEveryCluster(t.Context())
+
+	held := srv.healthOfCluster(mk2)
+	if held.Wobbling || !held.Reachable {
+		t.Fatalf("a cluster that answered again reads as %+v", held)
+	}
+}
+
+func TestARequestThatFailedIsNotGivenTheBenefitOfTheDoubt(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{})
+
+	srv.recordHealthOf(mk2, notAnswering("connection refused"))
+
+	if srv.healthOfCluster(mk2).Reachable {
+		t.Fatal("a request that actually failed was softened into a wobble")
 	}
 }

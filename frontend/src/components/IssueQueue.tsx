@@ -8,7 +8,10 @@ import {
   severityClass,
   severityLabel,
   usePagedIssues,
+  ISSUE_ORDERS,
+  orderLabel,
 } from '../lib/issues';
+import type { IssueOrder } from '../lib/issues';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
 import LoadFailure from './LoadFailure';
@@ -205,9 +208,11 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
   const fleet = useFleetIssues();
   const setFleet = useIssuesStore((state) => state.setFleet);
   const showing = fleet && several;
+  const [order, setOrder] = useState<IssueOrder>('worst');
   const { data, error, reload, rows, more, loadingMore, moreError, loadMore } = usePagedIssues(
     active,
     showing,
+    order,
   );
   const [opened, setOpened] = useState<Record<string, boolean>>({});
   const now = useNow();
@@ -256,6 +261,23 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
             </label>
           )}
         </div>
+        <label className="flex items-center gap-1.5 text-fg-soft">
+          Sort
+          <select
+            aria-label="Sort issues"
+            value={order}
+            onChange={(event) => {
+              setOrder(event.target.value as IssueOrder);
+            }}
+            className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
+          >
+            {ISSUE_ORDERS.map((one) => (
+              <option key={one} value={one}>
+                {orderLabel(one)}
+              </option>
+            ))}
+          </select>
+        </label>
         <Tally rows={rows} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto">

@@ -103,7 +103,20 @@ func (h *heldHistory) Changed(_ context.Context, query store.Query) (store.Chang
 	if h.changeErr != nil {
 		return store.Changes{}, h.changeErr
 	}
-	return h.changePage, nil
+	return store.Changes{Rows: rowsBelow(h.changePage.Rows, query.After), More: h.changePage.More}, nil
+}
+
+func rowsBelow(rows []store.Change, after int64) []store.Change {
+	if after == 0 {
+		return rows
+	}
+	out := make([]store.Change, 0, len(rows))
+	for _, one := range rows {
+		if one.ID < after {
+			out = append(out, one)
+		}
+	}
+	return out
 }
 
 func (h *heldHistory) Prune(_ context.Context, keep store.Retention, _ time.Time) error {
@@ -145,7 +158,22 @@ func (h *heldHistory) Recent(_ context.Context, query store.Query) (store.Page, 
 	if h.readErr != nil {
 		return store.Page{}, h.readErr
 	}
-	return h.page, nil
+	return store.Page{Entries: below(h.page.Entries, query.AfterAction), More: h.page.More}, nil
+}
+
+// The real store bounds each half by its own cursor; a double that ignores it
+// would let a paging test pass without the bound ever being applied.
+func below(entries []store.Entry, after int64) []store.Entry {
+	if after == 0 {
+		return entries
+	}
+	out := make([]store.Entry, 0, len(entries))
+	for _, one := range entries {
+		if one.ID < after {
+			out = append(out, one)
+		}
+	}
+	return out
 }
 
 func (h *heldHistory) asked() store.Query {

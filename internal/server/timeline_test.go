@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -162,19 +163,19 @@ func TestTheTimelineIsTrimmedAsItIsWrittenTo(t *testing.T) {
 
 func TestTheAuditIsBoundedByTheSamePassThatTrimsTheTimeline(t *testing.T) {
 	backend := &taped{}
-	srv, store, _ := tapingServer(t, backend)
+	srv, taped, _ := tapingServer(t, backend)
 
 	srv.startRecording(t.Context(), mk1, timelineWorkloads)
 	defer srv.stopRecording(mk1)
 
 	for range 200 {
-		if len(store.auditTrims()) > 0 {
+		if len(taped.auditTrims()) > 0 {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	trims := store.auditTrims()
+	trims := taped.auditTrims()
 	if len(trims) == 0 {
 		t.Fatal("the audit was never trimmed, so it grows without bound")
 	}
@@ -655,15 +656,70 @@ func TestAContinuedPageSaysWhereItEnded(t *testing.T) {
 	}
 }
 
-func TestAContinuedPageLeavesTheActionsAlone(t *testing.T) {
+func TestAContinuedPageStillReachesTheActions(t *testing.T) {
 	ts := mergingServer(t, bothKinds())
 
 	got := askHistory(t, ts, "?after=1")
 
+	actions := 0
 	for _, one := range got.Entries {
 		if one.Source == api.HistoryAction {
-			t.Fatalf("an action came back on a continued page: %+v", one)
+			actions++
 		}
+	}
+	if actions == 0 {
+		t.Fatal("a continued page dropped the audit half, which is how a row becomes unreachable")
+	}
+}
+
+// Ids ascend with time here, which is what the store's own writer produces and
+// what an id cursor over an at-ordered read assumes.
+func inOrder() *heldHistory {
+	at := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	return &heldHistory{
+		page: store.Page{Entries: []store.Entry{
+			{ID: 2, At: at.Add(3 * time.Minute), Verb: "scale", Name: "web", Outcome: api.HistoryDone},
+			{ID: 1, At: at.Add(time.Minute), Verb: "scale", Name: "api", Outcome: api.HistoryDone},
+		}},
+		changePage: store.Changes{Rows: []store.Change{
+			{ID: 2, At: at.Add(2 * time.Minute), Verb: store.Changed, Name: "web-2"},
+			{ID: 1, At: at, Verb: store.Added, Name: "web-1"},
+		}},
+	}
+}
+
+func TestEachHalfIsBoundedByItsOwnCursor(t *testing.T) {
+	ts := mergingServer(t, inOrder())
+
+	first := askHistory(t, ts, "?limit=2")
+	if first.Next == 0 || first.NextAction == 0 {
+		t.Fatalf("a merged page offered next=%d nextAction=%d", first.Next, first.NextAction)
+	}
+
+	rest := askHistory(t, ts, fmt.Sprintf("?after=%d&afterAction=%d", first.Next, first.NextAction))
+
+	for _, one := range rest.Entries {
+		for _, seen := range first.Entries {
+			if one.Source == seen.Source && one.ID == seen.ID {
+				t.Fatalf("%s %d came back on both pages", one.Source, one.ID)
+			}
+		}
+	}
+}
+
+func TestAHalfWithNothingOnThePageKeepsTheCursorItCameWith(t *testing.T) {
+	ts := mergingServer(t, inOrder())
+
+	got := askHistory(t, ts, "?afterAction=1")
+
+	for _, one := range got.Entries {
+		if one.Source == api.HistoryAction {
+			t.Fatalf("an action came back below the cursor: %+v", one)
+		}
+	}
+	if got.NextAction != 1 {
+		t.Fatalf("nextAction = %d, want the cursor it came in with when no action was shown",
+			got.NextAction)
 	}
 }
 

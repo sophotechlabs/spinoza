@@ -42,6 +42,9 @@ type Query struct {
 	// After is the id a page continues below, so a reader can reach older rows
 	// on a cluster that writes faster than one page holds.
 	After int64
+	// AfterAction is the same for the audit half, which has its own id
+	// sequence: one number cannot bound both tables.
+	AfterAction int64
 }
 
 type Page struct {
@@ -165,7 +168,9 @@ func (s *Store) Recent(ctx context.Context, query Query) (Page, error) {
 		return Page{Entries: []Entry{}}, nil
 	}
 	limit := limitOf(query.Limit)
-	rows, err := db.QueryContext(ctx, selectAudit, query.Cluster, query.Cluster, limit+1)
+	rows, err := db.QueryContext(
+		ctx, selectAudit, query.Cluster, query.Cluster, query.AfterAction, query.AfterAction, limit+1,
+	)
 	if err != nil {
 		return Page{}, fmt.Errorf("store: %w", err)
 	}

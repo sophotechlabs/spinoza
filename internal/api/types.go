@@ -166,11 +166,12 @@ type HistoryEntry struct {
 }
 
 type History struct {
-	Entries []HistoryEntry `json:"entries"`
-	More    bool           `json:"more,omitempty"`
-	Dropped int            `json:"dropped,omitempty"`
-	Next    int64          `json:"next,omitempty"`
-	Reason  string         `json:"reason,omitempty"`
+	Entries    []HistoryEntry `json:"entries"`
+	More       bool           `json:"more,omitempty"`
+	Dropped    int            `json:"dropped,omitempty"`
+	Next       int64          `json:"next,omitempty"`
+	NextAction int64          `json:"nextAction,omitempty"`
+	Reason     string         `json:"reason,omitempty"`
 }
 
 type Memory struct {
@@ -801,6 +802,7 @@ type ServerMsg struct {
 	Context    string      `json:"context,omitempty"`
 	Cluster    string      `json:"cluster,omitempty"`
 	Reachable  bool        `json:"reachable,omitempty"`
+	Wobbling   bool        `json:"wobbling,omitempty"`
 	Reason     string      `json:"reason,omitempty"`
 	Changes    []RowChange `json:"changes,omitempty"`
 }
@@ -809,6 +811,7 @@ type ClusterHealth struct {
 	Type      string `json:"type"`
 	Cluster   string `json:"cluster,omitempty"`
 	Reachable bool   `json:"reachable"`
+	Wobbling  bool   `json:"wobbling,omitempty"`
 	Reason    string `json:"reason,omitempty"`
 }
 

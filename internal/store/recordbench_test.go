@@ -54,9 +54,7 @@ func BenchmarkRecordWhileAnotherWriterContends(b *testing.B) {
 
 	stop := make(chan struct{})
 	var contending sync.WaitGroup
-	contending.Add(1)
-	go func() {
-		defer contending.Done()
+	contending.Go(func() {
 		for {
 			select {
 			case <-stop:
@@ -65,7 +63,7 @@ func BenchmarkRecordWhileAnotherWriterContends(b *testing.B) {
 			}
 			_ = store.record(ctx, entry)
 		}
-	}()
+	})
 
 	for b.Loop() {
 		err := store.record(ctx, entry)

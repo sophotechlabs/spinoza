@@ -10,6 +10,7 @@ import {
   sameTraffic,
   sameTrafficShape,
   toTrafficFlow,
+  MAX_EDGES,
 } from '../../src/lib/trafficLayout';
 
 function edge(over: Partial<TrafficEdge> = {}): TrafficEdge {
@@ -173,5 +174,58 @@ describe('sameTraffic', () => {
   it('sees the rate and the dropped rate move', () => {
     expect(sameTraffic(graph(), graph({ edges: [edge({ rate: 2 })] }))).toBe(false);
     expect(sameTraffic(graph(), graph({ edges: [edge({ dropped: 1 })] }))).toBe(false);
+  });
+});
+
+describe('a dense graph', () => {
+  function edgesOf(count: number): TrafficEdge[] {
+    return Array.from({ length: count }, (_, at) => ({
+      from: `ns/from-${String(at)}`,
+      to: `ns/to-${String(at)}`,
+      rate: at,
+      dropped: 0,
+    }));
+  }
+
+  function graphOf(count: number): TrafficGraph {
+    const edges = edgesOf(count);
+    const names = new Set<string>();
+    for (const edge of edges) {
+      names.add(edge.from);
+      names.add(edge.to);
+    }
+    return {
+      source: 'Cilium Hubble',
+      nodes: [...names].map((id) => ({ id, namespace: 'ns', workload: id })),
+      edges,
+    };
+  }
+
+  it('draws every edge while the graph is small enough to animate', () => {
+    const flow = toTrafficFlow(graphOf(10));
+
+    expect(flow.edges).toHaveLength(10);
+    expect(flow.edges[0].animated).toBe(true);
+    expect(flow.edges[0].label).not.toBeUndefined();
+  });
+
+  it('keeps only the busiest edges past the cap', () => {
+    const flow = toTrafficFlow(graphOf(MAX_EDGES + 60));
+
+    expect(flow.edges).toHaveLength(MAX_EDGES);
+    const ids = new Set(flow.edges.map((edge) => edge.id));
+    expect(ids.has('ns/from-0->ns/to-0')).toBe(false);
+    expect(ids.has(`ns/from-${String(MAX_EDGES + 59)}->ns/to-${String(MAX_EDGES + 59)}`)).toBe(
+      true,
+    );
+  });
+
+  it('stops animating and labelling once it is dense', () => {
+    const flow = toTrafficFlow(graphOf(MAX_EDGES + 1));
+
+    for (const edge of flow.edges) {
+      expect(edge.animated).toBe(false);
+      expect(edge.label).toBeUndefined();
+    }
   });
 });

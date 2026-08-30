@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -537,5 +538,38 @@ func TestAColumnThatChangedShapeIsReported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "store") {
 		t.Fatalf("error = %q, want it to say what it was doing", err.Error())
+	}
+}
+
+func TestTheAuditHalfIsBoundedByItsOwnCursor(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	for at := range 5 {
+		record(t, store, entry(p1, noon.Add(time.Duration(at)*time.Minute), "row-"+strconv.Itoa(at)))
+	}
+
+	whole := recent(t, store, Query{})
+	if len(whole.Entries) != 5 {
+		t.Fatalf("read %d rows", len(whole.Entries))
+	}
+	boundary := whole.Entries[1].ID
+
+	below := recent(t, store, Query{AfterAction: boundary})
+
+	if len(below.Entries) != 3 {
+		t.Fatalf("read %d rows below the cursor, want the three older ones", len(below.Entries))
+	}
+	for _, one := range below.Entries {
+		if one.ID >= boundary {
+			t.Fatalf("row %d came back at or above the cursor %d", one.ID, boundary)
+		}
+	}
+}
+
+func TestNoAuditCursorReadsFromTheTop(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	record(t, store, entry(p1, noon, "only"))
+
+	if len(recent(t, store, Query{AfterAction: 0}).Entries) != 1 {
+		t.Fatal("a zero cursor hid the newest row")
 	}
 }

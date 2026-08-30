@@ -83,7 +83,7 @@ describe('fetchIssues', () => {
 
     const got = await fetchIssues();
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/issues', { signal: anySignal() });
+    expect(fetchMock).toHaveBeenCalledWith('/api/issues?sort=worst', { signal: anySignal() });
     expect(got.rows[0].title).toBe('CrashLoopBackOff');
     expect(got.rows[0].change).toBe('revision 4');
     expect(got.rows[0].children?.[0].object.name).toBe('api-1');
@@ -330,7 +330,7 @@ describe('usePagedIssues', () => {
     });
 
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toContain(
-      '/api/issues/fleet?after=c1',
+      '/api/issues/fleet?sort=worst&after=c1',
     );
   });
 

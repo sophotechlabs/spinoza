@@ -82,16 +82,18 @@ function toFlowNode(g: LayoutGraph, node: TrafficNode): TrafficFlowNode {
   };
 }
 
-function toFlowEdge(edge: TrafficEdge): Edge {
-  return {
+function toFlowEdge(edge: TrafficEdge, dense: boolean): Edge {
+  const drawn: Edge = {
     id: `${edge.from}->${edge.to}`,
     source: edge.from,
     target: edge.to,
-    animated: true,
-    label: edgeLabel(edge),
-    labelStyle: { fontSize: 10 },
+    animated: !dense,
     style: { stroke: edgeStroke(edge) },
   };
+  if (dense) {
+    return drawn;
+  }
+  return { ...drawn, label: edgeLabel(edge), labelStyle: { fontSize: 10 } };
 }
 
 export function sameTrafficShape(a: TrafficGraph, b: TrafficGraph): boolean {
@@ -132,7 +134,20 @@ function sameRates(a: TrafficEdge, b: TrafficEdge): boolean {
 }
 
 export function restyleTraffic(flow: TrafficFlow, graph: TrafficGraph): TrafficFlow {
-  return { nodes: flow.nodes, edges: graph.edges.map(toFlowEdge) };
+  return {
+    nodes: flow.nodes,
+    edges: busiest(graph.edges).map((edge) => toFlowEdge(edge, graph.edges.length > MAX_EDGES)),
+  };
+}
+
+export const MAX_EDGES = 240;
+
+function busiest(edges: TrafficEdge[]): TrafficEdge[] {
+  if (edges.length <= MAX_EDGES) {
+    return edges;
+  }
+  const byRate = [...edges].sort((left, right) => right.rate - left.rate);
+  return byRate.slice(0, MAX_EDGES);
 }
 
 export function toTrafficFlow(graph: TrafficGraph): TrafficFlow {
@@ -142,12 +157,14 @@ export function toTrafficFlow(graph: TrafficGraph): TrafficFlow {
   for (const node of graph.nodes) {
     g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
   }
-  for (const edge of graph.edges) {
+  const drawn = busiest(graph.edges);
+  const dense = graph.edges.length > MAX_EDGES;
+  for (const edge of drawn) {
     g.setEdge(edge.from, edge.to);
   }
   dagre.layout(g);
   return {
     nodes: graph.nodes.map((node) => toFlowNode(g, node)),
-    edges: graph.edges.map((edge) => toFlowEdge(edge)),
+    edges: drawn.map((edge) => toFlowEdge(edge, dense)),
   };
 }

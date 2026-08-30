@@ -366,7 +366,7 @@ export function useResourceFeed(): ResourceFeed {
           void contextAnnounced(msg.context);
           break;
         case 'cluster':
-          reportHealth(msg.cluster ?? '', msg.reachable, msg.reason ?? '');
+          reportHealth(msg.cluster ?? '', msg.reachable, msg.wobbling ?? false, msg.reason ?? '');
           break;
         case 'error':
           flush();

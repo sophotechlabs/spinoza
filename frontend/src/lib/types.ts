@@ -297,7 +297,14 @@ export type ServerMsg =
   | { type: 'log-open'; subId: string; attached: number; matched: number }
   | { type: 'log-end'; subId: string }
   | { type: 'context'; subId: string; cluster?: string; context: string }
-  | { type: 'cluster'; subId: string; cluster?: string; reachable: boolean; reason?: string }
+  | {
+      type: 'cluster';
+      subId: string;
+      cluster?: string;
+      reachable: boolean;
+      wobbling?: boolean;
+      reason?: string;
+    }
   | { type: 'error'; subId: string; message: string };
 
 export const VIEWS = [
@@ -624,6 +631,7 @@ export interface History {
   more?: boolean;
   dropped?: number;
   next?: number;
+  nextAction?: number;
   reason?: string;
 }
 

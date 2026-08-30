@@ -322,7 +322,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('turns the dot red even though the feed is connected', () => {
-    reportHealth('', false, 'connection refused');
+    reportHealth('', false, false, 'connection refused');
 
     const { container } = render(<TopBar status="connected" />);
 
@@ -330,7 +330,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('says so in words, not only in colour', () => {
-    reportHealth('', false, 'connection refused');
+    reportHealth('', false, false, 'connection refused');
 
     render(<TopBar status="connected" />);
 
@@ -338,7 +338,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('carries the reason the cluster gave', () => {
-    reportHealth('', false, 'dial tcp 10.0.0.1:6443: connection refused');
+    reportHealth('', false, false, 'dial tcp 10.0.0.1:6443: connection refused');
 
     render(<TopBar status="connected" />);
 
@@ -350,7 +350,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('still says something useful when no reason came with it', () => {
-    reportHealth('', false, '');
+    reportHealth('', false, false, '');
 
     render(<TopBar status="connected" />);
 
@@ -362,12 +362,12 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('goes back to green when the cluster answers again', () => {
-    reportHealth('', false, 'connection refused');
+    reportHealth('', false, false, 'connection refused');
     const { container, rerender } = render(<TopBar status="connected" />);
     expect(dotFor(container).className).toContain('bg-error-solid');
 
     act(() => {
-      reportHealth('', true, '');
+      reportHealth('', true, false, '');
     });
     rerender(<TopBar status="connected" />);
 
@@ -376,11 +376,57 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('leaves a disconnected feed reading as disconnected', () => {
-    reportHealth('', false, 'connection refused');
+    reportHealth('', false, false, 'connection refused');
 
     render(<TopBar status="disconnected" />);
 
     expect(screen.getByRole('status', { name: 'The cluster feed is disconnected' })).toBeVisible();
     expect(screen.queryByText('cluster not answering')).not.toBeInTheDocument();
+  });
+});
+
+describe('a cluster that missed a ping', () => {
+  beforeEach(() => {
+    useClusterHealthStore.getState().reset();
+  });
+
+  afterEach(() => {
+    useClusterHealthStore.getState().reset();
+  });
+
+  it('turns the dot amber, not red', () => {
+    reportHealth('', true, true, 'i/o timeout');
+
+    const { container } = render(<TopBar status="connected" />);
+
+    expect(dotFor(container).className).toContain('bg-warn-solid');
+    expect(dotFor(container).className).not.toContain('bg-error-solid');
+  });
+
+  it('says a ping was missed rather than that the cluster is gone', () => {
+    reportHealth('', true, true, 'i/o timeout');
+
+    render(<TopBar status="connected" />);
+
+    expect(screen.getByRole('status').getAttribute('title')).toContain('missed a ping');
+    expect(screen.getByRole('status').getAttribute('title')).toContain('i/o timeout');
+  });
+
+  it('says so without a reason when the cluster gave none', () => {
+    reportHealth('', true, true, '');
+
+    render(<TopBar status="connected" />);
+
+    expect(screen.getByRole('status').getAttribute('title')).toContain(
+      'still showing what it last said',
+    );
+  });
+
+  it('is green again once the cluster answers', () => {
+    reportHealth('', true, false, '');
+
+    const { container } = render(<TopBar status="connected" />);
+
+    expect(dotFor(container).className).toContain('bg-ok-solid');
   });
 });

@@ -104,6 +104,7 @@ ClusterHealth.Cluster cluster,omitempty string
 ClusterHealth.Reachable reachable bool
 ClusterHealth.Reason reason,omitempty string
 ClusterHealth.Type type string
+ClusterHealth.Wobbling wobbling,omitempty bool
 ClusterList.Clusters clusters []OpenCluster
 ClusterList.Remembered remembered []RememberedCluster
 ClusterOverview.Controllers controllers,omitempty []GitopsController
@@ -434,6 +435,7 @@ History.Dropped dropped,omitempty int
 History.Entries entries []HistoryEntry
 History.More more,omitempty bool
 History.Next next,omitempty int64
+History.NextAction nextAction,omitempty int64
 History.Reason reason,omitempty string
 HistoryEntry.At at string
 HistoryEntry.Cluster cluster,omitempty string
@@ -738,6 +740,7 @@ ServerMsg.SubID subId,omitempty string
 ServerMsg.Total total,omitempty int
 ServerMsg.Type type string
 ServerMsg.UID uid,omitempty string
+ServerMsg.Wobbling wobbling,omitempty bool
 Settings.Values values map[string]string
 Snapshot.Columns columns []Column
 Snapshot.Limit limit int

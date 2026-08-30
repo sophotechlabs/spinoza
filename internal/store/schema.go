@@ -22,7 +22,7 @@ const selectAudit = `
 SELECT id, cluster, at, verb, api_group, api_version, resource, kind,
 	namespace, name, detail, outcome, message
 FROM audit
-WHERE (? = '' OR cluster = ?)
+WHERE (? = '' OR cluster = ?) AND (? = 0 OR id < ?)
 ORDER BY at DESC, id DESC
 LIMIT ?`
 

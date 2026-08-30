@@ -81,7 +81,7 @@ describe('the strip of open clusters', () => {
   it('says which tabs are answering', () => {
     open(MK1);
     act(() => {
-      reportHealth(MK2, false, 'no route to host');
+      reportHealth(MK2, false, false, 'no route to host');
     });
 
     render(<ClusterStrip onShown={vi.fn()} />);

@@ -93,7 +93,7 @@ func (s *Server) pingOne(ctx context.Context, id string) {
 	}
 	bounded, cancel := context.WithTimeout(ctx, clusterPingTimeout)
 	defer cancel()
-	s.recordHealthOf(id, healthOf(backend.Ping(bounded)))
+	s.recordPingOf(id, healthOf(backend.Ping(bounded)))
 }
 
 func (s *Server) sinkOf(id string) *reach.Sink {
@@ -131,8 +131,24 @@ func assumedHealthOf(id string) api.ClusterHealth {
 	return health
 }
 
+// One missed ping is a wobble, not an outage: a cluster that answered a second
+// ago and answers again in a moment should not read the same as one that is
+// gone. Red is reserved for a cluster that has missed enough of them.
+const missesBeforeUnreachable = 3
+
 func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
 	now.Cluster = id
+	s.publishHealthOf(id, now)
+}
+
+// A missed ping is a heartbeat nobody answered; a failed request is the cluster
+// actually saying no. Only the first gets the benefit of the doubt.
+func (s *Server) recordPingOf(id string, now api.ClusterHealth) {
+	now.Cluster = id
+	s.publishHealthOf(id, s.settled(id, now))
+}
+
+func (s *Server) publishHealthOf(id string, now api.ClusterHealth) {
 	was := assumedHealthOf(id)
 	s.mu.Lock()
 	held, known := s.health[id]
@@ -147,10 +163,31 @@ func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
 	s.announceHealthOf(id, now)
 }
 
+func (s *Server) settled(id string, now api.ClusterHealth) api.ClusterHealth {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if now.Reachable {
+		delete(s.misses, id)
+		return now
+	}
+	s.misses[id]++
+	if s.misses[id] >= missesBeforeUnreachable {
+		return now
+	}
+	return api.ClusterHealth{
+		Type:      now.Type,
+		Cluster:   now.Cluster,
+		Reachable: true,
+		Wobbling:  true,
+		Reason:    now.Reason,
+	}
+}
+
 func (s *Server) forgetHealthOf(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.health, id)
+	delete(s.misses, id)
 }
 
 func (s *Server) healthOfCluster(id string) api.ClusterHealth {

@@ -53,8 +53,8 @@ func allowNodeShell(flagged bool, held *settingsstore.Store) func() bool {
 	}
 }
 
-func customColumns(store *settingsstore.Store) func() map[string][]api.CustomColumn {
+func customColumns(held *settingsstore.Store) func() map[string][]api.CustomColumn {
 	return func() map[string][]api.CustomColumn {
-		return api.ParseColumns(store.All()[settingsstore.ColumnsKey])
+		return api.ParseColumns(held.All()[settingsstore.ColumnsKey])
 	}
 }

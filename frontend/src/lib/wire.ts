@@ -103,6 +103,13 @@ export function stringList(value: unknown): string[] {
   return out;
 }
 
+export function optionalStringList(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return stringList(value);
+}
+
 export function listOf<T>(value: unknown, parse: (item: Record<string, unknown>) => T): T[] {
   return asList(value).map((item) => parse(asRecord(item)));
 }

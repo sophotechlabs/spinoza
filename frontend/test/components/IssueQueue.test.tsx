@@ -93,6 +93,21 @@ function pagedStub(pages: Record<string, Queue | undefined>): string[] {
 }
 
 describe('IssueQueue', () => {
+  it('asks the server for the order the picker names', async () => {
+    const asked = pagedStub({
+      '': queue({ rows: [issue()] }),
+    });
+
+    render(<IssueQueue />);
+    await screen.findByText('CrashLoopBackOff');
+
+    fireEvent.change(screen.getByLabelText('Sort issues'), { target: { value: 'newest' } });
+
+    await waitFor(() => {
+      expect(asked.some((url) => url.includes('sort=newest'))).toBe(true);
+    });
+  });
+
   it('leaves the rest of the queue behind a button until it is asked for', async () => {
     pagedStub({
       '': queue({ rows: [issue()], next: 'cursor-1' }),

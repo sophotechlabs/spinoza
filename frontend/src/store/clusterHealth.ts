@@ -5,22 +5,25 @@ import { drop, held, put } from './perCluster';
 
 interface Health {
   reachable: boolean;
+  wobbling: boolean;
   reason: string;
 }
 
-const ANSWERING: Health = { reachable: true, reason: '' };
+const ANSWERING: Health = { reachable: true, wobbling: false, reason: '' };
 
 interface ClusterHealthState {
   byCluster: ByCluster<Health>;
-  report: (cluster: string, reachable: boolean, reason: string) => void;
+  report: (cluster: string, reachable: boolean, wobbling: boolean, reason: string) => void;
   forget: (cluster: string) => void;
   reset: () => void;
 }
 
 export const useClusterHealthStore = create<ClusterHealthState>((set) => ({
   byCluster: {},
-  report: (cluster, reachable, reason) => {
-    set((state) => ({ byCluster: put(state.byCluster, cluster, { reachable, reason }) }));
+  report: (cluster, reachable, wobbling, reason) => {
+    set((state) => ({
+      byCluster: put(state.byCluster, cluster, { reachable, wobbling, reason }),
+    }));
   },
   forget: (cluster) => {
     set((state) => ({ byCluster: drop(state.byCluster, cluster) }));
@@ -44,10 +47,20 @@ export function useReachable(cluster: string): boolean {
   return useClusterHealthStore((state) => held(state.byCluster, cluster, ANSWERING).reachable);
 }
 
-export function reportHealth(cluster: string, reachable: boolean, reason: string): void {
-  useClusterHealthStore.getState().report(cluster, reachable, reason);
+export function reportHealth(
+  cluster: string,
+  reachable: boolean,
+  wobbling: boolean,
+  reason: string,
+): void {
+  useClusterHealthStore.getState().report(cluster, reachable, wobbling, reason);
 }
 
 export function forgetHealth(cluster: string): void {
   useClusterHealthStore.getState().forget(cluster);
+}
+
+export function useClusterWobbling(): boolean {
+  const on = useActiveCluster();
+  return useClusterHealthStore((state) => held(state.byCluster, on, ANSWERING).wobbling);
 }

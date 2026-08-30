@@ -166,7 +166,7 @@ describe('the settings on a tab', () => {
 
   it('offers a reconnect once the cluster stops answering', () => {
     act(() => {
-      reportHealth(MK1, false, 'no route to host');
+      reportHealth(MK1, false, false, 'no route to host');
     });
 
     render(<TabMenu tab={tabOf()} onDone={vi.fn()} />);
@@ -178,7 +178,7 @@ describe('the settings on a tab', () => {
     const user = userEvent.setup();
     const calls = stub();
     act(() => {
-      reportHealth(MK1, false, 'gone');
+      reportHealth(MK1, false, false, 'gone');
       rememberObject({ group: '', version: 'v1', resource: 'pods', namespace: 'p', name: 'web' });
     });
     render(<TabMenu tab={tabOf()} onDone={vi.fn()} />);
@@ -198,7 +198,7 @@ describe('the settings on a tab', () => {
     const user = userEvent.setup();
     stub(false, { message: 'no route to host' });
     act(() => {
-      reportHealth(MK1, false, 'gone');
+      reportHealth(MK1, false, false, 'gone');
     });
     render(<TabMenu tab={tabOf()} onDone={vi.fn()} />);
 
@@ -211,7 +211,7 @@ describe('the settings on a tab', () => {
 
   it("leaves another tab's health out of it", () => {
     act(() => {
-      reportHealth(MK2, false, 'gone');
+      reportHealth(MK2, false, false, 'gone');
     });
 
     render(<TabMenu tab={tabOf()} onDone={vi.fn()} />);

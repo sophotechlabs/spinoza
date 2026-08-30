@@ -9,7 +9,11 @@ import ViewSwitch from './ViewSwitch';
 import { ReconnectIcon } from './icons';
 import { useNamespaces } from '../lib/namespaces';
 import { ALL, useNamespace, useNamespaceNames, useNamespaceStore } from '../store/namespace';
-import { useClusterReachable, useClusterUnreachableReason } from '../store/clusterHealth';
+import {
+  useClusterReachable,
+  useClusterUnreachableReason,
+  useClusterWobbling,
+} from '../store/clusterHealth';
 import Wordmark from './Wordmark';
 
 interface TopBarProps {
@@ -31,20 +35,40 @@ function pickerTitle(scoped: boolean | null): string {
 }
 
 // The dot covers the whole path to the cluster, not just the socket to spinoza.
-function statusColor(status: ConnectionStatus, clusterReachable: boolean): string {
+// Red means it cannot be reached; amber means something on the way is wobbling.
+// Nothing about what is wrong *inside* the cluster belongs here.
+function statusColor(
+  status: ConnectionStatus,
+  clusterReachable: boolean,
+  wobbling: boolean,
+): string {
+  if (status === 'connecting') {
+    return 'bg-warn-solid';
+  }
   if (status !== 'connected') {
-    if (status === 'connecting') {
-      return 'bg-warn-solid';
-    }
     return 'bg-error-solid';
   }
   if (!clusterReachable) {
     return 'bg-error-solid';
   }
+  if (wobbling) {
+    return 'bg-warn-solid';
+  }
   return 'bg-ok-solid';
 }
 
-function statusLabel(status: ConnectionStatus, clusterReachable: boolean, reason: string): string {
+function statusLabel(
+  status: ConnectionStatus,
+  clusterReachable: boolean,
+  wobbling: boolean,
+  reason: string,
+): string {
+  if (status === 'connected' && clusterReachable && wobbling) {
+    if (reason === '') {
+      return 'The cluster missed a ping; still showing what it last said';
+    }
+    return `The cluster missed a ping: ${reason}`;
+  }
   if (status === 'connected' && !clusterReachable) {
     if (reason === '') {
       return 'The cluster is not answering; what is on screen is the last thing it said';
@@ -66,6 +90,7 @@ export default function TopBar({
 }: TopBarProps) {
   const clusterReachable = useClusterReachable();
   const unreachableReason = useClusterUnreachableReason();
+  const wobbling = useClusterWobbling();
   const namespace = useNamespace();
   const names = useNamespaceNames();
   const choose = useNamespaceStore((state) => state.choose);
@@ -117,13 +142,13 @@ export default function TopBar({
         <ProtectionToggle />
         <span
           role="status"
-          aria-label={statusLabel(status, clusterReachable, unreachableReason)}
-          title={statusLabel(status, clusterReachable, unreachableReason)}
+          aria-label={statusLabel(status, clusterReachable, wobbling, unreachableReason)}
+          title={statusLabel(status, clusterReachable, wobbling, unreachableReason)}
           className={`${ICON_CONTROL} border-edge-strong`}
         >
           <span
             data-testid="connection-dot"
-            className={`h-2 w-2 rounded-full ${statusColor(status, clusterReachable)}`}
+            className={`h-2 w-2 rounded-full ${statusColor(status, clusterReachable, wobbling)}`}
           />
         </span>
         {status === 'connected' && !clusterReachable && (

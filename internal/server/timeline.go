@@ -306,7 +306,7 @@ func (s *Server) readChanges(
 		Entries: rows,
 		More:    page.More,
 		Dropped: s.droppedOn(on),
-		Next:    nextOf(rows),
+		Next:    lastOf(rows, api.HistoryChange, after),
 	}, true
 }
 

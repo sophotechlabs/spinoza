@@ -223,8 +223,37 @@ func whereOfRef(ref api.ObjectRef) string {
 
 // Rank is the queue's order: worst first. Exported because merging several
 // clusters into one queue has to order them the same way one cluster is ordered.
-func Rank(rows []api.Issue) {
+func Rank(rows []api.Issue, order string) {
+	if order == ByNewest {
+		slices.SortStableFunc(rows, newestFirst)
+		return
+	}
+	if order == ByOldest {
+		slices.SortStableFunc(rows, oldestFirst)
+		return
+	}
 	slices.SortStableFunc(rows, worstFirst)
+}
+
+func newestFirst(left, right api.Issue) int {
+	if !seenAt(left.Since).Equal(seenAt(right.Since)) {
+		return seenAt(right.Since).Compare(seenAt(left.Since))
+	}
+	return sameMoment(left, right)
+}
+
+func oldestFirst(left, right api.Issue) int {
+	if !seenAt(left.Since).Equal(seenAt(right.Since)) {
+		return seenAt(left.Since).Compare(seenAt(right.Since))
+	}
+	return sameMoment(left, right)
+}
+
+func sameMoment(left, right api.Issue) int {
+	if left.Cluster != right.Cluster {
+		return strings.Compare(left.Cluster, right.Cluster)
+	}
+	return strings.Compare(left.ID, right.ID)
 }
 
 func worstFirst(left, right api.Issue) int {
@@ -244,7 +273,7 @@ func worstFirst(left, right api.Issue) int {
 }
 
 func rank(rows []api.Issue) {
-	Rank(rows)
+	Rank(rows, ByWorst)
 }
 
 func severityRank(name string) int {

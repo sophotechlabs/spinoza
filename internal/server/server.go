@@ -76,6 +76,7 @@ type Server struct {
 	terminals  map[*websocket.Conn]string
 	profiler   bool
 	health     map[string]api.ClusterHealth
+	misses     map[string]int
 	watching   bool
 	updates    Updates
 	installer  Installs
@@ -97,6 +98,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		sessions:  map[*wsSession]struct{}{},
 		terminals: map[*websocket.Conn]string{},
 		health:    map[string]api.ClusterHealth{},
+		misses:    map[string]int{},
 		taping:    map[string]*recording{},
 		now:       time.Now,
 		pingEvery: defaultPingInterval,

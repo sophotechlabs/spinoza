@@ -233,7 +233,7 @@ func manyIssues(count int) api.IssueQueue {
 			Kind:     "Pod",
 		})
 	}
-	issues.Rank(queue.Rows)
+	issues.Rank(queue.Rows, issues.ByWorst)
 	return queue
 }
 

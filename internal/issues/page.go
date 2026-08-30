@@ -13,11 +13,38 @@ import (
 const Shown = 50
 
 const (
+	ByWorst  = "worst"
+	ByNewest = "newest"
+	ByOldest = "oldest"
+)
+
+func OrderOf(asked string) string {
+	if asked == ByNewest || asked == ByOldest {
+		return asked
+	}
+	return ByWorst
+}
+
+const (
 	foldCeiling = 999999999
 	timeCeiling = 9999999999
 )
 
-func issueKey(row api.Issue) string {
+func issueKey(row api.Issue, order string) string {
+	if order == ByNewest {
+		return strings.Join([]string{
+			countDown(secondsOf(seenAt(row.Since)), timeCeiling),
+			row.Cluster,
+			row.ID,
+		}, "\x00")
+	}
+	if order == ByOldest {
+		return strings.Join([]string{
+			countUp(secondsOf(seenAt(row.Since)), timeCeiling),
+			row.Cluster,
+			row.ID,
+		}, "\x00")
+	}
 	return strings.Join([]string{
 		strconv.Itoa(severityFatal - severityRank(row.Severity)),
 		countDown(row.Folded, foldCeiling),
@@ -25,6 +52,17 @@ func issueKey(row api.Issue) string {
 		row.Cluster,
 		row.ID,
 	}, "\x00")
+}
+
+func countUp(value, ceiling int) string {
+	if value < 0 {
+		value = 0
+	}
+	if value > ceiling {
+		value = ceiling
+	}
+	width := len(strconv.Itoa(ceiling))
+	return fmt.Sprintf("%0*d", width, value)
 }
 
 func countDown(value, ceiling int) string {
@@ -63,11 +101,11 @@ func DecodeCursor(cursor string) string {
 	return string(raw)
 }
 
-func Page(rows []api.Issue, after string, limit int) ([]api.Issue, string) {
+func Page(rows []api.Issue, after string, limit int, order string) ([]api.Issue, string) {
 	out := make([]api.Issue, 0, min(limit, len(rows)))
 	last := ""
 	for _, row := range rows {
-		key := issueKey(row)
+		key := issueKey(row, order)
 		if key <= after {
 			continue
 		}

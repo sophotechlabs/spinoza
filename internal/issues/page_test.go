@@ -39,11 +39,11 @@ func rowsAcrossEveryOrderingField() []api.Issue {
 
 func TestTheCursorKeyOrdersRowsTheWayRankDoes(t *testing.T) {
 	rows := rowsAcrossEveryOrderingField()
-	Rank(rows)
+	Rank(rows, ByWorst)
 
 	for at := 1; at < len(rows); at++ {
-		before := issueKey(rows[at-1])
-		after := issueKey(rows[at])
+		before := issueKey(rows[at-1], ByWorst)
+		after := issueKey(rows[at], ByWorst)
 		if before >= after {
 			t.Fatalf(
 				"row %d sorts before row %d but its key does not: %q >= %q",
@@ -55,12 +55,12 @@ func TestTheCursorKeyOrdersRowsTheWayRankDoes(t *testing.T) {
 
 func TestPagingWalksTheWholeQueueInOrder(t *testing.T) {
 	rows := rowsAcrossEveryOrderingField()
-	Rank(rows)
+	Rank(rows, ByWorst)
 
 	walked := []api.Issue{}
 	cursor := ""
 	for range rows {
-		page, next := Page(rows, DecodeCursor(cursor), 7)
+		page, next := Page(rows, DecodeCursor(cursor), 7, ByWorst)
 		walked = append(walked, page...)
 		if next == "" {
 			break
@@ -80,12 +80,12 @@ func TestPagingWalksTheWholeQueueInOrder(t *testing.T) {
 
 func TestEveryPageButTheLastIsFull(t *testing.T) {
 	rows := rowsAcrossEveryOrderingField()
-	Rank(rows)
+	Rank(rows, ByWorst)
 
 	cursor := ""
 	pages := 0
 	for {
-		page, next := Page(rows, DecodeCursor(cursor), 7)
+		page, next := Page(rows, DecodeCursor(cursor), 7, ByWorst)
 		pages++
 		if next == "" {
 			if len(page) > 7 {
@@ -105,9 +105,9 @@ func TestEveryPageButTheLastIsFull(t *testing.T) {
 
 func TestAPageBigEnoughForTheQueueEndsIt(t *testing.T) {
 	rows := rowsAcrossEveryOrderingField()
-	Rank(rows)
+	Rank(rows, ByWorst)
 
-	page, next := Page(rows, "", len(rows)+1)
+	page, next := Page(rows, "", len(rows)+1, ByWorst)
 
 	if len(page) != len(rows) {
 		t.Fatalf("page carries %d of %d rows", len(page), len(rows))
@@ -118,7 +118,7 @@ func TestAPageBigEnoughForTheQueueEndsIt(t *testing.T) {
 }
 
 func TestAnEmptyQueuePagesToNothing(t *testing.T) {
-	page, next := Page(nil, "", Shown)
+	page, next := Page(nil, "", Shown, ByWorst)
 
 	if len(page) != 0 {
 		t.Fatalf("an empty queue paged to %d rows", len(page))
@@ -130,14 +130,14 @@ func TestAnEmptyQueuePagesToNothing(t *testing.T) {
 
 func TestARowClearingBeforeTheNextPageDoesNotSkipItsNeighbour(t *testing.T) {
 	rows := rowsAcrossEveryOrderingField()
-	Rank(rows)
-	first, next := Page(rows, "", 7)
+	Rank(rows, ByWorst)
+	first, next := Page(rows, "", 7, ByWorst)
 	if next == "" {
 		t.Fatal("the fixture is too small to have a second page")
 	}
 
 	shorter := slices.Delete(slices.Clone(rows), 0, 1)
-	second, _ := Page(shorter, DecodeCursor(next), 7)
+	second, _ := Page(shorter, DecodeCursor(next), 7, ByWorst)
 
 	if len(second) == 0 {
 		t.Fatal("the second page came back empty")
@@ -152,9 +152,9 @@ func TestARowClearingBeforeTheNextPageDoesNotSkipItsNeighbour(t *testing.T) {
 
 func TestGarbageInTheCursorStartsFromTheTop(t *testing.T) {
 	rows := rowsAcrossEveryOrderingField()
-	Rank(rows)
+	Rank(rows, ByWorst)
 
-	page, _ := Page(rows, DecodeCursor("not base64 at all!!"), 3)
+	page, _ := Page(rows, DecodeCursor("not base64 at all!!"), 3, ByWorst)
 
 	if len(page) != 3 {
 		t.Fatalf("page carries %d rows", len(page))
@@ -218,7 +218,78 @@ func TestAFoldCountPastTheCeilingStillOutranksASmallOne(t *testing.T) {
 	huge := api.Issue{ID: "huge", Severity: api.SeverityWarning, Folded: foldCeiling + 10}
 	modest := api.Issue{ID: "modest", Severity: api.SeverityWarning, Folded: 1}
 
-	if issueKey(huge) >= issueKey(modest) {
+	if issueKey(huge, ByWorst) >= issueKey(modest, ByWorst) {
 		t.Fatalf("a fold count past the ceiling wrapped and sorted below a fold of 1")
+	}
+}
+
+func TestNewestFirstOrdersByWhenNotBySeverity(t *testing.T) {
+	rows := []api.Issue{
+		{ID: "old-fatal", Severity: api.SeverityFatal, Since: "2026-08-01T00:00:00Z"},
+		{ID: "new-warning", Severity: api.SeverityWarning, Since: "2026-08-29T00:00:00Z"},
+	}
+
+	Rank(rows, ByNewest)
+
+	if rows[0].ID != "new-warning" {
+		t.Fatalf("newest first put %q on top", rows[0].ID)
+	}
+}
+
+func TestOldestFirstIsTheOtherWayRound(t *testing.T) {
+	rows := []api.Issue{
+		{ID: "new-warning", Severity: api.SeverityWarning, Since: "2026-08-29T00:00:00Z"},
+		{ID: "old-fatal", Severity: api.SeverityFatal, Since: "2026-08-01T00:00:00Z"},
+	}
+
+	Rank(rows, ByOldest)
+
+	if rows[0].ID != "old-fatal" {
+		t.Fatalf("oldest first put %q on top", rows[0].ID)
+	}
+}
+
+func TestEveryOrderWalksItsWholeQueueWithoutRepeating(t *testing.T) {
+	for _, order := range []string{ByWorst, ByNewest, ByOldest} {
+		t.Run(order, func(t *testing.T) {
+			rows := rowsAcrossEveryOrderingField()
+			Rank(rows, order)
+
+			for at := 1; at < len(rows); at++ {
+				if issueKey(rows[at-1], order) >= issueKey(rows[at], order) {
+					t.Fatalf("row %d sorts before row %d but its key does not", at-1, at)
+				}
+			}
+
+			seen := map[string]bool{}
+			cursor := ""
+			for range rows {
+				page, next := Page(rows, DecodeCursor(cursor), 7, order)
+				for _, row := range page {
+					if seen[row.ID] {
+						t.Fatalf("%s came back twice", row.ID)
+					}
+					seen[row.ID] = true
+				}
+				if next == "" {
+					break
+				}
+				cursor = next
+			}
+			if len(seen) != len(rows) {
+				t.Fatalf("walked %d of %d rows", len(seen), len(rows))
+			}
+		})
+	}
+}
+
+func TestAnUnknownOrderFallsBackToWorstFirst(t *testing.T) {
+	for _, asked := range []string{"", "sideways", "WORST"} {
+		if OrderOf(asked) != ByWorst {
+			t.Fatalf("%q read as %q", asked, OrderOf(asked))
+		}
+	}
+	if OrderOf(ByNewest) != ByNewest || OrderOf(ByOldest) != ByOldest {
+		t.Fatal("a date order was not taken")
 	}
 }
