@@ -30,11 +30,11 @@ spinoza --open          # browser
 open -a Spinoza         # desktop window, macOS
 ```
 
-Archives are on the [releases page](https://github.com/sophotechlabs/spinoza/releases): tarballs for Linux and macOS, zips for Windows. `SPINOZA_VERSION=v1.8.1` pins the installer.
+Archives are on the [releases page](https://github.com/sophotechlabs/spinoza/releases): tarballs for Linux and macOS, zips for Windows. `SPINOZA_VERSION=v1.22.0` pins the installer.
 
 Nothing is code-signed, so Windows SmartScreen warns on first run: More info, then Run anyway.
 
-Set `SPINOZA_VERIFY_ATTESTATION=1` and both installers check the GitHub build provenance of what they downloaded before writing it, which the checksum alone cannot tell you. It needs `gh` installed and signed in, so it is off by default.
+Set `SPINOZA_VERIFY_ATTESTATION=1` and both installers check the GitHub build provenance of what they downloaded before writing it. It needs `gh` installed and signed in, so it is off by default.
 
 To remove it, on macOS and Linux:
 
@@ -52,11 +52,62 @@ Either takes back the binary, the desktop app and its launcher entry, and on Win
 
 Needs a kubeconfig. Upgrades, rollbacks and debug containers call `helm` and `kubectl`.
 
-## Every GVR discovery reports
+## Every type discovery reports
 
 One informer-backed view per type, so CRDs need no per-type code. Snapshot, then deltas over a WebSocket keyed by uid. Field-aware filter completed from what the cluster reported, namespace scope, failing-object badges, bulk restart and delete.
 
 ![Spinoza pods table with the inspect drawer open on coredns: ports, metadata, conditions, containers and owner references](docs/images/pods.png)
+
+## Clusters
+
+Open as many as you like. Each is a tab with its own state, health and history, named and coloured
+however you want, grouped, and remembered or forgotten between runs. Anything destructive on a
+protected cluster asks for the name typed out.
+
+![Spinoza with two clusters open as tabs and the compare panel docked below, ready to pair an object against the other cluster](docs/images/compare.png)
+
+The fleet view answers one question across every open cluster at once: checks, issues, search, Helm
+releases and GitOps, without switching tab.
+
+## Checks
+
+125 checks over security, reliability and efficiency, decided against the live cluster rather than a
+parsed manifest, and labelled PSS baseline, PSS restricted or NSA/CISA where a framework covers them.
+They read workloads, RBAC, networking, storage and your own custom resources, and warn about APIs a
+coming release removes and certificates about to expire.
+
+![Spinoza cluster checks: findings across the cluster, each rule labelled with its framework, severity and the number of objects that tripped it](docs/images/checks.png)
+
+Findings rank by how far the problem reaches, not by rule severity alone. Mute a rule with one of your
+own, take a baseline and compare a cluster against it, or write a check as a CEL expression.
+
+## Issues
+
+What is broken now, ranked and self-clearing as the cluster recovers, paged, and available across
+every open cluster at once. The timeline beside it records what the cluster did.
+
+![Spinoza issues view: what is broken in the cluster right now, ranked, with the reason for each failing workload](docs/images/issues.png)
+
+## Topology
+
+Open the graph around one object and it draws what owns it, what it owns, what routes to it and what
+configures it. Folded by default; the whole cluster is one click away.
+
+![Spinoza topology graph rooted on one Deployment: the namespace that owns it, the ReplicaSet it owns and the ConfigMap that configures its pods](docs/images/topology.png)
+
+## Compare across clusters
+
+Any object against another context side by side, or a whole kind at once with a verdict per object:
+same, differs by so many lines, or present on only one side. Both sides lose status, managedFields and
+the rest of what the server assigns, so what differs is what you authored.
+
+![Spinoza comparing every ConfigMap in a namespace across two clusters: a verdict per object with the number of lines that differ](docs/images/kind-compare.png)
+
+## History
+
+Every change Spinoza made, kept per cluster, with what changed and when.
+
+![Spinoza history view: a record of the changes Spinoza itself made to the cluster](docs/images/history.png)
 
 ## GitOps
 
@@ -104,6 +155,10 @@ Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan b
 - **Metrics**: metrics-server in the tables, CPU and memory history from Prometheus through the apiserver proxy. `--prometheus namespace/service:port` overrides discovery. With no Prometheus to ask, spinoza samples metrics-server itself while the window is open and says so on the chart.
 - **Update check**: asks spinoza.tech once per run whether a newer release exists, and offers the install command if so. It never installs anything.
 - **Kubeconfigs** added by path, referenced in place, never copied or merged. Contexts grouped per file, listed in `kubeconfigs.json`. `--kubeconfig PATH` replaces the default lookup for one run.
+- **MCP server**: `spinoza-mcp`, a separate binary giving an agent 21 tools and 3 resources over one cluster.
+- **Node shell**: a root shell in the node's own namespaces, off until you turn it on. It asks the apiserver whether you may create the pod first, and the pod carries a two-hour deadline.
+- **Secrets** arrive masked. Reveal one key at a time; the reveal drops the moment you select something else.
+- **Traffic**: a workload graph from Cilium Hubble flow metrics, read through Prometheus.
 - **Nine themes**, contrast-gated in CI, plus your own as JSON. Screenshots here are Borg.
 
 ## Security
@@ -128,8 +183,7 @@ Vite serves its own `index.html` without the token, so open `http://localhost:51
 
 The binary embeds the built frontend; `just stub-assets` writes a placeholder for the Go-only recipes.
 
-Every test recipe takes an optional test name and an optional path, so you can re-run one test
-instead of a suite:
+Every test recipe takes an optional test name and an optional path:
 
 ```sh
 just test-be TestScaleRejectsNegative ./internal/actions/...
@@ -137,8 +191,7 @@ just test-fe 'renders the empty state' test/components/History.test.tsx
 just test-e2e 'the view says what it is for' specs/history.spec.ts
 ```
 
-Either argument can be given alone. A filtered Go run writes no coverage profile, so it cannot
-leave a partial one behind for `cover-gate`.
+Either argument can be given alone. A filtered Go run writes no coverage profile.
 
 `just check` before pushing. `just ci` runs everything CI does: cross-compilation, the coverage gate, `govulncheck`, dead-code and unused-dependency checks, a bundle-size budget, secret scanning and SAST.
 
