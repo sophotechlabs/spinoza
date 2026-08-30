@@ -142,6 +142,7 @@ type Manager struct {
 	streams     map[streamKey]*stream
 	layoutMu    sync.Mutex
 	layouts     map[schema.GroupVersionResource]*recent[layout]
+	surveys     *checks.Surveys
 	building    map[streamKey]*buildGate
 	failures    map[streamKey]buildFailure
 	syncTimeout time.Duration
@@ -251,6 +252,7 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		now:        time.Now,
 		streams:    map[streamKey]*stream{},
 		layouts:    map[schema.GroupVersionResource]*recent[layout]{},
+		surveys:    checks.NewSurveys(time.Now),
 		building:   map[streamKey]*buildGate{},
 		failures:   map[streamKey]buildFailure{},
 
@@ -727,7 +729,7 @@ func (m *Manager) Graph(ctx context.Context) api.Graph {
 func (m *Manager) CheckPage(
 	ctx context.Context, id, after string, keep checks.Filter,
 ) (api.CheckPage, error) {
-	return checks.Page(ctx, m, m.descriptors(), m.Metrics(ctx), id, after, keep, m.limits.CheckFindings)
+	return m.surveys.Page(ctx, m, m.descriptors(), m.Metrics(ctx), id, after, keep, m.limits.CheckFindings)
 }
 
 func (m *Manager) Facts() checks.Facts {
@@ -752,7 +754,7 @@ func (m *Manager) Facts() checks.Facts {
 }
 
 func (m *Manager) Checks(ctx context.Context, keep checks.Filter) api.CheckReport {
-	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, m.limits.CheckFindings)
+	return m.surveys.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, m.limits.CheckFindings)
 }
 
 // everyFinding is the cap for a caller that has to see all of them. The audit

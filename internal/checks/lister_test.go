@@ -17,6 +17,7 @@ type fakeLister struct {
 	errs    map[string]error
 	warmed  int
 	scanned int
+	listed  int
 	facts   Facts
 }
 
@@ -30,11 +31,20 @@ func newLister(objects ...*unstructured.Unstructured) *fakeLister {
 }
 
 func (f *fakeLister) List(_ context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	f.mu.Lock()
+	f.listed++
+	f.mu.Unlock()
 	err, failing := f.errs[desc.Resource]
 	if failing {
 		return nil, err
 	}
 	return f.objects[desc.Resource], nil
+}
+
+func (f *fakeLister) listCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.listed
 }
 
 func (f *fakeLister) ListNames(_ context.Context, desc api.ResourceDescriptor) ([]Named, error) {

@@ -422,6 +422,19 @@ func Page(
 	keep Filter,
 	shown int,
 ) (api.CheckPage, error) {
+	return (*Surveys)(nil).Page(ctx, lister, descs, usage, id, after, keep, shown)
+}
+
+func (s *Surveys) Page(
+	ctx context.Context,
+	lister Lister,
+	descs map[string]api.ResourceDescriptor,
+	usage api.Metrics,
+	id string,
+	after string,
+	keep Filter,
+	shown int,
+) (api.CheckPage, error) {
 	var wanted check
 	for _, entry := range registryWith(keep.Rules) {
 		if entry.id == id {
@@ -431,7 +444,7 @@ func Page(
 	if wanted.id == "" {
 		return api.CheckPage{}, ErrNoSuchCheck
 	}
-	sc, _, _ := survey(ctx, lister, descs, usage, keep)
+	sc, _, _ := s.take(ctx, lister, descs, usage, keep)
 	if wanted.standsDown(sc) != "" {
 		return api.CheckPage{Findings: []api.CheckFinding{}, Objects: []api.CheckObject{}}, nil
 	}
@@ -486,7 +499,18 @@ func Run(
 	keep Filter,
 	shown int,
 ) api.CheckReport {
-	sc, failure, absent := survey(ctx, lister, descs, usage, keep)
+	return (*Surveys)(nil).Run(ctx, lister, descs, usage, keep, shown)
+}
+
+func (s *Surveys) Run(
+	ctx context.Context,
+	lister Lister,
+	descs map[string]api.ResourceDescriptor,
+	usage api.Metrics,
+	keep Filter,
+	shown int,
+) api.CheckReport {
+	sc, failure, absent := s.take(ctx, lister, descs, usage, keep)
 	checks := keep.chosen(registryWith(keep.Rules))
 	objs := newObjects()
 	spread := newNamespaces()
