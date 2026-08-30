@@ -117,6 +117,16 @@ function fromDocument(name: string): string {
   return window.getComputedStyle(document.documentElement).getPropertyValue(`--${name}`);
 }
 
+export const EDITOR_PAIRS: { token: string; behind: string; where: string }[] = [
+  { token: 'fg-muted', behind: 'surface', where: 'the editor line numbers' },
+  { token: 'fg-strong', behind: 'surface', where: 'the editor cursor' },
+  { token: 'fg', behind: 'surface-raised', where: 'the editor popups' },
+  { token: 'fg-subtle', behind: 'surface', where: 'the editor comments' },
+  { token: 'ansi-green', behind: 'surface', where: 'the editor strings' },
+  { token: 'ansi-blue', behind: 'surface', where: 'the editor keywords' },
+  { token: 'ansi-cyan', behind: 'surface', where: 'the editor numbers' },
+];
+
 export function contrastWarnings(
   tokens: Record<string, string | undefined>,
   base: (name: string) => string = fromDocument,
@@ -144,6 +154,20 @@ export function contrastWarnings(
       if (ratio < AA) {
         warnings.push(`${token} is ${ratio.toFixed(2)}:1 on ${name}, below AA`);
       }
+    }
+  }
+  for (const { token, behind, where } of EDITOR_PAIRS) {
+    const ink = resolve(token);
+    if (ink === null) {
+      continue;
+    }
+    const paper = resolve(behind);
+    if (paper === null) {
+      continue;
+    }
+    const ratio = contrastRatio(ink, paper);
+    if (ratio < AA) {
+      warnings.push(`${where} takes ${token}, ${ratio.toFixed(2)}:1 on ${behind}, below AA`);
     }
   }
   return warnings;

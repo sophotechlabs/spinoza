@@ -61,9 +61,10 @@ describe('warning about a theme that is hard to read', () => {
       nothing,
     );
 
-    expect(warnings).toHaveLength(3);
+    expect(warnings).toHaveLength(4);
     expect(warnings[0]).toMatch(/^fg is \d+\.\d+:1 on surface, below AA$/);
     expect(warnings[2]).toMatch(/on surface-active, below AA$/);
+    expect(warnings[3]).toMatch(/^the editor popups takes fg, /);
   });
 
   it('measures an override against the background the base theme supplies', () => {
@@ -114,5 +115,23 @@ describe('toHex', () => {
   it('gives nothing back for something it cannot read', () => {
     expect(toHex('rebeccapurple')).toBeNull();
     expect(toHex('')).toBeNull();
+  });
+
+  it('warns when an imported theme would make the editor line numbers unreadable', () => {
+    const warnings = contrastWarnings({ surface: '#2e3440', 'fg-muted': '#3a4050' });
+
+    expect(warnings.some((line) => line.includes('the editor line numbers'))).toBe(true);
+  });
+
+  it('warns about the syntax colours the editor takes from the palette', () => {
+    const warnings = contrastWarnings({ surface: '#2e3440', 'ansi-green': '#37402f' });
+
+    expect(warnings.some((line) => line.includes('the editor strings'))).toBe(true);
+  });
+
+  it('says nothing about the editor when the palette is readable', () => {
+    const warnings = contrastWarnings({ surface: '#2e3440', 'fg-muted': '#b8c3d4' });
+
+    expect(warnings.some((line) => line.includes('the editor line numbers'))).toBe(false);
   });
 });
