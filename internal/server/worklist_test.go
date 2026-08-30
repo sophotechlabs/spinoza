@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -249,6 +250,54 @@ func TestAServerGivenNoBaselineStoreStillTakesOne(t *testing.T) {
 	}
 	if report := checksReport(t, ts.URL+"/api/checks"); report.Baseline != "" {
 		t.Fatalf("a server keeping no baselines named one: %q", report.Baseline)
+	}
+}
+
+// reading a rule list back before it is saved
+
+func TestARuleListThatReadsComesBackWithNoFaults(t *testing.T) {
+	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
+	rules := `[{"id":"no-beta","expr":"object.kind == \"Pod\""}]`
+
+	resp := send(t, http.MethodPost, ts.URL+"/api/checks/rules/faults", json.RawMessage(rules))
+
+	var found api.RuleFaults
+	bodyOf(t, resp, &found)
+	if len(found.Faults) != 0 {
+		t.Fatalf("a rule that compiles came back as %v", found.Faults)
+	}
+}
+
+func TestARuleThatDoesNotCompileComesBackNamed(t *testing.T) {
+	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
+	rules := `[{"id":"broken","expr":"object.spec.nope("}]`
+
+	resp := send(t, http.MethodPost, ts.URL+"/api/checks/rules/faults", json.RawMessage(rules))
+
+	var found api.RuleFaults
+	bodyOf(t, resp, &found)
+	if len(found.Faults) != 1 || found.Faults[0].ID != "broken" {
+		t.Fatalf("came back as %v", found.Faults)
+	}
+}
+
+func TestARuleListTooLargeToReadIsRefused(t *testing.T) {
+	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
+	huge := strings.Repeat("x", maxRulesBytes+1)
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost,
+		ts.URL+"/api/checks/rules/faults", strings.NewReader(huge))
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp, sendErr := http.DefaultClient.Do(req)
+	if sendErr != nil {
+		t.Fatalf("post: %v", sendErr)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 }
 

@@ -147,6 +147,77 @@ func TestTheReportSaysWhenItsBaselineWasTaken(t *testing.T) {
 	}
 }
 
+// what churns and what a baseline refuses to call new
+
+func TestAPodWhoseNameWasGeneratedIsTheSameFindingAfterItIsReplaced(t *testing.T) {
+	before := pod("web-7d9f8-x2klm", podSpec(container("app", nil)))
+	before.SetGenerateName("web-7d9f8-")
+	after := pod("web-7d9f8-q4jrt", podSpec(container("app", nil)))
+	after.SetGenerateName("web-7d9f8-")
+
+	report := against(t, fingerprintOfCluster(t, before), after)
+
+	for _, group := range report.Groups {
+		if group.NewCount != 0 {
+			t.Fatalf("%s called %d findings new after a generated name changed",
+				group.ID, group.NewCount)
+		}
+	}
+}
+
+func TestAPodNamedByHandIsANewFindingWhenItIsANewPod(t *testing.T) {
+	base := fingerprintOfCluster(t, pod("first", podSpec(container("app", nil))))
+
+	report := against(t, base, pod("second", podSpec(container("app", nil))))
+
+	fresh := 0
+	for _, group := range report.Groups {
+		fresh += group.NewCount
+	}
+	if fresh == 0 {
+		t.Fatal("a pod nobody had seen before was not reported as new")
+	}
+}
+
+func TestACheckThatReadsLiveMeasurementIsNotComparedAtAll(t *testing.T) {
+	usage := map[string]api.ResourceUsage{"apps/api": {CPUMilli: 1, MemoryMi: 1}}
+	base := fingerprintOfCluster(t, privilegedDeployment("api"))
+	keep := wholeCluster()
+	keep.Base = &base
+
+	report := Run(t.Context(), newLister(privilegedDeployment("api")), descriptors(),
+		api.Metrics{Pods: usage}, keep, 0)
+
+	group := groupNamed(t, report, "requests-far-above-usage")
+	if !group.Measured {
+		t.Fatal("a check reading live usage did not say it was measured")
+	}
+	if group.Baselined || group.NewCount != 0 || group.Fixed != 0 {
+		t.Fatalf("a measured check was compared against the baseline: %+v", group)
+	}
+}
+
+func TestAFindingAboutTheClusterItselfSurvivesABaseline(t *testing.T) {
+	lister := newLister()
+	lister.facts = Facts{
+		ServerVersion:  "v1.24.0",
+		ServedVersions: []string{"batch/v1beta1"},
+	}
+	base := Fingerprint(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster())
+	keep := wholeCluster()
+	keep.Base = &base
+
+	report := Run(t.Context(), lister, descriptors(), api.Metrics{}, keep, 0)
+
+	group := groupNamed(t, report, "serves-a-removed-api")
+	if group.Total == 0 {
+		t.Fatal("the cluster fact this is built on stopped firing")
+	}
+	if group.NewCount != 0 {
+		t.Fatalf("a finding about the cluster itself was called new against its own baseline")
+	}
+}
+
 // what the fingerprint covers
 
 func TestAFingerprintIgnoresTheFilterTheCallerWasLookingThrough(t *testing.T) {
@@ -167,8 +238,8 @@ func TestAFingerprintLeavesOutTheChecksThatStoodDown(t *testing.T) {
 	base := fingerprintOfCluster(t, privilegedDeployment("api"))
 
 	for _, id := range base.Checks {
-		if id == "orphaned-config-map" {
-			t.Fatal("a check that stood down was recorded as covered by the baseline")
+		if id == "requests-far-above-usage" {
+			t.Fatal("a check with no metrics to read was recorded as covered by the baseline")
 		}
 	}
 }

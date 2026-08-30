@@ -1,6 +1,10 @@
 package checks
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -132,9 +136,34 @@ func TestTheRemovalTableHasBeenLookedAtThisCycle(t *testing.T) {
 			"through 1.%d; reconcile the two", newest, lookedAtThrough)
 	}
 
-	client := minorOf(clientMinor)
-	if client-newest > 6 {
+	client := clientMinor(t)
+	if client-newest > staleAfter {
 		t.Fatalf("this repo builds against 1.%d and the removal table stops at 1.%d; "+
 			"read the release notes since and add what is missing", client, newest)
 	}
+}
+
+// The releases the table may fall behind the client by before it is treated as
+// out of date. Kubernetes removes a beta API every other release or so.
+const staleAfter = 6
+
+// clientMinor is the Kubernetes minor this repo builds against, read from the
+// client-go requirement rather than written down beside the table: a number
+// nobody updates measures nothing, and the whole point of the tripwire is to
+// notice a bump that left the table behind.
+func clientMinor(t *testing.T) int {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join("..", "..", "go.mod"))
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+	found := regexp.MustCompile(`k8s\.io/client-go v0\.(\d+)\.`).FindSubmatch(body)
+	if found == nil {
+		t.Fatal("go.mod no longer requires k8s.io/client-go the way this reads it")
+	}
+	minor, convErr := strconv.Atoi(string(found[1]))
+	if convErr != nil {
+		t.Fatalf("client-go minor: %v", convErr)
+	}
+	return minor
 }

@@ -189,7 +189,7 @@ func TestAFrameForASubscriptionThatIsGoneIsNotWritten(t *testing.T) {
 func TestAFailureForASubscriptionThatIsGoneIsNotWritten(t *testing.T) {
 	sess := &wsSession{ctx: t.Context(), tables: map[string]*entry{}, logs: map[string]*entry{}}
 
-	sess.failCurrent(tables, "missing", 1, errors.New("too late"))
+	sess.failAndForget(tables, "missing", 1, errors.New("too late"))
 }
 
 func TestAskingForMoreOfSomethingThatIsNotSubscribed(t *testing.T) {

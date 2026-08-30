@@ -3,6 +3,7 @@ package checks
 import (
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 
 	"cel.dev/cel-go/cel"
@@ -50,6 +51,45 @@ func ParseRules(raw string) []UserRule {
 		kept = append(kept, one)
 	}
 	return kept
+}
+
+// RuleFault is one rule the audit would refuse, named so the editor can say
+// which line is wrong before the rule is saved rather than after the next audit.
+type RuleFault = api.RuleFault
+
+// Faults reads a rule list the way the audit will and reports what it would
+// refuse. An unreadable list is one fault about the list itself: an editor that
+// says nothing about a typo is worse than one that says the wrong thing.
+func Faults(raw string) []RuleFault {
+	if strings.TrimSpace(raw) == "" {
+		return []RuleFault{}
+	}
+	var out []UserRule
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return []RuleFault{{Reason: "this is not a list of rules: " + err.Error()}}
+	}
+	faults := []RuleFault{}
+	for at, one := range out {
+		faults = append(faults, one.faults(at)...)
+	}
+	return faults
+}
+
+func (r UserRule) faults(at int) []RuleFault {
+	name := r.ID
+	if name == "" {
+		name = "rule " + strconv.Itoa(at+1)
+	}
+	if r.ID == "" {
+		return []RuleFault{{ID: name, Reason: "a rule needs an id of its own"}}
+	}
+	if r.Expr == "" {
+		return []RuleFault{{ID: name, Reason: "a rule needs an expression to judge by"}}
+	}
+	if _, err := compileRule(r.Expr); err != nil {
+		return []RuleFault{{ID: name, Reason: "the expression did not compile: " + err.Error()}}
+	}
+	return nil
 }
 
 func userChecks(rules []UserRule) []check {

@@ -223,21 +223,36 @@ func TestACheckSaysWhyItWasSkippedWhenTheClusterHidesWhatItNeeds(t *testing.T) {
 	}
 }
 
-func TestAskingForEveryKindStopsTheOrphanChecksBeingSkipped(t *testing.T) {
-	loaded := bundle(t)
-	held := manager(t, loaded)
+func TestAnAuditOfTheWholeClusterRunsTheOrphanChecks(t *testing.T) {
+	held := manager(t, bundle(t))
 
-	narrow := held.Checks(context.Background(), checks.Filter{WholeCluster: true})
+	narrow := held.Checks(context.Background(), checks.Filter{})
 	if groupOf(narrow, "orphaned-config-map").Skipped == "" {
-		t.Fatal("orphaned-config-map ran without being asked to read every kind")
+		t.Fatal("orphaned-config-map ran from an audit that only read the workloads")
 	}
 
-	wide := groupOf(held.Checks(context.Background(), checks.Filter{WholeCluster: true, EveryKind: true}), "orphaned-config-map")
-	if wide.ID == "" {
+	whole := groupOf(held.Checks(context.Background(), checks.Filter{WholeCluster: true}), "orphaned-config-map")
+	if whole.ID == "" {
 		t.Fatal("orphaned-config-map is not in the report at all")
 	}
-	if wide.Skipped != "" {
-		t.Fatalf("orphaned-config-map was still skipped after asking for every kind: %q", wide.Skipped)
+	if whole.Skipped != "" {
+		t.Fatalf("orphaned-config-map was skipped on an audit of the whole cluster: %q", whole.Skipped)
+	}
+}
+
+func TestTheCustomResourcesAreReadStraightFromTheApiserver(t *testing.T) {
+	held := manager(t, bundle(t))
+
+	report := held.Checks(context.Background(), checks.Filter{WholeCluster: true})
+
+	for _, object := range report.Objects {
+		if object.Group == "apiextensions.k8s.io" {
+			t.Fatalf("a custom resource definition was kept in the report: %s", object.Name)
+		}
+	}
+	if groupOf(report, "orphaned-secret").Skipped != "" {
+		t.Fatalf("the orphan check stood down on a cluster it can read: %q",
+			groupOf(report, "orphaned-secret").Skipped)
 	}
 }
 

@@ -13,10 +13,13 @@ type corpus struct {
 	byResource map[target][]*unstructured.Unstructured
 	names      map[target]map[string]bool
 	absent     map[target]bool
+	unread     []target
 	mentioned  map[string]int
 }
 
-func newCorpus(items []held, names []api.ObjectRef, absent []string, asked, unread []target) *corpus {
+func newCorpus(
+	items []held, names []api.ObjectRef, absent []string, asked, unread []target, mentions map[string]int,
+) *corpus {
 	out := &corpus{
 		byResource: map[target][]*unstructured.Unstructured{},
 		names:      map[target]map[string]bool{},
@@ -34,6 +37,9 @@ func newCorpus(items []held, names []api.ObjectRef, absent []string, asked, unre
 		out.names[key][ref.Namespace+"/"+ref.Name] = true
 	}
 	out.mentioned = mentionedStrings(items)
+	for name, seen := range mentions {
+		out.mentioned[name] += seen
+	}
 	requested := map[target]bool{}
 	for _, want := range asked {
 		requested[want] = true
@@ -56,7 +62,23 @@ func newCorpus(items []held, names []api.ObjectRef, absent []string, asked, unre
 	for _, want := range unread {
 		out.absent[want] = true
 	}
+	out.unread = unread
 	return out
+}
+
+// refused names a kind the cluster would not let the audit read. Any check that
+// answers "nothing anywhere names this" has to stand down when one exists: the
+// reference it is looking for may be in exactly the kind that was refused.
+func (c *corpus) refused() string {
+	if len(c.unread) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(c.unread))
+	for _, want := range c.unread {
+		names = append(names, want.resource)
+	}
+	slices.Sort(names)
+	return strings.Join(names, ", ")
 }
 
 func mentionedStrings(items []held) map[string]int {

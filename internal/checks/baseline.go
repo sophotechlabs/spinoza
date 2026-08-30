@@ -61,7 +61,7 @@ func Fingerprint(
 	sc, _, _ := survey(ctx, lister, descs, usage, wide)
 	out := Baseline{Checks: []string{}, Counts: map[string]int{}, Keys: map[string]bool{}}
 	for _, entry := range registryWith(wide.Rules) {
-		if entry.standsDown(sc) != "" {
+		if entry.standsDown(sc) != "" || !entry.comparable() {
 			continue
 		}
 		found := entry.find(sc)

@@ -16,6 +16,7 @@ type fakeLister struct {
 	objects map[string][]*unstructured.Unstructured
 	errs    map[string]error
 	warmed  int
+	scanned int
 	facts   Facts
 }
 
@@ -51,6 +52,19 @@ func (f *fakeLister) ListNames(_ context.Context, desc api.ResourceDescriptor) (
 		})
 	}
 	return out, nil
+}
+
+func (f *fakeLister) Scan(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	f.mu.Lock()
+	f.scanned++
+	f.mu.Unlock()
+	return f.List(ctx, desc)
+}
+
+func (f *fakeLister) scanCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.scanned
 }
 
 func (f *fakeLister) Cached() []api.ResourceDescriptor {
@@ -103,11 +117,13 @@ var kindResources = map[string]string{
 	"RoleBinding":             "rolebindings",
 	"ClusterRole":             "clusterroles",
 	"ClusterRoleBinding":      "clusterrolebindings",
+	"ClusterIssuer":           "clusterissuers",
 }
 
 var clusterScoped = map[string]bool{
 	"Node": true, "Namespace": true, "IngressClass": true, "StorageClass": true,
 	"PriorityClass": true, "RuntimeClass": true, "ClusterRole": true, "ClusterRoleBinding": true,
+	"ClusterIssuer": true,
 }
 
 var kindGroups = map[string]string{
@@ -129,6 +145,7 @@ var kindGroups = map[string]string{
 	"RoleBinding":             "rbac.authorization.k8s.io",
 	"ClusterRole":             "rbac.authorization.k8s.io",
 	"ClusterRoleBinding":      "rbac.authorization.k8s.io",
+	"ClusterIssuer":           "cert-manager.io",
 }
 
 func resourceFor(kind string) string {
@@ -146,10 +163,19 @@ func descriptors() map[string]api.ResourceDescriptor {
 			Resource:   resource,
 			Kind:       kind,
 			Namespaced: !clusterScoped[kind],
-			Category:   "Workloads",
+			Category:   categoryOf(group),
 		}
 	}
 	return out
+}
+
+// Discovery calls anything outside the Kubernetes API groups a custom
+// resource, and the audit reads those to decide what nothing references.
+func categoryOf(group string) string {
+	if group == "cert-manager.io" {
+		return customResources
+	}
+	return "Workloads"
 }
 
 func wholeCluster() Filter {

@@ -102,8 +102,23 @@ func SameMute(one, other Mute) bool {
 	return one.Check == other.Check && one.Namespace == other.Namespace && one.Ref == other.Ref
 }
 
+// identityOf is what a baseline remembers a finding by. A pod whose name the
+// apiserver generated is a different object every time it is replaced, so the
+// generateName stands in for it: the workload is the same one, and a rollout is
+// not a hundred new findings.
 func identityOf(id string, item found) string {
-	return strings.Join([]string{id, RefKey(item.subject.Ref), item.container}, "\x00")
+	ref := item.subject.Ref
+	if generated := generatedName(item.subject); generated != "" {
+		ref.Name = generated
+	}
+	return strings.Join([]string{id, RefKey(ref), item.container}, "\x00")
+}
+
+func generatedName(subject Subject) string {
+	if subject.Object == nil {
+		return ""
+	}
+	return subject.Object.GetGenerateName()
 }
 
 const fingerprintBytes = 8

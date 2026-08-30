@@ -47,11 +47,6 @@ var removals = []removal{
 	{groupVersion: "authentication.k8s.io/v1beta1", kinds: "TokenReview", minor: 22},
 }
 
-// The Kubernetes minor this repo builds against. The table below is written by
-// hand from what each release removes, so the tripwire in the tests uses this
-// to notice when it has been left behind.
-const clientMinor = "1.36"
-
 func deprecationChecks() []check {
 	return []check{
 		{

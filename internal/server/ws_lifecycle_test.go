@@ -418,13 +418,13 @@ func TestAdoptLogsRefusesAStreamCancelledWhileOpening(t *testing.T) {
 	}
 }
 
-func TestFailCurrentStaysSilentOnceSuperseded(t *testing.T) {
+func TestAFailureStaysSilentOnceSuperseded(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
 
 	stale := sess.claim(tables, "main", mk1)
 	sess.claim(tables, "main", mk1)
-	sess.failCurrent(tables, "main", stale, errors.New("discovery failed"))
+	sess.failAndForget(tables, "main", stale, errors.New("discovery failed"))
 	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "main"})
 
 	msg := readMsg(ctx, t, client)
@@ -442,7 +442,7 @@ func TestAFailureCannotLandAfterTheSnapshotThatReplacedIt(t *testing.T) {
 	failed := make(chan struct{})
 	go func() {
 		defer close(failed)
-		sess.failCurrent(tables, "main", stale, errors.New("discovery failed"))
+		sess.failAndForget(tables, "main", stale, errors.New("discovery failed"))
 	}()
 	time.Sleep(50 * time.Millisecond)
 
@@ -469,7 +469,7 @@ func TestALogFailureCannotLandAfterTheStreamThatReplacedIt(t *testing.T) {
 	failed := make(chan struct{})
 	go func() {
 		defer close(failed)
-		sess.failCurrent(streams, "logs", stale, errors.New("pods/log is forbidden"))
+		sess.failAndForget(streams, "logs", stale, errors.New("pods/log is forbidden"))
 	}()
 	time.Sleep(50 * time.Millisecond)
 
@@ -487,13 +487,13 @@ func TestALogFailureCannotLandAfterTheStreamThatReplacedIt(t *testing.T) {
 	}
 }
 
-func TestFailCurrentLogsStaysSilentOnceSuperseded(t *testing.T) {
+func TestALogFailureStaysSilentOnceSuperseded(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, client, ctx := rawSession(t, mgr)
 
 	stale := sess.claim(streams, "logs", mk1)
 	sess.claim(streams, "logs", mk1)
-	sess.failCurrent(streams, "logs", stale, errors.New("pods/log is forbidden"))
+	sess.failAndForget(streams, "logs", stale, errors.New("pods/log is forbidden"))
 	sess.write(ctx, api.ServerMsg{Type: "marker", SubID: "logs"})
 
 	msg := readMsg(ctx, t, client)

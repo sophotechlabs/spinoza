@@ -214,13 +214,13 @@ func TestARefusedListingDoesNotSilenceUnrelatedChecks(t *testing.T) {
 
 // what nothing-references-this needs before it may say so
 
-func TestTheOrphanChecksWaitForAnExhaustiveRead(t *testing.T) {
+func TestTheOrphanChecksWaitUntilTheCustomResourcesAreRead(t *testing.T) {
 	lister := newLister(configMap("nobody-names-me", map[string]any{"a": "b"}))
 
-	partial := Run(t.Context(), lister, descriptors(), api.Metrics{}, Filter{WholeCluster: true}, 0)
-	group := groupNamed(t, partial, "orphaned-config-map")
+	narrow := Run(t.Context(), lister, descriptors(), api.Metrics{}, Filter{}, 0)
+	group := groupNamed(t, narrow, "orphaned-config-map")
 	if group.Skipped == "" {
-		t.Fatal("an orphan check answered without having read every kind")
+		t.Fatal("an orphan check answered from an audit that only read the workloads")
 	}
 	if !strings.Contains(group.Skipped, "every kind") {
 		t.Fatalf("skipped said %q, want it to name what it is waiting for", group.Skipped)
@@ -229,10 +229,18 @@ func TestTheOrphanChecksWaitForAnExhaustiveRead(t *testing.T) {
 		t.Fatalf("a skipped orphan check still reported %d findings", group.Total)
 	}
 
-	full := Run(t.Context(), lister, descriptors(), api.Metrics{},
-		Filter{WholeCluster: true, EveryKind: true}, 0)
-	if groupNamed(t, full, "orphaned-config-map").Total != 1 {
-		t.Fatal("the orphan check stayed quiet even after an exhaustive read")
+	whole := Run(t.Context(), lister, descriptors(), api.Metrics{}, Filter{WholeCluster: true}, 0)
+	if groupNamed(t, whole, "orphaned-config-map").Total != 1 {
+		t.Fatal("the orphan check stayed quiet on an audit of the whole cluster")
+	}
+}
+
+func TestTheOrphanChecksSayTheyReadTheCustomResources(t *testing.T) {
+	report := Run(t.Context(), newLister(configMap("nobody-names-me", map[string]any{"a": "b"})),
+		descriptors(), api.Metrics{}, Filter{WholeCluster: true}, 0)
+
+	if wrong := groupNamed(t, report, "orphaned-config-map").Wrong; !strings.Contains(wrong, "custom resource") {
+		t.Fatalf("the check does not say what it read: %q", wrong)
 	}
 }
 
@@ -246,7 +254,7 @@ func TestAPageOfASkippedOrphanCheckIsEmpty(t *testing.T) {
 	lister := newLister(configMap("nobody-names-me", map[string]any{"a": "b"}))
 
 	page, err := Page(t.Context(), lister, descriptors(), api.Metrics{},
-		"orphaned-config-map", "", Filter{WholeCluster: true}, 0)
+		"orphaned-config-map", "", Filter{}, 0)
 	if err != nil {
 		t.Fatalf("page: %v", err)
 	}

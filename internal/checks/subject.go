@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,6 +21,11 @@ const (
 
 type Lister interface {
 	List(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
+	// Scan reads a kind straight from the apiserver, with no cache and no
+	// watch behind it. The custom resources are read this way: they are here
+	// only to say which names something in the cluster mentions, and holding
+	// every one of them in a cache costs more than a gigabyte on a large one.
+	Scan(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
 	Warm(ctx context.Context, descs []api.ResourceDescriptor)
 	ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]api.ObjectRef, error)
 	Cached() []api.ResourceDescriptor
@@ -139,6 +145,26 @@ func needed(descs map[string]api.ResourceDescriptor, wholeCluster bool) (found [
 	return found, absent
 }
 
+// customResources is the category discovery gives anything outside the
+// Kubernetes API groups. Reading them is what lets "nothing references this"
+// be true on a cluster where cert-manager, Flux and Cilium name half the
+// secrets in it.
+const customResources = "Custom Resources"
+
+func customKinds(descs map[string]api.ResourceDescriptor) []api.ResourceDescriptor {
+	out := []api.ResourceDescriptor{}
+	for _, desc := range descs {
+		if desc.Category != customResources {
+			continue
+		}
+		out = append(out, desc)
+	}
+	slices.SortFunc(out, func(left, right api.ResourceDescriptor) int {
+		return strings.Compare(descKey(left), descKey(right))
+	})
+	return out
+}
+
 const extraWarmKinds = 25
 
 func alsoWarm(lister Lister, already []api.ResourceDescriptor) []api.ResourceDescriptor {
@@ -205,21 +231,26 @@ func undiscovered(absent []string) string {
 
 func gather(
 	ctx context.Context, lister Lister, descs []api.ResourceDescriptor,
-) ([]held, []api.ObjectRef, []target, string) {
+) ([]held, []api.ObjectRef, []target, map[string]int, string) {
 	warmed := []api.ResourceDescriptor{}
 	for _, desc := range descs {
-		if isNameOnly(desc) {
+		if isNameOnly(desc) || borrowed(desc) {
 			continue
 		}
 		warmed = append(warmed, desc)
 	}
 	lister.Warm(ctx, warmed)
+	mentions, refused := scanMentions(ctx, lister, descs)
 	failures := listerr.New()
 	out := []held{}
 	names := []api.ObjectRef{}
-	unread := []target{}
+	unread := refused
 	for _, desc := range descs {
 		gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
+		if borrowed(desc) {
+			failures.Record(gvr.GroupResource().String(), mentions.errs[descKey(desc)])
+			continue
+		}
 		if isNameOnly(desc) {
 			found, err := lister.ListNames(ctx, desc)
 			failures.Record(gvr.GroupResource().String(), err)
@@ -240,7 +271,76 @@ func gather(
 			out = append(out, held{desc: desc, obj: item})
 		}
 	}
-	return out, names, unread, failures.Message()
+	return out, names, unread, mentions.counts, failures.Message()
+}
+
+const scanConcurrency = 8
+
+type scanned struct {
+	counts map[string]int
+	errs   map[string]error
+}
+
+// scanMentions reads the borrowed kinds and keeps only what they name. The
+// objects themselves are freed as each kind finishes: on a cluster with a
+// hundred custom kinds, holding all of them at once is where the memory goes.
+// They are read at once because one at a time is a minute rather than a second.
+func scanMentions(
+	ctx context.Context, lister Lister, descs []api.ResourceDescriptor,
+) (scanned, []target) {
+	wanted := []api.ResourceDescriptor{}
+	for _, desc := range descs {
+		if borrowed(desc) {
+			wanted = append(wanted, desc)
+		}
+	}
+	out := scanned{counts: map[string]int{}, errs: map[string]error{}}
+	refused := []target{}
+	if len(wanted) == 0 {
+		return out, refused
+	}
+	var lock sync.Mutex
+	var group sync.WaitGroup
+	slots := make(chan struct{}, scanConcurrency)
+	for _, desc := range wanted {
+		group.Go(func() {
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			items, err := lister.Scan(ctx, desc)
+			counted := countMentions(items)
+			lock.Lock()
+			defer lock.Unlock()
+			if err != nil {
+				out.errs[descKey(desc)] = err
+				refused = append(refused, target{group: desc.Group, resource: desc.Resource})
+				return
+			}
+			for name, seen := range counted {
+				out.counts[name] += seen
+			}
+		})
+	}
+	group.Wait()
+	return out, refused
+}
+
+func countMentions(items []*unstructured.Unstructured) map[string]int {
+	out := map[string]int{}
+	for _, obj := range items {
+		here := map[string]bool{}
+		gatherStrings(obj.Object, here)
+		delete(here, obj.GetName())
+		for name := range here {
+			out[name]++
+		}
+	}
+	return out
+}
+
+// borrowed says this kind is read for the one audit and then let go. Nothing
+// browses a custom resource through the audit, so nothing needs its cache kept.
+func borrowed(desc api.ResourceDescriptor) bool {
+	return desc.Category == customResources
 }
 
 func groupOf(apiVersion string) string {

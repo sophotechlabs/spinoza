@@ -183,36 +183,32 @@ func (sess *wsSession) writeCurrent(which feed, subID string, gen uint64, msg an
 	return true
 }
 
-func (sess *wsSession) failCurrent(which feed, subID string, gen uint64, err error) {
-	sess.writeMu.Lock()
-	defer sess.writeMu.Unlock()
-	if !sess.isCurrent(which, subID, gen) {
-		return
-	}
-	slog.Warn("a feed could not be opened", "subId", subID, "error", err)
-	sess.writeLocked(sess.ctx, api.FeedError{Type: msgError, SubID: subID, Message: err.Error()})
-}
-
 // The client must not be told a subscription was refused while the session is
 // still holding it: a reader that acts on the error frame can look and find the
-// entry there. Forgetting and announcing happen in that order, under one claim
-// on the generation, so a resubscribe in between is left alone.
+// entry there. Forgetting and announcing both happen while the write lock is
+// held, so a replacement that has already written its own first frame finds
+// this failure superseded and drops it.
 func (sess *wsSession) failAndForget(which feed, subID string, gen uint64, err error) {
-	sess.mu.Lock()
-	held, ok := sess.entriesOf(which)[subID]
-	current := ok && held.gen == gen
-	if current {
-		delete(sess.entriesOf(which), subID)
-	}
-	sess.mu.Unlock()
+	sess.writeMu.Lock()
+	defer sess.writeMu.Unlock()
+	held, current := sess.forgetCurrent(which, subID, gen)
 	if !current {
 		return
 	}
 	stop(held)
-	sess.writeMu.Lock()
-	defer sess.writeMu.Unlock()
 	slog.Warn("a feed could not be opened", "subId", subID, "error", err)
 	sess.writeLocked(sess.ctx, api.FeedError{Type: msgError, SubID: subID, Message: err.Error()})
+}
+
+func (sess *wsSession) forgetCurrent(which feed, subID string, gen uint64) (*entry, bool) {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	held, ok := sess.entriesOf(which)[subID]
+	if !ok || held.gen != gen {
+		return nil, false
+	}
+	delete(sess.entriesOf(which), subID)
+	return held, true
 }
 
 func (sess *wsSession) drop(which feed, subID string) {
@@ -283,7 +279,7 @@ func (sess *wsSession) buildSub(backend Backend, msg api.ClientMsg, gen uint64) 
 		sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit, msg.Filters,
 	)
 	if err != nil {
-		sess.failCurrent(tables, msg.SubID, gen, err)
+		sess.failAndForget(tables, msg.SubID, gen, err)
 		return
 	}
 	if !sess.adopt(tables, msg.SubID, gen, sub) {
@@ -412,7 +408,7 @@ func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 func (sess *wsSession) buildLogs(backend Backend, msg api.ClientMsg, gen uint64) {
 	selector, selErr := sess.selectorFor(backend, msg)
 	if selErr != nil {
-		sess.failCurrent(streams, msg.SubID, gen, selErr)
+		sess.failAndForget(streams, msg.SubID, gen, selErr)
 		return
 	}
 	stream, err := backend.Logs(sess.ctx, logs.Request{
@@ -424,7 +420,7 @@ func (sess *wsSession) buildLogs(backend Backend, msg api.ClientMsg, gen uint64)
 		Selector:  selector,
 	})
 	if err != nil {
-		sess.failCurrent(streams, msg.SubID, gen, err)
+		sess.failAndForget(streams, msg.SubID, gen, err)
 		return
 	}
 	if !sess.adopt(streams, msg.SubID, gen, stream) {
