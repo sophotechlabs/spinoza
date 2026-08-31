@@ -732,6 +732,25 @@ export interface Capabilities {
   localShell: LocalShell;
 }
 
+export const ROLES = ['viewer', 'editor', 'admin'] as const;
+
+export type Role = (typeof ROLES)[number];
+
+export type Scope =
+  { everywhere: true } | { everywhere: false; namespaces: string[]; undecided: string[] };
+
+export interface Session {
+  authenticated: boolean;
+  cluster: boolean;
+  error?: string;
+  groups?: string[];
+  mode: string;
+  role: string;
+  scope: Scope;
+  signIn: boolean;
+  user?: string;
+}
+
 export interface TerminalSize {
   cols: number;
   rows: number;

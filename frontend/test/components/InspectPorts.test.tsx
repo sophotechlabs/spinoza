@@ -7,6 +7,8 @@ import { useToastsStore } from '../../src/store/toasts';
 import { accessKey, useAccessStore } from '../../src/store/access';
 import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 import type { ObjectPort, ObjectRef, PortForward } from '../../src/lib/types';
+import { adoptSession } from '../../src/store/identity';
+import { OWN_WINDOW } from '../../src/lib/identity';
 
 const target: ObjectRef = {
   group: '',
@@ -276,5 +278,27 @@ describe('a forward the cluster would refuse', () => {
 
     const buttons = await screen.findAllByRole('button', { name: 'Forward' });
     expect(buttons[0]).toBeEnabled();
+  });
+});
+
+describe('the ports panel when spinoza serves the cluster', () => {
+  it('offers no forward, because one would land on the server', async () => {
+    adoptSession({
+      ...OWN_WINDOW,
+      cluster: true,
+      authenticated: true,
+      mode: 'oidc',
+      role: 'admin',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+
+    expect(screen.queryByRole('button', { name: 'Forward' })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/lands on the server/)).toHaveLength(ports.length);
+    await waitFor(() => {
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 });

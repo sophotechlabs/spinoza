@@ -4,6 +4,7 @@ import { request } from './http';
 import { parseMetrics } from './parse';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
+import { failure } from './object';
 
 const METRICS_POLL_MS = 10000;
 export const METRICS_CUTOFF_MS = 60000;
@@ -11,7 +12,7 @@ export const METRICS_CUTOFF_MS = 60000;
 export async function fetchMetrics(): Promise<Metrics> {
   const response = await request('/api/metrics');
   if (!response.ok) {
-    throw new Error(`metrics request failed with status ${response.status}`);
+    throw await failure(response, `metrics request failed with status ${response.status}`);
   }
   return parseMetrics(await response.json());
 }

@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { refreshForwards, stopForward, useForwardPolling } from '../lib/portForward';
+import {
+  NO_FORWARDS_WHEN_SERVED,
+  refreshForwards,
+  stopForward,
+  useForwardPolling,
+} from '../lib/portForward';
 import { forwardURL, openExternal } from '../lib/openExternal';
 import { useForwards } from '../store/forwards';
+import { useClusterMode } from '../store/identity';
 import { notifyError, notifyOk } from '../store/toasts';
 import StaleBanner from './StaleBanner';
 import CopyButton from './CopyButton';
@@ -27,9 +33,10 @@ interface ForwardsPanelProps {
 }
 
 export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
+  const served = useClusterMode();
   const forwards = useForwards();
   const [error, setError] = useState<string | null>(null);
-  const poll = useForwardPolling(active);
+  const poll = useForwardPolling(active && !served);
 
   async function stop(id: string) {
     setError(null);
@@ -47,6 +54,14 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
   let notice: ReactNode = null;
   if (poll.error !== null) {
     notice = <StaleBanner what="The forward list" message={poll.error} onRetry={poll.reload} />;
+  }
+
+  if (served) {
+    return (
+      <div className="flex min-h-0 flex-col">
+        <div className="p-3 text-fg-muted">{NO_FORWARDS_WHEN_SERVED}</div>
+      </div>
+    );
   }
 
   if (forwards.length === 0) {

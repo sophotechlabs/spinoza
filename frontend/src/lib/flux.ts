@@ -3,13 +3,14 @@ import { request } from './http';
 import { parseFluxDashboard, parseFluxOverview } from './parse';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
+import { failure } from './object';
 
 const FLUX_POLL_MS = 5000;
 
 export async function fetchFlux(): Promise<FluxDashboard> {
   const response = await request('/api/flux');
   if (!response.ok) {
-    throw new Error(`flux request failed with status ${response.status}`);
+    throw await failure(response, `flux request failed with status ${response.status}`);
   }
   return parseFluxDashboard(await response.json());
 }
@@ -23,7 +24,10 @@ const OVERVIEW_POLL_MS = 10000;
 export async function fetchFluxOverview(): Promise<FluxOverview> {
   const response = await request('/api/flux/overview');
   if (!response.ok) {
-    throw new Error(`the flux overview request failed with status ${response.status}`);
+    throw await failure(
+      response,
+      `the flux overview request failed with status ${response.status}`,
+    );
   }
   return parseFluxOverview(await response.json());
 }

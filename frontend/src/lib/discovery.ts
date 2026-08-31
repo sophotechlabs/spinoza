@@ -1,6 +1,7 @@
 import type { ResourceCatalog, ResourceCounts, ResourceDescriptor } from './types';
 import { request } from './http';
 import { parseCatalog, parseCounts } from './parse';
+import { failure } from './object';
 
 async function catalog(method: string): Promise<ResourceCatalog> {
   const response = await request('/api/resources', { method });
@@ -21,7 +22,7 @@ export async function refreshResources(): Promise<ResourceCatalog> {
 export async function fetchResourceCounts(): Promise<ResourceCounts> {
   const response = await request('/api/resources/counts');
   if (!response.ok) {
-    throw new Error(`resource counts request failed with status ${response.status}`);
+    throw await failure(response, `resource counts request failed with status ${response.status}`);
   }
   return parseCounts(await response.json());
 }

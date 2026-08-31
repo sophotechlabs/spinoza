@@ -4,6 +4,8 @@ import { refreshForwards, startForward, stopForward } from '../lib/portForward';
 import { forwardURL, openExternal } from '../lib/openExternal';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useForwards } from '../store/forwards';
+import { useClusterMode } from '../store/identity';
+import { FORWARDS_ARE_LOCAL } from '../lib/portForward';
 import { useRefusal } from '../store/access';
 import Announce from './Announce';
 
@@ -51,11 +53,15 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
   const forwards = useForwards();
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const served = useClusterMode();
   const noForward = useRefusal(target, 'portForward');
 
   useEffect(() => {
+    if (served) {
+      return;
+    }
     void refreshForwards();
-  }, [target.namespace, target.name]);
+  }, [served, target.namespace, target.name]);
 
   async function forward(port: number) {
     setBusy(port);
@@ -100,7 +106,8 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
           return (
             <div key={`${port.port}-${port.name ?? ''}`} className="flex items-center gap-2">
               <span className="text-fg">{portLabel(port)}</span>
-              {running === null ? (
+              {served && <span className="ml-auto text-fg-muted">{FORWARDS_ARE_LOCAL}</span>}
+              {!served && running === null ? (
                 <button
                   type="button"
                   onClick={() => void forward(port.port)}
@@ -110,7 +117,8 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
                 >
                   Forward
                 </button>
-              ) : (
+              ) : null}
+              {!served && running !== null ? (
                 <>
                   <span className="ml-auto text-ok">
                     127.0.0.1:{running.localPort} to {port.port}
@@ -136,7 +144,7 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
                     Stop
                   </button>
                 </>
-              )}
+              ) : null}
             </div>
           );
         })}

@@ -6,6 +6,8 @@ import { setForwards } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
 import type { PortForward } from '../../src/lib/types';
 import { anySignal, rejectsWith } from '../helpers';
+import { adoptSession } from '../../src/store/identity';
+import { OWN_WINDOW } from '../../src/lib/identity';
 
 function forward(overrides: Partial<PortForward> = {}): PortForward {
   return {
@@ -223,5 +225,22 @@ describe('copying a forward url', () => {
     render(<ForwardsPanel />);
 
     expect(screen.queryByRole('button', { name: /forward url/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('the forwards panel when spinoza serves the cluster', () => {
+  it('says why there is nothing to forward here', () => {
+    adoptSession({
+      ...OWN_WINDOW,
+      cluster: true,
+      authenticated: true,
+      mode: 'oidc',
+      role: 'admin',
+    });
+
+    render(<ForwardsPanel />);
+
+    expect(screen.getByText(/would land on the server/)).toBeInTheDocument();
+    expect(screen.getByText(/kubectl port-forward/)).toBeInTheDocument();
   });
 });

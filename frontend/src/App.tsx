@@ -24,6 +24,7 @@ import ClusterStrip from './components/ClusterStrip';
 import { announceUpdate } from './lib/update';
 import { watchSettings } from './lib/settingsSync';
 import { useContextsStore } from './store/contexts';
+import { useClusterMode } from './store/identity';
 import { descriptorOf, documentTitle, resourceKey, useRouter } from './lib/router';
 import type { Route } from './lib/router';
 import type { Selection } from './lib/refs';
@@ -160,6 +161,7 @@ export default function App() {
   const [subId, setSubId] = useState(FIRST_SUB_ID);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moved, setMoved] = useState(false);
+  const served = useClusterMode();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
 
@@ -223,13 +225,17 @@ export default function App() {
   }, [replace]);
 
   useEffect(() => {
+    if (served) {
+      showActiveTab();
+      return;
+    }
     void openRememberedTabs().then(() => {
       if (linked.current !== '') {
         return;
       }
       showActiveTab();
     });
-  }, [showActiveTab]);
+  }, [served, showActiveTab]);
 
   useEffect(() => {
     let live = true;
@@ -246,8 +252,11 @@ export default function App() {
   }, [contextEpoch]);
 
   useEffect(() => {
+    if (served) {
+      return;
+    }
     void announceUpdate();
-  }, []);
+  }, [served]);
 
   useEffect(watchSettings, []);
 
@@ -643,9 +652,11 @@ export default function App() {
           }}
         />
       </ErrorBoundary>
-      <ErrorBoundary label="The cluster strip">
-        <ClusterStrip onShown={showActiveTab} />
-      </ErrorBoundary>
+      {!served && (
+        <ErrorBoundary label="The cluster strip">
+          <ClusterStrip onShown={showActiveTab} />
+        </ErrorBoundary>
+      )}
       <ConnectionBanner status={feed.status} attempt={feed.attempt} onReconnect={feed.reconnect} />
       <KubeconfigBanner />
       <div className="flex min-h-0 flex-1">

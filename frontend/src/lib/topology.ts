@@ -1,6 +1,7 @@
 import type { Graph, ObjectRef } from './types';
 import { request } from './http';
 import { parseGraph } from './parse';
+import { failure } from './object';
 
 export interface TopologyQuery {
   namespace: string;
@@ -33,7 +34,7 @@ export function topologyParams(query: TopologyQuery): string {
 export async function fetchTopology(query: TopologyQuery): Promise<Graph> {
   const response = await request(`/api/topology${topologyParams(query)}`);
   if (!response.ok) {
-    throw new Error(`topology request failed with status ${response.status}`);
+    throw await failure(response, `topology request failed with status ${response.status}`);
   }
   return parseGraph(await response.json());
 }

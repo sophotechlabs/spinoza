@@ -1,3 +1,8 @@
+export const FORWARDS_ARE_LOCAL = 'forwarding lands on the server, not on you';
+
+export const NO_FORWARDS_WHEN_SERVED =
+  'A forward would land on the server rather than on you, so this spinoza does not offer one. Use kubectl port-forward from your own machine.';
+
 import type { ObjectRef, PortForward } from './types';
 import { failure } from './object';
 import { request } from './http';

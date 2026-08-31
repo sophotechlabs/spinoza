@@ -4,6 +4,7 @@ import { request } from './http';
 import { parseIssueQueue } from './parse';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
+import { failure } from './object';
 
 const ISSUES_POLL_MS = 5000;
 
@@ -35,7 +36,7 @@ export async function fetchIssues(order: IssueOrder = 'worst'): Promise<IssueQue
 async function queueFrom(path: string): Promise<IssueQueue> {
   const response = await request(path);
   if (!response.ok) {
-    throw new Error(`issues request failed with status ${response.status}`);
+    throw await failure(response, `issues request failed with status ${response.status}`);
   }
   return parseIssueQueue(await response.json());
 }

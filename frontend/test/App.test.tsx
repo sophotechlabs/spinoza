@@ -472,6 +472,8 @@ import { notifyOk, useToastsStore } from '../src/store/toasts';
 import { bumpClusterEpoch } from '../src/store/cluster';
 import { setUnsaved } from '../src/lib/unsaved';
 import { capabilities, makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
+import { adoptSession } from '../src/store/identity';
+import { OWN_WINDOW } from '../src/lib/identity';
 
 const podDescriptor = makeDescriptor({
   group: '',
@@ -2978,5 +2980,45 @@ describe('a deep link that names a cluster and an object', () => {
     await waitFor(() => {
       expect(window.location.hash).toContain('name=pod-a');
     });
+  });
+});
+
+describe('App served to a team', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+    adoptSession({
+      ...OWN_WINDOW,
+      cluster: true,
+      authenticated: true,
+      mode: 'oidc',
+      role: 'admin',
+      user: 'alice@example.com',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetStore();
+    adoptSession(OWN_WINDOW);
+  });
+
+  it('drops the parts of the window that only a local spinoza can honour', async () => {
+    render(<App />);
+
+    expect(await screen.findByLabelText('Account')).toHaveTextContent('alice@example.com');
+    expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Open clusters')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Open in the browser, hide this window')).not.toBeInTheDocument();
+  });
+
+  it('never asks spinoza.tech whether a newer release is out', async () => {
+    render(<App />);
+
+    await screen.findByLabelText('Account');
+    const asked = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.map(
+      (call) => call[0] as string,
+    );
+    expect(asked.some((url) => url.startsWith('/api/update'))).toBe(false);
   });
 });

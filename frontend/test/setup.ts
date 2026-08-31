@@ -16,6 +16,8 @@ import { useFiltersStore } from '../src/store/filters';
 import { useRecentsStore } from '../src/store/recents';
 import { useCatalogStore } from '../src/store/catalog';
 import { useTerminalsStore } from '../src/store/terminals';
+import { useIdentityStore } from '../src/store/identity';
+import { OWN_WINDOW } from '../src/lib/identity';
 import { hydrate, resetStored } from '../src/lib/persist';
 
 configure({ asyncUtilTimeout: 5000 });
@@ -39,6 +41,7 @@ beforeEach(() => {
   useRecentsStore.getState().clear();
   useCatalogStore.getState().clear();
   useTerminalsStore.getState().reset();
+  useIdentityStore.setState({ session: OWN_WINDOW, known: false });
 });
 
 class ResizeObserverStub {

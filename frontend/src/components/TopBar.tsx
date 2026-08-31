@@ -14,7 +14,9 @@ import {
   useClusterUnreachableReason,
   useClusterWobbling,
 } from '../store/clusterHealth';
+import UserMenu from './UserMenu';
 import Wordmark from './Wordmark';
+import { useClusterMode } from '../store/identity';
 
 interface TopBarProps {
   status: ConnectionStatus;
@@ -85,6 +87,7 @@ export default function TopBar({
   onSelectObject,
   onLeftForDesktop,
 }: TopBarProps) {
+  const served = useClusterMode();
   const clusterReachable = useClusterReachable();
   const unreachableReason = useClusterUnreachableReason();
   const wobbling = useClusterWobbling();
@@ -134,7 +137,7 @@ export default function TopBar({
   return (
     <header className="flex h-10 shrink-0 items-center gap-4 border-b border-edge bg-surface-raised px-3 text-xs">
       <Wordmark />
-      <ContextPicker onSwitched={handleContextChanged} />
+      {!served && <ContextPicker onSwitched={handleContextChanged} />}
       <div className="flex items-center gap-1.5">
         <ProtectionToggle />
         <span
@@ -187,8 +190,9 @@ export default function TopBar({
         >
           Search <span className="text-fg-muted">{paletteChordLabel()}</span>
         </button>
-        <ViewSwitch onLeft={handleLeftForDesktop} />
+        {!served && <ViewSwitch onLeft={handleLeftForDesktop} />}
         <NotificationsMenu onSelectObject={handleSelectObject} />
+        <UserMenu />
         <button
           type="button"
           aria-label="Settings"
