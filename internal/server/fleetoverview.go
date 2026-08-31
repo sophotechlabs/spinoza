@@ -26,6 +26,9 @@ func mergeOverviews(found []clusterAnswer[api.ClusterOverview]) api.FleetOvervie
 		if one.answer.Error != "" {
 			trouble = append(trouble, one.context+": "+one.answer.Error)
 		}
+		if one.failure != "" {
+			trouble = append(trouble, one.context+": "+one.failure)
+		}
 	}
 	slices.SortStableFunc(merged.Clusters, func(left, right api.FleetCluster) int {
 		return strings.Compare(left.Context, right.Context)
@@ -43,8 +46,15 @@ func lineFor(one clusterAnswer[api.ClusterOverview]) api.FleetCluster {
 		Nodes:    one.answer.Nodes,
 		Pods:     one.answer.Pods,
 		Warnings: len(one.answer.Warnings),
-		Reason:   one.answer.Error,
+		Reason:   reasonOf(one),
 	}
+}
+
+func reasonOf(one clusterAnswer[api.ClusterOverview]) string {
+	if one.failure != "" {
+		return one.failure
+	}
+	return one.answer.Error
 }
 
 func addNodes(into *api.NodeSummary, one api.NodeSummary) {

@@ -2,18 +2,28 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const fleetSearchCap = 200
 
 func eachCluster[T any](
 	ctx context.Context, srv *Server, read func(context.Context, Backend) T,
+) []clusterAnswer[T] {
+	return eachOpenCluster(ctx, srv, func(ctx context.Context, _ api.OpenCluster, backend Backend) T {
+		return read(ctx, backend)
+	})
+}
+
+func eachOpenCluster[T any](
+	ctx context.Context, srv *Server, read func(context.Context, api.OpenCluster, Backend) T,
 ) []clusterAnswer[T] {
 	open := srv.cluster.Opened()
 	found := make([]clusterAnswer[T], len(open))
@@ -23,20 +33,32 @@ func eachCluster[T any](
 		go func(at int, one api.OpenCluster) {
 			defer asking.Done()
 			found[at] = clusterAnswer[T]{cluster: one.ID, context: nameOf(one)}
+			defer func() {
+				found[at].failure = recovered("asking "+nameOf(one), recover())
+			}()
 			backend := srv.managerOf(one.ID)
 			if backend == nil {
 				return
 			}
-			found[at].answer = read(ctx, backend)
+			found[at].answer = read(ctx, one, backend)
 		}(at, one)
 	}
 	asking.Wait()
 	return found
 }
 
+func recovered(what string, caught any) string {
+	if caught == nil {
+		return ""
+	}
+	safe.Log(what, caught)
+	return "panicked: " + fmt.Sprint(caught)
+}
+
 type clusterAnswer[T any] struct {
 	cluster string
 	context string
+	failure string
 	answer  T
 }
 
@@ -59,6 +81,9 @@ func mergeSearch(found []clusterAnswer[api.SearchResults]) api.SearchResults {
 		merged.Truncated = merged.Truncated || one.answer.Truncated
 		for where, why := range one.answer.Errors {
 			trouble[one.context+": "+where] = why
+		}
+		if one.failure != "" {
+			trouble[one.context] = one.failure
 		}
 	}
 	slices.SortStableFunc(merged.Hits, byWhere)
@@ -103,6 +128,9 @@ func mergeReleases(found []clusterAnswer[api.HelmReleases]) api.HelmReleases {
 		}
 		if one.answer.Error != "" {
 			trouble = append(trouble, one.context+": "+one.answer.Error)
+		}
+		if one.failure != "" {
+			trouble = append(trouble, one.context+": "+one.failure)
 		}
 	}
 	markSkew(merged.Releases)

@@ -5,40 +5,19 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/issues"
 )
 
-type clusterQueue struct {
-	cluster string
-	context string
-	queue   api.IssueQueue
-}
-
 func (s *Server) fleetIssues(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, pagedQueue(mergeQueues(s.everyClustersIssues(r.Context())), r))
 }
 
-func (s *Server) everyClustersIssues(ctx context.Context) []clusterQueue {
-	open := s.cluster.Opened()
-	found := make([]clusterQueue, len(open))
-	var asking sync.WaitGroup
-	for at, one := range open {
-		asking.Add(1)
-		go func(at int, one api.OpenCluster) {
-			defer asking.Done()
-			found[at] = clusterQueue{cluster: one.ID, context: nameOf(one)}
-			backend := s.managerOf(one.ID)
-			if backend == nil {
-				return
-			}
-			found[at].queue = backend.Issues(ctx)
-		}(at, one)
-	}
-	asking.Wait()
-	return found
+func (s *Server) everyClustersIssues(ctx context.Context) []clusterAnswer[api.IssueQueue] {
+	return eachCluster(ctx, s, func(ctx context.Context, backend Backend) api.IssueQueue {
+		return backend.Issues(ctx)
+	})
 }
 
 func nameOf(one api.OpenCluster) string {
@@ -48,17 +27,20 @@ func nameOf(one api.OpenCluster) string {
 	return one.Context
 }
 
-func mergeQueues(found []clusterQueue) api.IssueQueue {
+func mergeQueues(found []clusterAnswer[api.IssueQueue]) api.IssueQueue {
 	merged := api.IssueQueue{Rows: []api.Issue{}}
 	trouble := []string{}
 	for _, one := range found {
-		for _, row := range one.queue.Rows {
+		for _, row := range one.answer.Rows {
 			row.Cluster = one.cluster
 			merged.Rows = append(merged.Rows, row)
 		}
-		merged.Dropped += one.queue.Dropped
-		if one.queue.Error != "" {
-			trouble = append(trouble, one.context+": "+one.queue.Error)
+		merged.Dropped += one.answer.Dropped
+		if one.answer.Error != "" {
+			trouble = append(trouble, one.context+": "+one.answer.Error)
+		}
+		if one.failure != "" {
+			trouble = append(trouble, one.context+": "+one.failure)
 		}
 	}
 	issues.Rank(merged.Rows, issues.ByWorst)
