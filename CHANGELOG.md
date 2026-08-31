@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.24.0](https://github.com/sophotechlabs/spinoza/compare/v1.23.0...v1.24.0) (2026-08-31)
+
+
+### Features
+
+* **cli:** open on a named view and context, and keep injected values inside their quotes ([472f06b](https://github.com/sophotechlabs/spinoza/commit/472f06be169ae2fc9c604a8480f0e5279da26685))
+
+
+### Bug Fixes
+
+* **clusters:** remember tab and columns on switch ([1808c8f](https://github.com/sophotechlabs/spinoza/commit/1808c8f40e73524d7462d3bd2c14ea7afc7f2f24))
+
+
+### Miscellaneous
+
+* cleanup comments ([74d916f](https://github.com/sophotechlabs/spinoza/commit/74d916f89158e9a2353eb30616e7cf280adce173))
+
+
+### Refactoring
+
+* **resources:** give each interface the manager implements its own file ([187f187](https://github.com/sophotechlabs/spinoza/commit/187f1872cddd6decb5c7c1d848efe4bd1326dc55))
+
+
+### Tests
+
+* **resources:** cover the delegations the split showed nobody was calling ([40429a9](https://github.com/sophotechlabs/spinoza/commit/40429a90305ca04cd2f0542bb666cd1da00fc9d7))
+
 ## [1.23.0](https://github.com/sophotechlabs/spinoza/compare/v1.22.0...v1.23.0) (2026-08-30)
 
 
