@@ -40,9 +40,7 @@ type scan struct {
 	held      *corpus
 	facts     Facts
 	everyKind bool
-	// custom says every kind outside the Kubernetes API groups was read, which
-	// is what "nothing references this" needs before it can be said at all.
-	custom bool
+	custom    bool
 }
 
 func (sc scan) hasUsage() bool {
@@ -50,12 +48,10 @@ func (sc scan) hasUsage() bool {
 }
 
 type found struct {
-	subject   Subject
-	container string
-	detail    string
-	patch     string
-	// convention is why this finding is not the leftover it looks like: an
-	// owner, a manager, or something known to read it without naming it.
+	subject    Subject
+	container  string
+	detail     string
+	patch      string
 	convention string
 	severity   string
 }
@@ -110,12 +106,9 @@ type check struct {
 	remedy     string
 	needsUsage bool
 	needsEvery bool
-	// arguable says a reasonable operator could leave this as it is. Such a
-	// check ships at low severity and says so in its own words, which the
-	// registry test holds it to.
-	arguable bool
-	needs    []target
-	find     finder
+	arguable   bool
+	needs      []target
+	find       finder
 }
 
 func overContainers(rule containerRule) finder {
@@ -203,8 +196,6 @@ func decodeCursor(cursor string) string {
 	return string(raw)
 }
 
-// marked is a finding with what the filter decided about it: whether a mute
-// covers it, and whether the baseline had seen it before.
 type marked struct {
 	found
 
@@ -215,16 +206,11 @@ type marked struct {
 }
 
 type tally struct {
-	// found is everything the check produced in the part of the cluster being
-	// looked at, before muting and before only-new. It is the number a baseline
-	// count can honestly be compared against.
 	found int
 	total int
 	muted int
 	fresh int
-	// here is every fingerprint this audit produced, so what the baseline holds
-	// and this audit does not can be named.
-	here map[string]bool
+	here  map[string]bool
 }
 
 func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
@@ -237,9 +223,6 @@ func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 			continue
 		}
 		count.found++
-		// Recorded before anything can drop the finding from the page: a muted
-		// finding is still here, and a baseline told otherwise would report it
-		// as work somebody did.
 		key := c.id + "\x00" + fingerprintOf(identityOf(c.id, item))
 		here[key] = true
 		by, muted := keep.mutes(c.id, item)
@@ -311,10 +294,6 @@ func page(all []marked, objs *objects, after string, limit int) ([]api.CheckFind
 	return out, ""
 }
 
-// wantsCorpus says some check in this audit decides what nothing references,
-// which is the only reason to read every custom resource in the cluster. With
-// the orphan checks turned off or under the severity floor, reading a hundred
-// custom kinds each time would buy nothing.
 func wantsCorpus(keep Filter) bool {
 	for _, entry := range keep.chosen(registryWith(keep.Rules)) {
 		if entry.needsEvery {
@@ -324,15 +303,10 @@ func wantsCorpus(keep Filter) bool {
 	return false
 }
 
-// comparable says a finding of this check means the same thing on two different
-// days. A check that reads live measurement does not: its findings appear and
-// go with load, so calling them new would report the weather as work.
 func (c check) comparable() bool {
 	return !c.needsUsage
 }
 
-// standsDown is why a check reported nothing, which is never the same as
-// finding nothing.
 func (c check) standsDown(sc scan) string {
 	if c.needsUsage && !sc.hasUsage() {
 		return noUsage

@@ -1,5 +1,3 @@
-// Package atomicfile writes a small file whole or not at all: to a temporary
-// file beside the target, then renamed over it.
 package atomicfile
 
 import (

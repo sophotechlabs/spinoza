@@ -9,7 +9,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// MaxRows is how many the queue keeps, one cluster or several.
 const MaxRows = 500
 
 const (

@@ -19,7 +19,6 @@ const (
 	defaultEventWindow = 100
 )
 
-// Anything else gets a single status, unless the CRD says otherwise.
 func columnsFor(kind string) []api.Column {
 	found, ok := builtinColumns(kind)
 	if ok {

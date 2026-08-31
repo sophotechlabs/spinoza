@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// what the editor is told before a rule is saved
-
 func TestARuleListThatReadsHasNoFaults(t *testing.T) {
 	if faults := Faults(betaRule); len(faults) != 0 {
 		t.Fatalf("a rule that compiles was reported as %v", faults)

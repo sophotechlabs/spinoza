@@ -13,8 +13,6 @@ import (
 
 const maxMuteBytes = 1 << 16
 
-// The point past which muting is no longer how you are dealing with this. A
-// list this long is a check to turn off or a namespace to skip.
 const maxMutes = 2000
 
 var errTooManyMutes = errors.New("that is more mutes than one cluster holds; turn the check off or skip the namespace instead")

@@ -428,7 +428,6 @@ func TestComparingAKindTheOtherClusterCannotList(t *testing.T) {
 	}
 }
 
-// A client that hung up mid-response.
 type deafWriter struct {
 	header http.Header
 	status int

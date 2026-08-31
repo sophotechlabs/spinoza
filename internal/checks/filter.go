@@ -42,9 +42,6 @@ func ParseFilter(query url.Values) Filter {
 	}
 }
 
-// narrows says the audit is looking at part of the cluster. A count taken from
-// part of it cannot be subtracted from a baseline taken over all of it: the
-// difference is the filter, not work anybody did.
 func (f Filter) narrows() bool {
 	return f.Namespace != "" || len(f.SkipNamespaces) > 0 || f.OnlyNew || !f.WholeCluster
 }
@@ -63,8 +60,6 @@ func (f Filter) goneSince(id string, here map[string]bool) []string {
 	return f.Base.gone(id, here)
 }
 
-// countedBefore is what the baseline found for this check, which is the only
-// comparison that survives being carried to another cluster.
 func (f Filter) countedBefore(id string) (int, bool) {
 	if f.narrows() {
 		return 0, false
@@ -89,15 +84,10 @@ func (f Filter) takenAt() string {
 	return f.Base.TakenAt
 }
 
-// foreign says the baseline was taken somewhere else. Two clusters run
-// different objects, so a finding here is "new" against a baseline there
-// whatever anybody did; the counts are what can honestly be compared.
 func (f Filter) foreign() bool {
 	return f.takenFrom() != ""
 }
 
-// takenFrom names the cluster the baseline came from, which the server leaves
-// set only when it is not the one being audited.
 func (f Filter) takenFrom() string {
 	if f.Base == nil {
 		return ""
@@ -109,8 +99,6 @@ func asked(raw string) bool {
 	return raw == "1" || strings.EqualFold(raw, "true")
 }
 
-// Absence means the whole cluster: a caller that says nothing gets every check.
-// Narrowing to workloads is the thing you have to ask for.
 func narrowed(raw string) bool {
 	return raw == "0" || strings.EqualFold(raw, "false")
 }
@@ -158,9 +146,6 @@ func (f Filter) keeps(item found) bool {
 	return f.Namespace == item.subject.Ref.Namespace
 }
 
-// silenced answers whether a rule of your own quietens this finding, and what
-// the rule said. A rule that errors on one object leaves it alone rather than
-// taking the audit down.
 func (f Filter) silenced(id string, item found) (Mute, bool) {
 	for _, one := range f.Silencers {
 		if one.Silences != id {
@@ -177,8 +162,6 @@ func (f Filter) silenced(id string, item found) (Mute, bool) {
 	return Mute{}, false
 }
 
-// mutes answers whether you have already decided about this finding, and what
-// you said at the time.
 func (f Filter) mutes(id string, item found) (Mute, bool) {
 	for _, one := range f.Mutes {
 		if silences(one, id, item) {

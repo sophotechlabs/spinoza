@@ -67,7 +67,6 @@ func (s *Service) jobs(ref api.ObjectRef) dynamic.ResourceInterface {
 	return s.dyn.Resource(jobsGVR).Namespace(ref.Namespace)
 }
 
-// Owned so it goes with the cron job, uncontrolled so the schedule ignores it.
 func jobFrom(cron *unstructured.Unstructured, now time.Time) (*unstructured.Unstructured, error) {
 	spec, found := unstr.Map(cron, specField, "jobTemplate", specField)
 	if !found {

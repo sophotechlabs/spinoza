@@ -37,13 +37,9 @@ type Entry struct {
 }
 
 type Query struct {
-	Cluster string
-	Limit   int
-	// After is the id a page continues below, so a reader can reach older rows
-	// on a cluster that writes faster than one page holds.
-	After int64
-	// AfterAction is the same for the audit half, which has its own id
-	// sequence: one number cannot bound both tables.
+	Cluster     string
+	Limit       int
+	After       int64
 	AfterAction int64
 }
 
@@ -182,8 +178,6 @@ func (s *Store) Recent(ctx context.Context, query Query) (Page, error) {
 	return pageOf(found, limit), nil
 }
 
-// Limit is what the store will actually return for what was asked for, so a
-// caller merging two of its answers can hold the same cap.
 func Limit(asked int) int {
 	return limitOf(asked)
 }

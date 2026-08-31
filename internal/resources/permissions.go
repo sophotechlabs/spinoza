@@ -28,9 +28,6 @@ func (m *Manager) HelmAccess(ctx context.Context, namespace, name string) api.Ac
 	return m.perms.ReviewRelease(ctx, namespace, m.helm.ReleaseDriver(ctx, namespace, name))
 }
 
-// RBACIndex answers who may do what on this cluster. It is built fresh: the
-// bindings are small beside the workloads, and a stale answer about who holds
-// the keys is worse than a slow one.
 func (m *Manager) RBACIndex(ctx context.Context) rbac.Index {
 	return rbac.Read(ctx, m, m.descriptors())
 }

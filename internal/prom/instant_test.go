@@ -172,8 +172,6 @@ func TestInstantReportsDiscoveryFailure(t *testing.T) {
 	}
 }
 
-// the query as it leaves the process, over a real client and a real socket
-
 func TestInstantSendsTheQueryOverTheServiceProxy(t *testing.T) {
 	var asked string
 	apiserver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

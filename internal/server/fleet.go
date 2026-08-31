@@ -48,8 +48,6 @@ func nameOf(one api.OpenCluster) string {
 	return one.Context
 }
 
-// The merged queue is ordered and capped the way one cluster's is, so the worst
-// thing in the fleet is at the top whichever cluster it is on.
 func mergeQueues(found []clusterQueue) api.IssueQueue {
 	merged := api.IssueQueue{Rows: []api.Issue{}}
 	trouble := []string{}

@@ -44,8 +44,6 @@ func (w *WarningSink) first(text string) bool {
 	return true
 }
 
-// Seen returns the distinct deprecation warnings this cluster has answered
-// with, which is the apiserver's own account of what it wants you off.
 func (w *WarningSink) Seen() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()

@@ -14,7 +14,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
-// MetricHistory uses Prometheus when reachable, otherwise spinoza's readings.
 func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {
 	if m.prom != nil {
 		history, err := m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
@@ -28,7 +27,6 @@ func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span
 	if m.samples == nil {
 		return api.MetricHistory{}, prom.ErrUnavailable
 	}
-	// Fills the store, and may be the only page open. Cached, shared with tables.
 	m.Metrics(ctx)
 	return m.samples.History(namespace, pod, span, m.now()), nil
 }

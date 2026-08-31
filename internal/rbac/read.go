@@ -19,8 +19,6 @@ type Lister interface {
 
 var wanted = []string{"roles", "clusterroles", "rolebindings", "clusterrolebindings"}
 
-// Read pulls the four kinds RBAC is made of. A cluster missing one of them is
-// not an error worth refusing over — the index says what it could not see.
 func Read(ctx context.Context, lister Lister, descs map[string]api.ResourceDescriptor) Index {
 	found, absent := kinds(descs)
 	lister.Warm(ctx, found)

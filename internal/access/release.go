@@ -14,15 +14,6 @@ const (
 	Uninstall = "uninstall"
 )
 
-// Helm keeps release history in the namespace as a secret or configmap.
-// Measured against helm v4:
-//
-//	install    create
-//	upgrade    create, update
-//	rollback   create, update
-//	uninstall  delete
-//
-// A dry run writes none of it.
 func releaseCapabilities(namespace, driver string) []capability {
 	store := Check{Resource: storeFor(driver), Namespace: namespace}
 	create := with(store, "create")

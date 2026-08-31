@@ -58,8 +58,6 @@ func plainRole() *unstructured.Unstructured {
 	return role("Role", "reader", grants([]string{"get"}, []string{"configmaps"}, []string{""}))
 }
 
-// what each RBAC check refuses, and what it lets through
-
 func TestEveryRbacCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	cases := []struct {
 		id      string
@@ -151,8 +149,6 @@ func TestEveryRbacCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 		})
 	}
 }
-
-// the parts that decide how wide a rule really is
 
 func TestASecretRuleNamingItsSecretsIsNotFlagged(t *testing.T) {
 	narrow := role("Role", "reader", map[string]any{

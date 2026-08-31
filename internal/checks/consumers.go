@@ -8,9 +8,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// Named is one object the corpus knows of by name, with what the cluster says
-// about who put it there. A secret is only ever read this far: the audit needs
-// to know it exists and who manages it, never what is in it.
 type Named struct {
 	Ref     api.ObjectRef
 	Owned   bool
@@ -19,9 +16,6 @@ type Named struct {
 
 var fluxLabels = []string{"helm.toolkit.fluxcd.io/name", "kustomize.toolkit.fluxcd.io/name"}
 
-// ManagerOf reads who the cluster says looks after this object. A manager is
-// not a reference, but it does mean deleting the object is somebody else's
-// decision: whatever put it there will put it back.
 func ManagerOf(labels map[string]string) string {
 	for _, key := range fluxLabels {
 		if labels[key] != "" {
@@ -39,10 +33,6 @@ func namedOf(ref api.ObjectRef, obj *unstructured.Unstructured) Named {
 	}
 }
 
-// A consumer is something that reads an object without ever naming it in the
-// cluster. The list is written by hand from what each of these is known to do,
-// so it only covers what is on it; anything else stays a finding. Nothing here
-// is hidden — the audit reports these as silenced, with the reason.
 type consumer struct {
 	who       string
 	resource  string
@@ -80,8 +70,6 @@ func (c consumer) covers(resource string, ref api.ObjectRef) bool {
 	return c.suffix != "" && strings.HasSuffix(ref.Name, c.suffix)
 }
 
-// consumedBy says why this object is not the leftover it looks like, or nothing
-// when it is one.
 func consumedBy(resource string, held Named) string {
 	if held.Owned {
 		return "something in this cluster owns it, so it is not loose"

@@ -7,9 +7,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// namespaces counts findings per namespace as the audit produces them. The
-// browser cannot work this out for itself: a group stops at the findings it
-// shows, so anything counted there would be wrong for every capped check.
 type namespaces struct {
 	index map[string]int
 	list  []api.NamespaceCount
@@ -51,8 +48,6 @@ func (n *namespaces) count(space, severity string) {
 	}
 }
 
-// sorted puts the namespace carrying the most weight first, so the list reads
-// as where to start.
 func (n *namespaces) sorted() []api.NamespaceCount {
 	out := slices.Clone(n.list)
 	slices.SortFunc(out, func(left, right api.NamespaceCount) int {

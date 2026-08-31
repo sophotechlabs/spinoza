@@ -457,8 +457,6 @@ func TestDetailKeepsTheVersionTheControllerReported(t *testing.T) {
 	}
 }
 
-// which resources get read from the cluster, and in what order
-
 func TestABrokenResourceIsReadBeforeADriftedOne(t *testing.T) {
 	resources := []api.GitopsResource{
 		{Kind: "Service", Name: "drifted", Sync: "OutOfSync", Health: "Healthy"},
@@ -501,8 +499,6 @@ func TestResourcesTheControllerSaysNothingAboutKeepTheirOrder(t *testing.T) {
 		t.Fatalf("order = %v, want the list order kept when nothing distinguishes them", order)
 	}
 }
-
-// the events a resource carries
 
 func TestEventsAreAskedForByTheObjectTheyBelongTo(t *testing.T) {
 	client := detailClient(
@@ -593,8 +589,6 @@ func TestEventsSurviveANamespaceThatRefusesToListThem(t *testing.T) {
 	}
 }
 
-// the pure readers behind the source resolution
-
 func TestBranchOfTakesEveryRefFluxAccepts(t *testing.T) {
 	cases := []struct {
 		name string
@@ -659,8 +653,6 @@ func TestIdentifyFillsTheVersionOnlyWhenTheControllerLeftItOut(t *testing.T) {
 		t.Fatalf("version = %q, want the controller's own left alone", resources[1].Version)
 	}
 }
-
-// what an application that syncs server-side gets instead of a value diff
 
 func ssaDeployment(managers ...string) *unstructured.Unstructured {
 	live := liveDeployment("")

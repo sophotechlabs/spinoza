@@ -61,7 +61,6 @@ func TestInstallingRunsTheScriptAgainstThisBinarysDirectory(t *testing.T) {
 	}
 }
 
-// The script is fetched, saved and handed to sh by path, and taken away after.
 func TestTheSavedScriptIsRemovedAfterwards(t *testing.T) {
 	dir := t.TempDir()
 	var ran call
@@ -98,8 +97,6 @@ func TestTheScriptThatRanIsTheOneTheSiteServed(t *testing.T) {
 	}
 }
 
-// A symlinked name has to keep working afterwards, so the file it points at is
-// what gets replaced.
 func TestASymlinkedBinaryIsFollowedToTheRealDirectory(t *testing.T) {
 	actual := t.TempDir()
 	linked := t.TempDir()
@@ -135,7 +132,6 @@ func TestABinaryThatCannotBeFoundIsReported(t *testing.T) {
 	}
 }
 
-// Windows has no path through install.sh at all.
 func TestASystemWithNoInstallScriptIsNotOffered(t *testing.T) {
 	one := installerFor(t, t.TempDir(), &call{}, nil)
 	one.goos = "windows"
@@ -222,8 +218,6 @@ func TestAScriptURLThatIsNotOneIsReported(t *testing.T) {
 	}
 }
 
-// Two presses. The second is told rather than starting a second install over
-// the first one's files.
 func TestASecondInstallWhileOneIsRunningIsRefused(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -274,8 +268,6 @@ func TestADirectoryThatIsNotThereIsNotWritable(t *testing.T) {
 	}
 }
 
-// The directory and the skip go through the environment, so a path with a space
-// or a quote in it stays one argument.
 func TestTheScriptIsToldWhereToInstallAndToLeaveTheAppAlone(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "env.txt")
@@ -314,8 +306,6 @@ func TestTheLastLineIsWhatIsReported(t *testing.T) {
 	}
 }
 
-// The script that comes back has to be one that reads the variable. An older
-// one would install the desktop app beside the binary without saying so.
 func TestAScriptThatDoesNotTakeTheSkipIsRefused(t *testing.T) {
 	var ran call
 	one := installerFor(t, t.TempDir(), &ran, nil)

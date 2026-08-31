@@ -43,10 +43,6 @@ function replace(next: Map<string, string>): void {
 let timer: ReturnType<typeof setTimeout> | null = null;
 let saving = false;
 
-// changed names the keys this window has written and not yet had accepted. Only
-// those are sent: a window open for an hour holds a stale copy of everything it
-// never touched, and putting the whole map back would undo whatever moved in
-// the meantime.
 const changed = new Set<string>();
 
 export function startSaving(): void {
@@ -115,7 +111,6 @@ export function hydrate(): void {
   if (local.size === 0) {
     return;
   }
-  // Moving what the browser kept onto the server: all of it is ours to send.
   for (const key of local.keys()) {
     changed.add(key);
   }
@@ -149,8 +144,6 @@ function schedule(): void {
   }, SAVE_DELAY_MS);
 }
 
-// refresh takes what the server holds now, which is what another window wrote
-// since this one loaded. A window that cannot reach the server keeps what it has.
 export async function refresh(): Promise<boolean> {
   let body: unknown = null;
   try {
@@ -166,7 +159,6 @@ export async function refresh(): Promise<boolean> {
   if (found === null) {
     return false;
   }
-  // A key changed here and not yet accepted is newer than the server's copy.
   for (const key of changed) {
     const held = cache().get(key);
     if (held !== undefined) {
@@ -242,8 +234,6 @@ function pending(): Record<string, string> {
   return out;
 }
 
-// accepted forgets only what went out unchanged. A key written again while the
-// request was in flight stays, so the newer value follows.
 function accepted(sent: Record<string, string>): void {
   for (const [key, value] of Object.entries(sent)) {
     if (cache().get(key) === value) {

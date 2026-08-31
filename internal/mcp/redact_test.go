@@ -7,8 +7,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// what counts as a secret-shaped name
-
 func TestWhichNamesReadAsSecrets(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -32,8 +30,6 @@ func TestWhichNamesReadAsSecrets(t *testing.T) {
 		})
 	}
 }
-
-// what a scrubbed line keeps and what it loses
 
 func TestScrubbingALine(t *testing.T) {
 	cases := []struct {
@@ -121,8 +117,6 @@ func TestEveryLineIsScrubbed(t *testing.T) {
 		t.Fatalf("the second line changed: %q", result[1])
 	}
 }
-
-// what leaves the process for a Secret
 
 func TestASecretGivesUpKeysAndSizesOnly(t *testing.T) {
 	entries := []api.DataEntry{

@@ -244,7 +244,6 @@ export function useResourceFeed(): ResourceFeed {
         schedule();
         return;
       }
-      // The source is per batch, so only a change of pod needs a new one.
       const last = waiting.at(-1);
       if (last?.source === source) {
         last.lines.push(...lines);

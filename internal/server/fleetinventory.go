@@ -19,8 +19,6 @@ func (s *Server) fleetInventory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, mergeCounts(found))
 }
 
-// The inventory answers "how much of this do we have, and where", so a kind
-// keeps its per-cluster split rather than collapsing to one number.
 func mergeCounts(found []clusterAnswer[api.ResourceCounts]) api.FleetInventory {
 	merged := api.FleetInventory{Kinds: []api.FleetKind{}}
 	at := map[string]int{}
@@ -71,8 +69,6 @@ type imageAnswer struct {
 	err  string
 }
 
-// Two clusters running two tags of one repo is the drift a fleet has and a
-// single cluster cannot see, so the repo carries the tags found beside it.
 func mergeImages(found []clusterAnswer[imageAnswer]) api.FleetImages {
 	held := map[string]*api.FleetImage{}
 	byRepo := map[string]map[string]struct{}{}
@@ -143,8 +139,6 @@ func byUse(left, right api.FleetImage) int {
 	return strings.Compare(left.Image, right.Image)
 }
 
-// A digest pins the whole reference, so it stays part of the repo rather than
-// being read as a tag nobody else has.
 func splitImage(image string) (repo, tag string) {
 	if held, digest, found := strings.Cut(image, "@"); found {
 		return held, digest

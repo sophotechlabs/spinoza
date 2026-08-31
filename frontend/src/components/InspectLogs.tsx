@@ -95,7 +95,6 @@ function podsLabel(attached: number, matched: number): string {
   return `${String(attached)} pods`;
 }
 
-// A merged stream reading nothing stays open, because pods come back.
 function readingNothing(pods: {
   attached: number;
   matched: number;

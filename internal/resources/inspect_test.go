@@ -548,8 +548,6 @@ func TestAPlainObjectNamesNoConsumers(t *testing.T) {
 	}
 }
 
-// what these say when nothing is wired up
-
 func TestGitopsAppSaysItIsNotWiredUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)

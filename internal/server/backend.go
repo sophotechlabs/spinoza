@@ -50,8 +50,6 @@ type Objects interface {
 	Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error)
 }
 
-// Permissions is both directions of the same question: may I, which the
-// apiserver answers, and who may, which only the bindings can.
 type Permissions interface {
 	RBACIndex(ctx context.Context) rbac.Index
 	Access(ctx context.Context, ref api.ObjectRef) api.Access

@@ -69,8 +69,6 @@ func TestSaysNothingAboutAnEmptyMessage(t *testing.T) {
 	}
 }
 
-// which rule wins when a message matches more than one
-
 func TestASpecificRuleBeatsTheGenericOneBehindIt(t *testing.T) {
 	cases := []struct {
 		name    string

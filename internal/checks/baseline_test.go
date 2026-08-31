@@ -21,8 +21,6 @@ func against(t *testing.T, base Baseline, objects ...*unstructured.Unstructured)
 	return Run(t.Context(), newLister(objects...), descriptors(), api.Metrics{}, keep, 0)
 }
 
-// what a baseline says has changed
-
 func TestNothingIsNewAgainstABaselineOfTheSameCluster(t *testing.T) {
 	same := privilegedDeployment("api")
 
@@ -110,8 +108,6 @@ func TestAnAuditOfOneNamespaceCountsNothingFixed(t *testing.T) {
 			group.Fixed)
 	}
 }
-
-// what a baseline refuses to guess
 
 func TestACheckTheBaselineNeverRanReportsNothingAsNew(t *testing.T) {
 	base := Baseline{TakenAt: "2026-08-01T00:00:00Z", Checks: []string{"something-else"}, Keys: map[string]string{}}
@@ -228,8 +224,6 @@ func TestACheckTheBaselineNeverRanNamesNothingAsGone(t *testing.T) {
 	}
 }
 
-// what churns and what a baseline refuses to call new
-
 func TestAPodWhoseNameWasGeneratedIsTheSameFindingAfterItIsReplaced(t *testing.T) {
 	before := pod("web-7d9f8-x2klm", podSpec(container("app", nil)))
 	before.SetGenerateName("web-7d9f8-")
@@ -299,8 +293,6 @@ func TestAFindingAboutTheClusterItselfSurvivesABaseline(t *testing.T) {
 	}
 }
 
-// what the fingerprint covers
-
 func TestAFingerprintIgnoresTheFilterTheCallerWasLookingThrough(t *testing.T) {
 	keep := wholeCluster()
 	keep.MinSeverity = severityHigh
@@ -324,8 +316,6 @@ func TestAFingerprintLeavesOutTheChecksThatStoodDown(t *testing.T) {
 		}
 	}
 }
-
-// what survives being carried to another cluster
 
 func fromElsewhere(t *testing.T, objects ...*unstructured.Unstructured) Baseline {
 	t.Helper()

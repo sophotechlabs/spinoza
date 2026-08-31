@@ -53,8 +53,6 @@ func cleanPod() map[string]any {
 	)
 }
 
-// what each hardening check refuses, and what it lets through
-
 func TestEveryHardeningCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	cases := []struct {
 		id    string
@@ -193,8 +191,6 @@ func TestEveryHardeningCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 		})
 	}
 }
-
-// the details a reader has to act on
 
 func TestSeccompSaysWhetherTheProfileIsMissingOrTurnedOff(t *testing.T) {
 	missing := report(t, deployment("api", podSpec(container("app", nil))))
@@ -415,8 +411,6 @@ func TestNamingAnAccountThatIsNotTheDefaultIsAccepted(t *testing.T) {
 		t.Fatal("a named service account was reported as the default")
 	}
 }
-
-// what the readers do with a spec that is the wrong shape
 
 func TestListsHoldingSomethingOtherThanObjectsAreSkipped(t *testing.T) {
 	found := report(t, deployment("api", podSpecWith(map[string]any{

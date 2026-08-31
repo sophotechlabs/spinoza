@@ -37,8 +37,6 @@ func withSilencers(t *testing.T, raw string, objects ...*unstructured.Unstructur
 	return Run(t.Context(), newLister(objects...), descriptors(), api.Metrics{}, keep, 0)
 }
 
-// what a rule of your own can quieten
-
 func TestARuleOfYourOwnCanSilenceACheckWithAReason(t *testing.T) {
 	report := withSilencers(t, silencingRule,
 		tagged(privilegedDaemonSet("agent"), map[string]string{"tier": "system"}))
@@ -94,8 +92,6 @@ func TestASilencingRuleIsNotACheckOfItsOwn(t *testing.T) {
 		}
 	}
 }
-
-// what a silencing rule is never allowed to do
 
 func TestASilencingRuleThatDoesNotCompileQuietensNothing(t *testing.T) {
 	raw := `[{"id":"broken","silences":"privileged-containers","expr":"object.nope(","reason":"x"}]`
@@ -157,8 +153,6 @@ func TestASilencedFindingIsStillCountedAndStillInTheBaseline(t *testing.T) {
 			base.Counts[privilegedCheck])
 	}
 }
-
-// what the editor is told about a silencing rule
 
 func TestASilencingRuleNamingNoRealCheckIsNamedAsAFault(t *testing.T) {
 	faults := Faults(`[{"id":"typo","silences":"no-such-check","expr":"true","reason":"x"}]`)

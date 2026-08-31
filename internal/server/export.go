@@ -8,9 +8,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// exportChecks writes the audit as CSV, one row per finding, under whatever
-// filter the view is showing. The report a browser holds stops at the findings
-// it displays, so this is built from a fresh audit rather than from the page.
 func (s *Server) exportChecks(w http.ResponseWriter, r *http.Request) {
 	report := s.managerFor(r).CheckExport(r.Context(), s.checkFilter(r))
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

@@ -87,8 +87,6 @@ func serviceSelectingNothing(t *testing.T, loaded *kube.Bundle) {
 	})
 }
 
-// A finalizer nothing removes is what makes a delete hang, which is the state
-// the detector is for. Cleanup strips it so the namespace can go.
 func podHeldByAFinalizer(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	pods := loaded.Clientset.CoreV1().Pods(faultsNamespace)
@@ -149,9 +147,6 @@ func patchNode(t *testing.T, loaded *kube.Bundle, name, body string) {
 	}
 }
 
-// kind names the container after the node, so stopping the kubelet is one
-// docker exec. The node reports NotReady once the controller manager's grace
-// period runs out, which is why the wait below is generous.
 func nodeWithNoKubelet(t *testing.T, loaded *kube.Bundle) string {
 	t.Helper()
 	name := faultNode(t, loaded, 2)
@@ -214,8 +209,6 @@ func waitForRow(t *testing.T, mgr issueSource, title, name string) {
 type issueSource interface {
 	Issues(ctx context.Context) api.IssueQueue
 }
-
-// the runtime faults, forced on a real cluster
 
 func TestTheClusterFaultDetectorsFireOnARealCluster(t *testing.T) {
 	loaded := bundle(t)

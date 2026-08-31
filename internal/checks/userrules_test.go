@@ -27,8 +27,6 @@ const betaRule = `[{
   "remedy": "Move it to a release tag."
 }]`
 
-// what a rule of your own does
-
 func TestARuleOfYourOwnFiresOnWhatItMatches(t *testing.T) {
 	report := withRules(t, betaRule,
 		deployment("api", podSpec(container("app", map[string]any{"image": "ghcr.io/x/api:2.0-beta"}))))
@@ -76,8 +74,6 @@ func TestARuleNamingNoKindJudgesEverything(t *testing.T) {
 	}
 }
 
-// what a rule that is wrong does
-
 func TestARuleThatDoesNotCompileSaysSoInTheView(t *testing.T) {
 	raw := `[{"id":"broken","expr":"object.spec.nope("}]`
 
@@ -108,8 +104,6 @@ func TestARuleReturningSomethingOtherThanTrueOrFalseReportsNothing(t *testing.T)
 		t.Fatal("a rule returning a number was read as a finding")
 	}
 }
-
-// what the settings store is allowed to hold
 
 func TestRulesAreReadFromWhatTheStoreHolds(t *testing.T) {
 	rules := ParseRules(betaRule)

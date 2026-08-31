@@ -47,8 +47,6 @@ export function attachedTo(cluster: string): string[] {
   return held;
 }
 
-// The name a person put on the tab wins over the context it came from; the
-// context name stays the identifier in the address bar.
 export function displayName(tabs: Tab[], cluster: string, fallback: string): string {
   for (const tab of tabs) {
     if (tab.id === cluster && tab.label !== '') {
@@ -58,8 +56,6 @@ export function displayName(tabs: Tab[], cluster: string, fallback: string): str
   return fallback;
 }
 
-// Past a handful of tabs the strip scrolls rather than growing the window, and
-// each tab gives up label width first. The cap is legibility, not memory.
 const ROOMY = 6;
 
 export function tabWidth(open: number): string {

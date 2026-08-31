@@ -69,8 +69,6 @@ func liveReader(t *testing.T, answers map[string]string) (*Reader, *promServer) 
 	return New(client), server
 }
 
-// the queries that actually reach prometheus, over a real client and a real socket
-
 func TestAGraphIsOneQueryAgainstARealPrometheus(t *testing.T) {
 	answers := map[string]string{
 		cilium.flows: vector(

@@ -374,9 +374,6 @@ export async function fetchMutes(): Promise<Mute[]> {
   return body.mutes ?? [];
 }
 
-// The audit is built fresh for an export: what a browser holds stops at the
-// findings it shows, so building the file here would truncate every capped
-// check without saying so.
 export async function exportChecks(keep: ChecksFilter): Promise<Blob> {
   const response = await request(withParams('/api/checks/export', filterParams(keep)));
   if (!response.ok) {
@@ -398,8 +395,6 @@ export async function ruleFaults(rules: string): Promise<RuleFault[]> {
   return body.faults ?? [];
 }
 
-// The ref a mute needs to name one object, which is the shape the audit files
-// them under on the other side.
 export function refKeyOf(object: ObjectRef): string {
   return [object.group, object.version, object.resource, object.namespace, object.name].join('/');
 }
@@ -450,10 +445,6 @@ export function countLabel(group: CheckGroupView): string {
   return String(group.total);
 }
 
-// driftLabel is how a check reads against a baseline taken on another cluster.
-// The objects are different there, so what a finding is doing on this one is a
-// count against a count, read per workload because the clusters are not the
-// same size.
 export function driftLabel(group: CheckGroupView, here: number, there: number): string {
   if (group.ran !== true) {
     return 'not in the baseline';
@@ -473,9 +464,6 @@ function perWorkload(was: number, now: number, here: number, there: number): str
   return ` (${ratio.toFixed(1)}× per workload)`;
 }
 
-// changeLabel says what moved since a baseline of this same cluster. A check the
-// baseline never ran says so, rather than reporting every one of its findings as
-// new. Only called once there is a baseline to compare against.
 export function changeLabel(group: CheckGroupView): string {
   if (group.measured === true) {
     return 'measured, not compared';

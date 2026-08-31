@@ -86,8 +86,6 @@ export function restartColor(value: string): string {
   return 'text-warn';
 }
 
-// Ready=True is good, KernelDeadlock=False is fine. A GKE node carries two
-// dozen detectors sitting at False, so only known words decide.
 const ALARMING_WHEN_TRUE = [
   'Pressure',
   'Unavailable',
@@ -132,7 +130,6 @@ export function alarmingWhenTrue(type: string): boolean {
   return ALARMING_WHEN_TRUE.some((word) => type.includes(word));
 }
 
-// After alarmingWhenTrue, so ReadyReplicasMissing reads as trouble.
 function goodWhenTrue(type: string): boolean {
   return GOOD_WHEN_TRUE.some((word) => type.includes(word));
 }

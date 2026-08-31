@@ -35,8 +35,6 @@ func deploymentRef(name, namespace string) string {
 	})
 }
 
-// what a mute silences
-
 func TestAMuteOnOneObjectLeavesTheOthersAlone(t *testing.T) {
 	report := withMutes(t,
 		[]Mute{{Check: privilegedCheck, Ref: deploymentRef("api", testNamespace), Reason: "it is the node agent"}},
@@ -84,8 +82,6 @@ func TestAMuteOnOneCheckLeavesTheOthersSaying(t *testing.T) {
 		t.Fatal("muting one check silenced another")
 	}
 }
-
-// what a mute is never allowed to do
 
 func TestAMutedFindingIsCountedRatherThanForgotten(t *testing.T) {
 	report := withMutes(t,
@@ -149,8 +145,6 @@ func TestAFindingNobodyMutedNamesNoMute(t *testing.T) {
 		t.Fatalf("an unmuted finding said it was muted by %q", got)
 	}
 }
-
-// what the settings store is allowed to hold
 
 func TestMutesAreReadForOneClusterOnly(t *testing.T) {
 	raw := `{"https://one":[{"check":"a"}],"https://two":[{"check":"b"}]}`

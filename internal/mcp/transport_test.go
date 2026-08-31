@@ -13,8 +13,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// the stdio loop
-
 func TestStdioAnswersOneMessagePerLine(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{})
 	in := strings.NewReader(
@@ -65,8 +63,6 @@ func TestStdioStopsWhenTheContextIsDone(t *testing.T) {
 		t.Fatal("serve carried on after the context was canceled")
 	}
 }
-
-// the one-shot command line
 
 func TestTheToolListingMarksWhatWrites(t *testing.T) {
 	server := serverFor(writableCluster(), Options{AllowWrite: true})
@@ -167,8 +163,6 @@ func TestCallingAToolThatFailsReportsIt(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 }
-
-// the resources a client can subscribe to
 
 func TestEveryResourceIsListedWithAURIAndAType(t *testing.T) {
 	for _, card := range resourceCards() {
@@ -314,8 +308,6 @@ func TestASuccessfulCallComesBackAsTextContent(t *testing.T) {
 	}
 }
 
-// the command line the binary hands us
-
 func TestParsingTheCommandLine(t *testing.T) {
 	var out bytes.Buffer
 
@@ -424,8 +416,6 @@ func TestPrometheusIsSkippedWhenTheSpecIsNonsense(t *testing.T) {
 		t.Fatal("a Prometheus client was built from a spec that does not parse")
 	}
 }
-
-// a session survives whatever a client sends down it
 
 func TestAMessageTooLargeIsAnsweredRatherThanEndingTheSession(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{})

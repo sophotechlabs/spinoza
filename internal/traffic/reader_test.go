@@ -263,8 +263,6 @@ func TestPrometheusFailuresSurface(t *testing.T) {
 	}
 }
 
-// what a crowded cluster gets instead of a refusal
-
 func crowded(pairs int) []prom.Sample {
 	samples := make([]prom.Sample, 0, pairs)
 	for i := range pairs {
@@ -366,8 +364,6 @@ func TestFoldingKeepsAWorkloadWithNoNamespaceApart(t *testing.T) {
 	}
 }
 
-// a second mesh is a row in the table, and the reader has to reach it
-
 func TestTheReaderFallsThroughToTheNextMesh(t *testing.T) {
 	second := mesh{
 		name:    "Another Mesh",
@@ -429,8 +425,6 @@ func TestAnUnlabeledFirstMeshIsReportedWhenNoneAnswer(t *testing.T) {
 		t.Fatalf("reason = %q, want that mesh's hint", support.Reason)
 	}
 }
-
-// the read carries its own deadline, so a slow prometheus cannot hold a request open
 
 type deadlineQuerier struct {
 	bounded bool

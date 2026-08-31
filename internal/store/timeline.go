@@ -187,8 +187,6 @@ var auditTrim = trimmable{
 	below:  deleteAuditBelow,
 }
 
-// Prune is the disk control: a day window a person can reason about, and a row
-// cap that holds on a cluster nobody has measured.
 func (s *Store) Prune(ctx context.Context, keep Retention, now time.Time) error {
 	return s.trim(ctx, timelineTrim, keep, now)
 }

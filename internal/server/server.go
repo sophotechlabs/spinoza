@@ -122,8 +122,6 @@ func (s *Server) managerOf(id string) Backend {
 
 type clusterLookup func(id string) (Backend, string)
 
-// clusterOf answers which cluster a request is for, folding an unnamed one to
-// whichever is active. A terminal opened without one belongs to the tab in front.
 func (s *Server) clusterOf(r *http.Request) string {
 	_, on := s.lookup(clusterOf(r))
 	return on

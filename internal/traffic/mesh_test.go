@@ -24,8 +24,6 @@ func rendered() string {
 	return out.String()
 }
 
-// the PromQL a mesh sends is a contract; it changes on purpose or not at all
-
 func TestTheQueriesMatchTheGolden(t *testing.T) {
 	got := rendered()
 	if os.Getenv("UPDATE_TRAFFIC_QUERIES") == "1" {

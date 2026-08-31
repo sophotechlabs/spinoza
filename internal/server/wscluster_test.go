@@ -122,8 +122,6 @@ func TestASubscriptionToAClusterThatIsNotOpenIsNotRemembered(t *testing.T) {
 	awaitNothingHeld(t, onlySession(t, srv), tables)
 }
 
-// The error frame is written before the claim is dropped, so the frame arriving
-// says nothing about whether the entry is gone yet.
 func awaitNothingHeld(t *testing.T, sess *wsSession, which feed) {
 	t.Helper()
 	for range 200 {

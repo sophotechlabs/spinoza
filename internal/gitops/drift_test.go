@@ -247,8 +247,6 @@ func TestDriftStopsAfterTwentyFieldsAndCountsTheRest(t *testing.T) {
 	}
 }
 
-// the pure readers behind the comparison
-
 func TestNamedOnlyClaimsAListEveryEntryOfWhichCarriesAName(t *testing.T) {
 	cases := []struct {
 		name    string

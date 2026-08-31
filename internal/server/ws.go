@@ -31,7 +31,6 @@ const (
 	relayStop
 )
 
-// Const on purpose: read from a goroutine outliving the test that started it.
 const minResyncInterval = 2 * time.Second
 
 type throttle struct {
@@ -183,11 +182,6 @@ func (sess *wsSession) writeCurrent(which feed, subID string, gen uint64, msg an
 	return true
 }
 
-// The client must not be told a subscription was refused while the session is
-// still holding it: a reader that acts on the error frame can look and find the
-// entry there. Forgetting and announcing both happen while the write lock is
-// held, so a replacement that has already written its own first frame finds
-// this failure superseded and drops it.
 func (sess *wsSession) failAndForget(which feed, subID string, gen uint64, err error) {
 	sess.writeMu.Lock()
 	defer sess.writeMu.Unlock()
@@ -495,8 +489,6 @@ func (sess *wsSession) reportPods(
 	return sess.writeCurrent(streams, subID, gen, now)
 }
 
-// Hands back the line a batch stopped on. A quiet stream still wakes on the
-// tick: the pods being read can change with nothing written.
 func (sess *wsSession) nextLine(
 	stream *logs.Stream,
 	held *logs.Line,

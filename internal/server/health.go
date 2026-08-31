@@ -20,7 +20,6 @@ func (s *Server) pingInterval() time.Duration {
 	return s.pingEvery
 }
 
-// Inherits the first feed's context without dying with it.
 func (s *Server) watchCluster(ctx context.Context) {
 	s.mu.Lock()
 	if s.watching {
@@ -35,7 +34,6 @@ func (s *Server) watchCluster(ctx context.Context) {
 	})
 }
 
-// The timer covers a cluster nobody is asking anything of.
 func (s *Server) pingUntilNobodyIsWatching(ctx context.Context) {
 	ticker := time.NewTicker(s.pingInterval())
 	defer ticker.Stop()
@@ -131,9 +129,6 @@ func assumedHealthOf(id string) api.ClusterHealth {
 	return health
 }
 
-// One missed ping is a wobble, not an outage: a cluster that answered a second
-// ago and answers again in a moment should not read the same as one that is
-// gone. Red is reserved for a cluster that has missed enough of them.
 const missesBeforeUnreachable = 3
 
 func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
@@ -141,8 +136,6 @@ func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
 	s.publishHealthOf(id, now)
 }
 
-// A missed ping is a heartbeat nobody answered; a failed request is the cluster
-// actually saying no. Only the first gets the benefit of the doubt.
 func (s *Server) recordPingOf(id string, now api.ClusterHealth) {
 	now.Cluster = id
 	s.publishHealthOf(id, s.settled(id, now))

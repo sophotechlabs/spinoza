@@ -56,8 +56,6 @@ export function useRBAC(enabled = true): Polled<RBACIndex> {
   });
 }
 
-// A subject bound everywhere has no namespace list, and saying "everywhere" is
-// clearer than saying nothing.
 export function whereLabel(subject: RBACSubject): string {
   const held = subject.namespaces ?? [];
   if (held.length === 0) {
@@ -69,8 +67,6 @@ export function whereLabel(subject: RBACSubject): string {
   return `${held.slice(0, 3).join(', ')} and ${String(held.length - 3)} more`;
 }
 
-// A grant reads as the binding that made it, because that is the object a
-// person edits to take it away.
 export function grantLabel(grant: RBACGrant): string {
   const where =
     grant.namespace === undefined || grant.namespace === '' ? 'everywhere' : grant.namespace;
@@ -91,8 +87,6 @@ export function ruleLabel(rule: RBACRule): string {
   return parts.join(' ');
 }
 
-// An aggregated role with no rules yet is waiting on a controller, not
-// harmless, and the row should not read as empty.
 export function grantNote(grant: RBACGrant): string {
   if (grant.missing === true) {
     return 'the role it names does not exist';

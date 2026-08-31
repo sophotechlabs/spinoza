@@ -1,6 +1,4 @@
 #!/usr/bin/env sh
-# Proves `just editorconfig` finds the checker under either name it ships as:
-# mise installs it as `ec`, the Forgejo toolbox renames it to `editorconfig-checker`.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)

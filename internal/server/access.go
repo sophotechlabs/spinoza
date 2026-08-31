@@ -38,7 +38,6 @@ func (s *Server) bulkAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.managerFor(r).AccessEach(bounded, query.Capability, query.Refs))
 }
 
-// No release name means the question is about installing one.
 func (s *Server) helmAccess(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	namespace := query.Get("namespace")
@@ -51,7 +50,6 @@ func (s *Server) helmAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.managerFor(r).HelmAccess(bounded, namespace, query.Get("name")))
 }
 
-// An unnamed object is asked about by kind, which is a different refusal.
 func readable(query api.AccessQuery) error {
 	if query.Capability == "" {
 		return errors.New("capability is required")

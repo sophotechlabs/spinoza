@@ -679,8 +679,6 @@ func TestRollbackSkipsHistoryEntriesThatAreNotUsable(t *testing.T) {
 	}
 }
 
-// what a refusal says to the person reading it
-
 func TestARefusalReadsAsOneSentence(t *testing.T) {
 	client := actionClient(newApplication())
 
@@ -743,8 +741,6 @@ func TestEveryRefusalNamesTheApplicationAndTheReason(t *testing.T) {
 		})
 	}
 }
-
-// what happens when the cluster ignores the patch
 
 func TestTerminateSaysSoWhenTheOperationKeepsRunning(t *testing.T) {
 	client := actionClient(operating(newApplication(), runningPhase))

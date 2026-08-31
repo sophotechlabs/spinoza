@@ -366,10 +366,6 @@ func graceTooLong(subject Subject) (string, string) {
 		"s, so a drain waits that long for each pod", ""
 }
 
-// A bare Pod that runs to completion is meant to use Never, and a job runner
-// creates thousands of them. Only a controller that is supposed to keep its
-// pods running is judged on this. Found on GKE production 2026-08-29, where
-// the check fired on 497 Airbyte replication pods.
 func wrongRestartPolicy(subject Subject) (string, string) {
 	policy := stringAt(subject.Pod, "restartPolicy")
 	if isBatch(subject.Kind) {

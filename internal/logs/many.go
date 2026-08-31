@@ -17,10 +17,7 @@ import (
 )
 
 const (
-	// Above this a workload is tailed in part.
-	maxPods = 20
-	// tailBudget is the opening size of the merged stream. MAX_LOG_LINES in
-	// frontend/src/store/logs.ts must be at least this; budget_test.go checks it.
+	maxPods    = 20
 	tailBudget = 5000
 	minTail    = 50
 )
@@ -60,7 +57,6 @@ func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Strea
 		}
 		opened++
 	}
-	// A pod still starting is different: a following stream waits for it.
 	if opened == 0 && (!req.Follow || permanent(refused)) {
 		cancel()
 		return nil, refused
@@ -78,7 +74,6 @@ func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Strea
 	return stream, nil
 }
 
-// Every pod ever read: reopening one whose log ended would resend it all.
 type attachments struct {
 	mu   sync.Mutex
 	open map[string]func()
@@ -106,7 +101,6 @@ func (a *attachments) release(name string) {
 	delete(a.open, name)
 }
 
-// The next sweep has to be free to ask again.
 func (a *attachments) forget(name string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -238,7 +232,6 @@ func podsMatching(
 	return found[:maxPods], len(found), nil
 }
 
-// So twenty pods open with a full buffer, not the three that answered first.
 func share(tail int64, pods int) int64 {
 	if tail <= 0 || pods < 2 {
 		return tail
@@ -250,8 +243,6 @@ func share(tail int64, pods int) int64 {
 	return each
 }
 
-// The apiserver answers 400 while a container is being created, 403 or 404
-// when it will not hand the log over at all.
 func permanent(err error) bool {
 	if err == nil {
 		return false

@@ -8,28 +8,15 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// Baseline is a past audit, kept so this one can say what is new. It holds
-// fingerprints rather than findings, the count each check produced, and the
-// ids it covered, so a check added since is reported as absent from the
-// baseline instead of as thousands of new findings.
 type Baseline struct {
 	TakenAt string
-	// Cluster is where it was taken, which is only interesting once a baseline
-	// has been carried from one cluster to another.
 	Cluster string
 	Checks  []string
 	Counts  map[string]int
-	// Scanned is how many workloads the audit saw. Two clusters are compared
-	// per workload or not at all: a count from a cluster nine times the size
-	// says nothing on its own.
 	Scanned int
-	// Keys maps a finding's fingerprint to what it was about, so a finding
-	// that has since gone can be named rather than only counted.
-	Keys map[string]string
+	Keys    map[string]string
 }
 
-// counted is what this check found when the baseline was taken, and whether
-// the baseline ran it at all.
 func (b *Baseline) counted(id string) (int, bool) {
 	if !b.covers(id) {
 		return 0, false
@@ -44,14 +31,11 @@ func (b *Baseline) covers(id string) bool {
 	return slices.Contains(b.Checks, id)
 }
 
-// has is only ever asked after covers said yes, so there is no nil to guard.
 func (b *Baseline) has(key string) bool {
 	_, found := b.Keys[key]
 	return found
 }
 
-// gone names what the baseline held for this check and this audit no longer
-// finds. A check the baseline never ran names nothing rather than guessing.
 func (b *Baseline) gone(id string, here map[string]bool) []string {
 	if !b.covers(id) {
 		return nil
@@ -70,8 +54,6 @@ func (b *Baseline) gone(id string, here map[string]bool) []string {
 	return out
 }
 
-// fixed is what the baseline counted for a check that this audit no longer
-// finds. A check the baseline never ran reports nothing rather than guessing.
 func (b *Baseline) fixed(id string, now int) int {
 	if !b.covers(id) {
 		return 0
@@ -82,10 +64,6 @@ func (b *Baseline) fixed(id string, now int) int {
 	return b.Counts[id] - now
 }
 
-// Fingerprint is the audit taken to be compared against later. It deliberately
-// ignores the mutes, the severity floor and the namespace the caller is looking
-// at: a baseline narrower than the audits compared to it would report the
-// difference between two filters as work someone did.
 func Fingerprint(
 	ctx context.Context,
 	lister Lister,

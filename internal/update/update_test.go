@@ -208,7 +208,6 @@ func TestTheQuestionIsAskedOnce(t *testing.T) {
 	}
 }
 
-// No flag reaches it.
 func TestARunningSpinozaAsksTheProjectsOwnEndpoint(t *testing.T) {
 	if got := New("v1.0.0", "").endpoint; got != Endpoint {
 		t.Fatalf("endpoint = %q, want %q", got, Endpoint)
@@ -255,7 +254,6 @@ func TestTheRequestSaysWhichReleaseIsAsking(t *testing.T) {
 	}
 }
 
-// The window is told once per run; a button press is a reason to ask again.
 func TestRecheckAsksAgain(t *testing.T) {
 	var asked atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

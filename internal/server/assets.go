@@ -39,8 +39,6 @@ type startRoute struct {
 	context string
 }
 
-// StartOn is what a run with no address bar and nobody to click uses to open
-// somewhere other than the default.
 func (s *Server) StartOn(view, context string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -51,8 +49,6 @@ func TokenScript(token string) string {
 	return "<script>window.__SPINOZA_TOKEN__=" + scriptValue(token) + ";</script>"
 }
 
-// strconv.Quote escapes a Go string, not an HTML one: a value holding </script>
-// would close the tag it sits in. Inside a JS string <\/ reads as / and cannot.
 func scriptValue(raw string) string {
 	return strings.ReplaceAll(strconv.Quote(raw), "</", `<\/`)
 }

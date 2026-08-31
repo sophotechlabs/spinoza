@@ -15,7 +15,6 @@ type Updates interface {
 	Recheck(ctx context.Context) api.UpdateStatus
 }
 
-// Installs replaces the running binary. A build that cannot has none wired up.
 type Installs interface {
 	Install(ctx context.Context) error
 }
@@ -44,8 +43,6 @@ func (s *Server) updateInstaller() Installs {
 	return s.installer
 }
 
-// handleUpdate reports whether there is a newer release. A build with no checker
-// says so in the reason, and so does a run the user has turned checking off in.
 func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	checker := s.updateChecker()
 	if checker == nil {
@@ -59,8 +56,6 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, checker.Status(r.Context()))
 }
 
-// handleInstallUpdate asks again and installs what it finds. Pressing a button
-// is a reason to ask whatever the setting says.
 func (s *Server) handleInstallUpdate(w http.ResponseWriter, r *http.Request) {
 	checker := s.updateChecker()
 	if checker == nil {

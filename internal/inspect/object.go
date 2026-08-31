@@ -35,7 +35,6 @@ var fluxAppliers = map[string]string{
 	"helm.toolkit.fluxcd.io":      "HelmRelease",
 }
 
-// ErrNoResourceVersion means the write would be unconditional.
 var ErrNoResourceVersion = errors.New(
 	"this document names no resourceVersion, so applying it would overwrite whatever is on the server now; " +
 		"Revert to load the current object, then make the change again",
@@ -152,7 +151,6 @@ func detailOf(source *unstructured.Unstructured) (api.ObjectDetail, error) {
 	}, nil
 }
 
-// A Secret base64-encodes every value; a ConfigMap only binaryData.
 func dataOf(item *unstructured.Unstructured) []api.DataEntry {
 	switch item.GetKind() {
 	case "Secret":

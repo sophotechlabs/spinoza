@@ -1655,7 +1655,6 @@ describe('sorting a node by memory', () => {
     });
   });
 
-  // A pod has no ceiling to sort by, so its columns keep the plain toggle.
   it('leaves a pod table with the ordinary two-way sort', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(

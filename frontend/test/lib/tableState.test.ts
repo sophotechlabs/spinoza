@@ -181,7 +181,6 @@ describe('nextMetricSort', () => {
     });
   });
 
-  // Three clicks reach the biggest node, which is the point of the basis.
   it('moves to the largest once both directions of used are spent', () => {
     expect(nextMetricSort('memory', [{ id: 'memory', desc: false }], 'used')).toEqual({
       sorting: [{ id: 'memory', desc: true }],
@@ -203,7 +202,6 @@ describe('nextMetricSort', () => {
     });
   });
 
-  // Sorting a different column and coming back starts the cycle over.
   it('starts over when another column holds the sort', () => {
     expect(nextMetricSort('memory', [{ id: 'name', desc: false }], 'total')).toEqual({
       sorting: [{ id: 'memory', desc: true }],

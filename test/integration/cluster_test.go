@@ -532,7 +532,6 @@ func TestHelmDetailAndActionsAgainstRealHelm(t *testing.T) {
 	}
 }
 
-// the upgrade path refuses private hosts, so the repo has to answer to a name
 const chartHostVar = "SPINOZA_CHART_HOST"
 
 func namedRepo(t *testing.T, raw string) string {

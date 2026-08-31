@@ -672,8 +672,6 @@ func TestAContinuedPageStillReachesTheActions(t *testing.T) {
 	}
 }
 
-// Ids ascend with time here, which is what the store's own writer produces and
-// what an id cursor over an at-ordered read assumes.
 func inOrder() *heldHistory {
 	at := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	return &heldHistory{

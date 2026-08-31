@@ -217,7 +217,6 @@ export function writeColumns(held: Record<string, CustomColumn[]>): Promise<void
 
 export const UPDATE_CHECK_KEY = 'spinoza.update.check.v1';
 
-// On until it is turned off, so a fresh install has never been asked.
 export function readUpdateCheck(): boolean {
   return readStored(UPDATE_CHECK_KEY) !== OFF;
 }

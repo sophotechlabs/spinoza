@@ -26,7 +26,6 @@ type Bundle struct {
 	Dynamic   dynamic.Interface
 	Discovery discovery.CachedDiscoveryInterface
 	Mapper    *restmapper.DeferredDiscoveryRESTMapper
-	// Every client here is built on one config, so one sink sees every request.
 	Reach     *reach.Sink
 	Warnings  *WarningSink
 	Ref       api.ContextRef
@@ -140,8 +139,6 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(cached)
 
 	resolved := ref
-	// helm and kubectl take a context by name, which needs the file it came from;
-	// without it they read the default kubeconfig.
 	if resolved.Kubeconfig == "" {
 		resolved.Kubeconfig = options.Kubeconfig
 	}

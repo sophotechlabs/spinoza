@@ -11,8 +11,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// a cluster that answers every read with something, so a tool reaches its own logic
-
 func answeringCluster() *fakeCluster {
 	return &fakeCluster{
 		catalog: catalogOf(
@@ -29,8 +27,6 @@ func answeringCluster() *fakeCluster {
 		usage:    api.Metrics{Pods: map[string]api.ResourceUsage{"prod/web-0": {CPUMilli: 1}}},
 	}
 }
-
-// arguments every tool accepts, so one call can drive any of them
 
 var verbFor = map[string]string{
 	"manage_workload": "restart",
@@ -61,8 +57,6 @@ func everyArgument(tool string) arguments {
 	return args
 }
 
-// the safety claim: a read tool has no write path
-
 func TestNoReadToolEverTouchesAWritePath(t *testing.T) {
 	for _, card := range serverFor(answeringCluster(), Options{AllowWrite: true}).cards() {
 		if !card.Annotations.ReadOnlyHint {
@@ -86,8 +80,6 @@ func TestNoReadToolEverTouchesAWritePath(t *testing.T) {
 	}
 }
 
-// the contract claim: every required argument is enforced by the handler, not only declared
-
 func TestEveryRequiredArgumentIsEnforced(t *testing.T) {
 	server := serverFor(answeringCluster(), Options{AllowWrite: true, Prometheus: &fakeProm{}})
 
@@ -107,8 +99,6 @@ func TestEveryRequiredArgumentIsEnforced(t *testing.T) {
 		}
 	}
 }
-
-// the naming clients rely on
 
 func TestEveryToolIsNamedTheWayClientsExpect(t *testing.T) {
 	shape := regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
@@ -134,8 +124,6 @@ func TestEveryToolIsNamedTheWayClientsExpect(t *testing.T) {
 	}
 }
 
-// every tool answers something a client can render
-
 func TestEveryToolReturnsSomethingOrSaysWhyNot(t *testing.T) {
 	server := serverFor(answeringCluster(), Options{AllowWrite: true, Prometheus: &fakeProm{}})
 
@@ -151,8 +139,6 @@ func TestEveryToolReturnsSomethingOrSaysWhyNot(t *testing.T) {
 		})
 	}
 }
-
-// a tool that runs long is cut off rather than hanging the client
 
 type slowCluster struct {
 	*fakeCluster
@@ -184,8 +170,6 @@ func TestTheBudgetHasADefaultSoNoCallIsUnbounded(t *testing.T) {
 		t.Fatalf("budget = %s, want the one that was asked for", got)
 	}
 }
-
-// the write gate, stated once across every write tool
 
 func TestEveryWriteToolAsksTheAccessCheckFirst(t *testing.T) {
 	for name := range writeToolNames {

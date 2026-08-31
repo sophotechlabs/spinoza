@@ -57,7 +57,6 @@ describe('memPair', () => {
     expect(memPair(192, 512)).toBe('192/512Mi');
   });
 
-  // The ceiling comes from the node object, which spinoza may not have read.
   it('says what is used when there is no ceiling to read against', () => {
     expect(memPair(2048, 0)).toBe('2.0Gi');
   });

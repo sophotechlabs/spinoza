@@ -6,10 +6,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/checks"
 )
 
-// These are one-line delegations, and the split that gave them their own file
-// showed nobody had ever called them. A delegation that names the wrong
-// function still compiles.
-
 func TestTheAuditRunsOverWhatTheClusterHolds(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()

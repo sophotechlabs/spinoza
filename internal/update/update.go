@@ -1,4 +1,3 @@
-// Package update reports whether a newer spinoza has been published.
 package update
 
 import (
@@ -53,7 +52,6 @@ type Checker struct {
 	answer api.UpdateStatus
 }
 
-// New takes an endpoint for tests; empty means Endpoint.
 func New(current, endpoint string) *Checker {
 	if endpoint == "" {
 		endpoint = Endpoint
@@ -76,7 +74,6 @@ func (c *Checker) Status(ctx context.Context) api.UpdateStatus {
 	return c.answer
 }
 
-// Recheck asks again. Pressing a button is a reason to; opening a window is not.
 func (c *Checker) Recheck(ctx context.Context) api.UpdateStatus {
 	answer := c.ask(ctx)
 	c.mu.Lock()
@@ -152,7 +149,6 @@ func released(version string) bool {
 	return len(parts(version)) == 3
 }
 
-// Numeric, so v1.10.0 sorts above v1.9.0.
 func newer(candidate, current string) bool {
 	if !released(candidate) {
 		return false

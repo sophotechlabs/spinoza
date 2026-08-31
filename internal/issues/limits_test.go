@@ -11,8 +11,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// what the engine defaults to, and what it does when it runs out of time
-
 func TestEveryLimitHasADefault(t *testing.T) {
 	got := Limits{}.orDefaults()
 

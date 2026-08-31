@@ -73,8 +73,6 @@ func benchCluster(namespaces, perNamespace int) []runtime.Object {
 	return objects
 }
 
-// The dynamic fake deep-copies its whole tracker on every List, which would
-// dominate the measurement. This one hands back what an informer cache holds.
 type staticLister struct {
 	byResource map[string][]*unstructured.Unstructured
 }

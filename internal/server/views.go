@@ -39,8 +39,6 @@ func (s *Server) checkFilter(r *http.Request) checks.Filter {
 	return s.checkFilterOn(r, s.clusterKey(r))
 }
 
-// Mutes and baselines are filed per cluster, so a fleet report asks each one
-// with its own, rather than one cluster's silences hiding another's findings.
 func (s *Server) checkFilterOn(r *http.Request, cluster string) checks.Filter {
 	keep := checks.ParseFilter(r.URL.Query())
 	held := s.stored().All()
@@ -48,8 +46,6 @@ func (s *Server) checkFilterOn(r *http.Request, cluster string) checks.Filter {
 	keep.Silencers = checks.Silencers(keep.Rules)
 	keep.Mutes = checks.ParseMutes(held[checks.MutesKey], cluster)
 	if taken, ok := s.baselines().Load(cluster); ok {
-		// A baseline taken here needs no explaining; one carried from elsewhere
-		// does, and the view says where it came from.
 		if taken.Cluster == cluster {
 			taken.Cluster = ""
 		}
@@ -58,9 +54,6 @@ func (s *Server) checkFilterOn(r *http.Request, cluster string) checks.Filter {
 	return keep
 }
 
-// clusterKey is what mutes and baselines are filed under. A request that named
-// no cluster still means one, so the resolved id is used rather than the empty
-// string a single-cluster window sends.
 func (s *Server) clusterKey(r *http.Request) string {
 	_, on := s.lookup(clusterOf(r))
 	return on

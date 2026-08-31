@@ -9,7 +9,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
 
-// Held is what the cluster gave back, one slice per kind.
 type Held struct {
 	Roles        []*unstructured.Unstructured
 	ClusterRoles []*unstructured.Unstructured
@@ -17,8 +16,6 @@ type Held struct {
 	ClusterBinds []*unstructured.Unstructured
 }
 
-// Build turns bindings inside out. A binding names a role and some subjects;
-// the index names a subject and everything it can reach.
 func Build(held Held) Index {
 	roles := byName(held.Roles, true)
 	clusterRoles := byName(held.ClusterRoles, false)
@@ -33,8 +30,6 @@ func Build(held Held) Index {
 	return Index{Holders: ordered(holders), Absent: sortedKeys(absent)}
 }
 
-// A Role lives in a namespace and a ClusterRole does not, so they are filed
-// under different keys even when they share a name.
 func byName(held []*unstructured.Unstructured, namespaced bool) map[string]*unstructured.Unstructured {
 	out := map[string]*unstructured.Unstructured{}
 	for _, one := range held {
@@ -50,9 +45,6 @@ func roleKey(name, namespace string, namespaced bool) string {
 	return namespace + "/" + name
 }
 
-// A RoleBinding may name a ClusterRole. The rules then come from the cluster
-// role but apply only in the binding's namespace, which is the corner of RBAC
-// people most often read the wrong way round.
 func fold(
 	holders map[string]*Holder, absent map[string]struct{},
 	roles, clusterRoles map[string]*unstructured.Unstructured,
@@ -110,9 +102,6 @@ func where(binding *unstructured.Unstructured) string {
 	return binding.GetNamespace() + "/" + binding.GetName()
 }
 
-// An aggregated cluster role has its rules written by a controller. One that
-// has none yet is waiting rather than powerless, and the view should not read
-// it as harmless.
 func aggregated(role *unstructured.Unstructured) bool {
 	_, found := unstr.Map(role, "aggregationRule")
 	return found
@@ -136,8 +125,6 @@ func rulesOf(role *unstructured.Unstructured) []Rule {
 	return out
 }
 
-// A service account subject with no namespace of its own belongs to the
-// binding's namespace, which is what the apiserver assumes too.
 func subjectsOf(binding *unstructured.Unstructured, namespace string) []Subject {
 	out := []Subject{}
 	for _, raw := range unstr.Slice(binding, "subjects") {
@@ -174,8 +161,6 @@ func stringsAt(entry map[string]any, field string) []string {
 	return out
 }
 
-// The most reaching subject comes first, because a list of every service
-// account in name order answers nothing.
 func ordered(holders map[string]*Holder) []Holder {
 	out := make([]Holder, 0, len(holders))
 	for _, one := range holders {

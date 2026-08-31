@@ -21,7 +21,6 @@ func (s *Server) handleRBAC(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
-// The reverse lookup: not "may I", which the apiserver answers, but who may.
 func (s *Server) handleRBACWho(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	ask := rbac.Ask{

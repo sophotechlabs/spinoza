@@ -11,8 +11,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// fixtures
-
 func replicated(ready int64, wanted any) *unstructured.Unstructured {
 	spec := map[string]any{}
 	if wanted != nil {
@@ -49,8 +47,6 @@ func condition(kind, status string) map[string]any {
 	return map[string]any{"type": kind, "status": status}
 }
 
-// the numbers this package and the canvas both depend on
-
 func TestTheNodeBudgetIsTheCanvasCap(t *testing.T) {
 	source, err := os.ReadFile("../../frontend/src/lib/graphState.ts")
 	if err != nil {
@@ -85,8 +81,6 @@ func TestOnlyThreeKindsEverFold(t *testing.T) {
 	}
 }
 
-// what each listed resource becomes
-
 func TestEveryListedResourceHasACategory(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -120,8 +114,6 @@ func TestEveryListedResourceHasACategory(t *testing.T) {
 	}
 }
 
-// how an api version splits
-
 func TestAnAPIVersionSplitsIntoGroupAndVersion(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -145,8 +137,6 @@ func TestAnAPIVersionSplitsIntoGroupAndVersion(t *testing.T) {
 		})
 	}
 }
-
-// what a workload says it wants
 
 func TestAnAbsentReplicaCountMeansOne(t *testing.T) {
 	cases := []struct {
@@ -173,8 +163,6 @@ func TestAReplicaSummaryReadsReadyOverWanted(t *testing.T) {
 		t.Fatalf("summary = %q, want 2/3", got)
 	}
 }
-
-// whether a node reads ready, broken or unknown
 
 func TestReadinessPerKind(t *testing.T) {
 	cases := []struct {
@@ -264,8 +252,6 @@ func TestAPlaceholderIsBrokenOnlyWhenItIsMissing(t *testing.T) {
 	}
 }
 
-// which pods a selector picks
-
 func TestASelectorPicksOnlyWhatMatchesEveryPair(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -301,8 +287,6 @@ func TestASelectorKeepsOnlyItsStringPairs(t *testing.T) {
 		t.Fatal("a spec with no selector at all should read as no selector")
 	}
 }
-
-// which services an ingress names
 
 func TestAnIngressNamesEveryBackendOnce(t *testing.T) {
 	obj := &unstructured.Unstructured{Object: map[string]any{"spec": map[string]any{
@@ -340,8 +324,6 @@ func TestAnIngressWithNoBackendsNamesNothing(t *testing.T) {
 		t.Fatalf("backends = %v, want none", got)
 	}
 }
-
-// which config a pod template mounts
 
 func TestAPodTemplateNamesEveryConfigItMounts(t *testing.T) {
 	spec := map[string]any{
@@ -430,8 +412,6 @@ func TestTheVolumeTheKubeletInjectsIsRecognised(t *testing.T) {
 	}
 }
 
-// reading a nested map without panicking on a shape nobody promised
-
 func TestReachingIntoAShapeThatIsNotThere(t *testing.T) {
 	object := map[string]any{"spec": map[string]any{"list": []any{"one"}, "leaf": "text"}}
 
@@ -464,8 +444,6 @@ func TestReachingIntoAShapeThatIsNotThere(t *testing.T) {
 	}
 }
 
-// what the open set does with what the query sends
-
 func TestAnOpenSetIgnoresWhatIsNotAnID(t *testing.T) {
 	result := setOf([]string{"one", "", "two"})
 
@@ -476,8 +454,6 @@ func TestAnOpenSetIgnoresWhatIsNotAnID(t *testing.T) {
 		t.Fatal("an empty entry became an id")
 	}
 }
-
-// walking the fold
 
 func TestWhatIsVisibleDependsOnEveryOwnerAboveIt(t *testing.T) {
 	parents := map[string]string{"pod": "replicas", "replicas": "deployment"}

@@ -72,8 +72,6 @@ BeforeAll {
     }
 }
 
-# configuration the release layout depends on
-
 Describe 'the release this installer is pinned to' {
     It 'names the repository the binaries are published from' {
         $script:Repo | Should -Be 'sophotechlabs/spinoza'
@@ -85,8 +83,6 @@ Describe 'the release this installer is pinned to' {
         $script:EnvironmentKey | Should -Be 'Environment'
     }
 }
-
-# input construction
 
 Describe 'Resolve-Architecture' {
     It 'maps what this machine reports onto a published architecture' {
@@ -132,8 +128,6 @@ Describe 'Get-InstallDirectory' {
         Get-InstallDirectory | Should -Be (Join-Path $env:LOCALAPPDATA (Join-Path 'Programs' 'spinoza'))
     }
 }
-
-# output parsing
 
 Describe 'Get-ListedChecksum' {
     BeforeAll {
@@ -259,8 +253,6 @@ Describe 'Get-InstalledVersion' {
     }
 }
 
-# file placement
-
 Describe 'Install-Binary' {
     BeforeEach {
         $script:work = NewWorkspace
@@ -295,8 +287,6 @@ Describe 'Install-Binary' {
         Test-Path -LiteralPath "$($script:target).old" | Should -BeFalse
     }
 }
-
-# the path this installer edits
 
 Describe 'Test-OnPath' {
     It 'finds a directory already on the path' {
@@ -424,8 +414,6 @@ Describe 'Remove-FromPath' {
     }
 }
 
-# the gh call the provenance check shells out to
-
 Describe 'Test-Attestation' {
     BeforeEach {
         $script:work = NewWorkspace
@@ -476,8 +464,6 @@ Describe 'Test-Attestation' {
         { Test-Attestation -Path $script:asset -Name 'spinoza_v9.9.9_windows_amd64.zip' } | Should -Throw '*gh is not on PATH*'
     }
 }
-
-# installing, end to end, against a real release
 
 Describe 'installing a release' {
     BeforeEach {
@@ -599,8 +585,6 @@ Describe 'installing a release' {
     }
 }
 
-# removing what the install put down
-
 Describe 'uninstalling after a real install' {
     BeforeEach {
         $script:release = NewRelease
@@ -662,8 +646,6 @@ Describe 'uninstalling after a real install' {
     }
 }
 
-# the start menu entry
-
 Describe 'Get-StartMenuShortcut' {
     BeforeEach {
         $script:previousAppData = $env:APPDATA
@@ -715,8 +697,6 @@ Describe 'Add-StartMenuShortcut' {
     }
 }
 
-# the entry point a piped install actually runs
-
 Describe 'running install.ps1 as a script' -Tag 'windows' -Skip:(-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
     BeforeEach {
         $script:target = NewWorkspace
@@ -730,8 +710,6 @@ Describe 'running install.ps1 as a script' -Tag 'windows' -Skip:(-not [System.Ru
         (($said) -join "`n") | Should -Match 'not installed'
     }
 }
-
-# the shape of the script itself
 
 Describe 'the installer source' {
     BeforeAll {

@@ -483,8 +483,6 @@ func TestATemplateThatIsNotAMapProducesNoContainers(t *testing.T) {
 	}
 }
 
-// what a stopped audit does
-
 func TestAnAuditThatWasStoppedSaysSoRatherThanAnsweringHalfway(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -511,8 +509,6 @@ func TestAStoppedFingerprintIsEmptyRatherThanPartial(t *testing.T) {
 		t.Fatalf("a stopped fingerprint kept %d checks and %d findings", len(base.Checks), len(base.Keys))
 	}
 }
-
-// what a check that is a judgement call owes the reader
 
 func TestEveryJudgementCallShipsAtLowSeverityAndSaysSo(t *testing.T) {
 	for _, entry := range registry() {

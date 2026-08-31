@@ -53,8 +53,6 @@ func labelledDeployment(name string, pod map[string]any) *unstructured.Unstructu
 	return labelledWorkload("Deployment", name, pod)
 }
 
-// what each reference check refuses, and what it lets through
-
 func TestEveryReferenceCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	pod := func(extra map[string]any) map[string]any {
 		return podSpecWith(extra, sourcedContainer(nil))
@@ -286,8 +284,6 @@ func TestEveryReferenceCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	}
 }
 
-// the parts of reference resolution that are easy to get wrong
-
 func TestAnOptionalReferenceIsNotAMissingOne(t *testing.T) {
 	found := report(t, labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
 		"envFrom": []any{map[string]any{
@@ -440,8 +436,6 @@ func TestAWorkloadWithNoTemplateLabelsIsNotJudgedOnSelectors(t *testing.T) {
 	}
 }
 
-// what a real cluster taught these checks
-
 func TestAClaimAStatefulSetGeneratedIsMounted(t *testing.T) {
 	set := labelledWorkload("StatefulSet", "redis-broker", podSpec(sourcedContainer(nil)))
 	specOf(set)["volumeClaimTemplates"] = []any{
@@ -491,10 +485,6 @@ func TestTheCaBundleEveryNamespaceGetsIsNotAnOrphan(t *testing.T) {
 }
 
 func TestASecretAnythingAtAllNamesIsNotAnOrphan(t *testing.T) {
-	// The name appears nowhere a reference check looks: it is a field on an
-	// unrelated object. The widened search is what a custom resource holding
-	// a secretRef relies on. Proved needed on p-mk1 2026-08-29, where every
-	// remaining orphan was named by a Flux, cert-manager or CNPG resource.
 	namer := simple("Service", "gateway", testNamespace, map[string]any{
 		"selector":        map[string]any{"app": "api"},
 		"externalName":    "tls-cert",
@@ -507,8 +497,6 @@ func TestASecretAnythingAtAllNamesIsNotAnOrphan(t *testing.T) {
 		t.Fatal("a Secret named by another object was still reported as an orphan")
 	}
 }
-
-// the orphan checks, once the read has been exhaustive
 
 func TestAConfigMapNothingNamesIsAnOrphanOnceEveryKindIsRead(t *testing.T) {
 	alone := reportEverything(t, configMap("nobody-names-me", map[string]any{"a": "b"}))

@@ -482,7 +482,6 @@ func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef) error {
 	return inspect.Delete(ctx, m.dyn, ref)
 }
 
-// ListKind reads from the apiserver, not the informer cache.
 func (m *Manager) ListKind(ctx context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error) {
 	if m.dyn == nil {
 		return nil, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
@@ -538,7 +537,6 @@ func (m *Manager) Action(ctx context.Context, req actions.Request) (api.ActionRe
 	return actions.New(m.dyn, m.cs).Do(ctx, req, time.Now())
 }
 
-// Ping counts a refusal as an answer: the cluster is there.
 func (m *Manager) Ping(ctx context.Context) error {
 	if m.cs == nil {
 		return fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
@@ -578,9 +576,6 @@ func (m *Manager) Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessa
 	return m.schemas.For(ctx, gvk)
 }
 
-// everyFinding is the cap for a caller that has to see all of them. The audit
-// is written to page, so an export that stopped at the page size would be a
-// truncation nobody was told about.
 const everyFinding = math.MaxInt32
 
 func (m *Manager) serverVersion() string {
@@ -731,15 +726,12 @@ func (s *subscriber) wants(ev Event) bool {
 }
 
 type stream struct {
-	kind    string
-	gvr     schema.GroupVersionResource
-	owner   *Manager
-	handler atomic.Pointer[cache.ResourceEventHandlerRegistration]
-	// seenMu guards the last row written per object, which is what decides
-	// whether a change is worth recording.
-	seenMu sync.Mutex
-	seen   map[string]held
-	// viewMu guards the pair: columns and cell-filling always change together.
+	kind     string
+	gvr      schema.GroupVersionResource
+	owner    *Manager
+	handler  atomic.Pointer[cache.ResourceEventHandlerRegistration]
+	seenMu   sync.Mutex
+	seen     map[string]held
 	viewMu   sync.Mutex
 	columns  []api.Column
 	cells    func(obj *unstructured.Unstructured) []string
@@ -822,9 +814,6 @@ func (m *Manager) List(ctx context.Context, desc api.ResourceDescriptor) ([]*uns
 	return m.Lease(ctx, desc)
 }
 
-// ListNames reads metadata only. A secret's contents never leave the apiserver
-// on this path; what comes back is the name, whether something owns it, and
-// which operator says it manages it.
 func (m *Manager) ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]checks.Named, error) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	page, err := m.meta.Resource(gvr).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
@@ -848,8 +837,6 @@ func (m *Manager) ListNames(ctx context.Context, desc api.ResourceDescriptor) ([
 	return out, nil
 }
 
-// Scan reads a kind straight from the apiserver. Nothing caches what comes
-// back, so it is freed as soon as the caller is done with it.
 func (m *Manager) Scan(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	page, err := m.dyn.Resource(gvr).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
@@ -1329,7 +1316,6 @@ func (st *stream) snapshot(ns string, limit int, filters []api.RowFilter) ([]api
 	return rows, total, nil
 }
 
-// A capped stream cuts the newest first, so the rest would be unfindable.
 func (st *stream) keepMatching(
 	held []*unstructured.Unstructured,
 	limit int,

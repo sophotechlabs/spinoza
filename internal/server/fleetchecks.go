@@ -40,9 +40,6 @@ func (s *Server) everyClustersChecks(ctx context.Context, r *http.Request) []clu
 	return found
 }
 
-// The merged report is one row per rule, the way a single cluster's is: the
-// question a fleet asks is which rules are failing and where, not which cluster
-// has its own copy of the same rule.
 func mergeReports(found []clusterReport) api.CheckReport {
 	merged := api.CheckReport{Groups: []api.CheckGroup{}, Objects: []api.CheckObject{}}
 	at := map[string]int{}
@@ -81,8 +78,6 @@ func stamped(one clusterReport) []api.CheckObject {
 	return out
 }
 
-// Every cluster walks the same rule registry, so first-seen order is registry
-// order and a rule nobody else reported still lands in its own place.
 func foldGroups(merged *api.CheckReport, at map[string]int, groups []api.CheckGroup, offset int) {
 	for _, group := range groups {
 		found := shifted(group, offset)
@@ -105,8 +100,6 @@ func foldGroups(merged *api.CheckReport, at map[string]int, groups []api.CheckGr
 	}
 }
 
-// A finding points at an object by position, so merging two reports means
-// moving each cluster's findings along by however many objects came before it.
 func shifted(group api.CheckGroup, offset int) api.CheckGroup {
 	moved := make([]api.CheckFinding, 0, len(group.Findings))
 	for _, one := range group.Findings {

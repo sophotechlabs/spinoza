@@ -161,8 +161,6 @@ func (h *heldHistory) Recent(_ context.Context, query store.Query) (store.Page, 
 	return store.Page{Entries: below(h.page.Entries, query.AfterAction), More: h.page.More}, nil
 }
 
-// The real store bounds each half by its own cursor; a double that ignores it
-// would let a paging test pass without the bound ever being applied.
 func below(entries []store.Entry, after int64) []store.Entry {
 	if after == 0 {
 		return entries

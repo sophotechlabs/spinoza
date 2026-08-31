@@ -130,7 +130,7 @@ export async function contextAnnounced(name: string): Promise<void> {
   try {
     useContextsStore.getState().setList(await fetchContexts());
   } catch {
-    // The next reconnect asks again.
+    return;
   }
 }
 

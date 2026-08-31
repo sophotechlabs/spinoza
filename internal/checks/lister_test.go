@@ -183,8 +183,6 @@ func descriptors() map[string]api.ResourceDescriptor {
 	return out
 }
 
-// Discovery calls anything outside the Kubernetes API groups a custom
-// resource, and the audit reads those to decide what nothing references.
 func categoryOf(group string) string {
 	if group == "cert-manager.io" {
 		return customResources

@@ -331,8 +331,6 @@ function silencedLabel(by: string): string {
 
 type MuteScope = 'object' | 'namespace' | 'check';
 
-// A finding muted by its namespace has to be unmuted the same way, or the undo
-// removes a mute that was never made and leaves the one that was.
 function scopeOf(finding: CheckFindingView): MuteScope {
   if (finding.mutedBy === 'namespace') {
     return 'namespace';
@@ -353,8 +351,6 @@ function refFor(scope: MuteScope, finding: CheckFindingView): Partial<Mute> {
   return { ref: refKeyOf(finding.object) };
 }
 
-// A baseline from another cluster names different objects, so the group says
-// how many each cluster found rather than which findings are new.
 function driftOrChange(group: CheckGroupView, report: CheckReportView): string {
   if (report.baseline === '') {
     return '';
@@ -664,8 +660,6 @@ function MutesPanel({ audit, onChanged }: { audit: unknown; onChanged: () => voi
   const [mutes, setMutes] = useState<Mute[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
-  // Reloaded whenever the audit is, so muting something in the list below shows
-  // up here without the panel having to be closed and opened again.
   useEffect(() => {
     if (!open) {
       return;

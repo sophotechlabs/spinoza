@@ -21,10 +21,6 @@ const (
 
 type Lister interface {
 	List(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
-	// Scan reads a kind straight from the apiserver, with no cache and no
-	// watch behind it. The custom resources are read this way: they are here
-	// only to say which names something in the cluster mentions, and holding
-	// every one of them in a cache costs more than a gigabyte on a large one.
 	Scan(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error)
 	Warm(ctx context.Context, descs []api.ResourceDescriptor)
 	ListNames(ctx context.Context, desc api.ResourceDescriptor) ([]Named, error)
@@ -145,10 +141,6 @@ func needed(descs map[string]api.ResourceDescriptor, wholeCluster bool) (found [
 	return found, absent
 }
 
-// customResources is the category discovery gives anything outside the
-// Kubernetes API groups. Reading them is what lets "nothing references this"
-// be true on a cluster where cert-manager, Flux and Cilium name half the
-// secrets in it.
 const customResources = "Custom Resources"
 
 func customKinds(descs map[string]api.ResourceDescriptor) []api.ResourceDescriptor {
@@ -281,10 +273,6 @@ type scanned struct {
 	errs   map[string]error
 }
 
-// scanMentions reads the borrowed kinds and keeps only what they name. The
-// objects themselves are freed as each kind finishes: on a cluster with a
-// hundred custom kinds, holding all of them at once is where the memory goes.
-// They are read at once because one at a time is a minute rather than a second.
 func scanMentions(
 	ctx context.Context, lister Lister, descs []api.ResourceDescriptor,
 ) (scanned, []target) {
@@ -324,9 +312,6 @@ func scanMentions(
 	return out, refused
 }
 
-// countMentions reuses one set across the whole kind. Allocating a fresh one
-// per object is where the memory went on a large cluster: two thousand objects
-// each building a map of every string in themselves.
 func countMentions(items []*unstructured.Unstructured) map[string]int {
 	out := map[string]int{}
 	here := map[string]bool{}
@@ -341,8 +326,6 @@ func countMentions(items []*unstructured.Unstructured) map[string]int {
 	return out
 }
 
-// borrowed says this kind is read for the one audit and then let go. Nothing
-// browses a custom resource through the audit, so nothing needs its cache kept.
 func borrowed(desc api.ResourceDescriptor) bool {
 	return desc.Category == customResources
 }

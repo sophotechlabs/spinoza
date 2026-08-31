@@ -213,8 +213,6 @@ export function namespaceStart(cluster: string, context = ''): NamespaceStart {
   return state.namespaceStart;
 }
 
-// The answer is kept against the cluster now. One written before that, against
-// a context name, still counts until the next answer replaces it.
 function answerFor(
   starts: Partial<Record<string, NamespaceStart>>,
   cluster: string,

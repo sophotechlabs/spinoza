@@ -3,7 +3,6 @@ import type { HelmCapability, HelmRefusals } from '../lib/helmAccess';
 import { useContextsStore } from './contexts';
 
 interface HelmAccessState {
-  // A release panel and an install dialog can be open at once.
   answers: Record<string, HelmRefusals>;
   setRefused: (key: string, refused: HelmRefusals) => void;
   forget: (key: string) => void;

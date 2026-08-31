@@ -23,8 +23,6 @@ function served(values: Record<string, string>) {
   return fetchMock;
 }
 
-// held is everything this window has now, which includes the palette painting a
-// theme leaves behind.
 function held(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of storedKeys()) {
@@ -65,7 +63,6 @@ describe('catchUp', () => {
     expect(readStored(THEME_KEY)).toBe('borg');
   });
 
-  // Every focus would otherwise repaint the theme for nothing.
   it('does not touch the theme when nothing changed', async () => {
     served(held());
     const adopt = vi.spyOn(useThemeStore.getState(), 'adoptStored');
@@ -76,7 +73,6 @@ describe('catchUp', () => {
     adopt.mockRestore();
   });
 
-  // The same number of keys, one of them different: a change all the same.
   it('takes a change that keeps the number of settings the same', async () => {
     const changed = held();
     changed[THEME_KEY] = 'borg';
@@ -87,7 +83,6 @@ describe('catchUp', () => {
     expect(useThemeStore.getState().preference).toBe('borg');
   });
 
-  // Another window wrote a setting this one has never held at all.
   it('takes a setting it has never seen', async () => {
     const grown = held();
     grown['spinoza.sidebar.v1'] = '{"Cluster":true}';
@@ -98,8 +93,6 @@ describe('catchUp', () => {
     expect(readStored('spinoza.sidebar.v1')).toBe('{"Cluster":true}');
   });
 
-  // A window that cannot reach the server keeps what it has rather than
-  // falling back to a default nobody chose.
   it('keeps what it has when the server cannot be reached', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
 
@@ -152,8 +145,6 @@ describe('catchUp', () => {
     expect(readStored('junk')).toBeNull();
   });
 
-  // Adopting must not write back: the value is already saved, and a write would
-  // put this window's whole copy over whatever else moved.
   it('does not save what it adopted', async () => {
     vi.useFakeTimers();
     startSaving();

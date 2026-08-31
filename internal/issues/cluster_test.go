@@ -45,8 +45,6 @@ func onlyNodeFinding(t *testing.T, snap *snapshot) finding {
 	return found[0]
 }
 
-// what a node says about itself
-
 func TestANodeThatIsNotReadyIsFatal(t *testing.T) {
 	snap := snapshotOf(nodeWith("worker", []any{
 		condition("Ready", conditionFalse, map[string]any{
@@ -124,8 +122,6 @@ func TestBeingNotReadyOutranksBeingCordoned(t *testing.T) {
 	}
 }
 
-// claims that will never bind
-
 func TestAPendingClaimIsFatal(t *testing.T) {
 	snap := snapshotOf(clusterObject(kindClaim, "data", nil, map[string]any{"phase": "Pending"}))
 
@@ -163,8 +159,6 @@ func TestAClaimOnItsWayOutIsNotReportedAsPending(t *testing.T) {
 		t.Fatal("a claim being deleted was reported as pending")
 	}
 }
-
-// things that were asked to go and did not
 
 func terminating(kind, name string, ago time.Duration, grace int64, finalizers []string) object {
 	spec := map[string]any{}
@@ -250,8 +244,6 @@ func TestANodeThatReportsNoReadyConditionAtAllSaysNothing(t *testing.T) {
 		t.Fatalf("a node with no conditions yet produced %d findings", len(found))
 	}
 }
-
-// kinds the apiserver will not serve, and services that answer nothing
 
 func crd(name string, conditions []any) object {
 	obj := &unstructured.Unstructured{Object: map[string]any{
@@ -350,8 +342,6 @@ func TestAServiceThatSelectsNothingIsNotJudgedOnEndpoints(t *testing.T) {
 		t.Fatal("a selectorless service was asked for endpoints")
 	}
 }
-
-// certificates on their way out
 
 func certificate(name, notAfter string) object {
 	obj := &unstructured.Unstructured{Object: map[string]any{

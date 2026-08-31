@@ -125,8 +125,6 @@ func TestAClusterRoleBindingReachesEveryNamespace(t *testing.T) {
 	}
 }
 
-// The corner people read the wrong way round: a RoleBinding to a ClusterRole
-// takes the cluster role's rules but applies only where the binding is.
 func TestARoleBindingToAClusterRoleStaysInItsNamespace(t *testing.T) {
 	index := Build(Held{
 		ClusterRoles: []*unstructured.Unstructured{clusterRole("reader", rule([]string{"get"}, []string{""}, []string{"secrets"}))},
@@ -203,8 +201,6 @@ func TestTheApiGroupHasToMatch(t *testing.T) {
 	}
 }
 
-// The distinction the whole feature exists for: holding pods is not holding
-// pods/exec.
 func TestPodsDoesNotCoverPodsExec(t *testing.T) {
 	one := Rule{Verbs: []string{"create"}, Groups: []string{""}, Resources: []string{"pods"}}
 

@@ -41,8 +41,6 @@ func ownersOf(t *testing.T, live *unstructured.Unstructured, controller string) 
 	return out
 }
 
-// which fields another writer has taken over
-
 func TestOwnershipNamesAFieldAnotherManagerTookFromArgo(t *testing.T) {
 	live := ssaObject(
 		fieldsEntry("argocd-controller", `{"f:spec":{"f:paused":{}}}`),
@@ -187,8 +185,6 @@ func TestOwnershipCountsAFieldOnceWhenTwoWritersHoldIt(t *testing.T) {
 		t.Fatalf("taken by = %q, want the first writer that holds it", found[0].Live)
 	}
 }
-
-// how a fieldsV1 path reads back
 
 func TestFieldPathsReadTheShapesTheApiServerWrites(t *testing.T) {
 	cases := []struct {

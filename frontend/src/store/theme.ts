@@ -55,8 +55,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     applyTheme(resolved);
     set({ custom: nextCustom, themes: nextThemes, resolved });
   },
-  // adoptStored takes what is in the settings now, without writing it back. It
-  // is for a change another window made, which is already saved.
   adoptStored: () => {
     const nextPreference = readTheme();
     const nextCustom = readCustomThemes();

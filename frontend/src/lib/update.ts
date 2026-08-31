@@ -54,7 +54,6 @@ export async function installUpdate(): Promise<UpdateResult> {
   return parseUpdateResult(await response.json());
 }
 
-// updateFailure is for a request that never came back with a result at all.
 export function updateFailure(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
@@ -62,7 +61,6 @@ export function updateFailure(err: unknown): string {
   return 'the update failed';
 }
 
-// updateOutcome is what the About row says once the button has been pressed.
 export function updateOutcome(result: UpdateResult): string {
   if (result.updated) {
     return `Updated to ${String(result.latest)}. Restart spinoza to finish.`;

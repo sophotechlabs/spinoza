@@ -20,8 +20,6 @@ func writableCluster() *fakeCluster {
 	)}
 }
 
-// whether a write tool is offered at all
-
 func TestNoWriteToolExistsUnlessWritesAreAllowed(t *testing.T) {
 	server := serverFor(writableCluster(), Options{})
 
@@ -68,8 +66,6 @@ func TestEveryWriteToolIsOfferedWhenWritesAreAllowed(t *testing.T) {
 	}
 }
 
-// rbac
-
 func TestARefusedCapabilityStopsTheWriteAndCarriesTheReason(t *testing.T) {
 	cluster := writableCluster()
 	cluster.refused = api.Access{Refused: []api.Refusal{
@@ -103,8 +99,6 @@ func TestARefusalOfAnotherCapabilityDoesNotBlockThisOne(t *testing.T) {
 		t.Fatalf("acted = %v, want the restart to have run", cluster.acted)
 	}
 }
-
-// workloads
 
 func TestScalingCarriesTheReplicaCount(t *testing.T) {
 	cluster := writableCluster()
@@ -169,8 +163,6 @@ func TestAWorkloadActionOutsideTheListIsRefused(t *testing.T) {
 	}
 }
 
-// nodes
-
 func TestNodeActionsNameTheNodeAndCarryForce(t *testing.T) {
 	cluster := writableCluster()
 	server := serverFor(cluster, Options{AllowWrite: true})
@@ -208,8 +200,6 @@ func TestANodeActionNeedsANameAndAKnownVerb(t *testing.T) {
 	}
 }
 
-// cron jobs
-
 func TestACronJobActionBuildsItsOwnReference(t *testing.T) {
 	cluster := writableCluster()
 	server := serverFor(cluster, Options{AllowWrite: true})
@@ -238,8 +228,6 @@ func TestACronJobActionNeedsEverything(t *testing.T) {
 		t.Fatal("an unknown cron job verb was accepted")
 	}
 }
-
-// gitops
 
 func TestFluxAndArgoGoToDifferentControllers(t *testing.T) {
 	cluster := writableCluster()
@@ -308,8 +296,6 @@ func TestAGitopsCallNeedsAnActionAndAResourceItCanFind(t *testing.T) {
 		t.Fatal("a gitops call with no action was accepted")
 	}
 }
-
-// apply
 
 func TestApplyingSendsTheDocumentAndNamesWhatChanged(t *testing.T) {
 	cluster := writableCluster()

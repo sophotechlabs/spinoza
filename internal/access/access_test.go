@@ -82,7 +82,6 @@ func serviceFor(t *testing.T, auth *authorizer) *Service {
 	return New(cs)
 }
 
-// Built so a map of verbs on secrets does not read as credentials.
 func refusingVerb(verb, resource, reason string) *authorizer {
 	return refusing(map[string]string{verb + "  " + resource + " ": reason})
 }

@@ -25,9 +25,6 @@ export function inDesktopWindow(): boolean {
   return viewKind() === DESKTOP;
 }
 
-// A window with no address bar cannot be pointed at a route, so a run may name
-// one to open on. It only applies when nothing else has asked: a hash the user
-// arrived with always wins, and a view this build does not know is dropped.
 export function startRoute(): string {
   if (window.location.hash !== '') {
     return '';

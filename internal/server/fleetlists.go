@@ -12,8 +12,6 @@ import (
 
 const fleetSearchCap = 200
 
-// eachCluster runs the same read against every open cluster at once. Every
-// fleet view is that shape, so the fan-out is written once.
 func eachCluster[T any](
 	ctx context.Context, srv *Server, read func(context.Context, Backend) T,
 ) []clusterAnswer[T] {
@@ -95,9 +93,6 @@ func (s *Server) fleetHelm(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, mergeReleases(found))
 }
 
-// The skew is the point of a fleet release list: the same chart on two clusters
-// at two versions is what a person is looking for, and it is only visible once
-// the lists are one list.
 func mergeReleases(found []clusterAnswer[api.HelmReleases]) api.HelmReleases {
 	merged := api.HelmReleases{Releases: []api.HelmRelease{}}
 	trouble := []string{}

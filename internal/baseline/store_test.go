@@ -28,8 +28,6 @@ func store(t *testing.T) *Store {
 	return Open(t.TempDir())
 }
 
-// what a baseline survives
-
 func TestABaselineComesBackAsItWasSaved(t *testing.T) {
 	held := store(t)
 
@@ -99,8 +97,6 @@ func TestForgettingABaselineThatWasNeverTakenIsNotAnError(t *testing.T) {
 	}
 }
 
-// what a baseline refuses
-
 func TestAClusterWithNoBaselineSaysSo(t *testing.T) {
 	if _, ok := store(t).Load(cluster); ok {
 		t.Fatal("a cluster with no baseline was given one")
@@ -137,8 +133,6 @@ func TestMoreFindingsThanOneBaselineHoldsIsRefused(t *testing.T) {
 		t.Fatal("a baseline past the cap was written anyway")
 	}
 }
-
-// what a store with nowhere to write does
 
 func TestAStoreWithNoDirectoryKeepsNothingAndSaysNothing(t *testing.T) {
 	held := Open("")
@@ -209,8 +203,6 @@ func TestTheDefaultDirectorySitsBesideTheSettings(t *testing.T) {
 		t.Fatalf("the default directory is %q", dir)
 	}
 }
-
-// what a baseline survives being carried somewhere else
 
 func TestABaselineComesBackFromTheFileItWasWrittenTo(t *testing.T) {
 	body, err := Encode(taken())

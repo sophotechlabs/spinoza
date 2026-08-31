@@ -100,7 +100,6 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
   }
 
   const offered = rangesFor(sampled);
-  // A span chosen before the answer may be unreachable, leaving the control blank.
   if (!offered.includes(span)) {
     setSpan(DEFAULT_RANGE);
   }
@@ -133,7 +132,6 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
         live = false;
       };
     }
-    // Sampled readings arrive while open; a database holds the whole span.
     const timer = setInterval(load, SAMPLED_REFRESH_MS);
     return () => {
       live = false;

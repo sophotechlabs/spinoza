@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// helpers
-
 func as[T any](t *testing.T, value any) T {
 	t.Helper()
 	found, ok := value.(T)
@@ -48,8 +46,6 @@ func resultOf(t *testing.T, reply map[string]any) map[string]any {
 	}
 	return found
 }
-
-// what the server refuses before it does anything
 
 func TestAMessageThatIsNotJSONIsRefusedAsParseError(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{})
@@ -119,8 +115,6 @@ func TestTheIDComesBackExactlyAsItWasSent(t *testing.T) {
 	}
 }
 
-// what the handshake says
-
 func TestInitializeNamesTheProtocolAndWhatItServes(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{Version: "v1.2.3", Context: "p-mk1"})
 
@@ -166,8 +160,6 @@ func TestPingAnswersWithNothingToSay(t *testing.T) {
 		t.Fatal("ping answered with a body")
 	}
 }
-
-// what the tool list carries
 
 func TestEveryToolCardCarriesASchemaAndAnnotations(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{AllowWrite: true})

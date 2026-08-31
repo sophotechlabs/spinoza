@@ -92,8 +92,6 @@ func TestMergingNothingChangesNothing(t *testing.T) {
 	}
 }
 
-// Two spinozas run at once, each holding a copy taken when it started. The one
-// that writes second must not undo what the first changed.
 func TestAKeyWrittenByAnotherProcessSurvives(t *testing.T) {
 	path := tempPath(t)
 	first := openAt(t, path)
@@ -111,8 +109,6 @@ func TestAKeyWrittenByAnotherProcessSurvives(t *testing.T) {
 	}
 }
 
-// A window opened here has to be given what the file holds now, not what this
-// process read when it started.
 func TestAllPicksUpWhatAnotherProcessWrote(t *testing.T) {
 	path := tempPath(t)
 	store := openAt(t, path)
@@ -331,7 +327,6 @@ func TestAHomelessAccountHasNoDefaultPath(t *testing.T) {
 	}
 }
 
-// A setting that is on until somebody turns it off, which an absent key is not.
 func TestOffIsOnlyTheWordOff(t *testing.T) {
 	store := Memory()
 

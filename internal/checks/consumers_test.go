@@ -30,8 +30,6 @@ func mutedFinding(t *testing.T, id string, objects ...*unstructured.Unstructured
 	return onlyFinding(t, report, id)
 }
 
-// what stops an object looking like a leftover
-
 func TestSomethingWithAnOwnerIsNotALeftover(t *testing.T) {
 	finding := mutedFinding(t, "orphaned-secret", ownedSecret("node-password", "worker-1"))
 

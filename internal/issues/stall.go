@@ -63,9 +63,6 @@ func stallFindings(ctx context.Context, events Events, snap *snapshot, reported 
 	return out
 }
 
-// A pod that is bound and running nothing has either said nothing at all,
-// which is the kubelet going quiet, or said exactly what is wrong. Both are
-// worth reporting and both come from the one event read.
 func whatHappened(
 	ctx context.Context, events Events, candidates []object, limits Limits,
 ) (quiet map[string]bool, complained map[string]api.Event) {

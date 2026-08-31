@@ -1,5 +1,3 @@
-// Package samples retains the cluster's own metrics readings, so that a pod has
-// a chart without Prometheus. It covers the lifetime of the process only.
 package samples
 
 import (
@@ -12,8 +10,7 @@ import (
 const (
 	Window = time.Hour
 	Every  = 15 * time.Second
-	// Pods bounds memory at ~12 MB.
-	Pods = 2000
+	Pods   = 2000
 )
 
 const (
@@ -44,7 +41,6 @@ func New() *Store {
 	}
 }
 
-// Record takes a fresh read; a pod absent from it is dropped.
 func (s *Store) Record(at time.Time, pods map[string]api.ResourceUsage) {
 	if len(pods) == 0 {
 		return

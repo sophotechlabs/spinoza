@@ -33,8 +33,6 @@ type Note struct {
 	Was       []string
 }
 
-// Timeline takes what changed. It is called from the informer's own callback,
-// so it must return without waiting for a disk.
 type Timeline interface {
 	Note(note Note)
 }
@@ -44,8 +42,6 @@ type Kind struct {
 	Resource string
 }
 
-// Record watches a fixed set of kinds rather than whatever happens to be on
-// screen, so what the timeline holds does not depend on what was clicked.
 func (m *Manager) Record(ctx context.Context, into Timeline, kinds []Kind) {
 	descs := m.recorded(kinds)
 	wanted := map[schema.GroupVersionResource]struct{}{}
@@ -59,8 +55,6 @@ func (m *Manager) Record(ctx context.Context, into Timeline, kinds []Kind) {
 	m.Warm(ctx, descs)
 }
 
-// A kind the cluster does not have is skipped rather than refused: the same
-// timeline setting has to mean something on every cluster it is turned on for.
 func (m *Manager) recorded(kinds []Kind) []api.ResourceDescriptor {
 	known := m.descriptors()
 	out := make([]api.ResourceDescriptor, 0, len(kinds))
@@ -110,8 +104,6 @@ func gvrOf(desc api.ResourceDescriptor) schema.GroupVersionResource {
 	}
 }
 
-// note writes when the row changes, not when the object does: a reconcile that
-// only rewrites a condition message shows nothing on screen and is not history.
 func (st *stream) note(verb string, obj *unstructured.Unstructured, row api.Row) {
 	into := st.owner.recording(st.gvr)
 	if into == nil {
@@ -121,10 +113,6 @@ func (st *stream) note(verb string, obj *unstructured.Unstructured, row api.Row)
 	if !fresh {
 		return
 	}
-	// What was already on the cluster when recording started is not something
-	// that happened; the first listing seeds the shapes and writes nothing.
-	// The handler's own registration is what says the listing is behind us —
-	// the informer's store syncs before its listeners are told anything.
 	if !st.delivered() {
 		return
 	}
@@ -151,8 +139,6 @@ func (st *stream) delivered() bool {
 	return (*handler).HasSynced()
 }
 
-// rowIsNew answers whether the row moved, and hands back what it moved from,
-// so a change can say "2/3 to 1/3" rather than only where it landed.
 func (st *stream) rowIsNew(verb string, row api.Row) ([]string, bool) {
 	st.seenMu.Lock()
 	defer st.seenMu.Unlock()
@@ -179,8 +165,6 @@ func (st *stream) rowIsNew(verb string, row api.Row) ([]string, bool) {
 	return was.cells, true
 }
 
-// held is the last row written for an object: the digest decides whether the
-// next one is worth writing, the cells are what it changed from.
 type held struct {
 	shape uint64
 	cells []string

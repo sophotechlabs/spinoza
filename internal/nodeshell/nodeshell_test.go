@@ -443,7 +443,6 @@ func TestItRemembersWhatTheClusterSaid(t *testing.T) {
 	}
 }
 
-// The one place that refuses rather than guess.
 func TestAQuestionThatCouldNotBePutLeavesItUnoffered(t *testing.T) {
 	svc, cs := service(t, true)
 	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {

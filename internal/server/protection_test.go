@@ -189,9 +189,6 @@ func TestApplyingGoesAheadOnceTheNameMatches(t *testing.T) {
 	}
 }
 
-// Interactive access is outside the gate: a name before every shell is
-// unusable.
-
 func TestInteractiveAccessIsNotGatedByProtection(t *testing.T) {
 	ts := inspectServer(t, newPod())
 	protect(t, ts)

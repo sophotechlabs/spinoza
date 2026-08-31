@@ -18,8 +18,6 @@ func withFacts(t *testing.T, facts Facts) api.CheckReport {
 	return Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
 }
 
-// what the cluster says about its own versions
-
 func TestAVersionARemovalIsComingForIsReported(t *testing.T) {
 	report := withFacts(t, Facts{
 		ServerVersion:  "v1.24.9+k3s1",
@@ -81,8 +79,6 @@ func TestEveryRemovalTheTableNamesIsCaughtOnAnOldEnoughCluster(t *testing.T) {
 	}
 }
 
-// what the apiserver itself said
-
 func TestTheApiserversOwnWarningIsPassedThrough(t *testing.T) {
 	report := withFacts(t, Facts{
 		Warnings: []string{"v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice"},
@@ -115,19 +111,7 @@ func TestAClusterWithNothingToSayReportsNothing(t *testing.T) {
 	}
 }
 
-// a tripwire, not a guarantee
-
 func TestTheRemovalTableHasBeenLookedAtThisCycle(t *testing.T) {
-	// The table is hand-written from what Kubernetes publishes each release.
-	// Nothing keeps it current, so this fails once the client the repo builds
-	// against has moved far enough past the newest entry that the table is
-	// almost certainly missing a removal. Look at the release notes, add what
-	// is new, and raise the bound.
-	//
-	// Checked against kubernetes.io/docs/reference/using-api/deprecation-guide
-	// on 2026-08-30, with the docs offering v1.37: that page still lists v1.32
-	// as the newest release to have stopped serving anything, so the table is
-	// current and nothing was missing for 1.33 through 1.36.
 	const lookedAtThrough = 32
 
 	newest := 0
@@ -148,14 +132,8 @@ func TestTheRemovalTableHasBeenLookedAtThisCycle(t *testing.T) {
 	}
 }
 
-// The releases the table may fall behind the client by before it is treated as
-// out of date. Kubernetes removes a beta API every other release or so.
 const staleAfter = 6
 
-// clientMinor is the Kubernetes minor this repo builds against, read from the
-// client-go requirement rather than written down beside the table: a number
-// nobody updates measures nothing, and the whole point of the tripwire is to
-// notice a bump that left the table behind.
 func clientMinor(t *testing.T) int {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("..", "..", "go.mod"))

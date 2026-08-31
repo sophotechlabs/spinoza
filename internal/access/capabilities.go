@@ -18,11 +18,9 @@ const (
 	Logs        = "logs"
 	Exec        = "exec"
 	PortForward = "portForward"
-	// Reconcile covers suspend and resume too: the same patch, one answer.
-	Reconcile = "reconcile"
-	// Suspend covers resume too.
-	Suspend = "suspend"
-	Trigger = "trigger"
+	Reconcile   = "reconcile"
+	Suspend     = "suspend"
+	Trigger     = "trigger"
 )
 
 const (
@@ -61,7 +59,6 @@ var restartable = map[groupResource]bool{
 	{group: appsGroup, resource: "daemonsets"}:   true,
 }
 
-// Logs come from the pods these select, so the question is about pods.
 var ownsPods = map[groupResource]bool{
 	{group: appsGroup, resource: "deployments"}:     true,
 	{group: appsGroup, resource: "statefulsets"}:    true,
@@ -110,7 +107,6 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 	if ownsPods[here] {
 		held = append(held, needs(Logs, podCheck("get", ref.Namespace, "", "log")))
 	}
-	// A service forwards through one of its pods, so ask about pods.
 	if here == (groupResource{resource: "services"}) {
 		held = append(held, needs(PortForward, podCheck("create", ref.Namespace, "", "portforward")))
 	}
@@ -125,7 +121,6 @@ func nodeCapabilities(object Check) []capability {
 	cordon := with(object, "patch")
 	return []capability{
 		needs(Cordon, cordon),
-		// Reading pods and cordoning are all or nothing; eviction is per pod.
 		needs(Drain, podCheck("list", "", "", ""), cordon),
 	}
 }
@@ -177,8 +172,6 @@ func (s *Service) answer(ctx context.Context, held []capability) api.Access {
 	return api.Access{Refused: refused}
 }
 
-// ReviewEach asks one capability of many objects. Not applicable is not
-// refused.
 func (s *Service) ReviewEach(ctx context.Context, name string, refs []api.ObjectRef) api.BulkAccess {
 	wanted := make([][]Check, len(refs))
 	checks := []Check{}

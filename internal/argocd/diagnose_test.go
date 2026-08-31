@@ -268,8 +268,6 @@ func TestAnApplicationBeingDeletedWithNoFinalizersSaysSo(t *testing.T) {
 	}
 }
 
-// the words this page uses are the words the issues queue uses
-
 func TestAFailedOperationIsAsFatalHereAsItIsInTheQueue(t *testing.T) {
 	app := detailed()
 	_ = unstructured.SetNestedField(app.Object, "Failed", "status", "operationState", "phase")

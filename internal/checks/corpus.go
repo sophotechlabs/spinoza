@@ -56,9 +56,6 @@ func newCorpus(
 			}
 		}
 	}
-	// A listing the apiserver refused is not an empty cluster. Treating it as
-	// one turned 500 references into "missing" on GKE production 2026-08-29,
-	// where the account could not list Secrets.
 	for _, want := range unread {
 		out.absent[want] = true
 	}
@@ -66,9 +63,6 @@ func newCorpus(
 	return out
 }
 
-// refused names a kind the cluster would not let the audit read. Any check that
-// answers "nothing anywhere names this" has to stand down when one exists: the
-// reference it is looking for may be in exactly the kind that was refused.
 func (c *corpus) refused() string {
 	if len(c.unread) == 0 {
 		return ""
@@ -112,11 +106,6 @@ func gatherStrings(value any, into map[string]bool) {
 	}
 }
 
-// An object's own name is dropped before counting, so anything left is another
-// object naming it. That is what lets a Flux GitRepository or a cert-manager
-// Certificate count as a reference without the audit knowing either kind.
-// Proved needed on p-mk1 2026-08-29, where every remaining orphan was named by
-// a custom resource.
 func (c *corpus) mentionedElsewhere(name string) bool {
 	return c.mentioned[name] > 0
 }

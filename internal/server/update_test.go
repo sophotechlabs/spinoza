@@ -160,7 +160,6 @@ func TestTheButtonInstallsWhatItFinds(t *testing.T) {
 	}
 }
 
-// The button asks again rather than reading what the window was told on open.
 func TestTheButtonAsksAgain(t *testing.T) {
 	checker := newerRelease()
 	ts := updateServerWith(t, checker, &stubInstaller{}, settings.Memory())
@@ -197,8 +196,6 @@ func TestTheButtonSaysWhenThereIsNothingNewer(t *testing.T) {
 	}
 }
 
-// A desktop build has no installer wired up, so the button hands over the
-// command instead of pretending it cannot be done at all.
 func TestABuildThatCannotReplaceItselfOffersTheCommand(t *testing.T) {
 	ts := updateServerWith(t, newerRelease(), nil, settings.Memory())
 
@@ -229,8 +226,6 @@ func TestAFailedInstallComesBackWithWhatWentWrong(t *testing.T) {
 	}
 }
 
-// An install refused for what this build is comes with the command, so there is
-// somewhere to go from there.
 func TestAnUnsupportedInstallOffersTheCommand(t *testing.T) {
 	installer := &stubInstaller{err: fmt.Errorf("%w: /usr/local/bin is not writable", update.ErrUnsupported)}
 	ts := updateServerWith(t, newerRelease(), installer, settings.Memory())
@@ -253,7 +248,6 @@ func TestTheButtonWithoutAChecker(t *testing.T) {
 	}
 }
 
-// Turning the check off stops the automatic one. The button is a separate act.
 func TestTurningTheCheckOffStopsTheAutomaticOne(t *testing.T) {
 	store := settings.Memory()
 	if err := store.Merge(map[string]string{settings.UpdateCheckKey: "off"}); err != nil {

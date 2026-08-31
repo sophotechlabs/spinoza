@@ -116,7 +116,6 @@ function renderCondition(name: string, value: string): ReactNode {
   return <span className={conditionColor(name, value)}>{value}</span>;
 }
 
-// A replica count can be named "Ready", so only True and False are coloured.
 function answersACondition(value: string): boolean {
   if (value === 'True') {
     return true;
@@ -140,7 +139,6 @@ function metricUsage(kind: string, metrics: Metrics, row: Row): ResourceUsage | 
   return metrics.pods[`${row.namespace}/${row.name}`];
 }
 
-// The bar is already the proportion, so the cell says how much of how much.
 function nodeUsageCell(usage: ResourceUsage | undefined, memory: boolean): ReactNode {
   if (usage === undefined) {
     return <UsageBar percent={0} label="" text="" />;
@@ -337,8 +335,6 @@ export default function ResourceTable({
     writeTableState(stateKey, { sorting, visibility: next, sizing, bases });
   }
 
-  // One header, four sorted states: most consumed, least, biggest, smallest.
-  // The label says which, because an arrow alone cannot.
   function cycleMetric(id: string) {
     const next = nextMetricSort(id, sorting, bases[id] ?? 'used');
     const nextBases = { ...bases, [id]: next.basis };
@@ -352,8 +348,6 @@ export default function ResourceTable({
     });
   }
 
-  // A node's metric columns cycle through both sides of the cell; everything
-  // else keeps the table's own two-way toggle.
   function cyclesBothSides(column: TanColumn<Row>): boolean {
     return activeKind === 'Node' && METRIC_COLUMNS.includes(column.id);
   }

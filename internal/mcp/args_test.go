@@ -7,8 +7,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// reading one argument out of whatever a client sent
-
 func TestReadingTextFromWhateverTypeArrived(t *testing.T) {
 	args := arguments{"name": "web", "count": float64(3), "on": true, "list": []any{"a"}}
 
@@ -103,8 +101,6 @@ func TestAChoiceListsWhatItWouldHaveAccepted(t *testing.T) {
 	}
 }
 
-// turning a resource name into something the cluster serves
-
 func TestResolvingAResourceName(t *testing.T) {
 	catalog := catalogOf(
 		descriptor("apps", "v1", "deployments", "Deployment"),
@@ -176,8 +172,6 @@ func TestTheCoreGroupIsNamedInWords(t *testing.T) {
 		t.Fatalf("error = %v, want the empty group described in words", err)
 	}
 }
-
-// turning arguments into an object reference
 
 func TestBuildingAnObjectReference(t *testing.T) {
 	catalog := catalogOf(descriptor("apps", "v1", "deployments", "Deployment"))

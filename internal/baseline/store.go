@@ -15,10 +15,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/checks"
 )
 
-// A baseline of a large cluster is tens of thousands of fingerprints. This is
-// the point past which the file is refused rather than written: something has
-// gone wrong upstream, and an unbounded file in a config directory is worse
-// than a missing baseline.
 const maxKeys = 500_000
 
 const maxBytes = 64 << 20
@@ -26,8 +22,6 @@ const maxBytes = 64 << 20
 const nameLength = 16
 
 type stored struct {
-	// Cluster is where the baseline was taken, kept so one handed to another
-	// cluster says whose it was rather than pretending to be its own.
 	Cluster string            `json:"cluster,omitempty"`
 	TakenAt string            `json:"takenAt"`
 	Checks  []string          `json:"checks"`
@@ -36,9 +30,6 @@ type stored struct {
 	Keys    map[string]string `json:"keys"`
 }
 
-// Store keeps one baseline per cluster, as a file of its own. It is deliberately
-// not in the settings file: that one is read on every checks request and
-// rewritten whole whenever any setting moves.
 type Store struct {
 	mu  sync.Mutex
 	dir string
@@ -56,8 +47,6 @@ func DefaultDir() (string, error) {
 	return filepath.Join(dir, "spinoza", "baselines"), nil
 }
 
-// fileFor names the file after a hash of the cluster, so an apiserver URL never
-// has to survive being a path.
 func (s *Store) fileFor(cluster string) string {
 	sum := sha256.Sum256([]byte(cluster))
 	return filepath.Join(s.dir, hex.EncodeToString(sum[:])[:nameLength]+".json")
@@ -143,8 +132,6 @@ func flatten(taken checks.Baseline) stored {
 	}
 }
 
-// Encode writes a baseline the way it is kept on disk, so one can be handed to
-// somebody else or kept in a repository.
 func Encode(taken checks.Baseline) ([]byte, error) {
 	body, err := json.Marshal(flatten(taken))
 	if err != nil {
@@ -153,9 +140,6 @@ func Encode(taken checks.Baseline) ([]byte, error) {
 	return body, nil
 }
 
-// Decode reads one back. Anything that is not a baseline is refused rather
-// than stored: a file that turns out to be empty would quietly report every
-// finding in the cluster as new.
 func Decode(body []byte) (checks.Baseline, error) {
 	if len(body) > maxBytes {
 		return checks.Baseline{}, fmt.Errorf("baselines: %d bytes is more than one baseline holds", len(body))

@@ -196,7 +196,6 @@ package-desktop-linux arch='amd64': (build-desktop-linux arch)
     tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -cf - -C "$staged" Spinoza spinoza.png LICENSE | gzip -n > "$archive"
     echo "package-desktop-linux: wrote $archive, built from an app that reports $reported"
 
-# Wails writes an icns with the retina sizes only; macOS wants the plain ones too
 icns:
     #!/usr/bin/env bash
     set -euo pipefail

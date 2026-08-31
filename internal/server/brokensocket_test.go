@@ -19,7 +19,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// Wraps the listener so writes can be made to fail after n frames.
 type breaking struct {
 	writes     atomic.Int64
 	failAt     atomic.Int64
@@ -89,7 +88,6 @@ func brokenServer(t *testing.T) (*httptest.Server, *breaking, dynamic.Interface)
 	return ts, state, dyn
 }
 
-// Waits out the opening frames; breaking earlier breaks a greeting instead.
 func openBrokenFeed(t *testing.T, ts *httptest.Server) (context.Context, *websocket.Conn) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -265,7 +263,6 @@ func TestAFeedWhoseWindowGoesAwayMidPauseStops(t *testing.T) {
 	stillServing(t, ts)
 }
 
-// Write counts start once a feed is open, so opening frames must be known.
 func TestAFeedIsSentItsOpeningFramesAndThenNothing(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)
@@ -284,7 +281,6 @@ func TestAFeedIsSentItsOpeningFramesAndThenNothing(t *testing.T) {
 	}
 }
 
-// The first write a socket refuses is the last one the server attempts on it.
 func TestNothingMoreIsWrittenToASocketThatHasGone(t *testing.T) {
 	ts, socket, _ := brokenServer(t)
 	ctx, conn := openBrokenFeed(t, ts)

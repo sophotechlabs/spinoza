@@ -9,18 +9,10 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// MutesKey is where the settings store holds what you have decided about.
-// Mutes are kept per cluster: a judgement about one cluster's workload has no
-// business following you to another.
 const MutesKey = "spinoza.checks.muted.v1"
 
-// Mute silences one check, in one namespace, or on one object, and keeps the
-// reason with it. An empty Ref and Namespace means the check everywhere.
 type Mute = api.Mute
 
-// AllMutes reads what the settings store holds, which is a cluster to mute-list
-// object. Anything unreadable yields no mutes rather than an error: an audit is
-// not the place to argue about the settings file.
 func AllMutes(raw string) map[string][]Mute {
 	if strings.TrimSpace(raw) == "" {
 		return map[string][]Mute{}
@@ -57,26 +49,16 @@ func EncodeMutes(all map[string][]Mute) string {
 	return string(body)
 }
 
-// RefKey names one object the way a mute and a baseline both have to name it.
-// Neither the origin ranking nor the finding's wording belongs in here: a
-// workload moves between yours and packaged when its labels change, and the
-// wording of a check is edited, and a mute must survive both.
 func RefKey(ref api.ObjectRef) string {
 	return strings.Join([]string{ref.Group, ref.Version, ref.Resource, ref.Namespace, ref.Name}, "/")
 }
 
-// Scopes are what a mute was made at, so undoing one from a finding removes the
-// mute that silenced it rather than a narrower one nobody made.
 const (
-	ScopeObject    = "object"
-	ScopeNamespace = "namespace"
-	ScopeCheck     = "check"
-	// ScopeConvention is the audit silencing itself: the object is read by
-	// something that never names it. Nobody decided this, so nobody can undo it.
+	ScopeObject     = "object"
+	ScopeNamespace  = "namespace"
+	ScopeCheck      = "check"
 	ScopeConvention = "convention"
-	// ScopeRule is a rule of your own quietening a check. It is undone by
-	// changing the rule, not by unmuting the finding.
-	ScopeRule = "rule"
+	ScopeRule       = "rule"
 )
 
 func silences(mute Mute, id string, item found) bool {
@@ -102,16 +84,10 @@ func scopeOf(mute Mute) string {
 	return ScopeCheck
 }
 
-// SameMute identifies a mute for removal. Two mutes are the same when they
-// silence the same thing, whatever reason each was given.
 func SameMute(one, other Mute) bool {
 	return one.Check == other.Check && one.Namespace == other.Namespace && one.Ref == other.Ref
 }
 
-// identityOf is what a baseline remembers a finding by. A pod whose name the
-// apiserver generated is a different object every time it is replaced, so the
-// generateName stands in for it: the workload is the same one, and a rollout is
-// not a hundred new findings.
 func identityOf(id string, item found) string {
 	ref := item.subject.Ref
 	if generated := generatedName(item.subject); generated != "" {
@@ -120,8 +96,6 @@ func identityOf(id string, item found) string {
 	return strings.Join([]string{id, RefKey(ref), item.container}, "\x00")
 }
 
-// labelOf is how a finding reads once the object it was about may be gone: the
-// kind and where it lived, which is all a baseline can honestly keep.
 func labelOf(item found) string {
 	parts := []string{item.subject.Kind, refLabel(item.subject.Ref)}
 	if item.container != "" {
@@ -146,9 +120,6 @@ func generatedName(subject Subject) string {
 
 const fingerprintBytes = 8
 
-// Fingerprints are what a baseline stores instead of the findings themselves:
-// they answer "was this here last time" without putting the name of every
-// workload on disk.
 func fingerprintOf(key string) string {
 	sum := sha256.Sum256([]byte(key))
 	return base64.RawURLEncoding.EncodeToString(sum[:fingerprintBytes])

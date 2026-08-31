@@ -326,8 +326,6 @@ func TestHelmReleaseDetailFallsBackToTheChartRef(t *testing.T) {
 	}
 }
 
-// which kinds this package treats as a source
-
 func TestIsSourceRecognisesTheFluxSourceKinds(t *testing.T) {
 	cases := []struct {
 		name string
@@ -391,8 +389,6 @@ func TestAFailingFluxObjectIsAsFatalAsItIsInTheQueue(t *testing.T) {
 		t.Fatalf("severity = %q, want %q", got.Issues[0].Severity, api.SeverityFatal)
 	}
 }
-
-// the pure readers, every shape
 
 func TestSplitInventoryIDTakesEveryShapeFluxWrites(t *testing.T) {
 	cases := []struct {

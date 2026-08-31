@@ -8,8 +8,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// Facts are what the cluster says about itself, as opposed to what its objects
-// say. The audit cannot work any of this out from the objects it lists.
 type Facts struct {
 	ServerVersion  string
 	ServedVersions []string
@@ -22,10 +20,6 @@ type removal struct {
 	minor        int
 }
 
-// Removed group-versions, newest first. A cluster that still serves one of
-// these breaks on the release named, so the check is only interesting while
-// the server is below it. Kubernetes publishes this list per release; it needs
-// a look each cycle.
 var removals = []removal{
 	{groupVersion: "flowcontrol.apiserver.k8s.io/v1beta3", kinds: "FlowSchema, PriorityLevelConfiguration", minor: 32},
 	{groupVersion: "flowcontrol.apiserver.k8s.io/v1beta2", kinds: "FlowSchema, PriorityLevelConfiguration", minor: 29},
@@ -111,8 +105,6 @@ func apiserverSaysDeprecated(sc scan) []found {
 	return out
 }
 
-// The warning text opens with what it is about, so the first few words make a
-// readable subject without parsing a format the apiserver never promised.
 func warningSubject(text string) string {
 	head, _, found := strings.Cut(text, " is deprecated")
 	if !found {

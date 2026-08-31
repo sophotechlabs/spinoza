@@ -90,8 +90,6 @@ export function clusterItems(hits: SearchHit[], categories: Category[]): Palette
   }));
 }
 
-// A hit from another cluster is only useful if the row says which one, so the
-// hint carries it beside the kind.
 function hintFor(hit: SearchHit): string {
   if (hit.cluster === undefined || hit.cluster === '') {
     return hit.kind.toLowerCase();

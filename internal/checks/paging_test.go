@@ -47,8 +47,6 @@ func walkEveryPage(t *testing.T, lister *fakeLister) []string {
 	return nil
 }
 
-// what a cursor promises
-
 func TestAPageStopsAtTheLimitAndOffersACursor(t *testing.T) {
 	lister := newLister(manyDeployments(findingsShown + 40)...)
 
@@ -106,8 +104,6 @@ func TestPagingKeepsTheOrderTheFirstPageStarted(t *testing.T) {
 	}
 }
 
-// what a cursor survives
-
 func TestAFindingFixedMidWalkDoesNotShiftThePagesAfterIt(t *testing.T) {
 	lister := newLister(manyDeployments(findingsShown + 10)...)
 	first := pageOf(t, lister, "")
@@ -146,8 +142,6 @@ func TestACursorForAFindingThatIsGoneStillPagesForward(t *testing.T) {
 	}
 }
 
-// what a cursor refuses
-
 func TestAnUnknownCheckIsRefusedByName(t *testing.T) {
 	_, err := Page(t.Context(), newLister(), descriptors(), api.Metrics{}, "not-a-check", "", wholeCluster(), 0)
 
@@ -185,8 +179,6 @@ func TestACheckWithNoUsageDataPagesToNothing(t *testing.T) {
 		t.Fatal("a check with no metrics offered a cursor")
 	}
 }
-
-// what the report says about paging
 
 func TestTheReportCarriesTheCursorForACappedGroup(t *testing.T) {
 	found := report(t, manyDeployments(findingsShown+40)...)
@@ -235,8 +227,6 @@ func TestTheReportsFirstPageAndTheEndpointsFirstPageAgree(t *testing.T) {
 		t.Fatalf("report sent %d findings, endpoint sent %d", len(group.Findings), len(fromEndpoint.Findings))
 	}
 }
-
-// the key a cursor is built from
 
 func TestTheFindingKeyOrdersBySubjectThenContainer(t *testing.T) {
 	subject := Subject{Kind: "Deployment", Ref: api.ObjectRef{Namespace: "apps", Name: "api"}}

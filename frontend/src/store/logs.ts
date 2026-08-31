@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-// Must be at least tailBudget in internal/logs/many.go, which a Go test checks.
 export const MAX_LOG_LINES = 5000;
 
 interface StreamState {

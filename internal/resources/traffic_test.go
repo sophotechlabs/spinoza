@@ -60,8 +60,6 @@ func trafficManager(t *testing.T, proxy prom.Proxy, ttl time.Duration) (*Manager
 	return mgr, cancel
 }
 
-// what the manager says when prometheus was never wired up
-
 func TestTrafficSupportSaysItIsNotWiredUp(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
@@ -91,8 +89,6 @@ func TestTrafficGraphSaysItIsNotWiredUp(t *testing.T) {
 		t.Fatalf("nodes = %d, want none", len(graph.Nodes))
 	}
 }
-
-// what it does once prometheus is there
 
 func TestTrafficGraphReadsThroughToPrometheus(t *testing.T) {
 	proxy := &countingProxy{body: labeledFlow}

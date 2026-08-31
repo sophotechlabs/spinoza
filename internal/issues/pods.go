@@ -159,8 +159,6 @@ func terminatedSymptom(name string, terminated, entry map[string]any) (symptom, 
 			action:   "raise the memory limit, or make it hold less",
 		}, true
 	}
-	// A container being backed off reads as terminated for most of the cycle;
-	// the waiting reason is only there between restarts.
 	if !crashing(terminated, entry) {
 		return symptom{}, false
 	}

@@ -26,7 +26,6 @@ export function memFromMi(mem: Mebibytes): string {
   return `${mem}Mi`;
 }
 
-// 6.2/15.6Gi rather than 6.2Gi/15.6Gi. No ceiling falls back to the amount.
 export function memPair(used: Mebibytes, total: Mebibytes): string {
   if (total <= 0) {
     return memFromMi(used);

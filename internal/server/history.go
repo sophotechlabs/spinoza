@@ -154,8 +154,6 @@ func messageOf(err error) string {
 	return err.Error()
 }
 
-// History is one view of two tables: what spinoza did, and what the cluster
-// did. Which of them a reader wants is a filter, not a second view.
 func (s *Server) readHistory(w http.ResponseWriter, r *http.Request) {
 	past := s.recorder()
 	if past == nil {
@@ -194,9 +192,6 @@ func (s *Server) readHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, found)
 }
 
-// Each half carries its own cursor, because the two tables have independent id
-// sequences and one number cannot bound both. A merged page then reaches older
-// rows on both sides rather than dropping the audit half after page one.
 type cursors struct {
 	changes int64
 	actions int64
@@ -220,8 +215,6 @@ func (s *Server) historyFrom(
 	return merged(actions, changes, from, store.Limit(limit)), true
 }
 
-// An empty cluster is what the store reads as "every cluster", so the fleet
-// rollup is the same query with the filter taken off.
 func (s *Server) historyScope(r *http.Request, fleet bool) string {
 	if fleet {
 		return ""
@@ -266,9 +259,6 @@ func rowCursor(r *http.Request, name string) (int64, error) {
 	return after, nil
 }
 
-// The two halves are ordered the same way one of them is, and the cap holds
-// across the merge, so asking for everything cannot return more than asking for
-// one side.
 func merged(actions, changes api.History, from cursors, limit int) api.History {
 	rows := make([]api.HistoryEntry, 0, len(actions.Entries)+len(changes.Entries))
 	rows = append(rows, actions.Entries...)
@@ -288,8 +278,6 @@ func merged(actions, changes api.History, from cursors, limit int) api.History {
 	}
 }
 
-// A half whose rows were all outranked on this page keeps the cursor it came
-// in with, so the next page does not read them again.
 func lastOf(rows []api.HistoryEntry, source string, held int64) int64 {
 	for _, row := range slices.Backward(rows) {
 		if row.Source == source {

@@ -22,8 +22,6 @@ func clusterIssuer(name, secret string) *unstructured.Unstructured {
 	}}
 }
 
-// what a custom resource naming something is allowed to prevent
-
 func TestASecretACustomResourceNamesIsNotOrphaned(t *testing.T) {
 	report := report(t,
 		simple("Secret", "letsencrypt-account", testNamespace, nil),

@@ -34,9 +34,6 @@ function pickerTitle(scoped: boolean | null): string {
   return 'The namespace the resource list shows';
 }
 
-// The dot covers the whole path to the cluster, not just the socket to spinoza.
-// Red means it cannot be reached; amber means something on the way is wobbling.
-// Nothing about what is wrong *inside* the cluster belongs here.
 function statusColor(
   status: ConnectionStatus,
   clusterReachable: boolean,

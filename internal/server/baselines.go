@@ -10,15 +10,12 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/checks"
 )
 
-// Baselines is where a past audit is kept so this one can say what is new.
 type Baselines interface {
 	Load(cluster string) (checks.Baseline, bool)
 	Save(cluster string, taken checks.Baseline) error
 	Clear(cluster string) error
 }
 
-// noBaselines is what a server runs with until it is given a store: taking a
-// baseline succeeds and finds nothing to compare against, rather than failing.
 type noBaselines struct{}
 
 func (noBaselines) Load(string) (checks.Baseline, bool) {
@@ -47,8 +44,6 @@ func (s *Server) baselines() Baselines {
 
 const maxBaselineBytes = 64 << 20
 
-// saveBaselineFile hands the baseline out as the file it is kept in, so it can
-// live in a repository or be given to somebody else.
 func (s *Server) saveBaselineFile(w http.ResponseWriter, r *http.Request) {
 	taken, ok := s.baselines().Load(s.clusterKey(r))
 	if !ok {
@@ -65,8 +60,6 @@ func (s *Server) saveBaselineFile(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// loadBaselineFile takes one back. What it names as its own cluster is kept, so
-// a baseline carried from somewhere else says where it came from.
 func (s *Server) loadBaselineFile(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBaselineBytes))
 	if err != nil {

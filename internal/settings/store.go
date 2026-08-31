@@ -64,8 +64,6 @@ func Memory() *Store {
 	return &Store{values: map[string]string{}}
 }
 
-// All refreshes from the file first, so a window opened here sees what another
-// spinoza wrote since this one started.
 func (s *Store) All() map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -79,17 +77,12 @@ func (s *Store) On(key string) bool {
 	return s.values[key] == enabled
 }
 
-// Off is for settings that are on until somebody turns them off, which an
-// absent key never has.
 func (s *Store) Off(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.values[key] == disabled
 }
 
-// Merge applies values over what the file holds now. Two spinozas run at once,
-// each holding a copy taken when it started, so writing the whole map back would
-// undo whatever the other changed in between.
 func (s *Store) Merge(values map[string]string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -103,8 +96,6 @@ func (s *Store) Merge(values map[string]string) error {
 	return nil
 }
 
-// onDisk is the file's contents, falling back to what this process holds when
-// the file cannot be read.
 func (s *Store) onDisk() map[string]string {
 	held := maps.Clone(s.values)
 	if held == nil {

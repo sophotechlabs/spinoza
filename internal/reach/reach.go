@@ -1,5 +1,3 @@
-// Package reach reads cluster health off the requests spinoza already makes:
-// no reply means gone, any reply means answering.
 package reach
 
 import (
@@ -24,7 +22,6 @@ func (s *Sink) Wrap(next http.RoundTripper) http.RoundTripper {
 	return &watched{next: next, sink: s}
 }
 
-// Saw records one request's outcome. A canceled request is not an outage.
 func (s *Sink) Saw(err error) {
 	if s == nil {
 		return
@@ -70,7 +67,6 @@ func (s *Sink) record(answering bool, reason string) {
 	s.tell()
 }
 
-// One pending notification is enough.
 func (s *Sink) tell() {
 	select {
 	case s.changed <- struct{}{}:

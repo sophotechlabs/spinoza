@@ -81,9 +81,6 @@ func (s *Server) rememberedTabs(ctx context.Context) []api.RememberedCluster {
 	return out
 }
 
-// A tab is remembered on a context the request cannot cancel: the page often
-// navigates the moment a cluster opens, and a write that dies with the request
-// leaves a cluster that opened fine but never comes back.
 const rememberTimeout = 10 * time.Second
 
 func (s *Server) rememberTab(ctx context.Context, id string, ref api.ContextRef) {
@@ -112,8 +109,6 @@ func (s *Server) rememberTab(ctx context.Context, id string, ref api.ContextRef)
 	}
 }
 
-// RememberOpen gives the cluster spinoza started on a tab. It was never opened
-// through the API, so nothing has given it a color or a row to come back from.
 func (s *Server) RememberOpen(ctx context.Context) {
 	known := s.tabsByID(ctx)
 	for _, one := range s.cluster.Opened() {
@@ -124,8 +119,6 @@ func (s *Server) RememberOpen(ctx context.Context) {
 	}
 }
 
-// colorFor keeps the color a cluster was given; a new one takes the lowest
-// nobody open is using, so two tabs never look alike at the moment they open.
 func colorFor(known map[string]store.Tab, id string, open []api.OpenCluster) int {
 	if held, seen := known[id]; seen && held.Color != 0 {
 		return held.Color

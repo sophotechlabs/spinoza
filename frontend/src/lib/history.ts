@@ -68,8 +68,6 @@ export function useHistory(ask: HistoryAsk = {}, enabled = true): Polled<History
   });
 }
 
-// A cluster can write a page of changes in seconds, so repeats of one object
-// fold into a single row the way the issue queue folds its children.
 export function foldRepeats(entries: HistoryEntry[]): FoldedEntry[] {
   const out: FoldedEntry[] = [];
   for (const entry of entries) {
@@ -100,8 +98,6 @@ function sameObject(left: HistoryEntry, right: HistoryEntry): boolean {
   return left.name === right.name && left.namespace === right.namespace;
 }
 
-// The cursor is where the newest page ended, or where the last page reached
-// back to, so asking again always moves further back rather than repeating.
 export function cursorOf(page: History, older: HistoryEntry[]): number {
   const last = older.at(-1);
   if (last !== undefined) {
@@ -110,8 +106,6 @@ export function cursorOf(page: History, older: HistoryEntry[]): number {
   return page.next ?? 0;
 }
 
-// There is more to reach only while a page came back full and the last one
-// still said so; an empty answer ends it.
 export function reachable(page: History, older: HistoryEntry[]): boolean {
   if (cursorOf(page, older) === 0) {
     return false;
@@ -237,9 +231,6 @@ export function refOf(entry: HistoryEntry): ObjectRef | null {
   };
 }
 
-// A change says what it moved from, so the row reads as a move rather than a
-// snapshot. Something that went has nothing to move to, so it shows what was
-// there instead of an arrow pointing at nothing.
 export function wasText(entry: HistoryEntry): string {
   if (entry.was === undefined || entry.was === '') {
     return '';

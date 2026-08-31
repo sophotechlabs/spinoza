@@ -51,8 +51,6 @@ func twoClusters(t *testing.T, first, second Backend) (*Server, *fleet) {
 	return New(held, testAssets(), testToken), held
 }
 
-// A missed ping is a wobble until enough of them stack up, so a fixture that
-// wants the settled answer has to miss that many.
 func pingUntilSettled(t *testing.T, srv *Server) {
 	t.Helper()
 	for range missesBeforeUnreachable {

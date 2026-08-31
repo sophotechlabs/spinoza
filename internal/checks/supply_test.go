@@ -46,8 +46,6 @@ func namespaced(obj *unstructured.Unstructured, namespace string) *unstructured.
 	return obj
 }
 
-// what each supply-chain and metadata check refuses, and what it lets through
-
 func TestEverySupplyCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	cases := []struct {
 		id    string
@@ -136,8 +134,6 @@ func TestEverySupplyCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	}
 }
 
-// registries, tags and digests
-
 func TestABareImageNameIsReadAsDockerHub(t *testing.T) {
 	found := report(t, sourced(podSpec(sourcedContainer(map[string]any{"image": "busybox:1.36"}))))
 
@@ -198,8 +194,6 @@ func TestAPullSecretSatisfiesThePrivateRegistryCheck(t *testing.T) {
 		t.Fatal("a workload with imagePullSecrets was still reported")
 	}
 }
-
-// credentials
 
 func TestOnlyCredentialShapedNamesWithLiteralValuesAreReported(t *testing.T) {
 	fromSecret := report(t, sourced(podSpec(sourcedContainer(map[string]any{
@@ -270,8 +264,6 @@ func TestASecretVolumeThatSetsNoModeIsLeftAlone(t *testing.T) {
 	}
 }
 
-// selectors and labels
-
 func TestASelectorLabelCarriedWithADifferentValueIsAMismatch(t *testing.T) {
 	obj := sourcedClean()
 	template, ok := specOf(obj)["template"].(map[string]any)
@@ -325,8 +317,6 @@ func TestListsAndFieldsOfTheWrongShapeAreSkippedByTheSupplyChecks(t *testing.T) 
 		}
 	}
 }
-
-// jobs and cron
 
 func TestEveryBatchCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	settledJob := func() *unstructured.Unstructured {

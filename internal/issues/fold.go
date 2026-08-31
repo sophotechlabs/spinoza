@@ -221,8 +221,6 @@ func whereOfRef(ref api.ObjectRef) string {
 	return ref.Namespace + "/" + ref.Name
 }
 
-// Rank is the queue's order: worst first. Exported because merging several
-// clusters into one queue has to order them the same way one cluster is ordered.
 func Rank(rows []api.Issue, order string) {
 	if order == ByNewest {
 		slices.SortStableFunc(rows, newestFirst)

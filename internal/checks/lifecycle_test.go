@@ -59,8 +59,6 @@ func withSpec(obj *unstructured.Unstructured, key string, value any) *unstructur
 	return obj
 }
 
-// what each lifecycle check refuses, and what it lets through
-
 func TestEveryLifecycleCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	cases := []struct {
 		id    string
@@ -188,8 +186,6 @@ func TestEveryLifecycleCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 		})
 	}
 }
-
-// the parts that are easy to get subtly wrong
 
 func TestProbesThatShareAHandlerKindButNotItsFieldsAreNotIdentical(t *testing.T) {
 	found := report(t, settledDeployment(settledPod(nil, settledContainer(map[string]any{
@@ -405,8 +401,6 @@ func TestListsAndFieldsOfTheWrongShapeAreSkippedByTheLifecycleChecks(t *testing.
 		t.Fatal("an affinity field of the wrong shape was read as anti-affinity")
 	}
 }
-
-// numbers that arrive as floats, and probes of every handler kind
 
 func TestPortsAndProbeValuesDecodedAsFloatsAreStillRead(t *testing.T) {
 	found := report(t, settledDeployment(settledPod(nil, settledContainer(map[string]any{

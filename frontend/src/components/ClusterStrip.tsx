@@ -29,7 +29,6 @@ function showing(open: string, wanted: string): string {
   return wanted;
 }
 
-// Tabs sit beside the others in their group, so a run of them reads as one client.
 function inGroups(tabs: Tab[]): { name: string; tabs: Tab[] }[] {
   const runs: { name: string; tabs: Tab[] }[] = [];
   for (const tab of [...tabs].sort((a, b) => a.grouping.localeCompare(b.grouping))) {

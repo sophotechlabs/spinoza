@@ -332,8 +332,6 @@ export const FLUX_VIEWS: View[] = ['flux-roles', 'gitops', 'flux-list'];
 
 export const ARGO_VIEWS: View[] = ['argo-apps', 'argo-graph', 'argo-list'];
 
-// The fleet view only means anything with more than one cluster open, so it is
-// hidden the way the GitOps views are hidden when their controller is absent.
 export const FLEET_VIEWS: View[] = ['fleet'];
 
 export interface ArgoApp {
@@ -986,7 +984,6 @@ export interface ResourceUsage {
   memoryMi: number;
   cpuPercent: number;
   memPercent: number;
-  // Only a node has a ceiling, so these stay zero for a pod.
   cpuAllocatableMilli: number;
   memAllocatableMi: number;
 }

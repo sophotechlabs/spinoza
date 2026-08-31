@@ -70,8 +70,6 @@ func kindsNamed(name string) ([]resources.Kind, bool) {
 	return nil, false
 }
 
-// A recording holds the informer's callback away from the disk: the callback
-// hands over a change and returns, and one goroutine writes them in batches.
 type recording struct {
 	into    store.Noter
 	prune   func(ctx context.Context)
@@ -189,8 +187,6 @@ func (s *Server) keepDays() int {
 	return days
 }
 
-// startRecording is what turns a tab's timeline on: the kinds are warmed so the
-// timeline holds the same thing whatever the tab is showing.
 func (s *Server) startRecording(ctx context.Context, id, name string) {
 	kinds, ok := kindsNamed(name)
 	if !ok {
@@ -247,8 +243,6 @@ func (s *Server) stopRecording(id string) {
 	was.close()
 }
 
-// StartRecordings picks up where the last run left off: a tab that was
-// recording when spinoza closed is recording again when it opens.
 func (s *Server) StartRecordings(ctx context.Context) {
 	for id, tab := range s.tabsByID(ctx) {
 		if tab.Timeline == timelineOff {

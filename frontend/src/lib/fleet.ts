@@ -128,10 +128,6 @@ export function shortKey(key: string): string {
   return parts[parts.length - 1];
 }
 
-// An image on more than one cluster with more than one tag is drift; anything
-// else is just an image, and the row says nothing.
-// An app on every open cluster is the normal case and says nothing; one that is
-// missing somewhere is the thing worth seeing.
 export function spreadLabel(spread: number | undefined, open: number): string {
   if (spread === undefined || open < 2) {
     return '';

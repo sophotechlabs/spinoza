@@ -239,7 +239,6 @@ describe('sending only what this window changed', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  // A refused save has to come round again, or the change is lost quietly.
   it('keeps a key the server refused', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     vi.stubGlobal('fetch', fetchMock);
@@ -264,8 +263,6 @@ describe('sending only what this window changed', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  // Written again while the first request was still out: the newer value has to
-  // follow it rather than being forgotten with the older one.
   it('keeps a key written again while the save was in flight', async () => {
     const fetchMock = stubFetch();
     startSaving();

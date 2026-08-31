@@ -44,7 +44,6 @@ func column(name, kind, path string) map[string]any {
 	return map[string]any{"name": name, "type": kind, "jsonPath": path}
 }
 
-// A jsonPath starts with a dot, so a range closes and reopens the braces.
 const rangingPath = `.status.conditions[0].type}{range .status.conditions[*]}{.status}{end`
 
 func kustomization() *unstructured.Unstructured {
@@ -312,7 +311,6 @@ func TestAPathAlreadyInBracesIsReadTheSame(t *testing.T) {
 	}
 }
 
-// Overlapping long enough for the race detector.
 func TestAColumnCanBeReadFromSeveralGoroutinesAtOnce(t *testing.T) {
 	crd := crdWith("v1", column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
 	shown, _ := layoutOf(crd, "v1")
@@ -332,7 +330,6 @@ func TestAColumnCanBeReadFromSeveralGoroutinesAtOnce(t *testing.T) {
 	group.Wait()
 }
 
-// Walking a range rewrites the parse tree, so a kept template answers once.
 func TestAColumnThatRangesAnswersForEveryRowNotJustTheFirst(t *testing.T) {
 	crd := crdWith("v1", column("Conditions", "string", rangingPath))
 	shown, ok := layoutOf(crd, "v1")
@@ -353,7 +350,6 @@ func TestAColumnThatRangesAnswersForEveryRowNotJustTheFirst(t *testing.T) {
 	}
 }
 
-// Reading a kept template costs about a tenth of parsing one again.
 func TestAColumnThatDoesNotRangeKeepsItsParsedTemplate(t *testing.T) {
 	made, ok := declaredColumnOf(column("Ready", "string", `.status.conditions[?(@.type=="Ready")].status`))
 	if !ok {

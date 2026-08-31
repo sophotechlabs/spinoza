@@ -15,8 +15,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
-// helpers
-
 func run(t *testing.T, server *Server, name string, args arguments) map[string]any {
 	t.Helper()
 	found, known := server.tools[name]
@@ -54,8 +52,6 @@ func object(kind, namespace, name string) *unstructured.Unstructured {
 	item.SetCreationTimestamp(metav1.Now())
 	return item
 }
-
-// the dashboard
 
 func TestTheDashboardJoinsHealthCountsIssuesAndTheAudit(t *testing.T) {
 	cluster := &fakeCluster{
@@ -113,8 +109,6 @@ func TestTheDashboardReportsEachFailureOnce(t *testing.T) {
 	}
 }
 
-// namespaces and kinds
-
 func TestNamespacesComeBackAsRows(t *testing.T) {
 	cluster := &fakeCluster{spaces: api.Namespaces{Names: []string{"default", "prod"}}}
 	server := serverFor(cluster, Options{})
@@ -147,8 +141,6 @@ func TestTheKindListGroupsWhatTheClusterServes(t *testing.T) {
 		t.Fatalf("a core resource reads %q, want it bare", kinds["Workloads"][1])
 	}
 }
-
-// listing
 
 func TestListingSummarisesAndCaps(t *testing.T) {
 	cluster := &fakeCluster{
@@ -218,8 +210,6 @@ func TestAClusterScopedRowCarriesNoNamespace(t *testing.T) {
 		t.Fatalf("a cluster-scoped row carries a namespace: %v", rows[0])
 	}
 }
-
-// one resource
 
 func TestGettingAResourceCarriesTheShapeAndNotTheSecret(t *testing.T) {
 	cluster := &fakeCluster{
@@ -328,8 +318,6 @@ func TestGettingAResourceThatIsNotThere(t *testing.T) {
 	}
 }
 
-// events
-
 func TestEventsAreFoldedByReasonAndMessage(t *testing.T) {
 	cluster := &fakeCluster{events: []api.Event{
 		{Reason: "BackOff", Message: "restarting", Count: 3, LastSeen: "now"},
@@ -386,8 +374,6 @@ func TestEventsPassTheRefusalBack(t *testing.T) {
 	}
 }
 
-// topology
-
 func TestTopologyCarriesTheFoldCounts(t *testing.T) {
 	cluster := &fakeCluster{graph: api.Graph{
 		Nodes: []api.GraphNode{
@@ -428,8 +414,6 @@ func TestTopologyWithNothingOpenSendsNoExpandList(t *testing.T) {
 		t.Fatalf("expanded = %v, want nothing", cluster.lastTopo.Expanded)
 	}
 }
-
-// logs
 
 func TestPodLogsAreScrubbedAndCapped(t *testing.T) {
 	cluster := &fakeCluster{lines: []string{"starting", "password=hunter2000", "ready"}}
@@ -558,8 +542,6 @@ func TestLogFailuresComeBack(t *testing.T) {
 	}
 }
 
-// usage
-
 func TestTopRanksByWhatWasAsked(t *testing.T) {
 	cluster := &fakeCluster{usage: api.Metrics{Pods: map[string]api.ResourceUsage{
 		"prod/web-0":    {CPUMilli: 10, MemoryMi: 900},
@@ -596,8 +578,6 @@ func TestTopKeepsToOneNamespaceWhenAsked(t *testing.T) {
 func stringify(value any) string {
 	return fmt.Sprint(value)
 }
-
-// search and helm
 
 func TestSearchPassesTheQueryThrough(t *testing.T) {
 	cluster := &fakeCluster{hits: api.SearchResults{
@@ -652,8 +632,6 @@ func TestHelmFailuresComeBack(t *testing.T) {
 		t.Fatal("a release read with no name was accepted")
 	}
 }
-
-// the audit
 
 func TestTheAuditNamesTheObjectEachFindingIsAbout(t *testing.T) {
 	cluster := &fakeCluster{report: api.CheckReport{
@@ -718,8 +696,6 @@ func TestTheAuditFiltersBySeverityAndCheck(t *testing.T) {
 	}
 }
 
-// issues
-
 func TestTheIssueQueueScrubsAndCaps(t *testing.T) {
 	cluster := &fakeCluster{queue: api.IssueQueue{Rows: []api.Issue{
 		{Title: "CrashLoopBackOff", Detail: "exited after password=hunter2000", Folded: 3},
@@ -739,8 +715,6 @@ func TestTheIssueQueueScrubsAndCaps(t *testing.T) {
 		t.Fatalf("folded = %v", rows[0]["folded"])
 	}
 }
-
-// prometheus
 
 func TestPrometheusIsOfferedOnlyWhenThereIsOne(t *testing.T) {
 	without := serverFor(&fakeCluster{}, Options{})

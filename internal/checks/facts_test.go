@@ -73,8 +73,6 @@ func onNodeSelector(spec, selector map[string]any) map[string]any {
 	return spec
 }
 
-// what each cluster-fact check refuses, and what it lets through
-
 func TestEveryFactCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	cases := []struct {
 		id      string
@@ -217,8 +215,6 @@ func TestEveryFactCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	}
 }
 
-// what a check does when the cluster never told us what it needs
-
 func TestACheckSaysSoWhenTheClusterNeverReportedWhatItNeeds(t *testing.T) {
 	descs := descriptors()
 	delete(descs, "/v1/nodes")
@@ -241,8 +237,6 @@ func TestAChecksNeedsAreNamedForEveryFactCheck(t *testing.T) {
 		}
 	}
 }
-
-// the parts of the scheduling arithmetic that are easy to get wrong
 
 func TestATolerationCoversTheTaintItNames(t *testing.T) {
 	tainted := node("worker", map[string]any{hostnameKey: "worker"}, map[string]any{
@@ -381,8 +375,6 @@ func TestANamespaceObjectIsNotAuditedAsAWorkload(t *testing.T) {
 		t.Fatalf("scanned %d subjects, want 0 from a cluster holding only context objects", found.Scanned)
 	}
 }
-
-// fields of the wrong shape in the cluster's own objects
 
 func TestClusterObjectsOfTheWrongShapeAreSkipped(t *testing.T) {
 	odd := &unstructured.Unstructured{Object: map[string]any{

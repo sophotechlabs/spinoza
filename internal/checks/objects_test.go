@@ -38,8 +38,6 @@ func scalerWith(spec map[string]any) *unstructured.Unstructured {
 	return simple("HorizontalPodAutoscaler", "api", testNamespace, spec)
 }
 
-// what each object check refuses, and what it lets through
-
 func TestEveryObjectCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 	settledPolicy := policyWith(map[string]any{
 		"podSelector": map[string]any{"matchLabels": map[string]any{"app": "api"}},
@@ -184,8 +182,6 @@ func TestEveryObjectCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 		})
 	}
 }
-
-// the parts that decide how open something really is
 
 func TestAClusterIPServiceIsNotPublished(t *testing.T) {
 	found := report(t, simple("Service", "api", testNamespace, map[string]any{"type": "ClusterIP"}))

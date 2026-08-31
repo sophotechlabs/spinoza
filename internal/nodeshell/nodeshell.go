@@ -25,8 +25,7 @@ var (
 	startTimeout = 60 * time.Second
 	pollEvery    = 500 * time.Millisecond
 	removeGrace  = int64(0)
-	// The kubelet stops it even if spinoza dies without deleting it.
-	livesFor = int64((2 * time.Hour).Seconds())
+	livesFor     = int64((2 * time.Hour).Seconds())
 )
 
 var Enter = []string{"nsenter", "--target", "1", "--mount", "--uts", "--ipc", "--net", "--pid", "--", "sh"}
@@ -70,7 +69,6 @@ func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport
 		support.Reason = "no node was named"
 		return support
 	}
-	// One that cannot be asked about is not offered, unlike elsewhere.
 	decision := s.perms.Ask(ctx, access.Check{
 		Verb:      "create",
 		Resource:  "pods",

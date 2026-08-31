@@ -140,8 +140,6 @@ func factsFiredOn(report api.CheckReport, id, name string) bool {
 	return false
 }
 
-// the checks that can only be decided against the cluster's own shape
-
 func TestTheClusterFactChecksFireOnARealCluster(t *testing.T) {
 	loaded := bundle(t)
 	mgr := manager(t, loaded)

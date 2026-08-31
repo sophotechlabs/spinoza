@@ -198,8 +198,6 @@ func issueTitled(app api.GitopsApp, title string) (api.GitopsIssue, bool) {
 	return api.GitopsIssue{}, false
 }
 
-// what a real api server does with the patches this package writes
-
 func TestTheApplicationCRDTakesAStatusMergePatch(t *testing.T) {
 	loaded := bundle(t)
 	installApplicationCRD(t, loaded.Dynamic)
@@ -279,8 +277,6 @@ func TestASyncWritesTheOptionsTheApiServerKeeps(t *testing.T) {
 		t.Fatal("force did not reach syncStrategy.hook, so the hooks would be skipped")
 	}
 }
-
-// what the per-application view reads back off a real cluster
 
 func TestThePerApplicationViewReadsRealDrift(t *testing.T) {
 	loaded := bundle(t)
@@ -426,8 +422,6 @@ func applyDeclaredDeployment(t *testing.T, loaded *kube.Bundle) {
 		t.Fatalf("scale the declared deployment: %v", err)
 	}
 }
-
-// what a server-side apply leaves behind for the drift reader
 
 func TestAServerSideAppliedResourceNamesTheWriterThatTookAField(t *testing.T) {
 	loaded := bundle(t)

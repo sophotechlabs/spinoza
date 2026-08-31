@@ -30,8 +30,6 @@ func holds(names []string, wanted string) bool {
 	return slices.Contains(names, wanted)
 }
 
-// what the filter reads off a query string
-
 func TestAFilterIsReadFromWhatTheBrowserSends(t *testing.T) {
 	keep := ParseFilter(url.Values{
 		"disabled":       {"cpu-limit-set, image-latest"},
@@ -91,8 +89,6 @@ func TestAnEmptyFilterChangesNothing(t *testing.T) {
 	}
 }
 
-// what it takes away
-
 func TestADisabledCheckIsNotReportedAtAll(t *testing.T) {
 	report := filtered(t, Filter{Disabled: []string{"image-latest"}},
 		deployment("api", podSpec(container("app", map[string]any{"image": "busybox"}))))
@@ -146,8 +142,6 @@ func TestSkippingOneNamespaceLeavesTheOthers(t *testing.T) {
 	}
 }
 
-// what the whole-cluster switch gathers
-
 func TestTheWorkloadOnlyAuditAsksForFewerKinds(t *testing.T) {
 	narrow, _ := needed(descriptors(), false)
 	wide, _ := needed(descriptors(), true)
@@ -179,8 +173,6 @@ func TestTheFactChecksSurviveAWorkloadOnlyAudit(t *testing.T) {
 	}
 }
 
-// a listing the apiserver refused
-
 func TestACheckIsSkippedWhenItsKindCouldNotBeListed(t *testing.T) {
 	lister := newLister(labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
 		"envFrom": []any{map[string]any{"secretRef": map[string]any{"name": "creds"}}},
@@ -211,8 +203,6 @@ func TestARefusedListingDoesNotSilenceUnrelatedChecks(t *testing.T) {
 		t.Fatal("a refused Secret listing silenced a check that never needed one")
 	}
 }
-
-// what nothing-references-this needs before it may say so
 
 func TestTheOrphanChecksWaitUntilTheCustomResourcesAreRead(t *testing.T) {
 	lister := newLister(configMap("nobody-names-me", map[string]any{"a": "b"}))

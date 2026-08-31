@@ -13,7 +13,6 @@ export interface TableState {
   sorting: SortingState;
   visibility: VisibilityState;
   sizing: ColumnSizingState;
-  // Which side of a used-of-total cell a metric column sorts on, by column id.
   bases: Partial<Record<string, MetricBasis>>;
 }
 
@@ -136,8 +135,6 @@ interface MetricSort {
   basis: MetricBasis;
 }
 
-// nextMetricSort walks a metric column through its four sorted states and back
-// to none: most consumed, least consumed, largest, smallest.
 export function nextMetricSort(id: string, sorting: SortingState, basis: MetricBasis): MetricSort {
   const current = sorting.find((entry) => entry.id === id);
   if (current === undefined) {
@@ -152,8 +149,6 @@ export function nextMetricSort(id: string, sorting: SortingState, basis: MetricB
   return { sorting: [], basis: 'used' };
 }
 
-// A node cell shows how much of how much, so its header says which of the two
-// it is ordering by.
 export function metricHeader(label: string, sorted: boolean, basis: MetricBasis): string {
   if (sorted && basis === 'total') {
     return `${label} total`;

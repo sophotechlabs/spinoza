@@ -9,8 +9,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// One line per cluster and one total, because the first question a person with
-// several clusters asks is which of them needs looking at.
 func (s *Server) fleetOverview(w http.ResponseWriter, r *http.Request) {
 	found := eachCluster(r.Context(), s, func(ctx context.Context, backend Backend) api.ClusterOverview {
 		return backend.Overview(ctx)
@@ -49,8 +47,6 @@ func lineFor(one clusterAnswer[api.ClusterOverview]) api.FleetCluster {
 	}
 }
 
-// A cluster that could not say what it holds contributes nothing rather than
-// zeroes, so the total is what the fleet actually reported.
 func addNodes(into *api.NodeSummary, one api.NodeSummary) {
 	into.Total += one.Total
 	into.Ready += one.Ready

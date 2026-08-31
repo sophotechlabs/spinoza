@@ -121,11 +121,10 @@ async function openRememberedTabs(): Promise<void> {
       await openCluster(one.kubeconfig ?? '', one.context);
     }
   } catch {
-    // The picker is how you open one by hand.
+    return;
   }
 }
 
-// Remembered per kind: a fresh subscription has no limit and would flip it back.
 function windowKey(windowed: boolean, chips: Chip[]): string {
   if (!windowed) {
     return '';
@@ -230,7 +229,6 @@ export default function App() {
       }
       showActiveTab();
     });
-    // The tabs that come back decide what is in front, unless a link already named a cluster.
   }, [showActiveTab]);
 
   useEffect(() => {
@@ -450,8 +448,6 @@ export default function App() {
     });
   }
 
-  // Picking a cluster in the fleet view is the same move as clicking its tab:
-  // go there and show what that cluster was last showing.
   function goToCluster(cluster: string) {
     if (cluster === onCluster) {
       return;
@@ -466,7 +462,6 @@ export default function App() {
     if (!mayDiscard()) {
       return;
     }
-    // A hit from another cluster is only useful if opening it goes there.
     if (found.cluster !== undefined && found.cluster !== '' && found.cluster !== onCluster) {
       void switchTo(found.cluster, found.ref);
       return;
@@ -510,8 +505,6 @@ export default function App() {
     void switchTo(cluster, ref);
   }
 
-  // A ref means "take me to that object on that cluster"; no ref means "take me
-  // to that cluster", which is whatever it was last showing.
   async function switchTo(cluster: string, ref: ObjectRef | null) {
     const state = useClustersStore.getState();
     state.focus(cluster);

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addKubeconfig,
   confirmName,
+  contextAnnounced,
   contextGroups,
   fetchContexts,
   fetchFilePicker,
@@ -11,6 +12,7 @@ import {
   setProtection,
 } from '../../src/lib/contexts';
 import type { ContextList } from '../../src/lib/types';
+import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 
 function stub(body: unknown, ok = true, status = 200) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -46,6 +48,26 @@ const list: ContextList = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  useContextsStore.getState().setList(EMPTY_CONTEXTS);
+});
+
+describe('a cluster announcing itself', () => {
+  it('reads the list again when the announced context is a different one', async () => {
+    stub(list);
+
+    await contextAnnounced('p-mk1');
+
+    expect(useContextsStore.getState().list.current.name).toBe('p-mk1');
+  });
+
+  it('leaves the list alone when the backend cannot give it one', async () => {
+    useContextsStore.getState().setList(list);
+    stub({ message: 'kubeconfig is unreadable' }, false, 500);
+
+    await contextAnnounced('p-mk2');
+
+    expect(useContextsStore.getState().list).toBe(list);
+  });
 });
 
 describe('contextGroups', () => {

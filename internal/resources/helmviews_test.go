@@ -195,7 +195,6 @@ func TestHelmMethodsReachTheService(t *testing.T) {
 	}
 }
 
-// The wrong version would make a rollback address the wrong API.
 func TestTheManagerRefusesAKindAtAVersionItDoesNotServe(t *testing.T) {
 	mgr := viewManager(t, nil)
 

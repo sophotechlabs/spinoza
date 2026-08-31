@@ -49,9 +49,6 @@ func clusterFindings(snap *snapshot, now time.Time) []finding {
 	return out
 }
 
-// Anything that publishes status.notAfter is telling you when it stops being
-// valid. cert-manager Certificates do, and so does anything built the same way,
-// which is why this reads the field rather than the kind.
 func expiryFindings(snap *snapshot, now time.Time) []finding {
 	out := []finding{}
 	for _, items := range snap.byKind {

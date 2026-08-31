@@ -179,8 +179,6 @@ type Memory struct {
 	SysMi  int64 `json:"sysMi"`
 }
 
-// RBACRule is one policy rule as written, so a reader can see the wildcard
-// rather than only its consequence.
 type RBACRule struct {
 	Verbs     []string `json:"verbs,omitempty"`
 	Groups    []string `json:"groups,omitempty"`
@@ -189,8 +187,6 @@ type RBACRule struct {
 	URLs      []string `json:"urls,omitempty"`
 }
 
-// RBACGrant is one binding's contribution to a subject. An empty namespace
-// means the grant applies everywhere.
 type RBACGrant struct {
 	Binding     string     `json:"binding"`
 	BindingKind string     `json:"bindingKind"`
@@ -302,8 +298,6 @@ type ClusterOverview struct {
 	Error       string             `json:"error,omitempty"`
 }
 
-// FleetCluster is one cluster's line in the fleet overview: what a person
-// scanning several clusters needs before deciding which one to open.
 type FleetCluster struct {
 	Cluster  string      `json:"cluster"`
 	Context  string      `json:"context"`
@@ -314,8 +308,6 @@ type FleetCluster struct {
 	Reason   string      `json:"reason,omitempty"`
 }
 
-// FleetKind is one resource type across the fleet: how many exist and how many
-// are unhealthy, per cluster and in total.
 type FleetKind struct {
 	Key        string         `json:"key"`
 	Total      int            `json:"total"`
@@ -328,8 +320,6 @@ type FleetInventory struct {
 	Error string      `json:"error,omitempty"`
 }
 
-// FleetImage is one container image and everywhere it runs. Images are the
-// thing a fleet drifts on that nothing else surfaces.
 type FleetImage struct {
 	Image    string   `json:"image"`
 	Repo     string   `json:"repo"`
@@ -724,7 +714,6 @@ type ExecSupport struct {
 	Shell     string `json:"shell"`
 }
 
-// Access carries refusals only; absent means permitted or unanswerable.
 type Access struct {
 	Refused []Refusal `json:"refused"`
 }
@@ -739,7 +728,6 @@ type AccessQuery struct {
 	Refs       []ObjectRef `json:"refs"`
 }
 
-// BulkAccess indexes refusals by their place in the list asked about.
 type BulkAccess struct {
 	Refused []RowRefusal `json:"refused"`
 }
@@ -1141,9 +1129,6 @@ const (
 	EngineArgo = ControllerArgo
 )
 
-// FleetApp is one delivery object on one cluster, whichever engine manages it.
-// Spread is how many clusters carry an app of that name, which is what makes
-// the same app on three clusters legible as one thing.
 type FleetApp struct {
 	Cluster   string `json:"cluster"`
 	Engine    string `json:"engine"`
@@ -1173,11 +1158,10 @@ type FluxDashboard struct {
 }
 
 type ResourceUsage struct {
-	CPUMilli   int64 `json:"cpuMilli"`
-	MemoryMi   int64 `json:"memoryMi"`
-	CPUPercent int64 `json:"cpuPercent"`
-	MemPercent int64 `json:"memPercent"`
-	// Only a node has a ceiling, so these stay zero for a pod.
+	CPUMilli            int64 `json:"cpuMilli"`
+	MemoryMi            int64 `json:"memoryMi"`
+	CPUPercent          int64 `json:"cpuPercent"`
+	MemPercent          int64 `json:"memPercent"`
 	CPUAllocatableMilli int64 `json:"cpuAllocatableMilli"`
 	MemAllocatableMi    int64 `json:"memAllocatableMi"`
 }
@@ -1192,9 +1176,6 @@ type UpdateStatus struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
-// UpdateResult is what pressing the update button came to. Updated means the
-// binary on disk was replaced and spinoza has to be restarted; Command is the
-// install line for a build that cannot replace itself.
 type UpdateResult struct {
 	Updated bool   `json:"updated"`
 	Current string `json:"current"`
@@ -1209,14 +1190,13 @@ type MetricPoint struct {
 }
 
 type MetricHistory struct {
-	Namespace string `json:"namespace"`
-	Pod       string `json:"pod"`
-	Source    string `json:"source,omitempty"`
-	Sampled   bool   `json:"sampled,omitempty"`
-	// Unix ms of the oldest reading here, not the span asked for.
-	Since  int64         `json:"since,omitempty"`
-	CPU    []MetricPoint `json:"cpu"`
-	Memory []MetricPoint `json:"memory"`
+	Namespace string        `json:"namespace"`
+	Pod       string        `json:"pod"`
+	Source    string        `json:"source,omitempty"`
+	Sampled   bool          `json:"sampled,omitempty"`
+	Since     int64         `json:"since,omitempty"`
+	CPU       []MetricPoint `json:"cpu"`
+	Memory    []MetricPoint `json:"memory"`
 }
 
 type Metrics struct {
@@ -1250,29 +1230,26 @@ type CheckFinding struct {
 }
 
 type CheckGroup struct {
-	ID         string   `json:"id"`
-	Title      string   `json:"title"`
-	Category   string   `json:"category"`
-	Severity   string   `json:"severity"`
-	Frameworks []string `json:"frameworks,omitempty"`
-	Wrong      string   `json:"wrong"`
-	Remedy     string   `json:"remedy"`
-	Skipped    string   `json:"skipped,omitempty"`
-	Total      int      `json:"total"`
-	Muted      int      `json:"muted,omitempty"`
-	NewCount   int      `json:"new,omitempty"`
-	Fixed      int      `json:"fixed,omitempty"`
-	Gone       []string `json:"gone,omitempty"`
-	Baselined  bool     `json:"baselined,omitempty"`
-	// Was is what this check found when the baseline was taken, and Ran says
-	// the baseline ran it at all — nought findings and never asked are not the
-	// same thing.
-	Was       int            `json:"was,omitempty"`
-	Ran       bool           `json:"ran,omitempty"`
-	Measured  bool           `json:"measured,omitempty"`
-	Truncated bool           `json:"truncated,omitempty"`
-	Next      string         `json:"next,omitempty"`
-	Findings  []CheckFinding `json:"findings"`
+	ID         string         `json:"id"`
+	Title      string         `json:"title"`
+	Category   string         `json:"category"`
+	Severity   string         `json:"severity"`
+	Frameworks []string       `json:"frameworks,omitempty"`
+	Wrong      string         `json:"wrong"`
+	Remedy     string         `json:"remedy"`
+	Skipped    string         `json:"skipped,omitempty"`
+	Total      int            `json:"total"`
+	Muted      int            `json:"muted,omitempty"`
+	NewCount   int            `json:"new,omitempty"`
+	Fixed      int            `json:"fixed,omitempty"`
+	Gone       []string       `json:"gone,omitempty"`
+	Baselined  bool           `json:"baselined,omitempty"`
+	Was        int            `json:"was,omitempty"`
+	Ran        bool           `json:"ran,omitempty"`
+	Measured   bool           `json:"measured,omitempty"`
+	Truncated  bool           `json:"truncated,omitempty"`
+	Next       string         `json:"next,omitempty"`
+	Findings   []CheckFinding `json:"findings"`
 }
 
 type NamespaceCount struct {
@@ -1318,17 +1295,12 @@ type Mutes struct {
 }
 
 type CheckReport struct {
-	Groups     []CheckGroup     `json:"groups"`
-	Objects    []CheckObject    `json:"objects"`
-	Namespaces []NamespaceCount `json:"namespaces,omitempty"`
-	Baseline   string           `json:"baseline,omitempty"`
-	// BaselineFrom names the cluster a baseline was taken on when that is not
-	// this one. Comparing two clusters is a fair thing to want; being told
-	// nine thousand findings are new without being told why is not.
-	BaselineFrom string `json:"baselineFrom,omitempty"`
-	// WasScanned is how many workloads the baseline saw, so a count taken on a
-	// cluster of a different size can be read per workload.
-	WasScanned int    `json:"wasScanned,omitempty"`
-	Scanned    int    `json:"scanned"`
-	Error      string `json:"error,omitempty"`
+	Groups       []CheckGroup     `json:"groups"`
+	Objects      []CheckObject    `json:"objects"`
+	Namespaces   []NamespaceCount `json:"namespaces,omitempty"`
+	Baseline     string           `json:"baseline,omitempty"`
+	BaselineFrom string           `json:"baselineFrom,omitempty"`
+	WasScanned   int              `json:"wasScanned,omitempty"`
+	Scanned      int              `json:"scanned"`
+	Error        string           `json:"error,omitempty"`
 }

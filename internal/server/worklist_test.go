@@ -134,8 +134,6 @@ func groupIn(t *testing.T, report api.CheckReport, id string) api.CheckGroup {
 	return api.CheckGroup{}
 }
 
-// muting through the endpoint
-
 func TestAMuteSilencesTheFindingOnTheNextAudit(t *testing.T) {
 	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
 	before := groupIn(t, checksReport(t, ts.URL+"/api/checks"), "requests-missing").Total
@@ -225,8 +223,6 @@ func TestSomethingThatIsNotAMuteIsRefused(t *testing.T) {
 	}
 }
 
-// the baseline through the endpoint
-
 func TestABaselineTakenNowLeavesNothingNew(t *testing.T) {
 	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
 	srv.UseBaselines(newHeldBaselines())
@@ -295,8 +291,6 @@ func TestAServerGivenNoBaselineStoreStillTakesOne(t *testing.T) {
 	}
 }
 
-// reading a rule list back before it is saved
-
 func TestARuleListThatReadsComesBackWithNoFaults(t *testing.T) {
 	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
 	rules := `[{"id":"no-beta","expr":"object.kind == \"Pod\""}]`
@@ -343,8 +337,6 @@ func TestARuleListTooLargeToReadIsRefused(t *testing.T) {
 	}
 }
 
-// the audit as a file
-
 func TestTheExportCarriesEveryFindingAsARow(t *testing.T) {
 	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
 
@@ -388,8 +380,6 @@ func TestTheExportObeysTheFilterTheViewIsShowing(t *testing.T) {
 		t.Fatal("an export of one namespace carried nothing at all")
 	}
 }
-
-// carrying a baseline somewhere else
 
 func TestTheBaselineCanBeSavedToAFileAndTakenBack(t *testing.T) {
 	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
@@ -480,8 +470,6 @@ func TestABaselineThatCannotBeKeptOnLoadIsReported(t *testing.T) {
 		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
-
-// the namespace summary through the endpoint
 
 func TestTheReportCountsFindingsPerNamespace(t *testing.T) {
 	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"), newPodObject("staging", "web-1"))

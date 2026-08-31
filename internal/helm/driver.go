@@ -5,7 +5,6 @@ import (
 	"os"
 )
 
-// DefaultDriver is where a release that does not exist yet will go.
 func DefaultDriver() string {
 	if os.Getenv(driverEnv) == DriverConfigMap {
 		return DriverConfigMap
@@ -13,7 +12,6 @@ func DefaultDriver() string {
 	return DriverSecret
 }
 
-// ReleaseDriver is where history actually lives; the environment can disagree.
 func (s *Service) ReleaseDriver(ctx context.Context, namespace, name string) string {
 	if s == nil {
 		return DefaultDriver()

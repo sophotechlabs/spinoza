@@ -215,7 +215,6 @@ func (c *Cluster) List(
 	return c.list(ctx, ref, target)
 }
 
-// Read opens a client for that read alone, leaving current caches untouched.
 func (c *Cluster) Read(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error) {
 	if c.read == nil {
 		return "", fmt.Errorf("%w: reading another context is not wired up", api.ErrInternal)
@@ -343,8 +342,6 @@ func (c *Cluster) Opened() []api.OpenCluster {
 	return out
 }
 
-// dial builds a connection, bounded, so an apiserver that never answers is an
-// error rather than a handler that never returns.
 func (c *Cluster) dial(root context.Context, ref api.ContextRef) (*connection, error) {
 	ctx, cancel := context.WithCancel(root)
 	type built struct {

@@ -14,8 +14,6 @@ type delivery struct {
 	argo api.ArgoDashboard
 }
 
-// One list, not two views side by side: a person asking what is deployed does
-// not care which engine put it there until they are looking at one row.
 func (s *Server) fleetGitops(w http.ResponseWriter, r *http.Request) {
 	found := eachCluster(r.Context(), s, func(ctx context.Context, backend Backend) delivery {
 		return delivery{flux: backend.Flux(ctx), argo: backend.Argo(ctx)}

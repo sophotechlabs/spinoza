@@ -28,8 +28,6 @@ func labeled(namespace string, labels, annotations map[string]any) *unstructured
 	}}
 }
 
-// what the audit calls yours, packaged, or the distribution's
-
 func TestOriginNamesWhatDeployedTheObject(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -112,8 +110,6 @@ func TestAPackagedWorkloadInASystemNamespaceIsStillPackaged(t *testing.T) {
 		t.Fatalf("managed by = %q, want %q", manager, "Flux: infra")
 	}
 }
-
-// what the ordering does with them
 
 func TestYoursSortsAheadOfPackagedAndPackagedAheadOfTheDistribution(t *testing.T) {
 	mine := Subject{Ref: refFor("z-last-alphabetically"), Kind: "Deployment"}

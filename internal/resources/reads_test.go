@@ -378,7 +378,6 @@ func TestAClusterThatAnswersIsReachable(t *testing.T) {
 	}
 }
 
-// A refusal read as an outage would put every restricted cluster in the red.
 func TestAClusterThatRefusesTheQuestionIsStillReachable(t *testing.T) {
 	refused := apierrors.NewForbidden(
 		schema.GroupResource{Resource: "version"},

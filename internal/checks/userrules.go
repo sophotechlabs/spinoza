@@ -13,9 +13,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-// UserRule is a check written by whoever runs Spinoza rather than shipped with
-// it. The expression is CEL, the language Kubernetes itself chose for
-// admission policy, evaluated with the workload bound to `object`.
 type UserRule struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
@@ -25,10 +22,6 @@ type UserRule struct {
 	Expr     string `json:"expr"`
 	Wrong    string `json:"wrong"`
 	Remedy   string `json:"remedy"`
-	// Silences names a check this rule quietens instead of adding one of its
-	// own. Where the expression matches, that check's finding is reported as
-	// silenced with Reason, the same way the audit silences what an operator
-	// reads without naming it.
 	Silences string `json:"silences,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 }
@@ -39,12 +32,8 @@ func (r UserRule) silencer() bool {
 
 const userRuleObject = ScopeObject
 
-// RulesKey is where the settings store holds the rules you wrote yourself.
 const RulesKey = "spinoza.checks.rules.v1"
 
-// ParseRules reads what the settings store holds. A store that holds nothing,
-// or holds something that is not a rule list, yields no rules rather than an
-// error: the audit is not the place to argue about the settings file.
 func ParseRules(raw string) []UserRule {
 	if strings.TrimSpace(raw) == "" {
 		return nil
@@ -63,13 +52,8 @@ func ParseRules(raw string) []UserRule {
 	return kept
 }
 
-// RuleFault is one rule the audit would refuse, named so the editor can say
-// which line is wrong before the rule is saved rather than after the next audit.
 type RuleFault = api.RuleFault
 
-// Faults reads a rule list the way the audit will and reports what it would
-// refuse. An unreadable list is one fault about the list itself: an editor that
-// says nothing about a typo is worse than one that says the wrong thing.
 func Faults(raw string) []RuleFault {
 	if strings.TrimSpace(raw) == "" {
 		return []RuleFault{}
@@ -117,8 +101,6 @@ func isCheck(id string) bool {
 	return false
 }
 
-// Silencers are the rules that quieten a check rather than add one. They are
-// kept apart from the rest so the registry only ever holds checks.
 func Silencers(rules []UserRule) []UserRule {
 	out := []UserRule{}
 	for _, one := range rules {
@@ -201,8 +183,6 @@ func compileRule(expr string) (cel.Program, error) {
 	return env.Program(parsed)
 }
 
-// A rule that does not compile becomes a check that reports the compile error
-// instead of findings, so a typo is visible in the view rather than silent.
 func refuses(reason string) finder {
 	return func(scan) []found {
 		return []found{{
@@ -215,8 +195,6 @@ func refuses(reason string) finder {
 	}
 }
 
-// A rule that matches is a finding; a rule that errors on one object is quiet
-// about that object and keeps going. Neither may take the audit down with it.
 func judgeWith(rule UserRule, program cel.Program) subjectRule {
 	return func(subject Subject) (string, string) {
 		if !rule.matches(subject) {
@@ -233,9 +211,6 @@ func judgeWith(rule UserRule, program cel.Program) subjectRule {
 	}
 }
 
-// holds runs the rule against one object. A rule that cannot be compiled, or
-// that errors on this object, holds for nothing: a broken silencer must not
-// quieten a check by accident.
 func (r UserRule) holds(subject Subject) bool {
 	program, err := compileRule(r.Expr)
 	if err != nil {

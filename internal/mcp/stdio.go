@@ -84,8 +84,6 @@ func (s *Server) answer(ctx context.Context, line []byte) []byte {
 	return s.Handle(ctx, line)
 }
 
-// A message is one line. Reading it in parts keeps an oversized one from ending
-// the session: it is answered with an error like any other bad message.
 func readMessage(reader *bufio.Reader) ([]byte, error) {
 	var whole []byte
 	for {
