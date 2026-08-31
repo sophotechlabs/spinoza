@@ -91,16 +91,9 @@ func runDesktop() error {
 	if printedNotice(os.Stdout, opts) {
 		return nil
 	}
-	kept, logErr := logFile()
-	out := io.Writer(os.Stderr)
-	if logErr == nil {
+	kept := startLogging(opts.logLevel)
+	if kept != nil {
 		defer func() { _ = kept.Close() }()
-		out = io.MultiWriter(os.Stderr, kept)
-	}
-	slog.SetDefault(slog.New(logHandler(out, opts.logLevel)))
-	klog.SetSlogLogger(slog.Default())
-	if logErr != nil {
-		slog.Warn("this run will not be written to a log file", "error", logErr)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -151,24 +144,9 @@ func runDesktop() error {
 	srv.RememberOpen(ctx)
 	srv.StartRecordings(ctx)
 	srv.UseUpdates(updateChecker())
-	srv.UseLocalShell(func(cols, rows uint16) (server.LocalShell, error) {
-		session, err := localshell.Start(context.Background(), localshell.Options{
-			Size: localshell.Size{Cols: cols, Rows: rows},
-		})
-		if err != nil {
-			return nil, err
-		}
-		return shellAdapter{session: session}, nil
-	})
+	srv.UseLocalShell(localShell)
 	useViews(srv, &window, addr, token)
-	srv.UseFilePicker(func(context.Context) (string, error) {
-		ready := window.Load()
-		if ready == nil {
-			return "", errors.New("the spinoza window is not ready yet")
-		}
-		//nolint:contextcheck // the dialog belongs to the window, not to the request that asked for it
-		return chooseKubeconfig(*ready)
-	})
+	srv.UseFilePicker(filePicker(&window))
 	httpServer := &http.Server{
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -204,6 +182,42 @@ func runDesktop() error {
 		return fmt.Errorf("wails: %w", runErr)
 	}
 	return nil
+}
+
+func startLogging(level slog.Leveler) io.Closer {
+	kept, err := logFile()
+	out := io.Writer(os.Stderr)
+	if err == nil {
+		out = io.MultiWriter(os.Stderr, kept)
+	}
+	slog.SetDefault(slog.New(logHandler(out, level)))
+	klog.SetSlogLogger(slog.Default())
+	if err != nil {
+		slog.Warn("this run will not be written to a log file", "error", err)
+		return nil
+	}
+	return kept
+}
+
+func localShell(cols, rows uint16) (server.LocalShell, error) {
+	session, err := localshell.Start(context.Background(), localshell.Options{
+		Size: localshell.Size{Cols: cols, Rows: rows},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return shellAdapter{session: session}, nil
+}
+
+func filePicker(window *atomic.Pointer[context.Context]) func(context.Context) (string, error) {
+	return func(context.Context) (string, error) {
+		ready := window.Load()
+		if ready == nil {
+			return "", errors.New("the spinoza window is not ready yet")
+		}
+		//nolint:contextcheck // the dialog belongs to the window, not to the request that asked for it
+		return chooseKubeconfig(*ready)
+	}
 }
 
 func logFile() (*os.File, error) {
