@@ -111,8 +111,8 @@ func podHeldByAFinalizer(t *testing.T, loaded *kube.Bundle) {
 		t.Fatalf("create pod: %v", err)
 	}
 	t.Cleanup(func() {
-		clear := []byte(`{"metadata":{"finalizers":null}}`)
-		_, _ = pods.Patch(context.Background(), "will-not-go", types.MergePatchType, clear, metav1.PatchOptions{})
+		release := []byte(`{"metadata":{"finalizers":null}}`)
+		_, _ = pods.Patch(context.Background(), "will-not-go", types.MergePatchType, release, metav1.PatchOptions{})
 		_ = pods.Delete(context.Background(), "will-not-go", metav1.DeleteOptions{})
 	})
 	_ = pods.Delete(context.Background(), "will-not-go", metav1.DeleteOptions{})

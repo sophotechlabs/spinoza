@@ -470,6 +470,7 @@ publish-badges:
 lint-be: stub-assets
     golangci-lint run {{ go_pkgs }}
     golangci-lint run --build-tags desktop {{ go_pkgs }}
+    golangci-lint run --build-tags integration ./test/...
     go vet {{ go_pkgs }}
     go vet -tags desktop {{ go_pkgs }}
     go vet -tags integration ./test/...

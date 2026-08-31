@@ -95,7 +95,7 @@ func TestWhatTheClusterOwnsOrManagesIsNotCalledALeftover(t *testing.T) {
 		}
 	}
 	if silenced == 0 {
-		t.Fatal("no secret on this cluster was recognised as owned, managed, or read by convention")
+		t.Fatal("no secret on this cluster was recognized as owned, managed, or read by convention")
 	}
 }
 

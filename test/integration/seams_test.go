@@ -173,8 +173,9 @@ func TestNewWiresARealCluster(t *testing.T) {
 	}
 	raw.CurrentContext = name
 	path := filepath.Join(t.TempDir(), "kubeconfig")
-	if err := clientcmd.WriteToFile(*raw, path); err != nil {
-		t.Fatalf("write kubeconfig: %v", err)
+	writeErr := clientcmd.WriteToFile(*raw, path)
+	if writeErr != nil {
+		t.Fatalf("write kubeconfig: %v", writeErr)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

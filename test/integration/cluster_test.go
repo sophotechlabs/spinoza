@@ -544,6 +544,7 @@ func namedRepo(t *testing.T, raw string) string {
 	if err != nil {
 		t.Fatalf("parse %q: %v", raw, err)
 	}
+	//nolint:gosec // the host is this test's own SPINOZA_CHART_HOST, and the lookup only proves it resolves
 	if _, lookupErr := net.LookupHost(host); lookupErr != nil {
 		t.Fatalf("%s is %q, which does not resolve: %v", chartHostVar, host, lookupErr)
 	}

@@ -96,9 +96,9 @@ func taintOneNode(t *testing.T, loaded *kube.Bundle) string {
 		t.Fatalf("taint %s: %v", name, err)
 	}
 	t.Cleanup(func() {
-		clear := []byte(`{"spec":{"taints":null}}`)
+		untaint := []byte(`{"spec":{"taints":null}}`)
 		_, _ = loaded.Clientset.CoreV1().Nodes().Patch(
-			context.Background(), name, types.StrategicMergePatchType, clear, metav1.PatchOptions{},
+			context.Background(), name, types.StrategicMergePatchType, untaint, metav1.PatchOptions{},
 		)
 	})
 	return name

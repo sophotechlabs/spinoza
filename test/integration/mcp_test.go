@@ -69,7 +69,9 @@ func mcpCall(t *testing.T, server *mcp.Server, name string, args map[string]any)
 	}
 	raw := server.Handle(context.Background(), frame)
 	var reply struct {
-		Error  *struct{ Message string } `json:"error"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
 		Result *struct {
 			IsError bool `json:"isError"`
 			Content []struct {

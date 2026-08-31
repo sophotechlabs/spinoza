@@ -239,12 +239,28 @@ func TestSuspendKeepsThePolicyTheApplicationHad(t *testing.T) {
 	if !found {
 		t.Fatal("suspend removed the automated block instead of switching it off")
 	}
-	if automated["enabled"] != false {
+	if !isFalse(automated, "enabled") {
 		t.Fatalf("enabled = %v, want false", automated["enabled"])
 	}
-	if automated["prune"] != true || automated["selfHeal"] != true {
+	if !isTrue(automated, "prune") || !isTrue(automated, "selfHeal") {
 		t.Fatalf("automated = %v, want prune and selfHeal kept", automated)
 	}
+}
+
+func isTrue(held map[string]any, key string) bool {
+	value, ok := held[key].(bool)
+	if !ok {
+		return false
+	}
+	return value
+}
+
+func isFalse(held map[string]any, key string) bool {
+	value, ok := held[key].(bool)
+	if !ok {
+		return false
+	}
+	return !value
 }
 
 func TestASyncWritesTheOptionsTheApiServerKeeps(t *testing.T) {
@@ -265,7 +281,7 @@ func TestASyncWritesTheOptionsTheApiServerKeeps(t *testing.T) {
 	if !found {
 		t.Fatal("the sync wrote no operation for a controller to pick up")
 	}
-	if sync["prune"] != true {
+	if !isTrue(sync, "prune") {
 		t.Fatalf("prune = %v, want true", sync["prune"])
 	}
 	options, _, _ := unstructured.NestedStringSlice(live.Object, "operation", "sync", "syncOptions")
