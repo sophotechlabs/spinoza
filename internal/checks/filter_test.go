@@ -101,17 +101,48 @@ func TestADisabledCheckIsNotReportedAtAll(t *testing.T) {
 	}
 }
 
-func TestASeverityFloorDropsEverythingBelowIt(t *testing.T) {
+func TestASeverityFloorDropsEveryRowBelowIt(t *testing.T) {
+	report := filtered(t, Filter{MinSeverity: severityHigh},
+		deployment("api", podSpec(container("app", nil))),
+		inNamespace(privilegedDeployment("agent"), "kube-system"))
+
+	shown := 0
+	for _, group := range report.Groups {
+		for _, finding := range group.Findings {
+			shown++
+			if finding.Severity != severityHigh {
+				t.Fatalf("%s showed a %s row under a high floor", group.ID, finding.Severity)
+			}
+		}
+	}
+	if shown == 0 {
+		t.Fatal("a high floor left no rows at all")
+	}
+}
+
+func TestARowRaisedAboveTheFloorSurvivesACheckBelowIt(t *testing.T) {
+	spread := replicas(deployment("api", podSpec(container("app", nil))), 3)
+
+	report := filtered(t, Filter{MinSeverity: severityHigh}, spread)
+
+	group := groupNamed(t, report, "privilege-escalation")
+	if group.Severity != severityMedium {
+		t.Fatalf("the fixture check is %s, so it no longer tests the raised row", group.Severity)
+	}
+	if len(group.Findings) != 1 {
+		t.Fatalf("a row raised to high by its replica count was dropped with its medium check: %+v", group.Findings)
+	}
+	if group.Findings[0].Severity != severityHigh {
+		t.Fatalf("the row read %s", group.Findings[0].Severity)
+	}
+}
+
+func TestACheckThatCannotReachTheFloorIsNotReportedAtAll(t *testing.T) {
 	report := filtered(t, Filter{MinSeverity: severityHigh},
 		deployment("api", podSpec(container("app", nil))))
 
-	for _, group := range report.Groups {
-		if group.Severity != severityHigh {
-			t.Fatalf("%s is %s and survived a high floor", group.ID, group.Severity)
-		}
-	}
-	if len(report.Groups) == 0 {
-		t.Fatal("a high floor left nothing at all")
+	if holds(groupIDs(report), "orphaned-secret") {
+		t.Fatal("a low check was reported under a high floor")
 	}
 }
 

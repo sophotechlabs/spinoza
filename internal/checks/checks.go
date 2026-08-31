@@ -29,7 +29,13 @@ const (
 	notEveryKind = "not audited: this decides what nothing references, " +
 		"which is only true once every kind has been read"
 
-	readsCustom = "Every built-in kind and every custom resource was read to decide this."
+	readsPart = "Nothing among the kinds this read names it. It read every custom resource, " +
+		"the workload, config and storage kinds, and the built-in kinds that hold references to them " +
+		"— not every built-in kind. Something outside the cluster still might name it, " +
+		"which is the one thing this cannot see."
+
+	readsEvery = "Nothing anywhere in the cluster names it. Every kind the cluster reports was read " +
+		"to decide this. Something outside the cluster still might, which is the one thing this cannot see."
 
 	findingsShown = 200
 )
@@ -103,6 +109,7 @@ type check struct {
 	severity   string
 	frameworks []string
 	wrong      string
+	wrongEvery string
 	remedy     string
 	needsUsage bool
 	needsEvery bool
@@ -337,6 +344,9 @@ func (c check) group(sc scan, objs *objects, spread *namespaces, keep Filter, sh
 		Remedy:     c.remedy,
 		Findings:   []api.CheckFinding{},
 	}
+	if sc.everyKind && c.wrongEvery != "" {
+		out.Wrong = c.wrongEvery
+	}
 	if down := c.standsDown(sc); down != "" {
 		out.Skipped = down
 		return out
@@ -354,7 +364,7 @@ func (c check) group(sc scan, objs *objects, spread *namespaces, keep Filter, sh
 	}
 	out.Measured = !c.comparable()
 	out.Truncated = out.Next != ""
-	spread.add(c.severity, all)
+	spread.add(all)
 	return out
 }
 
@@ -453,6 +463,7 @@ func survey(
 	if keep.WholeCluster && !keep.EveryKind {
 		if wantsCorpus(keep) {
 			wanted = append(wanted, customKinds(descs)...)
+			wanted = append(wanted, mentionKinds(descs)...)
 			custom = true
 		}
 		wanted = append(wanted, alsoWarm(lister, wanted)...)

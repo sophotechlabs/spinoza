@@ -43,6 +43,9 @@ func ParseFilter(query url.Values) Filter {
 }
 
 func (f Filter) narrows() bool {
+	if f.MinSeverity != "" {
+		return true
+	}
 	return f.Namespace != "" || len(f.SkipNamespaces) > 0 || f.OnlyNew || !f.WholeCluster
 }
 
@@ -126,7 +129,14 @@ func (f Filter) wants(entry check) bool {
 	if slices.Contains(f.Disabled, entry.id) {
 		return false
 	}
-	return f.severeEnough(entry.severity)
+	return f.couldReach(entry.severity)
+}
+
+func (f Filter) couldReach(severity string) bool {
+	if f.MinSeverity == "" {
+		return true
+	}
+	return highestWeight(severity) >= baseWeight(f.MinSeverity)
 }
 
 func (f Filter) severeEnough(severity string) bool {
@@ -138,6 +148,9 @@ func (f Filter) severeEnough(severity string) bool {
 
 func (f Filter) keeps(item found) bool {
 	if slices.Contains(f.SkipNamespaces, item.subject.Ref.Namespace) {
+		return false
+	}
+	if !f.severeEnough(item.severity) {
 		return false
 	}
 	if f.Namespace == "" {

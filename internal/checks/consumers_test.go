@@ -131,3 +131,15 @@ func TestSilencedLeftoversAreCountedRatherThanHidden(t *testing.T) {
 		t.Fatalf("counted %d silenced, want the Helm record counted rather than dropped", group.Muted)
 	}
 }
+
+func TestTheK3sClusterDNSConfigMapIsNotOfferedForDeletion(t *testing.T) {
+	report := report(t, simple("ConfigMap", "cluster-dns", "kube-system", nil))
+
+	group := groupNamed(t, report, "orphaned-config-map")
+	if len(group.Findings) != 0 {
+		t.Fatalf("k3s's own DNS ConfigMap was offered for deletion: %+v", group.Findings)
+	}
+	if group.Muted != 1 {
+		t.Fatalf("the DNS ConfigMap was not muted by convention: muted %d", group.Muted)
+	}
+}

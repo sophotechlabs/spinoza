@@ -57,6 +57,14 @@ func blastWeight(base int, subject Subject) int {
 	return weight
 }
 
+func highestWeight(severity string) int {
+	weight := baseWeight(severity) + 1
+	if weight > weightHigh {
+		return weightHigh
+	}
+	return weight
+}
+
 func severityFor(base string, subject Subject) string {
 	return severityAt(blastWeight(baseWeight(base), subject))
 }

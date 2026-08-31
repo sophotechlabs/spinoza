@@ -74,6 +74,14 @@ var nameOnlyTargets = []target{
 	{group: "", resource: secretsResource},
 }
 
+var mentionTargets = []target{
+	{group: "", resource: "persistentvolumes"},
+	{group: "", resource: "podtemplates"},
+	{group: "admissionregistration.k8s.io", resource: "mutatingwebhookconfigurations"},
+	{group: "admissionregistration.k8s.io", resource: "validatingwebhookconfigurations"},
+	{group: "apiregistration.k8s.io", resource: "apiservices"},
+}
+
 func allTargets() []target {
 	return targetsFor(true)
 }
@@ -327,7 +335,31 @@ func countMentions(items []*unstructured.Unstructured) map[string]int {
 }
 
 func borrowed(desc api.ResourceDescriptor) bool {
-	return desc.Category == customResources
+	if desc.Category == customResources {
+		return true
+	}
+	return mentionOnly(desc)
+}
+
+func mentionOnly(desc api.ResourceDescriptor) bool {
+	for _, want := range mentionTargets {
+		if desc.Group == want.group && desc.Resource == want.resource {
+			return true
+		}
+	}
+	return false
+}
+
+func mentionKinds(descs map[string]api.ResourceDescriptor) []api.ResourceDescriptor {
+	out := []api.ResourceDescriptor{}
+	for _, want := range mentionTargets {
+		desc, ok := matching(descs, want)
+		if !ok {
+			continue
+		}
+		out = append(out, desc)
+	}
+	return out
 }
 
 func groupOf(apiVersion string) string {

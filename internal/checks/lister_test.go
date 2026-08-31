@@ -118,6 +118,7 @@ var kindResources = map[string]string{
 	"ServiceAccount":          "serviceaccounts",
 	"ConfigMap":               "configmaps",
 	"Secret":                  "secrets",
+	"PersistentVolume":        "persistentvolumes",
 	"PersistentVolumeClaim":   "persistentvolumeclaims",
 	"Ingress":                 "ingresses",
 	"IngressClass":            "ingressclasses",
@@ -137,7 +138,7 @@ var kindResources = map[string]string{
 var clusterScoped = map[string]bool{
 	"Node": true, "Namespace": true, "IngressClass": true, "StorageClass": true,
 	"PriorityClass": true, "RuntimeClass": true, "ClusterRole": true, "ClusterRoleBinding": true,
-	"ClusterIssuer": true,
+	"ClusterIssuer": true, "PersistentVolume": true,
 }
 
 var kindGroups = map[string]string{

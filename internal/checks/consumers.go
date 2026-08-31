@@ -52,6 +52,7 @@ var knownConsumers = []consumer{
 	{who: "Helm, which keeps release history here", resource: secretsResource, prefix: "sh.helm.release.v1."},
 	{who: "k3s, which serves the apiserver with it", resource: secretsResource, namespace: "kube-system", name: "k3s-serving"},
 	{who: "k3s, which authenticates a node with it", resource: secretsResource, namespace: "kube-system", suffix: ".node-password.k3s"},
+	{who: "k3s, which reads the cluster DNS address and domain from it", resource: configMapsResource, namespace: "kube-system", name: "cluster-dns"},
 }
 
 func (c consumer) covers(resource string, ref api.ObjectRef) bool {

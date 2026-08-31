@@ -16,7 +16,7 @@ func newNamespaces() *namespaces {
 	return &namespaces{index: map[string]int{}}
 }
 
-func (n *namespaces) add(severity string, all []marked) {
+func (n *namespaces) add(all []marked) {
 	for _, item := range all {
 		space := item.subject.Ref.Namespace
 		if space == "" {
@@ -25,7 +25,7 @@ func (n *namespaces) add(severity string, all []marked) {
 		if item.muted {
 			continue
 		}
-		n.count(space, severity)
+		n.count(space, item.severity)
 	}
 }
 

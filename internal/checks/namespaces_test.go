@@ -23,8 +23,32 @@ func TestTheSummaryCountsFindingsWhereTheyLive(t *testing.T) {
 	if count := namespaceCount(t, report, testNamespace); count.High == 0 {
 		t.Fatalf("%s carried no high findings: %+v", testNamespace, count)
 	}
-	if count := namespaceCount(t, report, "kube-system"); count.High == 0 {
-		t.Fatalf("kube-system carried no high findings: %+v", count)
+	if count := namespaceCount(t, report, "kube-system"); count.Total == 0 {
+		t.Fatalf("kube-system carried no findings: %+v", count)
+	}
+}
+
+func TestTheSummaryCountsTheSeverityEachRowShows(t *testing.T) {
+	report := report(t, inNamespace(privilegedDeployment("agent"), "kube-system"))
+
+	count := namespaceCount(t, report, "kube-system")
+	shown := map[string]int{}
+	for _, group := range report.Groups {
+		for _, finding := range group.Findings {
+			if report.Objects[finding.Ref].Namespace != "kube-system" {
+				continue
+			}
+			shown[finding.Severity]++
+		}
+	}
+	if count.High != shown[severityHigh] {
+		t.Fatalf("the panel counted %d high where %d rows read high: %+v", count.High, shown[severityHigh], count)
+	}
+	if count.Medium != shown[severityMedium] {
+		t.Fatalf("the panel counted %d medium where %d rows read medium: %+v", count.Medium, shown[severityMedium], count)
+	}
+	if count.Low != shown[severityLow] {
+		t.Fatalf("the panel counted %d low where %d rows read low: %+v", count.Low, shown[severityLow], count)
 	}
 }
 
