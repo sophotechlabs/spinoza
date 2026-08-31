@@ -531,3 +531,51 @@ func TestTwoSubjectsWithTheSamePowersAreOrderedByName(t *testing.T) {
 		t.Fatalf("the order was %+v", labels(index))
 	}
 }
+
+func namedRule(verbs, groups, resources, names []string) map[string]any {
+	one := rule(verbs, groups, resources)
+	one["resourceNames"] = asAny(names)
+	return one
+}
+
+func TestARuleTiedToNamedObjectsDoesNotAnswerForAllOfThem(t *testing.T) {
+	one := Rule{
+		Verbs:     []string{"get"},
+		Groups:    []string{""},
+		Resources: []string{"secrets"},
+		Names:     []string{"forgejo-pg-app"},
+	}
+
+	if one.Allows(Ask{Verb: "get", Resource: "secrets"}) {
+		t.Fatal("a rule that only names one secret answered for every secret, which the apiserver denies")
+	}
+}
+
+func TestARuleWithNoNamesStillAnswers(t *testing.T) {
+	one := Rule{Verbs: []string{"get"}, Groups: []string{""}, Resources: []string{"secrets"}}
+
+	if !one.Allows(Ask{Verb: "get", Resource: "secrets"}) {
+		t.Fatal("an unrestricted rule stopped answering")
+	}
+}
+
+func TestASubjectHeldToNamedSecretsIsNotSaidToReadSecrets(t *testing.T) {
+	index := Build(Held{
+		Roles: []*unstructured.Unstructured{
+			role("pg", "forgejo",
+				namedRule([]string{"get"}, []string{""}, []string{"secrets"}, []string{"forgejo-pg-app"})),
+		},
+		Bindings: []*unstructured.Unstructured{
+			binding("pg", "forgejo", "Role", "pg", account("forgejo-pg", "forgejo")),
+		},
+	})
+
+	held := holderFor(t, index, "system:serviceaccount:forgejo:forgejo-pg")
+
+	if slices.Contains(held.Powers, "reads secrets") {
+		t.Fatalf("powers = %+v, want no claim the apiserver would deny", held.Powers)
+	}
+	if len(index.Who(Ask{Verb: "get", Resource: "secrets", Namespace: "forgejo"})) != 0 {
+		t.Fatal("a subject held to one named secret came back as able to get secrets")
+	}
+}

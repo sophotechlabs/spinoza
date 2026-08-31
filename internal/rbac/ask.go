@@ -38,6 +38,9 @@ func (r Rule) Allows(ask Ask) bool {
 	if len(r.Resources) == 0 {
 		return false
 	}
+	if len(r.Names) > 0 {
+		return false
+	}
 	if !covers(r.Verbs, ask.Verb) {
 		return false
 	}
