@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.25.0](https://github.com/sophotechlabs/spinoza/compare/v1.24.1...v1.25.0) (2026-08-31)
+
+
+### Features
+
+* **desktop:** write the app log to a file ([8e6e314](https://github.com/sophotechlabs/spinoza/commit/8e6e31481bf5d929f42a85ed2c9ddc2958d59660))
+
+
+### Bug Fixes
+
+* **checks:** decide orphans from the kinds that carry references, and filter on severity ([717e46a](https://github.com/sophotechlabs/spinoza/commit/717e46a9f550ef581d6902354939c6b3e3beb517))
+* **cluster:** keep the context you asked for active, and settle cluster health with one writer ([901b21b](https://github.com/sophotechlabs/spinoza/commit/901b21b20be43cb32b3692656472f0e50f5df5ad))
+* **counts:** page the unhealthy pod count instead of stopping at 500 ([51a776f](https://github.com/sophotechlabs/spinoza/commit/51a776f404b5f1347735290c740ddbd5f8ea4f13))
+* **fleet:** keep the baseline and the skip mark, and survive a panicking cluster ([5f4866c](https://github.com/sophotechlabs/spinoza/commit/5f4866c3cd472eb8a573acf553c991a5ef411e50))
+* **frontend:** key cluster health, page history per table, and gate issue cursors on their own sort ([64f44fd](https://github.com/sophotechlabs/spinoza/commit/64f44fdb135ceefa1140a547a348592a3248b64c))
+* **frontend:** stop exporting queueKey ([1e95927](https://github.com/sophotechlabs/spinoza/commit/1e959273baa9d3940f301185fce8f97c87d04076))
+* **rbac:** stop a rule tied to named objects answering for every object ([6677679](https://github.com/sophotechlabs/spinoza/commit/667767918331a1ea78463e0d1cafb58e4fe338ba))
+* **server:** refuse every cluster write on a protected cluster and finish the ones already started ([7aed69e](https://github.com/sophotechlabs/spinoza/commit/7aed69ed7dae627886d4b2fc83e8e0d1b32e0916))
+
+
+### CI
+
+* install only the tools each release job runs ([e0fae60](https://github.com/sophotechlabs/spinoza/commit/e0fae60177acadd34e6416649f5561e26894611c))
+
+
+### Refactoring
+
+* **desktop:** lift logging, local shell and file picker out of runDesktop ([56ca8dc](https://github.com/sophotechlabs/spinoza/commit/56ca8dc7cc42f0937eb372e73121ba45a728defc))
+
+
+### Tests
+
+* e2e design ([c982322](https://github.com/sophotechlabs/spinoza/commit/c9823223c6a6fb7ea406a8376116e83eb8e7d34d))
+* match every truncation wording in the scale counter filter ([6c7568a](https://github.com/sophotechlabs/spinoza/commit/6c7568a6c7123e7520a6b95f6b08cce3843e3a64))
+
 ## [1.24.1](https://github.com/sophotechlabs/spinoza/compare/v1.24.0...v1.24.1) (2026-08-31)
 
 
