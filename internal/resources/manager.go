@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"math"
 	"net/http"
@@ -31,17 +30,14 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
-	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
-	"github.com/sophotechlabs/spinoza/internal/gitops"
 	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
-	"github.com/sophotechlabs/spinoza/internal/issues"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/logs"
@@ -50,11 +46,9 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/overview"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
-	"github.com/sophotechlabs/spinoza/internal/rbac"
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/samples"
-	"github.com/sophotechlabs/spinoza/internal/topology"
 	"github.com/sophotechlabs/spinoza/internal/traffic"
 )
 
@@ -540,40 +534,8 @@ func (m *Manager) PodSelector(ctx context.Context, ref api.ObjectRef) (string, e
 	return metav1.FormatLabelSelector(&metav1.LabelSelector{MatchLabels: matched}), nil
 }
 
-func (m *Manager) FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error) {
-	return flux.Do(ctx, m.dyn, m.descriptors(), ref, action, time.Now())
-}
-
-func (m *Manager) ArgoAction(ctx context.Context, ref api.ObjectRef, req argocd.Request) (api.ArgoActionResult, error) {
-	if m.dyn == nil {
-		return api.ArgoActionResult{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
-	}
-	return argocd.Do(ctx, m.dyn, ref, req)
-}
-
 func (m *Manager) Action(ctx context.Context, req actions.Request) (api.ActionResult, error) {
 	return actions.New(m.dyn, m.cs).Do(ctx, req, time.Now())
-}
-
-func (m *Manager) StartForward(ctx context.Context, target portforward.Target, port int32) (api.PortForward, error) {
-	if m.forwards == nil {
-		return api.PortForward{}, fmt.Errorf("%w: port forwarding is not wired up", api.ErrInternal)
-	}
-	return m.forwards.Start(ctx, target, port)
-}
-
-func (m *Manager) Forwards() []api.PortForward {
-	if m.forwards == nil {
-		return []api.PortForward{}
-	}
-	return m.forwards.List()
-}
-
-func (m *Manager) StopForward(id string) error {
-	if m.forwards == nil {
-		return fmt.Errorf("%w: port forwarding is not wired up", api.ErrInternal)
-	}
-	return m.forwards.Stop(id)
 }
 
 // Ping counts a refusal as an answer: the cluster is there.
@@ -609,116 +571,6 @@ func answered(err error) bool {
 	return errors.As(err, &status)
 }
 
-func (m *Manager) Access(ctx context.Context, ref api.ObjectRef) api.Access {
-	if m.perms == nil {
-		return api.Access{}
-	}
-	return m.perms.Review(ctx, ref)
-}
-
-func (m *Manager) AccessEach(ctx context.Context, name string, refs []api.ObjectRef) api.BulkAccess {
-	if m.perms == nil {
-		return api.BulkAccess{}
-	}
-	return m.perms.ReviewEach(ctx, name, refs)
-}
-
-func (m *Manager) HelmAccess(ctx context.Context, namespace, name string) api.Access {
-	if m.perms == nil {
-		return api.Access{}
-	}
-	return m.perms.ReviewRelease(ctx, namespace, m.helm.ReleaseDriver(ctx, namespace, name))
-}
-
-func (m *Manager) ExecSupport(ctx context.Context, req exec.Request) (api.ExecSupport, error) {
-	if m.shells == nil {
-		return api.ExecSupport{}, fmt.Errorf("%w: exec is not wired up", api.ErrInternal)
-	}
-	return m.shells.Support(ctx, req)
-}
-
-func (m *Manager) StartExec(ctx context.Context, req exec.Request, stdout io.Writer) (*exec.Session, error) {
-	if m.shells == nil {
-		return nil, fmt.Errorf("%w: exec is not wired up", api.ErrInternal)
-	}
-	return m.shells.Start(ctx, req, stdout)
-}
-
-func (m *Manager) DebugSupport(ctx context.Context, namespace, pod string) api.DebugSupport {
-	if m.debugger == nil {
-		return api.DebugSupport{Namespace: namespace, Pod: pod, Allowed: false, Reason: debugcontainer.ErrUnavailable.Error()}
-	}
-	return m.debugger.Allowed(ctx, namespace, pod)
-}
-
-func (m *Manager) StartDebug(ctx context.Context, req debugcontainer.Request) (api.DebugSession, error) {
-	if m.debugger == nil {
-		return api.DebugSession{}, debugcontainer.ErrUnavailable
-	}
-	return m.debugger.Ensure(ctx, req)
-}
-
-func (m *Manager) NodeShellSupport(ctx context.Context, node string) api.NodeShellSupport {
-	if m.nodeShells == nil {
-		return api.NodeShellSupport{Node: node, Reason: "node shells are not wired up"}
-	}
-	return m.nodeShells.Support(ctx, node)
-}
-
-func (m *Manager) StartNodeShell(ctx context.Context, node string) (api.NodeShellSession, error) {
-	if m.nodeShells == nil {
-		return api.NodeShellSession{}, fmt.Errorf("%w: node shells are not wired up", api.ErrInternal)
-	}
-	return m.nodeShells.Start(ctx, node)
-}
-
-func (m *Manager) RemoveNodeShell(ctx context.Context, pod string) {
-	if m.nodeShells == nil {
-		return
-	}
-	m.nodeShells.Remove(ctx, pod)
-}
-
-// MetricHistory uses Prometheus when reachable, otherwise spinoza's readings.
-func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {
-	if m.prom != nil {
-		history, err := m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
-		if err == nil {
-			return history, nil
-		}
-		if !errors.Is(err, prom.ErrUnavailable) {
-			return api.MetricHistory{}, err
-		}
-	}
-	if m.samples == nil {
-		return api.MetricHistory{}, prom.ErrUnavailable
-	}
-	// Fills the store, and may be the only page open. Cached, shared with tables.
-	m.Metrics(ctx)
-	return m.samples.History(namespace, pod, span, m.now()), nil
-}
-
-func (m *Manager) TrafficSupport(ctx context.Context) api.TrafficSupport {
-	if m.traffic == nil {
-		return api.TrafficSupport{Reason: "prometheus is not wired up"}
-	}
-	value, ok := shared(ctx, &m.meshes, m.now, m.limits.TrafficTTL, func(ctx context.Context) (api.TrafficSupport, bool) {
-		support := m.traffic.Support(ctx, m.now())
-		return support, true
-	})
-	if !ok {
-		return api.TrafficSupport{Reason: ctx.Err().Error()}
-	}
-	return value
-}
-
-func (m *Manager) TrafficGraph(ctx context.Context) api.TrafficGraph {
-	if m.traffic == nil {
-		return api.TrafficGraph{Error: "prometheus is not wired up"}
-	}
-	return m.traffic.Graph(ctx, m.now())
-}
-
 func (m *Manager) Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error) {
 	if m.schemas == nil {
 		return nil, fmt.Errorf("%w: schemas are not wired up", api.ErrInternal)
@@ -726,94 +578,10 @@ func (m *Manager) Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessa
 	return m.schemas.For(ctx, gvk)
 }
 
-func (m *Manager) Graph(ctx context.Context) api.Graph {
-	return gitops.Build(ctx, m, m.descriptors())
-}
-
-func (m *Manager) CheckPage(
-	ctx context.Context, id, after string, keep checks.Filter,
-) (api.CheckPage, error) {
-	return m.surveys.Page(ctx, m, m.descriptors(), m.Metrics(ctx), id, after, keep, m.limits.CheckFindings)
-}
-
-// RBACIndex answers who may do what on this cluster. It is built fresh: the
-// bindings are small beside the workloads, and a stale answer about who holds
-// the keys is worse than a slow one.
-func (m *Manager) RBACIndex(ctx context.Context) rbac.Index {
-	return rbac.Read(ctx, m, m.descriptors())
-}
-
-func (m *Manager) Facts() checks.Facts {
-	out := checks.Facts{}
-	if m.disco == nil {
-		return out
-	}
-	if info, err := m.disco.ServerVersion(); err == nil {
-		out.ServerVersion = info.GitVersion
-	}
-	if groups, err := m.disco.ServerGroups(); err == nil {
-		for _, group := range groups.Groups {
-			for _, version := range group.Versions {
-				out.ServedVersions = append(out.ServedVersions, version.GroupVersion)
-			}
-		}
-	}
-	if m.warnings != nil {
-		out.Warnings = m.warnings.Seen()
-	}
-	return out
-}
-
-func (m *Manager) Checks(ctx context.Context, keep checks.Filter) api.CheckReport {
-	return m.surveys.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, m.limits.CheckFindings)
-}
-
 // everyFinding is the cap for a caller that has to see all of them. The audit
 // is written to page, so an export that stopped at the page size would be a
 // truncation nobody was told about.
 const everyFinding = math.MaxInt32
-
-func (m *Manager) CheckExport(ctx context.Context, keep checks.Filter) api.CheckReport {
-	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, everyFinding)
-}
-
-func (m *Manager) CheckFingerprint(ctx context.Context, keep checks.Filter) checks.Baseline {
-	return checks.Fingerprint(ctx, m, m.descriptors(), m.Metrics(ctx), keep)
-}
-
-func (m *Manager) Topology(ctx context.Context, req topology.Request) api.Graph {
-	return topology.Build(ctx, m, m.descriptors(), req)
-}
-
-func (m *Manager) GitopsApp(ctx context.Context, ref api.ObjectRef) (api.GitopsApp, error) {
-	if m.dyn == nil {
-		return api.GitopsApp{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
-	}
-	return gitops.Detail(ctx, m.dyn, m.descriptors(), ref)
-}
-
-func (m *Manager) GitopsAppGraph(ctx context.Context, ref api.ObjectRef) (api.Graph, error) {
-	if m.dyn == nil {
-		return api.Graph{}, fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
-	}
-	app, err := gitops.Shape(ctx, m.dyn, m.descriptors(), ref)
-	if err != nil {
-		return api.Graph{}, err
-	}
-	return gitops.AppGraph(app), nil
-}
-
-func (m *Manager) Flux(ctx context.Context) api.FluxDashboard {
-	return flux.Build(ctx, m, m.descriptors(), m.charts)
-}
-
-func (m *Manager) FluxOverview(ctx context.Context) api.FluxOverview {
-	return flux.Overview(ctx, m.cs, m, m.descriptors(), flux.Cluster{
-		Kubernetes: m.serverVersion(),
-		Nodes:      m.nodeCount(ctx),
-		Usage:      m.Metrics(ctx).Pods,
-	})
-}
 
 func (m *Manager) serverVersion() string {
 	if m.disco == nil {
@@ -836,10 +604,6 @@ func (m *Manager) nodeCount(ctx context.Context) int {
 		return 0
 	}
 	return len(found)
-}
-
-func (m *Manager) Argo(ctx context.Context) api.ArgoDashboard {
-	return argocd.Build(ctx, m, m.descriptors())
 }
 
 func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
@@ -881,20 +645,6 @@ func withWatched(out api.ResourceCounts, watched map[string]int) api.ResourceCou
 	return out
 }
 
-func (m *Manager) Metrics(ctx context.Context) api.Metrics {
-	value, ok := shared(ctx, &m.usage, m.now, m.limits.MetricsTTL, func(ctx context.Context) (api.Metrics, bool) {
-		built := metrics.Build(ctx, m.dyn, m.nodeSource())
-		if built.Error == "" {
-			m.samples.Record(m.now(), built.Pods)
-		}
-		return built, built.Error == ""
-	})
-	if !ok {
-		return api.Metrics{Error: ctx.Err().Error()}
-	}
-	return value
-}
-
 func (m *Manager) nodeSource() metrics.Nodes {
 	desc, ok := m.descriptors()[discovery.Key("", "v1", "nodes")]
 	if !ok {
@@ -912,108 +662,11 @@ func (c cachedNodes) List(ctx context.Context) ([]*unstructured.Unstructured, er
 	return c.mgr.List(ctx, c.desc)
 }
 
-func (m *Manager) Overview(ctx context.Context) api.ClusterOverview {
-	out := overview.Build(ctx, m.dyn, m.meta, m, m.versions(), m.descriptors())
-	out.Controllers = gitops.Controllers(ctx, m.cs)
-	return out
-}
-
-func (m *Manager) Issues(ctx context.Context) api.IssueQueue {
-	return issues.Build(ctx, m, m, m.descriptors(), m.now, issues.Limits{})
-}
-
 func (m *Manager) versions() overview.Versions {
 	if m.disco == nil {
 		return nil
 	}
 	return m.disco
-}
-
-func (m *Manager) HelmReleases(ctx context.Context) (api.HelmReleases, error) {
-	if m.helm == nil {
-		return api.HelmReleases{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	list, err := m.helm.List(ctx)
-	if err != nil {
-		return list, err
-	}
-	decorateOwners(list.Releases, m.fluxOwners(ctx))
-	return list, nil
-}
-
-func (m *Manager) HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error) {
-	if m.helm == nil {
-		return api.HelmReleaseDetail{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	detail, err := m.helm.Detail(ctx, namespace, name, m.resolveKind)
-	if err != nil {
-		return detail, err
-	}
-	detail.Release.FluxRef = ownerRef(m.fluxOwners(ctx), namespace, name)
-	return detail, nil
-}
-
-func (m *Manager) HelmSupport() api.HelmSupport {
-	if m.helm == nil {
-		return api.HelmSupport{Reason: "helm is not wired up"}
-	}
-	return m.helm.Support()
-}
-
-func (m *Manager) HelmRollback(ctx context.Context, namespace, name string, revision int64) (api.HelmActionResult, error) {
-	if m.helm == nil {
-		return api.HelmActionResult{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	return m.helm.Rollback(ctx, namespace, name, revision)
-}
-
-func (m *Manager) HelmUninstall(ctx context.Context, namespace, name string) (api.HelmActionResult, error) {
-	if m.helm == nil {
-		return api.HelmActionResult{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	return m.helm.Uninstall(ctx, namespace, name)
-}
-
-func (m *Manager) HelmUpgrade(ctx context.Context, req helm.UpgradeRequest) (api.HelmActionResult, error) {
-	if m.helm == nil {
-		return api.HelmActionResult{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	owner := ownerRef(m.fluxOwners(ctx), req.Namespace, req.Name)
-	if owner != nil {
-		return api.HelmActionResult{}, fmt.Errorf(
-			"%w: change the helmrelease object %s/%s in git instead",
-			helm.ErrFluxManaged, owner.Namespace, owner.Name,
-		)
-	}
-	return m.helm.Upgrade(ctx, req)
-}
-
-func (m *Manager) HelmVersions(ctx context.Context, chart string) (api.HelmChartVersions, error) {
-	if m.helm == nil {
-		return api.HelmChartVersions{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	return m.helm.Versions(ctx, chart)
-}
-
-func (m *Manager) HelmChartSearch(ctx context.Context, query string) (api.HelmChartSearch, error) {
-	if m.helm == nil {
-		return api.HelmChartSearch{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	return m.helm.SearchCharts(ctx, query)
-}
-
-func (m *Manager) HelmChartValues(ctx context.Context, req helm.ValuesRequest) (api.HelmChartValues, error) {
-	if m.helm == nil {
-		return api.HelmChartValues{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	return m.helm.ChartValues(ctx, req)
-}
-
-func (m *Manager) HelmInstall(ctx context.Context, req helm.InstallRequest) (api.HelmActionResult, error) {
-	if m.helm == nil {
-		return api.HelmActionResult{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
-	}
-	return m.helm.Install(ctx, req)
 }
 
 func (m *Manager) resolveKind(apiVersion, kind string) (helm.Kind, bool) {
