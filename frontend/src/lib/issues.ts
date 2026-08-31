@@ -57,7 +57,7 @@ export function useIssues(
   });
 }
 
-export function queueKey(fleet: boolean, order: IssueOrder): string {
+function queueKey(fleet: boolean, order: IssueOrder): string {
   return `${queuePath(fleet)}?sort=${order}`;
 }
 
