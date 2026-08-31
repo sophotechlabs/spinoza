@@ -55,11 +55,11 @@ test('discovery that failed says so and offers to try again', async ({ browser }
   await close();
 });
 
-test('a view that cannot load says which request failed', async ({ browser }) => {
+test('a view that cannot load says why, in the words the backend used', async ({ browser }) => {
   const [page, close] = await openNowhere(browser, '');
   await expect(
     page.getByRole('alert').filter({ hasText: 'The cluster overview could not be loaded' }),
-  ).toContainText('overview request failed with status 503', { timeout: 60_000 });
+  ).toContainText('spinoza has no cluster; pick a context that answers', { timeout: 60_000 });
   await close();
 });
 

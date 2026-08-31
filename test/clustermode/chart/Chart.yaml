@@ -1,0 +1,6 @@
+apiVersion: v2
+name: probe
+description: A one-object chart the cluster-mode suite installs and removes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

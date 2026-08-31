@@ -161,11 +161,38 @@ Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan b
 - **Traffic**: a workload graph from Cilium Hubble flow metrics, read through Prometheus.
 - **Nine themes**, contrast-gated in CI, plus your own as JSON. Screenshots here are Borg.
 
+## Cluster mode
+
+The same binary serves one cluster to a team: run it as a pod, put it behind
+your ingress, and point it at your Keycloak, or any other OIDC provider, the way
+you would point Grafana at one.
+
+```sh
+helm upgrade --install spinoza deploy/helm/spinoza \
+  --namespace spinoza --create-namespace \
+  --set publicURL=https://spinoza.example.com \
+  --set auth.mode=oidc \
+  --set auth.oidc.issuerURL=https://keycloak.example.com/realms/main \
+  --set auth.oidc.clientID=spinoza \
+  --set auth.oidc.clientSecret=... \
+  --set auth.adminGroups='{platform-admins}'
+```
+
+Signing in is authorization code with PKCE, the ID token verified against the
+provider's JWKS, and a signed session cookie. Groups from the token map to
+viewer, editor and admin. Every call spinoza then makes to the apiserver
+impersonates the person who asked for it, so Kubernetes RBAC decides what they
+may do and the buttons they may not use say why. Reads from the shared cache are
+filtered to the namespaces they may list. Proxy-header auth and back-channel
+logout are both there.
+
+Full guide, including what changes when it runs this way: [docs/cluster-mode.md](docs/cluster-mode.md).
+
 ## Security
 
-Binds loopback only; rejects non-local Host or Origin. Every route and both WebSockets require the token minted for that run, as the `X-Spinoza-Token` header, a `token` query parameter, or the cookie the page keeps. `--token-file PATH` writes it at mode 0600. Exits when the last view closes.
+On your own machine it binds loopback only and rejects non-local Host or Origin. Every route and both WebSockets require the token minted for that run, as the `X-Spinoza-Token` header, a `token` query parameter, or the cookie the page keeps. `--token-file PATH` writes it at mode 0600. Exits when the last view closes.
 
-Outbound: your apiserver, the chart repos you configured, and one request per run to spinoza.tech asking whether a newer release exists.
+Outbound: your apiserver, the chart repos you configured, and one request per run to spinoza.tech asking whether a newer release exists. In cluster mode the update check is off, and the only extra outbound is your identity provider.
 
 ## Develop
 

@@ -1,0 +1,144 @@
+{
+  "realm": "spinoza",
+  "enabled": true,
+  "sslRequired": "none",
+  "groups": [
+    {
+      "name": "platform-admins"
+    },
+    {
+      "name": "platform"
+    },
+    {
+      "name": "guests"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "spinoza",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "spinoza-client-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "https://spinoza.localtest.me:8443/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "https://spinoza.localtest.me:8443",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "https://spinoza.localtest.me:8443/*+http://localhost:8080/*",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.url": "http://spinoza.spinoza.svc.cluster.local:8080/auth/backchannel-logout"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "spinoza-nosid",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "spinoza-client-secret",
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "https://spinoza.localtest.me:8443/*"
+      ],
+      "webOrigins": [
+        "https://spinoza.localtest.me:8443"
+      ],
+      "attributes": {
+        "backchannel.logout.session.required": "false",
+        "backchannel.logout.url": "http://spinoza.spinoza.svc.cluster.local:8080/auth/backchannel-logout"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.com",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/platform-admins"
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@example.com",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Editor",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/platform"
+      ]
+    },
+    {
+      "username": "carol",
+      "enabled": true,
+      "email": "carol@example.com",
+      "emailVerified": true,
+      "firstName": "Carol",
+      "lastName": "Viewer",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "carol",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/guests"
+      ]
+    }
+  ]
+}
