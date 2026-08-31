@@ -21,6 +21,14 @@ export function freePort(port: string): void {
     return;
   }
   for (const pid of holders.split('\n')) {
+    const command = run('ps', ['-o', 'command=', '-p', pid]).stdout.trim();
+    if (!command.startsWith(BINARY)) {
+      throw new Error(
+        `port ${port} is held by pid ${pid} running ${command}, which is not this checkout's ` +
+          `spinoza at ${BINARY}. Two sessions have been given the same port; set SPINOZA_E2E_ADDR ` +
+          `for this one rather than killing whatever is there.`,
+      );
+    }
     run('kill', [pid]);
   }
 }
