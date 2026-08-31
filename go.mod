@@ -6,8 +6,10 @@ require (
 	cel.dev/cel-go v0.32.0
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/coder/websocket v1.8.15
+	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/creack/pty v1.1.24
 	github.com/wailsapp/wails/v2 v2.13.0
+	golang.org/x/oauth2 v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
@@ -27,6 +29,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
@@ -72,7 +75,6 @@ require (
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
