@@ -22,6 +22,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/localshell"
 	"github.com/sophotechlabs/spinoza/internal/server"
+	"github.com/sophotechlabs/spinoza/internal/store"
 	"github.com/sophotechlabs/spinoza/internal/toolpath"
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
@@ -49,9 +50,9 @@ func run() error {
 	slog.SetDefault(slog.New(logHandler(os.Stderr, opts.logLevel)))
 	klog.SetSlogLogger(slog.Default())
 
-	addrErr := server.CheckLoopback(opts.addr)
-	if addrErr != nil {
-		return addrErr
+	listenErr := checkListen(opts)
+	if listenErr != nil {
+		return listenErr
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -59,9 +60,10 @@ func run() error {
 
 	toolpath.Ensure(ctx, localshell.ShellPath())
 
-	store := settingsStore()
-	opts.cluster.NodeShell = allowNodeShell(opts.nodeShell, store)
-	opts.cluster.Columns = customColumns(store)
+	held := settingsStore()
+	opts.cluster.NodeShell = allowNodeShell(opts.nodeShell, held)
+	opts.cluster.Columns = customColumns(held)
+	opts.cluster.ToolKubeconfig = toolKubeconfig(opts)
 
 	clusters, err := cluster.New(ctx, opts.cluster)
 	if err != nil {
@@ -73,8 +75,7 @@ func run() error {
 		return fmt.Errorf("assets: %w", err)
 	}
 
-	token := server.NewToken()
-	tokenErr := writeTokenFile(opts.tokenFile, token)
+	token, tokenErr := runToken(opts)
 	if tokenErr != nil {
 		return tokenErr
 	}
@@ -85,36 +86,24 @@ func run() error {
 	srv := server.New(clusters, assets, token)
 	srv.StartOn(opts.startView, opts.cluster.Context)
 	srv.UseProfiler(opts.pprof)
-	srv.UseSettings(store)
+	srv.UseSettings(held)
 	srv.UseBaselines(baselineStore())
 	past := historyStore(ctx)
 	defer func() { _ = past.Close() }()
 	srv.UseHistory(past)
-	srv.UseTabs(past.Tabs())
-	srv.RememberOpen(ctx)
 	srv.StartRecordings(ctx)
-	srv.UseUpdates(updateChecker())
-	srv.UseInstaller(updateInstaller())
+	wiredErr := wireMode(ctx, srv, opts, past)
+	if wiredErr != nil {
+		return wiredErr
+	}
 	httpServer := &http.Server{
 		Addr:              opts.addr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	url := server.BrowserURL(opts.addr, token)
-	slog.Info("spinoza is listening, open this in a browser", "url", url, "version", version.String())
-	if opts.openBrowser {
-		openURL(ctx, url)
-	}
-
 	idle := make(chan struct{})
-	var once sync.Once
-	srv.UseIdleExit(func() {
-		once.Do(func() {
-			slog.Info("every spinoza view is gone, stopping")
-			close(idle)
-		})
-	})
+	announceListening(ctx, srv, opts, token, idle)
 
 	ended := make(chan struct{})
 	drained := make(chan struct{})
@@ -162,4 +151,41 @@ func openURL(ctx context.Context, url string) {
 	go func() {
 		_ = opener.Wait()
 	}()
+}
+
+func wireMode(ctx context.Context, srv *server.Server, opts settings, past *store.Store) error {
+	if opts.serve.on {
+		return serveTeam(ctx, srv, opts)
+	}
+	srv.UseTabs(past.Tabs())
+	srv.RememberOpen(ctx)
+	srv.UseUpdates(updateChecker())
+	srv.UseInstaller(updateInstaller())
+	return nil
+}
+
+func announceListening(ctx context.Context, srv *server.Server, opts settings, token string, idle chan struct{}) {
+	if opts.serve.on {
+		slog.Info(
+			"spinoza is serving this cluster",
+			"listen", opts.addr,
+			"url", opts.serve.publicURL,
+			"auth", opts.serve.auth.Mode,
+			"impersonate", opts.serve.impersonate,
+			"version", version.String(),
+		)
+		return
+	}
+	url := server.BrowserURL(opts.addr, token)
+	slog.Info("spinoza is listening, open this in a browser", "url", url, "version", version.String())
+	if opts.openBrowser {
+		openURL(ctx, url)
+	}
+	var once sync.Once
+	srv.UseIdleExit(func() {
+		once.Do(func() {
+			slog.Info("every spinoza view is gone, stopping")
+			close(idle)
+		})
+	})
 }

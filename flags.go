@@ -37,6 +37,7 @@ type settings struct {
 	pprof       bool
 	nodeShell   bool
 	startView   string
+	serve       serving
 	cluster     cluster.Options
 }
 
@@ -66,6 +67,7 @@ func parseFlags(args []string) (settings, error) {
 	countBudget := flags.Duration("count-budget", envDuration("SPINOZA_COUNT_BUDGET", defaultCountBudget), "total time the sidebar counts may take")
 	countPerType := flags.Duration("count-timeout", envDuration("SPINOZA_COUNT_TIMEOUT", defaultCountPerType), "time one resource type may take to be counted")
 	countConcurrency := flags.Int("count-concurrency", envInt("SPINOZA_COUNT_CONCURRENCY", defaultCountConcurrency), "resource types counted at once")
+	serving := registerCluster(flags)
 	err := flags.Parse(args)
 	if errors.Is(err, flag.ErrHelp) {
 		return settings{}, errHelp
@@ -77,8 +79,18 @@ func parseFlags(args []string) (settings, error) {
 	if levelErr != nil {
 		return settings{}, levelErr
 	}
+	served, servedErr := serving.settings()
+	if servedErr != nil {
+		return settings{}, servedErr
+	}
+	if !*showVersion && !*showLicense {
+		checkErr := served.check()
+		if checkErr != nil {
+			return settings{}, checkErr
+		}
+	}
 	return settings{
-		addr:        *addr,
+		addr:        listenAddress(*addr, served.on, wasGiven(flags, "addr")),
 		openBrowser: *openBrowser,
 		tokenFile:   *tokenFile,
 		logLevel:    level,
@@ -87,7 +99,9 @@ func parseFlags(args []string) (settings, error) {
 		pprof:       *profiler,
 		nodeShell:   *nodeShell,
 		startView:   *startView,
+		serve:       served,
 		cluster: cluster.Options{
+			Impersonate:      served.on && served.impersonate,
 			DebugImage:       *debugImage,
 			NodeShellImage:   *nodeShellImage,
 			NodeShellNS:      *nodeShellNamespace,
@@ -105,6 +119,27 @@ func parseFlags(args []string) (settings, error) {
 			CountConcurrency: *countConcurrency,
 		},
 	}, nil
+}
+
+func wasGiven(flags *flag.FlagSet, name string) bool {
+	found := false
+	flags.Visit(func(one *flag.Flag) {
+		if one.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
+func listenAddress(addr string, serving, given bool) string {
+	if !serving || given {
+		return addr
+	}
+	_, fromEnv := os.LookupEnv("SPINOZA_ADDR")
+	if fromEnv {
+		return addr
+	}
+	return clusterAddr
 }
 
 func parseLevel(name string) (slog.Level, error) {

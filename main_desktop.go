@@ -91,6 +91,9 @@ func runDesktop() error {
 	if printedNotice(os.Stdout, opts) {
 		return nil
 	}
+	if opts.serve.on {
+		return errors.New("the desktop app cannot serve a cluster; run the spinoza binary with --cluster-mode instead")
+	}
 	kept := startLogging(opts.logLevel)
 	if kept != nil {
 		defer func() { _ = kept.Close() }()
