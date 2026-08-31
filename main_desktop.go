@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -33,6 +34,8 @@ import (
 )
 
 const shutdownGrace = 3 * time.Second
+
+const logFileLimit = 4 << 20
 
 func main() {
 	err := runDesktop()
@@ -88,8 +91,17 @@ func runDesktop() error {
 	if printedNotice(os.Stdout, opts) {
 		return nil
 	}
-	slog.SetDefault(slog.New(logHandler(os.Stderr, opts.logLevel)))
+	kept, logErr := logFile()
+	out := io.Writer(os.Stderr)
+	if logErr == nil {
+		defer func() { _ = kept.Close() }()
+		out = io.MultiWriter(os.Stderr, kept)
+	}
+	slog.SetDefault(slog.New(logHandler(out, opts.logLevel)))
 	klog.SetSlogLogger(slog.Default())
+	if logErr != nil {
+		slog.Warn("this run will not be written to a log file", "error", logErr)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -192,6 +204,35 @@ func runDesktop() error {
 		return fmt.Errorf("wails: %w", runErr)
 	}
 	return nil
+}
+
+func logFile() (*os.File, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("log: %w", err)
+	}
+	path := filepath.Join(dir, "spinoza", "desktop.log")
+	mkErr := os.MkdirAll(filepath.Dir(path), 0o755)
+	if mkErr != nil {
+		return nil, fmt.Errorf("log: %w", mkErr)
+	}
+	rollLog(path)
+	held, openErr := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if openErr != nil {
+		return nil, fmt.Errorf("log: %w", openErr)
+	}
+	return held, nil
+}
+
+func rollLog(path string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	if info.Size() < logFileLimit {
+		return
+	}
+	_ = os.Rename(path, path+".1")
 }
 
 func chooseKubeconfig(window context.Context) (string, error) {
