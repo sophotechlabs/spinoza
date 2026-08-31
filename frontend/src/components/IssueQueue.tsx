@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Issue, IssueChild, ObjectRef, Severity } from '../lib/types';
+import type { Issue, IssueChild, IssueTally, ObjectRef, Severity } from '../lib/types';
 import {
-  countBySeverity,
   foldedLabel,
   hiddenChildren,
   severityClass,
   severityLabel,
+  tallyCounts,
   tallyScope,
   usePagedIssues,
   ISSUE_ORDERS,
@@ -31,9 +31,17 @@ interface IssueQueueProps {
 
 const SEVERITY_ORDER: Severity[] = ['fatal', 'degraded', 'warning'];
 
-function Tally({ rows, partial }: { rows: Issue[]; partial: boolean }) {
-  const counts = countBySeverity(rows);
-  const scope = tallyScope(rows.length, partial);
+function Tally({
+  rows,
+  partial,
+  whole,
+}: {
+  rows: Issue[];
+  partial: boolean;
+  whole: IssueTally | undefined;
+}) {
+  const counts = tallyCounts(rows, whole);
+  const scope = tallyScope(rows.length, partial, whole);
   return (
     <div className="flex items-baseline gap-3">
       {SEVERITY_ORDER.map((severity) => (
@@ -212,7 +220,7 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
   const setFleet = useIssuesStore((state) => state.setFleet);
   const showing = fleet && several;
   const [order, setOrder] = useState<IssueOrder>('worst');
-  const { data, error, reload, rows, more, partial, loadingMore, moreError, loadMore } =
+  const { data, error, reload, rows, more, partial, whole, loadingMore, moreError, loadMore } =
     usePagedIssues(active, showing, order);
   const [opened, setOpened] = useState<Record<string, boolean>>({});
   const now = useNow();
@@ -278,7 +286,7 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
             ))}
           </select>
         </label>
-        <Tally rows={rows} partial={partial} />
+        <Tally rows={rows} partial={partial} whole={whole} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {rows.length === 0 && <p className="p-3 text-fg-muted">{emptyWord(showing)}</p>}

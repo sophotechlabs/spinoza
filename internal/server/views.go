@@ -154,6 +154,7 @@ func pagedQueue(queue api.IssueQueue, r *http.Request) api.IssueQueue {
 	query := r.URL.Query()
 	order := issues.OrderOf(query.Get("sort"))
 	issues.Rank(queue.Rows, order)
+	queue.Tally = issues.Tally(queue.Rows)
 	rows, next := issues.Page(
 		queue.Rows,
 		issues.DecodeCursor(query.Get("after")),

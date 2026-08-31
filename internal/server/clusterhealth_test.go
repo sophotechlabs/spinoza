@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -286,6 +287,54 @@ func TestAClusterThatAnswersAgainStopsWobbling(t *testing.T) {
 	held := srv.healthOfCluster(mk2)
 	if held.Wobbling || !held.Reachable {
 		t.Fatalf("a cluster that answered again reads as %+v", held)
+	}
+}
+
+func clusterInList(t *testing.T, srv *Server, id string) api.OpenCluster {
+	t.Helper()
+	ts := httptest.NewServer(authed(srv.Handler()))
+	t.Cleanup(ts.Close)
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/clusters", nil)
+
+	var list api.ClusterList
+	if err := json.Unmarshal(body, &list); err != nil {
+		t.Fatalf("decode: %v: %s", err, body)
+	}
+	for _, one := range list.Clusters {
+		if one.ID == id {
+			return one
+		}
+	}
+	t.Fatalf("no cluster %s in %s", id, body)
+	return api.OpenCluster{}
+}
+
+func TestTheClusterListSaysAWobblingClusterIsWobbling(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{err: errors.New("no route to host")})
+
+	srv.pingEveryCluster(t.Context())
+
+	one := clusterInList(t, srv, mk2)
+	if !one.Reachable {
+		t.Fatal("a single missed ping was listed as the cluster being gone")
+	}
+	if !one.Wobbling {
+		t.Fatalf("cluster = %+v, want the wobble the websocket already reports", one)
+	}
+}
+
+func TestTheClusterListSaysASettledOutageIsNotAWobble(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{err: errors.New("no route to host")})
+
+	pingUntilSettled(t, srv)
+
+	one := clusterInList(t, srv, mk2)
+	if one.Reachable {
+		t.Fatalf("cluster = %+v, want a settled outage listed as unreachable", one)
+	}
+	if one.Wobbling {
+		t.Fatalf("cluster = %+v, want no wobble mark once the outage settled", one)
 	}
 }
 

@@ -422,6 +422,33 @@ describe('Checks', () => {
     expect(screen.getByText('no data')).toBeInTheDocument();
   });
 
+  it('keeps the count and names the clusters that could not run the check', async () => {
+    show({
+      groups: [
+        makeGroup('requests-far-above-usage', {
+          title: 'Requests far above measured usage',
+          category: 'efficiency',
+          severity: 'low',
+          total: 31,
+          findings: [makeFinding()],
+          partialOn: ['kind-dev: metrics-server did not answer, so usage is unknown'],
+        }),
+      ],
+    });
+
+    expect(await screen.findByText('not run on kind-dev')).toBeInTheDocument();
+    expect(screen.getByText('31')).toBeInTheDocument();
+    expect(screen.queryByText('no data')).not.toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /Requests far above measured usage/ }),
+    );
+
+    expect(
+      screen.getByText('kind-dev: metrics-server did not answer, so usage is unknown'),
+    ).toBeInTheDocument();
+  });
+
   it('shows the framework a check comes from', async () => {
     show({
       groups: [makeGroup('privileged-containers', { frameworks: ['PSS baseline', 'NSA/CISA'] })],

@@ -4,23 +4,10 @@ import (
 	"context"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
-
-type standDown struct {
-	cluster string
-	group   string
-	title   string
-	why     string
-}
-
-type standDownKey struct {
-	cluster string
-	why     string
-}
 
 func (s *Server) fleetChecks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, mergeReports(s.everyClustersChecks(r.Context(), r)))
@@ -37,15 +24,12 @@ func mergeReports(found []clusterAnswer[api.CheckReport]) api.CheckReport {
 	at := map[string]int{}
 	trouble := []string{}
 	spread := map[string]api.NamespaceCount{}
-	ran := map[string]bool{}
-	stood := make([]standDown, 0, len(found))
 	taken := []string{}
 	unbaselined := []string{}
 	for _, one := range found {
 		offset := len(merged.Objects)
 		merged.Objects = append(merged.Objects, stamped(one)...)
-		foldGroups(&merged, at, one.answer.Groups, offset)
-		stood = append(stood, standDownsIn(one, ran)...)
+		foldGroups(&merged, at, one.answer.Groups, offset, one.context)
 		foldNamespaces(spread, one.answer.Namespaces)
 		merged.Scanned += one.answer.Scanned
 		merged.WasScanned += one.answer.WasScanned
@@ -62,11 +46,22 @@ func mergeReports(found []clusterAnswer[api.CheckReport]) api.CheckReport {
 			trouble = append(trouble, one.context+": "+one.failure)
 		}
 	}
+	settleStandDowns(merged.Groups)
 	merged.Namespaces = spreadOf(spread)
 	merged.Baseline = earliest(taken)
 	slices.Sort(trouble)
-	merged.Error = strings.Join(append(trouble, notes(stood, ran, taken, unbaselined)...), " · ")
+	merged.Error = strings.Join(append(trouble, notes(taken, unbaselined)...), " · ")
 	return merged
+}
+
+func settleStandDowns(groups []api.CheckGroup) {
+	for at := range groups {
+		if groups[at].Skipped != "" {
+			groups[at].PartialOn = nil
+			continue
+		}
+		slices.Sort(groups[at].PartialOn)
+	}
 }
 
 func lacksBaseline(one clusterAnswer[api.CheckReport]) bool {
@@ -79,55 +74,13 @@ func lacksBaseline(one clusterAnswer[api.CheckReport]) bool {
 	return one.answer.Error == ""
 }
 
-func standDownsIn(one clusterAnswer[api.CheckReport], ran map[string]bool) []standDown {
-	out := []standDown{}
-	for _, group := range one.answer.Groups {
-		if group.Skipped == "" {
-			ran[group.ID] = true
-			continue
-		}
-		out = append(out, standDown{
-			cluster: one.context,
-			group:   group.ID,
-			title:   group.Title,
-			why:     group.Skipped,
-		})
-	}
-	return out
-}
-
-func notes(stood []standDown, ran map[string]bool, taken, unbaselined []string) []string {
-	out := standDownNotes(stood, ran)
+func notes(taken, unbaselined []string) []string {
+	out := []string{}
 	if len(taken) > 0 {
 		out = append(out, baselineNotes(unbaselined)...)
 	}
 	slices.Sort(out)
 	return out
-}
-
-func standDownNotes(stood []standDown, ran map[string]bool) []string {
-	titles := map[standDownKey][]string{}
-	for _, one := range stood {
-		if !ran[one.group] {
-			continue
-		}
-		key := standDownKey{cluster: one.cluster, why: one.why}
-		titles[key] = append(titles[key], one.title)
-	}
-	out := make([]string, 0, len(titles))
-	for key, held := range titles {
-		slices.Sort(held)
-		out = append(out, key.cluster+": "+checkWord(len(held))+
-			" did not run there ("+key.why+"): "+strings.Join(held, ", "))
-	}
-	return out
-}
-
-func checkWord(count int) string {
-	if count == 1 {
-		return "1 check"
-	}
-	return strconv.Itoa(count) + " checks"
 }
 
 func baselineNotes(unbaselined []string) []string {
@@ -167,21 +120,33 @@ func stamped(one clusterAnswer[api.CheckReport]) []api.CheckObject {
 	return out
 }
 
-func foldGroups(merged *api.CheckReport, at map[string]int, groups []api.CheckGroup, offset int) {
+func foldGroups(
+	merged *api.CheckReport,
+	at map[string]int,
+	groups []api.CheckGroup,
+	offset int,
+	on string,
+) {
 	for _, group := range groups {
 		found := shifted(group, offset)
 		where, seen := at[group.ID]
 		if !seen {
 			at[group.ID] = len(merged.Groups)
+			if found.Skipped != "" {
+				found.PartialOn = []string{stoodDownOn(on, found.Skipped)}
+			}
 			merged.Groups = append(merged.Groups, found)
 			continue
 		}
 		into := &merged.Groups[where]
 		if found.Skipped != "" {
+			into.PartialOn = append(into.PartialOn, stoodDownOn(on, found.Skipped))
 			continue
 		}
 		if into.Skipped != "" {
+			held := into.PartialOn
 			*into = found
+			into.PartialOn = held
 			continue
 		}
 		into.Total += found.Total
@@ -195,6 +160,10 @@ func foldGroups(merged *api.CheckReport, at map[string]int, groups []api.CheckGr
 		into.Truncated = into.Truncated || found.Truncated
 		into.Findings = append(into.Findings, found.Findings...)
 	}
+}
+
+func stoodDownOn(cluster, why string) string {
+	return cluster + ": " + why
 }
 
 func shifted(group api.CheckGroup, offset int) api.CheckGroup {

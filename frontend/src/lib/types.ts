@@ -556,6 +556,7 @@ export interface OpenCluster {
   timeline?: string;
   protection: string;
   reachable: boolean;
+  wobbling?: boolean;
   reason?: string;
 }
 
@@ -850,9 +851,17 @@ export interface Issue {
   children?: IssueChild[];
 }
 
+export interface IssueTally {
+  fatal: number;
+  degraded: number;
+  warning: number;
+  total: number;
+}
+
 export interface IssueQueue {
   rows: Issue[];
   dropped: number;
+  tally?: IssueTally;
   next?: string;
   error?: string;
 }
@@ -1228,6 +1237,7 @@ export interface CheckGroup {
   wrong: string;
   remedy: string;
   skipped?: string;
+  partialOn?: string[];
   total: number;
   muted?: number;
   new?: number;

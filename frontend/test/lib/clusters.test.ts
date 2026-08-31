@@ -12,6 +12,7 @@ import {
   stillToOpen,
 } from '../../src/lib/clusters';
 import { useClustersStore } from '../../src/store/clusters';
+import { useClusterHealthStore } from '../../src/store/clusterHealth';
 import { MK1, MK2 } from '../helpers-clusters';
 
 interface Call {
@@ -43,6 +44,7 @@ const oneOpen = {
 describe('what the server says is open', () => {
   beforeEach(() => {
     useClustersStore.getState().reset();
+    useClusterHealthStore.getState().reset();
   });
 
   afterEach(() => {
@@ -64,6 +66,7 @@ describe('what the server says is open', () => {
       timeline: undefined,
       protection: 'unknown',
       reachable: true,
+      wobbling: undefined,
       reason: undefined,
     });
     expect(list.remembered[0]).toEqual({ id: '', context: '', kubeconfig: undefined });
@@ -79,6 +82,30 @@ describe('what the server says is open', () => {
     await fetchClusters();
 
     expect(useClustersStore.getState().tabs.map((one) => one.context)).toEqual(['p-mk1']);
+  });
+
+  it('reads a wobble off the list, not only off the feed', async () => {
+    stub({
+      clusters: [
+        { id: MK1, context: 'p-mk1', active: true, reachable: true },
+        { id: MK2, context: 'p-mk2', reachable: true, wobbling: true, reason: 'no route to host' },
+      ],
+      remembered: [],
+    });
+
+    const list = await fetchClusters();
+
+    expect(list.clusters[1].wobbling).toBe(true);
+    expect(useClusterHealthStore.getState().byCluster[MK2]).toEqual({
+      reachable: true,
+      wobbling: true,
+      reason: 'no route to host',
+    });
+    expect(useClusterHealthStore.getState().byCluster[MK1]).toEqual({
+      reachable: true,
+      wobbling: false,
+      reason: '',
+    });
   });
 
   it('says which remembered clusters are not open yet', () => {

@@ -13,6 +13,7 @@ import {
   findingLabel,
   inCategory,
   originLabel,
+  partialLabel,
   refLabel,
   severityClass,
   severityReason,
@@ -337,6 +338,27 @@ describe('labels', () => {
     expect(countLabel(viewGroup('a', { findings: [viewFinding('api')] }))).toBe('1');
     expect(countLabel(viewGroup('a', { total: 7087 }))).toBe('7087');
     expect(countLabel(viewGroup('a', { skipped: 'no metrics' }))).toBe('no data');
+  });
+
+  it('keeps the real count and names the clusters that stood down', () => {
+    const partial = viewGroup('a', {
+      total: 31,
+      partialOn: ['kind-dev: metrics-server did not answer, so usage is unknown'],
+    });
+
+    expect(countLabel(partial)).toBe('31');
+    expect(partialLabel(partial)).toBe('not run on kind-dev');
+  });
+
+  it('says nothing about partial coverage when every cluster ran the check', () => {
+    expect(partialLabel(viewGroup('a'))).toBe('');
+    expect(partialLabel(viewGroup('a', { partialOn: [] }))).toBe('');
+  });
+
+  it('names every cluster that stood down, reason or not', () => {
+    const partial = viewGroup('a', { partialOn: ['kind-dev: no metrics', 'p-mk2'] });
+
+    expect(partialLabel(partial)).toBe('not run on kind-dev, p-mk2');
   });
 
   it('says how much of a capped group is on screen', () => {

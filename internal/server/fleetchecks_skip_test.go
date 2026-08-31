@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -58,11 +59,15 @@ func TestACheckOneClusterCouldNotRunIsNamedRatherThanFoldedIntoTheNumber(t *test
 	if got.Groups[0].Total != 1 {
 		t.Fatalf("total = %d, want what the cluster that ran it found", got.Groups[0].Total)
 	}
-	if !contains(got.Error, "p-mk2") || !contains(got.Error, noMetrics[:14]) {
-		t.Fatalf("error = %q, want the cluster that could not run it named", got.Error)
+	if got.Groups[0].Skipped != "" {
+		t.Fatalf("skipped = %q, want no skip mark that would grey out a real count", got.Groups[0].Skipped)
 	}
-	if !contains(got.Error, "1 check did not run there") {
-		t.Fatalf("error = %q, want how many checks stood down said plainly", got.Error)
+	want := []string{"p-mk2: " + noMetrics}
+	if !slices.Equal(got.Groups[0].PartialOn, want) {
+		t.Fatalf("partialOn = %v, want %v", got.Groups[0].PartialOn, want)
+	}
+	if contains(got.Error, "did not run there") {
+		t.Fatalf("error = %q, want the stand-down on the row rather than the banner", got.Error)
 	}
 }
 
@@ -83,6 +88,10 @@ func TestAGroupAnotherClusterRanIsNotMarkedSkipped(t *testing.T) {
 	if len(got.Groups[0].Findings) != 1 {
 		t.Fatalf("findings = %d, want the one the cluster that ran it reported", len(got.Groups[0].Findings))
 	}
+	want := []string{"p-mk1: " + noMetrics}
+	if !slices.Equal(got.Groups[0].PartialOn, want) {
+		t.Fatalf("partialOn = %v, want %v", got.Groups[0].PartialOn, want)
+	}
 }
 
 func TestACheckNoClusterCouldRunKeepsSayingSo(t *testing.T) {
@@ -96,8 +105,8 @@ func TestACheckNoClusterCouldRunKeepsSayingSo(t *testing.T) {
 	if got.Groups[0].Skipped != noMetrics {
 		t.Fatalf("skipped = %q, want the reason kept when nobody ran it", got.Groups[0].Skipped)
 	}
-	if contains(got.Error, "did not run there") {
-		t.Fatalf("error = %q, want no note for a check the row already explains", got.Error)
+	if len(got.Groups[0].PartialOn) != 0 {
+		t.Fatalf("partialOn = %v, want nothing partial about a check nobody ran", got.Groups[0].PartialOn)
 	}
 }
 

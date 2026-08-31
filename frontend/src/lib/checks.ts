@@ -173,6 +173,7 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
     wrong: item.wrong ?? '',
     remedy: item.remedy ?? '',
     skipped: item.skipped,
+    partialOn: item.partialOn,
     total: item.total ?? findings.length,
     muted: item.muted,
     new: item.new,
@@ -479,6 +480,22 @@ export function changeLabel(group: CheckGroupView): string {
     parts.push(`${String(group.fixed)} fixed`);
   }
   return parts.join(' · ');
+}
+
+function clusterOf(entry: string): string {
+  const cut = entry.indexOf(': ');
+  if (cut < 0) {
+    return entry;
+  }
+  return entry.slice(0, cut);
+}
+
+export function partialLabel(group: CheckGroupView): string {
+  const on = group.partialOn ?? [];
+  if (on.length === 0) {
+    return '';
+  }
+  return `not run on ${on.map(clusterOf).join(', ')}`;
 }
 
 export function mutedLabel(group: CheckGroupView): string {

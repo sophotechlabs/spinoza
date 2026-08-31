@@ -58,6 +58,7 @@ CheckGroup.Measured measured,omitempty bool
 CheckGroup.Muted muted,omitempty int
 CheckGroup.NewCount new,omitempty int
 CheckGroup.Next next,omitempty string
+CheckGroup.PartialOn partialOn,omitempty []string
 CheckGroup.Ran ran,omitempty bool
 CheckGroup.Remedy remedy string
 CheckGroup.Severity severity string
@@ -477,6 +478,11 @@ IssueQueue.Dropped dropped int
 IssueQueue.Error error,omitempty string
 IssueQueue.Next next,omitempty string
 IssueQueue.Rows rows []Issue
+IssueQueue.Tally tally,omitempty *IssueTally
+IssueTally.Degraded degraded int
+IssueTally.Fatal fatal int
+IssueTally.Total total int
+IssueTally.Warning warning int
 KindComparison.Differs differs int
 KindComparison.LeftContext leftContext string
 KindComparison.MatchedByName matchedByName,omitempty bool
@@ -609,6 +615,7 @@ OpenCluster.Reachable reachable bool
 OpenCluster.Reason reason,omitempty string
 OpenCluster.Reopen reopen bool
 OpenCluster.Timeline timeline,omitempty string
+OpenCluster.Wobbling wobbling,omitempty bool
 OverviewEvent.Count count int64
 OverviewEvent.LastSeen lastSeen string
 OverviewEvent.Message message string

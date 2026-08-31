@@ -46,6 +46,7 @@ import type {
   Issue,
   IssueChild,
   IssueQueue,
+  IssueTally,
   K8sEvent,
   MetricHistory,
   UpdateResult,
@@ -741,11 +742,28 @@ function parseIssue(item: Record<string, unknown>): Issue {
   };
 }
 
+function parseIssueTally(value: unknown): IssueTally | undefined {
+  if (value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'object') {
+    return undefined;
+  }
+  const item = asRecord(value);
+  return {
+    fatal: asNumber(item.fatal),
+    degraded: asNumber(item.degraded),
+    warning: asNumber(item.warning),
+    total: asNumber(item.total),
+  };
+}
+
 export function parseIssueQueue(body: unknown): IssueQueue {
   const item = asRecord(body);
   return {
     rows: listOf(item.rows, parseIssue),
     dropped: asNumber(item.dropped),
+    tally: parseIssueTally(item.tally),
     next: optionalString(item.next),
     error: optionalString(item.error),
   };

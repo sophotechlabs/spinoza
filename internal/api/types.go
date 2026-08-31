@@ -81,6 +81,7 @@ type OpenCluster struct {
 	Timeline   string `json:"timeline,omitempty"`
 	Protection string `json:"protection"`
 	Reachable  bool   `json:"reachable"`
+	Wobbling   bool   `json:"wobbling,omitempty"`
 	Reason     string `json:"reason,omitempty"`
 }
 
@@ -395,11 +396,19 @@ type Issue struct {
 	Children  []IssueChild `json:"children,omitempty"`
 }
 
+type IssueTally struct {
+	Fatal    int `json:"fatal"`
+	Degraded int `json:"degraded"`
+	Warning  int `json:"warning"`
+	Total    int `json:"total"`
+}
+
 type IssueQueue struct {
-	Rows    []Issue `json:"rows"`
-	Dropped int     `json:"dropped"`
-	Next    string  `json:"next,omitempty"`
-	Error   string  `json:"error,omitempty"`
+	Rows    []Issue     `json:"rows"`
+	Dropped int         `json:"dropped"`
+	Tally   *IssueTally `json:"tally,omitempty"`
+	Next    string      `json:"next,omitempty"`
+	Error   string      `json:"error,omitempty"`
 }
 
 type HelmRelease struct {
@@ -1259,6 +1268,7 @@ type CheckGroup struct {
 	Wrong      string         `json:"wrong"`
 	Remedy     string         `json:"remedy"`
 	Skipped    string         `json:"skipped,omitempty"`
+	PartialOn  []string       `json:"partialOn,omitempty"`
 	Total      int            `json:"total"`
 	Muted      int            `json:"muted,omitempty"`
 	NewCount   int            `json:"new,omitempty"`

@@ -9,6 +9,7 @@ import {
   hiddenChildren,
   severityClass,
   severityLabel,
+  tallyCounts,
   tallyScope,
   useIssues,
   usePagedIssues,
@@ -123,6 +124,34 @@ describe('fetchIssues', () => {
     expect(got.rows[0].children?.[0].severity).toBe('warning');
   });
 
+  it('reads the whole-queue tally the server sends', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ rows: [], tally: { fatal: 111, degraded: 2, warning: 3, total: 116 } }),
+      }),
+    );
+
+    const got = await fetchIssues();
+
+    expect(got.tally).toEqual({ fatal: 111, degraded: 2, warning: 3, total: 116 });
+  });
+
+  it('reads a payload whose tally is absent or null', async () => {
+    for (const body of [{ rows: [] }, { rows: [], tally: null }]) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(body) }),
+      );
+
+      const got = await fetchIssues();
+
+      expect(got.tally).toBeUndefined();
+    }
+  });
+
   it('reports a failed status', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
 
@@ -197,11 +226,24 @@ describe('severity', () => {
 
 describe('what the tally is counting', () => {
   it('says nothing while the whole queue is loaded', () => {
-    expect(tallyScope(12, false)).toBe('');
+    expect(tallyScope(12, false, undefined)).toBe('');
   });
 
-  it('names how many rows it counted while more are unloaded', () => {
-    expect(tallyScope(50, true)).toBe('of the 50 loaded so far');
+  it('names how many rows it counted while the server sent no tally', () => {
+    expect(tallyScope(50, true, undefined)).toBe('of the 50 loaded so far');
+  });
+
+  it('counts the whole cluster and says how much of it is on screen', () => {
+    const whole = { fatal: 111, degraded: 0, warning: 0, total: 111 };
+
+    expect(tallyCounts([], whole)).toEqual({ fatal: 111, degraded: 0, warning: 0, info: 0 });
+    expect(tallyScope(50, true, whole)).toBe('50 of 111 on screen');
+  });
+
+  it('falls back to the rows it holds when the server sent no tally', () => {
+    const rows = [issue({ severity: 'fatal' }), issue({ severity: 'warning' })];
+
+    expect(tallyCounts(rows, undefined)).toEqual({ fatal: 1, degraded: 0, warning: 1, info: 0 });
   });
 });
 

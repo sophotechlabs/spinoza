@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import type { Issue, IssueQueue, Severity } from './types';
+import type { Issue, IssueQueue, IssueTally, Severity } from './types';
 import { request } from './http';
 import { parseIssueQueue } from './parse';
 import { usePoll } from './usePoll';
@@ -74,6 +74,7 @@ export interface PagedIssues extends Polled<IssueQueue> {
   rows: Issue[];
   more: string;
   partial: boolean;
+  whole: IssueTally | undefined;
   loadingMore: boolean;
   moreError: string;
   loadMore: () => void;
@@ -147,14 +148,32 @@ export function usePagedIssues(
   if (!current) {
     partial = true;
   }
-  return { ...polled, rows, more, partial, loadingMore, moreError, loadMore };
+  const whole = polled.data?.tally;
+  return { ...polled, rows, more, partial, whole, loadingMore, moreError, loadMore };
 }
 
-export function tallyScope(loaded: number, partial: boolean): string {
+export function tallyScope(
+  loaded: number,
+  partial: boolean,
+  whole: IssueTally | undefined,
+): string {
   if (!partial) {
     return '';
   }
-  return `of the ${String(loaded)} loaded so far`;
+  if (whole === undefined) {
+    return `of the ${String(loaded)} loaded so far`;
+  }
+  return `${String(loaded)} of ${String(whole.total)} on screen`;
+}
+
+export function tallyCounts(
+  rows: Issue[],
+  whole: IssueTally | undefined,
+): Record<Severity, number> {
+  if (whole === undefined) {
+    return countBySeverity(rows);
+  }
+  return { fatal: whole.fatal, degraded: whole.degraded, warning: whole.warning, info: 0 };
 }
 
 export function countBySeverity(rows: Issue[]): Record<Severity, number> {

@@ -9,6 +9,7 @@ import {
   clearBaseline,
   driftLabel,
   countLabel,
+  partialLabel,
   exportChecks,
   fetchMutes,
   findingLabel,
@@ -427,6 +428,9 @@ function Group({
           {mutedLabel(group) !== '' && (
             <span className="shrink-0 text-[11px] text-fg-subtle">{mutedLabel(group)}</span>
           )}
+          {partialLabel(group) !== '' && (
+            <span className="shrink-0 text-[11px] text-warn">{partialLabel(group)}</span>
+          )}
           {(group.frameworks ?? []).map((framework) => (
             <span key={framework} className="shrink-0 text-[11px] text-fg-subtle">
               {framework}
@@ -445,6 +449,11 @@ function Group({
         <div className="pb-1">
           <p className="px-3 py-1 pl-9 text-fg-muted">{group.wrong}</p>
           <p className="px-3 py-1 pl-9 text-fg-soft">{group.remedy}</p>
+          {(group.partialOn ?? []).map((stood) => (
+            <p key={stood} className="px-3 py-1 pl-9 text-warn">
+              {stood}
+            </p>
+          ))}
           {shownLabel(group, shown.length) !== '' && (
             <p className="px-3 py-1 pl-9 text-fg-subtle">{shownLabel(group, shown.length)}</p>
           )}

@@ -2,6 +2,7 @@ import type { ClusterList, OpenCluster, RememberedCluster } from './types';
 import { failure } from './object';
 import { SLOW_REQUEST_TIMEOUT_MS, request } from './http';
 import { adoptClusters } from '../store/clusters';
+import { reportHealth } from '../store/clusterHealth';
 
 interface WireOpenCluster {
   id?: string;
@@ -15,6 +16,7 @@ interface WireOpenCluster {
   timeline?: string;
   protection?: string;
   reachable?: boolean;
+  wobbling?: boolean;
   reason?: string;
 }
 
@@ -42,6 +44,7 @@ function openClusterOf(entry: WireOpenCluster): OpenCluster {
     timeline: entry.timeline,
     protection: entry.protection ?? 'unknown',
     reachable: entry.reachable ?? true,
+    wobbling: entry.wobbling,
     reason: entry.reason,
   };
 }
@@ -68,7 +71,14 @@ async function clustersFrom(response: Response, what: string): Promise<ClusterLi
   }
   const list = parseClusters(await response.json());
   adoptClusters(list);
+  adoptHealth(list);
   return list;
+}
+
+function adoptHealth(list: ClusterList): void {
+  for (const one of list.clusters) {
+    reportHealth(one.id, one.reachable, one.wobbling ?? false, one.reason ?? '');
+  }
 }
 
 export async function fetchClusters(): Promise<ClusterList> {

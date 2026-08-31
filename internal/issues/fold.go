@@ -68,6 +68,22 @@ func fold(found []finding, snap *snapshot, limits Limits) api.IssueQueue {
 	return capRows(rows, limits)
 }
 
+func Tally(rows []api.Issue) *api.IssueTally {
+	out := api.IssueTally{Total: len(rows)}
+	for _, row := range rows {
+		switch row.Severity {
+		case api.SeverityFatal:
+			out.Fatal++
+		case api.SeverityDegraded:
+			out.Degraded++
+		case api.SeverityWarning:
+			out.Warning++
+		default:
+		}
+	}
+	return &out
+}
+
 func capRows(rows []api.Issue, limits Limits) api.IssueQueue {
 	if len(rows) <= limits.Rows {
 		return api.IssueQueue{Rows: rows, Dropped: 0}
