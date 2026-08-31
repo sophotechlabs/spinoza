@@ -2,6 +2,7 @@ package compare
 
 import (
 	"fmt"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
@@ -10,6 +11,28 @@ import (
 )
 
 const lastApplied = "kubectl.kubernetes.io/last-applied-configuration"
+
+const headless = "None"
+
+const specField = "spec"
+
+const (
+	serviceKind    = "Service"
+	claimKind      = "PersistentVolumeClaim"
+	volumeKind     = "PersistentVolume"
+	crdKind        = "CustomResourceDefinition"
+	validatingKind = "ValidatingWebhookConfiguration"
+	mutatingKind   = "MutatingWebhookConfiguration"
+)
+
+var allocatedByTheServer = map[string][][]string{
+	claimKind:  {{specField, "volumeName"}},
+	volumeKind: {{specField, "claimRef", "uid"}, {specField, "claimRef", "resourceVersion"}},
+	serviceKind: {
+		{specField, "healthCheckNodePort"},
+	},
+	crdKind: {{specField, "conversion", "webhook", "clientConfig", "caBundle"}},
+}
 
 var assignedByTheServer = []string{
 	"uid",
@@ -28,7 +51,82 @@ func Normalise(item *unstructured.Unstructured) *unstructured.Unstructured {
 	}
 	dropLastApplied(clean)
 	dropOwnerUIDs(clean)
+	dropAllocations(clean)
 	return clean
+}
+
+func dropAllocations(clean *unstructured.Unstructured) {
+	kind := clean.GetKind()
+	for _, path := range allocatedByTheServer[kind] {
+		unstructured.RemoveNestedField(clean.Object, path...)
+	}
+	dropClusterIPs(clean, kind)
+	dropNodePorts(clean, kind)
+	dropCABundles(clean, kind)
+}
+
+func dropClusterIPs(clean *unstructured.Unstructured, kind string) {
+	if kind != serviceKind {
+		return
+	}
+	one, found, err := unstructured.NestedString(clean.Object, specField, "clusterIP")
+	if found && err == nil && one != headless {
+		unstructured.RemoveNestedField(clean.Object, specField, "clusterIP")
+	}
+	many, found, err := unstructured.NestedStringSlice(clean.Object, specField, "clusterIPs")
+	if !found || err != nil {
+		return
+	}
+	if slices.Contains(many, headless) {
+		return
+	}
+	unstructured.RemoveNestedField(clean.Object, specField, "clusterIPs")
+}
+
+func dropNodePorts(clean *unstructured.Unstructured, kind string) {
+	if kind != serviceKind {
+		return
+	}
+	ports, found, err := unstructured.NestedSlice(clean.Object, specField, "ports")
+	if !found || err != nil {
+		return
+	}
+	for _, entry := range ports {
+		port, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		delete(port, "nodePort")
+	}
+	setErr := unstructured.SetNestedSlice(clean.Object, ports, specField, "ports")
+	if setErr != nil {
+		unstructured.RemoveNestedField(clean.Object, specField, "ports")
+	}
+}
+
+func dropCABundles(clean *unstructured.Unstructured, kind string) {
+	if kind != validatingKind && kind != mutatingKind {
+		return
+	}
+	hooks, found, err := unstructured.NestedSlice(clean.Object, "webhooks")
+	if !found || err != nil {
+		return
+	}
+	for _, entry := range hooks {
+		hook, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		config, ok := hook["clientConfig"].(map[string]any)
+		if !ok {
+			continue
+		}
+		delete(config, "caBundle")
+	}
+	setErr := unstructured.SetNestedSlice(clean.Object, hooks, "webhooks")
+	if setErr != nil {
+		unstructured.RemoveNestedField(clean.Object, "webhooks")
+	}
 }
 
 func dropLastApplied(clean *unstructured.Unstructured) {
