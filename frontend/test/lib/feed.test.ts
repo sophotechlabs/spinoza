@@ -1690,6 +1690,59 @@ describe('the server saying whether the cluster answers', () => {
 
     expect(useClusterHealthStore.getState().byCluster['']?.reachable).toBe(false);
   });
+
+  it('files the health under the cluster the frame names', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'cluster',
+            cluster: 'https://127.0.0.1:36443',
+            reachable: false,
+            reason: 'context deadline exceeded',
+          }),
+        }),
+      );
+    });
+
+    expect(useClusterHealthStore.getState().byCluster['https://127.0.0.1:36443']).toMatchObject({
+      reachable: false,
+      reason: 'context deadline exceeded',
+    });
+    expect(useClusterHealthStore.getState().byCluster['']).toBeUndefined();
+  });
+
+  it('keeps the wobbling flag the server sent', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'cluster',
+            cluster: 'https://127.0.0.1:36443',
+            reachable: true,
+            wobbling: true,
+          }),
+        }),
+      );
+    });
+
+    expect(useClusterHealthStore.getState().byCluster['https://127.0.0.1:36443']).toMatchObject({
+      reachable: true,
+      wobbling: true,
+    });
+  });
 });
 
 describe('which cluster a subscription is for', () => {

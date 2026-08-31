@@ -7,6 +7,7 @@ import {
   hiddenChildren,
   severityClass,
   severityLabel,
+  tallyScope,
   usePagedIssues,
   ISSUE_ORDERS,
   orderLabel,
@@ -30,15 +31,17 @@ interface IssueQueueProps {
 
 const SEVERITY_ORDER: Severity[] = ['fatal', 'degraded', 'warning'];
 
-function Tally({ rows }: { rows: Issue[] }) {
+function Tally({ rows, partial }: { rows: Issue[]; partial: boolean }) {
   const counts = countBySeverity(rows);
+  const scope = tallyScope(rows.length, partial);
   return (
-    <div className="flex gap-3">
+    <div className="flex items-baseline gap-3">
       {SEVERITY_ORDER.map((severity) => (
         <span key={severity} className={severityClass(severity)}>
           {counts[severity]} {severityLabel(severity).toLowerCase()}
         </span>
       ))}
+      {scope !== '' && <span className="text-[11px] text-fg-muted">{scope}</span>}
     </div>
   );
 }
@@ -209,11 +212,8 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
   const setFleet = useIssuesStore((state) => state.setFleet);
   const showing = fleet && several;
   const [order, setOrder] = useState<IssueOrder>('worst');
-  const { data, error, reload, rows, more, loadingMore, moreError, loadMore } = usePagedIssues(
-    active,
-    showing,
-    order,
-  );
+  const { data, error, reload, rows, more, partial, loadingMore, moreError, loadMore } =
+    usePagedIssues(active, showing, order);
   const [opened, setOpened] = useState<Record<string, boolean>>({});
   const now = useNow();
 
@@ -278,7 +278,7 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
             ))}
           </select>
         </label>
-        <Tally rows={rows} />
+        <Tally rows={rows} partial={partial} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {rows.length === 0 && <p className="p-3 text-fg-muted">{emptyWord(showing)}</p>}

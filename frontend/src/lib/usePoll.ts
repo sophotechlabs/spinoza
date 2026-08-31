@@ -4,6 +4,7 @@ import { sessionExpired } from '../store/session';
 
 export interface Polled<T> {
   data: T | null;
+  askedFor: string;
   error: string | null;
   stale: boolean;
   reload: () => void;
@@ -14,6 +15,7 @@ export interface PollOptions {
   enabled?: boolean;
   fallback?: string;
   refreshKey?: number;
+  resetKey?: string;
 }
 
 function messageOf(err: unknown, fallback: string): string {
@@ -24,12 +26,19 @@ function messageOf(err: unknown, fallback: string): string {
 }
 
 export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Polled<T> {
-  const { intervalMs, enabled = true, fallback = 'request failed', refreshKey = 0 } = options;
+  const {
+    intervalMs,
+    enabled = true,
+    fallback = 'request failed',
+    refreshKey = 0,
+    resetKey = '',
+  } = options;
   const epoch = useClusterEpoch();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
   const [lastEpoch, setLastEpoch] = useState(epoch);
+  const [askedFor, setAskedFor] = useState(resetKey);
 
   if (epoch !== lastEpoch) {
     setLastEpoch(epoch);
@@ -54,6 +63,7 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
         const next = await fetcher();
         if (mounted) {
           setData(next);
+          setAskedFor(resetKey);
           setError(null);
         }
       } catch (err: unknown) {
@@ -72,7 +82,7 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
       mounted = false;
       clearInterval(timer);
     };
-  }, [fetcher, intervalMs, enabled, fallback, epoch, reloads, refreshKey]);
+  }, [fetcher, intervalMs, enabled, fallback, epoch, reloads, refreshKey, resetKey]);
 
   const reload = useCallback(() => {
     setReloads((value) => value + 1);
@@ -83,5 +93,5 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
     stale = true;
   }
 
-  return { data, error, stale, reload };
+  return { data, askedFor, error, stale, reload };
 }

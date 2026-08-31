@@ -18,6 +18,7 @@ export type HistorySource = (typeof SOURCES)[number];
 export interface HistoryAsk {
   source?: HistorySource;
   after?: number;
+  afterAction?: number;
   fleet?: boolean;
 }
 
@@ -28,6 +29,9 @@ export async function fetchHistory(ask: HistoryAsk = {}): Promise<History> {
   });
   if (ask.after !== undefined && ask.after > 0) {
     params.set('after', String(ask.after));
+  }
+  if (ask.afterAction !== undefined && ask.afterAction > 0) {
+    params.set('afterAction', String(ask.afterAction));
   }
   if (ask.fleet === true) {
     params.set('fleet', 'true');
@@ -98,22 +102,40 @@ function sameObject(left: HistoryEntry, right: HistoryEntry): boolean {
   return left.name === right.name && left.namespace === right.namespace;
 }
 
-export function cursorOf(page: History, older: HistoryEntry[]): number {
-  const last = older.at(-1);
-  if (last !== undefined) {
-    return last.id;
-  }
-  return page.next ?? 0;
+export interface HistoryCursor {
+  after: number;
+  afterAction: number;
 }
 
-export function reachable(page: History, older: HistoryEntry[]): boolean {
-  if (cursorOf(page, older) === 0) {
+function oldestIdOf(entries: HistoryEntry[], source: string): number {
+  let found = 0;
+  for (const entry of entries) {
+    if (entry.source === source) {
+      found = entry.id;
+    }
+  }
+  return found;
+}
+
+function cursorFor(offered: number | undefined, entries: HistoryEntry[], source: string): number {
+  if (offered !== undefined) {
+    return offered;
+  }
+  return oldestIdOf(entries, source);
+}
+
+export function cursorOf(page: History): HistoryCursor {
+  return {
+    after: cursorFor(page.next, page.entries, 'change'),
+    afterAction: cursorFor(page.nextAction, page.entries, 'action'),
+  };
+}
+
+export function reachable(page: History, cursor: HistoryCursor): boolean {
+  if (cursor.after === 0 && cursor.afterAction === 0) {
     return false;
   }
-  if (older.length === 0) {
-    return page.more === true;
-  }
-  return older.length % HISTORY_LIMIT === 0;
+  return page.more === true;
 }
 
 export function olderFailure(err: unknown): string {

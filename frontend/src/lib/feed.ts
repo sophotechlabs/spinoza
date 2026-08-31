@@ -2,7 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { sessionExpired } from '../store/session';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { parseColumn, parseRow } from './parse';
-import { asBoolean, asList, asNumber, asRecord, asString, listOf, optionalString } from './wire';
+import {
+  asBoolean,
+  asList,
+  asNumber,
+  asRecord,
+  asString,
+  listOf,
+  optionalBoolean,
+  optionalString,
+} from './wire';
 import type { Chip } from './filterChips';
 import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
@@ -178,7 +187,9 @@ function serverMsg(raw: unknown): ServerMsg | null {
       return {
         type: 'cluster',
         subId,
+        cluster: optionalString(item.cluster),
         reachable: asBoolean(item.reachable),
+        wobbling: optionalBoolean(item.wobbling),
         reason: optionalString(item.reason),
       };
     case 'error':

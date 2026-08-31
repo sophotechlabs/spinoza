@@ -263,6 +263,24 @@ describe('asking for a page', () => {
     expect(fetcher.mock.calls[0][0]).not.toContain('after=');
   });
 
+  it('carries the action cursor separately from the change cursor', async () => {
+    const fetcher = stub({ entries: [] });
+
+    await fetchHistory({ after: 1762, afterAction: 45 });
+
+    expect(fetcher.mock.calls[0][0]).toContain('after=1762');
+    expect(fetcher.mock.calls[0][0]).toContain('afterAction=45');
+  });
+
+  it('sends only the action cursor when no change row was shown', async () => {
+    const fetcher = stub({ entries: [] });
+
+    await fetchHistory({ after: 0, afterAction: 45 });
+
+    expect(fetcher.mock.calls[0][0]).toContain('afterAction=45');
+    expect(fetcher.mock.calls[0][0]).not.toContain('&after=');
+  });
+
   it('asks for every cluster when told to', async () => {
     const fetcher = stub({ entries: [] });
 
@@ -396,24 +414,57 @@ describe('when', () => {
 });
 
 describe('reaching back through the pages', () => {
-  it('starts from the cursor the newest page ended on', () => {
-    expect(cursorOf({ entries: [], next: 40 }, [])).toBe(40);
+  it('starts from the cursors the newest page ended on', () => {
+    expect(cursorOf({ entries: [], next: 40, nextAction: 7 })).toEqual({
+      after: 40,
+      afterAction: 7,
+    });
   });
 
-  it('continues from the last row it already holds', () => {
-    expect(cursorOf({ entries: [], next: 40 }, [entry({ id: 9 })])).toBe(9);
+  it('keeps each table on its own cursor', () => {
+    const page: History = {
+      entries: [entry({ id: 1962, source: 'change' }), entry({ id: 129, source: 'action' })],
+      more: true,
+      next: 1762,
+      nextAction: 45,
+    };
+
+    expect(cursorOf(page)).toEqual({ after: 1762, afterAction: 45 });
+  });
+
+  it('never lets an action id become the changes cursor', () => {
+    const page: History = {
+      entries: [entry({ id: 1962, source: 'change' }), entry({ id: 129, source: 'action' })],
+      more: true,
+    };
+
+    expect(cursorOf(page).after).toBe(1962);
+    expect(cursorOf(page).afterAction).toBe(129);
+  });
+
+  it('falls back to the oldest row of each source when the page named no cursor', () => {
+    const page: History = {
+      entries: [entry({ id: 90, source: 'action' }), entry({ id: 45, source: 'action' })],
+      more: true,
+    };
+
+    expect(cursorOf(page)).toEqual({ after: 0, afterAction: 45 });
   });
 
   it('says there is nothing to reach when the page named no cursor', () => {
-    expect(reachable({ entries: [] }, [])).toBe(false);
+    expect(reachable({ entries: [] }, { after: 0, afterAction: 0 })).toBe(false);
   });
 
-  it('offers to reach back while the first page said there was more', () => {
-    expect(reachable({ entries: [], more: true, next: 40 }, [])).toBe(true);
+  it('offers to reach back while the page said there was more', () => {
+    expect(reachable({ entries: [], more: true }, { after: 40, afterAction: 0 })).toBe(true);
   });
 
-  it('stops offering once a page came back short', () => {
-    expect(reachable({ entries: [], more: true, next: 40 }, [entry({ id: 9 })])).toBe(false);
+  it('keeps offering when only the action cursor moved', () => {
+    expect(reachable({ entries: [], more: true }, { after: 0, afterAction: 45 })).toBe(true);
+  });
+
+  it('stops offering once the server said there was no more', () => {
+    expect(reachable({ entries: [], more: false }, { after: 40, afterAction: 45 })).toBe(false);
   });
 
   it('says what failed when reaching back does', () => {

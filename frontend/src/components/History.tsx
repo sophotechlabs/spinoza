@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { HistoryEntry, ObjectRef } from '../lib/types';
+import type { History as HistoryPage, HistoryEntry, ObjectRef } from '../lib/types';
 import {
   HISTORY_LIMIT,
   SOURCES,
@@ -186,6 +186,7 @@ export default function History({ onOpen }: HistoryProps) {
   const [source, setSource] = useState<HistorySource>('all');
   const [fleet, setFleet] = useState(false);
   const [older, setOlder] = useState<HistoryEntry[]>([]);
+  const [tail, setTail] = useState<HistoryPage | null>(null);
   const [reaching, setReaching] = useState(false);
   const several = useTabStrip();
   const showing = fleet && several;
@@ -203,13 +204,28 @@ export default function History({ onOpen }: HistoryProps) {
     return <Loading what="history" />;
   }
 
-  const page = data;
+  let deepest = data;
+  if (tail !== null) {
+    deepest = tail;
+  }
+  const cursor = cursorOf(deepest);
+
+  function startOver() {
+    setOlder([]);
+    setTail(null);
+  }
 
   async function reachBack() {
     setReaching(true);
     try {
-      const next = await fetchHistory({ source, fleet: showing, after: cursorOf(page, older) });
+      const next = await fetchHistory({
+        source,
+        fleet: showing,
+        after: cursor.after,
+        afterAction: cursor.afterAction,
+      });
       setOlder((have) => [...have, ...next.entries]);
+      setTail(next);
     } catch (err: unknown) {
       notifyError(olderFailure(err));
     } finally {
@@ -222,6 +238,7 @@ export default function History({ onOpen }: HistoryProps) {
     try {
       await forgetHistory();
       notifyOk('History cleared');
+      startOver();
       reload();
     } catch (err: unknown) {
       notifyError(clearFailure(err));
@@ -243,6 +260,7 @@ export default function History({ onOpen }: HistoryProps) {
             value={source}
             onChange={(event) => {
               setSource(event.target.value as HistorySource);
+              startOver();
             }}
             className={`${CONTROL} border-edge-strong bg-surface text-fg-soft`}
           >
@@ -260,6 +278,7 @@ export default function History({ onOpen }: HistoryProps) {
               checked={fleet}
               onChange={(event) => {
                 setFleet(event.target.checked);
+                startOver();
               }}
             />
             Every open cluster
@@ -319,7 +338,7 @@ export default function History({ onOpen }: HistoryProps) {
               ))}
             </tbody>
           </table>
-          {reachable(data, older) && (
+          {reachable(deepest, cursor) && (
             <button
               type="button"
               disabled={reaching}

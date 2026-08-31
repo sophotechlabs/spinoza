@@ -53,7 +53,12 @@ export function useIssues(
     intervalMs: ISSUES_POLL_MS,
     enabled,
     fallback: 'issues request failed',
+    resetKey: queueKey(fleet, order),
   });
+}
+
+export function queueKey(fleet: boolean, order: IssueOrder): string {
+  return `${queuePath(fleet)}?sort=${order}`;
 }
 
 async function fetchIssuePage(
@@ -67,6 +72,7 @@ async function fetchIssuePage(
 export interface PagedIssues extends Polled<IssueQueue> {
   rows: Issue[];
   more: string;
+  partial: boolean;
   loadingMore: boolean;
   moreError: string;
   loadMore: () => void;
@@ -83,12 +89,26 @@ export function usePagedIssues(
   const [next, setNext] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState('');
+  const asked = queueKey(fleet, order);
+  const [lastAsked, setLastAsked] = useState(asked);
 
+  if (asked !== lastAsked) {
+    setLastAsked(asked);
+    setTail([]);
+    setBuiltOn('');
+    setNext('');
+    setMoreError('');
+  }
+
+  const current = polled.askedFor === asked;
   const head = polled.data?.next ?? '';
   const first = polled.data?.rows ?? [];
-  const joined = builtOn === head;
+  const joined = current && builtOn === head;
   let rows = first;
-  let more = head;
+  let more = '';
+  if (current) {
+    more = head;
+  }
   if (joined) {
     rows = [...first, ...tail];
     more = next;
@@ -122,7 +142,18 @@ export function usePagedIssues(
       });
   }
 
-  return { ...polled, rows, more, loadingMore, moreError, loadMore };
+  let partial = more !== '';
+  if (!current) {
+    partial = true;
+  }
+  return { ...polled, rows, more, partial, loadingMore, moreError, loadMore };
+}
+
+export function tallyScope(loaded: number, partial: boolean): string {
+  if (!partial) {
+    return '';
+  }
+  return `of the ${String(loaded)} loaded so far`;
 }
 
 export function countBySeverity(rows: Issue[]): Record<Severity, number> {

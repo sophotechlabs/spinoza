@@ -12,7 +12,9 @@ import {
   writeStored,
 } from '../../src/lib/persist';
 import { useThemeStore } from '../../src/store/theme';
+import { useSettingsStore } from '../../src/store/settings';
 import { THEME_KEY } from '../../src/lib/theme';
+import { SETTINGS_KEY } from '../../src/lib/settings';
 
 function served(values: Record<string, string>) {
   const fetchMock = vi.fn().mockResolvedValue({
@@ -38,6 +40,7 @@ function loadedWith(values: Record<string, string>) {
   window.__SPINOZA_SETTINGS__ = JSON.stringify(values);
   hydrate();
   useThemeStore.getState().adoptStored();
+  useSettingsStore.getState().adoptStored();
 }
 
 beforeEach(() => {
@@ -210,6 +213,30 @@ describe('watchSettings', () => {
     await Promise.resolve();
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('a setting another window changed', () => {
+  it('is taken over rather than overwritten', async () => {
+    loadedWith({ [SETTINGS_KEY]: JSON.stringify({ logView: 'pretty' }) });
+    expect(useSettingsStore.getState().logView).toBe('pretty');
+    served({ [SETTINGS_KEY]: JSON.stringify({ logView: 'raw' }) });
+
+    await catchUp();
+
+    expect(useSettingsStore.getState().logView).toBe('raw');
+  });
+
+  it('survives this window changing a different setting', async () => {
+    loadedWith({ [SETTINGS_KEY]: JSON.stringify({ logView: 'pretty' }) });
+    served({ [SETTINGS_KEY]: JSON.stringify({ logView: 'raw' }) });
+    await catchUp();
+
+    useSettingsStore.getState().setScreenReader(true);
+
+    const written = JSON.parse(readStored(SETTINGS_KEY) ?? '{}') as Record<string, unknown>;
+    expect(written.logView).toBe('raw');
+    expect(written.screenReader).toBe(true);
   });
 });
 

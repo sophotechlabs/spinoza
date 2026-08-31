@@ -1,4 +1,5 @@
 import { isSaving, refresh, startSaving, stopSaving } from './persist';
+import { useSettingsStore } from '../store/settings';
 import { useThemeStore } from '../store/theme';
 
 export async function catchUp(): Promise<void> {
@@ -9,6 +10,7 @@ export async function catchUp(): Promise<void> {
   stopSaving();
   try {
     useThemeStore.getState().adoptStored();
+    useSettingsStore.getState().adoptStored();
   } finally {
     if (was) {
       startSaving();

@@ -76,7 +76,13 @@ export function useMetrics(enabled: boolean): Polled<Metrics> {
   if (!expired) {
     return polled;
   }
-  return { data: null, error: polled.error, stale: true, reload: polled.reload };
+  return {
+    data: null,
+    askedFor: polled.askedFor,
+    error: polled.error,
+    stale: true,
+    reload: polled.reload,
+  };
 }
 
 export function barColor(percent: number): string {

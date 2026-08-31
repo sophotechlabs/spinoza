@@ -36,6 +36,7 @@ interface SettingsState extends Settings {
   setNodeShell: (nodeShell: boolean) => Promise<void>;
   setUpdateCheck: (updateCheck: boolean) => Promise<void>;
   setCheckRules: (checkRules: string) => Promise<void>;
+  adoptStored: () => void;
 }
 
 const stored = readSettings();
@@ -140,6 +141,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setCheckRules: async (checkRules) => {
     await writeCheckRules(checkRules);
     set({ checkRules });
+  },
+  adoptStored: () => {
+    set({
+      ...readSettings(),
+      nodeShell: readNodeShell(),
+      updateCheck: readUpdateCheck(),
+      checkRules: readCheckRules(),
+    });
   },
 }));
 

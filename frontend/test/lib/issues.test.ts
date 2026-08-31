@@ -9,9 +9,11 @@ import {
   hiddenChildren,
   severityClass,
   severityLabel,
+  tallyScope,
   useIssues,
   usePagedIssues,
 } from '../../src/lib/issues';
+import type { IssueOrder } from '../../src/lib/issues';
 import { anySignal, rejectsWith } from '../helpers';
 
 function issue(patch: Partial<Issue> = {}): Issue {
@@ -193,6 +195,16 @@ describe('severity', () => {
   });
 });
 
+describe('what the tally is counting', () => {
+  it('says nothing while the whole queue is loaded', () => {
+    expect(tallyScope(12, false)).toBe('');
+  });
+
+  it('names how many rows it counted while more are unloaded', () => {
+    expect(tallyScope(50, true)).toBe('of the 50 loaded so far');
+  });
+});
+
 describe('the fold', () => {
   it('says nothing when a row folded nothing', () => {
     expect(foldedLabel(issue())).toBe('');
@@ -244,6 +256,71 @@ function pagesStub(pages: Record<string, unknown>): ReturnType<typeof vi.fn> {
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
+
+describe('changing the sort while pages are loaded', () => {
+  function sortedStub() {
+    return vi.fn((url: string) => {
+      const asked = new URL(url, 'http://localhost').searchParams;
+      const sort = asked.get('sort') ?? '';
+      const after = asked.get('after') ?? '';
+      if (sort === 'worst' && after === '') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ rows: [issue({ id: 'w1' })], dropped: 0, next: 'wc1' }),
+        });
+      }
+      if (sort === 'worst' && after === 'wc1') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ rows: [issue({ id: 'w2' })], dropped: 0 }),
+        });
+      }
+      if (sort === 'newest' && after === '') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ rows: [issue({ id: 'n1' })], dropped: 0, next: 'nc1' }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ rows: [issue({ id: 'wrong' })], dropped: 0 }),
+      });
+    });
+  }
+
+  it('never carries one order\u2019s cursor into another', async () => {
+    const fetchMock = sortedStub();
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, rerender } = renderHook(
+      ({ order }: { order: IssueOrder }) => usePagedIssues(true, false, order),
+      { initialProps: { order: 'worst' as IssueOrder } },
+    );
+    await waitFor(() => {
+      expect(result.current.rows).toHaveLength(1);
+    });
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['w1', 'w2']);
+    });
+
+    rerender({ order: 'newest' as IssueOrder });
+
+    expect(result.current.more).toBe('');
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['n1']);
+    });
+    expect(result.current.more).toBe('nc1');
+    const asked = fetchMock.mock.calls.map((call) => call[0]);
+    expect(asked.some((url) => url.includes('sort=newest') && url.includes('after=wc1'))).toBe(
+      false,
+    );
+  });
+});
 
 describe('usePagedIssues', () => {
   it('joins the pages it has been asked for onto the first one', async () => {

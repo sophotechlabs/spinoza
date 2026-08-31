@@ -959,6 +959,7 @@ export function parseHistory(body: unknown): History {
     more: optionalBoolean(item.more),
     dropped: optionalNumber(item.dropped),
     next: optionalNumber(item.next),
+    nextAction: optionalNumber(item.nextAction),
     reason: optionalString(item.reason),
   };
 }
