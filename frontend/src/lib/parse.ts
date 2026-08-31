@@ -758,6 +758,7 @@ export function parseClusterOverview(body: unknown): ClusterOverview {
     nodes: parseNodeSummary(asRecord(item.nodes)),
     pods: parsePodSummary(asRecord(item.pods)),
     warnings: listOf(item.warnings, parseOverviewEvent),
+    warningCount: asNumber(item.warningCount),
     controllers: optionalListOf(item.controllers, parseGitopsController),
     error: optionalString(item.error),
   };

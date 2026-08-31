@@ -796,6 +796,7 @@ export interface ClusterOverview {
   nodes: NodeSummary;
   pods: PodSummary;
   warnings: OverviewEvent[];
+  warningCount: number;
   controllers?: GitopsController[];
   error?: string;
 }

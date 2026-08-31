@@ -112,6 +112,7 @@ ClusterOverview.Error error,omitempty string
 ClusterOverview.Nodes nodes NodeSummary
 ClusterOverview.Pods pods PodSummary
 ClusterOverview.Version version string
+ClusterOverview.WarningCount warningCount int
 ClusterOverview.Warnings warnings []OverviewEvent
 Column.Name name string
 Column.Render render,omitempty string

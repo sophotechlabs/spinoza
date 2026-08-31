@@ -7,12 +7,17 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const fleetSearchCap = 200
+
+// One cluster that accepts the connection and never answers must not decide how
+// long the whole fleet takes, so every cluster gets its own deadline.
+const perClusterTimeout = 30 * time.Second
 
 func eachCluster[T any](
 	ctx context.Context, srv *Server, read func(context.Context, Backend) T,
@@ -40,7 +45,9 @@ func eachOpenCluster[T any](
 			if backend == nil {
 				return
 			}
-			found[at].answer = read(ctx, one, backend)
+			asked, giveUp := context.WithTimeout(ctx, perClusterTimeout)
+			defer giveUp()
+			found[at].answer = read(asked, one, backend)
 		}(at, one)
 	}
 	asking.Wait()

@@ -705,3 +705,26 @@ func TestBuildSaysWhenThereAreMorePodsThanItWillCount(t *testing.T) {
 		t.Fatal("a truncated tally is still a tally; it should not read as unknown")
 	}
 }
+
+func TestTheOverviewSaysHowManyWarningsThereWereNotHowManyItKept(t *testing.T) {
+	dyn := dynClient()
+	objs := make([]*unstructured.Unstructured, 0, warningsShown+11)
+	for i := range warningsShown + 11 {
+		objs = append(objs, warning(
+			fmt.Sprintf("event-%d", i),
+			"BackOff",
+			"web",
+			"2026-08-11T10:00:00Z",
+		))
+	}
+	seedEvents(t, dyn, objs...)
+
+	got := Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
+
+	if len(got.Warnings) != warningsShown {
+		t.Fatalf("kept %d warnings, want the cap of %d", len(got.Warnings), warningsShown)
+	}
+	if got.WarningCount != warningsShown+11 {
+		t.Fatalf("count = %d, want every warning the cluster had", got.WarningCount)
+	}
+}

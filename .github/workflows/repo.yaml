@@ -23,6 +23,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just gitleaks
       - run: just secrets
 
   sast:
@@ -32,6 +34,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just pipx:semgrep
       - run: just sast
 
   vulns:
@@ -41,6 +45,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just trivy osv-scanner
       - run: just vulns
 
   workflows:
@@ -50,6 +56,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just yamllint actionlint zizmor
       - run: just workflows
 
   hygiene:
@@ -59,6 +67,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just typos editorconfig-checker shellcheck yq
       - run: just hygiene
       - run: just test-packaging
       - run: just test-verify-archives
@@ -71,6 +81,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just syft grype
       - run: just sbom
 
   dependencies:

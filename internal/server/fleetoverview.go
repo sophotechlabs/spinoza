@@ -45,7 +45,7 @@ func lineFor(one clusterAnswer[api.ClusterOverview]) api.FleetCluster {
 		Version:  one.answer.Version,
 		Nodes:    one.answer.Nodes,
 		Pods:     one.answer.Pods,
-		Warnings: len(one.answer.Warnings),
+		Warnings: one.answer.WarningCount,
 		Reason:   reasonOf(one),
 	}
 }

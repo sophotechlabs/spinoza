@@ -271,3 +271,40 @@ func TestSpinozaSaysWhatItIsHolding(t *testing.T) {
 		t.Fatalf("memory = %+v", got)
 	}
 }
+
+func TestTheWarningColumnSaysHowManyThereWereNotHowManyWereKept(t *testing.T) {
+	held := overviewOf("v1.34.1", 3, 3, 40, 39)
+	held.Warnings = make([]api.OverviewEvent, 25)
+	held.WarningCount = 1219
+	ts := listServer(t, &surveying{overview: held}, &surveying{})
+
+	var got api.FleetOverview
+	readFleet(t, ts, "/api/overview/fleet", &got)
+
+	if got.Clusters[0].Warnings != 1219 {
+		t.Fatalf("warnings = %d, want what the cluster had rather than what fits", got.Clusters[0].Warnings)
+	}
+}
+
+func TestOneClusterThatNeverAnswersDoesNotHoldTheFleet(t *testing.T) {
+	if perClusterTimeout <= 0 {
+		t.Fatal("the fan-out has no per-cluster deadline")
+	}
+	held := &fleet{
+		held:     []api.OpenCluster{{ID: mk1, Context: "p-mk1", Active: true}},
+		active:   mk1,
+		backends: map[string]Backend{mk1: &surveying{}},
+	}
+	srv := New(held, testAssets(), testToken)
+
+	asked, giveUp := context.WithCancel(t.Context())
+	giveUp()
+	found := eachCluster(asked, srv, func(ctx context.Context, _ Backend) string {
+		<-ctx.Done()
+		return ctx.Err().Error()
+	})
+
+	if len(found) != 1 || found[0].answer == "" {
+		t.Fatalf("the fan-out did not hand the cluster a context it could give up on: %+v", found)
+	}
+}

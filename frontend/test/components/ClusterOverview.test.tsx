@@ -18,6 +18,7 @@ function overview(patch: Partial<Overview> = {}): Overview {
     },
     pods: { total: 40, running: 38, pending: 1, failed: 1, succeeded: 0, known: true, capped: [] },
     warnings: [],
+    warningCount: 0,
     ...patch,
   };
 }

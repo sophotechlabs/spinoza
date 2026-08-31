@@ -78,7 +78,7 @@ func Build(
 	})
 	go safe.Run("collecting warnings", func() {
 		defer wg.Done()
-		out.Warnings = warnings(bounded, dyn, descs, failures)
+		out.Warnings, out.WarningCount = warnings(bounded, dyn, descs, failures)
 	})
 	wg.Wait()
 
@@ -243,28 +243,35 @@ func lowestCap(capped map[string]int) int {
 	return lowest
 }
 
-func warnings(ctx context.Context, dyn dynamic.Interface, descs map[string]api.ResourceDescriptor, failures *listerr.Collector) []api.OverviewEvent {
+func warnings(
+	ctx context.Context, dyn dynamic.Interface,
+	descs map[string]api.ResourceDescriptor, failures *listerr.Collector,
+) (shown []api.OverviewEvent, found int) {
 	out := []api.OverviewEvent{}
 	_, ok := descs[discovery.Key("", "v1", "events")]
 	if !ok {
-		return out
+		return out, len(out)
 	}
 	bounded, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	opts := metav1.ListOptions{Limit: warningWindow, FieldSelector: "type=Warning"}
+	// The list is cut every page, so what was read has to be counted as it
+	// arrives rather than measured off the end.
+	seen := 0
 	for range warningPages {
 		list, err := dyn.Resource(eventsGVR).List(bounded, opts)
 		if err != nil {
 			failures.Record(eventsKey, err)
-			return out
+			return out, seen
 		}
 		for i := range list.Items {
 			out = append(out, eventOf(&list.Items[i]))
+			seen++
 		}
 		out = newestFirst(out)
 		if list.GetContinue() == "" {
 			failures.Record(eventsKey, nil)
-			return out
+			return out, seen
 		}
 		opts.Continue = list.GetContinue()
 	}
@@ -272,7 +279,7 @@ func warnings(ctx context.Context, dyn dynamic.Interface, descs map[string]api.R
 		"more than %d warning events, so the newest are taken from the first %d",
 		warningWindow*warningPages, warningWindow*warningPages,
 	))
-	return out
+	return out, seen
 }
 
 func newestFirst(events []api.OverviewEvent) []api.OverviewEvent {

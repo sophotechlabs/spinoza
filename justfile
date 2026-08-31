@@ -549,12 +549,24 @@ vulns:
     trivy fs --exit-code 1 --scanners secret,misconfig --skip-dirs e2e/fixtures --skip-files test/integration/metrics-server.yaml .
     osv-scanner scan source --recursive .
 
-workflows:
+workflows: scoped-tools
     yamllint .forgejo .github
     actionlint -config-file .forgejo/actionlint.yaml .forgejo/workflows/*.yaml
     actionlint .github/workflows/*.yaml
     zizmor --no-online-audits --config .forgejo/zizmor.yml .forgejo/workflows/*.yaml
     zizmor --no-online-audits .github/workflows/*.yaml
+
+scoped-tools:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    unscoped=$(yq -r '.jobs[].steps[] | select(.uses // "" | test("jdx/mise-action")) | .with.install_args // "UNSCOPED"' \
+        .github/workflows/*.yaml .forgejo/workflows/*.yaml 2>/dev/null | grep -c UNSCOPED || true)
+    if [ "$unscoped" != "0" ]; then
+        echo "scoped-tools: $unscoped mise-action steps install every tool in mise.toml."
+        echo "Name the tools the job runs with install_args, so an outage in a tool it"
+        echo "never uses cannot fail it."
+        exit 1
+    fi
 
 hygiene:
     typos
