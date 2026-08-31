@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -24,13 +23,17 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		refuseRole(w, r, need)
 		return
 	}
-	if guarded(req) && s.unconfirmed(r, req.Ref.Name) {
-		refuseUnconfirmed(w, req.Ref.Name)
+	confirm := unguarded
+	if guarded(req) {
+		confirm = req.Ref.Name
+	}
+	writer, kept, stop, ok := s.writing(w, r, confirm)
+	if !ok {
 		return
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
 	defer stop()
-	result, actionErr := s.managerFor(r).Action(kept, req)
+	//nolint:contextcheck // writing detaches r.Context so an abandoned request still finishes the write
+	result, actionErr := writer.Action(kept, req)
 	s.record(r, change{
 		verb:   string(req.Action),
 		ref:    req.Ref,
@@ -125,18 +128,17 @@ func (s *Server) getObject(w http.ResponseWriter, r *http.Request, ref api.Objec
 }
 
 func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	if s.unconfirmed(r, ref.Name) {
-		refuseUnconfirmed(w, ref.Name)
+	writer, kept, stop, ok := s.writing(w, r, ref.Name)
+	if !ok {
 		return
 	}
+	defer stop()
 	doc, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, maxDocBytes))
 	if readErr != nil {
 		writeAPIError(w, readErr)
 		return
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
-	defer stop()
-	detail, err := s.managerFor(r).ApplyObject(kept, ref, doc)
+	detail, err := writer.ApplyObject(kept, ref, doc)
 	s.record(r, change{verb: verbApply, ref: ref, kind: detail.Kind, err: err})
 	if err != nil {
 		writeAPIError(w, err)
@@ -146,13 +148,12 @@ func (s *Server) applyObject(w http.ResponseWriter, r *http.Request, ref api.Obj
 }
 
 func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
-	if s.unconfirmed(r, ref.Name) {
-		refuseUnconfirmed(w, ref.Name)
+	writer, kept, stop, ok := s.writing(w, r, ref.Name)
+	if !ok {
 		return
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
 	defer stop()
-	err := s.managerFor(r).DeleteObject(kept, ref)
+	err := writer.DeleteObject(kept, ref)
 	s.record(r, change{verb: verbDelete, ref: ref, err: err})
 	if err != nil {
 		writeAPIError(w, err)

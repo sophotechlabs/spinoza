@@ -115,7 +115,7 @@ func clusterOf(r *http.Request) string {
 	return r.URL.Query().Get(clusterParam)
 }
 
-func (s *Server) managerFor(r *http.Request) Backend {
+func (s *Server) managerFor(r *http.Request) Reader {
 	backend, _ := s.lookup(clusterOf(r))
 	return backend
 }
@@ -124,14 +124,18 @@ func (s *Server) managerOf(id string) Backend {
 	return s.cluster.Manager(id)
 }
 
-type clusterLookup func(id string) (Backend, string)
+func (s *Server) writerOf(id string) Writer {
+	return s.cluster.Manager(id)
+}
+
+type clusterLookup func(id string) (Reader, string)
 
 func (s *Server) clusterOf(r *http.Request) string {
 	_, on := s.lookup(clusterOf(r))
 	return on
 }
 
-func (s *Server) lookup(id string) (Backend, string) {
+func (s *Server) lookup(id string) (Reader, string) {
 	on := id
 	if on == "" {
 		on = s.cluster.ID()

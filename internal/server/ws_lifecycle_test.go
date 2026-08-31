@@ -151,7 +151,7 @@ func rawSession(t *testing.T, mgr *resources.Manager) (*wsSession, *websocket.Co
 	sess := &wsSession{
 		conn:   server,
 		ctx:    ctx,
-		lookup: func(string) (Backend, string) { return mgr, mk1 },
+		lookup: func(string) (Reader, string) { return mgr, mk1 },
 		tables: map[string]*entry{},
 		logs:   map[string]*entry{},
 	}

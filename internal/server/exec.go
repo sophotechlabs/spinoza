@@ -92,13 +92,13 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
-	if s.unconfirmed(r, req.Pod) {
-		refuseUnconfirmed(w, req.Pod)
+	writer, kept, stop, ok := s.writingWithin(w, r, req.Pod, debugTimeout)
+	if !ok {
 		return
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), debugTimeout)
 	defer stop()
-	session, err := s.managerFor(r).StartDebug(kept, req)
+	//nolint:contextcheck // writing detaches r.Context so an abandoned request still finishes the write
+	session, err := writer.StartDebug(kept, req)
 	s.record(r, change{
 		verb:   verbDebug,
 		ref:    podRef(req.Namespace, req.Pod),
@@ -128,8 +128,8 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "node is required")
 		return
 	}
-	if s.unconfirmed(r, node) {
-		refuseUnconfirmed(w, node)
+	writer, ok := s.writingSocket(w, r, node)
+	if !ok {
 		return
 	}
 	socket, err := accept(w, r)
@@ -146,7 +146,7 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 
 	backend := s.managerFor(r)
 	conn := &execConn{conn: socket, ctx: ctx}
-	shell, startErr := backend.StartNodeShell(ctx, node)
+	shell, startErr := writer.StartNodeShell(ctx, node)
 	s.record(r, change{verb: verbNodeShell, ref: nodeRef(node), kind: kindNode, err: startErr})
 	if startErr != nil {
 		_ = conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
@@ -157,7 +157,7 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		gone, stop := context.WithTimeout(context.WithoutCancel(ctx), removeTimeout)
 		defer stop()
-		backend.RemoveNodeShell(gone, shell.Pod)
+		writer.RemoveNodeShell(gone, shell.Pod)
 	}()
 
 	req := exec.Request{

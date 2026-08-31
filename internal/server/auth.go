@@ -75,15 +75,15 @@ func (s *Server) expectedOrigin() string {
 }
 
 func (s *Server) sessionRoute() endpoint {
-	return endpoint{http.MethodGet, pathSession, s.handleSession, true}
+	return endpoint{http.MethodGet, pathSession, s.handleSession, true, false}
 }
 
 func (s *Server) signInRoutes() []endpoint {
 	return []endpoint{
-		{http.MethodGet, pathLogin, s.handleLogin, true},
-		{http.MethodGet, pathCallback, s.handleCallback, true},
-		{http.MethodGet, pathLogout, s.handleLogout, true},
-		{http.MethodPost, pathBackchannel, s.handleBackchannelLogout, true},
+		{http.MethodGet, pathLogin, s.handleLogin, true, false},
+		{http.MethodGet, pathCallback, s.handleCallback, true, false},
+		{http.MethodGet, pathLogout, s.handleLogout, true, false},
+		{http.MethodPost, pathBackchannel, s.handleBackchannelLogout, true, false},
 	}
 }
 

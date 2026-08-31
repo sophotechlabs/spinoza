@@ -1,105 +1,105 @@
-DELETE /api/checks/baseline role=editor local=no whole=no
-DELETE /api/checks/mutes role=editor local=no whole=no
-DELETE /api/clusters role=- local=yes whole=no
-DELETE /api/history role=admin local=no whole=no
-DELETE /api/kubeconfigs role=- local=yes whole=no
-DELETE /api/object role=editor local=no whole=no
-DELETE /api/portforward role=- local=yes whole=no
-GET /api/access role=- local=no whole=no
-GET /api/argocd role=- local=no whole=yes
-GET /api/auth/me role=- local=no whole=no
-GET /api/capabilities role=- local=no whole=no
-GET /api/checks role=- local=no whole=yes
-GET /api/checks/baseline/file role=- local=no whole=yes
-GET /api/checks/export role=- local=no whole=yes
-GET /api/checks/findings role=- local=no whole=yes
-GET /api/checks/fleet role=- local=no whole=yes
-GET /api/checks/mutes role=- local=no whole=no
-GET /api/clusters role=- local=no whole=no
-GET /api/compare role=- local=no whole=yes
-GET /api/compare/kind role=- local=no whole=yes
-GET /api/contexts role=- local=no whole=no
-GET /api/debug/support role=- local=no whole=no
-GET /api/events role=- local=no whole=no
-GET /api/exec role=admin local=no whole=no
-GET /api/exec/support role=- local=no whole=no
-GET /api/flux role=- local=no whole=yes
-GET /api/flux/overview role=- local=no whole=yes
-GET /api/gitops/app role=- local=no whole=yes
-GET /api/gitops/app/graph role=- local=no whole=yes
-GET /api/gitops/fleet role=- local=no whole=yes
-GET /api/gitops/graph role=- local=no whole=yes
-GET /api/helm role=- local=no whole=no
-GET /api/helm/access role=- local=no whole=no
-GET /api/helm/charts role=- local=no whole=no
-GET /api/helm/fleet role=- local=no whole=yes
-GET /api/helm/release role=- local=no whole=no
-GET /api/helm/values role=- local=no whole=no
-GET /api/helm/versions role=- local=no whole=no
-GET /api/history role=- local=no whole=no
-GET /api/images/fleet role=- local=no whole=yes
-GET /api/issues role=- local=no whole=yes
-GET /api/issues/fleet role=- local=no whole=yes
-GET /api/kubeconfigs/picker role=- local=yes whole=no
-GET /api/memory role=- local=no whole=no
-GET /api/metrics role=- local=no whole=yes
-GET /api/metrics/history role=- local=no whole=no
-GET /api/namespaces role=- local=no whole=no
-GET /api/nodeshell role=admin local=no whole=no
-GET /api/nodeshell/support role=- local=no whole=no
-GET /api/object role=- local=no whole=no
-GET /api/overview role=- local=no whole=yes
-GET /api/overview/fleet role=- local=no whole=yes
-GET /api/portforward role=- local=no whole=no
-GET /api/rbac role=admin local=no whole=no
-GET /api/rbac/who role=admin local=no whole=no
-GET /api/resources role=- local=no whole=no
-GET /api/resources/counts role=- local=no whole=yes
-GET /api/resources/fleet role=- local=no whole=yes
-GET /api/schema role=- local=no whole=no
-GET /api/search role=- local=no whole=no
-GET /api/search/fleet role=- local=no whole=yes
-GET /api/settings role=- local=no whole=no
-GET /api/shell role=- local=yes whole=no
-GET /api/topology role=- local=no whole=yes
-GET /api/traffic role=- local=no whole=yes
-GET /api/update role=- local=yes whole=no
-GET /api/version role=- local=no whole=no
-GET /api/view role=- local=no whole=no
-GET /auth/callback role=- local=no whole=no
-GET /auth/login role=- local=no whole=no
-GET /auth/logout role=- local=no whole=no
-GET /healthz role=- local=no whole=no
-GET /ws role=- local=no whole=no
-POST /api/access role=- local=no whole=no
-POST /api/action role=editor local=no whole=no
-POST /api/argocd/action role=editor local=no whole=no
-POST /api/checks/baseline role=editor local=no whole=yes
-POST /api/checks/mutes role=editor local=no whole=no
-POST /api/checks/rules/faults role=- local=no whole=no
-POST /api/clusters role=- local=yes whole=no
-POST /api/clusters/active role=- local=yes whole=no
-POST /api/clusters/color role=- local=yes whole=no
-POST /api/clusters/name role=- local=yes whole=no
-POST /api/clusters/reopen role=- local=yes whole=no
-POST /api/clusters/timeline role=admin local=no whole=no
-POST /api/debug role=admin local=no whole=no
-POST /api/flux/action role=editor local=no whole=no
-POST /api/helm/action role=editor local=no whole=no
-POST /api/helm/install role=editor local=no whole=no
-POST /api/helm/upgrade role=editor local=no whole=no
-POST /api/kubeconfigs role=- local=yes whole=no
-POST /api/kubeconfigs/picker role=- local=yes whole=no
-POST /api/portforward role=- local=yes whole=no
-POST /api/protection role=admin local=no whole=no
-POST /api/resources role=- local=no whole=no
-POST /api/update role=- local=yes whole=no
-POST /api/view/browser role=- local=yes whole=no
-POST /api/view/desktop role=- local=yes whole=no
-POST /auth/backchannel-logout role=- local=no whole=no
-PUT /api/checks/baseline/file role=editor local=no whole=no
-PUT /api/object role=editor local=no whole=no
-PUT /api/settings role=admin local=no whole=no
+DELETE /api/checks/baseline role=editor local=no whole=no writes=no
+DELETE /api/checks/mutes role=editor local=no whole=no writes=no
+DELETE /api/clusters role=- local=yes whole=no writes=no
+DELETE /api/history role=admin local=no whole=no writes=no
+DELETE /api/kubeconfigs role=- local=yes whole=no writes=no
+DELETE /api/object role=editor local=no whole=no writes=yes
+DELETE /api/portforward role=- local=yes whole=no writes=no
+GET /api/access role=- local=no whole=no writes=no
+GET /api/argocd role=- local=no whole=yes writes=no
+GET /api/auth/me role=- local=no whole=no writes=no
+GET /api/capabilities role=- local=no whole=no writes=no
+GET /api/checks role=- local=no whole=yes writes=no
+GET /api/checks/baseline/file role=- local=no whole=yes writes=no
+GET /api/checks/export role=- local=no whole=yes writes=no
+GET /api/checks/findings role=- local=no whole=yes writes=no
+GET /api/checks/fleet role=- local=no whole=yes writes=no
+GET /api/checks/mutes role=- local=no whole=no writes=no
+GET /api/clusters role=- local=no whole=no writes=no
+GET /api/compare role=- local=no whole=yes writes=no
+GET /api/compare/kind role=- local=no whole=yes writes=no
+GET /api/contexts role=- local=no whole=no writes=no
+GET /api/debug/support role=- local=no whole=no writes=no
+GET /api/events role=- local=no whole=no writes=no
+GET /api/exec role=admin local=no whole=no writes=no
+GET /api/exec/support role=- local=no whole=no writes=no
+GET /api/flux role=- local=no whole=yes writes=no
+GET /api/flux/overview role=- local=no whole=yes writes=no
+GET /api/gitops/app role=- local=no whole=yes writes=no
+GET /api/gitops/app/graph role=- local=no whole=yes writes=no
+GET /api/gitops/fleet role=- local=no whole=yes writes=no
+GET /api/gitops/graph role=- local=no whole=yes writes=no
+GET /api/helm role=- local=no whole=no writes=no
+GET /api/helm/access role=- local=no whole=no writes=no
+GET /api/helm/charts role=- local=no whole=no writes=no
+GET /api/helm/fleet role=- local=no whole=yes writes=no
+GET /api/helm/release role=- local=no whole=no writes=no
+GET /api/helm/values role=- local=no whole=no writes=no
+GET /api/helm/versions role=- local=no whole=no writes=no
+GET /api/history role=- local=no whole=no writes=no
+GET /api/images/fleet role=- local=no whole=yes writes=no
+GET /api/issues role=- local=no whole=yes writes=no
+GET /api/issues/fleet role=- local=no whole=yes writes=no
+GET /api/kubeconfigs/picker role=- local=yes whole=no writes=no
+GET /api/memory role=- local=no whole=no writes=no
+GET /api/metrics role=- local=no whole=yes writes=no
+GET /api/metrics/history role=- local=no whole=no writes=no
+GET /api/namespaces role=- local=no whole=no writes=no
+GET /api/nodeshell role=admin local=no whole=no writes=yes
+GET /api/nodeshell/support role=- local=no whole=no writes=no
+GET /api/object role=- local=no whole=no writes=no
+GET /api/overview role=- local=no whole=yes writes=no
+GET /api/overview/fleet role=- local=no whole=yes writes=no
+GET /api/portforward role=- local=no whole=no writes=no
+GET /api/rbac role=admin local=no whole=no writes=no
+GET /api/rbac/who role=admin local=no whole=no writes=no
+GET /api/resources role=- local=no whole=no writes=no
+GET /api/resources/counts role=- local=no whole=yes writes=no
+GET /api/resources/fleet role=- local=no whole=yes writes=no
+GET /api/schema role=- local=no whole=no writes=no
+GET /api/search role=- local=no whole=no writes=no
+GET /api/search/fleet role=- local=no whole=yes writes=no
+GET /api/settings role=- local=no whole=no writes=no
+GET /api/shell role=- local=yes whole=no writes=no
+GET /api/topology role=- local=no whole=yes writes=no
+GET /api/traffic role=- local=no whole=yes writes=no
+GET /api/update role=- local=yes whole=no writes=no
+GET /api/version role=- local=no whole=no writes=no
+GET /api/view role=- local=no whole=no writes=no
+GET /auth/callback role=- local=no whole=no writes=no
+GET /auth/login role=- local=no whole=no writes=no
+GET /auth/logout role=- local=no whole=no writes=no
+GET /healthz role=- local=no whole=no writes=no
+GET /ws role=- local=no whole=no writes=no
+POST /api/access role=- local=no whole=no writes=no
+POST /api/action role=editor local=no whole=no writes=yes
+POST /api/argocd/action role=editor local=no whole=no writes=yes
+POST /api/checks/baseline role=editor local=no whole=yes writes=no
+POST /api/checks/mutes role=editor local=no whole=no writes=no
+POST /api/checks/rules/faults role=- local=no whole=no writes=no
+POST /api/clusters role=- local=yes whole=no writes=no
+POST /api/clusters/active role=- local=yes whole=no writes=no
+POST /api/clusters/color role=- local=yes whole=no writes=no
+POST /api/clusters/name role=- local=yes whole=no writes=no
+POST /api/clusters/reopen role=- local=yes whole=no writes=no
+POST /api/clusters/timeline role=admin local=no whole=no writes=no
+POST /api/debug role=admin local=no whole=no writes=yes
+POST /api/flux/action role=editor local=no whole=no writes=yes
+POST /api/helm/action role=editor local=no whole=no writes=yes
+POST /api/helm/install role=editor local=no whole=no writes=yes
+POST /api/helm/upgrade role=editor local=no whole=no writes=yes
+POST /api/kubeconfigs role=- local=yes whole=no writes=no
+POST /api/kubeconfigs/picker role=- local=yes whole=no writes=no
+POST /api/portforward role=- local=yes whole=no writes=no
+POST /api/protection role=admin local=no whole=no writes=no
+POST /api/resources role=- local=no whole=no writes=no
+POST /api/update role=- local=yes whole=no writes=no
+POST /api/view/browser role=- local=yes whole=no writes=no
+POST /api/view/desktop role=- local=yes whole=no writes=no
+POST /auth/backchannel-logout role=- local=no whole=no writes=no
+PUT /api/checks/baseline/file role=editor local=no whole=no writes=no
+PUT /api/object role=editor local=no whole=no writes=yes
+PUT /api/settings role=admin local=no whole=no writes=no
 action cordon role=admin
 action drain role=admin
 action restart role=editor

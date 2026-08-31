@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -45,13 +44,16 @@ func argoDetail(req argocd.Request) string {
 
 func (s *Server) fluxAction(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
 	action := flux.Action(r.URL.Query().Get("action"))
-	if patchesTheCluster(action) && s.unconfirmed(r, ref.Name) {
-		refuseUnconfirmed(w, ref.Name)
+	confirm := unguarded
+	if patchesTheCluster(action) {
+		confirm = ref.Name
+	}
+	writer, kept, stop, ok := s.writing(w, r, confirm)
+	if !ok {
 		return
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
 	defer stop()
-	result, err := s.managerFor(r).FluxAction(kept, ref, action)
+	result, err := writer.FluxAction(kept, ref, action)
 	s.record(r, change{verb: string(action), ref: ref, err: err})
 	if err != nil {
 		writeAPIError(w, err)
@@ -93,13 +95,16 @@ func (s *Server) argoAction(w http.ResponseWriter, r *http.Request, ref api.Obje
 		}
 	}
 	req := argoRequest(r.URL.Query().Get("action"), dto)
-	if changesTheCluster(req.Action) && s.unconfirmed(r, ref.Name) {
-		refuseUnconfirmed(w, ref.Name)
+	confirm := unguarded
+	if changesTheCluster(req.Action) {
+		confirm = ref.Name
+	}
+	writer, kept, stop, ok := s.writing(w, r, confirm)
+	if !ok {
 		return
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
 	defer stop()
-	result, actionErr := s.managerFor(r).ArgoAction(kept, ref, req)
+	result, actionErr := writer.ArgoAction(kept, ref, req)
 	s.record(r, change{
 		verb:   string(req.Action),
 		ref:    ref,

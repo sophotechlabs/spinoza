@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -85,3 +86,36 @@ func (s *Server) pickFile(w http.ResponseWriter, r *http.Request) {
 }
 
 const mutationTimeout = 10 * time.Minute
+
+const unguarded = ""
+
+func (s *Server) writing(
+	w http.ResponseWriter,
+	r *http.Request,
+	confirm string,
+) (Writer, context.Context, func(), bool) {
+	return s.writingWithin(w, r, confirm, mutationTimeout)
+}
+
+func (s *Server) writingWithin(
+	w http.ResponseWriter,
+	r *http.Request,
+	confirm string,
+	ceiling time.Duration,
+) (Writer, context.Context, func(), bool) {
+	writer, ok := s.writingSocket(w, r, confirm)
+	if !ok {
+		return nil, nil, nil, false
+	}
+	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), ceiling)
+	return writer, kept, stop, true
+}
+
+func (s *Server) writingSocket(w http.ResponseWriter, r *http.Request, confirm string) (Writer, bool) {
+	if confirm != unguarded && s.unconfirmed(r, confirm) {
+		refuseUnconfirmed(w, confirm)
+		return nil, false
+	}
+	_, on := s.lookup(clusterOf(r))
+	return s.writerOf(on), true
+}

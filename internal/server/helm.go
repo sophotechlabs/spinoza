@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -37,15 +36,14 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	action := query.Get("action")
-	backend := s.managerFor(r)
-	if s.unconfirmed(r, name) {
-		refuseUnconfirmed(w, name)
+	writer, kept, stop, ok := s.writing(w, r, name)
+	if !ok {
 		return
 	}
+	defer stop()
 	if action == helm.ActionUninstal {
-		kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
-		defer stop()
-		removed, removeErr := backend.HelmUninstall(kept, namespace, name)
+		//nolint:contextcheck // writing detaches r.Context so an abandoned request still finishes the write
+		removed, removeErr := writer.HelmUninstall(kept, namespace, name)
 		s.finishHelmAction(w, r, releaseChange(verbUninstall, namespace, name, "", false, removeErr), removed, removeErr)
 		return
 	}
@@ -58,9 +56,8 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "revision must be a number")
 		return
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
-	defer stop()
-	rolled, rollErr := backend.HelmRollback(kept, namespace, name, revision)
+	//nolint:contextcheck // writing detaches r.Context so an abandoned request still finishes the write
+	rolled, rollErr := writer.HelmRollback(kept, namespace, name, revision)
 	detail := "to revision " + strconv.FormatInt(revision, 10)
 	s.finishHelmAction(w, r, releaseChange(verbRollback, namespace, name, detail, false, rollErr), rolled, rollErr)
 }
@@ -137,13 +134,17 @@ func (s *Server) handleHelmInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dryRun := r.URL.Query().Get("dryRun") == queryTrue
-	if !dryRun && s.unconfirmed(r, dto.Name) {
-		refuseUnconfirmed(w, dto.Name)
+	confirm := dto.Name
+	if dryRun {
+		confirm = unguarded
+	}
+	writer, kept, stop, ok := s.writing(w, r, confirm)
+	if !ok {
 		return
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
 	defer stop()
-	result, installErr := s.managerFor(r).HelmInstall(kept, helm.InstallRequest{
+	//nolint:contextcheck // writing detaches r.Context so an abandoned request still finishes the write
+	result, installErr := writer.HelmInstall(kept, helm.InstallRequest{
 		Namespace:       dto.Namespace,
 		Name:            dto.Name,
 		Chart:           dto.Chart,
@@ -183,10 +184,15 @@ func (s *Server) handleHelmUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dryRun := r.URL.Query().Get("dryRun") == queryTrue
-	if !dryRun && s.unconfirmed(r, dto.Name) {
-		refuseUnconfirmed(w, dto.Name)
+	confirm := dto.Name
+	if dryRun {
+		confirm = unguarded
+	}
+	writer, kept, stop, ok := s.writing(w, r, confirm)
+	if !ok {
 		return
 	}
+	defer stop()
 	req := helm.UpgradeRequest{
 		Namespace: dto.Namespace,
 		Name:      dto.Name,
@@ -197,9 +203,8 @@ func (s *Server) handleHelmUpgrade(w http.ResponseWriter, r *http.Request) {
 		Values:    dto.Values,
 		DryRun:    dryRun,
 	}
-	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
-	defer stop()
-	result, upgradeErr := s.managerFor(r).HelmUpgrade(kept, req)
+	//nolint:contextcheck // writing detaches r.Context so an abandoned request still finishes the write
+	result, upgradeErr := writer.HelmUpgrade(kept, req)
 	s.finishHelmAction(w, r, releaseChange(verbUpgrade, dto.Namespace, dto.Name, dto.Chart+" "+dto.Version, dryRun, upgradeErr), result, upgradeErr)
 }
 

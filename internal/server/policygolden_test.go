@@ -20,12 +20,13 @@ func policyLines(t *testing.T) string {
 	lines := make([]string, 0, len(routes))
 	for _, entry := range routes {
 		lines = append(lines, fmt.Sprintf(
-			"%s %s role=%s local=%s whole=%s",
+			"%s %s role=%s local=%s whole=%s writes=%s",
 			entry.method,
 			entry.path,
 			orDash(roleFor(entry)),
 			yesNo(onlyHere(entry)),
 			yesNo(wholeCluster(entry)),
+			yesNo(entry.writes),
 		))
 	}
 	for _, action := range actions.Every() {

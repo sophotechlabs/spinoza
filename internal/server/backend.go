@@ -43,8 +43,6 @@ type Objects interface {
 	Liveness
 
 	Object(ctx context.Context, ref api.ObjectRef) (api.ObjectDetail, error)
-	ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error)
-	DeleteObject(ctx context.Context, ref api.ObjectRef) error
 	Events(ctx context.Context, namespace, uid string) ([]api.Event, error)
 	ListKind(ctx context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error)
 	Schema(ctx context.Context, gvk jsonschema.GVK) (json.RawMessage, error)
@@ -106,22 +104,15 @@ type Releases interface {
 	HelmReleases(ctx context.Context) (api.HelmReleases, error)
 	HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error)
 	HelmSupport() api.HelmSupport
-	HelmRollback(ctx context.Context, namespace, name string, revision int64) (api.HelmActionResult, error)
-	HelmUninstall(ctx context.Context, namespace, name string) (api.HelmActionResult, error)
-	HelmUpgrade(ctx context.Context, req helm.UpgradeRequest) (api.HelmActionResult, error)
 }
 
 type ChartRepos interface {
 	HelmVersions(ctx context.Context, chart string) (api.HelmChartVersions, error)
 	HelmChartSearch(ctx context.Context, query string) (api.HelmChartSearch, error)
 	HelmChartValues(ctx context.Context, req helm.ValuesRequest) (api.HelmChartValues, error)
-	HelmInstall(ctx context.Context, req helm.InstallRequest) (api.HelmActionResult, error)
 }
 
-type Changes interface {
-	Action(ctx context.Context, req actions.Request) (api.ActionResult, error)
-	FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error)
-	ArgoAction(ctx context.Context, ref api.ObjectRef, req argocd.Request) (api.ArgoActionResult, error)
+type Gitops interface {
 	GitopsApp(ctx context.Context, ref api.ObjectRef) (api.GitopsApp, error)
 	GitopsAppGraph(ctx context.Context, ref api.ObjectRef) (api.Graph, error)
 }
@@ -136,19 +127,52 @@ type Terminals interface {
 	ExecSupport(ctx context.Context, req exec.Request) (api.ExecSupport, error)
 	StartExec(ctx context.Context, req exec.Request, stdout io.Writer) (*exec.Session, error)
 	DebugSupport(ctx context.Context, namespace, pod string) api.DebugSupport
-	StartDebug(ctx context.Context, req debugcontainer.Request) (api.DebugSession, error)
 	NodeShellSupport(ctx context.Context, node string) api.NodeShellSupport
+}
+
+type ObjectWrites interface {
+	Action(ctx context.Context, req actions.Request) (api.ActionResult, error)
+	ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error)
+	DeleteObject(ctx context.Context, ref api.ObjectRef) error
+}
+
+type DeliveryWrites interface {
+	FluxAction(ctx context.Context, ref api.ObjectRef, action flux.Action) (api.FluxActionResult, error)
+	ArgoAction(ctx context.Context, ref api.ObjectRef, req argocd.Request) (api.ArgoActionResult, error)
+}
+
+type ReleaseWrites interface {
+	HelmInstall(ctx context.Context, req helm.InstallRequest) (api.HelmActionResult, error)
+	HelmUpgrade(ctx context.Context, req helm.UpgradeRequest) (api.HelmActionResult, error)
+	HelmRollback(ctx context.Context, namespace, name string, revision int64) (api.HelmActionResult, error)
+	HelmUninstall(ctx context.Context, namespace, name string) (api.HelmActionResult, error)
+}
+
+type TerminalWrites interface {
+	StartDebug(ctx context.Context, req debugcontainer.Request) (api.DebugSession, error)
 	StartNodeShell(ctx context.Context, node string) (api.NodeShellSession, error)
 	RemoveNodeShell(ctx context.Context, pod string)
 }
 
-type Backend interface {
+type Writer interface {
+	ObjectWrites
+	DeliveryWrites
+	ReleaseWrites
+	TerminalWrites
+}
+
+type Reader interface {
 	Catalog
 	Objects
 	Feeds
 	Views
 	Releases
-	Changes
+	Gitops
 	Forwarding
 	Terminals
+}
+
+type Backend interface {
+	Reader
+	Writer
 }

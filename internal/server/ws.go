@@ -268,7 +268,7 @@ func (sess *wsSession) more(msg api.ClientMsg) {
 	sub.SetLimit(msg.Limit)
 }
 
-func (sess *wsSession) buildSub(backend Backend, msg api.ClientMsg, gen uint64) {
+func (sess *wsSession) buildSub(backend Reader, msg api.ClientMsg, gen uint64) {
 	sub, err := backend.Subscribe(
 		sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit, msg.Filters,
 	)
@@ -400,7 +400,7 @@ func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 	safe.Go("opening the log stream "+msg.SubID, func() { sess.buildLogs(backend, msg, gen) })
 }
 
-func (sess *wsSession) buildLogs(backend Backend, msg api.ClientMsg, gen uint64) {
+func (sess *wsSession) buildLogs(backend Reader, msg api.ClientMsg, gen uint64) {
 	selector, selErr := sess.selectorFor(backend, msg)
 	if selErr != nil {
 		sess.failAndForget(streams, msg.SubID, gen, selErr)
@@ -426,7 +426,7 @@ func (sess *wsSession) buildLogs(backend Backend, msg api.ClientMsg, gen uint64)
 	sess.relayLogs(msg.SubID, gen, stream)
 }
 
-func (sess *wsSession) selectorFor(backend Backend, msg api.ClientMsg) (string, error) {
+func (sess *wsSession) selectorFor(backend Reader, msg api.ClientMsg) (string, error) {
 	if msg.Resource == "" || msg.Resource == "pods" {
 		return "", nil
 	}
