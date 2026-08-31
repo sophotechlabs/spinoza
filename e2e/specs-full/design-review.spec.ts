@@ -214,7 +214,7 @@ test('design: the resource table at scale', async ({ page }) => {
       .map((one) => (one as HTMLElement).innerText)
       .join('\n')
       .split('\n')
-      .filter((line) => /of |showing|more|truncat|first |dropped|capped/i.test(line))
+      .filter((line) => /of |showing|more|trunc|first |dropped|capped/i.test(line))
       .slice(0, 12),
   );
   console.log(`##SCALE configmaps counters=${JSON.stringify(chrome)}\n##END`);
