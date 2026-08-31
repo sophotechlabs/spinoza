@@ -1,0 +1,185 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "spinoza.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spinoza.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "spinoza.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "spinoza.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "spinoza.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: spinoza
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          args:
+            - --cluster-mode
+            - --addr=0.0.0.0:{{ .Values.service.port }}
+            - --public-url={{ .Values.publicURL }}
+            - --log-level={{ .Values.logLevel }}
+            - --impersonate={{ .Values.impersonate }}
+            - --auth-mode={{ .Values.auth.mode }}
+            - --auth-default-role={{ .Values.auth.defaultRole }}
+            - --session-ttl={{ .Values.auth.sessionTTL }}
+            - --session-max-age={{ .Values.auth.sessionMaxAge }}
+            {{- with .Values.auth.adminGroups }}
+            - --auth-admin-groups={{ join "," . }}
+            {{- end }}
+            {{- with .Values.auth.editorGroups }}
+            - --auth-editor-groups={{ join "," . }}
+            {{- end }}
+            {{- with .Values.auth.viewerGroups }}
+            - --auth-viewer-groups={{ join "," . }}
+            {{- end }}
+            {{- if eq .Values.auth.mode "proxy" }}
+            - --auth-user-header={{ .Values.auth.proxy.userHeader }}
+            - --auth-groups-header={{ .Values.auth.proxy.groupsHeader }}
+            {{- with .Values.auth.proxy.logoutURL }}
+            - --auth-proxy-logout-url={{ . }}
+            {{- end }}
+            {{- end }}
+            {{- if eq .Values.auth.mode "oidc" }}
+            - --auth-oidc-issuer={{ .Values.auth.oidc.issuerURL }}
+            - --auth-oidc-client-id={{ .Values.auth.oidc.clientID }}
+            - --auth-oidc-groups-claim={{ .Values.auth.oidc.groupsClaim }}
+            {{- with .Values.auth.oidc.internalIssuerURL }}
+            - --auth-oidc-internal-issuer={{ . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.redirectURL }}
+            - --auth-oidc-redirect-url={{ . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.postLogoutURL }}
+            - --auth-oidc-post-logout-url={{ . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.scopes }}
+            - --auth-oidc-scopes={{ join "," . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.usernameClaims }}
+            - --auth-oidc-username-claims={{ join "," . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.usernamePrefix }}
+            - --auth-oidc-username-prefix={{ . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.groupsPrefix }}
+            - --auth-oidc-groups-prefix={{ . }}
+            {{- end }}
+            {{- with .Values.auth.oidc.caCert }}
+            - --auth-oidc-ca-cert={{ . }}
+            {{- end }}
+            {{- if .Values.auth.oidc.insecureSkipVerify }}
+            - --auth-oidc-insecure-skip-verify
+            {{- end }}
+            {{- if .Values.auth.oidc.backchannelLogout }}
+            - --auth-oidc-backchannel-logout
+            {{- end }}
+            {{- end }}
+            {{- with .Values.prometheus }}
+            - --prometheus={{ . }}
+            {{- end }}
+            {{- if .Values.nodeShell }}
+            - --node-shell
+            {{- end }}
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- if or .Values.auth.existingSecret .Values.auth.sessionSecret }}
+            - name: SPINOZA_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "spinoza.sessionSecretName" . }}
+                  key: {{ .Values.auth.existingSecretKey }}
+            {{- end }}
+            {{- if and (eq .Values.auth.mode "oidc") (or .Values.auth.oidc.existingSecret .Values.auth.oidc.clientSecret) }}
+            - name: SPINOZA_AUTH_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "spinoza.clientSecretName" . }}
+                  key: {{ .Values.auth.oidc.clientSecretKey }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/spinoza
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: state
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "spinoza.fullname" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

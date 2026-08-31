@@ -1,0 +1,13 @@
+# A GUI that shows every kind the cluster has cannot enumerate them in advance,
+# so the chart's default read role is get/list/watch on everything. rbac.read
+# can be set to workloads for a curated list without secrets; both are in
+# docs/cluster-mode.md, and neither grants any write verb.
+KSV-0046
+
+# No cpu limit on purpose: throttling a process that keeps informer caches in
+# step with the apiserver makes it fall behind rather than use less. The memory
+# limit is set.
+KSV-0011
+
+# ghcr.io is where spinoza publishes its own image.
+KSV-0125

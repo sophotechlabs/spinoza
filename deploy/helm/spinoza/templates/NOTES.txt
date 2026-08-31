@@ -1,0 +1,34 @@
+Spinoza is serving {{ .Release.Namespace }} at {{ .Values.publicURL }}.
+
+{{ if not .Values.ingress.enabled -}}
+Nothing exposes it yet. Reach it with a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "spinoza.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+
+{{ end -}}
+{{- if eq .Values.auth.mode "none" }}
+auth.mode is none, so anybody who reaches that address is an admin here.
+Set auth.mode to oidc and point it at your identity provider, or to proxy and
+put an auth proxy in front.
+{{- end }}
+{{- if eq .Values.auth.mode "oidc" }}
+Register this callback with {{ .Values.auth.oidc.issuerURL }}:
+
+  {{ .Values.auth.oidc.redirectURL | default (printf "%s/auth/callback" (trimSuffix "/" .Values.publicURL)) }}
+{{- if .Values.auth.oidc.backchannelLogout }}
+
+And this back-channel logout uri:
+
+  {{ trimSuffix "/" .Values.publicURL }}/auth/backchannel-logout
+{{- end }}
+{{- end }}
+{{- if and (not .Values.auth.existingSecret) (not .Values.auth.sessionSecret) }}
+
+No session key was given, so one was generated inside the pod: every sign-in
+ends when it restarts. Set auth.sessionSecret or auth.existingSecret.
+{{- end }}
+{{- if not .Values.impersonate }}
+
+Impersonation is off, so every change runs as spinoza's own service account
+rather than the person who asked for it.
+{{- end }}

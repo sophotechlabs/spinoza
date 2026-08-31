@@ -10,3 +10,7 @@ regexes = ['''dGhlIHNhbXBsZSBub25jZQ==''']
 description = "Browser localStorage key names in the frontend — spinoza.<area>.v<n>, not credentials"
 regexTarget = "secret"
 regexes = ['''^spinoza\.[a-z]+\.v\d+$''']
+
+[[allowlists]]
+description = "The repo's scratch directory, gitignored: kind configs and the throwaway TLS key just cluster-mode-up generates"
+paths = ['''^\.tmp/''']

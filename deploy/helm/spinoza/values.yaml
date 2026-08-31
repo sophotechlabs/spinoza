@@ -1,0 +1,156 @@
+# The address browsers reach spinoza at. Cluster mode will not start without it.
+publicURL: ""
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/sophotechlabs/spinoza
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Act on the cluster as the person who is signed in, so kubernetes rbac decides
+# what each of them may do. With this off, everything runs as spinoza's own
+# service account and rbac.write has to be on.
+impersonate: true
+
+logLevel: info
+
+# Prometheus for the metrics history charts, as namespace/service:port.
+# Discovered when empty.
+prometheus: ""
+
+# Allow a root shell on a node, which creates a privileged pod. Admins only,
+# and still subject to the signed-in user's own rbac.
+nodeShell: false
+
+auth:
+  # none, proxy or oidc. With none, anybody who reaches this address is an
+  # admin here, so put an auth proxy in front or pick another mode.
+  mode: none
+
+  # Role for anyone whose groups match none of the lists below.
+  defaultRole: viewer
+  adminGroups: []
+  editorGroups: []
+  viewerGroups: []
+
+  sessionTTL: 8h
+  # How long a sign-in may be renewed for. Past this the browser goes back to
+  # the provider, which is what makes a group somebody lost take effect.
+  sessionMaxAge: 24h
+  # The key that signs session cookies. Leave empty and one is generated, which
+  # means every sign-in ends when the pod restarts.
+  sessionSecret: ""
+  # A secret you made yourself, instead of the one this chart creates.
+  existingSecret: ""
+  existingSecretKey: session-secret
+
+  proxy:
+    userHeader: X-Forwarded-User
+    groupsHeader: X-Forwarded-Groups
+    # Where signing out sends the browser, such as oauth2-proxy's /oauth2/sign_out.
+    logoutURL: ""
+
+  oidc:
+    # Your keycloak realm, or any other provider: https://keycloak.example.com/realms/main
+    issuerURL: ""
+    # The same provider on an address this pod can reach, when it differs from
+    # the browser's.
+    internalIssuerURL: ""
+    clientID: ""
+    clientSecret: ""
+    existingSecret: ""
+    clientSecretKey: client-secret
+    # Defaults to publicURL + /auth/callback.
+    redirectURL: ""
+    # Defaults to publicURL + /. Register it with your provider.
+    postLogoutURL: ""
+    scopes: []
+    groupsClaim: groups
+    usernameClaims: []
+    # Prefixes to match what your apiserver binds, such as oidc:.
+    usernamePrefix: ""
+    groupsPrefix: ""
+    # Mount a ca certificate yourself with extraVolumes and name its path here.
+    caCert: ""
+    insecureSkipVerify: false
+    backchannelLogout: false
+
+rbac:
+  create: true
+  # everything: get, list and watch on every resource, which is what a gui that
+  # shows every kind your cluster has needs, secrets included.
+  # workloads: the common kinds without secrets. Custom resources then need
+  # extraRules, and the helm view stays empty.
+  read: everything
+  # Write verbs for the service account itself. Only needed with impersonate
+  # off; with it on, every change runs as the person who asked for it.
+  write: false
+  extraRules: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+# Keeps settings, audit baselines and the timeline across restarts.
+persistence:
+  enabled: false
+  size: 1Gi
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+extraArgs: []
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""

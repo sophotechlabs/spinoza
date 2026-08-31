@@ -1,0 +1,17 @@
+apiVersion: v2
+name: spinoza
+description: A self-hosted Kubernetes GUI, served to a team from inside the cluster
+type: application
+version: 0.1.0
+appVersion: "1.22.0"
+home: https://spinoza.tech
+sources:
+  - https://github.com/sophotechlabs/spinoza
+maintainers:
+  - name: Sophotech s.r.o.
+    email: spinoza@sopho.tech
+keywords:
+  - kubernetes
+  - dashboard
+  - gitops
+  - helm

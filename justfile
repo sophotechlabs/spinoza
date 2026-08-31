@@ -490,7 +490,115 @@ lint-e2e:
     fi
     npm run typecheck
 
-lint: lint-be lint-fe lint-e2e
+cm_dir := 'test/clustermode'
+cm_cluster := env_var_or_default('SPINOZA_CM_CLUSTER', test_cluster + '-cm')
+cm_context := 'kind-' + cm_cluster
+
+# stand up a cluster with an ingress, keycloak and the fixtures cluster mode is verified against
+cluster-mode-up:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! kind get clusters | grep -qx {{ cm_cluster }}; then
+        kind create cluster --name {{ cm_cluster }} --config {{ cm_dir }}/kind.yaml --wait 300s
+    fi
+    kind export kubeconfig --name {{ cm_cluster }}
+    kubectl --context {{ cm_context }} apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.1/deploy/static/provider/kind/deploy.yaml
+    kubectl --context {{ cm_context }} -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=5m
+    kubectl --context {{ cm_context }} -n ingress-nginx wait --for=condition=ready pod \
+        --selector=app.kubernetes.io/component=controller --timeout=5m
+    for _ in $(seq 1 60); do
+        if kubectl --context {{ cm_context }} -n ingress-nginx get endpoints ingress-nginx-controller-admission \
+            -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .; then
+            break
+        fi
+        sleep 2
+    done
+    mkdir -p .tmp/cm
+    if [ ! -f .tmp/cm/tls.crt ]; then
+        openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
+            -keyout .tmp/cm/tls.key -out .tmp/cm/tls.crt \
+            -subj "/CN=localtest.me" \
+            -addext "subjectAltName=DNS:localtest.me,DNS:spinoza.localtest.me,DNS:keycloak.localtest.me"
+    fi
+    kubectl --context {{ cm_context }} apply -f {{ cm_dir }}/rbac.yaml
+    kubectl --context {{ cm_context }} create namespace spinoza --dry-run=client -o yaml | kubectl --context {{ cm_context }} apply -f -
+    for ns in keycloak spinoza; do
+        kubectl --context {{ cm_context }} create namespace "$ns" --dry-run=client -o yaml | kubectl --context {{ cm_context }} apply -f -
+        kubectl --context {{ cm_context }} -n "$ns" create secret tls localtest-tls \
+            --cert=.tmp/cm/tls.crt --key=.tmp/cm/tls.key --dry-run=client -o yaml \
+            | kubectl --context {{ cm_context }} apply -f -
+    done
+    kubectl --context {{ cm_context }} -n keycloak create configmap spinoza-realm \
+        --from-file=realm.json={{ cm_dir }}/realm.json --dry-run=client -o yaml \
+        | kubectl --context {{ cm_context }} apply -f -
+    kubectl --context {{ cm_context }} apply -f {{ cm_dir }}/keycloak.yaml
+    kubectl --context {{ cm_context }} apply -f {{ cm_dir }}/shim.yaml
+    kubectl --context {{ cm_context }} apply -f {{ cm_dir }}/workloads.yaml
+    realm=$(shasum -a 256 {{ cm_dir }}/realm.json | cut -d' ' -f1)
+    kubectl --context {{ cm_context }} -n keycloak patch deployment/keycloak --type=merge \
+        -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"spinoza.test/realm\":\"$realm\"}}}}}"
+    kubectl --context {{ cm_context }} -n keycloak rollout status deployment/keycloak --timeout=8m
+    kubectl --context {{ cm_context }} -n keycloak rollout status deployment/kcshim --timeout=5m
+    kubectl --context {{ cm_context }} -n payments rollout status deployment/web --timeout=5m
+    kubectl --context {{ cm_context }} -n default rollout status deployment/other --timeout=5m
+
+cluster-mode-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="$(just app-version)"
+    named="${KIND_EXPERIMENTAL_DOCKER_NETWORK:-}"
+    if [ -z "$named" ]; then
+        docker build --build-arg SPINOZA_VERSION="$version" -t spinoza:cluster-mode .
+    else
+        # buildkit takes a network from its builder, not from the build, and the
+        # default bridge is the one this host's firewall will not forward.
+        builder="spinoza-$named"
+        if ! docker buildx inspect "$builder" > /dev/null 2>&1; then
+            docker buildx create --name "$builder" --driver docker-container \
+                --driver-opt "network=$named" > /dev/null
+        fi
+        docker buildx build --builder "$builder" --load \
+            --build-arg SPINOZA_VERSION="$version" -t spinoza:cluster-mode .
+    fi
+    kind load docker-image spinoza:cluster-mode --name {{ cm_cluster }}
+
+cluster-mode-down:
+    kind delete cluster --name {{ cm_cluster }}
+
+# every cluster-mode path, against a real cluster and a real identity provider
+test-cluster-mode name='': cluster-mode-up cluster-mode-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(-tags clustermode -count=1 -timeout 45m -v)
+    if [ -n '{{ name }}' ]; then
+        args+=(-run '{{ name }}')
+    fi
+    SPINOZA_CM_CONTEXT={{ cm_context }} SPINOZA_CM_CA="$PWD/.tmp/cm/tls.crt" \
+        go test "${args[@]}" ./{{ cm_dir }}/...
+
+lint-chart:
+    helm lint deploy/helm/spinoza --set publicURL=https://spinoza.example.com
+    helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set auth.mode=oidc \
+        --set auth.oidc.issuerURL=https://keycloak.example.com/realms/main \
+        --set auth.oidc.clientID=spinoza > /dev/null
+    ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set replicaCount=2 > /dev/null 2>&1
+    helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set auth.mode=proxy \
+        --set rbac.read=workloads \
+        --set persistence.enabled=true \
+        --set ingress.enabled=true \
+        --set ingress.hosts[0].host=spinoza.example.com \
+        --set ingress.hosts[0].paths[0].path=/ > /dev/null
+
+image tag='spinoza:dev':
+    docker build --build-arg SPINOZA_VERSION="$(just app-version)" -t {{ tag }} .
+
+lint: lint-be lint-fe lint-e2e lint-chart
 
 fmt-check:
     golangci-lint fmt --diff
@@ -546,7 +654,10 @@ sast:
 # e2e/fixtures holds workloads written to be insecure so the checks have
 # something to find; scanning them fails the build on findings we put there.
 vulns:
-    trivy fs --exit-code 1 --scanners secret,misconfig --skip-dirs e2e/fixtures --skip-files test/integration/metrics-server.yaml .
+    trivy fs --exit-code 1 --scanners secret,misconfig \
+        --skip-dirs e2e/fixtures --skip-dirs test/clustermode --skip-dirs .tmp \
+        --skip-files test/integration/metrics-server.yaml \
+        --helm-set publicURL=https://spinoza.example.com .
     osv-scanner scan source --recursive .
 
 workflows: scoped-tools
@@ -1085,7 +1196,7 @@ publish-desktop-linux: (publish-asset '*_linux_amd64_app.tar.gz')
 
 check: lint test
 
-ci: ci-go-build ci-go-test ci-go-lint ci-go-audit ci-fe-lint ci-fe-test ci-fe-audit ci-fe-build secrets sast vulns workflows hygiene links sbom
+ci: ci-go-build ci-go-test ci-go-lint ci-go-audit ci-fe-lint ci-fe-test ci-fe-audit ci-fe-build secrets sast vulns workflows hygiene lint-chart links sbom
 
 rescan: stub-assets audit-be vulns sbom links
 
