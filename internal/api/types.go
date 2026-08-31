@@ -224,6 +224,24 @@ type LocalShell struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+type Scope struct {
+	Everywhere bool     `json:"everywhere"`
+	Namespaces []string `json:"namespaces,omitempty"`
+	Undecided  []string `json:"undecided,omitempty"`
+}
+
+type Session struct {
+	Authenticated bool     `json:"authenticated"`
+	Cluster       bool     `json:"cluster"`
+	Error         string   `json:"error,omitempty"`
+	Groups        []string `json:"groups,omitempty"`
+	Mode          string   `json:"mode"`
+	Role          string   `json:"role"`
+	Scope         Scope    `json:"scope"`
+	SignIn        bool     `json:"signIn"`
+	User          string   `json:"user,omitempty"`
+}
+
 type Capabilities struct {
 	Helm       HelmSupport    `json:"helm"`
 	Traffic    TrafficSupport `json:"traffic"`

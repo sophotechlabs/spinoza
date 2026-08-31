@@ -90,7 +90,7 @@ func TestEveryTypeScriptDeclarationHasAShape(t *testing.T) {
 		"any":                       jsonAny,
 	}
 	for kind, want := range cases {
-		got, ok := tsShape(kind, aliases, interfaces, 0)
+		got, ok := tsShape(kind, aliases, interfaces, nil, 0)
 		if !ok {
 			t.Fatalf("tsShape(%q) could not place it on the wire", kind)
 		}
@@ -100,10 +100,23 @@ func TestEveryTypeScriptDeclarationHasAShape(t *testing.T) {
 	}
 }
 
+func TestAFieldTypedAsADiscriminatedUnionIsPlacedAsAnObject(t *testing.T) {
+	aliases, interfaces := tsTable()
+	unions := map[string][]string{"Scope": {"everywhere", "namespaces", "undecided"}}
+
+	got, ok := tsShape("Scope", aliases, interfaces, unions, 0)
+	if !ok {
+		t.Fatal("a field typed as a discriminated union could not be placed on the wire")
+	}
+	if got != jsonObject {
+		t.Fatalf("tsShape(\"Scope\") = %q, want %q", got, jsonObject)
+	}
+}
+
 func TestATypeScriptDeclarationNobodyDeclaredIsRefused(t *testing.T) {
 	aliases, interfaces := tsTable()
 	for _, kind := range []string{"SomethingNobodyDeclared", "UnknownTarget", "LoopingAlias"} {
-		if _, ok := tsShape(kind, aliases, interfaces, 0); ok {
+		if _, ok := tsShape(kind, aliases, interfaces, nil, 0); ok {
 			t.Fatalf("tsShape(%q) placed a type it should have refused", kind)
 		}
 	}
@@ -124,7 +137,7 @@ func TestADriftedFieldIsCaught(t *testing.T) {
 	}
 	for _, tc := range cases {
 		want, okGo := goShape(tc.goKind)
-		got, okTS := tsShape(tc.tsKind, aliases, interfaces, 0)
+		got, okTS := tsShape(tc.tsKind, aliases, interfaces, nil, 0)
 		if !okGo || !okTS {
 			t.Fatalf("go %q / ts %q could not both be placed", tc.goKind, tc.tsKind)
 		}

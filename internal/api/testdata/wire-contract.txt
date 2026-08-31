@@ -712,6 +712,9 @@ RowRefusal.Reason reason string
 RuleFault.ID id string
 RuleFault.Reason reason string
 RuleFaults.Faults faults []RuleFault
+Scope.Everywhere everywhere bool
+Scope.Namespaces namespaces,omitempty []string
+Scope.Undecided undecided,omitempty []string
 SearchHit.Cluster cluster,omitempty string
 SearchHit.Group group string
 SearchHit.Kind kind string
@@ -742,6 +745,15 @@ ServerMsg.Total total,omitempty int
 ServerMsg.Type type string
 ServerMsg.UID uid,omitempty string
 ServerMsg.Wobbling wobbling,omitempty bool
+Session.Authenticated authenticated bool
+Session.Cluster cluster bool
+Session.Error error,omitempty string
+Session.Groups groups,omitempty []string
+Session.Mode mode string
+Session.Role role string
+Session.Scope scope Scope
+Session.SignIn signIn bool
+Session.User user,omitempty string
 Settings.Values values map[string]string
 Snapshot.Columns columns []Column
 Snapshot.Limit limit int

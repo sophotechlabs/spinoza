@@ -70,9 +70,11 @@ func objectsIn(dyn dynamic.Interface, gvr schema.GroupVersionResource, namespace
 func readerFor(options Options) reader {
 	return func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) (string, error) {
 		bundle, err := kube.LoadContext(ref, kube.Options{
-			Kubeconfig: options.Kubeconfig,
-			QPS:        options.ClientQPS,
-			Burst:      options.ClientBurst,
+			Kubeconfig:     options.Kubeconfig,
+			ToolKubeconfig: options.ToolKubeconfig,
+			QPS:            options.ClientQPS,
+			Burst:          options.ClientBurst,
+			Impersonate:    options.Impersonate,
 		})
 		if err != nil {
 			return "", fmt.Errorf("kube: %w", err)
@@ -93,9 +95,11 @@ const listAcrossTimeout = 60 * time.Second
 func listerFor(options Options) lister {
 	return func(ctx context.Context, ref api.ContextRef, target api.ObjectRef) ([]*unstructured.Unstructured, error) {
 		bundle, err := kube.LoadContext(ref, kube.Options{
-			Kubeconfig: options.Kubeconfig,
-			QPS:        options.ClientQPS,
-			Burst:      options.ClientBurst,
+			Kubeconfig:     options.Kubeconfig,
+			ToolKubeconfig: options.ToolKubeconfig,
+			QPS:            options.ClientQPS,
+			Burst:          options.ClientBurst,
+			Impersonate:    options.Impersonate,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("kube: %w", err)
@@ -153,9 +157,11 @@ func unreachable(name string, discErr error) error {
 
 func build(ctx context.Context, ref api.ContextRef, options Options, promTarget prom.Target) (*resources.Manager, *kube.Bundle, error) {
 	bundle, err := kube.LoadContext(ref, kube.Options{
-		Kubeconfig: options.Kubeconfig,
-		QPS:        options.ClientQPS,
-		Burst:      options.ClientBurst,
+		Kubeconfig:     options.Kubeconfig,
+		ToolKubeconfig: options.ToolKubeconfig,
+		QPS:            options.ClientQPS,
+		Burst:          options.ClientBurst,
+		Impersonate:    options.Impersonate,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("kube: %w", err)

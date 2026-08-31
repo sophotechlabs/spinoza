@@ -15,6 +15,7 @@ var namedDifferentlyInTypeScript = map[string]string{
 }
 
 var sentAsADiscriminatedUnion = map[string]string{
+	"Scope":          "Scope",
 	"ClientMsg":      "ClientMsg",
 	"ServerMsg":      "ServerMsg",
 	"Snapshot":       "ServerMsg",
@@ -202,7 +203,13 @@ func oneLine(members string) string {
 	return strings.TrimSuffix(strings.Join(strings.Fields(members), " "), ",")
 }
 
-func tsShape(kind string, aliases map[string]string, interfaces map[string][]property, depth int) (string, bool) {
+func tsShape(
+	kind string,
+	aliases map[string]string,
+	interfaces map[string][]property,
+	unions map[string][]string,
+	depth int,
+) (string, bool) {
 	if depth > 4 {
 		return "", false
 	}
@@ -229,9 +236,12 @@ func tsShape(kind string, aliases map[string]string, interfaces map[string][]pro
 		return jsonString, true
 	}
 	if resolved, ok := aliases[bare]; ok {
-		return tsShape(resolved, aliases, interfaces, depth+1)
+		return tsShape(resolved, aliases, interfaces, unions, depth+1)
 	}
 	if _, ok := interfaces[bare]; ok {
+		return jsonObject, true
+	}
+	if _, ok := unions[bare]; ok {
 		return jsonObject, true
 	}
 	return "", false
@@ -339,6 +349,7 @@ func TestTheFrontendInterfacesCarryTheSameTypes(t *testing.T) {
 	source := readMirror(t)
 	interfaces := mirrorInterfaces(source)
 	aliases := mirrorAliases(source)
+	unions := mirrorUnions(source)
 
 	for typeName, fields := range goProperties(t) {
 		if !compared(typeName) || regroupedIntoNestedViewTypes[typeName] {
@@ -363,7 +374,7 @@ func TestTheFrontendInterfacesCarryTheSameTypes(t *testing.T) {
 					continue
 				}
 				want := shapeOf(t, entry)
-				got, readable := tsShape(other.kind, aliases, interfaces, 0)
+				got, readable := tsShape(other.kind, aliases, interfaces, unions, 0)
 				if !readable {
 					t.Fatalf("%s.%s is %q in %s, which this test cannot place on the wire",
 						typeName, entry.name, other.kind, mirrorPath)

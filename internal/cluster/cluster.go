@@ -37,6 +37,8 @@ type Options struct {
 	CountPerType     time.Duration
 	CountConcurrency int
 	OpenTimeout      time.Duration
+	Impersonate      bool
+	ToolKubeconfig   string
 }
 
 type connection struct {

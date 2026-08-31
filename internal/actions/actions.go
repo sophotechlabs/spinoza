@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"k8s.io/client-go/dynamic"
@@ -94,13 +95,12 @@ func Supported(ref api.ObjectRef, action Action) bool {
 	}
 }
 
+func Every() []Action {
+	return []Action{Scale, Restart, Cordon, Uncordon, Drain, Suspend, Resume, Trigger}
+}
+
 func known(action Action) bool {
-	switch action {
-	case Scale, Restart, Cordon, Uncordon, Drain, Suspend, Resume, Trigger:
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(Every(), action)
 }
 
 func (s *Service) Do(ctx context.Context, req Request, now time.Time) (api.ActionResult, error) {
