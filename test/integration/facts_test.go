@@ -6,6 +6,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -20,6 +21,12 @@ import (
 )
 
 const factsNamespace = "spinoza-facts"
+
+const (
+	spentQuota   = "spent"
+	quotaCounted = "count/configmaps"
+	quotaTimeout = 2 * time.Minute
+)
 
 func factsNamespaceExists(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
@@ -117,9 +124,9 @@ func limitRangeExists(t *testing.T, loaded *kube.Bundle) {
 func spentQuotaExists(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	quota := &corev1.ResourceQuota{
-		ObjectMeta: metav1.ObjectMeta{Name: "spent", Namespace: factsNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: spentQuota, Namespace: factsNamespace},
 		Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{
-			"count/configmaps": resource.MustParse("1"),
+			quotaCounted: resource.MustParse("1"),
 		}},
 	}
 	_, err := loaded.Clientset.CoreV1().ResourceQuotas(factsNamespace).Create(
@@ -127,6 +134,32 @@ func spentQuotaExists(t *testing.T, loaded *kube.Bundle) {
 	)
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("create quota: %v", err)
+	}
+	awaitQuotaSpent(t, loaded)
+}
+
+func awaitQuotaSpent(t *testing.T, loaded *kube.Bundle) {
+	t.Helper()
+	deadline := time.Now().Add(quotaTimeout)
+	for {
+		found, err := loaded.Clientset.CoreV1().ResourceQuotas(factsNamespace).Get(
+			context.Background(), spentQuota, metav1.GetOptions{},
+		)
+		if err != nil {
+			t.Fatalf("read quota: %v", err)
+		}
+		hard, okHard := found.Status.Hard[quotaCounted]
+		used, okUsed := found.Status.Used[quotaCounted]
+		if okHard && okUsed && used.Cmp(hard) >= 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf(
+				"the quota never reached its ceiling within %s: hard %v, used %v",
+				quotaTimeout, found.Status.Hard, found.Status.Used,
+			)
+		}
+		time.Sleep(pollInterval)
 	}
 }
 
