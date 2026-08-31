@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.24.1](https://github.com/sophotechlabs/spinoza/compare/v1.24.0...v1.24.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **e2e:** stop the harness killing a server it does not own ([1ff746f](https://github.com/sophotechlabs/spinoza/commit/1ff746f500ec576df4de868e586c67ab0fc92b58))
+* **test:** wait for the quota controller before auditing the namespace it fills ([e94d045](https://github.com/sophotechlabs/spinoza/commit/e94d045553964aa539958dfe4f349703f3116494))
+
+
+### Documentation
+
+* carry the social preview card in the repo ([a65fdfc](https://github.com/sophotechlabs/spinoza/commit/a65fdfc23b1b87f27a45ab0f6eefdf5e7314e621))
+
+
+### Tests
+
+* **integration:** wait for the quota controller, and lint the package ([7649076](https://github.com/sophotechlabs/spinoza/commit/764907691e73727aedf0b5f5d4111af14ec3a4b2))
+
 ## [1.24.0](https://github.com/sophotechlabs/spinoza/compare/v1.23.0...v1.24.0) (2026-08-31)
 
 
