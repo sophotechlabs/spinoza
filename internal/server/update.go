@@ -76,7 +76,9 @@ func (s *Server) handleInstallUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, result)
 		return
 	}
-	err := installer.Install(r.Context())
+	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
+	defer stop()
+	err := installer.Install(kept)
 	if err == nil {
 		result.Updated = true
 		writeJSON(w, result)

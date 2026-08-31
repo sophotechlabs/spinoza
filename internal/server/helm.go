@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -42,7 +43,9 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if action == helm.ActionUninstal {
-		removed, removeErr := backend.HelmUninstall(r.Context(), namespace, name)
+		kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
+		defer stop()
+		removed, removeErr := backend.HelmUninstall(kept, namespace, name)
 		s.finishHelmAction(w, r, releaseChange(verbUninstall, namespace, name, "", false, removeErr), removed, removeErr)
 		return
 	}
@@ -55,7 +58,9 @@ func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "revision must be a number")
 		return
 	}
-	rolled, rollErr := backend.HelmRollback(r.Context(), namespace, name, revision)
+	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
+	defer stop()
+	rolled, rollErr := backend.HelmRollback(kept, namespace, name, revision)
 	detail := "to revision " + strconv.FormatInt(revision, 10)
 	s.finishHelmAction(w, r, releaseChange(verbRollback, namespace, name, detail, false, rollErr), rolled, rollErr)
 }
@@ -136,7 +141,9 @@ func (s *Server) handleHelmInstall(w http.ResponseWriter, r *http.Request) {
 		refuseUnconfirmed(w, dto.Name)
 		return
 	}
-	result, installErr := s.managerFor(r).HelmInstall(r.Context(), helm.InstallRequest{
+	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
+	defer stop()
+	result, installErr := s.managerFor(r).HelmInstall(kept, helm.InstallRequest{
 		Namespace:       dto.Namespace,
 		Name:            dto.Name,
 		Chart:           dto.Chart,
@@ -190,7 +197,9 @@ func (s *Server) handleHelmUpgrade(w http.ResponseWriter, r *http.Request) {
 		Values:    dto.Values,
 		DryRun:    dryRun,
 	}
-	result, upgradeErr := s.managerFor(r).HelmUpgrade(r.Context(), req)
+	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
+	defer stop()
+	result, upgradeErr := s.managerFor(r).HelmUpgrade(kept, req)
 	s.finishHelmAction(w, r, releaseChange(verbUpgrade, dto.Namespace, dto.Name, dto.Chart+" "+dto.Version, dryRun, upgradeErr), result, upgradeErr)
 }
 

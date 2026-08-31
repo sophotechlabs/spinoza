@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -82,3 +83,5 @@ func (s *Server) pickFile(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, api.PickedFile{Path: path})
 }
+
+const mutationTimeout = 10 * time.Minute

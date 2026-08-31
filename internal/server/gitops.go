@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -48,7 +49,9 @@ func (s *Server) fluxAction(w http.ResponseWriter, r *http.Request, ref api.Obje
 		refuseUnconfirmed(w, ref.Name)
 		return
 	}
-	result, err := s.managerFor(r).FluxAction(r.Context(), ref, action)
+	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
+	defer stop()
+	result, err := s.managerFor(r).FluxAction(kept, ref, action)
 	s.record(r, change{verb: string(action), ref: ref, err: err})
 	if err != nil {
 		writeAPIError(w, err)
@@ -94,7 +97,9 @@ func (s *Server) argoAction(w http.ResponseWriter, r *http.Request, ref api.Obje
 		refuseUnconfirmed(w, ref.Name)
 		return
 	}
-	result, actionErr := s.managerFor(r).ArgoAction(r.Context(), ref, req)
+	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), mutationTimeout)
+	defer stop()
+	result, actionErr := s.managerFor(r).ArgoAction(kept, ref, req)
 	s.record(r, change{
 		verb:   string(req.Action),
 		ref:    ref,

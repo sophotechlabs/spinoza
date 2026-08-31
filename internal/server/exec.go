@@ -128,6 +128,10 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "node is required")
 		return
 	}
+	if s.unconfirmed(r, node) {
+		refuseUnconfirmed(w, node)
+		return
+	}
 	socket, err := accept(w, r)
 	if err != nil {
 		slog.Warn("a node shell upgrade was refused", "node", node, "error", err)
