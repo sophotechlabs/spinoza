@@ -66,16 +66,22 @@ func TestAServerVersionNobodyCanReadStopsTheCheck(t *testing.T) {
 	}
 }
 
-func TestEveryRemovalTheTableNamesIsCaughtOnAnOldEnoughCluster(t *testing.T) {
-	served := make([]string, 0, len(removals))
-	for _, one := range removals {
+func TestEveryRemovalTheMarkersNameIsCaughtOnAnOldEnoughCluster(t *testing.T) {
+	const running = 21
+
+	served := make([]string, 0, len(removals()))
+	coming := 0
+	for _, one := range removals() {
 		served = append(served, one.groupVersion)
+		if one.minor > running {
+			coming++
+		}
 	}
 
 	report := withFacts(t, Facts{ServerVersion: "v1.21.0", ServedVersions: served})
 
-	if got := groupNamed(t, report, "serves-a-removed-api").Total; got != len(removals) {
-		t.Fatalf("reported %d of the %d removals the table names", got, len(removals))
+	if got := groupNamed(t, report, "serves-a-removed-api").Total; got != coming {
+		t.Fatalf("reported %d of the %d removals ahead of 1.%d", got, coming, running)
 	}
 }
 
@@ -111,28 +117,26 @@ func TestAClusterWithNothingToSayReportsNothing(t *testing.T) {
 	}
 }
 
-func TestTheRemovalTableHasBeenLookedAtThisCycle(t *testing.T) {
-	const lookedAtThrough = 32
-
+func TestTheRemovalTableComesFromTheApiThisRepoBuildsAgainst(t *testing.T) {
 	newest := 0
-	for _, one := range removals {
+	for _, one := range removals() {
 		if one.minor > newest {
 			newest = one.minor
 		}
 	}
-	if newest != lookedAtThrough {
-		t.Fatalf("the newest removal in the table is 1.%d and the table claims to be current "+
-			"through 1.%d; reconcile the two", newest, lookedAtThrough)
-	}
 
 	client := clientMinor(t)
-	if client-newest > staleAfter {
-		t.Fatalf("this repo builds against 1.%d and the removal table stops at 1.%d; "+
-			"read the release notes since and add what is missing", client, newest)
+	if newest < client {
+		t.Fatalf("this repo builds against 1.%d and the newest removal it knows is 1.%d; "+
+			"the table is no longer being read from the k8s.io/api markers", client, newest)
+	}
+	if newest-client > aheadAtMost {
+		t.Fatalf("the newest removal is 1.%d against a 1.%d client, which is further ahead than "+
+			"k8s.io/api has ever marked; check how the markers are being read", newest, client)
 	}
 }
 
-const staleAfter = 6
+const aheadAtMost = 12
 
 func clientMinor(t *testing.T) int {
 	t.Helper()

@@ -1,9 +1,13 @@
 package checks
 
 import (
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -20,25 +24,54 @@ type removal struct {
 	minor        int
 }
 
-var removals = []removal{
-	{groupVersion: "flowcontrol.apiserver.k8s.io/v1beta3", kinds: "FlowSchema, PriorityLevelConfiguration", minor: 32},
-	{groupVersion: "flowcontrol.apiserver.k8s.io/v1beta2", kinds: "FlowSchema, PriorityLevelConfiguration", minor: 29},
-	{groupVersion: "autoscaling/v2beta2", kinds: "HorizontalPodAutoscaler", minor: 26},
-	{groupVersion: "autoscaling/v2beta1", kinds: "HorizontalPodAutoscaler", minor: 25},
-	{groupVersion: "batch/v1beta1", kinds: cronKind, minor: 25},
-	{groupVersion: "policy/v1beta1", kinds: "PodDisruptionBudget, PodSecurityPolicy", minor: 25},
-	{groupVersion: "discovery.k8s.io/v1beta1", kinds: "EndpointSlice", minor: 25},
-	{groupVersion: "events.k8s.io/v1beta1", kinds: "Event", minor: 25},
-	{groupVersion: "node.k8s.io/v1beta1", kinds: "RuntimeClass", minor: 25},
-	{groupVersion: "coordination.k8s.io/v1beta1", kinds: "Lease", minor: 25},
-	{groupVersion: "storage.k8s.io/v1beta1", kinds: "CSIDriver, CSINode, StorageClass, VolumeAttachment", minor: 25},
-	{groupVersion: "networking.k8s.io/v1beta1", kinds: "Ingress, IngressClass", minor: 22},
-	{groupVersion: "rbac.authorization.k8s.io/v1beta1", kinds: "Role, RoleBinding, ClusterRole, ClusterRoleBinding", minor: 22},
-	{groupVersion: "apiextensions.k8s.io/v1beta1", kinds: "CustomResourceDefinition", minor: 22},
-	{groupVersion: "admissionregistration.k8s.io/v1beta1", kinds: "ValidatingWebhookConfiguration, MutatingWebhookConfiguration", minor: 22},
-	{groupVersion: "apiregistration.k8s.io/v1beta1", kinds: "APIService", minor: 22},
-	{groupVersion: "certificates.k8s.io/v1beta1", kinds: "CertificateSigningRequest", minor: 22},
-	{groupVersion: "authentication.k8s.io/v1beta1", kinds: "TokenReview", minor: 22},
+type removalKey struct {
+	groupVersion string
+	minor        int
+}
+
+type removedAPI interface {
+	APILifecycleRemoved() (int, int)
+}
+
+var removals = sync.OnceValue(collectRemovals)
+
+func collectRemovals() []removal {
+	grouped := map[removalKey][]string{}
+	for gvk, typ := range scheme.Scheme.AllKnownTypes() {
+		if strings.HasSuffix(gvk.Kind, "List") {
+			continue
+		}
+		marked, ok := reflect.New(typ).Interface().(removedAPI)
+		if !ok {
+			continue
+		}
+		major, minor := marked.APILifecycleRemoved()
+		if major != 1 {
+			continue
+		}
+		key := removalKey{groupVersion: gvk.GroupVersion().String(), minor: minor}
+		grouped[key] = append(grouped[key], gvk.Kind)
+	}
+	return sortedRemovals(grouped)
+}
+
+func sortedRemovals(grouped map[removalKey][]string) []removal {
+	out := make([]removal, 0, len(grouped))
+	for key, kinds := range grouped {
+		slices.Sort(kinds)
+		out = append(out, removal{
+			groupVersion: key.groupVersion,
+			kinds:        strings.Join(kinds, ", "),
+			minor:        key.minor,
+		})
+	}
+	slices.SortFunc(out, func(one, two removal) int {
+		if one.groupVersion != two.groupVersion {
+			return strings.Compare(one.groupVersion, two.groupVersion)
+		}
+		return one.minor - two.minor
+	})
+	return out
 }
 
 func deprecationChecks() []check {
@@ -83,7 +116,7 @@ func servesARemovedAPI(sc scan) []found {
 		return nil
 	}
 	out := []found{}
-	for _, one := range removals {
+	for _, one := range removals() {
 		if one.minor <= running {
 			continue
 		}
