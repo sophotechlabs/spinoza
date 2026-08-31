@@ -19,6 +19,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/listerr"
+	"github.com/sophotechlabs/spinoza/internal/podcount"
 )
 
 type stubLister struct {
@@ -301,10 +302,10 @@ func TestBuildNamesThePhasesWhoseTallyStoppedAtAPage(t *testing.T) {
 	if len(got.Pods.Capped) != 1 || got.Pods.Capped[0] != "succeeded" {
 		t.Fatalf("capped = %v, want just the succeeded phase", got.Pods.Capped)
 	}
-	if got.Pods.Succeeded != 500 {
-		t.Fatalf("succeeded = %d, want the page it read", got.Pods.Succeeded)
+	if got.Pods.Succeeded != podcount.Limit() {
+		t.Fatalf("succeeded = %d, want everything it could page through", got.Pods.Succeeded)
 	}
-	if !strings.Contains(got.Error, "more than 500 pods in succeeded") {
+	if !strings.Contains(got.Error, "more than 10000 pods in succeeded") {
 		t.Fatalf("error = %q, want the phase and the page size named", got.Error)
 	}
 }

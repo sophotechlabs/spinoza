@@ -36,9 +36,6 @@ func Count(ctx context.Context, client metadata.Interface, selector string) (Res
 	if probe.GetContinue() == "" {
 		return Result{Total: len(probe.Items), Complete: true}, nil
 	}
-	if selector != "" {
-		return Result{Total: len(probe.Items), Complete: false}, nil
-	}
 	return walk(ctx, client, selector, len(probe.Items), probe.GetContinue())
 }
 

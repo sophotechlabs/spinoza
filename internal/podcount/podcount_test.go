@@ -97,7 +97,7 @@ func TestANegativeRemainingCountIsIgnored(t *testing.T) {
 	}
 }
 
-func TestAFilteredCountStopsAfterOnePage(t *testing.T) {
+func TestAFilteredCountPagesToTheEndRatherThanStoppingAtOne(t *testing.T) {
 	dyn := client()
 	calls := answerPages(dyn, [][]runtime.RawExtension{
 		pods(500),
@@ -110,17 +110,19 @@ func TestAFilteredCountStopsAfterOnePage(t *testing.T) {
 		t.Fatalf("count: %v", err)
 	}
 
-	if got.Total != 500 {
-		t.Fatalf("total = %d, want the one page it read", got.Total)
+	if got.Total != 1007 {
+		t.Fatalf("total = %d, want every page counted rather than the first one stated as the answer", got.Total)
 	}
-	if got.Complete {
-		t.Fatal("a count that stopped at one page claimed to be complete")
+	if !got.Complete {
+		t.Fatal("a count that reached the last page said it was short")
 	}
-	if len(*calls) != 1 {
-		t.Fatalf("list calls = %d, want just the one page", len(*calls))
+	if len(*calls) != 3 {
+		t.Fatalf("list calls = %d, want one per page", len(*calls))
 	}
-	if (*calls)[0].fields != "status.phase=Running" {
-		t.Fatalf("selector = %q, want it on the probe", (*calls)[0].fields)
+	for at, call := range *calls {
+		if call.fields != "status.phase=Running" {
+			t.Fatalf("selector on call %d = %q, want it carried through the walk", at, call.fields)
+		}
 	}
 }
 
