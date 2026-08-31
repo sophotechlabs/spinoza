@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +18,8 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
 	streamhttp "k8s.io/streaming/pkg/httpstream"
+
+	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 type errorStream struct {
@@ -102,7 +105,7 @@ func (d *fakeDialer) Dial(protocols ...string) (streamhttp.Connection, string, e
 
 func runnerWith(dialer streamhttp.Dialer, err error) *streamRunner {
 	return &streamRunner{
-		dialerFor: func(string, string) (streamhttp.Dialer, error) {
+		dialerFor: func(context.Context, string, string) (streamhttp.Dialer, error) {
 			if err != nil {
 				return nil, err
 			}
@@ -347,7 +350,7 @@ func TestNewRunnerBuildsADialerFromTheClientset(t *testing.T) {
 		t.Fatalf("NewRunner did not return a streamRunner")
 	}
 
-	dialer, err := runner.dialerFor("flux-system", "web")
+	dialer, err := runner.dialerFor(t.Context(), "flux-system", "web")
 	if err != nil {
 		t.Fatalf("dialerFor: %v", err)
 	}
@@ -406,5 +409,39 @@ func TestAnnounceGivesUpWhenTheForwardEndsBeforeItIsReady(t *testing.T) {
 	}
 	if len(ready) != 0 {
 		t.Fatalf("announce reported a port for a forward that never started")
+	}
+}
+
+func TestAForwardCarriesTheSignedInUserRatherThanSpinozasOwnAccount(t *testing.T) {
+	config := &restclient.Config{Host: "https://apiserver"}
+	ctx := auth.WithIdentity(t.Context(), auth.Identity{
+		User:   "alice@example.com",
+		Groups: []string{"platform", "sre"},
+	})
+
+	acting := actingAs(ctx, config)
+
+	if acting == config {
+		t.Fatal("the caller's own config was handed back, so the forward would act as the pod")
+	}
+	if acting.Impersonate.UserName != "alice@example.com" {
+		t.Fatalf("impersonated user = %q, want the signed-in one", acting.Impersonate.UserName)
+	}
+	if strings.Join(acting.Impersonate.Groups, ",") != "platform,sre" {
+		t.Fatalf("impersonated groups = %v, want both", acting.Impersonate.Groups)
+	}
+	if config.Impersonate.UserName != "" {
+		t.Fatal("the shared config was changed, so every later forward would act as alice")
+	}
+}
+
+func TestAForwardWithNobodySignedInGoesAsSpinozaItself(t *testing.T) {
+	config := &restclient.Config{Host: "https://apiserver"}
+
+	if actingAs(t.Context(), config) != config {
+		t.Fatal("a local forward was given an impersonation it never needed")
+	}
+	if actingAs(auth.AsServer(t.Context()), config) != config {
+		t.Fatal("a forward spinoza started for itself would impersonate nobody")
 	}
 }

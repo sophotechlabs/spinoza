@@ -45,7 +45,7 @@ func (s *Service) Upgrade(ctx context.Context, req UpgradeRequest) (api.HelmActi
 	defer func() {
 		_ = os.Remove(valuesFile)
 	}()
-	args := s.args(upgradeArgs(req, valuesFile)...)
+	args := s.args(ctx, upgradeArgs(req, valuesFile)...)
 	out, runErr := s.run(ctx, args, driver)
 	if runErr != nil {
 		return api.HelmActionResult{}, runErr

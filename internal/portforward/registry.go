@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
@@ -298,8 +299,9 @@ func (r *Registry) Start(ctx context.Context, target Target, port int32) (api.Po
 	active := newRun()
 	ready := make(chan int32, 1)
 	failed := make(chan error, 1)
+	held := auth.Carry(ctx, r.root)
 	safe.Go("forwarding to "+target.Namespace+"/"+pod, func() {
-		failed <- r.runner.Run(r.root, target.Namespace, pod, 0, podPort, ready, active.stop)
+		failed <- r.runner.Run(held, target.Namespace, pod, 0, podPort, ready, active.stop)
 	})
 
 	select {

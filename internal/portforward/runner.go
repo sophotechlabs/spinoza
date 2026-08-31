@@ -13,10 +13,11 @@ import (
 	"k8s.io/client-go/transport/spdy"
 	streamhttp "k8s.io/streaming/pkg/httpstream"
 
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
-type dialerFactory func(namespace, pod string) (streamhttp.Dialer, error)
+type dialerFactory func(ctx context.Context, namespace, pod string) (streamhttp.Dialer, error)
 
 type streamRunner struct {
 	dialerFor dialerFactory
@@ -24,13 +25,18 @@ type streamRunner struct {
 
 func NewRunner(cs kubernetes.Interface, config *restclient.Config) Runner {
 	return &streamRunner{
-		dialerFor: func(namespace, pod string) (streamhttp.Dialer, error) {
-			return apiDialer(cs, config, namespace, pod)
+		dialerFor: func(ctx context.Context, namespace, pod string) (streamhttp.Dialer, error) {
+			return apiDialer(ctx, cs, config, namespace, pod)
 		},
 	}
 }
 
-func apiDialer(cs kubernetes.Interface, config *restclient.Config, namespace, pod string) (streamhttp.Dialer, error) {
+func apiDialer(
+	ctx context.Context,
+	cs kubernetes.Interface,
+	config *restclient.Config,
+	namespace, pod string,
+) (streamhttp.Dialer, error) {
 	endpoint := cs.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -38,7 +44,17 @@ func apiDialer(cs kubernetes.Interface, config *restclient.Config, namespace, po
 		Name(pod).
 		SubResource("portforward").
 		URL()
-	return fallbackDialer(config, endpoint)
+	return fallbackDialer(actingAs(ctx, config), endpoint)
+}
+
+func actingAs(ctx context.Context, config *restclient.Config) *restclient.Config {
+	who, ok := auth.ActingAs(ctx)
+	if !ok {
+		return config
+	}
+	copied := restclient.CopyConfig(config)
+	copied.Impersonate = restclient.ImpersonationConfig{UserName: who.User, Groups: who.Groups}
+	return copied
 }
 
 func fallbackDialer(config *restclient.Config, endpoint *url.URL) (streamhttp.Dialer, error) {
@@ -62,7 +78,7 @@ func shouldFallback(err error) bool {
 }
 
 func (s *streamRunner) Run(ctx context.Context, namespace, pod string, localPort, remotePort int32, ready chan<- int32, stop <-chan struct{}) error {
-	dialer, err := s.dialerFor(namespace, pod)
+	dialer, err := s.dialerFor(ctx, namespace, pod)
 	if err != nil {
 		return err
 	}

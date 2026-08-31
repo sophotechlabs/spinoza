@@ -33,9 +33,11 @@ type Bundle struct {
 }
 
 type Options struct {
-	Kubeconfig string
-	QPS        float32
-	Burst      int
+	Kubeconfig     string
+	ToolKubeconfig string
+	QPS            float32
+	Burst          int
+	Impersonate    bool
 }
 
 func (o Options) orDefaults() Options {
@@ -120,6 +122,9 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	restConfig.WarningHandler = warnings
 	answers := reach.New()
 	restConfig.Wrap(answers.Wrap)
+	if options.Impersonate {
+		restConfig.Wrap(Impersonating)
+	}
 
 	cs, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
@@ -141,6 +146,9 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	resolved := ref
 	if resolved.Kubeconfig == "" {
 		resolved.Kubeconfig = options.Kubeconfig
+	}
+	if resolved.Kubeconfig == "" {
+		resolved.Kubeconfig = options.ToolKubeconfig
 	}
 	if resolved.Name == "" {
 		rawConfig, rawErr := clientConfig.RawConfig()

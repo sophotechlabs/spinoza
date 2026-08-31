@@ -16,6 +16,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 const (
@@ -188,7 +189,7 @@ func (s *Service) Ensure(ctx context.Context, req Request) (api.DebugSession, er
 	name := nextName(pod)
 	patchCtx, cancelPatch := context.WithTimeout(ctx, patchTimeout)
 	defer cancelPatch()
-	runErr := s.runner.Run(patchCtx, s.args(req, name, profile))
+	runErr := s.runner.Run(patchCtx, s.args(patchCtx, req, name, profile))
 	if runErr != nil {
 		return api.DebugSession{}, runErr
 	}
@@ -206,7 +207,7 @@ func (s *Service) Ensure(ctx context.Context, req Request) (api.DebugSession, er
 	}, nil
 }
 
-func (s *Service) args(req Request, name, profile string) []string {
+func (s *Service) args(ctx context.Context, req Request, name, profile string) []string {
 	args := []string{
 		"debug", req.Pod,
 		"--namespace", req.Namespace,
@@ -225,7 +226,7 @@ func (s *Service) args(req Request, name, profile string) []string {
 	if s.kubeRef.Kubeconfig != "" {
 		args = append(args, "--kubeconfig", s.kubeRef.Kubeconfig)
 	}
-	return args
+	return append(args, auth.KubectlFlags(ctx)...)
 }
 
 func (s *Service) waitRunning(ctx context.Context, req Request, name string) error {

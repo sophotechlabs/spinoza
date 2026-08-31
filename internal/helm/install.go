@@ -39,7 +39,7 @@ func (s *Service) Install(ctx context.Context, req InstallRequest) (api.HelmActi
 		_ = os.Remove(valuesFile)
 	}()
 	onCluster := s.namespaceExists(ctx, req.Namespace)
-	args := s.args(installArgs(req, valuesFile, onCluster)...)
+	args := s.args(ctx, installArgs(req, valuesFile, onCluster)...)
 	out, runErr := s.run(ctx, args, "")
 	if runErr != nil {
 		return api.HelmActionResult{}, runErr

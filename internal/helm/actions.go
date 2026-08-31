@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 const (
@@ -119,7 +120,7 @@ func (s *Service) Rollback(ctx context.Context, namespace, name string, revision
 	if driverErr != nil {
 		return api.HelmActionResult{}, driverErr
 	}
-	args := s.args("rollback", name, strconv.FormatInt(revision, 10), "--namespace", namespace)
+	args := s.args(ctx, "rollback", name, strconv.FormatInt(revision, 10), "--namespace", namespace)
 	out, runErr := s.run(ctx, args, driver)
 	if runErr != nil {
 		return api.HelmActionResult{}, runErr
@@ -140,7 +141,7 @@ func (s *Service) Uninstall(ctx context.Context, namespace, name string) (api.He
 	if driverErr != nil {
 		return api.HelmActionResult{}, driverErr
 	}
-	args := s.args("uninstall", name, "--namespace", namespace)
+	args := s.args(ctx, "uninstall", name, "--namespace", namespace)
 	out, runErr := s.run(ctx, args, driver)
 	if runErr != nil {
 		return api.HelmActionResult{}, runErr
@@ -161,7 +162,7 @@ func (s *Service) admits(namespace, name string) error {
 	return nil
 }
 
-func (s *Service) args(rest ...string) []string {
+func (s *Service) args(ctx context.Context, rest ...string) []string {
 	args := append([]string{}, rest...)
 	if s.kubeRef.Name != "" {
 		args = append(args, "--kube-context", s.kubeRef.Name)
@@ -169,7 +170,7 @@ func (s *Service) args(rest ...string) []string {
 	if s.kubeRef.Kubeconfig != "" {
 		args = append(args, "--kubeconfig", s.kubeRef.Kubeconfig)
 	}
-	return args
+	return append(args, auth.HelmFlags(ctx)...)
 }
 
 func (s *Service) run(ctx context.Context, args []string, driver string) (string, error) {

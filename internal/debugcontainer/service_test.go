@@ -768,7 +768,7 @@ func TestTheKubectlArgsCarryTheContextAndKubeconfig(t *testing.T) {
 		Kubeconfig: "/home/arch/.kube/config",
 	}, permsOn(k8sfake.NewClientset(runningPod())))
 
-	args := service.args(request(), "spinoza-debug-1", "general")
+	args := service.args(t.Context(), request(), "spinoza-debug-1", "general")
 
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "--context kind-spinoza") {
