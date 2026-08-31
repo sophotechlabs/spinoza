@@ -19,6 +19,11 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	need := actionRole(req.Action)
+	if s.inCluster() && !s.holdsRole(r, need) {
+		refuseRole(w, r, need)
+		return
+	}
 	if guarded(req) && s.unconfirmed(r, req.Ref.Name) {
 		refuseUnconfirmed(w, req.Ref.Name)
 		return

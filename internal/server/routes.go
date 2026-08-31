@@ -5,6 +5,7 @@ import (
 	"net/http/pprof"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 type endpoint struct {
@@ -116,29 +117,118 @@ func (s *Server) routes() []endpoint {
 	}
 }
 
+func (s *Server) allRoutes() []endpoint {
+	all := append(s.routes(), s.sessionRoute())
+	if !s.inCluster() {
+		return all
+	}
+	return append(all, s.signInRoutes()...)
+}
+
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	known := map[string]bool{}
-	for _, entry := range s.routes() {
-		mux.HandleFunc(entry.method+" "+entry.path, s.reachable(entry))
+	for _, entry := range s.allRoutes() {
+		mux.HandleFunc(entry.method+" "+entry.path, s.permitted(entry))
 		known[entry.path] = true
 	}
 	for path := range known {
 		mux.HandleFunc(path, methodNotAllowed)
 	}
 	if s.wantsProfiler() {
-		mountProfiler(mux)
+		s.mountProfiler(mux)
 	}
 	mux.HandleFunc("/", s.handleAssets)
 	return s.guard(mux.ServeHTTP)
 }
 
-func mountProfiler(mux *http.ServeMux) {
-	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
-	mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+func (s *Server) mountProfiler(mux *http.ServeMux) {
+	for path, handler := range map[string]http.HandlerFunc{
+		"GET /debug/pprof/":        pprof.Index,
+		"GET /debug/pprof/cmdline": pprof.Cmdline,
+		"GET /debug/pprof/profile": pprof.Profile,
+		"GET /debug/pprof/symbol":  pprof.Symbol,
+		"GET /debug/pprof/trace":   pprof.Trace,
+	} {
+		mux.HandleFunc(path, s.forAdmins(handler))
+	}
+}
+
+func (s *Server) forAdmins(handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.inCluster() && !s.holdsRole(r, auth.RoleAdmin) {
+			refuseRole(w, r, auth.RoleAdmin)
+			return
+		}
+		handler(w, r)
+	}
+}
+
+func (s *Server) permitted(entry endpoint) http.HandlerFunc {
+	inner := s.reachable(entry)
+	need := roleFor(entry)
+	only := onlyHere(entry)
+	whole := wholeCluster(entry)
+	if need == "" && !only && !whole {
+		return inner
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.inCluster() {
+			inner(w, r)
+			return
+		}
+		if only {
+			writeError(w, http.StatusForbidden, notInClusterMode)
+			return
+		}
+		if need != "" && !s.holdsRole(r, need) {
+			refuseRole(w, r, need)
+			return
+		}
+		if whole {
+			status, why := s.wholeClusterRefusal(r)
+			if why != "" {
+				writeError(w, status, why)
+				return
+			}
+		}
+		inner(w, r)
+	}
+}
+
+func (s *Server) wholeClusterRefusal(r *http.Request) (int, string) {
+	backend := s.managerFor(r)
+	if backend == nil {
+		return 0, ""
+	}
+	seen := backend.Scope(r.Context())
+	if seen.Everywhere {
+		return 0, ""
+	}
+	if len(seen.Namespaces) == 0 && len(seen.Undecided) > 0 {
+		return http.StatusServiceUnavailable, clusterWouldNotSay
+	}
+	return http.StatusForbidden, readsEverything
+}
+
+func (s *Server) holdsRole(r *http.Request, need string) bool {
+	who, ok := auth.IdentityFrom(r.Context())
+	if !ok {
+		return false
+	}
+	return auth.Allows(who.Role, need)
+}
+
+func refuseRole(w http.ResponseWriter, r *http.Request, need string) {
+	writeError(w, http.StatusForbidden, "your role here is "+heldRole(r)+"; this needs "+need)
+}
+
+func heldRole(r *http.Request) string {
+	who, ok := auth.IdentityFrom(r.Context())
+	if !ok || who.Role == "" {
+		return "unknown"
+	}
+	return who.Role
 }
 
 func (s *Server) reachable(entry endpoint) http.HandlerFunc {

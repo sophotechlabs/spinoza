@@ -325,6 +325,7 @@ func (sess *wsSession) relay(subID string, gen uint64, sub *resources.Subscripti
 
 func (sess *wsSession) sendResync(subID string, gen uint64, sub *resources.Subscription) bool {
 	drainEvents(sub.Events)
+	sub.Refresh(sess.ctx)
 	rows, total, err := sub.Snapshot()
 	if err != nil {
 		slog.Warn("a resync could not read the cache", "subId", subID, "error", err)

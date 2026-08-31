@@ -39,38 +39,46 @@ func accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 
 func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !isLocal(r) {
-			slog.Warn(
-				"refused a request that did not look local",
-				"path", r.URL.Path,
-				"host", r.Host,
-				"origin", r.Header.Get("Origin"),
-				"fetchSite", r.Header.Get("Sec-Fetch-Site"),
-			)
-			writeError(w, http.StatusForbidden, "spinoza answers local requests only")
+		admitted, ok := s.admit(w, r)
+		if !ok {
 			return
 		}
-		if !publicAsset(r) && !s.authorize(w, r) {
-			slog.Warn(
-				"refused a request without this run's token",
-				"path", r.URL.Path,
-				"origin", r.Header.Get("Origin"),
-			)
-			writeError(w, http.StatusUnauthorized, "spinoza needs the token it printed at startup")
-			return
-		}
-		if upgrading(r) {
-			defer safe.Recover("the socket on " + r.URL.Path)
-			handler(w, r)
+		if upgrading(admitted) {
+			defer safe.Recover("the socket on " + admitted.URL.Path)
+			handler(w, admitted)
 			return
 		}
 		recorded := &recorder{ResponseWriter: w, status: http.StatusOK}
 		started := time.Now()
 		defer func() {
-			finish(recorded, r, started, recover())
+			finish(recorded, admitted, started, recover())
 		}()
-		handler(recorded, r)
+		handler(recorded, admitted)
 	}
+}
+
+func (s *Server) admitLocal(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+	if !isLocal(r) {
+		slog.Warn(
+			"refused a request that did not look local",
+			"path", r.URL.Path,
+			"host", r.Host,
+			"origin", r.Header.Get("Origin"),
+			"fetchSite", r.Header.Get("Sec-Fetch-Site"),
+		)
+		writeError(w, http.StatusForbidden, "spinoza answers local requests only")
+		return nil, false
+	}
+	if !publicAsset(r) && !s.authorize(w, r) {
+		slog.Warn(
+			"refused a request without this run's token",
+			"path", r.URL.Path,
+			"origin", r.Header.Get("Origin"),
+		)
+		writeError(w, http.StatusUnauthorized, "spinoza needs the token it printed at startup")
+		return nil, false
+	}
+	return r, true
 }
 
 func finish(recorded *recorder, r *http.Request, started time.Time, caught any) {

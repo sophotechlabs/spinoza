@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
@@ -28,7 +29,7 @@ func (s *Server) watchCluster(ctx context.Context) {
 	}
 	s.watching = true
 	s.mu.Unlock()
-	outlives := context.WithoutCancel(ctx)
+	outlives := auth.AsServer(context.WithoutCancel(ctx))
 	safe.Go("watching whether the clusters answer", func() {
 		s.pingUntilNobodyIsWatching(outlives)
 	})

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 	"github.com/sophotechlabs/spinoza/internal/store"
 )
@@ -211,7 +212,7 @@ func (s *Server) startRecording(ctx context.Context, id, name string) {
 	if was != nil {
 		was.close()
 	}
-	kept := context.WithoutCancel(ctx)
+	kept := auth.AsServer(context.WithoutCancel(ctx))
 	go held.run(kept)
 	backend.Record(kept, held, kinds)
 }

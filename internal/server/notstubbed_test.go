@@ -300,6 +300,11 @@ func (n notStubbed) Schema(_ context.Context, _ jsonschema.GVK) (r0 json.RawMess
 	return r0, r1
 }
 
+func (n notStubbed) Scope(_ context.Context) (r0 api.Scope) {
+	n.missing("Scope")
+	return r0
+}
+
 func (n notStubbed) Search(_ context.Context, _ string) (r0 api.SearchResults) {
 	n.missing("Search")
 	return r0

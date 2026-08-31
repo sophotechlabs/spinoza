@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 func (s *Server) handleAssets(w http.ResponseWriter, r *http.Request) {
@@ -13,20 +15,32 @@ func (s *Server) handleAssets(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	if r.URL.Path == "/" || r.URL.Path == "/index.html" {
-		s.serveIndex(w)
+		s.serveIndex(w, r)
 		return
 	}
 	s.files.ServeHTTP(w, r)
 }
 
-func (s *Server) serveIndex(w http.ResponseWriter) {
+func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 	doc, err := fs.ReadFile(s.assets, "index.html")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "index.html is missing from the bundled assets")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(InjectHead(doc, s.IndexHead(ViewBrowser)))
+	_, _ = w.Write(InjectHead(doc, s.headFor(r, ViewBrowser)))
+}
+
+func (s *Server) headFor(r *http.Request, view string) string {
+	if s.inCluster() && !signedIn(r) {
+		return ViewScript(view)
+	}
+	return s.IndexHead(view)
+}
+
+func signedIn(r *http.Request) bool {
+	_, ok := auth.IdentityFrom(r.Context())
+	return ok
 }
 
 func (s *Server) IndexHead(view string) string {

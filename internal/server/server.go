@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/settings"
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
@@ -60,32 +61,35 @@ type FilePicker func(ctx context.Context) (string, error)
 const noFilePicker = "only the desktop window can open a file dialog; type the path instead"
 
 type Server struct {
-	cluster    Cluster
-	assets     fs.FS
-	files      http.Handler
-	token      string
-	mu         sync.Mutex
-	picker     FilePicker
-	localShell LocalShellOpener
-	settings   Settings
-	baseline   Baselines
-	window     Window
-	browser    BrowserOpener
-	views      views
-	sessions   map[*wsSession]struct{}
-	terminals  map[*websocket.Conn]string
-	profiler   bool
-	health     map[string]api.ClusterHealth
-	misses     map[string]int
-	start      startRoute
-	watching   bool
-	updates    Updates
-	installer  Installs
-	past       History
-	open       Tabs
-	taping     map[string]*recording
-	now        func() time.Time
-	pingEvery  time.Duration
+	cluster      Cluster
+	assets       fs.FS
+	files        http.Handler
+	token        string
+	mu           sync.Mutex
+	picker       FilePicker
+	localShell   LocalShellOpener
+	settings     Settings
+	baseline     Baselines
+	window       Window
+	browser      BrowserOpener
+	views        views
+	sessions     map[*wsSession]struct{}
+	terminals    map[*websocket.Conn]string
+	profiler     bool
+	health       map[string]api.ClusterHealth
+	misses       map[string]int
+	start        startRoute
+	watching     bool
+	updates      Updates
+	installer    Installs
+	past         History
+	open         Tabs
+	taping       map[string]*recording
+	now          func() time.Time
+	pingEvery    time.Duration
+	authn        *auth.Authenticator
+	publicOrigin string
+	served       bool
 }
 
 func New(cluster Cluster, assets fs.FS, token string) *Server {
