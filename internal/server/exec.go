@@ -25,6 +25,12 @@ const execWriteTimeout = 10 * time.Second
 
 const removeTimeout = 15 * time.Second
 
+var debugTimeout = 3 * time.Minute
+
+var nodeShellDrain = 20 * time.Second
+
+var nodeShells shellTally
+
 var execStdinTimeout = 10 * time.Second
 
 func execRequest(r *http.Request) exec.Request {
@@ -86,7 +92,13 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
-	session, err := s.managerFor(r).StartDebug(r.Context(), req)
+	if s.unconfirmed(r, req.Pod) {
+		refuseUnconfirmed(w, req.Pod)
+		return
+	}
+	kept, stop := context.WithTimeout(context.WithoutCancel(r.Context()), debugTimeout)
+	defer stop()
+	session, err := s.managerFor(r).StartDebug(kept, req)
 	s.record(r, change{
 		verb:   verbDebug,
 		ref:    podRef(req.Namespace, req.Pod),
@@ -136,6 +148,8 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 		_ = conn.send(ctx, api.ExecChannelError, []byte(startErr.Error()))
 		return
 	}
+	nodeShells.start()
+	defer nodeShells.done()
 	defer func() {
 		gone, stop := context.WithTimeout(context.WithoutCancel(ctx), removeTimeout)
 		defer stop()
@@ -327,4 +341,61 @@ func resize(session *exec.Session, payload []byte) {
 		return
 	}
 	session.Resize(size)
+}
+
+type shellTally struct {
+	mu      sync.Mutex
+	open    int
+	drained chan struct{}
+}
+
+func (t *shellTally) start() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.open++
+	if t.drained == nil {
+		t.drained = make(chan struct{})
+	}
+}
+
+func (t *shellTally) done() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.open--
+	if t.open > 0 {
+		return
+	}
+	if t.drained == nil {
+		return
+	}
+	close(t.drained)
+	t.drained = nil
+}
+
+func (t *shellTally) count() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.open
+}
+
+func (t *shellTally) waiter() <-chan struct{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.drained != nil {
+		return t.drained
+	}
+	gone := make(chan struct{})
+	close(gone)
+	return gone
+}
+
+func awaitNodeShells() {
+	timer := time.NewTimer(nodeShellDrain)
+	defer timer.Stop()
+	select {
+	case <-nodeShells.waiter():
+		return
+	case <-timer.C:
+		slog.Warn("a node shell pod may still be running on the cluster", "waited", nodeShellDrain)
+	}
 }

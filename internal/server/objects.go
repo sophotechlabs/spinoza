@@ -55,10 +55,12 @@ func guarded(req actions.Request) bool {
 	if req.DryRun {
 		return false
 	}
-	if req.Action == actions.Drain {
+	switch req.Action {
+	case actions.Scale, actions.Restart, actions.Cordon, actions.Uncordon, actions.Drain, actions.Suspend, actions.Resume, actions.Trigger:
 		return true
+	default:
+		return false
 	}
-	return req.Action == actions.Scale && req.Replicas == 0
 }
 
 func actionRequest(r *http.Request) (actions.Request, error) {

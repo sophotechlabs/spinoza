@@ -101,25 +101,76 @@ func TestScalingToZeroOnAProtectedClusterNeedsTheNameTyped(t *testing.T) {
 	}
 }
 
-func TestScalingUpNeedsNoConfirmation(t *testing.T) {
-	ts, _ := actionServer(t, nil, actionDeployment())
+func TestScalingUpOnAProtectedClusterNeedsTheNameTyped(t *testing.T) {
+	ts, dyn := actionServer(t, nil, actionDeployment())
 	protect(t, ts)
 
-	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/action"+deploymentQuery+"&action=scale&replicas=3", nil)
+	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/action"+deploymentQuery+"&action=scale&replicas=3", nil)
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want a routine scale to go through: %s", resp.StatusCode, body)
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("status = %d, want 412; a scale up is still a write", resp.StatusCode)
+	}
+	if replicasOf(t, dyn) != 1 {
+		t.Fatal("the deployment was scaled anyway")
 	}
 }
 
-func TestRestartingNeedsNoConfirmation(t *testing.T) {
+func TestScalingUpGoesAheadOnceTheNameMatches(t *testing.T) {
 	ts, _ := actionServer(t, nil, actionDeployment())
 	protect(t, ts)
 
-	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/action"+deploymentQuery+"&action=restart", nil)
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/action"+deploymentQuery+"&action=scale&replicas=3&confirm=web", nil)
 
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+		t.Fatalf("status = %d, want the confirmed scale to go through: %s", resp.StatusCode, body)
+	}
+}
+
+func TestRestartingOnAProtectedClusterNeedsTheNameTyped(t *testing.T) {
+	ts, _ := actionServer(t, nil, actionDeployment())
+	protect(t, ts)
+
+	resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/action"+deploymentQuery+"&action=restart", nil)
+
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("status = %d, want 412; a rollout restart replaces every pod", resp.StatusCode)
+	}
+}
+
+func TestRestartingGoesAheadOnceTheNameMatches(t *testing.T) {
+	ts, _ := actionServer(t, nil, actionDeployment())
+	protect(t, ts)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/action"+deploymentQuery+"&action=restart&confirm=web", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want the confirmed restart to go through: %s", resp.StatusCode, body)
+	}
+}
+
+func TestCordoningOnAProtectedClusterNeedsTheNodeNameTyped(t *testing.T) {
+	for _, action := range []string{"cordon", "uncordon"} {
+		t.Run(action, func(t *testing.T) {
+			ts, _ := actionServer(t, nil, actionNode())
+			protect(t, ts)
+
+			resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/action"+nodeQuery+"&action="+action, nil)
+
+			if resp.StatusCode != http.StatusPreconditionFailed {
+				t.Fatalf("status = %d, want 412 for %s", resp.StatusCode, action)
+			}
+		})
+	}
+}
+
+func TestCordoningGoesAheadOnceTheNodeNameMatches(t *testing.T) {
+	ts, _ := actionServer(t, nil, actionNode())
+	protect(t, ts)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/action"+nodeQuery+"&action=cordon&confirm=worker-1", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want the confirmed cordon to go through: %s", resp.StatusCode, body)
 	}
 }
 

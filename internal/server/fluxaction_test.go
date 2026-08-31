@@ -168,3 +168,41 @@ func TestFluxActionMissingObject(t *testing.T) {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestFluxActionsOnAProtectedClusterNeedTheNameTyped(t *testing.T) {
+	for _, action := range []string{"reconcile", "reconcile-with-source", "suspend", "resume"} {
+		t.Run(action, func(t *testing.T) {
+			ts, dyn := fluxActionServer(t, newKustomization())
+			protect(t, ts)
+
+			resp, _ := doRequest(t, http.MethodPost, ts.URL+"/api/flux/action"+kustomizationQuery+"&action="+action, nil)
+
+			if resp.StatusCode != http.StatusPreconditionFailed {
+				t.Fatalf("status = %d, want 412 for %s", resp.StatusCode, action)
+			}
+			stored := storedKustomization(t, dyn)
+			if len(stored.GetAnnotations()) != 0 {
+				t.Fatalf("%s annotated the object anyway: %v", action, stored.GetAnnotations())
+			}
+			suspended, _, _ := unstructured.NestedBool(stored.Object, "spec", "suspend")
+			if suspended {
+				t.Fatalf("%s suspended the object anyway", action)
+			}
+		})
+	}
+}
+
+func TestSuspendingAKustomizationGoesAheadOnceTheNameMatches(t *testing.T) {
+	ts, dyn := fluxActionServer(t, newKustomization())
+	protect(t, ts)
+
+	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/flux/action"+kustomizationQuery+"&action=suspend&confirm=apps", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want the confirmed suspend to go through: %s", resp.StatusCode, body)
+	}
+	suspended, _, _ := unstructured.NestedBool(storedKustomization(t, dyn).Object, "spec", "suspend")
+	if !suspended {
+		t.Fatal("the kustomization was not suspended")
+	}
+}

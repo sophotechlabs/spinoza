@@ -44,6 +44,10 @@ func argoDetail(req argocd.Request) string {
 
 func (s *Server) fluxAction(w http.ResponseWriter, r *http.Request, ref api.ObjectRef) {
 	action := flux.Action(r.URL.Query().Get("action"))
+	if patchesTheCluster(action) && s.unconfirmed(r, ref.Name) {
+		refuseUnconfirmed(w, ref.Name)
+		return
+	}
 	result, err := s.managerFor(r).FluxAction(r.Context(), ref, action)
 	s.record(r, change{verb: string(action), ref: ref, err: err})
 	if err != nil {
@@ -103,6 +107,15 @@ func (s *Server) argoAction(w http.ResponseWriter, r *http.Request, ref api.Obje
 		return
 	}
 	writeJSON(w, result)
+}
+
+func patchesTheCluster(action flux.Action) bool {
+	switch action {
+	case flux.Reconcile, flux.ReconcileSource, flux.Suspend, flux.Resume:
+		return true
+	default:
+		return false
+	}
 }
 
 func changesTheCluster(action argocd.Action) bool {
