@@ -67,9 +67,14 @@ func (s *Server) rememberedTabs(ctx context.Context) []api.RememberedCluster {
 		slog.Warn("the clusters that were open could not be read", "error", err)
 		return []api.RememberedCluster{}
 	}
+	known := s.knownContexts()
 	out := make([]api.RememberedCluster, 0, len(found))
 	for _, one := range found {
 		if !one.Reopen {
+			continue
+		}
+		if len(known) > 0 && !known[one.Context] {
+			slog.Info("a remembered cluster is not in your kubeconfigs and will not reopen", "context", one.Context)
 			continue
 		}
 		out = append(out, api.RememberedCluster{
@@ -79,6 +84,19 @@ func (s *Server) rememberedTabs(ctx context.Context) []api.RememberedCluster {
 		})
 	}
 	return out
+}
+
+func (s *Server) knownContexts() map[string]bool {
+	known := map[string]bool{}
+	for _, source := range s.cluster.Contexts().Kubeconfigs {
+		if source.Error != "" {
+			continue
+		}
+		for _, one := range source.Contexts {
+			known[one.Name] = true
+		}
+	}
+	return known
 }
 
 const rememberTimeout = 10 * time.Second
@@ -253,16 +271,56 @@ func (s *Server) openCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref := api.ContextRef{Kubeconfig: query.Get("kubeconfig"), Name: name}
+	kept, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), rememberTimeout)
+	defer cancel()
+	restoring := s.restoringTab(kept, ref)
+	was := s.cluster.ID()
 	id, err := s.cluster.Open(ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
-	kept, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), rememberTimeout)
-	defer cancel()
+	if restoring {
+		s.keepActive(was, id)
+	}
 	s.rememberTab(kept, id, ref)
 	s.announceContext()
 	writeJSON(w, s.clusterList(kept))
+}
+
+func (s *Server) restoringTab(ctx context.Context, ref api.ContextRef) bool {
+	for _, one := range s.rememberedTabs(ctx) {
+		if one.Context != ref.Name {
+			continue
+		}
+		if one.Kubeconfig != ref.Kubeconfig {
+			continue
+		}
+		return !s.alreadyOpen(one.ID)
+	}
+	return false
+}
+
+func (s *Server) alreadyOpen(id string) bool {
+	for _, one := range s.cluster.Opened() {
+		if one.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) keepActive(was, opened string) {
+	if was == "" {
+		return
+	}
+	if was == opened {
+		return
+	}
+	err := s.cluster.Activate(was)
+	if err != nil {
+		slog.Warn("the cluster spinoza started on could not be kept active", "cluster", was, "error", err)
+	}
 }
 
 func (s *Server) activateCluster(w http.ResponseWriter, r *http.Request) {
@@ -294,10 +352,12 @@ func (s *Server) closeCluster(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, err)
 		return
 	}
+	kept, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), rememberTimeout)
+	defer cancel()
 	s.forgetHealthOf(id)
-	s.forgetTab(r.Context(), id)
+	s.forgetTab(kept, id)
 	s.announceContext()
-	writeJSON(w, s.clusterList(r.Context()))
+	writeJSON(w, s.clusterList(kept))
 }
 
 func (s *Server) drainTerminals(ctx context.Context, id string) {

@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -92,6 +91,7 @@ func newCluster(
 	sources Kubeconfigs,
 	protection Protection,
 	openWithin time.Duration,
+	start api.ContextRef,
 ) *Cluster {
 	if openWithin <= 0 {
 		openWithin = defaultOpenTimeout
@@ -104,11 +104,10 @@ func newCluster(
 		openWithin: openWithin,
 		open:       map[string]*connection{},
 	}
-	err := cluster.use(ctx, api.ContextRef{})
+	err := cluster.use(ctx, start)
 	if err == nil {
 		return cluster
 	}
-	slog.Error("starting without a cluster; pick a context from the app", "error", err)
 	cluster.mu.Lock()
 	cluster.startErr = err.Error()
 	cluster.mu.Unlock()
@@ -239,6 +238,7 @@ func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 		opened.cancel()
 		return nil
 	}
+	replaced := c.open[opened.id]
 	previous := c.retire(opened.id)
 	c.installed = seq
 	c.open[opened.id] = opened
@@ -246,6 +246,9 @@ func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 	c.startErr = ""
 	c.mu.Unlock()
 
+	if replaced != nil {
+		replaced.cancel()
+	}
 	for _, gone := range previous {
 		gone.cancel()
 	}

@@ -76,10 +76,10 @@ func (s *Server) pingEveryCluster(ctx context.Context) {
 	var asking sync.WaitGroup
 	for _, id := range s.openClusterIDs() {
 		asking.Add(1)
-		go func(id string) {
+		safe.Go("asking whether "+id+" answers", func() {
 			defer asking.Done()
 			s.pingOne(ctx, id)
-		}(id)
+		})
 	}
 	asking.Wait()
 }
@@ -133,12 +133,11 @@ const missesBeforeUnreachable = 3
 
 func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
 	now.Cluster = id
-	s.publishHealthOf(id, now)
+	s.publishHealthOf(id, s.settled(id, now))
 }
 
 func (s *Server) recordPingOf(id string, now api.ClusterHealth) {
-	now.Cluster = id
-	s.publishHealthOf(id, s.settled(id, now))
+	s.recordHealthOf(id, now)
 }
 
 func (s *Server) publishHealthOf(id string, now api.ClusterHealth) {

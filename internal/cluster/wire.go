@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -43,15 +44,17 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 			return nil, err
 		}
 		return &connection{manager: manager, ref: bundle.Ref, host: bundle.Config.Host}, nil
-	}, sources, openProtection(), options.OpenTimeout)
+	}, sources, openProtection(), options.OpenTimeout, api.ContextRef{Name: options.Context})
 	cluster.useReader(readerFor(options))
 	cluster.useLister(listerFor(options))
-	if options.Context != "" {
-		useErr := cluster.Use(api.ContextRef{Name: options.Context})
-		if useErr != nil {
-			return cluster, useErr
-		}
+	failed := cluster.unreached()
+	if failed == "" {
+		return cluster, nil
 	}
+	if options.Context != "" {
+		return cluster, errors.New(failed)
+	}
+	slog.Error("starting without a cluster; pick a context from the app", "error", failed)
 	return cluster, nil
 }
 

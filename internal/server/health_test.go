@@ -88,6 +88,34 @@ func awaitHealth(ctx context.Context, t *testing.T, conn *websocket.Conn, want b
 	return api.ServerMsg{}
 }
 
+func awaitWobble(ctx context.Context, t *testing.T, conn *websocket.Conn) api.ServerMsg {
+	t.Helper()
+	for range 60 {
+		msg := nextHealth(ctx, t, conn)
+		if msg.Wobbling {
+			return msg
+		}
+	}
+	t.Fatal("the cluster was never said to be wobbling")
+	return api.ServerMsg{}
+}
+
+func awaitAnswering(ctx context.Context, t *testing.T, conn *websocket.Conn) api.ServerMsg {
+	t.Helper()
+	for range 60 {
+		msg := nextHealth(ctx, t, conn)
+		if !msg.Reachable {
+			continue
+		}
+		if msg.Wobbling {
+			continue
+		}
+		return msg
+	}
+	t.Fatal("the cluster was never said to answer again")
+	return api.ServerMsg{}
+}
+
 func TestAWindowIsToldTheClusterAnswers(t *testing.T) {
 	ts := flakyServer(t, &flaky{})
 	ctx, conn := openAwkwardFeed(t, ts)
@@ -216,7 +244,7 @@ func TestAWindowHearsAboutAFailedRequestWithoutWaitingForThePing(t *testing.T) {
 
 	backend.heard.Saw(errors.New("dial tcp 10.0.0.1:6443: connect: connection refused"))
 
-	gone := awaitHealth(ctx, t, conn, false)
+	gone := awaitWobble(ctx, t, conn)
 	if !strings.Contains(gone.Reason, "connection refused") {
 		t.Fatalf("reason = %q, want what the request ran into", gone.Reason)
 	}
@@ -228,11 +256,11 @@ func TestAWindowHearsTheClusterAnsweringAgainFromTheNextRequestThatWorks(t *test
 	ctx, conn := openAwkwardFeed(t, ts)
 	nextHealth(ctx, t, conn)
 	backend.heard.Saw(errors.New("connection refused"))
-	awaitHealth(ctx, t, conn, false)
+	awaitWobble(ctx, t, conn)
 
 	backend.heard.Saw(nil)
 
-	back := awaitHealth(ctx, t, conn, true)
+	back := awaitAnswering(ctx, t, conn)
 	if back.Reason != "" {
 		t.Fatalf("reason = %q, want it forgotten once the cluster answered", back.Reason)
 	}

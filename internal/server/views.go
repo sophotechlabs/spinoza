@@ -111,7 +111,22 @@ func (s *Server) handleMetricHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTraffic(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.managerFor(r).TrafficGraph(r.Context()))
+	graph := s.managerFor(r).TrafficGraph(r.Context())
+	if nothingButAnError(graph) {
+		writeJSONStatus(w, http.StatusBadGateway, graph)
+		return
+	}
+	writeJSON(w, graph)
+}
+
+func nothingButAnError(graph api.TrafficGraph) bool {
+	if graph.Error == "" {
+		return false
+	}
+	if len(graph.Nodes) > 0 {
+		return false
+	}
+	return len(graph.Edges) == 0
 }
 
 func (s *Server) handleFluxOverview(w http.ResponseWriter, r *http.Request) {

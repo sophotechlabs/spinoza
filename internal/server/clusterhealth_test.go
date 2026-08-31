@@ -174,8 +174,11 @@ func TestABackgroundClustersHealthReachesTheBrowserToo(t *testing.T) {
 	if msg.Cluster != mk2 {
 		t.Fatalf("frame named %q, want the background cluster; its tab shows the wrong dot otherwise", msg.Cluster)
 	}
-	if msg.Reachable {
-		t.Fatalf("frame = %+v, want the background cluster reported as not answering", msg)
+	if !msg.Wobbling {
+		t.Fatalf("frame = %+v, want the background cluster reported as wobbling", msg)
+	}
+	if msg.Reason != "gone" {
+		t.Fatalf("reason = %q, want what the failing request said", msg.Reason)
 	}
 }
 
@@ -216,7 +219,7 @@ func TestAFailedRequestIsHeardWithoutWaitingForAPing(t *testing.T) {
 	}
 	sink.Saw(errors.New("connection refused"))
 	deadline := time.After(5 * time.Second)
-	for srv.healthOfCluster(mk1).Reachable {
+	for !srv.healthOfCluster(mk1).Wobbling {
 		select {
 		case <-deadline:
 			t.Fatal("a failed request never reached the health state")
@@ -286,12 +289,49 @@ func TestAClusterThatAnswersAgainStopsWobbling(t *testing.T) {
 	}
 }
 
-func TestARequestThatFailedIsNotGivenTheBenefitOfTheDoubt(t *testing.T) {
+func TestAFailedRequestSettlesTheSameWayAMissedPingDoes(t *testing.T) {
 	srv, _ := twoClusters(t, &pinger{}, &pinger{})
 
 	srv.recordHealthOf(mk2, notAnswering("connection refused"))
 
-	if srv.healthOfCluster(mk2).Reachable {
-		t.Fatal("a request that actually failed was softened into a wobble")
+	first := srv.healthOfCluster(mk2)
+	if !first.Reachable || !first.Wobbling {
+		t.Fatalf("one failed request reads as %+v, want a wobble", first)
+	}
+	for range missesBeforeUnreachable {
+		srv.recordHealthOf(mk2, notAnswering("connection refused"))
+	}
+	settled := srv.healthOfCluster(mk2)
+	if settled.Reachable || settled.Wobbling {
+		t.Fatalf("a cluster that keeps failing reads as %+v, want an outage", settled)
+	}
+}
+
+func TestPingsAndFailedRequestsShareOneVerdict(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{err: errors.New("no route to host")})
+
+	srv.pingEveryCluster(t.Context())
+	srv.pingEveryCluster(t.Context())
+	srv.recordHealthOf(mk2, notAnswering("connection refused"))
+
+	held := srv.healthOfCluster(mk2)
+	if held.Reachable || held.Wobbling {
+		t.Fatalf("health = %+v, want the third miss to settle whichever writer saw it", held)
+	}
+}
+
+func TestAnAnsweringRequestClearsTheMissesAPingCounted(t *testing.T) {
+	flaky := &pinger{err: errors.New("no route to host")}
+	srv, _ := twoClusters(t, &pinger{}, flaky)
+
+	srv.pingEveryCluster(t.Context())
+	srv.pingEveryCluster(t.Context())
+	srv.recordHealthOf(mk2, answering())
+	flaky.err = errors.New("no route to host")
+	srv.pingEveryCluster(t.Context())
+
+	held := srv.healthOfCluster(mk2)
+	if !held.Reachable || !held.Wobbling {
+		t.Fatalf("health = %+v, want the count to have restarted after the cluster answered", held)
 	}
 }
