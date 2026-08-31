@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
@@ -168,7 +169,9 @@ func (m *Manager) Search(ctx context.Context, query string) api.SearchResults {
 	for _, desc := range descs {
 		flat = append(flat, desc)
 	}
-	return Search(ctx, m.meta, flat, query, m.limits.Search)
+	seen := m.filter(ctx)
+	found := Search(auth.AsServer(ctx), m.meta, flat, query, m.limits.Search)
+	return m.scopedHits(seen, found)
 }
 
 const namespaceResource = "namespaces"
@@ -176,19 +179,14 @@ const namespaceResource = "namespaces"
 var namespaceGVR = schema.GroupVersionResource{Version: "v1", Resource: namespaceResource}
 
 func (m *Manager) Namespaces(ctx context.Context) api.Namespaces {
-	if m.meta == nil {
-		return api.Namespaces{}
+	found := m.everyNamespace(ctx)
+	if found.Error != "" {
+		return found
 	}
-	bounded, cancel := context.WithTimeout(ctx, m.limits.Search.PerType)
-	defer cancel()
-	list, err := m.meta.Resource(namespaceGVR).List(bounded, metav1.ListOptions{})
-	if err != nil {
-		return api.Namespaces{Error: err.Error()}
+	seen := m.Scope(ctx)
+	if seen.Everywhere {
+		return found
 	}
-	names := make([]string, 0, len(list.Items))
-	for _, item := range list.Items {
-		names = append(names, item.GetName())
-	}
-	slices.Sort(names)
-	return api.Namespaces{Names: names}
+	found.Names = seen.Namespaces
+	return found
 }

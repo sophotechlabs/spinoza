@@ -82,6 +82,7 @@ type Subscription struct {
 	Resync     <-chan struct{}
 	stream     *stream
 	entry      *subscriber
+	owner      *Manager
 	namespace  string
 	filters    []api.RowFilter
 	cancel     func()
@@ -105,7 +106,12 @@ func (s *Subscription) Columns() []api.Column {
 }
 
 func (s *Subscription) Snapshot() ([]api.Row, int, error) {
-	return s.stream.snapshot(s.namespace, s.Limit(), s.filters)
+	return s.stream.snapshot(s.namespace, s.Limit(), s.filters, s.entry.filter())
+}
+
+func (s *Subscription) Refresh(ctx context.Context) {
+	seen := s.owner.filter(ctx)
+	s.entry.seen.Store(&seen)
 }
 
 type Manager struct {
@@ -702,27 +708,36 @@ type subscriber struct {
 	events chan Event
 	resync chan struct{}
 	ns     string
+	seen   atomic.Pointer[nsFilter]
 	limit  atomic.Int64
 }
 
-func newSubscriber(ns string, limit int) *subscriber {
+func newSubscriber(ns string, limit int, seen nsFilter) *subscriber {
 	sub := &subscriber{
 		events: make(chan Event, eventBuffer),
 		resync: make(chan struct{}, 1),
 		ns:     ns,
 	}
+	sub.seen.Store(&seen)
 	sub.limit.Store(int64(limit))
 	return sub
 }
 
+func (s *subscriber) filter() nsFilter {
+	return *s.seen.Load()
+}
+
 func (s *subscriber) wants(ev Event) bool {
+	if ev.Kind != "added" && ev.Kind != "modified" {
+		return true
+	}
+	if !s.filter().allows(ev.Row.Namespace) {
+		return false
+	}
 	if s.ns == "" {
 		return true
 	}
-	if ev.Kind == "added" || ev.Kind == "modified" {
-		return ev.Row.Namespace == s.ns
-	}
-	return true
+	return ev.Row.Namespace == s.ns
 }
 
 type stream struct {
@@ -757,18 +772,26 @@ func (m *Manager) Subscribe(
 		return nil, fmt.Errorf("unknown resource %s/%s/%s", group, version, resource)
 	}
 	gvr := schema.GroupVersionResource{Group: group, Version: version, Resource: resource}
+	seen := m.filter(ctx)
+	admitErr := m.admits(seen, desc, namespace)
+	if admitErr != nil {
+		return nil, admitErr
+	}
 	effNs := namespace
 	if !desc.Namespaced {
 		effNs = ""
 	}
+	if effNs == "" {
+		effNs = seen.only()
+	}
 	key := streamKey{gvr: gvr}
 
-	st, entry, err := m.attach(ctx, key, desc, effNs, limitFor(desc.Kind, limit))
+	st, entry, err := m.attach(ctx, key, desc, effNs, limitFor(desc.Kind, limit), seen)
 	if err != nil {
 		return nil, err
 	}
 	st.useLayout(m.layoutFor(ctx, desc, key.gvr))
-	rows, total, snapErr := st.snapshot(effNs, int(entry.limit.Load()), filters)
+	rows, total, snapErr := st.snapshot(effNs, int(entry.limit.Load()), filters, seen)
 	if snapErr != nil {
 		m.detach(key, st, entry)
 		return nil, snapErr
@@ -778,6 +801,7 @@ func (m *Manager) Subscribe(
 		Namespaced: desc.Namespaced,
 		Rows:       rows,
 		Total:      total,
+		owner:      m,
 		namespace:  effNs,
 		filters:    filters,
 		Events:     entry.events,
@@ -796,13 +820,14 @@ func (m *Manager) attach(
 	desc api.ResourceDescriptor,
 	ns string,
 	limit int,
+	seen nsFilter,
 ) (*stream, *subscriber, error) {
 	for range attachAttempts {
 		st, err := m.streamFor(ctx, key, desc)
 		if err != nil {
 			return nil, nil, err
 		}
-		entry, ok := m.register(key, st, ns, limit)
+		entry, ok := m.register(key, st, ns, limit, seen)
 		if ok {
 			return st, entry, nil
 		}
@@ -851,9 +876,13 @@ func (m *Manager) Scan(ctx context.Context, desc api.ResourceDescriptor) ([]*uns
 }
 
 func (m *Manager) Lease(ctx context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
+	seen := m.filter(ctx)
+	if !seen.all {
+		return nil, fmt.Errorf("%w: %s", ErrClusterWide, desc.Kind)
+	}
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	key := streamKey{gvr: gvr}
-	st, entry, err := m.attach(ctx, key, desc, "", 0)
+	st, entry, err := m.attach(ctx, key, desc, "", 0, seen)
 	if err != nil {
 		return nil, err
 	}
@@ -951,13 +980,13 @@ func (m *Manager) unpin(key streamKey) {
 	}
 }
 
-func (m *Manager) register(key streamKey, st *stream, ns string, limit int) (*subscriber, bool) {
+func (m *Manager) register(key streamKey, st *stream, ns string, limit int, seen nsFilter) (*subscriber, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.streams[key] != st {
 		return nil, false
 	}
-	entry := newSubscriber(ns, limit)
+	entry := newSubscriber(ns, limit, seen)
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if st.idle != nil {
@@ -1293,18 +1322,21 @@ func signalResync(sub *subscriber) {
 	}
 }
 
-func (st *stream) snapshot(ns string, limit int, filters []api.RowFilter) ([]api.Row, int, error) {
+func (st *stream) snapshot(ns string, limit int, filters []api.RowFilter, seen nsFilter) ([]api.Row, int, error) {
 	objs, err := st.listFor(ns)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading the cached %s: %w", st.kind, err)
 	}
 	held := make([]*unstructured.Unstructured, 0, len(objs))
-	for _, o := range objs {
-		u, ok := toUnstructured(o)
+	for _, obj := range objs {
+		item, ok := toUnstructured(obj)
 		if !ok {
 			continue
 		}
-		held = append(held, u)
+		if !seen.allows(item.GetNamespace()) {
+			continue
+		}
+		held = append(held, item)
 	}
 	held = st.keepMatching(held, limit, filters)
 	total := len(held)

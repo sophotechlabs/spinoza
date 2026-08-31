@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 type recent[T any] struct {
@@ -60,7 +62,7 @@ func shared[T any](
 			return value, true
 		}
 		if waiting.mine {
-			built, keep := build(ctx)
+			built, keep := build(auth.AsServer(ctx))
 			store.store(built, now(), keep)
 			return built, true
 		}

@@ -1232,7 +1232,7 @@ func TestRegisterRefusesAStreamThatWasAlreadyDropped(t *testing.T) {
 	mgr.mu.Unlock()
 	st.cancel()
 
-	_, ok := mgr.register(key, st, "", 0)
+	_, ok := mgr.register(key, st, "", 0, everything())
 
 	if ok {
 		t.Fatal("registered against a torn-down stream; the subscriber would never see an event")
@@ -1254,7 +1254,7 @@ func TestAttachRebuildsAfterTheStreamIsDropped(t *testing.T) {
 	mgr.mu.Unlock()
 	first.cancel()
 
-	st, entry, attachErr := mgr.attach(context.Background(), key, desc, "", 0)
+	st, entry, attachErr := mgr.attach(context.Background(), key, desc, "", 0, everything())
 	if attachErr != nil {
 		t.Fatalf("attach: %v", attachErr)
 	}
@@ -1276,7 +1276,7 @@ func TestDetachLeavesAStreamThatWasAlreadyReplaced(t *testing.T) {
 	key := deploymentKey()
 	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
 
-	old, entry, err := mgr.attach(context.Background(), key, desc, "", 0)
+	old, entry, err := mgr.attach(context.Background(), key, desc, "", 0, everything())
 	if err != nil {
 		t.Fatalf("attach: %v", err)
 	}
