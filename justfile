@@ -356,6 +356,37 @@ test-e2e-full name='' spec='': cluster-full
     set -euo pipefail
     SPINOZA_E2E_TIER=full just e2e-run full {{ quote(name) }} {{ quote(spec) }}
 
+test-e2e-group group browser='chromium' name='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    group={{ quote(group) }}
+    browser={{ quote(browser) }}
+    profile=$(node e2e/scripts/group-field.mjs "$group" profile)
+    runner=$(node e2e/scripts/group-field.mjs "$group" runner)
+    if [ "$runner" != playwright ]; then
+        echo "test-e2e-group: $group uses $runner"
+        exit 1
+    fi
+    case "$profile" in
+        core)
+            just cluster-e2e
+            ;;
+        full)
+            just cluster-full
+            ;;
+        *)
+            echo "test-e2e-group: $group has unsupported Playwright profile $profile"
+            exit 1
+            ;;
+    esac
+    export SPINOZA_E2E_GROUP="$group"
+    export SPINOZA_E2E_BROWSER="$browser"
+    export SPINOZA_E2E_TIER="$profile"
+    just e2e-run "$browser" {{ quote(name) }} ''
+
+validate-e2e-suite:
+    node e2e/scripts/validate-suite.mjs
+
 [private]
 e2e-run project name='' spec='':
     #!/usr/bin/env bash
@@ -368,7 +399,17 @@ e2e-run project name='' spec='':
     if [ ! -d node_modules ] || [ package-lock.json -nt node_modules ]; then
         npm ci
     fi
-    npx playwright install chromium
+    browser="{{ project }}"
+    case "$browser" in
+        core|full|shots)
+            browser=chromium
+            ;;
+    esac
+    if [ -n "${CI:-}" ]; then
+        npx playwright install --with-deps "$browser"
+    else
+        npx playwright install "$browser"
+    fi
     run=(test --project={{ project }})
     spec={{ quote(spec) }}
     if [ -n "$spec" ]; then
@@ -762,7 +803,6 @@ workflow-triggers:
     validation=(
         codeql.yaml
         commits.yaml
-        e2e.yaml
         frontend.yaml
         go.yaml
         integration.yaml
@@ -782,6 +822,17 @@ workflow-triggers:
                 exit 1
             fi
         done
+    done
+    if [ "$(yq -r '.concurrency.cancel-in-progress' .github/workflows/e2e.yaml)" != "true" ]; then
+        echo ".github/workflows/e2e.yaml does not cancel a superseded validation run" >&2
+        exit 1
+    fi
+    ignored=$(yq -r '.on.pull_request.paths-ignore[]' .github/workflows/e2e.yaml)
+    for path in "${release_files[@]}"; do
+        if grep -Fxq "$path" <<< "$ignored"; then
+            echo ".github/workflows/e2e.yaml skips release validation for $path" >&2
+            exit 1
+        fi
     done
     if [ "$(yq -r '.concurrency.cancel-in-progress' .github/workflows/badges.yaml)" != "true" ]; then
         echo ".github/workflows/badges.yaml can publish an obsolete measurement" >&2

@@ -42,7 +42,11 @@ export const NAMESPACE = 'e2e';
 export const ADDR = addr;
 export const BASE_URL = `http://${ADDR}`;
 
-export const BINARY = join(REPO_DIR, 'spinoza');
+let binary = join(REPO_DIR, 'spinoza');
+if (process.env.SPINOZA_E2E_BINARY !== undefined) {
+  binary = process.env.SPINOZA_E2E_BINARY;
+}
+export const BINARY = binary;
 
 const sidePort = portFor(cluster) + SESSION_PORT_SPAN;
 

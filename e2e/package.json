@@ -5,7 +5,9 @@
   "scripts": {
     "test": "playwright test",
     "report": "playwright show-report",
-    "typecheck": "tsc --noEmit"
+    "select": "node scripts/select-groups.mjs",
+    "typecheck": "tsc --noEmit",
+    "validate": "node scripts/validate-suite.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

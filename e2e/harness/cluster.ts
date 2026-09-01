@@ -7,6 +7,7 @@ import {
   NAMESPACE,
   REPO_DIR,
   SECOND_CLUSTER,
+  SECOND_CONTEXT,
   SECOND_KUBECONFIG,
   TMP_DIR,
 } from './paths';
@@ -95,6 +96,34 @@ export function kubectlApply(document: string): string {
 
 export function kubectlSoft(args: string[]): number {
   return run('kubectl', ['--kubeconfig', KUBECONFIG, '--context', CONTEXT, ...args]).code;
+}
+
+export function kubectlSecond(args: string[]): string {
+  return mustRun('kubectl', [
+    '--kubeconfig',
+    SECOND_KUBECONFIG,
+    '--context',
+    SECOND_CONTEXT,
+    ...args,
+  ]);
+}
+
+export function kubectlSecondApply(document: string): string {
+  return mustRun(
+    'kubectl',
+    ['--kubeconfig', SECOND_KUBECONFIG, '--context', SECOND_CONTEXT, 'apply', '-f', '-'],
+    { input: document },
+  );
+}
+
+export function kubectlSecondSoft(args: string[]): number {
+  return run('kubectl', [
+    '--kubeconfig',
+    SECOND_KUBECONFIG,
+    '--context',
+    SECOND_CONTEXT,
+    ...args,
+  ]).code;
 }
 
 export function helm(args: string[]): string {

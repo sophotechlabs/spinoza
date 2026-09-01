@@ -1,0 +1,420 @@
+{
+  "schemaVersion": 1,
+  "smokeGroup": "foundation-security",
+  "specRoots": ["specs", "specs-full"],
+  "productionRoots": [
+    "*.go",
+    "cmd/**",
+    "deploy/**",
+    "frontend/src/**",
+    "internal/**",
+    "packaging/**",
+    "install.sh",
+    "install.ps1"
+  ],
+  "fullRunPaths": [
+    ".github/workflows/**",
+    "Dockerfile",
+    "e2e/harness/**",
+    "e2e/package-lock.json",
+    "e2e/package.json",
+    "e2e/playwright.config.ts",
+    "e2e/scripts/**",
+    "e2e/suite.json",
+    "e2e/versions.json",
+    "frontend/package-lock.json",
+    "frontend/src/**",
+    "frontend/src/App.tsx",
+    "frontend/src/Root.tsx",
+    "frontend/src/lib/http.ts",
+    "frontend/src/lib/types.ts",
+    "frontend/src/store/**",
+    "go.mod",
+    "go.sum",
+    "internal/**",
+    "internal/api/**",
+    "internal/cluster/**",
+    "internal/server/**",
+    "justfile",
+    "*.go",
+    "main.go",
+    "main_desktop.go",
+    "mise.lock",
+    "mise.toml",
+    "serve.go",
+    "wails.json"
+  ],
+  "groups": [
+    {
+      "id": "foundation-security",
+      "label": "Foundation and security",
+      "runner": "playwright",
+      "profile": "core",
+      "timeoutMinutes": 45,
+      "specs": [
+        "specs/access.spec.ts",
+        "specs/degrade.spec.ts",
+        "specs/guard.spec.ts"
+      ],
+      "paths": [
+        "internal/access/**",
+        "internal/auth/**",
+        "internal/kubeconfig/**",
+        "internal/protect/**",
+        "frontend/src/components/ConnectionBanner.tsx",
+        "frontend/src/components/KubeconfigBanner.tsx",
+        "frontend/src/components/SignIn.tsx",
+        "frontend/src/lib/access.ts",
+        "frontend/src/lib/identity.ts",
+        "e2e/specs/access.spec.ts",
+        "e2e/specs/degrade.spec.ts",
+        "e2e/specs/guard.spec.ts"
+      ]
+    },
+    {
+      "id": "navigation-visual-a11y",
+      "label": "Navigation, visual and accessibility",
+      "runner": "playwright",
+      "profile": "full",
+      "timeoutMinutes": 90,
+      "specs": [
+        "specs/navigation.spec.ts",
+        "specs/palette.spec.ts",
+        "specs/panels.spec.ts",
+        "specs/settings.spec.ts",
+        "specs/zz-a11y.spec.ts",
+        "specs-full/design-review.spec.ts"
+      ],
+      "paths": [
+        "frontend/src/index.css",
+        "frontend/src/components/CommandPalette.tsx",
+        "frontend/src/components/Panel*.tsx",
+        "frontend/src/components/SettingsDialog.tsx",
+        "frontend/src/components/Sidebar.tsx",
+        "frontend/src/components/TopBar.tsx",
+        "frontend/src/components/TooltipHost.tsx",
+        "frontend/src/lib/contrast.ts",
+        "frontend/src/lib/customThemes.ts",
+        "frontend/src/lib/hotkeys.ts",
+        "frontend/src/lib/palette.ts",
+        "frontend/src/lib/panels.ts",
+        "frontend/src/lib/router.ts",
+        "frontend/src/lib/theme*.ts",
+        "frontend/themes/**",
+        "e2e/specs/navigation.spec.ts",
+        "e2e/specs/palette.spec.ts",
+        "e2e/specs/panels.spec.ts",
+        "e2e/specs/settings.spec.ts",
+        "e2e/specs/zz-a11y.spec.ts",
+        "e2e/specs-full/design-review.spec.ts"
+      ]
+    },
+    {
+      "id": "resources-live-tables",
+      "label": "Resources, live updates and tables",
+      "runner": "playwright",
+      "profile": "full",
+      "timeoutMinutes": 90,
+      "specs": [
+        "specs/crds.spec.ts",
+        "specs/live.spec.ts",
+        "specs/resources.spec.ts",
+        "specs-full/scale.spec.ts"
+      ],
+      "paths": [
+        "internal/discovery/**",
+        "internal/resources/**",
+        "frontend/src/components/Column*.tsx",
+        "frontend/src/components/FilterBar.tsx",
+        "frontend/src/components/ResourceTable.tsx",
+        "frontend/src/lib/catalog.ts",
+        "frontend/src/lib/discovery.ts",
+        "frontend/src/lib/filter*.ts",
+        "frontend/src/lib/search.ts",
+        "frontend/src/lib/tableState.ts",
+        "e2e/specs/crds.spec.ts",
+        "e2e/specs/live.spec.ts",
+        "e2e/specs/resources.spec.ts",
+        "e2e/specs-full/scale.spec.ts"
+      ]
+    },
+    {
+      "id": "inspect-compare-rbac-topology",
+      "label": "Inspect, compare, RBAC and topology",
+      "runner": "playwright",
+      "profile": "full",
+      "timeoutMinutes": 75,
+      "specs": [
+        "specs/compare-rbac.spec.ts",
+        "specs/inspect.spec.ts",
+        "specs/secrets.spec.ts",
+        "specs/topology.spec.ts"
+      ],
+      "paths": [
+        "internal/compare/**",
+        "internal/inspect/**",
+        "internal/jsonschema/**",
+        "internal/rbac/**",
+        "internal/topology/**",
+        "frontend/src/components/ComparePanel.tsx",
+        "frontend/src/components/Inspect*.tsx",
+        "frontend/src/components/KindCompare.tsx",
+        "frontend/src/components/Rbac.tsx",
+        "frontend/src/components/TopologyGraph.tsx",
+        "frontend/src/lib/compare.ts",
+        "frontend/src/lib/rbac.ts",
+        "frontend/src/lib/schema.ts",
+        "frontend/src/lib/topology.ts",
+        "e2e/specs/compare-rbac.spec.ts",
+        "e2e/specs/inspect.spec.ts",
+        "e2e/specs/secrets.spec.ts",
+        "e2e/specs/topology.spec.ts"
+      ]
+    },
+    {
+      "id": "mutations-protection-history",
+      "label": "Mutations, protection and history",
+      "runner": "playwright",
+      "profile": "core",
+      "timeoutMinutes": 75,
+      "specs": [
+        "specs/actions.spec.ts",
+        "specs/guarded.spec.ts",
+        "specs/history.spec.ts"
+      ],
+      "paths": [
+        "internal/actions/**",
+        "internal/store/**",
+        "frontend/src/components/BulkBar.tsx",
+        "frontend/src/components/ConfirmByName.tsx",
+        "frontend/src/components/History.tsx",
+        "frontend/src/components/InspectActions.tsx",
+        "frontend/src/components/InspectObjectActions.tsx",
+        "frontend/src/components/Protection*.tsx",
+        "frontend/src/lib/objectActions.ts",
+        "frontend/src/lib/history.ts",
+        "e2e/specs/actions.spec.ts",
+        "e2e/specs/guarded.spec.ts",
+        "e2e/specs/history.spec.ts"
+      ]
+    },
+    {
+      "id": "streams-terminals-forwards",
+      "label": "Streams, terminals and forwards",
+      "runner": "playwright",
+      "profile": "core",
+      "timeoutMinutes": 75,
+      "specs": [
+        "specs/exec.spec.ts",
+        "specs/portforward.spec.ts",
+        "specs/terminals.spec.ts"
+      ],
+      "paths": [
+        "internal/debugcontainer/**",
+        "internal/exec/**",
+        "internal/localshell/**",
+        "internal/logs/**",
+        "internal/nodeshell/**",
+        "internal/portforward/**",
+        "frontend/src/components/DebugPrompt.tsx",
+        "frontend/src/components/ForwardsPanel.tsx",
+        "frontend/src/components/Terminal*.tsx",
+        "frontend/src/lib/exec.ts",
+        "frontend/src/lib/portForward.ts",
+        "frontend/src/lib/terminal.ts",
+        "e2e/specs/exec.spec.ts",
+        "e2e/specs/portforward.spec.ts",
+        "e2e/specs/terminals.spec.ts"
+      ]
+    },
+    {
+      "id": "checks-issues-worklist",
+      "label": "Checks, issues and worklist",
+      "runner": "playwright",
+      "profile": "core",
+      "timeoutMinutes": 75,
+      "specs": [
+        "specs/checks.spec.ts",
+        "specs/issues.spec.ts",
+        "specs/worklist.spec.ts"
+      ],
+      "paths": [
+        "internal/baseline/**",
+        "internal/checks/**",
+        "internal/facts/**",
+        "internal/faults/**",
+        "internal/issues/**",
+        "frontend/src/components/Checks.tsx",
+        "frontend/src/components/IssueQueue.tsx",
+        "frontend/src/lib/checks.ts",
+        "frontend/src/lib/issues.ts",
+        "e2e/specs/checks.spec.ts",
+        "e2e/specs/issues.spec.ts",
+        "e2e/specs/worklist.spec.ts"
+      ]
+    },
+    {
+      "id": "helm",
+      "label": "Helm",
+      "runner": "playwright",
+      "profile": "core",
+      "timeoutMinutes": 90,
+      "specs": ["specs/helm.spec.ts"],
+      "paths": [
+        "internal/charts/**",
+        "internal/helm/**",
+        "frontend/src/components/Helm*.tsx",
+        "frontend/src/components/ReleasePanel.tsx",
+        "frontend/src/lib/chart.ts",
+        "frontend/src/lib/helm*.ts",
+        "e2e/fixtures/chart/**",
+        "e2e/specs/helm.spec.ts"
+      ]
+    },
+    {
+      "id": "gitops",
+      "label": "GitOps",
+      "runner": "playwright",
+      "profile": "full",
+      "timeoutMinutes": 120,
+      "specs": [
+        "specs-full/argo.spec.ts",
+        "specs-full/flux.spec.ts",
+        "specs-full/gitops.spec.ts"
+      ],
+      "paths": [
+        "internal/argocd/**",
+        "internal/flux/**",
+        "internal/gitops/**",
+        "frontend/src/components/Argo*.tsx",
+        "frontend/src/components/Flux*.tsx",
+        "frontend/src/components/Gitops*.tsx",
+        "frontend/src/lib/argo*.ts",
+        "frontend/src/lib/flux*.ts",
+        "frontend/src/lib/gitops*.ts",
+        "e2e/fixtures/gitops.yaml",
+        "e2e/specs-full/argo.spec.ts",
+        "e2e/specs-full/flux.spec.ts",
+        "e2e/specs-full/gitops.spec.ts"
+      ]
+    },
+    {
+      "id": "observability-traffic",
+      "label": "Observability and traffic",
+      "runner": "playwright",
+      "profile": "core",
+      "timeoutMinutes": 90,
+      "specs": [
+        "specs/metrics.spec.ts",
+        "specs/traffic.spec.ts"
+      ],
+      "paths": [
+        "internal/metrics/**",
+        "internal/prom/**",
+        "internal/samples/**",
+        "internal/traffic/**",
+        "frontend/src/components/InspectMetrics.tsx",
+        "frontend/src/components/Traffic.tsx",
+        "frontend/src/lib/metrics*.ts",
+        "frontend/src/lib/traffic*.ts",
+        "e2e/fixtures/prometheus.yaml",
+        "e2e/specs/metrics.spec.ts",
+        "e2e/specs/traffic.spec.ts"
+      ]
+    },
+    {
+      "id": "multicluster-fleet",
+      "label": "Multicluster and fleet",
+      "runner": "playwright",
+      "profile": "full",
+      "timeoutMinutes": 120,
+      "specs": [
+        "specs/clusters.spec.ts",
+        "specs/fleet.spec.ts",
+        "specs-full/twoclusters.spec.ts"
+      ],
+      "paths": [
+        "internal/clusterid/**",
+        "internal/kube/**",
+        "frontend/src/components/Cluster*.tsx",
+        "frontend/src/components/ContextPicker.tsx",
+        "frontend/src/components/Fleet.tsx",
+        "frontend/src/lib/cluster*.ts",
+        "frontend/src/lib/clusters.ts",
+        "frontend/src/lib/fleet.ts",
+        "e2e/specs/clusters.spec.ts",
+        "e2e/specs/fleet.spec.ts",
+        "e2e/specs-full/twoclusters.spec.ts"
+      ]
+    },
+    {
+      "id": "cluster-mode-auth",
+      "label": "Cluster mode and authentication",
+      "runner": "cluster-mode",
+      "profile": "cluster-mode",
+      "timeoutMinutes": 120,
+      "specs": [],
+      "paths": [
+        "deploy/helm/spinoza/**",
+        "docs/cluster-mode.md",
+        "internal/auth/**",
+        "serve.go",
+        "test/clustermode/**"
+      ]
+    },
+    {
+      "id": "resilience-capacity-soak",
+      "label": "Resilience, capacity and soak",
+      "runner": "playwright",
+      "profile": "full",
+      "timeoutMinutes": 120,
+      "specs": [
+        "specs/resilience.spec.ts",
+        "specs/capacity.spec.ts"
+      ],
+      "paths": [
+        "internal/reach/**",
+        "internal/safe/**",
+        "e2e/specs/resilience.spec.ts",
+        "e2e/specs/capacity.spec.ts",
+        "test/integration/faults_test.go"
+      ]
+    },
+    {
+      "id": "mcp-cli",
+      "label": "MCP and CLI",
+      "runner": "mcp-cli",
+      "profile": "integration",
+      "timeoutMinutes": 75,
+      "specs": [],
+      "paths": [
+        "cmd/spinoza-mcp/**",
+        "internal/mcp/**",
+        "test/integration/mcp_test.go",
+        "main.go"
+      ]
+    },
+    {
+      "id": "distribution-desktop-install",
+      "label": "Distribution, desktop and install",
+      "runner": "distribution",
+      "profile": "distribution",
+      "timeoutMinutes": 180,
+      "specs": [],
+      "paths": [
+        ".github/workflows/install.yaml",
+        ".github/workflows/release-artifacts.yaml",
+        "Dockerfile",
+        "install.ps1",
+        "install.sh",
+        "installer.go",
+        "main_desktop.go",
+        "packaging/**",
+        "test/install/**",
+        "test/packaging/**",
+        "test/smoke.ps1",
+        "wails.json"
+      ]
+    }
+  ]
+}
