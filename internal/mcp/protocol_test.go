@@ -47,6 +47,25 @@ func resultOf(t *testing.T, reply map[string]any) map[string]any {
 	return found
 }
 
+func TestEncodingNoReplyProducesNoMessage(t *testing.T) {
+	if body := encode(nil); body != nil {
+		t.Fatalf("body = %q, want no notification reply", body)
+	}
+}
+
+func TestAnUnencodableReplyFallsBackToAProtocolError(t *testing.T) {
+	body := encode(answer(json.RawMessage(`1`), make(chan int)))
+	var reply map[string]any
+	if err := json.Unmarshal(body, &reply); err != nil {
+		t.Fatalf("fallback = %q, want valid JSON: %v", body, err)
+	}
+
+	failure := errorOf(t, reply)
+	if failure["code"] != float64(codeInternal) {
+		t.Fatalf("error = %v, want internal protocol failure", failure)
+	}
+}
+
 func TestAMessageThatIsNotJSONIsRefusedAsParseError(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{})
 

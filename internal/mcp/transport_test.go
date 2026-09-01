@@ -18,6 +18,18 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
+type interruptedInput struct {
+	delivered bool
+}
+
+func (i *interruptedInput) Read(into []byte) (int, error) {
+	if i.delivered {
+		return 0, errRefused
+	}
+	i.delivered = true
+	return copy(into, `{"jsonrpc":"2.0","id":1,"method":"ping"}`), nil
+}
+
 func TestStdioAnswersOneMessagePerLine(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{})
 	in := strings.NewReader(
@@ -146,6 +158,20 @@ func TestAnArgumentWithNoEqualsIsRefused(t *testing.T) {
 	}
 }
 
+func TestACommandLineCallRejectsAnArgumentWithNoEquals(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	var out bytes.Buffer
+
+	err := server.Call(t.Context(), &out, "list_namespaces", []string{"namespace"})
+
+	if err == nil || !strings.Contains(err.Error(), "key=value") {
+		t.Fatalf("error = %v, want the malformed pair named", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output = %q, want no partial answer", out.String())
+	}
+}
+
 func TestCallingSomethingTheServerDoesNotServe(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{})
 	var out bytes.Buffer
@@ -265,6 +291,30 @@ func TestAWriteFailureIsReportedRatherThanSwallowed(t *testing.T) {
 	err := server.Serve(context.Background(), strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`+"\n"), brokenWriter{})
 	if !errors.Is(err, errRefused) {
 		t.Fatalf("serve error = %v", err)
+	}
+}
+
+func TestAWriteFailureWhileFillingTheBufferIsReported(t *testing.T) {
+	sink := &writer{out: bufio.NewWriter(brokenWriter{})}
+
+	sink.send(bytes.Repeat([]byte("x"), 8192))
+
+	if !errors.Is(sink.err(), errRefused) {
+		t.Fatalf("write error = %v, want the underlying failure", sink.err())
+	}
+}
+
+func TestAStdioInputFailureIsReturnedAfterItsLastMessage(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	var out bytes.Buffer
+
+	err := server.Serve(t.Context(), &interruptedInput{}, &out)
+
+	if !errors.Is(err, errRefused) {
+		t.Fatalf("serve error = %v, want the input failure", err)
+	}
+	if !strings.Contains(out.String(), `"jsonrpc":"2.0"`) {
+		t.Fatalf("output = %q, want the complete final request answered", out.String())
 	}
 }
 
