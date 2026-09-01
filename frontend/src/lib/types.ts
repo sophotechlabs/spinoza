@@ -733,10 +733,6 @@ export interface Capabilities {
   localShell: LocalShell;
 }
 
-export const ROLES = ['viewer', 'editor', 'admin'] as const;
-
-export type Role = (typeof ROLES)[number];
-
 export type Scope =
   { everywhere: true } | { everywhere: false; namespaces: string[]; undecided: string[] };
 

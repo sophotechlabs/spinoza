@@ -20,10 +20,6 @@ export function adoptSession(session: Session): void {
   useIdentityStore.getState().adopt(session);
 }
 
-export function currentSession(): Session {
-  return useIdentityStore.getState().session;
-}
-
 export function useSession(): Session {
   return useIdentityStore((state) => state.session);
 }

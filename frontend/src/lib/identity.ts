@@ -1,5 +1,4 @@
-import type { Role, Scope, Session } from './types';
-import { ROLES } from './types';
+import type { Scope, Session } from './types';
 import { request } from './http';
 
 const SESSION_PATH = '/api/auth/me';
@@ -75,22 +74,6 @@ export function signInHref(): string {
   const here = window.location.pathname + window.location.search + window.location.hash;
   const params = new URLSearchParams({ next: here });
   return `${SIGN_IN_PATH}?${params.toString()}`;
-}
-
-function rank(role: string): number {
-  return ROLES.indexOf(role as Role);
-}
-
-export function holds(session: Session, needed: Role): boolean {
-  return rank(session.role) >= rank(needed);
-}
-
-export function mayEdit(session: Session): boolean {
-  return holds(session, 'editor');
-}
-
-export function mayAdminister(session: Session): boolean {
-  return holds(session, 'admin');
 }
 
 export function signedOut(session: Session): boolean {

@@ -134,13 +134,13 @@ func (cf *clusterFlags) settings() (serving, error) {
 			InternalIssuerURL:  *cf.inner,
 			ClientID:           *cf.clientID,
 			ClientSecret:       string(clientSecret),
-			RedirectURL:        redirectFor(*cf.redirect, out.publicURL),
+			RedirectURL:        underPublic(*cf.redirect, out.publicURL, callbackPath),
 			Scopes:             auth.ParseList(*cf.scopes),
 			GroupsClaim:        *cf.groupsClaim,
 			UsernameClaims:     auth.ParseList(*cf.usernameClaim),
 			UsernamePrefix:     *cf.userPrefix,
 			GroupsPrefix:       *cf.groupPrefix,
-			PostLogoutURL:      postLogoutFor(*cf.postLogout, out.publicURL),
+			PostLogoutURL:      underPublic(*cf.postLogout, out.publicURL, "/"),
 			CACertFile:         *cf.caCert,
 			InsecureSkipVerify: *cf.skipVerify,
 			BackchannelLogout:  *cf.backchannel,
@@ -169,24 +169,14 @@ func (sv serving) check() error {
 	return nil
 }
 
-func redirectFor(given, public string) string {
+func underPublic(given, public, path string) string {
 	if given != "" {
 		return given
 	}
 	if public == "" {
 		return ""
 	}
-	return strings.TrimSuffix(public, "/") + callbackPath
-}
-
-func postLogoutFor(given, public string) string {
-	if given != "" {
-		return given
-	}
-	if public == "" {
-		return ""
-	}
-	return strings.TrimSuffix(public, "/") + "/"
+	return strings.TrimSuffix(public, "/") + path
 }
 
 func readSecret(path, fallbackEnv string) ([]byte, error) {
