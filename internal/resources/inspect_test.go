@@ -574,6 +574,19 @@ func TestGitopsAppGraphSaysItIsNotWiredUp(t *testing.T) {
 	}
 }
 
+func TestGitopsAppGraphReportsAnApplicationReadFailure(t *testing.T) {
+	manager := argoManager(t)
+
+	_, err := manager.GitopsAppGraph(t.Context(), applicationRef())
+
+	if err == nil {
+		t.Fatal("a missing application produced an empty graph without an error")
+	}
+	if !strings.Contains(err.Error(), "podinfo") {
+		t.Fatalf("error = %v, want the missing application named", err)
+	}
+}
+
 func TestArgoActionSaysItIsNotWiredUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
