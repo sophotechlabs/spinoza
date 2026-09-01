@@ -453,6 +453,14 @@ func TestSyncIsEmptyWithoutTheKustomizationKind(t *testing.T) {
 	}
 }
 
+func TestSyncIsEmptyWhenKustomizationsCannotBeListed(t *testing.T) {
+	sync := syncOf(t.Context(), failingLister{}, overviewDescs(), "flux-system", "flux-system")
+
+	if sync.Kind != "" || sync.Namespace != "flux-system" || sync.Name != "flux-system" {
+		t.Fatalf("sync = %+v, want only the requested identity", sync)
+	}
+}
+
 func TestSyncSourceNeedsBothAKindAndAName(t *testing.T) {
 	entry := &unstructured.Unstructured{Object: map[string]any{
 		"spec": map[string]any{"sourceRef": map[string]any{"kind": "GitRepository"}},
@@ -486,6 +494,20 @@ func TestSyncSourceKeepsTheKindWhenTheSourceCannotBeRead(t *testing.T) {
 	}
 	if url != "" || ref != "" {
 		t.Fatalf("url/ref = %q %q, want nothing when the source could not be read", url, ref)
+	}
+}
+
+func TestSyncSourceKeepsTheKindWhenDiscoveryHasNoSourceType(t *testing.T) {
+	entry := &unstructured.Unstructured{Object: map[string]any{
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "Bucket", "name": "artifacts"},
+		},
+	}}
+
+	kind, url, ref := syncSource(t.Context(), emptyLister{}, nil, entry, "flux-system")
+
+	if kind != "Bucket" || url != "" || ref != "" {
+		t.Fatalf("source = %q %q %q, want only Bucket", kind, url, ref)
 	}
 }
 

@@ -252,6 +252,51 @@ func TestDetailAttachesTheRecentEventsOfEachResource(t *testing.T) {
 	}
 }
 
+func TestDetailOrdersEventsAtTheSameMomentDeterministically(t *testing.T) {
+	events := []runtime.Object{
+		gitopsEvent("third", "Progressing", "controller-z", "working"),
+		gitopsEvent("second", "Healthy", "controller-z", "ready"),
+		gitopsEvent("first", "Healthy", "controller-a", "ready"),
+	}
+	objects := append([]runtime.Object{
+		managingApplication(managed("Deployment", "podinfo")),
+		liveDeployment(`{"spec":{"replicas":3}}`),
+	}, events...)
+
+	got, err := Detail(t.Context(), detailClient(objects...), detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	attached := got.Resources[0].Events
+	if len(attached) != 3 {
+		t.Fatalf("events = %+v, want three", attached)
+	}
+	if attached[0].Reason != "Healthy" || attached[0].Source != "controller-a" {
+		t.Fatalf("first event = %+v, want Healthy from controller-a", attached[0])
+	}
+	if attached[1].Reason != "Healthy" || attached[1].Source != "controller-z" {
+		t.Fatalf("second event = %+v, want Healthy from controller-z", attached[1])
+	}
+	if attached[2].Reason != "Progressing" {
+		t.Fatalf("third event = %+v, want Progressing", attached[2])
+	}
+}
+
+func gitopsEvent(name, reason, source, message string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion":     "v1",
+		"kind":           "Event",
+		"metadata":       map[string]any{"name": name, "namespace": "web"},
+		"involvedObject": map[string]any{"kind": "Deployment", "name": "podinfo", "namespace": "web"},
+		"type":           "Normal",
+		"reason":         reason,
+		"message":        message,
+		"source":         map[string]any{"component": source},
+		"lastTimestamp":  "2026-08-01T10:00:00Z",
+	}}
+}
+
 func TestDetailAttachesNoEventsToAResourceThatHasNone(t *testing.T) {
 	client := detailClient(managingApplication(managed("Service", "podinfo")))
 

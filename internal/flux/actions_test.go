@@ -226,6 +226,22 @@ func TestIsFluxGroup(t *testing.T) {
 	}
 }
 
+func TestDescriptorLookupIgnoresOtherGroupsAndKinds(t *testing.T) {
+	cases := []map[string]api.ResourceDescriptor{
+		{
+			"deployment": {Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment"},
+		},
+		{
+			"helm": {Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "helmrepositories", Kind: "HelmRepository"},
+		},
+	}
+	for _, descs := range cases {
+		if desc, found := descriptorOf(descs, "GitRepository"); found {
+			t.Fatalf("descriptor = %+v, want no GitRepository", desc)
+		}
+	}
+}
+
 func sourceDescs() map[string]api.ResourceDescriptor {
 	return map[string]api.ResourceDescriptor{
 		"gitrepositories": {

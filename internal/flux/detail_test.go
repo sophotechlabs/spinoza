@@ -470,6 +470,17 @@ func TestTheRevisionFallsBackToWhatWasApplied(t *testing.T) {
 	}
 }
 
+func TestTheAttemptedRevisionWinsOverTheAppliedOne(t *testing.T) {
+	obj := appliedKustomization()
+	if err := unstructured.SetNestedField(obj.Object, "main@sha1:new", "status", "lastAttemptedRevision"); err != nil {
+		t.Fatalf("seed attempted revision: %v", err)
+	}
+
+	if got := revisionAttempted(obj); got != "main@sha1:new" {
+		t.Fatalf("revision = %q, want the attempted revision", got)
+	}
+}
+
 func TestFailingCallsOutOnlyTheConditionsThatMeanTrouble(t *testing.T) {
 	cases := []struct {
 		name   string

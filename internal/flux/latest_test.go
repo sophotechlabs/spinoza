@@ -263,3 +263,27 @@ func TestBuildWithoutAChartIndex(t *testing.T) {
 		t.Fatalf("latest = %q, want empty when no index is configured", row.Latest)
 	}
 }
+
+func TestRepositoryIndexSkipsAListThatFailed(t *testing.T) {
+	got := repoIndex(t.Context(), failingLister{}, latestDescs())
+
+	if len(got) != 0 {
+		t.Fatalf("repositories = %v, want none from a failed list", got)
+	}
+}
+
+func TestLatestVersionToleratesARowWithoutItsObject(t *testing.T) {
+	rows := map[string][]api.FluxResource{
+		"Helm Releases": {{Name: "podinfo", Revision: "6.14.0"}},
+	}
+	index := &stubCharts{versions: map[string]string{}}
+
+	applyLatest(rows, map[string][]*unstructured.Unstructured{}, nil, index)
+
+	if rows["Helm Releases"][0].Latest != "" {
+		t.Fatalf("row = %+v, want no version without its source object", rows["Helm Releases"][0])
+	}
+	if len(index.warmed) != 0 {
+		t.Fatalf("warmed = %v, want no repository fetch", index.warmed)
+	}
+}

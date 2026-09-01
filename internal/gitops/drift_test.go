@@ -123,6 +123,16 @@ func TestDriftStillComparesAnUnnamedListByPosition(t *testing.T) {
 	}
 }
 
+func TestDriftIgnoresEqualScalarsInAnUnnamedList(t *testing.T) {
+	live := declaring(`{"spec":{"args":["serve","--port=8080"]}}`, map[string]any{
+		"spec": map[string]any{"args": []any{"serve", "--port=8080"}},
+	})
+
+	if got := pathsOf(t, live); len(got) != 0 {
+		t.Fatalf("drift = %v, want no difference", got)
+	}
+}
+
 func TestDriftReportsAListThatChangedLength(t *testing.T) {
 	live := declaring(`{"spec":{"ports":[{"port":80},{"port":443}]}}`, map[string]any{
 		"spec": map[string]any{"ports": []any{map[string]any{"port": int64(80)}}},

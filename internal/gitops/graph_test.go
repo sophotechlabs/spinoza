@@ -3,7 +3,6 @@ package gitops
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 
@@ -706,6 +705,17 @@ func TestAnObjectWithNoConditionsIsMarkedUnknown(t *testing.T) {
 	}
 }
 
+func TestReadinessSkipsMalformedConditions(t *testing.T) {
+	obj := conditionsObject([]any{
+		"not a condition",
+		map[string]any{"type": "Ready", "status": "True"},
+	})
+
+	if got := conditionReady(obj); got != readyTrue {
+		t.Fatalf("ready = %q, want %q", got, readyTrue)
+	}
+}
+
 func TestArgoHealthBecomesReadiness(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -745,6 +755,14 @@ func TestEdgesAreSortedBySourceThenTarget(t *testing.T) {
 			"sourceRef": map[string]any{"kind": "GitRepository", "name": "another-repo", "namespace": "flux-system"},
 		},
 	}}
+	sameSource := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+		"kind":       "Kustomization",
+		"metadata":   map[string]any{"name": "z-last", "namespace": "flux-system"},
+		"spec": map[string]any{
+			"sourceRef": map[string]any{"kind": "GitRepository", "name": "app-repo", "namespace": "flux-system"},
+		},
+	}}
 	scheme := runtime.NewScheme()
 	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
 		scheme,
@@ -753,18 +771,22 @@ func TestEdgesAreSortedBySourceThenTarget(t *testing.T) {
 		kustomizationApps(),
 		second,
 		dependent,
+		sameSource,
 	)
 
 	graph := Build(context.Background(), listerFor(dyn), graphDescs())
 
-	sources := make([]string, 0, len(graph.Edges))
-	for _, edge := range graph.Edges {
-		sources = append(sources, edge.From)
+	if len(graph.Edges) < 3 {
+		t.Fatalf("edges = %v, want at least three so both ordering fields can be seen", graph.Edges)
 	}
-	if len(sources) < 2 {
-		t.Fatalf("edges = %v, want at least two so the order can be seen", sources)
-	}
-	if !slices.IsSorted(sources) {
-		t.Fatalf("edge sources = %v, want them sorted", sources)
+	for at := 1; at < len(graph.Edges); at++ {
+		before := graph.Edges[at-1]
+		after := graph.Edges[at]
+		if before.From > after.From {
+			t.Fatalf("edges = %v, source order breaks at %d", graph.Edges, at)
+		}
+		if before.From == after.From && before.To > after.To {
+			t.Fatalf("edges = %v, target order breaks at %d", graph.Edges, at)
+		}
 	}
 }

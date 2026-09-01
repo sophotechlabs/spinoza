@@ -228,6 +228,11 @@ func TestFieldPathsReadTheShapesTheApiServerWrites(t *testing.T) {
 			want:   "spec.odd",
 		},
 		{
+			name:   "a malformed field value",
+			fields: `{"f:spec":{"f:replicas":true}}`,
+			want:   "spec.replicas",
+		},
+		{
 			name:   "a key that is not readable json",
 			fields: `{"f:spec":{"f:ports":{"k:not-json":{}}}}`,
 			want:   "spec.ports[not-json]",
