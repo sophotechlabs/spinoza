@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -149,6 +150,54 @@ func TestAClusterThatCouldNotBeSurveyedSaysWhyOnItsOwnLine(t *testing.T) {
 	}
 	if got.Error != "p-mk2: the apiserver refused" {
 		t.Fatalf("error = %q", got.Error)
+	}
+}
+
+func TestAPanickingClusterIsNamedInTheFleetOverview(t *testing.T) {
+	got := mergeOverviews([]clusterAnswer[api.ClusterOverview]{
+		{
+			cluster: "mk1",
+			context: "p-mk1",
+			answer:  overviewOf("v1.34.1", 3, 3, 40, 39),
+		},
+		{
+			cluster: "mk2",
+			context: "p-mk2",
+			failure: "panicked: informer cache changed",
+		},
+	})
+
+	if got.Clusters[1].Reason != "panicked: informer cache changed" {
+		t.Fatalf("cluster = %+v, want the recovered failure", got.Clusters[1])
+	}
+	if got.Error != "p-mk2: panicked: informer cache changed" {
+		t.Fatalf("error = %q", got.Error)
+	}
+}
+
+func TestFleetOverviewKeepsEveryPodStateAndUniqueCap(t *testing.T) {
+	first := overviewOf("v1.34.1", 3, 3, 40, 30)
+	first.Pods.Pending = 2
+	first.Pods.Failed = 3
+	first.Pods.Succeeded = 5
+	first.Pods.Capped = []string{"pods", "events"}
+	second := overviewOf("v1.33.0", 2, 2, 20, 10)
+	second.Pods.Pending = 4
+	second.Pods.Failed = 2
+	second.Pods.Succeeded = 4
+	second.Pods.Capped = []string{"events", "jobs"}
+
+	got := mergeOverviews([]clusterAnswer[api.ClusterOverview]{
+		{cluster: "mk1", context: "p-mk1", answer: first},
+		{cluster: "mk2", context: "p-mk2", answer: second},
+	})
+
+	if got.Pods.Pending != 6 || got.Pods.Failed != 5 || got.Pods.Succeeded != 9 {
+		t.Fatalf("pods = %+v", got.Pods)
+	}
+	wantCaps := []string{"pods", "events", "jobs"}
+	if !slices.Equal(got.Pods.Capped, wantCaps) {
+		t.Fatalf("caps = %v, want %v", got.Pods.Capped, wantCaps)
 	}
 }
 

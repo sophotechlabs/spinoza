@@ -791,3 +791,15 @@ func TestACursorBelowZeroIsRefused(t *testing.T) {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
 }
+
+func TestAnActionCursorThatIsInvalidIsRefused(t *testing.T) {
+	ts := mergingServer(t, bothKinds())
+
+	for _, cursor := range []string{"soon", "-4"} {
+		resp, _ := doRequest(t, http.MethodGet, ts.URL+"/api/history?afterAction="+cursor, nil)
+
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("cursor %q status = %d", cursor, resp.StatusCode)
+		}
+	}
+}

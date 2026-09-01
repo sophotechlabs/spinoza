@@ -195,6 +195,36 @@ func TestALocalSpinozaSaysItIsNotServingACluster(t *testing.T) {
 	}
 }
 
+func TestAServedSpinozaWithoutAnAuthenticatorKeepsAdminAccess(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: everyNamespace()}, testAssets(), "")
+	srv.UseClusterAuth(ClusterAuth{})
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	resp, body := asUser(t, ts, http.MethodGet, "/api/overview", "", "")
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", resp.StatusCode, http.StatusOK, body)
+	}
+}
+
+func TestASignedInSessionWithoutAnActiveClusterHasEverywhereScope(t *testing.T) {
+	ts := proxyServer(t, nil, auth.Config{DefaultRole: auth.RoleAdmin})
+
+	_, body := asUser(t, ts, http.MethodGet, pathSession, "alice@example.com", "")
+
+	var found api.Session
+	if err := json.Unmarshal([]byte(body), &found); err != nil {
+		t.Fatalf("decoding the session: %v", err)
+	}
+	if !found.Authenticated {
+		t.Fatalf("session = %+v, want alice signed in", found)
+	}
+	if !found.Scope.Everywhere {
+		t.Fatalf("scope = %+v, want no active cluster to impose no namespace limit", found.Scope)
+	}
+}
+
 func TestAViewerMayLookAndMayNotChangeAnything(t *testing.T) {
 	ts := proxyServer(t, everyNamespace(), auth.Config{DefaultRole: auth.RoleViewer})
 
