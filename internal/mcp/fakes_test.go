@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -148,6 +149,16 @@ func descriptor(group, version, resource, kind string) api.ResourceDescriptor {
 		Kind:       kind,
 		Namespaced: true,
 	}
+}
+
+func always(protected bool) func() bool {
+	return func() bool {
+		return protected
+	}
+}
+
+func offered(server *Server, name string) bool {
+	return slices.Contains(server.Tools(), name)
 }
 
 func serverFor(cluster Cluster, opts Options) *Server {

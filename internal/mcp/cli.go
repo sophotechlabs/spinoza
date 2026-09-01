@@ -23,7 +23,7 @@ func (s *Server) List(out io.Writer) error {
 }
 
 func (s *Server) Call(ctx context.Context, out io.Writer, name string, pairs []string) error {
-	found, known := s.tools[name]
+	found, known := s.toolFor(name)
 	if !known {
 		return fmt.Errorf("%s", s.unknown(name))
 	}

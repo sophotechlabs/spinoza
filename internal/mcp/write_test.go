@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -10,6 +11,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/flux"
 )
+
+const restartCall = `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"manage_workload","arguments":{"resource":"deployments","name":"web","namespace":"prod","action":"restart"}}}`
 
 func writableCluster() *fakeCluster {
 	return &fakeCluster{catalog: catalogOf(
@@ -24,7 +27,7 @@ func TestNoWriteToolExistsUnlessWritesAreAllowed(t *testing.T) {
 	server := serverFor(writableCluster(), Options{})
 
 	for name := range writeToolNames {
-		if _, held := server.tools[name]; held {
+		if offered(server, name) {
 			t.Fatalf("%s is offered on a read-only server", name)
 		}
 	}
@@ -34,12 +37,76 @@ func TestNoWriteToolExistsUnlessWritesAreAllowed(t *testing.T) {
 }
 
 func TestAProtectedClusterWithholdsEveryWriteToolEvenWhenAsked(t *testing.T) {
-	server := serverFor(writableCluster(), Options{AllowWrite: true, Protected: true})
+	server := serverFor(writableCluster(), Options{AllowWrite: true, Protected: always(true)})
 
 	for name := range writeToolNames {
-		if _, held := server.tools[name]; held {
+		if offered(server, name) {
 			t.Fatalf("%s is offered on a protected cluster", name)
 		}
+	}
+}
+
+func TestAWithheldWriteToolIsRefusedWhenItIsCalledAnyway(t *testing.T) {
+	server := serverFor(writableCluster(), Options{AllowWrite: true, Protected: always(true)})
+
+	reply := ask(t, server, restartCall)
+
+	message := as[string](t, errorOf(t, reply)["message"])
+	if !strings.Contains(message, "read-only") {
+		t.Fatalf("message = %q, want the refusal to say this server may not write", message)
+	}
+}
+
+func TestAProtectionSetAfterTheServerStartedIsHonoured(t *testing.T) {
+	protected := false
+	cluster := writableCluster()
+	server := serverFor(cluster, Options{
+		AllowWrite: true,
+		Protected: func() bool {
+			return protected
+		},
+	})
+
+	for name := range writeToolNames {
+		if !offered(server, name) {
+			t.Fatalf("%s is missing while the cluster is unprotected", name)
+		}
+	}
+
+	protected = true
+
+	for name := range writeToolNames {
+		if offered(server, name) {
+			t.Fatalf("%s is still offered after the cluster was marked protected", name)
+		}
+	}
+	if _, refused := ask(t, server, restartCall)["error"]; !refused {
+		t.Fatal("a write tool still ran after the cluster was marked protected")
+	}
+	if len(cluster.acted) != 0 {
+		t.Fatal("a write reached the cluster after it was protected")
+	}
+}
+
+func TestTheCLICallRechecksProtectionBeforeWriting(t *testing.T) {
+	protected := false
+	server := serverFor(writableCluster(), Options{
+		AllowWrite: true,
+		Protected: func() bool {
+			return protected
+		},
+	})
+	protected = true
+
+	err := server.Call(context.Background(), &strings.Builder{}, "manage_workload", []string{
+		"resource=deployments",
+		"name=web",
+		"namespace=prod",
+		"action=restart",
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("error = %v, want the protected-cluster refusal", err)
 	}
 }
 
@@ -60,7 +127,7 @@ func TestEveryWriteToolIsOfferedWhenWritesAreAllowed(t *testing.T) {
 	server := serverFor(writableCluster(), Options{AllowWrite: true})
 
 	for name := range writeToolNames {
-		if _, held := server.tools[name]; !held {
+		if !offered(server, name) {
 			t.Fatalf("%s is missing from a writable server", name)
 		}
 	}

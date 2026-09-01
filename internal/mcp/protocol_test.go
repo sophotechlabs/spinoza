@@ -144,7 +144,7 @@ func TestInitializeNamesTheProtocolAndWhatItServes(t *testing.T) {
 }
 
 func TestTheHandshakeSaysWhenTheClusterIsProtected(t *testing.T) {
-	server := serverFor(&fakeCluster{}, Options{Protected: true, AllowWrite: true})
+	server := serverFor(&fakeCluster{}, Options{Protected: always(true), AllowWrite: true})
 
 	result := resultOf(t, ask(t, server, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
 

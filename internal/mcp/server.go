@@ -11,7 +11,7 @@ import (
 type Options struct {
 	Version    string
 	Context    string
-	Protected  bool
+	Protected  func() bool
 	AllowWrite bool
 	Prometheus Prometheus
 	LogLines   int
@@ -24,15 +24,15 @@ const (
 )
 
 type Server struct {
-	cluster     Cluster
-	prom        Prometheus
-	tools       map[string]tool
-	version     string
-	context     string
-	protected   bool
-	allowWrites bool
-	logLines    int
-	budget      time.Duration
+	cluster    Cluster
+	prom       Prometheus
+	tools      map[string]tool
+	version    string
+	context    string
+	protected  func() bool
+	allowWrite bool
+	logLines   int
+	budget     time.Duration
 }
 
 func New(cluster Cluster, opts Options) *Server {
@@ -45,19 +45,44 @@ func New(cluster Cluster, opts Options) *Server {
 		budget = defaultCallBudget
 	}
 	server := &Server{
-		cluster:     cluster,
-		prom:        opts.Prometheus,
-		tools:       map[string]tool{},
-		version:     opts.Version,
-		context:     opts.Context,
-		protected:   opts.Protected,
-		allowWrites: opts.AllowWrite && !opts.Protected,
-		logLines:    lines,
-		budget:      budget,
+		cluster:    cluster,
+		prom:       opts.Prometheus,
+		tools:      map[string]tool{},
+		version:    opts.Version,
+		context:    opts.Context,
+		protected:  opts.Protected,
+		allowWrite: opts.AllowWrite,
+		logLines:   lines,
+		budget:     budget,
 	}
 	server.registerReads()
 	server.registerWrites()
 	return server
+}
+
+func (s *Server) isProtected() bool {
+	if s.protected == nil {
+		return false
+	}
+	return s.protected()
+}
+
+func (s *Server) writesAllowed() bool {
+	if !s.allowWrite {
+		return false
+	}
+	return !s.isProtected()
+}
+
+func (s *Server) toolFor(name string) (tool, bool) {
+	one, known := s.tools[name]
+	if !known {
+		return tool{}, false
+	}
+	if one.writes && !s.writesAllowed() {
+		return tool{}, false
+	}
+	return one, true
 }
 
 func (s *Server) Tools() []string {
@@ -119,10 +144,10 @@ func (s *Server) instructions() string {
 		"Reads one Kubernetes cluster through spinoza's own informer caches.",
 		"Context: " + s.context + ".",
 	}
-	if s.protected {
+	if s.isProtected() {
 		lines = append(lines, "This cluster is marked protected in spinoza, so every write tool is withheld.")
 	}
-	if !s.allowWrites {
+	if !s.writesAllowed() {
 		lines = append(lines, "Read-only: no tool here can change the cluster.")
 	}
 	lines = append(lines, "Secret values are never returned; key names and sizes are.")
@@ -134,7 +159,7 @@ func (s *Server) callTool(ctx context.Context, call request) *response {
 	if err := json.Unmarshal(call.Params, &params); err != nil {
 		return refuse(call.ID, codeInvalidParams, "the call parameters are not an object")
 	}
-	found, known := s.tools[params.Name]
+	found, known := s.toolFor(params.Name)
 	if !known {
 		return refuse(call.ID, codeInvalidParams, s.unknown(params.Name))
 	}
@@ -163,7 +188,7 @@ func (s *Server) runBounded(ctx context.Context, one tool, args arguments) (any,
 }
 
 func (s *Server) unknown(name string) string {
-	if !s.allowWrites && writeToolNames[name] {
+	if !s.writesAllowed() && writeToolNames[name] {
 		return name + " changes the cluster and this server is read-only"
 	}
 	return "spinoza serves no tool called " + name

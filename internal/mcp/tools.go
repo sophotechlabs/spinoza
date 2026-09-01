@@ -25,7 +25,11 @@ func (s *Server) cards() []toolCard {
 	slices.Sort(names)
 	out := make([]toolCard, 0, len(names))
 	for _, name := range names {
-		out = append(out, s.tools[name].card())
+		one, served := s.toolFor(name)
+		if !served {
+			continue
+		}
+		out = append(out, one.card())
 	}
 	return out
 }
@@ -66,9 +70,6 @@ func toggle(description string) propOf {
 }
 
 func (s *Server) register(one tool) {
-	if one.writes && !s.allowWrites {
-		return
-	}
 	s.tools[one.name] = one
 }
 

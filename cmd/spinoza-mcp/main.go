@@ -12,7 +12,6 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/mcp"
-	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
 func main() {
@@ -53,14 +52,6 @@ func run() error {
 	if backend == nil {
 		return errors.New("no cluster answered; name a context with -context")
 	}
-	server := mcp.New(logReader{Backend: backend}, mcp.Options{
-		Version:    version.String(),
-		Context:    clusters.Current().Name,
-		Protected:  clusters.Protected(clusters.ID()),
-		AllowWrite: opts.AllowWrite,
-		Prometheus: mcp.PromFor(clusters.Current(), opts),
-		LogLines:   opts.LogLines,
-		CallBudget: opts.CallBudget,
-	})
+	server := mcp.New(logReader{Backend: backend}, optionsFor(clusters, opts, mcp.PromFor(clusters.Current(), opts)))
 	return server.Dispatch(ctx, opts, os.Stdin, os.Stdout)
 }
