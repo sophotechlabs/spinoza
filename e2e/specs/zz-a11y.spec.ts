@@ -5,7 +5,23 @@ import type { Page } from '@playwright/test';
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
-const VIEWS = ['issues', 'topology', 'helm', 'checks', 'history'];
+const VIEWS = [
+  'issues',
+  'topology',
+  'helm',
+  'checks',
+  'history',
+  'fleet',
+  'rbac',
+  'gitops',
+  'flux-list',
+  'flux-roles',
+  'argo-apps',
+  'argo-graph',
+  'argo-list',
+];
+
+const SETTINGS_SECTIONS = ['Cluster', 'Columns', 'Logs', 'Terminal', 'Panels', 'Keyboard', 'About'];
 
 async function settled(page: Page): Promise<void> {
   const main = page.locator('main');
@@ -71,5 +87,27 @@ test('the settings dialog has no detectable accessibility violations', async ({ 
   await openHome(page);
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+  expect(await violations(page)).toEqual([]);
+});
+
+for (const section of SETTINGS_SECTIONS) {
+  test(`the ${section} settings have no detectable accessibility violations`, async ({ page }) => {
+    await openHome(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('button', { name: section, exact: true })
+      .click();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    expect(await violations(page)).toEqual([]);
+  });
+}
+
+test('the Helm install dialog has no detectable accessibility violations', async ({ page }) => {
+  await openView(page, 'helm');
+  await page.getByRole('button', { name: 'Install chart', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Install a chart' })).toBeVisible({
+    timeout: 60_000,
+  });
   expect(await violations(page)).toEqual([]);
 });
