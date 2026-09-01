@@ -34,18 +34,35 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	defer stop()
 	//nolint:contextcheck // writing detaches r.Context so an abandoned request still finishes the write
 	result, actionErr := writer.Action(kept, req)
+	recordErr := actionErr
+	if recordErr == nil {
+		recordErr = incompleteAction(result)
+	}
 	s.record(r, change{
 		verb:   string(req.Action),
 		ref:    req.Ref,
 		detail: actionDetail(req),
 		dryRun: req.DryRun,
-		err:    actionErr,
+		err:    recordErr,
 	})
 	if actionErr != nil {
 		writeAPIError(w, actionErr)
 		return
 	}
 	writeJSON(w, result)
+}
+
+func incompleteAction(result api.ActionResult) error {
+	for _, pod := range result.Pods {
+		if pod.Outcome != api.OutcomeBlocked && pod.Outcome != api.OutcomeFailed {
+			continue
+		}
+		if result.Message != "" {
+			return fmt.Errorf("%w: %s", api.ErrInternal, result.Message)
+		}
+		return fmt.Errorf("%w: the action did not finish", api.ErrInternal)
+	}
+	return nil
 }
 
 func actionDetail(req actions.Request) string {

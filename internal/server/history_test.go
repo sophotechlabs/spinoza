@@ -231,12 +231,15 @@ type writingBackend struct {
 	notStubbed
 
 	err      error
+	action   api.ActionResult
 	detail   api.ObjectDetail
 	helmDone api.HelmActionResult
 }
 
 func (b *writingBackend) Action(_ context.Context, req actions.Request) (api.ActionResult, error) {
-	return api.ActionResult{Action: string(req.Action)}, b.err
+	result := b.action
+	result.Action = string(req.Action)
+	return result, b.err
 }
 
 func (b *writingBackend) ApplyObject(context.Context, api.ObjectRef, []byte) (api.ObjectDetail, error) {
@@ -590,6 +593,33 @@ func TestAWriteThatBrokeIsRecordedAsFailed(t *testing.T) {
 
 	if outcome := held.only(t).Outcome; outcome != api.HistoryFailed {
 		t.Fatalf("outcome = %q, want failed", outcome)
+	}
+}
+
+func TestAPartialDrainIsRecordedAsFailed(t *testing.T) {
+	result := api.ActionResult{
+		Message: "1 pod failed to evict",
+		Pods: []api.PodOutcome{{
+			Namespace: "default",
+			Name:      "web",
+			Outcome:   api.OutcomeFailed,
+			Reason:    "the admission webhook failed",
+		}},
+	}
+	ts, held := recordingServer(t, &writingBackend{action: result})
+
+	resp, _ := doRequest(t, http.MethodPost,
+		ts.URL+"/api/action?action=drain&version=v1&resource=nodes&name=worker-1", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want the useful drain result returned", resp.StatusCode)
+	}
+	entry := held.only(t)
+	if entry.Outcome != api.HistoryFailed {
+		t.Fatalf("outcome = %q, want the partial drain recorded as failed", entry.Outcome)
+	}
+	if !strings.Contains(entry.Message, result.Message) {
+		t.Fatalf("message = %q, want it to include %q", entry.Message, result.Message)
 	}
 }
 
