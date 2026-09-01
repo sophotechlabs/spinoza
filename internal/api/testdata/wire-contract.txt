@@ -365,9 +365,7 @@ GraphNode.Resource resource string
 GraphNode.Status status string
 GraphNode.Unhealthy unhealthy int
 GraphNode.Version version string
-Health.Context context string
 Health.Status status string
-Health.Version version string
 HelmActionResult.Action action string
 HelmActionResult.DryRun dryRun,omitempty bool
 HelmActionResult.Manifest manifest,omitempty string
