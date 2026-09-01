@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectObjectActions from '../../src/components/InspectObjectActions';
 import { useToastsStore } from '../../src/store/toasts';
@@ -778,6 +778,46 @@ describe('the actions that cannot be undone', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(screen.queryByText('scaled')).not.toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('drops an action failure when the target changes', async () => {
+    const user = userEvent.setup();
+    let fail: (reason?: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = reject;
+          }),
+      ),
+    );
+    const onDone = vi.fn();
+    const view = render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 1 } })}
+        onDone={onDone}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Scale' }));
+    await screen.findByText('working');
+
+    view.rerender(
+      <InspectObjectActions
+        target={{ ...deployment, name: 'other' }}
+        detail={detailFor({ workload: { replicas: 1 } })}
+        onDone={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      fail(new Error('the old action failed'));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('the old action failed')).not.toBeInTheDocument();
     expect(onDone).not.toHaveBeenCalled();
     expect(useToastsStore.getState().toasts).toHaveLength(0);
   });

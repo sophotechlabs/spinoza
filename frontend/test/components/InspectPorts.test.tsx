@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectPorts from '../../src/components/InspectPorts';
 import { forwardsNow, setForwards } from '../../src/store/forwards';
@@ -144,6 +144,33 @@ describe('InspectPorts', () => {
     expect(screen.queryByText('127.0.0.1:45123 to 8080')).not.toBeInTheDocument();
   });
 
+  it('drops a forward failure when the selected object changes', async () => {
+    const user = userEvent.setup();
+    let fail: (reason?: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/portforward?kind') && init?.method === 'POST') {
+          return new Promise((_resolve, reject) => {
+            fail = reject;
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+      }),
+    );
+    const view = render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+    await user.click(screen.getAllByRole('button', { name: 'Forward' })[0]);
+
+    view.rerender(<InspectPorts target={{ ...target, name: 'other' }} kind="Pod" ports={ports} />);
+    await act(async () => {
+      fail(new Error('the old forward failed'));
+      await Promise.resolve();
+    });
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+    expect(screen.queryByText('the old forward failed')).not.toBeInTheDocument();
+  });
+
   it('surfaces a failure', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
@@ -188,6 +215,71 @@ describe('InspectPorts', () => {
 
     expect(await screen.findAllByRole('button', { name: 'Forward' })).toHaveLength(2);
     expect(screen.queryByText('127.0.0.1:45123 to 8080')).not.toBeInTheDocument();
+  });
+
+  it('drops a stop result when the selected object changes', async () => {
+    const user = userEvent.setup();
+    let finish: (body: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        }
+        if (url.startsWith('/api/portforward')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve([running(45123, 8080)]),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      }),
+    );
+    const view = render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+    await user.click(await screen.findByRole('button', { name: 'Stop forwarding port 8080' }));
+
+    view.rerender(<InspectPorts target={{ ...target, name: 'other' }} kind="Pod" ports={ports} />);
+    finish({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('drops a stop failure when the selected object changes', async () => {
+    const user = userEvent.setup();
+    let fail: (reason?: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return new Promise((_resolve, reject) => {
+            fail = reject;
+          });
+        }
+        if (url.startsWith('/api/portforward')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve([running(45123, 8080)]),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      }),
+    );
+    const view = render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+    await user.click(await screen.findByRole('button', { name: 'Stop forwarding port 8080' }));
+
+    view.rerender(<InspectPorts target={{ ...target, name: 'other' }} kind="Pod" ports={ports} />);
+    await act(async () => {
+      fail(new Error('the old stop failed'));
+      await Promise.resolve();
+    });
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+    expect(screen.queryByText('the old stop failed')).not.toBeInTheDocument();
   });
 
   it('shows what another view already started', async () => {

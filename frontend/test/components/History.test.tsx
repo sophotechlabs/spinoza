@@ -549,6 +549,54 @@ describe('History', () => {
     });
   });
 
+  it('drops an older-page failure when the history scope changes', async () => {
+    const user = userEvent.setup();
+    let failOlder: (reason?: unknown) => void = () => undefined;
+    const older = new Promise((_resolve, reject) => {
+      failOlder = reject;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/memory')) {
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+        }
+        if (url.includes('after=')) {
+          return older;
+        }
+        if (url.includes('source=change')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                entries: [entry({ id: 30, source: 'change', name: 'changed-only' })],
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry()], more: true, next: 40 }),
+        });
+      }),
+    );
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+
+    await user.click(screen.getByRole('button', { name: 'Show older' }));
+    await user.selectOptions(screen.getByLabelText('What to show'), 'change');
+    expect(await screen.findByText('changed-only')).toBeTruthy();
+    await act(async () => {
+      failOlder(new Error('the old page failed'));
+      await Promise.resolve();
+    });
+
+    const said = useToastsStore.getState().toasts.map((toast) => toast.message);
+    expect(said.some((message) => message.includes('the old page failed'))).toBe(false);
+    expect(screen.getByText('changed-only')).toBeTruthy();
+  });
+
   it('says so when reaching back fails', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(

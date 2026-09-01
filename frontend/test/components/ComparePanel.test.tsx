@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../../src/components/YamlDiff', () => ({
@@ -220,6 +220,34 @@ describe('running a comparison', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('yaml-diff')).not.toBeInTheDocument();
     });
+  });
+
+  it('drops a pending failure when its comparison inputs change', async () => {
+    const user = userEvent.setup();
+    let failRequest: (reason?: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            failRequest = reject;
+          }),
+      ),
+    );
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
+    await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+    expect(screen.getByText('reading')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Namespace'));
+    await user.type(screen.getByLabelText('Namespace'), 'staging');
+    await act(async () => {
+      failRequest(new Error('the old comparison failed'));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('the old comparison failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('reading')).not.toBeInTheDocument();
   });
 
   it('clears a completed result when its comparison inputs change', async () => {

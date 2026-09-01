@@ -142,6 +142,33 @@ describe('ProtectionToggle', () => {
     expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 
+  it('drops a protection failure when the active cluster changes', async () => {
+    const user = userEvent.setup();
+    let fail: (reason?: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = reject;
+          }),
+      ),
+    );
+    show('open');
+    await user.click(screen.getByRole('button', { name: 'Open cluster' }));
+
+    act(() => {
+      useContextsStore.getState().setList(list('open', 'p-mk2'));
+    });
+    await act(async () => {
+      fail(new Error('the old cluster failed'));
+      await Promise.resolve();
+    });
+
+    expect(useContextsStore.getState().list.current.name).toBe('p-mk2');
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
   it('reports a change the backend refused', async () => {
     const user = userEvent.setup();
     stubFetch('open', false);
