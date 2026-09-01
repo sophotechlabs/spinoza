@@ -29,6 +29,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/helm"
@@ -697,13 +698,14 @@ func TestTheManagerHandsANodeShellToTheServiceThatRunsIt(t *testing.T) {
 
 func TestTheManagerHandsChartWorkToHelm(t *testing.T) {
 	ctx := t.Context()
+	const repoURL = "https://charts.example.com"
 	runner := &recordingRunner{out: "replicaCount: 1\n"}
 	mgr := NewManager(ctx, Deps{
 		Dynamic:   newClient(t),
 		Clientset: k8sfake.NewClientset(),
 		Helm: helm.NewService(
 			k8sfake.NewClientset(), nil, runner, nil,
-			[]helm.RepoEntry{},
+			[]helm.RepoEntry{{Repo: charts.Repo{URL: repoURL}}},
 			api.ContextRef{Name: "kind-spinoza"},
 		),
 		Limits: Limits{IdleGrace: time.Millisecond},
@@ -713,14 +715,14 @@ func TestTheManagerHandsChartWorkToHelm(t *testing.T) {
 	values, valuesErr := mgr.HelmChartValues(ctx, helm.ValuesRequest{
 		Chart:   "podinfo",
 		Version: "6.14.1",
-		RepoURL: "https://charts.example.com",
+		RepoURL: repoURL,
 	})
 	if searchErr != nil || valuesErr != nil {
 		t.Fatalf("search: %v, values: %v", searchErr, valuesErr)
 	}
 
-	if !strings.Contains(search.Error, "helm repo add") {
-		t.Fatalf("search = %+v, want the service's own answer for a machine with no repositories", search)
+	if !strings.Contains(search.Error, "not wired up") {
+		t.Fatalf("search = %+v, want the service's own answer without a chart index", search)
 	}
 	if values.Values != "replicaCount: 1\n" {
 		t.Fatalf("values = %q, want what helm printed", values.Values)
@@ -734,7 +736,7 @@ func TestTheManagerHandsChartWorkToHelm(t *testing.T) {
 		Name:      "greeter",
 		Chart:     "podinfo",
 		Version:   "6.14.1",
-		RepoURL:   "https://charts.example.com",
+		RepoURL:   repoURL,
 	})
 	if installErr != nil {
 		t.Fatalf("install: %v", installErr)
