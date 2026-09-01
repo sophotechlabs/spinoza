@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -491,27 +493,27 @@ func TestALineWithNoNewlineAtTheEndIsStillServed(t *testing.T) {
 
 func TestASlowToolDoesNotHoldUpTheOnesBehindIt(t *testing.T) {
 	release := make(chan struct{})
+	releaseAll := closeOnce(release)
+	defer releaseAll()
 	cluster := &blockingCluster{fakeCluster: &fakeCluster{}, release: release}
 	server := serverFor(cluster, Options{})
 	in := strings.NewReader(
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_namespaces","arguments":{}}}` + "\n" +
 			`{"jsonrpc":"2.0","id":2,"method":"ping"}` + "\n",
 	)
-	var out lockedBuffer
+	out := lockedBuffer{written: make(chan struct{}, 4)}
 
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(context.Background(), in, &out) }()
 
-	deadline := time.After(5 * time.Second)
 	for !strings.Contains(out.read(), `"id":2`) {
 		select {
-		case <-deadline:
+		case <-out.written:
+		case <-time.After(5 * time.Second):
 			t.Fatal("the ping never came back while a slow tool was running")
-		default:
-			time.Sleep(5 * time.Millisecond)
 		}
 	}
-	close(release)
+	releaseAll()
 	if err := <-done; err != nil {
 		t.Fatalf("serve: %v", err)
 	}
@@ -524,22 +526,233 @@ type blockingCluster struct {
 	*fakeCluster
 
 	release chan struct{}
+	entered chan struct{}
 }
 
 func (b *blockingCluster) Namespaces(context.Context) api.Namespaces {
+	if b.entered != nil {
+		b.entered <- struct{}{}
+	}
 	<-b.release
 	return api.Namespaces{Names: []string{"prod"}}
 }
 
-type lockedBuffer struct {
-	mu   sync.Mutex
+func namespaceRequests(count int) string {
+	var in strings.Builder
+	for id := 1; id <= count; id++ {
+		_, _ = fmt.Fprintf(
+			&in,
+			`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"list_namespaces","arguments":{}}}`+"\n",
+			id,
+		)
+	}
+	return in.String()
+}
+
+func waitForEntries(t *testing.T, entered <-chan struct{}, count int) {
+	t.Helper()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for received := range count {
+		select {
+		case <-entered:
+		case <-timer.C:
+			t.Fatalf("calls entered = %d, want %d", received, count)
+		}
+	}
+}
+
+func closeOnce(ch chan struct{}) func() {
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			close(ch)
+		})
+	}
+}
+
+func TestStdioCapsConcurrentCalls(t *testing.T) {
+	release := make(chan struct{})
+	releaseAll := closeOnce(release)
+	entered := make(chan struct{}, atOnce+1)
+	cluster := &blockingCluster{fakeCluster: &fakeCluster{}, release: release, entered: entered}
+	server := serverFor(cluster, Options{})
+	var out lockedBuffer
+	done := make(chan error, 1)
+	finished := make(chan struct{})
+	t.Cleanup(func() {
+		releaseAll()
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Error("serve did not stop during cleanup")
+		}
+	})
+
+	go func() {
+		defer close(finished)
+		done <- server.Serve(context.Background(), strings.NewReader(namespaceRequests(atOnce+1)), &out)
+	}()
+	waitForEntries(t, entered, atOnce)
+	select {
+	case <-entered:
+		t.Fatalf("more than %d calls ran at once", atOnce)
+	default:
+	}
+	releaseAll()
+
+	if err := <-done; err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+	if replies := strings.Count(strings.TrimSpace(out.read()), "\n") + 1; replies != atOnce+1 {
+		t.Fatalf("replies = %d, want %d", replies, atOnce+1)
+	}
+}
+
+func TestCancellationWaitsForRunningCalls(t *testing.T) {
+	release := make(chan struct{})
+	releaseAll := closeOnce(release)
+	entered := make(chan struct{}, atOnce+1)
+	cluster := &blockingCluster{fakeCluster: &fakeCluster{}, release: release, entered: entered}
+	server := serverFor(cluster, Options{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	finished := make(chan struct{})
+	t.Cleanup(func() {
+		releaseAll()
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Error("serve did not stop during cleanup")
+		}
+	})
+
+	go func() {
+		defer close(finished)
+		done <- server.Serve(ctx, strings.NewReader(namespaceRequests(atOnce+1)), &lockedBuffer{})
+	}()
+	waitForEntries(t, entered, atOnce)
+	cancel()
+	select {
+	case err := <-done:
+		t.Fatalf("serve returned before its workers: %v", err)
+	default:
+	}
+	releaseAll()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("serve error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve did not finish after its workers")
+	}
+}
+
+type yieldingWriter struct {
 	body bytes.Buffer
+}
+
+func (w *yieldingWriter) Write(p []byte) (int, error) {
+	middle := len(p) / 2
+	first, _ := w.body.Write(p[:middle])
+	runtime.Gosched()
+	second, _ := w.body.Write(p[middle:])
+	return first + second, nil
+}
+
+func TestConcurrentRepliesStayIndivisible(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	const calls = 64
+	var in strings.Builder
+	for id := 1; id <= calls; id++ {
+		_, _ = fmt.Fprintf(&in, `{"jsonrpc":"2.0","id":%d,"method":"ping"}`+"\n", id)
+	}
+	var out yieldingWriter
+
+	if err := server.Serve(context.Background(), strings.NewReader(in.String()), &out); err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.body.String()), "\n")
+	if len(lines) != calls {
+		t.Fatalf("replies = %d, want %d", len(lines), calls)
+	}
+	ids := map[float64]bool{}
+	for _, line := range lines {
+		var reply map[string]any
+		if err := json.Unmarshal([]byte(line), &reply); err != nil {
+			t.Fatalf("interleaved reply %q: %v", line, err)
+		}
+		id, ok := reply["id"].(float64)
+		if !ok {
+			t.Fatalf("reply id = %#v, want a number", reply["id"])
+		}
+		ids[id] = true
+	}
+	if len(ids) != calls {
+		t.Fatalf("distinct reply ids = %d, want %d", len(ids), calls)
+	}
+	for id := 1; id <= calls; id++ {
+		if !ids[float64(id)] {
+			t.Errorf("missing reply id %d", id)
+		}
+	}
+}
+
+type firstFailureWriter struct {
+	calls int
+	first error
+	later error
+}
+
+func (w *firstFailureWriter) Write([]byte) (int, error) {
+	w.calls++
+	if w.calls == 1 {
+		return 0, w.first
+	}
+	return 0, w.later
+}
+
+func TestConcurrentRepliesReturnTheFirstWriteFailure(t *testing.T) {
+	first := errors.New("stdout closed")
+	later := errors.New("a later failure")
+	out := &firstFailureWriter{first: first, later: later}
+	server := serverFor(&fakeCluster{}, Options{})
+	var in strings.Builder
+	for id := 1; id <= 16; id++ {
+		_, _ = fmt.Fprintf(&in, `{"jsonrpc":"2.0","id":%d,"method":"ping"}`+"\n", id)
+	}
+
+	err := server.Serve(context.Background(), strings.NewReader(in.String()), out)
+
+	if !errors.Is(err, first) {
+		t.Fatalf("serve error = %v, want the first write failure", err)
+	}
+	if out.calls != 1 {
+		t.Fatalf("writer calls = %d, want replies suppressed after the failure", out.calls)
+	}
+}
+
+type lockedBuffer struct {
+	mu      sync.Mutex
+	body    bytes.Buffer
+	written chan struct{}
 }
 
 func (l *lockedBuffer) Write(p []byte) (int, error) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.body.Write(p)
+	written, err := l.body.Write(p)
+	l.mu.Unlock()
+	if l.written != nil {
+		select {
+		case l.written <- struct{}{}:
+		default:
+		}
+	}
+	return written, err
 }
 
 func (l *lockedBuffer) read() string {
