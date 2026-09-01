@@ -3,6 +3,7 @@ package update
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,6 +19,18 @@ const script = "#!/bin/sh\n# reads SPINOZA_SKIP_APP\necho installed\n"
 type call struct {
 	script string
 	dir    string
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
+
+type failedRead struct{}
+
+func (failedRead) Read([]byte) (int, error) {
+	return 0, errors.New("response body broke")
 }
 
 func servingStatus(t *testing.T, body string, status int) *httptest.Server {
@@ -72,6 +85,49 @@ func TestTheSavedScriptIsRemovedAfterwards(t *testing.T) {
 
 	if _, err := os.Stat(ran.script); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the script is still at %s", ran.script)
+	}
+}
+
+func TestASavedScriptKeepsItsExactBodyAndExecutableMode(t *testing.T) {
+	path, err := saveScript([]byte(script))
+	if err != nil {
+		t.Fatalf("saveScript: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(path)
+	})
+
+	body, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read: %v", readErr)
+	}
+	if string(body) != script {
+		t.Fatalf("script = %q, want the fetched body unchanged", body)
+	}
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		t.Fatalf("stat: %v", statErr)
+	}
+	if info.Mode().Perm() != scriptMode {
+		t.Fatalf("mode = %v, want %v", info.Mode().Perm(), scriptMode)
+	}
+}
+
+func TestAScriptThatCannotBeSavedIsNotRun(t *testing.T) {
+	root := t.TempDir()
+	installDir := t.TempDir()
+	missing := filepath.Join(root, "missing")
+	t.Setenv("TMPDIR", missing)
+	var ran call
+	one := installerFor(t, installDir, &ran, nil)
+
+	err := one.Install(t.Context())
+
+	if err == nil {
+		t.Fatal("an install with nowhere to save its script reported success")
+	}
+	if ran.dir != "" {
+		t.Fatal("the install script ran without being saved")
 	}
 }
 
@@ -206,6 +262,41 @@ func TestASiteThatCannotBeReachedIsReported(t *testing.T) {
 
 	if err := one.Install(context.Background()); err == nil {
 		t.Fatal("an unreachable site installed anyway")
+	}
+}
+
+func TestAScriptResponseThatBreaksWhileReadingIsReported(t *testing.T) {
+	one := NewInstaller("v1.0.0", "https://spinoza.example/install.sh")
+	one.client = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(failedRead{}),
+			Request:    request,
+		}, nil
+	})}
+
+	_, err := one.fetch(t.Context())
+
+	if err == nil || !strings.Contains(err.Error(), "response body broke") {
+		t.Fatalf("error = %v, want the body read failure", err)
+	}
+}
+
+func TestAFailedInstallReleasesTheInstallerForARetry(t *testing.T) {
+	var ran call
+	one := installerFor(t, t.TempDir(), &ran, nil)
+	one.script = "http://127.0.0.1:1/install.sh"
+
+	if err := one.Install(t.Context()); err == nil {
+		t.Fatal("the unreachable first install reported success")
+	}
+	one.script = servingStatus(t, script, http.StatusOK).URL
+
+	if err := one.Install(t.Context()); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if ran.dir == "" {
+		t.Fatal("the retry never ran")
 	}
 }
 

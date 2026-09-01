@@ -110,6 +110,63 @@ func TestConcurrentClustersKeepTheirOwnBaselines(t *testing.T) {
 	}
 }
 
+func TestConcurrentReadsAndReplacementsNeverExposeAPartialBaseline(t *testing.T) {
+	held := store(t)
+	initial := taken()
+	initial.Cluster = cluster
+	if err := held.Save(cluster, initial); err != nil {
+		t.Fatalf("initial save: %v", err)
+	}
+
+	const workers = 24
+	var group sync.WaitGroup
+	for index := range workers {
+		group.Go(func() {
+			next := taken()
+			next.Cluster = cluster
+			next.TakenAt = fmt.Sprintf("2026-09-01T%02d:00:00Z", index)
+			if err := held.Save(cluster, next); err != nil {
+				t.Errorf("save %d: %v", index, err)
+			}
+		})
+		group.Go(func() {
+			loaded, ok := held.Load(cluster)
+			if !ok {
+				t.Errorf("read %d saw no baseline", index)
+				return
+			}
+			if loaded.Cluster != cluster || len(loaded.Checks) != 1 || len(loaded.Keys) != 2 {
+				t.Errorf("read %d saw a partial baseline: %+v", index, loaded)
+			}
+		})
+	}
+	group.Wait()
+}
+
+func TestStoredBaselineAndDirectoryArePrivate(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "baselines")
+	held := Open(dir)
+
+	if err := held.Save(cluster, taken()); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat directory: %v", err)
+	}
+	if dirInfo.Mode().Perm() != 0o700 {
+		t.Fatalf("directory mode = %v, want 0700", dirInfo.Mode().Perm())
+	}
+	fileInfo, err := os.Stat(held.fileFor(cluster))
+	if err != nil {
+		t.Fatalf("stat baseline: %v", err)
+	}
+	if fileInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("baseline mode = %v, want 0600", fileInfo.Mode().Perm())
+	}
+}
+
 func TestTakingANewBaselineReplacesTheOldOne(t *testing.T) {
 	held := store(t)
 	if err := held.Save(cluster, taken()); err != nil {
