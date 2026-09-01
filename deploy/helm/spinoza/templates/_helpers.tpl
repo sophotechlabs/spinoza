@@ -47,17 +47,38 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default (printf "%s-auth" (include "spinoza.fullname" .)) .Values.auth.oidc.existingSecret -}}
 {{- end -}}
 
+{{- define "spinoza.proxySecretName" -}}
+{{- default (printf "%s-auth" (include "spinoza.fullname" .)) .Values.auth.proxy.existingSecret -}}
+{{- end -}}
+
 {{- define "spinoza.ownSecretNeeded" -}}
 {{- if and (not .Values.auth.existingSecret) .Values.auth.sessionSecret -}}yes{{- end -}}
 {{- if and (not .Values.auth.oidc.existingSecret) .Values.auth.oidc.clientSecret -}}yes{{- end -}}
+{{- if and (eq .Values.auth.mode "proxy") (not .Values.auth.proxy.existingSecret) .Values.auth.proxy.sharedSecret -}}yes{{- end -}}
 {{- end -}}
 
 {{- define "spinoza.validate" -}}
 {{- if not .Values.publicURL -}}
 {{- fail "spinoza needs publicURL, the address browsers reach it at" -}}
 {{- end -}}
+{{- if not .Values.auth.mode -}}
+{{- fail "auth.mode must be set explicitly to oidc, proxy or none" -}}
+{{- end -}}
 {{- if not (has .Values.auth.mode (list "none" "proxy" "oidc")) -}}
 {{- fail (printf "auth.mode %q is not one of none, proxy, oidc" .Values.auth.mode) -}}
+{{- end -}}
+{{- if eq .Values.auth.mode "none" -}}
+{{- if not .Values.auth.allowAnonymous -}}
+{{- fail "auth.mode none requires auth.allowAnonymous=true because every caller becomes an admin" -}}
+{{- end -}}
+{{- end -}}
+{{- if eq .Values.auth.mode "proxy" -}}
+{{- if not (or .Values.auth.proxy.existingSecret .Values.auth.proxy.sharedSecret) -}}
+{{- fail "auth.mode proxy requires auth.proxy.sharedSecret or auth.proxy.existingSecret" -}}
+{{- end -}}
+{{- if and .Values.auth.proxy.sharedSecret (lt (len .Values.auth.proxy.sharedSecret) 32) -}}
+{{- fail "auth.proxy.sharedSecret must be at least 32 bytes" -}}
+{{- end -}}
 {{- end -}}
 {{- if not (has .Values.rbac.read (list "everything" "workloads")) -}}
 {{- fail (printf "rbac.read %q is not one of everything, workloads" .Values.rbac.read) -}}

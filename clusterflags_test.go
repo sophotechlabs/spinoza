@@ -158,6 +158,7 @@ func TestEveryAuthFlagReachesTheConfig(t *testing.T) {
 	got := servedFlags(
 		t,
 		"--auth-mode", "oidc",
+		"--allow-anonymous-admin",
 		"--session-ttl", "30m",
 		"--auth-default-role", "editor",
 		"--auth-admin-groups", "platform-admins",
@@ -165,6 +166,8 @@ func TestEveryAuthFlagReachesTheConfig(t *testing.T) {
 		"--auth-viewer-groups", "everyone",
 		"--auth-user-header", "X-User",
 		"--auth-groups-header", "X-Groups",
+		"--auth-proxy-secret-header", "X-Proxy-Token",
+		"--auth-proxy-secret-file", fileHolding(t, "proxy-secret\n"),
 		"--auth-proxy-logout-url", "https://proxy/sign_out",
 		"--auth-oidc-issuer", "https://keycloak.example.com/realms/main",
 		"--auth-oidc-internal-issuer", "http://keycloak.keycloak.svc/realms/main",
@@ -182,6 +185,9 @@ func TestEveryAuthFlagReachesTheConfig(t *testing.T) {
 	if got.auth.Mode != auth.ModeOIDC {
 		t.Fatalf("mode = %q", got.auth.Mode)
 	}
+	if !got.auth.AllowAnonymous {
+		t.Fatal("the anonymous admin opt-in did not reach auth config")
+	}
 	if got.auth.SessionTTL != 30*time.Minute {
 		t.Fatalf("ttl = %s", got.auth.SessionTTL)
 	}
@@ -196,6 +202,9 @@ func TestEveryAuthFlagReachesTheConfig(t *testing.T) {
 	}
 	if got.auth.Proxy.UserHeader != "X-User" || got.auth.Proxy.GroupsHeader != "X-Groups" {
 		t.Fatalf("proxy = %+v", got.auth.Proxy)
+	}
+	if got.auth.Proxy.SecretHeader != "X-Proxy-Token" || string(got.auth.Proxy.SharedSecret) != "proxy-secret" {
+		t.Fatalf("proxy authentication = %+v", got.auth.Proxy)
 	}
 	if got.auth.Proxy.LogoutURL != "https://proxy/sign_out" {
 		t.Fatalf("proxy logout = %q", got.auth.Proxy.LogoutURL)
@@ -241,7 +250,7 @@ func TestSecretsComeFromFilesWithoutTheirTrailingNewline(t *testing.T) {
 }
 
 func TestASecretFileThatIsNotThereStopsSpinozaStarting(t *testing.T) {
-	for _, flag := range []string{"--session-secret-file", "--auth-oidc-client-secret-file"} {
+	for _, flag := range []string{"--session-secret-file", "--auth-proxy-secret-file", "--auth-oidc-client-secret-file"} {
 		t.Run(flag, func(t *testing.T) {
 			_, err := parseFlags([]string{
 				"--cluster-mode", "--public-url", "https://spinoza.example.com", flag, "/no/such/file",

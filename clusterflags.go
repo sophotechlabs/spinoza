@@ -19,6 +19,7 @@ const (
 	secretEnv = "SPINOZA_SESSION_SECRET"
 	//nolint:gosec // the name of an environment variable, not a secret
 	clientSecretEnv = "SPINOZA_AUTH_OIDC_CLIENT_SECRET"
+	proxyAuthEnv    = "SPINOZA_AUTH_PROXY_SECRET"
 )
 
 type serving struct {
@@ -33,6 +34,7 @@ type clusterFlags struct {
 	publicURL     *string
 	impersonate   *bool
 	mode          *string
+	allowAnon     *bool
 	secretFile    *string
 	ttl           *time.Duration
 	maxAge        *time.Duration
@@ -42,6 +44,8 @@ type clusterFlags struct {
 	viewerGroups  *string
 	userHeader    *string
 	groupsHeader  *string
+	proxyHeader   *string
+	proxyFile     *string
 	proxyLogout   *string
 	issuer        *string
 	inner         *string
@@ -66,6 +70,7 @@ func registerCluster(flags *flag.FlagSet) *clusterFlags {
 		publicURL:     flags.String("public-url", envOr("SPINOZA_PUBLIC_URL", ""), "the address browsers reach spinoza at, such as https://spinoza.example.com"),
 		impersonate:   flags.Bool("impersonate", envUnless("SPINOZA_IMPERSONATE"), "act on the cluster as the signed-in user, so kubernetes rbac decides what they may do"),
 		mode:          flags.String("auth-mode", envOr("SPINOZA_AUTH_MODE", auth.ModeNone), "how people sign in: none, proxy or oidc"),
+		allowAnon:     flags.Bool("allow-anonymous-admin", envBool("SPINOZA_ALLOW_ANONYMOUS_ADMIN"), "allow unauthenticated cluster-mode requests to act as administrators"),
 		secretFile:    flags.String("session-secret-file", envOr("SPINOZA_SESSION_SECRET_FILE", ""), "file holding the key that signs session cookies; without one every sign-in ends when spinoza restarts"),
 		ttl:           flags.Duration("session-ttl", envDuration("SPINOZA_SESSION_TTL", auth.DefaultSessionTTL), "how long a sign-in lasts before it is renewed or ends"),
 		maxAge:        flags.Duration("session-max-age", envDuration("SPINOZA_SESSION_MAX_AGE", auth.DefaultSessionMax), "how long a sign-in may be renewed for before the provider has to decide again"),
@@ -75,6 +80,8 @@ func registerCluster(flags *flag.FlagSet) *clusterFlags {
 		viewerGroups:  flags.String("auth-viewer-groups", envOr("SPINOZA_AUTH_VIEWER_GROUPS", ""), "comma separated groups whose members may only look"),
 		userHeader:    flags.String("auth-user-header", envOr("SPINOZA_AUTH_USER_HEADER", auth.DefaultUserHeader), "header your auth proxy puts the username in"),
 		groupsHeader:  flags.String("auth-groups-header", envOr("SPINOZA_AUTH_GROUPS_HEADER", auth.DefaultGroupsHeader), "header your auth proxy puts the groups in"),
+		proxyHeader:   flags.String("auth-proxy-secret-header", envOr("SPINOZA_AUTH_PROXY_SECRET_HEADER", auth.DefaultProxyAuthHeader), "header your auth proxy puts its shared secret in"),
+		proxyFile:     flags.String("auth-proxy-secret-file", envOr("SPINOZA_AUTH_PROXY_SECRET_FILE", ""), "file holding the secret that authenticates your proxy"),
 		proxyLogout:   flags.String("auth-proxy-logout-url", envOr("SPINOZA_AUTH_PROXY_LOGOUT_URL", ""), "where signing out sends the browser when a proxy holds the session"),
 		issuer:        flags.String("auth-oidc-issuer", envOr("SPINOZA_AUTH_OIDC_ISSUER", ""), "your identity provider, such as https://keycloak.example.com/realms/main"),
 		inner:         flags.String("auth-oidc-internal-issuer", envOr("SPINOZA_AUTH_OIDC_INTERNAL_ISSUER", ""), "the same provider on the address this pod can reach, when it differs from the browser's"),
@@ -114,19 +121,26 @@ func (cf *clusterFlags) settings() (serving, error) {
 	if len(clientSecret) == 0 {
 		clientSecret = []byte(*cf.clientSecret)
 	}
+	proxySecret, proxySecretErr := readSecret(*cf.proxyFile, proxyAuthEnv)
+	if proxySecretErr != nil {
+		return serving{}, proxySecretErr
+	}
 	out.auth = auth.Config{
-		Mode:          *cf.mode,
-		PublicURL:     out.publicURL,
-		SessionSecret: secret,
-		SessionTTL:    *cf.ttl,
-		SessionMaxAge: *cf.maxAge,
-		DefaultRole:   *cf.defaultRole,
-		AdminGroups:   auth.ParseList(*cf.adminGroups),
-		EditorGroups:  auth.ParseList(*cf.editorGroups),
-		ViewerGroups:  auth.ParseList(*cf.viewerGroups),
+		Mode:           *cf.mode,
+		PublicURL:      out.publicURL,
+		AllowAnonymous: *cf.allowAnon,
+		SessionSecret:  secret,
+		SessionTTL:     *cf.ttl,
+		SessionMaxAge:  *cf.maxAge,
+		DefaultRole:    *cf.defaultRole,
+		AdminGroups:    auth.ParseList(*cf.adminGroups),
+		EditorGroups:   auth.ParseList(*cf.editorGroups),
+		ViewerGroups:   auth.ParseList(*cf.viewerGroups),
 		Proxy: auth.ProxyConfig{
 			UserHeader:   *cf.userHeader,
 			GroupsHeader: *cf.groupsHeader,
+			SecretHeader: *cf.proxyHeader,
+			SharedSecret: proxySecret,
 			LogoutURL:    *cf.proxyLogout,
 		},
 		OIDC: auth.OIDCConfig{

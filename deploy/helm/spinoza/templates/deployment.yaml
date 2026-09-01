@@ -47,6 +47,9 @@ spec:
             - --log-level={{ .Values.logLevel }}
             - --impersonate={{ .Values.impersonate }}
             - --auth-mode={{ .Values.auth.mode }}
+            {{- if .Values.auth.allowAnonymous }}
+            - --allow-anonymous-admin
+            {{- end }}
             - --auth-default-role={{ .Values.auth.defaultRole }}
             - --session-ttl={{ .Values.auth.sessionTTL }}
             - --session-max-age={{ .Values.auth.sessionMaxAge }}
@@ -62,6 +65,7 @@ spec:
             {{- if eq .Values.auth.mode "proxy" }}
             - --auth-user-header={{ .Values.auth.proxy.userHeader }}
             - --auth-groups-header={{ .Values.auth.proxy.groupsHeader }}
+            - --auth-proxy-secret-header={{ .Values.auth.proxy.secretHeader }}
             {{- with .Values.auth.proxy.logoutURL }}
             - --auth-proxy-logout-url={{ . }}
             {{- end }}
@@ -117,6 +121,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "spinoza.sessionSecretName" . }}
                   key: {{ .Values.auth.existingSecretKey }}
+            {{- end }}
+            {{- if eq .Values.auth.mode "proxy" }}
+            - name: SPINOZA_AUTH_PROXY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "spinoza.proxySecretName" . }}
+                  key: {{ .Values.auth.proxy.existingSecretKey }}
             {{- end }}
             {{- if and (eq .Values.auth.mode "oidc") (or .Values.auth.oidc.existingSecret .Values.auth.oidc.clientSecret) }}
             - name: SPINOZA_AUTH_OIDC_CLIENT_SECRET

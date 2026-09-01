@@ -30,9 +30,8 @@ prometheus: ""
 nodeShell: false
 
 auth:
-  # none, proxy or oidc. With none, anybody who reaches this address is an
-  # admin here, so put an auth proxy in front or pick another mode.
-  mode: none
+  mode: ""
+  allowAnonymous: false
 
   # Role for anyone whose groups match none of the lists below.
   defaultRole: viewer
@@ -54,6 +53,10 @@ auth:
   proxy:
     userHeader: X-Forwarded-User
     groupsHeader: X-Forwarded-Groups
+    secretHeader: X-Spinoza-Proxy-Secret
+    sharedSecret: ""
+    existingSecret: ""
+    existingSecretKey: proxy-secret
     # Where signing out sends the browser, such as oauth2-proxy's /oauth2/sign_out.
     logoutURL: ""
 

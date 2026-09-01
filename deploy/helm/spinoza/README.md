@@ -26,7 +26,8 @@ helm upgrade --install spinoza oci://ghcr.io/sophotechlabs/charts/spinoza \
 | `logLevel` | `info` | `debug`, `info`, `warn` or `error`. |
 | `prometheus` | `""` | `namespace/service:port` for metric history; discovered when empty. |
 | `nodeShell` | `false` | Allow a root shell on a node, which creates a privileged pod. |
-| `auth.mode` | `none` | `none`, `proxy` or `oidc`. |
+| `auth.mode` | `""` | Required: `none`, `proxy` or `oidc`. |
+| `auth.allowAnonymous` | `false` | Required unsafe opt-in when `auth.mode` is `none`. |
 | `auth.defaultRole` | `viewer` | Role for anyone matching none of the group lists. |
 | `auth.adminGroups` | `[]` | Groups whose members are admins here. |
 | `auth.editorGroups` | `[]` | Groups whose members may change objects. |
@@ -38,6 +39,10 @@ helm upgrade --install spinoza oci://ghcr.io/sophotechlabs/charts/spinoza \
 | `auth.existingSecretKey` | `session-secret` | Key inside it. |
 | `auth.proxy.userHeader` | `X-Forwarded-User` | |
 | `auth.proxy.groupsHeader` | `X-Forwarded-Groups` | |
+| `auth.proxy.secretHeader` | `X-Spinoza-Proxy-Secret` | Header carrying the proxy shared secret. |
+| `auth.proxy.sharedSecret` | `""` | At least 32 bytes; authenticates the proxy. |
+| `auth.proxy.existingSecret` | `""` | A secret holding the proxy shared secret. |
+| `auth.proxy.existingSecretKey` | `proxy-secret` | Key inside it. |
 | `auth.proxy.logoutURL` | `""` | Where signing out sends the browser. |
 | `auth.oidc.issuerURL` | `""` | Your realm, as the browser reaches it. |
 | `auth.oidc.internalIssuerURL` | `""` | The same provider on an address the pod can reach. |
@@ -74,7 +79,9 @@ behave the way they do in every other chart.
 ## What the chart refuses to render
 
 - No `publicURL`.
-- An `auth.mode` that is not `none`, `proxy` or `oidc`.
+- No explicit `auth.mode`, or a value other than `none`, `proxy` or `oidc`.
+- `auth.mode: none` without `auth.allowAnonymous: true`.
+- `auth.mode: proxy` without a proxy shared secret of at least 32 bytes.
 - `auth.mode: oidc` with no `issuerURL` or no `clientID`.
 - `impersonate: false` together with `rbac.write: false`, which would leave
   spinoza unable to change anything at all.
