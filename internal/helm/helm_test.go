@@ -601,6 +601,19 @@ func TestListReportsNothingForAClusterWithoutHelm(t *testing.T) {
 	}
 }
 
+func TestListWithoutAMetadataClientExplainsWhyItCannotLook(t *testing.T) {
+	service := NewService(k8sfake.NewClientset(), nil, nil, nil, nil, api.ContextRef{})
+
+	got, err := service.List(t.Context())
+
+	if !errors.Is(err, errNoMetadata) {
+		t.Fatalf("error = %v, want the missing metadata client named", err)
+	}
+	if got.Releases == nil || len(got.Releases) != 0 {
+		t.Fatalf("releases = %v, want an explicit empty list", got.Releases)
+	}
+}
+
 func TestAnEmptyPayloadIsRefused(t *testing.T) {
 	_, err := decode(nil)
 
@@ -617,6 +630,17 @@ func TestAGzipHeaderWithRubbishBehindItIsRefused(t *testing.T) {
 	}
 	if errors.Is(err, errNotGzip) {
 		t.Fatalf("err = %v, want the gzip failure itself", err)
+	}
+}
+
+func TestAGzipStreamThatBreaksWhileReadingIsRefused(t *testing.T) {
+	body := gzipped(strings.Repeat("release data ", 64))
+	body = body[:len(body)-1]
+
+	_, err := gunzipLimit(body, maxPayload)
+
+	if err == nil {
+		t.Fatal("a truncated gzip stream decoded successfully")
 	}
 }
 

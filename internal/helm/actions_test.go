@@ -235,6 +235,16 @@ func TestTheRealRunnerReportsAMissingBinary(t *testing.T) {
 	}
 }
 
+func TestRunningAMissingHelmBinaryReturnsTheStableError(t *testing.T) {
+	runner := NewRunner("definitely-not-a-real-binary-name")
+
+	_, err := runner.Run(t.Context(), []string{"version"}, nil)
+
+	if !errors.Is(err, ErrNoHelmBinary) {
+		t.Fatalf("err = %v, want the missing-binary error", err)
+	}
+}
+
 func TestTheRealRunnerCarriesTheCommandOutput(t *testing.T) {
 	runner := NewRunner("echo")
 

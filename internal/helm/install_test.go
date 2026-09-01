@@ -2,6 +2,7 @@ package helm
 
 import (
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -209,6 +210,21 @@ func TestAnInstallWithoutARunnerIsRefused(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("an install without a runner reported success")
+	}
+}
+
+func TestAnInstallStopsBeforeHelmWhenValuesCannotBeSaved(t *testing.T) {
+	runner := &stubRunner{}
+	svc := installer(t, runner, namespaceObject("demo"))
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+
+	_, err := svc.Install(t.Context(), installRequest())
+
+	if err == nil {
+		t.Fatal("an install with nowhere to save values reported success")
+	}
+	if len(runner.args) != 0 {
+		t.Fatalf("helm args = %v, want helm left alone", runner.args)
 	}
 }
 
