@@ -16,7 +16,10 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
-const maxLogBatch = 200
+const (
+	maxLogBatch      = 200
+	maxSubscriptions = 64
+)
 
 const msgError = "error"
 
@@ -135,9 +138,13 @@ func (sess *wsSession) entriesOf(which feed) map[string]*entry {
 	return sess.tables
 }
 
-func (sess *wsSession) claim(which feed, subID, cluster string) uint64 {
+func (sess *wsSession) tryClaim(which feed, subID, cluster string) (uint64, bool) {
 	sess.mu.Lock()
 	previous, existed := sess.entriesOf(which)[subID]
+	if !existed && len(sess.tables)+len(sess.logs) >= maxSubscriptions {
+		sess.mu.Unlock()
+		return 0, false
+	}
 	sess.nextGen++
 	gen := sess.nextGen
 	sess.entriesOf(which)[subID] = &entry{gen: gen, cluster: cluster}
@@ -145,7 +152,7 @@ func (sess *wsSession) claim(which feed, subID, cluster string) uint64 {
 	if existed {
 		stop(previous)
 	}
-	return gen
+	return gen, true
 }
 
 func (sess *wsSession) adopt(which feed, subID string, gen uint64, resource stoppable) bool {
@@ -242,12 +249,24 @@ func (sess *wsSession) handle(msg api.ClientMsg) {
 
 func (sess *wsSession) subscribe(msg api.ClientMsg) {
 	backend, on := sess.lookup(msg.Cluster)
-	gen := sess.claim(tables, msg.SubID, on)
+	gen, claimed := sess.tryClaim(tables, msg.SubID, on)
+	if !claimed {
+		sess.refuse(msg.SubID)
+		return
+	}
 	if backend == nil {
 		sess.failAndForget(tables, msg.SubID, gen, notOpen(msg.Cluster))
 		return
 	}
 	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(backend, msg, gen) })
+}
+
+func (sess *wsSession) refuse(subID string) {
+	sess.write(sess.ctx, api.FeedError{
+		Type:    msgError,
+		SubID:   subID,
+		Message: "this connection already holds the maximum number of subscriptions",
+	})
 }
 
 type resizable interface {
@@ -392,7 +411,11 @@ func drainEvents(events <-chan resources.Event) {
 
 func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 	backend, on := sess.lookup(msg.Cluster)
-	gen := sess.claim(streams, msg.SubID, on)
+	gen, claimed := sess.tryClaim(streams, msg.SubID, on)
+	if !claimed {
+		sess.refuse(msg.SubID)
+		return
+	}
 	if backend == nil {
 		sess.failAndForget(streams, msg.SubID, gen, notOpen(msg.Cluster))
 		return

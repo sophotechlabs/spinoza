@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -115,6 +116,33 @@ func TestASubscriptionThatCannotBeBuiltIsReported(t *testing.T) {
 	}
 	if msg.Message != "deployments is forbidden" {
 		t.Fatalf("message = %q, want what the cluster said", msg.Message)
+	}
+}
+
+func TestAConnectionCannotHoldUnboundedSubscriptions(t *testing.T) {
+	hold := make(chan struct{})
+	t.Cleanup(func() { close(hold) })
+	ts := awkwardServer(t, &awkward{hold: hold})
+	ctx, conn := openAwkwardFeed(t, ts)
+
+	for index := range maxSubscriptions {
+		sendMsg(ctx, t, conn, api.ClientMsg{
+			Type: "subscribe", SubID: fmt.Sprintf("s%d", index), Resource: "pods",
+		})
+	}
+	sendMsg(ctx, t, conn, api.ClientMsg{
+		Type: "logs-subscribe", SubID: "one-too-many", Namespace: "default", Name: "web",
+	})
+
+	msg := readMsg(ctx, t, conn)
+	if msg.Type != msgError {
+		t.Fatalf("type = %q, want an error frame", msg.Type)
+	}
+	if msg.SubID != "one-too-many" {
+		t.Fatalf("subId = %q, want the refused subscription", msg.SubID)
+	}
+	if msg.Message != "this connection already holds the maximum number of subscriptions" {
+		t.Fatalf("message = %q", msg.Message)
 	}
 }
 
@@ -331,8 +359,8 @@ func TestComparingAnObjectRawSkipsTheParsing(t *testing.T) {
 
 func TestABatchForAReplacedSubscriptionIsNotWritten(t *testing.T) {
 	sess := &wsSession{ctx: t.Context(), tables: map[string]*entry{}, logs: map[string]*entry{}}
-	gen := sess.claim(tables, "s1", mk1)
-	sess.claim(tables, "s1", mk1)
+	gen := sess.claim(tables, "s1")
+	sess.claim(tables, "s1")
 
 	events := make(chan resources.Event)
 	close(events)
