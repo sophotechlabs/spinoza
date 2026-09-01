@@ -25,6 +25,7 @@ type Entry struct {
 	Cluster   string
 	At        time.Time
 	Verb      string
+	Actor     string
 	Group     string
 	Version   string
 	Resource  string
@@ -147,7 +148,7 @@ func (s *Store) record(ctx context.Context, entry Entry) error {
 	}
 	_, err := db.ExecContext(
 		ctx, insertAudit,
-		entry.Cluster, entry.At.UTC().UnixMilli(), entry.Verb,
+		entry.Cluster, entry.At.UTC().UnixMilli(), entry.Verb, entry.Actor,
 		entry.Group, entry.Version, entry.Resource, entry.Kind,
 		entry.Namespace, entry.Name,
 		entry.Detail, entry.Outcome, entry.Message,
@@ -205,7 +206,7 @@ func scanEntries(rows *sql.Rows) ([]Entry, error) {
 		var entry Entry
 		var at int64
 		err := rows.Scan(
-			&entry.ID, &entry.Cluster, &at, &entry.Verb,
+			&entry.ID, &entry.Cluster, &at, &entry.Verb, &entry.Actor,
 			&entry.Group, &entry.Version, &entry.Resource, &entry.Kind,
 			&entry.Namespace, &entry.Name,
 			&entry.Detail, &entry.Outcome, &entry.Message,

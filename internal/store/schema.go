@@ -14,12 +14,12 @@ const readers = 4
 
 const insertAudit = `
 INSERT INTO audit (
-	cluster, at, verb, api_group, api_version, resource, kind,
+	cluster, at, verb, actor, api_group, api_version, resource, kind,
 	namespace, name, detail, outcome, message
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 const selectAudit = `
-SELECT id, cluster, at, verb, api_group, api_version, resource, kind,
+SELECT id, cluster, at, verb, actor, api_group, api_version, resource, kind,
 	namespace, name, detail, outcome, message
 FROM audit
 WHERE (? = '' OR cluster = ?) AND (? = 0 OR id < ?)
@@ -132,6 +132,8 @@ CREATE INDEX changes_by_cluster ON changes (cluster, at DESC, id DESC);
 ALTER TABLE clusters ADD COLUMN timeline TEXT NOT NULL DEFAULT '';
 `, `
 ALTER TABLE changes ADD COLUMN was TEXT NOT NULL DEFAULT '[]';
+`, `
+ALTER TABLE audit ADD COLUMN actor TEXT NOT NULL DEFAULT 'unknown';
 `}
 
 func migrate(ctx context.Context, db *sql.DB) error {

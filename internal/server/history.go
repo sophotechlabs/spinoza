@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
@@ -122,6 +123,7 @@ func (s *Server) record(r *http.Request, made change) {
 	err := past.For(on).Record(kept, store.Entry{
 		At:        s.instant(),
 		Verb:      made.verb,
+		Actor:     actorOf(r),
 		Group:     made.ref.Group,
 		Version:   made.ref.Version,
 		Resource:  made.ref.Resource,
@@ -135,6 +137,17 @@ func (s *Server) record(r *http.Request, made change) {
 	if err != nil {
 		slog.Warn("what spinoza just did was not recorded", "verb", made.verb, "name", made.ref.Name, "error", err)
 	}
+}
+
+func actorOf(r *http.Request) string {
+	identity, known := auth.IdentityFrom(r.Context())
+	if !known {
+		return "local"
+	}
+	if identity.User == "" {
+		return "anonymous"
+	}
+	return identity.User
 }
 
 func outcomeOf(err error) string {
@@ -324,6 +337,7 @@ func entriesOf(held []store.Entry) []api.HistoryEntry {
 			Cluster:   one.Cluster,
 			At:        one.At.UTC().Format(time.RFC3339),
 			Verb:      one.Verb,
+			Actor:     one.Actor,
 			Group:     one.Group,
 			Version:   one.Version,
 			Resource:  one.Resource,

@@ -21,6 +21,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/flux"
@@ -980,6 +981,33 @@ func TestAWriteIsRecordedEvenIfTheBrowserWalkedAway(t *testing.T) {
 	if len(held.recorded()) != 1 {
 		t.Fatal("the cluster changed and nothing recorded it because the client hung up")
 	}
+	if held.only(t).Actor != "local" {
+		t.Fatalf("actor = %q, want local for a request without a signed-in identity", held.only(t).Actor)
+	}
+}
+
+func TestAnActionRecordsWhoMadeIt(t *testing.T) {
+	tests := []struct {
+		name     string
+		identity *auth.Identity
+		want     string
+	}{
+		{name: "local mode", want: "local"},
+		{name: "authentication disabled", identity: &auth.Identity{Role: auth.RoleAdmin}, want: "anonymous"},
+		{name: "signed in", identity: &auth.Identity{User: "alice@example.com", Role: auth.RoleEditor}, want: "alice@example.com"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody)
+			if test.identity != nil {
+				req = req.WithContext(auth.WithIdentity(req.Context(), *test.identity))
+			}
+
+			if got := actorOf(req); got != test.want {
+				t.Fatalf("actor = %q, want %q", got, test.want)
+			}
+		})
+	}
 }
 
 func realStoreServer(t *testing.T) (*httptest.Server, *store.Store) {
@@ -1017,6 +1045,9 @@ func TestAChangeMadeThroughTheApiComesBackFromTheRealStore(t *testing.T) {
 	}
 	if entry.Verb != "scale" || entry.Detail != "to 3 replicas" {
 		t.Fatalf("entry = %+v, want the scale it recorded", entry)
+	}
+	if entry.Actor != "local" {
+		t.Fatalf("actor = %q, want local for the local-token request", entry.Actor)
 	}
 	if entry.Resource != "deployments" || entry.Namespace != "default" || entry.Name != "web" {
 		t.Fatalf("entry = %+v, want the object it acted on", entry)
@@ -1145,6 +1176,7 @@ func TestEntriesOfCarriesEveryValue(t *testing.T) {
 	at := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	one := store.Entry{
 		ID: 7, Cluster: "p-mk2", At: at, Verb: "scale",
+		Actor: "alice@example.com",
 		Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment",
 		Namespace: "audit-probe", Name: "target", Detail: "to 2 replicas",
 		Outcome: "done", Message: "all good",
@@ -1157,6 +1189,7 @@ func TestEntriesOfCarriesEveryValue(t *testing.T) {
 	}
 	want := api.HistoryEntry{
 		ID: 7, Source: api.HistoryAction, Cluster: "p-mk2", At: "2026-08-29T12:00:00Z", Verb: "scale",
+		Actor: "alice@example.com",
 		Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment",
 		Namespace: "audit-probe", Name: "target", Detail: "to 2 replicas",
 		Outcome: "done", Message: "all good",

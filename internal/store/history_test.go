@@ -39,6 +39,7 @@ func entry(cluster string, at time.Time, name string) Entry {
 		Cluster:   cluster,
 		At:        at,
 		Verb:      "delete",
+		Actor:     "alice@example.com",
 		Group:     "apps",
 		Version:   "v1",
 		Resource:  "deployments",
@@ -475,6 +476,46 @@ func TestMigratingTwiceChangesNothing(t *testing.T) {
 
 	if len(recent(t, again, Query{}).Entries) != 1 {
 		t.Fatal("reopening re-ran the schema and lost what was recorded")
+	}
+}
+
+func TestAnOlderAuditRowIsKeptWithAnUnknownActor(t *testing.T) {
+	path := dbPath(t)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	db := sql.OpenDB(connector{dsn: path + pragmas})
+	for version, statements := range migrations[:len(migrations)-1] {
+		if err := apply(t.Context(), db, statements, version+1); err != nil {
+			t.Fatalf("apply version %d: %v", version+1, err)
+		}
+	}
+	_, err := db.ExecContext(
+		t.Context(), `
+INSERT INTO audit (
+	cluster, at, verb, api_group, api_version, resource, kind,
+	namespace, name, detail, outcome, message
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p1, noon.UnixMilli(), "delete", "apps", "v1", "deployments", "Deployment",
+		"default", "web", "deleted the deployment", "done", "",
+	)
+	if err != nil {
+		t.Fatalf("insert legacy audit row: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy database: %v", err)
+	}
+
+	got := recent(t, openHistory(t, path), Query{}).Entries
+
+	if len(got) != 1 {
+		t.Fatalf("entries = %d, want the legacy row", len(got))
+	}
+	if got[0].Actor != "unknown" {
+		t.Fatalf("actor = %q, want unknown for a row written before actors were recorded", got[0].Actor)
+	}
+	if got[0].Name != "web" {
+		t.Fatalf("name = %q, want the legacy row to survive", got[0].Name)
 	}
 }
 

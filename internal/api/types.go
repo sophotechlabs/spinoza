@@ -152,6 +152,7 @@ type HistoryEntry struct {
 	Cluster   string `json:"cluster,omitempty"`
 	At        string `json:"at"`
 	Verb      string `json:"verb"`
+	Actor     string `json:"actor,omitempty"`
 	Group     string `json:"group,omitempty"`
 	Version   string `json:"version,omitempty"`
 	Resource  string `json:"resource,omitempty"`
