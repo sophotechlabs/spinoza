@@ -79,3 +79,29 @@ test('the resource tree counts what it found', async ({ page }) => {
   await expect(sidebar(page, /^Deployment \d/)).toBeVisible();
   await expect(sidebar(page, /^CronJob \d/)).toBeVisible();
 });
+
+test('browser back and forward restore complete application routes', async ({ page }) => {
+  await openHome(page);
+  await sidebar(page, 'Issues').click();
+  await expect(page).toHaveTitle(/^issues /);
+  await sidebar(page, 'Topology').click();
+  await expect(page).toHaveTitle(/^topology /);
+  await page.goBack();
+  await expect(page).toHaveTitle(/^issues /);
+  await page.goForward();
+  await expect(page).toHaveTitle(/^topology /);
+});
+
+test('the help shortcut opens settings on the keyboard reference', async ({ page }) => {
+  await openHome(page);
+  await page.keyboard.press('?');
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', {
+      name: 'Keyboard',
+      exact: true,
+    }),
+  ).toHaveAttribute('aria-current', 'true');
+  await expect(dialog.getByRole('table', { name: 'Keyboard shortcuts' })).toBeVisible();
+});

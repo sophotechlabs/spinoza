@@ -1,11 +1,27 @@
 import { expect, test } from '../harness/test';
-import { openHome } from '../harness/app';
+import { openHome, openResource } from '../harness/app';
 import type { Page } from '@playwright/test';
 
 async function openSettings(page: Page): Promise<void> {
   await openHome(page);
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+}
+
+async function openSection(page: Page, section: string): Promise<void> {
+  await openSettings(page);
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: section, exact: true })
+    .click();
+}
+
+function settingsWrite(page: Page) {
+  return page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/settings') && response.request().method() === 'PUT',
+    { timeout: 30_000 },
+  );
 }
 
 function surface(page: Page): Promise<string> {
@@ -97,4 +113,77 @@ test('a theme that is not a theme is refused rather than applied', async ({ page
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Theme preference' })).not.toContainText('nope');
+});
+
+test('the default log presentation survives a new document', async ({ page }) => {
+  await openSection(page, 'Logs');
+  let saved = settingsWrite(page);
+  await page.getByLabel('Default log view').selectOption('raw');
+  await saved;
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Logs', exact: true }).click();
+  await expect(page.getByLabel('Default log view')).toHaveValue('raw');
+  saved = settingsWrite(page);
+  await page.getByLabel('Default log view').selectOption('pretty');
+  await saved;
+});
+
+test('the audit refresh interval is stored by the server', async ({ page }) => {
+  await openSection(page, 'Cluster');
+  let saved = settingsWrite(page);
+  await page.getByLabel('Check refresh interval').selectOption('15');
+  await saved;
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Cluster', exact: true }).click();
+  await expect(page.getByLabel('Check refresh interval')).toHaveValue('15');
+  saved = settingsWrite(page);
+  await page.getByLabel('Check refresh interval').selectOption('60');
+  await saved;
+});
+
+test('the namespace start preference changes the live cluster scope', async ({ page }) => {
+  await openSection(page, 'Cluster');
+  let saved = settingsWrite(page);
+  await page.getByLabel('Namespace to open on').selectOption('default');
+  await saved;
+  await expect(page.getByRole('combobox', { name: 'Namespace', exact: true })).toHaveValue(
+    'default',
+  );
+  saved = settingsWrite(page);
+  await page.getByLabel('Namespace to open on').selectOption('all');
+  await saved;
+  await expect(page.getByRole('combobox', { name: 'Namespace', exact: true })).toHaveValue('');
+});
+
+test('a custom column reaches the real resource table and can be removed', async ({ page }) => {
+  await openSection(page, 'Columns');
+  await page.getByLabel('Kind', { exact: true }).selectOption({ label: 'Pod' });
+  await page.getByLabel('Column name').fill('E2E app');
+  await page.getByLabel('Field path').fill('.metadata.labels.app');
+  let saved = settingsWrite(page);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await saved;
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await openResource(page, 'pods', 'Pod');
+  await expect(page.getByRole('columnheader', { name: /E2E app/ })).toBeVisible({
+    timeout: 60_000,
+  });
+  const healthy = page.locator('main tbody tr').filter({ hasText: 'healthy-' }).first();
+  await expect(healthy).toContainText('healthy');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Columns', exact: true }).click();
+  await page.getByLabel('Kind', { exact: true }).selectOption({ label: 'Pod' });
+  saved = settingsWrite(page);
+  await page.getByRole('button', { name: 'Remove E2E app', exact: true }).click();
+  await saved;
+});
+
+test('the keyboard section reports the shortcuts that work in the application', async ({ page }) => {
+  await openSection(page, 'Keyboard');
+  const table = page.getByRole('table', { name: 'Keyboard shortcuts' });
+  await expect(table).toContainText('Open the command palette');
+  await expect(table).toContainText('Jump to the resource filter');
+  await expect(table).toContainText('Close the palette or dialog, then the inspector');
 });

@@ -53,3 +53,76 @@ test('a deep link to an object opens it without a click', async ({ page }) => {
   );
   await expect(page).toHaveTitle(/^noshell pods /);
 });
+
+test('sorting changes both the announced direction and the row order', async ({ page }) => {
+  await openResource(page, 'pods', 'Pod');
+  const header = page.getByRole('columnheader', { name: /Name/ });
+  const sort = header.getByRole('button');
+  const first = page.locator('main tbody tr').first();
+  await expect(first).toBeVisible({ timeout: 60_000 });
+  await sort.click();
+  await expect(header).toHaveAttribute('aria-sort', 'ascending');
+  const ascending = await first.textContent();
+  await sort.click();
+  await expect(header).toHaveAttribute('aria-sort', 'descending');
+  await expect.poll(() => first.textContent()).not.toBe(ascending);
+});
+
+test('a field filter becomes a removable chip and filters the real rows', async ({ page }) => {
+  await openResource(page, 'pods', 'Pod');
+  const filter = page.getByRole('combobox', { name: 'Filter' });
+  await filter.fill('status:Running');
+  await filter.press('Enter');
+  await expect(page.getByText('Status:', { exact: true })).toBeVisible();
+  await expect(page.locator('main tbody tr').filter({ hasText: 'healthy-' }).first()).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(page.locator('main tbody tr').filter({ hasText: 'crashing-' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Remove the Status Running filter' }).click();
+  await expect(page.locator('main tbody tr').filter({ hasText: 'crashing-' }).first()).toBeVisible({
+    timeout: 60_000,
+  });
+});
+
+test('the filter shortcut focuses the resource filter without typing into the page', async ({ page }) => {
+  await openResource(page, 'pods', 'Pod');
+  const filter = page.getByRole('combobox', { name: 'Filter' });
+  await page.keyboard.press('/');
+  await expect(filter).toBeFocused();
+});
+
+test('column visibility survives a reload and can be restored', async ({ page }) => {
+  await openResource(page, 'pods', 'Pod');
+  await page.getByText('Columns', { exact: true }).click();
+  await page.getByLabel('Namespace', { exact: true }).uncheck();
+  await expect(page.getByRole('columnheader', { name: /Namespace/ })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('columnheader', { name: /Namespace/ })).toHaveCount(0);
+  await page.getByText('Columns', { exact: true }).click();
+  await page.getByLabel('Namespace', { exact: true }).check();
+  await expect(page.getByRole('columnheader', { name: /Namespace/ })).toBeVisible();
+});
+
+test('namespace scoping removes objects from other namespaces and is reversible', async ({ page }) => {
+  await openResource(page, 'pods', 'Pod');
+  const picker = page.getByRole('combobox', { name: 'Namespace', exact: true });
+  await expect(page.locator('main tbody tr').filter({ hasText: 'coredns' }).first()).toBeVisible({
+    timeout: 60_000,
+  });
+  await picker.selectOption('e2e');
+  await expect(page.getByText('Namespace:', { exact: true })).toBeVisible();
+  await expect(page.locator('main tbody tr').filter({ hasText: 'coredns' })).toHaveCount(0);
+  await expect(page.locator('main tbody tr').filter({ hasText: 'healthy-' }).first()).toBeVisible();
+  await picker.selectOption('');
+  await expect(page.locator('main tbody tr').filter({ hasText: 'coredns' }).first()).toBeVisible({
+    timeout: 60_000,
+  });
+});
+
+test('an empty result offers a working way back to the table', async ({ page }) => {
+  await openResource(page, 'pods', 'Pod');
+  await page.getByRole('combobox', { name: 'Filter' }).fill('there-is-no-pod-with-this-name');
+  await expect(page.getByText('Nothing matches the current filter.')).toBeVisible();
+  await page.getByRole('button', { name: 'Clear filter', exact: true }).click();
+  await expect(page.locator('main tbody tr').first()).toBeVisible({ timeout: 60_000 });
+});
