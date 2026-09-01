@@ -316,6 +316,53 @@ func TestAPodThatNeverStartsGivesUp(t *testing.T) {
 	}
 }
 
+func TestAStartWhosePodCannotBeReadIsReportedAndRemoved(t *testing.T) {
+	svc, cs := service(t, true)
+	creates(cs, "spinoza-node-shell-unreadable", corev1.PodPending, "")
+	cs.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "pods"},
+			"spinoza-node-shell-unreadable",
+			errors.New("pod reads are forbidden"),
+		)
+	})
+	deleted := false
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deleted = true
+		return false, nil, nil
+	})
+
+	_, err := svc.Start(t.Context(), "p-mk1")
+
+	if err == nil || !strings.Contains(err.Error(), "pod reads are forbidden") {
+		t.Fatalf("start error = %v, want the pod read failure", err)
+	}
+	if !deleted {
+		t.Fatal("an unreadable node shell pod was left behind")
+	}
+}
+
+func TestCancelingAStartStillRemovesThePod(t *testing.T) {
+	svc, cs := service(t, true)
+	creates(cs, "spinoza-node-shell-canceled", corev1.PodPending, "")
+	deleted := false
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deleted = true
+		return false, nil, nil
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := svc.Start(ctx, "p-mk1")
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("start error = %v, want cancellation", err)
+	}
+	if !deleted {
+		t.Fatal("a canceled node shell pod was left behind")
+	}
+}
+
 func TestRemoveDeletesThePod(t *testing.T) {
 	svc, cs := service(t, true, running("spinoza-node-shell-abc"))
 
@@ -326,6 +373,14 @@ func TestRemoveDeletesThePod(t *testing.T) {
 	_, err := cs.CoreV1().Pods(DefaultNamespace).Get(t.Context(), "spinoza-node-shell-abc", metav1.GetOptions{})
 	if err == nil {
 		t.Fatal("the pod outlived the shell")
+	}
+}
+
+func TestRemoveTreatsAMissingPodAsAlreadyGone(t *testing.T) {
+	svc, _ := service(t, true)
+
+	if err := svc.Remove(t.Context(), "spinoza-node-shell-gone"); err != nil {
+		t.Fatalf("remove missing pod: %v", err)
 	}
 }
 
