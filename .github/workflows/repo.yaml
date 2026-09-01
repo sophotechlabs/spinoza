@@ -79,6 +79,7 @@ jobs:
       - run: just test-release-publication
       - run: just test-packaging
       - run: just test-verify-archives
+      - run: just test-verify-checksums
       - run: just test-uninstall
 
   sbom:

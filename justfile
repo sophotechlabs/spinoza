@@ -1008,7 +1008,7 @@ verify-checksums dir:
         exit 1
     fi
     checked=0
-    for file in "$dir"/*.tar.gz "$dir"/*.zip "$dir"/*.deb "$dir"/*.rpm; do
+    for file in "$dir"/*.tar.gz "$dir"/*.tgz "$dir"/*.zip "$dir"/*.deb "$dir"/*.rpm; do
         if [ ! -f "$file" ]; then
             continue
         fi
@@ -1030,6 +1030,26 @@ verify-checksums dir:
         exit 1
     fi
     echo "verify-checksums: every artifact in $dir matches checksums.txt"
+
+test-verify-checksums:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=$(mktemp -d)
+    trap 'rm -rf "$out"' EXIT
+    artifact="$out/spinoza-9.9.9.tgz"
+    printf 'chart' > "$artifact"
+    if command -v sha256sum > /dev/null; then
+        (cd "$out" && sha256sum "$(basename "$artifact")" > checksums.txt)
+    else
+        (cd "$out" && shasum -a 256 "$(basename "$artifact")" > checksums.txt)
+    fi
+    just verify-checksums "$out"
+    printf 'changed' >> "$artifact"
+    if just verify-checksums "$out" > /dev/null 2>&1; then
+        echo "test-verify-checksums: a changed Helm chart still passed"
+        exit 1
+    fi
+    echo "test-verify-checksums: Helm charts are checked and checksum mismatches fail"
 
 wait-for-release:
     #!/usr/bin/env bash
