@@ -18,7 +18,7 @@ import { useCatalogStore } from '../src/store/catalog';
 import { useTerminalsStore } from '../src/store/terminals';
 import { useIdentityStore } from '../src/store/identity';
 import { OWN_WINDOW } from '../src/lib/identity';
-import { hydrate, resetStored } from '../src/lib/persist';
+import { hydrate, resetStored, withoutTrackingChanges } from '../src/lib/persist';
 
 configure({ asyncUtilTimeout: 5000 });
 
@@ -28,20 +28,22 @@ beforeEach(() => {
   resetStored();
   hydrate();
   window.history.replaceState(null, '', '/');
-  usePanelsStore.getState().reset();
-  useClusterStore.getState().reset();
-  useHelmStore.getState().reset();
-  useSessionStore.getState().reset();
-  useContextsStore.getState().reset();
-  useForwardsStore.getState().clear();
-  useClustersStore.getState().reset();
-  useClusterHealthStore.getState().reset();
-  useNamespaceStore.getState().reset();
-  useFiltersStore.getState().clear();
-  useRecentsStore.getState().clear();
-  useCatalogStore.getState().clear();
-  useTerminalsStore.getState().reset();
-  useIdentityStore.setState({ session: OWN_WINDOW, known: false });
+  withoutTrackingChanges(() => {
+    usePanelsStore.getState().reset();
+    useClusterStore.getState().reset();
+    useHelmStore.getState().reset();
+    useSessionStore.getState().reset();
+    useContextsStore.getState().reset();
+    useForwardsStore.getState().clear();
+    useClustersStore.getState().reset();
+    useClusterHealthStore.getState().reset();
+    useNamespaceStore.getState().reset();
+    useFiltersStore.getState().clear();
+    useRecentsStore.getState().clear();
+    useCatalogStore.getState().clear();
+    useTerminalsStore.getState().reset();
+    useIdentityStore.setState({ session: OWN_WINDOW, known: false });
+  });
 });
 
 class ResizeObserverStub {

@@ -43,11 +43,16 @@ function replace(next: Map<string, string>): void {
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 let saving = false;
+let tracking = true;
+let activeSave: Promise<void> | null = null;
+let saveEpoch = 0;
 
 const changed = new Set<string>();
+const migrating = new Map<string, string>();
 
 export function startSaving(): void {
   saving = true;
+  void save();
 }
 
 export function stopSaving(): void {
@@ -98,6 +103,7 @@ function fromBrowser(): Map<string, string> {
 }
 
 export function hydrate(): void {
+  migrating.clear();
   const served = fromServer();
   if (served === null) {
     replace(fromBrowser());
@@ -114,6 +120,10 @@ export function hydrate(): void {
   }
   for (const key of local.keys()) {
     changed.add(key);
+    const value = local.get(key);
+    if (value !== undefined) {
+      migrating.set(key, value);
+    }
   }
   void save();
 }
@@ -124,8 +134,21 @@ export function readStored(key: string): string | null {
 
 export function writeStored(key: string, value: string): void {
   cache().set(key, value);
+  if (!tracking) {
+    return;
+  }
   changed.add(key);
   schedule();
+}
+
+export function withoutTrackingChanges(action: () => void): void {
+  const was = tracking;
+  tracking = false;
+  try {
+    action();
+  } finally {
+    tracking = was;
+  }
 }
 
 export function storedKeys(): string[] {
@@ -206,22 +229,35 @@ export function save(): Promise<void> {
   if (!saving) {
     return Promise.resolve();
   }
+  if (activeSave !== null) {
+    return activeSave.then(() => save());
+  }
   const sending = pending();
   if (Object.keys(sending).length === 0) {
     return Promise.resolve();
   }
   const settings: Settings = { values: sending };
-  return request(SETTINGS_PATH, {
+  const epoch = saveEpoch;
+  const sendingNow = request(SETTINGS_PATH, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
   })
     .then((response) => {
-      if (response.ok) {
-        accepted(sending);
+      if (!response.ok || saveEpoch !== epoch) {
+        return;
       }
+      accepted(sending);
+      removeMigrated(sending);
     })
     .catch(() => undefined);
+  const settled = sendingNow.finally(() => {
+    if (activeSave === settled) {
+      activeSave = null;
+    }
+  });
+  activeSave = settled;
+  return settled;
 }
 
 function pending(): Record<string, string> {
@@ -243,6 +279,24 @@ function accepted(sent: Record<string, string>): void {
   }
 }
 
+function removeMigrated(sent: Record<string, string>): void {
+  for (const key of Object.keys(sent)) {
+    const legacy = migrating.get(key);
+    if (legacy === undefined) {
+      continue;
+    }
+    try {
+      if (window.localStorage.getItem(key) !== legacy) {
+        continue;
+      }
+      window.localStorage.removeItem(key);
+    } catch {
+      continue;
+    }
+    migrating.delete(key);
+  }
+}
+
 export function flush(): Promise<void> {
   if (timer !== null) {
     clearTimeout(timer);
@@ -253,7 +307,11 @@ export function flush(): Promise<void> {
 
 export function resetStored(): void {
   saving = false;
+  tracking = true;
+  saveEpoch += 1;
+  activeSave = null;
   changed.clear();
+  migrating.clear();
   replace(new Map<string, string>());
   if (timer !== null) {
     clearTimeout(timer);

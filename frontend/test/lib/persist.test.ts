@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SAVE_DELAY_MS,
   SETTINGS_PATH,
+  flush,
   hydrate,
   readStored,
   resetStored,
@@ -38,6 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
   stopSaving();
@@ -137,6 +139,74 @@ describe('settings left over in the browser', () => {
     hydrate();
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('are sent when page saving starts after hydration', async () => {
+    const fetchMock = stubFetch();
+    window.localStorage.setItem('spinoza.theme.v1', '"nord"');
+    served({});
+
+    hydrate();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    startSaving();
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(body(fetchMock)).toEqual({ 'spinoza.theme.v1': '"nord"' });
+  });
+
+  it('are removed only after the server accepts the migration', async () => {
+    const fetchMock = stubFetch();
+    startSaving();
+    window.localStorage.setItem('spinoza.theme.v1', '"nord"');
+    served({});
+
+    hydrate();
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem('spinoza.theme.v1')).toBeNull();
+  });
+
+  it('remain available when the server refuses the migration', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    startSaving();
+    window.localStorage.setItem('spinoza.theme.v1', '"nord"');
+    served({});
+
+    hydrate();
+    await flush();
+
+    expect(window.localStorage.getItem('spinoza.theme.v1')).toBe('"nord"');
+  });
+
+  it('are removed after an accepted replacement is stored', async () => {
+    const fetchMock = stubFetch();
+    startSaving();
+    window.localStorage.setItem('spinoza.theme.v1', '"nord"');
+    served({});
+    hydrate();
+    writeStored('spinoza.theme.v1', '"borg"');
+
+    await flush();
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(window.localStorage.getItem('spinoza.theme.v1')).toBeNull();
+  });
+
+  it('do not overwrite a value changed by another browser tab', async () => {
+    stubFetch();
+    startSaving();
+    window.localStorage.setItem('spinoza.theme.v1', '"nord"');
+    served({});
+    hydrate();
+    window.localStorage.setItem('spinoza.theme.v1', '"matrix"');
+
+    await flush();
+
+    expect(window.localStorage.getItem('spinoza.theme.v1')).toBe('"matrix"');
   });
 });
 
@@ -274,6 +344,35 @@ describe('sending only what this window changed', () => {
     writeStored('spinoza.theme.v1', '"nord"');
     await inFlight;
     await save();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const second = fetchMock.mock.calls[1][1] as { body: string };
+    expect((JSON.parse(second.body) as { values: Record<string, string> }).values).toEqual({
+      'spinoza.theme.v1': '"nord"',
+    });
+  });
+
+  it('does not let a stale save reach the server after a newer one', async () => {
+    let finishFirst: ((response: { ok: boolean; status: number }) => void) | undefined;
+    const first = new Promise<{ ok: boolean; status: number }>((resolve) => {
+      finishFirst = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => first)
+      .mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
+    startSaving();
+    writeStored('spinoza.theme.v1', '"borg"');
+
+    const stale = save();
+    writeStored('spinoza.theme.v1', '"nord"');
+    const latest = save();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    finishFirst?.({ ok: true, status: 200 });
+    await stale;
+    await latest;
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const second = fetchMock.mock.calls[1][1] as { body: string };

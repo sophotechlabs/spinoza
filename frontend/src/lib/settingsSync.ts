@@ -1,21 +1,39 @@
-import { isSaving, refresh, startSaving, stopSaving } from './persist';
+import { isSaving, refresh, startSaving, stopSaving, withoutTrackingChanges } from './persist';
 import { useSettingsStore } from '../store/settings';
 import { useThemeStore } from '../store/theme';
 
-export async function catchUp(): Promise<void> {
+let activeCatchUp: Promise<void> | null = null;
+
+async function refreshSettings(): Promise<void> {
   if (!(await refresh())) {
     return;
   }
   const was = isSaving();
   stopSaving();
   try {
-    useThemeStore.getState().adoptStored();
-    useSettingsStore.getState().adoptStored();
+    withoutTrackingChanges(() => {
+      useThemeStore.getState().adoptStored();
+      useSettingsStore.getState().adoptStored();
+    });
   } finally {
     if (was) {
       startSaving();
     }
   }
+}
+
+export function catchUp(): Promise<void> {
+  if (activeCatchUp !== null) {
+    return activeCatchUp;
+  }
+  const started = refreshSettings();
+  const settled = started.finally(() => {
+    if (activeCatchUp === settled) {
+      activeCatchUp = null;
+    }
+  });
+  activeCatchUp = settled;
+  return settled;
 }
 
 export function watchSettings(): () => void {

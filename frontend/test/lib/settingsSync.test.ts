@@ -6,9 +6,11 @@ import {
   hydrate,
   isSaving,
   readStored,
+  resetStored,
   startSaving,
   stopSaving,
   storedKeys,
+  withoutTrackingChanges,
   writeStored,
 } from '../../src/lib/persist';
 import { useThemeStore } from '../../src/store/theme';
@@ -39,11 +41,14 @@ function held(): Record<string, string> {
 function loadedWith(values: Record<string, string>) {
   window.__SPINOZA_SETTINGS__ = JSON.stringify(values);
   hydrate();
-  useThemeStore.getState().adoptStored();
-  useSettingsStore.getState().adoptStored();
+  withoutTrackingChanges(() => {
+    useThemeStore.getState().adoptStored();
+    useSettingsStore.getState().adoptStored();
+  });
 }
 
 beforeEach(() => {
+  resetStored();
   stopSaving();
   window.localStorage.clear();
   loadedWith({ [THEME_KEY]: 'nord' });
@@ -52,7 +57,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   delete window.__SPINOZA_SETTINGS__;
-  stopSaving();
+  resetStored();
 });
 
 describe('catchUp', () => {
@@ -184,6 +189,27 @@ describe('watchSettings', () => {
 
     document.dispatchEvent(new Event('visibilitychange'));
 
+    await vi.waitFor(() => {
+      expect(useThemeStore.getState().preference).toBe('borg');
+    });
+    stop();
+  });
+
+  it('coalesces the focus and visibility events from one return', async () => {
+    const stop = watchSettings();
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const response = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    const fetchMock = vi.fn(() => response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    finish({ ok: true, json: () => Promise.resolve({ values: { [THEME_KEY]: 'borg' } }) });
+    await response;
     await vi.waitFor(() => {
       expect(useThemeStore.getState().preference).toBe('borg');
     });
