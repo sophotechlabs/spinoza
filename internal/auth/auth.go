@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -98,6 +99,33 @@ func (a *Authenticator) Identify(w http.ResponseWriter, r *http.Request) (Identi
 	default:
 		return a.fromSession(w, r)
 	}
+}
+
+func (a *Authenticator) StillValid(r *http.Request, expected Identity) bool {
+	var current Identity
+	var ok bool
+	switch a.cfg.Mode {
+	case ModeNone:
+		current = Identity{Role: RoleAdmin}
+		ok = true
+	case ModeProxy:
+		current, ok = a.fromHeaders(r)
+	default:
+		held, found := a.sessions.read(r)
+		if !found || a.revoked.revoked(held.who.Session) {
+			return false
+		}
+		current = held.who
+		ok = true
+	}
+	return ok && sameIdentity(current, expected)
+}
+
+func sameIdentity(left, right Identity) bool {
+	if left.User != right.User || left.Role != right.Role || left.Session != right.Session {
+		return false
+	}
+	return slices.Equal(left.Groups, right.Groups)
 }
 
 func (a *Authenticator) fromHeaders(r *http.Request) (Identity, bool) {

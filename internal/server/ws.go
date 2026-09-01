@@ -11,16 +11,20 @@ import (
 	"github.com/coder/websocket/wsjson"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/logs"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const (
-	maxLogBatch             = 200
-	maxSubscriptions        = 64
-	defaultFeedPingInterval = 30 * time.Second
-	defaultFeedPingTimeout  = 10 * time.Second
+	maxLogBatch                       = 200
+	maxSubscriptions                  = 64
+	defaultLiveConnectionLimit        = 128
+	defaultIdentityConnectionLimit    = 8
+	defaultFeedPingInterval           = 30 * time.Second
+	defaultFeedPingTimeout            = 10 * time.Second
+	defaultAuthorizationCheckInterval = 5 * time.Second
 )
 
 const msgError = "error"
@@ -83,6 +87,12 @@ type entry struct {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	release, ok := s.claimLiveConnection(r)
+	if !ok {
+		writeError(w, http.StatusTooManyRequests, "too many live connections are already open")
+		return
+	}
+	defer release()
 	conn, err := accept(w, r)
 	if err != nil {
 		slog.Warn("a websocket upgrade was refused", "path", r.URL.Path, "error", err)
@@ -114,6 +124,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	s.watchCluster(ctx)
 	safe.Go("watching a feed websocket", func() { sess.keepAlive(ctx, cancel) })
+	s.revalidateLive(ctx, cancel, r, "revalidating a feed websocket")
 
 	for {
 		var msg api.ClientMsg
@@ -122,6 +133,101 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sess.handle(msg)
+	}
+}
+
+func liveIdentity(r *http.Request) string {
+	who, ok := auth.IdentityFrom(r.Context())
+	return identityName(who, ok)
+}
+
+func identityName(who auth.Identity, ok bool) string {
+	if !ok {
+		return "local"
+	}
+	if who.User != "" {
+		return who.User
+	}
+	if who.Session != "" {
+		return who.Session
+	}
+	return "anonymous"
+}
+
+func (s *Server) claimLiveConnection(r *http.Request) (func(), bool) {
+	identity := liveIdentity(r)
+	s.mu.Lock()
+	liveLimit := s.liveLimit
+	if liveLimit <= 0 {
+		liveLimit = defaultLiveConnectionLimit
+	}
+	identityLimit := s.identityLimit
+	if identityLimit <= 0 {
+		identityLimit = defaultIdentityConnectionLimit
+	}
+	globalFull := s.live >= liveLimit
+	identityFull := s.liveByUser[identity] >= identityLimit
+	if globalFull || identityFull {
+		globalOpen := s.live
+		identityOpen := s.liveByUser[identity]
+		s.mu.Unlock()
+		slog.Warn("a live connection was refused because its budget is full",
+			"identity", identity, "global_open", globalOpen, "identity_open", identityOpen)
+		return nil, false
+	}
+	s.live++
+	s.liveByUser[identity]++
+	s.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			s.live--
+			s.liveByUser[identity]--
+			if s.liveByUser[identity] == 0 {
+				delete(s.liveByUser, identity)
+			}
+			s.mu.Unlock()
+		})
+	}, true
+}
+
+func (s *Server) revalidateLive(ctx context.Context, cancel context.CancelFunc, r *http.Request, task string) {
+	who, known := auth.IdentityFrom(ctx)
+	identity := identityName(who, known)
+	safe.Go(task, func() { s.watchAuthorization(ctx, cancel, r, who, known, identity) })
+}
+
+func (s *Server) watchAuthorization(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	r *http.Request,
+	who auth.Identity,
+	known bool,
+	identity string,
+) {
+	interval := s.authEvery
+	if interval <= 0 {
+		interval = defaultAuthorizationCheckInterval
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			authn := s.authenticator()
+			if authn == nil {
+				continue
+			}
+			if known && authn.StillValid(r, who) {
+				continue
+			}
+			slog.Info("a live connection ended because its authentication is no longer valid", "identity", identity)
+			cancel()
+			return
+		}
 	}
 }
 

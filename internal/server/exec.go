@@ -128,6 +128,12 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "node is required")
 		return
 	}
+	release, allowed := s.claimLiveConnection(r)
+	if !allowed {
+		writeError(w, http.StatusTooManyRequests, "too many live connections are already open")
+		return
+	}
+	defer release()
 	writer, ok := s.writingSocket(w, r, node)
 	if !ok {
 		return
@@ -143,6 +149,7 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	s.revalidateLive(ctx, cancel, r, "revalidating the node shell on "+node)
 
 	backend := s.managerFor(r)
 	conn := &execConn{conn: socket, ctx: ctx}
@@ -188,6 +195,12 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
+	release, allowed := s.claimLiveConnection(r)
+	if !allowed {
+		writeError(w, http.StatusTooManyRequests, "too many live connections are already open")
+		return
+	}
+	defer release()
 	socket, err := accept(w, r)
 	if err != nil {
 		slog.Warn("a terminal upgrade was refused", "namespace", req.Namespace, "pod", req.Pod, "error", err)
@@ -199,6 +212,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	s.revalidateLive(ctx, cancel, r, "revalidating the terminal in "+req.Namespace+"/"+req.Pod)
 
 	backend := s.managerFor(r)
 	conn := &execConn{conn: socket, ctx: ctx}

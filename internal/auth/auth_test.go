@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 var testProxySecret = []byte(strings.Repeat("p", minimumSecretBytes))
@@ -87,6 +88,69 @@ func TestProxyModeTurnsAwayARequestWithNoIdentityOnIt(t *testing.T) {
 
 	if _, ok := held.Identify(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/overview", http.NoBody)); ok {
 		t.Fatal("a request that bypassed the proxy was let in")
+	}
+}
+
+func TestAProxyIdentityStopsBeingValidWhenItsHeadersChange(t *testing.T) {
+	held := modeless(t, Config{Mode: ModeProxy})
+	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
+	req.Header.Set(DefaultUserHeader, "alice")
+	req.Header.Set(DefaultGroupsHeader, "platform")
+	req.Header.Set(DefaultProxyAuthHeader, string(testProxySecret))
+	who, ok := held.Identify(httptest.NewRecorder(), req)
+	if !ok || !held.StillValid(req, who) {
+		t.Fatal("the proxy identity was not initially valid")
+	}
+
+	req.Header.Set(DefaultGroupsHeader, "guests")
+	if held.StillValid(req, who) {
+		t.Fatal("a proxy identity stayed valid after its groups changed")
+	}
+}
+
+func TestARevokedSessionIsNotStillValid(t *testing.T) {
+	held := modeless(t, Config{Mode: ModeProxy})
+	held.cfg.Mode = ModeOIDC
+	who := Identity{User: "alice", Groups: []string{"platform"}, Role: RoleEditor, Session: "session-7"}
+	recorded := httptest.NewRecorder()
+	if err := held.sessions.issue(recorded, who, held.sessions.now()); err != nil {
+		t.Fatalf("issuing a session: %v", err)
+	}
+	response := recorded.Result()
+	defer func() { _ = response.Body.Close() }()
+	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
+	req.AddCookie(response.Cookies()[0])
+	if !held.StillValid(req, who) {
+		t.Fatal("a current session was not valid")
+	}
+
+	held.revoked.revoke(who.Session)
+	if held.StillValid(req, who) {
+		t.Fatal("a revoked session stayed valid")
+	}
+}
+
+func TestAnExpiredSessionIsNotStillValid(t *testing.T) {
+	held := modeless(t, Config{Mode: ModeProxy})
+	held.cfg.Mode = ModeOIDC
+	now := time.Now().Truncate(time.Second)
+	held.sessions.now = func() time.Time { return now }
+	who := Identity{User: "alice", Role: RoleViewer, Session: "session-8"}
+	recorded := httptest.NewRecorder()
+	if err := held.sessions.issue(recorded, who, now); err != nil {
+		t.Fatalf("issuing a session: %v", err)
+	}
+	response := recorded.Result()
+	defer func() { _ = response.Body.Close() }()
+	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
+	req.AddCookie(response.Cookies()[0])
+	if !held.StillValid(req, who) {
+		t.Fatal("a current session was not valid")
+	}
+
+	held.sessions.now = func() time.Time { return now.Add(DefaultSessionTTL) }
+	if held.StillValid(req, who) {
+		t.Fatal("an expired session stayed valid")
 	}
 }
 

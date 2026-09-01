@@ -75,6 +75,10 @@ type Server struct {
 	views         views
 	sessions      map[*wsSession]struct{}
 	terminals     map[*websocket.Conn]string
+	live          int
+	liveByUser    map[string]int
+	liveLimit     int
+	identityLimit int
 	profiler      bool
 	health        map[string]api.ClusterHealth
 	misses        map[string]int
@@ -89,6 +93,7 @@ type Server struct {
 	pingEvery     time.Duration
 	feedPingEvery time.Duration
 	feedPingWait  time.Duration
+	authEvery     time.Duration
 	authn         *auth.Authenticator
 	publicOrigin  string
 	served        bool
@@ -104,6 +109,9 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		baseline:      noBaselines{},
 		sessions:      map[*wsSession]struct{}{},
 		terminals:     map[*websocket.Conn]string{},
+		liveByUser:    map[string]int{},
+		liveLimit:     defaultLiveConnectionLimit,
+		identityLimit: defaultIdentityConnectionLimit,
 		health:        map[string]api.ClusterHealth{},
 		misses:        map[string]int{},
 		taping:        map[string]*recording{},
@@ -111,6 +119,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		pingEvery:     defaultPingInterval,
 		feedPingEvery: defaultFeedPingInterval,
 		feedPingWait:  defaultFeedPingTimeout,
+		authEvery:     defaultAuthorizationCheckInterval,
 		views:         views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}
 }
