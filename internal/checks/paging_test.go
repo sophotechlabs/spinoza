@@ -60,6 +60,22 @@ func TestAPageStopsAtTheLimitAndOffersACursor(t *testing.T) {
 	}
 }
 
+func TestAPageHonorsAnExplicitLimit(t *testing.T) {
+	lister := newLister(manyDeployments(10)...)
+
+	got, err := Page(t.Context(), lister, descriptors(), api.Metrics{}, paged, "", wholeCluster(), 3)
+	if err != nil {
+		t.Fatalf("page: %v", err)
+	}
+
+	if len(got.Findings) != 3 {
+		t.Fatalf("findings = %d, want 3", len(got.Findings))
+	}
+	if got.Next == "" {
+		t.Fatal("the limited page offered no cursor")
+	}
+}
+
 func TestTheLastPageOffersNoCursor(t *testing.T) {
 	lister := newLister(manyDeployments(findingsShown + 40)...)
 

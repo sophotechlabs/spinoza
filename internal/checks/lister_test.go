@@ -19,6 +19,7 @@ type fakeLister struct {
 	scanned int
 	listed  int
 	facts   Facts
+	cached  []api.ResourceDescriptor
 }
 
 func newLister(objects ...*unstructured.Unstructured) *fakeLister {
@@ -82,7 +83,7 @@ func (f *fakeLister) scanCount() int {
 }
 
 func (f *fakeLister) Cached() []api.ResourceDescriptor {
-	return nil
+	return f.cached
 }
 
 func (f *fakeLister) Facts() Facts {

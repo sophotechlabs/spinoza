@@ -66,6 +66,14 @@ func TestAServerVersionNobodyCanReadStopsTheCheck(t *testing.T) {
 	}
 }
 
+func TestAMalformedMinorVersionIsNotGuessed(t *testing.T) {
+	for _, version := range []string{"v1.next", "1.36beta", "v1.+"} {
+		if got := minorOf(version); got != 0 {
+			t.Fatalf("minorOf(%q) = %d, want 0", version, got)
+		}
+	}
+}
+
 func TestEveryRemovalTheMarkersNameIsCaughtOnAnOldEnoughCluster(t *testing.T) {
 	const running = 21
 

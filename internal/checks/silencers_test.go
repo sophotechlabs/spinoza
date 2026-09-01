@@ -146,6 +146,21 @@ func TestRepeatedSilencerFailuresAreCountedWithoutRepeatingTheError(t *testing.T
 	}
 }
 
+func TestSeveralSilencerFailuresUseThePluralObjectCount(t *testing.T) {
+	raw := `[{"id":"reaches","silences":"privileged-containers","expr":"object.spec.nothingHere == 1","reason":"x"}]`
+
+	report := withSilencers(
+		t, raw,
+		privilegedDaemonSet("one"),
+		privilegedDaemonSet("two"),
+		privilegedDaemonSet("three"),
+	)
+
+	if !strings.Contains(report.Error, "and 2 other objects") {
+		t.Fatalf("error = %q, want the other objects counted", report.Error)
+	}
+}
+
 func TestSeveralFindingsOnOneObjectCountAsOneSilencerFailure(t *testing.T) {
 	raw := `[{"id":"reaches","silences":"privileged-containers","expr":"object.spec.nothingHere == 1","reason":"x"}]`
 	object := workload("DaemonSet", "agent", podSpec(
@@ -227,6 +242,9 @@ func TestASilencerCannotReadFieldsTheFindingDoesNotCarry(t *testing.T) {
 		{"a Secret's labels", "orphaned-secret", `object.metadata.labels["tier"] == "system"`},
 		{"a claim's spec", "claim-nothing-mounts", `object.spec.storageClassName == "local"`},
 		{"a field through brackets", "orphaned-config-map", `object["data"].size() > 0`},
+		{"a dynamic bracket", "orphaned-config-map", `object[object.metadata.name] == "value"`},
+		{"a non-string bracket", "orphaned-config-map", `object[0] == "value"`},
+		{"a metadata iteration", "orphaned-config-map", `object.metadata.exists(k, k == "name")`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := `[{"id":"quiet","silences":"` + tc.check + `","expr":` + strconv.Quote(tc.expr) +

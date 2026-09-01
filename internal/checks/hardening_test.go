@@ -228,6 +228,17 @@ func TestAContainerProfileOverridesAnUnconfinedPod(t *testing.T) {
 	}
 }
 
+func TestAnUnconfinedPodProfileIsReportedAtPodLevel(t *testing.T) {
+	found := report(t, deployment("api", podSpecWith(map[string]any{
+		"securityContext": map[string]any{"seccompProfile": map[string]any{"type": unconfined}},
+	}, container("app", nil))))
+
+	detail := onlyFinding(t, found, "seccomp-unconfined").Detail
+	if !strings.Contains(detail, "on the pod") {
+		t.Fatalf("detail was %q, want the pod-level profile named", detail)
+	}
+}
+
 func TestTheLegacyAppArmorAnnotationIsRead(t *testing.T) {
 	obj := annotated(deployment("api", podSpec(container("app", nil))), apparmorPrefix+"app", "unconfined")
 
@@ -463,6 +474,18 @@ func TestAMalformedSupplementalGroupDoesNotHideRoot(t *testing.T) {
 
 	if findingCount(t, found, "root-group") != 1 {
 		t.Fatal("a malformed supplementalGroup hid a later root group")
+	}
+}
+
+func TestNonRootSupplementalGroupsAreNotReported(t *testing.T) {
+	found := report(t, deployment("api", podSpecWith(map[string]any{
+		"securityContext": map[string]any{
+			"supplementalGroups": []any{int64(1000), float64(2000), "not-a-number"},
+		},
+	}, container("app", nil))))
+
+	if findingCount(t, found, "root-group") != 0 {
+		t.Fatal("non-root supplemental groups were reported as root")
 	}
 }
 

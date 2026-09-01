@@ -424,6 +424,64 @@ func TestABinaryConfigMapKeyCounts(t *testing.T) {
 	}
 }
 
+func TestAKeyInAnAbsentConfigMapIsNotReportedAsAMissingKey(t *testing.T) {
+	found := report(t,
+		configMap("other", map[string]any{"MODE": "live"}),
+		labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
+			"env": []any{map[string]any{"name": "PORT", "valueFrom": map[string]any{
+				"configMapKeyRef": map[string]any{"name": "settings", "key": "PORT"},
+			}}},
+		}))))
+
+	if findingCount(t, found, "config-map-missing") != 1 {
+		t.Fatal("an absent ConfigMap was not reported")
+	}
+	if findingCount(t, found, "config-map-key-missing") != 0 {
+		t.Fatal("a key was reported missing from a ConfigMap that does not exist")
+	}
+}
+
+func TestConfigMapDataOfTheWrongShapeHasNoKeys(t *testing.T) {
+	settings := simple("ConfigMap", "settings", testNamespace, nil)
+	settings.Object["data"] = "not-an-object"
+	found := report(t, settings, labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
+		"env": []any{map[string]any{"name": "PORT", "valueFrom": map[string]any{
+			"configMapKeyRef": map[string]any{"name": "settings", "key": "PORT"},
+		}}},
+	}))))
+
+	if findingCount(t, found, "config-map-key-missing") != 1 {
+		t.Fatal("malformed ConfigMap data was treated as containing a requested key")
+	}
+}
+
+func TestMalformedPullSecretsDoNotHideALaterMissingSecret(t *testing.T) {
+	found := report(t, labelledDeployment("api", podSpecWith(map[string]any{
+		"imagePullSecrets": []any{
+			"not-an-object",
+			map[string]any{"name": "registry"},
+		},
+	}, sourcedContainer(nil))))
+
+	if findingCount(t, found, "pull-secret-missing") != 1 {
+		t.Fatal("a malformed pull secret hid a later missing one")
+	}
+}
+
+func TestMalformedSelectorsAndLabelsDoNotSelectAWorkload(t *testing.T) {
+	deployment := labelledDeployment("api", podSpec(sourcedContainer(nil)))
+	template := specAt(deployment, specField, "template", "metadata")
+	template["labels"] = map[string]any{"app": "api", "generation": int64(3)}
+	found := report(t,
+		simple("Service", "malformed", testNamespace, map[string]any{"selector": "not-an-object"}),
+		service("non-string", map[string]any{"app": int64(3)}),
+		deployment)
+
+	if findingCount(t, found, "no-service-selects-it") != 1 {
+		t.Fatal("a malformed or non-string selector selected a workload")
+	}
+}
+
 func TestAWorkloadWithNoTemplateLabelsIsNotJudgedOnSelectors(t *testing.T) {
 	bare := workload("Deployment", "api", podSpec(sourcedContainer(nil)))
 
@@ -445,6 +503,22 @@ func TestAClaimAStatefulSetGeneratedIsMounted(t *testing.T) {
 
 	if findingCount(t, report(t, set, claim), "claim-nothing-mounts") != 0 {
 		t.Fatal("a claim a StatefulSet generated was reported as unmounted")
+	}
+}
+
+func TestMalformedClaimTemplatesDoNotHideALaterValidTemplate(t *testing.T) {
+	set := labelledWorkload("StatefulSet", "redis-broker", podSpec(sourcedContainer(nil)))
+	specOf(set)["volumeClaimTemplates"] = []any{
+		"not-an-object",
+		map[string]any{"metadata": "not-an-object"},
+		map[string]any{"metadata": map[string]any{"name": int64(3)}},
+		map[string]any{"metadata": map[string]any{"name": "data"}},
+		map[string]any{"metadata": map[string]any{"name": "logs"}},
+	}
+	claim := simple("PersistentVolumeClaim", "logs-redis-broker-0", testNamespace, map[string]any{})
+
+	if findingCount(t, report(t, set, claim), "claim-nothing-mounts") != 0 {
+		t.Fatal("malformed claim templates hid a later valid template")
 	}
 }
 

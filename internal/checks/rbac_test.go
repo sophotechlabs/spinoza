@@ -250,6 +250,18 @@ func TestAMalformedRuleValueDoesNotHideFollowingPermissions(t *testing.T) {
 	}
 }
 
+func TestMalformedRuleEntriesDoNotHideLaterPermissions(t *testing.T) {
+	wide := role("Role", "wide", map[string]any{
+		"verbs":     []any{int64(7), "get"},
+		"resources": []any{int64(7), "secrets"},
+		"apiGroups": []any{int64(7), ""},
+	})
+
+	if findingCount(t, report(t, wide), "rbac-read-secrets") != 1 {
+		t.Fatal("malformed rule entries hid a later sensitive permission")
+	}
+}
+
 func TestARoleWithNoRulesAtAllSaysNothing(t *testing.T) {
 	bare := simple("ClusterRole", "aggregator", "", nil)
 

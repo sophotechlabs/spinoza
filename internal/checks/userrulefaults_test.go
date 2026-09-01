@@ -1,9 +1,19 @@
 package checks
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
+
+func TestNilRuleDiagnosticsAreSafe(t *testing.T) {
+	var diagnostics *ruleDiagnostics
+	diagnostics.record(UserRule{ID: "broken"}, Subject{}, errors.New("bad rule"))
+
+	if message := diagnostics.message(); message != "" {
+		t.Fatalf("nil diagnostics returned %q", message)
+	}
+}
 
 func TestARuleListThatReadsHasNoFaults(t *testing.T) {
 	if faults := Faults(betaRule); len(faults) != 0 {

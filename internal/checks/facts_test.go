@@ -260,6 +260,23 @@ func TestATolerationCoversTheTaintItNames(t *testing.T) {
 	}
 }
 
+func TestTolerationsSkipMalformedEntriesBeforeAMatch(t *testing.T) {
+	tainted := node("worker", map[string]any{hostnameKey: "worker"}, map[string]any{
+		"taints": []any{map[string]any{"key": "gpu", "value": "yes", "effect": "NoSchedule"}},
+	}, map[string]any{"cpu": "4", "memory": "8Gi"})
+	tolerated := deployment("api", podSpecWith(map[string]any{
+		"tolerations": []any{
+			"not a toleration",
+			map[string]any{"key": "other", "value": "yes", "effect": "NoSchedule"},
+			map[string]any{"key": "gpu", "value": "yes", "effect": "NoSchedule"},
+		},
+	}, container("app", nil)))
+
+	if findingCount(t, report(t, tainted, tolerated), "tolerations-miss-the-taints") != 0 {
+		t.Fatal("a valid toleration after malformed entries was missed")
+	}
+}
+
 func TestAMalformedTolerationDoesNotHideALaterMatch(t *testing.T) {
 	tainted := node("worker", map[string]any{hostnameKey: "worker"}, map[string]any{
 		"taints": []any{map[string]any{"key": "gpu", "value": "yes", "effect": "NoSchedule"}},
@@ -332,6 +349,84 @@ func TestTheSpreadCheckCountsDomainsNotNodes(t *testing.T) {
 	}
 	if findingCount(t, report(t, one, two, three, spread(2)), "spread-needs-more-domains") != 0 {
 		t.Fatal("two zones were not enough for two replicas")
+	}
+}
+
+func TestSpreadConstraintsSkipMalformedEntriesAndDefaultTheSkew(t *testing.T) {
+	nodes := []*unstructured.Unstructured{
+		plainNode("unlabelled", map[string]any{hostnameKey: "unlabelled"}),
+		plainNode("a", map[string]any{hostnameKey: "a", "zone": "a"}),
+		plainNode("b", map[string]any{hostnameKey: "b", "zone": "b"}),
+	}
+	spread := replicas(deployment("api", podSpecWith(map[string]any{
+		"topologySpreadConstraints": []any{
+			"not a constraint",
+			map[string]any{"whenUnsatisfiable": doNotSchedule},
+			map[string]any{"topologyKey": "zone", "whenUnsatisfiable": doNotSchedule},
+		},
+	}, container("app", nil))), 3)
+
+	objects := append(nodes, spread)
+	if findingCount(t, report(t, objects...), "spread-needs-more-domains") != 1 {
+		t.Fatal("the default maxSkew did not catch three replicas across two domains")
+	}
+}
+
+func TestMalformedRequiredAntiAffinityIsIgnored(t *testing.T) {
+	cases := []Subject{
+		{Pod: map[string]any{"affinity": map[string]any{"podAntiAffinity": "not an object"}}},
+		{Pod: map[string]any{"affinity": map[string]any{"podAntiAffinity": map[string]any{
+			"requiredDuringSchedulingIgnoredDuringExecution": []any{"not a rule"},
+		}}}},
+	}
+	for _, subject := range cases {
+		if got := requiredAntiAffinity(subject); got != nil {
+			t.Fatalf("anti-affinity = %v, want malformed state ignored", got)
+		}
+	}
+}
+
+func TestAntiAffinityOnlyCountsHostnameDomainsWithUsableNodes(t *testing.T) {
+	empty := newCorpus(nil, nil, nil, allTargets(), nil, nil)
+	wrongTopology := Subject{Replicas: 3, Pod: map[string]any{"affinity": map[string]any{
+		"podAntiAffinity": map[string]any{"requiredDuringSchedulingIgnoredDuringExecution": []any{
+			map[string]any{"topologyKey": "zone"},
+		}},
+	}}}
+	if detail, _ := antiAffinityExceedsNodes(wrongTopology, empty); detail != "" {
+		t.Fatalf("wrong topology detail = %q, want none", detail)
+	}
+	wrongTopology.Pod = map[string]any{"affinity": map[string]any{
+		"podAntiAffinity": map[string]any{"requiredDuringSchedulingIgnoredDuringExecution": []any{
+			map[string]any{"topologyKey": hostnameKey},
+		}},
+	}}
+	if detail, _ := antiAffinityExceedsNodes(wrongTopology, empty); detail != "" {
+		t.Fatalf("empty cluster detail = %q, want none", detail)
+	}
+}
+
+func TestFullestQuotaEntrySkipsUnreadableValues(t *testing.T) {
+	if name, share := fullestEntry("not a map", map[string]any{}); name != "" || share != 0 {
+		t.Fatalf("invalid maps = %q %d, want empty", name, share)
+	}
+	hard := map[string]any{"bad": "not a quantity", "zero": "0", "valid": "10"}
+	used := map[string]any{"valid": "not a quantity"}
+	if name, share := fullestEntry(hard, used); name != "" || share != 0 {
+		t.Fatalf("unreadable values = %q %d, want empty", name, share)
+	}
+}
+
+func TestBaselinePodSecurityNamesPrivilegeAndHostPath(t *testing.T) {
+	unsafe := deployment("api", podSpecWith(map[string]any{
+		"volumes": []any{map[string]any{"name": "host", "hostPath": map[string]any{"path": "/srv/data"}}},
+	}, container("app", map[string]any{"securityContext": map[string]any{"privileged": true}})))
+
+	found := report(t, namespaceObj(testNamespace, map[string]any{enforceLabel: profileBaseline}), unsafe)
+	detail := onlyFinding(t, found, "pod-security-would-reject").Detail
+
+	if !strings.Contains(detail, "privileged") || !strings.Contains(detail, "hostPath volumes") {
+		t.Fatalf("detail = %q, want both baseline violations", detail)
 	}
 }
 

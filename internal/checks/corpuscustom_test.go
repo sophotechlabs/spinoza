@@ -2,6 +2,7 @@ package checks
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -47,6 +48,70 @@ func TestTheCustomResourcesAreReadWithoutBeingAskedFor(t *testing.T) {
 
 	if len(found) != 1 || found[0].Resource != "clusterissuers" {
 		t.Fatalf("the custom kinds were %v", found)
+	}
+}
+
+func TestCustomResourceKindsAreReturnedInStableOrder(t *testing.T) {
+	descs := descriptors()
+	descs["example.io/v1/widgets"] = api.ResourceDescriptor{
+		Group: "example.io", Version: "v1", Resource: "widgets", Kind: "Widget", Category: customResources,
+	}
+
+	found := customKinds(descs)
+
+	if len(found) != 2 {
+		t.Fatalf("custom kinds = %+v, want two", found)
+	}
+	if descKey(found[0]) >= descKey(found[1]) {
+		t.Fatalf("custom kinds = %+v, want stable key order", found)
+	}
+}
+
+func TestCorpusLookupsKeepNamesAndNamespacesSeparate(t *testing.T) {
+	desc := api.ResourceDescriptor{Version: "v1", Resource: "configmaps", Kind: "ConfigMap"}
+	items := []held{
+		{desc: desc, obj: simple("ConfigMap", "alpha", "team-a", nil)},
+		{desc: desc, obj: simple("ConfigMap", "beta", "team-b", nil)},
+	}
+	corpus := newCorpus(items, nil, nil, []target{{resource: "configmaps"}}, nil, nil)
+
+	if !corpus.named("", "configmaps", "team-b", "beta") {
+		t.Fatal("the exact ConfigMap was not found")
+	}
+	if corpus.named("", "configmaps", "team-b", "alpha") {
+		t.Fatal("a ConfigMap in another namespace matched")
+	}
+	if got := corpus.inNamespace("", "configmaps", "team-a"); len(got) != 1 || got[0].GetName() != "alpha" {
+		t.Fatalf("team-a ConfigMaps = %+v, want alpha", got)
+	}
+}
+
+func TestExtraWarmKindsAreUniqueSortedAndBounded(t *testing.T) {
+	already := api.ResourceDescriptor{Group: "apps", Version: "v1", Resource: "deployments"}
+	lister := newLister()
+	lister.cached = []api.ResourceDescriptor{already}
+	for at := 30; at >= 0; at-- {
+		lister.cached = append(lister.cached, api.ResourceDescriptor{
+			Group: "example.io", Version: "v1", Resource: fmt.Sprintf("resources-%02d", at),
+		})
+	}
+	lister.cached = append(lister.cached, lister.cached[1])
+
+	got := alsoWarm(lister, []api.ResourceDescriptor{already})
+
+	if len(got) != extraWarmKinds {
+		t.Fatalf("warm kinds = %d, want cap %d", len(got), extraWarmKinds)
+	}
+	seen := map[string]bool{descKey(already): true}
+	for at, desc := range got {
+		key := descKey(desc)
+		if seen[key] {
+			t.Fatalf("warm kinds repeat %q", key)
+		}
+		seen[key] = true
+		if at > 0 && descKey(got[at-1]) >= key {
+			t.Fatalf("warm kinds are not sorted at %q", key)
+		}
 	}
 }
 

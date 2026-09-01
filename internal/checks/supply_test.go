@@ -294,6 +294,26 @@ func TestAPodIsNotAskedAboutItsSelector(t *testing.T) {
 	}
 }
 
+func TestAlwaysPullSatisfiesAMutableTag(t *testing.T) {
+	obj := sourced(podSpec(sourcedContainer(map[string]any{
+		"image":           "ghcr.io/acme/api:stable",
+		"imagePullPolicy": "Always",
+	})))
+
+	if findingCount(t, report(t, obj), "pull-policy-not-always") != 0 {
+		t.Fatal("Always was reported as an unsafe pull policy")
+	}
+}
+
+func TestASelectorWithMalformedMatchLabelsIsIgnored(t *testing.T) {
+	obj := sourcedClean()
+	specOf(obj)["selector"] = map[string]any{"matchLabels": "not-an-object"}
+
+	if findingCount(t, report(t, obj), "selector-template-mismatch") != 0 {
+		t.Fatal("malformed matchLabels were treated as a selector")
+	}
+}
+
 func TestListsAndFieldsOfTheWrongShapeAreSkippedByTheSupplyChecks(t *testing.T) {
 	obj := sourced(podSpecWith(map[string]any{
 		"volumes":          []any{"not-an-object"},
