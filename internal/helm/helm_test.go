@@ -620,6 +620,14 @@ func TestAGzipHeaderWithRubbishBehindItIsRefused(t *testing.T) {
 	}
 }
 
+func TestAnExpandedPayloadLargerThanItsLimitIsRefused(t *testing.T) {
+	_, err := gunzipLimit(gzipped("{}   "), 2)
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestALabelWithANonNumericRevisionReadsAsZero(t *testing.T) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{

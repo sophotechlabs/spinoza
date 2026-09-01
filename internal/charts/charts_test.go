@@ -1247,6 +1247,29 @@ func TestSearchKeepsAtMostTheLimit(t *testing.T) {
 	}
 }
 
+func TestAnIndexLargerThanItsLimitIsNotAcceptedPartially(t *testing.T) {
+	body := "entries:\n  web:\n    - version: 1.0.0\n"
+
+	_, err := parseBoundedIndex(strings.NewReader(body+"extra"), len(body))
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestJSONLargerThanItsLimitIsNotAcceptedPartially(t *testing.T) {
+	body := `{"tags":["1.0.0"]}`
+	var doc struct {
+		Tags []string `json:"tags"`
+	}
+
+	err := decodeBoundedJSON(strings.NewReader(body+"extra"), len(body), &doc)
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestAnEmptySearchListsEverything(t *testing.T) {
 	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`entries:

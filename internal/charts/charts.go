@@ -474,7 +474,7 @@ func (c *Cache) Resolve(ctx context.Context, repo Repo, chart string) (map[strin
 }
 
 func (c *Cache) Seed(repo Repo, body io.Reader, fetched time.Time) error {
-	found, err := parseIndex(io.LimitReader(body, maxBodyBytes))
+	found, err := parseBoundedIndex(body, maxBodyBytes)
 	if err != nil {
 		return err
 	}
@@ -510,7 +510,7 @@ func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (listing, error) {
 	}
 	defer func() { _ = body.Close() }()
 
-	found, decodeErr := parseIndex(io.LimitReader(body, maxBodyBytes))
+	found, decodeErr := parseBoundedIndex(body, maxBodyBytes)
 	if decodeErr != nil {
 		return listing{}, fmt.Errorf("parse %s: %w", endpoint, decodeErr)
 	}
@@ -554,6 +554,33 @@ func parseIndex(body io.Reader) (listing, error) {
 	return out, nil
 }
 
+func parseBoundedIndex(body io.Reader, limit int) (listing, error) {
+	raw, err := readBounded(body, limit)
+	if err != nil {
+		return listing{}, err
+	}
+	return parseIndex(strings.NewReader(string(raw)))
+}
+
+func readBounded(body io.Reader, limit int) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(body, int64(limit)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > limit {
+		return nil, fmt.Errorf("response body is larger than %d bytes", limit)
+	}
+	return raw, nil
+}
+
+func decodeBoundedJSON(body io.Reader, limit int, into any) error {
+	raw, err := readBounded(body, limit)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, into)
+}
+
 func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (listing, error) {
 	host, path, err := splitOCI(repo.URL)
 	if err != nil {
@@ -570,7 +597,7 @@ func (c *Cache) resolveOCI(ctx context.Context, repo Repo, chart string) (listin
 	var doc struct {
 		Tags []string `json:"tags"`
 	}
-	decodeErr := json.NewDecoder(io.LimitReader(body, maxBodyBytes)).Decode(&doc)
+	decodeErr := decodeBoundedJSON(body, maxBodyBytes, &doc)
 	if decodeErr != nil {
 		return listing{}, fmt.Errorf("parse tags for %s: %w", endpoint, decodeErr)
 	}
@@ -637,7 +664,7 @@ func (c *Cache) token(ctx context.Context, challenge string, registry *url.URL) 
 		Token       string `json:"token"`
 		AccessToken string `json:"access_token"`
 	}
-	decodeErr := json.NewDecoder(io.LimitReader(resp.Body, maxBodyBytes)).Decode(&doc)
+	decodeErr := decodeBoundedJSON(resp.Body, maxBodyBytes, &doc)
 	if decodeErr != nil {
 		return "", fmt.Errorf("parse token: %w", decodeErr)
 	}

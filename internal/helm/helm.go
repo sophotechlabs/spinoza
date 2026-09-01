@@ -200,6 +200,10 @@ func decode(raw []byte) (payload, error) {
 }
 
 func gunzip(body []byte) ([]byte, error) {
+	return gunzipLimit(body, maxPayload)
+}
+
+func gunzipLimit(body []byte, limit int) ([]byte, error) {
 	if len(body) < 2 || body[0] != 0x1f || body[1] != 0x8b {
 		return nil, errNotGzip
 	}
@@ -210,5 +214,12 @@ func gunzip(body []byte) ([]byte, error) {
 	defer func() {
 		_ = reader.Close()
 	}()
-	return io.ReadAll(io.LimitReader(reader, maxPayload))
+	plain, readErr := io.ReadAll(io.LimitReader(reader, int64(limit)+1))
+	if readErr != nil {
+		return nil, readErr
+	}
+	if len(plain) > limit {
+		return nil, fmt.Errorf("release payload is larger than %d bytes", limit)
+	}
+	return plain, nil
 }
