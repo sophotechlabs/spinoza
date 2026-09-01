@@ -182,13 +182,13 @@ func TestAReleaseIsThreeQuestions(t *testing.T) {
 	}
 }
 
-func TestAnApiserverThatWillNotAnswerLeavesEveryHelmButtonAlone(t *testing.T) {
+func TestAnApiserverThatWillNotAnswerKeepsEveryHelmButtonUnavailable(t *testing.T) {
 	service := serviceFor(t, &authorizer{broken: true})
 
 	result := service.ReviewRelease(t.Context(), "prod", helm.DriverSecret)
 
-	if len(result.Refused) != 0 {
-		t.Fatalf("refused = %v; a failed check must not disable anything", result.Refused)
+	if len(result.Refused) != 4 {
+		t.Fatalf("refused = %v, want every Helm action kept unavailable", result.Refused)
 	}
 }
 

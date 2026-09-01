@@ -357,23 +357,23 @@ func TestAnUnscalableKindIsNotAskedAboutScaling(t *testing.T) {
 	}
 }
 
-func TestAnApiserverThatWillNotAnswerTakesNothingAway(t *testing.T) {
+func TestAnApiserverThatWillNotAnswerKeepsCapabilitiesUnavailable(t *testing.T) {
 	service := serviceFor(t, &authorizer{broken: true})
 
 	result := service.Review(t.Context(), podRef())
 
-	if len(result.Refused) != 0 {
-		t.Fatalf("refused = %v; a failed check must not disable anything", result.Refused)
+	if len(result.Refused) != 5 {
+		t.Fatalf("refused = %v, want every capability kept unavailable", result.Refused)
 	}
 }
 
-func TestAnAuthorizerWithNoOpinionTakesNothingAway(t *testing.T) {
+func TestAnAuthorizerWithNoOpinionKeepsCapabilitiesUnavailable(t *testing.T) {
 	service := serviceFor(t, &authorizer{unsure: true})
 
 	result := service.Review(t.Context(), podRef())
 
-	if len(result.Refused) != 0 {
-		t.Fatalf("refused = %v; an evaluation error is not a refusal", result.Refused)
+	if len(result.Refused) != 5 {
+		t.Fatalf("refused = %v, want every capability kept unavailable", result.Refused)
 	}
 }
 

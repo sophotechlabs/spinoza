@@ -191,13 +191,13 @@ func TestTheFirstRefusedRequirementIsTheReportedOne(t *testing.T) {
 	}
 }
 
-func TestAnApiserverThatWillNotAnswerRefusesNoRow(t *testing.T) {
+func TestAnApiserverThatWillNotAnswerKeepsEveryRowUnavailable(t *testing.T) {
 	service := serviceFor(t, &authorizer{broken: true})
 
 	result := service.ReviewEach(t.Context(), Delete, podRows("web-0", "web-1"))
 
-	if len(result.Refused) != 0 {
-		t.Fatalf("refused = %v; a failed check must not stop anything", result.Refused)
+	if len(result.Refused) != 2 {
+		t.Fatalf("refused = %v, want both rows kept unavailable", result.Refused)
 	}
 }
 
