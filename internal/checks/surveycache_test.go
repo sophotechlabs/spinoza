@@ -111,3 +111,45 @@ func TestASurveyOlderThanTheWindowIsDroppedRatherThanHeld(t *testing.T) {
 		t.Fatalf("the cache holds %d surveys, want the stale one dropped", kept)
 	}
 }
+
+func TestASurveyWithoutMetricsIsNotReusedOnceMetricsArrive(t *testing.T) {
+	surveys, lister, _ := cachedRun(t)
+	surveys.Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
+	after := lister.listCount()
+
+	withUsage := api.Metrics{Pods: map[string]api.ResourceUsage{
+		testNamespace + "/api": {CPUMilli: 5, MemoryMi: 20},
+	}}
+	surveys.Run(t.Context(), lister, descriptors(), withUsage, wholeCluster(), 0)
+
+	if lister.listCount() == after {
+		t.Fatal("the survey without metrics was reused after metrics arrived")
+	}
+}
+
+func TestASurveyWithMetricsIsReusedForTheSameMetrics(t *testing.T) {
+	surveys, lister, _ := cachedRun(t)
+	withUsage := api.Metrics{Pods: map[string]api.ResourceUsage{
+		testNamespace + "/api": {CPUMilli: 5, MemoryMi: 20},
+	}}
+	surveys.Run(t.Context(), lister, descriptors(), withUsage, wholeCluster(), 0)
+	after := lister.listCount()
+
+	surveys.Run(t.Context(), lister, descriptors(), withUsage, wholeCluster(), 0)
+
+	if lister.listCount() != after {
+		t.Fatalf("the same metrics caused %d more kinds to be read", lister.listCount()-after)
+	}
+}
+
+func TestASurveyWithFailedMetricsIsNotReusedOnceTheyRead(t *testing.T) {
+	surveys, lister, _ := cachedRun(t)
+	surveys.Run(t.Context(), lister, descriptors(), api.Metrics{Error: "metrics unavailable"}, wholeCluster(), 0)
+	after := lister.listCount()
+
+	surveys.Run(t.Context(), lister, descriptors(), api.Metrics{}, wholeCluster(), 0)
+
+	if lister.listCount() == after {
+		t.Fatal("the survey with failed metrics was reused after metrics recovered")
+	}
+}

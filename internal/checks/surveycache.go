@@ -42,7 +42,7 @@ func (s *Surveys) take(
 	if s == nil {
 		return survey(ctx, lister, descs, usage, keep)
 	}
-	key := surveyKey(descs, keep)
+	key := surveyKey(descs, usage, keep)
 	held, fresh := s.lookup(key)
 	if fresh {
 		return held.scan, held.failure, held.absent
@@ -76,7 +76,7 @@ func (s *Surveys) keep(key string, one surveyed) {
 	s.held[key] = one
 }
 
-func surveyKey(descs map[string]api.ResourceDescriptor, keep Filter) string {
+func surveyKey(descs map[string]api.ResourceDescriptor, usage api.Metrics, keep Filter) string {
 	ids := make([]string, 0, 32)
 	for _, entry := range keep.chosen(registryWith(keep.Rules)) {
 		ids = append(ids, entry.id)
@@ -85,6 +85,8 @@ func surveyKey(descs map[string]api.ResourceDescriptor, keep Filter) string {
 	return strconv.FormatBool(keep.WholeCluster) +
 		"|" + strconv.FormatBool(keep.EveryKind) +
 		"|" + strconv.FormatUint(fingerprint(descs), 10) +
+		"|" + strconv.Itoa(len(usage.Pods)) +
+		"|" + strconv.FormatBool(usage.Error == "") +
 		"|" + strings.Join(ids, ",")
 }
 
