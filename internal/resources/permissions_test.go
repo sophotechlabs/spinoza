@@ -31,3 +31,17 @@ func TestWhoCanDoWhatIsReadFromTheCluster(t *testing.T) {
 		t.Fatal("the index came back with neither holders nor a reason")
 	}
 }
+
+func TestBulkAccessWithoutPermissionsIsEmpty(t *testing.T) {
+	manager := NewManager(t.Context(), Deps{})
+	refs := []api.ObjectRef{
+		{Version: "v1", Resource: "pods", Namespace: "prod", Name: "web-0"},
+		{Version: "v1", Resource: "pods", Namespace: "prod", Name: "api-0"},
+	}
+
+	access := manager.AccessEach(t.Context(), "restart", refs)
+
+	if len(access.Refused) != 0 {
+		t.Fatalf("refused = %v, want no invented decisions", access.Refused)
+	}
+}

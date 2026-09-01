@@ -31,15 +31,44 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
+	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 	"github.com/sophotechlabs/spinoza/internal/portforward"
+	"github.com/sophotechlabs/spinoza/internal/reach"
+	"github.com/sophotechlabs/spinoza/internal/topology"
 )
 
 type stubImages struct {
 	digest string
+}
+
+func TestManagerTopologyReadsTheKnownResources(t *testing.T) {
+	manager, cancel := newManager(t, newClient(t, newDeployment("prod", "web")))
+	defer cancel()
+
+	graph := manager.Topology(t.Context(), topology.Request{Namespace: "prod"})
+
+	if graph.Error != "" {
+		t.Fatalf("graph error = %q", graph.Error)
+	}
+	if len(graph.Nodes) != 1 {
+		t.Fatalf("nodes = %d, want the deployment", len(graph.Nodes))
+	}
+	if graph.Nodes[0].Name != "web" || graph.Nodes[0].Namespace != "prod" {
+		t.Fatalf("node = %+v", graph.Nodes[0])
+	}
+}
+
+func TestManagerReturnsItsReachabilitySink(t *testing.T) {
+	sink := reach.New()
+	manager := NewManager(t.Context(), Deps{Reach: sink})
+
+	if manager.Reach() != sink {
+		t.Fatal("manager returned a different reachability sink")
+	}
 }
 
 func (s stubImages) ImageID(context.Context, exec.Request) (string, error) {
@@ -407,7 +436,7 @@ func TestOnlyRealObjectsInTheCacheAreJudged(t *testing.T) {
 	}
 }
 
-func TestPodStreamsAreLeftToThePodCounter(t *testing.T) {
+func TestNonPodStreamsAreWatchedForFailures(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()
 	sub, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "default", 0, nil)
@@ -420,6 +449,46 @@ func TestPodStreamsAreLeftToThePodCounter(t *testing.T) {
 
 	if _, held := watched["apps/v1/deployments"]; !held {
 		t.Fatalf("watched = %v, want the deployment stream", watched)
+	}
+}
+
+func TestPodStreamsAreLeftToThePodCounter(t *testing.T) {
+	podGVR := schema.GroupVersionResource{Version: "v1", Resource: "pods"}
+	pod := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Pod",
+		"metadata": map[string]any{
+			"name":      "web-0",
+			"namespace": "default",
+		},
+	}}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{podGVR: "PodList"},
+		pod,
+	)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	mgr := NewManager(ctx, Deps{
+		Dynamic:   dyn,
+		Clientset: k8sfake.NewClientset(),
+		Descriptors: map[string]api.ResourceDescriptor{
+			discovery.Key("", "v1", "pods"): {
+				Version:    "v1",
+				Resource:   "pods",
+				Kind:       "Pod",
+				Namespaced: true,
+			},
+		},
+	})
+	sub, err := mgr.Subscribe(t.Context(), "", "v1", "pods", "default", 0, nil)
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	if watched := mgr.watchedTypes(); len(watched) != 0 {
+		t.Fatalf("watched = %v, want pods excluded from the cache failure tally", watched)
 	}
 }
 

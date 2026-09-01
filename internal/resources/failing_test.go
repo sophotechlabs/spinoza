@@ -170,6 +170,27 @@ func TestCountsWithoutWatchedTypesLeaveFailingAlone(t *testing.T) {
 	}
 }
 
+func TestCachedReportsOnlyResourcesWithSyncedStreams(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	desc := testDescs()[discovery.Key("apps", "v1", "deployments")]
+
+	if got := mgr.Cached(); len(got) != 0 {
+		t.Fatalf("cached before a read = %+v, want none", got)
+	}
+	if _, err := mgr.List(t.Context(), desc); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	got := mgr.Cached()
+	if len(got) != 1 {
+		t.Fatalf("cached = %+v, want the deployment descriptor", got)
+	}
+	if got[0] != desc {
+		t.Fatalf("cached descriptor = %+v, want %+v", got[0], desc)
+	}
+}
+
 func TestALeasedReadLetsTheStreamGoWhenNobodyIsWatching(t *testing.T) {
 	mgr, cancel := newManagerWithGrace(t, newClient(t, newDeployment("default", "web")), time.Millisecond)
 	defer cancel()

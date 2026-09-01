@@ -587,6 +587,29 @@ func TestArgoActionSaysItIsNotWiredUp(t *testing.T) {
 	}
 }
 
+func TestGitopsAppAndGraphReadThroughTheManager(t *testing.T) {
+	manager := argoManager(t, argoApplication("argocd", "podinfo"))
+
+	app, err := manager.GitopsApp(t.Context(), applicationRef())
+	if err != nil {
+		t.Fatalf("gitops app: %v", err)
+	}
+	if app.Name != "podinfo" || app.Namespace != "argocd" || app.Controller != api.ControllerArgo {
+		t.Fatalf("app = %+v", app)
+	}
+
+	graph, err := manager.GitopsAppGraph(t.Context(), applicationRef())
+	if err != nil {
+		t.Fatalf("gitops app graph: %v", err)
+	}
+	if len(graph.Nodes) != 1 {
+		t.Fatalf("nodes = %d, want the application root", len(graph.Nodes))
+	}
+	if graph.Nodes[0].Name != "podinfo" || graph.Nodes[0].Category != "app" {
+		t.Fatalf("root = %+v", graph.Nodes[0])
+	}
+}
+
 func applicationRef() api.ObjectRef {
 	return api.ObjectRef{
 		Group:     "argoproj.io",

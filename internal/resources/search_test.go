@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -42,6 +43,12 @@ func descriptorsFor(keys ...string) []api.ResourceDescriptor {
 		},
 		"/v1/configmaps": {
 			Version: "v1", Resource: "configmaps", Kind: "ConfigMap", Namespaced: true,
+		},
+		"/v1/secrets": {
+			Version: "v1", Resource: "secrets", Kind: "Secret", Namespaced: true,
+		},
+		"/v1/persistentvolumeclaims": {
+			Version: "v1", Resource: "persistentvolumeclaims", Kind: "PersistentVolumeClaim", Namespaced: true,
 		},
 		"apps/v1/deployments": {
 			Group: "apps", Version: "v1", Resource: "deployments", Kind: "Deployment", Namespaced: true,
@@ -196,6 +203,46 @@ func TestSearchStopsAfterEnoughOfOneKind(t *testing.T) {
 	}
 }
 
+func TestSearchStopsAfterEnoughResultsAcrossKinds(t *testing.T) {
+	objects := make([]runtime.Object, 0, 6*searchPerKind)
+	types := []struct {
+		group    string
+		kind     string
+		key      string
+		resource string
+	}{
+		{kind: "Pod", key: "/v1/pods", resource: "pods"},
+		{kind: "Service", key: "/v1/services", resource: "services"},
+		{kind: "ConfigMap", key: "/v1/configmaps", resource: "configmaps"},
+		{kind: "Secret", key: "/v1/secrets", resource: "secrets"},
+		{kind: "PersistentVolumeClaim", key: "/v1/persistentvolumeclaims", resource: "persistentvolumeclaims"},
+		{group: "apps", kind: "Deployment", key: "apps/v1/deployments", resource: "deployments"},
+	}
+	keys := make([]string, 0, len(types))
+	for _, resourceType := range types {
+		keys = append(keys, resourceType.key)
+		for index := range searchPerKind {
+			name := fmt.Sprintf("airbyte-%s-%02d", resourceType.resource, index)
+			objects = append(objects, meta(resourceType.group, "v1", resourceType.kind, "shop", name))
+		}
+	}
+	client := fakeMeta(t, objects...)
+
+	found := Search(context.Background(), client, descriptorsFor(keys...), "airbyte", CountLimits{})
+
+	if len(found.Hits) != searchTotal {
+		t.Fatalf("hits = %d, want the global cap", len(found.Hits))
+	}
+	if !found.Truncated {
+		t.Fatal("the caller was not told the combined result was cut short")
+	}
+	for _, hit := range found.Hits {
+		if hit.Kind == "Service" {
+			t.Fatalf("sorting and truncation kept a service beyond the first %d hits", searchTotal)
+		}
+	}
+}
+
 func TestSearchSaysWhyAKindCouldNotBeRead(t *testing.T) {
 	client := fakeMeta(t)
 	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
@@ -330,5 +377,24 @@ func TestNamespacesWithoutAClusterAreEmpty(t *testing.T) {
 
 	if len(got.Names) != 0 || got.Error != "" {
 		t.Fatalf("namespaces = %+v, want nothing without a cluster", got)
+	}
+}
+
+func TestNamespacesAreLimitedToWhatTheAccountCanRead(t *testing.T) {
+	manager := NewManager(t.Context(), Deps{
+		Metadata: namespacesNamed("payments", "kube-system", "storefront"),
+		Perms:    boundTo("payments", "storefront"),
+	})
+
+	found := manager.Namespaces(alice(t))
+
+	want := []string{"payments", "storefront"}
+	if len(found.Names) != len(want) {
+		t.Fatalf("names = %v, want %v", found.Names, want)
+	}
+	for index, name := range want {
+		if found.Names[index] != name {
+			t.Fatalf("names = %v, want %v", found.Names, want)
+		}
 	}
 }
