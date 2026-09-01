@@ -111,6 +111,12 @@ type stubResolver struct {
 	users   []string
 }
 
+type resolverFunc func(context.Context, Target, int32) (string, int32, error)
+
+func (fn resolverFunc) Resolve(ctx context.Context, target Target, port int32) (string, int32, error) {
+	return fn(ctx, target, port)
+}
+
 func (s *stubResolver) Resolve(ctx context.Context, _ Target, _ int32) (string, int32, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -415,6 +421,102 @@ func TestACleanExitRemovesTheForward(t *testing.T) {
 			t.Fatalf("forward was not removed after a clean exit")
 		case <-time.After(10 * time.Millisecond):
 		}
+	}
+}
+
+func TestAStaleRunCannotFailItsReplacement(t *testing.T) {
+	stale := newRun()
+	replacement := newRun()
+	registry := &Registry{
+		forwards: map[string]*record{
+			"pf-1": {
+				forward: api.PortForward{ID: "pf-1", State: StateRunning},
+				current: replacement,
+			},
+		},
+	}
+	failed := make(chan error, 1)
+	failed <- errors.New("old pod deleted")
+
+	registry.watch("pf-1", stale, failed)
+
+	entry := registry.forwards["pf-1"]
+	if entry.current != replacement {
+		t.Fatal("the stale run displaced its replacement")
+	}
+	if entry.forward.State != StateRunning {
+		t.Fatalf("state = %q, want the replacement to remain running", entry.forward.State)
+	}
+	if entry.forward.Error != "" {
+		t.Fatalf("error = %q, want the stale failure ignored", entry.forward.Error)
+	}
+	select {
+	case <-stale.ended:
+	default:
+		t.Fatal("the stale run was not marked ended")
+	}
+}
+
+func TestAForwardGoneAfterAReapSnapshotIsNotResolvedAgain(t *testing.T) {
+	resolver := &stubResolver{pod: "web-def", podPort: 8080}
+	registry := newTestRegistry(t, newStubRunner(45123), resolver)
+	stale := api.PortForward{
+		ID:         "pf-gone",
+		Kind:       KindService,
+		Namespace:  "prod",
+		Name:       "web",
+		Pod:        "web-abc",
+		RemotePort: 8080,
+	}
+
+	registry.replace(context.Background(), stale)
+
+	if got := resolver.actors(); len(got) != 0 {
+		t.Fatalf("resolver calls = %d, want the removed forward left alone", len(got))
+	}
+}
+
+func TestAForwardStoppedWhileResolvingIsNotRestarted(t *testing.T) {
+	runner := newStubRunner(45123)
+	active := newRun()
+	var registry *Registry
+	resolver := resolverFunc(func(context.Context, Target, int32) (string, int32, error) {
+		if err := registry.Stop("pf-1"); err != nil {
+			t.Fatalf("stop during resolve: %v", err)
+		}
+		return "web-def", 8080, nil
+	})
+	registry = &Registry{
+		runner:   runner,
+		resolver: resolver,
+		forwards: map[string]*record{
+			"pf-1": {
+				forward: api.PortForward{ID: "pf-1", State: StateRunning},
+				current: active,
+			},
+		},
+	}
+	stale := api.PortForward{
+		ID:         "pf-1",
+		Kind:       KindService,
+		Namespace:  "prod",
+		Name:       "web",
+		Pod:        "web-abc",
+		RemotePort: 8080,
+	}
+
+	registry.replace(context.Background(), stale)
+
+	if len(registry.List()) != 0 {
+		t.Fatalf("forwards = %v, want the stopped forward left out", registry.List())
+	}
+	if runner.count() != 0 {
+		t.Fatalf("runner calls = %d, want no restart after stop", runner.count())
+	}
+	select {
+	case <-active.stop:
+	default:
+		t.Fatal("the stopped run was left active")
 	}
 }
 
