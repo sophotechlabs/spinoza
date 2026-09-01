@@ -256,7 +256,8 @@ func TestCrossContextAccessHonoursCancellation(t *testing.T) {
 	}
 }
 
-func TestBuildWiresAReachableContext(t *testing.T) {
+func discoveryAPIServer(t *testing.T, partial bool) *httptest.Server {
+	t.Helper()
 	apiserver := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -268,11 +269,19 @@ func TestBuildWiresAReachableContext(t *testing.T) {
                 "serverAddressByClientCIDRs":[]
             }`))
 		case "/apis":
-			_, _ = w.Write([]byte(`{
+			groups := ""
+			if partial {
+				groups = `{
+					"name":"broken.example.com",
+					"versions":[{"groupVersion":"broken.example.com/v1","version":"v1"}],
+					"preferredVersion":{"groupVersion":"broken.example.com/v1","version":"v1"}
+				}`
+			}
+			_, _ = fmt.Fprintf(w, `{
                 "kind":"APIGroupList",
                 "apiVersion":"v1",
-                "groups":[]
-            }`))
+				"groups":[%s]
+			}`, groups)
 		case "/api/v1":
 			_, _ = w.Write([]byte(`{
                 "kind":"APIResourceList",
@@ -288,6 +297,16 @@ func TestBuildWiresAReachableContext(t *testing.T) {
                     }
                 ]
             }`))
+		case "/apis/broken.example.com/v1":
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{
+				"kind":"Status",
+				"apiVersion":"v1",
+				"status":"Failure",
+				"message":"broken discovery is unavailable",
+				"reason":"ServiceUnavailable",
+				"code":503
+			}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{
@@ -300,6 +319,11 @@ func TestBuildWiresAReachableContext(t *testing.T) {
 		}
 	}))
 	t.Cleanup(apiserver.Close)
+	return apiserver
+}
+
+func TestBuildWiresAReachableContext(t *testing.T) {
+	apiserver := discoveryAPIServer(t, false)
 	path := accessKubeconfig(t, apiserver.URL)
 	helmRoot := t.TempDir()
 	t.Setenv("HELM_REPOSITORY_CONFIG", filepath.Join(helmRoot, "repositories.yaml"))
@@ -343,5 +367,65 @@ func TestBuildWiresAReachableContext(t *testing.T) {
 	}
 	if !foundPod {
 		t.Fatalf("catalog = %+v, want core pods", catalog.Categories)
+	}
+}
+
+func TestNewStartsOnAReachableContext(t *testing.T) {
+	apiserver := discoveryAPIServer(t, false)
+	path := accessKubeconfig(t, apiserver.URL)
+	helmRoot := t.TempDir()
+	t.Setenv("HELM_REPOSITORY_CONFIG", filepath.Join(helmRoot, "repositories.yaml"))
+	t.Setenv("HELM_REPOSITORY_CACHE", filepath.Join(helmRoot, "cache"))
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	cluster, err := New(ctx, Options{Kubeconfig: path})
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	if cluster.Manager("") == nil {
+		t.Fatal("a reachable current context produced no resource manager")
+	}
+	if cluster.Current().Name != "remote" {
+		t.Fatalf("current context = %q, want remote", cluster.Current().Name)
+	}
+	if cluster.Contexts().Error != "" {
+		t.Fatalf("contexts error = %q, want the startup failure cleared", cluster.Contexts().Error)
+	}
+}
+
+func TestBuildKeepsResourcesFromAPartialDiscovery(t *testing.T) {
+	apiserver := discoveryAPIServer(t, true)
+	path := accessKubeconfig(t, apiserver.URL)
+	helmRoot := t.TempDir()
+	t.Setenv("HELM_REPOSITORY_CONFIG", filepath.Join(helmRoot, "repositories.yaml"))
+	t.Setenv("HELM_REPOSITORY_CACHE", filepath.Join(helmRoot, "cache"))
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	manager, _, err := build(
+		ctx,
+		api.ContextRef{Name: "remote"},
+		Options{Kubeconfig: path},
+		prom.Target{},
+	)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	catalog := manager.Resources()
+	if !strings.Contains(catalog.Error, "broken.example.com/v1") {
+		t.Fatalf("catalog error = %q, want the incomplete API group named", catalog.Error)
+	}
+	foundPod := false
+	for _, category := range catalog.Categories {
+		for _, resource := range category.Resources {
+			if resource.Group == "" && resource.Version == "v1" && resource.Resource == "pods" {
+				foundPod = true
+			}
+		}
+	}
+	if !foundPod {
+		t.Fatalf("catalog = %+v, want resources from the API group that answered", catalog.Categories)
 	}
 }

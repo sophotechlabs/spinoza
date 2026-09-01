@@ -14,7 +14,9 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/kube"
+	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
 const deadKubeconfig = `apiVersion: v1
@@ -61,6 +63,43 @@ func TestNewStartsWithoutAClusterWhenNothingAnswers(t *testing.T) {
 	}
 	if !strings.Contains(contexts.Error, "dead") {
 		t.Fatalf("error = %q, want the context name in it", contexts.Error)
+	}
+}
+
+func TestNewRefusesAnExplicitContextThatCannotBeReached(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kubeconfig")
+	if err := os.WriteFile(path, []byte(deadKubeconfig), 0o600); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+
+	_, err := New(t.Context(), Options{Kubeconfig: path, Context: "dead"})
+
+	if err == nil {
+		t.Fatal("an explicitly requested unreachable context was ignored")
+	}
+	if !strings.Contains(err.Error(), "dead") {
+		t.Fatalf("error = %v, want the requested context named", err)
+	}
+}
+
+func TestBuildNamesAKubeconfigItCannotLoad(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+
+	manager, bundle, err := build(
+		t.Context(),
+		api.ContextRef{Name: "gone"},
+		Options{Kubeconfig: missing},
+		prom.Target{},
+	)
+
+	if err == nil {
+		t.Fatal("a missing kubeconfig produced a cluster connection")
+	}
+	if manager != nil || bundle != nil {
+		t.Fatalf("manager = %v, bundle = %v, want neither after setup failed", manager, bundle)
+	}
+	if !strings.Contains(err.Error(), "kube:") || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("error = %v, want the failed kubeconfig operation and path", err)
 	}
 }
 
