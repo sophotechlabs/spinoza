@@ -22,6 +22,7 @@ const (
 	DefaultUsernameKeys = "preferred_username,email,sub"
 	DefaultSessionTTL   = 8 * time.Hour
 	DefaultSessionMax   = 24 * time.Hour
+	minimumSecretBytes  = 32
 )
 
 var DefaultScopes = []string{"openid", "profile", "email", "groups"}
@@ -102,6 +103,9 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.SessionMaxAge < cfg.SessionTTL {
 		return fmt.Errorf("a sign-in may not last longer than it may be renewed for: ttl %s, cap %s", cfg.SessionTTL, cfg.SessionMaxAge)
+	}
+	if len(cfg.SessionSecret) > 0 && len(cfg.SessionSecret) < minimumSecretBytes {
+		return fmt.Errorf("the session secret must be at least %d bytes", minimumSecretBytes)
 	}
 	if !KnownRole(cfg.DefaultRole) {
 		return fmt.Errorf("default role %q is not one of %s", cfg.DefaultRole, strings.Join(rolesWeakestFirst, ", "))

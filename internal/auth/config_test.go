@@ -164,3 +164,30 @@ func TestTheSessionCapHasADefault(t *testing.T) {
 		t.Fatalf("cap = %s, want %s", got, DefaultSessionMax)
 	}
 }
+
+func TestValidateRejectsAWeakExplicitSessionSecret(t *testing.T) {
+	cfg := Config{
+		Mode:          ModeNone,
+		DefaultRole:   RoleViewer,
+		SessionSecret: []byte(strings.Repeat("x", minimumSecretBytes-1)),
+	}
+
+	err := cfg.Validate()
+
+	if err == nil {
+		t.Fatal("a short session secret was accepted")
+	}
+	if !strings.Contains(err.Error(), "at least 32 bytes") {
+		t.Fatalf("error = %q, want the minimum length", err.Error())
+	}
+}
+
+func TestValidateAcceptsGeneratedAndStrongSessionSecrets(t *testing.T) {
+	for _, secret := range [][]byte{nil, []byte(strings.Repeat("x", minimumSecretBytes))} {
+		cfg := Config{Mode: ModeNone, DefaultRole: RoleViewer, SessionSecret: secret}
+
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("a %d-byte session secret was refused: %v", len(secret), err)
+		}
+	}
+}

@@ -173,7 +173,7 @@ func authFor(t *testing.T, idp *fakeIDP, change func(*Config)) *Authenticator {
 	cfg := Config{
 		Mode:          ModeOIDC,
 		PublicURL:     "https://spinoza.example.com",
-		SessionSecret: []byte("a-test-secret"),
+		SessionSecret: []byte(strings.Repeat("x", minimumSecretBytes)),
 		OIDC:          oidcConfig(idp),
 	}
 	if change != nil {
