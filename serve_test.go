@@ -25,6 +25,14 @@ type wiredMode struct {
 	err   error
 }
 
+type idleExitRecorder struct {
+	quit func()
+}
+
+func (r *idleExitRecorder) UseIdleExit(quit func()) {
+	r.quit = quit
+}
+
 func (w *wiredMode) UseClusterAuth(server.ClusterAuth) {
 	w.calls = append(w.calls, "authentication")
 }
@@ -104,6 +112,40 @@ func TestLocalModeStillRestoresTabsBeforeItsUpdateServices(t *testing.T) {
 	}
 	if strings.Join(wired.calls, ",") != "timeline,updates,installer" {
 		t.Fatalf("wiring order = %v, want the timeline before local services", wired.calls)
+	}
+}
+
+func TestLocalListeningStopsAfterTheLastViewLeaves(t *testing.T) {
+	recorded := &idleExitRecorder{}
+	idle := make(chan struct{})
+
+	announceListening(t.Context(), recorded, settings{addr: "127.0.0.1:34115"}, "secret", idle)
+
+	if recorded.quit == nil {
+		t.Fatal("local listening did not register an idle exit")
+	}
+	recorded.quit()
+	recorded.quit()
+	select {
+	case <-idle:
+	default:
+		t.Fatal("the last view leaving did not stop local listening")
+	}
+}
+
+func TestClusterListeningDoesNotStopWhenThereAreNoViews(t *testing.T) {
+	recorded := &idleExitRecorder{}
+	idle := make(chan struct{})
+
+	announceListening(t.Context(), recorded, servedOpts(nil), "", idle)
+
+	if recorded.quit != nil {
+		t.Fatal("cluster listening registered a local idle exit")
+	}
+	select {
+	case <-idle:
+		t.Fatal("cluster listening stopped without a view")
+	default:
 	}
 }
 

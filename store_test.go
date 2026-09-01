@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/checks"
 	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
 	pastore "github.com/sophotechlabs/spinoza/internal/store"
@@ -42,6 +43,35 @@ func TestWithoutTheFlagTheStoredSettingDecides(t *testing.T) {
 
 	if allow() {
 		t.Fatal("turning the setting off left node shells allowed")
+	}
+}
+
+func TestCustomColumnsFollowStoredSettings(t *testing.T) {
+	store := settingsstore.Memory()
+	columns := customColumns(store)
+
+	if got := columns(); len(got) != 0 {
+		t.Fatalf("columns before configuration = %v", got)
+	}
+
+	err := store.Merge(map[string]string{
+		settingsstore.ColumnsKey: `{"/v1/pods":[{"name":"Node name","path":".spec.nodeName"}]}`,
+	})
+	if err != nil {
+		t.Fatalf("store columns: %v", err)
+	}
+	got := columns()
+	want := api.CustomColumn{Name: "Node name", Path: ".spec.nodeName"}
+	if len(got["/v1/pods"]) != 1 || got["/v1/pods"][0] != want {
+		t.Fatalf("columns after configuration = %v, want %v", got, want)
+	}
+
+	err = store.Merge(map[string]string{settingsstore.ColumnsKey: "not json"})
+	if err != nil {
+		t.Fatalf("store malformed columns: %v", err)
+	}
+	if got := columns(); len(got) != 0 {
+		t.Fatalf("malformed columns = %v, want none", got)
 	}
 }
 

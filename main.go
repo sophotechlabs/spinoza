@@ -175,7 +175,11 @@ func wireMode(ctx context.Context, srv modeServer, opts settings, past *store.St
 	return nil
 }
 
-func announceListening(ctx context.Context, srv *server.Server, opts settings, token string, idle chan struct{}) {
+type idleExitServer interface {
+	UseIdleExit(func())
+}
+
+func announceListening(ctx context.Context, srv idleExitServer, opts settings, token string, idle chan struct{}) {
 	if opts.serve.on {
 		slog.Info(
 			"spinoza is serving this cluster",
