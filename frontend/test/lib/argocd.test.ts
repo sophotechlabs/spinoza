@@ -11,6 +11,7 @@ import {
   useArgo,
 } from '../../src/lib/argocd';
 import type { ArgoApp, ArgoDashboard } from '../../src/lib/types';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
 function dashboard(extra: Partial<ArgoDashboard> = {}): ArgoDashboard {
   return { apps: [], applicationSets: [], projects: [], ...extra };
@@ -46,6 +47,7 @@ function stub(body: unknown, ok = true, status = 200) {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  useClusterStore.getState().reset();
 });
 
 describe('refOf', () => {
@@ -263,6 +265,37 @@ describe('useArgo', () => {
     await waitFor(() => {
       expect(result.current.error).toContain('argo is unreachable');
     });
+  });
+
+  it('drops an error from the previous cluster while loading the next one', async () => {
+    let holdNext!: () => void;
+    const next = new Promise<{ ok: boolean; json: () => Promise<ArgoDashboard> }>((resolve) => {
+      holdNext = () => {
+        resolve({ ok: true, json: () => Promise.resolve(dashboard()) });
+      };
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          json: () => Promise.resolve({ message: 'old cluster refused applications' }),
+        })
+        .mockImplementationOnce(() => next),
+    );
+    const { result } = renderHook(() => useArgo());
+    await waitFor(() => {
+      expect(result.current.error).toContain('old cluster refused applications');
+    });
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(result.current.error).toBeNull();
+    holdNext();
   });
 
   it('does not overlap scheduled refreshes', async () => {

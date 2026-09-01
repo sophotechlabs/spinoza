@@ -680,6 +680,25 @@ describe('resource counts', () => {
     expect(screen.queryByRole('button', { name: 'Pod 57' })).not.toBeInTheDocument();
   });
 
+  it('drops the previous cluster catalog error while the next cluster loads', async () => {
+    stubCatalog(categories, 'old cluster refused discovery');
+    const view = renderSidebar();
+    await screen.findByText('old cluster refused discovery');
+    expect(screen.getByRole('button', { name: /Workloads/ })).toBeInTheDocument();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => new Promise(() => undefined)),
+    );
+    act(() => {
+      bumpClusterEpoch();
+    });
+    view.rerender(<Sidebar {...sidebarProps()} />);
+
+    expect(screen.queryByText('old cluster refused discovery')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Workloads/ })).not.toBeInTheDocument();
+  });
+
   it('carries on when the counts payload has no counts', async () => {
     vi.stubGlobal(
       'fetch',

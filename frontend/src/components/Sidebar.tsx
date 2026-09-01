@@ -247,6 +247,9 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   useEffect(() => {
     let mounted = true;
     let attempt = 0;
+    setCategories([]);
+    setError(null);
+    setRetrying(false);
     setCounts({});
     setFailing({});
     setCapped([]);

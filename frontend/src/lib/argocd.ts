@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import type {
   ArgoApp,
   ArgoDashboard,
@@ -10,7 +9,7 @@ import type {
 } from './types';
 import { failure } from './object';
 import { request } from './http';
-import { useClusterEpoch } from '../store/cluster';
+import { usePoll } from './usePoll';
 
 const REFRESH_MS = 10000;
 
@@ -165,48 +164,8 @@ export interface ArgoState {
 }
 
 export function useArgo(): ArgoState {
-  const epoch = useClusterEpoch();
-  const [data, setData] = useState<ArgoDashboard | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [reloads, setReloads] = useState(0);
-
-  useEffect(() => {
-    let live = true;
-    let inFlight = false;
-    function load() {
-      if (inFlight) {
-        return;
-      }
-      inFlight = true;
-      fetchArgo()
-        .then((found) => {
-          if (live) {
-            setData(found);
-            setError(null);
-          }
-        })
-        .catch((err: unknown) => {
-          if (live) {
-            setError(err instanceof Error ? err.message : 'the argo request failed');
-          }
-        })
-        .finally(() => {
-          inFlight = false;
-        });
-    }
-    load();
-    const timer = setInterval(load, REFRESH_MS);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [epoch, reloads]);
-
-  return {
-    data,
-    error,
-    reload: () => {
-      setReloads((value) => value + 1);
-    },
-  };
+  return usePoll(fetchArgo, {
+    intervalMs: REFRESH_MS,
+    fallback: 'the argo request failed',
+  });
 }
