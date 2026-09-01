@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/helm"
@@ -134,7 +135,7 @@ func metaFor(t *testing.T, loaded *kube.Bundle) metadata.Interface {
 	return client
 }
 
-func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
+func manager(t *testing.T, loaded *kube.Bundle, repos ...helm.RepoEntry) *resources.Manager {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -155,7 +156,7 @@ func manager(t *testing.T, loaded *kube.Bundle) *resources.Manager {
 			metaFor(t, loaded),
 			helm.NewRunner(""),
 			nil,
-			nil,
+			repos,
 			api.ContextRef{Name: os.Getenv("SPINOZA_TEST_CONTEXT")},
 		),
 		Descriptors: descs,
@@ -577,19 +578,20 @@ func TestHelmUpgradeRefusesARepoOnThisMachine(t *testing.T) {
 
 func TestHelmUpgradeThroughAChartRepo(t *testing.T) {
 	loaded := bundle(t)
-	mgr := manager(t, loaded)
 	installRelease(t, loaded)
 
 	repoDir := packageChart(t, writeChartVersion(t, "0.2.0"))
 	server := httptest.NewServer(http.FileServer(http.Dir(repoDir)))
 	t.Cleanup(server.Close)
+	repoURL := namedRepo(t, server.URL)
+	mgr := manager(t, loaded, helm.RepoEntry{Repo: charts.Repo{URL: repoURL}})
 
 	req := helm.UpgradeRequest{
 		Namespace: namespace,
 		Name:      "smoke-release",
 		Chart:     "spinoza-smoke",
 		Version:   "0.2.0",
-		RepoURL:   namedRepo(t, server.URL),
+		RepoURL:   repoURL,
 		Values:    "extra: upgraded\n",
 	}
 
