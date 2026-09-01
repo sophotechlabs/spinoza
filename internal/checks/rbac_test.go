@@ -238,6 +238,18 @@ func TestRulesAndSubjectsOfTheWrongShapeAreSkipped(t *testing.T) {
 	}
 }
 
+func TestAMalformedRuleValueDoesNotHideFollowingPermissions(t *testing.T) {
+	wide := role("Role", "wide", map[string]any{
+		"verbs":     []any{false, anything},
+		"resources": anyList([]string{"pods"}),
+		"apiGroups": anyList([]string{""}),
+	})
+
+	if findingCount(t, report(t, wide), "rbac-wildcard-verbs") != 1 {
+		t.Fatal("a malformed value hid a later wildcard verb")
+	}
+}
+
 func TestARoleWithNoRulesAtAllSaysNothing(t *testing.T) {
 	bare := simple("ClusterRole", "aggregator", "", nil)
 
