@@ -62,8 +62,8 @@ func (b *Buffer) writeTail(chunk []byte) {
 		return
 	}
 	if len(chunk) >= b.limit {
+		b.exceeded = b.exceeded || len(b.body) > 0 || len(chunk) > b.limit
 		b.body = append(b.body[:0], chunk[len(chunk)-b.limit:]...)
-		b.exceeded = true
 		return
 	}
 	overflow := len(b.body) + len(chunk) - b.limit

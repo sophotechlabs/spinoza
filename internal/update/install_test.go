@@ -402,6 +402,41 @@ func TestScriptOutputIsBounded(t *testing.T) {
 	}
 }
 
+func TestScriptOutputAtTheLimitIsNotCalledTruncated(t *testing.T) {
+	dir := t.TempDir()
+	saved := filepath.Join(dir, "exact.sh")
+	body := "#!/bin/sh\nprintf '%s' '" + strings.Repeat("x", maxRunOutput) + "'\n"
+	if err := os.WriteFile(saved, []byte(body), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	output, err := runScript(t.Context(), saved, dir)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(output) != maxRunOutput {
+		t.Fatalf("kept %d output bytes, want %d", len(output), maxRunOutput)
+	}
+}
+
+func TestSuccessfulScriptOutputPastTheLimitIsReported(t *testing.T) {
+	dir := t.TempDir()
+	saved := filepath.Join(dir, "noisy-success.sh")
+	body := "#!/bin/sh\nprintf '%s' '" + strings.Repeat("x", maxRunOutput+1) + "'\n"
+	if err := os.WriteFile(saved, []byte(body), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	output, err := runScript(t.Context(), saved, dir)
+
+	if err == nil || !strings.Contains(err.Error(), "output exceeded") {
+		t.Fatalf("run error = %v, want successful truncation reported", err)
+	}
+	if len(output) != maxRunOutput {
+		t.Fatalf("kept %d output bytes, want %d", len(output), maxRunOutput)
+	}
+}
+
 func TestTheLastLineIsWhatIsReported(t *testing.T) {
 	cases := map[string]string{
 		"one\ntwo\n":   "two",

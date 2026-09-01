@@ -1,6 +1,9 @@
 package commandbuffer
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 func TestAHeadBufferKeepsOnlyItsLimit(t *testing.T) {
 	buffer := Head(5)
@@ -51,6 +54,72 @@ func TestAZeroLimitStillAcceptsWrites(t *testing.T) {
 		}
 		if len(buffer.Bytes()) != 0 || !buffer.Exceeded() {
 			t.Fatalf("buffer = %q, exceeded = %t", buffer.String(), buffer.Exceeded())
+		}
+	}
+}
+
+func TestFillingABufferExactlyDoesNotClaimTruncation(t *testing.T) {
+	for _, buffer := range []*Buffer{Head(3), Tail(3)} {
+		_, _ = buffer.Write([]byte("abc"))
+
+		if buffer.Exceeded() {
+			t.Fatalf("buffer %q claimed an exact fit was truncated", buffer.String())
+		}
+	}
+}
+
+func TestAnExactTailWriteReplacesOlderBytesAndClaimsTruncation(t *testing.T) {
+	buffer := Tail(3)
+	_, _ = buffer.Write([]byte("ab"))
+	_, _ = buffer.Write([]byte("cde"))
+
+	if buffer.String() != "cde" {
+		t.Fatalf("body = %q", buffer.String())
+	}
+	if !buffer.Exceeded() {
+		t.Fatal("replacing older bytes was not recorded as truncation")
+	}
+}
+
+func TestEmptyWritesDoNotClaimTruncation(t *testing.T) {
+	for _, buffer := range []*Buffer{Head(3), Tail(3)} {
+		written, err := buffer.Write(nil)
+
+		if err != nil || written != 0 {
+			t.Fatalf("write = %d, %v", written, err)
+		}
+		if buffer.Exceeded() {
+			t.Fatal("an empty write claimed truncation")
+		}
+	}
+}
+
+func TestBytesHandsOutACopy(t *testing.T) {
+	buffer := Head(3)
+	_, _ = buffer.Write([]byte("abc"))
+
+	buffer.Bytes()[0] = 'x'
+
+	if buffer.String() != "abc" {
+		t.Fatalf("body = %q, want the buffer isolated from its caller", buffer.String())
+	}
+}
+
+func TestConcurrentWritesStayBounded(t *testing.T) {
+	for _, buffer := range []*Buffer{Head(64), Tail(64)} {
+		var group sync.WaitGroup
+		for range 128 {
+			group.Go(func() {
+				_, _ = buffer.Write([]byte("abcdefgh"))
+			})
+		}
+		group.Wait()
+
+		if len(buffer.Bytes()) != 64 {
+			t.Fatalf("buffer length = %d, want its limit", len(buffer.Bytes()))
+		}
+		if !buffer.Exceeded() {
+			t.Fatal("concurrent overflow was not recorded")
 		}
 	}
 }
