@@ -318,16 +318,16 @@ func judgeWith(rule UserRule, program cel.Program) subjectRule {
 	}
 }
 
-func (r UserRule) holds(subject Subject) bool {
+func (r UserRule) holds(subject Subject) (bool, error) {
 	program, err := compileRule(r.Expr)
 	if err != nil {
-		return false
+		return false, err
 	}
 	value, _, evalErr := program.Eval(map[string]any{userRuleObject: subject.Object.Object})
 	if evalErr != nil {
-		return false
+		return false, evalErr
 	}
-	return truthy(value)
+	return truthy(value), nil
 }
 
 func (r UserRule) matches(subject Subject) bool {

@@ -27,6 +27,7 @@ type Filter struct {
 	EveryKind      bool
 	OnlyNew        bool
 	ShowMuted      bool
+	ruleFailures   *ruleDiagnostics
 }
 
 func ParseFilter(query url.Values) Filter {
@@ -167,7 +168,12 @@ func (f Filter) silenced(id string, item found) (Mute, bool) {
 		if !one.matches(item.subject) {
 			continue
 		}
-		if !one.holds(item.subject) {
+		holds, err := one.holds(item.subject)
+		if err != nil {
+			f.ruleFailures.record(one, item.subject, err)
+			continue
+		}
+		if !holds {
 			continue
 		}
 		return Mute{Check: id, Reason: one.Reason}, true

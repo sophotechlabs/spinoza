@@ -102,6 +102,10 @@ func TestASilencingRuleThatDoesNotCompileQuietensNothing(t *testing.T) {
 	if finding := onlyFinding(t, report, privilegedCheck); finding.Muted {
 		t.Fatal("a rule that does not compile silenced a finding")
 	}
+	if !strings.Contains(report.Error, `silencer "broken"`) ||
+		!strings.Contains(report.Error, "DaemonSet "+testNamespace+"/agent") {
+		t.Fatalf("error = %q, want the rule and object named", report.Error)
+	}
 }
 
 func TestASilencingRuleThatErrorsOnAnObjectQuietensNothing(t *testing.T) {
@@ -111,6 +115,48 @@ func TestASilencingRuleThatErrorsOnAnObjectQuietensNothing(t *testing.T) {
 
 	if finding := onlyFinding(t, report, privilegedCheck); finding.Muted {
 		t.Fatal("a rule that errored on the object silenced the finding anyway")
+	}
+	if !strings.Contains(report.Error, `silencer "reaches"`) ||
+		!strings.Contains(report.Error, "DaemonSet "+testNamespace+"/agent") ||
+		!strings.Contains(report.Error, "nothingHere") {
+		t.Fatalf("error = %q, want the rule, object, and evaluation fault", report.Error)
+	}
+}
+
+func TestASilencingRuleThatEvaluatesFalseReportsNoFault(t *testing.T) {
+	raw := `[{"id":"other","silences":"privileged-containers","expr":"object.metadata.name == 'elsewhere'","reason":"x"}]`
+
+	report := withSilencers(t, raw, privilegedDaemonSet("agent"))
+
+	if report.Error != "" {
+		t.Fatalf("a false expression was reported as %q", report.Error)
+	}
+}
+
+func TestRepeatedSilencerFailuresAreCountedWithoutRepeatingTheError(t *testing.T) {
+	raw := `[{"id":"reaches","silences":"privileged-containers","expr":"object.spec.nothingHere == 1","reason":"x"}]`
+
+	report := withSilencers(t, raw, privilegedDaemonSet("agent"), privilegedDaemonSet("other"))
+
+	if strings.Count(report.Error, `silencer "reaches"`) != 1 {
+		t.Fatalf("error = %q, want the rule named once", report.Error)
+	}
+	if !strings.Contains(report.Error, "and 1 other object") {
+		t.Fatalf("error = %q, want the other affected object counted", report.Error)
+	}
+}
+
+func TestSeveralFindingsOnOneObjectCountAsOneSilencerFailure(t *testing.T) {
+	raw := `[{"id":"reaches","silences":"privileged-containers","expr":"object.spec.nothingHere == 1","reason":"x"}]`
+	object := workload("DaemonSet", "agent", podSpec(
+		container("one", map[string]any{"securityContext": map[string]any{"privileged": true}}),
+		container("two", map[string]any{"securityContext": map[string]any{"privileged": true}}),
+	))
+
+	report := withSilencers(t, raw, object)
+
+	if strings.Contains(report.Error, "other object") {
+		t.Fatalf("one object with several findings was reported as several objects: %q", report.Error)
 	}
 }
 

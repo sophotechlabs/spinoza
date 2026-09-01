@@ -497,6 +497,16 @@ describe('your own rules', () => {
     expect(await screen.findByText('Every rule reads.')).toBeInTheDocument();
   });
 
+  it('explains what an absent field means at evaluation time', async () => {
+    faultsAnswer([]);
+
+    await openRules();
+
+    expect(
+      screen.getByText(/If a field is absent, the expression does not match/),
+    ).toBeInTheDocument();
+  });
+
   it('names the rule that does not compile', async () => {
     faultsAnswer([{ id: 'broken', reason: 'the expression did not compile: syntax error' }]);
 

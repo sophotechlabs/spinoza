@@ -563,7 +563,8 @@ function YourRules() {
         A list of {'{ id, match, expr }'} objects. The expression is CEL, with the workload bound to
         object, and a rule that matches becomes a finding. Give a rule {'{ silences, reason }'}{' '}
         instead and it quietens that check where it matches, saying why. Copy the list to keep it in
-        a repository, and paste one back here to use it on another cluster.
+        a repository, and paste one back here to use it on another cluster. If a field is absent,
+        the expression does not match that object and the audit names the evaluation fault.
       </p>
       <textarea
         aria-label="Your own rules"

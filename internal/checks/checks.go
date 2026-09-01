@@ -499,6 +499,7 @@ func (s *Surveys) Run(
 	shown int,
 ) api.CheckReport {
 	sc, failure, absent := s.take(ctx, lister, descs, usage, keep)
+	keep.ruleFailures = newRuleDiagnostics()
 	checks := keep.chosen(registryWith(keep.Rules))
 	objs := newObjects()
 	spread := newNamespaces()
@@ -521,6 +522,6 @@ func (s *Surveys) Run(
 		BaselineFrom: keep.takenFrom(),
 		WasScanned:   keep.scannedBefore(),
 		Scanned:      len(sc.subjects),
-		Error:        joined(failure, undiscovered(absent)),
+		Error:        joined(failure, undiscovered(absent), keep.ruleFailures.message()),
 	}
 }
