@@ -170,6 +170,22 @@ func TestCountsWithoutWatchedTypesLeaveFailingAlone(t *testing.T) {
 	}
 }
 
+func TestAHealthyWatchedTypeIsNotReportedAsFailing(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	got := mgr.Counts(context.Background())
+	if _, reported := got.Failing["apps/v1/deployments"]; reported {
+		t.Fatalf("failing = %v, want the healthy watched type left out", got.Failing)
+	}
+}
+
 func TestCachedReportsOnlyResourcesWithSyncedStreams(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()

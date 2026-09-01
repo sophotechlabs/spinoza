@@ -18,6 +18,27 @@ type countingProxy struct {
 	body  string
 }
 
+type blockingProxy struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingProxy) Get(ctx context.Context, _ prom.Target, path string, _ map[string]string) ([]byte, error) {
+	if path != "api/v1/query" {
+		return []byte(`{"status":"success"}`), nil
+	}
+	select {
+	case b.entered <- struct{}{}:
+	default:
+	}
+	select {
+	case <-b.release:
+		return []byte(labeledFlow), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 func (c *countingProxy) Get(ctx context.Context, _ prom.Target, path string, _ map[string]string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -153,6 +174,32 @@ func TestATrafficProbeOnACancelledContextSaysWhy(t *testing.T) {
 	}
 	if !strings.Contains(support.Reason, "context canceled") {
 		t.Fatalf("reason = %q, want the cancellation", support.Reason)
+	}
+}
+
+func TestAWindowCanStopWaitingForAnotherWindowsTrafficProbe(t *testing.T) {
+	proxy := &blockingProxy{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	mgr, cancel := trafficManager(t, proxy, time.Minute)
+	defer cancel()
+	firstDone := make(chan struct{})
+	var firstAvailable bool
+	go func() {
+		firstAvailable = mgr.TrafficSupport(context.Background()).Available
+		close(firstDone)
+	}()
+	<-proxy.entered
+	waiting, stop := context.WithCancel(context.Background())
+	stop()
+
+	second := mgr.TrafficSupport(waiting)
+
+	if second.Available || !strings.Contains(second.Reason, "context canceled") {
+		t.Fatalf("support = %+v, want the canceled waiter released", second)
+	}
+	close(proxy.release)
+	<-firstDone
+	if !firstAvailable {
+		t.Fatal("canceling the waiter canceled the shared probe")
 	}
 }
 

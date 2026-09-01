@@ -173,6 +173,22 @@ func TestADeletionIsRecordedAndForgotten(t *testing.T) {
 	}
 }
 
+func TestADeletionNotSeenBeforeIsStillRecorded(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	held, st := startRecording(t, mgr)
+
+	st.publishDelete(newDeployment("default", "api"))
+
+	found := held.await(t, 1)
+	if found[0].Verb != Removed || found[0].Name != "api" {
+		t.Fatalf("deletion = %+v, want the unseen object recorded", found[0])
+	}
+	if len(found[0].Was) != 0 {
+		t.Fatalf("previous cells = %v, want none for an unseen object", found[0].Was)
+	}
+}
+
 func TestNothingIsRecordedForAKindThatWasNotAskedFor(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
 	defer cancel()
