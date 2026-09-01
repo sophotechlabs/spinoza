@@ -365,6 +365,25 @@ func TestTheQuotaCheckNamesTheFullestEntry(t *testing.T) {
 	}
 }
 
+func TestMalformedQuotaEntriesDoNotHideALaterValidOne(t *testing.T) {
+	quota := resourceQuota(testNamespace,
+		map[string]any{
+			"a-bad-hard":      true,
+			"b-bad-used":      "10",
+			"requests.memory": "10Gi",
+		},
+		map[string]any{
+			"b-bad-used":      true,
+			"requests.memory": "10Gi",
+		})
+
+	found := report(t, quota, deployment("api", podSpec(container("app", nil))))
+	detail := onlyFinding(t, found, "quota-nearly-exhausted").Detail
+	if !strings.Contains(detail, "requests.memory") {
+		t.Fatalf("detail was %q, want the valid quota entry named", detail)
+	}
+}
+
 func TestAQuotaWithNoStatusIsSkipped(t *testing.T) {
 	bare := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1",

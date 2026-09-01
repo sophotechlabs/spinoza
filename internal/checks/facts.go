@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -464,7 +465,8 @@ func fullestEntry(hard, used any) (name string, share int64) {
 	if !okHard || !okUsed {
 		return "", 0
 	}
-	for key, raw := range hardMap {
+	for _, key := range slices.Sorted(maps.Keys(hardMap)) {
+		raw := hardMap[key]
 		ceiling, ok := quantityFrom(raw)
 		if !ok || ceiling.Value() == 0 {
 			continue
