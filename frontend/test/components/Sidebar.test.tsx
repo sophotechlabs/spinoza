@@ -44,12 +44,13 @@ function stubFetch(
   counts: Record<string, number> = {},
   failing?: Record<string, number>,
   byPhase?: string[],
+  capped?: string[],
 ): void {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url.startsWith('/api/resources/counts')) {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ counts, failing, byPhase }),
+        json: () => Promise.resolve({ counts, failing, byPhase, capped }),
       });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
@@ -824,6 +825,32 @@ describe('pods that are not running', () => {
     expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
     expect(pods).toHaveAttribute('title', 'Pod: 3 of 12 not ready');
     expect(pods).toHaveTextContent('3 not ready');
+  });
+
+  it('marks a tally that stopped at the ceiling rather than reading it as exact', async () => {
+    stubFetch(
+      categories,
+      { '/v1/pods': 42000, 'apps/v1/deployments': 4 },
+      { '/v1/pods': 10000 },
+      ['/v1/pods'],
+      ['/v1/pods'],
+    );
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const pods = await screen.findByRole('button', { name: /^Pod/ });
+    expect(pods.querySelector('.text-error')?.textContent).toBe('(10000+)');
+    expect(pods).toHaveAttribute('title', 'Pod: 10000+ of 42000 not Running or Succeeded');
+    expect(pods).toHaveTextContent('10000+ not Running or Succeeded');
+  });
+
+  it('leaves a completed tally unmarked', async () => {
+    stubFetch(categories, { '/v1/pods': 12 }, { '/v1/pods': 3 }, [], []);
+    renderSidebar();
+    await userEvent.click(await screen.findByRole('button', { name: /Workloads/ }));
+
+    const pods = await screen.findByRole('button', { name: /^Pod/ });
+    expect(pods.querySelector('.text-error')?.textContent).toBe('(3)');
   });
 
   it('explains the failing count without a total when the tally is missing', async () => {

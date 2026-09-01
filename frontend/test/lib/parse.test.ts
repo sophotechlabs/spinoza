@@ -317,6 +317,10 @@ describe('parseCounts', () => {
       '/v1/secrets': 'forbidden',
     });
   });
+
+  it('keeps the resource keys whose counts were capped', () => {
+    expect(parseCounts({ capped: ['/v1/pods', 4] }).capped).toEqual(['/v1/pods']);
+  });
 });
 
 describe('the remaining action payloads', () => {
