@@ -668,36 +668,7 @@ lint-chart:
         --set ingress.hosts[0].paths[0].path=/ > /dev/null
 
 test-release-publication:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    released=$(yq -r '.["."]' .release-please-manifest.json)
-    chart=$(yq -r '.version' deploy/helm/spinoza/Chart.yaml)
-    app=$(yq -r '.appVersion' deploy/helm/spinoza/Chart.yaml)
-    if [ "$chart" != "$released" ] || [ "$app" != "$released" ]; then
-        echo "chart=$chart appVersion=$app release=$released"
-        exit 1
-    fi
-    yq -e '.packages."."."extra-files"[] | select(.type == "yaml" and .path == "deploy/helm/spinoza/Chart.yaml" and .jsonpath == "$.version")' release-please-config.json > /dev/null
-    yq -e '.packages."."."extra-files"[] | select(.type == "yaml" and .path == "deploy/helm/spinoza/Chart.yaml" and .jsonpath == "$.appVersion")' release-please-config.json > /dev/null
-    yq -e '.packages."."."force-tag-creation" == true' release-please-config.json > /dev/null
-    recovery=$(yq -r '."last-release-sha"' release-please-config.json)
-    git merge-base --is-ancestor "$recovery" HEAD
-    yq -e '.jobs.version.outputs.version != null' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.version.outputs.pending != null' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.version.outputs.sha | test("steps.read.outputs.sha")' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.on.push.paths == null' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.version.steps[] | select(.id == "read") | .run | test("scripts/release-pending.sh")' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.dist.if | test("pending")' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.install.if | test("pending")' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.image.permissions.packages == "write"' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.image.steps[] | select(.id == "push") | ((.with.push == true) and (.with.platforms == "linux/amd64,linux/arm64"))' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.image.steps[] | select(.id == "push") | .with.tags | test("needs.version.outputs.version")' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.chart.needs | contains(["image"])' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.chart.permissions.packages == "write"' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.chart.steps[] | select(.run != null) | .run | select(test("helm package"))' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.chart.steps[] | select(.run != null) | .run | select(test("helm push"))' .github/workflows/release-artifacts.yaml > /dev/null
-    yq -e '.jobs.publish.needs | contains(["chart"])' .github/workflows/release-artifacts.yaml > /dev/null
-    echo "test-release-publication: release-please, image and chart publication are linked"
+    go test ./test/release
 
 image tag='spinoza:dev':
     docker build --build-arg SPINOZA_VERSION="$(just app-version)" -t {{ tag }} .
@@ -854,25 +825,6 @@ workflow-triggers:
             exit 1
         fi
     done
-    if [ "$(yq -r '.jobs.release-please.permissions.actions' .github/workflows/release-please.yaml)" != "write" ]; then
-        echo ".github/workflows/release-please.yaml cannot dispatch release validation" >&2
-        exit 1
-    fi
-    release_step=$(yq -r '.jobs.release-please.steps[] | select(.uses // "" | test("^googleapis/release-please-action@")) | .id' .github/workflows/release-please.yaml)
-    if [ "$release_step" != "release" ]; then
-        echo ".github/workflows/release-please.yaml does not expose release pull request outputs" >&2
-        exit 1
-    fi
-    dispatch_condition=$(yq -r '.jobs.release-please.steps[] | select(.name == "Validate the release pull request") | .if' .github/workflows/release-please.yaml)
-    if ! grep -Fq "steps.release.outputs.prs_created" <<< "$dispatch_condition"; then
-        echo ".github/workflows/release-please.yaml dispatches without a release pull request" >&2
-        exit 1
-    fi
-    dispatch=$(yq -r '.jobs.release-please.steps[] | select(.name == "Validate the release pull request") | .run' .github/workflows/release-please.yaml)
-    if ! grep -Fq "gh workflow run e2e.yaml" <<< "$dispatch" || ! grep -Fq 'pull_request=' <<< "$dispatch"; then
-        echo ".github/workflows/release-please.yaml does not dispatch grouped release validation" >&2
-        exit 1
-    fi
     if [ "$(yq -r '.concurrency.cancel-in-progress' .github/workflows/badges.yaml)" != "true" ]; then
         echo ".github/workflows/badges.yaml can publish an obsolete measurement" >&2
         exit 1
