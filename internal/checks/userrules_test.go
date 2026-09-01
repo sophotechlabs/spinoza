@@ -95,13 +95,14 @@ func TestARuleThatErrorsOnAnObjectIsQuietAboutIt(t *testing.T) {
 	}
 }
 
-func TestARuleReturningSomethingOtherThanTrueOrFalseReportsNothing(t *testing.T) {
+func TestARuleReturningSomethingOtherThanTrueOrFalseReportsItsFault(t *testing.T) {
 	raw := `[{"id":"counts","expr":"size(object.spec.template.spec.containers)"}]`
 
 	report := withRules(t, raw, deployment("api", podSpec(container("app", nil))))
 
-	if findingCount(t, report, "counts") != 0 {
-		t.Fatal("a rule returning a number was read as a finding")
+	finding := onlyFinding(t, report, "counts")
+	if !strings.Contains(finding.Detail, "return true or false") {
+		t.Fatalf("detail was %q, want the rule's output type fault", finding.Detail)
 	}
 }
 

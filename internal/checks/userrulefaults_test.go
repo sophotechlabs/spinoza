@@ -33,6 +33,20 @@ func TestARuleThatDoesNotCompileIsNamedBeforeItIsSaved(t *testing.T) {
 	}
 }
 
+func TestARuleThatDoesNotReturnTrueOrFalseIsNamedBeforeItIsSaved(t *testing.T) {
+	faults := Faults(`[{"id":"a-name","expr":"object.metadata.name"}]`)
+
+	if len(faults) != 1 {
+		t.Fatalf("reported %v", faults)
+	}
+	if faults[0].ID != "a-name" {
+		t.Fatalf("the fault named %q", faults[0].ID)
+	}
+	if !strings.Contains(faults[0].Reason, "return true or false") {
+		t.Fatalf("the reason was %q", faults[0].Reason)
+	}
+}
+
 func TestARuleMissingWhatEveryRuleNeedsIsNamed(t *testing.T) {
 	cases := []struct {
 		name, raw, want string

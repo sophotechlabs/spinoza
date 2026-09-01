@@ -2,6 +2,7 @@ package checks
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -81,7 +82,7 @@ func (r UserRule) faults(at int) []RuleFault {
 		return []RuleFault{{ID: name, Reason: "a rule needs an expression to judge by"}}
 	}
 	if _, err := compileRule(r.Expr); err != nil {
-		return []RuleFault{{ID: name, Reason: "the expression did not compile: " + err.Error()}}
+		return []RuleFault{{ID: name, Reason: err.Error()}}
 	}
 	if r.silencer() && !isCheck(r.Silences) {
 		return []RuleFault{{ID: name, Reason: "no check goes by the name " + r.Silences}}
@@ -178,7 +179,11 @@ func compileRule(expr string) (cel.Program, error) {
 	}
 	parsed, issues := env.Compile(expr)
 	if issues != nil && issues.Err() != nil {
-		return nil, issues.Err()
+		return nil, fmt.Errorf("the expression did not compile: %w", issues.Err())
+	}
+	if !parsed.OutputType().IsExactType(cel.BoolType) {
+		return nil, fmt.Errorf("the expression has to return true or false, not %s",
+			cel.FormatCELType(parsed.OutputType()))
 	}
 	return env.Program(parsed)
 }
@@ -190,7 +195,7 @@ func refuses(reason string) finder {
 				Ref:  api.ObjectRef{Version: "v1", Resource: "rules", Name: "this rule"},
 				Kind: "Rule",
 			},
-			detail: "the expression did not compile: " + reason,
+			detail: reason,
 		}}
 	}
 }
