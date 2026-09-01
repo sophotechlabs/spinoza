@@ -2,9 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 )
 
 const maxSettingsBytes = 1 << 20
@@ -36,7 +38,7 @@ func SettingsScript(values map[string]string) string {
 }
 
 func (s *Server) readSettings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, api.Settings{Values: s.stored().All()})
+	writeJSON(w, api.Settings{Values: servedSettings(s.stored().All())})
 }
 
 func (s *Server) writeSettings(w http.ResponseWriter, r *http.Request) {
@@ -46,10 +48,20 @@ func (s *Server) writeSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "settings must be an object of strings")
 		return
 	}
+	if _, protected := wanted.Values[checks.MutesKey]; protected {
+		writeError(w, http.StatusBadRequest, "check mutes must be changed through the mutes endpoint")
+		return
+	}
 	saveErr := s.stored().Merge(wanted.Values)
 	if saveErr != nil {
 		writeError(w, http.StatusInternalServerError, saveErr.Error())
 		return
 	}
-	writeJSON(w, api.Settings{Values: s.stored().All()})
+	writeJSON(w, api.Settings{Values: servedSettings(s.stored().All())})
+}
+
+func servedSettings(values map[string]string) map[string]string {
+	out := maps.Clone(values)
+	delete(out, checks.MutesKey)
+	return out
 }

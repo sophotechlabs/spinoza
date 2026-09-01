@@ -74,6 +74,9 @@ var needsWholeCluster = map[string]bool{
 	routeKey(http.MethodGet, "/api/checks/findings"):       true,
 	routeKey(http.MethodGet, "/api/checks/findings/fleet"): true,
 	routeKey(http.MethodGet, "/api/checks/export"):         true,
+	routeKey(http.MethodGet, "/api/checks/mutes"):          true,
+	routeKey(http.MethodPost, "/api/checks/mutes"):         true,
+	routeKey(http.MethodDelete, "/api/checks/mutes"):       true,
 	routeKey(http.MethodGet, "/api/gitops/graph"):          true,
 	routeKey(http.MethodGet, "/api/gitops/app"):            true,
 	routeKey(http.MethodGet, "/api/gitops/app/graph"):      true,
@@ -95,6 +98,8 @@ var needsWholeCluster = map[string]bool{
 	routeKey(http.MethodGet, "/api/helm/fleet"):            true,
 	routeKey(http.MethodPost, "/api/checks/baseline"):      true,
 	routeKey(http.MethodGet, "/api/checks/baseline/file"):  true,
+	routeKey(http.MethodGet, "/api/history"):               true,
+	routeKey(http.MethodDelete, "/api/history"):            true,
 }
 
 const readsEverything = "this view reads the whole cluster, and your account reads named namespaces only"

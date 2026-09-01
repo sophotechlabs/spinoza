@@ -11,6 +11,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/settings"
 )
 
@@ -249,6 +250,34 @@ func TestAViewThatReadsTheWholeClusterIsRefusedToAScopedAccount(t *testing.T) {
 	}
 }
 
+func TestAScopedAccountCannotReadOrChangeSharedHistoryAndMutes(t *testing.T) {
+	ts := proxyServer(t, &servedBackend{scope: api.Scope{Namespaces: []string{"payments"}}}, auth.Config{
+		DefaultRole: auth.RoleAdmin,
+	})
+	cases := []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/history"},
+		{method: http.MethodDelete, path: "/api/history"},
+		{method: http.MethodGet, path: "/api/checks/mutes"},
+		{method: http.MethodPost, path: "/api/checks/mutes"},
+		{method: http.MethodDelete, path: "/api/checks/mutes"},
+	}
+	for _, test := range cases {
+		t.Run(test.method+" "+test.path, func(t *testing.T) {
+			resp, body := asUser(t, ts, test.method, test.path, "carol@example.com", "")
+
+			if resp.StatusCode != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
+			}
+			if !strings.Contains(body, "reads the whole cluster") {
+				t.Fatalf("body = %q, want it to explain the shared cluster scope", body)
+			}
+		})
+	}
+}
+
 func TestAViewThatReadsTheWholeClusterIsNotRefusedForAnAnswerNobodyGave(t *testing.T) {
 	ts := proxyServer(t, &servedBackend{scope: api.Scope{Undecided: []string{"payments"}}}, auth.Config{
 		DefaultRole: auth.RoleAdmin,
@@ -367,8 +396,11 @@ func TestWhereALoginLandsIsWhereSpinozaIsPublished(t *testing.T) {
 func TestTheSignInPageCarriesNothingOfTheCluster(t *testing.T) {
 	srv := New(&stubBackendCluster{backend: everyNamespace()}, testAssets(), "")
 	held := settings.Memory()
+	privateObject := "/v1/pods/team-a/storefront"
 	mergeErr := held.Merge(map[string]string{
-		"spinoza.checks.muted.v1": `[{"check":"privileged","object":"payments/web"}]`,
+		checks.MutesKey: checks.EncodeMutes(map[string][]checks.Mute{
+			"cluster": {{Check: "privileged", Ref: privateObject}},
+		}),
 	})
 	if mergeErr != nil {
 		t.Fatalf("holding a mute: %v", mergeErr)
@@ -386,7 +418,7 @@ func TestTheSignInPageCarriesNothingOfTheCluster(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	_, anonymousPage := asUser(t, ts, http.MethodGet, "/", "", "")
-	if strings.Contains(anonymousPage, "payments/web") {
+	if strings.Contains(anonymousPage, privateObject) {
 		t.Fatalf("the sign-in page handed a stranger what this cluster mutes:\n%s", anonymousPage)
 	}
 	if strings.Contains(anonymousPage, "__SPINOZA_SETTINGS__") {
@@ -394,8 +426,8 @@ func TestTheSignInPageCarriesNothingOfTheCluster(t *testing.T) {
 	}
 
 	_, signedInPage := asUser(t, ts, http.MethodGet, "/", "alice", "")
-	if !strings.Contains(signedInPage, "payments/web") {
-		t.Fatalf("a signed-in reader lost the settings the app needs:\n%s", signedInPage)
+	if strings.Contains(signedInPage, privateObject) {
+		t.Fatalf("a signed-in reader received mute metadata through the page:\n%s", signedInPage)
 	}
 }
 

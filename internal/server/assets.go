@@ -44,7 +44,7 @@ func signedIn(r *http.Request) bool {
 }
 
 func (s *Server) IndexHead(view string) string {
-	return TokenScript(s.token) + SettingsScript(s.stored().All()) + ViewScript(view) +
+	return TokenScript(s.token) + SettingsScript(servedSettings(s.stored().All())) + ViewScript(view) +
 		StartScript(s.start.view, s.start.context)
 }
 

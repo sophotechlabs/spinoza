@@ -126,3 +126,18 @@ func TestExecAndPortForwardingAreAdminOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestSharedHistoryAndMutesNeedTheWholeCluster(t *testing.T) {
+	shared := []string{
+		routeKey(http.MethodGet, "/api/history"),
+		routeKey(http.MethodDelete, "/api/history"),
+		routeKey(http.MethodGet, "/api/checks/mutes"),
+		routeKey(http.MethodPost, "/api/checks/mutes"),
+		routeKey(http.MethodDelete, "/api/checks/mutes"),
+	}
+	for _, key := range shared {
+		if !needsWholeCluster[key] {
+			t.Errorf("%s exposes shared cluster records without a whole-cluster scope check", key)
+		}
+	}
+}

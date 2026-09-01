@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/settings"
 )
 
@@ -74,6 +75,47 @@ func TestSettingsComeBackAfterTheyAreKept(t *testing.T) {
 
 	if decodeSettings(t, body).Values["spinoza.theme.v1"] != `"nord"` {
 		t.Fatalf("the theme did not survive: %s", body)
+	}
+}
+
+func TestMutesDoNotComeBackThroughSettings(t *testing.T) {
+	store := settings.Memory()
+	err := store.Merge(map[string]string{
+		"spinoza.theme.v1": `"nord"`,
+		checks.MutesKey:    `{"cluster":[{"check":"privileged","namespace":"payments"}]}`,
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	ts := settingsServer(t, store)
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/settings", nil)
+	values := decodeSettings(t, body).Values
+
+	if _, exposed := values[checks.MutesKey]; exposed {
+		t.Fatalf("settings exposed check mutes: %s", body)
+	}
+	if values["spinoza.theme.v1"] != `"nord"` {
+		t.Fatalf("ordinary settings were filtered with the mutes: %s", body)
+	}
+}
+
+func TestMutesCannotBeChangedThroughSettings(t *testing.T) {
+	store := settings.Memory()
+	original := `{"cluster":[{"check":"privileged","namespace":"payments"}]}`
+	if err := store.Merge(map[string]string{checks.MutesKey: original}); err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	ts := settingsServer(t, store)
+	body := `{"values":{"` + checks.MutesKey + `":"[]"}}`
+
+	resp, _ := doRequest(t, http.MethodPut, ts.URL+"/api/settings", strings.NewReader(body))
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if store.All()[checks.MutesKey] != original {
+		t.Fatal("the settings endpoint changed the shared mute state")
 	}
 }
 
