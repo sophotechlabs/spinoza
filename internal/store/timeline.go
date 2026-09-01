@@ -127,7 +127,15 @@ func (s *Store) Changed(ctx context.Context, query Query) (Changes, error) {
 	}
 	limit := limitOf(query.Limit)
 	rows, err := db.QueryContext(
-		ctx, selectChanges, query.Cluster, query.Cluster, query.After, query.After, limit+1,
+		ctx,
+		selectChanges,
+		query.Cluster,
+		query.Cluster,
+		query.After,
+		query.After,
+		query.Cluster,
+		query.Cluster,
+		limit+1,
 	)
 	if err != nil {
 		return Changes{}, fmt.Errorf("store: %w", err)

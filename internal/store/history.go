@@ -166,7 +166,15 @@ func (s *Store) Recent(ctx context.Context, query Query) (Page, error) {
 	}
 	limit := limitOf(query.Limit)
 	rows, err := db.QueryContext(
-		ctx, selectAudit, query.Cluster, query.Cluster, query.AfterAction, query.AfterAction, limit+1,
+		ctx,
+		selectAudit,
+		query.Cluster,
+		query.Cluster,
+		query.AfterAction,
+		query.AfterAction,
+		query.Cluster,
+		query.Cluster,
+		limit+1,
 	)
 	if err != nil {
 		return Page{}, fmt.Errorf("store: %w", err)

@@ -19,11 +19,24 @@ INSERT INTO audit (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 const selectAudit = `
-SELECT id, cluster, at, verb, actor, api_group, api_version, resource, kind,
-	namespace, name, detail, outcome, message
-FROM audit
-WHERE (? = '' OR cluster = ?) AND (? = 0 OR id < ?)
-ORDER BY at DESC, id DESC
+SELECT current.id, current.cluster, current.at, current.verb, current.actor,
+	current.api_group, current.api_version, current.resource, current.kind,
+	current.namespace, current.name, current.detail, current.outcome, current.message
+FROM audit AS current
+WHERE (? = '' OR current.cluster = ?)
+	AND (
+		? = 0 OR EXISTS (
+			SELECT 1
+			FROM audit AS cursor
+			WHERE cursor.id = ?
+				AND (? = '' OR cursor.cluster = ?)
+				AND (
+					current.at < cursor.at OR
+					(current.at = cursor.at AND current.id < cursor.id)
+				)
+		)
+	)
+ORDER BY current.at DESC, current.id DESC
 LIMIT ?`
 
 const deleteAudit = `
@@ -37,11 +50,24 @@ INSERT INTO changes (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 const selectChanges = `
-SELECT id, cluster, at, verb, api_group, api_version, resource, kind,
-	namespace, name, uid, cells, was
-FROM changes
-WHERE (? = '' OR cluster = ?) AND (? = 0 OR id < ?)
-ORDER BY at DESC, id DESC
+SELECT current.id, current.cluster, current.at, current.verb, current.api_group,
+	current.api_version, current.resource, current.kind, current.namespace,
+	current.name, current.uid, current.cells, current.was
+FROM changes AS current
+WHERE (? = '' OR current.cluster = ?)
+	AND (
+		? = 0 OR EXISTS (
+			SELECT 1
+			FROM changes AS cursor
+			WHERE cursor.id = ?
+				AND (? = '' OR cursor.cluster = ?)
+				AND (
+					current.at < cursor.at OR
+					(current.at = cursor.at AND current.id < cursor.id)
+				)
+		)
+	)
+ORDER BY current.at DESC, current.id DESC
 LIMIT ?`
 
 const deleteAuditBefore = `DELETE FROM audit WHERE at < ?`

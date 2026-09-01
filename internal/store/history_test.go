@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -637,6 +638,23 @@ func TestTheAuditHalfIsBoundedByItsOwnCursor(t *testing.T) {
 		if one.ID >= boundary {
 			t.Fatalf("row %d came back at or above the cursor %d", one.ID, boundary)
 		}
+	}
+}
+
+func TestAuditPaginationFollowsTimestampOrder(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	record(t, store, entry(p1, noon, "oldest"))
+	record(t, store, entry(p1, noon.Add(2*time.Minute), "newest"))
+	record(t, store, entry(p1, noon.Add(time.Minute), "middle"))
+
+	first := recent(t, store, Query{Limit: 2})
+	second := recent(t, store, Query{Limit: 2, AfterAction: first.Entries[1].ID})
+
+	if got := names(first); !slices.Equal(got, []string{"newest", "middle"}) {
+		t.Fatalf("first page = %v", got)
+	}
+	if got := names(second); !slices.Equal(got, []string{"oldest"}) {
+		t.Fatalf("second page = %v", got)
 	}
 }
 

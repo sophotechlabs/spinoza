@@ -1,6 +1,7 @@
 package store
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -410,6 +411,33 @@ func TestAPageOfChangesContinuesBelowTheCursor(t *testing.T) {
 	}
 	if next.Rows[0].Name != "middle" {
 		t.Fatalf("the next page started at %s", next.Rows[0].Name)
+	}
+}
+
+func TestChangePaginationFollowsTimestampOrder(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	noteOne(t, store, p1, change(noon, "oldest"))
+	noteOne(t, store, p1, change(noon.Add(2*time.Minute), "newest"))
+	noteOne(t, store, p1, change(noon.Add(time.Minute), "middle"))
+	first, err := store.Changed(t.Context(), Query{Limit: 2})
+	if err != nil {
+		t.Fatalf("changed: %v", err)
+	}
+	second, nextErr := store.Changed(t.Context(), Query{Limit: 2, After: first.Rows[1].ID})
+	if nextErr != nil {
+		t.Fatalf("changed: %v", nextErr)
+	}
+
+	firstNames := []string{first.Rows[0].Name, first.Rows[1].Name}
+	if !slices.Equal(firstNames, []string{"newest", "middle"}) {
+		t.Fatalf("first page = %v", firstNames)
+	}
+	secondNames := make([]string, 0, len(second.Rows))
+	for _, row := range second.Rows {
+		secondNames = append(secondNames, row.Name)
+	}
+	if !slices.Equal(secondNames, []string{"oldest"}) {
+		t.Fatalf("second page = %v", secondNames)
 	}
 }
 
