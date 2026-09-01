@@ -2,6 +2,7 @@ package issues
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -83,22 +84,34 @@ func secondsOf(at time.Time) int {
 	return int(at.Unix())
 }
 
-func EncodeCursor(key string) string {
+var (
+	ErrInvalidCursor = errors.New("that page marker is invalid")
+	ErrCursorOrder   = errors.New("that page marker belongs to a different sort order")
+)
+
+func EncodeCursor(key, order string) string {
 	if key == "" {
 		return ""
 	}
-	return base64.RawURLEncoding.EncodeToString([]byte(key))
+	return base64.RawURLEncoding.EncodeToString([]byte(order + "\x00" + key))
 }
 
-func DecodeCursor(cursor string) string {
+func DecodeCursor(cursor, order string) (string, error) {
 	if cursor == "" {
-		return ""
+		return "", nil
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(cursor)
 	if err != nil {
-		return ""
+		return "", ErrInvalidCursor
 	}
-	return string(raw)
+	minted, key, found := strings.Cut(string(raw), "\x00")
+	if !found || minted == "" || key == "" {
+		return "", ErrInvalidCursor
+	}
+	if minted != order {
+		return "", ErrCursorOrder
+	}
+	return key, nil
 }
 
 func Page(rows []api.Issue, after string, limit int, order string) ([]api.Issue, string) {
@@ -110,7 +123,7 @@ func Page(rows []api.Issue, after string, limit int, order string) ([]api.Issue,
 			continue
 		}
 		if len(out) == limit {
-			return out, EncodeCursor(last)
+			return out, EncodeCursor(last, order)
 		}
 		out = append(out, row)
 		last = key

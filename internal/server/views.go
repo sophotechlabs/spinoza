@@ -142,23 +142,32 @@ func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
 	for at := range queue.Rows {
 		queue.Rows[at].Cluster = on
 	}
-	writeJSON(w, pagedQueue(queue, r))
+	paged, err := pagedQueue(queue, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, paged)
 }
 
-func pagedQueue(queue api.IssueQueue, r *http.Request) api.IssueQueue {
+func pagedQueue(queue api.IssueQueue, r *http.Request) (api.IssueQueue, error) {
 	query := r.URL.Query()
 	order := issues.OrderOf(query.Get("sort"))
+	after, err := issues.DecodeCursor(query.Get("after"), order)
+	if err != nil {
+		return api.IssueQueue{}, err
+	}
 	issues.Rank(queue.Rows, order)
 	queue.Tally = issues.Tally(queue.Rows)
 	rows, next := issues.Page(
 		queue.Rows,
-		issues.DecodeCursor(query.Get("after")),
+		after,
 		issues.PageSize(shownOf(query.Get("shown"))),
 		order,
 	)
 	queue.Rows = rows
 	queue.Next = next
-	return queue
+	return queue, nil
 }
 
 func shownOf(raw string) int {

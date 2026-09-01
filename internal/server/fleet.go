@@ -11,7 +11,12 @@ import (
 )
 
 func (s *Server) fleetIssues(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, pagedQueue(mergeQueues(s.everyClustersIssues(r.Context())), r))
+	paged, err := pagedQueue(mergeQueues(s.everyClustersIssues(r.Context())), r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, paged)
 }
 
 func (s *Server) everyClustersIssues(ctx context.Context) []clusterAnswer[api.IssueQueue] {

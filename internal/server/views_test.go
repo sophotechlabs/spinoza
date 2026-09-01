@@ -264,6 +264,26 @@ func TestTheIssuesEndpointHandsOutOnePageAtATime(t *testing.T) {
 	}
 }
 
+func TestTheIssuesEndpointRefusesInvalidAndWrongOrderCursors(t *testing.T) {
+	ts := stubbedServer(t, &stubViews{issues: manyIssues(issues.Shown + 3)})
+
+	var first api.IssueQueue
+	getJSON(t, ts.URL+"/api/issues?sort=worst", &first)
+	if first.Next == "" {
+		t.Fatal("the fixture produced no second page")
+	}
+
+	for _, path := range []string{
+		"/api/issues?after=not-base64!",
+		"/api/issues?sort=newest&after=" + first.Next,
+	} {
+		resp := getJSON(t, ts.URL+path, nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status for %q = %d, want 400", path, resp.StatusCode)
+		}
+	}
+}
+
 func TestTheQueueTallyCountsTheWholeClusterNotThePage(t *testing.T) {
 	queue := manyIssues(issues.Shown + 3)
 	queue.Rows[0].Severity = api.SeverityFatal

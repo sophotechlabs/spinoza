@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"errors"
 	"slices"
 	"strconv"
 	"testing"
@@ -60,7 +61,7 @@ func TestPagingWalksTheWholeQueueInOrder(t *testing.T) {
 	walked := []api.Issue{}
 	cursor := ""
 	for range rows {
-		page, next := Page(rows, DecodeCursor(cursor), 7, ByWorst)
+		page, next := Page(rows, cursorKey(t, cursor, ByWorst), 7, ByWorst)
 		walked = append(walked, page...)
 		if next == "" {
 			break
@@ -85,7 +86,7 @@ func TestEveryPageButTheLastIsFull(t *testing.T) {
 	cursor := ""
 	pages := 0
 	for {
-		page, next := Page(rows, DecodeCursor(cursor), 7, ByWorst)
+		page, next := Page(rows, cursorKey(t, cursor, ByWorst), 7, ByWorst)
 		pages++
 		if next == "" {
 			if len(page) > 7 {
@@ -137,7 +138,7 @@ func TestARowClearingBeforeTheNextPageDoesNotSkipItsNeighbour(t *testing.T) {
 	}
 
 	shorter := slices.Delete(slices.Clone(rows), 0, 1)
-	second, _ := Page(shorter, DecodeCursor(next), 7, ByWorst)
+	second, _ := Page(shorter, cursorKey(t, next, ByWorst), 7, ByWorst)
 
 	if len(second) == 0 {
 		t.Fatal("the second page came back empty")
@@ -150,26 +151,44 @@ func TestARowClearingBeforeTheNextPageDoesNotSkipItsNeighbour(t *testing.T) {
 	}
 }
 
-func TestGarbageInTheCursorStartsFromTheTop(t *testing.T) {
-	rows := rowsAcrossEveryOrderingField()
-	Rank(rows, ByWorst)
+func TestGarbageInTheCursorIsRefused(t *testing.T) {
+	_, err := DecodeCursor("not base64 at all!!", ByWorst)
 
-	page, _ := Page(rows, DecodeCursor("not base64 at all!!"), 3, ByWorst)
-
-	if len(page) != 3 {
-		t.Fatalf("page carries %d rows", len(page))
-	}
-	if page[0].ID != rows[0].ID {
-		t.Fatalf("page starts at %q, the queue starts at %q", page[0].ID, rows[0].ID)
+	if !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("error = %v, want invalid cursor", err)
 	}
 }
 
-func TestAnEmptyCursorEncodesToNothing(t *testing.T) {
-	if EncodeCursor("") != "" {
-		t.Fatalf("an empty key encoded to %q", EncodeCursor(""))
+func cursorKey(t *testing.T, cursor, order string) string {
+	t.Helper()
+	key, err := DecodeCursor(cursor, order)
+	if err != nil {
+		t.Fatalf("decode cursor: %v", err)
 	}
-	if DecodeCursor("") != "" {
-		t.Fatalf("an empty cursor decoded to %q", DecodeCursor(""))
+	return key
+}
+
+func TestAnEmptyCursorEncodesToNothing(t *testing.T) {
+	if EncodeCursor("", ByWorst) != "" {
+		t.Fatalf("an empty key encoded to %q", EncodeCursor("", ByWorst))
+	}
+	if cursorKey(t, "", ByWorst) != "" {
+		t.Fatal("an empty cursor decoded to something")
+	}
+}
+
+func TestACursorFromAnotherOrderIsRefused(t *testing.T) {
+	rows := rowsAcrossEveryOrderingField()
+	Rank(rows, ByWorst)
+	_, next := Page(rows, "", 3, ByWorst)
+	if next == "" {
+		t.Fatal("the fixture produced no second page")
+	}
+
+	_, err := DecodeCursor(next, ByNewest)
+
+	if !errors.Is(err, ErrCursorOrder) {
+		t.Fatalf("error = %v, want cursor order mismatch", err)
 	}
 }
 
@@ -264,7 +283,7 @@ func TestEveryOrderWalksItsWholeQueueWithoutRepeating(t *testing.T) {
 			seen := map[string]bool{}
 			cursor := ""
 			for range rows {
-				page, next := Page(rows, DecodeCursor(cursor), 7, order)
+				page, next := Page(rows, cursorKey(t, cursor, order), 7, order)
 				for _, row := range page {
 					if seen[row.ID] {
 						t.Fatalf("%s came back twice", row.ID)

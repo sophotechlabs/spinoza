@@ -192,6 +192,16 @@ func TestTheFleetQueueHandsOutOnePageAtATime(t *testing.T) {
 	}
 }
 
+func TestTheFleetQueueRefusesAnInvalidCursor(t *testing.T) {
+	ts := queueServer(t, queueOf(issue("a", api.SeverityWarning)), queueOf())
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet?after=not-base64!", nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+}
+
 func TestAClusterWithNoBackendIsSkippedRatherThanFatal(t *testing.T) {
 	srv, held := twoClusters(t, &queueBackend{queue: queueOf(issue("a", api.SeverityWarning))}, nil)
 	held.backends[mk2] = nil
