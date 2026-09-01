@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -497,6 +498,33 @@ func TestACertificateAuthorityHasToBeReadable(t *testing.T) {
 	_, badErr := httpClientFor(OIDCConfig{CACertFile: path})
 	if badErr == nil {
 		t.Fatal("a file with no certificate in it was accepted")
+	}
+}
+
+func TestACustomCertificateAuthorityTrustsItsProvider(t *testing.T) {
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(provider.Close)
+
+	certificate := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: provider.Certificate().Raw,
+	})
+	path := writeFile(t, string(certificate))
+	client, err := httpClientFor(OIDCConfig{CACertFile: path})
+	if err != nil {
+		t.Fatalf("building the client: %v", err)
+	}
+	response, err := client.Get(provider.URL)
+	if err != nil {
+		t.Fatalf("calling the provider: %v", err)
+	}
+	t.Cleanup(func() {
+		response.Body.Close()
+	})
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusNoContent)
 	}
 }
 
