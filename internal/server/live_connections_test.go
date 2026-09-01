@@ -55,6 +55,18 @@ func TestLiveConnectionBudgetsAreGlobalAndIdentityScoped(t *testing.T) {
 	releaseCarol()
 }
 
+func TestLiveConnectionIdentityFallsBackToTheSessionID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
+	req = req.WithContext(auth.WithIdentity(req.Context(), auth.Identity{
+		Session: "session-7",
+		Role:    auth.RoleViewer,
+	}))
+
+	if got := liveIdentity(req); got != "session-7" {
+		t.Fatalf("identity = %q, want the session id", got)
+	}
+}
+
 func TestAuthorizationWatcherEndsAConnectionWhoseIdentityChanged(t *testing.T) {
 	authn, err := auth.New(t.Context(), auth.Config{Mode: auth.ModeNone})
 	if err != nil {

@@ -207,6 +207,33 @@ func TestAFeedWithNoClusterStillHearsSomething(t *testing.T) {
 	}
 }
 
+func TestCancelingTheHealthWatcherClearsItsRunningState(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, &pinger{})
+	srv.mu.Lock()
+	srv.watching = true
+	srv.mu.Unlock()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	done := make(chan struct{})
+	go func() {
+		srv.pingUntilNobodyIsWatching(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("the canceled health watcher did not stop")
+	}
+
+	srv.mu.Lock()
+	watching := srv.watching
+	srv.mu.Unlock()
+	if watching {
+		t.Fatal("the stopped health watcher still claims to be running")
+	}
+}
+
 func TestAFailedRequestIsHeardWithoutWaitingForAPing(t *testing.T) {
 	sink := reach.New()
 	srv, _ := twoClusters(t, &pinger{sink: sink}, &pinger{})

@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/actions"
@@ -96,6 +97,35 @@ func TestARouteWithNoPolicyIsHandedStraightThrough(t *testing.T) {
 	}
 	if onlyHere(entry) || wholeCluster(entry) {
 		t.Fatal("a plain read was gated")
+	}
+}
+
+func TestRouteRoleChecksRequireAKnownSufficientRole(t *testing.T) {
+	srv := New(nil, nil, "")
+	req := httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody)
+
+	if srv.holdsRole(req, auth.RoleViewer) {
+		t.Fatal("a request with no identity satisfied a role requirement")
+	}
+	if got := heldRole(req); got != "unknown" {
+		t.Fatalf("held role = %q, want unknown", got)
+	}
+	req = req.WithContext(auth.WithIdentity(req.Context(), auth.Identity{}))
+	if srv.holdsRole(req, auth.RoleViewer) {
+		t.Fatal("an identity with no role satisfied a role requirement")
+	}
+	if got := heldRole(req); got != "unknown" {
+		t.Fatalf("empty held role = %q, want unknown", got)
+	}
+	req = req.WithContext(auth.WithIdentity(req.Context(), auth.Identity{Role: auth.RoleEditor}))
+	if !srv.holdsRole(req, auth.RoleViewer) {
+		t.Fatal("an editor did not satisfy a viewer requirement")
+	}
+	if srv.holdsRole(req, auth.RoleAdmin) {
+		t.Fatal("an editor satisfied an admin requirement")
+	}
+	if got := heldRole(req); got != auth.RoleEditor {
+		t.Fatalf("held role = %q, want editor", got)
 	}
 }
 

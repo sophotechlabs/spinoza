@@ -19,6 +19,11 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/argocd"
+	"github.com/sophotechlabs/spinoza/internal/checks"
+	"github.com/sophotechlabs/spinoza/internal/flux"
+	"github.com/sophotechlabs/spinoza/internal/gitops"
+	"github.com/sophotechlabs/spinoza/internal/helm"
 	"github.com/sophotechlabs/spinoza/internal/inspect"
 	"github.com/sophotechlabs/spinoza/internal/jsonschema"
 	"github.com/sophotechlabs/spinoza/internal/prom"
@@ -37,8 +42,16 @@ func TestStatusForMapsEachOutcome(t *testing.T) {
 	}{
 		{"internal sentinel", fmt.Errorf("action: %w", api.ErrInternal), http.StatusInternalServerError},
 		{"oversized body", &http.MaxBytesError{Limit: 1}, http.StatusRequestEntityTooLarge},
+		{"unknown check", checks.ErrNoSuchCheck, http.StatusBadRequest},
 		{"invalid uid", inspect.ErrInvalidUID, http.StatusBadRequest},
+		{"missing resource version", inspect.ErrNoResourceVersion, http.StatusBadRequest},
+		{"not an applier", gitops.ErrNotAnApplier, http.StatusBadRequest},
+		{"cluster not open", api.ErrNotOpen, http.StatusNotFound},
 		{"no schema", jsonschema.ErrNoSchema, http.StatusNotFound},
+		{"no helm release", helm.ErrNoRelease, http.StatusNotFound},
+		{"flux-managed helm release", helm.ErrFluxManaged, http.StatusConflict},
+		{"argo action refused", argocd.ErrRefused, http.StatusConflict},
+		{"flux source missing", flux.ErrNoSource, http.StatusConflict},
 		{"deadline exceeded", context.DeadlineExceeded, http.StatusGatewayTimeout},
 		{"canceled", context.Canceled, http.StatusServiceUnavailable},
 		{"not found", apierrors.NewNotFound(podsResource(), "web"), http.StatusNotFound},
@@ -46,6 +59,11 @@ func TestStatusForMapsEachOutcome(t *testing.T) {
 		{"unauthorized", apierrors.NewUnauthorized("who is this"), http.StatusUnauthorized},
 		{"forbidden", apierrors.NewForbidden(podsResource(), "web", errors.New("no")), http.StatusForbidden},
 		{"namespace outside scope", resources.ErrOutOfScope, http.StatusForbidden},
+		{
+			"invalid Kubernetes object",
+			apierrors.NewInvalid(schema.GroupKind{Group: "apps", Kind: "Deployment"}, "web", nil),
+			http.StatusUnprocessableEntity,
+		},
 		{"bad request", apierrors.NewBadRequest("no such field"), http.StatusUnprocessableEntity},
 		{"anything else", errors.New("unknown resource apps/v1/widgets"), http.StatusBadRequest},
 	}

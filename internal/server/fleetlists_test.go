@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -139,6 +140,52 @@ func TestASearchNamesAnOpenClusterWithoutABackend(t *testing.T) {
 	}
 }
 
+func TestFleetSearchCapsCombinedResultsAfterStableSorting(t *testing.T) {
+	answers := make([]clusterAnswer[api.SearchResults], 0, 3)
+	for _, cluster := range []string{"mk3", "mk1", "mk2"} {
+		hits := make([]api.SearchHit, 0, 100)
+		for index := range 100 {
+			hits = append(hits, hit(fmt.Sprintf("workload-%03d", index)))
+		}
+		answers = append(answers, clusterAnswer[api.SearchResults]{
+			cluster: cluster,
+			context: cluster,
+			answer:  api.SearchResults{Hits: hits},
+		})
+	}
+
+	got := mergeSearch(answers)
+
+	if len(got.Hits) != fleetSearchCap {
+		t.Fatalf("hits = %d, want %d", len(got.Hits), fleetSearchCap)
+	}
+	if !got.Truncated {
+		t.Fatal("the combined fleet result did not say it was truncated")
+	}
+	last := got.Hits[len(got.Hits)-1]
+	if last.Name != "workload-066" || last.Cluster != "mk2" {
+		t.Fatalf("last hit = %+v, want the deterministic cap boundary", last)
+	}
+}
+
+func TestFleetSearchIncludesAClusterPanicAlongsideResourceErrors(t *testing.T) {
+	got := mergeSearch([]clusterAnswer[api.SearchResults]{
+		{
+			cluster: "mk1",
+			context: "p-mk1",
+			answer:  api.SearchResults{Errors: map[string]string{"pods": "forbidden"}},
+		},
+		{cluster: "mk2", context: "p-mk2", failure: "panicked: informer cache changed"},
+	})
+
+	if got.Errors["p-mk1: pods"] != "forbidden" {
+		t.Fatalf("errors = %v, want the resource refusal", got.Errors)
+	}
+	if got.Errors["p-mk2"] != "panicked: informer cache changed" {
+		t.Fatalf("errors = %v, want the panicking cluster", got.Errors)
+	}
+}
+
 func release(chart, version string) api.HelmRelease {
 	return api.HelmRelease{Name: chart, Namespace: "default", Chart: chart, ChartVersion: version}
 }
@@ -196,6 +243,46 @@ func TestAClusterWhoseReleasesCouldNotBeReadIsNamed(t *testing.T) {
 
 	if got.Error != "p-mk2: helm is not installed" {
 		t.Fatalf("error = %q", got.Error)
+	}
+}
+
+func TestFleetReleasesHaveStableNestedOrderingAndErrors(t *testing.T) {
+	got := mergeReleases([]clusterAnswer[api.HelmReleases]{
+		{
+			cluster: "mk2",
+			context: "p-mk2",
+			answer: api.HelmReleases{
+				Releases: []api.HelmRelease{
+					{Name: "worker", Namespace: "shop", Chart: "zinc", ChartVersion: "1.0.0"},
+					{Name: "web", Namespace: "shop", Chart: "loki", ChartVersion: "6.1.0"},
+				},
+				Error: "helm timed out",
+			},
+		},
+		{
+			cluster: "mk1",
+			context: "p-mk1",
+			answer: api.HelmReleases{Releases: []api.HelmRelease{
+				{Name: "api", Namespace: "apps", Chart: "loki", ChartVersion: "6.1.0"},
+				{Name: "web", Namespace: "shop", Chart: "loki", ChartVersion: "6.1.0"},
+			}},
+			failure: "panicked: cache changed",
+		},
+	})
+
+	want := []string{"loki/mk1/apps/api", "loki/mk1/shop/web", "loki/mk2/shop/web", "zinc/mk2/shop/worker"}
+	if len(got.Releases) != len(want) {
+		t.Fatalf("releases = %+v", got.Releases)
+	}
+	for index, one := range got.Releases {
+		key := one.Chart + "/" + one.Cluster + "/" + one.Namespace + "/" + one.Name
+		if key != want[index] {
+			t.Fatalf("release %d = %q, want %q", index, key, want[index])
+		}
+	}
+	wantError := "p-mk1: panicked: cache changed · p-mk2: helm timed out"
+	if got.Error != wantError {
+		t.Fatalf("error = %q, want %q", got.Error, wantError)
 	}
 }
 
