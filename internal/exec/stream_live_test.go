@@ -33,11 +33,12 @@ type fakeKubelet struct {
 	path    string
 	query   string
 	done    chan struct{}
+	changed chan struct{}
 	closing sync.Once
 }
 
 func newFakeKubelet() *fakeKubelet {
-	return &fakeKubelet{done: make(chan struct{})}
+	return &fakeKubelet{done: make(chan struct{}), changed: make(chan struct{}, 1)}
 }
 
 func (f *fakeKubelet) finish() {
@@ -85,6 +86,7 @@ func (f *fakeKubelet) handle(ctx context.Context, conn *websocket.Conn, data []b
 		f.mu.Lock()
 		f.stdin.Write(payload)
 		f.mu.Unlock()
+		f.signalChange()
 		_ = conn.Write(ctx, websocket.MessageBinary, append([]byte{streamStdout}, bytes.ToUpper(payload)...))
 	case streamResize:
 		var size struct {
@@ -95,6 +97,7 @@ func (f *fakeKubelet) handle(ctx context.Context, conn *websocket.Conn, data []b
 			f.mu.Lock()
 			f.sizes = append(f.sizes, Size{Cols: size.Width, Rows: size.Height})
 			f.mu.Unlock()
+			f.signalChange()
 		}
 	case streamClose:
 		if len(payload) == 1 && payload[0] == streamStdin {
@@ -104,6 +107,13 @@ func (f *fakeKubelet) handle(ctx context.Context, conn *websocket.Conn, data []b
 	default:
 	}
 	return false
+}
+
+func (f *fakeKubelet) signalChange() {
+	select {
+	case f.changed <- struct{}{}:
+	default:
+	}
 }
 
 func (f *fakeKubelet) succeed(ctx context.Context, conn *websocket.Conn) {
@@ -147,13 +157,19 @@ func TestStreamRunsAShellOverTheRealClient(t *testing.T) {
 	resize <- Size{Cols: 120, Rows: 40}
 	_, _ = stdinWriter.Write([]byte("uptime\n"))
 
-	waitFor(t, func() bool {
+	deadline := time.NewTimer(10 * time.Second)
+	defer deadline.Stop()
+	for {
 		stdin, sizes, _, _ := kubelet.recorded()
-		if stdin != "uptime\n" {
-			return false
+		if stdin == "uptime\n" && len(sizes) == 1 {
+			break
 		}
-		return len(sizes) == 1
-	}, "the kubelet never saw both the keystrokes and the resize")
+		select {
+		case <-kubelet.changed:
+		case <-deadline.C:
+			t.Fatal("the kubelet never saw both the keystrokes and the resize")
+		}
+	}
 	_ = stdinWriter.Close()
 
 	select {

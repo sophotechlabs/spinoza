@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,11 +38,11 @@ type Server struct {
 
 func New(cluster Cluster, opts Options) *Server {
 	lines := opts.LogLines
-	if lines == 0 {
+	if lines <= 0 {
 		lines = defaultLogLines
 	}
 	budget := opts.CallBudget
-	if budget == 0 {
+	if budget <= 0 {
 		budget = defaultCallBudget
 	}
 	server := &Server{
@@ -90,18 +91,38 @@ func (s *Server) Tools() []string {
 }
 
 func (s *Server) Handle(ctx context.Context, raw []byte) []byte {
+	if !json.Valid(raw) {
+		return encode(refuse(nil, codeParse, "the message is not JSON"))
+	}
 	var call request
 	if err := json.Unmarshal(raw, &call); err != nil {
-		return encode(refuse(nil, codeParse, "the message is not JSON"))
+		return encode(refuse(nil, codeInvalidRequest, "the message is not a JSON-RPC request"))
 	}
 	if call.JSONRPC != jsonRPCVersion {
 		return encode(refuse(call.ID, codeInvalidRequest, "jsonrpc must be "+jsonRPCVersion))
+	}
+	if call.Method == "" {
+		return encode(refuse(call.ID, codeInvalidRequest, "method is required"))
+	}
+	if !validID(call.ID) {
+		return encode(refuse(nil, codeInvalidRequest, "id must be a string, number, or null"))
 	}
 	if len(call.ID) == 0 {
 		s.notified(call.Method)
 		return nil
 	}
 	return encode(s.dispatch(ctx, call))
+}
+
+func validID(id json.RawMessage) bool {
+	id = bytes.TrimSpace(id)
+	if len(id) == 0 || bytes.Equal(id, []byte("null")) {
+		return true
+	}
+	if id[0] == '"' || id[0] == '-' {
+		return true
+	}
+	return id[0] >= '0' && id[0] <= '9'
 }
 
 func (s *Server) notified(method string) {

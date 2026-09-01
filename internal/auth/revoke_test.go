@@ -21,6 +21,19 @@ func TestARevokedSessionStaysRevokedUntilItWouldHaveExpired(t *testing.T) {
 	}
 }
 
+func TestARevocationEndsAtTheExactExpiryBoundary(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	held := newRevocations(time.Hour)
+	held.now = func() time.Time { return now }
+	held.revoke("session-7")
+
+	now = now.Add(time.Hour)
+
+	if held.revoked("session-7") {
+		t.Fatal("a revocation survived the exact instant the session expired")
+	}
+}
+
 func TestNothingIsRevokedByDefault(t *testing.T) {
 	held := newRevocations(time.Hour)
 

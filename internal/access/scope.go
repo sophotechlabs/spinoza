@@ -101,15 +101,18 @@ const (
 )
 
 func decide(decisions []Decision) verdict {
-	found := unanswered
+	if len(decisions) == 0 {
+		return unanswered
+	}
+	found := allowed
 	for _, one := range decisions {
 		if !one.Answered {
+			found = unanswered
 			continue
 		}
-		if one.Allowed {
-			return allowed
+		if !one.Allowed {
+			return denied
 		}
-		found = denied
 	}
 	return found
 }

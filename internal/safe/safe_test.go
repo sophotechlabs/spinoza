@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
+	"testing/synctest"
 )
 
 type journal struct {
@@ -65,13 +65,18 @@ func TestRunLeavesAnOrdinaryCallAlone(t *testing.T) {
 }
 
 func TestGoKeepsTheProcessAliveThroughAPanic(t *testing.T) {
-	logged := captureLog(t)
+	synctest.Test(t, func(t *testing.T) {
+		logged := captureLog(t)
 
-	Go("a spawned unit of work", func() {
-		panic("boom")
+		Go("a spawned unit of work", func() {
+			panic("boom")
+		})
+		synctest.Wait()
+
+		if !strings.Contains(logged.String(), "a spawned unit of work") {
+			t.Fatalf("log never mentioned the spawned work: %q", logged.String())
+		}
 	})
-
-	waitFor(t, logged, "a spawned unit of work")
 }
 
 func TestLogIgnoresACleanReturn(t *testing.T) {
@@ -82,16 +87,4 @@ func TestLogIgnoresACleanReturn(t *testing.T) {
 	if logged.String() != "" {
 		t.Fatalf("log = %q, want nothing recorded for a clean return", logged.String())
 	}
-}
-
-func waitFor(t *testing.T, logged *journal, want string) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if strings.Contains(logged.String(), want) {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatalf("log never mentioned %q", want)
 }

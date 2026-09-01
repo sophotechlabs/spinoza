@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	authv1 "k8s.io/api/authorization/v1"
@@ -393,20 +394,22 @@ func TestNextNameCountsFromTheHighestExisting(t *testing.T) {
 }
 
 func TestEnsureHonoursACancelledContext(t *testing.T) {
-	runner := &stubRunner{onRun: func() {}}
-	service := newService(t, runningPod(), runner)
-	service.timeout = 5 * time.Second
+	synctest.Test(t, func(t *testing.T) {
+		runner := &stubRunner{onRun: func() {}}
+		service := newService(t, runningPod(), runner)
+		service.timeout = 5 * time.Second
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(5 * time.Millisecond)
-		cancel()
-	}()
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(5 * time.Millisecond)
+			cancel()
+		}()
 
-	_, err := service.Ensure(ctx, request())
-	if err == nil {
-		t.Fatal("expected the cancellation to surface")
-	}
+		_, err := service.Ensure(ctx, request())
+		if err == nil {
+			t.Fatal("expected the cancellation to surface")
+		}
+	})
 }
 
 func TestEnsureRejectsABadNamespaceName(t *testing.T) {

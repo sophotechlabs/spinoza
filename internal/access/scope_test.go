@@ -136,6 +136,31 @@ func TestAnAnswerNobodyGaveIsNotAYes(t *testing.T) {
 	}
 }
 
+func TestEveryRequiredPermissionHasToBeAllowed(t *testing.T) {
+	cases := []struct {
+		name      string
+		decisions []Decision
+		want      verdict
+	}{
+		{name: "no requirements", want: unanswered},
+		{name: "one allowance", decisions: []Decision{{Answered: true, Allowed: true}}, want: allowed},
+		{name: "one refusal", decisions: []Decision{{Answered: true}}, want: denied},
+		{name: "one unanswered", decisions: []Decision{{}}, want: unanswered},
+		{name: "all allowed", decisions: []Decision{{Answered: true, Allowed: true}, {Answered: true, Allowed: true}}, want: allowed},
+		{name: "allow and refusal", decisions: []Decision{{Answered: true, Allowed: true}, {Answered: true}}, want: denied},
+		{name: "refusal and allow", decisions: []Decision{{Answered: true}, {Answered: true, Allowed: true}}, want: denied},
+		{name: "allow and unanswered", decisions: []Decision{{Answered: true, Allowed: true}, {}}, want: unanswered},
+		{name: "unanswered and refusal", decisions: []Decision{{}, {Answered: true}}, want: denied},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := decide(tc.decisions); got != tc.want {
+				t.Fatalf("decide(%+v) = %v, want %v", tc.decisions, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestANamespaceTheClusterWouldNotDecideIsNotReportedAsRefused(t *testing.T) {
 	rules := &namespaceRules{
 		allowed: map[string]bool{"payments": true, "storefront": true},

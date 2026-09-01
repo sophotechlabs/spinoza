@@ -129,6 +129,23 @@ func TestAnEmptyQueuePagesToNothing(t *testing.T) {
 	}
 }
 
+func TestAnInvalidPageLimitStillMakesProgress(t *testing.T) {
+	rows := rowsAcrossEveryOrderingField()
+	Rank(rows, ByWorst)
+	for _, limit := range []int{0, -1, -100} {
+		page, next := Page(rows, "", limit, ByWorst)
+		if len(page) == 0 {
+			t.Fatalf("limit %d returned an empty page for a non-empty queue", limit)
+		}
+		if len(page) > Shown {
+			t.Fatalf("limit %d returned %d rows, want at most %d", limit, len(page), Shown)
+		}
+		if len(rows) > Shown && next == "" {
+			t.Fatalf("limit %d lost the continuation", limit)
+		}
+	}
+}
+
 func TestARowClearingBeforeTheNextPageDoesNotSkipItsNeighbour(t *testing.T) {
 	rows := rowsAcrossEveryOrderingField()
 	Rank(rows, ByWorst)

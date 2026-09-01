@@ -9,6 +9,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/creack/pty v1.1.24
 	github.com/wailsapp/wails/v2 v2.13.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/oauth2 v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.3

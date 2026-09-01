@@ -1190,6 +1190,8 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 	factory.Start(streamCtx.Done())
 	syncCtx, cancelSync := context.WithTimeout(ctx, m.syncTimeout)
 	defer cancelSync()
+	stopRootCancel := context.AfterFunc(m.rootCtx, cancelSync)
+	defer stopRootCancel()
 	synced := make(chan bool, 1)
 	go func() {
 		synced <- cache.WaitForCacheSync(syncCtx.Done(), informer.HasSynced)

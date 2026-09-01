@@ -52,6 +52,8 @@ func TestARoleAllowsEverythingWeakerThanItself(t *testing.T) {
 		{name: "a viewer may not edit", held: RoleViewer, needed: RoleEditor, want: false},
 		{name: "an unknown role may do nothing", held: "nobody", needed: RoleViewer, want: false},
 		{name: "no role at all may do nothing", held: "", needed: RoleViewer, want: false},
+		{name: "an unknown requirement is never granted", held: RoleAdmin, needed: "owner", want: false},
+		{name: "two unknown roles do not grant each other", held: "owner", needed: "operator", want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -59,6 +61,18 @@ func TestARoleAllowsEverythingWeakerThanItself(t *testing.T) {
 				t.Fatalf("Allows(%q, %q) = %v, want %v", tc.held, tc.needed, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestEveryRolePairFollowsTheDeclaredOrder(t *testing.T) {
+	for heldAt, held := range rolesWeakestFirst {
+		for neededAt, needed := range rolesWeakestFirst {
+			want := heldAt >= neededAt
+			got := Allows(held, needed)
+			if got != want {
+				t.Fatalf("Allows(%q, %q) = %v, want %v", held, needed, got, want)
+			}
+		}
 	}
 }
 

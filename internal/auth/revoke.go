@@ -36,7 +36,7 @@ func (rv *revocations) revoked(session string) bool {
 	if !held {
 		return false
 	}
-	if rv.now().After(until) {
+	if !rv.now().Before(until) {
 		delete(rv.gone, session)
 		return false
 	}
@@ -46,7 +46,7 @@ func (rv *revocations) revoked(session string) bool {
 func (rv *revocations) sweep() {
 	now := rv.now()
 	for session, until := range rv.gone {
-		if now.After(until) {
+		if !now.Before(until) {
 			delete(rv.gone, session)
 		}
 	}

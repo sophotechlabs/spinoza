@@ -11,24 +11,26 @@ import (
 )
 
 type stubStreamer struct {
-	mu      sync.Mutex
-	calls   int
-	req     Request
-	command []string
-	stdin   []byte
-	sizes   []Size
-	entered chan struct{}
-	release chan struct{}
-	err     error
-	echo    string
-	drain   int
-	gate    chan struct{}
+	mu        sync.Mutex
+	calls     int
+	req       Request
+	command   []string
+	stdin     []byte
+	stdinDone chan struct{}
+	sizes     []Size
+	entered   chan struct{}
+	release   chan struct{}
+	err       error
+	echo      string
+	drain     int
+	gate      chan struct{}
 }
 
 func newStubStreamer() *stubStreamer {
 	return &stubStreamer{
-		entered: make(chan struct{}, 1),
-		release: make(chan struct{}),
+		entered:   make(chan struct{}, 1),
+		release:   make(chan struct{}),
+		stdinDone: make(chan struct{}),
 	}
 }
 
@@ -59,6 +61,7 @@ func (s *stubStreamer) Stream(ctx context.Context, req Request, opts Options) er
 		s.mu.Lock()
 		s.stdin = data
 		s.mu.Unlock()
+		close(s.stdinDone)
 	}()
 
 	if s.gate != nil {
@@ -119,12 +122,12 @@ func TestStartRunsShellAndForwardsStdin(t *testing.T) {
 		t.Fatal("session did not finish")
 	}
 
-	waitFor(t, func() bool {
-		stdin, _, _, _ := streamer.recorded()
-		return string(stdin) == "uptime\n"
-	}, "stdin never reached the streamer")
+	<-streamer.stdinDone
 
-	_, _, req, command := streamer.recorded()
+	stdin, _, req, command := streamer.recorded()
+	if string(stdin) != "uptime\n" {
+		t.Fatalf("stdin = %q, want uptime", stdin)
+	}
 	if req.Pod != "web" {
 		t.Fatalf("pod = %q", req.Pod)
 	}
@@ -194,16 +197,4 @@ func TestCloseStopsTheStream(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("close did not end the session")
 	}
-}
-
-func waitFor(t *testing.T, cond func() bool, message string) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Fatal(message)
 }

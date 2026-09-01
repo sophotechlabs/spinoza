@@ -69,5 +69,9 @@ func Allows(held, needed string) bool {
 	if needed == "" {
 		return true
 	}
-	return slices.Index(rolesWeakestFirst, held) >= slices.Index(rolesWeakestFirst, needed)
+	neededAt := slices.Index(rolesWeakestFirst, needed)
+	if neededAt < 0 {
+		return false
+	}
+	return slices.Index(rolesWeakestFirst, held) >= neededAt
 }

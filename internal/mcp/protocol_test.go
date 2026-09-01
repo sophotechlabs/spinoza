@@ -57,6 +57,42 @@ func TestAMessageThatIsNotJSONIsRefusedAsParseError(t *testing.T) {
 	}
 }
 
+func TestValidJSONThatIsNotARequestIsAnInvalidRequest(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	for _, raw := range []string{`null`, `true`, `[]`, `"ping"`, `{"jsonrpc":2,"id":1,"method":"ping"}`} {
+		reply := ask(t, server, raw)
+		if code := errorOf(t, reply)["code"]; code != float64(codeInvalidRequest) {
+			t.Fatalf("%s produced code %v, want %d", raw, code, codeInvalidRequest)
+		}
+	}
+}
+
+func TestARequestNeedsAMethod(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	reply := ask(t, server, `{"jsonrpc":"2.0","id":1}`)
+
+	if code := errorOf(t, reply)["code"]; code != float64(codeInvalidRequest) {
+		t.Fatalf("code = %v, want %d", code, codeInvalidRequest)
+	}
+}
+
+func TestOnlyJSONRPCIDTypesAreAccepted(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	for _, id := range []string{`true`, `false`, `[]`, `{}`, `{"nested":1}`} {
+		raw := `{"jsonrpc":"2.0","id":` + id + `,"method":"ping"}`
+		reply := ask(t, server, raw)
+		if code := errorOf(t, reply)["code"]; code != float64(codeInvalidRequest) {
+			t.Fatalf("id %s produced code %v, want %d", id, code, codeInvalidRequest)
+		}
+	}
+	for _, id := range []string{`null`, `0`, `-1`, `1.5`, `"call-1"`} {
+		raw := `{"jsonrpc":"2.0","id":` + id + `,"method":"ping"}`
+		if _, exists := ask(t, server, raw)["result"]; !exists {
+			t.Fatalf("id %s was refused", id)
+		}
+	}
+}
+
 func TestAMessageOfTheWrongProtocolIsRefused(t *testing.T) {
 	server := serverFor(&fakeCluster{}, Options{})
 

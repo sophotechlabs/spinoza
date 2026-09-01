@@ -414,6 +414,31 @@ test-repeat name='' pkgs=go_pkgs: stub-assets
     fi
     go test -race -shuffle=on -count=5 {{ pkgs }}
 
+fuzz-one pkg target tags='' duration='30s': stub-assets
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(test {{ quote(pkg) }} -run '^$' -fuzz {{ quote(target) }} -fuzztime {{ quote(duration) }} -timeout 2m)
+    tags={{ quote(tags) }}
+    if [ -n "$tags" ]; then
+        args+=(-tags "$tags")
+    fi
+    go "${args[@]}"
+
+mutation mode='default' output='dist/mutation/default.json': stub-assets
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mode={{ quote(mode) }}
+    output={{ quote(output) }}
+    mkdir -p "$(dirname "$output")"
+    args=(unleash --output "$output" --output-statuses lc)
+    if [ "$mode" = desktop ]; then
+        args+=(--tags desktop)
+    elif [ "$mode" != default ]; then
+        echo "mutation: mode must be default or desktop" >&2
+        exit 1
+    fi
+    gremlins "${args[@]}"
+
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml
 
@@ -762,6 +787,22 @@ workflow-triggers:
         echo ".github/workflows/badges.yaml can publish an obsolete measurement" >&2
         exit 1
     fi
+    durable=(go-fuzz.yaml go-mutation.yaml)
+    for name in "${durable[@]}"; do
+        workflow=".github/workflows/$name"
+        if [ "$(yq -r '.on | (has("push") and has("pull_request"))' "$workflow")" != "true" ]; then
+            echo "$workflow does not run on every push and pull request" >&2
+            exit 1
+        fi
+        if [ "$(yq -r '.on | has("schedule")' "$workflow")" != "false" ]; then
+            echo "$workflow must not depend on a schedule" >&2
+            exit 1
+        fi
+        if [ "$(yq -r '.concurrency.cancel-in-progress // false' "$workflow")" != "false" ]; then
+            echo "$workflow cancels an in-progress test campaign" >&2
+            exit 1
+        fi
+    done
 
 hygiene:
     typos

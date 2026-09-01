@@ -224,6 +224,10 @@ url = "https://dl.google.com/go/go1.26.6.windows-amd64.zip"
 version = "2.47.0"
 backend = "go:github.com/goreleaser/nfpm/v2/cmd/nfpm"
 
+[[tools."go:github.com/go-gremlins/gremlins/cmd/gremlins"]]
+version = "0.6.0"
+backend = "go:github.com/go-gremlins/gremlins/cmd/gremlins"
+
 [[tools."go:github.com/vladopajic/go-test-coverage/v2"]]
 version = "2.19.0"
 backend = "go:github.com/vladopajic/go-test-coverage/v2"

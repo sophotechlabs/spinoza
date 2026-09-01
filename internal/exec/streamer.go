@@ -23,6 +23,8 @@ func NewStreamer(cs kubernetes.Interface, config *restclient.Config) Streamer {
 }
 
 func (a *apiStreamer) Stream(ctx context.Context, req Request, opts Options) error {
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	endpoint := a.cs.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -43,11 +45,11 @@ func (a *apiStreamer) Stream(ctx context.Context, req Request, opts Options) err
 	if err != nil {
 		return err
 	}
-	return executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+	return executor.StreamWithContext(streamCtx, remotecommand.StreamOptions{
 		Stdin:             opts.Stdin,
 		Stdout:            opts.Stdout,
 		Tty:               true,
-		TerminalSizeQueue: &sizeQueue{ctx: ctx, resize: opts.Resize},
+		TerminalSizeQueue: &sizeQueue{ctx: streamCtx, resize: opts.Resize},
 	})
 }
 

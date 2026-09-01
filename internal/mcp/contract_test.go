@@ -171,6 +171,17 @@ func TestTheBudgetHasADefaultSoNoCallIsUnbounded(t *testing.T) {
 	}
 }
 
+func TestInvalidServerLimitsFallBackToSafeDefaults(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{LogLines: -1, CallBudget: -time.Second})
+
+	if server.logLines != defaultLogLines {
+		t.Fatalf("log lines = %d, want %d", server.logLines, defaultLogLines)
+	}
+	if server.budget != defaultCallBudget {
+		t.Fatalf("budget = %s, want %s", server.budget, defaultCallBudget)
+	}
+}
+
 func TestEveryWriteToolAsksTheAccessCheckFirst(t *testing.T) {
 	for name := range writeToolNames {
 		t.Run(name, func(t *testing.T) {

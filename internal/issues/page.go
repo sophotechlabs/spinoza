@@ -115,6 +115,7 @@ func DecodeCursor(cursor, order string) (string, error) {
 }
 
 func Page(rows []api.Issue, after string, limit int, order string) ([]api.Issue, string) {
+	limit = PageSize(limit)
 	out := make([]api.Issue, 0, min(limit, len(rows)))
 	last := ""
 	for _, row := range rows {
