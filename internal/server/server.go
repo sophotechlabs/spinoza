@@ -172,11 +172,7 @@ func (s *Server) filePicker() FilePicker {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, api.Health{
-		Status:  "ok",
-		Version: version.String(),
-		Context: s.cluster.Contexts().Current.Name,
-	})
+	writeJSON(w, api.Health{Status: "ok"})
 }
 
 func handleVersion(w http.ResponseWriter, r *http.Request) {

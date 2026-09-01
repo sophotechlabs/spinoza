@@ -7,9 +7,7 @@ var ErrNotOpen = errors.New("that cluster is not open")
 var ErrInternal = errors.New("spinoza could not do that")
 
 type Health struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-	Context string `json:"context"`
+	Status string `json:"status"`
 }
 
 type Build struct {

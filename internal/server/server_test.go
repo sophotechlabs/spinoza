@@ -164,11 +164,12 @@ func TestHealthzReturnsOK(t *testing.T) {
 	if health.Status != "ok" {
 		t.Fatalf("status = %q", health.Status)
 	}
-	if health.Version != version.String() {
-		t.Fatalf("version = %q, want the build to name itself", health.Version)
+	var fields map[string]any
+	if decodeErr := json.Unmarshal(body, &fields); decodeErr != nil {
+		t.Fatalf("decode fields from %s: %v", body, decodeErr)
 	}
-	if health.Context != "p-mk2" {
-		t.Fatalf("context = %q, want the context a bug report needs", health.Context)
+	if len(fields) != 1 {
+		t.Fatalf("health = %s, want only the probe status exposed", body)
 	}
 }
 
