@@ -18,7 +18,7 @@ func TestClusterKeyUsesTheAskedClusterOrTheCurrentOne(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", tc.path, http.NoBody)
+			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
 			if got := srv.clusterKey(req); got != tc.want {
 				t.Fatalf("clusterKey() = %q, want %q", got, tc.want)
 			}

@@ -13,16 +13,14 @@ func TestConcurrentHealthWritersLeaveAConsistentVerdict(t *testing.T) {
 		start := make(chan struct{})
 		var writers sync.WaitGroup
 		for writer := range 16 {
-			writers.Add(1)
-			go func() {
-				defer writers.Done()
+			writers.Go(func() {
 				<-start
 				if writer%3 == 0 {
 					srv.recordHealthOf(mk1, answering())
 					return
 				}
 				srv.recordHealthOf(mk1, notAnswering("connection refused"))
-			}()
+			})
 		}
 		close(start)
 		writers.Wait()
