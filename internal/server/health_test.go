@@ -62,6 +62,7 @@ func flakyServer(t *testing.T, backend *flaky) *httptest.Server {
 }
 
 func flakyServerEvery(t *testing.T, backend *flaky, every time.Duration) *httptest.Server {
+	t.Helper()
 	ts, _ := flakyServerAndInstance(t, backend, every)
 	return ts
 }
