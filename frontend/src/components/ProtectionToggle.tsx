@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ICON_CONTROL } from '../lib/controls';
 import { setProtection } from '../lib/contexts';
 import { useContextList, useContextsStore } from '../store/contexts';
@@ -42,21 +42,45 @@ export default function ProtectionToggle() {
   const setList = useContextsStore((state) => state.setList);
   const [busy, setBusy] = useState(false);
   const protectedCluster = list.protection === 'protected';
+  const operation = useRef(0);
+  const clusterKey = `${list.current.kubeconfig}/${list.current.name}`;
+
+  useEffect(() => {
+    operation.current += 1;
+    setBusy(false);
+  }, [clusterKey]);
+
+  useEffect(() => {
+    return () => {
+      operation.current += 1;
+    };
+  }, []);
 
   async function flip() {
     const wanted = !protectedCluster;
+    operation.current += 1;
+    const token = operation.current;
     setBusy(true);
     try {
-      setList(await setProtection(wanted));
+      const found = await setProtection(wanted);
+      if (operation.current !== token) {
+        return;
+      }
+      setList(found);
       if (wanted) {
         notifyOk(`${list.current.name} is protected`);
       } else {
         notifyOk(`${list.current.name} is open again`);
       }
     } catch (err: unknown) {
+      if (operation.current !== token) {
+        return;
+      }
       notifyError(reason(err));
     } finally {
-      setBusy(false);
+      if (operation.current === token) {
+        setBusy(false);
+      }
     }
   }
 

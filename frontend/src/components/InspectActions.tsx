@@ -60,6 +60,7 @@ export default function InspectActions({
   const watchRef = useRef(0);
 
   useEffect(() => {
+    setBusy(null);
     setError(null);
     setNotice(null);
     setState(null);
@@ -95,7 +96,9 @@ export default function InspectActions({
       }
       setError(errorMessage(err));
     } finally {
-      setBusy(null);
+      if (watchRef.current === token) {
+        setBusy(null);
+      }
     }
   }
 

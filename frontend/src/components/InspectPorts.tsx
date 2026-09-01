@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ObjectPort, ObjectRef, PortForward } from '../lib/types';
 import { refreshForwards, startForward, stopForward } from '../lib/portForward';
 import { forwardURL, openExternal } from '../lib/openExternal';
@@ -8,6 +8,7 @@ import { useClusterMode } from '../store/identity';
 import { FORWARDS_ARE_LOCAL } from '../lib/portForward';
 import { useRefusal } from '../store/access';
 import Announce from './Announce';
+import { refQuery } from '../lib/object';
 
 interface InspectPortsProps {
   target: ObjectRef;
@@ -53,8 +54,22 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
   const forwards = useForwards();
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const operation = useRef(0);
   const served = useClusterMode();
   const noForward = useRefusal(target, 'portForward');
+  const targetKey = `${kind}:${refQuery(target)}`;
+
+  useEffect(() => {
+    operation.current += 1;
+    setBusy(null);
+    setError(null);
+  }, [targetKey]);
+
+  useEffect(() => {
+    return () => {
+      operation.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (served) {
@@ -64,34 +79,54 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
   }, [served, target.namespace, target.name]);
 
   async function forward(port: number) {
+    operation.current += 1;
+    const token = operation.current;
     setBusy(port);
     setError(null);
     try {
       const started = await startForward(kind, target, port);
-      notifyOk(`Forwarding ${target.name} 127.0.0.1:${started.localPort} to ${port}`, target);
       await refreshForwards();
+      if (operation.current !== token) {
+        return;
+      }
+      notifyOk(`Forwarding ${target.name} 127.0.0.1:${started.localPort} to ${port}`, target);
     } catch (err: unknown) {
+      if (operation.current !== token) {
+        return;
+      }
       const message = errorMessage(err);
       setError(message);
       notifyError(`Forwarding ${target.name} port ${port}: ${message}`, target);
     } finally {
-      setBusy(null);
+      if (operation.current === token) {
+        setBusy(null);
+      }
     }
   }
 
   async function stop(running: PortForward) {
+    operation.current += 1;
+    const token = operation.current;
     setBusy(running.remotePort);
     setError(null);
     try {
       await stopForward(running.id);
-      notifyOk(`Stopped forwarding ${target.name} port ${running.remotePort}`, target);
       await refreshForwards();
+      if (operation.current !== token) {
+        return;
+      }
+      notifyOk(`Stopped forwarding ${target.name} port ${running.remotePort}`, target);
     } catch (err: unknown) {
+      if (operation.current !== token) {
+        return;
+      }
       const message = errorMessage(err);
       setError(message);
       notifyError(`Stopping the forward: ${message}`);
     } finally {
-      setBusy(null);
+      if (operation.current === token) {
+        setBusy(null);
+      }
     }
   }
 

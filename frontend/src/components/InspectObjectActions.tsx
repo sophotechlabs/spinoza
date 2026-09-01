@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ActionResult, ObjectDetail, ObjectRef, PodOutcome } from '../lib/types';
 import {
   canRestart,
@@ -89,6 +89,7 @@ export default function InspectObjectActions({
   const [plan, setPlan] = useState<ActionResult | null>(null);
   const [force, setForce] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
+  const runRef = useRef(0);
   const protectedCluster = useProtectedCluster();
   const noScale = useRefusal(target, 'scale');
   const noRestart = useRefusal(target, 'restart');
@@ -100,12 +101,20 @@ export default function InspectObjectActions({
   const refKey = refQuery(target);
 
   useEffect(() => {
+    runRef.current += 1;
+    setBusy(false);
     setError(null);
     setNotice(null);
     setPlan(null);
     setForce(false);
     setPending(null);
   }, [refKey]);
+
+  useEffect(() => {
+    return () => {
+      runRef.current += 1;
+    };
+  }, []);
 
   const currentReplicas = replicasOf(detail);
 
@@ -114,11 +123,16 @@ export default function InspectObjectActions({
   }, [currentReplicas]);
 
   async function run(action: ObjectAction, options: Record<string, unknown> = {}) {
+    runRef.current += 1;
+    const token = runRef.current;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const result = await runAction(target, action, options);
+      if (runRef.current !== token) {
+        return null;
+      }
       if (result.dryRun === true) {
         setPlan(result);
       } else {
@@ -129,13 +143,18 @@ export default function InspectObjectActions({
       onDone();
       return result;
     } catch (err: unknown) {
+      if (runRef.current !== token) {
+        return null;
+      }
       const message = errorMessage(err);
       setError(message);
       notifyError(`${action} ${target.name}: ${message}`, target);
       setPlan(null);
       return null;
     } finally {
-      setBusy(false);
+      if (runRef.current === token) {
+        setBusy(false);
+      }
     }
   }
 

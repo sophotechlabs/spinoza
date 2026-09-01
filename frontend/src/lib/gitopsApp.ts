@@ -171,7 +171,12 @@ export function useGitopsApp(target: ObjectRef | null, active = true): GitopsApp
     }
     const wanted = target;
     let mounted = true;
+    let inFlight = false;
     function load() {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       fetchGitopsApp(wanted)
         .then((found) => {
           if (mounted) {
@@ -183,6 +188,9 @@ export function useGitopsApp(target: ObjectRef | null, active = true): GitopsApp
           if (mounted) {
             setError(errorMessage(err));
           }
+        })
+        .finally(() => {
+          inFlight = false;
         });
     }
     load();

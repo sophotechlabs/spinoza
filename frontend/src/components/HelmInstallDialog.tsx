@@ -111,10 +111,13 @@ export default function HelmInstallDialog({
     if (query.trim() === '') {
       setHits([]);
       setTruncated(false);
+      setSearching(false);
+      setSearchError(null);
       return;
     }
     let live = true;
     setSearching(true);
+    setSearchError(null);
     const timer = setTimeout(() => {
       searchCharts(query)
         .then((found) => {

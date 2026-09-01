@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { History as HistoryPage, HistoryEntry, ObjectRef } from '../lib/types';
 import {
   HISTORY_LIMIT,
@@ -33,6 +33,7 @@ import { nameOf, tabOn, useActiveTab, useClustersStore, useTabStrip } from '../s
 import { colorVar } from '../lib/clusterColor';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useNow } from '../lib/useNow';
+import { useClusterEpoch } from '../store/cluster';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
@@ -193,10 +194,22 @@ export default function History({ onOpen }: HistoryProps) {
   const [reaching, setReaching] = useState(false);
   const several = useTabStrip();
   const showing = fleet && several;
+  const clusterEpoch = useClusterEpoch();
+  const pageKey = `${String(clusterEpoch)}:${source}:${String(showing)}`;
+  const currentPage = useRef(pageKey);
+  const pageGeneration = useRef(0);
+  currentPage.current = pageKey;
   const { data, error, reload } = useHistory({ source, fleet: showing });
   const held = useMemory();
   const [clearing, setClearing] = useState(false);
   const now = useNow();
+
+  useEffect(() => {
+    pageGeneration.current += 1;
+    setOlder([]);
+    setTail(null);
+    setReaching(false);
+  }, [pageKey]);
 
   if (data === null) {
     if (error !== null) {
@@ -214,11 +227,15 @@ export default function History({ onOpen }: HistoryProps) {
   const cursor = cursorOf(deepest);
 
   function startOver() {
+    pageGeneration.current += 1;
     setOlder([]);
     setTail(null);
+    setReaching(false);
   }
 
   async function reachBack() {
+    const requestedPage = pageKey;
+    const requestedGeneration = pageGeneration.current;
     setReaching(true);
     try {
       const next = await fetchHistory({
@@ -227,16 +244,26 @@ export default function History({ onOpen }: HistoryProps) {
         after: cursor.after,
         afterAction: cursor.afterAction,
       });
+      if (currentPage.current !== requestedPage || pageGeneration.current !== requestedGeneration) {
+        return;
+      }
       setOlder((have) => [...have, ...next.entries]);
       setTail(next);
     } catch (err: unknown) {
+      if (currentPage.current !== requestedPage || pageGeneration.current !== requestedGeneration) {
+        return;
+      }
       notifyError(olderFailure(err));
     } finally {
-      setReaching(false);
+      if (currentPage.current === requestedPage && pageGeneration.current === requestedGeneration) {
+        setReaching(false);
+      }
     }
   }
 
   async function handleClear() {
+    pageGeneration.current += 1;
+    setReaching(false);
     setClearing(true);
     try {
       await forgetHistory();

@@ -24,6 +24,7 @@ import {
 import { fetchCapabilities } from './capabilities';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
+import { useClusterEpoch } from '../store/cluster';
 
 const HELM_POLL_MS = 15000;
 
@@ -345,9 +346,11 @@ export function useHelmRelease(namespace: string, name: string): ReleaseDetail {
 
 export function useHelmSupport(): HelmSupport | null {
   const [support, setSupport] = useState<HelmSupport | null>(null);
+  const epoch = useClusterEpoch();
 
   useEffect(() => {
     let live = true;
+    setSupport(null);
     fetchHelmSupport()
       .then((found) => {
         if (live) {
@@ -362,7 +365,7 @@ export function useHelmSupport(): HelmSupport | null {
     return () => {
       live = false;
     };
-  }, []);
+  }, [epoch]);
 
   return support;
 }

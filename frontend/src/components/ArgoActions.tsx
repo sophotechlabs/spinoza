@@ -68,6 +68,7 @@ export default function ArgoActions({ target, suspended, terminating, onDone }: 
   const runRef = useRef(0);
 
   useEffect(() => {
+    setBusy(null);
     setError(null);
     setNotice(null);
     setAsking(null);
@@ -101,7 +102,9 @@ export default function ArgoActions({ target, suspended, terminating, onDone }: 
       }
       setError(errorMessage(err));
     } finally {
-      setBusy(null);
+      if (runRef.current === token) {
+        setBusy(null);
+      }
     }
   }
 

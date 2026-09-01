@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { Issue, IssueCursor, IssueQueue, IssueTally, Severity } from './types';
 import { request } from './http';
 import { parseIssueQueue } from './parse';
@@ -93,12 +93,15 @@ export function usePagedIssues(
   const [moreError, setMoreError] = useState('');
   const asked = queueKey(fleet, order);
   const [lastAsked, setLastAsked] = useState(asked);
+  const pageGeneration = useRef(0);
 
   if (asked !== lastAsked) {
+    pageGeneration.current += 1;
     setLastAsked(asked);
     setTail([]);
     setBuiltOn('');
     setNext('');
+    setLoadingMore(false);
     setMoreError('');
   }
 
@@ -122,8 +125,12 @@ export function usePagedIssues(
     }
     setLoadingMore(true);
     setMoreError('');
+    const generation = pageGeneration.current;
     fetchIssuePage(more, fleet, order)
       .then((page) => {
+        if (generation !== pageGeneration.current) {
+          return;
+        }
         if (joined) {
           setTail((current) => [...current, ...page.rows]);
         } else {
@@ -133,6 +140,9 @@ export function usePagedIssues(
         setNext(page.next ?? '');
       })
       .catch((reason: unknown) => {
+        if (generation !== pageGeneration.current) {
+          return;
+        }
         if (reason instanceof Error) {
           setMoreError(reason.message);
           return;
@@ -140,7 +150,9 @@ export function usePagedIssues(
         setMoreError('issues request failed');
       })
       .finally(() => {
-        setLoadingMore(false);
+        if (generation === pageGeneration.current) {
+          setLoadingMore(false);
+        }
       });
   }
 

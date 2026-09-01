@@ -67,6 +67,8 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
 
   useEffect(() => {
     liveTargetRef.current = targetKey;
+    setBusy(false);
+    setError(null);
     return () => {
       liveTargetRef.current = '';
     };
@@ -118,7 +120,9 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
       }
       setError(errorMessage(err));
     } finally {
-      setBusy(false);
+      if (liveTargetRef.current === key) {
+        setBusy(false);
+      }
     }
   }
 
@@ -152,6 +156,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
           aria-label="Debug profile"
           value={profile}
           onChange={handleProfile}
+          disabled={busy}
           className="rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
         >
           {DEBUG_PROFILES.map((name) => (

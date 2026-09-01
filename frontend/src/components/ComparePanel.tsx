@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useRef, useState } from 'react';
 import type { Comparison, ObjectRef, ResourceDescriptor } from '../lib/types';
 import type { CompareTarget } from '../lib/compare';
 import { changedSections, differingLines, fetchComparison } from '../lib/compare';
@@ -65,7 +65,13 @@ export default function ComparePanel({ target, kind, namespace, onOpen }: Compar
     );
   }
 
-  const identity = `${kind?.resource ?? ''}/${target?.namespace ?? ''}/${target?.name ?? ''}`;
+  const identity = JSON.stringify({
+    current: list.current,
+    kind,
+    namespace,
+    others: others.map((entry) => ({ kubeconfig: entry.kubeconfig, name: entry.name })),
+    target,
+  });
   return (
     <Comparing
       key={identity}
@@ -98,11 +104,21 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const asked = useRef(0);
   const width = useElementWidth(host);
 
   const picked = others.find((entry) => entry.value === chosen) ?? null;
 
+  function invalidate() {
+    asked.current += 1;
+    setResult(null);
+    setError(null);
+    setBusy(false);
+  }
+
   async function run(against: ContextEntry, object: ObjectRef) {
+    const token = asked.current + 1;
+    asked.current = token;
     setBusy(true);
     setError(null);
     const wanted: CompareTarget = {
@@ -112,12 +128,21 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
       object: object.name,
     };
     try {
-      setResult(await fetchComparison(object, wanted, raw));
+      const found = await fetchComparison(object, wanted, raw);
+      if (asked.current !== token) {
+        return;
+      }
+      setResult(found);
     } catch (err: unknown) {
+      if (asked.current !== token) {
+        return;
+      }
       setResult(null);
       setError(reason(err));
     } finally {
-      setBusy(false);
+      if (asked.current === token) {
+        setBusy(false);
+      }
     }
   }
 
@@ -131,6 +156,7 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
           id="compare-context"
           value={chosen}
           onChange={(event) => {
+            invalidate();
             onChoose(event.target.value);
           }}
           className="rounded border border-edge-strong bg-surface-raised px-2 py-1 text-fg"
@@ -150,6 +176,7 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
           aria-label="What to compare"
           value={where}
           onChange={(event) => {
+            invalidate();
             setWhere(event.target.value as Scope);
           }}
           className="rounded border border-edge-strong bg-surface-raised px-2 py-1 text-fg"
@@ -168,6 +195,7 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
           id="compare-namespace"
           value={namespace}
           onChange={(event) => {
+            invalidate();
             setNamespace(event.target.value);
           }}
           className="w-40 rounded border border-edge-strong bg-surface-raised px-2 py-1 font-mono text-fg"
@@ -191,6 +219,7 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
                 type="checkbox"
                 checked={raw}
                 onChange={(event) => {
+                  invalidate();
                   setRaw(event.target.checked);
                 }}
               />
