@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { usePoll } from '../../src/lib/usePoll';
+import type { PollOptions } from '../../src/lib/usePoll';
 import { expireSession } from '../../src/store/session';
 import { bumpClusterEpoch } from '../../src/store/cluster';
 
@@ -8,7 +9,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function options(overrides: Partial<{ enabled: boolean; fallback: string }> = {}) {
+function options(overrides: Partial<PollOptions> = {}) {
   return { intervalMs: 1000, ...overrides };
 }
 
@@ -160,6 +161,37 @@ describe('usePoll', () => {
     await waitFor(() => {
       expect(fetcher).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('drops data from the previous request scope before its replacement arrives', async () => {
+    let scope = 'first';
+    let release: (value: string) => void = () => undefined;
+    const fetcher = vi.fn(() => {
+      if (scope === 'first') {
+        return Promise.resolve('old');
+      }
+      return new Promise<string>((resolve) => {
+        release = resolve;
+      });
+    });
+    const { result, rerender } = renderHook(
+      ({ resetKey }: { resetKey: string }) => usePoll(fetcher, options({ resetKey })),
+      { initialProps: { resetKey: 'first' } },
+    );
+    await waitFor(() => {
+      expect(result.current.data).toBe('old');
+    });
+
+    scope = 'second';
+    rerender({ resetKey: 'second' });
+
+    expect(result.current.data).toBeNull();
+    await act(async () => {
+      release('new');
+      await Promise.resolve();
+    });
+    expect(result.current.data).toBe('new');
+    expect(result.current.askedFor).toBe('second');
   });
 
   it('refetches without dropping the data when the refresh key moves', async () => {
