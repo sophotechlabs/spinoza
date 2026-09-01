@@ -6,14 +6,14 @@ import (
 )
 
 func TestReleaseArtifactsRunOnEveryMainPush(t *testing.T) {
-	workflow := readYAML[workflow](t, ".github/workflows/release-artifacts.yaml")
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
 	if len(workflow.On.Push.Paths) != 0 {
 		t.Fatalf("release artifact pushes are restricted to %v", workflow.On.Push.Paths)
 	}
 }
 
 func TestReleaseArtifactVersionContract(t *testing.T) {
-	workflow := readYAML[workflow](t, ".github/workflows/release-artifacts.yaml")
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
 	version := requireJob(t, workflow, "version")
 	for _, output := range []string{"version", "pending", "sha"} {
 		if version.Outputs[output] == "" {
@@ -27,7 +27,7 @@ func TestReleaseArtifactVersionContract(t *testing.T) {
 }
 
 func TestReleaseArtifactBuildsAreGatedOnPendingWork(t *testing.T) {
-	workflow := readYAML[workflow](t, ".github/workflows/release-artifacts.yaml")
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
 	jobs := []string{"dist", "image", "chart", "desktop", "desktop-linux", "publish", "install"}
 	for _, name := range jobs {
 		job := requireJob(t, workflow, name)
@@ -38,13 +38,14 @@ func TestReleaseArtifactBuildsAreGatedOnPendingWork(t *testing.T) {
 }
 
 func TestReleaseImagePublication(t *testing.T) {
-	workflow := readYAML[workflow](t, ".github/workflows/release-artifacts.yaml")
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
 	image := requireJob(t, workflow, "image")
 	if image.Permissions["packages"] != "write" {
 		t.Fatal("image job cannot publish packages")
 	}
 	push := requireStep(t, image, "push")
-	if push.With["push"] != true {
+	pushed, ok := push.With["push"].(bool)
+	if !ok || !pushed {
 		t.Fatal("image build does not push")
 	}
 	if push.With["platforms"] != "linux/amd64,linux/arm64" {
@@ -60,7 +61,7 @@ func TestReleaseImagePublication(t *testing.T) {
 }
 
 func TestReleaseChartPublication(t *testing.T) {
-	workflow := readYAML[workflow](t, ".github/workflows/release-artifacts.yaml")
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
 	chart := requireJob(t, workflow, "chart")
 	if !contains(chart.Needs, "image") {
 		t.Fatal("chart job does not wait for the image")

@@ -6,7 +6,7 @@ import (
 )
 
 func TestReleasePleaseDispatchesPullRequestValidation(t *testing.T) {
-	workflow := readYAML[workflow](t, ".github/workflows/release-please.yaml")
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-please.yaml")
 	job := requireJob(t, workflow, "release-please")
 	if job.Permissions["actions"] != "write" {
 		t.Fatal("release-please cannot dispatch validation")

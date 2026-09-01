@@ -2,9 +2,10 @@ package release_test
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -38,7 +39,7 @@ type wails struct {
 	} `json:"info"`
 }
 
-type workflow struct {
+type workflowFile struct {
 	On struct {
 		Push struct {
 			Paths []string `yaml:"paths"`
@@ -75,13 +76,13 @@ func (values *stringList) UnmarshalYAML(node *yaml.Node) error {
 	case yaml.SequenceNode:
 		for _, item := range node.Content {
 			if item.Kind != yaml.ScalarNode {
-				return fmt.Errorf("need is not a string")
+				return errors.New("need is not a string")
 			}
 			*values = append(*values, item.Value)
 		}
 		return nil
 	default:
-		return fmt.Errorf("needs is neither a string nor a list")
+		return errors.New("needs is neither a string nor a list")
 	}
 }
 
@@ -129,7 +130,7 @@ func requirePackage(t *testing.T, config releaseConfig) releasePackage {
 	return pkg
 }
 
-func requireJob(t *testing.T, workflow workflow, name string) workflowJob {
+func requireJob(t *testing.T, workflow workflowFile, name string) workflowJob {
 	t.Helper()
 	job, ok := workflow.Jobs[name]
 	if !ok {
@@ -161,12 +162,7 @@ func requireNamedStep(t *testing.T, job workflowJob, name string) workflowStep {
 }
 
 func contains(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, want)
 }
 
 func containsRun(steps []workflowStep, want string) bool {
