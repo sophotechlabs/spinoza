@@ -17,6 +17,7 @@ const KEYS = [
   'spinoza.nodeshell.v1',
   'spinoza.columns.v1',
   'spinoza.update.check.v1',
+  'spinoza.checks.rules.v1',
 ];
 
 declare global {

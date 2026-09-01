@@ -86,6 +86,7 @@ describe('settings left over in the browser', () => {
     startSaving();
     window.localStorage.setItem('spinoza.theme.v1', '"nord"');
     window.localStorage.setItem('spinoza.layout.v1', '{"sidebar":320}');
+    window.localStorage.setItem('spinoza.checks.rules.v1', 'rule source');
     served({});
 
     hydrate();
@@ -95,6 +96,7 @@ describe('settings left over in the browser', () => {
     expect(body(fetchMock)).toEqual({
       'spinoza.theme.v1': '"nord"',
       'spinoza.layout.v1': '{"sidebar":320}',
+      'spinoza.checks.rules.v1': 'rule source',
     });
   });
 
