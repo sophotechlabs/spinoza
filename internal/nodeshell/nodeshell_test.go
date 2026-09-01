@@ -273,6 +273,30 @@ func TestAPodThatFailsIsReportedAndRemoved(t *testing.T) {
 	}
 }
 
+func TestAStartFailureIncludesACleanupFailure(t *testing.T) {
+	svc, cs := service(t, true)
+	creates(cs, "spinoza-node-shell-bad", corev1.PodFailed, "ImagePullBackOff")
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "pods"},
+			"spinoza-node-shell-bad",
+			errors.New("cleanup was refused"),
+		)
+	})
+
+	_, err := svc.Start(t.Context(), "p-mk1")
+
+	if err == nil {
+		t.Fatal("a failed start and cleanup reported success")
+	}
+	if !strings.Contains(err.Error(), "ImagePullBackOff") {
+		t.Fatalf("error = %v, want the pod failure", err)
+	}
+	if !strings.Contains(err.Error(), "cleanup was refused") {
+		t.Fatalf("error = %v, want the cleanup failure", err)
+	}
+}
+
 func TestAPodThatNeverStartsGivesUp(t *testing.T) {
 	svc, cs := service(t, true)
 	creates(cs, "spinoza-node-shell-slow", corev1.PodPending, "")
@@ -358,6 +382,35 @@ func TestRemoveReportsAnErrorThatOutlivesItsContext(t *testing.T) {
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("remove error = %v, want the cleanup deadline", err)
+	}
+}
+
+func TestPermanentDeleteErrorsAreNotRetried(t *testing.T) {
+	reasons := []metav1.StatusReason{
+		metav1.StatusReasonBadRequest,
+		metav1.StatusReasonForbidden,
+		metav1.StatusReasonInvalid,
+		metav1.StatusReasonMethodNotAllowed,
+		metav1.StatusReasonUnauthorized,
+	}
+	for _, reason := range reasons {
+		t.Run(string(reason), func(t *testing.T) {
+			svc, cs := service(t, true, running("spinoza-node-shell-abc"))
+			attempts := 0
+			cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				attempts++
+				return true, nil, &apierrors.StatusError{ErrStatus: metav1.Status{Reason: reason}}
+			})
+
+			err := svc.Remove(t.Context(), "spinoza-node-shell-abc")
+
+			if err == nil {
+				t.Fatal("a permanent deletion failure reported success")
+			}
+			if attempts != 1 {
+				t.Fatalf("delete attempts = %d, want no retry", attempts)
+			}
+		})
 	}
 }
 
