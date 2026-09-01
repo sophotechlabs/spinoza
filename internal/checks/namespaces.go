@@ -22,9 +22,6 @@ func (n *namespaces) add(all []marked) {
 		if space == "" {
 			continue
 		}
-		if item.muted {
-			continue
-		}
 		n.count(space, item.severity)
 	}
 }

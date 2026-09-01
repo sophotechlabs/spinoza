@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -95,5 +96,31 @@ func TestOneNamespaceCanBeAskedForOnItsOwn(t *testing.T) {
 	finding := onlyFinding(t, report, privilegedCheck)
 	if objectFor(t, report, finding).Namespace != "kube-system" {
 		t.Fatalf("asking for one namespace returned %s", objectFor(t, report, finding).Namespace)
+	}
+}
+
+func TestTheNamespaceBreakdownAndHeadlineCountTheSameFindings(t *testing.T) {
+	for _, showMuted := range []bool{false, true} {
+		t.Run(fmt.Sprintf("show-muted-%t", showMuted), func(t *testing.T) {
+			keep := wholeCluster()
+			keep.ShowMuted = showMuted
+			keep.Mutes = []Mute{{Check: privilegedCheck, Namespace: "kube-system"}}
+			found := Run(t.Context(), newLister(
+				privilegedDeployment("api"),
+				inNamespace(privilegedDeployment("agent"), "kube-system"),
+			), descriptors(), api.Metrics{}, keep, 0)
+
+			headline := 0
+			for _, group := range found.Groups {
+				headline += group.Total
+			}
+			breakdown := 0
+			for _, namespace := range found.Namespaces {
+				breakdown += namespace.Total
+			}
+			if headline != breakdown {
+				t.Fatalf("headline counted %d findings while namespaces counted %d", headline, breakdown)
+			}
+		})
 	}
 }
