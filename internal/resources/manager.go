@@ -1212,7 +1212,7 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 	}
 }
 
-func (m *Manager) cancelSyncWhenClosed(cancel context.CancelFunc) func() {
+func (m *Manager) cancelSyncWhenClosed(cancel context.CancelFunc) func() bool {
 	return context.AfterFunc(m.rootCtx, cancel)
 }
 
