@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,7 +16,96 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/server"
+	"github.com/sophotechlabs/spinoza/internal/store"
 )
+
+type wiredMode struct {
+	calls []string
+	tabs  []store.Tab
+	err   error
+}
+
+func (w *wiredMode) UseClusterAuth(server.ClusterAuth) {
+	w.calls = append(w.calls, "authentication")
+}
+
+func (w *wiredMode) RestoreTabs(ctx context.Context, held server.Tabs) {
+	w.calls = append(w.calls, "timeline")
+	w.tabs, w.err = held.All(ctx)
+}
+
+func (w *wiredMode) UseUpdates(server.Updates) {
+	w.calls = append(w.calls, "updates")
+}
+
+func (w *wiredMode) UseInstaller(server.Installs) {
+	w.calls = append(w.calls, "installer")
+}
+
+func storedTimeline(t *testing.T) *store.Store {
+	t.Helper()
+	past, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "history.db"))
+	if err != nil {
+		t.Fatalf("open history: %v", err)
+	}
+	t.Cleanup(func() { _ = past.Close() })
+	tabs := past.Tabs()
+	rememberErr := tabs.Remember(t.Context(), store.Tab{ID: "cluster-1", Context: "in-cluster"})
+	if rememberErr != nil {
+		t.Fatalf("remember cluster: %v", rememberErr)
+	}
+	recordingErr := tabs.Recording(t.Context(), "cluster-1", "workloads")
+	if recordingErr != nil {
+		t.Fatalf("remember timeline: %v", recordingErr)
+	}
+	return past
+}
+
+func TestClusterModeRestoresItsPersistedTimeline(t *testing.T) {
+	past := storedTimeline(t)
+	wired := &wiredMode{}
+
+	err := wireMode(t.Context(), wired, servedOpts(nil), past)
+	if err != nil {
+		t.Fatalf("wire cluster mode: %v", err)
+	}
+	if wired.err != nil {
+		t.Fatalf("read restored tabs: %v", wired.err)
+	}
+	if strings.Join(wired.calls, ",") != "authentication,timeline" {
+		t.Fatalf("wiring order = %v, want authentication before the timeline", wired.calls)
+	}
+	if len(wired.tabs) != 1 || wired.tabs[0].Timeline != "workloads" {
+		t.Fatalf("restored tabs = %+v, want the persisted timeline", wired.tabs)
+	}
+}
+
+func TestClusterModeDoesNotRestoreTimelineStateWhenAuthenticationCannotStart(t *testing.T) {
+	wired := &wiredMode{}
+	opts := servedOpts(func(opts *settings) {
+		opts.serve.auth.Mode = "ldap"
+	})
+
+	err := wireMode(t.Context(), wired, opts, storedTimeline(t))
+	if err == nil {
+		t.Fatal("cluster mode restored state after authentication failed")
+	}
+	if len(wired.calls) != 0 {
+		t.Fatalf("wiring continued with calls %v after authentication failed", wired.calls)
+	}
+}
+
+func TestLocalModeStillRestoresTabsBeforeItsUpdateServices(t *testing.T) {
+	wired := &wiredMode{}
+
+	err := wireMode(t.Context(), wired, settings{}, storedTimeline(t))
+	if err != nil {
+		t.Fatalf("wire local mode: %v", err)
+	}
+	if strings.Join(wired.calls, ",") != "timeline,updates,installer" {
+		t.Fatalf("wiring order = %v, want the timeline before local services", wired.calls)
+	}
+}
 
 func servedOpts(change func(*settings)) settings {
 	opts := settings{}

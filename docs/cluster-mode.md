@@ -290,7 +290,10 @@ tools act as spinoza itself and the startup log says so.
 ## Storage
 
 Settings, audit baselines, mutes and the timeline live under `/var/lib/spinoza`.
-Without `persistence.enabled` that is an `emptyDir` and they go with the pod.
+An admin chooses workload or wide timeline recording from the History view. The
+choice and recorded changes resume after a pod replacement when
+`persistence.enabled` is on. Otherwise the state volume is an `emptyDir` and
+they go with the pod.
 
 ## Running several replicas
 

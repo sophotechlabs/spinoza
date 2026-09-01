@@ -15,6 +15,10 @@ import (
 
 const providerWait = 30 * time.Second
 
+type teamServer interface {
+	UseClusterAuth(settings server.ClusterAuth)
+}
+
 func toolKubeconfig(opts settings) string {
 	return toolKubeconfigFrom(opts, kube.InCluster, os.UserConfigDir, kube.WriteInClusterKubeconfig)
 }
@@ -44,7 +48,7 @@ func toolKubeconfigFrom(
 	return path
 }
 
-func serveTeam(ctx context.Context, srv *server.Server, opts settings) error {
+func serveTeam(ctx context.Context, srv teamServer, opts settings) error {
 	building, cancel := context.WithTimeout(ctx, providerWait)
 	defer cancel()
 	authn, err := auth.New(building, opts.serve.auth)

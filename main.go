@@ -152,11 +152,24 @@ func openURL(ctx context.Context, url string) {
 	}()
 }
 
-func wireMode(ctx context.Context, srv *server.Server, opts settings, past *store.Store) error {
+type modeServer interface {
+	teamServer
+	RestoreTabs(ctx context.Context, held server.Tabs)
+	UseUpdates(checker server.Updates)
+	UseInstaller(installer server.Installs)
+}
+
+func wireMode(ctx context.Context, srv modeServer, opts settings, past *store.Store) error {
 	if opts.serve.on {
-		return serveTeam(ctx, srv, opts)
+		teamErr := serveTeam(ctx, srv, opts)
+		if teamErr != nil {
+			return teamErr
+		}
 	}
 	srv.RestoreTabs(ctx, past.Tabs())
+	if opts.serve.on {
+		return nil
+	}
 	srv.UseUpdates(updateChecker())
 	srv.UseInstaller(updateInstaller())
 	return nil

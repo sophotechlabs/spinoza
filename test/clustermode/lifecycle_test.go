@@ -4,13 +4,17 @@ package clustermode
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 func TestTheProviderCanEndASessionFromItsOwnSide(t *testing.T) {
@@ -75,6 +79,82 @@ func TestSettingsSurviveThePodBeingReplaced(t *testing.T) {
 	if !strings.Contains(after, "borg") {
 		t.Fatalf("settings did not survive the restart: %s", truncate(after))
 	}
+}
+
+func TestTheTimelineSurvivesThePodBeingReplaced(t *testing.T) {
+	values := baseValues()
+	values["auth.mode"] = "none"
+	values["auth.allowAnonymous"] = "true"
+	values["persistence.enabled"] = "true"
+	deploy(t, values)
+	held := anonymous(t)
+
+	status, body := read(t, held, "/api/clusters")
+	if status != http.StatusOK {
+		t.Fatalf("reading clusters gave %d: %s", status, truncate(body))
+	}
+	var before api.ClusterList
+	decodeErr := json.Unmarshal([]byte(body), &before)
+	if decodeErr != nil {
+		t.Fatalf("decoding clusters: %v", decodeErr)
+	}
+	if len(before.Clusters) != 1 {
+		t.Fatalf("clusters = %+v, want the one served cluster", before.Clusters)
+	}
+	id := before.Clusters[0].ID
+	path := "/api/clusters/timeline?cluster=" + url.QueryEscape(id) + "&kinds=workloads"
+	status, body = post(t, held, path)
+	if status != http.StatusOK {
+		t.Fatalf("enabling the timeline gave %d: %s", status, truncate(body))
+	}
+
+	kubectl(t, "-n", namespace, "rollout", "restart", "deployment/"+release)
+	kubectl(t, "-n", namespace, "rollout", "status", "deployment/"+release, "--timeout="+deployWait)
+	waitEndpoints(t)
+	waitReachable(t)
+	waitServing(t, "none")
+
+	held = anonymous(t)
+	status, body = read(t, held, "/api/clusters")
+	if status != http.StatusOK {
+		t.Fatalf("reading clusters after restart gave %d: %s", status, truncate(body))
+	}
+	var after api.ClusterList
+	decodeErr = json.Unmarshal([]byte(body), &after)
+	if decodeErr != nil {
+		t.Fatalf("decoding clusters after restart: %v", decodeErr)
+	}
+	if len(after.Clusters) != 1 || after.Clusters[0].ID != id {
+		t.Fatalf("clusters after restart = %+v, want %q", after.Clusters, id)
+	}
+	if after.Clusters[0].Timeline != "workloads" {
+		t.Fatalf("timeline after restart = %q, want workloads", after.Clusters[0].Timeline)
+	}
+
+	probe := fmt.Sprintf("timeline-restart-%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		_, _ = maybeKubectl(t, "-n", "default", "delete", "deployment", probe, "--ignore-not-found=true")
+	})
+	kubectl(t, "-n", "default", "create", "deployment", probe, "--image=nginx:1.27-alpine")
+	historyPath := "/api/history?source=change&cluster=" + url.QueryEscape(id) + "&limit=200"
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		status, body = read(t, held, historyPath)
+		if status == http.StatusOK {
+			var history api.History
+			decodeErr = json.Unmarshal([]byte(body), &history)
+			if decodeErr != nil {
+				t.Fatalf("decoding history: %v", decodeErr)
+			}
+			for _, entry := range history.Entries {
+				if entry.Name == probe {
+					return
+				}
+			}
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatalf("the resumed timeline did not record %q: %s", probe, truncate(body))
 }
 
 func TestTheDesktopBuildRefusesToServeACluster(t *testing.T) {
