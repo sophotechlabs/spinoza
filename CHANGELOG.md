@@ -1,5 +1,79 @@
 # Changelog
 
+## [1.27.0](https://github.com/sophotechlabs/spinoza/compare/v1.26.1...v1.27.0) (2026-09-01)
+
+
+### Bug Fixes
+
+* **checks:** compare structured probe values ([6953c4c](https://github.com/sophotechlabs/spinoza/commit/6953c4ca544441c43c8250cc5db19a4cf8b42278))
+* **checks:** make quota selection deterministic ([b4084e5](https://github.com/sophotechlabs/spinoza/commit/b4084e57a5df24b410720a47fdee0b5c41114a42))
+* **ci:** validate release pull requests automatically ([62cf979](https://github.com/sophotechlabs/spinoza/commit/62cf979a76bda7754d358f6246b483e275e0d194))
+* **frontend:** discard stale action and query results ([e73f8a8](https://github.com/sophotechlabs/spinoza/commit/e73f8a8c830380113d66e746d6bb520784af8735))
+* **frontend:** isolate cluster-bound asynchronous state ([cb9337f](https://github.com/sophotechlabs/spinoza/commit/cb9337f22a18642e7ec6cd99ab1d54009b07e66e))
+* **frontend:** scope polling errors to requests ([3d5f915](https://github.com/sophotechlabs/spinoza/commit/3d5f915e9b0d3acf8e1070610a6b0fe3eb8672e9))
+* **helm:** reject oversized payloads ([2a97f05](https://github.com/sophotechlabs/spinoza/commit/2a97f0558f47680d37087b9d8a532fa13e208c5e))
+* **helm:** report OCI catalog failures ([d97aec5](https://github.com/sophotechlabs/spinoza/commit/d97aec5d40b767df7017db1d7a25cbac9445f121))
+* **history:** preserve timeline and persistence invariants ([1d26717](https://github.com/sophotechlabs/spinoza/commit/1d26717d3135110cc5c8c04ba769f80e8e805dad))
+* **release:** make draft recovery reliable ([a74f7fb](https://github.com/sophotechlabs/spinoza/commit/a74f7fbc5a741ba8a66d8639c274e3da91033f6a))
+* **release:** make validation self-contained ([a149b17](https://github.com/sophotechlabs/spinoza/commit/a149b171d9bf2293502863e0a388d5d598ad65e4))
+* **release:** recognize squash commit subjects ([79b02c0](https://github.com/sophotechlabs/spinoza/commit/79b02c080ed51815475d4b5b623e9cb4e3c7b686))
+* **release:** recover drafts automatically ([5c07e41](https://github.com/sophotechlabs/spinoza/commit/5c07e4150fef0f358ae3e07b9ff05c40e8766181))
+* **release:** restore release boundaries ([df995dc](https://github.com/sophotechlabs/spinoza/commit/df995dc6f436042de54a30b211c829d14fa732a0))
+* **release:** use native release recovery ([2157e57](https://github.com/sophotechlabs/spinoza/commit/2157e57b2031faedd7ea8a40bff8a0a4529b4a12))
+* **resources:** compile root cancellation ([4109099](https://github.com/sophotechlabs/spinoza/commit/410909974b8bfeae4ce46c056f0871ecb4a24b5d))
+* **runtime:** bound subprocess output ([f244e8a](https://github.com/sophotechlabs/spinoza/commit/f244e8a3218f5f5627d581ae1fc53332fcfe4440))
+* **security:** enforce auth and cluster scope boundaries ([636e60b](https://github.com/sophotechlabs/spinoza/commit/636e60bdec7aeed19def719df5886f1591ecb6fd))
+* **server:** strictly decode bounded JSON bodies ([eee74b9](https://github.com/sophotechlabs/spinoza/commit/eee74b92402b563dc724910e2f0a69a6e9dfc4ea))
+* **settings:** serialize migration and synchronization ([0c0c4c7](https://github.com/sophotechlabs/spinoza/commit/0c0c4c7d7e1cfbe6c5ec1c06042659e43df6b4ba))
+* **store:** paginate history by timestamp and ID ([7da75dd](https://github.com/sophotechlabs/spinoza/commit/7da75dddd8b4e2bc3a7395af5a6951649c52dea0))
+* **update:** order rechecks and bound responses ([c880f7e](https://github.com/sophotechlabs/spinoza/commit/c880f7ea6b503256f083321f39c4c482709bcc3c))
+
+
+### CI
+
+* cancel superseded test campaigns ([0a745aa](https://github.com/sophotechlabs/spinoza/commit/0a745aa9d041ac83bb7080d7627a2ce57c213133))
+* **e2e:** let main test campaigns finish ([8438bf0](https://github.com/sophotechlabs/spinoza/commit/8438bf009921ed59355b3bc90713f9fc193f757c))
+* skip redundant test campaigns ([a038789](https://github.com/sophotechlabs/spinoza/commit/a0387899c18c5d93eaddceb1f748209656594f54))
+
+
+### Tests
+
+* **actions:** cover Kubernetes action boundaries ([13cbd22](https://github.com/sophotechlabs/spinoza/commit/13cbd22747afdafcbe7851b0815937166a108f7f))
+* **auth:** harden identity and kube client boundaries ([ae8c089](https://github.com/sophotechlabs/spinoza/commit/ae8c089232aa90c3ceb4150416980d71acefe7b4))
+* **checks:** cover malformed scheduling facts ([bd99e8e](https://github.com/sophotechlabs/spinoza/commit/bd99e8e5baf80340964a9c1a08e4f73e404f1cc9))
+* **checks:** keep scanning malformed RBAC values ([609ba9b](https://github.com/sophotechlabs/spinoza/commit/609ba9bd40942df7c307dfa9267b7366e26b1d8c))
+* **checks:** keep scanning supplemental groups ([ee9f9fc](https://github.com/sophotechlabs/spinoza/commit/ee9f9fc275a5472b899a96a6299e63337cae051d))
+* **checks:** strengthen malformed input coverage ([4f43c03](https://github.com/sophotechlabs/spinoza/commit/4f43c0358bd8e69d355840fb18a70cebdbda5e87))
+* **ci:** use typed concurrency contracts ([3be8d23](https://github.com/sophotechlabs/spinoza/commit/3be8d2333e83fcf421274ac8f5cb29690dd259c0))
+* **cluster:** cover client wiring and malformed comparisons ([67b7df7](https://github.com/sophotechlabs/spinoza/commit/67b7df748897461e4fb33d6ce5d38aeaf812f51b))
+* **concurrency:** cover MCP and log lifecycle limits ([ef34a5c](https://github.com/sophotechlabs/spinoza/commit/ef34a5c64d0b0ee75b0c8288045a25f7f165d10a))
+* **core:** cover service boundary failures ([9ef8b10](https://github.com/sophotechlabs/spinoza/commit/9ef8b10e75c0ac151d202ef05adb50056064b69b))
+* cover listening and stored settings behavior ([9aaf590](https://github.com/sophotechlabs/spinoza/commit/9aaf590b628898ce849ab43e670d74f9c13a85ec))
+* **e2e:** audit major application surfaces ([323d24f](https://github.com/sophotechlabs/spinoza/commit/323d24f37f30cf7701886d23ea9a47de5dc5bf3a))
+* **e2e:** cover persisted browser behavior ([fafbcc0](https://github.com/sophotechlabs/spinoza/commit/fafbcc0cdf2430b5885ed38f2fc4f7d072a70791))
+* **frontend:** cover paging and migration failures ([6f2c189](https://github.com/sophotechlabs/spinoza/commit/6f2c189cad3a4dcfda1e494eab2a1b75aaf2b708))
+* **frontend:** cover stale asynchronous results ([eab5d8d](https://github.com/sophotechlabs/spinoza/commit/eab5d8d560d62c91ff448b1c9f42f30f293c80f9))
+* **frontend:** cover stale request failures ([8ea3e27](https://github.com/sophotechlabs/spinoza/commit/8ea3e27249b28f85ff7a6980863d36be5b3bf229))
+* **frontend:** finish stale asynchronous regressions ([ce5d696](https://github.com/sophotechlabs/spinoza/commit/ce5d696baebebd2869030787cd8e29f567ece022))
+* **gitops:** cover ordering and malformed state ([d4ca5d0](https://github.com/sophotechlabs/spinoza/commit/d4ca5d0d5cb5d3f61830a76e379535dcae9a25e9))
+* **go:** cover concurrent lifecycle edges ([90c4d64](https://github.com/sophotechlabs/spinoza/commit/90c4d642db752ac128bf86aa8b8dc26434109253))
+* **go:** harden concurrent state persistence ([d042d67](https://github.com/sophotechlabs/spinoza/commit/d042d678fa679c19dcdd8ee1419d34d9218781bd))
+* **helm:** cover release cache eviction ([344c691](https://github.com/sophotechlabs/spinoza/commit/344c69154b1738799335210d0f3e45c757105de2))
+* **issues:** cover malformed and boundary states ([7ed6a0a](https://github.com/sophotechlabs/spinoza/commit/7ed6a0a7d34baeb76d4eb9174291c88d5545a3cd))
+* **nodeshell:** cover cleanup failure boundaries ([3482a93](https://github.com/sophotechlabs/spinoza/commit/3482a930c1faa41a2a97d1b533f9c08a21a3ce33))
+* **nodeshell:** fix lint spelling ([136400a](https://github.com/sophotechlabs/spinoza/commit/136400a82c46170c9934c669f2b7731f5ee8f2d6))
+* **rbac:** cover grant count ordering ([8048cbe](https://github.com/sophotechlabs/spinoza/commit/8048cbe011d78260d6908c89d5ca9ba063b4d8a4))
+* **release:** align assertions with recovery workflow ([289ddd4](https://github.com/sophotechlabs/spinoza/commit/289ddd426bcf65ac3d3718e25c2e273457296a98))
+* **release:** clean up workflow assertions ([c4faec6](https://github.com/sophotechlabs/spinoza/commit/c4faec6937f760393bd4148fc5c8ab83f5ade7b8))
+* **resources:** cover filtering and fallback boundaries ([580aa1b](https://github.com/sophotechlabs/spinoza/commit/580aa1b18d0294135e88562ca899c9dae4997a80))
+* **resources:** expand inventory and manager coverage ([667c254](https://github.com/sophotechlabs/spinoza/commit/667c254beb5469582e35b982d4ce4e7dab570a90))
+* **server:** cover fleet limits and authorization mapping ([055034d](https://github.com/sophotechlabs/spinoza/commit/055034d853ffdc66a93506646c01f33e00f7b53f))
+* **server:** mark health helper ([1262119](https://github.com/sophotechlabs/spinoza/commit/1262119ed919ab15afa15a9fbbcb9634a71ab7b7))
+* **settings:** cover zero-value store ([740f571](https://github.com/sophotechlabs/spinoza/commit/740f571eb5fccad81d2e2d9a98e9efbc2dcb9022))
+* **storage:** cover persistence and update recovery ([166ed81](https://github.com/sophotechlabs/spinoza/commit/166ed819fb786bd22ac743325ac72fd5e78d7890))
+* **store:** use a valid baseline fixture ([0e0923a](https://github.com/sophotechlabs/spinoza/commit/0e0923a790dc0c19b8fae18ab47712c6df8e9aa4))
+* **topology:** cover builder boundaries ([13711f1](https://github.com/sophotechlabs/spinoza/commit/13711f169ce2197cc01e9f4aba93af7959e935ec))
+
 ## [1.26.1](https://github.com/sophotechlabs/spinoza/compare/v1.26.0...v1.26.1) (2026-09-01)
 
 
