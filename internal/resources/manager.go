@@ -1287,17 +1287,12 @@ func (st *stream) watchBroke(reason string) {
 
 func (st *stream) watchRecovered() {
 	st.mu.Lock()
-	broken := st.broken
-	st.broken = false
-	subs := make([]*subscriber, 0, len(st.subs))
-	for sub := range st.subs {
-		subs = append(subs, sub)
-	}
-	st.mu.Unlock()
-	if !broken {
+	defer st.mu.Unlock()
+	if !st.broken {
 		return
 	}
-	for _, sub := range subs {
+	st.broken = false
+	for sub := range st.subs {
 		signalResync(sub)
 	}
 }

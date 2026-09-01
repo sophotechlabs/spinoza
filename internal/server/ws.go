@@ -302,17 +302,25 @@ type resizable interface {
 }
 
 func (sess *wsSession) more(msg api.ClientMsg) {
-	sess.mu.Lock()
-	held, ok := sess.entriesOf(tables)[msg.SubID]
-	sess.mu.Unlock()
-	if !ok || held.resource == nil {
+	resource := sess.resourceOf(tables, msg.SubID)
+	if resource == nil {
 		return
 	}
-	sub, ok := held.resource.(resizable)
+	sub, ok := resource.(resizable)
 	if !ok {
 		return
 	}
 	sub.SetLimit(msg.Limit)
+}
+
+func (sess *wsSession) resourceOf(which feed, subID string) stoppable {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	held, ok := sess.entriesOf(which)[subID]
+	if !ok {
+		return nil
+	}
+	return held.resource
 }
 
 func (sess *wsSession) buildSub(backend Reader, msg api.ClientMsg, gen uint64) {
