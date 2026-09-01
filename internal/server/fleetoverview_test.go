@@ -218,6 +218,32 @@ func TestAClusterFailureIsNamedInTheFleetInventory(t *testing.T) {
 	}
 }
 
+func TestFleetInventoryErrorsAndEqualTotalsAreStable(t *testing.T) {
+	got := mergeCounts([]clusterAnswer[api.ResourceCounts]{
+		{
+			cluster: "mk1",
+			context: "p-mk1",
+			answer: api.ResourceCounts{
+				Counts: map[string]int{
+					"/v1/services": 2,
+					"/v1/pods":     2,
+				},
+				Errors: map[string]string{
+					"services": "forbidden",
+					"pods":     "timed out",
+				},
+			},
+		},
+	})
+
+	if len(got.Kinds) != 2 || got.Kinds[0].Key != "/v1/pods" || got.Kinds[1].Key != "/v1/services" {
+		t.Fatalf("kinds = %+v, want equal totals ordered by key", got.Kinds)
+	}
+	if got.Error != "p-mk1 pods: timed out · p-mk1 services: forbidden" {
+		t.Fatalf("error = %q", got.Error)
+	}
+}
+
 func podWith(images ...string) *unstructured.Unstructured {
 	containers := make([]any, 0, len(images))
 	for _, image := range images {
@@ -361,6 +387,54 @@ func TestAFleetImageListInsideTheCapIsNotMarkedCut(t *testing.T) {
 	}
 	if got.Total != 1 {
 		t.Fatalf("total = %d, want 1", got.Total)
+	}
+}
+
+func TestFleetImagesAreOrderedByReachThenUseThenName(t *testing.T) {
+	got := mergeImages([]clusterAnswer[imageAnswer]{
+		{
+			cluster: "mk1",
+			answer: imageAnswer{
+				pods: []*unstructured.Unstructured{
+					podWith("z:1", "busy:1", "alpha:1", "beta:1"),
+					podWith("busy:1"),
+				},
+			},
+		},
+		{
+			cluster: "mk2",
+			answer:  imageAnswer{pods: []*unstructured.Unstructured{podWith("z:1")}},
+		},
+	})
+
+	want := []string{"z:1", "busy:1", "alpha:1", "beta:1"}
+	if len(got.Images) != len(want) {
+		t.Fatalf("images = %+v", got.Images)
+	}
+	for at, image := range got.Images {
+		if image.Image != want[at] {
+			t.Fatalf("image %d = %q, want %q", at, image.Image, want[at])
+		}
+	}
+}
+
+func TestMalformedContainerImagesAreIgnored(t *testing.T) {
+	pod := &unstructured.Unstructured{Object: map[string]any{
+		"spec": map[string]any{
+			"containers": []any{
+				"not a container",
+				map[string]any{"image": int64(42)},
+				map[string]any{"image": ""},
+				map[string]any{"image": "nginx:1.27"},
+			},
+			"initContainers": map[string]any{"image": "not a list"},
+		},
+	}}
+
+	got := imagesIn(pod)
+
+	if len(got) != 1 || got[0] != "nginx:1.27" {
+		t.Fatalf("images = %v", got)
 	}
 }
 

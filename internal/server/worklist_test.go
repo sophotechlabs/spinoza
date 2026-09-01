@@ -302,6 +302,16 @@ func TestAServerGivenNoBaselineStoreStillTakesOne(t *testing.T) {
 	}
 }
 
+func TestAServerGivenNoBaselineStoreStillClearsOne(t *testing.T) {
+	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
+
+	resp := send(t, http.MethodDelete, ts.URL+"/api/checks/baseline", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
 func TestARuleListThatReadsComesBackWithNoFaults(t *testing.T) {
 	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
 	rules := `[{"id":"no-beta","expr":"object.kind == \"Pod\""}]`
@@ -447,6 +457,22 @@ func TestSavingABaselineNobodyTookIsRefused(t *testing.T) {
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestSavingAnInvalidHeldBaselineIsReported(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	held := newHeldBaselines()
+	srv.UseBaselines(held)
+	send(t, http.MethodPost, ts.URL+"/api/checks/baseline", nil)
+	for cluster := range held.taken {
+		held.taken[cluster] = checks.Baseline{}
+	}
+
+	resp := getRaw(t, ts.URL+"/api/checks/baseline/file")
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 
