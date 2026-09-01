@@ -2,6 +2,7 @@ package charts
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -592,6 +593,31 @@ func TestTheGuardedTransportCannotBypassAddressValidation(t *testing.T) {
 	}
 	if bypassedHTTP || bypassedTLS {
 		t.Fatal("the guarded client used one of the caller's dialers")
+	}
+}
+
+func TestTheGuardedTLSClientRefusesLegacyProtocols(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		configured *tls.Config
+		want       uint16
+	}{
+		{name: "no caller configuration", want: tls.VersionTLS12},
+		{name: "a legacy minimum", configured: &tls.Config{MinVersion: tls.VersionTLS10}, want: tls.VersionTLS12},
+		{name: "a stricter minimum", configured: &tls.Config{MinVersion: tls.VersionTLS13}, want: tls.VersionTLS13},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			transport := &http.Transport{TLSClientConfig: tc.configured}
+
+			got := tlsConfigFor(transport, "charts.example.com")
+
+			if got.MinVersion != tc.want {
+				t.Fatalf("minimum TLS version = %x, want %x", got.MinVersion, tc.want)
+			}
+			if got.ServerName != "charts.example.com" {
+				t.Fatalf("server name = %q", got.ServerName)
+			}
+		})
 	}
 }
 

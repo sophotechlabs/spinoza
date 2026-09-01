@@ -149,13 +149,7 @@ func publicTLSDial(transport *http.Transport, lookup lookupIPs, dial dialContext
 		if err != nil {
 			return nil, err
 		}
-		config := &tls.Config{ServerName: host}
-		if transport.TLSClientConfig != nil {
-			config = transport.TLSClientConfig.Clone()
-			if config.ServerName == "" {
-				config.ServerName = host
-			}
-		}
+		config := tlsConfigFor(transport, host)
 		secured := tls.Client(plain, config)
 		if err := secured.HandshakeContext(ctx); err != nil {
 			_ = plain.Close()
@@ -163,6 +157,21 @@ func publicTLSDial(transport *http.Transport, lookup lookupIPs, dial dialContext
 		}
 		return secured, nil
 	}
+}
+
+func tlsConfigFor(transport *http.Transport, host string) *tls.Config {
+	config := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
+	if transport.TLSClientConfig == nil {
+		return config
+	}
+	config = transport.TLSClientConfig.Clone()
+	if config.ServerName == "" {
+		config.ServerName = host
+	}
+	if config.MinVersion < tls.VersionTLS12 {
+		config.MinVersion = tls.VersionTLS12
+	}
+	return config
 }
 
 func resolvePublic(ctx context.Context, lookup lookupIPs, host string) ([]netip.Addr, error) {
