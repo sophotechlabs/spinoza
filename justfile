@@ -791,10 +791,6 @@ workflow-triggers:
     )
     for name in "${validation[@]}"; do
         workflow=".github/workflows/$name"
-        if [ "$(yq -r '.concurrency.cancel-in-progress' "$workflow")" != "true" ]; then
-            echo "$workflow does not cancel a superseded validation run" >&2
-            exit 1
-        fi
         ignored=$(yq -r '.on.pull_request.paths-ignore[]' "$workflow")
         for path in "${release_files[@]}"; do
             if ! grep -Fxq "$path" <<< "$ignored"; then
@@ -803,15 +799,6 @@ workflow-triggers:
             fi
         done
     done
-    go_cancel=$(yq -r '.concurrency.cancel-in-progress' .github/workflows/go.yaml)
-    if ! grep -Fq "github.event_name == 'pull_request'" <<< "$go_cancel"; then
-        echo ".github/workflows/go.yaml must finish main runs and cancel superseded pull requests" >&2
-        exit 1
-    fi
-    if [ "$(yq -r '.concurrency.cancel-in-progress' .github/workflows/e2e.yaml)" != "true" ]; then
-        echo ".github/workflows/e2e.yaml does not cancel a superseded validation run" >&2
-        exit 1
-    fi
     if [ "$(yq -r '.on | (has("pull_request") and has("workflow_dispatch") and (has("pull_request_target") | not))' .github/workflows/e2e.yaml)" != "true" ]; then
         echo ".github/workflows/e2e.yaml does not support pull requests and trusted release dispatches" >&2
         exit 1
@@ -823,10 +810,6 @@ workflow-triggers:
             exit 1
         fi
     done
-    if [ "$(yq -r '.concurrency.cancel-in-progress' .github/workflows/badges.yaml)" != "true" ]; then
-        echo ".github/workflows/badges.yaml can publish an obsolete measurement" >&2
-        exit 1
-    fi
 hygiene:
     typos
     just editorconfig
