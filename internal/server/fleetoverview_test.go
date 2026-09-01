@@ -70,6 +70,54 @@ func TestTheFleetOverviewTotalsWhatEveryClusterReported(t *testing.T) {
 	}
 }
 
+func TestFleetUsageIsUnknownWhenOneClusterHasNoMetrics(t *testing.T) {
+	known := overviewOf("v1.34.1", 3, 3, 40, 39)
+	known.Nodes.CPUUsedMilli = 500
+	known.Nodes.MemAllocatableMi = 2048
+	known.Nodes.MemUsedMi = 1024
+	known.Nodes.UsageKnown = true
+	unknown := overviewOf("v1.33.0", 2, 2, 20, 20)
+	unknown.Nodes.MemAllocatableMi = 4096
+	ts := listServer(t, &surveying{overview: known}, &surveying{overview: unknown})
+
+	var got api.FleetOverview
+	readFleet(t, ts, "/api/overview/fleet", &got)
+
+	if got.Nodes.UsageKnown {
+		t.Fatalf("nodes = %+v, want fleet usage to be unknown", got.Nodes)
+	}
+	if got.Nodes.CPUUsedMilli != 0 || got.Nodes.MemUsedMi != 0 {
+		t.Fatalf("nodes = %+v, want no partial fleet usage", got.Nodes)
+	}
+	if got.Nodes.CPUAllocatableMilli != 2000 || got.Nodes.MemAllocatableMi != 6144 {
+		t.Fatalf("nodes = %+v, want capacity from every cluster", got.Nodes)
+	}
+}
+
+func TestFleetUsageTotalsWhenEveryClusterHasMetrics(t *testing.T) {
+	first := overviewOf("v1.34.1", 3, 3, 40, 39)
+	first.Nodes.CPUUsedMilli = 500
+	first.Nodes.MemAllocatableMi = 2048
+	first.Nodes.MemUsedMi = 1024
+	first.Nodes.UsageKnown = true
+	second := overviewOf("v1.33.0", 2, 2, 20, 20)
+	second.Nodes.CPUUsedMilli = 250
+	second.Nodes.MemAllocatableMi = 4096
+	second.Nodes.MemUsedMi = 2048
+	second.Nodes.UsageKnown = true
+	ts := listServer(t, &surveying{overview: first}, &surveying{overview: second})
+
+	var got api.FleetOverview
+	readFleet(t, ts, "/api/overview/fleet", &got)
+
+	if !got.Nodes.UsageKnown {
+		t.Fatalf("nodes = %+v, want fleet usage to be known", got.Nodes)
+	}
+	if got.Nodes.CPUUsedMilli != 750 || got.Nodes.MemUsedMi != 3072 {
+		t.Fatalf("nodes = %+v, want usage from every cluster", got.Nodes)
+	}
+}
+
 func TestAClusterThatCouldNotCountItsPodsIsNotCountedAsZero(t *testing.T) {
 	quiet := overviewOf("v1.33.0", 2, 2, 0, 0)
 	quiet.Pods.Known = false

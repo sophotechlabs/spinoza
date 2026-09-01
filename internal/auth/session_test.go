@@ -291,6 +291,33 @@ func TestARenewedSessionKeepsTheInstantItWasSignedInAt(t *testing.T) {
 	}
 }
 
+func TestARenewedSessionStopsAtItsMaximumAge(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	held := newSessions([]byte("a-test-secret"), time.Hour, 6*time.Hour, false)
+	held.now = func() time.Time { return now }
+	issued := now.Add(-5*time.Hour - 59*time.Minute)
+	recorded := httptest.NewRecorder()
+
+	if err := held.issue(recorded, Identity{User: "alice", Role: RoleViewer}, issued); err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	cookie := recorded.Result().Cookies()[0]
+	if cookie.MaxAge != 60 {
+		t.Fatalf("max age = %d, want the remaining minute", cookie.MaxAge)
+	}
+	decoded, ok := held.decode(cookie.Value)
+	if !ok {
+		t.Fatal("the renewed session did not read before its cap")
+	}
+	if !decoded.expires.Equal(issued.Add(6 * time.Hour)) {
+		t.Fatalf("expires = %s, want the original maximum %s", decoded.expires, issued.Add(6*time.Hour))
+	}
+	held.now = func() time.Time { return now.Add(time.Minute) }
+	if _, ok := held.decode(cookie.Value); ok {
+		t.Fatal("the renewed session read at its maximum age")
+	}
+}
+
 func TestAPayloadNobodyCanWriteDownIsNotSetAsACookie(t *testing.T) {
 	recorded := httptest.NewRecorder()
 

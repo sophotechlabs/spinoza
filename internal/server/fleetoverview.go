@@ -18,9 +18,13 @@ func (s *Server) fleetOverview(w http.ResponseWriter, r *http.Request) {
 
 func mergeOverviews(found []clusterAnswer[api.ClusterOverview]) api.FleetOverview {
 	merged := api.FleetOverview{Clusters: []api.FleetCluster{}}
+	usageKnown := len(found) > 0
 	trouble := make([]string, 0, len(found))
 	for _, one := range found {
 		merged.Clusters = append(merged.Clusters, lineFor(one))
+		if !one.answer.Nodes.UsageKnown {
+			usageKnown = false
+		}
 		addNodes(&merged.Nodes, one.answer.Nodes)
 		addPods(&merged.Pods, one.answer.Pods)
 		if one.answer.Error != "" {
@@ -35,6 +39,11 @@ func mergeOverviews(found []clusterAnswer[api.ClusterOverview]) api.FleetOvervie
 	})
 	slices.Sort(trouble)
 	merged.Error = strings.Join(trouble, " · ")
+	merged.Nodes.UsageKnown = usageKnown
+	if !usageKnown {
+		merged.Nodes.CPUUsedMilli = 0
+		merged.Nodes.MemUsedMi = 0
+	}
 	return merged
 }
 
@@ -66,7 +75,6 @@ func addNodes(into *api.NodeSummary, one api.NodeSummary) {
 	if !one.UsageKnown {
 		return
 	}
-	into.UsageKnown = true
 	into.CPUUsedMilli += one.CPUUsedMilli
 	into.MemUsedMi += one.MemUsedMi
 }

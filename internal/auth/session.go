@@ -87,14 +87,28 @@ func (ss *sessions) unseal(value string, into any) bool {
 }
 
 func (ss *sessions) encode(who Identity, issued time.Time) (string, error) {
+	now := ss.now()
+	return ss.encodeUntil(who, issued, ss.expiry(issued, now))
+}
+
+func (ss *sessions) encodeUntil(who Identity, issued, expires time.Time) (string, error) {
 	return ss.seal(sessionClaims{
 		User:    who.User,
 		Groups:  who.Groups,
 		Role:    who.Role,
 		Session: who.Session,
 		Issued:  issued.Unix(),
-		Expires: ss.now().Add(ss.ttl).Unix(),
+		Expires: expires.Unix(),
 	})
+}
+
+func (ss *sessions) expiry(issued, now time.Time) time.Time {
+	expires := now.Add(ss.ttl)
+	maximum := issued.Add(ss.maxAge)
+	if maximum.Before(expires) {
+		return maximum
+	}
+	return expires
 }
 
 func (ss *sessions) decode(value string) (session, bool) {
@@ -102,7 +116,9 @@ func (ss *sessions) decode(value string) (session, bool) {
 	if !ss.unseal(value, &claims) {
 		return session{}, false
 	}
-	if ss.now().Unix() >= claims.Expires {
+	now := ss.now()
+	issued := time.Unix(claims.Issued, 0)
+	if !now.Before(time.Unix(claims.Expires, 0)) || !now.Before(issued.Add(ss.maxAge)) {
 		return session{}, false
 	}
 	who := Identity{
@@ -116,17 +132,19 @@ func (ss *sessions) decode(value string) (session, bool) {
 	}
 	return session{
 		who:     who,
-		issued:  time.Unix(claims.Issued, 0),
+		issued:  issued,
 		expires: time.Unix(claims.Expires, 0),
 	}, true
 }
 
 func (ss *sessions) issue(w http.ResponseWriter, who Identity, issued time.Time) error {
-	value, err := ss.encode(who, issued)
+	now := ss.now()
+	expires := ss.expiry(issued, now)
+	value, err := ss.encodeUntil(who, issued, expires)
 	if err != nil {
 		return err
 	}
-	http.SetCookie(w, ss.cookie(SessionCookie, value, ss.ttl))
+	http.SetCookie(w, ss.cookie(SessionCookie, value, expires.Sub(now)))
 	return nil
 }
 
