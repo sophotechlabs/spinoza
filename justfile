@@ -680,6 +680,12 @@ test-release-publication:
     yq -e '.packages."."."extra-files"[] | select(.type == "yaml" and .path == "deploy/helm/spinoza/Chart.yaml" and .jsonpath == "$.version")' release-please-config.json > /dev/null
     yq -e '.packages."."."extra-files"[] | select(.type == "yaml" and .path == "deploy/helm/spinoza/Chart.yaml" and .jsonpath == "$.appVersion")' release-please-config.json > /dev/null
     yq -e '.jobs.version.outputs.version != null' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.version.outputs.pending != null' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.version.outputs.sha | test("steps.read.outputs.sha")' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.on.push.paths == null' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.version.steps[] | select(.id == "read") | .run | test("scripts/release-pending.sh")' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.dist.if | test("pending")' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.install.if | test("pending")' .github/workflows/release-artifacts.yaml > /dev/null
     yq -e '.jobs.image.permissions.packages == "write"' .github/workflows/release-artifacts.yaml > /dev/null
     yq -e '.jobs.image.steps[] | select(.id == "push") | ((.with.push == true) and (.with.platforms == "linux/amd64,linux/arm64"))' .github/workflows/release-artifacts.yaml > /dev/null
     yq -e '.jobs.image.steps[] | select(.id == "push") | .with.tags | test("needs.version.outputs.version")' .github/workflows/release-artifacts.yaml > /dev/null
@@ -778,6 +784,7 @@ workflows: scoped-tools workflow-triggers
     zizmor --no-online-audits --config .forgejo/zizmor.yml .forgejo/workflows/*.yaml
     zizmor --no-online-audits .github/workflows/*.yaml
     test/release-tag.sh
+    test/release-pending.sh
 
 scoped-tools:
     #!/usr/bin/env bash

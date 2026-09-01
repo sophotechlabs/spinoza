@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - .release-please-manifest.json
   workflow_dispatch:
 
 permissions:
@@ -19,19 +17,30 @@ jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
+      pending: ${{ steps.read.outputs.pending }}
+      sha: ${{ steps.read.outputs.sha }}
       tag: ${{ steps.read.outputs.tag }}
       version: ${{ steps.read.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 2
           persist-credentials: false
       - id: read
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version=$(jq -r '.["."]' .release-please-manifest.json)
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          pending=$(scripts/release-pending.sh)
+          {
+            echo "pending=$pending"
+            echo "sha=$GITHUB_SHA"
+            echo "tag=v$version"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
 
   dist:
+    if: needs.version.outputs.pending == 'true'
     needs: version
     runs-on: ubuntu-latest
     permissions:
@@ -42,6 +51,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ needs.version.outputs.sha }}
 
       - name: Wait for the draft release release-please cuts
         env:
@@ -83,6 +93,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   image:
+    if: needs.version.outputs.pending == 'true'
     needs: version
     runs-on: ubuntu-latest
     permissions:
@@ -94,6 +105,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ needs.version.outputs.sha }}
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
@@ -121,6 +133,7 @@ jobs:
           push-to-registry: true
 
   chart:
+    if: needs.version.outputs.pending == 'true'
     needs:
       - version
       - dist
@@ -140,6 +153,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ needs.version.outputs.sha }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           cache: false
@@ -161,6 +175,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   desktop:
+    if: needs.version.outputs.pending == 'true'
     needs:
       - version
       - dist
@@ -176,6 +191,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ needs.version.outputs.sha }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           cache: false
@@ -193,6 +209,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   desktop-linux:
+    if: needs.version.outputs.pending == 'true'
     needs:
       - version
       - dist
@@ -209,6 +226,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ needs.version.outputs.sha }}
       - run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
@@ -229,6 +247,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
+    if: needs.version.outputs.pending == 'true'
     needs:
       - version
       - dist
@@ -245,6 +264,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ needs.version.outputs.sha }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just
@@ -269,6 +289,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   install:
+    if: needs.version.outputs.pending == 'true'
     needs:
       - version
       - publish

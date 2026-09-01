@@ -92,7 +92,17 @@ grep -q 'ref=refs/tags/v1.0.3' "$GH_CALLS"
 grep -q "sha=$SHA" "$GH_CALLS"
 
 commit 1.0.4 'chore(main): release 1.0.4 (#37)'
+release_sha=$SHA
 run
 test "$(wc -l < "$GH_CALLS" | tr -d ' ')" = 2
 grep -q 'ref=refs/tags/v1.0.4' "$GH_CALLS"
-grep -q "sha=$SHA" "$GH_CALLS"
+grep -q "sha=$release_sha" "$GH_CALLS"
+
+commit 1.0.4 'fix(server): repair after release'
+run
+test "$(wc -l < "$GH_CALLS" | tr -d ' ')" = 2
+grep -q 'ref=refs/tags/v1.0.4' "$GH_CALLS"
+grep -q "sha=$release_sha" "$GH_CALLS"
+
+EXISTING_SHA=$release_sha run
+test "$(wc -l < "$GH_CALLS" | tr -d ' ')" = 1
