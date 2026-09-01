@@ -295,6 +295,20 @@ func TestATabThatWasRecordingIsRecordingAgainNextTime(t *testing.T) {
 	}
 }
 
+func TestRestoringTabsInstallsThemBeforeRecordingsResume(t *testing.T) {
+	backend := &taped{}
+	srv, _, tabs := tapingServer(t, backend)
+	tabs.tabs[0].Timeline = timelineWorkloads
+	srv.UseTabs(nil)
+
+	srv.RestoreTabs(t.Context(), tabs)
+	defer srv.stopRecording(mk1)
+
+	if srv.recordingOn(mk1) == nil {
+		t.Fatal("the restored tab did not resume recording")
+	}
+}
+
 func TestATabThatWasNotRecordingStaysQuiet(t *testing.T) {
 	srv, _, _ := tapingServer(t, &taped{})
 

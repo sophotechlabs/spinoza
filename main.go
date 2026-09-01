@@ -91,7 +91,6 @@ func run() error {
 	past := historyStore(ctx)
 	defer func() { _ = past.Close() }()
 	srv.UseHistory(past)
-	srv.StartRecordings(ctx)
 	wiredErr := wireMode(ctx, srv, opts, past)
 	if wiredErr != nil {
 		return wiredErr
@@ -157,8 +156,7 @@ func wireMode(ctx context.Context, srv *server.Server, opts settings, past *stor
 	if opts.serve.on {
 		return serveTeam(ctx, srv, opts)
 	}
-	srv.UseTabs(past.Tabs())
-	srv.RememberOpen(ctx)
+	srv.RestoreTabs(ctx, past.Tabs())
 	srv.UseUpdates(updateChecker())
 	srv.UseInstaller(updateInstaller())
 	return nil

@@ -256,6 +256,12 @@ func (s *Server) StartRecordings(ctx context.Context) {
 	}
 }
 
+func (s *Server) RestoreTabs(ctx context.Context, held Tabs) {
+	s.UseTabs(held)
+	s.RememberOpen(ctx)
+	s.StartRecordings(ctx)
+}
+
 func (s *Server) recordCluster(w http.ResponseWriter, r *http.Request) {
 	id := clusterOf(r)
 	if id == "" {
