@@ -100,6 +100,22 @@ func TestNoFiltersMeansNoFiltering(t *testing.T) {
 	}
 }
 
+func TestBlankAndDuplicateColumnNamesDoNotDisplaceTheFirstColumn(t *testing.T) {
+	columns := []api.Column{
+		{Name: "---"},
+		{Name: "Status"},
+		{Name: "status"},
+	}
+	matcher := matcherFor(columns, []api.RowFilter{{Field: "status", Value: "running"}})
+
+	if len(matcher.cells) != 1 || matcher.cells["status"] != 1 {
+		t.Fatalf("column index = %v, want the first named Status column", matcher.cells)
+	}
+	if !matcher.matches(api.Row{Cells: []string{"ignored", "Running", "Stopped"}}) {
+		t.Fatal("a duplicate label displaced the first matching column")
+	}
+}
+
 func TestTheFieldKeyMatchesTheOneTheBrowserBuilds(t *testing.T) {
 	cases := map[string]string{
 		"Last seen":  "lastseen",

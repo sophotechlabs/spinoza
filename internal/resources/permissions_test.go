@@ -33,7 +33,7 @@ func TestWhoCanDoWhatIsReadFromTheCluster(t *testing.T) {
 }
 
 func TestBulkAccessWithoutPermissionsIsEmpty(t *testing.T) {
-	manager := NewManager(t.Context(), Deps{})
+	manager := &Manager{}
 	refs := []api.ObjectRef{
 		{Version: "v1", Resource: "pods", Namespace: "prod", Name: "web-0"},
 		{Version: "v1", Resource: "pods", Namespace: "prod", Name: "api-0"},

@@ -243,6 +243,19 @@ func TestADefinitionThatIsNotShapedLikeOneIsNotUsed(t *testing.T) {
 	}
 }
 
+func TestAColumnLayoutCannotBeReadWithoutAClientOrForACoreKind(t *testing.T) {
+	withoutClient := &Manager{}
+	if _, ok := withoutClient.crdLayout(t.Context(), kustomizationGVR); ok {
+		t.Fatal("a layout was invented without a Kubernetes client")
+	}
+
+	mgr, cancel := crdServing(t, crdWith("v1", column("Ready", "string", ".status.ready")))
+	defer cancel()
+	if _, ok := mgr.crdLayout(t.Context(), schema.GroupVersionResource{Version: "v1", Resource: "pods"}); ok {
+		t.Fatal("a core kind was treated as having a custom resource definition")
+	}
+}
+
 func TestAVersionEntryThatIsNotShapedLikeOneIsSkipped(t *testing.T) {
 	crd := &unstructured.Unstructured{Object: map[string]any{
 		"spec": map[string]any{"versions": []any{"not an object"}},

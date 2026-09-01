@@ -137,6 +137,10 @@ func TestCountReasonTellsTheBudgetFromTheTypeFromTheApiserver(t *testing.T) {
 }
 
 func TestRemainingOfIgnoresANegativeOrAbsentCount(t *testing.T) {
+	positive := int64(4)
+	if remainingOf(&positive) != 4 {
+		t.Fatal("a positive remainder was not added to the total")
+	}
 	negative := int64(-4)
 	if remainingOf(&negative) != 0 {
 		t.Fatal("a negative remainder was added to the total")

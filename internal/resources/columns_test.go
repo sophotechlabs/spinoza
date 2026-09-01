@@ -569,3 +569,9 @@ func TestTheNewerEventApiReadsTheSame(t *testing.T) {
 		}
 	}
 }
+
+func TestAnEventWithoutAReferencedObjectLeavesTheObjectCellEmpty(t *testing.T) {
+	if got := eventObject(u(map[string]any{})); got != "" {
+		t.Fatalf("event object = %q, want empty", got)
+	}
+}
