@@ -470,7 +470,7 @@ func TestACancelledStartStillRetriesPodCleanup(t *testing.T) {
 		t.Fatalf("list: %v", listErr)
 	}
 	if len(left.Items) != 0 {
-		t.Fatalf("pods = %d, want the cancelled shell taken away", len(left.Items))
+		t.Fatalf("pods = %d, want the canceled shell taken away", len(left.Items))
 	}
 }
 
