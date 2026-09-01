@@ -96,7 +96,7 @@ func (s *Service) probeRegistry(ctx context.Context, entry RepoEntry, query stri
 	}
 	tags, err := s.index.Versions(ctx, entry.Repo, name)
 	if err != nil {
-		return repoHits{entry: entry}
+		return repoHits{entry: entry, failure: fmt.Sprintf("%s: %v", repoLabel(entry), err)}
 	}
 	if len(tags) == 0 {
 		return repoHits{entry: entry}

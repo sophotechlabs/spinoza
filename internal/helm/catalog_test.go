@@ -301,7 +301,7 @@ func TestARegistryIsNotAskedAboutSomethingThatIsNotAChartName(t *testing.T) {
 	}
 }
 
-func TestARegistryThatWillNotAnswerJustAddsNoHit(t *testing.T) {
+func TestASearchReportsARegistryItCouldNotRead(t *testing.T) {
 	index := &stubCharts{
 		catalog:  map[string][]charts.Chart{"https://one.example.com": {{Name: "podinfo", Version: "6.14.1"}}},
 		failures: map[string]error{"oci://ghcr.io/acme/charts|podinfo": errors.New("status 403")},
@@ -319,8 +319,8 @@ func TestARegistryThatWillNotAnswerJustAddsNoHit(t *testing.T) {
 	if len(found.Hits) != 1 || found.Hits[0].Repo != "one" {
 		t.Fatalf("hits = %+v, want only the index repository", found.Hits)
 	}
-	if found.Error != "" {
-		t.Fatalf("error = %q, want silence: a registry cannot be listed, so a miss is the only answer", found.Error)
+	if !strings.Contains(found.Error, "acme: status 403") {
+		t.Fatalf("error = %q, want the failing registry and reason", found.Error)
 	}
 }
 
