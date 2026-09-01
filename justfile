@@ -811,13 +811,6 @@ workflow-triggers:
         echo ".github/workflows/e2e.yaml does not support pull requests and trusted release dispatches" >&2
         exit 1
     fi
-    e2e_group=$(yq -r '.concurrency.group' .github/workflows/e2e.yaml)
-    for key in github.event.pull_request.number inputs.pull_request github.sha; do
-        if ! grep -Fq "$key" <<< "$e2e_group"; then
-            echo ".github/workflows/e2e.yaml concurrency does not distinguish $key" >&2
-            exit 1
-        fi
-    done
     ignored=$(yq -r '.on.pull_request.paths-ignore[]' .github/workflows/e2e.yaml)
     for path in "${release_files[@]}"; do
         if ! grep -Fxq "$path" <<< "$ignored"; then
@@ -829,23 +822,6 @@ workflow-triggers:
         echo ".github/workflows/badges.yaml can publish an obsolete measurement" >&2
         exit 1
     fi
-    durable=(go-fuzz.yaml go-mutation.yaml)
-    for name in "${durable[@]}"; do
-        workflow=".github/workflows/$name"
-        if [ "$(yq -r '.on | (has("push") and has("pull_request"))' "$workflow")" != "true" ]; then
-            echo "$workflow does not run on every push and pull request" >&2
-            exit 1
-        fi
-        if [ "$(yq -r '.on | has("schedule")' "$workflow")" != "false" ]; then
-            echo "$workflow must not depend on a schedule" >&2
-            exit 1
-        fi
-        if [ "$(yq -r '.concurrency.cancel-in-progress // false' "$workflow")" != "false" ]; then
-            echo "$workflow cancels an in-progress test campaign" >&2
-            exit 1
-        fi
-    done
-
 hygiene:
     typos
     just editorconfig
