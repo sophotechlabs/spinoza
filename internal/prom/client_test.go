@@ -341,13 +341,14 @@ func TestStepForKeepsThePointCountBounded(t *testing.T) {
 }
 
 type stubProxy struct {
-	calls     []Target
-	paths     []string
-	params    []map[string]string
-	failFor   map[string]bool
-	forbidden bool
-	body      string
-	rangeErr  error
+	calls         []Target
+	paths         []string
+	params        []map[string]string
+	failFor       map[string]bool
+	forbidden     bool
+	body          string
+	rangeErr      error
+	rangeErrAfter int
 }
 
 func (s *stubProxy) Get(_ context.Context, target Target, path string, params map[string]string) ([]byte, error) {
@@ -365,7 +366,10 @@ func (s *stubProxy) Get(_ context.Context, target Target, path string, params ma
 		return nil, errors.New("connection refused over " + target.Scheme)
 	}
 	if path == rangePath && s.rangeErr != nil {
-		return nil, s.rangeErr
+		if s.rangeErrAfter == 0 {
+			return nil, s.rangeErr
+		}
+		s.rangeErrAfter--
 	}
 	if path == rangePath {
 		return []byte(s.body), nil
@@ -575,8 +579,22 @@ func TestPodHistoryReportsAnUnresolvableTarget(t *testing.T) {
 	}
 }
 
-func TestPodHistorySurfacesAMemoryQueryFailure(t *testing.T) {
+func TestPodHistorySurfacesACPUQueryFailure(t *testing.T) {
 	proxy := &stubProxy{rangeErr: errors.New("boom")}
+	client := operatedClient(t, proxy)
+
+	_, err := client.PodHistory(context.Background(), "ns", "pod", time.Hour, time.Unix(0, 0))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+}
+
+func TestPodHistorySurfacesAMemoryQueryFailure(t *testing.T) {
+	proxy := &stubProxy{
+		body:          sample,
+		rangeErr:      errors.New("boom"),
+		rangeErrAfter: 1,
+	}
 	client := operatedClient(t, proxy)
 
 	_, err := client.PodHistory(context.Background(), "ns", "pod", time.Hour, time.Unix(0, 0))
