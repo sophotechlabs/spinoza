@@ -49,10 +49,12 @@ Without an ingress, reach it with a port-forward:
 kubectl -n spinoza port-forward svc/spinoza 8080:8080
 ```
 
-`publicURL` is not decoration. Spinoza refuses a request whose `Origin` is some
-other site, marks the session cookie `Secure` when it is https, and derives the
-OIDC callback from it. A request with no `Origin` — a kubelet probe, `curl`, the
-page's own navigation — is not one a browser made across sites, so it goes
+`publicURL` is the HTTP(S) origin browsers use, such as
+`https://spinoza.example.com`. It may end in `/`, but cannot contain a path,
+query, fragment, or credentials. Spinoza refuses a request whose `Origin` is
+some other site, marks the session cookie `Secure` when it is https, and derives
+the OIDC callback from it. A request with no `Origin` — a kubelet probe, `curl`,
+the page's own navigation — is not one a browser made across sites, so it goes
 through.
 
 ## Signing in

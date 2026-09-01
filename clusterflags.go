@@ -67,7 +67,7 @@ type clusterFlags struct {
 func registerCluster(flags *flag.FlagSet) *clusterFlags {
 	return &clusterFlags{
 		on:            flags.Bool("cluster-mode", envBool("SPINOZA_CLUSTER_MODE"), "serve a cluster to a team instead of running as your own local window"),
-		publicURL:     flags.String("public-url", envOr("SPINOZA_PUBLIC_URL", ""), "the address browsers reach spinoza at, such as https://spinoza.example.com"),
+		publicURL:     flags.String("public-url", envOr("SPINOZA_PUBLIC_URL", ""), "the http(s) origin browsers reach spinoza at, such as https://spinoza.example.com"),
 		impersonate:   flags.Bool("impersonate", envUnless("SPINOZA_IMPERSONATE"), "act on the cluster as the signed-in user, so kubernetes rbac decides what they may do"),
 		mode:          flags.String("auth-mode", envOr("SPINOZA_AUTH_MODE", auth.ModeNone), "how people sign in: none, proxy or oidc"),
 		allowAnon:     flags.Bool("allow-anonymous-admin", envBool("SPINOZA_ALLOW_ANONYMOUS_ADMIN"), "allow unauthenticated cluster-mode requests to act as administrators"),
@@ -179,6 +179,18 @@ func (sv serving) check() error {
 	}
 	if parsed.Host == "" {
 		return fmt.Errorf("public url %q names no host", sv.publicURL)
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("public url %q must not include credentials", sv.publicURL)
+	}
+	if escaped := parsed.EscapedPath(); escaped != "" && escaped != "/" {
+		return fmt.Errorf("public url %q must not include a path", sv.publicURL)
+	}
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return fmt.Errorf("public url %q must not include a query", sv.publicURL)
+	}
+	if strings.Contains(sv.publicURL, "#") {
+		return fmt.Errorf("public url %q must not include a fragment", sv.publicURL)
 	}
 	return nil
 }

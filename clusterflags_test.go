@@ -78,6 +78,45 @@ func TestAPublicUrlHasToBeOne(t *testing.T) {
 	}
 }
 
+func TestAPublicURLMustBeAnOrigin(t *testing.T) {
+	cases := map[string]string{
+		"https://spinoza.example.com/spinoza":  "path",
+		"https://spinoza.example.com/%2F":      "path",
+		"https://spinoza.example.com?tenant=x": "query",
+		"https://spinoza.example.com?":         "query",
+		"https://spinoza.example.com#settings": "fragment",
+		"https://spinoza.example.com#":         "fragment",
+		"https://user@spinoza.example.com":     "credentials",
+	}
+	for given, want := range cases {
+		t.Run(given, func(t *testing.T) {
+			_, err := parseFlags([]string{"--cluster-mode", "--public-url", given})
+			if err == nil {
+				t.Fatal("a public url that is not an origin was accepted")
+			}
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("error = %q, want it to mention %q", err.Error(), want)
+			}
+		})
+	}
+}
+
+func TestHTTPOriginsAreAcceptedAsPublicURLs(t *testing.T) {
+	for _, given := range []string{
+		"https://spinoza.example.com",
+		"https://spinoza.example.com/",
+		"http://127.0.0.1:8080",
+		"https://[2001:db8::1]:8443/",
+	} {
+		t.Run(given, func(t *testing.T) {
+			_, err := parseFlags([]string{"--cluster-mode", "--public-url", given})
+			if err != nil {
+				t.Fatalf("origin was refused: %v", err)
+			}
+		})
+	}
+}
+
 func TestServingMovesTheListenAddressOffLoopback(t *testing.T) {
 	if got := servedListen(t); got != clusterAddr {
 		t.Fatalf("addr = %q, want %q so the service can reach the pod", got, clusterAddr)
@@ -109,13 +148,18 @@ func TestAnAddressFromTheEnvironmentIsKept(t *testing.T) {
 }
 
 func TestTheCallbackAndTheLandingPageComeFromThePublicUrl(t *testing.T) {
-	got := servedFlags(t)
+	for _, extra := range [][]string{
+		nil,
+		{"--public-url", "https://spinoza.example.com/"},
+	} {
+		got := servedFlags(t, extra...)
 
-	if got.auth.OIDC.RedirectURL != "https://spinoza.example.com/auth/callback" {
-		t.Fatalf("redirect = %q", got.auth.OIDC.RedirectURL)
-	}
-	if got.auth.OIDC.PostLogoutURL != "https://spinoza.example.com/" {
-		t.Fatalf("post logout = %q", got.auth.OIDC.PostLogoutURL)
+		if got.auth.OIDC.RedirectURL != "https://spinoza.example.com/auth/callback" {
+			t.Fatalf("redirect = %q", got.auth.OIDC.RedirectURL)
+		}
+		if got.auth.OIDC.PostLogoutURL != "https://spinoza.example.com/" {
+			t.Fatalf("post logout = %q", got.auth.OIDC.PostLogoutURL)
+		}
 	}
 }
 

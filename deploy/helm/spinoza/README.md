@@ -12,13 +12,15 @@ helm upgrade --install spinoza oci://ghcr.io/sophotechlabs/charts/spinoza \
   --set publicURL=https://spinoza.example.com
 ```
 
-`publicURL` is required. The chart refuses to render without it.
+`publicURL` is required. Set it to the HTTP(S) origin browsers use, without a
+path, query, fragment, or credentials. A trailing `/` is accepted. The chart
+refuses to render without it, and Spinoza refuses invalid values at startup.
 
 ## Values
 
 | key | default | what it does |
 |---|---|---|
-| `publicURL` | — | The address browsers reach spinoza at. Required. |
+| `publicURL` | — | The HTTP(S) origin browsers use. Required. |
 | `replicaCount` | `1` | Has to be one; anything else is refused. See the guide. |
 | `image.repository` | `ghcr.io/sophotechlabs/spinoza` | |
 | `image.tag` | chart `appVersion` | |
