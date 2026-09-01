@@ -101,6 +101,9 @@ func (a *Authenticator) Identify(w http.ResponseWriter, r *http.Request) (Identi
 }
 
 func (a *Authenticator) fromHeaders(r *http.Request) (Identity, bool) {
+	if !a.cfg.Proxy.authenticates(r.Header.Get(a.cfg.Proxy.SecretHeader)) {
+		return Identity{}, false
+	}
 	user := strings.TrimSpace(r.Header.Get(a.cfg.Proxy.UserHeader))
 	if user == "" {
 		return Identity{}, false

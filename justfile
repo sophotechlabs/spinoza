@@ -577,7 +577,12 @@ test-cluster-mode name='': cluster-mode-up cluster-mode-image
         go test "${args[@]}" ./{{ cm_dir }}/...
 
 lint-chart:
-    helm lint deploy/helm/spinoza --set publicURL=https://spinoza.example.com
+    helm lint deploy/helm/spinoza --set publicURL=https://spinoza.example.com --set auth.mode=none --set auth.allowAnonymous=true
+    ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com > /dev/null 2>&1
+    ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set auth.mode=none > /dev/null 2>&1
     helm template spinoza deploy/helm/spinoza --namespace spinoza \
         --set publicURL=https://spinoza.example.com \
         --set auth.mode=oidc \
@@ -589,6 +594,7 @@ lint-chart:
     helm template spinoza deploy/helm/spinoza --namespace spinoza \
         --set publicURL=https://spinoza.example.com \
         --set auth.mode=proxy \
+        --set auth.proxy.sharedSecret=a-proxy-authentication-secret-that-is-long-enough \
         --set rbac.read=workloads \
         --set persistence.enabled=true \
         --set ingress.enabled=true \

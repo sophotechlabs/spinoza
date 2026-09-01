@@ -18,7 +18,7 @@ func TestDefaultsFillInEverythingLeftOut(t *testing.T) {
 	if got.DefaultRole != RoleViewer {
 		t.Fatalf("default role = %q, want %q", got.DefaultRole, RoleViewer)
 	}
-	if got.Proxy.UserHeader != DefaultUserHeader || got.Proxy.GroupsHeader != DefaultGroupsHeader {
+	if got.Proxy.UserHeader != DefaultUserHeader || got.Proxy.GroupsHeader != DefaultGroupsHeader || got.Proxy.SecretHeader != DefaultProxyAuthHeader {
 		t.Fatalf("proxy headers = %+v, want the oauth2-proxy ones", got.Proxy)
 	}
 	if got.OIDC.GroupsClaim != DefaultGroupsClaim {
@@ -63,6 +63,16 @@ func TestValidateRefusesWhatCannotWork(t *testing.T) {
 			name: "a role nobody defines",
 			cfg:  Config{Mode: ModeNone, DefaultRole: "owner"},
 			want: `default role "owner" is not one of`,
+		},
+		{
+			name: "cluster mode anonymous admin without an opt in",
+			cfg:  Config{Mode: ModeNone, PublicURL: "https://spinoza.example.com", DefaultRole: RoleViewer},
+			want: "explicit anonymous admin access",
+		},
+		{
+			name: "proxy mode without an authenticated proxy",
+			cfg:  Config{Mode: ModeProxy, DefaultRole: RoleViewer},
+			want: "shared secret of at least 32 bytes",
 		},
 		{
 			name: "oidc with no issuer",
@@ -117,6 +127,33 @@ func TestValidateRefusesWhatCannotWork(t *testing.T) {
 				t.Fatalf("error = %q, want it to mention %q", err.Error(), tc.want)
 			}
 		})
+	}
+}
+
+func TestValidateAcceptsExplicitAnonymousClusterMode(t *testing.T) {
+	cfg := Config{
+		Mode:           ModeNone,
+		PublicURL:      "https://spinoza.example.com",
+		AllowAnonymous: true,
+		DefaultRole:    RoleViewer,
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("explicit anonymous access was refused: %v", err)
+	}
+}
+
+func TestValidateAcceptsAnAuthenticatedProxy(t *testing.T) {
+	cfg := Config{
+		Mode:        ModeProxy,
+		DefaultRole: RoleViewer,
+		Proxy: ProxyConfig{
+			SharedSecret: []byte(strings.Repeat("p", minimumSecretBytes)),
+		},
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("an authenticated proxy was refused: %v", err)
 	}
 }
 

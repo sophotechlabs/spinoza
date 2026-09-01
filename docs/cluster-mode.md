@@ -138,23 +138,26 @@ not shared between replicas.
 
 Use this when oauth2-proxy, Pomerium, Authelia or similar already fronts your
 internal tools. Spinoza reads `X-Forwarded-User` and `X-Forwarded-Groups` and
-trusts them.
+trusts them only when the request also carries the configured proxy secret.
 
 ```yaml
 auth:
   mode: proxy
   proxy:
+    existingSecret: spinoza-proxy
+    existingSecretKey: proxy-secret
     logoutURL: https://spinoza.example.com/oauth2/sign_out
 ```
 
-Your ingress has to strip both headers from anything arriving from outside. The
-proxy must be the only way in.
+Configure the proxy to set `X-Spinoza-Proxy-Secret` from the same Kubernetes
+Secret. It must still strip the identity and secret headers from incoming
+requests. Direct requests cannot forge an identity without knowing this secret.
 
 ### `none`
 
-No sign-in at all: everybody who reaches the address is an admin here. It is the
-chart's default only because a default has to be something; put a proxy in front
-or pick a mode.
+No sign-in at all: everybody who reaches the address is an admin here. The chart
+does not select this mode by default and requires `auth.allowAnonymous: true`
+when you explicitly choose it.
 
 ## Sessions
 

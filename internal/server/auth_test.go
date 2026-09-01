@@ -14,6 +14,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/settings"
 )
 
+const testProxySecret = "a-proxy-authentication-secret-that-is-long-enough"
+
 type servedBackend struct {
 	notStubbed
 
@@ -52,6 +54,7 @@ func servedServer(t *testing.T, backend Backend, cfg auth.Config) *httptest.Serv
 func proxyServer(t *testing.T, backend Backend, cfg auth.Config) *httptest.Server {
 	t.Helper()
 	cfg.Mode = auth.ModeProxy
+	cfg.Proxy.SharedSecret = []byte(testProxySecret)
 	return servedServer(t, backend, cfg)
 }
 
@@ -64,6 +67,7 @@ func asUser(t *testing.T, ts *httptest.Server, method, path, user, groups string
 	if user != "" {
 		req.Header.Set(auth.DefaultUserHeader, user)
 		req.Header.Set(auth.DefaultGroupsHeader, groups)
+		req.Header.Set(auth.DefaultProxyAuthHeader, testProxySecret)
 	}
 	resp, doErr := ts.Client().Do(req)
 	if doErr != nil {
@@ -370,7 +374,10 @@ func TestTheSignInPageCarriesNothingOfTheCluster(t *testing.T) {
 		t.Fatalf("holding a mute: %v", mergeErr)
 	}
 	srv.UseSettings(held)
-	authn, err := auth.New(t.Context(), auth.Config{Mode: auth.ModeProxy})
+	authn, err := auth.New(t.Context(), auth.Config{
+		Mode:  auth.ModeProxy,
+		Proxy: auth.ProxyConfig{SharedSecret: []byte(testProxySecret)},
+	})
 	if err != nil {
 		t.Fatalf("building the authenticator: %v", err)
 	}
@@ -399,6 +406,7 @@ func TestAProfileAnswersToAdminsOnly(t *testing.T) {
 		Mode:        auth.ModeProxy,
 		DefaultRole: auth.RoleViewer,
 		AdminGroups: []string{"platform-admins"},
+		Proxy:       auth.ProxyConfig{SharedSecret: []byte(testProxySecret)},
 	})
 	if err != nil {
 		t.Fatalf("building the authenticator: %v", err)

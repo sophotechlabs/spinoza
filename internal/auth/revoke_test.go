@@ -66,6 +66,7 @@ func TestARevocationIsRememberedForAsLongAsASessionCanLive(t *testing.T) {
 		SessionSecret: NewSecret(),
 		SessionTTL:    time.Hour,
 		SessionMaxAge: 72 * time.Hour,
+		Proxy:         ProxyConfig{SharedSecret: NewSecret()},
 	})
 	if err != nil {
 		t.Fatalf("building the authenticator: %v", err)

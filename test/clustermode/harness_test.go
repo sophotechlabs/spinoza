@@ -467,6 +467,7 @@ func proxiedRequest(t *testing.T, method, path, user, groups string, follow bool
 	req.Header.Set("Origin", base)
 	req.Header.Set("X-Forwarded-User", user)
 	req.Header.Set("X-Forwarded-Groups", groups)
+	req.Header.Set("X-Spinoza-Proxy-Secret", "a-cluster-mode-proxy-secret-that-is-long-enough")
 	resp, doErr := held.Do(req)
 	if doErr != nil {
 		t.Fatalf("%s %s: %v", method, path, doErr)

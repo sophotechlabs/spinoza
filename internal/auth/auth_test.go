@@ -8,8 +8,13 @@ import (
 	"testing"
 )
 
+var testProxySecret = []byte(strings.Repeat("p", minimumSecretBytes))
+
 func modeless(t *testing.T, cfg Config) *Authenticator {
 	t.Helper()
+	if cfg.Mode == ModeProxy && len(cfg.Proxy.SharedSecret) == 0 {
+		cfg.Proxy.SharedSecret = testProxySecret
+	}
 	built, err := New(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("building the authenticator: %v", err)
@@ -46,6 +51,7 @@ func TestProxyModeReadsWhoTheProxySaysYouAre(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/overview", http.NoBody)
 	req.Header.Set(DefaultUserHeader, "alice@example.com")
 	req.Header.Set(DefaultGroupsHeader, "platform-admins, sre")
+	req.Header.Set(DefaultProxyAuthHeader, string(testProxySecret))
 
 	who, ok := held.Identify(httptest.NewRecorder(), req)
 	if !ok {
@@ -59,6 +65,20 @@ func TestProxyModeReadsWhoTheProxySaysYouAre(t *testing.T) {
 	}
 	if strings.Join(who.Groups, ",") != "platform-admins,sre" {
 		t.Fatalf("groups = %v, want both", who.Groups)
+	}
+}
+
+func TestProxyModeRejectsForgedIdentityHeadersWithoutProxyAuthentication(t *testing.T) {
+	held := modeless(t, Config{Mode: ModeProxy})
+	for _, token := range []string{"", strings.Repeat("x", minimumSecretBytes)} {
+		req := httptest.NewRequest(http.MethodGet, "/api/overview", http.NoBody)
+		req.Header.Set(DefaultUserHeader, "mallory")
+		req.Header.Set(DefaultGroupsHeader, "platform-admins")
+		req.Header.Set(DefaultProxyAuthHeader, token)
+
+		if _, ok := held.Identify(httptest.NewRecorder(), req); ok {
+			t.Fatalf("identity headers with proxy token %q were trusted", token)
+		}
 	}
 }
 

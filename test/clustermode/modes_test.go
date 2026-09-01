@@ -13,6 +13,7 @@ import (
 func TestBehindAnAuthProxy(t *testing.T) {
 	values := baseValues()
 	values["auth.mode"] = "proxy"
+	values["auth.proxy.sharedSecret"] = "a-cluster-mode-proxy-secret-that-is-long-enough"
 	values["auth.adminGroups[0]"] = "platform-admins"
 	values["auth.editorGroups[0]"] = "platform"
 	values["auth.proxy.logoutURL"] = "https://spinoza.localtest.me:8443/oauth2/sign_out"
@@ -63,6 +64,7 @@ func TestBehindAnAuthProxy(t *testing.T) {
 func TestWithNothingAskingPeopleToSignIn(t *testing.T) {
 	values := baseValues()
 	values["auth.mode"] = "none"
+	values["auth.allowAnonymous"] = "true"
 	deploy(t, values)
 
 	t.Run("anybody who reaches it is an admin", func(t *testing.T) {
@@ -86,6 +88,7 @@ func TestWithNothingAskingPeopleToSignIn(t *testing.T) {
 func TestWithImpersonationOff(t *testing.T) {
 	values := baseValues()
 	values["auth.mode"] = "proxy"
+	values["auth.proxy.sharedSecret"] = "a-cluster-mode-proxy-secret-that-is-long-enough"
 	values["impersonate"] = "false"
 	values["rbac.write"] = "true"
 	values["auth.adminGroups[0]"] = "platform"
@@ -109,6 +112,7 @@ func TestWithImpersonationOff(t *testing.T) {
 func TestWithTheNarrowerReadRole(t *testing.T) {
 	values := baseValues()
 	values["auth.mode"] = "none"
+	values["auth.allowAnonymous"] = "true"
 	values["rbac.read"] = "workloads"
 	deploy(t, values)
 

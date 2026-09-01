@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/url"
@@ -16,13 +17,14 @@ const (
 )
 
 const (
-	DefaultUserHeader   = "X-Forwarded-User"
-	DefaultGroupsHeader = "X-Forwarded-Groups"
-	DefaultGroupsClaim  = "groups"
-	DefaultUsernameKeys = "preferred_username,email,sub"
-	DefaultSessionTTL   = 8 * time.Hour
-	DefaultSessionMax   = 24 * time.Hour
-	minimumSecretBytes  = 32
+	DefaultUserHeader      = "X-Forwarded-User"
+	DefaultGroupsHeader    = "X-Forwarded-Groups"
+	DefaultProxyAuthHeader = "X-Spinoza-Proxy-Secret"
+	DefaultGroupsClaim     = "groups"
+	DefaultUsernameKeys    = "preferred_username,email,sub"
+	DefaultSessionTTL      = 8 * time.Hour
+	DefaultSessionMax      = 24 * time.Hour
+	minimumSecretBytes     = 32
 )
 
 var DefaultScopes = []string{"openid", "profile", "email", "groups"}
@@ -32,6 +34,8 @@ var modes = []string{ModeNone, ModeProxy, ModeOIDC}
 type ProxyConfig struct {
 	UserHeader   string
 	GroupsHeader string
+	SecretHeader string
+	SharedSecret []byte
 	LogoutURL    string
 }
 
@@ -53,17 +57,18 @@ type OIDCConfig struct {
 }
 
 type Config struct {
-	Mode          string
-	PublicURL     string
-	SessionSecret []byte
-	SessionTTL    time.Duration
-	SessionMaxAge time.Duration
-	DefaultRole   string
-	AdminGroups   []string
-	EditorGroups  []string
-	ViewerGroups  []string
-	Proxy         ProxyConfig
-	OIDC          OIDCConfig
+	Mode           string
+	PublicURL      string
+	AllowAnonymous bool
+	SessionSecret  []byte
+	SessionTTL     time.Duration
+	SessionMaxAge  time.Duration
+	DefaultRole    string
+	AdminGroups    []string
+	EditorGroups   []string
+	ViewerGroups   []string
+	Proxy          ProxyConfig
+	OIDC           OIDCConfig
 }
 
 func (cfg Config) withDefaults() Config {
@@ -84,6 +89,9 @@ func (cfg Config) withDefaults() Config {
 	}
 	if cfg.Proxy.GroupsHeader == "" {
 		cfg.Proxy.GroupsHeader = DefaultGroupsHeader
+	}
+	if cfg.Proxy.SecretHeader == "" {
+		cfg.Proxy.SecretHeader = DefaultProxyAuthHeader
 	}
 	if cfg.OIDC.GroupsClaim == "" {
 		cfg.OIDC.GroupsClaim = DefaultGroupsClaim
@@ -107,6 +115,12 @@ func (cfg Config) Validate() error {
 	if len(cfg.SessionSecret) > 0 && len(cfg.SessionSecret) < minimumSecretBytes {
 		return fmt.Errorf("the session secret must be at least %d bytes", minimumSecretBytes)
 	}
+	if cfg.Mode == ModeNone && cfg.PublicURL != "" && !cfg.AllowAnonymous {
+		return errors.New("cluster mode without authentication needs explicit anonymous admin access")
+	}
+	if cfg.Mode == ModeProxy && len(cfg.Proxy.SharedSecret) < minimumSecretBytes {
+		return fmt.Errorf("proxy authentication needs a shared secret of at least %d bytes", minimumSecretBytes)
+	}
 	if !KnownRole(cfg.DefaultRole) {
 		return fmt.Errorf("default role %q is not one of %s", cfg.DefaultRole, strings.Join(rolesWeakestFirst, ", "))
 	}
@@ -114,6 +128,10 @@ func (cfg Config) Validate() error {
 		return nil
 	}
 	return cfg.OIDC.validate()
+}
+
+func (pc ProxyConfig) authenticates(raw string) bool {
+	return subtle.ConstantTimeCompare([]byte(raw), pc.SharedSecret) == 1
 }
 
 func (oc OIDCConfig) validate() error {

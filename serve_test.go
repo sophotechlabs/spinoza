@@ -23,7 +23,11 @@ func servedOpts(change func(*settings)) settings {
 		on:          true,
 		publicURL:   "https://spinoza.example.com",
 		impersonate: true,
-		auth:        auth.Config{Mode: auth.ModeProxy, PublicURL: "https://spinoza.example.com"},
+		auth: auth.Config{
+			Mode:      auth.ModeProxy,
+			PublicURL: "https://spinoza.example.com",
+			Proxy:     auth.ProxyConfig{SharedSecret: auth.NewSecret()},
+		},
 	}
 	if change != nil {
 		change(&opts)
