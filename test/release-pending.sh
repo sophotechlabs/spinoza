@@ -60,6 +60,7 @@ DRAFT=false run > "$root/pending"
 test "$(cat "$root/pending")" = false
 test "$(wc -l < "$GH_CALLS" | tr -d ' ')" = 1
 
-GH_FAIL=true run > "$root/pending"
-test "$(cat "$root/pending")" = false
+if GH_FAIL=true run > "$root/pending" 2>/dev/null; then
+    exit 1
+fi
 test "$(wc -l < "$GH_CALLS" | tr -d ' ')" = 1

@@ -12,7 +12,7 @@ if git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep -qx '.releas
 fi
 
 version=$(jq -r '.["."]' .release-please-manifest.json)
-draft=$(gh release view "v$version" --json isDraft --jq .isDraft 2>/dev/null || true)
+draft=$(gh release view "v$version" --json isDraft --jq .isDraft)
 if [ "$draft" = true ]; then
     echo true
     exit 0
