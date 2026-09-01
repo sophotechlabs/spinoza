@@ -705,7 +705,7 @@ vulnerability-exceptions: stub-assets
     done
     echo "vulnerability-exceptions: no build imports deprecated openpgp code"
 
-workflows: scoped-tools
+workflows: scoped-tools workflow-triggers
     yamllint .forgejo .github
     actionlint -config-file .forgejo/actionlint.yaml .forgejo/workflows/*.yaml
     actionlint .github/workflows/*.yaml
@@ -722,6 +722,44 @@ scoped-tools:
         echo "scoped-tools: $unscoped mise-action steps install every tool in mise.toml."
         echo "Name the tools the job runs with install_args, so an outage in a tool it"
         echo "never uses cannot fail it."
+        exit 1
+    fi
+
+workflow-triggers:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    release_files=(
+        .release-please-manifest.json
+        CHANGELOG.md
+        deploy/helm/spinoza/Chart.yaml
+        wails.json
+    )
+    validation=(
+        codeql.yaml
+        commits.yaml
+        e2e.yaml
+        frontend.yaml
+        go.yaml
+        integration.yaml
+        repo.yaml
+        windows.yaml
+    )
+    for name in "${validation[@]}"; do
+        workflow=".github/workflows/$name"
+        if [ "$(yq -r '.concurrency.cancel-in-progress' "$workflow")" != "true" ]; then
+            echo "$workflow does not cancel a superseded validation run" >&2
+            exit 1
+        fi
+        ignored=$(yq -r '.on.pull_request.paths-ignore[]' "$workflow")
+        for path in "${release_files[@]}"; do
+            if ! grep -Fxq "$path" <<< "$ignored"; then
+                echo "$workflow reruns for release-only change $path" >&2
+                exit 1
+            fi
+        done
+    done
+    if [ "$(yq -r '.concurrency.cancel-in-progress' .github/workflows/badges.yaml)" != "true" ]; then
+        echo ".github/workflows/badges.yaml can publish an obsolete measurement" >&2
         exit 1
     fi
 

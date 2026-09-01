@@ -5,14 +5,19 @@ on:
     branches:
       - main
   pull_request:
+    paths-ignore:
+      - .release-please-manifest.json
+      - CHANGELOG.md
+      - deploy/helm/spinoza/Chart.yaml
+      - wails.json
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
