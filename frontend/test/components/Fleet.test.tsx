@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Fleet from '../../src/components/Fleet';
 import { useClustersStore } from '../../src/store/clusters';
@@ -51,7 +51,10 @@ describe('the fleet view', () => {
     });
     stub({
       '/api/overview/fleet': {
-        clusters: [line(MK1, 'p-mk1', 'v1.34.1'), line(MK2, 'p-mk2', 'v1.33.0')],
+        clusters: [
+          { ...line(MK1, 'p-mk1', 'v1.34.1'), warnings: 2 },
+          { ...line(MK2, 'p-mk2', 'v1.33.0'), warnings: 3 },
+        ],
         nodes: nodes(6, 6),
         pods: pods(60, 57),
       },
@@ -61,7 +64,9 @@ describe('the fleet view', () => {
 
     expect(await screen.findByText('v1.34.1')).toBeTruthy();
     expect(screen.getByText('v1.33.0')).toBeTruthy();
-    expect(screen.getByText('Everything open')).toBeTruthy();
+    const total = screen.getByRole('row', { name: /Everything open/ });
+    expect(within(total).getByText('Everything open')).toBeTruthy();
+    expect(within(total).getByText('5')).toBeTruthy();
     expect(screen.getByText('60/57'.replace('60/57', '57/60'))).toBeTruthy();
   });
 

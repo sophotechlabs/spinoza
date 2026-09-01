@@ -58,6 +58,7 @@ function Clusters({ onPick }: FleetProps) {
     }
     return <Loading what="the fleet" />;
   }
+  const warnings = data.clusters.reduce((total, cluster) => total + cluster.warnings, 0);
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
@@ -78,7 +79,7 @@ function Clusters({ onPick }: FleetProps) {
           ))}
           <tr className="border-t border-edge-strong text-fg-soft">
             <td className="px-2 py-1">Everything open</td>
-            <td className="px-2 py-1" />
+            <td className="px-2 py-1">{warnings}</td>
             <td className="px-2 py-1">{nodesLabel(data.nodes)}</td>
             <td className="px-2 py-1">{podsLabel(data.pods)}</td>
             <td className="px-2 py-1" />
