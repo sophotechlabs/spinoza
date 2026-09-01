@@ -439,6 +439,7 @@ History.More more,omitempty bool
 History.Next next,omitempty int64
 History.NextAction nextAction,omitempty int64
 History.Reason reason,omitempty string
+HistoryEntry.Actor actor,omitempty string
 HistoryEntry.At at string
 HistoryEntry.Cluster cluster,omitempty string
 HistoryEntry.Detail detail,omitempty string
