@@ -2533,6 +2533,7 @@ describe('finding your way in by keyboard', () => {
       const said = useToastsStore.getState().toasts.map((toast) => toast.message);
       expect(said.some((message) => message.includes('Switching to kind-dev'))).toBe(true);
     });
+    expect(useClustersStore.getState().active).toBe(idFor('other-cluster'));
   });
 
   it('opens the permission index from the sidebar', async () => {

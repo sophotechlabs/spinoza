@@ -423,6 +423,8 @@ describe('an argo action that outlives its panel', () => {
     await screen.findByText('working');
 
     view.rerender(<ArgoActions target={{ ...target, name: 'other' }} onDone={onDone} />);
+    expect(screen.queryByText('working')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
     deferred.release();
     await new Promise((resolve) => setTimeout(resolve, 50));
 

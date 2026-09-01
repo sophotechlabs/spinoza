@@ -128,6 +128,7 @@ describe('the strip of open clusters', () => {
     await waitFor(() => {
       expect(useToastsStore.getState().toasts[0].message).toContain('Switching to p-mk2');
     });
+    expect(useClustersStore.getState().active).toBe(MK1);
   });
 
   it('closes a tab and lets go of what belonged to it', async () => {

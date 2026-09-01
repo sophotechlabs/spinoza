@@ -388,6 +388,48 @@ describe('CommandPalette', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('ignores a running sweep when the query is cleared', async () => {
+    const user = userEvent.setup();
+    let release = () => undefined;
+    let asked = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (!url.startsWith('/api/search')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ categories }),
+          });
+        }
+        asked = true;
+        return new Promise((resolve) => {
+          release = () => {
+            resolve({
+              ok: true,
+              status: 200,
+              json: () => Promise.resolve({ hits: [clusterHit], truncated: false }),
+            });
+          };
+        });
+      }),
+    );
+    renderPalette();
+    const input = screen.getByLabelText(/Search resources/);
+    await user.type(input, 'airbyte');
+    await waitFor(() => {
+      expect(asked).toBe(true);
+    });
+
+    await user.clear(input);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(
+      screen.queryByRole('button', { name: /airbyte\/airbyte-server/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it('ignores a slow sweep that arrives after a newer one', async () => {
     const user = userEvent.setup();
     const held: { release: () => void } = { release: () => undefined };

@@ -194,6 +194,46 @@ describe('running a comparison', () => {
 
     expect(screen.queryByTestId('yaml-diff')).not.toBeInTheDocument();
   });
+
+  it('drops a pending result when its comparison inputs change', async () => {
+    const user = userEvent.setup();
+    let answerRequest: (body: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            answerRequest = resolve;
+          }),
+      ),
+    );
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
+    await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+    expect(screen.getByText('reading')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Namespace'));
+    await user.type(screen.getByLabelText('Namespace'), 'staging');
+    expect(screen.queryByText('reading')).not.toBeInTheDocument();
+
+    answerRequest({ ok: true, status: 200, json: () => Promise.resolve(answer) });
+    await waitFor(() => {
+      expect(screen.queryByTestId('yaml-diff')).not.toBeInTheDocument();
+    });
+  });
+
+  it('clears a completed result when its comparison inputs change', async () => {
+    const user = userEvent.setup();
+    stub(answer);
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
+    await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+    await screen.findByTestId('yaml-diff');
+
+    await user.click(screen.getByLabelText('Show everything'));
+
+    expect(screen.queryByTestId('yaml-diff')).not.toBeInTheDocument();
+  });
 });
 
 describe('the odd cases the summary and errors have to cover', () => {
