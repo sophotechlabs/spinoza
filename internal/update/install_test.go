@@ -381,6 +381,27 @@ func TestTheScriptIsToldWhereToInstallAndToLeaveTheAppAlone(t *testing.T) {
 	}
 }
 
+func TestScriptOutputIsBounded(t *testing.T) {
+	dir := t.TempDir()
+	saved := filepath.Join(dir, "noisy.sh")
+	body := "#!/bin/sh\nawk 'BEGIN { for (i = 0; i < 70000; i++) printf \"x\" }'\nprintf '\\nuseful failure\\n' >&2\nexit 1\n"
+	if err := os.WriteFile(saved, []byte(body), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	output, err := runScript(context.Background(), saved, dir)
+
+	if err == nil || !strings.Contains(err.Error(), "output exceeded") {
+		t.Fatalf("run error = %v", err)
+	}
+	if len(output) != maxRunOutput {
+		t.Fatalf("kept %d output bytes, want %d", len(output), maxRunOutput)
+	}
+	if lastLine(output) != "useful failure" {
+		t.Fatalf("last line = %q", lastLine(output))
+	}
+}
+
 func TestTheLastLineIsWhatIsReported(t *testing.T) {
 	cases := map[string]string{
 		"one\ntwo\n":   "two",

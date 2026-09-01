@@ -1,33 +1,37 @@
 package debugcontainer
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
 	"os/exec"
 	"strings"
+
+	"github.com/sophotechlabs/spinoza/internal/commandbuffer"
 )
 
 const DefaultBinary = "kubectl"
 
+const maxErrorOutput = 64 << 10
+
 type kubectlRunner struct {
-	binary string
+	binary     string
+	errorLimit int
 }
 
 func NewRunner(binary string) Runner {
 	if binary == "" {
 		binary = DefaultBinary
 	}
-	return &kubectlRunner{binary: binary}
+	return &kubectlRunner{binary: binary, errorLimit: maxErrorOutput}
 }
 
 func (k *kubectlRunner) Run(ctx context.Context, args []string) error {
 	//nolint:gosec // arguments are validated in Service.admits and passed as argv, never through a shell
 	command := exec.CommandContext(ctx, k.binary, args...)
-	var stderr bytes.Buffer
+	stderr := commandbuffer.Tail(k.errorLimit)
 	command.Stdout = io.Discard
-	command.Stderr = &stderr
+	command.Stderr = stderr
 	command.Stdin = nil
 
 	err := command.Run()
@@ -40,6 +44,9 @@ func (k *kubectlRunner) Run(ctx context.Context, args []string) error {
 		return errors.New("kubectl was not found on PATH; spinoza shells out to it to create debug containers")
 	}
 	message := meaningful(stderr.String())
+	if stderr.Exceeded() {
+		return errors.New("kubectl error output exceeded its limit: " + message)
+	}
 	if message == "" {
 		return err
 	}

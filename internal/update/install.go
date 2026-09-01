@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/commandbuffer"
 )
 
 const Script = "https://spinoza.tech/install.sh"
@@ -23,6 +25,7 @@ const (
 	fetchTimeout   = 30 * time.Second
 	installTimeout = 5 * time.Minute
 	maxScript      = 1 << 20
+	maxRunOutput   = 64 << 10
 	scriptMode     = 0o700
 )
 
@@ -182,7 +185,17 @@ func runScript(ctx context.Context, script, dir string) ([]byte, error) {
 		"SPINOZA_INSTALL_DIR="+dir,
 		skipApp+"=1",
 	)
-	return cmd.CombinedOutput()
+	output := commandbuffer.Tail(maxRunOutput)
+	cmd.Stdout = output
+	cmd.Stderr = output
+	err := cmd.Run()
+	if output.Exceeded() {
+		if err != nil {
+			return output.Bytes(), fmt.Errorf("install output exceeded %d bytes: %w", maxRunOutput, err)
+		}
+		return output.Bytes(), fmt.Errorf("install output exceeded %d bytes", maxRunOutput)
+	}
+	return output.Bytes(), err
 }
 
 func writableDir(dir string) error {

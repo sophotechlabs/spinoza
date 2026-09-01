@@ -30,6 +30,20 @@ func TestRunnerSurfacesStderr(t *testing.T) {
 	}
 }
 
+func TestRunnerBoundsStderr(t *testing.T) {
+	runner, ok := NewRunner("sh").(*kubectlRunner)
+	if !ok {
+		t.Fatal("NewRunner returned something other than the kubectl runner")
+	}
+	runner.errorLimit = 4
+
+	err := runner.Run(context.Background(), []string{"-c", "printf 12345 >&2; exit 1"})
+
+	if err == nil || !strings.Contains(err.Error(), "exceeded its limit") {
+		t.Fatalf("message = %v", err)
+	}
+}
+
 func TestRunnerDropsTheProfileDeprecationNotice(t *testing.T) {
 	runner := NewRunner("sh")
 

@@ -248,6 +248,20 @@ func TestTheRealRunnerCarriesTheCommandOutput(t *testing.T) {
 	}
 }
 
+func TestTheRealRunnerRefusesOutputBeyondItsLimit(t *testing.T) {
+	runner, ok := NewRunner("sh").(*helmRunner)
+	if !ok {
+		t.Fatal("NewRunner returned something other than the helm runner")
+	}
+	runner.outputLimit = 4
+
+	_, err := runner.Run(context.Background(), []string{"-c", "printf 12345"}, nil)
+
+	if err == nil || !strings.Contains(err.Error(), "exceeded 4 bytes") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestTheRealRunnerCarriesTheFailureMessage(t *testing.T) {
 	runner := NewRunner("sh")
 
@@ -258,6 +272,20 @@ func TestTheRealRunnerCarriesTheFailureMessage(t *testing.T) {
 	}
 	if err.Error() != "boom" {
 		t.Fatalf("err = %v, want the stderr line", err)
+	}
+}
+
+func TestTheRealRunnerBoundsFailureOutput(t *testing.T) {
+	runner, ok := NewRunner("sh").(*helmRunner)
+	if !ok {
+		t.Fatal("NewRunner returned something other than the helm runner")
+	}
+	runner.errorLimit = 4
+
+	_, err := runner.Run(context.Background(), []string{"-c", "printf 12345 >&2; exit 1"}, nil)
+
+	if err == nil || !strings.Contains(err.Error(), "exceeded 4 bytes") {
+		t.Fatalf("err = %v", err)
 	}
 }
 

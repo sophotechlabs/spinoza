@@ -1,7 +1,6 @@
 package helm
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -14,11 +13,14 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
+	"github.com/sophotechlabs/spinoza/internal/commandbuffer"
 )
 
 const (
 	DefaultBinary  = "helm"
 	actionTimeout  = 5 * time.Minute
+	maxHelmOutput  = 16 << 20
+	maxHelmError   = 64 << 10
 	driverEnv      = "HELM_DRIVER"
 	ActionRollback = "rollback"
 	ActionUninstal = "uninstall"
@@ -34,14 +36,16 @@ type Runner interface {
 }
 
 type helmRunner struct {
-	binary string
+	binary      string
+	outputLimit int
+	errorLimit  int
 }
 
 func NewRunner(binary string) Runner {
 	if binary == "" {
 		binary = DefaultBinary
 	}
-	return &helmRunner{binary: binary}
+	return &helmRunner{binary: binary, outputLimit: maxHelmOutput, errorLimit: maxHelmError}
 }
 
 func (h *helmRunner) Available() error {
@@ -55,14 +59,17 @@ func (h *helmRunner) Available() error {
 func (h *helmRunner) Run(ctx context.Context, args, env []string) (string, error) {
 	//nolint:gosec // the binary is a flag, every argument is validated below and passed as argv, never through a shell
 	command := exec.CommandContext(ctx, h.binary, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
+	stdout := commandbuffer.Head(h.outputLimit)
+	stderr := commandbuffer.Tail(h.errorLimit)
+	command.Stdout = stdout
+	command.Stderr = stderr
 	command.Stdin = nil
 	command.Env = append(os.Environ(), env...)
 
 	err := command.Run()
+	if stdout.Exceeded() {
+		return "", fmt.Errorf("helm output exceeded %d bytes", h.outputLimit)
+	}
 	if err == nil {
 		return strings.TrimSpace(stdout.String()), nil
 	}
@@ -71,6 +78,9 @@ func (h *helmRunner) Run(ctx context.Context, args, env []string) (string, error
 		return "", fmt.Errorf("%w: %s", ErrNoHelmBinary, h.binary)
 	}
 	message := firstMeaningful(stderr.String())
+	if stderr.Exceeded() {
+		return "", fmt.Errorf("helm error output exceeded %d bytes: %s", h.errorLimit, message)
+	}
 	if message == "" {
 		return "", err
 	}
