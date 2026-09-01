@@ -532,6 +532,25 @@ func TestTwoSubjectsWithTheSamePowersAreOrderedByName(t *testing.T) {
 	}
 }
 
+func TestSubjectsWithTheSamePowersAreOrderedByGrantCount(t *testing.T) {
+	holders := map[string]*Holder{
+		"one": {
+			Subject: Subject{Kind: KindUser, Name: "one"},
+			Grants:  []Grant{{Role: "reader"}},
+		},
+		"two": {
+			Subject: Subject{Kind: KindUser, Name: "two"},
+			Grants:  []Grant{{Role: "reader"}, {Role: "writer"}},
+		},
+	}
+
+	got := ordered(holders)
+
+	if got[0].Subject.Name != "two" {
+		t.Fatalf("holders = %+v, want the holder with more grants first", got)
+	}
+}
+
 func namedRule(verbs, groups, resources, names []string) map[string]any {
 	one := rule(verbs, groups, resources)
 	one["resourceNames"] = asAny(names)
