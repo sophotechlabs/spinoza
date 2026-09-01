@@ -353,11 +353,6 @@ func TestTheSpreadCheckCountsDomainsNotNodes(t *testing.T) {
 }
 
 func TestSpreadConstraintsSkipMalformedEntriesAndDefaultTheSkew(t *testing.T) {
-	nodes := []*unstructured.Unstructured{
-		plainNode("unlabelled", map[string]any{hostnameKey: "unlabelled"}),
-		plainNode("a", map[string]any{hostnameKey: "a", "zone": "a"}),
-		plainNode("b", map[string]any{hostnameKey: "b", "zone": "b"}),
-	}
 	spread := replicas(deployment("api", podSpecWith(map[string]any{
 		"topologySpreadConstraints": []any{
 			"not a constraint",
@@ -365,8 +360,13 @@ func TestSpreadConstraintsSkipMalformedEntriesAndDefaultTheSkew(t *testing.T) {
 			map[string]any{"topologyKey": "zone", "whenUnsatisfiable": doNotSchedule},
 		},
 	}, container("app", nil))), 3)
+	objects := []*unstructured.Unstructured{
+		plainNode("unlabelled", map[string]any{hostnameKey: "unlabelled"}),
+		plainNode("a", map[string]any{hostnameKey: "a", "zone": "a"}),
+		plainNode("b", map[string]any{hostnameKey: "b", "zone": "b"}),
+		spread,
+	}
 
-	objects := append(nodes, spread)
 	if findingCount(t, report(t, objects...), "spread-needs-more-domains") != 1 {
 		t.Fatal("the default maxSkew did not catch three replicas across two domains")
 	}

@@ -176,7 +176,7 @@ func wireMode(ctx context.Context, srv modeServer, opts settings, past *store.St
 }
 
 type idleExitServer interface {
-	UseIdleExit(func())
+	UseIdleExit(onIdle func())
 }
 
 func announceListening(ctx context.Context, srv idleExitServer, opts settings, token string, idle chan struct{}) {
