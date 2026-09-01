@@ -32,7 +32,7 @@ describe('parseIssueQueue', () => {
 
     expect(queue.next).toBe('server-cursor');
     expectTypeOf(queue.next).toEqualTypeOf<IssueCursor | undefined>();
-    expectTypeOf<string>().not.toMatchTypeOf<IssueCursor>();
+    expectTypeOf<string>().not.toExtend<IssueCursor>();
   });
 });
 
