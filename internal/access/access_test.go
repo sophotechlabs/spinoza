@@ -659,8 +659,8 @@ func TestAQuestionThatCouldNotBePutIsNotAnAnswer(t *testing.T) {
 	if decision.Answered {
 		t.Fatalf("decision = %+v, want it marked as no answer", decision)
 	}
-	if !decision.Allowed {
-		t.Fatalf("decision = %+v, want a failed question to take nothing away", decision)
+	if decision.Allowed {
+		t.Fatalf("decision = %+v, want a failed question kept unavailable", decision)
 	}
 	if decision.Reason == "" {
 		t.Fatal("a question that could not be put said nothing about why")
@@ -674,6 +674,9 @@ func TestAnAuthorizerWithNoOpinionIsNotAnAnswerEither(t *testing.T) {
 
 	if decision.Answered {
 		t.Fatalf("decision = %+v, want it marked as no answer", decision)
+	}
+	if decision.Allowed {
+		t.Fatalf("decision = %+v, want an unanswered question kept unavailable", decision)
 	}
 	if decision.Reason == "" {
 		t.Fatal("an authorizer that could not decide said nothing about why")

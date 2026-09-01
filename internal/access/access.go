@@ -119,10 +119,10 @@ func (s *Service) ask(ctx context.Context, want question) Decision {
 	}
 	result, err := s.cs.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, review, metav1.CreateOptions{})
 	if err != nil {
-		return Decision{Allowed: true, Reason: err.Error()}
+		return Decision{Reason: err.Error()}
 	}
 	if result.Status.EvaluationError != "" && !result.Status.Allowed {
-		return Decision{Allowed: true, Reason: result.Status.EvaluationError}
+		return Decision{Reason: result.Status.EvaluationError}
 	}
 	decision := Decision{Allowed: result.Status.Allowed, Answered: true, Reason: result.Status.Reason}
 	if decision.Allowed {
