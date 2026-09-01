@@ -327,3 +327,11 @@ func TestAReleaseResponseLargerThanItsLimitIsNotAcceptedPartially(t *testing.T) 
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestAReleaseResponseThatBreaksWhileReadingIsReported(t *testing.T) {
+	_, err := readAnswer(failedRead{}, maxAnswer)
+
+	if err == nil || !strings.Contains(err.Error(), "response body broke") {
+		t.Fatalf("error = %v, want the read failure", err)
+	}
+}
