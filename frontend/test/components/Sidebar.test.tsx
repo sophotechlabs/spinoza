@@ -9,6 +9,7 @@ import { ARGO_VIEWS, FLUX_VIEWS } from '../../src/lib/types';
 import { anySignal, makeCategory, makeDescriptor, rejectsWith } from '../helpers';
 import { activeClusterNow, useClustersStore } from '../../src/store/clusters';
 import { MK1, showing } from '../helpers-clusters';
+import { VIEW_LABELS } from '../../src/lib/views';
 
 interface RenderOverrides {
   view?: View;
@@ -195,6 +196,9 @@ describe('Sidebar', () => {
 
     expect(flux).toHaveLength(FLUX_VIEWS.length);
     expect(argo).toHaveLength(ARGO_VIEWS.length);
+    for (const view of [...FLUX_VIEWS, ...ARGO_VIEWS]) {
+      expect(screen.getByRole('button', { name: VIEW_LABELS[view] })).toBeInTheDocument();
+    }
   });
 
   it('renders the Flux section once Flux is found in the cluster', async () => {

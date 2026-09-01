@@ -3,7 +3,8 @@ import { act } from '@testing-library/react';
 import { useClustersStore } from '../../src/store/clusters';
 import { MK1, showing } from '../helpers-clusters';
 import type { ObjectRef } from '../../src/lib/types';
-import { VIEW_LABELS, clusterItems, matchItems, paletteItems } from '../../src/lib/palette';
+import { clusterItems, matchItems, paletteItems } from '../../src/lib/palette';
+import { VIEW_LABELS } from '../../src/lib/views';
 import { makeCategory, makeDescriptor } from '../helpers';
 import { VIEWS } from '../../src/lib/types';
 
@@ -203,7 +204,7 @@ describe('matchItems', () => {
     const items = paletteItems([makeCategory('Workloads', [makeDescriptor({})])], [], false);
 
     expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).not.toContain(
-      'Flux graph',
+      VIEW_LABELS.gitops,
     );
   });
 
@@ -224,7 +225,7 @@ describe('matchItems', () => {
     );
 
     expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).toContain(
-      'Flux graph',
+      VIEW_LABELS.gitops,
     );
   });
 });

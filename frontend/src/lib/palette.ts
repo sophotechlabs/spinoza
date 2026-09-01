@@ -5,25 +5,7 @@ import { typeFor } from './catalog';
 import { argoInstalled, fluxInstalled } from './gitops';
 import { useClustersStore } from '../store/clusters';
 import { contextOf } from './tabs';
-
-export const VIEW_LABELS: Record<View, string> = {
-  resources: 'Resources',
-  cluster: 'Cluster overview',
-  issues: 'Issues',
-  topology: 'Topology',
-  helm: 'Helm releases',
-  checks: 'Cluster checks',
-  history: 'History',
-  'flux-roles': 'Flux overview',
-  gitops: 'Flux graph',
-  'flux-list': 'Flux resources',
-  'argo-apps': 'Argo CD overview',
-  'argo-graph': 'Argo CD graph',
-  'argo-list': 'Argo CD resources',
-  traffic: 'Traffic graph',
-  fleet: 'Fleet',
-  rbac: 'Who can do what',
-};
+import { VIEW_LABELS } from './views';
 
 const VIEW_ORDER: View[] = [
   'fleet',

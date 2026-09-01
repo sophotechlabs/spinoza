@@ -1973,7 +1973,7 @@ describe('the command palette and shortcuts', () => {
     render(<App />);
 
     press('k', { ctrlKey: true });
-    await user.click(await screen.findByRole('button', { name: /Flux resources/ }));
+    await user.click(await screen.findByRole('button', { name: /Flux Resource list/ }));
 
     expect(await screen.findByTestId('flux-dashboard')).toBeInTheDocument();
   });

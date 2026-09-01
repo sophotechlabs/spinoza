@@ -6,6 +6,7 @@ import type {
   TrafficSupport,
   View,
 } from '../lib/types';
+import { ARGO_VIEWS, FLUX_VIEWS } from '../lib/types';
 import {
   descriptorKey,
   fetchResourceCounts,
@@ -29,6 +30,7 @@ import { useTrafficSupport } from '../store/traffic';
 import { kindLabels } from '../lib/kindLabels';
 import type { SidebarSections } from '../lib/sidebarState';
 import { useTabStrip } from '../store/clusters';
+import { VIEW_LABELS } from '../lib/views';
 
 interface SidebarProps {
   view: View;
@@ -37,33 +39,9 @@ interface SidebarProps {
   onSelectView: (view: View) => void;
 }
 
-interface GitopsEntry {
-  view: View;
-  label: string;
-}
-
-const TOP_VIEWS: GitopsEntry[] = [
-  { view: 'issues', label: 'Issues' },
-  { view: 'topology', label: 'Topology' },
-  { view: 'helm', label: 'Helm releases' },
-  { view: 'checks', label: 'Cluster checks' },
-  { view: 'rbac', label: 'Who can do what' },
-  { view: 'history', label: 'History' },
-];
+const TOP_VIEWS: View[] = ['issues', 'topology', 'helm', 'checks', 'rbac', 'history'];
 
 const CLUSTER_CATEGORY = 'Cluster';
-
-const FLUX_VIEWS: GitopsEntry[] = [
-  { view: 'flux-roles', label: 'Overview' },
-  { view: 'gitops', label: 'Graph' },
-  { view: 'flux-list', label: 'Resource list' },
-];
-
-const ARGO_VIEWS: GitopsEntry[] = [
-  { view: 'argo-apps', label: 'Overview' },
-  { view: 'argo-graph', label: 'Graph' },
-  { view: 'argo-list', label: 'Resource list' },
-];
 
 const NOT_INSTALLED = 'not found in this cluster';
 const BASE_DISCOVERY_BACKOFF_MS = 500;
@@ -216,12 +194,11 @@ function OverviewButton({ active, onOpen }: { active: boolean; onOpen: () => voi
   return (
     <button
       type="button"
-      aria-label="Cluster Overview"
       aria-current={current(active)}
       onClick={onOpen}
       className={overviewClass(active)}
     >
-      Overview
+      {VIEW_LABELS.cluster}
     </button>
   );
 }
@@ -397,17 +374,17 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
               Fleet
             </button>
           )}
-          {TOP_VIEWS.map((entry) => (
+          {TOP_VIEWS.map((viewName) => (
             <button
-              key={entry.view}
+              key={viewName}
               type="button"
-              aria-current={current(view === entry.view)}
+              aria-current={current(view === viewName)}
               onClick={() => {
-                onSelectView(entry.view);
+                onSelectView(viewName);
               }}
-              className={resourceClass(view === entry.view)}
+              className={resourceClass(view === viewName)}
             >
-              {entry.label}
+              {VIEW_LABELS[viewName]}
             </button>
           ))}
           <button
@@ -420,7 +397,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
             }}
             className={resourceClass(view === 'traffic', false, !traffic.available)}
           >
-            Traffic
+            {VIEW_LABELS.traffic}
           </button>
         </div>
         <div className="mb-1">
@@ -443,18 +420,17 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           </button>
           {flux && sectionOpen(sections, FLUX_SECTION) && (
             <div aria-label="Flux views">
-              {FLUX_VIEWS.map((entry) => (
+              {FLUX_VIEWS.map((viewName) => (
                 <button
-                  key={entry.view}
+                  key={viewName}
                   type="button"
-                  aria-label={`Flux ${entry.label}`}
-                  aria-current={current(view === entry.view)}
+                  aria-current={current(view === viewName)}
                   onClick={() => {
-                    onSelectView(entry.view);
+                    onSelectView(viewName);
                   }}
-                  className={resourceClass(view === entry.view)}
+                  className={resourceClass(view === viewName)}
                 >
-                  {entry.label}
+                  {VIEW_LABELS[viewName]}
                 </button>
               ))}
             </div>
@@ -480,18 +456,17 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           </button>
           {argo && sectionOpen(sections, ARGO_SECTION) && (
             <div aria-label="Argo CD views">
-              {ARGO_VIEWS.map((entry) => (
+              {ARGO_VIEWS.map((viewName) => (
                 <button
-                  key={entry.view}
+                  key={viewName}
                   type="button"
-                  aria-label={`Argo CD ${entry.label}`}
-                  aria-current={current(view === entry.view)}
+                  aria-current={current(view === viewName)}
                   onClick={() => {
-                    onSelectView(entry.view);
+                    onSelectView(viewName);
                   }}
-                  className={resourceClass(view === entry.view)}
+                  className={resourceClass(view === viewName)}
                 >
-                  {entry.label}
+                  {VIEW_LABELS[viewName]}
                 </button>
               ))}
             </div>

@@ -120,7 +120,7 @@ describe('CommandPalette', () => {
   it('offers every view the cluster can serve', async () => {
     renderPalette();
 
-    expect(await screen.findByRole('button', { name: /Flux graph/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Flux Graph/ })).toBeInTheDocument();
   });
 
   it('does not fetch the catalog while it is closed', () => {
