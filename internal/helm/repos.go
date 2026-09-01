@@ -1,6 +1,7 @@
 package helm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +13,10 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/charts"
 )
 
-const repoConfigEnv = "HELM_REPOSITORY_CONFIG"
+const (
+	repoConfigEnv = "HELM_REPOSITORY_CONFIG"
+	repoCacheEnv  = "HELM_REPOSITORY_CACHE"
+)
 
 type repoFile struct {
 	Repositories []struct {
@@ -31,6 +35,18 @@ func RepositoryConfig() string {
 		return ""
 	}
 	return filepath.Join(dir, "helm", "repositories.yaml")
+}
+
+func RepositoryCache() string {
+	fromEnv := os.Getenv(repoCacheEnv)
+	if fromEnv != "" {
+		return fromEnv
+	}
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "helm", "repository")
 }
 
 func configHome() string {
@@ -94,4 +110,43 @@ func Repositories(path string) []RepoEntry {
 		out = append(out, RepoEntry{Name: entry.Name, Repo: repo})
 	}
 	return out
+}
+
+func SeedRepositoryCache(index *charts.Cache, repos []RepoEntry, dir string) error {
+	if index == nil || dir == "" {
+		return nil
+	}
+	failures := []error{}
+	for _, entry := range repos {
+		if entry.Name == "" || entry.Repo.OCI {
+			continue
+		}
+		if filepath.Base(entry.Name) != entry.Name {
+			failures = append(failures, fmt.Errorf("repository name %q is not a cache filename", entry.Name))
+			continue
+		}
+		path := filepath.Join(dir, entry.Name+"-index.yaml")
+		err := seedRepository(index, entry.Repo, path)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			failures = append(failures, err)
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func seedRepository(index *charts.Cache, repo charts.Repo, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("stat repository cache %s: %w", path, err)
+	}
+	seedErr := index.Seed(repo, file, info.ModTime())
+	if seedErr != nil {
+		return fmt.Errorf("read repository cache %s: %w", path, seedErr)
+	}
+	return nil
 }

@@ -75,7 +75,14 @@ export async function launch(options: Launch): Promise<Instance> {
       process.env.SPINOZA_E2E_LOG ?? 'warn',
       ...options.extra,
     ],
-    { env: { HOME: options.home, XDG_CONFIG_HOME: join(options.home, '.config') } },
+    {
+      env: {
+        HELM_REPOSITORY_CACHE: join(options.home, '.cache', 'helm', 'repository'),
+        HELM_REPOSITORY_CONFIG: join(options.home, '.config', 'helm', 'repositories.yaml'),
+        HOME: options.home,
+        XDG_CONFIG_HOME: join(options.home, '.config'),
+      },
+    },
   );
   const baseURL = `http://${options.addr}`;
   await waitFor('spinoza to write its token', 120, 500, () => existsSync(options.tokenFile));

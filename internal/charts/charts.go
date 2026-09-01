@@ -472,6 +472,18 @@ func (c *Cache) Resolve(ctx context.Context, repo Repo, chart string) (map[strin
 	return found.versions, nil
 }
 
+func (c *Cache) Seed(repo Repo, body io.Reader, fetched time.Time) error {
+	found, err := parseIndex(io.LimitReader(body, maxBodyBytes))
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.fetched[fetchUnit(repo, "")] = fetched
+	c.keep(repo, found)
+	return nil
+}
+
 func (c *Cache) resolve(ctx context.Context, repo Repo, chart string) (listing, error) {
 	parsed, err := fetchableURL(repo.URL)
 	if err != nil {
@@ -497,15 +509,23 @@ func (c *Cache) resolveIndex(ctx context.Context, repo Repo) (listing, error) {
 	}
 	defer func() { _ = body.Close() }()
 
+	found, decodeErr := parseIndex(io.LimitReader(body, maxBodyBytes))
+	if decodeErr != nil {
+		return listing{}, fmt.Errorf("parse %s: %w", endpoint, decodeErr)
+	}
+	return found, nil
+}
+
+func parseIndex(body io.Reader) (listing, error) {
 	var doc struct {
 		Entries map[string][]struct {
 			Version     string `yaml:"version"`
 			Description string `yaml:"description"`
 		} `yaml:"entries"`
 	}
-	decodeErr := yaml.NewDecoder(io.LimitReader(body, maxBodyBytes)).Decode(&doc)
+	decodeErr := yaml.NewDecoder(body).Decode(&doc)
 	if decodeErr != nil {
-		return listing{}, fmt.Errorf("parse %s: %w", endpoint, decodeErr)
+		return listing{}, decodeErr
 	}
 
 	out := listing{versions: map[string][]string{}, charts: []Chart{}}

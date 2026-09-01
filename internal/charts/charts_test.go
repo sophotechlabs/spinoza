@@ -151,6 +151,52 @@ func TestWarmHonoursTheTTL(t *testing.T) {
 	}
 }
 
+func TestASeededIndexAnswersWithoutTheNetwork(t *testing.T) {
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		return nil, errors.New("the network was used")
+	}
+	cache := newCache(t.Context(), nil, time.Hour, lookup, nil)
+	cache.now = func() time.Time { return now }
+	repo := Repo{URL: "https://charts.example.com"}
+	body := indexBody + "\n  preview-only:\n    - version: 7.0.0-rc.1\n"
+
+	err := cache.Seed(repo, strings.NewReader(body), now)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	versions, versionsErr := cache.Versions(t.Context(), repo, "podinfo")
+	if versionsErr != nil {
+		t.Fatalf("versions: %v", versionsErr)
+	}
+	if strings.Join(versions, ",") != "6.15.1,6.14.0,6.9.0" {
+		t.Fatalf("versions = %v, want the cached stable versions", versions)
+	}
+	hits, searchErr := cache.Search(t.Context(), repo, "pod", 10)
+	if searchErr != nil {
+		t.Fatalf("search: %v", searchErr)
+	}
+	if len(hits) != 1 || hits[0].Name != "podinfo" {
+		t.Fatalf("hits = %+v, want podinfo from the cached catalog", hits)
+	}
+	if cache.Latest(repo, "preview-only") != "" {
+		t.Fatal("a preview-only chart entered the stable cache")
+	}
+}
+
+func TestABrokenSeedDoesNotChangeTheCache(t *testing.T) {
+	cache := New(t.Context(), nil, time.Hour)
+	repo := Repo{URL: "https://charts.example.com"}
+
+	err := cache.Seed(repo, strings.NewReader("entries: [not closed"), time.Now())
+	if err == nil {
+		t.Fatal("a malformed cached index was accepted")
+	}
+	if cache.Latest(repo, "podinfo") != "" {
+		t.Fatal("a malformed cached index populated the cache")
+	}
+}
+
 func TestWarmIgnoresEmptyInputs(t *testing.T) {
 	hits := 0
 	cache, ts := cacheFor(t, indexHandler(&hits))
