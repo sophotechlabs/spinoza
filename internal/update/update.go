@@ -3,6 +3,7 @@ package update
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"runtime"
@@ -47,9 +48,10 @@ type Checker struct {
 	current  string
 	client   *http.Client
 
-	mu     sync.Mutex
-	asked  bool
-	answer api.UpdateStatus
+	mu      sync.Mutex
+	asked   bool
+	answer  api.UpdateStatus
+	request uint64
 }
 
 func New(current, endpoint string) *Checker {
@@ -69,15 +71,24 @@ func (c *Checker) Status(ctx context.Context) api.UpdateStatus {
 	if c.asked {
 		return c.answer
 	}
+	c.request++
 	c.answer = c.ask(ctx)
 	c.asked = true
 	return c.answer
 }
 
 func (c *Checker) Recheck(ctx context.Context) api.UpdateStatus {
+	c.mu.Lock()
+	c.request++
+	request := c.request
+	c.mu.Unlock()
+
 	answer := c.ask(ctx)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if request != c.request {
+		return answer
+	}
 	c.answer = answer
 	c.asked = true
 	return answer
@@ -119,13 +130,24 @@ func (c *Checker) fetch(ctx context.Context) (answer, error) {
 	if response.StatusCode != http.StatusOK {
 		return answer{}, &statusError{code: response.StatusCode}
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxAnswer))
+	body, err := readAnswer(response.Body, maxAnswer)
 	if err != nil {
 		return answer{}, err
 	}
 	var found answer
 	if unmarshalErr := json.Unmarshal(body, &found); unmarshalErr != nil {
 		return answer{}, unmarshalErr
+	}
+	return found, nil
+}
+
+func readAnswer(body io.Reader, limit int) ([]byte, error) {
+	found, err := io.ReadAll(io.LimitReader(body, int64(limit)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(found) > limit {
+		return nil, fmt.Errorf("release response is larger than %d bytes", limit)
 	}
 	return found, nil
 }

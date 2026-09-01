@@ -279,3 +279,51 @@ func TestRecheckAsksAgain(t *testing.T) {
 		t.Fatalf("asked %d times, want the answer kept after a recheck", asked.Load())
 	}
 }
+
+func TestAnOlderRecheckCannotReplaceANewerAnswer(t *testing.T) {
+	var asked atomic.Int64
+	firstStarted := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if asked.Add(1) == 1 {
+			close(firstStarted)
+			<-releaseFirst
+			_, _ = w.Write([]byte(release))
+			return
+		}
+		_, _ = w.Write([]byte(`{"tag_name":"v1.16.0","html_url":"https://example.com/v1.16.0"}`))
+	}))
+	t.Cleanup(server.Close)
+	checker := New("v1.14.1", server.URL)
+	firstDone := make(chan string, 1)
+	secondDone := make(chan string, 1)
+
+	go func() {
+		firstDone <- checker.Recheck(t.Context()).Latest
+	}()
+	<-firstStarted
+	go func() {
+		secondDone <- checker.Recheck(t.Context()).Latest
+	}()
+	if latest := <-secondDone; latest != "v1.16.0" {
+		t.Fatalf("second recheck = %q", latest)
+	}
+	close(releaseFirst)
+	if latest := <-firstDone; latest != "v1.15.0" {
+		t.Fatalf("first recheck = %q", latest)
+	}
+
+	if latest := checker.Status(t.Context()).Latest; latest != "v1.16.0" {
+		t.Fatalf("cached release = %q, want the newer recheck", latest)
+	}
+}
+
+func TestAReleaseResponseLargerThanItsLimitIsNotAcceptedPartially(t *testing.T) {
+	body := `{"tag_name":"v1.15.0"}`
+
+	_, err := readAnswer(strings.NewReader(body+"extra"), len(body))
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("err = %v", err)
+	}
+}
