@@ -78,15 +78,24 @@ describe('the fleet inventory', () => {
 
 describe('the fleet images', () => {
   it('reads the images back', async () => {
-    stub({ images: [{ image: 'nginx:1.27', repo: 'nginx', pods: 3, clusters: ['a'] }] });
+    stub({
+      images: [{ image: 'nginx:1.27', repo: 'nginx', pods: 3, clusters: ['a'] }],
+      total: 1200,
+      truncated: true,
+    });
 
-    expect((await fetchFleetImages()).images).toHaveLength(1);
+    const got = await fetchFleetImages();
+    expect(got.images).toHaveLength(1);
+    expect(got.total).toBe(1200);
+    expect(got.truncated).toBe(true);
   });
 
   it('fills in an empty answer', async () => {
     stub({});
 
-    expect((await fetchFleetImages()).images).toEqual([]);
+    const got = await fetchFleetImages();
+    expect(got.images).toEqual([]);
+    expect(got.total).toBe(0);
   });
 
   it('reports a failure', async () => {

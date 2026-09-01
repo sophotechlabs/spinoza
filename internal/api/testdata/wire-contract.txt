@@ -213,6 +213,8 @@ FleetImage.Skew skew,omitempty []string
 FleetImage.Tag tag,omitempty string
 FleetImages.Error error,omitempty string
 FleetImages.Images images []FleetImage
+FleetImages.Total total int
+FleetImages.Truncated truncated,omitempty bool
 FleetInventory.Error error,omitempty string
 FleetInventory.Kinds kinds []FleetKind
 FleetKind.Failing failing,omitempty int

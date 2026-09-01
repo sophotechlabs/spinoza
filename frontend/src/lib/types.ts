@@ -679,6 +679,8 @@ export interface FleetImage {
 
 export interface FleetImages {
   images: FleetImage[];
+  total: number;
+  truncated?: boolean;
   error?: string;
 }
 

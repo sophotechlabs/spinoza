@@ -173,6 +173,11 @@ function Images() {
           <Image key={image.image} image={image} />
         ))}
       </ul>
+      {data.truncated === true && (
+        <p className="p-3 text-fg-muted">
+          Showing {data.images.length} of {data.total} images.
+        </p>
+      )}
       {data.images.length === 0 && <p className="p-3 text-fg-muted">No images found.</p>}
     </div>
   );

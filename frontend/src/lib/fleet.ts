@@ -42,7 +42,13 @@ export async function fetchFleetInventory(): Promise<FleetInventory> {
 
 export async function fetchFleetImages(): Promise<FleetImages> {
   const body = await readFleet<Partial<FleetImages>>('/api/images/fleet', 'the fleet images');
-  return { images: body.images ?? [], error: body.error };
+  const images = body.images ?? [];
+  return {
+    images,
+    total: body.total ?? images.length,
+    truncated: body.truncated,
+    error: body.error,
+  };
 }
 
 export async function fetchFleetReleases(): Promise<HelmReleases> {

@@ -39,6 +39,9 @@ func mergeCounts(found []clusterAnswer[api.ResourceCounts]) api.FleetInventory {
 		for what, why := range one.answer.Errors {
 			trouble = append(trouble, one.context+" "+what+": "+why)
 		}
+		if one.failure != "" {
+			trouble = append(trouble, one.context+": "+one.failure)
+		}
 	}
 	slices.SortStableFunc(merged.Kinds, func(left, right api.FleetKind) int {
 		if left.Total != right.Total {
@@ -80,6 +83,9 @@ func mergeImages(found []clusterAnswer[imageAnswer]) api.FleetImages {
 		if one.answer.err != "" {
 			trouble = append(trouble, one.context+": "+one.answer.err)
 		}
+		if one.failure != "" {
+			trouble = append(trouble, one.context+": "+one.failure)
+		}
 	}
 	out := make([]api.FleetImage, 0, len(held))
 	for _, one := range held {
@@ -88,11 +94,18 @@ func mergeImages(found []clusterAnswer[imageAnswer]) api.FleetImages {
 		out = append(out, *one)
 	}
 	slices.SortStableFunc(out, byUse)
-	if len(out) > fleetImageCap {
+	total := len(out)
+	cut := total > fleetImageCap
+	if cut {
 		out = out[:fleetImageCap]
 	}
 	slices.Sort(trouble)
-	return api.FleetImages{Images: out, Error: strings.Join(trouble, " · ")}
+	return api.FleetImages{
+		Images:    out,
+		Total:     total,
+		Truncated: cut,
+		Error:     strings.Join(trouble, " · "),
+	}
 }
 
 func countImages(

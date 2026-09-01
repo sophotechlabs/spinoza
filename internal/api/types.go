@@ -351,8 +351,10 @@ type FleetImage struct {
 }
 
 type FleetImages struct {
-	Images []FleetImage `json:"images"`
-	Error  string       `json:"error,omitempty"`
+	Images    []FleetImage `json:"images"`
+	Total     int          `json:"total"`
+	Truncated bool         `json:"truncated,omitempty"`
+	Error     string       `json:"error,omitempty"`
 }
 
 type FleetOverview struct {

@@ -157,6 +157,35 @@ describe('the fleet view', () => {
     expect(screen.getByText('nginx is at 1.25 · 1.27')).toBeTruthy();
   });
 
+  it('says when the image list stopped at its cap', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      '/api/overview/fleet': { clusters: [], nodes: nodes(0, 0), pods: pods(0, 0, false) },
+      '/api/images/fleet': {
+        images: [
+          {
+            image: 'nginx:1.27',
+            repo: 'nginx',
+            tag: '1.27',
+            pods: 3,
+            clusters: [MK1],
+          },
+        ],
+        total: 1200,
+        truncated: true,
+      },
+    });
+    render(<Fleet onPick={vi.fn()} />);
+    await screen.findByText('Everything open');
+
+    await user.click(screen.getByRole('button', { name: 'Images' }));
+
+    expect(await screen.findByText('Showing 1 of 1200 images.')).toBeTruthy();
+  });
+
   it('says so when what is on the clusters cannot be read', async () => {
     const user = userEvent.setup();
     act(() => {

@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -198,6 +200,24 @@ func TestWhatIsUnwellIsCountedAcrossTheFleet(t *testing.T) {
 	}
 }
 
+func TestAClusterFailureIsNamedInTheFleetInventory(t *testing.T) {
+	got := mergeCounts([]clusterAnswer[api.ResourceCounts]{
+		{
+			cluster: "mk1",
+			context: "p-mk1",
+			answer:  api.ResourceCounts{Counts: map[string]int{"/v1/pods": 20}},
+		},
+		{cluster: "mk2", context: "p-mk2", failure: "panicked: informer cache changed"},
+	})
+
+	if !strings.Contains(got.Error, "p-mk2") || !strings.Contains(got.Error, "panicked") {
+		t.Fatalf("error = %q, want the cluster and its failure", got.Error)
+	}
+	if len(got.Kinds) != 1 || got.Kinds[0].Total != 20 {
+		t.Fatalf("kinds = %+v, want the cluster that answered preserved", got.Kinds)
+	}
+}
+
 func podWith(images ...string) *unstructured.Unstructured {
 	containers := make([]any, 0, len(images))
 	for _, image := range images {
@@ -282,6 +302,65 @@ func TestAClusterWhosePodsCouldNotBeReadIsNamed(t *testing.T) {
 
 	if got.Error != "p-mk2: forbidden" {
 		t.Fatalf("error = %q", got.Error)
+	}
+}
+
+func TestAClusterFailureIsNamedInTheFleetImages(t *testing.T) {
+	got := mergeImages([]clusterAnswer[imageAnswer]{
+		{
+			cluster: "mk1",
+			context: "p-mk1",
+			answer:  imageAnswer{pods: []*unstructured.Unstructured{podWith("nginx:1.27")}},
+		},
+		{cluster: "mk2", context: "p-mk2", failure: "panicked: informer cache changed"},
+	})
+
+	if !strings.Contains(got.Error, "p-mk2") || !strings.Contains(got.Error, "panicked") {
+		t.Fatalf("error = %q, want the cluster and its failure", got.Error)
+	}
+	if len(got.Images) != 1 {
+		t.Fatalf("images = %+v, want the cluster that answered preserved", got.Images)
+	}
+}
+
+func TestAFleetImageListThatStoppedAtTheCapSaysSo(t *testing.T) {
+	images := make([]string, 0, fleetImageCap+1)
+	for at := range fleetImageCap + 1 {
+		images = append(images, fmt.Sprintf("ghcr.io/acme/app-%04d:1", at))
+	}
+	got := mergeImages([]clusterAnswer[imageAnswer]{
+		{
+			cluster: "mk1",
+			context: "p-mk1",
+			answer:  imageAnswer{pods: []*unstructured.Unstructured{podWith(images...)}},
+		},
+	})
+
+	if len(got.Images) != fleetImageCap {
+		t.Fatalf("images = %d, want the cap of %d", len(got.Images), fleetImageCap)
+	}
+	if !got.Truncated {
+		t.Fatal("a list cut at the cap came back marked complete")
+	}
+	if got.Total != fleetImageCap+1 {
+		t.Fatalf("total = %d, want %d", got.Total, fleetImageCap+1)
+	}
+}
+
+func TestAFleetImageListInsideTheCapIsNotMarkedCut(t *testing.T) {
+	got := mergeImages([]clusterAnswer[imageAnswer]{
+		{
+			cluster: "mk1",
+			context: "p-mk1",
+			answer:  imageAnswer{pods: []*unstructured.Unstructured{podWith("nginx:1.27")}},
+		},
+	})
+
+	if got.Truncated {
+		t.Fatal("a list inside the cap was marked cut")
+	}
+	if got.Total != 1 {
+		t.Fatalf("total = %d, want 1", got.Total)
 	}
 }
 
