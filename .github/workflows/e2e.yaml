@@ -5,12 +5,6 @@ on:
     branches:
       - main
   pull_request:
-    paths-ignore:
-      - .release-please-manifest.json
-      - CHANGELOG.md
-      - deploy/helm/spinoza/Chart.yaml
-      - wails.json
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,58 +14,179 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  core:
+  select:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    outputs:
+      groups: ${{ steps.groups.outputs.groups }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: node
+      - id: groups
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          args=(--base "$BASE" --head "$HEAD")
+          if [[ "$HEAD_REF" == release-please--branches--main* ]]; then
+            args+=(--all)
+          fi
+          if [ "$EVENT" = push ]; then
+            args+=(--push)
+          fi
+          changed=$(git diff --name-only "$BASE...$HEAD" 2>/dev/null || true)
+          if printf '%s\n' "$changed" | grep -qx '.release-please-manifest.json'; then
+            args+=(--all)
+          fi
+          selected=$(node e2e/scripts/select-groups.mjs "${args[@]}")
+          groups=$(printf '%s' "$selected" | jq -c '[.include[].group]')
+          echo "groups=$groups" >> "$GITHUB_OUTPUT"
+          printf 'Selected groups: %s\n' "$groups" >> "$GITHUB_STEP_SUMMARY"
+
+  suite-contract:
+    needs: select
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
+          install_args: node
+      - run: node e2e/scripts/validate-suite.mjs
+
+  browser:
+    needs: select
+    name: ${{ matrix.group.id }} / ${{ matrix.browser }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.group.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        browser:
+          - chromium
+          - firefox
+          - webkit
+        group:
+          - id: foundation-security
+            profile: core
+            timeout: 45
+          - id: navigation-visual-a11y
+            profile: full
+            timeout: 90
+          - id: resources-live-tables
+            profile: full
+            timeout: 90
+          - id: inspect-compare-rbac-topology
+            profile: full
+            timeout: 90
+          - id: mutations-protection-history
+            profile: core
+            timeout: 75
+          - id: streams-terminals-forwards
+            profile: core
+            timeout: 75
+          - id: checks-issues-worklist
+            profile: core
+            timeout: 75
+          - id: helm
+            profile: core
+            timeout: 90
+          - id: gitops
+            profile: full
+            timeout: 120
+          - id: observability-traffic
+            profile: core
+            timeout: 90
+          - id: multicluster-fleet
+            profile: full
+            timeout: 120
+          - id: resilience-capacity-soak
+            profile: full
+            timeout: 120
+    env:
+      SPINOZA_KIND_CLUSTER: e2e-${{ matrix.group.id }}-${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: contains(fromJSON(needs.select.outputs.groups), matrix.group.id)
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        if: contains(fromJSON(needs.select.outputs.groups), matrix.group.id)
+        with:
           install_args: just node go kind kubectl helm
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        if: contains(fromJSON(needs.select.outputs.groups), matrix.group.id)
         with:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
             ~/.cache/ms-playwright
-          key: e2e-${{ runner.os }}-${{ hashFiles('go.sum', 'e2e/package-lock.json') }}
-          restore-keys: e2e-${{ runner.os }}-
-
-      - run: just test-e2e
-
+          key: e2e-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('go.sum', 'e2e/package-lock.json') }}
+          restore-keys: e2e-${{ runner.os }}-${{ matrix.browser }}-
+      - if: contains(fromJSON(needs.select.outputs.groups), matrix.group.id)
+        run: just test-e2e-group '${{ matrix.group.id }}' '${{ matrix.browser }}'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        if: failure()
+        if: failure() && contains(fromJSON(needs.select.outputs.groups), matrix.group.id)
         with:
-          name: e2e-core-report
-          path: e2e/playwright-report
-          retention-days: 7
+          name: e2e-${{ matrix.group.id }}-${{ matrix.browser }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            e2e/.tmp/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+      - run: just cluster-down
+        if: always() && contains(fromJSON(needs.select.outputs.groups), matrix.group.id)
 
-  full:
+  cluster-mode-auth:
+    needs: select
+    if: contains(fromJSON(needs.select.outputs.groups), 'cluster-mode-auth')
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
-          install_args: just node go kind kubectl helm
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-            ~/.cache/ms-playwright
-          key: e2e-${{ runner.os }}-${{ hashFiles('go.sum', 'e2e/package-lock.json') }}
-          restore-keys: e2e-${{ runner.os }}-
+          install_args: just go kind kubectl helm
+      - run: just test-cluster-mode
+      - run: just cluster-mode-down
+        if: always()
 
-      - run: just test-e2e-full
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        if: failure()
+  mcp-cli:
+    needs: select
+    if: contains(fromJSON(needs.select.outputs.groups), 'mcp-cli')
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          name: e2e-full-report
-          path: e2e/playwright-report
-          retention-days: 7
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just go kind kubectl helm
+      - run: just test-integration MCP
+      - run: just cluster-down
+        if: always()
+
+  distribution-desktop-install:
+    needs: select
+    if: contains(fromJSON(needs.select.outputs.groups), 'distribution-desktop-install')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just yq
+      - run: just test-packaging test-verify-archives test-uninstall

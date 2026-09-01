@@ -1,9 +1,8 @@
 on:
   push:
-  workflow_dispatch:
 
 jobs:
-  core:
+  smoke:
     runs-on: docker
     container:
       image: infra-soph-ci-toolbox
@@ -11,28 +10,11 @@ jobs:
     env:
       KIND_EXPERIMENTAL_DOCKER_NETWORK: ci
       SPINOZA_KIND_INTERNAL: '1'
-      SPINOZA_KIND_CLUSTER: spinoza-forgejo-core
+      SPINOZA_KIND_CLUSTER: spinoza-forgejo-smoke
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - run: just test-e2e
-      - run: just cluster-down
-        if: always()
-
-  full:
-    runs-on: docker
-    container:
-      image: infra-soph-ci-toolbox
-      options: --volume /var/run/docker.sock:/var/run/docker.sock
-    env:
-      KIND_EXPERIMENTAL_DOCKER_NETWORK: ci
-      SPINOZA_KIND_INTERNAL: '1'
-      SPINOZA_KIND_CLUSTER: spinoza-forgejo-full
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - run: just test-e2e-full
+      - run: just test-e2e-group foundation-security chromium
       - run: just cluster-down
         if: always()
