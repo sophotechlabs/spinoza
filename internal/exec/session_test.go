@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -100,6 +102,12 @@ func (s *stubStreamer) recorded() ([]byte, []Size, Request, []string) {
 
 func noop(error) {}
 
+type panicStreamer struct{}
+
+func (panicStreamer) Stream(context.Context, Request, Options) error {
+	panic("streamer panicked")
+}
+
 func TestStartRunsShellAndForwardsStdin(t *testing.T) {
 	streamer := newStubStreamer()
 	var out bytes.Buffer
@@ -159,6 +167,32 @@ func TestStartReportsStreamError(t *testing.T) {
 	}
 	sess.Close()
 	sess.Close()
+}
+
+func TestStartReportsAStreamerPanicAsUnexpectedTermination(t *testing.T) {
+	seen := make(chan error, 1)
+	sess := start(t.Context(), panicStreamer{}, Request{}, io.Discard, func(err error) {
+		seen <- err
+	})
+
+	done := <-sess.Done()
+
+	if done == nil || !strings.Contains(done.Error(), "ended unexpectedly") {
+		t.Fatalf("done = %v, want an unexpected termination", done)
+	}
+	callback := <-seen
+	if callback == nil || callback.Error() != done.Error() {
+		t.Fatalf("callback = %v, want %v", callback, done)
+	}
+}
+
+func TestARequestedCommandReplacesTheDefaultShell(t *testing.T) {
+	want := []string{"env", "sh", "-l"}
+	got := commandOf(Request{Command: want})
+
+	if !slices.Equal(got, want) {
+		t.Fatalf("command = %v, want %v", got, want)
+	}
 }
 
 func TestResizeKeepsOnlyTheNewestSize(t *testing.T) {
