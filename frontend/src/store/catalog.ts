@@ -44,6 +44,11 @@ export function useCategories(): Category[] {
   return useCatalogStore((state) => held(state.categories, on, NONE));
 }
 
+export function useCatalogKnown(): boolean {
+  const on = useActiveCluster();
+  return useCatalogStore((state) => Object.hasOwn(state.categories, on));
+}
+
 export function useCounts(): Partial<Record<string, number>> {
   const on = useActiveCluster();
   return useCatalogStore((state) => held(state.counts, on, NO_COUNTS));

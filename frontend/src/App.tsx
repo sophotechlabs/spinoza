@@ -38,7 +38,7 @@ import { EVERY_NAMESPACE, ONLY_DEFAULT } from './lib/settings';
 import { namespaceAnswered, useSettingsStore } from './store/settings';
 import { podsIn, worthAsking } from './lib/namespaceOffer';
 import { kindScope } from './lib/catalog';
-import { useCategories, useCounts } from './store/catalog';
+import { useCatalogKnown, useCategories, useCounts } from './store/catalog';
 import { useSubLimit } from './store/resources';
 import type { Chip } from './lib/filterChips';
 import { chipsKey, nameChips } from './lib/filterChips';
@@ -47,6 +47,7 @@ import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
 import { revealDetails, revealPanel } from './store/panels';
 import { askToast, notifyError, notifyOk } from './store/toasts';
+import { gitopsAbsence } from './lib/gitops';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -187,6 +188,7 @@ export default function App() {
   }
 
   const categories = useCategories();
+  const catalogKnown = useCatalogKnown();
   const scope = useMemo(() => kindScope(categories, route.resource), [categories, route.resource]);
 
   const { subscribe, unsubscribe, loadMore, subscribeLogs, unsubscribeLogs } = feed;
@@ -623,6 +625,16 @@ export default function App() {
         <Traffic />
       </Suspense>
     );
+  }
+  if (catalogKnown) {
+    const absent = gitopsAbsence(route.view, categories);
+    if (absent !== null) {
+      mainArea = (
+        <div className="flex h-full items-center justify-center text-xs text-fg-muted">
+          {absent}
+        </div>
+      );
+    }
   }
 
   return (

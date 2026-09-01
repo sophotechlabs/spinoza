@@ -463,6 +463,7 @@ import { useContextsStore } from '../src/store/contexts';
 import { clearRecents, rememberObject } from '../src/store/recents';
 
 import { clearCatalog } from '../src/store/catalog';
+import { CLUSTER_ABSENCE } from '../src/lib/gitops';
 import { chipsOf, useFiltersStore } from '../src/store/filters';
 import { adoptClusters, useClustersStore } from '../src/store/clusters';
 import { usePanelsStore } from '../src/store/panels';
@@ -623,7 +624,7 @@ export function oneCluster(context: string): unknown {
   };
 }
 
-function stubFetch(pods?: number): void {
+function stubFetch(pods?: number, catalog: Category[] = categories): void {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation((url: string) => {
@@ -690,7 +691,7 @@ function stubFetch(pods?: number): void {
           json: () => Promise.resolve({ hits: [clusterHit], truncated: false }),
         });
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories: catalog }) });
     }),
   );
 }
@@ -734,6 +735,22 @@ beforeEach(() => {
   useNamespaceStore.getState().reset();
   clearCatalog();
   adoptClusters(oneCluster('kind-dev') as ClusterList);
+});
+
+describe('a GitOps view whose controller is absent', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('explains the missing controller instead of rendering an empty view', async () => {
+    stubFetch(undefined, categories.slice(0, 2));
+    openAt('#context=kind-dev&view=gitops');
+
+    render(<App />);
+
+    expect(await screen.findByText(CLUSTER_ABSENCE.flux)).toBeInTheDocument();
+    expect(screen.queryByTestId('gitops-graph')).not.toBeInTheDocument();
+  });
 });
 
 describe('the namespace offer, once per cluster', () => {

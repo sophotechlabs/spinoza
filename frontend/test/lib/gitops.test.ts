@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { argoInstalled, fluxInstalled } from '../../src/lib/gitops';
+import { CLUSTER_ABSENCE, argoInstalled, fluxInstalled, gitopsAbsence } from '../../src/lib/gitops';
 import { makeCategory, makeDescriptor } from '../helpers';
+import { ARGO_VIEWS, FLUX_VIEWS } from '../../src/lib/types';
 
 const plain = [
   makeCategory('Workloads', [
@@ -62,5 +63,25 @@ describe('argoInstalled', () => {
 
   it('is true once argo types are discovered', () => {
     expect(argoInstalled(argo)).toBe(true);
+  });
+});
+
+describe('gitopsAbsence', () => {
+  it('gives every Flux view the same missing-controller sentence', () => {
+    for (const view of FLUX_VIEWS) {
+      expect(gitopsAbsence(view, plain)).toBe(CLUSTER_ABSENCE.flux);
+      expect(gitopsAbsence(view, flux)).toBeNull();
+    }
+  });
+
+  it('gives every Argo CD view the same missing-controller sentence', () => {
+    for (const view of ARGO_VIEWS) {
+      expect(gitopsAbsence(view, plain)).toBe(CLUSTER_ABSENCE.argo);
+      expect(gitopsAbsence(view, argo)).toBeNull();
+    }
+  });
+
+  it('does not call an unrelated view missing', () => {
+    expect(gitopsAbsence('issues', plain)).toBeNull();
   });
 });

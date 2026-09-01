@@ -24,7 +24,7 @@ import {
   sectionOpen,
   writeSections,
 } from '../lib/sidebarState';
-import { argoInstalled, fluxInstalled } from '../lib/gitops';
+import { CLUSTER_ABSENCE, argoInstalled, fluxInstalled } from '../lib/gitops';
 import { useTrafficProbe } from '../lib/useTrafficProbe';
 import { useTrafficSupport } from '../store/traffic';
 import { kindLabels } from '../lib/kindLabels';
@@ -43,7 +43,6 @@ const TOP_VIEWS: View[] = ['issues', 'topology', 'helm', 'checks', 'rbac', 'hist
 
 const CLUSTER_CATEGORY = 'Cluster';
 
-const NOT_INSTALLED = 'not found in this cluster';
 const BASE_DISCOVERY_BACKOFF_MS = 500;
 const MAX_DISCOVERY_BACKOFF_MS = 5000;
 const MAX_DISCOVERY_ATTEMPTS = 6;
@@ -207,7 +206,7 @@ function trafficTitle(support: TrafficSupport): string | undefined {
   if (support.available) {
     return support.source;
   }
-  return support.reason ?? `Traffic is ${NOT_INSTALLED}`;
+  return support.reason ?? CLUSTER_ABSENCE.traffic;
 }
 
 function engineMark(found: boolean, open: boolean): string {
@@ -404,7 +403,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           <button
             type="button"
             disabled={!flux}
-            title={flux ? undefined : `Flux is ${NOT_INSTALLED}`}
+            title={flux ? undefined : CLUSTER_ABSENCE.flux}
             aria-expanded={flux && sectionOpen(sections, FLUX_SECTION)}
             onClick={() => {
               toggle(FLUX_SECTION);
@@ -440,7 +439,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
           <button
             type="button"
             disabled={!argo}
-            title={argo ? undefined : `Argo CD is ${NOT_INSTALLED}`}
+            title={argo ? undefined : CLUSTER_ABSENCE.argo}
             aria-expanded={argo && sectionOpen(sections, ARGO_SECTION)}
             onClick={() => {
               toggle(ARGO_SECTION);
