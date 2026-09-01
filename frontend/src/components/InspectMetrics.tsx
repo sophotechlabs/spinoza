@@ -106,9 +106,14 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
 
   useEffect(() => {
     let live = true;
+    let inFlight = false;
     setError(null);
 
     function load() {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       fetchMetricHistory(namespace, pod, span)
         .then((next) => {
           if (!live) {
@@ -123,6 +128,9 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           }
           setHistory(null);
           setError(errorMessage(err));
+        })
+        .finally(() => {
+          inFlight = false;
         });
     }
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { activateCluster, closeCluster, clusterFailure } from '../lib/clusters';
 import { colorVar } from '../lib/clusterColor';
 import { attachedTo, forgetTab, tabWidth } from '../lib/tabs';
-import { nameOf, useActiveCluster, useClustersStore, useTabs } from '../store/clusters';
+import { nameOf, useActiveCluster, useTabs } from '../store/clusters';
 import type { Tab } from '../store/clusters';
 import TabMenu from './TabMenu';
 import { useClusterHealthStore } from '../store/clusterHealth';
@@ -85,13 +85,13 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
     if (tab.id === active) {
       return;
     }
-    useClustersStore.getState().focus(tab.id);
-    onShown();
     try {
       await activateCluster(tab.id);
     } catch (err: unknown) {
       notifyError(`Switching to ${tab.context}: ${clusterFailure(err, 'the request failed')}`);
+      return;
     }
+    onShown();
   }
 
   async function drop(tab: Tab) {

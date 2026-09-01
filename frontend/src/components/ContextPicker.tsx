@@ -102,17 +102,26 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   }, [attempt, setList]);
 
   useEffect(() => {
+    let live = true;
+    let inFlight = false;
     const timer = setInterval(() => {
-      if (busy || sessionExpired()) {
+      if (busy || inFlight || sessionExpired()) {
         return;
       }
+      inFlight = true;
       fetchContexts()
         .then((found) => {
-          setList(found);
+          if (live) {
+            setList(found);
+          }
         })
-        .catch(() => undefined);
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = false;
+        });
     }, REFRESH_MS);
     return () => {
+      live = false;
       clearInterval(timer);
     };
   }, [busy, setList]);

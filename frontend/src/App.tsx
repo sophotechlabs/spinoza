@@ -517,28 +517,30 @@ export default function App() {
   }
 
   async function switchTo(cluster: string, ref: ObjectRef | null) {
+    try {
+      await activateCluster(cluster);
+    } catch (err: unknown) {
+      const state = useClustersStore.getState();
+      const context = contextOf(state.tabs, cluster);
+      notifyError(`Switching to ${context}: ${switchFailed(err)}`);
+      return;
+    }
     const state = useClustersStore.getState();
-    state.focus(cluster);
     bumpClusterEpoch();
     const context = contextOf(state.tabs, cluster);
     if (ref === null) {
       replace(state.routes[cluster] ?? blankRoute(context));
-    } else {
-      rememberObject(ref);
-      revealDetails();
-      replace({
-        context,
-        view: 'issues',
-        resource: null,
-        selection: ref,
-        release: null,
-      });
+      return;
     }
-    try {
-      await activateCluster(cluster);
-    } catch (err: unknown) {
-      notifyError(`Switching to ${context}: ${switchFailed(err)}`);
-    }
+    rememberObject(ref);
+    revealDetails();
+    replace({
+      context,
+      view: 'issues',
+      resource: null,
+      selection: ref,
+      release: null,
+    });
   }
 
   function handleSelectRow(row: Row) {

@@ -172,7 +172,12 @@ export function useArgo(): ArgoState {
 
   useEffect(() => {
     let live = true;
+    let inFlight = false;
     function load() {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       fetchArgo()
         .then((found) => {
           if (live) {
@@ -184,6 +189,9 @@ export function useArgo(): ArgoState {
           if (live) {
             setError(err instanceof Error ? err.message : 'the argo request failed');
           }
+        })
+        .finally(() => {
+          inFlight = false;
         });
     }
     load();

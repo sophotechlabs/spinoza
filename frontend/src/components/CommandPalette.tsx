@@ -96,13 +96,13 @@ export default function CommandPalette({
   }, [open]);
 
   useEffect(() => {
+    asked.current += 1;
+    const mine = asked.current;
     if (!open || !worthSearching(query)) {
       setHits([]);
       setPartial(false);
       return;
     }
-    asked.current += 1;
-    const mine = asked.current;
     const timer = setTimeout(() => {
       searchObjects(query, several)
         .then((found) => {
@@ -115,6 +115,7 @@ export default function CommandPalette({
         .catch(() => {
           if (asked.current === mine) {
             setHits([]);
+            setPartial(false);
           }
         });
     }, SEARCH_DELAY_MS);
