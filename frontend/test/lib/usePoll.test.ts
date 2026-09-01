@@ -194,6 +194,36 @@ describe('usePoll', () => {
     expect(result.current.askedFor).toBe('second');
   });
 
+  it('does not present an old request scope failure as the new scopes failure', async () => {
+    let scope = 'first';
+    let reject: (reason: unknown) => void = () => undefined;
+    const fetcher = vi.fn(() => {
+      if (scope === 'first') {
+        return Promise.reject(new Error('first failed'));
+      }
+      return new Promise<string>((_resolve, fail) => {
+        reject = fail;
+      });
+    });
+    const { result, rerender } = renderHook(
+      ({ resetKey }: { resetKey: string }) => usePoll(fetcher, options({ resetKey })),
+      { initialProps: { resetKey: 'first' } },
+    );
+    await waitFor(() => {
+      expect(result.current.error).toBe('first failed');
+    });
+
+    scope = 'second';
+    rerender({ resetKey: 'second' });
+
+    expect(result.current.error).toBeNull();
+    await act(async () => {
+      reject(new Error('second failed'));
+      await Promise.resolve();
+    });
+    expect(result.current.error).toBe('second failed');
+  });
+
   it('refetches without dropping the data when the refresh key moves', async () => {
     const fetcher = vi.fn().mockResolvedValue('one');
     const { result, rerender } = renderHook(

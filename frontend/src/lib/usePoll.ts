@@ -36,6 +36,7 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
   const epoch = useClusterEpoch();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorAskedFor, setErrorAskedFor] = useState(resetKey);
   const [reloads, setReloads] = useState(0);
   const [lastEpoch, setLastEpoch] = useState(epoch);
   const [askedFor, setAskedFor] = useState(resetKey);
@@ -69,6 +70,7 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
       } catch (err: unknown) {
         if (mounted) {
           setError(messageOf(err, fallback));
+          setErrorAskedFor(resetKey);
         }
       } finally {
         inFlight = false;
@@ -92,10 +94,14 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
   if (askedFor !== resetKey) {
     visible = null;
   }
+  let visibleError = error;
+  if (errorAskedFor !== resetKey) {
+    visibleError = null;
+  }
   let stale = false;
-  if (visible !== null && error !== null) {
+  if (visible !== null && visibleError !== null) {
     stale = true;
   }
 
-  return { data: visible, askedFor, error, stale, reload };
+  return { data: visible, askedFor, error: visibleError, stale, reload };
 }
