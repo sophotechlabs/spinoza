@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-artifacts
@@ -16,6 +16,8 @@ concurrency:
 jobs:
   version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       pending: ${{ steps.read.outputs.pending }}
       sha: ${{ steps.read.outputs.sha }}

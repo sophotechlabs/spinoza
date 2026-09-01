@@ -13,10 +13,9 @@ func TestReleaseArtifactsRunOnEveryMainPush(t *testing.T) {
 }
 
 func TestReleaseDetectionCanSeeDrafts(t *testing.T) {
-	workflow := readYAML[struct {
-		Permissions map[string]string `yaml:"permissions"`
-	}](t, ".github/workflows/release-artifacts.yaml")
-	if workflow.Permissions["contents"] != "write" {
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
+	version := requireJob(t, workflow, "version")
+	if version.Permissions["contents"] != "write" {
 		t.Fatal("release detection cannot see draft releases")
 	}
 }
