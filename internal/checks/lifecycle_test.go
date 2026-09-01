@@ -437,6 +437,23 @@ func TestProbesHoldingValuesOfDifferentTypesAreNotIdentical(t *testing.T) {
 	}
 }
 
+func TestProbesWithDifferentHTTPHeadersAreNotIdentical(t *testing.T) {
+	found := report(t, settledDeployment(settledPod(nil, settledContainer(map[string]any{
+		"livenessProbe": map[string]any{"httpGet": map[string]any{
+			"port":        int64(8080),
+			"httpHeaders": []any{map[string]any{"name": "X-Probe", "value": "live"}},
+		}},
+		"readinessProbe": map[string]any{"httpGet": map[string]any{
+			"port":        int64(8080),
+			"httpHeaders": []any{map[string]any{"name": "X-Probe", "value": "ready"}},
+		}},
+	}))))
+
+	if findingCount(t, found, "probes-identical") != 0 {
+		t.Fatal("probes with different HTTP headers were called identical")
+	}
+}
+
 func TestAProbeWithNoRecognisedHandlerIsIgnored(t *testing.T) {
 	found := report(t, settledDeployment(settledPod(nil, settledContainer(map[string]any{
 		"livenessProbe":  map[string]any{"initialDelaySeconds": int64(5)},
@@ -472,6 +489,16 @@ func TestAStrategyWithNoRollingUpdateBlockIsIgnored(t *testing.T) {
 
 	if findingCount(t, found, "max-unavailable-all") != 0 {
 		t.Fatal("a strategy with no rollingUpdate block was reported")
+	}
+}
+
+func TestARollingUpdateWithDefaultAvailabilityIsIgnored(t *testing.T) {
+	found := report(t, withSpec(settled(), "strategy", map[string]any{
+		"rollingUpdate": map[string]any{"maxSurge": "25%"},
+	}))
+
+	if findingCount(t, found, "max-unavailable-all") != 0 {
+		t.Fatal("an unset maxUnavailable was reported")
 	}
 }
 

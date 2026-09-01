@@ -2,6 +2,7 @@ package checks
 
 import (
 	"maps"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -233,7 +234,12 @@ func probesIdentical(_ Subject, container Container) (string, string) {
 }
 
 func sameValue(left, right any) bool {
-	return valueText(left) == valueText(right)
+	leftText := valueText(left)
+	rightText := valueText(right)
+	if leftText != "" || rightText != "" {
+		return leftText == rightText
+	}
+	return reflect.DeepEqual(left, right)
 }
 
 func valueText(value any) string {
