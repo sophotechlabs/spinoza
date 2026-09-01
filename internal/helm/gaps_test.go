@@ -51,6 +51,23 @@ func TestOnlyTheNewestRevisionOfEachReleaseSurvives(t *testing.T) {
 	}
 }
 
+func TestTheReleaseCacheForgetsObjectsThatAreNoLongerListed(t *testing.T) {
+	cache := newReleaseCache()
+	kept := storedRef{driver: DriverSecret, namespace: "apps", object: "kept", version: "2"}
+	removed := storedRef{driver: DriverSecret, namespace: "apps", object: "removed", version: "1"}
+	cache.put(kept, api.HelmRelease{Name: "kept"})
+	cache.put(removed, api.HelmRelease{Name: "removed"})
+
+	cache.keep([]storedRef{kept})
+
+	if _, ok := cache.get(removed); ok {
+		t.Fatal("an object missing from the latest list remained cached")
+	}
+	if release, ok := cache.get(kept); !ok || release.Name != "kept" {
+		t.Fatalf("the still-listed release was lost: %+v, %t", release, ok)
+	}
+}
+
 func TestAListFailureThatIsNotForbiddenStopsTheWalk(t *testing.T) {
 	cs := k8sfake.NewClientset(
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "apps"}},
