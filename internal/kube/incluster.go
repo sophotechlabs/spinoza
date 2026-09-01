@@ -25,8 +25,6 @@ func InCluster() bool {
 	return !errors.Is(err, restclient.ErrNotInCluster)
 }
 
-// WriteInClusterKubeconfig gives helm and kubectl a file to read, because both
-// stop falling back to the pod's own credentials the moment --as is passed.
 func WriteInClusterKubeconfig(dir string) (string, error) {
 	if dir == "" {
 		return "", errors.New("no directory to write the in-cluster kubeconfig into")

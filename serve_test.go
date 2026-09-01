@@ -199,3 +199,9 @@ func TestWhoHelmAndKubectlActAs(t *testing.T) {
 		})
 	}
 }
+
+func TestAServerNotServingAClusterWritesNoKubeconfig(t *testing.T) {
+	if got := toolKubeconfig(settings{}); got != "" {
+		t.Fatalf("kubeconfig = %q, want none when spinoza runs as your own window", got)
+	}
+}
