@@ -1,5 +1,115 @@
 # Changelog
 
+## [1.26.0](https://github.com/sophotechlabs/spinoza/compare/v1.25.0...v1.26.0) (2026-09-01)
+
+
+### Features
+
+* **access:** scope reads to the namespaces an account may list ([c9afead](https://github.com/sophotechlabs/spinoza/commit/c9afeadca617b8e037f742797121ddc09052a133))
+* **api:** carry partial check coverage, the issue total and the cluster wobble ([b5a42e6](https://github.com/sophotechlabs/spinoza/commit/b5a42e688007bf37442a0ae0c094e90cbd7f12d7))
+* **api:** carry the account's role and the namespaces it reads ([ab4df95](https://github.com/sophotechlabs/spinoza/commit/ab4df95231ca7370a739e5ff2c8e087a8c3e8cf2))
+* **auth:** add the identity, session and oidc package ([70e63fd](https://github.com/sophotechlabs/spinoza/commit/70e63fd450a839a737eb30158a89d961cb4113b0))
+* **cli:** serve a cluster to a team behind an identity provider ([7c8c50c](https://github.com/sophotechlabs/spinoza/commit/7c8c50c9fdef1fab84a01687369822159f630159))
+* **frontend:** sign in and show what the account reaches ([58dd4b8](https://github.com/sophotechlabs/spinoza/commit/58dd4b8fee7a45486f05e5ea57a582c67a83f68f))
+* **kube:** impersonate the signed-in account against the apiserver ([859e6f8](https://github.com/sophotechlabs/spinoza/commit/859e6f8cb410e7f7af5c0f207b661ff363763372))
+* **server:** gate every route on role, locality and cluster reach ([914c4b8](https://github.com/sophotechlabs/spinoza/commit/914c4b85fb10172b6fab161ae4579961d47ca2d6))
+
+
+### Bug Fixes
+
+* **access:** fail closed on unanswered reviews ([cd6d546](https://github.com/sophotechlabs/spinoza/commit/cd6d546f2e9825e741a0919d066e7bc8973d694a))
+* **atomicfile:** sync directory after replacement ([16e6951](https://github.com/sophotechlabs/spinoza/commit/16e6951cf285b108709dc36596871a784680ae86))
+* **auth:** enforce session maximum age ([d68c0ed](https://github.com/sophotechlabs/spinoza/commit/d68c0edef50e1f05bae001eca8ffe74a8d0c154e))
+* **auth:** enforce trusted proxy boundary ([1999a81](https://github.com/sophotechlabs/spinoza/commit/1999a817ef23e90aedf69cbad3d253261f2038c6))
+* **auth:** reject weak session secrets ([f8615d6](https://github.com/sophotechlabs/spinoza/commit/f8615d6b3e41e77f5932a25c1eb6813cde262798))
+* **auth:** restrict shared audit metadata ([ae28dbf](https://github.com/sophotechlabs/spinoza/commit/ae28dbf60ecf1a0ed40a9eef73e850d6fe7f39b6))
+* **auth:** validate trusted proxy requests ([9d1f001](https://github.com/sophotechlabs/spinoza/commit/9d1f0016f028ce7af79eccfe1d256cc64760a666))
+* **charts:** require modern TLS ([83f80f6](https://github.com/sophotechlabs/spinoza/commit/83f80f67dab7843397e6204e057fae14265b8269))
+* **checks:** align namespace counts ([86a8d35](https://github.com/sophotechlabs/spinoza/commit/86a8d35ffa99d593b6cdc84d38b84f35965abed7))
+* **checks:** key surveys by metrics state ([63129fe](https://github.com/sophotechlabs/spinoza/commit/63129feb75cb4c58432c2913b2abd0164f284328))
+* **checks:** read API removals from the k8s.io/api markers, keyed by kind ([798f329](https://github.com/sophotechlabs/spinoza/commit/798f329638a3ab6ac59cd77ac2eb9cb6d0ca9b55))
+* **checks:** reject non-boolean user rules ([47a0ff9](https://github.com/sophotechlabs/spinoza/commit/47a0ff9885915415188b4397a338c983693fd573))
+* **checks:** reject unreachable silencer rules ([4acfb19](https://github.com/sophotechlabs/spinoza/commit/4acfb19e3fd3121aea0e3751da1f2d964b294d27))
+* **checks:** report silencer evaluation errors ([2c54bd5](https://github.com/sophotechlabs/spinoza/commit/2c54bd513f210a3598100e4aeeb99a554f86092a))
+* **ci:** name uv where a Python tool needs it, and yq for the scope guard ([e2d8c23](https://github.com/sophotechlabs/spinoza/commit/e2d8c23d4ee255e98568f1dbe7c9f787d71ed6d9))
+* **ci:** prepare assets before vulnerability scans ([572d2a9](https://github.com/sophotechlabs/spinoza/commit/572d2a90c32d7dca3ffb802fac351c490299b8ac))
+* **ci:** satisfy Go lint checks ([82ee33d](https://github.com/sophotechlabs/spinoza/commit/82ee33dfd38c1d5450c1e244bfc2d4ab185fe5b8))
+* **ci:** scope every mise install, and stop counting a cut list as the whole ([f1393fd](https://github.com/sophotechlabs/spinoza/commit/f1393fdf32d71b89bdbf155a2e1435c6c3309c19))
+* **cluster:** require public URL origin ([ac44f0d](https://github.com/sophotechlabs/spinoza/commit/ac44f0d174bb1c37bc74cc274faf9d10dd3a507a))
+* **compare:** drop the spec fields each cluster allocates for itself ([1949ae9](https://github.com/sophotechlabs/spinoza/commit/1949ae9620cda99b06786e747fc13ed0a96f6497))
+* **fleet:** page merged check findings ([b887a51](https://github.com/sophotechlabs/spinoza/commit/b887a513eaca1cafacd79181db6923aaa399cb63))
+* **fleet:** preserve namespace provenance ([ac5688c](https://github.com/sophotechlabs/spinoza/commit/ac5688c8cafa67f44f2775efa820df8154fb0772))
+* **fleet:** report partial image inventory ([c745893](https://github.com/sophotechlabs/spinoza/commit/c74589361b903ca3028b6398f8ac76ae7050f2c4))
+* **frontend:** explain absent GitOps controllers ([8d001f0](https://github.com/sophotechlabs/spinoza/commit/8d001f0c32c9b58db95b1493fbacc24160cbbf70))
+* **frontend:** migrate custom check rules ([d7a0971](https://github.com/sophotechlabs/spinoza/commit/d7a0971c9f4d1963ced37bc8ee02d52225d36a65))
+* **frontend:** replace deprecated type matcher ([68f873a](https://github.com/sophotechlabs/spinoza/commit/68f873aab32ab3009ae06c638313f3ed54bc1808))
+* **frontend:** show fleet warning ([b26644f](https://github.com/sophotechlabs/spinoza/commit/b26644f8052f3138ce004145754b92aa61b05de4))
+* **health:** settle cluster verdict under one lock ([94a1bff](https://github.com/sophotechlabs/spinoza/commit/94a1bffed0a3f65f8b392558a75d46d9a3da0c5b))
+* **helm:** constrain repository network access ([6a8ef2e](https://github.com/sophotechlabs/spinoza/commit/6a8ef2e0384fe0960d88b218cfb45e69e0d34394))
+* **helm:** reuse cached repository indexes ([bb02a38](https://github.com/sophotechlabs/spinoza/commit/bb02a38dcfd1de6ad3d0c435aa04e6cbe0739f65))
+* **history:** persist action actors ([d7081bc](https://github.com/sophotechlabs/spinoza/commit/d7081bc2486c4048082298f5b35eba886242e758))
+* **history:** record action actors ([01a22df](https://github.com/sophotechlabs/spinoza/commit/01a22df162872834942c2699a4f1b5c7a93857e0))
+* **history:** record partial drains as failed ([8de3f25](https://github.com/sophotechlabs/spinoza/commit/8de3f25d68b25f7387b746642eca2d751e752d56))
+* **issues:** validate page cursors ([221d6a6](https://github.com/sophotechlabs/spinoza/commit/221d6a618bc4ddd0bbe7dcb883f4afc4bf6a9c58))
+* **mcp:** recheck cluster protection ([73cea28](https://github.com/sophotechlabs/spinoza/commit/73cea2838c1e61586fbe467a18b7bdde878f470b))
+* **release:** publish image and Helm chart ([ff8dd47](https://github.com/sophotechlabs/spinoza/commit/ff8dd47d3ab17ce3c0de0312bd824b6ea20d1e75))
+* **release:** verify release tags before creation ([8466f48](https://github.com/sophotechlabs/spinoza/commit/8466f483bda9b7d04cee146eeb6e2d608e9cee28))
+* **server:** avoid websocket shutdown delays ([602bbf6](https://github.com/sophotechlabs/spinoza/commit/602bbf6e7b8141d61bfcac59ce7fa17d1586fec4))
+* **server:** bound and revalidate live connections ([b69ec1f](https://github.com/sophotechlabs/spinoza/commit/b69ec1f11e1794f74c3e416a788db5fb8980e5d9))
+* **server:** count cluster label characters ([9f76dd3](https://github.com/sophotechlabs/spinoza/commit/9f76dd365f979e0e0bdefcc18ff754b269626244))
+* **server:** finish started writes and gate the node shell before it upgrades ([e1d5d5b](https://github.com/sophotechlabs/spinoza/commit/e1d5d5b3d032dfb7e769c1255a8e5bfc3a61ed5e))
+* **server:** limit websocket subscriptions ([189c894](https://github.com/sophotechlabs/spinoza/commit/189c8940795fb6c8560bb4b681246385a6ab5234))
+* **server:** minimize public ([520f936](https://github.com/sophotechlabs/spinoza/commit/520f936f173f5a32db8642b53a259cc0cfe01e3d))
+* **server:** release unresponsive websocket feeds ([dab5d76](https://github.com/sophotechlabs/spinoza/commit/dab5d760d276850e08d8fea8ca1fdd821ee65682))
+* **streams:** synchronize subscription access ([33ea429](https://github.com/sophotechlabs/spinoza/commit/33ea4297fd258a351d1a826acbf9cb0c708e1f8f))
+* **timeline:** resume saved recordings after restart ([902da76](https://github.com/sophotechlabs/spinoza/commit/902da76db657e127bca7b4de8b6ecb05b8973935))
+* **update:** reject oversized install scripts ([f911b5f](https://github.com/sophotechlabs/spinoza/commit/f911b5f48f79ac5c4e4c6c10f474dedfe472e958))
+
+
+### Miscellaneous
+
+* **security:** guard OpenPGP scanner exceptions ([ec534d0](https://github.com/sophotechlabs/spinoza/commit/ec534d045adfd136d0947c4bd69a0d04b44fa132))
+
+
+### CI
+
+* cancel superseded validation runs ([00598d9](https://github.com/sophotechlabs/spinoza/commit/00598d9d22de703e6e461772b08b3f00da796057))
+
+
+### Refactoring
+
+* **auth:** consolidate signed cookie handling ([881357c](https://github.com/sophotechlabs/spinoza/commit/881357c1b85ba477edf08f6af05a7d59d70b87ef))
+* **auth:** share signed cookie codec ([c375678](https://github.com/sophotechlabs/spinoza/commit/c37567854e923898217d415c553449e026ac2d2b))
+* **frontend:** share view labels ([6a093ab](https://github.com/sophotechlabs/spinoza/commit/6a093ab7569e53ca7b764518adb941dbb1f51f8c))
+* **server:** consolidate cluster key lookup ([50b06f6](https://github.com/sophotechlabs/spinoza/commit/50b06f6759c9fd0f1c4fe1803c0e05ceb0f950c0))
+* **server:** one door for cluster writes ([b9e964e](https://github.com/sophotechlabs/spinoza/commit/b9e964e370a1121b4c8cadb8098d8d7220ec7e81))
+
+
+### Tests
+
+* **access:** cover ([6b89662](https://github.com/sophotechlabs/spinoza/commit/6b8966211772d11baedac4dbb46d46edc9113d26))
+* **api:** refresh history wire contract ([9346daa](https://github.com/sophotechlabs/spinoza/commit/9346daa2766825a1430b7ffdaeb4ea750054d223))
+* **api:** support branded wire types ([844f82c](https://github.com/sophotechlabs/spinoza/commit/844f82c7d04e5d1cf2faaf886c1e58830ebda755))
+* **api:** update health wire contract ([4656104](https://github.com/sophotechlabs/spinoza/commit/46561045fb8e989caa11f524d672fb55d80c147a))
+* **auth:** cover custom CA trust ([537709d](https://github.com/sophotechlabs/spinoza/commit/537709db5e61fd4fe909cc3e3a5aafa93c8175cc))
+* **baseline:** cover legacy fingerprint data ([5565a6a](https://github.com/sophotechlabs/spinoza/commit/5565a6a81d4bcb3b3ea566327b9324638f672f62))
+* **charts:** allow deliberate TLS 1.0 fixture ([ac34385](https://github.com/sophotechlabs/spinoza/commit/ac343850e753f4fe8a498d2933f9e632513c5143))
+* **cluster:** cover dynamic client wiring ([04e1e1c](https://github.com/sophotechlabs/spinoza/commit/04e1e1c66d40a6d81937460eba0a9593c274f914))
+* **clustermode:** verify sso and impersonation against kind and keycloak ([dfeb3ba](https://github.com/sophotechlabs/spinoza/commit/dfeb3ba42eb0582c390ba10a9645c3acb624a983))
+* **counts:** cover capped failing totals ([7bd9399](https://github.com/sophotechlabs/spinoza/commit/7bd9399ddad4ef4a11127edf29a9eee9821db2e8))
+* **frontend:** cover polling scope resets ([8cb1a2b](https://github.com/sophotechlabs/spinoza/commit/8cb1a2b5dded7e3888f99b89e396a075dc497226))
+* **integration:** configure chart repository ([2685f65](https://github.com/sophotechlabs/spinoza/commit/2685f65b63e127606bf183c61104408ea0a7672b))
+* **resources:** configure delegated chart repository ([4f3951c](https://github.com/sophotechlabs/spinoza/commit/4f3951cd63e7d812fa422ad9f8d8cfec749eda9a))
+* **resources:** cover unanswered reviews ([98267c2](https://github.com/sophotechlabs/spinoza/commit/98267c2e1152328ec901073714b5e411aabf6da2))
+* **server:** cover local kubeconfig selection ([9b2b631](https://github.com/sophotechlabs/spinoza/commit/9b2b6310e1bb0ff335d114965fd3d08eba2cc2e8))
+* **server:** opt into anonymous cluster access ([aa2bed4](https://github.com/sophotechlabs/spinoza/commit/aa2bed4da79f7ec333d39d4b5695811efe1d74e8))
+* **server:** satisfy Go lint ([6c33481](https://github.com/sophotechlabs/spinoza/commit/6c334816c006c740c5c529887a45c742c2467e66))
+
+
+### Build
+
+* **helm:** ship the chart and image, and lint the chart in the gate ([197c712](https://github.com/sophotechlabs/spinoza/commit/197c71273f96cdff21c0735002c619d694e4ff22))
+
 ## [1.25.0](https://github.com/sophotechlabs/spinoza/compare/v1.24.1...v1.25.0) (2026-08-31)
 
 
