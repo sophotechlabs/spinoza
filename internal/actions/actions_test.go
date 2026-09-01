@@ -106,6 +106,20 @@ func serviceFor(client *dynamicfake.FakeDynamicClient, cs *k8sfake.Clientset) *S
 	return newWithDelay(client, cs, time.Millisecond)
 }
 
+func TestNewWiresTheClientsAndProductionRetryDelay(t *testing.T) {
+	dyn := dynClient()
+	cs := k8sfake.NewClientset()
+
+	service := New(dyn, cs)
+
+	if service.dyn != dyn || service.cs != cs {
+		t.Fatal("New returned a service with different Kubernetes clients")
+	}
+	if service.retryDelay != evictRetryDelay {
+		t.Fatalf("retry delay = %v, want %v", service.retryDelay, evictRetryDelay)
+	}
+}
+
 func TestSupported(t *testing.T) {
 	cases := []struct {
 		ref    api.ObjectRef

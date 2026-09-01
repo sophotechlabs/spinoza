@@ -3,6 +3,9 @@ package actions
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -16,7 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -489,6 +494,109 @@ func TestDrainReportsAFailedEviction(t *testing.T) {
 	}
 	if !strings.Contains(result.Message, "1 failed") {
 		t.Fatalf("message = %q", result.Message)
+	}
+}
+
+func TestCanceledEvictionReportsTheDrainDeadlineInsteadOfTheAPIError(t *testing.T) {
+	pod := replicaSetPod("web")
+	cs := k8sfake.NewClientset(pod)
+	recordEvictions(cs, func(string, int) error {
+		return apierrors.NewInternalError(errors.New("request interrupted"))
+	})
+	service := serviceFor(dynClient(newNode(false)), cs)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	outcome, reason := service.evictOne(ctx, pod)
+
+	if outcome != api.OutcomeFailed {
+		t.Fatalf("outcome = %q, want failed", outcome)
+	}
+	if !strings.Contains(reason, "ran out of time") {
+		t.Fatalf("reason = %q, want the drain deadline", reason)
+	}
+}
+
+func TestDrainLimitsConcurrentEvictions(t *testing.T) {
+	const pods = evictConcurrency + 5
+	plans := make([]podPlan, 0, pods)
+	for index := range pods {
+		pod := replicaSetPod(fmt.Sprintf("pod-%02d", index))
+		plans = append(plans, podPlan{
+			pod: pod,
+			outcome: api.PodOutcome{
+				Namespace: pod.Namespace,
+				Name:      pod.Name,
+				Outcome:   api.OutcomeEvict,
+			},
+		})
+	}
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() {
+		releaseOnce.Do(func() {
+			close(release)
+		})
+	})
+	reachedCap := make(chan struct{})
+	var capOnce sync.Once
+	active := 0
+	maximum := 0
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		active++
+		if active > maximum {
+			maximum = active
+		}
+		if active == evictConcurrency {
+			capOnce.Do(func() {
+				close(reachedCap)
+			})
+		}
+		mu.Unlock()
+		<-release
+		mu.Lock()
+		active--
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Success"}`))
+	}))
+	t.Cleanup(server.Close)
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	service := newWithDelay(dynClient(newNode(false)), cs, time.Millisecond)
+	done := make(chan []api.PodOutcome, 1)
+	go func() {
+		done <- service.evictAll(t.Context(), plans)
+	}()
+
+	select {
+	case <-reachedCap:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the eviction worker pool did not fill")
+	}
+	releaseOnce.Do(func() {
+		close(release)
+	})
+	outcomes := <-done
+
+	mu.Lock()
+	gotMaximum := maximum
+	mu.Unlock()
+	if gotMaximum != evictConcurrency {
+		t.Fatalf("maximum concurrent evictions = %d, want %d", gotMaximum, evictConcurrency)
+	}
+	if len(outcomes) != pods {
+		t.Fatalf("outcomes = %d, want %d", len(outcomes), pods)
+	}
+	for _, outcome := range outcomes {
+		if outcome.Outcome != api.OutcomeEvicted {
+			t.Fatalf("outcome for %s = %q, want evicted", outcome.Name, outcome.Outcome)
+		}
 	}
 }
 

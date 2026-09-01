@@ -2,14 +2,17 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -260,5 +263,26 @@ func TestTriggeringACronJobThatIsNotThereIsReported(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("a cron job that is not there was triggered anyway")
+	}
+}
+
+func TestTriggerReportsWhenTheJobCannotBeCreated(t *testing.T) {
+	client := dynClient(newCronJob(false))
+	client.PrependReactor("create", "jobs", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("jobs are forbidden")
+	})
+	service := serviceFor(client, k8sfake.NewClientset())
+
+	_, err := service.Do(context.Background(), Request{Ref: cronJobRef(), Action: Trigger}, stamp)
+
+	if err == nil || !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("error = %v, want the create refusal", err)
+	}
+	list, listErr := client.Resource(jobGVR).Namespace("shop").List(context.Background(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("list jobs: %v", listErr)
+	}
+	if len(list.Items) != 0 {
+		t.Fatalf("made %d jobs after the create was refused", len(list.Items))
 	}
 }
