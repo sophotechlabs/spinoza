@@ -93,6 +93,50 @@ func TestNothingIsLeftBehindWhenItWorks(t *testing.T) {
 	}
 }
 
+func TestTheContainingDirectoryIsSyncedAfterReplacement(t *testing.T) {
+	path := target(t)
+	saver := New()
+	steps := []string{}
+	saver.rename = func(from, to string) error {
+		steps = append(steps, "rename")
+		return os.Rename(from, to)
+	}
+	saver.syncDir = func(dir string) error {
+		steps = append(steps, "sync "+dir)
+		return nil
+	}
+
+	if err := saver.Save(path, "state-*.json", []byte("{}")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	want := []string{"rename", "sync " + filepath.Dir(path)}
+	if strings.Join(steps, "|") != strings.Join(want, "|") {
+		t.Fatalf("steps = %q, want %q", steps, want)
+	}
+}
+
+func TestADirectoryFlushFailureIsReportedAfterReplacement(t *testing.T) {
+	path := target(t)
+	saver := New()
+	saver.syncDir = func(string) error {
+		return errors.New("directory flush failed")
+	}
+
+	err := saver.Save(path, "state-*.json", []byte("new"))
+
+	if err == nil || !strings.Contains(err.Error(), "directory flush failed") {
+		t.Fatalf("error = %v, want the durability failure", err)
+	}
+	body, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read replacement: %v", readErr)
+	}
+	if string(body) != "new" {
+		t.Fatalf("body = %q, want the completed replacement", body)
+	}
+}
+
 func TestADirectoryThatCannotBeMadeIsReported(t *testing.T) {
 	saver := New()
 	saver.makeDir = func(string, os.FileMode) error {

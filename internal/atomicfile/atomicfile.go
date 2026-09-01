@@ -3,6 +3,7 @@ package atomicfile
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 const (
@@ -18,6 +19,7 @@ type Saver struct {
 	chmod   func(path string, mode os.FileMode) error
 	rename  func(from, to string) error
 	remove  func(path string) error
+	syncDir func(path string) error
 }
 
 func New() *Saver {
@@ -29,6 +31,7 @@ func New() *Saver {
 		chmod:   os.Chmod,
 		rename:  os.Rename,
 		remove:  os.Remove,
+		syncDir: syncDirectory,
 	}
 }
 
@@ -62,7 +65,7 @@ func (s *Saver) replace(file *os.File, path string, body []byte) error {
 		_ = s.remove(temp)
 		return renameErr
 	}
-	return nil
+	return s.syncDir(filepath.Dir(path))
 }
 
 func (s *Saver) fill(file *os.File, body []byte) error {
@@ -76,4 +79,16 @@ func (s *Saver) fill(file *os.File, body []byte) error {
 
 func Save(path, pattern string, body []byte) error {
 	return New().Save(path, pattern, body)
+}
+
+func syncDirectory(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dir.Close() }()
+	return dir.Sync()
 }
