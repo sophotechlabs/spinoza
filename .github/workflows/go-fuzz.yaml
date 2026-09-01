@@ -2,7 +2,14 @@ name: go-fuzz
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    paths-ignore:
+      - .release-please-manifest.json
+      - CHANGELOG.md
+      - deploy/helm/spinoza/Chart.yaml
+      - wails.json
   workflow_dispatch:
 
 permissions:

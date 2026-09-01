@@ -42,8 +42,12 @@ type wails struct {
 type workflowFile struct {
 	On struct {
 		Push struct {
-			Paths []string `yaml:"paths"`
+			Branches []string `yaml:"branches"`
+			Paths    []string `yaml:"paths"`
 		} `yaml:"push"`
+		PullRequest struct {
+			PathsIgnore []string `yaml:"paths-ignore"`
+		} `yaml:"pull_request"`
 	} `yaml:"on"`
 	Concurrency workflowConcurrency    `yaml:"concurrency"`
 	Jobs        map[string]workflowJob `yaml:"jobs"`
