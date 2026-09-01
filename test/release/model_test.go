@@ -42,20 +42,26 @@ type wails struct {
 type workflowFile struct {
 	On struct {
 		Push struct {
-			Branches []string `yaml:"branches"`
-			Paths    []string `yaml:"paths"`
+			Paths []string `yaml:"paths"`
 		} `yaml:"push"`
-		PullRequest struct {
-			PathsIgnore []string `yaml:"paths-ignore"`
-		} `yaml:"pull_request"`
 	} `yaml:"on"`
 	Concurrency workflowConcurrency    `yaml:"concurrency"`
 	Jobs        map[string]workflowJob `yaml:"jobs"`
 }
 
 type workflowConcurrency struct {
-	Group            string `yaml:"group"`
-	CancelInProgress bool   `yaml:"cancel-in-progress"`
+	Group            string         `yaml:"group"`
+	CancelInProgress workflowScalar `yaml:"cancel-in-progress"`
+}
+
+type workflowScalar string
+
+func (value *workflowScalar) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.ScalarNode {
+		return errors.New("workflow value is not a scalar")
+	}
+	*value = workflowScalar(node.Value)
+	return nil
 }
 
 type workflowJob struct {

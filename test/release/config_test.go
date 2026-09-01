@@ -28,11 +28,11 @@ func TestReleaseVersionsMatch(t *testing.T) {
 	}
 }
 
-func TestReleasePleaseCreatesTagsForDrafts(t *testing.T) {
+func TestReleasePleaseLeavesDraftTagCreationToPublication(t *testing.T) {
 	config := readJSON[releaseConfig](t, "release-please-config.json")
 	pkg := requirePackage(t, config)
-	if !pkg.ForceTag {
-		t.Fatal("release-please does not create tags for draft releases")
+	if pkg.ForceTag {
+		t.Fatal("release-please force-creates a tag before the draft can be published")
 	}
 }
 
