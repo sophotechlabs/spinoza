@@ -79,6 +79,26 @@ func TestAContainerThatHasNotRestartedYetIsNotACrashLoop(t *testing.T) {
 	}
 }
 
+func TestMalformedTerminationStateIsNotACrashLoop(t *testing.T) {
+	cases := []struct {
+		name       string
+		terminated map[string]any
+		entry      map[string]any
+	}{
+		{name: "missing exit code", terminated: map[string]any{}, entry: map[string]any{"restartCount": int64(2)}},
+		{name: "wrong exit code type", terminated: map[string]any{"exitCode": "1"}, entry: map[string]any{"restartCount": int64(2)}},
+		{name: "missing restart count", terminated: map[string]any{"exitCode": int64(1)}, entry: map[string]any{}},
+		{name: "wrong restart count type", terminated: map[string]any{"exitCode": int64(1)}, entry: map[string]any{"restartCount": "2"}},
+	}
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			if crashing(one.terminated, one.entry) {
+				t.Fatal("malformed state was treated as a crash loop")
+			}
+		})
+	}
+}
+
 func TestAnImagePullFailureCarriesTheMessage(t *testing.T) {
 	pod := newPod("web-2", withContainer("app", map[string]any{
 		"waiting": map[string]any{"reason": "ImagePullBackOff", "message": "pull access denied"},
@@ -318,6 +338,14 @@ func TestACrashLoopWithoutALastStateStillReports(t *testing.T) {
 	}
 }
 
+func TestACrashLoopWithMalformedLastStateUsesTheBareDetail(t *testing.T) {
+	entry := map[string]any{"lastState": map[string]any{"terminated": "not an object"}}
+
+	if got := crashDetail("app", entry); got != "container app keeps exiting" {
+		t.Fatalf("detail = %q, want the bare statement", got)
+	}
+}
+
 func TestACrashLoopNamesANonErrorTerminationReason(t *testing.T) {
 	pod := newPod("web-18", withContainerEntry(map[string]any{
 		"name":  "app",
@@ -380,5 +408,30 @@ func TestAPodConditionDatesItWhenNothingHasExitedYet(t *testing.T) {
 
 	if row.Since != testNow.Add(-4*time.Minute).UTC().Format(time.RFC3339) {
 		t.Fatalf("since = %q, want the scheduling attempt", row.Since)
+	}
+}
+
+func TestUnschedulableDetectionSkipsMalformedAndSatisfiedConditions(t *testing.T) {
+	pod := newPod("web-noise")
+	setNested(pod, []any{
+		"not a condition",
+		map[string]any{"type": "Ready", "status": "False"},
+		map[string]any{"type": "PodScheduled", "status": "True"},
+	}, "status", "conditions")
+
+	if found, ok := unschedulableSymptom(pod); ok {
+		t.Fatalf("symptom = %+v, want none", found)
+	}
+}
+
+func TestLastExitSkipsMalformedContainerState(t *testing.T) {
+	pod := newPod("web-noise")
+	setNested(pod, []any{
+		"not a status",
+		map[string]any{"lastState": map[string]any{"terminated": "not an object"}},
+	}, "status", "containerStatuses")
+
+	if got := lastExit(pod); !got.IsZero() {
+		t.Fatalf("last exit = %v, want none", got)
 	}
 }

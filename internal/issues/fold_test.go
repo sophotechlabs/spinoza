@@ -569,3 +569,41 @@ func TestAFoldTakesTheWorstOfWhateverItHolds(t *testing.T) {
 		})
 	}
 }
+
+func TestTallyCountsEverySeverityAndKeepsTheTotal(t *testing.T) {
+	rows := []api.Issue{
+		{Severity: api.SeverityFatal},
+		{Severity: api.SeverityFatal},
+		{Severity: api.SeverityDegraded},
+		{Severity: api.SeverityWarning},
+		{Severity: api.SeverityInfo},
+	}
+
+	got := Tally(rows)
+
+	if got.Total != 5 {
+		t.Fatalf("total = %d, want 5", got.Total)
+	}
+	if got.Fatal != 2 || got.Degraded != 1 || got.Warning != 1 {
+		t.Fatalf("tally = %+v, want 2 fatal, 1 degraded, and 1 warning", got)
+	}
+}
+
+func TestFoldedChildrenAreOrderedNewestFirst(t *testing.T) {
+	owner := object{obj: deploymentWith("web", map[string]any{}, map[string]any{}), desc: deploymentDescriptor()}
+	older := object{obj: newPod("web-old"), desc: podDescriptor()}
+	newer := object{obj: newPod("web-new"), desc: podDescriptor()}
+	group := []finding{
+		{subject: older, kind: kindPod, since: testNow.Add(-time.Hour)},
+		{subject: newer, kind: kindPod, since: testNow},
+	}
+
+	got := childrenOf(owner, group)
+
+	if len(got) != 2 {
+		t.Fatalf("children = %+v, want two", got)
+	}
+	if got[0].Object.Name != "web-new" || got[1].Object.Name != "web-old" {
+		t.Fatalf("children = %+v, want the newest first", got)
+	}
+}

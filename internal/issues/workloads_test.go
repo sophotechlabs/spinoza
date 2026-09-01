@@ -164,6 +164,22 @@ func TestAFreshRolloutIsGivenItsGrace(t *testing.T) {
 	}
 }
 
+func TestAConditionWithAnInvalidTransitionUsesTheCreationTime(t *testing.T) {
+	deployment := deploymentWith("web", map[string]any{
+		"conditions": []any{map[string]any{
+			"type":               "Available",
+			"status":             "True",
+			"lastTransitionTime": "not a timestamp",
+		}},
+	}, map[string]any{"replicas": int64(2)})
+
+	got := conditionSince(deployment, "Available")
+
+	if !got.Equal(deployment.GetCreationTimestamp().Time) {
+		t.Fatalf("condition time = %v, want creation time %v", got, deployment.GetCreationTimestamp().Time)
+	}
+}
+
 func TestAHealthyDeploymentIsNotAnIssue(t *testing.T) {
 	deployment := deploymentWith("web", map[string]any{
 		"readyReplicas": int64(3),

@@ -151,6 +151,19 @@ func TestABoundClaimSaysNothing(t *testing.T) {
 	}
 }
 
+func TestReadyAddressesIgnoreMalformedEndpointSubsets(t *testing.T) {
+	endpoints := clusterObject(kindEndpoints, "web", nil, nil).obj
+	setNested(endpoints, []any{
+		"not a subset",
+		map[string]any{"addresses": "not a list"},
+		map[string]any{"addresses": []any{map[string]any{"ip": "10.0.0.1"}}},
+	}, "subsets")
+
+	if got := readyAddresses(endpoints); got != 1 {
+		t.Fatalf("ready addresses = %d, want 1", got)
+	}
+}
+
 func TestAClaimOnItsWayOutIsNotReportedAsPending(t *testing.T) {
 	item := clusterObject(kindClaim, "data", nil, map[string]any{"phase": "Pending"})
 	item.obj.SetDeletionTimestamp(&metav1.Time{Time: testNow})

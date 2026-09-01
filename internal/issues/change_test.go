@@ -93,6 +93,19 @@ func TestADeploymentWithoutReplicaSetsFallsBackToItsGeneration(t *testing.T) {
 	}
 }
 
+func TestADeploymentIgnoresChildrenThatAreNotReplicaSets(t *testing.T) {
+	deployment := deploymentWith("web", map[string]any{}, map[string]any{})
+	pod := newPod("web-pod", withOwner(kindDeployment, "web", "uid-web"))
+	snap := snapshotOf(
+		object{obj: deployment, desc: deploymentDescriptor()},
+		object{obj: pod, desc: podDescriptor()},
+	)
+
+	if moved := changeOf(snap, snap.byUID["uid-web"]); moved.what != "generation 3" {
+		t.Fatalf("change = %q, want the deployment generation", moved.what)
+	}
+}
+
 func TestADeploymentPicksItsNewestReplicaSet(t *testing.T) {
 	deployment := deploymentWith("web", map[string]any{}, map[string]any{})
 	older := replicaSet("web-old", "uid-old", "uid-web", "3")

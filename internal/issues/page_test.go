@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"encoding/base64"
 	"errors"
 	"slices"
 	"strconv"
@@ -176,6 +177,16 @@ func TestGarbageInTheCursorIsRefused(t *testing.T) {
 	}
 }
 
+func TestIncompleteCursorsAreRefused(t *testing.T) {
+	for _, raw := range []string{ByWorst, "\x00key", ByWorst + "\x00"} {
+		cursor := base64.RawURLEncoding.EncodeToString([]byte(raw))
+		_, err := DecodeCursor(cursor, ByWorst)
+		if !errors.Is(err, ErrInvalidCursor) {
+			t.Fatalf("cursor for %q returned %v, want invalid cursor", raw, err)
+		}
+	}
+}
+
 func cursorKey(t *testing.T, cursor, order string) string {
 	t.Helper()
 	key, err := DecodeCursor(cursor, order)
@@ -236,6 +247,25 @@ func TestCountDownStaysInsideItsWidth(t *testing.T) {
 		got := countDown(one.value, 999)
 		if got != one.want {
 			t.Fatalf("countDown(%d, 999) = %q, want %q", one.value, got, one.want)
+		}
+	}
+}
+
+func TestCountUpStaysInsideItsWidth(t *testing.T) {
+	cases := []struct {
+		value int
+		want  string
+	}{
+		{value: 0, want: "000"},
+		{value: 1, want: "001"},
+		{value: 999, want: "999"},
+		{value: -7, want: "000"},
+		{value: 4000, want: "999"},
+	}
+	for _, one := range cases {
+		got := countUp(one.value, 999)
+		if got != one.want {
+			t.Fatalf("countUp(%d, 999) = %q, want %q", one.value, got, one.want)
 		}
 	}
 }
