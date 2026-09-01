@@ -834,8 +834,12 @@ workflow-triggers:
         echo ".github/workflows/e2e.yaml does not cancel a superseded validation run" >&2
         exit 1
     fi
+    if [ "$(yq -r '.on | (has("pull_request") and has("workflow_dispatch") and (has("pull_request_target") | not))' .github/workflows/e2e.yaml)" != "true" ]; then
+        echo ".github/workflows/e2e.yaml does not support pull requests and trusted release dispatches" >&2
+        exit 1
+    fi
     e2e_group=$(yq -r '.concurrency.group' .github/workflows/e2e.yaml)
-    for key in github.event.pull_request.number github.sha; do
+    for key in github.event.pull_request.number inputs.pull_request github.sha; do
         if ! grep -Fq "$key" <<< "$e2e_group"; then
             echo ".github/workflows/e2e.yaml concurrency does not distinguish $key" >&2
             exit 1
@@ -843,11 +847,30 @@ workflow-triggers:
     done
     ignored=$(yq -r '.on.pull_request.paths-ignore[]' .github/workflows/e2e.yaml)
     for path in "${release_files[@]}"; do
-        if grep -Fxq "$path" <<< "$ignored"; then
-            echo ".github/workflows/e2e.yaml skips release validation for $path" >&2
+        if ! grep -Fxq "$path" <<< "$ignored"; then
+            echo ".github/workflows/e2e.yaml reruns the approval-gated workflow for release-only change $path" >&2
             exit 1
         fi
     done
+    if [ "$(yq -r '.jobs.release-please.permissions.actions' .github/workflows/release-please.yaml)" != "write" ]; then
+        echo ".github/workflows/release-please.yaml cannot dispatch release validation" >&2
+        exit 1
+    fi
+    release_step=$(yq -r '.jobs.release-please.steps[] | select(.uses // "" | test("^googleapis/release-please-action@")) | .id' .github/workflows/release-please.yaml)
+    if [ "$release_step" != "release" ]; then
+        echo ".github/workflows/release-please.yaml does not expose release pull request outputs" >&2
+        exit 1
+    fi
+    dispatch_condition=$(yq -r '.jobs.release-please.steps[] | select(.name == "Validate the release pull request") | .if' .github/workflows/release-please.yaml)
+    if ! grep -Fq "steps.release.outputs.prs_created" <<< "$dispatch_condition"; then
+        echo ".github/workflows/release-please.yaml dispatches without a release pull request" >&2
+        exit 1
+    fi
+    dispatch=$(yq -r '.jobs.release-please.steps[] | select(.name == "Validate the release pull request") | .run' .github/workflows/release-please.yaml)
+    if ! grep -Fq "gh workflow run e2e.yaml" <<< "$dispatch" || ! grep -Fq 'pull_request=' <<< "$dispatch"; then
+        echo ".github/workflows/release-please.yaml does not dispatch grouped release validation" >&2
+        exit 1
+    fi
     if [ "$(yq -r '.concurrency.cancel-in-progress' .github/workflows/badges.yaml)" != "true" ]; then
         echo ".github/workflows/badges.yaml can publish an obsolete measurement" >&2
         exit 1

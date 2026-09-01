@@ -5,12 +5,23 @@ on:
     branches:
       - main
   pull_request:
+    paths-ignore:
+      - .release-please-manifest.json
+      - CHANGELOG.md
+      - deploy/helm/spinoza/Chart.yaml
+      - wails.json
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number used to cancel superseded release validation
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || inputs.pull_request || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -37,7 +48,7 @@ jobs:
           if [[ "$HEAD_REF" == release-please--branches--main* ]]; then
             args+=(--all)
           fi
-          if [ "$EVENT" = push ]; then
+          if [ "$EVENT" = push ] || [ "$EVENT" = workflow_dispatch ]; then
             args+=(--push)
           fi
           changed=$(git diff --name-only "$BASE...$HEAD" 2>/dev/null || true)

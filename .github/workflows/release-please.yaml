@@ -17,6 +17,7 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     steps:
@@ -33,7 +34,18 @@ jobs:
         run: |
           scripts/tag-release.sh
 
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Validate the release pull request
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: |
+          branch=$(jq -er '.headBranchName' <<< "$RELEASE_PR")
+          number=$(jq -er '.number' <<< "$RELEASE_PR")
+          gh workflow run e2e.yaml --ref "$branch" -f pull_request="$number"
