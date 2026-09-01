@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -44,7 +43,7 @@ func (s *Server) unmuteFinding(w http.ResponseWriter, r *http.Request) {
 
 func decodeMute(w http.ResponseWriter, r *http.Request) (checks.Mute, bool) {
 	var wanted checks.Mute
-	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxMuteBytes)).Decode(&wanted)
+	err := decodeJSONBody(w, r, maxMuteBytes, &wanted)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "a mute must be an object")
 		return checks.Mute{}, false

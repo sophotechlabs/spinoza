@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,7 +22,7 @@ func (s *Server) objectAccess(w http.ResponseWriter, r *http.Request, ref api.Ob
 
 func (s *Server) bulkAccess(w http.ResponseWriter, r *http.Request) {
 	var query api.AccessQuery
-	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAccessBytes)).Decode(&query)
+	err := decodeJSONBody(w, r, maxAccessBytes, &query)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "an access query needs a capability and a list of objects")
 		return

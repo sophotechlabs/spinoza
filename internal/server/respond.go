@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -33,6 +34,22 @@ func writeJSONStatus(w http.ResponseWriter, status int, payload any) {
 	if err != nil {
 		slog.Warn("a response could not be encoded", "error", err)
 	}
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, limit int64, into any) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
+	if err := decoder.Decode(into); err != nil {
+		return err
+	}
+	var trailing json.RawMessage
+	err := decoder.Decode(&trailing)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return errors.New("request body contains more than one json value")
 }
 
 func writeError(w http.ResponseWriter, code int, message string) {

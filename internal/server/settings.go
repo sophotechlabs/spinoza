@@ -65,7 +65,7 @@ func (s *Server) readSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) writeSettings(w http.ResponseWriter, r *http.Request) {
 	var wanted api.Settings
-	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSettingsBytes)).Decode(&wanted)
+	err := decodeJSONBody(w, r, maxSettingsBytes, &wanted)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "settings must be an object of strings")
 		return

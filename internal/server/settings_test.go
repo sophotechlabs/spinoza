@@ -397,6 +397,34 @@ func TestSettingsThatAreNotAnObjectAreRefused(t *testing.T) {
 	}
 }
 
+func TestSettingsRefuseASecondJSONValue(t *testing.T) {
+	store := settings.Memory()
+	ts := settingsServer(t, store)
+	body := `{"values":{"a":"1"}} {"values":{"a":"2"}}`
+
+	resp, _ := doRequest(t, http.MethodPut, ts.URL+"/api/settings", strings.NewReader(body))
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if len(store.All()) != 0 {
+		t.Fatalf("settings changed to %v", store.All())
+	}
+}
+
+func TestJSONBodiesEnforceTheirByteLimitAfterACompleteValue(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{} "))
+	recorder := httptest.NewRecorder()
+	var value map[string]any
+
+	err := decodeJSONBody(recorder, request, 2, &value)
+
+	var tooBig *http.MaxBytesError
+	if !errors.As(err, &tooBig) {
+		t.Fatalf("err = %v, want a body-size error", err)
+	}
+}
+
 func TestSettingsThatCannotBeWrittenAreReported(t *testing.T) {
 	ts := settingsServer(t, refusingSettings{})
 
