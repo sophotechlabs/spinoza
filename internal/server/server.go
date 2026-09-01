@@ -134,7 +134,7 @@ func (s *Server) writerOf(id string) Writer {
 
 type clusterLookup func(id string) (Reader, string)
 
-func (s *Server) clusterOf(r *http.Request) string {
+func (s *Server) clusterKey(r *http.Request) string {
 	_, on := s.lookup(clusterOf(r))
 	return on
 }

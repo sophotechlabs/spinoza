@@ -54,11 +54,6 @@ func (s *Server) checkFilterOn(r *http.Request, cluster string) checks.Filter {
 	return keep
 }
 
-func (s *Server) clusterKey(r *http.Request) string {
-	_, on := s.lookup(clusterOf(r))
-	return on
-}
-
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.managerFor(r).Topology(r.Context(), topologyRequest(r)))
 }
@@ -143,7 +138,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
 	queue := s.managerFor(r).Issues(r.Context())
-	on := s.clusterOf(r)
+	on := s.clusterKey(r)
 	for at := range queue.Rows {
 		queue.Rows[at].Cluster = on
 	}
