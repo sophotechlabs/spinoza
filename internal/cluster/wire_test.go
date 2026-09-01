@@ -6,6 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/rest"
+
+	"github.com/sophotechlabs/spinoza/internal/kube"
 )
 
 const deadKubeconfig = `apiVersion: v1
@@ -25,6 +34,8 @@ users:
 - name: nobody
   user: {}
 `
+
+var widgetGVR = schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
 
 func TestNewStartsWithoutAClusterWhenNothingAnswers(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "kubeconfig")
@@ -60,5 +71,58 @@ func TestNewRefusesABadPrometheusSpec(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "namespace/service:port") {
 		t.Fatalf("err = %v, want the expected shape named", err)
+	}
+}
+
+func widget(namespace, name string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "example.com/v1",
+		"kind":       "Widget",
+		"metadata": map[string]any{
+			"namespace": namespace,
+			"name":      name,
+		},
+	}}
+}
+
+func TestObjectsInScopesNamespacedResources(t *testing.T) {
+	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(),
+		widget("alpha", "one"), widget("beta", "two"))
+
+	listed, err := objectsIn(client, widgetGVR, "alpha").List(t.Context(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(listed.Items) != 1 || listed.Items[0].GetName() != "one" {
+		t.Fatalf("items = %+v, want only alpha/one", listed.Items)
+	}
+}
+
+func TestObjectsInLeavesClusterScopedResourcesUnscoped(t *testing.T) {
+	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(),
+		widget("", "one"), widget("", "two"))
+
+	listed, err := objectsIn(client, widgetGVR, "").List(t.Context(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(listed.Items) != 2 {
+		t.Fatalf("items = %d, want both cluster-scoped objects", len(listed.Items))
+	}
+}
+
+func TestMetadataClientRejectsAnInvalidAPIAddress(t *testing.T) {
+	client := metaClient(&kube.Bundle{Config: &rest.Config{Host: "://invalid"}})
+
+	if client != nil {
+		t.Fatal("an invalid API address produced a metadata client")
+	}
+}
+
+func TestMetadataClientBuildsFromAValidAPIAddress(t *testing.T) {
+	client := metaClient(&kube.Bundle{Config: &rest.Config{Host: "https://cluster.example"}})
+
+	if client == nil {
+		t.Fatal("a valid API address produced no metadata client")
 	}
 }
