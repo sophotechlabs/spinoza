@@ -23,6 +23,7 @@ if [[ "$*" == *'/git/ref/tags/'* ]]; then
         printf '%s\n' "$EXISTING_SHA"
         exit 0
     fi
+    printf '{"message":"Not Found"}\n'
     exit 1
 fi
 EOF

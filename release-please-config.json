@@ -5,6 +5,7 @@
     ".": {
       "release-type": "go",
       "draft": true,
+      "force-tag-creation": true,
       "changelog-sections": [
         {
           "type": "feat",

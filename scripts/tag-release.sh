@@ -34,7 +34,10 @@ if [ -z "$release_sha" ]; then
 fi
 
 tag="v$manifest"
-existing=$(gh api "repos/$REPO/git/ref/tags/$tag" --jq .object.sha 2>/dev/null || true)
+existing=
+if found=$(gh api "repos/$REPO/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
+    existing=$found
+fi
 if [ -n "$existing" ]; then
     if [ "$existing" != "$release_sha" ]; then
         echo "$tag points to $existing, not $release_sha" >&2
