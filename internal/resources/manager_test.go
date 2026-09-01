@@ -761,15 +761,21 @@ func TestRefreshResourcesWithoutADiscoveryClient(t *testing.T) {
 
 func stuckManager(t *testing.T, stuck string) (*Manager, *fake.FakeDynamicClient) {
 	t.Helper()
+	mgr, client, cancel := newStuckManager(t, stuck)
+	t.Cleanup(cancel)
+	return mgr, client
+}
+
+func newStuckManager(t *testing.T, stuck string) (*Manager, *fake.FakeDynamicClient, context.CancelFunc) {
+	t.Helper()
 	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
 	client.PrependReactor("list", stuck, func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("the apiserver went away")
 	})
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	mgr := NewManager(ctx, Deps{Dynamic: client, Clientset: k8sfake.NewClientset(), Descriptors: testDescs()})
 	mgr.syncTimeout = 300 * time.Millisecond
-	return mgr, client
+	return mgr, client, cancel
 }
 
 func TestSubscribeGivesUpWhenTheCacheNeverSyncs(t *testing.T) {
@@ -1095,6 +1101,41 @@ func TestACancelledRequestStopsWaitingForTheCache(t *testing.T) {
 	})
 	if cooling {
 		t.Fatal("a caller giving up put the resource into backoff for everyone else")
+	}
+}
+
+func TestManagerShutdownStopsWaitingForTheCache(t *testing.T) {
+	mgr, client, shutdown := newStuckManager(t, "deployments")
+	t.Cleanup(shutdown)
+	mgr.syncTimeout = 30 * time.Second
+	listed := make(chan struct{})
+	var listedOnce sync.Once
+	client.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		listedOnce.Do(func() {
+			close(listed)
+		})
+		return true, nil, errors.New("the apiserver went away")
+	})
+	done := make(chan error, 1)
+	go func() {
+		_, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
+		done <- err
+	}()
+
+	select {
+	case <-listed:
+	case <-time.After(time.Second):
+		t.Fatal("the cache never started syncing")
+	}
+	shutdown()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("shutdown let a cache that never synced subscribe")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("manager shutdown left a cache sync waiting")
 	}
 }
 

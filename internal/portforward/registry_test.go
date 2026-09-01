@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -736,44 +737,110 @@ func (g *gateResolver) Resolve(context.Context, Target, int32) (string, int32, e
 	return "web", 8080, nil
 }
 
+type failingGateResolver struct {
+	mu      sync.Mutex
+	entered chan struct{}
+	release chan struct{}
+	err     error
+	calls   int
+}
+
+func (g *failingGateResolver) Resolve(context.Context, Target, int32) (string, int32, error) {
+	g.mu.Lock()
+	g.calls++
+	call := g.calls
+	g.mu.Unlock()
+	if call == 1 {
+		close(g.entered)
+		<-g.release
+		return "", 0, g.err
+	}
+	return "web", 8080, nil
+}
+
 func TestConcurrentStartsShareOneForward(t *testing.T) {
-	runner := newStubRunner(45123)
-	resolver := &gateResolver{entered: make(chan struct{}, 2), release: make(chan struct{})}
-	registry := newTestRegistry(t, runner, resolver)
+	synctest.Test(t, func(t *testing.T) {
+		runner := newStubRunner(45123)
+		resolver := &gateResolver{entered: make(chan struct{}, 2), release: make(chan struct{})}
+		registry := newTestRegistry(t, runner, resolver)
 
-	var group sync.WaitGroup
-	ids := make([]string, 2)
-	errs := make([]error, 2)
-	group.Go(func() {
-		forward, err := registry.Start(context.Background(), podTarget(), 8080)
-		ids[0] = forward.ID
-		errs[0] = err
-	})
-	<-resolver.entered
+		var group sync.WaitGroup
+		ids := make([]string, 2)
+		errs := make([]error, 2)
+		group.Go(func() {
+			forward, err := registry.Start(context.Background(), podTarget(), 8080)
+			ids[0] = forward.ID
+			errs[0] = err
+		})
+		<-resolver.entered
 
-	group.Go(func() {
-		forward, err := registry.Start(context.Background(), podTarget(), 8080)
-		ids[1] = forward.ID
-		errs[1] = err
-	})
-	time.Sleep(50 * time.Millisecond)
-	close(resolver.release)
-	group.Wait()
+		group.Go(func() {
+			forward, err := registry.Start(context.Background(), podTarget(), 8080)
+			ids[1] = forward.ID
+			errs[1] = err
+		})
+		synctest.Wait()
+		close(resolver.release)
+		group.Wait()
 
-	for i, err := range errs {
-		if err != nil {
-			t.Fatalf("start %d: %v", i, err)
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("start %d: %v", i, err)
+			}
 		}
-	}
-	if runner.count() != 1 {
-		t.Fatalf("ran %d forwards for one target, want the second call to reuse the first", runner.count())
-	}
-	if ids[0] != ids[1] {
-		t.Fatalf("ids = %q and %q, want both callers to get the same forward", ids[0], ids[1])
-	}
-	if len(registry.List()) != 1 {
-		t.Fatalf("registry holds %d forwards, want 1", len(registry.List()))
-	}
+		if runner.count() != 1 {
+			t.Fatalf("ran %d forwards for one target, want the second call to reuse the first", runner.count())
+		}
+		if ids[0] != ids[1] {
+			t.Fatalf("ids = %q and %q, want both callers to get the same forward", ids[0], ids[1])
+		}
+		if len(registry.List()) != 1 {
+			t.Fatalf("registry holds %d forwards, want 1", len(registry.List()))
+		}
+	})
+}
+
+func TestAConcurrentStartRetriesAfterTheLeaderFails(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		failure := errors.New("the pod is not ready")
+		resolver := &failingGateResolver{
+			entered: make(chan struct{}),
+			release: make(chan struct{}),
+			err:     failure,
+		}
+		runner := newStubRunner(45123)
+		registry := newTestRegistry(t, runner, resolver)
+
+		var group sync.WaitGroup
+		forwards := make([]api.PortForward, 2)
+		errs := make([]error, 2)
+		group.Go(func() {
+			forwards[0], errs[0] = registry.Start(context.Background(), podTarget(), 8080)
+		})
+		<-resolver.entered
+		group.Go(func() {
+			forwards[1], errs[1] = registry.Start(context.Background(), podTarget(), 8080)
+		})
+		synctest.Wait()
+		close(resolver.release)
+		group.Wait()
+
+		if !errors.Is(errs[0], failure) {
+			t.Fatalf("leader error = %v", errs[0])
+		}
+		if errs[1] != nil {
+			t.Fatalf("waiting start: %v", errs[1])
+		}
+		if forwards[1].ID == "" {
+			t.Fatal("the waiting start did not create a forward")
+		}
+		if runner.count() != 1 {
+			t.Fatalf("runner calls = %d, want only the successful retry", runner.count())
+		}
+		if len(registry.List()) != 1 {
+			t.Fatalf("registry holds %d forwards, want the retry", len(registry.List()))
+		}
+	})
 }
 
 func TestAFailedStartReleasesTheReservation(t *testing.T) {

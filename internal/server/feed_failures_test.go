@@ -25,9 +25,13 @@ type awkward struct {
 	selectorErr  error
 	objectYAML   string
 	hold         chan struct{}
+	entered      chan struct{}
 }
 
 func (a *awkward) wait() {
+	if a.entered != nil {
+		a.entered <- struct{}{}
+	}
 	if a.hold != nil {
 		<-a.hold
 	}
@@ -265,7 +269,7 @@ func TestRaisingTheLimitSendsAFreshSnapshot(t *testing.T) {
 }
 
 func TestASubscriptionReplacedWhileItWasBeingBuiltIsDropped(t *testing.T) {
-	broken := &awkward{hold: make(chan struct{})}
+	broken := &awkward{hold: make(chan struct{}), entered: make(chan struct{}, 2)}
 	ts := awkwardServer(t, broken)
 	ctx, conn := openAwkwardFeed(t, ts)
 	subscribe := api.ClientMsg{
@@ -279,7 +283,8 @@ func TestASubscriptionReplacedWhileItWasBeingBuiltIsDropped(t *testing.T) {
 
 	sendMsg(ctx, t, conn, subscribe)
 	sendMsg(ctx, t, conn, subscribe)
-	time.Sleep(50 * time.Millisecond)
+	<-broken.entered
+	<-broken.entered
 	close(broken.hold)
 
 	if first := readMsg(ctx, t, conn); first.Type != "snapshot" {
@@ -294,7 +299,7 @@ func TestASubscriptionReplacedWhileItWasBeingBuiltIsDropped(t *testing.T) {
 }
 
 func TestALogStreamReplacedWhileItWasBeingOpenedIsDropped(t *testing.T) {
-	broken := &awkward{hold: make(chan struct{})}
+	broken := &awkward{hold: make(chan struct{}), entered: make(chan struct{}, 2)}
 	ts := awkwardServer(t, broken)
 	ctx, conn := openAwkwardFeed(t, ts)
 	subscribe := api.ClientMsg{
@@ -307,7 +312,8 @@ func TestALogStreamReplacedWhileItWasBeingOpenedIsDropped(t *testing.T) {
 
 	sendMsg(ctx, t, conn, subscribe)
 	sendMsg(ctx, t, conn, subscribe)
-	time.Sleep(50 * time.Millisecond)
+	<-broken.entered
+	<-broken.entered
 	close(broken.hold)
 
 	opened := 0
@@ -322,8 +328,8 @@ func TestALogStreamReplacedWhileItWasBeingOpenedIsDropped(t *testing.T) {
 			opened++
 		}
 	}
-	if opened > 1 {
-		t.Fatalf("%d streams were opened; the replaced one was not dropped", opened)
+	if opened != 1 {
+		t.Fatalf("opened %d streams, want only the replacement", opened)
 	}
 }
 

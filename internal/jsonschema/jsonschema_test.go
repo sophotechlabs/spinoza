@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"k8s.io/client-go/openapi"
@@ -108,6 +109,7 @@ type blockingClient struct {
 	release chan struct{}
 	calls   atomic.Int32
 	paths   map[string]openapi.GroupVersion
+	err     error
 }
 
 func newBlockingClient(doc, path string) *blockingClient {
@@ -125,6 +127,9 @@ func (b *blockingClient) Paths() (map[string]openapi.GroupVersion, error) {
 	default:
 	}
 	<-b.release
+	if b.err != nil {
+		return nil, b.err
+	}
 	return b.paths, nil
 }
 
@@ -157,38 +162,79 @@ func TestAStalledFetchDoesNotWedgeTheCacheItself(t *testing.T) {
 }
 
 func TestConcurrentCallersShareOneFetch(t *testing.T) {
-	blocked := newBlockingClient(podDoc, "api/v1")
-	client := NewClient(sourceOf(blocked))
-	const callers = 4
-	done := make(chan error, callers)
+	synctest.Test(t, func(t *testing.T) {
+		blocked := newBlockingClient(podDoc, "api/v1")
+		client := NewClient(sourceOf(blocked))
+		const callers = 4
+		done := make(chan error, callers)
 
-	for range callers {
-		go func() {
-			_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
-			done <- err
-		}()
-	}
-	<-blocked.entered
-	time.Sleep(50 * time.Millisecond)
-	close(blocked.release)
-
-	for range callers {
-		if err := <-done; err != nil {
-			t.Fatalf("for: %v", err)
+		for range callers {
+			go func() {
+				_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+				done <- err
+			}()
 		}
-	}
-	if got := blocked.calls.Load(); got != 1 {
-		t.Fatalf("openapi fetches = %d, want the callers to share one", got)
-	}
+		<-blocked.entered
+		synctest.Wait()
+		close(blocked.release)
+
+		for range callers {
+			if err := <-done; err != nil {
+				t.Fatalf("for: %v", err)
+			}
+		}
+		if got := blocked.calls.Load(); got != 1 {
+			t.Fatalf("openapi fetches = %d, want the callers to share one", got)
+		}
+	})
+}
+
+func TestConcurrentCallersShareAFailureAndCanRetry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		blocked := newBlockingClient(podDoc, "api/v1")
+		failure := errors.New("openapi is unavailable")
+		blocked.err = failure
+		client := NewClient(sourceOf(blocked))
+		const callers = 4
+		done := make(chan error, callers)
+
+		for range callers {
+			go func() {
+				_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+				done <- err
+			}()
+		}
+		<-blocked.entered
+		synctest.Wait()
+		close(blocked.release)
+
+		for range callers {
+			if err := <-done; !errors.Is(err, failure) {
+				t.Fatalf("for error = %v", err)
+			}
+		}
+		if got := blocked.calls.Load(); got != 1 {
+			t.Fatalf("openapi fetches = %d, want the callers to share one failure", got)
+		}
+
+		blocked.err = nil
+		if _, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"}); err != nil {
+			t.Fatalf("retry: %v", err)
+		}
+		if got := blocked.calls.Load(); got != 2 {
+			t.Fatalf("openapi fetches after retry = %d", got)
+		}
+	})
 }
 
 func TestAWaitingCallerGivesUpWithItsRequest(t *testing.T) {
 	blocked := newBlockingClient(podDoc, "api/v1")
 	client := NewClient(sourceOf(blocked))
-	t.Cleanup(func() { close(blocked.release) })
+	leader := make(chan error, 1)
 
 	go func() {
-		_, _ = client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+		_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+		leader <- err
 	}()
 	<-blocked.entered
 
@@ -198,6 +244,17 @@ func TestAWaitingCallerGivesUpWithItsRequest(t *testing.T) {
 
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want the queued caller to leave with its request", err)
+	}
+
+	close(blocked.release)
+	if err := <-leader; err != nil {
+		t.Fatalf("leader: %v", err)
+	}
+	if _, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Service"}); err != nil {
+		t.Fatalf("later caller: %v", err)
+	}
+	if got := blocked.calls.Load(); got != 1 {
+		t.Fatalf("openapi fetches = %d, want the canceled waiter to leave the shared fetch alone", got)
 	}
 }
 
