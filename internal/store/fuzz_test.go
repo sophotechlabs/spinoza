@@ -8,12 +8,14 @@ import (
 func FuzzTimelineCellsRoundTrip(f *testing.F) {
 	f.Add("Ready", "3/3", "hello")
 	f.Add("", "\x00", "line\nbreak")
-	f.Add("日本語", `"quoted"`, `[]{}\\`)
+	f.Add("\u65e5\u672c\u8a9e", `"quoted"`, `[]{}\\`)
+	f.Add("\xff", "\xfe\xff", "valid")
 
 	f.Fuzz(func(t *testing.T, first, second, third string) {
 		cells := []string{first, second, third}
-		if got := cellsOf(cellsText(cells)); !slices.Equal(got, cells) {
-			t.Fatalf("cells changed: %q != %q", got, cells)
+		want := []string{string([]rune(first)), string([]rune(second)), string([]rune(third))}
+		if got := cellsOf(cellsText(cells)); !slices.Equal(got, want) {
+			t.Fatalf("cells changed: %q != %q", got, want)
 		}
 	})
 }

@@ -79,6 +79,12 @@ func (f *stubShell) size() (uint16, uint16) {
 	return f.cols, f.rows
 }
 
+func (f *stubShell) isClosed() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.closed
+}
+
 func shellServer(t *testing.T, open LocalShellOpener) *httptest.Server {
 	t.Helper()
 	mgr, _ := testManager(t)
@@ -206,6 +212,20 @@ func TestALocalShellTakesWhatIsTyped(t *testing.T) {
 	sendShellFrame(t, conn, api.ExecChannelStdin, []byte("kubectl get pods\n"))
 
 	waitForServer(t, func() bool { return shell.typed() == "kubectl get pods\n" }, "the shell never saw the keystrokes")
+}
+
+func TestClosingTheTabClosesTheLocalShell(t *testing.T) {
+	shell := newStubShell()
+	ts := shellServer(t, func(uint16, uint16) (LocalShell, error) {
+		return shell, nil
+	})
+	conn := dialShell(t, ts, "")
+
+	if err := conn.CloseNow(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	waitForServer(t, shell.isClosed, "the local shell stayed open after its tab closed")
 }
 
 func TestALocalShellFollowsTheWindowSize(t *testing.T) {

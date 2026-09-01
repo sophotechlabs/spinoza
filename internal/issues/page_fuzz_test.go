@@ -1,6 +1,9 @@
 package issues
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func FuzzCursor(f *testing.F) {
 	for _, seed := range []struct {
@@ -33,7 +36,7 @@ func FuzzCursor(f *testing.F) {
 			if other == order {
 				continue
 			}
-			if _, err := DecodeCursor(cursor, other); err != ErrCursorOrder {
+			if _, err := DecodeCursor(cursor, other); !errors.Is(err, ErrCursorOrder) {
 				t.Fatalf("cursor for %q decoded under %q with %v", order, other, err)
 			}
 		}

@@ -29,6 +29,8 @@ func FuzzDecisionAggregation(f *testing.F) {
 				want = denied
 			case 2:
 				decisions[at] = Decision{Answered: true, Allowed: true}
+			default:
+				t.Fatalf("unreachable decision encoding %d", value)
 			}
 		}
 		if got := decide(decisions); got != want {

@@ -74,6 +74,7 @@ type Server struct {
 	browser       BrowserOpener
 	views         views
 	sessions      map[*wsSession]struct{}
+	sessionChange chan struct{}
 	terminals     map[*websocket.Conn]string
 	live          int
 	liveByUser    map[string]int
@@ -108,6 +109,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		settings:      settings.Memory(),
 		baseline:      noBaselines{},
 		sessions:      map[*wsSession]struct{}{},
+		sessionChange: make(chan struct{}, 1),
 		terminals:     map[*websocket.Conn]string{},
 		liveByUser:    map[string]int{},
 		liveLimit:     defaultLiveConnectionLimit,

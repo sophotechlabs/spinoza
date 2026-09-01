@@ -301,6 +301,20 @@ func TestAHiddenWindowDoesNotHoldTheAppOpen(t *testing.T) {
 	}
 }
 
+func TestAHiddenDesktopFinishingItsOpenDoesNotDisarmIdleExit(t *testing.T) {
+	stopped := make(chan struct{})
+	state := views{grace: 20 * time.Millisecond, await: defaultBrowserAwait, onIdle: func() { close(stopped) }}
+	state.hide()
+
+	state.opened(ViewDesktop)
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("the late hidden desktop disarmed idle exit")
+	}
+}
+
 func TestAShowingWindowHoldsTheAppOpen(t *testing.T) {
 	stopped := make(chan struct{})
 	srv, ts := viewServer(t, &stubWindow{}, func() error { return nil })

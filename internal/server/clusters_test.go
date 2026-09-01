@@ -363,8 +363,13 @@ func heldPair(t *testing.T) (*websocket.Conn, *websocket.Conn) {
 		if err != nil {
 			return
 		}
+		defer func() { _ = conn.CloseNow() }()
 		got <- conn
-		<-r.Context().Done()
+		for {
+			if _, _, readErr := conn.Read(r.Context()); readErr != nil {
+				return
+			}
+		}
 	}))
 	t.Cleanup(fixture.Close)
 	client, _, err := websocket.Dial(t.Context(), "ws"+strings.TrimPrefix(fixture.URL, "http"), nil)

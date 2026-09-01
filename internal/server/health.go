@@ -47,15 +47,28 @@ func (s *Server) pingUntilNobodyIsWatching(ctx context.Context) {
 		case <-ctx.Done():
 			s.stopWatching()
 			return
+		case <-s.sessionChange:
+			if s.stopWatchingIfIdle() {
+				return
+			}
 		case <-ticker.C:
-			if s.sessionsOpen() == 0 {
-				s.stopWatching()
+			if s.stopWatchingIfIdle() {
 				return
 			}
 			s.pingEveryCluster(ctx)
 			watched.follow(ctx, s.openClusterIDs())
 		}
 	}
+}
+
+func (s *Server) stopWatchingIfIdle() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sessions) != 0 {
+		return false
+	}
+	s.watching = false
+	return true
 }
 
 func (s *Server) stopWatching() {
@@ -101,12 +114,6 @@ func (s *Server) sinkOf(id string) *reach.Sink {
 		return nil
 	}
 	return backend.Reach()
-}
-
-func (s *Server) sessionsOpen() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return len(s.sessions)
 }
 
 func healthOf(err error) api.ClusterHealth {

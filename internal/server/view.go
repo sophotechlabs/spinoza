@@ -92,7 +92,7 @@ func (v *views) opened(kind string) {
 		v.waiting = nil
 	}
 	v.armed = true
-	v.stopTimer()
+	v.reconsider()
 	v.mu.Unlock()
 }
 

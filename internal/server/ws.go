@@ -761,14 +761,23 @@ func eventToMsg(subID string, ev resources.Event) any {
 
 func (s *Server) track(sess *wsSession) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.sessions[sess] = struct{}{}
+	s.mu.Unlock()
+	s.signalSessionChange()
 }
 
 func (s *Server) forget(sess *wsSession) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	delete(s.sessions, sess)
+	s.mu.Unlock()
+	s.signalSessionChange()
+}
+
+func (s *Server) signalSessionChange() {
+	select {
+	case s.sessionChange <- struct{}{}:
+	default:
+	}
 }
 
 func (s *Server) trackExec(conn *websocket.Conn, cluster string) {
@@ -847,6 +856,7 @@ func (s *Server) dropSessions() {
 	s.sessions = map[*wsSession]struct{}{}
 	s.terminals = map[*websocket.Conn]string{}
 	s.mu.Unlock()
+	s.signalSessionChange()
 	for _, sess := range open {
 		_ = sess.conn.CloseNow()
 	}

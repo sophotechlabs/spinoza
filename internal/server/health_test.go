@@ -54,6 +54,11 @@ func flakyServer(t *testing.T, backend *flaky) *httptest.Server {
 }
 
 func flakyServerEvery(t *testing.T, backend *flaky, every time.Duration) *httptest.Server {
+	ts, _ := flakyServerAndInstance(t, backend, every)
+	return ts
+}
+
+func flakyServerAndInstance(t *testing.T, backend *flaky, every time.Duration) (*httptest.Server, *Server) {
 	t.Helper()
 	mgr, _ := testManager(t)
 	backend.Backend = mgr
@@ -61,7 +66,7 @@ func flakyServerEvery(t *testing.T, backend *flaky, every time.Duration) *httpte
 	srv.pingEvery = every
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, srv
 }
 
 func nextHealth(ctx context.Context, t *testing.T, conn *websocket.Conn) api.ServerMsg {
@@ -188,21 +193,24 @@ func TestAnUnchangedAnswerIsNotRepeated(t *testing.T) {
 
 func TestTheProberStopsWhenTheLastWindowGoes(t *testing.T) {
 	backend := &flaky{}
-	ts := flakyServer(t, backend)
+	ts, srv := flakyServerAndInstance(t, backend, 20*time.Millisecond)
 	ctx, conn := openAwkwardFeed(t, ts)
 	nextHealth(ctx, t, conn)
-	for backend.asked() < 2 {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForServer(t, func() bool { return backend.asked() >= 2 }, "the prober never repeated its probe")
 
 	_ = conn.Close(websocket.StatusNormalClosure, "done")
+	waitForServer(t, func() bool {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		return !srv.watching
+	}, "the prober kept watching after the last window closed")
 
-	time.Sleep(150 * time.Millisecond)
-	settled := backend.asked()
-	time.Sleep(150 * time.Millisecond)
-	if backend.asked() != settled {
-		t.Fatalf("asked %d then %d; the prober kept going with nobody watching", settled, backend.asked())
-	}
+	before := backend.asked()
+	nextCtx, nextConn := openAwkwardFeed(t, ts)
+	nextHealth(nextCtx, t, nextConn)
+	waitForServer(t, func() bool { return backend.asked() > before }, "the prober did not restart for a new window")
+
+	_ = nextConn.Close(websocket.StatusNormalClosure, "done")
 }
 
 func TestWhatCountsAsReachable(t *testing.T) {

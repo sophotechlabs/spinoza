@@ -80,9 +80,13 @@ func (s *Server) handleLocalShell(w http.ResponseWriter, r *http.Request) {
 	defer shell.Close()
 
 	safe.Go("watching the local shell", func() {
-		leftErr := <-shell.Done()
-		_ = conn.send(ctx, api.ExecChannelError, endMessage(leftErr))
-		cancel()
+		select {
+		case leftErr := <-shell.Done():
+			_ = conn.send(ctx, api.ExecChannelError, endMessage(leftErr))
+			cancel()
+		case <-ctx.Done():
+			return
+		}
 	})
 
 	safe.Go("reading the local shell", func() {

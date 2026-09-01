@@ -1190,7 +1190,7 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 	factory.Start(streamCtx.Done())
 	syncCtx, cancelSync := context.WithTimeout(ctx, m.syncTimeout)
 	defer cancelSync()
-	stopRootCancel := context.AfterFunc(m.rootCtx, cancelSync)
+	stopRootCancel := m.cancelSyncWhenClosed(cancelSync)
 	defer stopRootCancel()
 	synced := make(chan bool, 1)
 	go func() {
@@ -1210,6 +1210,10 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 		cancel()
 		return nil, err
 	}
+}
+
+func (m *Manager) cancelSyncWhenClosed(cancel context.CancelFunc) func() {
+	return context.AfterFunc(m.rootCtx, cancel)
 }
 
 func watchFailure(holder *atomic.Pointer[string]) string {
