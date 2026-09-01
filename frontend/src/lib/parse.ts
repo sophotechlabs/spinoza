@@ -45,6 +45,7 @@ import type {
   HelmSupport,
   Issue,
   IssueChild,
+  IssueCursor,
   IssueQueue,
   IssueTally,
   K8sEvent,
@@ -758,13 +759,21 @@ function parseIssueTally(value: unknown): IssueTally | undefined {
   };
 }
 
+function parseIssueCursor(value: unknown): IssueCursor | undefined {
+  const cursor = optionalString(value);
+  if (cursor === undefined) {
+    return undefined;
+  }
+  return cursor as IssueCursor;
+}
+
 export function parseIssueQueue(body: unknown): IssueQueue {
   const item = asRecord(body);
   return {
     rows: listOf(item.rows, parseIssue),
     dropped: asNumber(item.dropped),
     tally: parseIssueTally(item.tally),
-    next: optionalString(item.next),
+    next: parseIssueCursor(item.next),
     error: optionalString(item.error),
   };
 }

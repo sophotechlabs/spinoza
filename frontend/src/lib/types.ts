@@ -854,11 +854,15 @@ export interface IssueTally {
   total: number;
 }
 
+declare const issueCursorBrand: unique symbol;
+
+export type IssueCursor = string & { readonly [issueCursorBrand]: never };
+
 export interface IssueQueue {
   rows: Issue[];
   dropped: number;
   tally?: IssueTally;
-  next?: string;
+  next?: IssueCursor;
   error?: string;
 }
 

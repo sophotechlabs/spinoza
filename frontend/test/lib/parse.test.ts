@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   parseKindComparison,
+  parseIssueQueue,
   parseActionResult,
   parseCatalog,
   parseCounts,
@@ -23,6 +24,17 @@ import {
   parseObjectDetail,
   parseRow,
 } from '../../src/lib/parse';
+import type { IssueCursor } from '../../src/lib/types';
+
+describe('parseIssueQueue', () => {
+  it('brands only the cursor supplied by the server', () => {
+    const queue = parseIssueQueue({ rows: [], dropped: 0, next: 'server-cursor' });
+
+    expect(queue.next).toBe('server-cursor');
+    expectTypeOf(queue.next).toEqualTypeOf<IssueCursor | undefined>();
+    expectTypeOf<string>().not.toMatchTypeOf<IssueCursor>();
+  });
+});
 
 describe('parseRow', () => {
   it('fills in every field a truncated row left out', () => {

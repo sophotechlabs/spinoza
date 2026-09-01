@@ -69,7 +69,20 @@ export function useHistory(ask: HistoryAsk = {}, enabled = true): Polled<History
     intervalMs: HISTORY_POLL_MS,
     enabled,
     fallback: 'history request failed',
+    resetKey: historyKey(source, fleet),
   });
+}
+
+function historyKey(source: HistorySource | undefined, fleet: boolean | undefined): string {
+  let chosenSource = 'all';
+  if (source !== undefined) {
+    chosenSource = source;
+  }
+  let scope = 'cluster';
+  if (fleet === true) {
+    scope = 'fleet';
+  }
+  return `${scope}:${chosenSource}`;
 }
 
 export function foldRepeats(entries: HistoryEntry[]): FoldedEntry[] {

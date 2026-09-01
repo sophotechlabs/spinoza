@@ -6,6 +6,8 @@ import { useClustersStore } from '../../src/store/clusters';
 import { useIssuesStore } from '../../src/store/issues';
 import { MK1, MK2, showing } from '../helpers-clusters';
 
+type WireQueue = Omit<Queue, 'next'> & { next?: string };
+
 function child(name: string) {
   return {
     object: { group: '', version: 'v1', resource: 'pods', namespace: 'web', name },
@@ -38,18 +40,18 @@ function issue(patch: Partial<Issue> = {}): Issue {
   };
 }
 
-function queue(patch: Partial<Queue> = {}): Queue {
+function queue(patch: Partial<WireQueue> = {}): WireQueue {
   return { rows: [issue()], dropped: 0, ...patch };
 }
 
-function stub(data: Queue): void {
+function stub(data: WireQueue): void {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(data) }),
   );
 }
 
-function stubEach(own: Queue, fleet: Queue): string[] {
+function stubEach(own: WireQueue, fleet: WireQueue): string[] {
   const asked: string[] = [];
   vi.stubGlobal(
     'fetch',
@@ -75,7 +77,7 @@ afterEach(() => {
   useIssuesStore.setState({ fleet: false });
 });
 
-function pagedStub(pages: Record<string, Queue | undefined>): string[] {
+function pagedStub(pages: Record<string, WireQueue | undefined>): string[] {
   const asked: string[] = [];
   vi.stubGlobal(
     'fetch',
@@ -497,7 +499,7 @@ describe('IssueQueue', () => {
     fireEvent.click(toggle);
     await screen.findByText('p-mk2');
 
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByLabelText('Every open cluster'));
 
     await waitFor(() => {
       expect(screen.queryByText('p-mk2')).not.toBeInTheDocument();

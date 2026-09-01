@@ -88,10 +88,14 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
     setReloads((value) => value + 1);
   }, []);
 
+  let visible = data;
+  if (askedFor !== resetKey) {
+    visible = null;
+  }
   let stale = false;
-  if (data !== null && error !== null) {
+  if (visible !== null && error !== null) {
     stale = true;
   }
 
-  return { data, askedFor, error, stale, reload };
+  return { data: visible, askedFor, error, stale, reload };
 }

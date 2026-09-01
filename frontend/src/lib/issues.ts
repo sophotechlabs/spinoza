@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import type { Issue, IssueQueue, IssueTally, Severity } from './types';
+import type { Issue, IssueCursor, IssueQueue, IssueTally, Severity } from './types';
 import { request } from './http';
 import { parseIssueQueue } from './parse';
 import { usePoll } from './usePoll';
@@ -63,7 +63,7 @@ function queueKey(fleet: boolean, order: IssueOrder): string {
 }
 
 async function fetchIssuePage(
-  after: string,
+  after: IssueCursor,
   fleet: boolean,
   order: IssueOrder,
 ): Promise<IssueQueue> {
@@ -72,7 +72,7 @@ async function fetchIssuePage(
 
 export interface PagedIssues extends Polled<IssueQueue> {
   rows: Issue[];
-  more: string;
+  more: IssueCursor | '';
   partial: boolean;
   whole: IssueTally | undefined;
   loadingMore: boolean;
@@ -88,7 +88,7 @@ export function usePagedIssues(
   const polled = useIssues(enabled, fleet, order);
   const [tail, setTail] = useState<Issue[]>([]);
   const [builtOn, setBuiltOn] = useState('');
-  const [next, setNext] = useState('');
+  const [next, setNext] = useState<IssueCursor | ''>('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState('');
   const asked = queueKey(fleet, order);
@@ -107,7 +107,7 @@ export function usePagedIssues(
   const first = polled.data?.rows ?? [];
   const joined = current && builtOn === head;
   let rows = first;
-  let more = '';
+  let more: IssueCursor | '' = '';
   if (current) {
     more = head;
   }

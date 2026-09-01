@@ -660,7 +660,7 @@ vulns: vulnerability-exceptions
         --helm-set publicURL=https://spinoza.example.com .
     osv-scanner scan source --recursive .
 
-vulnerability-exceptions:
+vulnerability-exceptions: stub-assets
     #!/usr/bin/env bash
     set -euo pipefail
     for tags in '' desktop integration clustermode; do
