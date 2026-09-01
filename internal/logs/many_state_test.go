@@ -146,6 +146,27 @@ func TestConcurrentDistinctAttachmentsAreAllCountedAndReleased(t *testing.T) {
 	}
 }
 
+func TestAttachSkipsAPodThatIsAlreadyClaimed(t *testing.T) {
+	held := newAttachments()
+	if !held.claim("web-0", func() {}) {
+		t.Fatal("first claim was refused")
+	}
+	client := fake.NewClientset()
+	lines := make(chan Line)
+	var group sync.WaitGroup
+
+	err := attach(t.Context(), client, Request{}, podRef{name: "web-0"}, lines, held, &group)
+	if err != nil {
+		t.Fatalf("attach duplicate: %v", err)
+	}
+	if len(client.Actions()) != 0 {
+		t.Fatalf("actions = %v, want no duplicate log request", client.Actions())
+	}
+	if held.count() != 1 {
+		t.Fatalf("open attachments = %d, want the original claim", held.count())
+	}
+}
+
 func TestPodsAreSortedBeforeTheAttachmentCapIsApplied(t *testing.T) {
 	objects := make([]k8sruntime.Object, 0, maxPods+5)
 	for id := maxPods + 4; id >= 0; id-- {
