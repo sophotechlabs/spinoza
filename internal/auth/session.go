@@ -58,38 +58,48 @@ func (ss *sessions) sign(payload []byte) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
+func (ss *sessions) seal(payload any) (string, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	encoded := base64.RawURLEncoding.EncodeToString(body)
+	value := encoded + "." + ss.sign([]byte(encoded))
+	if len(value) > maxCookieBytes {
+		return "", errCookieTooBig
+	}
+	return value, nil
+}
+
+func (ss *sessions) unseal(value string, into any) bool {
+	body, signature, found := strings.Cut(value, ".")
+	if !found {
+		return false
+	}
+	if !hmac.Equal([]byte(signature), []byte(ss.sign([]byte(body)))) {
+		return false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(body)
+	if err != nil {
+		return false
+	}
+	return json.Unmarshal(payload, into) == nil
+}
+
 func (ss *sessions) encode(who Identity, issued time.Time) (string, error) {
-	claims := sessionClaims{
+	return ss.seal(sessionClaims{
 		User:    who.User,
 		Groups:  who.Groups,
 		Role:    who.Role,
 		Session: who.Session,
 		Issued:  issued.Unix(),
 		Expires: ss.now().Add(ss.ttl).Unix(),
-	}
-	payload, err := json.Marshal(claims)
-	if err != nil {
-		return "", err
-	}
-	body := base64.RawURLEncoding.EncodeToString(payload)
-	return body + "." + ss.sign([]byte(body)), nil
+	})
 }
 
 func (ss *sessions) decode(value string) (session, bool) {
-	body, signature, found := strings.Cut(value, ".")
-	if !found {
-		return session{}, false
-	}
-	if !hmac.Equal([]byte(signature), []byte(ss.sign([]byte(body)))) {
-		return session{}, false
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(body)
-	if err != nil {
-		return session{}, false
-	}
 	var claims sessionClaims
-	unmarshalErr := json.Unmarshal(payload, &claims)
-	if unmarshalErr != nil {
+	if !ss.unseal(value, &claims) {
 		return session{}, false
 	}
 	if ss.now().Unix() >= claims.Expires {
@@ -116,15 +126,8 @@ func (ss *sessions) issue(w http.ResponseWriter, who Identity, issued time.Time)
 	if err != nil {
 		return err
 	}
-	if len(value) > maxCookieBytes {
-		return errCookieTooBig
-	}
 	http.SetCookie(w, ss.cookie(SessionCookie, value, ss.ttl))
 	return nil
-}
-
-func (ss *sessions) clear(w http.ResponseWriter) {
-	http.SetCookie(w, ss.cookie(SessionCookie, "", -time.Hour))
 }
 
 //nolint:gosec // Secure follows the public url, so a lab served over plain http still keeps its session
@@ -157,14 +160,9 @@ func (ss *sessions) renewable(issued time.Time) bool {
 }
 
 func (ss *sessions) stash(w http.ResponseWriter, name string, payload any, age time.Duration) error {
-	body, err := json.Marshal(payload)
+	value, err := ss.seal(payload)
 	if err != nil {
 		return err
-	}
-	encoded := base64.RawURLEncoding.EncodeToString(body)
-	value := encoded + "." + ss.sign([]byte(encoded))
-	if len(value) > maxCookieBytes {
-		return errCookieTooBig
 	}
 	http.SetCookie(w, ss.cookie(name, value, age))
 	return nil
@@ -179,18 +177,7 @@ func (ss *sessions) unstashNamed(r *http.Request, name string, into any) bool {
 	if err != nil {
 		return false
 	}
-	body, signature, found := strings.Cut(cookie.Value, ".")
-	if !found {
-		return false
-	}
-	if !hmac.Equal([]byte(signature), []byte(ss.sign([]byte(body)))) {
-		return false
-	}
-	payload, decodeErr := base64.RawURLEncoding.DecodeString(body)
-	if decodeErr != nil {
-		return false
-	}
-	return json.Unmarshal(payload, into) == nil
+	return ss.unseal(cookie.Value, into)
 }
 
 func (ss *sessions) drop(w http.ResponseWriter, name string) {

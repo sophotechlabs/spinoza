@@ -213,7 +213,7 @@ func (a *Authenticator) Logout(w http.ResponseWriter, r *http.Request) {
 	if held && a.oidc != nil {
 		a.revoked.revoke(who.Session)
 	}
-	a.sessions.clear(w)
+	a.sessions.drop(w, SessionCookie)
 	http.Redirect(w, r, a.afterLogout(), http.StatusFound)
 }
 

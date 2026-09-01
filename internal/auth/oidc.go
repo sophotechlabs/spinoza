@@ -125,7 +125,8 @@ func discover(ctx context.Context, cfg OIDCConfig) (*oidc.Provider, discovered, 
 	if err != nil {
 		return nil, discovered{}, err
 	}
-	return browserFacing(ctx, cfg, doc)
+	found, facing := browserFacing(ctx, cfg, doc)
+	return found, facing, nil
 }
 
 func discoverAt(ctx context.Context, issuer string) (*oidc.Provider, discovered, error) {
@@ -141,7 +142,7 @@ func discoverAt(ctx context.Context, issuer string) (*oidc.Provider, discovered,
 	return found, doc, nil
 }
 
-func browserFacing(ctx context.Context, cfg OIDCConfig, doc discovered) (*oidc.Provider, discovered, error) {
+func browserFacing(ctx context.Context, cfg OIDCConfig, doc discovered) (*oidc.Provider, discovered) {
 	internal := strings.TrimSuffix(cfg.InternalIssuerURL, "/")
 	public := strings.TrimSuffix(cfg.IssuerURL, "/")
 	doc.AuthorizationEndpoint = swapBase(doc.AuthorizationEndpoint, internal, public)
@@ -154,7 +155,7 @@ func browserFacing(ctx context.Context, cfg OIDCConfig, doc discovered) (*oidc.P
 		JWKSURL:     doc.JWKSEndpoint,
 		Algorithms:  doc.IDTokenSigningAlgSupported,
 	}
-	return built.NewProvider(ctx), doc, nil
+	return built.NewProvider(ctx), doc
 }
 
 func askableScopes(wanted, supported []string) []string {

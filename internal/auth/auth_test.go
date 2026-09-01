@@ -33,6 +33,9 @@ func TestWithNoAuthEverybodyWhoReachesSpinozaIsAnAdmin(t *testing.T) {
 	if held.Enabled() || held.SignsIn() {
 		t.Fatal("a spinoza with no auth claimed it could sign people in")
 	}
+	if held.Mode() != ModeNone {
+		t.Fatalf("mode = %q, want %q, which is what the browser is told", held.Mode(), ModeNone)
+	}
 }
 
 func TestProxyModeReadsWhoTheProxySaysYouAre(t *testing.T) {

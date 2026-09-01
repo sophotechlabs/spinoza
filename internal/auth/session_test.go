@@ -151,7 +151,7 @@ func TestTooManyGroupsToFitInACookieIsSaidOutLoud(t *testing.T) {
 func TestClearingASessionExpiresTheCookie(t *testing.T) {
 	recorded := httptest.NewRecorder()
 
-	testSessions(t, false).clear(recorded)
+	testSessions(t, false).drop(recorded, SessionCookie)
 
 	cookie := recorded.Result().Cookies()[0]
 	if cookie.Name != SessionCookie {
@@ -288,5 +288,44 @@ func TestARenewedSessionKeepsTheInstantItWasSignedInAt(t *testing.T) {
 	}
 	if got.expires.Unix() != now.Add(time.Hour).Unix() {
 		t.Fatalf("expires = %s, want an hour from now", got.expires)
+	}
+}
+
+func TestAPayloadNobodyCanWriteDownIsNotSetAsACookie(t *testing.T) {
+	recorded := httptest.NewRecorder()
+
+	err := testSessions(t, false).stash(recorded, flowCookie, make(chan int), time.Minute)
+
+	if err == nil {
+		t.Fatal("a payload that cannot be written down was accepted")
+	}
+	if len(recorded.Result().Cookies()) != 0 {
+		t.Fatal("a cookie was set for a payload that was never written")
+	}
+}
+
+func TestAStashedPayloadTooLargeForACookieIsNotSet(t *testing.T) {
+	recorded := httptest.NewRecorder()
+
+	err := testSessions(t, false).stash(recorded, flowCookie, strings.Repeat("x", maxCookieBytes), time.Minute)
+
+	if err == nil {
+		t.Fatal("a stashed payload past the cookie limit was accepted")
+	}
+	if len(recorded.Result().Cookies()) != 0 {
+		t.Fatal("an oversized cookie was set")
+	}
+}
+
+func TestASignedPayloadOfTheWrongShapeIsNotAFlow(t *testing.T) {
+	held := testSessions(t, false)
+	value, err := held.seal("not a flow")
+	if err != nil {
+		t.Fatalf("sealing: %v", err)
+	}
+
+	var flow flowState
+	if held.unseal(value, &flow) {
+		t.Fatal("a signed payload with the wrong shape was accepted as a flow")
 	}
 }

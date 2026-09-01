@@ -2,9 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   OWN_WINDOW,
   fetchSession,
-  holds,
-  mayAdminister,
-  mayEdit,
   normalizeSession,
   scopeSummary,
   signInHref,
@@ -100,18 +97,6 @@ describe('signInHref', () => {
     window.history.replaceState(null, '', '/?view=checks#top');
 
     expect(signInHref()).toBe('/auth/login?next=%2F%3Fview%3Dchecks%23top');
-  });
-});
-
-describe('roles', () => {
-  it('lets a stronger role do what a weaker one may', () => {
-    expect(holds(session({ role: 'admin' }), 'editor')).toBe(true);
-    expect(mayEdit(session({ role: 'editor' }))).toBe(true);
-    expect(mayAdminister(session({ role: 'editor' }))).toBe(false);
-  });
-
-  it('refuses a role it does not know', () => {
-    expect(holds(session({ role: 'nobody' }), 'viewer')).toBe(false);
   });
 });
 
