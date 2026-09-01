@@ -45,7 +45,13 @@ type workflowFile struct {
 			Paths []string `yaml:"paths"`
 		} `yaml:"push"`
 	} `yaml:"on"`
-	Jobs map[string]workflowJob `yaml:"jobs"`
+	Concurrency workflowConcurrency    `yaml:"concurrency"`
+	Jobs        map[string]workflowJob `yaml:"jobs"`
+}
+
+type workflowConcurrency struct {
+	Group            string `yaml:"group"`
+	CancelInProgress bool   `yaml:"cancel-in-progress"`
 }
 
 type workflowJob struct {
