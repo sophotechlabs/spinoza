@@ -5,8 +5,9 @@ kubeconfig, and it exits when the last window closes. Cluster mode is the other
 shape. Spinoza runs as a pod, serves one cluster to a team over an ingress, and
 asks people to sign in through your identity provider.
 
-Turn it on with `--cluster-mode` and `--public-url`. The Helm chart in
-[`deploy/helm/spinoza`](../deploy/helm/spinoza) sets both.
+Turn it on with `--cluster-mode` and `--public-url`. The published Helm chart at
+`oci://ghcr.io/sophotechlabs/charts/spinoza` sets both. Its source is in
+[`deploy/helm/spinoza`](../deploy/helm/spinoza).
 
 ## What changes
 
@@ -28,7 +29,7 @@ views, the same inspect drawer, the same exec and port-forwarding.
 ## Quick start
 
 ```sh
-helm upgrade --install spinoza deploy/helm/spinoza \
+helm upgrade --install spinoza oci://ghcr.io/sophotechlabs/charts/spinoza \
   --namespace spinoza --create-namespace \
   --set publicURL=https://spinoza.example.com \
   --set auth.mode=oidc \

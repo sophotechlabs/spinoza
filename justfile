@@ -595,6 +595,29 @@ lint-chart:
         --set ingress.hosts[0].host=spinoza.example.com \
         --set ingress.hosts[0].paths[0].path=/ > /dev/null
 
+test-release-publication:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    released=$(yq -r '.["."]' .release-please-manifest.json)
+    chart=$(yq -r '.version' deploy/helm/spinoza/Chart.yaml)
+    app=$(yq -r '.appVersion' deploy/helm/spinoza/Chart.yaml)
+    if [ "$chart" != "$released" ] || [ "$app" != "$released" ]; then
+        echo "chart=$chart appVersion=$app release=$released"
+        exit 1
+    fi
+    yq -e '.packages."."."extra-files"[] | select(.type == "yaml" and .path == "deploy/helm/spinoza/Chart.yaml" and .jsonpath == "$.version")' release-please-config.json > /dev/null
+    yq -e '.packages."."."extra-files"[] | select(.type == "yaml" and .path == "deploy/helm/spinoza/Chart.yaml" and .jsonpath == "$.appVersion")' release-please-config.json > /dev/null
+    yq -e '.jobs.version.outputs.version != null' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.image.permissions.packages == "write"' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.image.steps[] | select(.id == "push") | ((.with.push == true) and (.with.platforms == "linux/amd64,linux/arm64"))' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.image.steps[] | select(.id == "push") | .with.tags | test("needs.version.outputs.version")' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.chart.needs | contains(["image"])' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.chart.permissions.packages == "write"' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.chart.steps[] | select(.run != null) | .run | select(test("helm package"))' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.chart.steps[] | select(.run != null) | .run | select(test("helm push"))' .github/workflows/release-artifacts.yaml > /dev/null
+    yq -e '.jobs.publish.needs | contains(["chart"])' .github/workflows/release-artifacts.yaml > /dev/null
+    echo "test-release-publication: release-please, image and chart publication are linked"
+
 image tag='spinoza:dev':
     docker build --build-arg SPINOZA_VERSION="$(just app-version)" -t {{ tag }} .
 

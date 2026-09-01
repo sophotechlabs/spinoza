@@ -20,12 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.read.outputs.tag }}
+      version: ${{ steps.read.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - id: read
-        run: echo "tag=v$(jq -r '.["."]' .release-please-manifest.json)" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(jq -r '.["."]' .release-please-manifest.json)
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
   dist:
     needs: version
@@ -73,6 +77,84 @@ jobs:
             dist/release/*_sbom.cdx.json
 
       - run: gh release upload "$TAG" dist/release/* --clobber
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  image:
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ needs.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          build-args: SPINOZA_VERSION=${{ needs.version.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  chart:
+    needs:
+      - version
+      - dist
+      - image
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-checksums
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      CHART: dist/release/spinoza-${{ needs.version.outputs.version }}.tgz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          cache: false
+          install_args: just helm
+      - run: |
+          mkdir -p dist/release
+          helm package deploy/helm/spinoza --destination dist/release
+      - run: printf '%s' "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: helm push "$CHART" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: ${{ env.CHART }}
+      - run: just publish-asset 'spinoza-*.tgz'
         env:
           TAG: ${{ needs.version.outputs.tag }}
           GH_REPO: ${{ github.repository }}
@@ -152,6 +234,7 @@ jobs:
       - dist
       - desktop
       - desktop-linux
+      - chart
     runs-on: ubuntu-latest
     concurrency:
       group: release-checksums

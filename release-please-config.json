@@ -56,6 +56,16 @@
           "type": "json",
           "path": "wails.json",
           "jsonpath": "$.info.productVersion"
+        },
+        {
+          "type": "yaml",
+          "path": "deploy/helm/spinoza/Chart.yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "deploy/helm/spinoza/Chart.yaml",
+          "jsonpath": "$.appVersion"
         }
       ]
     }

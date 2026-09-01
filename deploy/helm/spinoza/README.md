@@ -7,7 +7,7 @@ The guide is [docs/cluster-mode.md](../../../docs/cluster-mode.md). This file is
 the values reference.
 
 ```sh
-helm upgrade --install spinoza deploy/helm/spinoza \
+helm upgrade --install spinoza oci://ghcr.io/sophotechlabs/charts/spinoza \
   --namespace spinoza --create-namespace \
   --set publicURL=https://spinoza.example.com
 ```
