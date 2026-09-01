@@ -734,9 +734,9 @@ func (s *Server) dropSessions() {
 	s.terminals = map[*websocket.Conn]string{}
 	s.mu.Unlock()
 	for _, sess := range open {
-		_ = sess.conn.Close(websocket.StatusGoingAway, "context changed")
+		_ = sess.conn.CloseNow()
 	}
 	for _, conn := range shells {
-		_ = conn.Close(websocket.StatusGoingAway, "context changed")
+		_ = conn.CloseNow()
 	}
 }

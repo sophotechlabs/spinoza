@@ -55,6 +55,21 @@ func TestClosingTheServerHangsUpOnEveryFeed(t *testing.T) {
 	}
 }
 
+func TestClosingTheServerDoesNotWaitForPeerHandshakes(t *testing.T) {
+	feed, _ := heldPair(t)
+	terminal, _ := heldPair(t)
+	srv := New(&stubCluster{}, testAssets(), testToken)
+	srv.sessions[&wsSession{conn: feed}] = struct{}{}
+	srv.terminals[terminal] = mk1
+
+	started := time.Now()
+	srv.Close()
+
+	if took := time.Since(started); took >= time.Second {
+		t.Fatalf("shutdown took %s for peers that were not reading", took)
+	}
+}
+
 func TestAFeedThatStopsReadingIsReleased(t *testing.T) {
 	mgr, _ := testManager(t)
 	srv := New(fixed(mgr), testAssets(), testToken)
