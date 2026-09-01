@@ -410,6 +410,20 @@ func TestBuildSkipsPodsThatDiscoveryNeverReported(t *testing.T) {
 	}
 }
 
+func TestPodSummaryNeedsAMetadataClient(t *testing.T) {
+	got := podSummary(t.Context(), nil, fullCatalog(), listerr.New())
+
+	if got.Total != 0 ||
+		got.Running != 0 ||
+		got.Pending != 0 ||
+		got.Failed != 0 ||
+		got.Succeeded != 0 ||
+		got.Known ||
+		len(got.Capped) != 0 {
+		t.Fatalf("pod summary = %+v, want empty", got)
+	}
+}
+
 func TestBuildReturnsTheNewestWarningsFirst(t *testing.T) {
 	dyn := dynClient()
 	seedEvents(
@@ -438,6 +452,35 @@ func TestBuildReturnsTheNewestWarningsFirst(t *testing.T) {
 	}
 	if got.Warnings[0].Count != 3 {
 		t.Fatalf("count = %d, want 3", got.Warnings[0].Count)
+	}
+}
+
+func TestBuildPlacesWarningsWithoutAValidTimestampLast(t *testing.T) {
+	dyn := dynClient()
+	seedEvents(
+		t, dyn,
+		warning("unstamped", "BackOff", "web-1", "not a timestamp"),
+		warning("stamped", "Unhealthy", "web-2", "2026-08-11T12:00:00Z"),
+	)
+
+	got := Build(t.Context(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
+
+	if len(got.Warnings) != 2 {
+		t.Fatalf("warnings = %+v, want two", got.Warnings)
+	}
+	if got.Warnings[0].Reason != "Unhealthy" || got.Warnings[1].Reason != "BackOff" {
+		t.Fatalf("warnings = %+v, want the unstamped warning last", got.Warnings)
+	}
+}
+
+func TestNonStringCapacityIsIgnored(t *testing.T) {
+	quantities := map[string]any{"cpu": int64(4), "memory": "8Gi"}
+
+	if got := milliOf(quantities, "cpu"); got != 0 {
+		t.Fatalf("cpu = %d, want an invalid capacity ignored", got)
+	}
+	if got := mebiOf(quantities, "memory"); got != 8192 {
+		t.Fatalf("memory = %d, want 8192", got)
 	}
 }
 

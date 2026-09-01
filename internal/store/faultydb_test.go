@@ -252,6 +252,16 @@ func TestForgettingAClusterReportsTheSecondWriteFailing(t *testing.T) {
 	}
 }
 
+func TestForgettingAClusterReportsTheCommitFailing(t *testing.T) {
+	store := &Store{writes: faultyDB(t, faults{execsPass: 2, commitErr: errQueryFailed})}
+
+	err := store.Forget(t.Context(), "one")
+
+	if !errors.Is(err, errQueryFailed) {
+		t.Fatalf("err = %v, want the commit failure", err)
+	}
+}
+
 func TestCappingRowsReportsTheDeleteFailing(t *testing.T) {
 	db := faultyDB(t, faults{columns: 1, values: []driver.Value{int64(42)}})
 	store := &Store{writes: db, reads: db}

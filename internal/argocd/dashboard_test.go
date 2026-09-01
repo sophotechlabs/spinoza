@@ -120,6 +120,16 @@ func TestABuildWithoutArgoTypesAsksForNothing(t *testing.T) {
 	}
 }
 
+func TestArgoTypesOutsideTheDashboardAreNotListed(t *testing.T) {
+	descs := catalog(api.ResourceDescriptor{
+		Group: Group, Version: "v1alpha1", Resource: "appprojecttokens", Kind: "AppProjectToken",
+	})
+
+	if got := wanted(descs); len(got) != 0 {
+		t.Fatalf("wanted = %+v, want no unsupported Argo types", got)
+	}
+}
+
 func TestApplicationsCarryTheirSyncAndHealth(t *testing.T) {
 	lister := onlyApps(healthy("web", "abc123"))
 

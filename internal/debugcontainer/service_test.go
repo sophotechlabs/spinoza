@@ -181,6 +181,19 @@ func TestEnsureSkipsATerminatedDebugContainer(t *testing.T) {
 	}
 }
 
+func TestRunningStatusWithoutItsContainerSpecIsIgnored(t *testing.T) {
+	pod := runningPod()
+	pod.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{
+		{Name: "spinoza-debug-1", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+	}
+
+	spec, image, found := runningDebugContainer(pod)
+
+	if found || spec != nil || image != "" {
+		t.Fatalf("running container = %+v %q %v, want none without a matching spec", spec, image, found)
+	}
+}
+
 func TestEnsureIgnoresForeignEphemeralContainers(t *testing.T) {
 	pod := runningPod()
 	pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{

@@ -13,6 +13,7 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
@@ -225,6 +226,38 @@ func TestTheScopeIsWorkedOutOncePerRequest(t *testing.T) {
 	}
 	if rules.count() != round {
 		t.Fatalf("asked %d times then %d, want the answer kept for the request", round, rules.count())
+	}
+}
+
+func TestConcurrentScopeReadsShareTheAnswerThatFinishesFirst(t *testing.T) {
+	rules := &namespaceRules{allowed: map[string]bool{"payments": true}}
+	held := scopeService(t, rules)
+	ctx := WithScopeSlot(asAlice(t))
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	blockedNames := func() []string {
+		entered <- struct{}{}
+		<-release
+		return names()
+	}
+	results := make(chan api.Scope, 2)
+	for range 2 {
+		go func() {
+			results <- held.Scope(ctx, blockedNames)
+		}()
+	}
+	<-entered
+	<-entered
+	close(release)
+
+	first := <-results
+	second := <-results
+
+	if !slices.Equal(first.Namespaces, []string{"payments"}) {
+		t.Fatalf("first scope = %+v, want payments", first)
+	}
+	if !slices.Equal(second.Namespaces, first.Namespaces) {
+		t.Fatalf("concurrent scopes differ: %+v and %+v", first, second)
 	}
 }
 

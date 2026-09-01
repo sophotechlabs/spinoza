@@ -150,6 +150,14 @@ func TestAFailingShellIsNotAnError(t *testing.T) {
 	}
 }
 
+func TestANonExitFailureIsPreserved(t *testing.T) {
+	want := errors.New("wait failed")
+
+	if got := exitError(want); !errors.Is(got, want) {
+		t.Fatalf("error = %v, want %v", got, want)
+	}
+}
+
 func TestReadingAClosedSessionEndsInsteadOfFailing(t *testing.T) {
 	session, err := Start(context.Background(), Options{Shell: "/bin/sh"})
 	if err != nil {

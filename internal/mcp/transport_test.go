@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -417,6 +419,48 @@ func TestDispatchPicksTheModeFromTheArguments(t *testing.T) {
 func TestPrometheusIsSkippedWhenTheSpecIsNonsense(t *testing.T) {
 	if PromFor(api.ContextRef{Name: "nowhere"}, Settings{PromSpec: "not a target"}) != nil {
 		t.Fatal("a Prometheus client was built from a spec that does not parse")
+	}
+}
+
+func TestPrometheusIsSkippedWhenTheClusterCannotBeLoaded(t *testing.T) {
+	opts := Settings{
+		Kubeconfig: filepath.Join(t.TempDir(), "missing"),
+		PromSpec:   "monitoring/prometheus:9090",
+	}
+
+	if PromFor(api.ContextRef{Name: "test"}, opts) != nil {
+		t.Fatal("a Prometheus client was built without a readable cluster")
+	}
+}
+
+func TestPrometheusUsesTheSelectedCluster(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config")
+	body := `apiVersion: v1
+kind: Config
+current-context: test
+clusters:
+- name: local
+  cluster:
+    server: https://127.0.0.1:6443
+    insecure-skip-tls-verify: true
+contexts:
+- name: test
+  context:
+    cluster: local
+    namespace: default
+    user: test
+users:
+- name: test
+  user:
+    token: token
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+	opts := Settings{Kubeconfig: path, PromSpec: "monitoring/prometheus:9090"}
+
+	if PromFor(api.ContextRef{Name: "test"}, opts) == nil {
+		t.Fatal("a valid cluster and Prometheus target produced no client")
 	}
 }
 
