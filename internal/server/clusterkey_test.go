@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -17,7 +18,7 @@ func TestClusterKeyUsesTheAskedClusterOrTheCurrentOne(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", tc.path, nil)
+			req := httptest.NewRequest("GET", tc.path, http.NoBody)
 			if got := srv.clusterKey(req); got != tc.want {
 				t.Fatalf("clusterKey() = %q, want %q", got, tc.want)
 			}

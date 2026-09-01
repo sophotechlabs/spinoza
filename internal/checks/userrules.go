@@ -181,6 +181,8 @@ func objectPath(expr celast.Expr) ([]string, bool) {
 			return nil, false
 		}
 		return append(path, string(field)), true
+	default:
+		return nil, false
 	}
 	return nil, false
 }
