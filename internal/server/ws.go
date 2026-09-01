@@ -17,8 +17,10 @@ import (
 )
 
 const (
-	maxLogBatch      = 200
-	maxSubscriptions = 64
+	maxLogBatch             = 200
+	maxSubscriptions        = 64
+	defaultFeedPingInterval = 30 * time.Second
+	defaultFeedPingTimeout  = 10 * time.Second
 )
 
 const msgError = "error"
@@ -92,11 +94,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	sess := &wsSession{
-		conn:   conn,
-		ctx:    ctx,
-		lookup: s.lookup,
-		tables: map[string]*entry{},
-		logs:   map[string]*entry{},
+		conn:      conn,
+		ctx:       ctx,
+		lookup:    s.lookup,
+		tables:    map[string]*entry{},
+		logs:      map[string]*entry{},
+		pingEvery: s.feedPingEvery,
+		pingWait:  s.feedPingWait,
 	}
 	defer sess.closeAll()
 	kind := viewOf(r)
@@ -109,6 +113,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		sess.write(ctx, health)
 	}
 	s.watchCluster(ctx)
+	safe.Go("watching a feed websocket", func() { sess.keepAlive(ctx, cancel) })
 
 	for {
 		var msg api.ClientMsg
@@ -121,14 +126,37 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 type wsSession struct {
-	conn    *websocket.Conn
-	ctx     context.Context
-	lookup  clusterLookup
-	mu      sync.Mutex
-	tables  map[string]*entry
-	logs    map[string]*entry
-	nextGen uint64
-	writeMu sync.Mutex
+	conn      *websocket.Conn
+	ctx       context.Context
+	lookup    clusterLookup
+	mu        sync.Mutex
+	tables    map[string]*entry
+	logs      map[string]*entry
+	nextGen   uint64
+	writeMu   sync.Mutex
+	pingEvery time.Duration
+	pingWait  time.Duration
+}
+
+func (sess *wsSession) keepAlive(ctx context.Context, cancel context.CancelFunc) {
+	ticker := time.NewTicker(sess.pingEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pingCtx, stop := context.WithTimeout(ctx, sess.pingWait)
+			err := sess.conn.Ping(pingCtx)
+			stop()
+			if err == nil {
+				continue
+			}
+			slog.Debug("a feed stopped answering", "error", err)
+			cancel()
+			return
+		}
+	}
 }
 
 func (sess *wsSession) entriesOf(which feed) map[string]*entry {

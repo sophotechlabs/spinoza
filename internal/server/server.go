@@ -61,53 +61,57 @@ type FilePicker func(ctx context.Context) (string, error)
 const noFilePicker = "only the desktop window can open a file dialog; type the path instead"
 
 type Server struct {
-	cluster      Cluster
-	assets       fs.FS
-	files        http.Handler
-	token        string
-	mu           sync.Mutex
-	picker       FilePicker
-	localShell   LocalShellOpener
-	settings     Settings
-	baseline     Baselines
-	window       Window
-	browser      BrowserOpener
-	views        views
-	sessions     map[*wsSession]struct{}
-	terminals    map[*websocket.Conn]string
-	profiler     bool
-	health       map[string]api.ClusterHealth
-	misses       map[string]int
-	start        startRoute
-	watching     bool
-	updates      Updates
-	installer    Installs
-	past         History
-	open         Tabs
-	taping       map[string]*recording
-	now          func() time.Time
-	pingEvery    time.Duration
-	authn        *auth.Authenticator
-	publicOrigin string
-	served       bool
+	cluster       Cluster
+	assets        fs.FS
+	files         http.Handler
+	token         string
+	mu            sync.Mutex
+	picker        FilePicker
+	localShell    LocalShellOpener
+	settings      Settings
+	baseline      Baselines
+	window        Window
+	browser       BrowserOpener
+	views         views
+	sessions      map[*wsSession]struct{}
+	terminals     map[*websocket.Conn]string
+	profiler      bool
+	health        map[string]api.ClusterHealth
+	misses        map[string]int
+	start         startRoute
+	watching      bool
+	updates       Updates
+	installer     Installs
+	past          History
+	open          Tabs
+	taping        map[string]*recording
+	now           func() time.Time
+	pingEvery     time.Duration
+	feedPingEvery time.Duration
+	feedPingWait  time.Duration
+	authn         *auth.Authenticator
+	publicOrigin  string
+	served        bool
 }
 
 func New(cluster Cluster, assets fs.FS, token string) *Server {
 	return &Server{
-		cluster:   cluster,
-		assets:    assets,
-		files:     http.FileServerFS(assets),
-		token:     token,
-		settings:  settings.Memory(),
-		baseline:  noBaselines{},
-		sessions:  map[*wsSession]struct{}{},
-		terminals: map[*websocket.Conn]string{},
-		health:    map[string]api.ClusterHealth{},
-		misses:    map[string]int{},
-		taping:    map[string]*recording{},
-		now:       time.Now,
-		pingEvery: defaultPingInterval,
-		views:     views{grace: defaultIdleGrace, await: defaultBrowserAwait},
+		cluster:       cluster,
+		assets:        assets,
+		files:         http.FileServerFS(assets),
+		token:         token,
+		settings:      settings.Memory(),
+		baseline:      noBaselines{},
+		sessions:      map[*wsSession]struct{}{},
+		terminals:     map[*websocket.Conn]string{},
+		health:        map[string]api.ClusterHealth{},
+		misses:        map[string]int{},
+		taping:        map[string]*recording{},
+		now:           time.Now,
+		pingEvery:     defaultPingInterval,
+		feedPingEvery: defaultFeedPingInterval,
+		feedPingWait:  defaultFeedPingTimeout,
+		views:         views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}
 }
 
