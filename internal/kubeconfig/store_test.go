@@ -2,10 +2,12 @@ package kubeconfig
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -58,6 +60,71 @@ func TestTheListKeepsTheOrderKubeconfigsWereAdded(t *testing.T) {
 	want := []string{"/tmp/one.yaml", "/tmp/two.yaml", "/tmp/three.yaml"}
 	if !slices.Equal(store.Paths(), want) {
 		t.Fatalf("paths = %v, want %v", store.Paths(), want)
+	}
+}
+
+func TestConcurrentAddsAreAllPersisted(t *testing.T) {
+	path := storePath(t)
+	store := openStore(t, path)
+	const additions = 32
+	var group sync.WaitGroup
+
+	for index := range additions {
+		entry := fmt.Sprintf("/tmp/cluster-%02d.yaml", index)
+		group.Go(func() {
+			if err := store.Add(entry); err != nil {
+				t.Errorf("add %s: %v", entry, err)
+			}
+		})
+	}
+	group.Wait()
+
+	want := make([]string, additions)
+	for index := range additions {
+		want[index] = fmt.Sprintf("/tmp/cluster-%02d.yaml", index)
+	}
+	slices.Sort(want)
+	held := store.Paths()
+	slices.Sort(held)
+	if !slices.Equal(held, want) {
+		t.Fatalf("paths = %v, want every concurrent addition", held)
+	}
+	persisted := openStore(t, path).Paths()
+	slices.Sort(persisted)
+	if !slices.Equal(persisted, want) {
+		t.Fatalf("persisted paths = %v, want every concurrent addition", persisted)
+	}
+}
+
+func TestConcurrentDuplicateAddsStoreOneEntry(t *testing.T) {
+	path := storePath(t)
+	store := openStore(t, path)
+	const callers = 16
+	results := make(chan error, callers)
+	var group sync.WaitGroup
+
+	for range callers {
+		group.Go(func() {
+			results <- store.Add("/tmp/one.yaml")
+		})
+	}
+	group.Wait()
+	close(results)
+
+	added := 0
+	for err := range results {
+		if err == nil {
+			added++
+		}
+	}
+	if added != 1 {
+		t.Fatalf("successful adds = %d, want one", added)
+	}
+	if !slices.Equal(store.Paths(), []string{"/tmp/one.yaml"}) {
+		t.Fatalf("paths = %v, want one entry", store.Paths())
+	}
+	if !slices.Equal(openStore(t, path).Paths(), []string{"/tmp/one.yaml"}) {
+		t.Fatal("the single entry was not persisted")
 	}
 }
 

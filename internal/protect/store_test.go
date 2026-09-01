@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -280,6 +281,36 @@ func TestManyClustersCanBeAnswered(t *testing.T) {
 	}
 	if reopened.Verdict("https://10.0.0.1:6443") != api.ProtectionOpen {
 		t.Fatal("a later answer overwrote an earlier one")
+	}
+}
+
+func TestConcurrentProtectionDecisionsAreAllPersisted(t *testing.T) {
+	path := storePath(t)
+	store := openStore(t, path)
+	const clusters = 32
+	var group sync.WaitGroup
+
+	for index := range clusters {
+		server := "https://10.0.1." + strconv.Itoa(index) + ":6443"
+		protected := index%2 == 0
+		group.Go(func() {
+			if err := store.Set(server, protected); err != nil {
+				t.Errorf("set %s: %v", server, err)
+			}
+		})
+	}
+	group.Wait()
+
+	reopened := openStore(t, path)
+	for index := range clusters {
+		server := "https://10.0.1." + strconv.Itoa(index) + ":6443"
+		want := api.ProtectionOpen
+		if index%2 == 0 {
+			want = api.ProtectionProtected
+		}
+		if got := reopened.Verdict(server); got != want {
+			t.Fatalf("%s verdict = %q, want %q", server, got, want)
+		}
 	}
 }
 

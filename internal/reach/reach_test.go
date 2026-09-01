@@ -138,6 +138,47 @@ func TestADifferentReasonIsSaidAgain(t *testing.T) {
 	}
 }
 
+func TestChangesCoalesceWithoutLosingTheNewestState(t *testing.T) {
+	sink := New()
+
+	sink.Saw(errors.New("connection refused"))
+	sink.Saw(nil)
+	sink.Saw(errors.New("no route to host"))
+
+	select {
+	case <-sink.Changed():
+	default:
+		t.Fatal("the accumulated changes were not announced")
+	}
+	select {
+	case <-sink.Changed():
+		t.Fatal("changes queued without bound while nobody listened")
+	default:
+	}
+	answering, reason := sink.State()
+	if answering || reason != "no route to host" {
+		t.Fatalf("state = (%v, %q), want the newest observation", answering, reason)
+	}
+}
+
+func TestACancelledRequestDoesNotEraseAnExistingOutage(t *testing.T) {
+	sink := New()
+	sink.Saw(errors.New("connection refused"))
+	<-sink.Changed()
+
+	sink.Saw(fmt.Errorf("reading body: %w", context.Canceled))
+
+	answering, reason := sink.State()
+	if answering || reason != "connection refused" {
+		t.Fatalf("state = (%v, %q), want the existing outage", answering, reason)
+	}
+	select {
+	case <-sink.Changed():
+		t.Fatal("a canceled request announced a health change")
+	default:
+	}
+}
+
 func TestTheResponseIsHandedOnUntouched(t *testing.T) {
 	sink := New()
 	want := &http.Response{StatusCode: http.StatusTeapot}

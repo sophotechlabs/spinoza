@@ -1,10 +1,13 @@
 package atomicfile
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -74,6 +77,46 @@ func TestSavingAgainReplacesWhatWasThere(t *testing.T) {
 	body, _ := os.ReadFile(path)
 	if string(body) != "second" {
 		t.Fatalf("body = %q, want the newer one", body)
+	}
+}
+
+func TestConcurrentSavesLeaveOneCompleteFile(t *testing.T) {
+	path := target(t)
+	const writers = 32
+	payloads := make([][]byte, writers)
+	var group sync.WaitGroup
+
+	for index := range writers {
+		payloads[index] = []byte(strings.Repeat(fmt.Sprintf("writer-%02d-", index), 1024))
+		body := payloads[index]
+		group.Go(func() {
+			if err := Save(path, "state-*.json", body); err != nil {
+				t.Errorf("save: %v", err)
+			}
+		})
+	}
+	group.Wait()
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	complete := false
+	for _, payload := range payloads {
+		if bytes.Equal(body, payload) {
+			complete = true
+			break
+		}
+	}
+	if !complete {
+		t.Fatalf("the final file is not one complete payload: %d bytes", len(body))
+	}
+	left, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	if len(left) != 1 {
+		t.Fatalf("directory holds %d files, want only the target", len(left))
 	}
 }
 

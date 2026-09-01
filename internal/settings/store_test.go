@@ -2,8 +2,10 @@ package settings
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -74,6 +76,36 @@ func TestMergingKeepsWhatItWasNotGiven(t *testing.T) {
 	}
 	if values["b"] != "2" {
 		t.Fatalf("b = %q, want the untouched value", values["b"])
+	}
+}
+
+func TestConcurrentMergesKeepEveryKey(t *testing.T) {
+	path := tempPath(t)
+	store := openAt(t, path)
+	const writers = 32
+	var group sync.WaitGroup
+
+	for index := range writers {
+		key := fmt.Sprintf("spinoza.user.v1.%02d", index)
+		value := fmt.Sprintf("value-%02d", index)
+		group.Go(func() {
+			if err := store.Merge(map[string]string{key: value}); err != nil {
+				t.Errorf("merge %s: %v", key, err)
+			}
+		})
+	}
+	group.Wait()
+
+	values := openAt(t, path).All()
+	if len(values) != writers {
+		t.Fatalf("settings = %d, want every concurrent merge", len(values))
+	}
+	for index := range writers {
+		key := fmt.Sprintf("spinoza.user.v1.%02d", index)
+		want := fmt.Sprintf("value-%02d", index)
+		if values[key] != want {
+			t.Fatalf("%s = %q, want %q", key, values[key], want)
+		}
 	}
 }
 

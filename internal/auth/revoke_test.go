@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -88,5 +90,26 @@ func TestARevocationIsRememberedForAsLongAsASessionCanLive(t *testing.T) {
 	if authn.revoked.within != 72*time.Hour {
 		t.Fatalf("revocations are kept %s but a session can live %s, so a revoked one would come back",
 			authn.revoked.within, 72*time.Hour)
+	}
+}
+
+func TestSessionsCanBeRevokedConcurrently(t *testing.T) {
+	held := newRevocations(time.Hour)
+	const sessions = 64
+	var group sync.WaitGroup
+
+	for index := range sessions {
+		session := fmt.Sprintf("session-%d", index)
+		group.Go(func() {
+			held.revoke(session)
+			if !held.revoked(session) {
+				t.Errorf("%s was accepted after revocation", session)
+			}
+		})
+	}
+	group.Wait()
+
+	if len(held.gone) != sessions {
+		t.Fatalf("revocations = %d, want %d", len(held.gone), sessions)
 	}
 }

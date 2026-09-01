@@ -1,9 +1,11 @@
 package baseline
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/checks"
@@ -72,6 +74,37 @@ func TestOneClusterCannotReadAnotherClusterBaseline(t *testing.T) {
 
 	if _, ok := held.Load("https://two.example:6443"); ok {
 		t.Fatal("a second cluster was given the first one's baseline")
+	}
+}
+
+func TestConcurrentClustersKeepTheirOwnBaselines(t *testing.T) {
+	held := store(t)
+	const clusters = 24
+	var group sync.WaitGroup
+
+	for index := range clusters {
+		server := fmt.Sprintf("https://cluster-%02d.example:6443", index)
+		baseline := taken()
+		baseline.Cluster = server
+		baseline.TakenAt = fmt.Sprintf("2026-09-01T%02d:00:00Z", index)
+		group.Go(func() {
+			if err := held.Save(server, baseline); err != nil {
+				t.Errorf("save %s: %v", server, err)
+			}
+		})
+	}
+	group.Wait()
+
+	for index := range clusters {
+		server := fmt.Sprintf("https://cluster-%02d.example:6443", index)
+		wantTakenAt := fmt.Sprintf("2026-09-01T%02d:00:00Z", index)
+		baseline, ok := held.Load(server)
+		if !ok {
+			t.Fatalf("%s has no baseline", server)
+		}
+		if baseline.Cluster != server || baseline.TakenAt != wantTakenAt {
+			t.Fatalf("%s loaded %+v", server, baseline)
+		}
 	}
 }
 

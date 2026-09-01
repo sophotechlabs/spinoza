@@ -19,10 +19,11 @@ import (
 type flaky struct {
 	Backend
 
-	mu    sync.Mutex
-	err   error
-	asks  int
-	heard *reach.Sink
+	mu     sync.Mutex
+	err    error
+	asks   int
+	heard  *reach.Sink
+	probed chan struct{}
 }
 
 func (u *flaky) Reach() *reach.Sink {
@@ -31,9 +32,16 @@ func (u *flaky) Reach() *reach.Sink {
 
 func (u *flaky) Ping(context.Context) error {
 	u.mu.Lock()
-	defer u.mu.Unlock()
 	u.asks++
-	return u.err
+	err := u.err
+	u.mu.Unlock()
+	if u.probed != nil {
+		select {
+		case u.probed <- struct{}{}:
+		default:
+		}
+	}
+	return err
 }
 
 func (u *flaky) breaks(err error) {
@@ -169,13 +177,17 @@ func TestAWindowIsToldWhenTheClusterComesBack(t *testing.T) {
 }
 
 func TestAnUnchangedAnswerIsNotRepeated(t *testing.T) {
-	backend := &flaky{}
+	backend := &flaky{probed: make(chan struct{}, 8)}
 	ts := flakyServer(t, backend)
 	ctx, conn := openAwkwardFeed(t, ts)
 	nextHealth(ctx, t, conn)
 
-	for backend.asked() < 4 {
-		time.Sleep(10 * time.Millisecond)
+	for range 4 {
+		select {
+		case <-backend.probed:
+		case <-time.After(time.Second):
+			t.Fatal("the cluster was not probed four times")
+		}
 	}
 
 	quiet, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
