@@ -47,6 +47,23 @@ func TestABaselineComesBackAsItWasSaved(t *testing.T) {
 	}
 }
 
+func TestAnOlderStoredBaselineWithNoFingerprintsStillLoads(t *testing.T) {
+	held := store(t)
+	body := []byte(`{"takenAt":"2026-08-30T00:00:00Z","checks":["privileged-containers"]}`)
+	if err := os.WriteFile(held.fileFor(cluster), body, 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	back, ok := held.Load(cluster)
+
+	if !ok {
+		t.Fatal("an older baseline without fingerprints could not be read")
+	}
+	if back.Keys == nil {
+		t.Fatal("an older baseline came back with a nil set to look fingerprints up in")
+	}
+}
+
 func TestOneClusterCannotReadAnotherClusterBaseline(t *testing.T) {
 	held := store(t)
 	if err := held.Save(cluster, taken()); err != nil {
