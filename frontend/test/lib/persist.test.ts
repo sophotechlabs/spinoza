@@ -169,6 +169,22 @@ describe('settings left over in the browser', () => {
     expect(window.localStorage.getItem('spinoza.theme.v1')).toBeNull();
   });
 
+  it('remain available when the browser refuses to remove the migrated copy', async () => {
+    const fetchMock = stubFetch();
+    startSaving();
+    window.localStorage.setItem('spinoza.theme.v1', '"nord"');
+    vi.spyOn(window.localStorage, 'removeItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    served({});
+
+    hydrate();
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem('spinoza.theme.v1')).toBe('"nord"');
+  });
+
   it('remain available when the server refuses the migration', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     startSaving();

@@ -418,6 +418,59 @@ describe('changing the sort while pages are loaded', () => {
     expect(result.current.rows.map((row) => row.id)).toEqual(['n1']);
     expect(result.current.more).toBe('nc1');
   });
+
+  it('ignores a page failure from the previous order when it lands late', async () => {
+    let failOldPage: (reason?: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const asked = new URL(url, 'http://localhost').searchParams;
+        const sort = asked.get('sort') ?? '';
+        const after = asked.get('after') ?? '';
+        if (sort === 'worst' && after === '') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ rows: [issue({ id: 'w1' })], next: 'wc1' }),
+          });
+        }
+        if (sort === 'worst' && after === 'wc1') {
+          return new Promise((_resolve, reject) => {
+            failOldPage = reject;
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ rows: [issue({ id: 'n1' })], next: 'nc1' }),
+        });
+      }),
+    );
+    const { result, rerender } = renderHook(
+      ({ order }: { order: IssueOrder }) => usePagedIssues(true, false, order),
+      { initialProps: { order: 'worst' as IssueOrder } },
+    );
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['w1']);
+    });
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.loadingMore).toBe(true);
+    });
+
+    rerender({ order: 'newest' as IssueOrder });
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['n1']);
+    });
+    await act(async () => {
+      failOldPage(new Error('the old page failed'));
+      await Promise.resolve();
+    });
+
+    expect(result.current.moreError).toBe('');
+    expect(result.current.rows.map((row) => row.id)).toEqual(['n1']);
+    expect(result.current.more).toBe('nc1');
+  });
 });
 
 describe('usePagedIssues', () => {
