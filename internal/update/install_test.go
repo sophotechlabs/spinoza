@@ -320,3 +320,34 @@ func TestAScriptThatDoesNotTakeTheSkipIsRefused(t *testing.T) {
 		t.Fatal("an older script ran anyway")
 	}
 }
+
+func TestAScriptAtTheSizeLimitStillRuns(t *testing.T) {
+	var ran call
+	one := installerFor(t, t.TempDir(), &ran, nil)
+	body := "#!/bin/sh\n# reads " + skipApp + "\n"
+	body += strings.Repeat("x", maxScript-len(body))
+	one.script = servingStatus(t, body, http.StatusOK).URL
+
+	if err := one.Install(context.Background()); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	if ran.dir == "" {
+		t.Fatal("a script at the size limit did not run")
+	}
+}
+
+func TestAnOversizedScriptIsRefusedRatherThanRunTruncated(t *testing.T) {
+	var ran call
+	one := installerFor(t, t.TempDir(), &ran, nil)
+	body := "#!/bin/sh\n# reads " + skipApp + "\n" + strings.Repeat("x", maxScript)
+	one.script = servingStatus(t, body, http.StatusOK).URL
+
+	err := one.Install(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("error = %v, want the oversized script refused", err)
+	}
+	if ran.dir != "" {
+		t.Fatal("the truncated script ran")
+	}
+}

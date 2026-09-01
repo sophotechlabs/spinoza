@@ -142,7 +142,14 @@ func (i *Installer) fetch(ctx context.Context) ([]byte, error) {
 	if response.StatusCode != http.StatusOK {
 		return nil, &statusError{code: response.StatusCode}
 	}
-	return io.ReadAll(io.LimitReader(response.Body, maxScript))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxScript+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxScript {
+		return nil, fmt.Errorf("install script is larger than %d bytes", maxScript)
+	}
+	return body, nil
 }
 
 func saveScript(body []byte) (string, error) {
