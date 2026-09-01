@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestReleasedPodStaysSeenWhileItIsPresent(t *testing.T) {
@@ -172,6 +174,26 @@ func TestPodsAreSortedBeforeTheAttachmentCapIsApplied(t *testing.T) {
 		if pod.name != want {
 			t.Errorf("pod %d = %q, want %q", id, pod.name, want)
 		}
+	}
+}
+
+func TestOpeningManyLogsReportsAPodListFailure(t *testing.T) {
+	client := fake.NewClientset()
+	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, errors.New("pods are forbidden")
+	})
+
+	stream, err := openMany(t.Context(), client, Request{
+		Namespace: "prod",
+		Selector:  "app=web",
+	})
+
+	if stream != nil {
+		stream.Close()
+		t.Fatal("a failed pod list opened a log stream")
+	}
+	if err == nil || !strings.Contains(err.Error(), "pods are forbidden") {
+		t.Fatalf("error = %v, want the pod list failure", err)
 	}
 }
 
