@@ -666,6 +666,7 @@ workflows: scoped-tools
     actionlint .github/workflows/*.yaml
     zizmor --no-online-audits --config .forgejo/zizmor.yml .forgejo/workflows/*.yaml
     zizmor --no-online-audits .github/workflows/*.yaml
+    test/release-tag.sh
 
 scoped-tools:
     #!/usr/bin/env bash
