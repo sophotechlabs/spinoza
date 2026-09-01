@@ -100,7 +100,7 @@ POST /api/view/desktop role=- local=yes whole=no writes=no
 POST /auth/backchannel-logout role=- local=no whole=no writes=no
 PUT /api/checks/baseline/file role=editor local=no whole=no writes=no
 PUT /api/object role=editor local=no whole=no writes=yes
-PUT /api/settings role=admin local=no whole=no writes=no
+PUT /api/settings role=- local=no whole=no writes=no
 action cordon role=admin
 action drain role=admin
 action restart role=editor

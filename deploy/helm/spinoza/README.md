@@ -69,7 +69,7 @@ refuses to render without it, and Spinoza refuses invalid values at startup.
 | `serviceAccount.create` | `true` | |
 | `service.port` | `8080` | |
 | `ingress.enabled` | `false` | |
-| `persistence.enabled` | `false` | Keeps settings, baselines and the timeline across restarts. |
+| `persistence.enabled` | `false` | Keeps per-user settings, baselines and the timeline across restarts. |
 | `resources` | 100m / 256Mi requested, 1Gi limit | |
 | `extraArgs`, `extraEnv`, `extraVolumes`, `extraVolumeMounts` | `[]` | |
 

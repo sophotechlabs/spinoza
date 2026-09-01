@@ -3,12 +3,15 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/settings"
 )
@@ -37,6 +40,67 @@ func settingsServer(t *testing.T, store Settings) *httptest.Server {
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts
+}
+
+func settingsServerForUsers(t *testing.T, store Settings) (*Server, *httptest.Server) {
+	t.Helper()
+	srv := New(&stubBackendCluster{backend: everyNamespace()}, testAssets(), "")
+	srv.UseSettings(store)
+	authn, err := auth.New(t.Context(), auth.Config{
+		Mode:        auth.ModeProxy,
+		DefaultRole: auth.RoleViewer,
+		Proxy: auth.ProxyConfig{
+			SharedSecret: []byte(testProxySecret),
+		},
+	})
+	if err != nil {
+		t.Fatalf("building the authenticator: %v", err)
+	}
+	srv.UseClusterAuth(ClusterAuth{Authenticator: authn})
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+	return srv, ts
+}
+
+func settingsAsUser(
+	t *testing.T,
+	ts *httptest.Server,
+	method string,
+	path string,
+	user string,
+	body string,
+) (*http.Response, []byte) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), method, ts.URL+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	req.Header.Set(auth.DefaultUserHeader, user)
+	req.Header.Set(auth.DefaultProxyAuthHeader, testProxySecret)
+	resp, doErr := ts.Client().Do(req)
+	if doErr != nil {
+		t.Fatalf("%s %s: %v", method, path, doErr)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	responseBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		t.Fatalf("reading response: %v", readErr)
+	}
+	return resp, responseBody
+}
+
+func putUserSettings(
+	t *testing.T,
+	ts *httptest.Server,
+	user string,
+	values map[string]string,
+) (*http.Response, []byte) {
+	t.Helper()
+	body, err := json.Marshal(api.Settings{Values: values})
+	if err != nil {
+		t.Fatalf("encoding settings: %v", err)
+	}
+	return settingsAsUser(t, ts, http.MethodPut, "/api/settings", user, string(body))
 }
 
 func decodeSettings(t *testing.T, body []byte) api.Settings {
@@ -78,6 +142,147 @@ func TestSettingsComeBackAfterTheyAreKept(t *testing.T) {
 	}
 }
 
+func TestServedSettingsBelongToTheSignedInUser(t *testing.T) {
+	store := settings.Memory()
+	err := store.Merge(map[string]string{"spinoza.theme.v1": `"legacy"`})
+	if err != nil {
+		t.Fatalf("holding legacy settings: %v", err)
+	}
+	_, ts := settingsServerForUsers(t, store)
+
+	_, first := settingsAsUser(t, ts, http.MethodGet, "/api/settings", "alice@example.com", "")
+	if len(decodeSettings(t, first).Values) != 0 {
+		t.Fatalf("alice inherited shared settings: %s", first)
+	}
+	alice, aliceBody := putUserSettings(t, ts, "alice@example.com", map[string]string{
+		"spinoza.theme.v1": `"nord"`,
+	})
+	if alice.StatusCode != http.StatusOK {
+		t.Fatalf("alice status = %d: %s", alice.StatusCode, aliceBody)
+	}
+	_, bobBefore := settingsAsUser(t, ts, http.MethodGet, "/api/settings", "bob@example.com", "")
+	if len(decodeSettings(t, bobBefore).Values) != 0 {
+		t.Fatalf("bob received alice's settings: %s", bobBefore)
+	}
+	bob, bobBody := putUserSettings(t, ts, "bob@example.com", map[string]string{
+		"spinoza.theme.v1": `"solarized"`,
+	})
+	if bob.StatusCode != http.StatusOK {
+		t.Fatalf("bob status = %d: %s", bob.StatusCode, bobBody)
+	}
+
+	_, aliceAfter := settingsAsUser(t, ts, http.MethodGet, "/api/settings", "alice@example.com", "")
+	if decodeSettings(t, aliceAfter).Values["spinoza.theme.v1"] != `"nord"` {
+		t.Fatalf("alice received the wrong settings: %s", aliceAfter)
+	}
+	_, bobAfter := settingsAsUser(t, ts, http.MethodGet, "/api/settings", "bob@example.com", "")
+	if decodeSettings(t, bobAfter).Values["spinoza.theme.v1"] != `"solarized"` {
+		t.Fatalf("bob received the wrong settings: %s", bobAfter)
+	}
+	stored := store.All()
+	if stored["spinoza.theme.v1"] != `"legacy"` {
+		t.Fatalf("personal settings overwrote the legacy shared value: %v", stored)
+	}
+	users := 0
+	for key := range stored {
+		if strings.Contains(key, "alice@example.com") || strings.Contains(key, "bob@example.com") {
+			t.Fatalf("the settings store exposes a username in %q", key)
+		}
+		if strings.HasPrefix(key, userSettingsPrefix) {
+			users++
+		}
+	}
+	if users != 2 {
+		t.Fatalf("stored user settings = %d, want 2: %v", users, stored)
+	}
+}
+
+func TestTheServedPageCarriesOnlyTheSignedInUsersSettings(t *testing.T) {
+	_, ts := settingsServerForUsers(t, settings.Memory())
+	putUserSettings(t, ts, "alice@example.com", map[string]string{"spinoza.theme.v1": `"nord"`})
+	putUserSettings(t, ts, "bob@example.com", map[string]string{"spinoza.theme.v1": `"solarized"`})
+
+	_, alicePage := settingsAsUser(t, ts, http.MethodGet, "/", "alice@example.com", "")
+	if !strings.Contains(string(alicePage), "nord") {
+		t.Fatalf("alice's page left out her settings: %s", alicePage)
+	}
+	if strings.Contains(string(alicePage), "solarized") {
+		t.Fatalf("alice's page included bob's settings: %s", alicePage)
+	}
+	_, bobPage := settingsAsUser(t, ts, http.MethodGet, "/", "bob@example.com", "")
+	if !strings.Contains(string(bobPage), "solarized") {
+		t.Fatalf("bob's page left out his settings: %s", bobPage)
+	}
+	if strings.Contains(string(bobPage), "nord") {
+		t.Fatalf("bob's page included alice's settings: %s", bobPage)
+	}
+}
+
+func TestCustomCheckRulesBelongToTheSignedInUser(t *testing.T) {
+	srv, ts := settingsServerForUsers(t, settings.Memory())
+	raw := `[{"id":"alice-rule","expr":"true"}]`
+	resp, body := putUserSettings(t, ts, "alice@example.com", map[string]string{checks.RulesKey: raw})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	alice := httptest.NewRequest(http.MethodGet, "/api/checks", http.NoBody)
+	alice = alice.WithContext(auth.WithIdentity(alice.Context(), auth.Identity{User: "alice@example.com"}))
+	bob := httptest.NewRequest(http.MethodGet, "/api/checks", http.NoBody)
+	bob = bob.WithContext(auth.WithIdentity(bob.Context(), auth.Identity{User: "bob@example.com"}))
+
+	aliceRules := srv.checkFilterOn(alice, "cluster").Rules
+	if len(aliceRules) != 1 || aliceRules[0].ID != "alice-rule" {
+		t.Fatalf("alice's rules = %+v", aliceRules)
+	}
+	bobRules := srv.checkFilterOn(bob, "cluster").Rules
+	if len(bobRules) != 0 {
+		t.Fatalf("bob received alice's rules: %+v", bobRules)
+	}
+}
+
+func TestServedSettingsAcceptOnlyBrowserManagedKeys(t *testing.T) {
+	_, ts := settingsServerForUsers(t, settings.Memory())
+	resp, _ := putUserSettings(t, ts, "alice@example.com", map[string]string{
+		"spinoza.unbounded.v1": "value",
+	})
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestTheBrowserAndServerAgreeOnPersonalSettingKeys(t *testing.T) {
+	body, err := os.ReadFile("../../frontend/src/lib/persist.ts")
+	if err != nil {
+		t.Fatalf("reading browser settings: %v", err)
+	}
+	source := string(body)
+	start := strings.Index(source, "const KEYS = [")
+	if start < 0 {
+		t.Fatal("the browser settings list could not be found")
+	}
+	end := strings.Index(source[start:], "];\n")
+	if end < 0 {
+		t.Fatal("the end of the browser settings list could not be found")
+	}
+	block := source[start : start+end]
+	browser := map[string]bool{}
+	for line := range strings.SplitSeq(block, "\n") {
+		key := strings.Trim(strings.TrimSpace(line), "',")
+		if strings.HasPrefix(key, "spinoza.") {
+			browser[key] = true
+		}
+	}
+	if len(browser) != len(personalSettingKeys) {
+		t.Fatalf("browser keys = %v, server keys = %v", browser, personalSettingKeys)
+	}
+	for key := range browser {
+		if !personalSettingKeys[key] {
+			t.Errorf("the browser writes %q but the server refuses it", key)
+		}
+	}
+}
+
 func TestMutesDoNotComeBackThroughSettings(t *testing.T) {
 	store := settings.Memory()
 	err := store.Merge(map[string]string{
@@ -100,6 +305,35 @@ func TestMutesDoNotComeBackThroughSettings(t *testing.T) {
 	}
 }
 
+func TestDeploymentAndOtherUsersSettingsDoNotComeBackThroughSettings(t *testing.T) {
+	store := settings.Memory()
+	otherUser := userSettingsPrefix + strings.Repeat("a", 64) + ".spinoza.theme.v1"
+	err := store.Merge(map[string]string{
+		"spinoza.theme.v1": `"nord"`,
+		timelineDaysKey:    "30",
+		otherUser:          `"solarized"`,
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	ts := settingsServer(t, store)
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/settings", nil)
+	values := decodeSettings(t, body).Values
+
+	if values["spinoza.theme.v1"] != `"nord"` {
+		t.Fatalf("ordinary settings were filtered: %s", body)
+	}
+	_, exposedTimeline := values[timelineDaysKey]
+	if exposedTimeline {
+		t.Fatalf("settings exposed timeline retention: %s", body)
+	}
+	_, exposedUser := values[otherUser]
+	if exposedUser {
+		t.Fatalf("settings exposed another user's values: %s", body)
+	}
+}
+
 func TestMutesCannotBeChangedThroughSettings(t *testing.T) {
 	store := settings.Memory()
 	original := `{"cluster":[{"check":"privileged","namespace":"payments"}]}`
@@ -116,6 +350,25 @@ func TestMutesCannotBeChangedThroughSettings(t *testing.T) {
 	}
 	if store.All()[checks.MutesKey] != original {
 		t.Fatal("the settings endpoint changed the shared mute state")
+	}
+}
+
+func TestDeploymentSettingsCannotBeChangedThroughPersonalSettings(t *testing.T) {
+	ts := settingsServer(t, settings.Memory())
+	for _, key := range []string{
+		timelineDaysKey,
+		userSettingsPrefix + strings.Repeat("a", 64) + ".spinoza.theme.v1",
+	} {
+		t.Run(key, func(t *testing.T) {
+			body, err := json.Marshal(api.Settings{Values: map[string]string{key: "value"}})
+			if err != nil {
+				t.Fatalf("encoding settings: %v", err)
+			}
+			resp, _ := doRequest(t, http.MethodPut, ts.URL+"/api/settings", strings.NewReader(string(body)))
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", resp.StatusCode)
+			}
+		})
 	}
 }
 

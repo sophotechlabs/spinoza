@@ -42,7 +42,7 @@ func (s *Server) checkFilter(r *http.Request) checks.Filter {
 func (s *Server) checkFilterOn(r *http.Request, cluster string) checks.Filter {
 	keep := checks.ParseFilter(r.URL.Query())
 	held := s.stored().All()
-	keep.Rules = checks.ParseRules(held[checks.RulesKey])
+	keep.Rules = checks.ParseRules(s.settingFor(r, held, checks.RulesKey))
 	keep.Silencers = checks.Silencers(keep.Rules)
 	keep.Mutes = checks.ParseMutes(held[checks.MutesKey], cluster)
 	if taken, ok := s.baselines().Load(cluster); ok {

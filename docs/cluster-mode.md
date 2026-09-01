@@ -189,9 +189,9 @@ Two things decide that, and both have to allow it.
 
 | role | may |
 |---|---|
-| `viewer` | read every view, and change nothing |
+| `viewer` | read permitted views, save personal settings, and change no cluster objects |
 | `editor` | everything above, plus apply, delete, scale, restart, reconcile, and Helm install, upgrade, rollback and uninstall |
-| `admin` | everything above, plus exec, debug containers, node shells, cordon, drain, the RBAC index, the profiler, protecting a cluster and changing spinoza's own settings |
+| `admin` | everything above, plus exec, debug containers, node shells, cordon, drain, the RBAC index, the profiler and protecting a cluster |
 
 ```yaml
 auth:
@@ -203,6 +203,12 @@ auth:
 
 The strongest matching list wins. With no lists at all, everybody gets
 `defaultRole`.
+
+Appearance, layout, table, check-rule and other browser settings belong to the
+signed-in user. They are stored under an identity digest, are never returned to
+another user, and do not require an elevated role. Cluster-wide mute decisions,
+timeline retention and other deployment state are kept outside that personal
+settings endpoint.
 
 **Kubernetes RBAC**, through impersonation. With `impersonate: true` — the
 default — every apiserver call spinoza makes for a request carries

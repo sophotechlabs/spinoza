@@ -68,6 +68,7 @@ var readOnlyWrites = map[string]bool{
 	routeKey(http.MethodPost, "/api/view/browser"):        true,
 	routeKey(http.MethodPost, "/api/view/desktop"):        true,
 	routeKey(http.MethodPost, "/api/update"):              true,
+	routeKey(http.MethodPut, "/api/settings"):             true,
 	routeKey(http.MethodPost, "/auth/backchannel-logout"): true,
 }
 
@@ -118,7 +119,6 @@ func TestExecAndPortForwardingAreAdminOnly(t *testing.T) {
 		routeKey(http.MethodGet, "/api/exec"),
 		routeKey(http.MethodGet, "/api/nodeshell"),
 		routeKey(http.MethodPost, "/api/debug"),
-		routeKey(http.MethodPut, "/api/settings"),
 	}
 	for _, key := range admin {
 		if neededRole[key] != auth.RoleAdmin {

@@ -114,7 +114,7 @@ ingress:
   hosts: []
   tls: []
 
-# Keeps settings, audit baselines and the timeline across restarts.
+# Keeps per-user settings, audit baselines and the timeline across restarts.
 persistence:
   enabled: false
   size: 1Gi

@@ -35,7 +35,7 @@ func (s *Server) headFor(r *http.Request, view string) string {
 	if s.inCluster() && !signedIn(r) {
 		return ViewScript(view)
 	}
-	return s.IndexHead(view)
+	return s.indexHead(r, view)
 }
 
 func signedIn(r *http.Request) bool {
@@ -44,7 +44,15 @@ func signedIn(r *http.Request) bool {
 }
 
 func (s *Server) IndexHead(view string) string {
-	return TokenScript(s.token) + SettingsScript(servedSettings(s.stored().All())) + ViewScript(view) +
+	return s.indexHead(nil, view)
+}
+
+func (s *Server) indexHead(r *http.Request, view string) string {
+	values := servedSettings(s.stored().All())
+	if r != nil && s.inCluster() {
+		values = s.settingsFor(r)
+	}
+	return TokenScript(s.token) + SettingsScript(values) + ViewScript(view) +
 		StartScript(s.start.view, s.start.context)
 }
 
