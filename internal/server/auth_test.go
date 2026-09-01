@@ -426,6 +426,46 @@ func TestALoginIsOnlyRoutedWhenSpinozaIsServingACluster(t *testing.T) {
 	}
 }
 
+func TestAClusterServerMountsEveryAuthenticationRoute(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: everyNamespace()}, testAssets(), "")
+	authn, err := auth.New(t.Context(), auth.Config{
+		Mode:  auth.ModeProxy,
+		Proxy: auth.ProxyConfig{SharedSecret: []byte(testProxySecret)},
+	})
+	if err != nil {
+		t.Fatalf("building the authenticator: %v", err)
+	}
+	srv.UseClusterAuth(ClusterAuth{Authenticator: authn})
+	handler := srv.Handler()
+
+	cases := []struct {
+		method   string
+		path     string
+		status   int
+		location string
+	}{
+		{method: http.MethodGet, path: pathLogin, status: http.StatusNotFound},
+		{method: http.MethodGet, path: pathCallback, status: http.StatusNotFound},
+		{method: http.MethodGet, path: pathLogout, status: http.StatusFound, location: "/"},
+		{method: http.MethodPost, path: pathBackchannel, status: http.StatusNotFound},
+	}
+	for _, test := range cases {
+		t.Run(test.method+" "+test.path, func(t *testing.T) {
+			recorded := httptest.NewRecorder()
+			request := httptest.NewRequest(test.method, test.path, http.NoBody)
+
+			handler.ServeHTTP(recorded, request)
+
+			if recorded.Code != test.status {
+				t.Fatalf("status = %d, want %d", recorded.Code, test.status)
+			}
+			if recorded.Header().Get("Location") != test.location {
+				t.Fatalf("location = %q, want %q", recorded.Header().Get("Location"), test.location)
+			}
+		})
+	}
+}
+
 func TestWhereALoginLandsIsWhereSpinozaIsPublished(t *testing.T) {
 	cases := map[string]string{
 		"https://spinoza.example.com":       "https://spinoza.example.com",

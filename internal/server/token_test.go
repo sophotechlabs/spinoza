@@ -73,6 +73,17 @@ func TestInjectHeadLeavesADocumentWithoutAHeadAlone(t *testing.T) {
 	}
 }
 
+func TestIndexHeadUsesTheConfiguredStartRoute(t *testing.T) {
+	srv := New(&stubBackendCluster{}, testAssets(), testToken)
+	srv.StartOn("traffic", "p-mk1")
+
+	head := srv.IndexHead(ViewBrowser)
+
+	if !strings.Contains(head, StartScript("traffic", "p-mk1")) {
+		t.Fatalf("head = %q, want the configured start route", head)
+	}
+}
+
 func TestAnAPICallWithoutTheTokenIsRefused(t *testing.T) {
 	ts := tokenServer(t)
 

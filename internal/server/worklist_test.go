@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -19,6 +20,16 @@ type heldBaselines struct {
 	taken   map[string]checks.Baseline
 	saveErr error
 	clearIt error
+}
+
+type brokenBaselineBody struct{}
+
+func (brokenBaselineBody) Read([]byte) (int, error) {
+	return 0, errors.New("upload interrupted")
+}
+
+func (brokenBaselineBody) Close() error {
+	return nil
 }
 
 func newHeldBaselines() *heldBaselines {
@@ -450,6 +461,27 @@ func TestAFileThatIsNotABaselineIsRefused(t *testing.T) {
 	}
 	if report := checksReport(t, ts.URL+"/api/checks"); report.Baseline != "" {
 		t.Fatalf("a refused file left %q as the baseline", report.Baseline)
+	}
+}
+
+func TestABaselineUploadThatBreaksWhileReadingIsRefused(t *testing.T) {
+	srv := New(&stubBackendCluster{}, testAssets(), testToken)
+	held := newHeldBaselines()
+	srv.UseBaselines(held)
+	request := httptest.NewRequest(http.MethodPut, "/api/checks/baseline/file", http.NoBody)
+	request.Body = brokenBaselineBody{}
+	recorded := httptest.NewRecorder()
+
+	srv.loadBaselineFile(recorded, request)
+
+	if recorded.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(recorded.Body.String(), "could not be read") {
+		t.Fatalf("body = %q, want the interrupted upload named", recorded.Body.String())
+	}
+	if len(held.taken) != 0 {
+		t.Fatalf("baselines = %v, want the partial upload left out", held.taken)
 	}
 }
 
