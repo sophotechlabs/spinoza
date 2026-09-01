@@ -28,6 +28,18 @@ entries:
     - version: 1.2.3
 `
 
+type interruptedReader struct {
+	delivered bool
+}
+
+func (r *interruptedReader) Read(into []byte) (int, error) {
+	if r.delivered {
+		return 0, errors.New("repository response interrupted")
+	}
+	r.delivered = true
+	return copy(into, "entries:\n  podinfo:"), nil
+}
+
 func cacheFor(t *testing.T, handler http.HandlerFunc) (*Cache, *httptest.Server) {
 	t.Helper()
 	ts := httptest.NewServer(handler)
@@ -267,6 +279,32 @@ func TestResolveIndexRejectsMalformedYAML(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("expected a parse error")
+	}
+}
+
+func TestResolveRefusesALocalRepositoryPassedDirectly(t *testing.T) {
+	cache := New(t.Context(), http.DefaultClient, DefaultTTL)
+
+	_, err := cache.Resolve(t.Context(), Repo{URL: "http://127.0.0.1/charts"}, "podinfo")
+
+	if err == nil || !strings.Contains(err.Error(), "public address") {
+		t.Fatalf("error = %v, want the local repository refused", err)
+	}
+}
+
+func TestResolveRequiresTheURLAndOCISettingToAgree(t *testing.T) {
+	cache := New(t.Context(), http.DefaultClient, DefaultTTL)
+	cases := []Repo{
+		{URL: "https://charts.example.com", OCI: true},
+		{URL: "oci://registry.example.com/team", OCI: false},
+	}
+
+	for _, repo := range cases {
+		_, err := cache.Resolve(t.Context(), repo, "podinfo")
+
+		if err == nil || !strings.Contains(err.Error(), "does not match its oci setting") {
+			t.Fatalf("repo = %+v, error = %v", repo, err)
+		}
 	}
 }
 
@@ -550,6 +588,90 @@ func TestARepositoryConnectionUsesTheAddressThatWasChecked(t *testing.T) {
 
 	if connected != "93.184.216.34:443" {
 		t.Fatalf("dialed %q, want the checked address rather than the hostname", connected)
+	}
+}
+
+func TestARepositoryConnectionNeedsAHostAndPort(t *testing.T) {
+	lookedUp := false
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		lookedUp = true
+		return nil, nil
+	}
+	dial := func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("unexpected dial")
+	}
+
+	_, err := publicDial(lookup, dial)(t.Context(), "tcp", "charts.example.com")
+
+	if err == nil || !strings.Contains(err.Error(), "repository address") {
+		t.Fatalf("error = %v, want the malformed address named", err)
+	}
+	if lookedUp {
+		t.Fatal("a malformed address reached DNS")
+	}
+}
+
+func TestATLSRepositoryConnectionNeedsAHostAndPort(t *testing.T) {
+	lookedUp := false
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		lookedUp = true
+		return nil, nil
+	}
+	dial := func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("unexpected dial")
+	}
+
+	_, err := publicTLSDial(defaultTransport(), lookup, dial)(t.Context(), "tcp", "charts.example.com")
+
+	if err == nil || !strings.Contains(err.Error(), "repository address") {
+		t.Fatalf("error = %v, want the malformed TLS address named", err)
+	}
+	if lookedUp {
+		t.Fatal("a malformed TLS address reached DNS")
+	}
+}
+
+func TestRepositoryDialRefusesLocalhostWithoutDNS(t *testing.T) {
+	lookedUp := false
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		lookedUp = true
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}
+	dial := func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("unexpected dial")
+	}
+
+	_, err := publicDial(lookup, dial)(t.Context(), "tcp", "localhost:443")
+
+	if err == nil || !strings.Contains(err.Error(), "this machine") {
+		t.Fatalf("error = %v, want localhost refused", err)
+	}
+	if lookedUp {
+		t.Fatal("localhost reached DNS")
+	}
+}
+
+func TestARepositoryDNSFailureIsReported(t *testing.T) {
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		return nil, errors.New("dns unavailable")
+	}
+
+	_, err := resolvePublic(t.Context(), lookup, "charts.example.com")
+
+	if err == nil || !strings.Contains(err.Error(), "resolve repository host") {
+		t.Fatalf("error = %v, want the DNS operation named", err)
+	}
+}
+
+func TestARepositoryResolvingToNothingIsRefused(t *testing.T) {
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		return nil, nil
+	}
+
+	_, err := resolvePublic(t.Context(), lookup, "charts.example.com")
+
+	if err == nil || !strings.Contains(err.Error(), "resolved to no addresses") {
+		t.Fatalf("error = %v, want the empty DNS answer named", err)
 	}
 }
 
@@ -1267,6 +1389,14 @@ func TestJSONLargerThanItsLimitIsNotAcceptedPartially(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "larger than") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAnIndexReadFailureIsNotAcceptedPartially(t *testing.T) {
+	_, err := parseBoundedIndex(&interruptedReader{}, maxBodyBytes)
+
+	if err == nil || !strings.Contains(err.Error(), "repository response interrupted") {
+		t.Fatalf("error = %v, want the interrupted response reported", err)
 	}
 }
 
