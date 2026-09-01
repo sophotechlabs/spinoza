@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.26.1](https://github.com/sophotechlabs/spinoza/compare/v1.26.0...v1.26.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* **cluster:** restore persisted timeline ([3d29302](https://github.com/sophotechlabs/spinoza/commit/3d293026c618e1ab391f26a58652b025c27ba2e6))
+* **go:** stabilize unit test CI ([28286b0](https://github.com/sophotechlabs/spinoza/commit/28286b04c580ba3f9b4941a86654a10f56fc602b))
+* **release:** verify Helm chart checksums ([28e41f3](https://github.com/sophotechlabs/spinoza/commit/28e41f3d37d09d597c6ca65903641942e18254fe))
+* **settings:** isolate served user preferences ([63096fb](https://github.com/sophotechlabs/spinoza/commit/63096fbd497b376b3f9b5475d357ee886e61282e))
+
+
+### CI
+
+* **e2e:** run capability groups automatically ([5e714f8](https://github.com/sophotechlabs/spinoza/commit/5e714f8801434426afeebdc2124691070ba4ca36))
+
+
+### Tests
+
+* **e2e:** add capability-grouped coverage ([5434052](https://github.com/sophotechlabs/spinoza/commit/543405225e1f979c39e8d796cd944fbdfd618bbc))
+* **e2e:** make existing scenarios independently runnable ([e8e222c](https://github.com/sophotechlabs/spinoza/commit/e8e222c1523736b07138469ce63992d203b2df1b))
+* **go:** expand unit reliability coverage ([1796f30](https://github.com/sophotechlabs/spinoza/commit/1796f307ce1f192a59ae56b03a9a18b6a1cf92d2))
+
 ## [1.26.0](https://github.com/sophotechlabs/spinoza/compare/v1.25.0...v1.26.0) (2026-09-01)
 
 
