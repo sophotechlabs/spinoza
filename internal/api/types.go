@@ -260,6 +260,7 @@ type ResourceCounts struct {
 	Counts  map[string]int    `json:"counts"`
 	Failing map[string]int    `json:"failing,omitempty"`
 	ByPhase []string          `json:"byPhase,omitempty"`
+	Capped  []string          `json:"capped,omitempty"`
 	Errors  map[string]string `json:"errors,omitempty"`
 }
 

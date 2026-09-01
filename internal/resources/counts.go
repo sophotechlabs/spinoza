@@ -73,11 +73,12 @@ func Count(
 		})
 	}
 	wg.Wait()
-	failing := failingPods(bounded, client, descs, limits)
+	failing, capped := failingPods(bounded, client, descs, limits)
 	return api.ResourceCounts{
 		Counts:  counts,
 		Failing: failing,
 		ByPhase: phaseCounted(failing),
+		Capped:  capped,
 		Errors:  reasons,
 	}
 }
@@ -99,20 +100,23 @@ func failingPods(
 	client metadata.Interface,
 	descs []api.ResourceDescriptor,
 	limits CountLimits,
-) map[string]int {
+) (map[string]int, []string) {
 	if !counted(descs, podsKey) {
-		return nil
+		return nil, nil
 	}
 	bounded, cancel := context.WithTimeout(ctx, limits.PerType)
 	defer cancel()
 	got, err := podcount.Count(bounded, client, unhealthyPods)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	if got.Total == 0 {
-		return nil
+		return nil, nil
 	}
-	return map[string]int{podsKey: got.Total}
+	if !got.Complete {
+		return map[string]int{podsKey: got.Total}, []string{podsKey}
+	}
+	return map[string]int{podsKey: got.Total}, nil
 }
 
 func counted(descs []api.ResourceDescriptor, key string) bool {

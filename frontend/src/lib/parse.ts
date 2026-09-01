@@ -612,6 +612,7 @@ export function parseCounts(body: unknown): ResourceCounts {
     counts: numberMap(item.counts),
     failing: optionalNumberMap(item.failing),
     byPhase: optionalStringList(item.byPhase),
+    capped: optionalStringList(item.capped),
     errors: stringMap(item.errors),
   };
 }

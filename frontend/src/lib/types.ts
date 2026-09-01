@@ -761,6 +761,7 @@ export interface ResourceCounts {
   counts: Record<string, number>;
   failing?: Record<string, number>;
   byPhase?: string[];
+  capped?: string[];
   errors?: Record<string, string>;
 }
 

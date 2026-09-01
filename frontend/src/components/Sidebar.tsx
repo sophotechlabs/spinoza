@@ -113,35 +113,44 @@ function failingWord(byPhase: boolean): string {
   return 'not ready';
 }
 
+function failingCount(failing: number, capped: boolean): string {
+  if (capped) {
+    return `${String(failing)}+`;
+  }
+  return String(failing);
+}
+
 function kindTitle(
   kind: string,
   total: number | undefined,
   failing: number | undefined,
   byPhase: boolean,
+  capped: boolean,
 ): string {
   if (failing === undefined) {
     return kind;
   }
   const word = failingWord(byPhase);
+  const shown = failingCount(failing, capped);
   const totalLabel = countLabel(total);
   if (totalLabel === '' || totalLabel === '-') {
-    return `${kind}: ${String(failing)} ${word}`;
+    return `${kind}: ${shown} ${word}`;
   }
-  return `${kind}: ${String(failing)} of ${totalLabel} ${word}`;
+  return `${kind}: ${shown} of ${totalLabel} ${word}`;
 }
 
-function failingNote(failing: number | undefined, byPhase: boolean): string {
+function failingNote(failing: number | undefined, byPhase: boolean, capped: boolean): string {
   if (failing === undefined) {
     return '';
   }
-  return `, ${String(failing)} ${failingWord(byPhase)}`;
+  return `, ${failingCount(failing, capped)} ${failingWord(byPhase)}`;
 }
 
-function failingBadge(failing: number | undefined): string {
+function failingBadge(failing: number | undefined, capped: boolean): string {
   if (failing === undefined) {
     return '';
   }
-  return `(${String(failing)})`;
+  return `(${failingCount(failing, capped)})`;
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -231,6 +240,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   const [retrying, setRetrying] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [failing, setFailing] = useState<Record<string, number>>({});
+  const [capped, setCapped] = useState<string[]>([]);
   const [byPhase, setByPhase] = useState<string[]>([]);
   const discoveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -239,6 +249,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     let attempt = 0;
     setCounts({});
     setFailing({});
+    setCapped([]);
     setByPhase([]);
     setCountsError(null);
     const again = () => {
@@ -296,6 +307,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
         setCounts(tally.counts);
         rememberCounts(tally.counts);
         setFailing(tally.failing ?? {});
+        setCapped(tally.capped ?? []);
         setByPhase(tally.byPhase ?? []);
         setCountsError(null);
       }
@@ -541,6 +553,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                         counts[descriptorKey(resource)],
                         failing[descriptorKey(resource)],
                         byPhase.includes(descriptorKey(resource)),
+                        capped.includes(descriptorKey(resource)),
                       )}
                       className={resourceClass(
                         isActive(activeResource, resource),
@@ -550,9 +563,15 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                     >
                       <span className="truncate">{labels[descriptorKey(resource)]}</span>{' '}
                       <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
-                        {failingBadge(failing[descriptorKey(resource)]) !== '' && (
+                        {failingBadge(
+                          failing[descriptorKey(resource)],
+                          capped.includes(descriptorKey(resource)),
+                        ) !== '' && (
                           <span aria-hidden="true" className="text-error">
-                            {failingBadge(failing[descriptorKey(resource)])}
+                            {failingBadge(
+                              failing[descriptorKey(resource)],
+                              capped.includes(descriptorKey(resource)),
+                            )}
                           </span>
                         )}
                         <span>{countLabel(counts[descriptorKey(resource)])}</span>
@@ -560,6 +579,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                           {failingNote(
                             failing[descriptorKey(resource)],
                             byPhase.includes(descriptorKey(resource)),
+                            capped.includes(descriptorKey(resource)),
                           )}
                         </span>
                       </span>
@@ -603,6 +623,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                   counts[descriptorKey(resource)],
                                   failing[descriptorKey(resource)],
                                   byPhase.includes(descriptorKey(resource)),
+                                  capped.includes(descriptorKey(resource)),
                                 )}
                                 className={resourceClass(
                                   isActive(activeResource, resource),
@@ -612,9 +633,15 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                               >
                                 <span className="truncate">{labels[descriptorKey(resource)]}</span>{' '}
                                 <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
-                                  {failingBadge(failing[descriptorKey(resource)]) !== '' && (
+                                  {failingBadge(
+                                    failing[descriptorKey(resource)],
+                                    capped.includes(descriptorKey(resource)),
+                                  ) !== '' && (
                                     <span aria-hidden="true" className="text-error">
-                                      {failingBadge(failing[descriptorKey(resource)])}
+                                      {failingBadge(
+                                        failing[descriptorKey(resource)],
+                                        capped.includes(descriptorKey(resource)),
+                                      )}
                                     </span>
                                   )}
                                   <span>{countLabel(counts[descriptorKey(resource)])}</span>
@@ -622,6 +649,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                     {failingNote(
                                       failing[descriptorKey(resource)],
                                       byPhase.includes(descriptorKey(resource)),
+                                      capped.includes(descriptorKey(resource)),
                                     )}
                                   </span>
                                 </span>
