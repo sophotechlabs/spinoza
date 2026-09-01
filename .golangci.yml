@@ -314,6 +314,10 @@ linters:
         linters:
           - gosec
         text: 'G124'
+      - path: internal/charts/charts_test\.go$
+        linters:
+          - gosec
+        text: 'G402'
       - path: test/integration/.*_test\.go$
         linters:
           - gosec
