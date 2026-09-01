@@ -134,31 +134,31 @@ const missesBeforeUnreachable = 3
 
 func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
 	now.Cluster = id
-	s.publishHealthOf(id, s.settled(id, now))
+	settled, changed := s.settleHealthOf(id, now)
+	if !changed {
+		return
+	}
+	s.announceHealthOf(id, settled)
 }
 
 func (s *Server) recordPingOf(id string, now api.ClusterHealth) {
 	s.recordHealthOf(id, now)
 }
 
-func (s *Server) publishHealthOf(id string, now api.ClusterHealth) {
-	was := assumedHealthOf(id)
+func (s *Server) settleHealthOf(id string, seen api.ClusterHealth) (api.ClusterHealth, bool) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.verdictHeld(id, seen)
+	was := assumedHealthOf(id)
 	held, known := s.health[id]
 	if known {
 		was = held
 	}
 	s.health[id] = now
-	s.mu.Unlock()
-	if was == now {
-		return
-	}
-	s.announceHealthOf(id, now)
+	return now, was != now
 }
 
-func (s *Server) settled(id string, now api.ClusterHealth) api.ClusterHealth {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Server) verdictHeld(id string, now api.ClusterHealth) api.ClusterHealth {
 	if now.Reachable {
 		delete(s.misses, id)
 		return now
