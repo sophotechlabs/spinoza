@@ -235,6 +235,7 @@ func TestALandingPageOffSpinozaIsNotFollowed(t *testing.T) {
 		"":                     "/",
 		"https://elsewhere/":   "/",
 		"//elsewhere/":         "/",
+		`/\elsewhere/`:         "/",
 		"/?view=checks#docked": "/?view=checks#docked",
 	}
 	for given, want := range cases {

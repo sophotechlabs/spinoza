@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -15,6 +16,9 @@ import (
 )
 
 func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {
+	if !m.filter(ctx).allows(namespace) {
+		return api.MetricHistory{}, fmt.Errorf("%w: %s", ErrOutOfScope, namespace)
+	}
 	if m.prom != nil {
 		history, err := m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
 		if err == nil {

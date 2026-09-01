@@ -583,7 +583,9 @@ func TestRemovingANodeShellThatWasNeverWiredUpIsQuiet(t *testing.T) {
 	mgr, cancel := newManager(t, newClient(t))
 	defer cancel()
 
-	mgr.RemoveNodeShell(context.Background(), "spinoza-node-shell-abc")
+	if err := mgr.RemoveNodeShell(context.Background(), "spinoza-node-shell-abc"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
 }
 
 func TestAnArgoActionReachesTheObjectItNames(t *testing.T) {
@@ -685,7 +687,9 @@ func TestTheManagerHandsANodeShellToTheServiceThatRunsIt(t *testing.T) {
 		t.Fatalf("session = %+v", session)
 	}
 
-	mgr.RemoveNodeShell(context.Background(), session.Pod)
+	if err := mgr.RemoveNodeShell(context.Background(), session.Pod); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
 
 	left, listErr := cs.CoreV1().Pods(nodeshell.DefaultNamespace).List(context.Background(), metav1.ListOptions{})
 	if listErr != nil {

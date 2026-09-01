@@ -74,9 +74,9 @@ func (m *Manager) StartNodeShell(ctx context.Context, node string) (api.NodeShel
 	return m.nodeShells.Start(ctx, node)
 }
 
-func (m *Manager) RemoveNodeShell(ctx context.Context, pod string) {
+func (m *Manager) RemoveNodeShell(ctx context.Context, pod string) error {
 	if m.nodeShells == nil {
-		return
+		return nil
 	}
-	m.nodeShells.Remove(ctx, pod)
+	return m.nodeShells.Remove(ctx, pod)
 }

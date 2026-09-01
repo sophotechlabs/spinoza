@@ -148,8 +148,17 @@ func (oc OIDCConfig) validate() error {
 	if err != nil {
 		return fmt.Errorf("oidc redirect url %q: %w", oc.RedirectURL, err)
 	}
-	if !parsed.IsAbs() {
+	if !parsed.IsAbs() || parsed.Host == "" {
 		return fmt.Errorf("oidc redirect url %q must be absolute, scheme and host included", oc.RedirectURL)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("oidc redirect url %q must use http or https", oc.RedirectURL)
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("oidc redirect url %q must not include credentials", oc.RedirectURL)
+	}
+	if strings.Contains(oc.RedirectURL, "#") {
+		return fmt.Errorf("oidc redirect url %q must not include a fragment", oc.RedirectURL)
 	}
 	if oc.InsecureSkipVerify && oc.CACertFile != "" {
 		return errors.New("oidc takes either a ca certificate or skipped verification, not both")

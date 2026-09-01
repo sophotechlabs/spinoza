@@ -106,6 +106,34 @@ func TestValidateRefusesWhatCannotWork(t *testing.T) {
 			want: "oidc redirect url",
 		},
 		{
+			name: "a redirect without a web scheme",
+			cfg: Config{Mode: ModeOIDC, DefaultRole: RoleViewer, OIDC: OIDCConfig{
+				IssuerURL: "https://idp", ClientID: "spinoza", RedirectURL: "javascript://spinoza.example.com/callback",
+			}},
+			want: "must use http or https",
+		},
+		{
+			name: "a redirect with credentials",
+			cfg: Config{Mode: ModeOIDC, DefaultRole: RoleViewer, OIDC: OIDCConfig{
+				IssuerURL: "https://idp", ClientID: "spinoza", RedirectURL: "https://user@spinoza.example.com/callback",
+			}},
+			want: "must not include credentials",
+		},
+		{
+			name: "a redirect with a fragment",
+			cfg: Config{Mode: ModeOIDC, DefaultRole: RoleViewer, OIDC: OIDCConfig{
+				IssuerURL: "https://idp", ClientID: "spinoza", RedirectURL: "https://spinoza.example.com/callback#landing",
+			}},
+			want: "must not include a fragment",
+		},
+		{
+			name: "a redirect with an empty fragment",
+			cfg: Config{Mode: ModeOIDC, DefaultRole: RoleViewer, OIDC: OIDCConfig{
+				IssuerURL: "https://idp", ClientID: "spinoza", RedirectURL: "https://spinoza.example.com/callback#",
+			}},
+			want: "must not include a fragment",
+		},
+		{
 			name: "both a ca and no verification",
 			cfg: Config{Mode: ModeOIDC, DefaultRole: RoleViewer, OIDC: OIDCConfig{
 				IssuerURL:          "https://idp",

@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 )
 
@@ -127,5 +128,18 @@ func TestMetricHistoryPassesOnAnErrorThatIsNotAMissingPrometheus(t *testing.T) {
 	}
 	if errors.Is(err, prom.ErrUnavailable) {
 		t.Fatalf("error = %v, want the one prometheus gave rather than a missing one", err)
+	}
+}
+
+func TestMetricHistoryRefusesAnotherNamespace(t *testing.T) {
+	mgr := NewManager(t.Context(), Deps{
+		Clientset: decidingClientset(false, "not for you"),
+	})
+	ctx := auth.WithIdentity(t.Context(), auth.Identity{User: "alice"})
+
+	_, err := mgr.MetricHistory(ctx, "prod", "web", time.Hour)
+
+	if !errors.Is(err, ErrOutOfScope) {
+		t.Fatalf("error = %v, want the namespace refused", err)
 	}
 }

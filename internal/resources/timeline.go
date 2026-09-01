@@ -83,17 +83,17 @@ func (m *Manager) StopRecording() {
 	}
 }
 
-func (m *Manager) recording(gvr schema.GroupVersionResource) Timeline {
+func (m *Manager) record(gvr schema.GroupVersionResource, note Note) {
 	m.noteMu.Lock()
 	defer m.noteMu.Unlock()
 	if m.notes == nil {
-		return nil
+		return
 	}
 	_, wanted := m.noted[gvr]
 	if !wanted {
-		return nil
+		return
 	}
-	return m.notes
+	m.notes.Note(note)
 }
 
 func gvrOf(desc api.ResourceDescriptor) schema.GroupVersionResource {
@@ -105,10 +105,6 @@ func gvrOf(desc api.ResourceDescriptor) schema.GroupVersionResource {
 }
 
 func (st *stream) note(verb string, obj *unstructured.Unstructured, row api.Row) {
-	into := st.owner.recording(st.gvr)
-	if into == nil {
-		return
-	}
 	was, fresh := st.rowIsNew(verb, row)
 	if !fresh {
 		return
@@ -116,7 +112,7 @@ func (st *stream) note(verb string, obj *unstructured.Unstructured, row api.Row)
 	if !st.delivered() {
 		return
 	}
-	into.Note(Note{
+	st.owner.record(st.gvr, Note{
 		At:        time.Now().UTC(),
 		Verb:      verb,
 		Group:     st.gvr.Group,

@@ -13,17 +13,24 @@ import (
 const listVerb = "list"
 
 type scopeSlot struct {
-	mu     sync.Mutex
-	filled bool
-	who    string
-	at     time.Time
-	scope  api.Scope
+	mu      sync.Mutex
+	entries map[scopeSlotKey]scopeSlotEntry
+}
+
+type scopeSlotKey struct {
+	service *Service
+	who     string
+}
+
+type scopeSlotEntry struct {
+	at    time.Time
+	scope api.Scope
 }
 
 type scopeKey struct{}
 
 func WithScopeSlot(ctx context.Context) context.Context {
-	return context.WithValue(ctx, scopeKey{}, &scopeSlot{})
+	return context.WithValue(ctx, scopeKey{}, &scopeSlot{entries: map[scopeSlotKey]scopeSlotEntry{}})
 }
 
 func clusterWide() []Check {
@@ -51,15 +58,23 @@ func (s *Service) Scope(ctx context.Context, everyNamespace func() []string) api
 	}
 	asked := asking(ctx)
 	held.mu.Lock()
-	defer held.mu.Unlock()
-	if held.filled && held.who == asked && s.now().Sub(held.at) <= s.ttl {
-		return held.scope
+	key := scopeSlotKey{service: s, who: asked}
+	cached, found := held.entries[key]
+	if found && s.now().Sub(cached.at) <= s.ttl {
+		held.mu.Unlock()
+		return cached.scope
 	}
-	held.scope = s.readScope(ctx, everyNamespace)
-	held.filled = true
-	held.who = asked
-	held.at = s.now()
-	return held.scope
+	held.mu.Unlock()
+	fresh := s.readScope(ctx, everyNamespace)
+	finished := s.now()
+	held.mu.Lock()
+	defer held.mu.Unlock()
+	cached, found = held.entries[key]
+	if found && finished.Sub(cached.at) <= s.ttl {
+		return cached.scope
+	}
+	held.entries[key] = scopeSlotEntry{at: finished, scope: fresh}
+	return fresh
 }
 
 func (s *Service) readScope(ctx context.Context, everyNamespace func() []string) api.Scope {

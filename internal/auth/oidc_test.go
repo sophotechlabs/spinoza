@@ -412,6 +412,23 @@ func TestABackChannelLogoutIsRefusedWhenItCannotBeTrusted(t *testing.T) {
 	}
 }
 
+func TestAnOversizedBackChannelLogoutIsRefusedBeforeItIsParsed(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, func(cfg *Config) {
+		cfg.OIDC.BackchannelLogout = true
+	})
+	body := strings.NewReader("logout_token=" + strings.Repeat("x", maxBackchannelLogoutBytes))
+	req := httptest.NewRequest(http.MethodPost, "/auth/backchannel-logout", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recorded := httptest.NewRecorder()
+
+	held.BackchannelLogout(recorded, req)
+
+	if recorded.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
 func TestALogoutNamingOnlyASubjectIsAcceptedAndSaidOutLoud(t *testing.T) {
 	idp := newIDP(t)
 	idp.noSIDs = true

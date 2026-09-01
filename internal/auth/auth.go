@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -16,6 +17,8 @@ const flashLifetime = time.Minute
 const returnParam = "next"
 
 const flashCookie = "spinoza_login_error"
+
+const maxBackchannelLogoutBytes = 1 << 20
 
 type Authenticator struct {
 	cfg      Config
@@ -178,6 +181,9 @@ func landingFrom(r *http.Request) string {
 	if strings.HasPrefix(wanted, "//") {
 		return "/"
 	}
+	if strings.Contains(wanted, `\`) {
+		return "/"
+	}
 	return wanted
 }
 
@@ -267,7 +273,18 @@ func (a *Authenticator) BackchannelLogout(w http.ResponseWriter, r *http.Request
 		writeAuthError(w, http.StatusNotFound, "back-channel logout is off")
 		return
 	}
-	raw := r.FormValue("logout_token")
+	r.Body = http.MaxBytesReader(w, r.Body, maxBackchannelLogoutBytes)
+	parseErr := r.ParseForm()
+	if parseErr != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(parseErr, &tooBig) {
+			writeAuthError(w, http.StatusRequestEntityTooLarge, "the back-channel logout request is too large")
+			return
+		}
+		writeAuthError(w, http.StatusBadRequest, "the back-channel logout request could not be read")
+		return
+	}
+	raw := r.Form.Get("logout_token")
 	if raw == "" {
 		writeAuthError(w, http.StatusBadRequest, "the request carried no logout_token")
 		return

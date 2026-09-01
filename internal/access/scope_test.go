@@ -228,6 +228,24 @@ func TestTheScopeIsWorkedOutOncePerRequest(t *testing.T) {
 	}
 }
 
+func TestARequestDoesNotReuseAnotherClustersScope(t *testing.T) {
+	wideRules := &namespaceRules{allowed: map[string]bool{"": true}}
+	narrowRules := &namespaceRules{allowed: map[string]bool{"payments": true}}
+	wide := scopeService(t, wideRules)
+	narrow := scopeService(t, narrowRules)
+	ctx := WithScopeSlot(asAlice(t))
+
+	first := wide.Scope(ctx, names)
+	second := narrow.Scope(ctx, names)
+
+	if !first.Everywhere {
+		t.Fatalf("first cluster scope = %+v, want the whole cluster", first)
+	}
+	if !slices.Equal(second.Namespaces, []string{"payments"}) {
+		t.Fatalf("second cluster scope = %+v, want only payments", second)
+	}
+}
+
 func TestASocketOpenAllDayAsksAgainOnceTheAnswerIsStale(t *testing.T) {
 	rules := &namespaceRules{allowed: map[string]bool{"payments": true}}
 	held := scopeService(t, rules)
