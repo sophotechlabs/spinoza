@@ -3,8 +3,6 @@ import { openView } from '../harness/app';
 import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 
-test.describe.configure({ mode: 'serial' });
-
 test('the queue ranks a crash loop as broken and names its cause', async ({ page }) => {
   await openView(page, 'issues');
   const main = page.locator('main');

@@ -2,8 +2,6 @@ import { expect, test } from '../harness/test';
 import { openHome } from '../harness/app';
 import type { Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 async function openSettings(page: Page): Promise<void> {
   await openHome(page);
   await page.getByRole('button', { name: 'Settings' }).click();

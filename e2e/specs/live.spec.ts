@@ -4,8 +4,6 @@ import { authed } from '../harness/test';
 import { kubectl } from '../harness/cluster';
 import { CONTEXT, NAMESPACE } from '../harness/paths';
 
-test.describe.configure({ mode: 'serial' });
-
 const NAME = 'live-probe';
 
 test.afterAll(() => {

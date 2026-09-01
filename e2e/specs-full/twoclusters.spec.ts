@@ -4,8 +4,6 @@ import { CONTEXT, SECOND_CONTEXT, SECOND_KUBECONFIG } from '../harness/paths';
 import { kubectl } from '../harness/cluster';
 import type { Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 interface Opened {
   id: string;
   context: string;

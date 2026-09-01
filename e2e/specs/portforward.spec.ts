@@ -1,8 +1,6 @@
 import { expect, test } from '../harness/test';
 import { openResource } from '../harness/app';
 
-test.describe.configure({ mode: 'serial' });
-
 async function openHealthy(page: import('@playwright/test').Page): Promise<void> {
   await openResource(page, 'pods', 'Pod');
   const row = page

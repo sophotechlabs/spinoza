@@ -4,8 +4,6 @@ import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 import type { Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 function field(kind: string, name: string, path: string, namespaced = true): string {
   const args = ['get', `${kind}/${name}`, '-o', `jsonpath={${path}}`];
   if (namespaced) {

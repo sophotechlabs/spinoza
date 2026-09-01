@@ -4,8 +4,6 @@ import { BASE_URL, CONTEXT, SECOND_CONTEXT, SECOND_KUBECONFIG } from '../harness
 import { state } from '../harness/test';
 import type { Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 const VIEWS = [
   'resources',
   'cluster',

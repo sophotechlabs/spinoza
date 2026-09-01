@@ -4,8 +4,6 @@ import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 import type { Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 async function openTerminal(page: Page, pod: string): Promise<void> {
   await openResource(page, 'pods', 'Pod');
   await selectRow(page, pod);

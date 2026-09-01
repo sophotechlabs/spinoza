@@ -17,7 +17,7 @@ test('the graph draws the edges the api sent, not just the legend', async ({ pag
     const answer = await fetch('/api/topology').then((r) => r.json());
     return (answer.edges ?? []).length as number;
   });
-  test.skip(sent === 0, 'this cluster has no relationships to draw');
+  expect(sent).toBeGreaterThan(0);
 
   await expect
     .poll(() => page.locator('.react-flow__edge').count(), { timeout: 60_000 })

@@ -6,8 +6,6 @@ import { DOOMED, RELEASE } from '../harness/fixtures';
 import { NEXT_VERSION, REPO_NAME } from '../harness/charts';
 import type { Locator, Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 async function openNamed(page: Page, release: string): Promise<void> {
   await openView(page, 'helm');
   const row = page.locator('main tbody tr').filter({ hasText: release }).first();

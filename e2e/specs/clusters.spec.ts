@@ -3,8 +3,6 @@ import { openHome } from '../harness/app';
 import { CONTEXT, NOWHERE_CONTEXT, NOWHERE_KUBECONFIG } from '../harness/paths';
 import type { Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 interface Opened {
   id: string;
   context: string;

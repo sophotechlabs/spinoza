@@ -2,8 +2,6 @@ import { expect, test } from '../harness/test';
 import { openHome, openResource, selectRow } from '../harness/app';
 import type { Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 async function openPod(page: Page): Promise<void> {
   await openResource(page, 'pods', 'Pod');
   await selectRow(page, 'healthy-');

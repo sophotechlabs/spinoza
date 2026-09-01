@@ -27,12 +27,15 @@ test('a container that prints reaches the log panel', async ({ page }) => {
 
 test('pausing follow stops the scroll, not the stream', async ({ page }) => {
   await openLogs(page, 'chatty');
+  const lines = page.getByText('e2e-log-line');
+  await expect(lines.first()).toBeVisible({ timeout: 60_000 });
+  const before = await lines.count();
   const follow = page.getByRole('button', { name: 'Following', exact: true });
   await expect(follow).toBeVisible({ timeout: 30_000 });
   await follow.click();
   await expect(page.getByRole('button', { name: 'Follow', exact: true })).toBeVisible();
-  await page.waitForTimeout(3000);
-  await expect(page.getByText('e2e-log-line').first()).toBeVisible();
+  await expect.poll(async () => lines.count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(before);
+  await expect(lines.first()).toBeVisible();
 });
 
 test('the filter narrows the lines that are shown', async ({ page }) => {

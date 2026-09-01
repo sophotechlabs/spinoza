@@ -4,8 +4,6 @@ import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 import type { Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 const EDITED = 'edited-by-e2e';
 
 async function openYaml(page: Page, name: string): Promise<void> {

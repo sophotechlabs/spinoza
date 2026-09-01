@@ -3,8 +3,6 @@ import { openGrouped, openView, selectRow } from '../harness/app';
 import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 
-test.describe.configure({ mode: 'serial' });
-
 test('the view says what it is for', async ({ page }) => {
   await openView(page, 'history');
   const showing = page.getByRole('combobox', { name: 'What to show' });

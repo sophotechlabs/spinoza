@@ -3,8 +3,6 @@ import type { Held } from '../harness/keepalive';
 import { CONTEXT } from '../harness/paths';
 import type { Browser, Page } from '@playwright/test';
 
-test.describe.configure({ mode: 'serial' });
-
 let release: Held;
 
 test.beforeAll(() => {
