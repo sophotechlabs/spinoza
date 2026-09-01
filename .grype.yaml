@@ -1,2 +1,5 @@
 ignore:
   - vulnerability: GO-2026-5932
+    reason: >-
+      The deprecated openpgp packages have no fixed release. Spinoza does not import them; the
+      vulnerability-exceptions gate checks each supported build tag before scanners run.

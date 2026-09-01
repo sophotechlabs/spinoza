@@ -1,3 +1,3 @@
 [[IgnoredVulns]]
 id = "GO-2026-5932"
-reason = "golang.org/x/crypto has no fixed release for this yet. govulncheck runs in the go job and reports no reachable call into the affected symbol from this module, so the version match is the only signal. Drop this entry when a fix ships."
+reason = "The deprecated openpgp packages have no fixed release. Spinoza does not import them; the vulnerability-exceptions gate checks each supported build tag before scanners run."

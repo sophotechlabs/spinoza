@@ -653,12 +653,28 @@ sast:
 
 # e2e/fixtures holds workloads written to be insecure so the checks have
 # something to find; scanning them fails the build on findings we put there.
-vulns:
+vulns: vulnerability-exceptions
     trivy fs --exit-code 1 --scanners secret,misconfig \
         --skip-dirs e2e/fixtures --skip-dirs test/clustermode --skip-dirs .tmp \
         --skip-files test/integration/metrics-server.yaml \
         --helm-set publicURL=https://spinoza.example.com .
     osv-scanner scan source --recursive .
+
+vulnerability-exceptions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for tags in '' desktop integration clustermode; do
+        args=()
+        if [ -n "$tags" ]; then
+            args=(-tags "$tags")
+        fi
+        deps=$(go list -deps "${args[@]}" ./...)
+        if grep -q '^golang.org/x/crypto/openpgp\($\|/\)' <<< "$deps"; then
+            echo "vulnerability-exceptions: the $tags build imports deprecated openpgp code" >&2
+            exit 1
+        fi
+    done
+    echo "vulnerability-exceptions: no build imports deprecated openpgp code"
 
 workflows: scoped-tools
     yamllint .forgejo .github
@@ -701,7 +717,7 @@ editorconfig:
 links:
     lychee --config lychee.toml .
 
-sbom:
+sbom: vulnerability-exceptions
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p dist
