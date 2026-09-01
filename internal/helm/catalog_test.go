@@ -129,7 +129,14 @@ func TestASearchSaysWhenItHeldSomeBack(t *testing.T) {
 
 func TestChartValuesAsksHelmForTheDefaults(t *testing.T) {
 	runner := &stubRunner{out: "replicaCount: 1\n"}
-	svc := NewService(k8sfake.NewClientset(), nil, runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	svc := NewService(
+		k8sfake.NewClientset(),
+		nil,
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{Name: "kind-spinoza"},
+	)
 
 	found, err := svc.ChartValues(t.Context(), ValuesRequest{
 		Chart:   "podinfo",
@@ -161,7 +168,14 @@ func TestChartValuesRefusesWhatItCannotFetch(t *testing.T) {
 	for name, req := range cases {
 		t.Run(name, func(t *testing.T) {
 			runner := &stubRunner{}
-			svc := NewService(k8sfake.NewClientset(), nil, runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+			svc := NewService(
+				k8sfake.NewClientset(),
+				nil,
+				runner,
+				nil,
+				actionRepositories(),
+				api.ContextRef{Name: "kind-spinoza"},
+			)
 
 			_, err := svc.ChartValues(t.Context(), req)
 
@@ -191,7 +205,14 @@ func TestChartValuesWithoutARunnerIsRefused(t *testing.T) {
 
 func TestChartValuesReportsWhatHelmSaid(t *testing.T) {
 	runner := &stubRunner{err: errors.New("chart not found")}
-	svc := NewService(k8sfake.NewClientset(), nil, runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	svc := NewService(
+		k8sfake.NewClientset(),
+		nil,
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{Name: "kind-spinoza"},
+	)
 
 	_, err := svc.ChartValues(t.Context(), ValuesRequest{
 		Chart:   "podinfo",
@@ -206,7 +227,14 @@ func TestChartValuesReportsWhatHelmSaid(t *testing.T) {
 
 func TestChartValuesFromAnOCIRegistryCarriesTheRef(t *testing.T) {
 	runner := &stubRunner{out: "{}"}
-	svc := NewService(k8sfake.NewClientset(), nil, runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	svc := NewService(
+		k8sfake.NewClientset(),
+		nil,
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{Name: "kind-spinoza"},
+	)
 
 	_, err := svc.ChartValues(t.Context(), ValuesRequest{
 		Chart:   "podinfo",

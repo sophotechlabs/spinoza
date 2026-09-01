@@ -27,7 +27,14 @@ func installRequest() InstallRequest {
 
 func installer(t *testing.T, runner Runner, objs ...runtime.Object) *Service {
 	t.Helper()
-	return NewService(k8sfake.NewClientset(objs...), nil, runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	return NewService(
+		k8sfake.NewClientset(objs...),
+		nil,
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{Name: "kind-spinoza"},
+	)
 }
 
 func namespaceObject(name string) *corev1.Namespace {

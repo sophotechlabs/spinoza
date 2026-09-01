@@ -1,6 +1,7 @@
 package helm
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -50,6 +51,25 @@ func configHome() string {
 type RepoEntry struct {
 	Name string
 	Repo charts.Repo
+}
+
+func (s *Service) admitsRepository(raw string, oci bool) error {
+	err := charts.CheckRepoURL(raw)
+	if err != nil {
+		return err
+	}
+	for _, entry := range s.repos {
+		configured := strings.TrimSuffix(entry.Repo.URL, "/")
+		requested := strings.TrimSuffix(raw, "/")
+		if configured != requested {
+			continue
+		}
+		if entry.Repo.OCI != oci {
+			return fmt.Errorf("repository %q does not match the requested protocol", raw)
+		}
+		return nil
+	}
+	return fmt.Errorf("repository %q is not configured", raw)
 }
 
 func Repositories(path string) []RepoEntry {

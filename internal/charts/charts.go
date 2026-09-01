@@ -2,12 +2,14 @@ package charts
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
@@ -47,6 +49,10 @@ type listing struct {
 	charts   []Chart
 }
 
+type lookupIPs func(context.Context, string, string) ([]netip.Addr, error)
+
+type dialContext func(context.Context, string, string) (net.Conn, error)
+
 type Cache struct {
 	ctx    context.Context
 	client *http.Client
@@ -62,9 +68,14 @@ type Cache struct {
 }
 
 func New(ctx context.Context, client *http.Client, ttl time.Duration) *Cache {
+	var dialer net.Dialer
+	return newCache(ctx, client, ttl, net.DefaultResolver.LookupNetIP, dialer.DialContext)
+}
+
+func newCache(ctx context.Context, client *http.Client, ttl time.Duration, lookup lookupIPs, dial dialContext) *Cache {
 	return &Cache{
 		ctx:      ctx,
-		client:   publicOnly(client),
+		client:   publicOnly(client, lookup, dial),
 		ttl:      ttl,
 		now:      time.Now,
 		lists:    map[key][]string{},
@@ -74,8 +85,19 @@ func New(ctx context.Context, client *http.Client, ttl time.Duration) *Cache {
 	}
 }
 
-func publicOnly(client *http.Client) *http.Client {
+func publicOnly(client *http.Client, lookup lookupIPs, dial dialContext) *http.Client {
+	if client == nil {
+		client = &http.Client{}
+	}
 	guarded := *client
+	transport := defaultTransport()
+	if configured, ok := client.Transport.(*http.Transport); ok {
+		transport = configured.Clone()
+	}
+	transport.Proxy = nil
+	transport.DialContext = publicDial(lookup, dial)
+	transport.DialTLSContext = publicTLSDial(transport, lookup, dial)
+	guarded.Transport = transport
 	guarded.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
 			return errors.New("stopped after 10 redirects")
@@ -83,6 +105,94 @@ func publicOnly(client *http.Client) *http.Client {
 		return CheckRepoURL(req.URL.String())
 	}
 	return &guarded
+}
+
+func defaultTransport() *http.Transport {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		panic("http default transport is not configurable")
+	}
+	return transport.Clone()
+}
+
+func publicDial(lookup lookupIPs, dial dialContext) dialContext {
+	return func(ctx context.Context, network, authority string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(authority)
+		if err != nil {
+			return nil, fmt.Errorf("repository address %q: %w", authority, err)
+		}
+		addresses, err := resolvePublic(ctx, lookup, host)
+		if err != nil {
+			return nil, err
+		}
+		failures := make([]error, 0, len(addresses))
+		for _, address := range addresses {
+			endpoint := net.JoinHostPort(address.String(), port)
+			conn, dialErr := dial(ctx, network, endpoint)
+			if dialErr == nil {
+				return conn, nil
+			}
+			failures = append(failures, dialErr)
+		}
+		return nil, errors.Join(failures...)
+	}
+}
+
+func publicTLSDial(transport *http.Transport, lookup lookupIPs, dial dialContext) dialContext {
+	guarded := publicDial(lookup, dial)
+	return func(ctx context.Context, network, authority string) (net.Conn, error) {
+		host, _, err := net.SplitHostPort(authority)
+		if err != nil {
+			return nil, fmt.Errorf("repository address %q: %w", authority, err)
+		}
+		plain, err := guarded(ctx, network, authority)
+		if err != nil {
+			return nil, err
+		}
+		config := &tls.Config{ServerName: host}
+		if transport.TLSClientConfig != nil {
+			config = transport.TLSClientConfig.Clone()
+			if config.ServerName == "" {
+				config.ServerName = host
+			}
+		}
+		secured := tls.Client(plain, config)
+		if err := secured.HandshakeContext(ctx); err != nil {
+			_ = plain.Close()
+			return nil, err
+		}
+		return secured, nil
+	}
+}
+
+func resolvePublic(ctx context.Context, lookup lookupIPs, host string) ([]netip.Addr, error) {
+	if localName(host) {
+		return nil, fmt.Errorf("repository host %q is this machine", host)
+	}
+	address, literal := literalAddress(host)
+	addresses := []netip.Addr{address}
+	if !literal {
+		var err error
+		addresses, err = lookup(ctx, "ip", host)
+		if err != nil {
+			return nil, fmt.Errorf("resolve repository host %q: %w", host, err)
+		}
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("repository host %q resolved to no addresses", host)
+	}
+	for i := range addresses {
+		addresses[i] = addresses[i].Unmap()
+		if !routableAddress(addresses[i]) {
+			return nil, fmt.Errorf("repository host %q resolved to non-public address %s", host, addresses[i])
+		}
+	}
+	return addresses, nil
+}
+
+func literalAddress(host string) (netip.Addr, bool) {
+	address, err := netip.ParseAddr(host)
+	return address, err == nil
 }
 
 func CheckRepoURL(raw string) error {
@@ -109,6 +219,9 @@ func fetchableURL(raw string) (*url.URL, error) {
 	if parsed.Host == "" {
 		return nil, errors.New("repository url has no host")
 	}
+	if parsed.User != nil {
+		return nil, errors.New("repository url must not contain user information")
+	}
 	return parsed, nil
 }
 
@@ -133,32 +246,61 @@ func checkHost(host string) error {
 	if localName(host) {
 		return fmt.Errorf("repository host %q is this machine", host)
 	}
-	ip := net.ParseIP(host)
-	if ip == nil {
+	ip, literal := literalAddress(host)
+	if !literal {
 		return nil
 	}
-	if !routableIP(ip) {
+	if !routableAddress(ip.Unmap()) {
 		return fmt.Errorf("repository host %q is not a public address", host)
 	}
 	return nil
 }
 
 func localName(host string) bool {
-	lowered := strings.ToLower(host)
+	lowered := strings.ToLower(strings.TrimSuffix(host, "."))
 	if lowered == "localhost" {
 		return true
 	}
 	return strings.HasSuffix(lowered, ".localhost")
 }
 
-func routableIP(ip net.IP) bool {
+func routableAddress(ip netip.Addr) bool {
+	if !ip.IsValid() || ip.Zone() != "" || !ip.IsGlobalUnicast() {
+		return false
+	}
 	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() {
 		return false
 	}
-	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
 		return false
 	}
-	return !ip.IsMulticast()
+	for _, blocked := range nonPublicNetworks {
+		if blocked.Contains(ip) {
+			return false
+		}
+	}
+	return true
+}
+
+var nonPublicNetworks = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("192.88.99.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("::/96"),
+	netip.MustParsePrefix("64:ff9b::/96"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("100::/64"),
+	netip.MustParsePrefix("2001::/32"),
+	netip.MustParsePrefix("2001:10::/28"),
+	netip.MustParsePrefix("2001:20::/28"),
+	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("2002::/16"),
 }
 
 func (c *Cache) Latest(repo Repo, chart string) string {
@@ -322,6 +464,16 @@ func (c *Cache) Resolve(ctx context.Context, repo Repo, chart string) (map[strin
 }
 
 func (c *Cache) resolve(ctx context.Context, repo Repo, chart string) (listing, error) {
+	parsed, err := fetchableURL(repo.URL)
+	if err != nil {
+		return listing{}, err
+	}
+	if err := checkHost(parsed.Hostname()); err != nil {
+		return listing{}, err
+	}
+	if (parsed.Scheme == "oci") != repo.OCI {
+		return listing{}, fmt.Errorf("repository url %q does not match its oci setting", repo.URL)
+	}
 	if repo.OCI {
 		return c.resolveOCI(ctx, repo, chart)
 	}

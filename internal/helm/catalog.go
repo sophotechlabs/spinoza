@@ -152,7 +152,7 @@ func (s *Service) ChartValues(ctx context.Context, req ValuesRequest) (api.HelmC
 	if !charts.ValidVersion(req.Version) {
 		return api.HelmChartValues{}, fmt.Errorf("version %q is not a semantic version", req.Version)
 	}
-	repoErr := charts.CheckRepoURL(req.RepoURL)
+	repoErr := s.admitsRepository(req.RepoURL, req.OCI)
 	if repoErr != nil {
 		return api.HelmChartValues{}, repoErr
 	}

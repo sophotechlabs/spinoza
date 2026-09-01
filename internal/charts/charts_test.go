@@ -2,10 +2,12 @@ package charts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
@@ -29,18 +31,32 @@ func cacheFor(t *testing.T, handler http.HandlerFunc) (*Cache, *httptest.Server)
 	t.Helper()
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	return New(ctx, ts.Client(), DefaultTTL), ts
+	address := ts.Listener.Addr().String()
+	ts.URL = "http://charts.example.com"
+	return cacheThrough(t, ts.Client(), address), ts
 }
 
 func tlsCacheFor(t *testing.T, handler http.HandlerFunc) (*Cache, *httptest.Server) {
 	t.Helper()
 	ts := httptest.NewTLSServer(handler)
 	t.Cleanup(ts.Close)
+	address := ts.Listener.Addr().String()
+	ts.URL = "https://registry.example.com"
+	return cacheThrough(t, ts.Client(), address), ts
+}
+
+func cacheThrough(t *testing.T, client *http.Client, address string) *Cache {
+	t.Helper()
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}
+	dial := func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, network, address)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	return New(ctx, ts.Client(), DefaultTTL), ts
+	return newCache(ctx, client, DefaultTTL, lookup, dial)
 }
 
 func indexHandler(hits *int) http.HandlerFunc {
@@ -405,18 +421,7 @@ func internetFor(t *testing.T, handler http.HandlerFunc) *Cache {
 	t.Helper()
 	ts := httptest.NewTLSServer(handler)
 	t.Cleanup(ts.Close)
-	client := ts.Client()
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport = %T, want one that can be redialled", client.Transport)
-	}
-	transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
-		var dialer net.Dialer
-		return dialer.DialContext(ctx, network, ts.Listener.Addr().String())
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	return New(ctx, client, DefaultTTL)
+	return cacheThrough(t, ts.Client(), ts.Listener.Addr().String())
 }
 
 func TestCheckRepoURLSortsFetchableFromNot(t *testing.T) {
@@ -436,12 +441,16 @@ func TestCheckRepoURLSortsFetchableFromNot(t *testing.T) {
 		{"loopback", "http://127.0.0.1:9090/charts", false},
 		{"loopback by name", "http://localhost:9090/charts", false},
 		{"a localhost subdomain", "http://spinoza.localhost/charts", false},
+		{"localhost with a dns root", "http://localhost./charts", false},
 		{"ipv6 loopback", "http://[::1]:9090/charts", false},
 		{"an ipv4-mapped loopback", "http://[::ffff:127.0.0.1]/charts", false},
 		{"a private range", "http://10.4.0.9/charts", false},
+		{"carrier grade nat", "http://100.100.100.200/charts", false},
 		{"a unique local address", "http://[fd00::1]/charts", false},
 		{"the unspecified address", "http://0.0.0.0/charts", false},
 		{"multicast", "http://224.0.0.1/charts", false},
+		{"userinfo", "https://operator:secret@charts.example.com/charts", false},
+		{"an encoded host", "https://%31%32%37.0.0.1/charts", false},
 		{"unparseable", "://bad", false},
 	}
 	for _, tc := range cases {
@@ -451,6 +460,138 @@ func TestCheckRepoURLSortsFetchableFromNot(t *testing.T) {
 				t.Fatalf("CheckRepoURL(%q) = %v", tc.url, err)
 			}
 		})
+	}
+}
+
+func TestARepositoryConnectionUsesTheAddressThatWasChecked(t *testing.T) {
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}
+	connected := ""
+	dial := func(_ context.Context, _, address string) (net.Conn, error) {
+		connected = address
+		return nil, errors.New("test dial stopped")
+	}
+
+	_, _ = publicDial(lookup, dial)(t.Context(), "tcp", "charts.example.com:443")
+
+	if connected != "93.184.216.34:443" {
+		t.Fatalf("dialed %q, want the checked address rather than the hostname", connected)
+	}
+}
+
+func TestAMixedPublicAndPrivateDNSAnswerIsRefusedBeforeDialling(t *testing.T) {
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{
+			netip.MustParseAddr("93.184.216.34"),
+			netip.MustParseAddr("10.0.0.8"),
+		}, nil
+	}
+	dialed := false
+	dial := func(context.Context, string, string) (net.Conn, error) {
+		dialed = true
+		return nil, errors.New("test dial stopped")
+	}
+
+	_, err := publicDial(lookup, dial)(t.Context(), "tcp", "charts.example.com:443")
+
+	if err == nil {
+		t.Fatal("a mixed public and private dns answer was accepted")
+	}
+	if dialed {
+		t.Fatal("an address was dialed before the complete dns answer was validated")
+	}
+}
+
+func TestAReboundHostnameIsCheckedAgainForTheNextConnection(t *testing.T) {
+	lookups := 0
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		lookups++
+		if lookups == 1 {
+			return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+		}
+		return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
+	}
+	dials := 0
+	dial := func(context.Context, string, string) (net.Conn, error) {
+		dials++
+		return nil, errors.New("test dial stopped")
+	}
+	guarded := publicDial(lookup, dial)
+
+	_, _ = guarded(t.Context(), "tcp", "charts.example.com:443")
+	_, err := guarded(t.Context(), "tcp", "charts.example.com:443")
+
+	if err == nil || !strings.Contains(err.Error(), "non-public") {
+		t.Fatalf("second connection error = %v, want the rebound address refused", err)
+	}
+	if lookups != 2 {
+		t.Fatalf("dns lookups = %d, want one for every connection", lookups)
+	}
+	if dials != 1 {
+		t.Fatalf("socket dials = %d, want only the first public answer dialed", dials)
+	}
+}
+
+func TestAnIPv4MappedPrivateDNSAnswerIsRefused(t *testing.T) {
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("::ffff:127.0.0.1")}, nil
+	}
+	dialed := false
+	dial := func(context.Context, string, string) (net.Conn, error) {
+		dialed = true
+		return nil, errors.New("test dial stopped")
+	}
+
+	_, err := publicDial(lookup, dial)(t.Context(), "tcp", "charts.example.com:443")
+
+	if err == nil {
+		t.Fatal("an ipv4-mapped loopback answer was accepted")
+	}
+	if dialed {
+		t.Fatal("the mapped loopback address was dialed")
+	}
+}
+
+func TestTheGuardedTransportCannotBypassAddressValidation(t *testing.T) {
+	transport := defaultTransport()
+	transport.Proxy = http.ProxyFromEnvironment
+	bypassedHTTP := false
+	transport.DialContext = func(context.Context, string, string) (net.Conn, error) {
+		bypassedHTTP = true
+		return nil, errors.New("unguarded http dial")
+	}
+	bypassedTLS := false
+	transport.DialTLSContext = func(context.Context, string, string) (net.Conn, error) {
+		bypassedTLS = true
+		return nil, errors.New("unguarded tls dial")
+	}
+	client := &http.Client{Transport: transport}
+	lookup := func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
+	}
+	dial := func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("guarded dial")
+	}
+
+	guarded := publicOnly(client, lookup, dial)
+	configured, ok := guarded.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport = %T", guarded.Transport)
+	}
+	if configured.Proxy != nil {
+		t.Fatal("the guarded client can bypass validation through an http proxy")
+	}
+	_, httpErr := configured.DialContext(t.Context(), "tcp", "charts.example.com:80")
+	if httpErr == nil || !strings.Contains(httpErr.Error(), "non-public") {
+		t.Fatalf("http dial error = %v, want address validation", httpErr)
+	}
+	_, tlsErr := configured.DialTLSContext(t.Context(), "tcp", "charts.example.com:443")
+	if tlsErr == nil || !strings.Contains(tlsErr.Error(), "non-public") {
+		t.Fatalf("tls dial error = %v, want address validation", tlsErr)
+	}
+	if bypassedHTTP || bypassedTLS {
+		t.Fatal("the guarded client used one of the caller's dialers")
 	}
 }
 
@@ -909,7 +1050,7 @@ func TestCheckHostRefusesAnEmptyHost(t *testing.T) {
 }
 
 func TestSearchListsWhatTheIndexOffers(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`entries:
   podinfo:
     - version: 6.10.0
@@ -920,9 +1061,7 @@ func TestSearchListsWhatTheIndexOffers(t *testing.T) {
     - version: 20.0.1
       description: an in-memory store
 `))
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "pod", 10)
 	if err != nil {
@@ -941,15 +1080,13 @@ func TestSearchListsWhatTheIndexOffers(t *testing.T) {
 }
 
 func TestSearchMatchesTheDescriptionToo(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`entries:
   redis:
     - version: 20.0.1
       description: an in-memory store
 `))
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "in-memory", 10)
 	if err != nil {
@@ -962,7 +1099,7 @@ func TestSearchMatchesTheDescriptionToo(t *testing.T) {
 }
 
 func TestSearchPutsNameMatchesBeforeDescriptionMatches(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`entries:
   cache-proxy:
     - version: 1.0.0
@@ -971,9 +1108,7 @@ func TestSearchPutsNameMatchesBeforeDescriptionMatches(t *testing.T) {
     - version: 20.0.1
       description: a cache
 `))
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "cache", 10)
 	if err != nil {
@@ -989,7 +1124,7 @@ func TestSearchPutsNameMatchesBeforeDescriptionMatches(t *testing.T) {
 }
 
 func TestSearchKeepsAtMostTheLimit(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`entries:
   chart-a:
     - version: 1.0.0
@@ -998,9 +1133,7 @@ func TestSearchKeepsAtMostTheLimit(t *testing.T) {
   chart-c:
     - version: 1.0.0
 `))
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "chart", 2)
 	if err != nil {
@@ -1013,16 +1146,14 @@ func TestSearchKeepsAtMostTheLimit(t *testing.T) {
 }
 
 func TestAnEmptySearchListsEverything(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`entries:
   chart-a:
     - version: 1.0.0
   chart-b:
     - version: 1.0.0
 `))
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "", 0)
 	if err != nil {
@@ -1048,11 +1179,9 @@ func TestSearchRefusesAnOCIRegistry(t *testing.T) {
 }
 
 func TestSearchReportsAnIndexItCannotRead(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	_, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "podinfo", 10)
 
@@ -1063,12 +1192,10 @@ func TestSearchReportsAnIndexItCannotRead(t *testing.T) {
 
 func TestSearchServesTheSecondAskFromTheCache(t *testing.T) {
 	asks := 0
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		asks++
 		_, _ = w.Write([]byte("entries:\n  podinfo:\n    - version: 6.10.0\n"))
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	_, first := cache.Search(context.Background(), Repo{URL: ts.URL}, "podinfo", 10)
 	_, second := cache.Search(context.Background(), Repo{URL: ts.URL}, "pod", 10)
@@ -1082,7 +1209,7 @@ func TestSearchServesTheSecondAskFromTheCache(t *testing.T) {
 }
 
 func TestSearchMatchesTheMiddleOfAName(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`entries:
   podinfo:
     - version: 6.14.1
@@ -1091,9 +1218,7 @@ func TestSearchMatchesTheMiddleOfAName(t *testing.T) {
     - version: 88.3.0
       description: a bundle
 `))
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "prometheus", 10)
 	if err != nil {
@@ -1106,7 +1231,7 @@ func TestSearchMatchesTheMiddleOfAName(t *testing.T) {
 }
 
 func TestAChartWithNoUsableVersionIsLeftOutOfTheCatalogue(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`entries:
   podinfo:
     - version: 6.14.1
@@ -1115,9 +1240,7 @@ func TestAChartWithNoUsableVersionIsLeftOutOfTheCatalogue(t *testing.T) {
   prereleased:
     - version: 1.0.0-rc1
 `))
-	}))
-	defer ts.Close()
-	cache := New(context.Background(), ts.Client(), DefaultTTL)
+	})
 
 	found, err := cache.Search(context.Background(), Repo{URL: ts.URL}, "", 10)
 	if err != nil {

@@ -209,7 +209,14 @@ func TestUpgradeTellsHelmWhichDriverHoldsTheRelease(t *testing.T) {
 		Data: map[string]string{releaseKey: "rubbish"},
 	}
 	client := k8sfake.NewClientset(entry)
-	service := NewService(client, mirrorMeta(client), runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	service := NewService(
+		client,
+		mirrorMeta(client),
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{Name: "kind-spinoza"},
+	)
 
 	_, err := service.Upgrade(context.Background(), upgradeSpec())
 	if err != nil {

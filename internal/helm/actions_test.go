@@ -45,7 +45,7 @@ func acting(t *testing.T, runner Runner, objs ...*corev1.Secret) *Service {
 			t.Fatalf("seed secret: %v", err)
 		}
 	}
-	return NewService(client, mirrorMeta(client), runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	return NewService(client, mirrorMeta(client), runner, nil, actionRepositories(), api.ContextRef{Name: "kind-spinoza"})
 }
 
 func TestRollbackRunsHelmWithThePinnedContext(t *testing.T) {

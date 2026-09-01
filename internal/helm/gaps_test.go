@@ -194,7 +194,7 @@ func TestAnUpgradeReportsWhatHelmSaid(t *testing.T) {
 		chart: "podinfo", version: "6.9.1", appVersion: "6.9.1",
 	}))
 	runner := &stubRunner{err: errors.New("upgrade failed: timed out")}
-	service := NewService(cs, mirrorMeta(cs), runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	service := NewService(cs, mirrorMeta(cs), runner, nil, actionRepositories(), api.ContextRef{Name: "kind-spinoza"})
 	req := UpgradeRequest{Namespace: "apps", Name: "podinfo", Chart: "podinfo", RepoURL: "https://example.com", Version: "6.9.2"}
 
 	_, err := service.Upgrade(context.Background(), req)
@@ -231,7 +231,14 @@ func TestValuesThatCannotBeWrittenStopTheUpgrade(t *testing.T) {
 		name: "podinfo", namespace: "apps", revision: 1, status: "deployed",
 		chart: "podinfo", version: "6.9.1", appVersion: "6.9.1",
 	}))
-	service := NewService(cs, mirrorMeta(cs), &stubRunner{}, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+	service := NewService(
+		cs,
+		mirrorMeta(cs),
+		&stubRunner{},
+		nil,
+		actionRepositories(),
+		api.ContextRef{Name: "kind-spinoza"},
+	)
 	req := UpgradeRequest{Namespace: "apps", Name: "podinfo", Chart: "podinfo", RepoURL: "https://example.com", Version: "6.9.2", Values: "replicaCount: 2"}
 
 	_, err := service.Upgrade(context.Background(), req)

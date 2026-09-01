@@ -98,6 +98,15 @@ func entriesOf(urls ...string) []RepoEntry {
 	return out
 }
 
+func actionRepositories() []RepoEntry {
+	return entriesOf(
+		"https://charts.example.com",
+		"https://example.com",
+		"oci://registry.example.com/charts",
+		"oci://ghcr.io/acme/charts",
+	)
+}
+
 type release struct {
 	name       string
 	namespace  string
