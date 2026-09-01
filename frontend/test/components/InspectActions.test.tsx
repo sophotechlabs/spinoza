@@ -307,6 +307,8 @@ describe('InspectActions', () => {
     view.rerender(
       <InspectActions target={{ ...target, name: 'infra' }} suspended={false} onDone={vi.fn()} />,
     );
+    expect(screen.queryByText('working')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reconcile' })).toBeEnabled();
     deferred.reject();
     await new Promise((resolve) => setTimeout(resolve, 50));
 

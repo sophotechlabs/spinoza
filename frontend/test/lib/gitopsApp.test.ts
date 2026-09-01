@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import {
   fetchGitopsApp,
   fetchGitopsAppGraph,
@@ -60,6 +60,7 @@ const full = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('recognising a gitops applier', () => {
@@ -265,5 +266,35 @@ describe('watching one application', () => {
     await waitFor(() => {
       expect(result.current.error).toBe('the application request failed');
     });
+  });
+
+  it('does not overlap scheduled refreshes', async () => {
+    vi.useFakeTimers();
+    let finishFirst!: (response: { ok: boolean; json: () => Promise<typeof full> }) => void;
+    const first = new Promise<{ ok: boolean; json: () => Promise<typeof full> }>((resolve) => {
+      finishFirst = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => first)
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve(full) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderHook(() => useGitopsApp(ref));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finishFirst({ ok: true, json: () => Promise.resolve(full) });
+      await first;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

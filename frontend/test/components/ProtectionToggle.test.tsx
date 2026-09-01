@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProtectionToggle from '../../src/components/ProtectionToggle';
 import type { ContextList, Protection } from '../../src/lib/types';
@@ -109,6 +109,37 @@ describe('ProtectionToggle', () => {
     });
     expect(calls[0]).toContain('protected=true');
     expect(useToastsStore.getState().toasts[0].message).toBe('p-mk1 is protected');
+  });
+
+  it('drops a protection answer when the active cluster changes', async () => {
+    const user = userEvent.setup();
+    let finish: (body: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    show('open');
+    await user.click(screen.getByRole('button', { name: 'Open cluster' }));
+    expect(screen.getByRole('button', { name: 'Open cluster' })).toBeDisabled();
+
+    act(() => {
+      useContextsStore.getState().setList(list('open', 'p-mk2'));
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Open cluster' })).toBeEnabled();
+    });
+
+    finish({ ok: true, status: 200, json: () => Promise.resolve(list('protected', 'p-mk1')) });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(useContextsStore.getState().list.current.name).toBe('p-mk2');
+    expect(useContextsStore.getState().list.protection).toBe('open');
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 
   it('reports a change the backend refused', async () => {

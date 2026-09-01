@@ -203,6 +203,50 @@ describe('InspectMetrics', () => {
     }
   });
 
+  it('does not overlap sampled metrics refreshes', async () => {
+    vi.useFakeTimers();
+    try {
+      let finishRefresh!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+      const refresh = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+        finishRefresh = resolve;
+      });
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(history({ source: undefined, sampled: true })),
+        })
+        .mockImplementationOnce(() => refresh)
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(history({ source: undefined, sampled: true })),
+        });
+      vi.stubGlobal('fetch', fetchMock);
+      render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(45000);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        finishRefresh({
+          ok: true,
+          json: () => Promise.resolve(history({ source: undefined, sampled: true })),
+        });
+        await refresh;
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(15000);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not poll a metrics database that already holds the whole span', async () => {
     vi.useFakeTimers();
     try {

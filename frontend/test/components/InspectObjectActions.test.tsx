@@ -740,6 +740,47 @@ describe('the actions that cannot be undone', () => {
 
     expect(screen.queryByText(/Every pod is replaced/)).not.toBeInTheDocument();
   });
+
+  it('drops an action result when the target changes', async () => {
+    const user = userEvent.setup();
+    let finish: (body: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    const onDone = vi.fn();
+    const view = render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 1 } })}
+        onDone={onDone}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Scale' }));
+    await screen.findByText('working');
+
+    view.rerender(
+      <InspectObjectActions
+        target={{ ...deployment, name: 'other' }}
+        detail={detailFor({ workload: { replicas: 1 } })}
+        onDone={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('working')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scale' })).toBeEnabled();
+
+    finish({ ok: true, status: 200, json: () => Promise.resolve({ message: 'scaled' }) });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(screen.queryByText('scaled')).not.toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
 });
 
 describe('on a protected cluster', () => {

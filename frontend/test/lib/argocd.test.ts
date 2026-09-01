@@ -45,6 +45,7 @@ function stub(body: unknown, ok = true, status = 200) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('refOf', () => {
@@ -262,5 +263,35 @@ describe('useArgo', () => {
     await waitFor(() => {
       expect(result.current.error).toContain('argo is unreachable');
     });
+  });
+
+  it('does not overlap scheduled refreshes', async () => {
+    vi.useFakeTimers();
+    let finishFirst!: (response: { ok: boolean; json: () => Promise<ArgoDashboard> }) => void;
+    const first = new Promise<{ ok: boolean; json: () => Promise<ArgoDashboard> }>((resolve) => {
+      finishFirst = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => first)
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve(dashboard()) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderHook(() => useArgo());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finishFirst({ ok: true, json: () => Promise.resolve(dashboard()) });
+      await first;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -362,6 +362,62 @@ describe('changing the sort while pages are loaded', () => {
       false,
     );
   });
+
+  it('ignores a page from the previous order when it lands late', async () => {
+    let landOldPage: (body: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const asked = new URL(url, 'http://localhost').searchParams;
+        const sort = asked.get('sort') ?? '';
+        const after = asked.get('after') ?? '';
+        if (sort === 'worst' && after === '') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ rows: [issue({ id: 'w1' })], next: 'wc1' }),
+          });
+        }
+        if (sort === 'worst' && after === 'wc1') {
+          return new Promise((resolve) => {
+            landOldPage = (body) => {
+              resolve({ ok: true, json: () => Promise.resolve(body) });
+            };
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ rows: [issue({ id: 'n1' })], next: 'nc1' }),
+        });
+      }),
+    );
+    const { result, rerender } = renderHook(
+      ({ order }: { order: IssueOrder }) => usePagedIssues(true, false, order),
+      { initialProps: { order: 'worst' as IssueOrder } },
+    );
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['w1']);
+    });
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.loadingMore).toBe(true);
+    });
+
+    rerender({ order: 'newest' as IssueOrder });
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['n1']);
+    });
+    act(() => {
+      landOldPage({ rows: [issue({ id: 'w2' })] });
+    });
+
+    await waitFor(() => {
+      expect(result.current.loadingMore).toBe(false);
+    });
+    expect(result.current.rows.map((row) => row.id)).toEqual(['n1']);
+    expect(result.current.more).toBe('nc1');
+  });
 });
 
 describe('usePagedIssues', () => {

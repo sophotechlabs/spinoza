@@ -473,6 +473,9 @@ describe('DebugPrompt', () => {
         onAttached={vi.fn()}
       />,
     );
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Attach debug container' })).toBeEnabled();
+    });
     deferred.settle();
 
     await waitFor(() => {

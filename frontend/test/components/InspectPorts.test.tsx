@@ -110,6 +110,40 @@ describe('InspectPorts', () => {
     ]);
   });
 
+  it('drops a forward result when the selected object changes', async () => {
+    const user = userEvent.setup();
+    let finish: (body: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/portforward?kind') && init?.method === 'POST') {
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+      }),
+    );
+    const view = render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+    await user.click(screen.getAllByRole('button', { name: 'Forward' })[0]);
+    expect(screen.getAllByRole('button', { name: 'Forward' })[0]).toBeDisabled();
+
+    view.rerender(<InspectPorts target={{ ...target, name: 'other' }} kind="Pod" ports={ports} />);
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Forward' })[0]).toBeEnabled();
+    });
+
+    finish({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(running(45123, 8080)),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+    expect(screen.queryByText('127.0.0.1:45123 to 8080')).not.toBeInTheDocument();
+  });
+
   it('surfaces a failure', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(

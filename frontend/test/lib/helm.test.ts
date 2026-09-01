@@ -24,6 +24,7 @@ import {
   useHelmReleases,
 } from '../../src/lib/helm';
 import { bumpHelmEpoch } from '../../src/store/helm';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 import { anySignal, capabilities } from '../helpers';
 
 const payload = {
@@ -594,6 +595,51 @@ describe('the helm support hook', () => {
       expect(result.current?.available).toBe(false);
     });
     expect(result.current?.reason).toBe('offline');
+  });
+
+  it('rechecks support after a cluster switch and drops the old answer', async () => {
+    let answerFirst: (body: unknown) => void = () => undefined;
+    const first = new Promise((resolve) => {
+      answerFirst = resolve;
+    });
+    let asked = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        asked += 1;
+        if (asked === 1) {
+          return first;
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              capabilities({
+                helm: { available: false, reason: 'helm is not installed', binary: 'helm' },
+              }),
+            ),
+        });
+      }),
+    );
+
+    const { result } = renderHook(() => useHelmSupport());
+    await waitFor(() => {
+      expect(asked).toBe(1);
+    });
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(result.current).toBeNull();
+    await waitFor(() => {
+      expect(result.current?.available).toBe(false);
+    });
+
+    answerFirst({ ok: true, json: () => Promise.resolve(capabilities()) });
+    await waitFor(() => {
+      expect(result.current?.available).toBe(false);
+    });
   });
 });
 

@@ -70,6 +70,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   useToastsStore.getState().clear();
 });
 
@@ -601,6 +602,35 @@ describe('ContextPicker', () => {
 
     expect(useContextsStore.getState().list.kubeconfigs).toHaveLength(1);
     vi.useRealTimers();
+  });
+
+  it('does not overlap context refreshes', async () => {
+    vi.useFakeTimers();
+    const healthy = listOf(['p-mk1'], 'p-mk1');
+    let finishRefresh!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const refresh = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishRefresh = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(healthy) })
+      .mockImplementationOnce(() => refresh)
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve(healthy) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(90000);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      finishRefresh({ ok: true, json: () => Promise.resolve(healthy) });
+      await refresh;
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('offers kubeconfig management inside the dropdown, not beside it', async () => {

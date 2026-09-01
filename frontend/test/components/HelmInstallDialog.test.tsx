@@ -663,6 +663,47 @@ describe('the corners of the install dialog', () => {
 });
 
 describe('HelmInstallDialog and a search that was left behind', () => {
+  it('stops searching when the query is cleared', async () => {
+    const user = userEvent.setup();
+    let answer: (body: unknown) => void = () => undefined;
+    const held = new Promise((resolve) => {
+      answer = resolve;
+    });
+    let asked = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/charts')) {
+          asked += 1;
+          return held;
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ refused: [] }),
+        });
+      }),
+    );
+    renderDialog();
+
+    const searchInput = screen.getByLabelText('Search charts');
+    await user.type(searchInput, 'podinfo');
+    await waitFor(() => {
+      expect(asked).toBe(1);
+    });
+    expect(screen.getByText('searching every configured repository')).toBeInTheDocument();
+
+    await user.clear(searchInput);
+
+    expect(screen.getByText('type part of a chart name')).toBeInTheDocument();
+    expect(screen.queryByText('searching every configured repository')).not.toBeInTheDocument();
+
+    answer({ ok: true, status: 200, json: () => Promise.resolve(searchPayload) });
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /^podinfo/ })).not.toBeInTheDocument();
+    });
+  });
+
   it('drops the hits for a query that has moved on', async () => {
     const user = userEvent.setup();
     let answerFirst: (body: unknown) => void = () => undefined;
