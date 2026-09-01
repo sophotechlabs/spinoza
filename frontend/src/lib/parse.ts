@@ -968,6 +968,7 @@ function parseHistoryEntry(item: Record<string, unknown>): HistoryEntry {
     cluster: optionalString(item.cluster),
     at: asString(item.at),
     verb: asString(item.verb),
+    actor: optionalString(item.actor),
     group: optionalString(item.group),
     version: optionalString(item.version),
     resource: optionalString(item.resource),

@@ -13,6 +13,7 @@ function entry(extra: Partial<HistoryEntry> = {}): HistoryEntry {
     source: 'action',
     at: '2026-08-29T09:30:00Z',
     verb: 'delete',
+    actor: 'local',
     name: 'web',
     outcome: 'done',
     ...extra,
@@ -46,6 +47,7 @@ describe('History', () => {
       entries: [
         entry({
           verb: 'scale',
+          actor: 'alice@example.com',
           kind: 'Deployment',
           resource: 'deployments',
           namespace: 'default',
@@ -58,9 +60,18 @@ describe('History', () => {
 
     expect(await screen.findByText('Deployment web')).toBeTruthy();
     expect(screen.getByText('scale')).toBeTruthy();
+    expect(screen.getByText('alice@example.com')).toBeTruthy();
     expect(screen.getByText('default')).toBeTruthy();
     expect(screen.getByText('to 3 replicas')).toBeTruthy();
     expect(screen.getByText('Done')).toBeTruthy();
+  });
+
+  it('marks actions recorded before actors were available', async () => {
+    stub({ entries: [entry({ actor: undefined })] });
+
+    render(<History onOpen={vi.fn()} />);
+
+    expect(await screen.findByText('unknown')).toBeTruthy();
   });
 
   it('says so when nothing has been done yet', async () => {

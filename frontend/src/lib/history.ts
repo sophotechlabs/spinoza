@@ -188,6 +188,16 @@ export function verbLabel(entry: HistoryEntry): string {
   return 'changed';
 }
 
+export function actorLabel(entry: HistoryEntry): string {
+  if (entry.source !== 'action') {
+    return '';
+  }
+  if (entry.actor === undefined || entry.actor === '') {
+    return 'unknown';
+  }
+  return entry.actor;
+}
+
 export async function forgetHistory(): Promise<void> {
   const response = await request('/api/history', { method: 'DELETE' });
   if (!response.ok) {

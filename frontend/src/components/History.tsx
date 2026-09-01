@@ -3,6 +3,7 @@ import type { History as HistoryPage, HistoryEntry, ObjectRef } from '../lib/typ
 import {
   HISTORY_LIMIT,
   SOURCES,
+  actorLabel,
   clearFailure,
   detailText,
   forgetHistory,
@@ -43,6 +44,7 @@ interface HistoryProps {
 const HEADERS = [
   { id: 'at', label: 'When', width: 'w-32' },
   { id: 'cluster', label: 'Cluster', width: 'w-40', fleet: true },
+  { id: 'actor', label: 'Who', width: 'w-36' },
   { id: 'verb', label: 'Did', width: 'w-28' },
   { id: 'target', label: 'To', width: 'w-72' },
   { id: 'namespace', label: 'Namespace', width: 'w-40' },
@@ -91,6 +93,7 @@ function Row({
           <OnCluster cluster={entry.cluster ?? ''} />
         </td>
       )}
+      <td className="truncate px-2 py-1 text-fg-muted">{actorLabel(entry)}</td>
       <td className="truncate px-2 py-1 text-fg-soft">{verbLabel(entry)}</td>
       <td className="truncate px-2 py-1">
         <Target entry={entry} onOpen={onOpen} />

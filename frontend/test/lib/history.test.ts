@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   HISTORY_LIMIT,
+  actorLabel,
   clearFailure,
   detailText,
   fetchHistory,
@@ -31,6 +32,7 @@ function entry(extra: Partial<HistoryEntry> = {}): HistoryEntry {
     source: 'action',
     at: '2026-08-29T09:30:00Z',
     verb: 'delete',
+    actor: 'local',
     name: 'web',
     outcome: 'done',
     ...extra,
@@ -65,6 +67,20 @@ describe('outcomeLabel', () => {
 
   it('falls back to done for anything it does not know', () => {
     expect(outcomeLabel('something-new')).toBe('Done');
+  });
+});
+
+describe('actorLabel', () => {
+  it('names the authenticated actor', () => {
+    expect(actorLabel(entry({ actor: 'alice@example.com' }))).toBe('alice@example.com');
+  });
+
+  it('marks an older action whose actor was not recorded', () => {
+    expect(actorLabel(entry({ actor: undefined }))).toBe('unknown');
+  });
+
+  it('leaves cluster changes without an actor', () => {
+    expect(actorLabel(entry({ source: 'change' }))).toBe('');
   });
 });
 

@@ -14,6 +14,7 @@ import {
   parseForward,
   parseForwards,
   parseGraph,
+  parseHistory,
   parseHelmActionResult,
   parseHelmChartVersions,
   parseHelmReleases,
@@ -25,6 +26,36 @@ import {
   parseRow,
 } from '../../src/lib/parse';
 import type { IssueCursor } from '../../src/lib/types';
+
+describe('parseHistory', () => {
+  it('carries the actor on an action', () => {
+    const history = parseHistory({
+      entries: [
+        {
+          id: 1,
+          source: 'action',
+          at: '2026-08-29T09:30:00Z',
+          verb: 'scale',
+          actor: 'alice@example.com',
+          name: 'web',
+          outcome: 'done',
+        },
+      ],
+    });
+
+    expect(history.entries[0].actor).toBe('alice@example.com');
+  });
+
+  it('leaves a legacy action without an actor for the presenter to label', () => {
+    const history = parseHistory({
+      entries: [
+        { id: 1, source: 'action', at: 'now', verb: 'scale', name: 'web', outcome: 'done' },
+      ],
+    });
+
+    expect(history.entries[0].actor).toBeUndefined();
+  });
+});
 
 describe('parseIssueQueue', () => {
   it('brands only the cursor supplied by the server', () => {

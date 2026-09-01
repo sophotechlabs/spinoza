@@ -613,6 +613,7 @@ export interface HistoryEntry {
   cluster?: string;
   at: string;
   verb: string;
+  actor?: string;
   group?: string;
   version?: string;
   resource?: string;
