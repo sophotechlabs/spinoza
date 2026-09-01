@@ -489,6 +489,14 @@ describe('the audit filter on the wire', () => {
     expect(url).toContain('check=image-latest');
     expect(url).toContain('after=abc');
   });
+
+  it('asks the fleet endpoint for a fleet findings page', async () => {
+    stub({ findings: [], objects: [] });
+
+    await fetchCheckPage('image-latest', 'abc', NO_FILTER, true);
+
+    expect(urlOf(0)).toContain('/api/checks/findings/fleet?');
+  });
 });
 
 describe('a finding carries its own severity', () => {

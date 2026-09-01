@@ -15,12 +15,18 @@ import (
 type listing struct {
 	notStubbed
 
-	hits     api.SearchResults
-	releases api.HelmReleases
-	relErr   error
-	report   api.CheckReport
-	flux     api.FluxDashboard
-	argo     api.ArgoDashboard
+	hits      api.SearchResults
+	releases  api.HelmReleases
+	relErr    error
+	report    api.CheckReport
+	page      api.CheckPage
+	pageErr   error
+	pageID    string
+	pageAfter string
+	pageKeep  checks.Filter
+	pageCalls int
+	flux      api.FluxDashboard
+	argo      api.ArgoDashboard
 }
 
 func (l *listing) Search(context.Context, string) api.SearchResults {
@@ -33,6 +39,14 @@ func (l *listing) HelmReleases(context.Context) (api.HelmReleases, error) {
 
 func (l *listing) Checks(context.Context, checks.Filter) api.CheckReport {
 	return l.report
+}
+
+func (l *listing) CheckPage(_ context.Context, id, after string, keep checks.Filter) (api.CheckPage, error) {
+	l.pageCalls++
+	l.pageID = id
+	l.pageAfter = after
+	l.pageKeep = keep
+	return l.page, l.pageErr
 }
 
 func (l *listing) Flux(context.Context) api.FluxDashboard {

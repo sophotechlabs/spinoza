@@ -53,6 +53,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/helm/fleet", s.fleetHelm, false, false},
 		{http.MethodGet, "/api/helm", s.handleHelm, false, false},
 		{http.MethodGet, "/api/checks/findings", s.handleCheckPage, false, false},
+		{http.MethodGet, "/api/checks/findings/fleet", s.fleetCheckPage, false, false},
 		{http.MethodPost, "/api/checks/baseline", s.takeBaseline, false, false},
 		{http.MethodDelete, "/api/checks/baseline", s.clearBaseline, false, false},
 		{http.MethodGet, "/api/checks/baseline/file", s.saveBaselineFile, false, false},

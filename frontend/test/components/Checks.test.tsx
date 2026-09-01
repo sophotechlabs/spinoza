@@ -610,6 +610,30 @@ describe('audit controls', () => {
     useClustersStore.getState().reset();
   });
 
+  it('loads the next fleet page with the filters that are showing', async () => {
+    act(() => {
+      showing(MK1);
+      useSettingsStore.setState({ checksSkipNamespaces: ['kube-system'] });
+    });
+    const calls = stubReportThenPages(cappedReport(), [
+      { findings: [{ ref: 0 }], objects: [{ ...OBJECTS[0], cluster: MK1 }], next: '' },
+    ]);
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByLabelText('Every open cluster'));
+    await waitFor(() => {
+      expect(asked(calls).some((url) => url.includes('/api/checks/fleet'))).toBe(true);
+    });
+    await userEvent.click(screen.getByRole('button', { name: /Privileged containers/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show more' }));
+
+    const page = asked(calls).find((url) => url.includes('/api/checks/findings/fleet'));
+    expect(page).toContain('skipNamespaces=kube-system');
+    expect(page).toContain('check=limits-missing');
+    expect(page).toContain('after=Y3Vyc29yLTE');
+    useClustersStore.getState().reset();
+  });
+
   it('names the cluster a fleet finding is on', async () => {
     act(() => {
       showing(MK1);

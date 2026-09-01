@@ -31,6 +31,7 @@ import {
 } from '../lib/checks';
 import type { SeverityFloor } from '../lib/settings';
 import { useChecksFilter, useSettingsStore } from '../store/settings';
+import type { ChecksFilter } from '../store/settings';
 import LoadFailure from './LoadFailure';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
@@ -91,9 +92,12 @@ function messageOf(err: unknown): string {
   return 'the findings request failed';
 }
 
-function moreLabel(loading: boolean, left: number): string {
+function moreLabel(loading: boolean, left: number, fleet: boolean): string {
   if (loading) {
     return 'Loading';
+  }
+  if (fleet) {
+    return 'Show more';
   }
   return `Show ${String(Math.min(left, PAGE_SIZE))} more`;
 }
@@ -368,11 +372,15 @@ function driftOrChange(group: CheckGroupView, report: CheckReportView): string {
 function Group({
   group,
   report,
+  keep,
+  fleet,
   onOpen,
   onChanged,
 }: {
   group: CheckGroupView;
   report: CheckReportView;
+  keep: ChecksFilter;
+  fleet: boolean;
   onOpen: (ref: ObjectRef, kind: string) => void;
   onChanged: () => void;
 }) {
@@ -398,7 +406,7 @@ function Group({
     setLoading(true);
     setFailed(null);
     try {
-      const page = await fetchCheckPage(group.id, nextCursor);
+      const page = await fetchCheckPage(group.id, nextCursor, keep, fleet);
       setPaged([...shown, ...page.findings]);
       setCursor(page.next);
     } catch (err: unknown) {
@@ -483,7 +491,7 @@ function Group({
               }}
               className="mt-1 ml-9 rounded border border-edge-strong px-2 py-0.5 text-fg-soft hover:bg-surface-raised disabled:text-fg-subtle"
             >
-              {moreLabel(loading, group.total - shown.length)}
+              {moreLabel(loading, group.total - shown.length, fleet)}
             </button>
           )}
         </div>
@@ -1053,12 +1061,16 @@ function Category({
   category,
   groups,
   report,
+  keep,
+  fleet,
   onOpen,
   onChanged,
 }: {
   category: CheckCategory;
   groups: CheckGroupView[];
   report: CheckReportView;
+  keep: ChecksFilter;
+  fleet: boolean;
   onOpen: (ref: ObjectRef, kind: string) => void;
   onChanged: () => void;
 }) {
@@ -1071,7 +1083,15 @@ function Category({
         {CATEGORY_LABELS[category]}
       </h2>
       {groups.map((group) => (
-        <Group key={group.id} group={group} report={report} onOpen={onOpen} onChanged={onChanged} />
+        <Group
+          key={group.id}
+          group={group}
+          report={report}
+          keep={keep}
+          fleet={fleet}
+          onOpen={onOpen}
+          onChanged={onChanged}
+        />
       ))}
     </section>
   );
@@ -1082,6 +1102,7 @@ export default function Checks({ onOpen }: ChecksProps) {
   const [fleet, setFleet] = useState(false);
   const showing = fleet && several;
   const { data, error, stale, reload } = useChecks(showing);
+  const keep = useChecksFilter();
   const namespace = useSettingsStore((state) => state.checksNamespace);
 
   if (data === null) {
@@ -1132,6 +1153,8 @@ export default function Checks({ onOpen }: ChecksProps) {
             category={category}
             groups={inCategory(data.groups, category)}
             report={data}
+            keep={keep}
+            fleet={showing}
             onOpen={onOpen}
             onChanged={reload}
           />

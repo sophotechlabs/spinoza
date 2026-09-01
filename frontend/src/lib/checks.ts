@@ -285,11 +285,13 @@ export async function fetchCheckPage(
   check: string,
   after: string,
   keep: ChecksFilter = NO_FILTER,
+  fleet = false,
 ): Promise<CheckPageView> {
   const params = filterParams(keep);
   params.set('check', check);
   params.set('after', after);
-  const response = await request(`/api/checks/findings?${params.toString()}`);
+  const where = fleet ? '/api/checks/findings/fleet' : '/api/checks/findings';
+  const response = await request(`${where}?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `the findings request failed with status ${response.status}`);
   }

@@ -13,6 +13,7 @@ GET /api/checks role=- local=no whole=yes writes=no
 GET /api/checks/baseline/file role=- local=no whole=yes writes=no
 GET /api/checks/export role=- local=no whole=yes writes=no
 GET /api/checks/findings role=- local=no whole=yes writes=no
+GET /api/checks/findings/fleet role=- local=no whole=yes writes=no
 GET /api/checks/fleet role=- local=no whole=yes writes=no
 GET /api/checks/mutes role=- local=no whole=no writes=no
 GET /api/clusters role=- local=no whole=no writes=no
