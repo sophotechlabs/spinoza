@@ -203,6 +203,18 @@ func TestAStoreWithoutAFileStillAnswers(t *testing.T) {
 	}
 }
 
+func TestTheZeroValueStoreCanAcceptSettings(t *testing.T) {
+	store := &Store{}
+
+	err := store.Merge(map[string]string{"a": "1"})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if store.All()["a"] != "1" {
+		t.Fatalf("settings = %v, want the merged value", store.All())
+	}
+}
+
 func TestUnreadableSettingsAreReported(t *testing.T) {
 	path := tempPath(t)
 	err := os.MkdirAll(filepath.Dir(path), 0o700)
