@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -167,6 +168,44 @@ func TestASilencingRuleWithNoReasonIsNamedAsAFault(t *testing.T) {
 
 	if len(faults) != 1 || !strings.Contains(faults[0].Reason, "has to say why") {
 		t.Fatalf("reported %v", faults)
+	}
+}
+
+func TestASilencerCannotReadFieldsTheFindingDoesNotCarry(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		check string
+		expr  string
+	}{
+		{"a ConfigMap's data", "orphaned-config-map", `object.data.size() > 0`},
+		{"a Secret's labels", "orphaned-secret", `object.metadata.labels["tier"] == "system"`},
+		{"a claim's spec", "claim-nothing-mounts", `object.spec.storageClassName == "local"`},
+		{"a field through brackets", "orphaned-config-map", `object["data"].size() > 0`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := `[{"id":"quiet","silences":"` + tc.check + `","expr":` + strconv.Quote(tc.expr) +
+				`,"reason":"expected here"}]`
+
+			faults := Faults(raw)
+
+			if len(faults) != 1 || !strings.Contains(faults[0].Reason, "only exposes") {
+				t.Fatalf("reported %v", faults)
+			}
+		})
+	}
+}
+
+func TestASilencerCanReadEveryFieldAMetadataOnlyFindingCarries(t *testing.T) {
+	for _, expr := range []string{
+		`object.apiVersion == 'v1' && object.kind == 'ConfigMap' && object.metadata.name == 'settings' && object.metadata.namespace == 'prod'`,
+		`object["metadata"]["name"] == 'settings'`,
+	} {
+		raw := `[{"id":"quiet","silences":"orphaned-config-map","expr":` + strconv.Quote(expr) +
+			`,"reason":"expected here"}]`
+
+		if faults := Faults(raw); len(faults) != 0 {
+			t.Fatalf("%q reported %v", expr, faults)
+		}
 	}
 }
 

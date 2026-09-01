@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cel.dev/cel-go/cel"
+	celast "cel.dev/cel-go/common/ast"
 	"cel.dev/cel-go/common/types"
 	"cel.dev/cel-go/common/types/ref"
 
@@ -81,7 +82,8 @@ func (r UserRule) faults(at int) []RuleFault {
 	if r.Expr == "" {
 		return []RuleFault{{ID: name, Reason: "a rule needs an expression to judge by"}}
 	}
-	if _, err := compileRule(r.Expr); err != nil {
+	_, parsed, err := parseRule(r.Expr)
+	if err != nil {
 		return []RuleFault{{ID: name, Reason: err.Error()}}
 	}
 	if r.silencer() && !isCheck(r.Silences) {
@@ -90,7 +92,97 @@ func (r UserRule) faults(at int) []RuleFault {
 	if r.silencer() && r.Reason == "" {
 		return []RuleFault{{ID: name, Reason: "a rule that silences a check has to say why"}}
 	}
+	if r.silencer() && metadataOnlyCheck(r.Silences) && readsPastMetadata(parsed) {
+		return []RuleFault{{
+			ID: name,
+			Reason: "this check only exposes object.apiVersion, object.kind, " +
+				"object.metadata.name, and object.metadata.namespace to a silencer",
+		}}
+	}
 	return nil
+}
+
+func metadataOnlyCheck(id string) bool {
+	return slices.Contains([]string{
+		"orphaned-config-map",
+		"orphaned-secret",
+		"claim-nothing-mounts",
+	}, id)
+}
+
+func readsPastMetadata(parsed *cel.Ast) bool {
+	root := celast.NavigateAST(parsed.NativeRep())
+	nodes := append(celast.MatchDescendants(root, celast.AllMatcher()), root)
+	for _, node := range nodes {
+		path, rooted := objectPath(node)
+		if !rooted {
+			continue
+		}
+		parent, hasParent := node.Parent()
+		if hasParent && extendsObjectPath(parent, node.ID()) {
+			continue
+		}
+		if slices.Equal(path, []string{"apiVersion"}) {
+			continue
+		}
+		if slices.Equal(path, []string{"kind"}) {
+			continue
+		}
+		if slices.Equal(path, []string{"metadata", "name"}) {
+			continue
+		}
+		if slices.Equal(path, []string{"metadata", "namespace"}) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func extendsObjectPath(parent celast.Expr, child int64) bool {
+	if _, rooted := objectPath(parent); !rooted {
+		return false
+	}
+	if parent.Kind() == celast.SelectKind {
+		return parent.AsSelect().Operand().ID() == child
+	}
+	if parent.Kind() != celast.CallKind {
+		return false
+	}
+	call := parent.AsCall()
+	if call.FunctionName() != "_[_]" || len(call.Args()) != 2 {
+		return false
+	}
+	return call.Args()[0].ID() == child
+}
+
+func objectPath(expr celast.Expr) ([]string, bool) {
+	switch expr.Kind() {
+	case celast.IdentKind:
+		if expr.AsIdent() == userRuleObject {
+			return []string{}, true
+		}
+	case celast.SelectKind:
+		path, rooted := objectPath(expr.AsSelect().Operand())
+		if rooted {
+			return append(path, expr.AsSelect().FieldName()), true
+		}
+	case celast.CallKind:
+		call := expr.AsCall()
+		if call.FunctionName() != "_[_]" || len(call.Args()) != 2 {
+			return nil, false
+		}
+		path, rooted := objectPath(call.Args()[0])
+		if !rooted || call.Args()[1].Kind() != celast.LiteralKind {
+			return nil, false
+		}
+		field, isString := call.Args()[1].AsLiteral().(types.String)
+		if !isString {
+			return nil, false
+		}
+		return append(path, string(field)), true
+	}
+	return nil, false
 }
 
 func isCheck(id string) bool {
@@ -173,19 +265,27 @@ func knownCategory(name string) string {
 }
 
 func compileRule(expr string) (cel.Program, error) {
-	env, err := cel.NewEnv(cel.Variable(userRuleObject, cel.DynType))
+	env, parsed, err := parseRule(expr)
 	if err != nil {
 		return nil, err
 	}
+	return env.Program(parsed)
+}
+
+func parseRule(expr string) (*cel.Env, *cel.Ast, error) {
+	env, err := cel.NewEnv(cel.Variable(userRuleObject, cel.DynType))
+	if err != nil {
+		return nil, nil, err
+	}
 	parsed, issues := env.Compile(expr)
 	if issues != nil && issues.Err() != nil {
-		return nil, fmt.Errorf("the expression did not compile: %w", issues.Err())
+		return nil, nil, fmt.Errorf("the expression did not compile: %w", issues.Err())
 	}
 	if !parsed.OutputType().IsExactType(cel.BoolType) {
-		return nil, fmt.Errorf("the expression has to return true or false, not %s",
+		return nil, nil, fmt.Errorf("the expression has to return true or false, not %s",
 			cel.FormatCELType(parsed.OutputType()))
 	}
-	return env.Program(parsed)
+	return env, parsed, nil
 }
 
 func refuses(reason string) finder {
