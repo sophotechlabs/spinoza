@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -286,6 +287,34 @@ func TestWhatEachClusterScannedIsCountedTogether(t *testing.T) {
 
 	if got.Scanned != 2 {
 		t.Fatalf("scanned = %d", got.Scanned)
+	}
+}
+
+func TestTheFleetNamespaceBreakdownNamesItsClusters(t *testing.T) {
+	shared := []api.NamespaceCount{{Namespace: "shop", Total: 3, High: 1, Medium: 1, Low: 1}}
+	only := []api.NamespaceCount{{Namespace: "flux-system", Total: 2, High: 2}}
+	got := mergeReports([]clusterAnswer[api.CheckReport]{
+		{context: "p-mk1", answer: api.CheckReport{Namespaces: append(slices.Clone(shared), only...)}},
+		{context: "p-mk2", answer: api.CheckReport{Namespaces: shared}},
+	})
+
+	rows := map[string]api.NamespaceCount{}
+	for _, one := range got.Namespaces {
+		rows[one.Namespace] = one
+	}
+	shop, held := rows["shop"]
+	if !held {
+		t.Fatalf("the merged report carries no shop row: %+v", got.Namespaces)
+	}
+	if shop.Total != 6 || shop.High != 2 || shop.Medium != 2 || shop.Low != 2 {
+		t.Fatalf("shop = %+v, want both clusters added in every column", shop)
+	}
+	want := []string{"p-mk1", "p-mk2"}
+	if !slices.Equal(shop.Clusters, want) {
+		t.Fatalf("shop clusters = %v, want %v", shop.Clusters, want)
+	}
+	if flux := rows["flux-system"]; !slices.Equal(flux.Clusters, []string{"p-mk1"}) {
+		t.Fatalf("flux-system clusters = %v, want only p-mk1", flux.Clusters)
 	}
 }
 

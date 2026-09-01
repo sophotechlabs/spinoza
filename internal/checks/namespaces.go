@@ -2,7 +2,6 @@ package checks
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -47,14 +46,6 @@ func (n *namespaces) count(space, severity string) {
 
 func (n *namespaces) sorted() []api.NamespaceCount {
 	out := slices.Clone(n.list)
-	slices.SortFunc(out, func(left, right api.NamespaceCount) int {
-		if left.High != right.High {
-			return right.High - left.High
-		}
-		if left.Total != right.Total {
-			return right.Total - left.Total
-		}
-		return strings.Compare(left.Namespace, right.Namespace)
-	})
+	slices.SortFunc(out, api.WorstNamespaceFirst)
 	return out
 }

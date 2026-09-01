@@ -100,7 +100,7 @@ func mergeReports(found []clusterAnswer[api.CheckReport]) api.CheckReport {
 		offset := len(merged.Objects)
 		merged.Objects = append(merged.Objects, stamped(one)...)
 		foldGroups(&merged, at, one.answer.Groups, offset, one.context)
-		foldNamespaces(spread, one.answer.Namespaces)
+		foldNamespaces(spread, one.answer.Namespaces, one.context)
 		merged.Scanned += one.answer.Scanned
 		merged.WasScanned += one.answer.WasScanned
 		if one.answer.Baseline != "" {
@@ -277,7 +277,7 @@ func earliest(taken []string) string {
 	return taken[0]
 }
 
-func foldNamespaces(spread map[string]api.NamespaceCount, counts []api.NamespaceCount) {
+func foldNamespaces(spread map[string]api.NamespaceCount, counts []api.NamespaceCount, cluster string) {
 	for _, count := range counts {
 		into := spread[count.Namespace]
 		into.Namespace = count.Namespace
@@ -285,6 +285,9 @@ func foldNamespaces(spread map[string]api.NamespaceCount, counts []api.Namespace
 		into.High += count.High
 		into.Medium += count.Medium
 		into.Low += count.Low
+		if !slices.Contains(into.Clusters, cluster) {
+			into.Clusters = append(into.Clusters, cluster)
+		}
 		spread[count.Namespace] = into
 	}
 }
@@ -361,13 +364,9 @@ func spreadOf(counts map[string]api.NamespaceCount) []api.NamespaceCount {
 	}
 	out := make([]api.NamespaceCount, 0, len(counts))
 	for _, count := range counts {
+		slices.Sort(count.Clusters)
 		out = append(out, count)
 	}
-	slices.SortFunc(out, func(left, right api.NamespaceCount) int {
-		if left.Total != right.Total {
-			return right.Total - left.Total
-		}
-		return strings.Compare(left.Namespace, right.Namespace)
-	})
+	slices.SortFunc(out, api.WorstNamespaceFirst)
 	return out
 }

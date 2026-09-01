@@ -535,6 +535,7 @@ Mute.Namespace namespace,omitempty string
 Mute.Reason reason,omitempty string
 Mute.Ref ref,omitempty string
 Mutes.Mutes mutes []Mute
+NamespaceCount.Clusters clusters,omitempty []string
 NamespaceCount.High high int
 NamespaceCount.Low low int
 NamespaceCount.Medium medium int

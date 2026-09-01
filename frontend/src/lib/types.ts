@@ -1259,6 +1259,7 @@ export interface NamespaceCount {
   high: number;
   medium: number;
   low: number;
+  clusters?: string[];
 }
 
 export interface Baseline {

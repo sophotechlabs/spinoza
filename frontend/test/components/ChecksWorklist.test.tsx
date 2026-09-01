@@ -1161,6 +1161,15 @@ describe('the namespace summary', () => {
     expect(await screen.findByText('2 namespaces with findings')).toBeInTheDocument();
   });
 
+  it('names the clusters behind a merged namespace', async () => {
+    answers({
+      groups: [group()],
+      namespaces: [{ ...namespaces[0], clusters: ['p-mk1', 'p-mk2'] }],
+    });
+
+    expect(await screen.findByText('p-mk1, p-mk2')).toBeInTheDocument();
+  });
+
   it('narrows to one namespace when it is picked', async () => {
     const calls = answers({ groups: [group()], namespaces });
 

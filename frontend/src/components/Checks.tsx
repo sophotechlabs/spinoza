@@ -74,6 +74,13 @@ function namespacesLabel(counts: NamespaceCount[], picked: string): string {
   return `${String(counts.length)} namespaces with findings`;
 }
 
+function clustersLabel(clusters: string[] | undefined): string {
+  if (clusters === undefined || clusters.length === 0) {
+    return '';
+  }
+  return clusters.join(', ');
+}
+
 function pickedNext(picked: string, namespace: string): string {
   if (picked === namespace) {
     return '';
@@ -948,6 +955,11 @@ function Namespaces({ counts }: { counts: NamespaceCount[] }) {
             >
               {entry.namespace}
             </button>
+            {clustersLabel(entry.clusters) !== '' && (
+              <span className="shrink-0 truncate text-fg-subtle">
+                {clustersLabel(entry.clusters)}
+              </span>
+            )}
             <span className="w-16 shrink-0 text-right text-error">{entry.high}</span>
             <span className="w-16 shrink-0 text-right text-fg-soft">{entry.total}</span>
           </li>

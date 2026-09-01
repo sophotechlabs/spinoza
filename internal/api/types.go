@@ -1283,11 +1283,12 @@ type CheckGroup struct {
 }
 
 type NamespaceCount struct {
-	Namespace string `json:"namespace"`
-	Total     int    `json:"total"`
-	High      int    `json:"high"`
-	Medium    int    `json:"medium"`
-	Low       int    `json:"low"`
+	Namespace string   `json:"namespace"`
+	Total     int      `json:"total"`
+	High      int      `json:"high"`
+	Medium    int      `json:"medium"`
+	Low       int      `json:"low"`
+	Clusters  []string `json:"clusters,omitempty"`
 }
 
 type CheckPage struct {
