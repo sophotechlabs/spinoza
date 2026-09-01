@@ -122,7 +122,11 @@ func TestBaselinesAreKeptBesideTheSettings(t *testing.T) {
 
 	store := baselineStore()
 
-	if err := store.Save("https://one.example", checks.Baseline{TakenAt: "2026-08-30T00:00:00Z"}); err != nil {
+	taken := checks.Baseline{
+		TakenAt: "2026-08-30T00:00:00Z",
+		Checks:  []string{"privileged-containers"},
+	}
+	if err := store.Save("https://one.example", taken); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 	if _, ok := store.Load("https://one.example"); !ok {
