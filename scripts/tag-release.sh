@@ -2,7 +2,7 @@
 set -euo pipefail
 
 subject=$(git log -1 --format=%s "$SHA")
-if [[ ! "$subject" =~ ^chore\(main\):\ release\ ([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+if [[ ! "$subject" =~ ^chore\(main\):\ release\ ([0-9]+\.[0-9]+\.[0-9]+)(\ \(#[0-9]+\))?$ ]]; then
     echo "not a release commit"
     exit 0
 fi

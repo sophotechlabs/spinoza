@@ -90,3 +90,9 @@ run
 test "$(wc -l < "$GH_CALLS" | tr -d ' ')" = 2
 grep -q 'ref=refs/tags/v1.0.3' "$GH_CALLS"
 grep -q "sha=$SHA" "$GH_CALLS"
+
+commit 1.0.4 'chore(main): release 1.0.4 (#37)'
+run
+test "$(wc -l < "$GH_CALLS" | tr -d ' ')" = 2
+grep -q 'ref=refs/tags/v1.0.4' "$GH_CALLS"
+grep -q "sha=$SHA" "$GH_CALLS"
