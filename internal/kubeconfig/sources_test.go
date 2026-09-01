@@ -88,6 +88,46 @@ func TestTheDefaultKubeconfigIsAlwaysListedFirst(t *testing.T) {
 	}
 }
 
+func TestAKubeconfigRememberedBeforeItBecameTheDefaultIsListedOnce(t *testing.T) {
+	fallback := writeFile(t, "config", oneContext)
+	t.Setenv("KUBECONFIG", fallback)
+	sources := newSources(t, "")
+	if err := sources.store.Add(fallback); err != nil {
+		t.Fatalf("remember existing path: %v", err)
+	}
+
+	list := sources.List()
+
+	if len(list) != 1 {
+		t.Fatalf("kubeconfigs = %v, want the default lookup listed once", list)
+	}
+	if list[0].Label != fallback {
+		t.Fatalf("label = %q, want the default lookup path", list[0].Label)
+	}
+}
+
+func TestFilteringARememberedDefaultKeepsOtherKubeconfigs(t *testing.T) {
+	fallback := writeFile(t, "config", oneContext)
+	other := writeFile(t, "other.yaml", otherContext)
+	t.Setenv("KUBECONFIG", fallback)
+	sources := newSources(t, "")
+	if err := sources.store.Add(fallback); err != nil {
+		t.Fatalf("remember existing path: %v", err)
+	}
+	if err := sources.store.Add(other); err != nil {
+		t.Fatalf("remember other path: %v", err)
+	}
+
+	list := sources.List()
+
+	if len(list) != 2 {
+		t.Fatalf("kubeconfigs = %v, want the default and other file", list)
+	}
+	if list[1].Path != other {
+		t.Fatalf("path = %q, want the distinct remembered file", list[1].Path)
+	}
+}
+
 func TestAnAddedKubeconfigIsListedOnItsOwn(t *testing.T) {
 	sources := newSources(t, writeFile(t, "config", oneContext))
 	other := writeFile(t, "other.yaml", otherContext)
@@ -213,6 +253,21 @@ func TestAddingRefusesTheKubeconfigAlreadyReadByDefault(t *testing.T) {
 	}
 }
 
+func TestAddingRefusesAFileInTheDefaultLookup(t *testing.T) {
+	fallback := writeFile(t, "config", oneContext)
+	t.Setenv("KUBECONFIG", fallback)
+	sources := newSources(t, "")
+
+	err := sources.Add(fallback)
+
+	if err == nil {
+		t.Fatal("a kubeconfig from the default lookup was added a second time")
+	}
+	if !strings.Contains(err.Error(), "already reads") {
+		t.Fatalf("error = %v, want it to name the reason", err)
+	}
+}
+
 func TestAddingRefusesAnEmptyPath(t *testing.T) {
 	sources := newSources(t, writeFile(t, "config", oneContext))
 
@@ -318,7 +373,7 @@ func TestAFallbackThatCannotBeResolvedIsKeptAsGiven(t *testing.T) {
 
 	sources := newSources(t, "~/cluster.yaml")
 
-	if sources.resolved != "~/cluster.yaml" {
-		t.Fatalf("resolved = %q, want the flag kept verbatim when it cannot be resolved", sources.resolved)
+	if _, found := sources.defaults["~/cluster.yaml"]; !found {
+		t.Fatalf("defaults = %v, want the flag kept verbatim when it cannot be resolved", sources.defaults)
 	}
 }

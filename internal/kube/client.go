@@ -86,10 +86,15 @@ func Read(path string) ([]api.KubeContext, error) {
 }
 
 func Label(path string) string {
-	if path != "" {
-		return path
+	return strings.Join(Paths(path), ", ")
+}
+
+func Paths(path string) []string {
+	rules := rulesFor(path)
+	if rules.ExplicitPath != "" {
+		return []string{rules.ExplicitPath}
 	}
-	return strings.Join(clientcmd.NewDefaultClientConfigLoadingRules().Precedence, ", ")
+	return slices.Clone(rules.Precedence)
 }
 
 const (

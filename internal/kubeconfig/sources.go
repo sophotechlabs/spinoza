@@ -15,12 +15,16 @@ const noContexts = "this kubeconfig holds no contexts"
 
 type Sources struct {
 	fallback string
-	resolved string
+	defaults map[string]struct{}
 	store    *Store
 }
 
 func NewSources(fallback string, store *Store) *Sources {
-	return &Sources{fallback: fallback, resolved: absolute(fallback), store: store}
+	defaults := make(map[string]struct{})
+	for _, path := range kube.Paths(fallback) {
+		defaults[absolute(path)] = struct{}{}
+	}
+	return &Sources{fallback: fallback, defaults: defaults, store: store}
 }
 
 func absolute(path string) string {
@@ -39,9 +43,17 @@ func (s *Sources) List() []api.Kubeconfig {
 	out := make([]api.Kubeconfig, 0, len(stored)+1)
 	out = append(out, read(api.Kubeconfig{Label: kube.Label(s.fallback)}, s.fallback))
 	for _, path := range stored {
+		if s.isDefault(path) {
+			continue
+		}
 		out = append(out, read(api.Kubeconfig{Label: path, Path: path, Removable: true}, path))
 	}
 	return out
+}
+
+func (s *Sources) isDefault(path string) bool {
+	_, found := s.defaults[absolute(path)]
+	return found
 }
 
 func read(entry api.Kubeconfig, file string) api.Kubeconfig {
@@ -64,7 +76,7 @@ func (s *Sources) Add(path string) error {
 	if err != nil {
 		return err
 	}
-	if resolved == s.resolved {
+	if s.isDefault(resolved) {
 		return fmt.Errorf("%s is the kubeconfig spinoza already reads by default", resolved)
 	}
 	contexts, readErr := kube.Read(resolved)
