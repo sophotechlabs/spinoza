@@ -218,6 +218,26 @@ func tsShape(
 		bare = strings.ReplaceAll(bare, nullable, "")
 	}
 	bare = strings.TrimSpace(bare)
+	if members := strings.Split(bare, " & "); len(members) > 1 {
+		shape := ""
+		for _, member := range members {
+			memberShape, readable := tsShape(member, aliases, interfaces, unions, depth+1)
+			if !readable {
+				return "", false
+			}
+			if memberShape == jsonObject {
+				continue
+			}
+			if shape != "" && shape != memberShape {
+				return "", false
+			}
+			shape = memberShape
+		}
+		if shape == "" {
+			return jsonObject, true
+		}
+		return shape, true
+	}
 	switch {
 	case strings.HasSuffix(bare, "[]"), strings.HasPrefix(bare, "Array<"):
 		return jsonArray, true
