@@ -482,6 +482,23 @@ func TestMalformedSelectorsAndLabelsDoNotSelectAWorkload(t *testing.T) {
 	}
 }
 
+func TestAnotherConfigMapDoesNotHideTheReferencedOne(t *testing.T) {
+	workload := labelledDeployment("api", podSpec(sourcedContainer(map[string]any{
+		"env": []any{map[string]any{"name": "PORT", "valueFrom": map[string]any{
+			"configMapKeyRef": map[string]any{"name": "settings", "key": "PORT"},
+		}}},
+	})))
+
+	found := report(t,
+		configMap("other", map[string]any{"PORT": "9090"}),
+		configMap("settings", map[string]any{"MODE": "live"}),
+		workload)
+
+	if findingCount(t, found, "config-map-key-missing") != 1 {
+		t.Fatal("another ConfigMap hid a missing key in the referenced one")
+	}
+}
+
 func TestAWorkloadWithNoTemplateLabelsIsNotJudgedOnSelectors(t *testing.T) {
 	bare := workload("Deployment", "api", podSpec(sourcedContainer(nil)))
 
