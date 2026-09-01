@@ -60,9 +60,10 @@ func TestServingTurnsTheServerIntoOneThatAsksWhoYouAre(t *testing.T) {
 	}
 }
 
-func TestServingWithNoWayToSignInStillStarts(t *testing.T) {
+func TestServingWithExplicitAnonymousAdminAccessStarts(t *testing.T) {
 	opts := servedOpts(func(opts *settings) {
 		opts.serve.auth.Mode = auth.ModeNone
+		opts.serve.auth.AllowAnonymous = true
 		opts.serve.impersonate = false
 	})
 
