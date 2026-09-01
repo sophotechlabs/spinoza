@@ -12,6 +12,15 @@ func TestReleaseArtifactsRunOnEveryMainPush(t *testing.T) {
 	}
 }
 
+func TestReleaseDetectionCanSeeDrafts(t *testing.T) {
+	workflow := readYAML[struct {
+		Permissions map[string]string `yaml:"permissions"`
+	}](t, ".github/workflows/release-artifacts.yaml")
+	if workflow.Permissions["contents"] != "write" {
+		t.Fatal("release detection cannot see draft releases")
+	}
+}
+
 func TestReleaseArtifactVersionContract(t *testing.T) {
 	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
 	version := requireJob(t, workflow, "version")
@@ -23,6 +32,9 @@ func TestReleaseArtifactVersionContract(t *testing.T) {
 	read := requireStep(t, version, "read")
 	if !strings.Contains(read.Run, "scripts/release-pending.sh") {
 		t.Fatal("version job does not ask the release-pending checker")
+	}
+	if !strings.Contains(read.Run, "scripts/release-commit.sh") {
+		t.Fatal("version job builds the dispatch head instead of the release commit")
 	}
 }
 

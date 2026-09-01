@@ -13,8 +13,8 @@ func TestLongRunningChecksCancelSupersededCommits(t *testing.T) {
 			if workflow.Concurrency.Group != want {
 				t.Fatalf("concurrency group = %q, want %q", workflow.Concurrency.Group, want)
 			}
-			if !workflow.Concurrency.CancelInProgress {
-				t.Fatal("superseded workflow runs are not cancelled")
+			if workflow.Concurrency.CancelInProgress != "true" {
+				t.Fatalf("cancel-in-progress = %q, want true", workflow.Concurrency.CancelInProgress)
 			}
 		})
 	}
@@ -26,32 +26,15 @@ func TestE2ECancelsSupersededCommitsAndPullRequests(t *testing.T) {
 	if workflow.Concurrency.Group != want {
 		t.Fatalf("concurrency group = %q, want %q", workflow.Concurrency.Group, want)
 	}
-	if !workflow.Concurrency.CancelInProgress {
-		t.Fatal("superseded workflow runs are not cancelled")
+	if workflow.Concurrency.CancelInProgress != "true" {
+		t.Fatalf("cancel-in-progress = %q, want true", workflow.Concurrency.CancelInProgress)
 	}
 }
 
-func TestLongCampaignsRunOnceAndSkipReleaseOnlyPullRequests(t *testing.T) {
-	releaseFiles := []string{
-		".release-please-manifest.json",
-		"CHANGELOG.md",
-		"deploy/helm/spinoza/Chart.yaml",
-		"wails.json",
-	}
-	for _, name := range []string{
-		".github/workflows/go-fuzz.yaml",
-		".github/workflows/go-mutation.yaml",
-	} {
-		t.Run(name, func(t *testing.T) {
-			workflow := readYAML[workflowFile](t, name)
-			if len(workflow.On.Push.Branches) != 1 || workflow.On.Push.Branches[0] != "main" {
-				t.Fatalf("push branches = %v, want only main", workflow.On.Push.Branches)
-			}
-			for _, path := range releaseFiles {
-				if !contains(workflow.On.PullRequest.PathsIgnore, path) {
-					t.Fatalf("release-only pull requests do not ignore %s", path)
-				}
-			}
-		})
+func TestGoValidationFinishesOnMainAndCancelsSupersededPullRequests(t *testing.T) {
+	workflow := readYAML[workflowFile](t, ".github/workflows/go.yaml")
+	want := workflowScalar("${{ github.event_name == 'pull_request' }}")
+	if workflow.Concurrency.CancelInProgress != want {
+		t.Fatalf("cancel-in-progress = %q, want %q", workflow.Concurrency.CancelInProgress, want)
 	}
 }

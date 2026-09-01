@@ -757,6 +757,7 @@ workflows: scoped-tools workflow-triggers
     actionlint .github/workflows/*.yaml
     zizmor --no-online-audits --config .forgejo/zizmor.yml .forgejo/workflows/*.yaml
     zizmor --no-online-audits .github/workflows/*.yaml
+    test/release-commit.sh
     test/release-pending.sh
 
 scoped-tools:
@@ -784,7 +785,6 @@ workflow-triggers:
         codeql.yaml
         commits.yaml
         frontend.yaml
-        go.yaml
         integration.yaml
         repo.yaml
         windows.yaml
@@ -803,6 +803,11 @@ workflow-triggers:
             fi
         done
     done
+    go_cancel=$(yq -r '.concurrency.cancel-in-progress' .github/workflows/go.yaml)
+    if ! grep -Fq "github.event_name == 'pull_request'" <<< "$go_cancel"; then
+        echo ".github/workflows/go.yaml must finish main runs and cancel superseded pull requests" >&2
+        exit 1
+    fi
     if [ "$(yq -r '.concurrency.cancel-in-progress' .github/workflows/e2e.yaml)" != "true" ]; then
         echo ".github/workflows/e2e.yaml does not cancel a superseded validation run" >&2
         exit 1
@@ -825,8 +830,9 @@ workflow-triggers:
 hygiene:
     typos
     just editorconfig
-    shellcheck install.sh test/install/container.sh test/install/uninstall.sh \
-        test/install/editorconfig-name.sh packaging/render.sh
+    shellcheck install.sh scripts/release-commit.sh scripts/release-pending.sh \
+        test/release-commit.sh test/release-pending.sh test/install/container.sh \
+        test/install/uninstall.sh test/install/editorconfig-name.sh packaging/render.sh
     just --unstable --fmt --check
 
 editorconfig:
