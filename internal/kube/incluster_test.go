@@ -69,3 +69,37 @@ func TestTheKubeconfigHelmAndKubectlReadIsTheOnDiskShape(t *testing.T) {
 		t.Fatalf("mode = %v, want 0600; it names the pod's token file", info.Mode().Perm())
 	}
 }
+
+func TestWritingTheToolKubeconfigReportsAnUnusableParent(t *testing.T) {
+	dir := t.TempDir()
+	parent := filepath.Join(dir, kubeconfigDir)
+	if err := os.WriteFile(parent, []byte("occupied"), 0o600); err != nil {
+		t.Fatalf("preparing the occupied path: %v", err)
+	}
+
+	_, err := writeToolKubeconfig(dir, "https://10.96.0.1:443")
+
+	if err == nil {
+		t.Fatal("writing through a regular file reported success")
+	}
+	if !strings.Contains(err.Error(), "in-cluster kubeconfig") {
+		t.Fatalf("error = %q, want the operation named", err.Error())
+	}
+}
+
+func TestWritingTheToolKubeconfigReportsAnUnwritableTarget(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, kubeconfigDir, kubeconfigFile)
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		t.Fatalf("preparing the occupied target: %v", err)
+	}
+
+	_, err := writeToolKubeconfig(dir, "https://10.96.0.1:443")
+
+	if err == nil {
+		t.Fatal("writing over a directory reported success")
+	}
+	if !strings.Contains(err.Error(), "in-cluster kubeconfig") {
+		t.Fatalf("error = %q, want the operation named", err.Error())
+	}
+}

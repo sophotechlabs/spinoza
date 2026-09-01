@@ -291,6 +291,29 @@ func TestATokenSpinozaCannotTrustNeverBecomesASession(t *testing.T) {
 	}
 }
 
+func TestAValidLoginTooLargeForASessionCookieIsRefused(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, nil)
+	login := startLogin(t, held, "/")
+	claims := idp.standardClaims(login.nonce)
+	claims["groups"] = []string{strings.Repeat("g", maxCookieBytes)}
+	idp.claims = claims
+
+	recorded := callback(t, held, login, url.Values{"state": {login.state}, "code": {"abc"}})
+
+	if recorded.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusInternalServerError)
+	}
+	for _, cookie := range recorded.Result().Cookies() {
+		if cookie.Name == SessionCookie && cookie.Value != "" {
+			t.Fatal("an identity too large to retain still became a session")
+		}
+	}
+	if !strings.Contains(recorded.Body.String(), "too large") {
+		t.Fatalf("body = %q, want the cookie limit named", recorded.Body.String())
+	}
+}
+
 func TestSigningOutEndsTheProvidersSessionToo(t *testing.T) {
 	idp := newIDP(t)
 	held := authFor(t, idp, func(cfg *Config) {

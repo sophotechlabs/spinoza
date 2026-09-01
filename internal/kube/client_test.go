@@ -1,12 +1,18 @@
 package kube
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/transport"
+
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 const validKubeconfig = `apiVersion: v1
@@ -314,6 +320,75 @@ func TestLoadContextRaisesTheClientRateLimit(t *testing.T) {
 	}
 	if bundle.Config.Burst < 100 {
 		t.Fatalf("Burst = %d, want headroom for the catalog fan-out", bundle.Config.Burst)
+	}
+}
+
+func TestLoadContextKeepsConfiguredClientRateLimits(t *testing.T) {
+	path := writeKubeconfig(t, validKubeconfig)
+
+	bundle, err := LoadContext(api.ContextRef{}, Options{Kubeconfig: path, QPS: 17, Burst: 29})
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+
+	if bundle.Config.QPS != 17 {
+		t.Fatalf("QPS = %v, want 17", bundle.Config.QPS)
+	}
+	if bundle.Config.Burst != 29 {
+		t.Fatalf("Burst = %d, want 29", bundle.Config.Burst)
+	}
+}
+
+func TestLoadContextRecordsTheToolKubeconfigAsTheFallbackSource(t *testing.T) {
+	path := writeKubeconfig(t, validKubeconfig)
+	t.Setenv("KUBECONFIG", path)
+
+	bundle, err := LoadContext(api.ContextRef{}, Options{ToolKubeconfig: "/runtime/spinoza/in-cluster.kubeconfig"})
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+
+	want := "/runtime/spinoza/in-cluster.kubeconfig"
+	if bundle.Ref.Kubeconfig != want {
+		t.Fatalf("Ref.Kubeconfig = %q, want %q", bundle.Ref.Kubeconfig, want)
+	}
+}
+
+func TestLoadContextWiresImpersonationIntoItsTransport(t *testing.T) {
+	path := writeKubeconfig(t, validKubeconfig)
+	bundle, err := LoadContext(api.ContextRef{}, Options{Kubeconfig: path, Impersonate: true})
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+	recorder := &recordingTripper{}
+	wrapped := bundle.Config.WrapTransport(recorder)
+	ctx := auth.WithIdentity(t.Context(), auth.Identity{User: "alice@example.com", Groups: []string{"platform"}})
+	req := httptest.NewRequest(http.MethodGet, "https://apiserver/api/v1/pods", http.NoBody).WithContext(ctx)
+
+	if _, err := wrapped.RoundTrip(req); err != nil {
+		t.Fatalf("round trip: %v", err)
+	}
+	if recorder.seen.Header.Get(transport.ImpersonateUserHeader) != "alice@example.com" {
+		t.Fatalf("user header = %q", recorder.seen.Header.Get(transport.ImpersonateUserHeader))
+	}
+	if got := recorder.seen.Header.Values(transport.ImpersonateGroupHeader); len(got) != 1 || got[0] != "platform" {
+		t.Fatalf("group headers = %v, want platform", got)
+	}
+}
+
+func TestBoundedDiscoveryRejectsAMalformedServer(t *testing.T) {
+	config := &rest.Config{Host: "://not-a-server"}
+
+	_, err := boundedDiscovery(config)
+
+	if err == nil {
+		t.Fatal("a malformed discovery endpoint reported success")
+	}
+	if !strings.Contains(err.Error(), "kube discovery") {
+		t.Fatalf("error = %q, want discovery named", err.Error())
+	}
+	if config.Timeout != 0 {
+		t.Fatalf("input timeout = %v, want the caller's config left unchanged", config.Timeout)
 	}
 }
 

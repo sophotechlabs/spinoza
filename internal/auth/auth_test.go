@@ -108,6 +108,73 @@ func TestAProxyIdentityStopsBeingValidWhenItsHeadersChange(t *testing.T) {
 	}
 }
 
+func TestAProxyIdentityStopsBeingValidWhenProxyAuthenticationDisappears(t *testing.T) {
+	held := modeless(t, Config{Mode: ModeProxy})
+	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
+	req.Header.Set(DefaultUserHeader, "alice")
+	req.Header.Set(DefaultGroupsHeader, "platform")
+	req.Header.Set(DefaultProxyAuthHeader, string(testProxySecret))
+	who, ok := held.Identify(httptest.NewRecorder(), req)
+	if !ok {
+		t.Fatal("the authenticated proxy identity was not read")
+	}
+
+	req.Header.Del(DefaultProxyAuthHeader)
+
+	if held.StillValid(req, who) {
+		t.Fatal("a proxy identity stayed valid after proxy authentication disappeared")
+	}
+}
+
+func TestProxyModeRejectsAnAuthenticatedBlankUser(t *testing.T) {
+	held := modeless(t, Config{Mode: ModeProxy})
+	req := httptest.NewRequest(http.MethodGet, "/api/overview", http.NoBody)
+	req.Header.Set(DefaultUserHeader, " \t ")
+	req.Header.Set(DefaultProxyAuthHeader, string(testProxySecret))
+
+	if _, ok := held.Identify(httptest.NewRecorder(), req); ok {
+		t.Fatal("a whitespace-only proxy user became an identity")
+	}
+}
+
+func TestNoAuthModeRevalidatesOnlyItsAnonymousAdminIdentity(t *testing.T) {
+	held := modeless(t, Config{Mode: ModeNone})
+	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
+
+	if !held.StillValid(req, Identity{Role: RoleAdmin}) {
+		t.Fatal("the anonymous admin stopped being valid in no-auth mode")
+	}
+	if held.StillValid(req, Identity{User: "alice", Role: RoleAdmin}) {
+		t.Fatal("a named identity was accepted in no-auth mode")
+	}
+}
+
+func TestEveryIdentityFieldRemainsBoundToTheSession(t *testing.T) {
+	original := Identity{
+		User:    "alice",
+		Groups:  []string{"platform", "sre"},
+		Role:    RoleEditor,
+		Session: "session-7",
+	}
+	if !sameIdentity(original, original) {
+		t.Fatal("an unchanged identity did not match itself")
+	}
+	cases := map[string]Identity{
+		"user":    {User: "mallory", Groups: original.Groups, Role: original.Role, Session: original.Session},
+		"role":    {User: original.User, Groups: original.Groups, Role: RoleAdmin, Session: original.Session},
+		"session": {User: original.User, Groups: original.Groups, Role: original.Role, Session: "session-8"},
+		"groups":  {User: original.User, Groups: []string{"platform"}, Role: original.Role, Session: original.Session},
+		"order":   {User: original.User, Groups: []string{"sre", "platform"}, Role: original.Role, Session: original.Session},
+	}
+	for name, changed := range cases {
+		t.Run(name, func(t *testing.T) {
+			if sameIdentity(original, changed) {
+				t.Fatalf("identity still matched after %s changed", name)
+			}
+		})
+	}
+}
+
 func TestARevokedSessionIsNotStillValid(t *testing.T) {
 	held := modeless(t, Config{Mode: ModeProxy})
 	held.cfg.Mode = ModeOIDC
