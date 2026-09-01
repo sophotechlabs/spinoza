@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 
@@ -182,7 +183,7 @@ func (s *Server) renameCluster(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	label := strings.TrimSpace(query.Get("label"))
 	grouping := strings.TrimSpace(query.Get("grouping"))
-	if len(label) > maxLabel || len(grouping) > maxLabel {
+	if utf8.RuneCountInString(label) > maxLabel || utf8.RuneCountInString(grouping) > maxLabel {
 		writeError(w, http.StatusBadRequest, errNameTooLong.Error())
 		return
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -871,6 +872,21 @@ func TestANameLongerThanTheStripCanShowIsRefused(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want a name that long refused", resp.StatusCode)
+	}
+}
+
+func TestANameLimitCountsCharacters(t *testing.T) {
+	ts, _ := openedFleet(t)
+	label := strings.Repeat("ž", maxLabel)
+
+	resp, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters/name?cluster="+urlValue(mk1)+"&label="+url.QueryEscape(label), nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want a %d-character name accepted", resp.StatusCode, maxLabel)
+	}
+	if got := namesOf(t, body)["p-mk1"].Label; got != label {
+		t.Fatalf("label = %q, want %q", got, label)
 	}
 }
 
