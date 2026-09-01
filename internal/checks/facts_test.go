@@ -260,6 +260,22 @@ func TestATolerationCoversTheTaintItNames(t *testing.T) {
 	}
 }
 
+func TestAMalformedTolerationDoesNotHideALaterMatch(t *testing.T) {
+	tainted := node("worker", map[string]any{hostnameKey: "worker"}, map[string]any{
+		"taints": []any{map[string]any{"key": "gpu", "value": "yes", "effect": "NoSchedule"}},
+	}, map[string]any{"cpu": "4", "memory": "8Gi"})
+	tolerated := deployment("api", podSpecWith(map[string]any{
+		"tolerations": []any{
+			"not-an-object",
+			map[string]any{"key": "gpu", "value": "yes", "effect": "NoSchedule", "operator": "Equal"},
+		},
+	}, container("app", nil)))
+
+	if findingCount(t, report(t, tainted, tolerated), "tolerations-miss-the-taints") != 0 {
+		t.Fatal("a malformed toleration hid a later matching one")
+	}
+}
+
 func TestAPreferNoScheduleTaintDoesNotBlockAnything(t *testing.T) {
 	soft := node("worker", map[string]any{hostnameKey: "worker"}, map[string]any{
 		"taints": []any{map[string]any{"key": "spot", "effect": "PreferNoSchedule"}},
@@ -309,12 +325,31 @@ func TestTheSpreadCheckCountsDomainsNotNodes(t *testing.T) {
 	one := plainNode("a1", map[string]any{hostnameKey: "a1", "zone": "a"})
 	two := plainNode("a2", map[string]any{hostnameKey: "a2", "zone": "a"})
 	three := plainNode("b1", map[string]any{hostnameKey: "b1", "zone": "b"})
+	joining := plainNode("joining", map[string]any{hostnameKey: "joining"})
 
-	if findingCount(t, report(t, one, two, spread(2)), "spread-needs-more-domains") != 1 {
+	if findingCount(t, report(t, joining, one, two, spread(2)), "spread-needs-more-domains") != 1 {
 		t.Fatal("two nodes in one zone were counted as two domains")
 	}
 	if findingCount(t, report(t, one, two, three, spread(2)), "spread-needs-more-domains") != 0 {
 		t.Fatal("two zones were not enough for two replicas")
+	}
+}
+
+func TestMalformedSpreadConstraintsDoNotHideALaterValidOne(t *testing.T) {
+	workload := replicas(deployment("api", podSpecWith(map[string]any{
+		"topologySpreadConstraints": []any{
+			"not-an-object",
+			map[string]any{"whenUnsatisfiable": doNotSchedule},
+			map[string]any{
+				"topologyKey": "zone", "whenUnsatisfiable": doNotSchedule, "maxSkew": int64(1),
+			},
+		},
+	}, container("app", nil))), 2)
+	one := plainNode("a1", map[string]any{hostnameKey: "a1", "zone": "a"})
+	two := plainNode("a2", map[string]any{hostnameKey: "a2", "zone": "a"})
+
+	if findingCount(t, report(t, one, two, workload), "spread-needs-more-domains") != 1 {
+		t.Fatal("a malformed constraint hid a later valid one")
 	}
 }
 
