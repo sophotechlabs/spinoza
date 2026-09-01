@@ -454,6 +454,18 @@ func TestASupplementalGroupDecodedAsAFloatIsStillRead(t *testing.T) {
 	}
 }
 
+func TestAMalformedSupplementalGroupDoesNotHideRoot(t *testing.T) {
+	found := report(t, deployment("api", podSpecWith(map[string]any{
+		"securityContext": map[string]any{
+			"supplementalGroups": []any{"not-a-number", int64(0)},
+		},
+	}, container("app", nil))))
+
+	if findingCount(t, found, "root-group") != 1 {
+		t.Fatal("a malformed supplementalGroup hid a later root group")
+	}
+}
+
 func TestAProfileFieldHoldingSomethingElseIsTreatedAsUnset(t *testing.T) {
 	found := report(t, deployment("api", podSpec(container("app", withSecurity(map[string]any{
 		"seccompProfile": "RuntimeDefault",
