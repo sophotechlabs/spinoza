@@ -356,3 +356,14 @@ func TestASignedPayloadOfTheWrongShapeIsNotAFlow(t *testing.T) {
 		t.Fatal("a signed payload with the wrong shape was accepted as a flow")
 	}
 }
+
+func TestASignedPayloadThatIsNotBase64IsRejected(t *testing.T) {
+	held := testSessions(t, false)
+	body := "not%base64"
+	value := body + "." + held.sign([]byte(body))
+
+	var flow flowState
+	if held.unseal(value, &flow) {
+		t.Fatal("a correctly signed but undecodable payload was accepted")
+	}
+}

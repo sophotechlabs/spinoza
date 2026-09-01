@@ -410,6 +410,15 @@ func TestABackChannelLogoutIsRefusedWhenItCannotBeTrusted(t *testing.T) {
 			want: http.StatusBadRequest,
 		},
 		{
+			name: "a token whose logout claims have the wrong shape",
+			on:   true,
+			token: signJWT(map[string]any{
+				"iss": idp.issuer, "aud": "spinoza", "iat": base["iat"], "exp": base["exp"], "sid": "session-7",
+				"events": "back-channel logout",
+			}),
+			want: http.StatusBadRequest,
+		},
+		{
 			name: "a logout naming nobody",
 			on:   true,
 			token: signJWT(map[string]any{
@@ -452,6 +461,25 @@ func TestAnOversizedBackChannelLogoutIsRefusedBeforeItIsParsed(t *testing.T) {
 	}
 }
 
+func TestAMalformedBackChannelLogoutIsRefused(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, func(cfg *Config) {
+		cfg.OIDC.BackchannelLogout = true
+	})
+	req := httptest.NewRequest(http.MethodPost, "/auth/backchannel-logout", strings.NewReader("logout_token=%zz"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recorded := httptest.NewRecorder()
+
+	held.BackchannelLogout(recorded, req)
+
+	if recorded.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(recorded.Body.String(), "could not be read") {
+		t.Fatalf("body = %q, want the malformed form named", recorded.Body.String())
+	}
+}
+
 func TestALogoutNamingOnlyASubjectIsAcceptedAndSaidOutLoud(t *testing.T) {
 	idp := newIDP(t)
 	idp.noSIDs = true
@@ -489,6 +517,45 @@ func TestAnUnreachableProviderStopsSpinozaStarting(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "oidc discovery") {
 		t.Fatalf("error = %q, want it to name discovery", err.Error())
+	}
+}
+
+func TestAnUnreachableInternalProviderStopsSpinozaStarting(t *testing.T) {
+	_, _, err := discover(t.Context(), OIDCConfig{
+		IssuerURL:         "https://login.example.com/realms/main",
+		InternalIssuerURL: "http://127.0.0.1:1/realms/main",
+	})
+
+	if err == nil {
+		t.Fatal("an unreachable internal issuer produced an OIDC provider")
+	}
+	if !strings.Contains(err.Error(), "oidc discovery") {
+		t.Fatalf("error = %v, want internal discovery named", err)
+	}
+}
+
+func TestAMalformedDiscoveryDocumentIsRejected(t *testing.T) {
+	issuer := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"issuer":"` + issuer + `",
+			"authorization_endpoint":"` + issuer + `/authorize",
+			"token_endpoint":"` + issuer + `/token",
+			"jwks_uri":"` + issuer + `/keys",
+			"scopes_supported":"openid"
+		}`))
+	}))
+	issuer = server.URL
+	t.Cleanup(server.Close)
+
+	_, _, err := discoverAt(t.Context(), issuer)
+
+	if err == nil {
+		t.Fatal("a discovery document with a malformed scope list was accepted")
+	}
+	if !strings.Contains(err.Error(), "discovery document") {
+		t.Fatalf("error = %v, want the malformed document named", err)
 	}
 }
 
@@ -585,6 +652,23 @@ func TestSkippingVerificationIsPossibleForALab(t *testing.T) {
 	}
 	if client.Transport == http.DefaultTransport {
 		t.Fatal("skipping verification left the default transport in place")
+	}
+}
+
+func TestCustomTLSNeedsTheStandardHTTPTransportShape(t *testing.T) {
+	original := http.DefaultTransport
+	http.DefaultTransport = http.NewFileTransport(http.Dir(t.TempDir()))
+	t.Cleanup(func() {
+		http.DefaultTransport = original
+	})
+
+	_, err := newProvider(t.Context(), OIDCConfig{InsecureSkipVerify: true})
+
+	if err == nil {
+		t.Fatal("custom TLS was added to a transport that cannot carry it")
+	}
+	if !strings.Contains(err.Error(), "default http transport was replaced") {
+		t.Fatalf("error = %v, want the replaced transport named", err)
 	}
 }
 
@@ -746,6 +830,43 @@ func TestWhyALoginFailedIsNotSomethingAnyoneCanPutOnThatPage(t *testing.T) {
 	refused := callback(t, held, login, url.Values{"state": {login.state}, "error": {"access_denied"}})
 	if got := errorFrom(t, held, refused); !strings.Contains(got, "access_denied") {
 		t.Fatalf("the provider's own reason was lost: %q", got)
+	}
+}
+
+func TestAnOversizedReturnPathCannotCreateAFlowCookie(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, nil)
+	next := "/" + strings.Repeat("x", maxCookieBytes)
+	req := httptest.NewRequest(http.MethodGet, "/auth/login?"+url.Values{returnParam: {next}}.Encode(), http.NoBody)
+	recorded := httptest.NewRecorder()
+
+	held.Login(recorded, req)
+
+	if recorded.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusInternalServerError)
+	}
+	if recorded.Header().Get("Location") != "" {
+		t.Fatalf("location = %q, want no provider redirect without a flow cookie", recorded.Header().Get("Location"))
+	}
+	if len(recorded.Result().Cookies()) != 0 {
+		t.Fatalf("cookies = %v, want no oversized flow state", recorded.Result().Cookies())
+	}
+}
+
+func TestAnOversizedProviderRefusalStillReturnsToSignIn(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, nil)
+	login := startLogin(t, held, "/")
+	recorded := callback(t, held, login, url.Values{
+		"state":             {login.state},
+		"error_description": {strings.Repeat("x", maxCookieBytes)},
+	})
+
+	if recorded.Code != http.StatusFound || recorded.Header().Get("Location") != "/" {
+		t.Fatalf("status/location = %d/%q, want the sign-in page", recorded.Code, recorded.Header().Get("Location"))
+	}
+	if got := errorFrom(t, held, recorded); got != "" {
+		t.Fatalf("stored refusal = %q, want an oversized reason left out", got)
 	}
 }
 
