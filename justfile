@@ -827,6 +827,13 @@ workflow-triggers:
         echo ".github/workflows/e2e.yaml does not cancel a superseded validation run" >&2
         exit 1
     fi
+    e2e_group=$(yq -r '.concurrency.group' .github/workflows/e2e.yaml)
+    for key in github.event.pull_request.number github.sha; do
+        if ! grep -Fq "$key" <<< "$e2e_group"; then
+            echo ".github/workflows/e2e.yaml concurrency does not distinguish $key" >&2
+            exit 1
+        fi
+    done
     ignored=$(yq -r '.on.pull_request.paths-ignore[]' .github/workflows/e2e.yaml)
     for path in "${release_files[@]}"; do
         if grep -Fxq "$path" <<< "$ignored"; then
