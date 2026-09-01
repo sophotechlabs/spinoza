@@ -1,10 +1,12 @@
 package baseline
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -184,6 +186,19 @@ func TestMoreFindingsThanOneBaselineHoldsIsRefused(t *testing.T) {
 	}
 }
 
+func TestABaselineTooLargeToReadBackIsNotSaved(t *testing.T) {
+	held := store(t)
+	huge := taken()
+	huge.Keys = map[string]string{"finding": strings.Repeat("x", maxBytes)}
+
+	if err := held.Save(cluster, huge); err == nil {
+		t.Fatal("a baseline past the byte cap was written anyway")
+	}
+	if _, ok := held.Load(cluster); ok {
+		t.Fatal("a refused baseline was left behind")
+	}
+}
+
 func TestAStoreWithNoDirectoryKeepsNothingAndSaysNothing(t *testing.T) {
 	held := Open("")
 
@@ -307,6 +322,22 @@ func TestSomethingThatIsNotABaselineIsRefusedRatherThanStored(t *testing.T) {
 func TestABaselineTooLargeToBeOneIsRefused(t *testing.T) {
 	if _, err := Decode(make([]byte, maxBytes+1)); err == nil {
 		t.Fatal("a body past the cap was read as a baseline")
+	}
+}
+
+func TestAnImportedBaselineCannotExceedTheFindingCap(t *testing.T) {
+	huge := taken()
+	huge.Keys = make(map[string]string, maxKeys+1)
+	for at := range maxKeys + 1 {
+		huge.Keys[strconv.Itoa(at)] = "Deployment apps/api"
+	}
+	body, err := json.Marshal(flatten(huge))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	if _, err := Decode(body); err == nil {
+		t.Fatal("a baseline past the finding cap was imported")
 	}
 }
 

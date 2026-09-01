@@ -89,7 +89,9 @@ type Server struct {
 	installer     Installs
 	past          History
 	open          Tabs
+	tapeMu        sync.Mutex
 	taping        map[string]*recording
+	tapingClosed  bool
 	now           func() time.Time
 	pingEvery     time.Duration
 	feedPingEvery time.Duration

@@ -124,6 +124,21 @@ func TestASearchThatFailedOnOneClusterNamesIt(t *testing.T) {
 	}
 }
 
+func TestASearchNamesAnOpenClusterWithoutABackend(t *testing.T) {
+	ts := listServer(
+		t,
+		&listing{hits: api.SearchResults{Hits: []api.SearchHit{hit("api")}}},
+		nil,
+	)
+
+	var got api.SearchResults
+	readFleet(t, ts, "/api/search/fleet?q=a", &got)
+
+	if got.Errors["p-mk2"] != "cluster is unavailable" {
+		t.Fatalf("errors = %+v, want the unavailable cluster named", got.Errors)
+	}
+}
+
 func release(chart, version string) api.HelmRelease {
 	return api.HelmRelease{Name: chart, Namespace: "default", Chart: chart, ChartVersion: version}
 }

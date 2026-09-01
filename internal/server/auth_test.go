@@ -59,6 +59,34 @@ func proxyServer(t *testing.T, backend Backend, cfg auth.Config) *httptest.Serve
 	return servedServer(t, backend, cfg)
 }
 
+func proxyFleetServer(t *testing.T, first, second Backend) *httptest.Server {
+	t.Helper()
+	held := &fleet{
+		held: []api.OpenCluster{
+			{ID: mk1, Context: "p-mk1", Active: true},
+			{ID: mk2, Context: "p-mk2"},
+		},
+		active:   mk1,
+		backends: map[string]Backend{mk1: first, mk2: second},
+	}
+	cfg := auth.Config{
+		Mode:        auth.ModeProxy,
+		DefaultRole: auth.RoleAdmin,
+		Proxy: auth.ProxyConfig{
+			SharedSecret: []byte(testProxySecret),
+		},
+	}
+	srv := New(held, testAssets(), "")
+	authn, err := auth.New(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("building the authenticator: %v", err)
+	}
+	srv.UseClusterAuth(ClusterAuth{Authenticator: authn})
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+	return ts
+}
+
 func asUser(t *testing.T, ts *httptest.Server, method, path, user, groups string) (*http.Response, string) {
 	t.Helper()
 	req, err := http.NewRequestWithContext(t.Context(), method, ts.URL+path, http.NoBody)
@@ -250,7 +278,24 @@ func TestAViewThatReadsTheWholeClusterIsRefusedToAScopedAccount(t *testing.T) {
 	}
 }
 
-func TestAScopedAccountCannotReadOrChangeSharedHistoryAndMutes(t *testing.T) {
+func TestAFleetViewChecksScopeOnEveryCluster(t *testing.T) {
+	ts := proxyFleetServer(
+		t,
+		&servedBackend{scope: api.Scope{Everywhere: true}},
+		&servedBackend{scope: api.Scope{Namespaces: []string{"payments"}}},
+	)
+
+	resp, body := asUser(t, ts, http.MethodGet, "/api/search/fleet?q=api", "alice@example.com", "")
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d: %s", resp.StatusCode, http.StatusForbidden, body)
+	}
+	if !strings.Contains(body, "p-mk2") {
+		t.Fatalf("body = %q, want the restricted cluster named", body)
+	}
+}
+
+func TestAScopedAccountCannotReadOrChangeSharedDeploymentState(t *testing.T) {
 	ts := proxyServer(t, &servedBackend{scope: api.Scope{Namespaces: []string{"payments"}}}, auth.Config{
 		DefaultRole: auth.RoleAdmin,
 	})
@@ -263,6 +308,11 @@ func TestAScopedAccountCannotReadOrChangeSharedHistoryAndMutes(t *testing.T) {
 		{method: http.MethodGet, path: "/api/checks/mutes"},
 		{method: http.MethodPost, path: "/api/checks/mutes"},
 		{method: http.MethodDelete, path: "/api/checks/mutes"},
+		{method: http.MethodPost, path: "/api/checks/baseline"},
+		{method: http.MethodDelete, path: "/api/checks/baseline"},
+		{method: http.MethodGet, path: "/api/checks/baseline/file"},
+		{method: http.MethodPut, path: "/api/checks/baseline/file"},
+		{method: http.MethodPost, path: "/api/clusters/timeline"},
 	}
 	for _, test := range cases {
 		t.Run(test.method+" "+test.path, func(t *testing.T) {

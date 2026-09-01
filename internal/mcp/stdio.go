@@ -86,9 +86,16 @@ func (s *Server) answer(ctx context.Context, line []byte) []byte {
 
 func readMessage(reader *bufio.Reader) ([]byte, error) {
 	var whole []byte
+	const retained = maxMessage + 2
 	for {
 		part, err := reader.ReadSlice('\n')
-		whole = append(whole, part...)
+		room := retained - len(whole)
+		if room > 0 {
+			if len(part) < room {
+				room = len(part)
+			}
+			whole = append(whole, part[:room]...)
+		}
 		if err == nil {
 			return trimEnd(whole), nil
 		}

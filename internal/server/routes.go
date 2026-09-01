@@ -171,6 +171,7 @@ func (s *Server) permitted(entry endpoint) http.HandlerFunc {
 	need := roleFor(entry)
 	only := onlyHere(entry)
 	whole := wholeCluster(entry)
+	fleet := wholeFleet(entry)
 	if need == "" && !only && !whole {
 		return inner
 	}
@@ -189,6 +190,9 @@ func (s *Server) permitted(entry endpoint) http.HandlerFunc {
 		}
 		if whole {
 			status, why := s.wholeClusterRefusal(r)
+			if fleet {
+				status, why = s.wholeFleetRefusal(r)
+			}
 			if why != "" {
 				writeError(w, status, why)
 				return
@@ -196,6 +200,24 @@ func (s *Server) permitted(entry endpoint) http.HandlerFunc {
 		}
 		inner(w, r)
 	}
+}
+
+func (s *Server) wholeFleetRefusal(r *http.Request) (int, string) {
+	for _, one := range s.cluster.Opened() {
+		backend := s.managerOf(one.ID)
+		if backend == nil {
+			return http.StatusServiceUnavailable, nameOf(one) + " is not available"
+		}
+		seen := backend.Scope(r.Context())
+		if seen.Everywhere {
+			continue
+		}
+		if len(seen.Namespaces) == 0 && len(seen.Undecided) > 0 {
+			return http.StatusServiceUnavailable, nameOf(one) + ": " + clusterWouldNotSay
+		}
+		return http.StatusForbidden, nameOf(one) + ": " + readsEverything
+	}
+	return 0, ""
 }
 
 func (s *Server) wholeClusterRefusal(r *http.Request) (int, string) {

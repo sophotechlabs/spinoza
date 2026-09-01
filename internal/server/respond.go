@@ -101,6 +101,8 @@ func statusFor(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, helm.ErrFluxManaged):
 		return http.StatusConflict
+	case errors.Is(err, resources.ErrOutOfScope):
+		return http.StatusForbidden
 	case errors.Is(err, argocd.ErrRefused):
 		return http.StatusConflict
 	case errors.Is(err, flux.ErrNoSource):

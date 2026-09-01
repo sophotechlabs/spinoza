@@ -286,8 +286,9 @@ func (n notStubbed) RefreshResources() (r0 api.ResourceCatalog) {
 	return r0
 }
 
-func (n notStubbed) RemoveNodeShell(_ context.Context, _ string) {
+func (n notStubbed) RemoveNodeShell(_ context.Context, _ string) error {
 	n.missing("RemoveNodeShell")
+	return nil
 }
 
 func (n notStubbed) Resources() (r0 api.ResourceCatalog) {

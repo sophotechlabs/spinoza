@@ -232,6 +232,32 @@ func TestWarmSurvivesAFailedFetch(t *testing.T) {
 	}
 }
 
+func TestAFailedWarmDoesNotHideTheNextSuccessfulFetch(t *testing.T) {
+	hits := 0
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		if hits == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(indexBody))
+	})
+	repo := Repo{URL: ts.URL}
+	cache.Warm(repo, "podinfo")
+	cache.Wait()
+
+	versions, err := cache.Versions(t.Context(), repo, "podinfo")
+	if err != nil {
+		t.Fatalf("versions after the repository recovered: %v", err)
+	}
+	if len(versions) == 0 || versions[0] != "6.15.1" {
+		t.Fatalf("versions after recovery = %v", versions)
+	}
+	if hits != 2 {
+		t.Fatalf("repository fetched %d times, want the failed warm and the recovery", hits)
+	}
+}
+
 func TestResolveIndexRejectsMalformedYAML(t *testing.T) {
 	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("entries: [oops"))
@@ -1046,6 +1072,7 @@ func TestSameRegistryAcceptsWhatBelongsToTheSameSite(t *testing.T) {
 		{name: "the very same authority", realm: "ghcr.io", registry: "ghcr.io", want: true},
 		{name: "the same host on another port", realm: "ghcr.io:443", registry: "ghcr.io", want: true},
 		{name: "a sibling under one domain", realm: "auth.ghcr.io", registry: "registry.ghcr.io", want: true},
+		{name: "different sites under a two label public suffix", realm: "auth.attacker.co.uk", registry: "registry.example.co.uk", want: false},
 		{name: "a different site", realm: "auth.example.com", registry: "ghcr.io", want: false},
 		{name: "an ip against a name", realm: "127.0.0.1", registry: "ghcr.io", want: false},
 		{name: "the same ip twice", realm: "127.0.0.1:5000", registry: "127.0.0.1", want: true},
@@ -1068,9 +1095,12 @@ func TestHostOnlyDropsThePortWhenThereIsOne(t *testing.T) {
 	}
 }
 
-func TestParentDomainKeepsTheLastTwoLabels(t *testing.T) {
+func TestParentDomainUsesTheRegistrableDomain(t *testing.T) {
 	if got := parentDomain("auth.docker.example.com"); got != "example.com" {
 		t.Fatalf("parent = %q, want example.com", got)
+	}
+	if got := parentDomain("auth.docker.example.co.uk"); got != "example.co.uk" {
+		t.Fatalf("parent = %q, want example.co.uk", got)
 	}
 	if got := parentDomain("localhost"); got != "localhost" {
 		t.Fatalf("parent = %q, want the single label unchanged", got)

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -434,6 +435,26 @@ func TestAMessageTooLargeIsAnsweredRatherThanEndingTheSession(t *testing.T) {
 	}
 	if !strings.Contains(body, `"id":2`) {
 		t.Fatalf("the message after the oversized one was never served:\n%s", body)
+	}
+}
+
+func TestReadingAnOversizedMessageRetainsOnlyTheLimit(t *testing.T) {
+	oversized := strings.Repeat("x", maxMessage+64*1024)
+	reader := bufio.NewReaderSize(strings.NewReader(oversized+"\nnext\n"), 64*1024)
+
+	first, err := readMessage(reader)
+	if err != nil {
+		t.Fatalf("first message: %v", err)
+	}
+	if len(first) != maxMessage+2 {
+		t.Fatalf("retained = %d bytes, want %d", len(first), maxMessage+2)
+	}
+	second, secondErr := readMessage(reader)
+	if secondErr != nil {
+		t.Fatalf("second message: %v", secondErr)
+	}
+	if string(second) != "next" {
+		t.Fatalf("second message = %q, want the request after the oversized line", second)
 	}
 }
 

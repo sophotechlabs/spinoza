@@ -62,25 +62,11 @@ func (s *Store) Load(cluster string) (checks.Baseline, bool) {
 	if err != nil {
 		return checks.Baseline{}, false
 	}
-	if len(body) > maxBytes {
+	taken, err := Decode(body)
+	if err != nil {
 		return checks.Baseline{}, false
 	}
-	var held stored
-	if json.Unmarshal(body, &held) != nil {
-		return checks.Baseline{}, false
-	}
-	keys := held.Keys
-	if keys == nil {
-		keys = map[string]string{}
-	}
-	return checks.Baseline{
-		TakenAt: held.TakenAt,
-		Cluster: held.Cluster,
-		Checks:  held.Checks,
-		Counts:  held.Counts,
-		Scanned: held.Scanned,
-		Keys:    keys,
-	}, true
+	return taken, true
 }
 
 func (s *Store) Save(cluster string, taken checks.Baseline) error {
@@ -89,15 +75,12 @@ func (s *Store) Save(cluster string, taken checks.Baseline) error {
 	if s.dir == "" {
 		return nil
 	}
-	if len(taken.Keys) > maxKeys {
-		return fmt.Errorf("baselines: %d findings is more than one baseline holds", len(taken.Keys))
-	}
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return fmt.Errorf("baselines: %w", err)
 	}
-	body, err := json.Marshal(flatten(taken))
+	body, err := Encode(taken)
 	if err != nil {
-		return fmt.Errorf("baselines: %w", err)
+		return err
 	}
 	if saveErr := atomicfile.Save(s.fileFor(cluster), "baseline-*.json", body); saveErr != nil {
 		return fmt.Errorf("baselines: %w", saveErr)
@@ -133,9 +116,15 @@ func flatten(taken checks.Baseline) stored {
 }
 
 func Encode(taken checks.Baseline) ([]byte, error) {
+	if err := validate(taken); err != nil {
+		return nil, err
+	}
 	body, err := json.Marshal(flatten(taken))
 	if err != nil {
 		return nil, fmt.Errorf("baselines: %w", err)
+	}
+	if len(body) > maxBytes {
+		return nil, fmt.Errorf("baselines: %d bytes is more than one baseline holds", len(body))
 	}
 	return body, nil
 }
@@ -148,19 +137,30 @@ func Decode(body []byte) (checks.Baseline, error) {
 	if err := json.Unmarshal(body, &held); err != nil {
 		return checks.Baseline{}, fmt.Errorf("baselines: this is not a baseline: %w", err)
 	}
-	if held.TakenAt == "" || len(held.Checks) == 0 {
-		return checks.Baseline{}, errors.New("baselines: this file names no checks and no day it was taken")
-	}
 	keys := held.Keys
 	if keys == nil {
 		keys = map[string]string{}
 	}
-	return checks.Baseline{
+	taken := checks.Baseline{
 		TakenAt: held.TakenAt,
 		Cluster: held.Cluster,
 		Checks:  held.Checks,
 		Counts:  held.Counts,
 		Scanned: held.Scanned,
 		Keys:    keys,
-	}, nil
+	}
+	if err := validate(taken); err != nil {
+		return checks.Baseline{}, err
+	}
+	return taken, nil
+}
+
+func validate(taken checks.Baseline) error {
+	if taken.TakenAt == "" || len(taken.Checks) == 0 {
+		return errors.New("baselines: this file names no checks and no day it was taken")
+	}
+	if len(taken.Keys) > maxKeys {
+		return fmt.Errorf("baselines: %d findings is more than one baseline holds", len(taken.Keys))
+	}
+	return nil
 }

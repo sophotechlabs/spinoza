@@ -164,7 +164,14 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		gone, stop := context.WithTimeout(context.WithoutCancel(ctx), removeTimeout)
 		defer stop()
-		writer.RemoveNodeShell(gone, shell.Pod)
+		if removeErr := writer.RemoveNodeShell(gone, shell.Pod); removeErr != nil {
+			slog.Error(
+				"a node shell pod could not be removed",
+				"node", node,
+				"pod", shell.Pod,
+				"error", removeErr,
+			)
+		}
 	}()
 
 	req := exec.Request{

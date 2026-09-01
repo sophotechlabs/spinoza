@@ -1,4 +1,4 @@
-DELETE /api/checks/baseline role=editor local=no whole=no writes=no
+DELETE /api/checks/baseline role=editor local=no whole=yes writes=no
 DELETE /api/checks/mutes role=editor local=no whole=yes writes=no
 DELETE /api/clusters role=- local=yes whole=no writes=no
 DELETE /api/history role=admin local=no whole=yes writes=no
@@ -83,7 +83,7 @@ POST /api/clusters/active role=- local=yes whole=no writes=no
 POST /api/clusters/color role=- local=yes whole=no writes=no
 POST /api/clusters/name role=- local=yes whole=no writes=no
 POST /api/clusters/reopen role=- local=yes whole=no writes=no
-POST /api/clusters/timeline role=admin local=no whole=no writes=no
+POST /api/clusters/timeline role=admin local=no whole=yes writes=no
 POST /api/debug role=admin local=no whole=no writes=yes
 POST /api/flux/action role=editor local=no whole=no writes=yes
 POST /api/helm/action role=editor local=no whole=no writes=yes
@@ -98,7 +98,7 @@ POST /api/update role=- local=yes whole=no writes=no
 POST /api/view/browser role=- local=yes whole=no writes=no
 POST /api/view/desktop role=- local=yes whole=no writes=no
 POST /auth/backchannel-logout role=- local=no whole=no writes=no
-PUT /api/checks/baseline/file role=editor local=no whole=no writes=no
+PUT /api/checks/baseline/file role=editor local=no whole=yes writes=no
 PUT /api/object role=editor local=no whole=no writes=yes
 PUT /api/settings role=- local=no whole=no writes=no
 action cordon role=admin

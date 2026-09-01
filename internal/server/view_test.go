@@ -180,6 +180,9 @@ func TestTheWindowStaysWhenNoBrowserArrives(t *testing.T) {
 	if hidden != 0 {
 		t.Fatalf("the window was hidden %d times, want none", hidden)
 	}
+	if len(srv.views.waiting) != 0 {
+		t.Fatalf("waiters = %d, want the timed-out request removed", len(srv.views.waiting))
+	}
 }
 
 func TestABrowserAlreadyOpenSwitchesStraightAway(t *testing.T) {
@@ -196,7 +199,7 @@ func TestABrowserAlreadyOpenSwitchesStraightAway(t *testing.T) {
 }
 
 func TestABrowserThatWillNotOpenIsReported(t *testing.T) {
-	_, ts := viewServer(t, &stubWindow{}, func() error {
+	srv, ts := viewServer(t, &stubWindow{}, func() error {
 		return errors.New("no browser on this machine")
 	})
 
@@ -207,6 +210,9 @@ func TestABrowserThatWillNotOpenIsReported(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "no browser") {
 		t.Fatalf("body = %s", body)
+	}
+	if len(srv.views.waiting) != 0 {
+		t.Fatalf("waiters = %d, want the failed request removed", len(srv.views.waiting))
 	}
 }
 

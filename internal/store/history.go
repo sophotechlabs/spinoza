@@ -228,13 +228,23 @@ func (s *Store) Forget(ctx context.Context, cluster string) error {
 	if db == nil {
 		return nil
 	}
-	_, err := db.ExecContext(ctx, deleteAudit, cluster, cluster)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
-	_, changesErr := db.ExecContext(ctx, deleteChanges, cluster, cluster)
+	_, auditErr := tx.ExecContext(ctx, deleteAudit, cluster, cluster)
+	if auditErr != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("store: %w", auditErr)
+	}
+	_, changesErr := tx.ExecContext(ctx, deleteChanges, cluster, cluster)
 	if changesErr != nil {
+		_ = tx.Rollback()
 		return fmt.Errorf("store: %w", changesErr)
+	}
+	commitErr := tx.Commit()
+	if commitErr != nil {
+		return fmt.Errorf("store: %w", commitErr)
 	}
 	return nil
 }
@@ -245,14 +255,15 @@ func (s *Store) Close() error {
 	s.reads = nil
 	s.writes = nil
 	s.mu.Unlock()
+	failures := []error{}
 	for _, db := range open {
 		if db == nil {
 			continue
 		}
 		err := db.Close()
 		if err != nil {
-			return fmt.Errorf("store: %w", err)
+			failures = append(failures, fmt.Errorf("store: %w", err))
 		}
 	}
-	return nil
+	return errors.Join(failures...)
 }

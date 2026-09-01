@@ -127,17 +127,30 @@ func TestExecAndPortForwardingAreAdminOnly(t *testing.T) {
 	}
 }
 
-func TestSharedHistoryAndMutesNeedTheWholeCluster(t *testing.T) {
+func TestSharedDeploymentStateNeedsTheWholeCluster(t *testing.T) {
 	shared := []string{
 		routeKey(http.MethodGet, "/api/history"),
 		routeKey(http.MethodDelete, "/api/history"),
 		routeKey(http.MethodGet, "/api/checks/mutes"),
 		routeKey(http.MethodPost, "/api/checks/mutes"),
 		routeKey(http.MethodDelete, "/api/checks/mutes"),
+		routeKey(http.MethodPost, "/api/checks/baseline"),
+		routeKey(http.MethodDelete, "/api/checks/baseline"),
+		routeKey(http.MethodGet, "/api/checks/baseline/file"),
+		routeKey(http.MethodPut, "/api/checks/baseline/file"),
+		routeKey(http.MethodPost, "/api/clusters/timeline"),
 	}
 	for _, key := range shared {
 		if !needsWholeCluster[key] {
 			t.Errorf("%s exposes shared cluster records without a whole-cluster scope check", key)
+		}
+	}
+}
+
+func TestFleetViewsNeedEveryOpenCluster(t *testing.T) {
+	for key := range needsWholeFleet {
+		if !needsWholeCluster[key] {
+			t.Fatalf("%s does not require whole-cluster access", key)
 		}
 	}
 }

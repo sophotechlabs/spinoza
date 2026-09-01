@@ -39,10 +39,14 @@ func eachOpenCluster[T any](
 			defer asking.Done()
 			found[at] = clusterAnswer[T]{cluster: one.ID, context: nameOf(one)}
 			defer func() {
-				found[at].failure = recovered("asking "+nameOf(one), recover())
+				failure := recovered("asking "+nameOf(one), recover())
+				if failure != "" {
+					found[at].failure = failure
+				}
 			}()
 			backend := srv.managerOf(one.ID)
 			if backend == nil {
+				found[at].failure = "cluster is unavailable"
 				return
 			}
 			asked, giveUp := context.WithTimeout(ctx, perClusterTimeout)

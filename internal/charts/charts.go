@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
 )
 
@@ -457,10 +458,10 @@ func (c *Cache) refresh(unit key, repo Repo, chart string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.inflight[unit] = false
-	c.fetched[unit] = c.now()
 	if err != nil {
 		return
 	}
+	c.fetched[unit] = c.now()
 	c.keep(repo, found)
 }
 
@@ -695,11 +696,11 @@ func hostOnly(authority string) string {
 }
 
 func parentDomain(host string) string {
-	labels := strings.Split(host, ".")
-	if len(labels) < 2 {
+	parent, err := publicsuffix.EffectiveTLDPlusOne(host)
+	if err != nil {
 		return host
 	}
-	return strings.Join(labels[len(labels)-2:], ".")
+	return parent
 }
 
 func parseChallenge(header string) map[string]string {

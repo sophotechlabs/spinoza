@@ -96,9 +96,24 @@ var needsWholeCluster = map[string]bool{
 	routeKey(http.MethodGet, "/api/checks/fleet"):          true,
 	routeKey(http.MethodGet, "/api/helm/fleet"):            true,
 	routeKey(http.MethodPost, "/api/checks/baseline"):      true,
+	routeKey(http.MethodDelete, "/api/checks/baseline"):    true,
 	routeKey(http.MethodGet, "/api/checks/baseline/file"):  true,
+	routeKey(http.MethodPut, "/api/checks/baseline/file"):  true,
+	routeKey(http.MethodPost, "/api/clusters/timeline"):    true,
 	routeKey(http.MethodGet, "/api/history"):               true,
 	routeKey(http.MethodDelete, "/api/history"):            true,
+}
+
+var needsWholeFleet = map[string]bool{
+	routeKey(http.MethodGet, "/api/resources/fleet"):       true,
+	routeKey(http.MethodGet, "/api/images/fleet"):          true,
+	routeKey(http.MethodGet, "/api/search/fleet"):          true,
+	routeKey(http.MethodGet, "/api/gitops/fleet"):          true,
+	routeKey(http.MethodGet, "/api/overview/fleet"):        true,
+	routeKey(http.MethodGet, "/api/issues/fleet"):          true,
+	routeKey(http.MethodGet, "/api/checks/fleet"):          true,
+	routeKey(http.MethodGet, "/api/checks/findings/fleet"): true,
+	routeKey(http.MethodGet, "/api/helm/fleet"):            true,
 }
 
 const readsEverything = "this view reads the whole cluster, and your account reads named namespaces only"
@@ -107,6 +122,10 @@ const clusterWouldNotSay = "this view reads the whole cluster, and the cluster w
 
 func wholeCluster(entry endpoint) bool {
 	return needsWholeCluster[routeKey(entry.method, entry.path)]
+}
+
+func wholeFleet(entry endpoint) bool {
+	return needsWholeFleet[routeKey(entry.method, entry.path)]
 }
 
 const actionPath = "/api/action"

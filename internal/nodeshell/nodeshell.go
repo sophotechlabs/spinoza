@@ -2,10 +2,12 @@ package nodeshell
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -28,14 +30,19 @@ var (
 	livesFor     = int64((2 * time.Hour).Seconds())
 )
 
+const removeEvery = 250 * time.Millisecond
+
+const startCleanupTimeout = 15 * time.Second
+
 var Enter = []string{"nsenter", "--target", "1", "--mount", "--uts", "--ipc", "--net", "--pid", "--", "sh"}
 
 type Service struct {
-	cs        kubernetes.Interface
-	image     string
-	namespace string
-	allow     func() bool
-	perms     *access.Service
+	cs          kubernetes.Interface
+	image       string
+	namespace   string
+	allow       func() bool
+	perms       *access.Service
+	removeEvery time.Duration
 }
 
 func NewService(
@@ -50,7 +57,14 @@ func NewService(
 	if allow == nil {
 		allow = func() bool { return false }
 	}
-	return &Service{cs: cs, image: image, namespace: namespace, allow: allow, perms: perms}
+	return &Service{
+		cs:          cs,
+		image:       image,
+		namespace:   namespace,
+		allow:       allow,
+		perms:       perms,
+		removeEvery: removeEvery,
+	}
 }
 
 func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport {
@@ -104,7 +118,12 @@ func (s *Service) Start(ctx context.Context, node string) (api.NodeShellSession,
 	}
 	waitErr := s.waitRunning(ctx, created.Name)
 	if waitErr != nil {
-		s.Remove(ctx, created.Name)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startCleanupTimeout)
+		defer cancel()
+		removeErr := s.Remove(cleanupCtx, created.Name)
+		if removeErr != nil {
+			return api.NodeShellSession{}, errors.Join(waitErr, removeErr)
+		}
 		return api.NodeShellSession{}, waitErr
 	}
 	return api.NodeShellSession{
@@ -116,11 +135,40 @@ func (s *Service) Start(ctx context.Context, node string) (api.NodeShellSession,
 	}, nil
 }
 
-func (s *Service) Remove(ctx context.Context, pod string) {
+func (s *Service) Remove(ctx context.Context, pod string) error {
 	if pod == "" {
-		return
+		return nil
 	}
-	_ = s.cs.CoreV1().Pods(s.namespace).Delete(ctx, pod, metav1.DeleteOptions{GracePeriodSeconds: &removeGrace})
+	for {
+		err := s.cs.CoreV1().Pods(s.namespace).Delete(
+			ctx,
+			pod,
+			metav1.DeleteOptions{GracePeriodSeconds: &removeGrace},
+		)
+		if err == nil || apierrors.IsNotFound(err) {
+			return nil
+		}
+		if permanentDeleteError(err) {
+			return fmt.Errorf("removing node shell pod %s: %w", pod, err)
+		}
+		timer := time.NewTimer(s.removeEvery)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return fmt.Errorf("removing node shell pod %s: %w", pod, errors.Join(err, ctx.Err()))
+		case <-timer.C:
+		}
+	}
+}
+
+func permanentDeleteError(err error) bool {
+	return apierrors.IsBadRequest(err) ||
+		apierrors.IsForbidden(err) ||
+		apierrors.IsInvalid(err) ||
+		apierrors.IsMethodNotSupported(err) ||
+		apierrors.IsUnauthorized(err)
 }
 
 func (s *Service) waitRunning(ctx context.Context, name string) error {

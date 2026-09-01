@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 type stubRunner struct {
@@ -19,6 +20,7 @@ type stubRunner struct {
 	local      int32
 	asked      []int32
 	pods       []string
+	users      []string
 	startErr   error
 	lateErr    chan error
 	entered    chan struct{}
@@ -55,11 +57,18 @@ func (s *stubRunner) forwarded() []string {
 	return append([]string{}, s.pods...)
 }
 
-func (s *stubRunner) Run(_ context.Context, _, pod string, localPort, _ int32, ready chan<- int32, stop <-chan struct{}) error {
+func (s *stubRunner) actors() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.users...)
+}
+
+func (s *stubRunner) Run(ctx context.Context, _, pod string, localPort, _ int32, ready chan<- int32, stop <-chan struct{}) error {
 	s.mu.Lock()
 	s.calls++
 	s.asked = append(s.asked, localPort)
 	s.pods = append(s.pods, pod)
+	s.users = append(s.users, actingUser(ctx))
 	s.mu.Unlock()
 	select {
 	case s.entered <- struct{}{}:
@@ -99,15 +108,31 @@ type stubResolver struct {
 	pod     string
 	podPort int32
 	err     error
+	users   []string
 }
 
-func (s *stubResolver) Resolve(context.Context, Target, int32) (string, int32, error) {
+func (s *stubResolver) Resolve(ctx context.Context, _ Target, _ int32) (string, int32, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.users = append(s.users, actingUser(ctx))
 	if s.err != nil {
 		return "", 0, s.err
 	}
 	return s.pod, s.podPort, nil
+}
+
+func (s *stubResolver) actors() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.users...)
+}
+
+func actingUser(ctx context.Context) string {
+	who, ok := auth.ActingAs(ctx)
+	if !ok {
+		return ""
+	}
+	return who.User
 }
 
 func (s *stubResolver) moveTo(pod string, err error) {
@@ -563,6 +588,32 @@ func TestAForwardFollowsItsServiceOntoAReplacementPod(t *testing.T) {
 	}
 	if want := []string{"web-abc", "web-def"}; !slices.Equal(runner.forwarded(), want) {
 		t.Fatalf("pods forwarded = %v, want %v", runner.forwarded(), want)
+	}
+}
+
+func TestAReplacementForwardKeepsTheOriginalUsersIdentity(t *testing.T) {
+	runner := newStubRunner(45123)
+	resolver := &stubResolver{pod: "web-abc", podPort: 8080}
+	prober := &stubProber{alive: true}
+	registry := replaceableRegistry(t, runner, resolver, prober)
+	ctx := auth.WithIdentity(context.Background(), auth.Identity{
+		User: "alice@example.com",
+		Role: auth.RoleEditor,
+	})
+
+	if _, err := registry.Start(ctx, webService(), 8080); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	prober.kill()
+	resolver.moveTo("web-def", nil)
+	registry.Reap()
+
+	want := []string{"alice@example.com", "alice@example.com"}
+	if got := resolver.actors(); !slices.Equal(got, want) {
+		t.Fatalf("resolver users = %v, want %v", got, want)
+	}
+	if got := runner.actors(); !slices.Equal(got, want) {
+		t.Fatalf("runner users = %v, want %v", got, want)
 	}
 }
 

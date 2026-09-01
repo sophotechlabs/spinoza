@@ -151,7 +151,7 @@ type ReleaseWrites interface {
 type TerminalWrites interface {
 	StartDebug(ctx context.Context, req debugcontainer.Request) (api.DebugSession, error)
 	StartNodeShell(ctx context.Context, node string) (api.NodeShellSession, error)
-	RemoveNodeShell(ctx context.Context, pod string)
+	RemoveNodeShell(ctx context.Context, pod string) error
 }
 
 type Writer interface {

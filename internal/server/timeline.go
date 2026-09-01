@@ -111,15 +111,35 @@ func noteOf(note resources.Note) store.Change {
 
 func (t *recording) run(ctx context.Context) {
 	defer close(t.stopped)
-	t.prune(ctx)
+	t.pruneWithin(ctx)
 	for {
 		select {
 		case <-t.stop:
+			t.flush(ctx)
 			return
 		case first := <-t.queue:
 			t.write(ctx, t.fill(first))
 		}
 	}
+}
+
+func (t *recording) flush(ctx context.Context) {
+	draining, cancel := context.WithTimeout(ctx, timelineWrite)
+	defer cancel()
+	for {
+		select {
+		case first := <-t.queue:
+			t.write(draining, t.fill(first))
+		default:
+			return
+		}
+	}
+}
+
+func (t *recording) pruneWithin(ctx context.Context) {
+	pruning, cancel := context.WithTimeout(ctx, timelineWrite)
+	defer cancel()
+	t.prune(pruning)
 }
 
 func (t *recording) fill(first store.Change) []store.Change {
@@ -149,7 +169,7 @@ func (t *recording) write(ctx context.Context, batch []store.Change) {
 		return
 	}
 	t.written = 0
-	t.prune(ctx)
+	t.pruneWithin(ctx)
 }
 
 func (t *recording) close() {
@@ -189,9 +209,14 @@ func (s *Server) keepDays() int {
 }
 
 func (s *Server) startRecording(ctx context.Context, id, name string) {
+	s.tapeMu.Lock()
+	defer s.tapeMu.Unlock()
+	if s.tapingClosed {
+		return
+	}
 	kinds, ok := kindsNamed(name)
 	if !ok {
-		s.stopRecording(id)
+		s.stopRecordingLocked(id)
 		return
 	}
 	past := s.recorder()
@@ -208,13 +233,13 @@ func (s *Server) startRecording(ctx context.Context, id, name string) {
 	held.prune = func(pruning context.Context) {
 		s.pruneTimeline(pruning)
 	}
+	kept := auth.AsServer(context.WithoutCancel(ctx))
+	go held.run(kept)
+	backend.Record(kept, held, kinds)
 	was := s.holdRecording(id, held)
 	if was != nil {
 		was.close()
 	}
-	kept := auth.AsServer(context.WithoutCancel(ctx))
-	go held.run(kept)
-	backend.Record(kept, held, kinds)
 }
 
 func (s *Server) pruneTimeline(ctx context.Context) {
@@ -233,6 +258,12 @@ func (s *Server) pruneTimeline(ctx context.Context) {
 }
 
 func (s *Server) stopRecording(id string) {
+	s.tapeMu.Lock()
+	defer s.tapeMu.Unlock()
+	s.stopRecordingLocked(id)
+}
+
+func (s *Server) stopRecordingLocked(id string) {
 	was := s.holdRecording(id, nil)
 	if was == nil {
 		return
@@ -242,6 +273,23 @@ func (s *Server) stopRecording(id string) {
 		backend.StopRecording()
 	}
 	was.close()
+}
+
+func (s *Server) closeRecordings() {
+	s.tapeMu.Lock()
+	defer s.tapeMu.Unlock()
+	s.tapingClosed = true
+	s.mu.Lock()
+	held := s.taping
+	s.taping = map[string]*recording{}
+	s.mu.Unlock()
+	for id, recording := range held {
+		backend := s.managerOf(id)
+		if backend != nil {
+			backend.StopRecording()
+		}
+		recording.close()
+	}
 }
 
 func (s *Server) StartRecordings(ctx context.Context) {

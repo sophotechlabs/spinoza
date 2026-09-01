@@ -1,6 +1,7 @@
 package nodeshell
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -294,7 +295,9 @@ func TestAPodThatNeverStartsGivesUp(t *testing.T) {
 func TestRemoveDeletesThePod(t *testing.T) {
 	svc, cs := service(t, true, running("spinoza-node-shell-abc"))
 
-	svc.Remove(t.Context(), "spinoza-node-shell-abc")
+	if err := svc.Remove(t.Context(), "spinoza-node-shell-abc"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
 
 	_, err := cs.CoreV1().Pods(DefaultNamespace).Get(t.Context(), "spinoza-node-shell-abc", metav1.GetOptions{})
 	if err == nil {
@@ -310,10 +313,51 @@ func TestRemoveWithNoPodDoesNothing(t *testing.T) {
 		return true, nil, nil
 	})
 
-	svc.Remove(t.Context(), "")
+	if err := svc.Remove(t.Context(), ""); err != nil {
+		t.Fatalf("remove empty name: %v", err)
+	}
 
 	if called {
 		t.Fatal("an empty pod name still reached the apiserver")
+	}
+}
+
+func TestRemoveRetriesATransientFailure(t *testing.T) {
+	svc, cs := service(t, true, running("spinoza-node-shell-abc"))
+	svc.removeEvery = time.Millisecond
+	deletes := 0
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deletes++
+		if deletes == 1 {
+			return true, nil, errors.New("the connection was reset")
+		}
+		return false, nil, nil
+	})
+
+	if err := svc.Remove(t.Context(), "spinoza-node-shell-abc"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if deletes != 2 {
+		t.Fatalf("delete attempts = %d, want one retry", deletes)
+	}
+}
+
+func TestRemoveReportsAnErrorThatOutlivesItsContext(t *testing.T) {
+	svc, cs := service(t, true, running("spinoza-node-shell-abc"))
+	svc.removeEvery = time.Millisecond
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("the connection was reset")
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer cancel()
+
+	err := svc.Remove(ctx, "spinoza-node-shell-abc")
+
+	if err == nil || !strings.Contains(err.Error(), "the connection was reset") {
+		t.Fatalf("remove error = %v, want the apiserver failure", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("remove error = %v, want the cleanup deadline", err)
 	}
 }
 
@@ -393,6 +437,40 @@ func TestAPodThatNeverStartsIsTakenAwayAgain(t *testing.T) {
 	}
 	if len(left.Items) != 0 {
 		t.Fatalf("pods = %d, want the one that never started taken away", len(left.Items))
+	}
+}
+
+func TestACancelledStartStillRetriesPodCleanup(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	allow(cs, true)
+	creates(cs, "spinoza-node-shell-slow", corev1.PodPending, "")
+	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
+	svc.removeEvery = time.Millisecond
+	deletes := 0
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		deletes++
+		if deletes == 1 {
+			return true, nil, errors.New("the connection was reset")
+		}
+		return false, nil, nil
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := svc.Start(ctx, "p-mk1")
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("start error = %v, want cancellation", err)
+	}
+	if deletes != 2 {
+		t.Fatalf("delete attempts = %d, want cleanup to outlive cancellation and retry", deletes)
+	}
+	left, listErr := cs.CoreV1().Pods(DefaultNamespace).List(t.Context(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("list: %v", listErr)
+	}
+	if len(left.Items) != 0 {
+		t.Fatalf("pods = %d, want the cancelled shell taken away", len(left.Items))
 	}
 }
 

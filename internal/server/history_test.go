@@ -853,7 +853,7 @@ func (b *writingBackend) StartNodeShell(context.Context, string) (api.NodeShellS
 	return api.NodeShellSession{}, b.err
 }
 
-func (b *writingBackend) RemoveNodeShell(context.Context, string) {}
+func (b *writingBackend) RemoveNodeShell(context.Context, string) error { return nil }
 
 func (b *writingBackend) StartExec(
 	context.Context,

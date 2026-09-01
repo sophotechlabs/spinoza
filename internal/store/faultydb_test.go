@@ -22,8 +22,9 @@ type faults struct {
 }
 
 type faultyConnector struct {
-	arm   faults
-	execs *int
+	arm    faults
+	execs  *int
+	closes *int
 }
 
 func (c faultyConnector) Connect(context.Context) (driver.Conn, error) {
@@ -41,15 +42,19 @@ func (faultyDriver) Open(string) (driver.Conn, error) {
 }
 
 type faultyConn struct {
-	arm   faults
-	execs *int
+	arm    faults
+	execs  *int
+	closes *int
 }
 
 func (c faultyConn) Prepare(string) (driver.Stmt, error) {
-	return faultyStmt(c), nil
+	return faultyStmt{arm: c.arm, execs: c.execs}, nil
 }
 
 func (c faultyConn) Close() error {
+	if c.closes != nil {
+		*c.closes++
+	}
 	return c.arm.closeErr
 }
 
@@ -301,13 +306,26 @@ func TestApplyingAMigrationReportsWhatTheTransactionDid(t *testing.T) {
 }
 
 func TestClosingReportsADatabaseThatWouldNotClose(t *testing.T) {
-	db := sql.OpenDB(faultyConnector{arm: faults{closeErr: errQueryFailed}, execs: new(int)})
-	store := &Store{writes: db, reads: db}
-	_ = store.Tabs().Forget(context.Background(), "one")
+	readCloses := 0
+	writeCloses := 0
+	reads := sql.OpenDB(faultyConnector{
+		arm: faults{closeErr: errQueryFailed}, execs: new(int), closes: &readCloses,
+	})
+	writes := sql.OpenDB(faultyConnector{execs: new(int), closes: &writeCloses})
+	if err := reads.Ping(); err != nil {
+		t.Fatalf("open reads: %v", err)
+	}
+	if err := writes.Ping(); err != nil {
+		t.Fatalf("open writes: %v", err)
+	}
+	store := &Store{writes: writes, reads: reads}
 
 	err := store.Close()
 
 	if !errors.Is(err, errQueryFailed) {
 		t.Fatalf("err = %v, want the close failure passed up", err)
+	}
+	if readCloses != 1 || writeCloses != 1 {
+		t.Fatalf("close calls = reads %d, writes %d, want both pools closed", readCloses, writeCloses)
 	}
 }

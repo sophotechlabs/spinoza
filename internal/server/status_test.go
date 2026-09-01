@@ -45,6 +45,7 @@ func TestStatusForMapsEachOutcome(t *testing.T) {
 		{"conflict", apierrors.NewConflict(podsResource(), "web", errors.New("newer")), http.StatusConflict},
 		{"unauthorized", apierrors.NewUnauthorized("who is this"), http.StatusUnauthorized},
 		{"forbidden", apierrors.NewForbidden(podsResource(), "web", errors.New("no")), http.StatusForbidden},
+		{"namespace outside scope", resources.ErrOutOfScope, http.StatusForbidden},
 		{"bad request", apierrors.NewBadRequest("no such field"), http.StatusUnprocessableEntity},
 		{"anything else", errors.New("unknown resource apps/v1/widgets"), http.StatusBadRequest},
 	}

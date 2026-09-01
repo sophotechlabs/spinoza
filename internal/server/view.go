@@ -177,6 +177,18 @@ func (v *views) awaitBrowser() chan struct{} {
 	return waiter
 }
 
+func (v *views) stopWaiting(waiter chan struct{}) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	for at, held := range v.waiting {
+		if held != waiter {
+			continue
+		}
+		v.waiting = append(v.waiting[:at], v.waiting[at+1:]...)
+		return
+	}
+}
+
 func (s *Server) UseWindow(window Window) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -222,6 +234,7 @@ func (s *Server) toBrowser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	waiter := s.views.awaitBrowser()
+	defer s.views.stopWaiting(waiter)
 	openErr := open()
 	if openErr != nil {
 		writeError(w, http.StatusInternalServerError, openErr.Error())

@@ -235,6 +235,43 @@ func TestTurningTheTimelineOffStopsWatching(t *testing.T) {
 	}
 }
 
+func TestClosingTheServerStopsAndFlushesRecordings(t *testing.T) {
+	backend := &taped{}
+	srv, held, _ := tapingServer(t, backend)
+	srv.startRecording(t.Context(), mk1, timelineWorkloads)
+	backend.sink().Note(resources.Note{Name: "waiting"})
+
+	srv.Close()
+
+	if backend.stops() != 1 {
+		t.Fatalf("the backend was told to stop %d times", backend.stops())
+	}
+	if srv.recordingOn(mk1) != nil {
+		t.Fatal("the recording is still held after shutdown")
+	}
+	found := held.noted()
+	if len(found) != 1 || found[0].Name != "waiting" {
+		t.Fatalf("shutdown kept changes %+v", found)
+	}
+}
+
+func TestFlushingARecordingDrainsEveryQueuedChange(t *testing.T) {
+	held := &heldHistory{}
+	recording := &recording{
+		into:  held.Timeline(mk1),
+		queue: make(chan store.Change, timelineQueue),
+	}
+	for at := range timelineBatch + 1 {
+		recording.queue <- store.Change{Name: fmt.Sprintf("pod-%d", at)}
+	}
+
+	recording.flush(t.Context())
+
+	if got := len(held.noted()); got != timelineBatch+1 {
+		t.Fatalf("flush wrote %d changes", got)
+	}
+}
+
 func TestStoppingSomethingThatWasNotRecordingIsQuiet(t *testing.T) {
 	backend := &taped{}
 	srv, _, _ := tapingServer(t, backend)

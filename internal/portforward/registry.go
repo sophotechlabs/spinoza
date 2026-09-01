@@ -70,6 +70,8 @@ func (r *run) halt() {
 type record struct {
 	forward   api.PortForward
 	current   *run
+	actor     auth.Identity
+	acting    bool
 	replacing bool
 }
 
@@ -158,8 +160,18 @@ func (r *Registry) reap(ctx context.Context) {
 }
 
 func (r *Registry) replace(ctx context.Context, forward api.PortForward) {
+	who, acting, found := r.runIdentity(forward.ID)
+	if !found {
+		return
+	}
 	target := Target{Kind: forward.Kind, Namespace: forward.Namespace, Name: forward.Name}
-	pod, podPort, err := r.resolver.Resolve(ctx, target, forward.RemotePort)
+	resolveAs := ctx
+	runAs := ctx
+	if acting {
+		resolveAs = auth.WithIdentity(resolveAs, who)
+		runAs = auth.WithIdentity(runAs, who)
+	}
+	pod, podPort, err := r.resolver.Resolve(resolveAs, target, forward.RemotePort)
 	if err != nil {
 		r.fail(forward.ID, fmt.Sprintf("pod %s/%s is gone and %s/%s no longer resolves: %v",
 			forward.Namespace, forward.Pod, forward.Namespace, forward.Name, err))
@@ -175,7 +187,17 @@ func (r *Registry) replace(ctx context.Context, forward api.PortForward) {
 	}
 	previous.halt()
 	r.awaitEnd(previous)
-	r.restart(forward, pod, podPort)
+	r.restart(runAs, forward, pod, podPort)
+}
+
+func (r *Registry) runIdentity(id string) (auth.Identity, bool, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry, present := r.forwards[id]
+	if !present {
+		return auth.Identity{}, false, false
+	}
+	return entry.actor, entry.acting, true
 }
 
 func (r *Registry) beginReplace(id string) (*run, bool) {
@@ -204,12 +226,12 @@ func (r *Registry) awaitEnd(previous *run) {
 	}
 }
 
-func (r *Registry) restart(forward api.PortForward, pod string, podPort int32) {
+func (r *Registry) restart(ctx context.Context, forward api.PortForward, pod string, podPort int32) {
 	active := newRun()
 	ready := make(chan int32, 1)
 	failed := make(chan error, 1)
 	safe.Go("moving the forward to "+forward.Namespace+"/"+pod, func() {
-		failed <- r.runner.Run(r.root, forward.Namespace, pod, forward.LocalPort, podPort, ready, active.stop)
+		failed <- r.runner.Run(ctx, forward.Namespace, pod, forward.LocalPort, podPort, ready, active.stop)
 	})
 
 	select {
@@ -300,13 +322,14 @@ func (r *Registry) Start(ctx context.Context, target Target, port int32) (api.Po
 	ready := make(chan int32, 1)
 	failed := make(chan error, 1)
 	held := auth.Carry(ctx, r.root)
+	actor, acting := auth.ActingAs(held)
 	safe.Go("forwarding to "+target.Namespace+"/"+pod, func() {
 		failed <- r.runner.Run(held, target.Namespace, pod, 0, podPort, ready, active.stop)
 	})
 
 	select {
 	case local := <-ready:
-		return r.register(target, port, pod, local, active, failed)
+		return r.register(target, port, pod, local, active, failed, actor, acting)
 	case runErr := <-failed:
 		active.halt()
 		if runErr == nil {
@@ -319,7 +342,16 @@ func (r *Registry) Start(ctx context.Context, target Target, port int32) (api.Po
 	}
 }
 
-func (r *Registry) register(target Target, port int32, pod string, local int32, active *run, failed <-chan error) (api.PortForward, error) {
+func (r *Registry) register(
+	target Target,
+	port int32,
+	pod string,
+	local int32,
+	active *run,
+	failed <-chan error,
+	actor auth.Identity,
+	acting bool,
+) (api.PortForward, error) {
 	r.mu.Lock()
 	if r.stopped {
 		r.mu.Unlock()
@@ -337,7 +369,7 @@ func (r *Registry) register(target Target, port int32, pod string, local int32, 
 		State:      StateRunning,
 		StartedAt:  r.now().UTC().Format(time.RFC3339),
 	}
-	r.forwards[forward.ID] = &record{forward: forward, current: active}
+	r.forwards[forward.ID] = &record{forward: forward, current: active, actor: actor, acting: acting}
 	r.mu.Unlock()
 
 	safe.Go("watching the forward "+forward.ID, func() { r.watch(forward.ID, active, failed) })

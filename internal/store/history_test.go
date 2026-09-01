@@ -424,6 +424,40 @@ func TestForgettingClearsEverything(t *testing.T) {
 	}
 }
 
+func TestForgettingRollsBackWhenOneHistoryTableCannotBeCleared(t *testing.T) {
+	store := openHistory(t, dbPath(t))
+	record(t, store, entry(p1, noon, "web"))
+	err := store.Timeline(p1).Note(t.Context(), []Change{{At: noon, Name: "web"}})
+	if err != nil {
+		t.Fatalf("record change: %v", err)
+	}
+	_, triggerErr := store.writes.ExecContext(t.Context(), `
+CREATE TRIGGER refuse_change_delete
+BEFORE DELETE ON changes
+BEGIN
+	SELECT RAISE(ABORT, 'changes cannot be deleted');
+END`)
+	if triggerErr != nil {
+		t.Fatalf("create trigger: %v", triggerErr)
+	}
+
+	forgetErr := store.Forget(t.Context(), p1)
+
+	if forgetErr == nil {
+		t.Fatal("forgetting succeeded despite the second table refusing its delete")
+	}
+	if got := names(recent(t, store, Query{Cluster: p1})); len(got) != 1 {
+		t.Fatalf("audit entries = %v, want the first delete rolled back", got)
+	}
+	changes, changedErr := store.Changed(t.Context(), Query{Cluster: p1})
+	if changedErr != nil {
+		t.Fatalf("read changes: %v", changedErr)
+	}
+	if len(changes.Rows) != 1 {
+		t.Fatalf("changes = %d, want the original row", len(changes.Rows))
+	}
+}
+
 func TestTwoStoresWritingAtOnceBothLand(t *testing.T) {
 	path := dbPath(t)
 	one := openHistory(t, path)
