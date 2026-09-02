@@ -1034,6 +1034,24 @@ func TestAResolveFailureReleasesTheReservation(t *testing.T) {
 	}
 }
 
+func TestReleasingAReservationTwiceIsSafe(t *testing.T) {
+	key := startKey{kind: KindPod, namespace: "flux-system", name: "web", port: 8080}
+	pending := make(chan struct{})
+	registry := &Registry{starting: map[startKey]chan struct{}{key: pending}}
+
+	registry.release(key)
+	registry.release(key)
+
+	select {
+	case <-pending:
+	default:
+		t.Fatal("the first release did not wake a waiting start")
+	}
+	if len(registry.starting) != 0 {
+		t.Fatalf("reservations = %v, want none", registry.starting)
+	}
+}
+
 func TestReapGivesEachProbeADeadline(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
