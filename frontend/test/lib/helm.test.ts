@@ -24,7 +24,7 @@ import {
   useHelmReleases,
 } from '../../src/lib/helm';
 import { bumpHelmEpoch } from '../../src/store/helm';
-import { bumpClusterEpoch } from '../../src/store/cluster';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 import { anySignal, capabilities } from '../helpers';
 
 const payload = {
@@ -45,6 +45,9 @@ const payload = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  act(() => {
+    useClusterStore.getState().reset();
+  });
 });
 
 describe('fetchHelmReleases', () => {
@@ -547,6 +550,58 @@ describe('the release detail hook', () => {
     await waitFor(() => {
       expect(fetchMock.mock.calls.length).toBe(2);
     });
+  });
+
+  it('hides the previous release while another target loads', async () => {
+    const pending = new Promise<never>(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ release: payload.releases[0], driver: 'secret' }),
+      })
+      .mockImplementationOnce(() => pending);
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, rerender } = renderHook(
+      ({ name }: { name: string }) => useHelmRelease('demo', name),
+      { initialProps: { name: 'podinfo' } },
+    );
+    await waitFor(() => {
+      expect(result.current.data).not.toBeNull();
+    });
+
+    rerender({ name: 'other' });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(true);
+  });
+
+  it('hides the previous clusters release while the replacement loads', async () => {
+    const pending = new Promise<never>(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ release: payload.releases[0], driver: 'secret' }),
+      })
+      .mockImplementationOnce(() => pending);
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, unmount } = renderHook(() => useHelmRelease('demo', 'podinfo'));
+    await waitFor(() => {
+      expect(result.current.data).not.toBeNull();
+    });
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await Promise.resolve();
+    });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    unmount();
   });
 
   it('reports a failure and drops any stale detail', async () => {

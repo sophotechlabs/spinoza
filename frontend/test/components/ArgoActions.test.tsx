@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ArgoActions from '../../src/components/ArgoActions';
 import type { ObjectRef } from '../../src/lib/types';
-import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
+import { contextScope, EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 import { accessKey, useAccessStore } from '../../src/store/access';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const target: ObjectRef = {
   group: 'argoproj.io',
@@ -13,6 +14,8 @@ const target: ObjectRef = {
   namespace: 'argocd',
   name: 'podinfo',
 };
+
+const clusterScope = contextScope({ kubeconfig: '', name: 'p-mk1' }, 0);
 
 const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
   this.open = true;
@@ -460,6 +463,41 @@ describe('an argo action that outlives its panel', () => {
 
     expect(screen.queryByText('forbidden')).not.toBeInTheDocument();
   });
+
+  it('drops a success that lands after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const action = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/argocd/action')) {
+          return action;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
+      }),
+    );
+    const onDone = vi.fn();
+    render(<ArgoActions target={target} onDone={onDone} />);
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    await screen.findByText('working');
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    expect(screen.queryByText('working')).not.toBeInTheDocument();
+
+    await act(async () => {
+      finish({ ok: true, json: () => Promise.resolve({ action: 'refresh' }) });
+      await action;
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('Refresh requested.')).not.toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+  });
 });
 
 describe('argo buttons the cluster would refuse', () => {
@@ -478,7 +516,7 @@ describe('argo buttons the cluster would refuse', () => {
   it("greys out Sync and Refresh with the cluster's reason", () => {
     useAccessStore
       .getState()
-      .setRefused(accessKey('p-mk1', target), { reconcile: 'no patching applications' });
+      .setRefused(accessKey(clusterScope, target), { reconcile: 'no patching applications' });
     renderActions();
 
     expect(screen.getByRole('button', { name: 'Sync' })).toBeDisabled();
@@ -489,7 +527,7 @@ describe('argo buttons the cluster would refuse', () => {
   });
 
   it('leaves them alone when nothing stands in the way', () => {
-    useAccessStore.getState().setRefused(accessKey('p-mk1', target), {});
+    useAccessStore.getState().setRefused(accessKey(clusterScope, target), {});
     renderActions();
 
     expect(screen.getByRole('button', { name: 'Sync' })).toBeEnabled();

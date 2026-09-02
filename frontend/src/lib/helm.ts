@@ -301,10 +301,13 @@ export interface ReleaseDetail {
 }
 
 export function useHelmRelease(namespace: string, name: string): ReleaseDetail {
+  const epoch = useClusterEpoch();
   const [data, setData] = useState<HelmReleaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [askedFor, setAskedFor] = useState('');
   const [reloads, setReloads] = useState(0);
+  const targetKey = `${epoch}|${namespace}|${name}`;
 
   useEffect(() => {
     if (namespace === '' || name === '') {
@@ -319,12 +322,14 @@ export function useHelmRelease(namespace: string, name: string): ReleaseDetail {
         if (live) {
           setData(detail);
           setError(null);
+          setAskedFor(targetKey);
         }
       })
       .catch((err: unknown) => {
         if (live) {
           setData(null);
           setError(messageOf(err));
+          setAskedFor(targetKey);
         }
       })
       .finally(() => {
@@ -335,12 +340,18 @@ export function useHelmRelease(namespace: string, name: string): ReleaseDetail {
     return () => {
       live = false;
     };
-  }, [namespace, name, reloads]);
+  }, [namespace, name, targetKey, reloads, epoch]);
 
   const reload = useCallback(() => {
     setReloads((count) => count + 1);
   }, []);
 
+  if (namespace === '' || name === '') {
+    return { data: null, error: null, loading: false, reload };
+  }
+  if (askedFor !== targetKey) {
+    return { data: null, error: null, loading: true, reload };
+  }
   return { data, error, loading, reload };
 }
 

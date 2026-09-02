@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { HelmRelease } from '../../src/lib/types';
 import HelmUpgradeDialog from '../../src/components/HelmUpgradeDialog';
@@ -316,6 +316,59 @@ describe('HelmUpgradeDialog', () => {
     const body = JSON.parse(call?.body ?? '{}') as { repo: string; version: string };
     expect(body.repo).toBe('oci://ghcr.io/acme/charts');
     expect(body.version).toBe('1.0.0');
+  });
+
+  it('drops an upgrade completion after the dialog is gone', async () => {
+    const user = userEvent.setup();
+    let finishUpgrade!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const upgrade = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishUpgrade = resolve;
+    });
+    let upgrades = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/versions')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(versionsPayload) });
+        }
+        upgrades += 1;
+        if (upgrades === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ action: 'upgrade', dryRun: true, manifest: 'new' }),
+          });
+        }
+        return upgrade;
+      }),
+    );
+    const onClose = vi.fn();
+    const onUpgraded = vi.fn();
+    const view = render(
+      <HelmUpgradeDialog
+        release={release}
+        currentValues={'replicaCount: 2\n'}
+        currentManifest={'kind: ConfigMap\n'}
+        onClose={onClose}
+        onUpgraded={onUpgraded}
+      />,
+    );
+    await pickAndPreview(user);
+    await screen.findByTestId('manifest-diff');
+    await user.click(screen.getByRole('button', { name: 'Upgrade to 6.15.1' }));
+    view.unmount();
+
+    await act(async () => {
+      finishUpgrade({
+        ok: true,
+        json: () => Promise.resolve({ action: 'upgrade', message: 'old cluster upgraded' }),
+      });
+      await upgrade;
+      await Promise.resolve();
+    });
+
+    expect(onUpgraded).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 });
 

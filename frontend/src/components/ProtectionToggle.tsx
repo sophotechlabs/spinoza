@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ICON_CONTROL } from '../lib/controls';
 import { setProtection } from '../lib/contexts';
-import { useContextList, useContextsStore } from '../store/contexts';
+import { useContextList, useContextScope, useContextsStore } from '../store/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
 import { LockedIcon, UnlockedIcon } from './icons';
 
@@ -39,47 +39,50 @@ function labelFor(protectedCluster: boolean): string {
 
 export default function ProtectionToggle() {
   const list = useContextList();
+  const clusterScope = useContextScope();
   const setList = useContextsStore((state) => state.setList);
-  const [busy, setBusy] = useState(false);
   const protectedCluster = list.protection === 'protected';
   const operation = useRef(0);
-  const clusterKey = `${list.current.kubeconfig}/${list.current.name}`;
+  const liveScope = useRef(clusterScope);
+  liveScope.current = clusterScope;
+  const [busyScope, setBusyScope] = useState('');
+  const busy = busyScope === clusterScope;
 
   useEffect(() => {
-    operation.current += 1;
-    setBusy(false);
-  }, [clusterKey]);
-
-  useEffect(() => {
+    const scope = clusterScope;
     return () => {
-      operation.current += 1;
+      if (liveScope.current === scope) {
+        liveScope.current = '';
+      }
     };
-  }, []);
+  }, [clusterScope]);
 
   async function flip() {
     const wanted = !protectedCluster;
+    const scope = clusterScope;
+    const name = list.current.name;
     operation.current += 1;
     const token = operation.current;
-    setBusy(true);
+    setBusyScope(scope);
     try {
       const found = await setProtection(wanted);
-      if (operation.current !== token) {
+      if (liveScope.current !== scope || operation.current !== token) {
         return;
       }
       setList(found);
       if (wanted) {
-        notifyOk(`${list.current.name} is protected`);
+        notifyOk(`${name} is protected`);
       } else {
-        notifyOk(`${list.current.name} is open again`);
+        notifyOk(`${name} is open again`);
       }
     } catch (err: unknown) {
-      if (operation.current !== token) {
+      if (liveScope.current !== scope || operation.current !== token) {
         return;
       }
       notifyError(reason(err));
     } finally {
-      if (operation.current === token) {
-        setBusy(false);
+      if (liveScope.current === scope && operation.current === token) {
+        setBusyScope('');
       }
     }
   }

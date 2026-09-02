@@ -13,6 +13,7 @@ import {
 import { forwardsNow, setForwards } from '../../src/store/forwards';
 import type { ObjectRef, PortForward } from '../../src/lib/types';
 import { anySignal } from '../helpers';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const ref: ObjectRef = {
   group: '',
@@ -150,6 +151,24 @@ describe('portForward', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
 
     await expect(loadForwards()).rejects.toThrow('offline');
+  });
+
+  it('does not write a list that belongs to the previous cluster epoch', async () => {
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const response = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => response),
+    );
+
+    const loading = loadForwards();
+    bumpClusterEpoch();
+    finish(ok([forward()]));
+    await loading;
+
+    expect(forwardsNow()).toHaveLength(0);
   });
 
   it('empties the store when the cluster changes underneath it', () => {

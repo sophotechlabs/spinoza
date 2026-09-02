@@ -5,10 +5,11 @@ import InspectPorts from '../../src/components/InspectPorts';
 import { forwardsNow, setForwards } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
 import { accessKey, useAccessStore } from '../../src/store/access';
-import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
+import { contextScope, EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 import type { ObjectPort, ObjectRef, PortForward } from '../../src/lib/types';
 import { adoptSession } from '../../src/store/identity';
 import { OWN_WINDOW } from '../../src/lib/identity';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const target: ObjectRef = {
   group: '',
@@ -17,6 +18,8 @@ const target: ObjectRef = {
   namespace: 'flux-system',
   name: 'web',
 };
+
+const clusterScope = contextScope({ kubeconfig: '', name: 'p-mk1' }, 0);
 
 const ports: ObjectPort[] = [{ name: 'http', port: 8080, protocol: 'TCP' }, { port: 9090 }];
 
@@ -169,6 +172,53 @@ describe('InspectPorts', () => {
 
     expect(useToastsStore.getState().toasts).toHaveLength(0);
     expect(screen.queryByText('the old forward failed')).not.toBeInTheDocument();
+  });
+
+  it('drops a forward result after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finish!: (response: { ok: boolean; status: number; json: () => Promise<unknown> }) => void;
+    const start = new Promise<{
+      ok: boolean;
+      status: number;
+      json: () => Promise<unknown>;
+    }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/portforward?kind') && init?.method === 'POST') {
+          return start;
+        }
+        if (url.startsWith('/api/access')) {
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+      }),
+    );
+    render(<InspectPorts target={target} kind="Pod" ports={ports} />);
+    await user.click(screen.getAllByRole('button', { name: 'Forward' })[0]);
+    expect(screen.getAllByRole('button', { name: 'Forward' })[0]).toBeDisabled();
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Forward' })[0]).toBeEnabled();
+    });
+
+    await act(async () => {
+      finish({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(running(45123, 8080)),
+      });
+      await start;
+      await Promise.resolve();
+    });
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+    expect(screen.queryByText('127.0.0.1:45123 to 8080')).not.toBeInTheDocument();
   });
 
   it('surfaces a failure', async () => {
@@ -371,7 +421,7 @@ describe('InspectPorts', () => {
 });
 
 describe('a forward the cluster would refuse', () => {
-  const podKey = accessKey('p-mk1', target);
+  const podKey = accessKey(clusterScope, target);
 
   beforeEach(() => {
     useAccessStore.getState().forget();

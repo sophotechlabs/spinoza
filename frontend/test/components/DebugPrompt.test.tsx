@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DebugPrompt from '../../src/components/DebugPrompt';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 import { useToastsStore } from '../../src/store/toasts';
 
 const target = { namespace: 'monitoring', pod: 'loki-0', container: 'loki' };
@@ -511,5 +512,146 @@ describe('DebugPrompt', () => {
     deferred.settle();
 
     expect(screen.queryByText(/too late/)).not.toBeInTheDocument();
+  });
+
+  it("clears the previous cluster's support answer while the replacement loads", async () => {
+    let finishNext!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const next = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishNext = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            namespace: 'monitoring',
+            pod: 'loki-0',
+            allowed: false,
+            reason: 'old cluster refusal',
+            image: 'old-toolbox',
+          }),
+      })
+      .mockImplementationOnce(() => next);
+    vi.stubGlobal('fetch', fetchMock);
+    renderPrompt();
+    expect(await screen.findByText(/old cluster refusal/)).toBeInTheDocument();
+    expect(screen.getByText('old-toolbox')).toBeInTheDocument();
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(screen.queryByText(/old cluster refusal/)).not.toBeInTheDocument();
+    expect(screen.queryByText('old-toolbox')).not.toBeInTheDocument();
+    await act(async () => {
+      finishNext({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            namespace: 'monitoring',
+            pod: 'loki-0',
+            allowed: true,
+            image: 'new-toolbox',
+          }),
+      });
+      await next;
+      await Promise.resolve();
+    });
+    expect(screen.getByText('new-toolbox')).toBeInTheDocument();
+  });
+
+  it('drops a pending support answer from the previous cluster', async () => {
+    let finishOld!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const old = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishOld = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementationOnce(() => old)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              namespace: 'monitoring',
+              pod: 'loki-0',
+              allowed: true,
+              image: 'new-toolbox',
+            }),
+        }),
+    );
+    renderPrompt();
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    expect(await screen.findByText('new-toolbox')).toBeInTheDocument();
+
+    await act(async () => {
+      finishOld({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            namespace: 'monitoring',
+            pod: 'loki-0',
+            allowed: false,
+            reason: 'old cluster refusal',
+            image: 'old-toolbox',
+          }),
+      });
+      await old;
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(/old cluster refusal/)).not.toBeInTheDocument();
+    expect(screen.queryByText('old-toolbox')).not.toBeInTheDocument();
+  });
+
+  it('drops an attach completion from the previous cluster', async () => {
+    const user = userEvent.setup();
+    let finishAttach!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const attach = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishAttach = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/debug/support')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ namespace: 'monitoring', allowed: true, image: 'busybox' }),
+          });
+        }
+        return attach;
+      }),
+    );
+    const { onAttached } = renderPrompt();
+    await user.click(screen.getByRole('button', { name: 'Attach debug container' }));
+    expect(screen.getByRole('button', { name: 'Starting' })).toBeDisabled();
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    expect(screen.getByRole('button', { name: 'Attach debug container' })).toBeEnabled();
+
+    await act(async () => {
+      finishAttach({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            container: 'debugger-from-old-cluster',
+            created: true,
+            image: '',
+            profile: '',
+          }),
+      });
+      await attach;
+      await Promise.resolve();
+    });
+
+    expect(onAttached).not.toHaveBeenCalled();
   });
 });

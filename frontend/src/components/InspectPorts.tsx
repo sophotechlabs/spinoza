@@ -7,6 +7,7 @@ import { useForwards } from '../store/forwards';
 import { useClusterMode } from '../store/identity';
 import { FORWARDS_ARE_LOCAL } from '../lib/portForward';
 import { useRefusal } from '../store/access';
+import { useClusterEpoch } from '../store/cluster';
 import Announce from './Announce';
 import { refQuery } from '../lib/object';
 
@@ -57,7 +58,8 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
   const operation = useRef(0);
   const served = useClusterMode();
   const noForward = useRefusal(target, 'portForward');
-  const targetKey = `${kind}:${refQuery(target)}`;
+  const epoch = useClusterEpoch();
+  const targetKey = `${epoch}|${kind}:${refQuery(target)}`;
 
   useEffect(() => {
     operation.current += 1;
@@ -76,7 +78,7 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
       return;
     }
     void refreshForwards();
-  }, [served, target.namespace, target.name]);
+  }, [served, target.namespace, target.name, epoch]);
 
   async function forward(port: number) {
     operation.current += 1;

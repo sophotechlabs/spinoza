@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import HelmInstallDialog from '../../src/components/HelmInstallDialog';
 import { useToastsStore } from '../../src/store/toasts';
@@ -173,18 +173,19 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useContextsStore.getState().reset();
-  useNamespaceStore.getState().offer([]);
 });
 
 describe('HelmInstallDialog', () => {
-  it('opens as a modal and waits for a search', () => {
+  it('opens as a modal and waits for a search', async () => {
     stub();
 
     renderDialog();
 
     expect(showModal).toHaveBeenCalled();
     expect(screen.getByText('type part of a chart name')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(Object.keys(useHelmAccessStore.getState().answers)).toHaveLength(1);
+    });
   });
 
   it('searches every repository and shows what came back', async () => {
@@ -659,6 +660,61 @@ describe('the corners of the install dialog', () => {
     settle.resolve?.({ ok: true, status: 200, json: () => Promise.resolve(versionsPayload) });
 
     expect(screen.queryByLabelText('Chart version')).not.toBeInTheDocument();
+  });
+
+  it('drops an install completion after the dialog is gone', async () => {
+    const user = userEvent.setup();
+    let finishInstall!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const install = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishInstall = resolve;
+    });
+    let installs = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/charts')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(searchPayload) });
+        }
+        if (url.startsWith('/api/helm/access')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
+        }
+        if (url.startsWith('/api/helm/versions')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(versionsPayload) });
+        }
+        installs += 1;
+        if (installs === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({ action: 'install', dryRun: true, manifest: 'kind: Service\n' }),
+          });
+        }
+        return install;
+      }),
+    );
+    const onClose = vi.fn();
+    const onInstalled = vi.fn();
+    const view = render(
+      <HelmInstallDialog namespace="demo" onClose={onClose} onInstalled={onInstalled} />,
+    );
+    await reachTheForm(user);
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    await screen.findByTestId('manifest-diff');
+    await user.click(screen.getByRole('button', { name: 'Install podinfo' }));
+    view.unmount();
+
+    await act(async () => {
+      finishInstall({
+        ok: true,
+        json: () => Promise.resolve({ action: 'install', message: 'old cluster installed' }),
+      });
+      await install;
+      await Promise.resolve();
+    });
+
+    expect(onInstalled).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 });
 

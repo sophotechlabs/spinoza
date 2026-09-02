@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { HelmRelease, HelmReleaseDetail as Detail } from '../../src/lib/types';
 import HelmReleaseDetail from '../../src/components/HelmReleaseDetail';
@@ -8,6 +8,7 @@ import { capabilities } from '../helpers';
 import { useContextsStore } from '../../src/store/contexts';
 import { useHelmStore } from '../../src/store/helm';
 import { useHelmAccessStore } from '../../src/store/helmAccess';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 vi.mock('../../src/components/HelmUpgradeDialog', () => ({
   default: ({
@@ -164,6 +165,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  act(() => {
+    useToastsStore.getState().clear();
+  });
 });
 
 describe('HelmReleaseDetail', () => {
@@ -344,6 +348,68 @@ describe('HelmReleaseDetail', () => {
     expect(screen.queryByTestId('upgrade-dialog')).not.toBeInTheDocument();
   });
 
+  it('closes an upgrade dialog when the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    stub();
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+    await user.click(screen.getByRole('button', { name: 'Upgrade' }));
+    expect(screen.getByTestId('upgrade-dialog')).toBeInTheDocument();
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(screen.queryByTestId('upgrade-dialog')).not.toBeInTheDocument();
+  });
+
+  it('drops a release action that finishes after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finishAction!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const action = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishAction = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/capabilities')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(capabilities()) });
+        }
+        if (url.startsWith('/api/helm/access')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
+        }
+        if (url.startsWith('/api/helm/action')) {
+          return action;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(detail()) });
+      }),
+    );
+    const { onClose } = renderDetail();
+    await screen.findByText('Upgrade complete');
+    await user.click(screen.getByRole('button', { name: 'Uninstall' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByText(/Uninstall podinfo/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      finishAction({
+        ok: true,
+        json: () => Promise.resolve({ action: 'uninstall', message: 'old cluster removed' }),
+      });
+      await action;
+      await Promise.resolve();
+    });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useHelmStore.getState().epoch).toBe(0);
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
   it('swaps the upgrade button for the flux owner', async () => {
     const user = userEvent.setup();
     const fluxRef = {
@@ -446,7 +512,9 @@ describe('HelmReleaseDetail on a protected cluster', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    useToastsStore.getState().clear();
+    act(() => {
+      useToastsStore.getState().clear();
+    });
   });
 
   it('asks for the release name before uninstalling', async () => {

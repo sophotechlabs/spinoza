@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { setProtection } from '../lib/contexts';
-import { useContextList, useContextsStore } from '../store/contexts';
+import { useContextList, useContextScope, useContextsStore } from '../store/contexts';
 import { notifyError, notifyOk } from '../store/toasts';
 import ClusterBadge from './ClusterBadge';
 
@@ -13,10 +13,51 @@ function reason(err: unknown): string {
 
 export default function ProtectionPrompt() {
   const list = useContextList();
+  const clusterScope = useContextScope();
   const setList = useContextsStore((state) => state.setList);
   const ref = useRef<HTMLDialogElement | null>(null);
-  const [busy, setBusy] = useState(false);
+  const operation = useRef(0);
+  const liveScope = useRef(clusterScope);
+  liveScope.current = clusterScope;
+  const [busyScope, setBusyScope] = useState('');
+  const busy = busyScope === clusterScope;
   const asking = list.protection === 'unknown' && list.current.name !== '';
+
+  useEffect(() => {
+    const scope = clusterScope;
+    return () => {
+      if (liveScope.current === scope) {
+        liveScope.current = '';
+      }
+    };
+  }, [clusterScope]);
+
+  async function answer(protectedCluster: boolean) {
+    const scope = clusterScope;
+    const name = list.current.name;
+    operation.current += 1;
+    const token = operation.current;
+    setBusyScope(scope);
+    try {
+      const found = await setProtection(protectedCluster);
+      if (liveScope.current !== scope || operation.current !== token) {
+        return;
+      }
+      setList(found);
+      if (protectedCluster) {
+        notifyOk(`${name} is protected`);
+      }
+    } catch (err: unknown) {
+      if (liveScope.current !== scope || operation.current !== token) {
+        return;
+      }
+      notifyError(reason(err));
+    } finally {
+      if (liveScope.current === scope && operation.current === token) {
+        setBusyScope('');
+      }
+    }
+  }
 
   useEffect(() => {
     const dialog = ref.current;
@@ -24,20 +65,6 @@ export default function ProtectionPrompt() {
       dialog.showModal();
     }
   }, [asking]);
-
-  async function answer(protectedCluster: boolean) {
-    setBusy(true);
-    try {
-      setList(await setProtection(protectedCluster));
-      if (protectedCluster) {
-        notifyOk(`${list.current.name} is protected`);
-      }
-    } catch (err: unknown) {
-      notifyError(reason(err));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (!asking) {
     return null;

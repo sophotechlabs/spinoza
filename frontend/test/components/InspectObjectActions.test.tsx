@@ -5,8 +5,9 @@ import InspectObjectActions from '../../src/components/InspectObjectActions';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { accessKey, useAccessStore } from '../../src/store/access';
-import { EMPTY_CONTEXTS } from '../../src/store/contexts';
+import { contextScope, EMPTY_CONTEXTS } from '../../src/store/contexts';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const deployment: ObjectRef = {
   group: 'apps',
@@ -33,6 +34,8 @@ const node: ObjectRef = {
   namespace: '',
   name: 'worker-1',
 };
+
+const clusterScope = contextScope({ kubeconfig: '', name: 'p-mk1' }, 0);
 
 function detailFor(overrides: Partial<ObjectDetail> = {}): ObjectDetail {
   return {
@@ -821,6 +824,52 @@ describe('the actions that cannot be undone', () => {
     expect(onDone).not.toHaveBeenCalled();
     expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
+
+  it('drops an action result after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finish!: (response: { ok: boolean; status: number; json: () => Promise<unknown> }) => void;
+    const action = new Promise<{
+      ok: boolean;
+      status: number;
+      json: () => Promise<unknown>;
+    }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/action')) {
+          return action;
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      }),
+    );
+    const onDone = vi.fn();
+    render(
+      <InspectObjectActions
+        target={deployment}
+        detail={detailFor({ workload: { replicas: 1 } })}
+        onDone={onDone}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Scale' }));
+    await screen.findByText('working');
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    expect(screen.queryByText('working')).not.toBeInTheDocument();
+
+    await act(async () => {
+      finish({ ok: true, status: 200, json: () => Promise.resolve({ message: 'scaled' }) });
+      await action;
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('scaled')).not.toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
 });
 
 describe('on a protected cluster', () => {
@@ -968,8 +1017,8 @@ describe('on a protected cluster', () => {
 });
 
 describe('an action the cluster would refuse', () => {
-  const deploymentKey = accessKey('p-mk1', deployment);
-  const nodeKey = accessKey('p-mk1', node);
+  const deploymentKey = accessKey(clusterScope, deployment);
+  const nodeKey = accessKey(clusterScope, node);
 
   beforeEach(() => {
     useAccessStore.getState().forget();
@@ -1048,7 +1097,7 @@ describe('an action the cluster would refuse', () => {
     stub();
     useAccessStore
       .getState()
-      .setRefused(accessKey('p-mk1', cronJob), { suspend: 'no patching cron jobs' });
+      .setRefused(accessKey(clusterScope, cronJob), { suspend: 'no patching cron jobs' });
     render(
       <InspectObjectActions
         target={cronJob}
@@ -1066,7 +1115,7 @@ describe('an action the cluster would refuse', () => {
     stub();
     useAccessStore
       .getState()
-      .setRefused(accessKey('p-mk1', cronJob), { trigger: 'no creating jobs in prod' });
+      .setRefused(accessKey(clusterScope, cronJob), { trigger: 'no creating jobs in prod' });
     render(
       <InspectObjectActions
         target={cronJob}
@@ -1083,7 +1132,7 @@ describe('an action the cluster would refuse', () => {
     stub();
     useAccessStore
       .getState()
-      .setRefused(accessKey('p-mk1', cronJob), { suspend: 'no patching cron jobs' });
+      .setRefused(accessKey(clusterScope, cronJob), { suspend: 'no patching cron jobs' });
     render(
       <InspectObjectActions
         target={cronJob}

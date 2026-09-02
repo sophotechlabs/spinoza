@@ -7,6 +7,7 @@ import {
   startDebug,
 } from '../lib/debugContainer';
 import type { DebugProfile } from '../lib/debugContainer';
+import { useClusterEpoch } from '../store/cluster';
 import { notifyWarn } from '../store/toasts';
 
 interface DebugPromptProps {
@@ -54,6 +55,7 @@ function buttonLabel(busy: boolean): string {
 }
 
 export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
+  const epoch = useClusterEpoch();
   const [profile, setProfile] = useState<DebugProfile>(DEFAULT_PROFILE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,23 +64,33 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
   const [image, setImage] = useState('');
 
   const { namespace, pod } = target;
-  const targetKey = `${namespace}/${pod}/${target.container}`;
+  const targetKey = `${epoch}|${namespace}/${pod}/${target.container}`;
   const liveTargetRef = useRef(targetKey);
-
-  useEffect(() => {
-    liveTargetRef.current = targetKey;
+  liveTargetRef.current = targetKey;
+  const [stateKey, setStateKey] = useState(targetKey);
+  if (stateKey !== targetKey) {
+    setStateKey(targetKey);
     setBusy(false);
     setError(null);
+    setRefused(null);
+    setUnchecked(null);
+    setImage('');
+  }
+
+  useEffect(() => {
     return () => {
-      liveTargetRef.current = '';
+      if (liveTargetRef.current === targetKey) {
+        liveTargetRef.current = '';
+      }
     };
   }, [targetKey]);
 
   useEffect(() => {
     let live = true;
+    const key = targetKey;
     fetchDebugSupport(namespace, pod)
       .then((support) => {
-        if (!live) {
+        if (!live || liveTargetRef.current !== key) {
           return;
         }
         setUnchecked(null);
@@ -90,7 +102,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
         setRefused(refusalMessage(namespace, support.reason));
       })
       .catch((err: unknown) => {
-        if (!live) {
+        if (!live || liveTargetRef.current !== key) {
           return;
         }
         setUnchecked(supportMessage(err));
@@ -98,7 +110,7 @@ export default function DebugPrompt({ target, onAttached }: DebugPromptProps) {
     return () => {
       live = false;
     };
-  }, [namespace, pod]);
+  }, [namespace, pod, targetKey]);
 
   async function attach() {
     const key = targetKey;

@@ -8,6 +8,7 @@ import type { PortForward } from '../../src/lib/types';
 import { anySignal, rejectsWith } from '../helpers';
 import { adoptSession } from '../../src/store/identity';
 import { OWN_WINDOW } from '../../src/lib/identity';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 function forward(overrides: Partial<PortForward> = {}): PortForward {
   return {
@@ -122,6 +123,36 @@ describe('ForwardsPanel', () => {
     expect(
       await screen.findByText('stopping the forward failed with status 404'),
     ).toBeInTheDocument();
+  });
+
+  it('drops a stop completion after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const stopping = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return stopping;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([forward()]) });
+      }),
+    );
+    render(<ForwardsPanel />);
+    await user.click(await screen.findByRole('button', { name: 'Stop' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      finish({ ok: true, json: () => Promise.resolve({}) });
+      await stopping;
+      await Promise.resolve();
+    });
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 
   it('falls back to a generic message for a non-Error rejection', async () => {

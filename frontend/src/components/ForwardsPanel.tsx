@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   NO_FORWARDS_WHEN_SERVED,
@@ -10,6 +10,7 @@ import { forwardURL, openExternal } from '../lib/openExternal';
 import { useForwards } from '../store/forwards';
 import { useClusterMode } from '../store/identity';
 import { notifyError, notifyOk } from '../store/toasts';
+import { useClusterEpoch } from '../store/cluster';
 import StaleBanner from './StaleBanner';
 import CopyButton from './CopyButton';
 import Announce from './Announce';
@@ -36,15 +37,36 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
   const served = useClusterMode();
   const forwards = useForwards();
   const [error, setError] = useState<string | null>(null);
+  const operation = useRef(0);
+  const epoch = useClusterEpoch();
   const poll = useForwardPolling(active && !served);
 
+  useEffect(() => {
+    operation.current += 1;
+    setError(null);
+  }, [epoch]);
+
+  useEffect(() => {
+    return () => {
+      operation.current += 1;
+    };
+  }, []);
+
   async function stop(id: string) {
+    operation.current += 1;
+    const token = operation.current;
     setError(null);
     try {
       await stopForward(id);
-      notifyOk('Forward stopped');
       await refreshForwards();
+      if (operation.current !== token) {
+        return;
+      }
+      notifyOk('Forward stopped');
     } catch (err: unknown) {
+      if (operation.current !== token) {
+        return;
+      }
       const message = errorMessage(err);
       setError(message);
       notifyError(`Stopping the forward: ${message}`);

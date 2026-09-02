@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InspectActions from '../../src/components/InspectActions';
 import type { ObjectRef } from '../../src/lib/types';
 import { accessKey, useAccessStore } from '../../src/store/access';
-import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
+import { contextScope, EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const target: ObjectRef = {
   group: 'kustomize.toolkit.fluxcd.io',
@@ -13,6 +14,8 @@ const target: ObjectRef = {
   namespace: 'flux-system',
   name: 'apps',
 };
+
+const clusterScope = contextScope({ kubeconfig: '', name: 'p-mk1' }, 0);
 
 function renderActions(suspended?: boolean, terminating?: boolean, sourced?: boolean) {
   const onDone = vi.fn();
@@ -315,6 +318,40 @@ describe('InspectActions', () => {
     expect(screen.queryByText('forbidden')).not.toBeInTheDocument();
   });
 
+  it('drops a reconcile result after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const action = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/flux/action')) {
+          return action;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
+      }),
+    );
+    const { onDone } = renderActions(false);
+    await user.click(screen.getByRole('button', { name: 'Reconcile' }));
+    await screen.findByText('working');
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    expect(screen.queryByText('working')).not.toBeInTheDocument();
+
+    await act(async () => {
+      finish({ ok: true, json: () => Promise.resolve({ action: 'reconcile' }) });
+      await action;
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('Reconciliation requested')).not.toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
   it('leaves a reconcile with no token unwatched', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
@@ -348,7 +385,7 @@ describe('gitops buttons the cluster would refuse', () => {
   it("greys out Reconcile and Suspend with the cluster's reason", () => {
     useAccessStore
       .getState()
-      .setRefused(accessKey('p-mk1', target), { reconcile: 'no patching kustomizations' });
+      .setRefused(accessKey(clusterScope, target), { reconcile: 'no patching kustomizations' });
     renderActions(false);
 
     const reconcile = screen.getByRole('button', { name: 'Reconcile' });
@@ -360,14 +397,14 @@ describe('gitops buttons the cluster would refuse', () => {
   it('greys out Resume on a suspended resource', () => {
     useAccessStore
       .getState()
-      .setRefused(accessKey('p-mk1', target), { reconcile: 'no patching kustomizations' });
+      .setRefused(accessKey(clusterScope, target), { reconcile: 'no patching kustomizations' });
     renderActions(true);
 
     expect(screen.getByRole('button', { name: 'Resume' })).toBeDisabled();
   });
 
   it('leaves them alone when nothing stands in the way', () => {
-    useAccessStore.getState().setRefused(accessKey('p-mk1', target), {});
+    useAccessStore.getState().setRefused(accessKey(clusterScope, target), {});
     renderActions(false);
 
     expect(screen.getByRole('button', { name: 'Reconcile' })).toBeEnabled();

@@ -18,6 +18,7 @@ import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import NodeShellButton from './NodeShellButton';
 import { useProtectedCluster } from '../store/contexts';
+import { useClusterEpoch } from '../store/cluster';
 import { useRefusal } from '../store/access';
 import ClusterBadge from './ClusterBadge';
 
@@ -97,8 +98,9 @@ export default function InspectObjectActions({
   const noDrain = useRefusal(target, 'drain');
   const noSuspend = useRefusal(target, 'suspend');
   const noTrigger = useRefusal(target, 'trigger');
+  const epoch = useClusterEpoch();
 
-  const refKey = refQuery(target);
+  const refKey = `${epoch}|${refQuery(target)}`;
 
   useEffect(() => {
     runRef.current += 1;

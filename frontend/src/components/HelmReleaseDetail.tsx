@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { HelmResource, ObjectRef } from '../lib/types';
 import {
   refOf,
@@ -13,7 +13,7 @@ import { useNow } from '../lib/useNow';
 import { useHelmAccess } from '../lib/useHelmAccess';
 import { useHelmRefusal } from '../store/helmAccess';
 import { notifyError, notifyOk } from '../store/toasts';
-import { useProtectedCluster } from '../store/contexts';
+import { useContextScope, useProtectedCluster } from '../store/contexts';
 import { confirmName } from '../lib/contexts';
 import { bumpHelmEpoch } from '../store/helm';
 import Announce from './Announce';
@@ -107,6 +107,12 @@ export default function HelmReleaseDetail({
   const protectedCluster = useProtectedCluster();
   const [failure, setFailure] = useState<string | null>(null);
   const now = useNow();
+  const clusterScope = useContextScope();
+  const actionScope = `${clusterScope}|${namespace}/${name}`;
+  const liveAction = useRef(actionScope);
+  liveAction.current = actionScope;
+  const operation = useRef(0);
+  const [stateScope, setStateScope] = useState(actionScope);
 
   useHelmAccess(namespace, name);
   const noUpgrade = useHelmRefusal(namespace, name, 'upgrade');
@@ -117,16 +123,43 @@ export default function HelmReleaseDetail({
   const helmReason = support?.reason ?? 'checking whether helm is available';
   const fluxRef = data?.release.fluxRef;
 
+  if (stateScope !== actionScope) {
+    setStateScope(actionScope);
+    setBusy(false);
+    setConfirming(null);
+    setTyped(null);
+    setUpgrading(false);
+    setFailure(null);
+  }
+
+  useEffect(() => {
+    const scope = actionScope;
+    return () => {
+      if (liveAction.current === scope) {
+        liveAction.current = '';
+      }
+    };
+  }, [actionScope]);
+
   async function act(what: 'rollback' | 'uninstall', revision: number) {
+    const scope = actionScope;
+    operation.current += 1;
+    const token = operation.current;
     setBusy(true);
     setFailure(null);
     setTyped(null);
     const confirm = confirmName(protectedCluster, name);
     try {
-      const result =
-        what === 'uninstall'
-          ? await uninstallRelease(namespace, name, confirm)
-          : await rollbackRelease(namespace, name, revision, confirm);
+      let work: ReturnType<typeof uninstallRelease>;
+      if (what === 'uninstall') {
+        work = uninstallRelease(namespace, name, confirm);
+      } else {
+        work = rollbackRelease(namespace, name, revision, confirm);
+      }
+      const result = await work;
+      if (liveAction.current !== scope || operation.current !== token) {
+        return;
+      }
       notifyOk(result.message);
       bumpHelmEpoch();
       if (what === 'uninstall') {
@@ -135,12 +168,17 @@ export default function HelmReleaseDetail({
       }
       reload();
     } catch (err: unknown) {
+      if (liveAction.current !== scope || operation.current !== token) {
+        return;
+      }
       const message = err instanceof Error ? err.message : 'the release action failed';
       setFailure(message);
       notifyError(message);
     } finally {
-      setBusy(false);
-      setConfirming(null);
+      if (liveAction.current === scope && operation.current === token) {
+        setBusy(false);
+        setConfirming(null);
+      }
     }
   }
 

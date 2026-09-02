@@ -65,7 +65,14 @@ export default function HelmUpgradeDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
+  const mounted = useRef(true);
   const protectedCluster = useProtectedCluster();
+
+  useEffect(() => {
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -99,14 +106,22 @@ export default function HelmUpgradeDialog({
     setError(null);
     try {
       const result = await upgradeRelease(argsFor(chosen), true);
+      if (!mounted.current) {
+        return;
+      }
       setProposed(result.manifest ?? '');
       setStep('diff');
     } catch (err: unknown) {
+      if (!mounted.current) {
+        return;
+      }
       const message = err instanceof Error ? err.message : 'the upgrade request failed';
       setError(message);
       notifyError(message);
     } finally {
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   }
 
@@ -116,15 +131,23 @@ export default function HelmUpgradeDialog({
     setTyping(false);
     try {
       const result = await upgradeRelease(argsFor(chosen), false, confirm);
+      if (!mounted.current) {
+        return;
+      }
       notifyOk(result.message);
       onUpgraded();
       onClose();
     } catch (err: unknown) {
+      if (!mounted.current) {
+        return;
+      }
       const message = err instanceof Error ? err.message : 'the upgrade request failed';
       setError(message);
       notifyError(message);
     } finally {
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   }
 

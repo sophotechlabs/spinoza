@@ -96,9 +96,16 @@ export default function HelmInstallDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
+  const mounted = useRef(true);
   const protectedCluster = useProtectedCluster();
   const known = useNamespaceNames();
   useHelmAccess(target, '');
+
+  useEffect(() => {
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -183,11 +190,19 @@ export default function HelmInstallDialog({
     setError(null);
     try {
       const found = await fetchChartValues(chart, chosen.repo, chosen.version);
+      if (!mounted.current) {
+        return;
+      }
       setValues(found.values);
     } catch (err: unknown) {
+      if (!mounted.current) {
+        return;
+      }
       setError(messageOf(err, 'the chart values could not be read'));
     } finally {
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   }
 
@@ -196,14 +211,22 @@ export default function HelmInstallDialog({
     setError(null);
     try {
       const result = await installRelease(argsFor(chosen), true);
+      if (!mounted.current) {
+        return;
+      }
       setRendered(result.manifest ?? '');
       setStep('preview');
     } catch (err: unknown) {
+      if (!mounted.current) {
+        return;
+      }
       const message = messageOf(err, 'the install preview failed');
       setError(message);
       notifyError(message);
     } finally {
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   }
 
@@ -213,15 +236,23 @@ export default function HelmInstallDialog({
     setTyping(false);
     try {
       const result = await installRelease(argsFor(chosen), false, confirm);
+      if (!mounted.current) {
+        return;
+      }
       notifyOk(result.message);
       onInstalled();
       onClose();
     } catch (err: unknown) {
+      if (!mounted.current) {
+        return;
+      }
       const message = messageOf(err, 'the install failed');
       setError(message);
       notifyError(message);
     } finally {
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   }
 

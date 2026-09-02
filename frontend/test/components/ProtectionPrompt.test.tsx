@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProtectionPrompt from '../../src/components/ProtectionPrompt';
 import type { ContextList, Protection } from '../../src/lib/types';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 import { useContextsStore } from '../../src/store/contexts';
 import { useToastsStore } from '../../src/store/toasts';
 
@@ -52,7 +53,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useToastsStore.getState().clear();
+  act(() => {
+    useToastsStore.getState().clear();
+  });
 });
 
 describe('ProtectionPrompt', () => {
@@ -147,5 +150,62 @@ describe('ProtectionPrompt', () => {
     await waitFor(() => {
       expect(useToastsStore.getState().toasts[0].message).toBe('the answer could not be saved');
     });
+  });
+
+  it('drops an answer after the active context changes', async () => {
+    const user = userEvent.setup();
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const answer = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => answer),
+    );
+    show('unknown');
+    await user.click(screen.getByRole('button', { name: 'Protect it' }));
+
+    act(() => {
+      useContextsStore.getState().setList(list('unknown', 'p-mk2'));
+    });
+    expect(screen.getByRole('button', { name: 'Protect it' })).toBeEnabled();
+
+    await act(async () => {
+      finish({ ok: true, json: () => Promise.resolve(list('protected', 'p-mk1')) });
+      await answer;
+      await Promise.resolve();
+    });
+
+    expect(useContextsStore.getState().list.current.name).toBe('p-mk2');
+    expect(useContextsStore.getState().list.protection).toBe('unknown');
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('drops an answer after the same context reconnects', async () => {
+    const user = userEvent.setup();
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const answer = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => answer),
+    );
+    show('unknown');
+    await user.click(screen.getByRole('button', { name: 'Protect it' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    expect(screen.getByRole('button', { name: 'Protect it' })).toBeEnabled();
+
+    await act(async () => {
+      finish({ ok: true, json: () => Promise.resolve(list('protected')) });
+      await answer;
+      await Promise.resolve();
+    });
+
+    expect(useContextsStore.getState().list.protection).toBe('unknown');
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 });

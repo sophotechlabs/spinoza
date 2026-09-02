@@ -11,6 +11,8 @@ import { asRecord } from './wire';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 import { useForwardsStore } from '../store/forwards';
+import { activeClusterNow } from '../store/clusters';
+import { useClusterStore } from '../store/cluster';
 
 const FORWARDS_POLL_MS = 5000;
 
@@ -62,7 +64,12 @@ export async function stopForward(id: string): Promise<void> {
 }
 
 export async function loadForwards(): Promise<PortForward[]> {
+  const cluster = activeClusterNow();
+  const epoch = useClusterStore.getState().epoch;
   const forwards = await listForwards();
+  if (activeClusterNow() !== cluster || useClusterStore.getState().epoch !== epoch) {
+    return forwards;
+  }
   useForwardsStore.getState().setForwards(forwards);
   return forwards;
 }

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { HelmRelease, HelmReleases as Releases, HelmSupport } from '../../src/lib/types';
 import HelmReleases from '../../src/components/HelmReleases';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 import { useNamespaceStore } from '../../src/store/namespace';
 import { capabilities } from '../helpers';
 
@@ -321,6 +322,12 @@ describe('installing from the releases view', () => {
     await user.click(button);
 
     expect(await screen.findByLabelText('Install a chart')).toBeInTheDocument();
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByLabelText('Install a chart')).not.toBeInTheDocument();
   });
 });
 

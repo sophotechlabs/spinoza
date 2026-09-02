@@ -15,6 +15,7 @@ import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
 import { ALL, DEFAULT_NAMESPACE, useNamespace } from '../store/namespace';
 import { bumpHelmEpoch } from '../store/helm';
+import { useContextScope } from '../store/contexts';
 import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
@@ -68,10 +69,12 @@ function matching(releases: HelmRelease[], query: string): HelmRelease[] {
 export default function HelmReleases({ active = true, selected, onSelect }: HelmReleasesProps) {
   const { data, error, reload } = useHelmReleases(active);
   const [query, setQuery] = useState('');
-  const [installing, setInstalling] = useState(false);
+  const [installingOn, setInstallingOn] = useState('');
   const now = useNow();
   const support = useHelmSupport();
   const namespace = useNamespace();
+  const clusterScope = useContextScope();
+  const installing = installingOn === clusterScope;
 
   if (data === null) {
     if (error !== null) {
@@ -110,7 +113,7 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
             type="button"
             disabled={support?.available !== true}
             onClick={() => {
-              setInstalling(true);
+              setInstallingOn(clusterScope);
             }}
             className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
           >
@@ -123,7 +126,7 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
           <HelmInstallDialog
             namespace={startingNamespace(namespace)}
             onClose={() => {
-              setInstalling(false);
+              setInstallingOn('');
             }}
             onInstalled={bumpHelmEpoch}
           />

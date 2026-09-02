@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { ObjectRef } from '../lib/types';
 import { pollReconcile, runFluxAction } from '../lib/fluxActions';
 import type { FluxAction, ReconcileProgress, ReconcileState } from '../lib/fluxActions';
+import { refQuery } from '../lib/object';
 import Announce from './Announce';
 import { useRefusal } from '../store/access';
+import { useClusterEpoch } from '../store/cluster';
 import { useGitopsKeys } from '../lib/gitopsKeys';
 
 interface InspectActionsProps {
@@ -57,7 +59,9 @@ export default function InspectActions({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [state, setState] = useState<ReconcileState | null>(null);
+  const epoch = useClusterEpoch();
   const watchRef = useRef(0);
+  const targetKey = `${epoch}|${refQuery(target)}`;
 
   useEffect(() => {
     setBusy(null);
@@ -65,7 +69,7 @@ export default function InspectActions({
     setNotice(null);
     setState(null);
     watchRef.current += 1;
-  }, [target]);
+  }, [targetKey]);
 
   useEffect(() => {
     return () => {

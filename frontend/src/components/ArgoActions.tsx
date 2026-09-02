@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { ObjectRef } from '../lib/types';
 import type { ArgoAction, ArgoOptions } from '../lib/argoActions';
 import { runArgoAction } from '../lib/argoActions';
+import { refQuery } from '../lib/object';
 import { confirmName } from '../lib/contexts';
 import { useProtectedCluster } from '../store/contexts';
+import { useClusterEpoch } from '../store/cluster';
 import { useRefusal } from '../store/access';
 import { useGitopsKeys } from '../lib/gitopsKeys';
 import Announce from './Announce';
@@ -65,7 +67,9 @@ export default function ArgoActions({ target, suspended, terminating, onDone }: 
   const [choosing, setChoosing] = useState(false);
   const [pending, setPending] = useState<ArgoOptions | undefined>(undefined);
   const protectedCluster = useProtectedCluster();
+  const epoch = useClusterEpoch();
   const runRef = useRef(0);
+  const targetKey = `${epoch}|${refQuery(target)}`;
 
   useEffect(() => {
     setBusy(null);
@@ -73,8 +77,9 @@ export default function ArgoActions({ target, suspended, terminating, onDone }: 
     setNotice(null);
     setAsking(null);
     setChoosing(false);
+    setPending(undefined);
     runRef.current += 1;
-  }, [target]);
+  }, [targetKey]);
 
   useEffect(() => {
     return () => {
