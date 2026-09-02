@@ -797,6 +797,33 @@ func TestAForwardThatArrivesAfterShutdownIsRefused(t *testing.T) {
 	}
 }
 
+func TestCancelingAStartStopsWaitingForTheForwarder(t *testing.T) {
+	runner := newStubRunner(45123)
+	runner.gate = make(chan struct{})
+	registry := newTestRegistry(t, runner, &stubResolver{pod: "web", podPort: 8080})
+	t.Cleanup(func() { close(runner.gate) })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := registry.Start(ctx, podTarget(), 8080)
+		done <- err
+	}()
+	<-runner.entered
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("start error = %v, want request cancellation", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("a canceled start kept waiting for the forwarder")
+	}
+	if len(registry.List()) != 0 {
+		t.Fatalf("list = %v, want no forward from the canceled start", registry.List())
+	}
+}
+
 func TestReapLeavesFailedForwardsAlone(t *testing.T) {
 	prober := &stubProber{alive: false}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -949,6 +976,70 @@ func TestConcurrentStartsShareOneForward(t *testing.T) {
 		}
 		if len(registry.List()) != 1 {
 			t.Fatalf("registry holds %d forwards, want 1", len(registry.List()))
+		}
+	})
+}
+
+func TestAStartWaitingForTheSameForwardHonorsItsCancellation(t *testing.T) {
+	runner := newStubRunner(45123)
+	resolver := &gateResolver{entered: make(chan struct{}, 2), release: make(chan struct{})}
+	registry := newTestRegistry(t, runner, resolver)
+	leaderDone := make(chan error, 1)
+	var releaseOnce sync.Once
+	releaseLeader := func() {
+		releaseOnce.Do(func() {
+			close(resolver.release)
+		})
+	}
+	t.Cleanup(func() {
+		releaseLeader()
+		<-leaderDone
+	})
+	go func() {
+		_, err := registry.Start(context.Background(), podTarget(), 8080)
+		leaderDone <- err
+	}()
+	<-resolver.entered
+	waiting, cancel := context.WithCancel(context.Background())
+	waiterDone := make(chan error, 1)
+	go func() {
+		_, err := registry.Start(waiting, podTarget(), 8080)
+		waiterDone <- err
+	}()
+	cancel()
+
+	select {
+	case err := <-waiterDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("waiting start error = %v, want context cancellation", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("a canceled start kept waiting for another request")
+	}
+	releaseLeader()
+}
+
+func TestShutdownWakesAStartWaitingForTheSameForward(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		registry := newTestRegistry(t, newStubRunner(45123), &stubResolver{pod: "web", podPort: 8080})
+		_, found, wait, stopped := registry.reserve(podTarget(), 8080)
+		if found || wait != nil || stopped {
+			t.Fatal("the fixture did not reserve the first start")
+		}
+		done := make(chan error, 1)
+		go func() {
+			_, err := registry.Start(context.Background(), podTarget(), 8080)
+			done <- err
+		}()
+		synctest.Wait()
+
+		registry.StopAll()
+
+		if err := <-done; !errors.Is(err, errStopped) {
+			t.Fatalf("waiting start error = %v, want stopped registry", err)
+		}
+		if _, err := registry.Start(context.Background(), podTarget(), 8080); !errors.Is(err, errStopped) {
+			t.Fatalf("new start error = %v, want stopped registry", err)
 		}
 	})
 }

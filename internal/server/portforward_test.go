@@ -169,7 +169,7 @@ func TestStartForwardRequiresATarget(t *testing.T) {
 
 func TestStartForwardRejectsABadPort(t *testing.T) {
 	ts := forwardServer(t, &fakeForwardRunner{local: 1}, &fakeForwardResolver{})
-	cases := []string{"", "0", "-1", "http"}
+	cases := []string{"", "0", "-1", "65536", "2147483647", "http"}
 
 	for _, port := range cases {
 		query := "?kind=Pod&namespace=flux-system&name=web&port=" + port

@@ -22,7 +22,7 @@ func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "kind, namespace and name are required")
 		return
 	}
-	port, err := strconv.ParseInt(query.Get("port"), 10, 32)
+	port, err := strconv.ParseUint(query.Get("port"), 10, 16)
 	if err != nil || port <= 0 {
 		writeError(w, http.StatusBadRequest, "a positive port is required")
 		return

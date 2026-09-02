@@ -93,6 +93,8 @@ type Registry struct {
 	stopped  bool
 }
 
+var errStopped = errors.New("port forwarding has stopped")
+
 func NewRegistry(root context.Context, runner Runner, resolver Resolver, prober Prober) *Registry {
 	return newRegistry(root, runner, resolver, prober, DefaultStartTimeout, DefaultReapInterval, DefaultProbeTimeout)
 }
@@ -303,19 +305,26 @@ func (r *Registry) stopOnShutdown() {
 }
 
 func (r *Registry) Start(ctx context.Context, target Target, port int32) (api.PortForward, error) {
-	existing, found, wait := r.reserve(target, port)
-	for wait != nil {
-		<-wait
-		existing, found, wait = r.reserve(target, port)
+	existing, found, reserveErr := r.reserveStart(ctx, target, port)
+	if reserveErr != nil {
+		return api.PortForward{}, reserveErr
 	}
 	if found {
 		return existing, nil
 	}
 	defer r.release(startKey{kind: target.Kind, namespace: target.Namespace, name: target.Name, port: port})
 
-	pod, podPort, err := r.resolver.Resolve(ctx, target, port)
+	resolving, cancelResolve := r.resolutionContext(ctx)
+	defer cancelResolve()
+	pod, podPort, err := r.resolver.Resolve(resolving, target, port)
 	if err != nil {
 		return api.PortForward{}, err
+	}
+	if ctx.Err() != nil {
+		return api.PortForward{}, ctx.Err()
+	}
+	if r.root.Err() != nil {
+		return api.PortForward{}, errStopped
 	}
 
 	active := newRun()
@@ -336,10 +345,55 @@ func (r *Registry) Start(ctx context.Context, target Target, port int32) (api.Po
 			runErr = errors.New("the port forward ended before it was ready")
 		}
 		return api.PortForward{}, runErr
+	case <-ctx.Done():
+		active.halt()
+		return api.PortForward{}, ctx.Err()
+	case <-r.root.Done():
+		active.halt()
+		return api.PortForward{}, errStopped
 	case <-time.After(r.timeout):
 		active.halt()
 		return api.PortForward{}, fmt.Errorf("timed out starting a port forward to %s/%s", target.Namespace, target.Name)
 	}
+}
+
+func (r *Registry) reserveStart(
+	ctx context.Context,
+	target Target,
+	port int32,
+) (api.PortForward, bool, error) {
+	for {
+		existing, found, wait, stopped := r.reserve(target, port)
+		if stopped {
+			return api.PortForward{}, false, errStopped
+		}
+		if wait == nil {
+			return existing, found, nil
+		}
+		select {
+		case <-ctx.Done():
+			return api.PortForward{}, false, ctx.Err()
+		case <-r.root.Done():
+			return api.PortForward{}, false, errStopped
+		case <-wait:
+		}
+	}
+}
+
+func (r *Registry) resolutionContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	resolving, cancel := context.WithCancel(ctx)
+	if r.root.Err() != nil {
+		cancel()
+		return resolving, cancel
+	}
+	safe.Go("canceling a port-forward resolution on shutdown", func() {
+		select {
+		case <-r.root.Done():
+			cancel()
+		case <-resolving.Done():
+		}
+	})
+	return resolving, cancel
 }
 
 func (r *Registry) register(
@@ -403,20 +457,23 @@ func (r *Registry) watch(id string, active *run, failed <-chan error) {
 	entry.forward.Error = err.Error()
 }
 
-func (r *Registry) reserve(target Target, port int32) (api.PortForward, bool, <-chan struct{}) {
+func (r *Registry) reserve(target Target, port int32) (api.PortForward, bool, <-chan struct{}, bool) {
 	key := startKey{kind: target.Kind, namespace: target.Namespace, name: target.Name, port: port}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.stopped {
+		return api.PortForward{}, false, nil, true
+	}
 	forward, found := r.matchLocked(target, port)
 	if found {
-		return forward, true, nil
+		return forward, true, nil, false
 	}
 	pending, busy := r.starting[key]
 	if busy {
-		return api.PortForward{}, false, pending
+		return api.PortForward{}, false, pending, false
 	}
 	r.starting[key] = make(chan struct{})
-	return api.PortForward{}, false, nil
+	return api.PortForward{}, false, nil, false
 }
 
 func (r *Registry) release(key startKey) {
@@ -488,9 +545,17 @@ func (r *Registry) StopAll() {
 		entries = append(entries, entry)
 	}
 	r.forwards = map[string]*record{}
+	pending := make([]chan struct{}, 0, len(r.starting))
+	for _, wait := range r.starting {
+		pending = append(pending, wait)
+	}
+	r.starting = map[startKey]chan struct{}{}
 	r.mu.Unlock()
 
 	for _, entry := range entries {
 		entry.current.halt()
+	}
+	for _, wait := range pending {
+		close(wait)
 	}
 }
