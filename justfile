@@ -280,6 +280,20 @@ cluster-up tier:
     just cluster-mirror
     kubectl --context {{ test_context }} cluster-info
     kubectl --context {{ test_context }} get nodes -L spinoza.test/pool
+    images=("$(yq '.spec.template.spec.containers[] | select(.name == "metrics-server") | .image' {{ kind_dir }}/metrics-server.yaml)")
+    if [ '{{ tier }}' != base ]; then
+        images+=(busybox:1.37 busybox:latest registry.k8s.io/pause:3.10)
+    fi
+    for image in "${images[@]}"; do
+        if ! docker image inspect "$image" > /dev/null 2>&1; then
+            docker pull "$image"
+        fi
+        for node in $(kind get nodes --name {{ test_cluster }}); do
+            if ! docker exec "$node" crictl inspecti "$image" > /dev/null 2>&1; then
+                docker image save "$image" | docker exec -i "$node" ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs -
+            fi
+        done
+    done
     kubectl --context {{ test_context }} apply -f {{ kind_dir }}/metrics-server.yaml
     kubectl --context {{ test_context }} -n kube-system rollout status deployment/metrics-server --timeout=5m
     kubectl --context {{ test_context }} wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=5m

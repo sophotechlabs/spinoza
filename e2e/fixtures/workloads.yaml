@@ -114,6 +114,7 @@ spec:
       containers:
         - name: risky
           image: busybox:latest
+          imagePullPolicy: IfNotPresent
           command: ['sh', '-c', 'sleep 3600']
           securityContext:
             privileged: true
