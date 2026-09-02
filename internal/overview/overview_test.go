@@ -163,9 +163,10 @@ func answerPods(meta *metadatafake.FakeMetadataClient, counts map[string]int) {
 		if !known {
 			return false, nil, nil
 		}
-		out := &metav1.List{}
-		remaining := int64(total)
-		out.RemainingItemCount = &remaining
+		out := &metav1.List{Items: make([]runtime.RawExtension, total)}
+		for at := range out.Items {
+			out.Items[at] = runtime.RawExtension{Object: &metav1.PartialObjectMetadata{}}
+		}
 		return true, out, nil
 	})
 }
