@@ -130,8 +130,9 @@ func shortened(revision string) string {
 	if cut := strings.LastIndexAny(revision, "@:"); cut >= 0 {
 		trimmed = revision[cut+1:]
 	}
-	if len(trimmed) > shortSHA*2 {
-		return trimmed[:shortSHA]
+	runes := []rune(trimmed)
+	if len(runes) > shortSHA*2 {
+		return string(runes[:shortSHA])
 	}
 	return trimmed
 }

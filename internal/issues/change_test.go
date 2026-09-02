@@ -152,6 +152,14 @@ func TestARevisionWithoutASeparatorIsStillShortened(t *testing.T) {
 	}
 }
 
+func TestALongUnicodeRevisionIsShortenedAtACharacterBoundary(t *testing.T) {
+	revision := "registry.example/release@🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂"
+
+	if got := shortened(revision); got != "🙂🙂🙂🙂🙂🙂🙂" {
+		t.Fatalf("shortened = %q, want whole characters", got)
+	}
+}
+
 func TestAConditionWithAnUnreadableTimeIsSkipped(t *testing.T) {
 	obj := newWorkload(kindStatefulSet, "db", "uid-db", map[string]any{
 		"conditions": []any{
