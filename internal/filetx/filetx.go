@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	dirMode   = 0o700
-	fileMode  = 0o600
-	lockWait  = 5 * time.Second
-	retryWait = 10 * time.Millisecond
+	dirMode                 = 0o700
+	fileMode                = 0o600
+	lockWait  time.Duration = 5_000_000_000
+	retryWait time.Duration = 10_000_000
 )
 
 func Exclusive(ctx context.Context, path string, action func() error) (err error) {
@@ -42,6 +42,13 @@ func Exclusive(ctx context.Context, path string, action func() error) (err error
 func Read(path string, limit int64) ([]byte, error) {
 	if limit < 1 {
 		return nil, fmt.Errorf("read %s: invalid byte limit %d", path, limit)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode().IsRegular() && info.Size() > limit {
+		return nil, fmt.Errorf("%s is larger than %d bytes", path, limit)
 	}
 	file, err := os.Open(path)
 	if err != nil {

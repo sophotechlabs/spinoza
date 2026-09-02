@@ -172,6 +172,16 @@ func TestExclusiveStopsWaitingWhenTheCallerIsCanceled(t *testing.T) {
 	}
 }
 
+func TestReadLimitsAStreamWhoseSizeWasNotKnown(t *testing.T) {
+	file := stubReadCloser{reader: strings.NewReader("1234")}
+
+	_, err := read("state.json", file, 3)
+
+	if err == nil || !strings.Contains(err.Error(), "larger than 3 bytes") {
+		t.Fatalf("read error = %v, want the stream size limit", err)
+	}
+}
+
 func TestExclusiveCreatesPrivateLockingState(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested")
 	path := filepath.Join(dir, "state.json")
