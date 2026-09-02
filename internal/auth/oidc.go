@@ -9,13 +9,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
+
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
 
 const flowCookie = "spinoza_login"
@@ -23,6 +24,8 @@ const flowCookie = "spinoza_login"
 const flowLifetime = 10 * time.Minute
 
 const providerTimeout = 20 * time.Second
+
+const maxCACertBytes = 4 << 20
 
 type discovered struct {
 	EndSession                 string   `json:"end_session_endpoint"`
@@ -79,7 +82,7 @@ func transportFor(cfg OIDCConfig) (http.RoundTripper, error) {
 }
 
 func poolFrom(path string) (*x509.CertPool, error) {
-	body, err := os.ReadFile(path)
+	body, err := filetx.Read(path, maxCACertBytes)
 	if err != nil {
 		return nil, fmt.Errorf("oidc ca certificate: %w", err)
 	}
@@ -187,7 +190,14 @@ func swapBase(endpoint, from, to string) string {
 	if !strings.HasPrefix(endpoint, from) {
 		return endpoint
 	}
-	return to + strings.TrimPrefix(endpoint, from)
+	suffix := strings.TrimPrefix(endpoint, from)
+	if suffix == "" {
+		return to
+	}
+	if suffix[0] != '/' && suffix[0] != '?' && suffix[0] != '#' {
+		return endpoint
+	}
+	return to + suffix
 }
 
 type flowState struct {

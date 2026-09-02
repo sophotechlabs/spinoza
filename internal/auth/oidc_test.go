@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
@@ -592,6 +593,19 @@ func TestAnEndpointOnAHostSpinozaWasNotToldAboutIsLeftAlone(t *testing.T) {
 	}
 }
 
+func TestAnEndpointWithOnlyAHostOrPathPrefixMatchIsLeftAlone(t *testing.T) {
+	from := "https://inner.example.com/realms/main"
+	to := "https://outer.example.com/realms/main"
+	for _, endpoint := range []string{
+		"https://inner.example.com.attacker.test/realms/main/authorize",
+		"https://inner.example.com/realms/mainland/authorize",
+	} {
+		if got := swapBase(endpoint, from, to); got != endpoint {
+			t.Fatalf("endpoint = %q, want %q untouched", got, endpoint)
+		}
+	}
+}
+
 func TestACertificateAuthorityHasToBeReadable(t *testing.T) {
 	_, err := httpClientFor(OIDCConfig{CACertFile: "/no/such/file"})
 	if err == nil {
@@ -632,6 +646,25 @@ func TestACustomCertificateAuthorityTrustsItsProvider(t *testing.T) {
 	})
 	if response.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusNoContent)
+	}
+}
+
+func TestAnOversizedCertificateAuthorityIsRefused(t *testing.T) {
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(provider.Close)
+	certificate := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: provider.Certificate().Raw,
+	})
+	copies := maxCACertBytes/len(certificate) + 1
+	path := writeFile(t, string(bytes.Repeat(certificate, copies)))
+
+	_, err := httpClientFor(OIDCConfig{CACertFile: path})
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("building the client = %v, want the ca size limit", err)
 	}
 }
 
