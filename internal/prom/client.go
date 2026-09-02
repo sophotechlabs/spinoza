@@ -16,7 +16,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	k8snet "k8s.io/apimachinery/pkg/util/net"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/kubernetes"
 	k8srest "k8s.io/client-go/rest"
 
@@ -74,7 +74,7 @@ func (s *serviceProxy) Get(ctx context.Context, target Target, path string, para
 		Namespace(target.Namespace).
 		Resource("services").
 		SubResource("proxy").
-		Name(k8snet.JoinSchemeNamePort(target.Scheme, target.Service, target.Port)).
+		Name(utilnet.JoinSchemeNamePort(target.Scheme, target.Service, target.Port)).
 		Suffix(path)
 	for key, value := range params {
 		proxyRequest = proxyRequest.Param(key, value)
