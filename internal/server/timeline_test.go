@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -139,6 +140,54 @@ func TestChangesArriveInOneBatchRatherThanOneWriteEach(t *testing.T) {
 	awaitNoted(t, held, 20)
 }
 
+func TestARejectedTimelineWriteIsNotCountedAsStored(t *testing.T) {
+	held := &heldHistory{recordErr: errors.New("the timeline is read-only")}
+	pruned := 0
+	recording := &recording{
+		into: held.Timeline(mk1),
+		prune: func(context.Context) {
+			pruned++
+		},
+		written: pruneEvery - 1,
+	}
+
+	recording.write(t.Context(), []store.Change{{Name: "api-1"}})
+
+	if len(held.noted()) != 0 {
+		t.Fatalf("stored = %+v, want the rejected change left out", held.noted())
+	}
+	if recording.written != pruneEvery-1 {
+		t.Fatalf("written = %d, want failed writes left uncounted", recording.written)
+	}
+	if pruned != 0 {
+		t.Fatalf("pruned = %d, want no retention pass after a failed write", pruned)
+	}
+}
+
+func TestEnoughStoredChangesTriggerAnotherRetentionPass(t *testing.T) {
+	held := &heldHistory{}
+	pruned := 0
+	recording := &recording{
+		into: held.Timeline(mk1),
+		prune: func(context.Context) {
+			pruned++
+		},
+		written: pruneEvery - 1,
+	}
+
+	recording.write(t.Context(), []store.Change{{Name: "api-1"}})
+
+	if len(held.noted()) != 1 {
+		t.Fatalf("stored = %+v, want the change written", held.noted())
+	}
+	if recording.written != 0 {
+		t.Fatalf("written = %d, want the retention counter reset", recording.written)
+	}
+	if pruned != 1 {
+		t.Fatalf("pruned = %d, want one retention pass", pruned)
+	}
+}
+
 func TestTheTimelineIsTrimmedAsItIsWrittenTo(t *testing.T) {
 	backend := &taped{}
 	srv, held, _ := tapingServer(t, backend)
@@ -181,6 +230,21 @@ func TestTheAuditIsBoundedByTheSamePassThatTrimsTheTimeline(t *testing.T) {
 	}
 	if trims[0].Days != auditDays || trims[0].Rows != auditRows {
 		t.Fatalf("it trimmed the audit to %+v", trims[0])
+	}
+}
+
+func TestTimelineAndAuditPruneFailuresDoNotStopEachOther(t *testing.T) {
+	srv, held, _ := tapingServer(t, &taped{})
+	held.pruneErr = errors.New("timeline table is locked")
+	held.auditErr = errors.New("audit table is locked")
+
+	srv.pruneTimeline(t.Context())
+
+	if len(held.trims()) != 1 {
+		t.Fatalf("timeline prune calls = %d, want 1", len(held.trims()))
+	}
+	if len(held.auditTrims()) != 1 {
+		t.Fatalf("audit prune calls = %d, want 1", len(held.auditTrims()))
 	}
 }
 
@@ -252,6 +316,21 @@ func TestClosingTheServerStopsAndFlushesRecordings(t *testing.T) {
 	found := held.noted()
 	if len(found) != 1 || found[0].Name != "waiting" {
 		t.Fatalf("shutdown kept changes %+v", found)
+	}
+}
+
+func TestARecordingCannotStartAfterServerShutdown(t *testing.T) {
+	backend := &taped{}
+	srv, _, _ := tapingServer(t, backend)
+	srv.Close()
+
+	srv.startRecording(t.Context(), mk1, timelineWorkloads)
+
+	if backend.sink() != nil {
+		t.Fatal("a recording started after shutdown")
+	}
+	if srv.recordingOn(mk1) != nil {
+		t.Fatal("the server retained a recording after shutdown")
 	}
 }
 
@@ -469,6 +548,23 @@ func TestChangesTheTimelineCouldNotKeepUpWithAreCounted(t *testing.T) {
 
 	if held.dropped.Load() != 1 {
 		t.Fatalf("it dropped %d", held.dropped.Load())
+	}
+}
+
+func TestDroppedChangesAreReportedForTheClusterRecordingThem(t *testing.T) {
+	srv, _, _ := tapingServer(t, &taped{})
+	held := &recording{}
+	held.dropped.Store(7)
+	srv.holdRecording(mk1, held)
+	t.Cleanup(func() {
+		srv.holdRecording(mk1, nil)
+	})
+
+	if got := srv.droppedOn(mk1); got != 7 {
+		t.Fatalf("dropped = %d, want 7", got)
+	}
+	if got := srv.droppedOn(mk2); got != 0 {
+		t.Fatalf("other cluster dropped = %d, want 0", got)
 	}
 }
 

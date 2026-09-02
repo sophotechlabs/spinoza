@@ -49,6 +49,8 @@ type heldHistory struct {
 	changes     []store.Change
 	changePage  store.Changes
 	changeErr   error
+	pruneErr    error
+	auditErr    error
 	pruned      []store.Retention
 	prunedAudit []store.Retention
 }
@@ -124,14 +126,14 @@ func (h *heldHistory) Prune(_ context.Context, keep store.Retention, _ time.Time
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.pruned = append(h.pruned, keep)
-	return nil
+	return h.pruneErr
 }
 
 func (h *heldHistory) PruneAudit(_ context.Context, keep store.Retention, _ time.Time) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.prunedAudit = append(h.prunedAudit, keep)
-	return nil
+	return h.auditErr
 }
 
 func (h *heldHistory) noted() []store.Change {
