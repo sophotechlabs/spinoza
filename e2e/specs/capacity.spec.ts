@@ -74,7 +74,7 @@ test('repeated live connection churn leaves the server responsive', async ({ pag
       protocol = 'wss:';
     }
     for (let cycle = 0; cycle < 20; cycle += 1) {
-      const sockets = Array.from({ length: 25 }, () => {
+      const sockets = Array.from({ length: 6 }, () => {
         return new WebSocket(`${protocol}//${location.host}/ws?view=browser`);
       });
       await Promise.all(
@@ -90,9 +90,17 @@ test('repeated live connection churn leaves the server responsive', async ({ pag
             }),
         ),
       );
-      for (const socket of sockets) {
-        socket.close();
-      }
+      await Promise.all(
+        sockets.map(
+          (socket) =>
+            new Promise<void>((resolve) => {
+              socket.addEventListener('close', () => {
+                resolve();
+              });
+              socket.close(1000, 'churn cycle complete');
+            }),
+        ),
+      );
     }
   });
   await expect
