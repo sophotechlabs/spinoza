@@ -3,6 +3,7 @@ package helm
 import (
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"strings"
@@ -21,6 +22,27 @@ type valuesReadingRunner struct {
 	valuesPath string
 	valuesSeen string
 	valuesMode fs.FileMode
+}
+
+type valuesFileStub struct {
+	name     string
+	written  int
+	writeErr error
+	closeErr error
+	closed   bool
+}
+
+func (f *valuesFileStub) Name() string {
+	return f.name
+}
+
+func (f *valuesFileStub) WriteString(string) (int, error) {
+	return f.written, f.writeErr
+}
+
+func (f *valuesFileStub) Close() error {
+	f.closed = true
+	return f.closeErr
 }
 
 func (v *valuesReadingRunner) Run(ctx context.Context, args, env []string) (string, error) {
@@ -116,6 +138,63 @@ func TestUpgradePassesAnEmptyValuesFileForNoOverrides(t *testing.T) {
 	}
 	if runner.valuesSeen != "" {
 		t.Fatalf("values = %q, want an empty file", runner.valuesSeen)
+	}
+}
+
+func TestAnIncompleteValuesFileIsRejectedAndRemoved(t *testing.T) {
+	values := "replicaCount: 2\n"
+	writeFailure := errors.New("disk full")
+	closeFailure := errors.New("close failed")
+	cases := []struct {
+		name string
+		file valuesFileStub
+		want error
+	}{
+		{
+			name: "write failure",
+			file: valuesFileStub{written: 3, writeErr: writeFailure, closeErr: closeFailure},
+			want: writeFailure,
+		},
+		{
+			name: "short write",
+			file: valuesFileStub{written: len(values) - 1},
+			want: io.ErrShortWrite,
+		},
+		{
+			name: "close failure",
+			file: valuesFileStub{written: len(values), closeErr: closeFailure},
+			want: closeFailure,
+		},
+	}
+	for _, one := range cases {
+		t.Run(one.name, func(t *testing.T) {
+			file := one.file
+			file.name = "values.yaml"
+			removed := ""
+			path, err := writeValuesWith(
+				values,
+				func() (temporaryValues, error) {
+					return &file, nil
+				},
+				func(name string) error {
+					removed = name
+					return nil
+				},
+			)
+
+			if !errors.Is(err, one.want) {
+				t.Fatalf("error = %v, want %v", err, one.want)
+			}
+			if path != "" {
+				t.Fatalf("path = %q, want no incomplete file", path)
+			}
+			if !file.closed {
+				t.Fatal("the incomplete values file was not closed")
+			}
+			if removed != file.name {
+				t.Fatalf("removed = %q, want %q", removed, file.name)
+			}
+		})
 	}
 }
 

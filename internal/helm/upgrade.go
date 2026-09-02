@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -90,21 +91,43 @@ func checkValues(values string) error {
 }
 
 func writeValues(values string) (string, error) {
-	file, err := os.CreateTemp("", "spinoza-values-*.yaml")
+	create := func() (temporaryValues, error) {
+		return os.CreateTemp("", "spinoza-values-*.yaml")
+	}
+	return writeValuesWith(values, create, os.Remove)
+}
+
+type temporaryValues interface {
+	Name() string
+	WriteString(values string) (int, error)
+	Close() error
+}
+
+func writeValuesWith(
+	values string,
+	create func() (temporaryValues, error),
+	remove func(string) error,
+) (string, error) {
+	file, err := create()
 	if err != nil {
 		return "", err
 	}
-	_, writeErr := file.WriteString(values)
+	name := file.Name()
+	written, writeErr := file.WriteString(values)
 	closeErr := file.Close()
 	if writeErr != nil {
-		_ = os.Remove(file.Name())
+		_ = remove(name)
 		return "", writeErr
 	}
+	if written != len(values) {
+		_ = remove(name)
+		return "", io.ErrShortWrite
+	}
 	if closeErr != nil {
-		_ = os.Remove(file.Name())
+		_ = remove(name)
 		return "", closeErr
 	}
-	return file.Name(), nil
+	return name, nil
 }
 
 func upgradeArgs(req UpgradeRequest, valuesFile string) []string {
