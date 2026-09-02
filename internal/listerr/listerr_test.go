@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestNoFailuresLeavesNoMessage(t *testing.T) {
@@ -116,5 +117,48 @@ func TestExactlyThreeFailuresAreAllNamed(t *testing.T) {
 
 	if strings.Contains(got, "more") {
 		t.Fatalf("message = %q, want no tail when everything fits", got)
+	}
+}
+
+func TestTheZeroValueCanRecordAFailure(t *testing.T) {
+	var collector Collector
+
+	collector.Record("pods", errors.New("is forbidden"))
+
+	if got := collector.Message(); !strings.Contains(got, "pods (is forbidden)") {
+		t.Fatalf("message = %q, want the recorded failure", got)
+	}
+}
+
+func TestANilPanicLeavesNoFailure(t *testing.T) {
+	collector := New()
+
+	collector.RecordPanic("pods", "reading pods", nil)
+
+	if got := collector.Message(); got != "" {
+		t.Fatalf("message = %q, want no failure", got)
+	}
+}
+
+func TestAPanicIsRecordedAsAListingFailure(t *testing.T) {
+	collector := New()
+
+	collector.RecordPanic("pods", "reading pods", "boom")
+
+	if got := collector.Message(); !strings.Contains(got, "pods") {
+		t.Fatalf("message = %q, want the panicking resource", got)
+	}
+}
+
+func TestALongFailureIsShortenedAtACharacterBoundary(t *testing.T) {
+	message := strings.Repeat("a", maxFailureSize-4) + "€" + "tail"
+
+	got := shorten(message)
+
+	if !utf8.ValidString(got) {
+		t.Fatalf("shortened message is not valid UTF-8: %q", got)
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatalf("shortened message = %q, want an ellipsis", got)
 	}
 }
