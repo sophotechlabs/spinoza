@@ -250,6 +250,67 @@ func TestCountsAreTakenAgainOnceTheWindowPasses(t *testing.T) {
 	}
 }
 
+func TestACanceledCountsWaiterDoesNotStopTheSharedTally(t *testing.T) {
+	mgr, _ := countingManager(t)
+	meta, ok := mgr.meta.(*metadatafake.FakeMetadataClient)
+	if !ok {
+		t.Fatalf("metadata client = %T, want the controllable fake", mgr.meta)
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var startedOnce sync.Once
+	var releaseOnce sync.Once
+	unblock := func() {
+		releaseOnce.Do(func() {
+			close(release)
+		})
+	}
+	t.Cleanup(unblock)
+	meta.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
+		startedOnce.Do(func() {
+			close(started)
+		})
+		<-release
+		return false, nil, nil
+	})
+	first := make(chan api.ResourceCounts, 1)
+	go func() {
+		first <- mgr.Counts(t.Context())
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the shared tally never started")
+	}
+	waiting, cancel := context.WithCancel(t.Context())
+	cancel()
+	second := make(chan api.ResourceCounts, 1)
+	go func() {
+		second <- mgr.Counts(waiting)
+	}()
+	select {
+	case counts := <-second:
+		if len(counts.Counts) != 0 {
+			t.Fatalf("counts = %v, want no stale answer for the canceled caller", counts.Counts)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the canceled waiter stayed behind the shared tally")
+	}
+	select {
+	case <-first:
+		t.Fatal("canceling a waiter stopped the shared tally")
+	default:
+	}
+
+	unblock()
+	select {
+	case <-first:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the shared tally did not finish once the cluster answered")
+	}
+}
+
 func TestWatchedFailuresDoNotLeakIntoTheCachedTally(t *testing.T) {
 	cached := api.ResourceCounts{Counts: map[string]int{"/v1/pods": 3}}
 
