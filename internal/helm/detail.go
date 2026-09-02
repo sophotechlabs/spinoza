@@ -1,6 +1,7 @@
 package helm
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -37,9 +38,7 @@ func (s *Service) Detail(ctx context.Context, namespace, name string, resolve Re
 	if len(revisions) == 0 {
 		return api.HelmReleaseDetail{}, fmt.Errorf("%w: %s/%s", ErrNoRelease, namespace, name)
 	}
-	slices.SortFunc(revisions, func(left, right stored) int {
-		return int(right.revision - left.revision)
-	})
+	slices.SortFunc(revisions, newerRevision)
 
 	newest := revisions[0]
 	release, decodeErr := newest.release()
@@ -60,6 +59,10 @@ func (s *Service) Detail(ctx context.Context, namespace, name string, resolve Re
 	detail.FirstDeployed = decoded.Info.FirstDeployed
 	detail.Resources = resourcesOf(decoded.Manifest, release.Namespace, resolve)
 	return detail, nil
+}
+
+func newerRevision(left, right stored) int {
+	return cmp.Compare(right.revision, left.revision)
 }
 
 func historyOf(revisions []stored) []api.HelmRevision {

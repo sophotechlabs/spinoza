@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -1198,5 +1199,17 @@ func TestEntriesOfCarriesEveryValue(t *testing.T) {
 	}
 	if got[0] != want {
 		t.Fatalf("entry = %+v, want %+v", got[0], want)
+	}
+}
+
+func TestHistoryIDOrderingDoesNotOverflow(t *testing.T) {
+	newest := api.HistoryEntry{ID: math.MaxInt64, At: "2026-08-29T12:00:00Z", Source: api.HistoryAction}
+	oldest := api.HistoryEntry{ID: math.MinInt64, At: newest.At, Source: newest.Source}
+
+	if newestFirst(newest, oldest) >= 0 {
+		t.Fatal("the largest id was not ordered first")
+	}
+	if newestFirst(oldest, newest) <= 0 {
+		t.Fatal("the smallest id was not ordered last")
 	}
 }

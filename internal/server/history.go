@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -308,7 +309,7 @@ func newestFirst(left, right api.HistoryEntry) int {
 		return strings.Compare(left.Source, right.Source)
 	}
 	if left.ID != right.ID {
-		return int(right.ID - left.ID)
+		return cmp.Compare(right.ID, left.ID)
 	}
 	return 0
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,6 +35,18 @@ metadata:
 spec:
   replicas: 1
 `
+
+func TestRevisionOrderingDoesNotOverflow(t *testing.T) {
+	newest := stored{revision: math.MaxInt64}
+	oldest := stored{revision: math.MinInt64}
+
+	if newerRevision(newest, oldest) >= 0 {
+		t.Fatal("the largest revision was not ordered first")
+	}
+	if newerRevision(oldest, newest) <= 0 {
+		t.Fatal("the smallest revision was not ordered last")
+	}
+}
 
 func detailPayload(spec release) string {
 	return `{
