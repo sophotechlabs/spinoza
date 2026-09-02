@@ -325,6 +325,56 @@ func TestAFleetViewChecksScopeOnEveryCluster(t *testing.T) {
 	}
 }
 
+func TestAFleetViewRefusesWhenAnOpenClusterHasNoBackend(t *testing.T) {
+	ts := proxyFleetServer(t, everyNamespace(), nil)
+
+	resp, body := asUser(t, ts, http.MethodGet, "/api/search/fleet?q=api", "alice@example.com", "")
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d: %s", resp.StatusCode, http.StatusServiceUnavailable, body)
+	}
+	if !strings.Contains(body, "p-mk2") || !strings.Contains(body, "not available") {
+		t.Fatalf("body = %q, want the unavailable cluster named", body)
+	}
+}
+
+func TestAFleetViewRefusesWhenAnyClusterCannotDetermineScope(t *testing.T) {
+	ts := proxyFleetServer(
+		t,
+		everyNamespace(),
+		&servedBackend{scope: api.Scope{Undecided: []string{"payments"}}},
+	)
+
+	resp, body := asUser(t, ts, http.MethodGet, "/api/search/fleet?q=api", "alice@example.com", "")
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d: %s", resp.StatusCode, http.StatusServiceUnavailable, body)
+	}
+	if !strings.Contains(body, "p-mk2") || !strings.Contains(body, "would not say") {
+		t.Fatalf("body = %q, want the undecided cluster named", body)
+	}
+}
+
+func TestAFleetScopeRefusalUsesTheClustersDisplayName(t *testing.T) {
+	held := &fleet{
+		held: []api.OpenCluster{{ID: mk1, Context: "p-mk1", Label: "Production"}},
+		backends: map[string]Backend{
+			mk1: &servedBackend{scope: api.Scope{Namespaces: []string{"payments"}}},
+		},
+	}
+	srv := New(held, testAssets(), "")
+	req := httptest.NewRequest(http.MethodGet, "/api/search/fleet?q=api", http.NoBody)
+
+	status, why := srv.wholeFleetRefusal(req)
+
+	if status != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", status, http.StatusForbidden)
+	}
+	if !strings.Contains(why, "Production") || strings.Contains(why, "p-mk1") {
+		t.Fatalf("refusal = %q, want the display name", why)
+	}
+}
+
 func TestAScopedAccountCannotReadOrChangeSharedDeploymentState(t *testing.T) {
 	ts := proxyServer(t, &servedBackend{scope: api.Scope{Namespaces: []string{"payments"}}}, auth.Config{
 		DefaultRole: auth.RoleAdmin,

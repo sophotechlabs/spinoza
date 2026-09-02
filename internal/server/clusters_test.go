@@ -585,6 +585,75 @@ func TestOpeningAClusterRemembersItForNextTime(t *testing.T) {
 	}
 }
 
+func TestRestoringATabDoesNotStealFocusFromTheActiveCluster(t *testing.T) {
+	held := &fleet{
+		held:   []api.OpenCluster{{ID: mk1, Context: "p-mk1"}},
+		active: mk1,
+	}
+	ts, open := rememberingServer(t, held)
+	open.tabs = []store.Tab{{ID: mk2, Context: "p-mk2", Kubeconfig: "/work.yaml", Reopen: true}}
+
+	resp, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters?kubeconfig=%2Fwork.yaml&name=p-mk2", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if held.active != mk1 {
+		t.Fatalf("active = %q, want the cluster already in front", held.active)
+	}
+	if len(held.activated) != 1 || held.activated[0] != mk1 {
+		t.Fatalf("activated = %v, want the original cluster restored", held.activated)
+	}
+}
+
+func TestARememberedContextFromAnotherKubeconfigIsAnOrdinaryOpen(t *testing.T) {
+	held := &fleet{
+		held:   []api.OpenCluster{{ID: mk1, Context: "p-mk1"}},
+		active: mk1,
+	}
+	ts, open := rememberingServer(t, held)
+	open.tabs = []store.Tab{{ID: mk2, Context: "p-mk2", Kubeconfig: "/other.yaml", Reopen: true}}
+
+	resp, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters?kubeconfig=%2Fwork.yaml&name=p-mk2", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if held.active != mk2 {
+		t.Fatalf("active = %q, want the newly opened cluster", held.active)
+	}
+	if len(held.activated) != 0 {
+		t.Fatalf("activated = %v, want no background restoration", held.activated)
+	}
+}
+
+func TestOpeningAnAlreadyOpenRememberedTabBringsItToTheFront(t *testing.T) {
+	held := &fleet{
+		held: []api.OpenCluster{
+			{ID: mk1, Context: "p-mk1"},
+			{ID: mk2, Context: "p-mk2", Kubeconfig: "/work.yaml"},
+		},
+		active: mk1,
+	}
+	ts, open := rememberingServer(t, held)
+	open.tabs = []store.Tab{{ID: mk2, Context: "p-mk2", Kubeconfig: "/work.yaml", Reopen: true}}
+
+	resp, body := doRequest(t, http.MethodPost,
+		ts.URL+"/api/clusters?kubeconfig=%2Fwork.yaml&name=p-mk2", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	if held.active != mk2 {
+		t.Fatalf("active = %q, want the opened tab brought forward", held.active)
+	}
+	if len(held.activated) != 0 {
+		t.Fatalf("activated = %v, want no restoration for a tab already open", held.activated)
+	}
+}
+
 func TestClosingAClusterStopsItReopeningNextTime(t *testing.T) {
 	ts, open := rememberingServer(t, &fleet{})
 	doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=p-mk1", nil)

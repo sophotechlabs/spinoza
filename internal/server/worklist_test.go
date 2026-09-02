@@ -6,11 +6,13 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/checks"
@@ -231,6 +233,151 @@ func TestSomethingThatIsNotAMuteIsRefused(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestAClusterCannotAccumulateUnboundedMutes(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	held := make([]checks.Mute, maxMutes)
+	for at := range held {
+		held[at] = checks.Mute{Check: fmt.Sprintf("check-%04d", at)}
+	}
+	raw := checks.EncodeMutes(map[string][]checks.Mute{mk2: held})
+	if err := srv.stored().Merge(map[string]string{checks.MutesKey: raw}); err != nil {
+		t.Fatalf("preload mutes: %v", err)
+	}
+
+	resp := send(t, http.MethodPost, ts.URL+"/api/checks/mutes", api.Mute{Check: "one-more"})
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", resp.StatusCode)
+	}
+	kept := checks.ParseMutes(srv.stored().All()[checks.MutesKey], mk2)
+	if len(kept) != maxMutes {
+		t.Fatalf("mutes = %d, want the refused mute left out", len(kept))
+	}
+}
+
+func TestReplacingAMuteAtTheLimitStillSucceeds(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	held := make([]checks.Mute, maxMutes)
+	for at := range held {
+		held[at] = checks.Mute{Check: fmt.Sprintf("check-%04d", at), Reason: "old"}
+	}
+	raw := checks.EncodeMutes(map[string][]checks.Mute{mk2: held})
+	if err := srv.stored().Merge(map[string]string{checks.MutesKey: raw}); err != nil {
+		t.Fatalf("preload mutes: %v", err)
+	}
+
+	resp := send(t, http.MethodPost, ts.URL+"/api/checks/mutes", api.Mute{
+		Check: "check-0000", Reason: "replacement",
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	kept := checks.ParseMutes(srv.stored().All()[checks.MutesKey], mk2)
+	if len(kept) != maxMutes {
+		t.Fatalf("mutes = %d, want %d", len(kept), maxMutes)
+	}
+	if kept[len(kept)-1].Reason != "replacement" {
+		t.Fatalf("replacement = %+v", kept[len(kept)-1])
+	}
+}
+
+func TestMutesAreReadFromTheRequestedClusterOnly(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	raw := checks.EncodeMutes(map[string][]checks.Mute{
+		mk2:     {{Check: "requests-missing"}},
+		"other": {{Check: "limits-missing"}},
+	})
+	if err := srv.stored().Merge(map[string]string{checks.MutesKey: raw}); err != nil {
+		t.Fatalf("preload mutes: %v", err)
+	}
+
+	var active api.Mutes
+	getJSON(t, ts.URL+"/api/checks/mutes", &active)
+	var other api.Mutes
+	getJSON(t, ts.URL+"/api/checks/mutes?cluster=other", &other)
+
+	if len(active.Mutes) != 1 || active.Mutes[0].Check != "requests-missing" {
+		t.Fatalf("active mutes = %+v", active.Mutes)
+	}
+	if len(other.Mutes) != 1 || other.Mutes[0].Check != "limits-missing" {
+		t.Fatalf("other mutes = %+v", other.Mutes)
+	}
+}
+
+func TestUnmutingTheLastRuleDropsOnlyThatClustersBucket(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	raw := checks.EncodeMutes(map[string][]checks.Mute{
+		mk2:     {{Check: "requests-missing"}},
+		"other": {{Check: "limits-missing"}},
+	})
+	if err := srv.stored().Merge(map[string]string{checks.MutesKey: raw}); err != nil {
+		t.Fatalf("preload mutes: %v", err)
+	}
+
+	resp := send(t, http.MethodDelete, ts.URL+"/api/checks/mutes", api.Mute{Check: "requests-missing"})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	all := checks.AllMutes(srv.stored().All()[checks.MutesKey])
+	if _, exists := all[mk2]; exists {
+		t.Fatalf("active cluster still has mutes: %+v", all[mk2])
+	}
+	if len(all["other"]) != 1 || all["other"][0].Check != "limits-missing" {
+		t.Fatalf("other cluster mutes = %+v", all["other"])
+	}
+}
+
+func TestAMuteUsesTheUTCDate(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	srv.now = func() time.Time {
+		return time.Date(2026, time.September, 2, 0, 30, 0, 0, time.FixedZone("CEST", 2*60*60))
+	}
+
+	resp := send(t, http.MethodPost, ts.URL+"/api/checks/mutes", api.Mute{Check: "requests-missing"})
+
+	var held api.Mutes
+	bodyOf(t, resp, &held)
+	if len(held.Mutes) != 1 || held.Mutes[0].At != "2026-09-01" {
+		t.Fatalf("mutes = %+v, want the UTC date", held.Mutes)
+	}
+}
+
+func TestAnOversizedMuteIsRefused(t *testing.T) {
+	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
+	body := []byte(`{"check":"` + strings.Repeat("x", maxMuteBytes) + `"}`)
+
+	resp := sendBody(t, http.MethodPost, ts.URL+"/api/checks/mutes", body)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if held := checks.ParseMutes(srv.stored().All()[checks.MutesKey], mk2); len(held) != 0 {
+		t.Fatalf("oversized mute was stored: %+v", held)
+	}
+}
+
+func TestAMuteStoreFailureIsReported(t *testing.T) {
+	ts := settingsServer(t, refusingSettings{})
+
+	resp := send(t, http.MethodPost, ts.URL+"/api/checks/mutes", api.Mute{Check: "requests-missing"})
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestAnUnmuteStoreFailureIsReported(t *testing.T) {
+	ts := settingsServer(t, refusingSettings{})
+
+	resp := send(t, http.MethodDelete, ts.URL+"/api/checks/mutes", api.Mute{Check: "requests-missing"})
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 

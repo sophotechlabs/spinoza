@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -277,6 +278,34 @@ func TestFleetCheckPageRejectsInvalidCursors(t *testing.T) {
 			}
 			if !contains(string(body), tt.want) {
 				t.Fatalf("body = %s, want %q", body, tt.want)
+			}
+		})
+	}
+}
+
+func TestFleetCheckPageRejectsIncompleteCursorPayloads(t *testing.T) {
+	ts := listServer(t, &listing{}, &listing{})
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{name: "invalid JSON", raw: "{"},
+		{name: "missing check", raw: `{"after":{"cluster":"position"}}`},
+		{name: "missing positions", raw: `{"check":"limits-missing"}`},
+		{name: "empty cluster", raw: `{"check":"limits-missing","after":{"":"position"}}`},
+		{name: "empty position", raw: `{"check":"limits-missing","after":{"cluster":""}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cursor := base64.RawURLEncoding.EncodeToString([]byte(tt.raw))
+			resp, body := doRequest(t, http.MethodGet,
+				ts.URL+"/api/checks/findings/fleet?check=limits-missing&after="+url.QueryEscape(cursor), nil)
+
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+			}
+			if !contains(string(body), "cursor is invalid") {
+				t.Fatalf("body = %s, want the cursor rejected", body)
 			}
 		})
 	}
