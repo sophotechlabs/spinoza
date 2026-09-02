@@ -83,7 +83,15 @@ test('the newest version the repo offers is reported beside the installed one', 
 test('the table names what helm itself records about a release', async ({ page }) => {
   await openView(page, 'helm');
   const headers = page.locator('main thead th');
-  for (const column of ['Name', 'Namespace', 'Chart', 'Chart version', 'App version', 'Rev', 'Status']) {
+  for (const column of [
+    'Name',
+    'Namespace',
+    'Chart',
+    'Chart version',
+    'App version',
+    'Rev',
+    'Status',
+  ]) {
     await expect(headers.filter({ hasText: column }).first()).toBeVisible({ timeout: 60_000 });
   }
   const row = page.locator('main tbody tr').filter({ hasText: RELEASE }).first();
@@ -132,6 +140,25 @@ test('the resources are the objects the release rendered', async ({ page }) => {
   await expect(panel(page)).toContainText('ConfigMap');
 });
 
+test('a rendered Helm resource opens the live object behind it', async ({ page }) => {
+  await openRelease(page);
+  await openTab(page, 'Resources');
+  const resource = panel(page).getByRole('button', { name: `${RELEASE}-greeting`, exact: true });
+  await expect(resource).toBeVisible({ timeout: 30_000 });
+  await resource.click();
+  await expect(page).toHaveTitle(new RegExp(`^${RELEASE}-greeting `));
+  await expect(page.getByRole('tab', { name: 'YAML', exact: true })).toBeVisible();
+});
+
+test('the release overview names the storage driver and deployment times', async ({ page }) => {
+  await openRelease(page);
+  const release = panel(page);
+  await expect(release).toContainText('Stored in');
+  await expect(release).toContainText('secrets');
+  await expect(release).toContainText('First deployed');
+  await expect(release).toContainText('Last deployed');
+});
+
 test('the history carries every revision helm recorded', async ({ page }) => {
   const recorded = JSON.parse(
     helm(['history', RELEASE, '--namespace', NAMESPACE, '-o', 'json']),
@@ -169,8 +196,6 @@ test('rolling back to the revision before puts its values back', async ({ page }
   });
   await expect(rollback).toBeEnabled({ timeout: 30_000 });
   await rollback.click();
-  const confirm = page.getByRole('button', { name: 'Confirm', exact: true });
-  await confirm.first().click({ timeout: 5_000 }).catch(() => undefined);
 
   await expect
     .poll(() => helm(['get', 'values', RELEASE, '--namespace', NAMESPACE]), { timeout: 90_000 })
@@ -204,6 +229,16 @@ test('uninstalling asks first, and then the release is gone', async ({ page }) =
   await expect(page.locator('main tbody')).not.toContainText(DOOMED, { timeout: 60_000 });
 });
 
+test('cancelling an uninstall leaves the release and its revision untouched', async ({ page }) => {
+  const before = helm(['list', '--namespace', NAMESPACE, '--filter', RELEASE, '-o', 'json']);
+  await openRelease(page);
+  await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
+  await expect(panel(page)).toContainText(`Uninstall ${RELEASE}? This cannot be undone.`);
+  await panel(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(panel(page)).not.toContainText(`Uninstall ${RELEASE}? This cannot be undone.`);
+  expect(helm(['list', '--namespace', NAMESPACE, '--filter', RELEASE, '-o', 'json'])).toBe(before);
+});
+
 test('a chart the repo offers is searchable and installable from the dialog', async ({ page }) => {
   await openView(page, 'helm');
   await page.getByRole('button', { name: 'Install chart' }).click();
@@ -213,6 +248,43 @@ test('a chart the repo offers is searchable and installable from the dialog', as
   await expect(
     dialog.getByRole('button', { name: `spinoza-e2e ${NEXT_VERSION} from ${REPO_NAME}` }),
   ).toBeVisible();
+});
+
+test('a chart no repository offers is reported as an empty search result', async ({ page }) => {
+  await openView(page, 'helm');
+  await page.getByRole('button', { name: 'Install chart' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Install a chart' });
+  await dialog.getByRole('searchbox', { name: 'Search charts' }).fill('e2e-no-such-chart');
+  await expect(dialog).toContainText('no configured repository offers a chart by that name', {
+    timeout: 60_000,
+  });
+  await expect(dialog.locator('ul')).toHaveCount(0);
+});
+
+test('an install preview stays disabled until the release and namespace are named', async ({
+  page,
+}) => {
+  await openView(page, 'helm');
+  await page.getByRole('button', { name: 'Install chart' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Install a chart' });
+  await dialog.getByRole('searchbox', { name: 'Search charts' }).fill('spinoza');
+  const chart = dialog.getByRole('button', {
+    name: `spinoza-e2e ${NEXT_VERSION} from ${REPO_NAME}`,
+  });
+  await expect(chart).toBeVisible({ timeout: 60_000 });
+  await chart.click();
+  const preview = dialog.getByRole('button', { name: 'Preview', exact: true });
+  const release = dialog.getByLabel('Release name');
+  const namespace = dialog.getByLabel('Namespace', { exact: true });
+  await release.fill('');
+  await namespace.fill('');
+  await expect(preview).toBeDisabled({ timeout: 60_000 });
+  await release.fill('e2e-preview-only');
+  await expect(preview).toBeDisabled();
+  await namespace.fill(NAMESPACE);
+  await expect(preview).toBeEnabled({ timeout: 60_000 });
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toBeHidden();
 });
 
 test('the upgrade dialog offers the version the repo carries, not the one installed', async ({
@@ -226,6 +298,19 @@ test('the upgrade dialog offers the version the repo carries, not the one instal
     timeout: 60_000,
   });
   await expect(dialog).toContainText('from 0.1.0');
+});
+
+test('closing an upgrade leaves the installed chart and revision untouched', async ({ page }) => {
+  const before = helm(['list', '--namespace', NAMESPACE, '--filter', RELEASE, '-o', 'json']);
+  await openRelease(page);
+  await panel(page).getByRole('button', { name: 'Upgrade', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: `Upgrade ${RELEASE}` });
+  await expect(dialog.getByRole('combobox', { name: 'Chart version' })).toBeVisible({
+    timeout: 60_000,
+  });
+  await dialog.getByRole('button', { name: 'Close the upgrade dialog' }).click();
+  await expect(dialog).toBeHidden();
+  expect(helm(['list', '--namespace', NAMESPACE, '--filter', RELEASE, '-o', 'json'])).toBe(before);
 });
 
 test('an upgrade renders the manifest it would apply before applying it', async ({ page }) => {
@@ -265,8 +350,6 @@ test('going through with the upgrade moves the release onto the new chart', asyn
   await preview.click();
   await previewed(dialog);
   await dialog.getByRole('button', { name: `Upgrade to ${NEXT_VERSION}` }).click();
-  const confirm = dialog.getByRole('button', { name: 'Confirm', exact: true });
-  await confirm.first().click({ timeout: 5_000 }).catch(() => undefined);
 
   await expect
     .poll(
