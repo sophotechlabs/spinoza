@@ -38,10 +38,10 @@ func TestCancelledBrowserSwitchRemovesItsWaiterAndKeepsTheWindowVisible(t *testi
 
 	moved := decodeSwitch(t, recorder.Body.Bytes())
 	if moved.Switched || !strings.Contains(moved.Reason, "browser") {
-		t.Fatalf("switch = %+v, want the cancelled switch reported", moved)
+		t.Fatalf("switch = %+v, want the canceled switch reported", moved)
 	}
 	if len(srv.views.waiting) != 0 {
-		t.Fatalf("waiters = %d, want the cancelled request removed", len(srv.views.waiting))
+		t.Fatalf("waiters = %d, want the canceled request removed", len(srv.views.waiting))
 	}
 	_, hidden := window.counts()
 	if hidden != 0 {

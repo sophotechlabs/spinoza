@@ -10,14 +10,14 @@ import (
 func TestRetirementDoesNotCancelAStreamThatBecameBusy(t *testing.T) {
 	gvr := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 	key := streamKey{gvr: gvr}
-	cancelled := false
-	st := &stream{gvr: gvr, refs: 1, cancel: func() { cancelled = true }}
+	canceled := false
+	st := &stream{gvr: gvr, refs: 1, cancel: func() { canceled = true }}
 	mgr := &Manager{streams: map[streamKey]*stream{key: st}}
 
 	mgr.retire(key, st)
 
-	if cancelled {
-		t.Fatal("a stream with a new subscriber was cancelled by its old idle timer")
+	if canceled {
+		t.Fatal("a stream with a new subscriber was canceled by its old idle timer")
 	}
 	if got := mgr.streams[key]; got != st {
 		t.Fatalf("stream = %p, want the busy stream %p retained", got, st)
