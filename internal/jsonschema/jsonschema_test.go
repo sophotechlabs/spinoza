@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -158,6 +160,69 @@ func TestAStalledFetchDoesNotWedgeTheCacheItself(t *testing.T) {
 	close(blocked.release)
 	if err := <-done; err != nil {
 		t.Fatalf("for: %v", err)
+	}
+}
+
+func TestRefreshDoesNotWaitForOrKeepAStaleFetch(t *testing.T) {
+	oldDoc := strings.Replace(docFor("Pod"), "io.k8s.api.core.v1.Pod", "old.Pod", 1)
+	newDoc := strings.Replace(docFor("Pod"), "io.k8s.api.core.v1.Pod", "new.Pod", 1)
+	blocked := newBlockingClient(oldDoc, "api/v1")
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() { close(blocked.release) })
+	}
+	t.Cleanup(release)
+	var sourceMu sync.Mutex
+	var current openapi.Client = blocked
+	client := NewClient(func() openapi.Client {
+		sourceMu.Lock()
+		defer sourceMu.Unlock()
+		return current
+	})
+	oldDone := make(chan error, 1)
+	go func() {
+		_, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+		oldDone <- err
+	}()
+	<-blocked.entered
+
+	sourceMu.Lock()
+	current = &fakeClient{paths: map[string]openapi.GroupVersion{
+		"api/v1": fakeGroupVersion{doc: newDoc},
+	}}
+	sourceMu.Unlock()
+	client.Refresh()
+	type result struct {
+		raw json.RawMessage
+		err error
+	}
+	freshDone := make(chan result, 1)
+	go func() {
+		raw, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+		freshDone <- result{raw: raw, err: err}
+	}()
+
+	select {
+	case fresh := <-freshDone:
+		if fresh.err != nil {
+			t.Fatalf("fresh schema: %v", fresh.err)
+		}
+		if decode(t, fresh.raw)["$ref"] != "#/definitions/new.Pod" {
+			t.Fatalf("fresh schema = %s, want the post-refresh document", fresh.raw)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("a refresh kept waiting for the fetch it was meant to invalidate")
+	}
+	release()
+	if err := <-oldDone; err != nil {
+		t.Fatalf("stale schema: %v", err)
+	}
+	kept, err := client.For(context.Background(), GVK{Version: "v1", Kind: "Pod"})
+	if err != nil {
+		t.Fatalf("kept schema: %v", err)
+	}
+	if decode(t, kept)["$ref"] != "#/definitions/new.Pod" {
+		t.Fatalf("kept schema = %s, want the stale fetch discarded", kept)
 	}
 }
 

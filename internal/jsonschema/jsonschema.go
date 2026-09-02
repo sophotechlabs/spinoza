@@ -39,18 +39,20 @@ const fetchTimeout = 30 * time.Second
 var ErrNoSchema = errors.New("this kind has no schema")
 
 type fetch struct {
-	done    chan struct{}
-	schemas map[string]map[string]any
-	err     error
+	done       chan struct{}
+	schemas    map[string]map[string]any
+	err        error
+	generation uint64
 }
 
 type Client struct {
-	source  Source
-	timeout time.Duration
-	mu      sync.Mutex
-	docs    map[string]map[string]map[string]any
-	cache   map[GVK]json.RawMessage
-	pending map[string]*fetch
+	source     Source
+	timeout    time.Duration
+	mu         sync.Mutex
+	docs       map[string]map[string]map[string]any
+	cache      map[GVK]json.RawMessage
+	pending    map[string]*fetch
+	generation uint64
 }
 
 func NewClient(source Source) *Client {
@@ -66,8 +68,10 @@ func NewClient(source Source) *Client {
 func (c *Client) Refresh() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.generation++
 	c.docs = map[string]map[string]map[string]any{}
 	c.cache = map[GVK]json.RawMessage{}
+	c.pending = map[string]*fetch{}
 }
 
 func (c *Client) cached(gvk GVK) (json.RawMessage, bool) {
@@ -77,13 +81,23 @@ func (c *Client) cached(gvk GVK) (json.RawMessage, bool) {
 	return raw, ok
 }
 
-func (c *Client) keep(gvk GVK, raw json.RawMessage) {
+func (c *Client) keep(gvk GVK, raw json.RawMessage, generation uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if generation != c.generation {
+		return
+	}
 	c.cache[gvk] = raw
 }
 
+func (c *Client) version() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.generation
+}
+
 func (c *Client) For(ctx context.Context, gvk GVK) (json.RawMessage, error) {
+	generation := c.version()
 	hit, ok := c.cached(gvk)
 	if ok {
 		return hit, nil
@@ -103,7 +117,7 @@ func (c *Client) For(ctx context.Context, gvk GVK) (json.RawMessage, error) {
 	if marshalErr != nil {
 		return nil, fmt.Errorf("marshal schema: %w", marshalErr)
 	}
-	c.keep(gvk, raw)
+	c.keep(gvk, raw, generation)
 	return raw, nil
 }
 
@@ -128,7 +142,7 @@ func (c *Client) claim(path string) (*fetch, *fetch) {
 	if busy {
 		return nil, running
 	}
-	leader := &fetch{done: make(chan struct{})}
+	leader := &fetch{done: make(chan struct{}), generation: c.generation}
 	c.pending[path] = leader
 	return leader, nil
 }
@@ -141,9 +155,11 @@ func closedChan() chan struct{} {
 
 func (c *Client) settle(path string, leader *fetch, schemas map[string]map[string]any, err error) {
 	c.mu.Lock()
-	delete(c.pending, path)
-	if err == nil {
-		c.docs[path] = schemas
+	if c.pending[path] == leader {
+		delete(c.pending, path)
+		if err == nil && leader.generation == c.generation {
+			c.docs[path] = schemas
+		}
 	}
 	c.mu.Unlock()
 
