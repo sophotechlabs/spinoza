@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -36,7 +37,10 @@ func New(ctx context.Context, cfg Config) (*Authenticator, error) {
 	}
 	secret := cfg.SessionSecret
 	if len(secret) == 0 {
-		secret = NewSecret()
+		secret, err = secretFrom(rand.Reader)
+		if err != nil {
+			return nil, err
+		}
 		slog.Warn("no session secret was given, so a new one was generated; every login ends when spinoza restarts")
 	}
 	auth := &Authenticator{

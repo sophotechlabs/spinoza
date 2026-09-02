@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -48,9 +50,19 @@ func newSessions(secret []byte, ttl, maxAge time.Duration, secure bool) *session
 }
 
 func NewSecret() []byte {
-	secret := make([]byte, 32)
-	_, _ = rand.Read(secret)
+	secret, err := secretFrom(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
 	return secret
+}
+
+func secretFrom(source io.Reader) ([]byte, error) {
+	secret := make([]byte, 32)
+	if _, err := io.ReadFull(source, secret); err != nil {
+		return nil, fmt.Errorf("generate session secret: %w", err)
+	}
+	return secret, nil
 }
 
 func newSessionID() string {

@@ -1,12 +1,30 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+type failedRandom struct{}
+
+func (failedRandom) Read([]byte) (int, error) {
+	return 0, errors.New("entropy source failed")
+}
+
+func TestASecretGenerationFailureIsNotTurnedIntoAWeakKey(t *testing.T) {
+	secret, err := secretFrom(failedRandom{})
+
+	if secret != nil {
+		t.Fatalf("secret = %x, want none", secret)
+	}
+	if err == nil || !strings.Contains(err.Error(), "entropy source failed") {
+		t.Fatalf("error = %v, want the entropy failure", err)
+	}
+}
 
 func testSessions(t *testing.T, secure bool) *sessions {
 	t.Helper()
