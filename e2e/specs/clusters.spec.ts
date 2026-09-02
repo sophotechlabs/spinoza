@@ -98,10 +98,10 @@ test('one cluster is open, and it is the one spinoza was pointed at', async ({ p
 
 test('the picker names the cluster and the file it came from', async ({ page }) => {
   await openHome(page);
-  await page.locator('header').getByRole('group').first().click();
-  const picker = page.locator('header').getByRole('group').first();
+  const picker = page.getByLabel('Kubernetes context');
   await expect(picker).toContainText(CONTEXT, { timeout: 30_000 });
-  await expect(picker.getByRole('button', { name: 'Manage kubeconfigs' })).toBeVisible();
+  await picker.click();
+  await expect(page.getByRole('button', { name: 'Manage kubeconfigs', exact: true })).toBeVisible();
 });
 
 test('a second kubeconfig puts its context in the picker', async ({ page }) => {
