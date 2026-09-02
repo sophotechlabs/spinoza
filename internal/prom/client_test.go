@@ -312,6 +312,20 @@ func TestDecodeRangeSkipsMalformedPoints(t *testing.T) {
 	}
 }
 
+func TestDecodeRangeSkipsNonfinitePoints(t *testing.T) {
+	raw := `{"status":"success","data":{"result":[{"values":[
+	  [1,"NaN"], [2,"+Inf"], [3,"-Inf"], [4,"2.0"]
+	]}]}}`
+
+	points, err := decodeRange([]byte(raw))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(points) != 1 || points[0].Value != 2 {
+		t.Fatalf("points = %+v, want only the finite sample", points)
+	}
+}
+
 func TestParseSpan(t *testing.T) {
 	got, err := ParseSpan("")
 	if err != nil || got != DefaultSpan {

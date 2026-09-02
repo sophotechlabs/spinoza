@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -418,6 +419,9 @@ func pointOf(pair []any) (api.MetricPoint, bool) {
 	}
 	value, err := strconv.ParseFloat(text, 64)
 	if err != nil {
+		return api.MetricPoint{}, false
+	}
+	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return api.MetricPoint{}, false
 	}
 	return api.MetricPoint{At: int64(at), Value: value}, true
