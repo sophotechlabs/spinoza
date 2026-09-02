@@ -9,6 +9,8 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+
+	"github.com/sophotechlabs/spinoza/internal/atomicfile"
 )
 
 const (
@@ -58,11 +60,15 @@ func writeToolKubeconfig(dir, host string) (string, error) {
 	if marshalErr != nil {
 		return "", fmt.Errorf("in-cluster kubeconfig: %w", marshalErr)
 	}
-	if mkErr := os.MkdirAll(filepath.Join(dir, kubeconfigDir), 0o700); mkErr != nil {
+	parent := filepath.Join(dir, kubeconfigDir)
+	if mkErr := os.MkdirAll(parent, 0o700); mkErr != nil {
 		return "", fmt.Errorf("in-cluster kubeconfig: %w", mkErr)
 	}
-	path := filepath.Join(dir, kubeconfigDir, kubeconfigFile)
-	if writeErr := os.WriteFile(path, body, 0o600); writeErr != nil {
+	if chmodErr := os.Chmod(parent, 0o700); chmodErr != nil {
+		return "", fmt.Errorf("in-cluster kubeconfig: %w", chmodErr)
+	}
+	path := filepath.Join(parent, kubeconfigFile)
+	if writeErr := atomicfile.Save(path, "in-cluster-*.kubeconfig", body); writeErr != nil {
 		return "", fmt.Errorf("in-cluster kubeconfig: %w", writeErr)
 	}
 	return path, nil

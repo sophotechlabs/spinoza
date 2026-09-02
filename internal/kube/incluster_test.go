@@ -70,6 +70,45 @@ func TestTheKubeconfigHelmAndKubectlReadIsTheOnDiskShape(t *testing.T) {
 	}
 }
 
+func TestAnExistingKubeconfigAndDirectoryAreMadePrivate(t *testing.T) {
+	dir := t.TempDir()
+	parent := filepath.Join(dir, kubeconfigDir)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	target := filepath.Join(parent, kubeconfigFile)
+	if err := os.WriteFile(target, []byte("old"), 0o600); err != nil {
+		t.Fatalf("write old kubeconfig: %v", err)
+	}
+	makeFileReadableByOthers(t, target)
+
+	if _, err := writeToolKubeconfig(dir, "https://10.96.0.1:443"); err != nil {
+		t.Fatalf("write kubeconfig: %v", err)
+	}
+	parentInfo, err := os.Stat(parent)
+	if err != nil {
+		t.Fatalf("stat parent: %v", err)
+	}
+	if parentInfo.Mode().Perm() != 0o700 {
+		t.Fatalf("directory mode = %v, want 0700", parentInfo.Mode().Perm())
+	}
+	fileInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("stat kubeconfig: %v", err)
+	}
+	if fileInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("kubeconfig mode = %v, want 0600", fileInfo.Mode().Perm())
+	}
+}
+
+func makeFileReadableByOthers(t *testing.T, path string) {
+	t.Helper()
+	mode := os.FileMode(0o644)
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatalf("make file readable by others: %v", err)
+	}
+}
+
 func TestWritingTheToolKubeconfigReportsAnUnusableParent(t *testing.T) {
 	dir := t.TempDir()
 	parent := filepath.Join(dir, kubeconfigDir)
