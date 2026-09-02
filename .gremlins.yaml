@@ -2,9 +2,6 @@ unleash:
   workers: 1
   test-cpu: 1
   timeout-coefficient: 5
-  threshold:
-    efficacy: 100
-    mutant-coverage: 100
 
 mutants:
   arithmetic-base:

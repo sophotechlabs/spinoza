@@ -502,6 +502,7 @@ mutation mode='default' output='dist/mutation/default.json': stub-assets
         exit 1
     fi
     gremlins "${args[@]}"
+    scripts/check-mutation-report.sh "$output"
 
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml
