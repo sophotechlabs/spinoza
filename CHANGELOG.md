@@ -1,5 +1,66 @@
 # Changelog
 
+## [1.27.2](https://github.com/sophotechlabs/spinoza/compare/v1.27.1...v1.27.2) (2026-09-02)
+
+
+### Bug Fixes
+
+* **access:** distinguish group lists in cache keys ([6afe352](https://github.com/sophotechlabs/spinoza/commit/6afe352e94bcf4d5c5de03491d5293ccd46a2b14))
+* **actions:** harden cron triggers and drain failures ([2e86cc6](https://github.com/sophotechlabs/spinoza/commit/2e86cc666e79319f864b7355656b4f6c68d597b6))
+* **auth:** enforce login flow expiry ([6d4c248](https://github.com/sophotechlabs/spinoza/commit/6d4c248f5ded8c145fdc6b4ecfb5e7612d44cd66))
+* **auth:** fail closed when secret generation fails ([c60f816](https://github.com/sophotechlabs/spinoza/commit/c60f8161bf7ee40dc4ed1412f226437b3710333b))
+* **cluster:** cancel stalled opens on shutdown ([85d1215](https://github.com/sophotechlabs/spinoza/commit/85d12155822099de3983ac9a93f7cb7295603753))
+* **clusters:** bound terminal teardown ([36d5412](https://github.com/sophotechlabs/spinoza/commit/36d54123cf36e8a12270d915b4c7226e851e0264))
+* **clusters:** snapshot context protection atomically ([bef96fb](https://github.com/sophotechlabs/spinoza/commit/bef96fbcd8130f64a1ff59e0394ee545fdbd4363))
+* **config:** validate cluster resource limits ([2c1aed4](https://github.com/sophotechlabs/spinoza/commit/2c1aed4423108ba6de642f1c11f780293e9e3fe3))
+* **e2e:** prepare cluster-mode assets ([7e80f72](https://github.com/sophotechlabs/spinoza/commit/7e80f7211ac3e88f1d45d134b93502d353c4e764))
+* **frontend:** apply namespace start to active cluster ([3925a75](https://github.com/sophotechlabs/spinoza/commit/3925a75a462fae9288d1e9b268c01ddb340dd49c))
+* **frontend:** scope namespace results to active cluster ([492b32c](https://github.com/sophotechlabs/spinoza/commit/492b32c6c9a90702b3bbc117680283cb24d1b618))
+* **inspect:** expose only forwardable TCP ports ([d47318d](https://github.com/sophotechlabs/spinoza/commit/d47318d8f1a55f6866245d380acfb8ce8326564e))
+* **kube:** suppress warning overflow floods ([f495def](https://github.com/sophotechlabs/spinoza/commit/f495defba13478f34da48d9c9ebd53bd621a72ea))
+* **listerr:** bound and deduplicate list failures ([3e625e9](https://github.com/sophotechlabs/spinoza/commit/3e625e9a6f1d032d3c645c697b46edb23fc74f41))
+* **logs:** follow recreated pod generations ([3ee88ce](https://github.com/sophotechlabs/spinoza/commit/3ee88ceae44ce862c41831a820643944879bd559))
+* **logs:** surface merged stream failures ([8f0f0ec](https://github.com/sophotechlabs/spinoza/commit/8f0f0ec7174659475a52d0acba37c1b385aa266c))
+* **mcp:** contain handler panics and bound result limits ([5df0af8](https://github.com/sophotechlabs/spinoza/commit/5df0af84946da846b38f12002f8814f8b465128f))
+* **portforward:** bound startup lifecycle and validate ports ([4e3a10b](https://github.com/sophotechlabs/spinoza/commit/4e3a10bc5d93cb4a96ca5ad4fa19747216b035ba))
+* **prometheus:** bound proxy response bodies ([5ad67e9](https://github.com/sophotechlabs/spinoza/commit/5ad67e92e71ba849a09f00bd453098c75a0f808c))
+* **prometheus:** use clear network alias ([8532fcd](https://github.com/sophotechlabs/spinoza/commit/8532fcd8c237ac87e1b42280cbbd82fe2de4b5d5))
+* **readers:** report recovered partial failures ([54608e2](https://github.com/sophotechlabs/spinoza/commit/54608e27aba50d955782fcbc766c5b737e701a94))
+* **samples:** enforce the remembered pod limit ([3a751f0](https://github.com/sophotechlabs/spinoza/commit/3a751f065522de7ffe3f6aa6529d9bc55ae6c807))
+* **schema:** discard stale fetches after refresh ([6221b79](https://github.com/sophotechlabs/spinoza/commit/6221b79ed384e77830e1cb4c21d7d2ff9e05ed9d))
+* **server:** harden asynchronous lifecycle handling ([4249758](https://github.com/sophotechlabs/spinoza/commit/42497584c31a3fef247321c5942caaa093d20be6))
+* **toolpath:** bound login shell PATH output ([782dede](https://github.com/sophotechlabs/spinoza/commit/782dedec568a151bf712877e2465c73a57d56095))
+
+
+### Tests
+
+* **auth:** cover session sealing failures ([3831018](https://github.com/sophotechlabs/spinoza/commit/38310189234eb37d099d29f2319cdd79f4cf37be))
+* **charts:** reject reserved repository addresses ([c54047d](https://github.com/sophotechlabs/spinoza/commit/c54047d27913cac140dbe13df49efb4c3ee3f389))
+* **e2e:** cover traffic graph semantics ([a580b7a](https://github.com/sophotechlabs/spinoza/commit/a580b7ab6f74e1c6475ffca9d65d042eba145d80))
+* **frontend:** cover stale asynchronous results ([61bdb40](https://github.com/sophotechlabs/spinoza/commit/61bdb40d2cb83fc3e7e4584f3cedda268189bd8a))
+* **go:** satisfy backend lint checks ([f040a3e](https://github.com/sophotechlabs/spinoza/commit/f040a3eda281f09722944d7c97d00df9bda8739b))
+* **helm:** preserve chart name ranking ([2129492](https://github.com/sophotechlabs/spinoza/commit/2129492ce52d4a7154636f5728b008422244bfa8))
+* **inspect:** skip malformed ConfigMap data ([0efc84e](https://github.com/sophotechlabs/spinoza/commit/0efc84ee9bd911bc09be88d944dfa4ade1ee4bb5))
+* **portforward:** cover runner lifecycle boundaries ([85c7d75](https://github.com/sophotechlabs/spinoza/commit/85c7d7557170239a18a7178868c8eccd89606222))
+* **portforward:** cover start cancellation boundaries ([0e4cfec](https://github.com/sophotechlabs/spinoza/commit/0e4cfecf6d66456cfdf1a5a7478aefcafcc8210e))
+* **prometheus:** cover proxy failure boundaries ([03bf359](https://github.com/sophotechlabs/spinoza/commit/03bf359a373ce26ae027fdb13fcfbfe70b4582a9))
+* **resources:** cover canceled shared count waiters ([c125cdb](https://github.com/sophotechlabs/spinoza/commit/c125cdb446b36c9c205e2cb9021ce9adf1353b36))
+* **resources:** register Flux list fixture ([e8f4172](https://github.com/sophotechlabs/spinoza/commit/e8f417295624f278791105fc1300056a20f0b1bb))
+* **server:** cover authorization check defaults ([cb24c44](https://github.com/sophotechlabs/spinoza/commit/cb24c443ade7c627a23ddbd0da91ffacdc1ae709))
+* **server:** cover closed exec writers ([5565e31](https://github.com/sophotechlabs/spinoza/commit/5565e31b6d2693a793038ab3bcb9b72afba73a91))
+* **server:** cover feed failure boundaries ([c5fae4a](https://github.com/sophotechlabs/spinoza/commit/c5fae4a602e926b9cc5ccab0547156f7036890f4))
+* **server:** cover fleet check close race ([14ccf1c](https://github.com/sophotechlabs/spinoza/commit/14ccf1cdcf49ac605ea9ffb5c9ae29ff057e263f))
+* **server:** cover history ordering ties ([d192c59](https://github.com/sophotechlabs/spinoza/commit/d192c5969feea734b1b439348fa6b5161b246568))
+* **server:** cover node shell cleanup rejection ([524d016](https://github.com/sophotechlabs/spinoza/commit/524d016d096c3ac618ad5309e9a0e19c63fa82e1))
+* **server:** cover stale log relay output ([f05a435](https://github.com/sophotechlabs/spinoza/commit/f05a4358567fa569d1991793626240e05b3001f6))
+* **server:** cover stale resource relay output ([5df8fde](https://github.com/sophotechlabs/spinoza/commit/5df8fdeaecfc93a58d288d8c5138217a4a685c04))
+* **server:** cover timeline overload boundaries ([212d8ab](https://github.com/sophotechlabs/spinoza/commit/212d8ab1c875b4ce04b5edea6b038a4cfd40df45))
+* **server:** ignore late closed cluster health ([1b68905](https://github.com/sophotechlabs/spinoza/commit/1b6890578e6fc0835d06f1e59e49dd17b9859b3f))
+* **server:** keep valid live authentication ([5dbd5ea](https://github.com/sophotechlabs/spinoza/commit/5dbd5ea4ef1199be19cb119d568d68940c277c25))
+* **server:** reject invalid fleet cursor encoding ([532b8fe](https://github.com/sophotechlabs/spinoza/commit/532b8fef24135bd28947b12cfe4349e05c61debe))
+* **server:** stop idle health watchers ([4d9ee57](https://github.com/sophotechlabs/spinoza/commit/4d9ee57dc381013e93fbc7998fcabafeca10ae6c))
+* use canonical canceled spelling ([0538875](https://github.com/sophotechlabs/spinoza/commit/05388752689fde779e4930e629d59a2f9660fa1d))
+
 ## [1.27.1](https://github.com/sophotechlabs/spinoza/compare/v1.27.0...v1.27.1) (2026-09-02)
 
 
