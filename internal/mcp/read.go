@@ -24,6 +24,7 @@ const (
 	defaultRows    = 100
 	defaultTop     = 20
 	defaultTailFor = 200
+	maxRows        = 1000
 )
 
 func (s *Server) registerReads() {
@@ -254,7 +255,7 @@ func (s *Server) listResources(ctx context.Context, args arguments) (any, error)
 	if err != nil {
 		return nil, err
 	}
-	limit := args.number(argLimit, defaultRows)
+	limit := args.limit(argLimit, defaultRows)
 	rows := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		if ref.Namespace != "" && item.GetNamespace() != ref.Namespace {
@@ -335,7 +336,7 @@ func (s *Server) events(ctx context.Context, args arguments) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"events": dedupeEvents(found, args.number(argLimit, defaultRows))}, nil
+	return map[string]any{"events": dedupeEvents(found, args.limit(argLimit, defaultRows))}, nil
 }
 
 func dedupeEvents(found []api.Event, limit int) []map[string]any {
@@ -499,7 +500,7 @@ func (s *Server) top(ctx context.Context, args arguments) (any, error) {
 		}
 		return cmp.Compare(right.CPU, left.CPU)
 	})
-	limit := args.number(argLimit, defaultTop)
+	limit := args.limit(argLimit, defaultTop)
 	if len(rows) > limit {
 		rows = rows[:limit]
 	}
@@ -555,7 +556,7 @@ func (s *Server) audit(ctx context.Context, args arguments) (any, error) {
 	report := s.cluster.Checks(ctx, checks.Filter{WholeCluster: args.text("scope") != "workloads"})
 	severity := args.text("severity")
 	only := args.text("check")
-	limit := args.number(argLimit, defaultRows)
+	limit := args.limit(argLimit, defaultRows)
 	rows := []map[string]any{}
 	for _, group := range report.Groups {
 		if only != "" && group.ID != only {
@@ -591,7 +592,7 @@ func objectAt(report api.CheckReport, ref int) any {
 
 func (s *Server) issues(ctx context.Context, args arguments) (any, error) {
 	queue := s.cluster.Issues(ctx)
-	return map[string]any{"rows": issueRows(queue, args.number(argLimit, defaultRows)), keyError: queue.Error}, nil
+	return map[string]any{"rows": issueRows(queue, args.limit(argLimit, defaultRows)), keyError: queue.Error}, nil
 }
 
 func issueRows(queue api.IssueQueue, limit int) []map[string]any {

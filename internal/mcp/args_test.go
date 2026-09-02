@@ -64,6 +64,20 @@ func TestReadingNumbersFallsBackRatherThanFailing(t *testing.T) {
 	}
 }
 
+func TestLimitsStayPositiveAndBounded(t *testing.T) {
+	args := arguments{"negative": float64(-1), "huge": float64(maxRows + 1), "small": float64(7)}
+
+	if got := args.limit("negative", 5); got != 5 {
+		t.Fatalf("negative limit = %d, want fallback 5", got)
+	}
+	if got := args.limit("huge", 5); got != maxRows {
+		t.Fatalf("huge limit = %d, want cap %d", got, maxRows)
+	}
+	if got := args.limit("small", 5); got != 7 {
+		t.Fatalf("small limit = %d, want 7", got)
+	}
+}
+
 func TestReadingFlags(t *testing.T) {
 	args := arguments{"a": true, "b": "true", "c": "yes", "d": float64(1)}
 

@@ -366,6 +366,16 @@ func TestEventsAreCapped(t *testing.T) {
 	}
 }
 
+func TestANegativeEventLimitFallsBackWithoutPanicking(t *testing.T) {
+	server := serverFor(&fakeCluster{events: []api.Event{{Reason: "Failed", Message: "one"}}}, Options{})
+
+	rows := as[[]map[string]any](t, run(t, server, "get_events", arguments{"limit": float64(-1)})["events"])
+
+	if len(rows) != 1 {
+		t.Fatalf("events = %d, want the default limit to keep the event", len(rows))
+	}
+}
+
 func TestEventsPassTheRefusalBack(t *testing.T) {
 	server := serverFor(&fakeCluster{eventsErr: errRefused}, Options{})
 

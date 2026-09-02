@@ -623,6 +623,30 @@ type blockingCluster struct {
 	entered chan struct{}
 }
 
+type panickingCluster struct {
+	*fakeCluster
+}
+
+func (p *panickingCluster) Namespaces(context.Context) api.Namespaces {
+	panic("broken namespace reader")
+}
+
+func TestStdioTurnsAHandlerPanicIntoAnInternalError(t *testing.T) {
+	server := serverFor(&panickingCluster{fakeCluster: &fakeCluster{}}, Options{})
+	var out bytes.Buffer
+
+	err := server.Serve(context.Background(), strings.NewReader(namespaceRequests(1)), &out)
+	if err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+	if !strings.Contains(out.String(), `"id":1`) {
+		t.Fatalf("reply = %s, want the request id", out.String())
+	}
+	if !strings.Contains(out.String(), `"code":-32603`) {
+		t.Fatalf("reply = %s, want an internal error", out.String())
+	}
+}
+
 func (b *blockingCluster) Namespaces(context.Context) api.Namespaces {
 	if b.entered != nil {
 		b.entered <- struct{}{}

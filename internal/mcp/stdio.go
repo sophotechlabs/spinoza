@@ -3,9 +3,12 @@ package mcp
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"sync"
+
+	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
 const (
@@ -53,15 +56,15 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 		if len(line) > 0 {
 			running.Add(1)
 			slots <- struct{}{}
-			go func() {
+			safe.Go("serving an MCP request", func() {
 				defer running.Done()
 				defer func() { <-slots }()
-				reply := s.answer(ctx, line)
+				reply := s.answerSafely(ctx, line)
 				if reply == nil {
 					return
 				}
 				sink.send(reply)
-			}()
+			})
 		}
 		if err != nil {
 			running.Wait()
@@ -75,6 +78,23 @@ func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 			return sink.err()
 		}
 	}
+}
+
+func (s *Server) answerSafely(ctx context.Context, line []byte) (reply []byte) {
+	defer func() {
+		caught := recover()
+		if caught == nil {
+			return
+		}
+		safe.Log("answering an MCP request", caught)
+		var call request
+		if json.Unmarshal(line, &call) != nil || len(call.ID) == 0 {
+			reply = nil
+			return
+		}
+		reply = encode(refuse(call.ID, codeInternal, "spinoza could not finish the request"))
+	}()
+	return s.answer(ctx, line)
 }
 
 func (s *Server) answer(ctx context.Context, line []byte) []byte {

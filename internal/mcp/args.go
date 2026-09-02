@@ -70,6 +70,17 @@ func (a arguments) number(key string, fallback int) int {
 	}
 }
 
+func (a arguments) limit(key string, fallback int) int {
+	found := a.number(key, fallback)
+	if found <= 0 {
+		return fallback
+	}
+	if found > maxRows {
+		return maxRows
+	}
+	return found
+}
+
 func (a arguments) count(key string) (int64, error) {
 	raw, held := a[key]
 	if !held {
