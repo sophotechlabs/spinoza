@@ -73,10 +73,13 @@ func kindsNamed(name string) ([]resources.Kind, bool) {
 
 type recording struct {
 	into    store.Noter
+	backend Backend
 	prune   func(ctx context.Context)
 	queue   chan store.Change
 	stop    chan struct{}
 	stopped chan struct{}
+	started chan struct{}
+	cancel  context.CancelFunc
 	once    sync.Once
 	dropped atomic.Int64
 	written int
@@ -173,7 +176,36 @@ func (t *recording) write(ctx context.Context, batch []store.Change) {
 }
 
 func (t *recording) close() {
+	t.cancelStart()
+	t.waitForStart()
+	t.stopBackend()
+	t.requestStop()
+	t.waitForStop()
+}
+
+func (t *recording) cancelStart() {
+	if t.cancel != nil {
+		t.cancel()
+	}
+}
+
+func (t *recording) waitForStart() {
+	if t.started != nil {
+		<-t.started
+	}
+}
+
+func (t *recording) stopBackend() {
+	if t.backend != nil {
+		t.backend.StopRecording()
+	}
+}
+
+func (t *recording) requestStop() {
 	t.once.Do(func() { close(t.stop) })
+}
+
+func (t *recording) waitForStop() {
 	<-t.stopped
 }
 
@@ -209,14 +241,9 @@ func (s *Server) keepDays() int {
 }
 
 func (s *Server) startRecording(ctx context.Context, id, name string) {
-	s.tapeMu.Lock()
-	defer s.tapeMu.Unlock()
-	if s.tapingClosed {
-		return
-	}
 	kinds, ok := kindsNamed(name)
 	if !ok {
-		s.stopRecordingLocked(id)
+		s.stopRecording(id)
 		return
 	}
 	past := s.recorder()
@@ -224,22 +251,34 @@ func (s *Server) startRecording(ctx context.Context, id, name string) {
 	if past == nil || backend == nil {
 		return
 	}
+	outlives := auth.AsServer(context.WithoutCancel(ctx))
+	starting, cancel := context.WithCancel(outlives)
 	held := &recording{
 		into:    past.Timeline(id),
+		backend: backend,
 		queue:   make(chan store.Change, timelineQueue),
 		stop:    make(chan struct{}),
 		stopped: make(chan struct{}),
+		started: make(chan struct{}),
+		cancel:  cancel,
 	}
 	held.prune = func(pruning context.Context) {
 		s.pruneTimeline(pruning)
 	}
-	kept := auth.AsServer(context.WithoutCancel(ctx))
-	go held.run(kept)
-	backend.Record(kept, held, kinds)
+	s.tapeMu.Lock()
+	if s.tapingClosed {
+		s.tapeMu.Unlock()
+		cancel()
+		return
+	}
+	go held.run(outlives)
 	was := s.holdRecording(id, held)
+	s.tapeMu.Unlock()
+	defer close(held.started)
 	if was != nil {
 		was.close()
 	}
+	backend.Record(starting, held, kinds)
 }
 
 func (s *Server) pruneTimeline(ctx context.Context) {
@@ -268,27 +307,31 @@ func (s *Server) stopRecordingLocked(id string) {
 	if was == nil {
 		return
 	}
-	backend := s.managerOf(id)
-	if backend != nil {
-		backend.StopRecording()
-	}
 	was.close()
 }
 
 func (s *Server) closeRecordings() {
 	s.tapeMu.Lock()
-	defer s.tapeMu.Unlock()
 	s.tapingClosed = true
 	s.mu.Lock()
 	held := s.taping
 	s.taping = map[string]*recording{}
 	s.mu.Unlock()
-	for id, recording := range held {
-		backend := s.managerOf(id)
-		if backend != nil {
-			backend.StopRecording()
-		}
-		recording.close()
+	s.tapeMu.Unlock()
+	for _, recording := range held {
+		recording.cancelStart()
+	}
+	for _, recording := range held {
+		recording.waitForStart()
+	}
+	for _, recording := range held {
+		recording.stopBackend()
+	}
+	for _, recording := range held {
+		recording.requestStop()
+	}
+	for _, recording := range held {
+		recording.waitForStop()
 	}
 }
 

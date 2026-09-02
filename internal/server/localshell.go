@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -100,10 +101,10 @@ func (s *Server) handleLocalShell(w http.ResponseWriter, r *http.Request) {
 		cancel()
 	})
 
-	pumpLocalShell(ctx, socket, shell)
+	pumpLocalShell(ctx, socket, shell, s.stdinWait)
 }
 
-func pumpLocalShell(ctx context.Context, socket *websocket.Conn, shell LocalShell) {
+func pumpLocalShell(ctx context.Context, socket *websocket.Conn, shell LocalShell, stdinWait time.Duration) {
 	for {
 		kind, data, err := socket.Read(ctx)
 		if err != nil {
@@ -115,18 +116,38 @@ func pumpLocalShell(ctx context.Context, socket *websocket.Conn, shell LocalShel
 		if len(data) == 0 {
 			continue
 		}
-		routeLocalShell(shell, data[0], data[1:])
+		if !routeLocalShell(shell, data[0], data[1:], stdinWait) {
+			return
+		}
 	}
 }
 
-func routeLocalShell(shell LocalShell, channel byte, payload []byte) {
+func routeLocalShell(shell LocalShell, channel byte, payload []byte, stdinWait time.Duration) bool {
 	switch channel {
 	case api.ExecChannelStdin:
-		_, _ = shell.Write(payload)
+		return writeLocalStdin(shell, payload, stdinWait)
 	case api.ExecChannelResize:
 		resizeLocalShell(shell, payload)
+		return true
 	default:
-		return
+		return true
+	}
+}
+
+func writeLocalStdin(shell LocalShell, payload []byte, stdinWait time.Duration) bool {
+	done := make(chan struct{})
+	safe.Go("writing to the local shell", func() {
+		defer close(done)
+		_, _ = shell.Write(payload)
+	})
+	timer := time.NewTimer(stdinWait)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		shell.Close()
+		return false
 	}
 }
 

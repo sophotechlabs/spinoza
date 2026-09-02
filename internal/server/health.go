@@ -99,13 +99,14 @@ func (s *Server) pingEveryCluster(ctx context.Context) {
 }
 
 func (s *Server) pingOne(ctx context.Context, id string) {
+	generation := s.healthGeneration(id)
 	backend := s.managerOf(id)
 	if backend == nil {
 		return
 	}
 	bounded, cancel := context.WithTimeout(ctx, clusterPingTimeout)
 	defer cancel()
-	s.recordPingOf(id, healthOf(backend.Ping(bounded)))
+	s.recordPingOf(id, generation, healthOf(backend.Ping(bounded)))
 }
 
 func (s *Server) sinkOf(id string) *reach.Sink {
@@ -140,21 +141,31 @@ func assumedHealthOf(id string) api.ClusterHealth {
 const missesBeforeUnreachable = 3
 
 func (s *Server) recordHealthOf(id string, now api.ClusterHealth) {
+	s.recordHealthAt(id, s.healthGeneration(id), now)
+}
+
+func (s *Server) recordHealthAt(id string, generation uint64, now api.ClusterHealth) {
+	if s.managerOf(id) == nil {
+		return
+	}
 	now.Cluster = id
-	settled, changed := s.settleHealthOf(id, now)
+	settled, changed := s.settleHealthAt(id, generation, now)
 	if !changed {
 		return
 	}
 	s.announceHealthOf(id, settled)
 }
 
-func (s *Server) recordPingOf(id string, now api.ClusterHealth) {
-	s.recordHealthOf(id, now)
+func (s *Server) recordPingOf(id string, generation uint64, now api.ClusterHealth) {
+	s.recordHealthAt(id, generation, now)
 }
 
-func (s *Server) settleHealthOf(id string, seen api.ClusterHealth) (api.ClusterHealth, bool) {
+func (s *Server) settleHealthAt(id string, generation uint64, seen api.ClusterHealth) (api.ClusterHealth, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.healthGen[id] != generation {
+		return api.ClusterHealth{}, false
+	}
 	now := s.verdictHeld(id, seen)
 	was := assumedHealthOf(id)
 	held, known := s.health[id]
@@ -186,8 +197,15 @@ func (s *Server) verdictHeld(id string, now api.ClusterHealth) api.ClusterHealth
 func (s *Server) forgetHealthOf(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.healthGen[id]++
 	delete(s.health, id)
 	delete(s.misses, id)
+}
+
+func (s *Server) healthGeneration(id string) uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.healthGen[id]
 }
 
 func (s *Server) healthOfCluster(id string) api.ClusterHealth {
@@ -205,9 +223,19 @@ func (s *Server) clusterHealth() api.ClusterHealth {
 }
 
 func (s *Server) announceHealthOf(_ string, health api.ClusterHealth) {
-	for _, sess := range s.openSessions() {
-		sess.write(sess.ctx, health)
+	broadcastTo(s.openSessions(), health)
+}
+
+func broadcastTo(sessions []*wsSession, msg any) {
+	var writing sync.WaitGroup
+	for _, sess := range sessions {
+		writing.Add(1)
+		safe.Go("broadcasting a feed frame", func() {
+			defer writing.Done()
+			sess.write(sess.ctx, msg)
+		})
 	}
+	writing.Wait()
 }
 
 func (s *Server) healthOfEveryCluster() []api.ClusterHealth {

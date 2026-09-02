@@ -467,9 +467,42 @@ func (s *stubCluster) Activate(string) error {
 }
 
 func (s *stubCluster) Opened() []api.OpenCluster {
-	return []api.OpenCluster{{ID: s.ID(), Active: true, Protection: api.ProtectionUnknown}}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return []api.OpenCluster{{
+		ID:         "https://" + s.current.Name + ":6443",
+		Context:    s.current.Name,
+		Active:     true,
+		Protection: api.ProtectionUnknown,
+	}}
 }
 
 func (s *stubCluster) Close(string) error {
 	return nil
+}
+
+type splitContextCluster struct {
+	*stubCluster
+}
+
+func (s *splitContextCluster) ID() string {
+	return mk1
+}
+
+func (s *splitContextCluster) Contexts() api.ContextList {
+	return api.ContextList{Current: api.ContextRef{Name: "p-mk2"}}
+}
+
+func (s *splitContextCluster) Opened() []api.OpenCluster {
+	return []api.OpenCluster{{ID: mk1, Context: "p-mk1", Active: true}}
+}
+
+func TestAContextAnnouncementDoesNotMixTwoClusterSnapshots(t *testing.T) {
+	srv := New(&splitContextCluster{stubCluster: fixed(nil)}, testAssets(), testToken)
+
+	frame := srv.contextFrame()
+
+	if frame.Cluster != mk1 || frame.Context != "p-mk1" {
+		t.Fatalf("frame = %+v, want one active-cluster snapshot", frame)
+	}
 }

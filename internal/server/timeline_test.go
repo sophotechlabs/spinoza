@@ -24,6 +24,39 @@ type taped struct {
 	stopped int
 }
 
+type stalledTape struct {
+	taped
+
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func newStalledTape() *stalledTape {
+	return &stalledTape{entered: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (r *stalledTape) Record(ctx context.Context, into resources.Timeline, kinds []resources.Kind) {
+	r.once.Do(func() {
+		close(r.entered)
+	})
+	select {
+	case <-ctx.Done():
+		return
+	case <-r.release:
+	}
+	r.taped.Record(ctx, into, kinds)
+}
+
+func (r *stalledTape) resume() {
+	r.once.Do(func() {})
+	select {
+	case <-r.release:
+	default:
+		close(r.release)
+	}
+}
+
 func (r *taped) Record(_ context.Context, into resources.Timeline, kinds []resources.Kind) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -316,6 +349,44 @@ func TestClosingTheServerStopsAndFlushesRecordings(t *testing.T) {
 	found := held.noted()
 	if len(found) != 1 || found[0].Name != "waiting" {
 		t.Fatalf("shutdown kept changes %+v", found)
+	}
+}
+
+func TestClosingTheServerCancelsARecordingThatIsStillStarting(t *testing.T) {
+	backend := newStalledTape()
+	srv, _, _ := tapingServer(t, backend)
+	started := make(chan struct{})
+	closed := make(chan struct{})
+	var closeOnce sync.Once
+	closeServer := func() {
+		closeOnce.Do(func() {
+			go func() {
+				srv.Close()
+				close(closed)
+			}()
+		})
+	}
+	t.Cleanup(func() {
+		backend.resume()
+		closeServer()
+		<-started
+		<-closed
+	})
+	go func() {
+		srv.startRecording(t.Context(), mk1, timelineWorkloads)
+		close(started)
+	}()
+	select {
+	case <-backend.entered:
+	case <-time.After(time.Second):
+		t.Fatal("recording startup never reached the backend")
+	}
+	closeServer()
+
+	select {
+	case <-closed:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("recording startup blocked server shutdown")
 	}
 }
 

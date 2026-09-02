@@ -27,6 +27,38 @@ type stubShell struct {
 	closed  bool
 }
 
+type blockedInputShell struct {
+	*stubShell
+
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func newBlockedInputShell() *blockedInputShell {
+	return &blockedInputShell{
+		stubShell: newStubShell(),
+		entered:   make(chan struct{}),
+		release:   make(chan struct{}),
+	}
+}
+
+func (f *blockedInputShell) Write([]byte) (int, error) {
+	close(f.entered)
+	<-f.release
+	return 0, io.ErrClosedPipe
+}
+
+func (f *blockedInputShell) Close() {
+	f.stubShell.Close()
+}
+
+func (f *blockedInputShell) unblock() {
+	f.once.Do(func() {
+		close(f.release)
+	})
+}
+
 func newStubShell() *stubShell {
 	return &stubShell{out: make(chan []byte, 8), done: make(chan error, 1)}
 }
@@ -87,6 +119,12 @@ func (f *stubShell) isClosed() bool {
 
 func shellServer(t *testing.T, open LocalShellOpener) *httptest.Server {
 	t.Helper()
+	ts, _ := shellServerAndInstance(t, open)
+	return ts
+}
+
+func shellServerAndInstance(t *testing.T, open LocalShellOpener) (*httptest.Server, *Server) {
+	t.Helper()
 	mgr, _ := testManager(t)
 	srv := New(fixed(mgr), testAssets(), testToken)
 	if open != nil {
@@ -94,7 +132,7 @@ func shellServer(t *testing.T, open LocalShellOpener) *httptest.Server {
 	}
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, srv
 }
 
 func decodeLocalShell(t *testing.T, body []byte) api.LocalShell {
@@ -212,6 +250,29 @@ func TestALocalShellTakesWhatIsTyped(t *testing.T) {
 	sendShellFrame(t, conn, api.ExecChannelStdin, []byte("kubectl get pods\n"))
 
 	waitForServer(t, func() bool { return shell.typed() == "kubectl get pods\n" }, "the shell never saw the keystrokes")
+}
+
+func TestALocalShellClosesWhenItsStdinStopsTakingInput(t *testing.T) {
+	shell := newBlockedInputShell()
+	t.Cleanup(shell.unblock)
+	ts, srv := shellServerAndInstance(t, func(uint16, uint16) (LocalShell, error) {
+		return shell, nil
+	})
+	srv.stdinWait = 20 * time.Millisecond
+	conn := dialShell(t, ts, "")
+
+	sendShellFrame(t, conn, api.ExecChannelStdin, []byte("blocked"))
+	select {
+	case <-shell.entered:
+	case <-time.After(time.Second):
+		t.Fatal("the shell was never handed its input")
+	}
+	waitForServer(t, shell.isClosed, "the blocked local shell was not closed")
+	waitForServer(t, func() bool {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		return srv.live == 0
+	}, "the blocked local shell kept its connection slot")
 }
 
 func TestClosingTheTabClosesTheLocalShell(t *testing.T) {

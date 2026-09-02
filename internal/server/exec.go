@@ -31,7 +31,9 @@ var nodeShellDrain = 20 * time.Second
 
 var nodeShells shellTally
 
-var execStdinTimeout = 10 * time.Second
+const defaultStdinTimeout = 10 * time.Second
+
+var execStdinTimeout = defaultStdinTimeout
 
 func execRequest(r *http.Request) exec.Request {
 	q := r.URL.Query()

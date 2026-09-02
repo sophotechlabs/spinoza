@@ -82,6 +82,7 @@ type Server struct {
 	identityLimit int
 	profiler      bool
 	health        map[string]api.ClusterHealth
+	healthGen     map[string]uint64
 	misses        map[string]int
 	start         startRoute
 	watching      bool
@@ -97,6 +98,7 @@ type Server struct {
 	feedPingEvery time.Duration
 	feedPingWait  time.Duration
 	authEvery     time.Duration
+	stdinWait     time.Duration
 	terminalDrain time.Duration
 	authn         *auth.Authenticator
 	publicOrigin  string
@@ -118,6 +120,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		liveLimit:     defaultLiveConnectionLimit,
 		identityLimit: defaultIdentityConnectionLimit,
 		health:        map[string]api.ClusterHealth{},
+		healthGen:     map[string]uint64{},
 		misses:        map[string]int{},
 		taping:        map[string]*recording{},
 		now:           time.Now,
@@ -125,6 +128,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		feedPingEvery: defaultFeedPingInterval,
 		feedPingWait:  defaultFeedPingTimeout,
 		authEvery:     defaultAuthorizationCheckInterval,
+		stdinWait:     defaultStdinTimeout,
 		terminalDrain: defaultTerminalDrain,
 		views:         views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}

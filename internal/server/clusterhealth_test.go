@@ -173,6 +173,61 @@ func TestClosingAClusterForgetsWhatWasKnownAboutIt(t *testing.T) {
 	}
 }
 
+func TestAPingThatFinishesAfterAClusterClosesIsForgotten(t *testing.T) {
+	release := make(chan struct{})
+	backend := &pinger{
+		err:     errors.New("connection closed"),
+		entered: make(chan string, 1),
+		release: release,
+		id:      mk2,
+	}
+	srv, _ := twoClusters(t, &pinger{}, backend)
+	done := make(chan struct{})
+	go func() {
+		srv.pingOne(t.Context(), mk2)
+		close(done)
+	}()
+	select {
+	case <-backend.entered:
+	case <-time.After(time.Second):
+		t.Fatal("the ping never started")
+	}
+
+	srv.forgetHealthOf(mk2)
+	close(release)
+	<-done
+
+	health := srv.healthOfCluster(mk2)
+	if health.Wobbling || !health.Reachable {
+		t.Fatalf("late health = %+v, want the closed cluster forgotten", health)
+	}
+}
+
+func TestReopeningTheSameClusterIDReplacesItsRequestHealthWatcher(t *testing.T) {
+	first := reach.New()
+	second := reach.New()
+	srv, held := twoClusters(t, &pinger{sink: first}, &pinger{})
+	watchers := newSinkWatchers(srv)
+	t.Cleanup(watchers.stopAll)
+	watchers.follow(t.Context(), []string{mk1})
+
+	srv.forgetHealthOf(mk1)
+	held.mu.Lock()
+	held.backends[mk1] = &pinger{sink: second}
+	held.mu.Unlock()
+	watchers.follow(t.Context(), []string{mk1})
+	second.Saw(errors.New("new connection refused"))
+
+	waitForServer(t, func() bool {
+		return srv.healthOfCluster(mk1).Reason == "new connection refused"
+	}, "the reopened cluster kept the old request-health watcher")
+	first.Saw(errors.New("stale connection refused"))
+	time.Sleep(20 * time.Millisecond)
+	if reason := srv.healthOfCluster(mk1).Reason; reason != "new connection refused" {
+		t.Fatalf("reason = %q, want the reopened cluster's request", reason)
+	}
+}
+
 func TestABackgroundClustersHealthReachesTheBrowserToo(t *testing.T) {
 	srv, held := twoClusters(t, &pinger{}, &pinger{})
 	server, client := heldPair(t)
@@ -193,6 +248,40 @@ func TestABackgroundClustersHealthReachesTheBrowserToo(t *testing.T) {
 	}
 	if msg.Reason != "gone" {
 		t.Fatalf("reason = %q, want what the failing request said", msg.Reason)
+	}
+}
+
+func TestAStalledFeedDoesNotDelayAnotherFeedAnnouncement(t *testing.T) {
+	firstServer, _ := heldPair(t)
+	secondServer, secondClient := heldPair(t)
+	first := &wsSession{conn: firstServer, ctx: t.Context()}
+	second := &wsSession{conn: secondServer, ctx: t.Context()}
+	first.writeMu.Lock()
+	unlocked := false
+	defer func() {
+		if unlocked {
+			return
+		}
+		first.writeMu.Unlock()
+	}()
+	done := make(chan struct{})
+	go func() {
+		broadcastTo([]*wsSession{first, second}, answering())
+		close(done)
+	}()
+
+	readCtx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	msg := readAnyMsg(readCtx, t, secondClient)
+	if msg.Type != "cluster" {
+		t.Fatalf("type = %q, want the announcement while another feed is stalled", msg.Type)
+	}
+	first.writeMu.Unlock()
+	unlocked = true
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("the broadcast did not finish after the stalled feed resumed")
 	}
 }
 

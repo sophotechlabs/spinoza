@@ -805,18 +805,21 @@ func (s *Server) forgetExec(conn *websocket.Conn) {
 }
 
 func (s *Server) contextFrame() api.ContextChanged {
-	return api.ContextChanged{
-		Type:    "context",
-		Cluster: s.cluster.ID(),
-		Context: s.cluster.Contexts().Current.Name,
+	frame := api.ContextChanged{Type: "context"}
+	for _, one := range s.cluster.Opened() {
+		if !one.Active {
+			continue
+		}
+		frame.Cluster = one.ID
+		frame.Context = one.Context
+		break
 	}
+	return frame
 }
 
 func (s *Server) announceContext() {
 	msg := s.contextFrame()
-	for _, sess := range s.openSessions() {
-		sess.write(sess.ctx, msg)
-	}
+	broadcastTo(s.openSessions(), msg)
 }
 
 func (s *Server) dropSubscriptionsOn(cluster string) {
