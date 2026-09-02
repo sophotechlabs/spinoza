@@ -2,6 +2,7 @@ package overview
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -68,16 +69,25 @@ func Build(
 
 	var wg sync.WaitGroup
 	wg.Add(3)
-	go safe.Run("counting nodes", func() {
+	safe.Go("counting nodes", func() {
 		defer wg.Done()
+		defer func() {
+			failures.RecordPanic(nodesKey, "counting nodes", recover())
+		}()
 		out.Nodes = nodeSummary(bounded, dyn, lister, descs, failures)
 	})
-	go safe.Run("counting pod phases", func() {
+	safe.Go("counting pod phases", func() {
 		defer wg.Done()
+		defer func() {
+			failures.RecordPanic(podsKey, "counting pod phases", recover())
+		}()
 		out.Pods = podSummary(bounded, meta, descs, failures)
 	})
-	go safe.Run("collecting warnings", func() {
+	safe.Go("collecting warnings", func() {
 		defer wg.Done()
+		defer func() {
+			failures.RecordPanic(eventsKey, "collecting warnings", recover())
+		}()
 		out.Warnings, out.WarningCount = warnings(bounded, dyn, descs, failures)
 	})
 	wg.Wait()
@@ -191,15 +201,28 @@ func podSummary(
 	broken := false
 	capped := map[string]int{}
 	for _, probe := range probes {
+		what := "counting " + probe.label
+		resourceKey := podsKey + " " + probe.label
 		wg.Add(1)
-		go safe.Run("counting "+probe.label, func() {
+		safe.Go(what, func() {
 			defer wg.Done()
+			defer func() {
+				caught := recover()
+				if caught == nil {
+					return
+				}
+				safe.Log(what, caught)
+				mu.Lock()
+				failures.Record(resourceKey, errors.New("spinoza could not finish counting this pod phase"))
+				broken = true
+				mu.Unlock()
+			}()
 			bounded, cancel := context.WithTimeout(ctx, probeTimeout)
 			defer cancel()
 			got, err := podcount.Count(bounded, meta, probe.selector)
 			mu.Lock()
 			defer mu.Unlock()
-			failures.Record(podsKey+" "+probe.label, err)
+			failures.Record(resourceKey, err)
 			if err != nil {
 				broken = true
 				return

@@ -95,6 +95,19 @@ func TestSearchFindsObjectsByPartOfTheirName(t *testing.T) {
 	}
 }
 
+func TestSearchReportsAPanickingResourceReader(t *testing.T) {
+	client := fakeMeta(t)
+	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		panic("broken metadata client")
+	})
+
+	found := Search(context.Background(), client, descriptorsFor("/v1/pods"), "airbyte", CountLimits{})
+
+	if found.Errors["/v1/pods"] == "" {
+		t.Fatalf("errors = %+v, want the panicking reader named", found.Errors)
+	}
+}
+
 func TestSearchIgnoresCase(t *testing.T) {
 	client := fakeMeta(t, meta("", "v1", "Pod", "shop", "Airbyte-Worker"))
 

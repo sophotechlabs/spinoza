@@ -72,6 +72,23 @@ func TestCountReportsUnknownWhenTheListIsRefused(t *testing.T) {
 	}
 }
 
+func TestCountReportsUnknownWhenTheListPanics(t *testing.T) {
+	dyn := countClient(t)
+	dyn.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		panic("broken metadata client")
+	})
+
+	counts := Count(context.Background(), dyn, []api.ResourceDescriptor{countDesc("deployments")}, CountLimits{})
+	key := "apps/v1/deployments"
+
+	if counts.Counts[key] != countUnknown {
+		t.Fatalf("count = %d, want unknown", counts.Counts[key])
+	}
+	if counts.Errors[key] == "" {
+		t.Fatal("panicking count has no reason")
+	}
+}
+
 func TestCountCoversEveryTypeItWasGiven(t *testing.T) {
 	descs := []api.ResourceDescriptor{countDesc("deployments"), countDesc("statefulsets")}
 

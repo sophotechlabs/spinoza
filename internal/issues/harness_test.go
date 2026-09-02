@@ -27,6 +27,7 @@ type stubLister struct {
 	mu     sync.Mutex
 	items  map[string][]*unstructured.Unstructured
 	errs   map[string]error
+	panics map[string]bool
 	cached []api.ResourceDescriptor
 	leased []api.ResourceDescriptor
 }
@@ -38,6 +39,9 @@ func (s *stubLister) Lease(
 	s.mu.Lock()
 	s.leased = append(s.leased, desc)
 	s.mu.Unlock()
+	if s.panics[desc.Resource] {
+		panic("broken resource reader")
+	}
 	err, refused := s.errs[desc.Resource]
 	if refused {
 		return nil, err
@@ -50,16 +54,20 @@ func (s *stubLister) Cached() []api.ResourceDescriptor {
 }
 
 type stubEvents struct {
-	mu    sync.Mutex
-	byUID map[string][]api.Event
-	err   error
-	asked []string
+	mu     sync.Mutex
+	byUID  map[string][]api.Event
+	err    error
+	panics bool
+	asked  []string
 }
 
 func (s *stubEvents) Events(_ context.Context, _, uid string) ([]api.Event, error) {
 	s.mu.Lock()
 	s.asked = append(s.asked, uid)
 	s.mu.Unlock()
+	if s.panics {
+		panic("broken event reader")
+	}
 	if s.err != nil {
 		return nil, s.err
 	}

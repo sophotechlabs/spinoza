@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -117,6 +118,22 @@ func TestBuildListErrors(t *testing.T) {
 	}
 	if len(m.Nodes) != 0 {
 		t.Fatalf("nodes = %d, want 0", len(m.Nodes))
+	}
+}
+
+func TestBuildReportsAPanickingMetricsReader(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+	dyn.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetResource().Group == "metrics.k8s.io" {
+			panic("broken metrics client")
+		}
+		return false, nil, nil
+	})
+
+	built := Build(context.Background(), dyn, FromCluster(dyn))
+
+	if !strings.Contains(built.Error, "pods.metrics.k8s.io") {
+		t.Fatalf("error = %q, want the panicking reader named", built.Error)
 	}
 }
 

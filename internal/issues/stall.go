@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/listerr"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/unstr"
 )
@@ -23,7 +24,7 @@ func stallFindings(ctx context.Context, events Events, snap *snapshot, reported 
 	}
 	bounded, cancel := context.WithTimeout(ctx, limits.StallBudget)
 	defer cancel()
-	quiet, complained := whatHappened(bounded, events, candidates, limits)
+	quiet, complained := whatHappened(bounded, events, candidates, snap.failures, limits)
 	out := []finding{}
 	for _, item := range candidates {
 		if said, ok := complained[item.uid()]; ok {
@@ -64,19 +65,24 @@ func stallFindings(ctx context.Context, events Events, snap *snapshot, reported 
 }
 
 func whatHappened(
-	ctx context.Context, events Events, candidates []object, limits Limits,
+	ctx context.Context, events Events, candidates []object, failures *listerr.Collector, limits Limits,
 ) (quiet map[string]bool, complained map[string]api.Event) {
 	quietAt := make([]bool, len(candidates))
 	saidAt := make([]api.Event, len(candidates))
 	slots := make(chan struct{}, limits.StallReader)
 	var wg sync.WaitGroup
 	for index, item := range candidates {
+		what := "asking what happened to " + item.obj.GetName()
 		wg.Add(1)
-		go safe.Run("asking what happened to "+item.obj.GetName(), func() {
+		safe.Go(what, func() {
 			defer wg.Done()
+			defer func() {
+				failures.RecordPanic("events", what, recover())
+			}()
 			slots <- struct{}{}
 			defer func() { <-slots }()
 			found, err := events.Events(ctx, item.obj.GetNamespace(), item.uid())
+			failures.Record("events", err)
 			if err != nil {
 				return
 			}

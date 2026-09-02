@@ -365,6 +365,26 @@ func TestListFallsBackToTheLabelsWhenThePayloadIsUnreadable(t *testing.T) {
 	}
 }
 
+func TestListFallsBackToLabelsWhenAReleaseReaderPanics(t *testing.T) {
+	secret := helmSecret(sampleRelease())
+	cs := k8sfake.NewClientset(secret)
+	meta := mirrorMeta(cs)
+	cs.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		panic("broken secret reader")
+	})
+
+	got, err := serviceWithMeta(cs, meta, nil).List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got.Releases) != 1 || got.Releases[0].Name != "podinfo" {
+		t.Fatalf("releases = %+v, want the fallback", got.Releases)
+	}
+	if !strings.Contains(got.Error, "1 release payloads could not be read") {
+		t.Fatalf("error = %q, want the panic reported as an unreadable payload", got.Error)
+	}
+}
+
 func TestListSkipsASecretWithNothingToIdentifyIt(t *testing.T) {
 	nameless := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{

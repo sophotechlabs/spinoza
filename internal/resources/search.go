@@ -88,16 +88,28 @@ func Search(
 	slots := make(chan struct{}, limits.Concurrency)
 
 	for _, desc := range searchableTypes(descs) {
+		key := keyOf(desc)
+		what := "searching " + key
 		wg.Add(1)
-		go safe.Run("searching "+keyOf(desc), func() {
+		safe.Go(what, func() {
 			defer wg.Done()
+			defer func() {
+				caught := recover()
+				if caught == nil {
+					return
+				}
+				safe.Log(what, caught)
+				mu.Lock()
+				reasons[key] = "spinoza could not finish searching this resource"
+				mu.Unlock()
+			}()
 			slots <- struct{}{}
 			defer func() { <-slots }()
 			found, cut, err := searchOne(bounded, meta, desc, needle, limits)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				reasons[keyOf(desc)] = countReason(ctx, err, limits)
+				reasons[key] = countReason(ctx, err, limits)
 				return
 			}
 			hits = append(hits, found...)

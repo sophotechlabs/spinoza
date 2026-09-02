@@ -58,12 +58,18 @@ func Build(ctx context.Context, dyn dynamic.Interface, nodes Nodes) api.Metrics 
 	var used map[string]api.ResourceUsage
 	var group sync.WaitGroup
 	group.Add(2)
-	go safe.Run("reading pod metrics", func() {
+	safe.Go("reading pod metrics", func() {
 		defer group.Done()
+		defer func() {
+			failures.RecordPanic("pods.metrics.k8s.io", "reading pod metrics", recover())
+		}()
 		pods = podUsage(ctx, dyn, failures)
 	})
-	go safe.Run("reading node metrics", func() {
+	safe.Go("reading node metrics", func() {
 		defer group.Done()
+		defer func() {
+			failures.RecordPanic("nodes.metrics.k8s.io", "reading node metrics", recover())
+		}()
 		used = nodeUsage(ctx, dyn, nodes, failures)
 	})
 	group.Wait()

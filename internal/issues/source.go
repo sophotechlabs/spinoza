@@ -206,14 +206,19 @@ func read(
 	slots := make(chan struct{}, limits.Readers)
 	var wg sync.WaitGroup
 	for index, desc := range types {
+		resource := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}.
+			GroupResource().String()
+		what := "reading " + desc.Kind
 		wg.Add(1)
-		go safe.Run("reading "+desc.Kind, func() {
+		safe.Go(what, func() {
 			defer wg.Done()
+			defer func() {
+				failures.RecordPanic(resource, what, recover())
+			}()
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 			items, err := lister.Lease(ctx, desc)
-			failures.Record(gvr.GroupResource().String(), err)
+			failures.Record(resource, err)
 			if err != nil {
 				return
 			}

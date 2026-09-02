@@ -2,6 +2,7 @@ package issues
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,16 @@ func TestAListThatFailsIsReportedOnTheQueue(t *testing.T) {
 	want := "1 of 1 resource types could not be listed: pods (forbidden)"
 	if queue.Error != want {
 		t.Fatalf("error = %q, want %q", queue.Error, want)
+	}
+}
+
+func TestAListThatPanicsIsReportedOnTheQueue(t *testing.T) {
+	lister := &stubLister{panics: map[string]bool{"pods": true}}
+
+	queue := build(t, lister, catalog(podDescriptor()))
+
+	if !strings.Contains(queue.Error, "pods") {
+		t.Fatalf("error = %q, want the panicking type named", queue.Error)
 	}
 }
 

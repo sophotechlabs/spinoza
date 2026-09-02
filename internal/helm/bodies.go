@@ -69,14 +69,28 @@ func (s *Service) read(ctx context.Context, refs []storedRef) ([]api.HelmRelease
 	var group sync.WaitGroup
 	slots := make(chan struct{}, readConcurrency)
 	for i, ref := range refs {
+		index := i
+		stored := ref
+		what := "reading the release " + ref.namespace + "/" + ref.name
 		group.Add(1)
-		go safe.Run("reading the release "+ref.namespace+"/"+ref.name, func() {
+		safe.Go(what, func() {
 			defer group.Done()
+			defer func() {
+				caught := recover()
+				if caught == nil {
+					return
+				}
+				safe.Log(what, caught)
+				mu.Lock()
+				out[index] = fallbackOf(stored)
+				undecodable++
+				mu.Unlock()
+			}()
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			release, ok := s.releaseFor(ctx, ref)
+			release, ok := s.releaseFor(ctx, stored)
 			mu.Lock()
-			out[i] = release
+			out[index] = release
 			if !ok {
 				undecodable++
 			}

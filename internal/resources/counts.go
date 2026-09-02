@@ -58,16 +58,29 @@ func Count(
 	slots := make(chan struct{}, limits.Concurrency)
 
 	for _, desc := range descs {
+		key := keyOf(desc)
+		what := "counting " + key
 		wg.Add(1)
-		go safe.Run("counting "+keyOf(desc), func() {
+		safe.Go(what, func() {
 			defer wg.Done()
+			defer func() {
+				caught := recover()
+				if caught == nil {
+					return
+				}
+				safe.Log(what, caught)
+				mu.Lock()
+				counts[key] = countUnknown
+				reasons[key] = "spinoza could not finish counting this resource"
+				mu.Unlock()
+			}()
 			slots <- struct{}{}
 			defer func() { <-slots }()
 			total, reason := countOne(bounded, client, desc, limits)
 			mu.Lock()
-			counts[keyOf(desc)] = total
+			counts[key] = total
 			if reason != "" {
-				reasons[keyOf(desc)] = reason
+				reasons[key] = reason
 			}
 			mu.Unlock()
 		})

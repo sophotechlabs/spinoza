@@ -58,12 +58,29 @@ func TestAPodWithEventsIsNotAStall(t *testing.T) {
 	}
 }
 
-func TestAnEventLookupThatFailsReportsNothing(t *testing.T) {
+func TestAnEventLookupThatFailsReportsNothingAndNamesTheGap(t *testing.T) {
 	lister := silentPod("web-3")
 	events := &stubEvents{err: errors.New("forbidden")}
 
-	if queue := buildWith(t, lister, events, catalog(podDescriptor())); len(queue.Rows) != 0 {
+	queue := buildWith(t, lister, events, catalog(podDescriptor()))
+	if len(queue.Rows) != 0 {
 		t.Fatalf("rows = %+v, want silence rather than a guess", queue.Rows)
+	}
+	if !contains(queue.Error, "events") || !contains(queue.Error, "forbidden") {
+		t.Fatalf("error = %q, want the missing event evidence named", queue.Error)
+	}
+}
+
+func TestAnEventLookupPanicReportsNothingAndNamesTheGap(t *testing.T) {
+	lister := silentPod("web-3")
+	events := &stubEvents{panics: true}
+
+	queue := buildWith(t, lister, events, catalog(podDescriptor()))
+	if len(queue.Rows) != 0 {
+		t.Fatalf("rows = %+v, want silence rather than a guess", queue.Rows)
+	}
+	if !contains(queue.Error, "events") {
+		t.Fatalf("error = %q, want the panicking event reader named", queue.Error)
 	}
 }
 

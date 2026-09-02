@@ -23,13 +23,17 @@ import (
 )
 
 type stubLister struct {
-	nodes []*unstructured.Unstructured
-	err   error
-	calls int
+	nodes  []*unstructured.Unstructured
+	err    error
+	calls  int
+	panics bool
 }
 
 func (s *stubLister) List(context.Context, api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
 	s.calls++
+	if s.panics {
+		panic("broken node reader")
+	}
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -219,6 +223,30 @@ func TestBuildCountsNodesByReadinessAndCapacity(t *testing.T) {
 	}
 	if got.Nodes.MemAllocatableMi != 16384 {
 		t.Fatalf("memory = %d, want 16384", got.Nodes.MemAllocatableMi)
+	}
+}
+
+func TestBuildReportsAPanickingNodeReader(t *testing.T) {
+	got := Build(context.Background(), dynClient(), metaClient(), &stubLister{panics: true}, nil, fullCatalog())
+
+	if !strings.Contains(got.Error, nodesKey) {
+		t.Fatalf("error = %q, want the panicking node reader named", got.Error)
+	}
+}
+
+func TestBuildDoesNotCallPanickingPodCountsKnown(t *testing.T) {
+	meta := metaClient()
+	meta.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		panic("broken pod counter")
+	})
+
+	got := Build(context.Background(), dynClient(), meta, &stubLister{}, nil, fullCatalog())
+
+	if got.Pods.Known {
+		t.Fatal("pod counts are known after every phase reader panicked")
+	}
+	if !strings.Contains(got.Error, podsKey) {
+		t.Fatalf("error = %q, want the panicking pod reader named", got.Error)
 	}
 }
 

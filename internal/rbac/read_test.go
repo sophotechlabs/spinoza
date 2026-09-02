@@ -13,15 +13,19 @@ import (
 )
 
 type cluster struct {
-	mu     sync.Mutex
-	held   map[string][]*unstructured.Unstructured
-	fail   map[string]error
-	warmed []api.ResourceDescriptor
+	mu       sync.Mutex
+	held     map[string][]*unstructured.Unstructured
+	fail     map[string]error
+	panicFor map[string]bool
+	warmed   []api.ResourceDescriptor
 }
 
 func (c *cluster) List(_ context.Context, desc api.ResourceDescriptor) ([]*unstructured.Unstructured, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.panicFor[desc.Resource] {
+		panic("list panic")
+	}
 	if err, wrong := c.fail[desc.Resource]; wrong {
 		return nil, err
 	}
@@ -102,6 +106,16 @@ func TestAKindThatWouldNotListIsNamed(t *testing.T) {
 
 	if !strings.Contains(index.Error, "clusterroles: forbidden") {
 		t.Fatalf("error = %q", index.Error)
+	}
+}
+
+func TestAKindThatPanicsWhileListingIsNamed(t *testing.T) {
+	lister := &cluster{panicFor: map[string]bool{"roles": true}}
+
+	index := Read(t.Context(), lister, everyKind())
+
+	if !strings.Contains(index.Error, "roles") {
+		t.Fatalf("error = %q, want the panicking kind", index.Error)
 	}
 }
 
