@@ -423,6 +423,32 @@ func TestResolveOCITokenEndpointFailure(t *testing.T) {
 	}
 }
 
+func TestResolveOCIReportsATokenConnectionThatBreaks(t *testing.T) {
+	cache, ts := tlsCacheFor(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/token" {
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+			return
+		}
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="https://%s/token"`, r.Host))
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+
+	_, err := cache.Resolve(context.Background(), ociRepo(ts), "keycloak")
+
+	if err == nil {
+		t.Fatal("a broken token connection was reported as a successful registry read")
+	}
+}
+
 func TestResolveOCIAcceptsAccessToken(t *testing.T) {
 	cache, ts := tlsCacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/token" {
