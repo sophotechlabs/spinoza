@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.27.3](https://github.com/sophotechlabs/spinoza/compare/v1.27.2...v1.27.3) (2026-09-02)
+
+
+### Bug Fixes
+
+* **a11y:** describe cluster color swatches ([90e781a](https://github.com/sophotechlabs/spinoza/commit/90e781aa28845731df04462b54a3f279632b87d9))
+* **auth:** harden OIDC local inputs ([ad07ec1](https://github.com/sophotechlabs/spinoza/commit/ad07ec1bc33fc4709b738aaf46dfbd1acb96b9ba))
+* **ci:** enforce exact mutation thresholds ([e37f9fe](https://github.com/sophotechlabs/spinoza/commit/e37f9fec3433ab56c6f4e9a804b6e3f92fa423b1))
+* **config:** bound local configuration reads ([c02ba3e](https://github.com/sophotechlabs/spinoza/commit/c02ba3ea784730da6c0a5139793de946815a081e))
+* **filetx:** bound local file reads ([9fb138a](https://github.com/sophotechlabs/spinoza/commit/9fb138af21aa4aa7ca146530748766f6895adc31))
+* **kubeconfig:** normalize default context identity ([b5f1da9](https://github.com/sophotechlabs/spinoza/commit/b5f1da9d757b9c5d1b39a9aa12f1a93aa7416694))
+* **kube:** replace in-cluster config atomically ([f152a2a](https://github.com/sophotechlabs/spinoza/commit/f152a2ae2ecaa9b95e0d729ec3ad427fb9802323))
+* **limits:** normalize nonpositive scan limits ([4159580](https://github.com/sophotechlabs/spinoza/commit/41595809dc671def433d2a77609b65fa1cebc910))
+* **logs:** surface selector refresh failures ([e1c37c1](https://github.com/sophotechlabs/spinoza/commit/e1c37c17d92d9bb98b6fc3f97d2ee3a292565492))
+* **podcount:** paginate for exact totals ([7beb419](https://github.com/sophotechlabs/spinoza/commit/7beb4196f5d77b24a2cde6232635a645a41b6a1f))
+* **podcount:** reject repeated continuation tokens ([755f3c1](https://github.com/sophotechlabs/spinoza/commit/755f3c165a66374db6b3ae66d28c2938a30ef789))
+* **release:** tag draft releases immediately ([9d85e06](https://github.com/sophotechlabs/spinoza/commit/9d85e0681f3f3b3e391e528e441176cbffd59f5e))
+* **resources:** count paginated resources exactly ([ef0e3e2](https://github.com/sophotechlabs/spinoza/commit/ef0e3e236965976c17903025816f716763724437))
+* **server:** bound and sanitize fleet reads ([376a0db](https://github.com/sophotechlabs/spinoza/commit/376a0db024da5d6875be8bdfa215e7edfe8cc62e))
+* **sort:** avoid identifier overflow ([26acdec](https://github.com/sophotechlabs/spinoza/commit/26acdec7b3f5dbd08d9c09fddacc2597d64e3620))
+* **state:** cancel blocked file transactions ([bb25937](https://github.com/sophotechlabs/spinoza/commit/bb25937779295b9d0d1775cbac1f8bee2680ba6d))
+* **store:** serialize cross-process state updates ([2ea018f](https://github.com/sophotechlabs/spinoza/commit/2ea018f39543f3a773f746ab3373b1e5a3561867))
+* **topology:** fit large graphs into view ([4d53c16](https://github.com/sophotechlabs/spinoza/commit/4d53c16484c55a1764696764f31fcba77ba41508))
+* **topology:** retain mixed projected references ([ebfde87](https://github.com/sophotechlabs/spinoza/commit/ebfde87401fc2ce8972798b935b92ac5f62ff695))
+
+
+### Tests
+
+* **actions:** cover canceled queued evictions ([a20003f](https://github.com/sophotechlabs/spinoza/commit/a20003f5815ba7e3fe7c246915de79af0205ef87))
+* **auth:** cover entropy and logging failures ([a0237fe](https://github.com/sophotechlabs/spinoza/commit/a0237fed60ddcc21c9daa754dfd959ab8371aebf))
+* **e2e:** cover subscription recovery ([8df331a](https://github.com/sophotechlabs/spinoza/commit/8df331a7e2f1e3d10001cf72db74fdd7cf4229ea))
+* **e2e:** expand access and degradation coverage ([d8e2361](https://github.com/sophotechlabs/spinoza/commit/d8e2361eba11998b1d54ba5b712bce52c3d5a2cc))
+* **e2e:** expand Helm workflow coverage ([3b047d8](https://github.com/sophotechlabs/spinoza/commit/3b047d85afbed3ea064003be7dc469a22f8598d3))
+* **e2e:** expand port-forward coverage ([ee10d0c](https://github.com/sophotechlabs/spinoza/commit/ee10d0c1f614594338612bf1bd3fb44d364b4c6e))
+* **e2e:** expand workload log coverage ([2aa7f47](https://github.com/sophotechlabs/spinoza/commit/2aa7f47c11cdfe575fd6301af80fd4d713546a2d))
+* **e2e:** stabilize cross-browser interactions ([57b2b17](https://github.com/sophotechlabs/spinoza/commit/57b2b17628d8e14baeba2b80d43481d758a4d2a5))
+* **e2e:** stabilize resource table interactions ([e07d5dc](https://github.com/sophotechlabs/spinoza/commit/e07d5dc1f8896b330c1962c04589f7ce7ed480c3))
+* **e2e:** target the context picker semantically ([96bc676](https://github.com/sophotechlabs/spinoza/commit/96bc676e140256274d7b49d5a5da516aed168ca9))
+* **filetx:** cover locking and read boundaries ([3c590f2](https://github.com/sophotechlabs/spinoza/commit/3c590f26ce65be164271ad8c2739e5e129ceb704))
+* **filetx:** cover transactional error boundaries ([76f00e3](https://github.com/sophotechlabs/spinoza/commit/76f00e3fd395be0db4f156c0178c2ab6a3a2b9ce))
+* **kubeconfig:** cover persistence boundaries ([f7f784f](https://github.com/sophotechlabs/spinoza/commit/f7f784ff7f9a5eca39b01e863b9b80f3b099fb6d))
+* **listerr:** cover collector failure boundaries ([d939807](https://github.com/sophotechlabs/spinoza/commit/d939807af3ba40d43a1b3afc6cc873c3a293db95))
+* **logs:** cover rollout and backpressure failures ([2431a8b](https://github.com/sophotechlabs/spinoza/commit/2431a8bda18c86a85bddbc457356890202d4996c))
+* **overview:** count phase fixtures from actual pods ([40f159b](https://github.com/sophotechlabs/spinoza/commit/40f159b9485dbbb9f376b53ac9cc57d2c9cc9843))
+* **portforward:** cover HTTPS proxy fallback ([11eb9f2](https://github.com/sophotechlabs/spinoza/commit/11eb9f216bdf8d31f30fc8cb50e107348e1da6b7))
+* **protect:** cover persistence boundaries ([462f204](https://github.com/sophotechlabs/spinoza/commit/462f204174ffb9f9848f8832b6b64a5d477bdbb5))
+* **resources:** skip malformed snapshot entries ([fb14879](https://github.com/sophotechlabs/spinoza/commit/fb14879e85d343a9a6695393230da5ce2577f9b9))
+* **samples:** cover runtime limit changes ([ec25a20](https://github.com/sophotechlabs/spinoza/commit/ec25a203705b8dbbf7778109c625bfcf73fb8477))
+* **server:** cover canceled resource relay ([eabd6b1](https://github.com/sophotechlabs/spinoza/commit/eabd6b1fac62ee082d90440886c01ea44113153f))
+* **settings:** cover persistence boundaries ([7821713](https://github.com/sophotechlabs/spinoza/commit/78217133572bb535f9ea9631e070717bec443308))
+* **store:** preserve empty cell arrays ([7f0e329](https://github.com/sophotechlabs/spinoza/commit/7f0e329ae80561f2236587bb70999cdd80218376))
+
 ## [1.27.2](https://github.com/sophotechlabs/spinoza/compare/v1.27.1...v1.27.2) (2026-09-02)
 
 
