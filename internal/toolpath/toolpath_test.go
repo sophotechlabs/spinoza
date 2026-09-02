@@ -108,6 +108,16 @@ func TestAShellThatPrintsNothingIsNotUsed(t *testing.T) {
 	}
 }
 
+func TestAShellCannotFillMemoryWithItsPathReply(t *testing.T) {
+	shell := fakeShell(t, `printf %s `+strings.Repeat("x", maxPathBytes+1))
+
+	_, err := FromLoginShell(t.Context(), shell)
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("error = %v, want the bounded reply named", err)
+	}
+}
+
 func TestABarePathPicksUpTheShellDirectories(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	shell := fakeShell(t, `printf %s /opt/homebrew/bin:/usr/bin`)

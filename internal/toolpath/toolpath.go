@@ -10,9 +10,13 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/commandbuffer"
 )
 
 const probeTimeout = 5 * time.Second
+
+const maxPathBytes = 64 * 1024
 
 var systemDirs = []string{"/usr/bin", "/bin", "/usr/sbin", "/sbin"}
 
@@ -47,11 +51,17 @@ func FromLoginShell(ctx context.Context, shell string) (string, error) {
 	}
 	asking, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(asking, shell, "-l", "-c", `printf %s "$PATH"`).Output()
+	out := commandbuffer.Head(maxPathBytes)
+	command := exec.CommandContext(asking, shell, "-l", "-c", `printf %s "$PATH"`)
+	command.Stdout = out
+	err := command.Run()
 	if err != nil {
 		return "", fmt.Errorf("asking %s for its PATH: %w", shell, err)
 	}
-	found := strings.TrimSpace(string(out))
+	if out.Exceeded() {
+		return "", fmt.Errorf("%s reported a PATH larger than %d bytes", shell, maxPathBytes)
+	}
+	found := strings.TrimSpace(out.String())
 	if found == "" {
 		return "", fmt.Errorf("%s reported no PATH", shell)
 	}
