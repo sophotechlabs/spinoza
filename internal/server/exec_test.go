@@ -155,6 +155,22 @@ func writeFrame(t *testing.T, conn *websocket.Conn, channel byte, payload []byte
 	}
 }
 
+func TestExecWriterReportsAClosedTerminal(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, _, ctx := rawSession(t, mgr)
+	writer := &execConn{conn: sess.conn, ctx: ctx}
+	_ = sess.conn.CloseNow()
+
+	written, err := writer.Write([]byte("late output"))
+
+	if written != 0 {
+		t.Fatalf("written = %d, want none after the terminal closed", written)
+	}
+	if err == nil || !strings.Contains(err.Error(), "terminal stopped reading") {
+		t.Fatalf("error = %v, want the disconnected terminal identified", err)
+	}
+}
+
 func TestExecStreamsStdoutStdinAndResize(t *testing.T) {
 	shell := newFakeShell()
 	shell.greet = "/ # "
