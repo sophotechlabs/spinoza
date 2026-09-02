@@ -697,6 +697,29 @@ func TestServiceProxyAsksTheApiserverToProxy(t *testing.T) {
 	}
 }
 
+func TestServiceProxyRefusesAnOversizedPrometheusResponse(t *testing.T) {
+	apiserver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(strings.Repeat("x", maxResponseBytes+1)))
+	}))
+	t.Cleanup(apiserver.Close)
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: apiserver.URL})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	proxy := &serviceProxy{cs: cs}
+	target := Target{Namespace: "monitoring", Service: "prometheus", Port: "9090", Scheme: "http"}
+
+	_, getErr := proxy.Get(context.Background(), target, rangePath, nil)
+
+	if getErr == nil {
+		t.Fatal("an oversized prometheus response was accepted")
+	}
+	if !strings.Contains(getErr.Error(), "larger") {
+		t.Fatalf("error = %q, want the response limit named", getErr)
+	}
+}
+
 func TestOnlyMatchReportsAFailedServiceList(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	cs.PrependReactor("list", "services", func(k8stesting.Action) (bool, runtime.Object, error) {

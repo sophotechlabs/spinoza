@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,21 +15,25 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8snet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/kubernetes"
+	k8srest "k8s.io/client-go/rest"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 const (
-	rangePath   = "api/v1/query_range"
-	instantPath = "api/v1/query"
-	defaultPort = "9090"
-	maxPort     = 65535
-	callTimeout = 15 * time.Second
-	buildPath   = "api/v1/status/buildinfo"
-	promNameKey = "app.kubernetes.io/name"
-	promNameVal = "prometheus"
-	maxNamed    = 3
+	rangePath        = "api/v1/query_range"
+	instantPath      = "api/v1/query"
+	defaultPort      = "9090"
+	maxPort          = 65535
+	callTimeout      = 15 * time.Second
+	buildPath        = "api/v1/status/buildinfo"
+	promNameKey      = "app.kubernetes.io/name"
+	promNameVal      = "prometheus"
+	maxNamed         = 3
+	maxResponseBytes = 8 << 20
 )
 
 var selectors = []string{
@@ -59,9 +65,54 @@ type serviceProxy struct {
 func (s *serviceProxy) Get(ctx context.Context, target Target, path string, params map[string]string) ([]byte, error) {
 	bounded, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
-	return s.cs.CoreV1().Services(target.Namespace).
-		ProxyGet(target.Scheme, target.Service, target.Port, path, params).
-		DoRaw(bounded)
+	core := s.cs.CoreV1()
+	client, ok := core.RESTClient().(*k8srest.RESTClient)
+	if !ok || client == nil {
+		return nil, errors.New("the kubernetes client cannot safely proxy prometheus")
+	}
+	proxyRequest := client.Get().
+		Namespace(target.Namespace).
+		Resource("services").
+		SubResource("proxy").
+		Name(k8snet.JoinSchemeNamePort(target.Scheme, target.Service, target.Port)).
+		Suffix(path)
+	for key, value := range params {
+		proxyRequest = proxyRequest.Param(key, value)
+	}
+	endpoint := proxyRequest.URL()
+	request, err := http.NewRequestWithContext(bounded, http.MethodGet, endpoint.String(), http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Accept", "application/json")
+	httpClient := client.Client
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxResponseBytes {
+		return nil, fmt.Errorf("prometheus response is larger than %d bytes", maxResponseBytes)
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, apierrors.NewGenericServerResponse(
+			response.StatusCode,
+			http.MethodGet,
+			schema.GroupResource{Resource: "services/proxy"},
+			target.Service,
+			string(body),
+			0,
+			false,
+		)
+	}
+	return body, nil
 }
 
 type Client struct {
