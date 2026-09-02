@@ -14,6 +14,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	spinozaauth "github.com/sophotechlabs/spinoza/internal/auth"
 )
 
 type authorizer struct {
@@ -294,6 +295,27 @@ func TestARequirementTwoButtonsShareIsAskedOnce(t *testing.T) {
 	}
 	if patches != 1 {
 		t.Fatalf("asked to patch the node %d times, want once", patches)
+	}
+}
+
+func TestDistinctGroupListsDoNotShareAnAccessAnswer(t *testing.T) {
+	rules := refusing(nil)
+	service := serviceFor(t, rules)
+	check := Check{Verb: "delete", Resource: "pods", Namespace: "prod", Name: "web"}
+	first := spinozaauth.WithIdentity(t.Context(), spinozaauth.Identity{User: "alice", Groups: []string{"platform,sre"}})
+	if !service.Ask(first, check).Allowed {
+		t.Fatal("the first group list was unexpectedly refused")
+	}
+
+	rules.mu.Lock()
+	rules.refuse = map[string]string{"delete  pods ": "not allowed"}
+	rules.mu.Unlock()
+	second := spinozaauth.WithIdentity(t.Context(), spinozaauth.Identity{User: "alice", Groups: []string{"platform", "sre"}})
+	if service.Ask(second, check).Allowed {
+		t.Fatal("a different group list reused the first list's cached access answer")
+	}
+	if rules.count() != 2 {
+		t.Fatalf("asked %d times, want one question for each distinct group list", rules.count())
 	}
 }
 

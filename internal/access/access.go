@@ -2,6 +2,7 @@ package access
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,7 +61,13 @@ func asking(ctx context.Context) string {
 	if !ok {
 		return ""
 	}
-	return who.User + "\x00" + strings.Join(who.Groups, ",")
+	var key strings.Builder
+	key.WriteString(strconv.Quote(who.User))
+	for _, group := range who.Groups {
+		key.WriteByte(0)
+		key.WriteString(strconv.Quote(group))
+	}
+	return key.String()
 }
 
 func (s *Service) review(ctx context.Context, checks []Check) []Decision {
