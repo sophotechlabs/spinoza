@@ -22,7 +22,7 @@ func storePath(t *testing.T) string {
 
 func openStore(t *testing.T, path string) *Store {
 	t.Helper()
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -35,7 +35,7 @@ func holdTransaction(t *testing.T, path string) func() {
 	release := make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- filetx.Exclusive(path, func() error {
+		done <- filetx.Exclusive(t.Context(), path, func() error {
 			close(entered)
 			<-release
 			return nil
@@ -308,7 +308,7 @@ func TestABrokenListSurfacesAndStartsEmpty(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 
 	if err == nil {
 		t.Fatal("an unreadable list was reported as an empty one")
@@ -366,7 +366,7 @@ func TestAnUnreadableListSurfaces(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	_, err := Open(path)
+	_, err := Open(t.Context(), path)
 
 	if err == nil {
 		t.Fatal("a directory in place of the list read as an empty list")
@@ -391,7 +391,7 @@ func TestAListThatCannotBeWrittenLeavesTheStoreAlone(t *testing.T) {
 	if err := os.WriteFile(blocked, []byte("not a directory"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	store := &Store{path: filepath.Join(blocked, "spinoza", "kubeconfigs.json")}
+	store := &Store{ctx: t.Context(), path: filepath.Join(blocked, "spinoza", "kubeconfigs.json")}
 
 	err := store.Add("/tmp/one.yaml")
 
@@ -409,7 +409,7 @@ func TestAListThatCannotBeReplacedLeavesTheStoreAlone(t *testing.T) {
 	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	store := &Store{path: path}
+	store := &Store{ctx: t.Context(), path: path}
 
 	err := store.Add("/tmp/one.yaml")
 
@@ -454,7 +454,7 @@ func TestAListThatCannotBeReadIsReported(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 
 	if err == nil {
 		t.Fatal("a list that could not be read opened without complaint")
@@ -470,7 +470,7 @@ func TestAListThatIsNotJsonIsReported(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 
 	if err == nil {
 		t.Fatal("a list that is not json opened without complaint")
@@ -481,7 +481,7 @@ func TestAListThatIsNotJsonIsReported(t *testing.T) {
 }
 
 func TestAKubeconfigThatCannotBeSavedIsNotRemembered(t *testing.T) {
-	store, err := Open(filepath.Join(lockedDir(t), "nested", "kubeconfigs.json"))
+	store, err := Open(t.Context(), filepath.Join(lockedDir(t), "nested", "kubeconfigs.json"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -499,7 +499,7 @@ func TestAKubeconfigThatCannotBeSavedIsNotRemembered(t *testing.T) {
 func TestARemovalThatCannotBeSavedLeavesTheListAlone(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "kubeconfigs.json")
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

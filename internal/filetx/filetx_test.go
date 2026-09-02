@@ -1,6 +1,7 @@
 package filetx
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/gofrs/flock"
 )
 
 func TestReadReturnsAFileAtItsExactLimit(t *testing.T) {
@@ -65,12 +68,44 @@ func TestReadRejectsAFileAboveItsLimit(t *testing.T) {
 	}
 }
 
+func TestExclusiveStopsWaitingWhenTheCallerIsCanceled(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	guard := flock.New(path + ".lock")
+	locked, lockErr := guard.TryLock()
+	if lockErr != nil {
+		t.Fatalf("hold lock: %v", lockErr)
+	}
+	if !locked {
+		t.Fatal("could not hold the lock")
+	}
+	t.Cleanup(func() {
+		if err := guard.Unlock(); err != nil {
+			t.Errorf("unlock: %v", err)
+		}
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	called := false
+
+	err := Exclusive(ctx, path, func() error {
+		called = true
+		return nil
+	})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("exclusive error = %v, want cancellation", err)
+	}
+	if called {
+		t.Fatal("the action ran without acquiring the lock")
+	}
+}
+
 func TestExclusiveCreatesPrivateLockingState(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested")
 	path := filepath.Join(dir, "state.json")
 	called := false
 
-	err := Exclusive(path, func() error {
+	err := Exclusive(t.Context(), path, func() error {
 		called = true
 		return nil
 	})
@@ -103,7 +138,7 @@ func TestExclusiveDoesNotCallTheActionWhenItsDirectoryCannotBeCreated(t *testing
 	}
 	called := false
 
-	err := Exclusive(filepath.Join(blocked, "state.json"), func() error {
+	err := Exclusive(t.Context(), filepath.Join(blocked, "state.json"), func() error {
 		called = true
 		return nil
 	})
@@ -120,7 +155,7 @@ func TestExclusiveDoesNotCallTheActionWhenTheLockCannotBeCreated(t *testing.T) {
 	path := filepath.Join(t.TempDir(), strings.Repeat("x", 300))
 	called := false
 
-	err := Exclusive(path, func() error {
+	err := Exclusive(t.Context(), path, func() error {
 		called = true
 		return nil
 	})
@@ -137,7 +172,7 @@ func TestExclusiveReturnsTheActionFailureAndReleasesTheLock(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	want := errors.New("update failed")
 
-	err := Exclusive(path, func() error {
+	err := Exclusive(t.Context(), path, func() error {
 		return want
 	})
 
@@ -145,7 +180,7 @@ func TestExclusiveReturnsTheActionFailureAndReleasesTheLock(t *testing.T) {
 		t.Fatalf("exclusive error = %v, want %v", err, want)
 	}
 	called := false
-	if retryErr := Exclusive(path, func() error {
+	if retryErr := Exclusive(t.Context(), path, func() error {
 		called = true
 		return nil
 	}); retryErr != nil {
@@ -164,12 +199,12 @@ func TestExclusiveReleasesTheLockWhenTheActionPanics(t *testing.T) {
 				t.Fatal("the action panic was swallowed")
 			}
 		}()
-		_ = Exclusive(path, func() error {
+		_ = Exclusive(t.Context(), path, func() error {
 			panic("broken update")
 		})
 	}()
 
-	if err := Exclusive(path, func() error { return nil }); err != nil {
+	if err := Exclusive(t.Context(), path, func() error { return nil }); err != nil {
 		t.Fatalf("transaction after panic: %v", err)
 	}
 }
@@ -185,7 +220,7 @@ func TestExclusiveSerializesConcurrentActions(t *testing.T) {
 
 	for range writers {
 		group.Go(func() {
-			errs <- Exclusive(path, func() error {
+			errs <- Exclusive(t.Context(), path, func() error {
 				if active.Add(1) != 1 {
 					overlapped.Store(true)
 				}

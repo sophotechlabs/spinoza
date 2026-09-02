@@ -1,6 +1,7 @@
 package protect
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ type state struct {
 
 type Store struct {
 	mu       sync.Mutex
+	ctx      context.Context
 	path     string
 	clusters map[string]bool
 }
@@ -37,8 +39,8 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "spinoza", "protected.json"), nil
 }
 
-func Open(path string) (*Store, error) {
-	store := &Store{path: path, clusters: map[string]bool{}}
+func Open(ctx context.Context, path string) (*Store, error) {
+	store := &Store{ctx: ctx, path: path, clusters: map[string]bool{}}
 	clusters, err := read(path)
 	if err != nil {
 		return store, fmt.Errorf("protected clusters %s: %w", path, err)
@@ -100,7 +102,7 @@ func (s *Store) Set(server string, protected bool) error {
 		s.clusters[key] = protected
 		return nil
 	}
-	err := filetx.Exclusive(s.path, func() error {
+	err := filetx.Exclusive(s.ctx, s.path, func() error {
 		next, readErr := read(s.path)
 		if readErr != nil {
 			return fmt.Errorf("%s: %w", s.path, readErr)

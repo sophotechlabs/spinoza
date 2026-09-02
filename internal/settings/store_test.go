@@ -21,7 +21,7 @@ func tempPath(t *testing.T) string {
 
 func openAt(t *testing.T, path string) *Store {
 	t.Helper()
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -34,7 +34,7 @@ func holdTransaction(t *testing.T, path string) func() {
 	release := make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- filetx.Exclusive(path, func() error {
+		done <- filetx.Exclusive(t.Context(), path, func() error {
 			close(entered)
 			<-release
 			return nil
@@ -306,7 +306,7 @@ func TestUnreadableSettingsAreReported(t *testing.T) {
 		t.Fatalf("write: %v", writeErr)
 	}
 
-	store, openErr := Open(path)
+	store, openErr := Open(t.Context(), path)
 	if openErr == nil {
 		t.Fatal("unreadable settings were accepted")
 	}
@@ -363,7 +363,7 @@ func TestADirectoryInPlaceOfTheFileIsReported(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	_, openErr := Open(path)
+	_, openErr := Open(t.Context(), path)
 
 	if openErr == nil {
 		t.Fatal("a directory was read as settings")
@@ -377,7 +377,7 @@ func TestWritingWhereItCannotIsReported(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	store, openErr := Open(filepath.Join(blocked, "settings.json"))
+	store, openErr := Open(t.Context(), filepath.Join(blocked, "settings.json"))
 	if openErr == nil {
 		t.Fatal("a path inside a file was accepted for reading")
 	}
@@ -428,7 +428,7 @@ func TestSettingsThatCannotReplaceTheFileAreNotKept(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	store := &Store{path: path, values: map[string]string{}}
+	store := &Store{ctx: t.Context(), path: path, values: map[string]string{}}
 
 	mergeErr := store.Merge(map[string]string{"a": "1"})
 
@@ -453,7 +453,7 @@ func TestSettingsAreNotWrittenWhereTheDirectoryCannotBeMade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	store := &Store{path: filepath.Join(blocked, "spinoza", "settings.json"), values: map[string]string{}}
+	store := &Store{ctx: t.Context(), path: filepath.Join(blocked, "spinoza", "settings.json"), values: map[string]string{}}
 
 	mergeErr := store.Merge(map[string]string{"a": "1"})
 
@@ -469,7 +469,7 @@ func TestATemporaryFileThatCannotBeMadeIsReported(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	store := &Store{path: filepath.Join(readOnly, "settings.json"), values: map[string]string{}}
+	store := &Store{ctx: t.Context(), path: filepath.Join(readOnly, "settings.json"), values: map[string]string{}}
 
 	mergeErr := store.Merge(map[string]string{"a": "1"})
 

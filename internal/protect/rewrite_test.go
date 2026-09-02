@@ -35,7 +35,7 @@ func TestEveryShapeAFileHoldsKeepsItsVerdictAcrossTheRewrite(t *testing.T) {
 		"https://two.example:6443/": false,
 	}
 	path := seeded(t, written)
-	before, err := Open(path)
+	before, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestEveryShapeAFileHoldsKeepsItsVerdictAcrossTheRewrite(t *testing.T) {
 		t.Fatalf("set: %v", setErr)
 	}
 
-	after, reopenErr := Open(path)
+	after, reopenErr := Open(t.Context(), path)
 	if reopenErr != nil {
 		t.Fatalf("reopen: %v", reopenErr)
 	}
@@ -66,7 +66,7 @@ func TestWhenTwoSpellingsMeetTheProtectedOneWins(t *testing.T) {
 		"https://one.example:443": false,
 	})
 
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestTheRewriteLeavesOneKeyPerCluster(t *testing.T) {
 		"https://one.example:443":  true,
 		"https://one.example:443/": true,
 	})
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

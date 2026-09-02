@@ -37,14 +37,14 @@ func New(ctx context.Context, options Options) (*Cluster, error) {
 	if targetErr != nil {
 		return nil, targetErr
 	}
-	sources := kubeconfig.NewSources(options.Kubeconfig, openStore())
+	sources := kubeconfig.NewSources(options.Kubeconfig, openStore(ctx))
 	cluster := newCluster(ctx, func(buildCtx context.Context, ref api.ContextRef) (*connection, error) {
 		manager, bundle, err := build(buildCtx, ref, options, promTarget)
 		if err != nil {
 			return nil, err
 		}
 		return &connection{manager: manager, ref: bundle.Ref, host: bundle.Config.Host}, nil
-	}, sources, openProtection(), options.OpenTimeout, api.ContextRef{Name: options.Context})
+	}, sources, openProtection(ctx), options.OpenTimeout, api.ContextRef{Name: options.Context})
 	cluster.useReader(readerFor(options))
 	cluster.useLister(listerFor(options))
 	failed := cluster.unreached()
@@ -119,24 +119,24 @@ func listerFor(options Options) lister {
 	}
 }
 
-func openProtection() *protect.Store {
+func openProtection(ctx context.Context) *protect.Store {
 	path, pathErr := protect.DefaultPath()
 	if pathErr != nil {
 		slog.Warn("protected clusters will not be remembered", "error", pathErr)
 	}
-	store, openErr := protect.Open(path)
+	store, openErr := protect.Open(ctx, path)
 	if openErr != nil {
 		slog.Warn("the protected cluster list could not be read", "error", openErr)
 	}
 	return store
 }
 
-func openStore() *kubeconfig.Store {
+func openStore(ctx context.Context) *kubeconfig.Store {
 	path, pathErr := kubeconfig.DefaultPath()
 	if pathErr != nil {
 		slog.Warn("kubeconfigs you add will not be remembered", "error", pathErr)
 	}
-	store, openErr := kubeconfig.Open(path)
+	store, openErr := kubeconfig.Open(ctx, path)
 	if openErr != nil {
 		slog.Warn("the remembered kubeconfig list could not be read", "error", openErr)
 	}

@@ -27,7 +27,7 @@ func TestAListThatCannotBeWrittenIsReported(t *testing.T) {
 		t.Fatalf("chmod: %v", err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(root, 0o700) })
-	store, err := Open(filepath.Join(root, "spinoza", "kubeconfigs.json"))
+	store, err := Open(t.Context(), filepath.Join(root, "spinoza", "kubeconfigs.json"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestAListThatCannotBeWrittenIsReported(t *testing.T) {
 
 func TestATempFileThatCannotBeMadeIsReported(t *testing.T) {
 	root := t.TempDir()
-	store, err := Open(filepath.Join(root, "kubeconfigs.json"))
+	store, err := Open(t.Context(), filepath.Join(root, "kubeconfigs.json"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestATempFileThatCannotBeMadeIsReported(t *testing.T) {
 func TestAListThatCannotBeMovedIntoPlaceIsReported(t *testing.T) {
 	root := t.TempDir()
 	inTheWay := filepath.Join(root, "kubeconfigs.json")
-	store, err := Open(inTheWay)
+	store, err := Open(t.Context(), inTheWay)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

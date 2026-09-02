@@ -24,7 +24,7 @@ func storePath(t *testing.T) string {
 
 func openStore(t *testing.T, path string) *Store {
 	t.Helper()
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -37,7 +37,7 @@ func holdTransaction(t *testing.T, path string) func() {
 	release := make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- filetx.Exclusive(path, func() error {
+		done <- filetx.Exclusive(t.Context(), path, func() error {
 			close(entered)
 			<-release
 			return nil
@@ -196,7 +196,7 @@ func TestABrokenListSurfacesAndProtectsNothing(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 
 	if err == nil {
 		t.Fatal("an unreadable list was reported as an empty one")
@@ -215,7 +215,7 @@ func TestAnUnreadableListSurfaces(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	_, err := Open(path)
+	_, err := Open(t.Context(), path)
 
 	if err == nil {
 		t.Fatal("a directory in place of the list read as an empty list")
@@ -227,7 +227,7 @@ func TestAnAnswerThatCannotBeSavedIsNotKept(t *testing.T) {
 	if err := os.WriteFile(blocked, []byte("not a directory"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	store := &Store{path: filepath.Join(blocked, "spinoza", "protected.json"), clusters: map[string]bool{}}
+	store := &Store{ctx: t.Context(), path: filepath.Join(blocked, "spinoza", "protected.json"), clusters: map[string]bool{}}
 
 	err := store.Set(remote, true)
 
@@ -245,7 +245,7 @@ func TestAnAnswerThatCannotReplaceTheFileIsNotKept(t *testing.T) {
 	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	store := &Store{path: path, clusters: map[string]bool{}}
+	store := &Store{ctx: t.Context(), path: path, clusters: map[string]bool{}}
 
 	err := store.Set(remote, true)
 
@@ -408,7 +408,7 @@ func TestAFileThatCannotBeReadIsReported(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	_, err := Open(path)
+	_, err := Open(t.Context(), path)
 
 	if err == nil {
 		t.Fatal("a file that could not be read opened without complaint")
@@ -421,7 +421,7 @@ func TestAFileThatIsNotJsonIsReported(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	store, err := Open(path)
+	store, err := Open(t.Context(), path)
 
 	if err == nil {
 		t.Fatal("a file that is not json opened without complaint")
@@ -483,7 +483,7 @@ func TestAnAnswerThatCannotBeSavedIsReported(t *testing.T) {
 }
 
 func TestAStoreWithNowhereToWriteKeepsTheAnswerInMemory(t *testing.T) {
-	store, err := Open("")
+	store, err := Open(t.Context(), "")
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

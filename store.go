@@ -10,13 +10,13 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
-func settingsStore() *settingsstore.Store {
+func settingsStore(ctx context.Context) *settingsstore.Store {
 	path, err := settingsstore.DefaultPath()
 	if err != nil {
 		slog.Warn("settings will not be kept", "error", err)
 		return settingsstore.Memory()
 	}
-	held, openErr := settingsstore.Open(path)
+	held, openErr := settingsstore.Open(ctx, path)
 	if openErr != nil {
 		slog.Warn("the stored settings could not be read", "error", openErr)
 	}

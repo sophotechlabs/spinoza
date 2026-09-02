@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,6 +33,7 @@ type state struct {
 
 type Store struct {
 	mu     sync.Mutex
+	ctx    context.Context
 	path   string
 	values map[string]string
 }
@@ -44,8 +46,8 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "spinoza", "settings.json"), nil
 }
 
-func Open(path string) (*Store, error) {
-	store := &Store{path: path, values: map[string]string{}}
+func Open(ctx context.Context, path string) (*Store, error) {
+	store := &Store{ctx: ctx, path: path, values: map[string]string{}}
 	values, err := read(path)
 	if err != nil {
 		return store, fmt.Errorf("settings %s: %w", path, err)
@@ -89,7 +91,7 @@ func (s *Store) Merge(values map[string]string) error {
 		maps.Copy(s.values, values)
 		return nil
 	}
-	err := filetx.Exclusive(s.path, func() error {
+	err := filetx.Exclusive(s.ctx, s.path, func() error {
 		next, readErr := read(s.path)
 		if readErr != nil {
 			return fmt.Errorf("%s: %w", s.path, readErr)

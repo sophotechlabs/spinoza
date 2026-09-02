@@ -60,7 +60,7 @@ func run() error {
 
 	toolpath.Ensure(ctx, localshell.ShellPath())
 
-	held := settingsStore()
+	held := settingsStore(ctx)
 	opts.cluster.NodeShell = allowNodeShell(opts.nodeShell, held)
 	opts.cluster.Columns = customColumns(held)
 	opts.cluster.ToolKubeconfig = toolKubeconfig(opts)

@@ -23,7 +23,7 @@ func TestTheDefaultPathNeedsAConfigDirectory(t *testing.T) {
 
 func TestAProtectionThatCannotBeWrittenIsReported(t *testing.T) {
 	root := t.TempDir()
-	store, err := Open(filepath.Join(root, "spinoza", "protected.json"))
+	store, err := Open(t.Context(), filepath.Join(root, "spinoza", "protected.json"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestAProtectionThatCannotBeWrittenIsReported(t *testing.T) {
 func TestAProtectionThatCannotBeMovedIntoPlaceIsReported(t *testing.T) {
 	root := t.TempDir()
 	inTheWay := filepath.Join(root, "protected.json")
-	store, err := Open(inTheWay)
+	store, err := Open(t.Context(), inTheWay)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

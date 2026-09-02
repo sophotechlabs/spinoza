@@ -58,7 +58,7 @@ func writeFile(t *testing.T, name, content string) string {
 
 func newSources(t *testing.T, fallback string) *Sources {
 	t.Helper()
-	store, err := Open(filepath.Join(t.TempDir(), "kubeconfigs.json"))
+	store, err := Open(t.Context(), filepath.Join(t.TempDir(), "kubeconfigs.json"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

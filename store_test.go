@@ -93,7 +93,7 @@ func TestTheStoreIsReadFromTheUsualPlace(t *testing.T) {
 		t.Fatalf("write: %v", writeErr)
 	}
 
-	store := settingsStore()
+	store := settingsStore(t.Context())
 
 	if !store.On(settingsstore.NodeShellKey) {
 		t.Fatal("the settings written on disk were not read back")
@@ -104,7 +104,7 @@ func TestNowhereToKeepSettingsStillLeavesAStore(t *testing.T) {
 	t.Setenv("HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
-	store := settingsStore()
+	store := settingsStore(t.Context())
 
 	if store == nil {
 		t.Fatal("settings with nowhere to live left no store at all")
@@ -135,7 +135,7 @@ func TestUnreadableSettingsStillLeaveAStore(t *testing.T) {
 		t.Fatalf("write: %v", writeErr)
 	}
 
-	store := settingsStore()
+	store := settingsStore(t.Context())
 
 	if store == nil {
 		t.Fatal("settings that cannot be read left no store at all")

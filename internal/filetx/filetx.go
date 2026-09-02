@@ -18,12 +18,12 @@ const (
 	retryWait = 10 * time.Millisecond
 )
 
-func Exclusive(path string, action func() error) (err error) {
+func Exclusive(ctx context.Context, path string, action func() error) (err error) {
 	if makeErr := os.MkdirAll(filepath.Dir(path), dirMode); makeErr != nil {
 		return makeErr
 	}
 	guard := flock.New(path+".lock", flock.SetPermissions(fileMode))
-	ctx, cancel := context.WithTimeout(context.Background(), lockWait)
+	ctx, cancel := context.WithTimeout(ctx, lockWait)
 	defer cancel()
 	locked, lockErr := guard.TryLockContext(ctx, retryWait)
 	if lockErr != nil {

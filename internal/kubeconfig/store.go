@@ -1,6 +1,7 @@
 package kubeconfig
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ type state struct {
 
 type Store struct {
 	mu    sync.Mutex
+	ctx   context.Context
 	path  string
 	paths []string
 }
@@ -34,8 +36,8 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "spinoza", "kubeconfigs.json"), nil
 }
 
-func Open(path string) (*Store, error) {
-	store := &Store{path: path}
+func Open(ctx context.Context, path string) (*Store, error) {
+	store := &Store{ctx: ctx, path: path}
 	paths, err := readStore(path)
 	if err != nil {
 		return store, fmt.Errorf("kubeconfig list %s: %w", path, err)
@@ -57,7 +59,7 @@ func (s *Store) Add(path string) error {
 	if s.path == "" {
 		return s.add(path)
 	}
-	err := filetx.Exclusive(s.path, func() error {
+	err := filetx.Exclusive(s.ctx, s.path, func() error {
 		paths, readErr := readStore(s.path)
 		if readErr != nil {
 			return fmt.Errorf("%s: %w", s.path, readErr)
@@ -77,7 +79,7 @@ func (s *Store) Remove(path string) error {
 	if s.path == "" {
 		return s.remove(path)
 	}
-	err := filetx.Exclusive(s.path, func() error {
+	err := filetx.Exclusive(s.ctx, s.path, func() error {
 		paths, readErr := readStore(s.path)
 		if readErr != nil {
 			return fmt.Errorf("%s: %w", s.path, readErr)

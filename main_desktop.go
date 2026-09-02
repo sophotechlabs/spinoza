@@ -104,7 +104,7 @@ func runDesktop() error {
 
 	toolpath.Ensure(ctx, localshell.ShellPath())
 
-	store := settingsStore()
+	store := settingsStore(ctx)
 	opts.cluster.NodeShell = allowNodeShell(opts.nodeShell, store)
 	opts.cluster.Columns = customColumns(store)
 
