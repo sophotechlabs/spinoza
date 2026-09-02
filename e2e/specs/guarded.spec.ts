@@ -4,6 +4,7 @@ import { expect, holdSide, side, sideAuthed, test } from '../harness/test';
 import type { Held } from '../harness/keepalive';
 import { kubectl, kubectlSoft } from '../harness/cluster';
 import { CONTEXT, NAMESPACE } from '../harness/paths';
+import { replaceEditor } from '../harness/editor';
 
 const GUARDED = 'guarded-by-e2e';
 
@@ -85,25 +86,6 @@ function gateValue(): string {
   ]).trim();
 }
 
-async function editorText(page: Page): Promise<string> {
-  const raw = await page.locator('.view-lines').first().innerText();
-  return raw.replace(/\u00a0/g, ' ');
-}
-
-async function typeInto(page: Page, text: string): Promise<void> {
-  await page
-    .locator('.view-lines')
-    .first()
-    .click({ position: { x: 5, y: 5 } });
-  await page.getByRole('textbox', { name: 'Editor content' }).focus();
-  await page.keyboard.press('ControlOrMeta+a');
-  await page.keyboard.press('Delete');
-  await page.keyboard.insertText(text);
-  await expect
-    .poll(async () => (await editorText(page)).trim(), { timeout: 20_000 })
-    .toBe(text.trim());
-}
-
 test.beforeAll(async () => {
   release = holdSide('guarded');
   await protect(true);
@@ -123,7 +105,7 @@ test.afterAll(async () => {
 test('applying on a protected cluster asks for the name before it writes', async ({ browser }) => {
   const [page, close] = await openGuardedYaml(browser);
 
-  await typeInto(page, documentFor(liveVersion(), 'asked'));
+  await replaceEditor(page, documentFor(liveVersion(), 'asked'));
   await page.getByRole('button', { name: 'Apply', exact: true }).click();
 
   await expect(page.getByRole('dialog', { name: 'Confirm on a protected cluster' })).toBeVisible({
@@ -136,12 +118,12 @@ test('applying on a protected cluster asks for the name before it writes', async
 
 test('the wrong name does not unlock the apply', async ({ browser }) => {
   const [page, close] = await openGuardedYaml(browser);
-  await typeInto(page, documentFor(liveVersion(), 'wrong-name'));
+  await replaceEditor(page, documentFor(liveVersion(), 'wrong-name'));
   await page.getByRole('button', { name: 'Apply', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Confirm on a protected cluster' });
   await expect(dialog).toBeVisible({ timeout: 30_000 });
 
-  await dialog.getByLabel('Name').fill('not-the-name');
+  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('not-the-name');
 
   await expect(dialog.getByRole('button', { name: 'Confirm' })).toBeDisabled();
   expect(gateValue()).toBe('before');
@@ -150,12 +132,12 @@ test('the wrong name does not unlock the apply', async ({ browser }) => {
 
 test('the name typed out lets the edit through to the apiserver', async ({ browser }) => {
   const [page, close] = await openGuardedYaml(browser);
-  await typeInto(page, documentFor(liveVersion(), 'after'));
+  await replaceEditor(page, documentFor(liveVersion(), 'after'));
   await page.getByRole('button', { name: 'Apply', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Confirm on a protected cluster' });
   await expect(dialog).toBeVisible({ timeout: 30_000 });
 
-  await dialog.getByLabel('Name').fill(GUARDED);
+  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill(GUARDED);
   await dialog.getByRole('button', { name: 'Confirm' }).click();
 
   await expect.poll(() => gateValue(), { timeout: 60_000 }).toBe('after');
@@ -239,7 +221,7 @@ test('the protected workload name permits scaling to zero and the apiserver reco
     await page.getByRole('spinbutton', { name: 'replicas' }).fill('0');
     await page.getByRole('button', { name: 'Scale', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Confirm on a protected cluster' });
-    await dialog.getByLabel('Name').fill('healthy');
+    await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('healthy');
     await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
     await expect
       .poll(
@@ -285,7 +267,7 @@ test('typing the protected object name permits its deletion', async ({ browser }
   try {
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Confirm on a protected cluster' });
-    await dialog.getByLabel('Name').fill(GUARDED);
+    await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill(GUARDED);
     await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
     await expect
       .poll(() => kubectlSoft(['-n', NAMESPACE, 'get', `configmap/${GUARDED}`]), {

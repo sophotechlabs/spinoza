@@ -3,6 +3,7 @@ import { openResource, selectRow } from '../harness/app';
 import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 import type { Page } from '@playwright/test';
+import { editorText, replaceEditor } from '../harness/editor';
 
 const EDITED = 'edited-by-e2e';
 
@@ -11,22 +12,6 @@ async function openYaml(page: Page, name: string): Promise<void> {
   await selectRow(page, name);
   await page.getByRole('tab', { name: 'YAML', exact: true }).click();
   await expect(page.locator('.monaco-editor').first()).toBeVisible({ timeout: 60_000 });
-}
-
-async function editorText(page: Page): Promise<string> {
-  const raw = await page.locator('.view-lines').first().innerText();
-  return raw.replace(/\u00a0/g, ' ');
-}
-
-async function replaceEditor(page: Page, text: string): Promise<void> {
-  await page.locator('.view-lines').first().click({ position: { x: 5, y: 5 } });
-  await page.getByRole('textbox', { name: 'Editor content' }).focus();
-  await page.keyboard.press('ControlOrMeta+a');
-  await page.keyboard.press('Delete');
-  await page.keyboard.insertText(text);
-  await expect
-    .poll(async () => (await editorText(page)).trim(), { timeout: 20_000 })
-    .toBe(text.trim());
 }
 
 test.afterAll(() => {
@@ -170,18 +155,14 @@ test('deleting from the drawer takes the object out of the table', async ({ page
   await openYaml(page, EDITED);
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   const confirm = page.getByRole('button', { name: 'Confirm', exact: true });
-  await confirm.first().click({ timeout: 5_000 }).catch(() => undefined);
+  await confirm
+    .first()
+    .click({ timeout: 5_000 })
+    .catch(() => undefined);
   await expect
     .poll(
       () =>
-        kubectl([
-          '-n',
-          NAMESPACE,
-          'get',
-          'configmaps',
-          '-o',
-          'jsonpath={.items[*].metadata.name}',
-        ]),
+        kubectl(['-n', NAMESPACE, 'get', 'configmaps', '-o', 'jsonpath={.items[*].metadata.name}']),
       { timeout: 60_000 },
     )
     .not.toContain(EDITED);
@@ -191,7 +172,10 @@ test('the events panel reports what the cluster recorded', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
   await selectRow(page, 'crashing-');
   await page.getByRole('tab', { name: 'Events', exact: true }).click();
-  await expect(page.getByRole('tabpanel', { name: 'Events' })).toContainText(/BackOff|Pulled|Created/, {
-    timeout: 60_000,
-  });
+  await expect(page.getByRole('tabpanel', { name: 'Events' })).toContainText(
+    /BackOff|Pulled|Created/,
+    {
+      timeout: 60_000,
+    },
+  );
 });

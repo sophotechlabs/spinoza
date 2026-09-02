@@ -1,6 +1,7 @@
 import { expect, test } from '../harness/test';
 import { CONTEXT } from '../harness/paths';
 import { expandCategory, openHome, openView, sidebar } from '../harness/app';
+import { primaryShortcut } from '../harness/keyboard';
 
 const VIEWS = [
   { label: 'Cluster Overview', title: CONTEXT },
@@ -18,9 +19,7 @@ test('the app opens on the cluster it was pointed at', async ({ page }) => {
 
 test('the app says the cluster feed is connected', async ({ page }) => {
   await openHome(page);
-  await expect(
-    page.getByRole('status', { name: 'The cluster feed is connected' }),
-  ).toBeVisible();
+  await expect(page.getByRole('status', { name: 'The cluster feed is connected' })).toBeVisible();
 });
 
 for (const view of VIEWS) {
@@ -37,11 +36,11 @@ test('a view survives a reload because it lives in the URL', async ({ page }) =>
   await expect(page).toHaveTitle(/^checks /);
 });
 
-test('a view spinoza cannot serve is offered but refused', async ({ page }) => {
+test('the sidebar reflects the services installed in the cluster', async ({ page }) => {
   await openHome(page);
-  for (const label of ['Traffic', 'Flux', 'Argo CD']) {
-    await expect(sidebar(page, label)).toBeDisabled();
-  }
+  await expect(sidebar(page, 'Traffic')).toBeDisabled();
+  await expect(sidebar(page, 'Flux')).toBeEnabled();
+  await expect(sidebar(page, 'Argo CD')).toBeEnabled();
 });
 
 test('the desktop switch explains why it is unavailable in a browser', async ({ page }) => {
@@ -52,15 +51,15 @@ test('the desktop switch explains why it is unavailable in a browser', async ({ 
 
 test('every namespace in the cluster is offered for scoping', async ({ page }) => {
   await openHome(page);
-  const picker = page.getByRole('combobox', { name: 'Namespace' });
+  const picker = page.getByRole('combobox', { name: 'Namespace', exact: true });
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole('option', { name: 'e2e' })).toHaveCount(1);
-  await expect(picker.getByRole('option', { name: 'All namespaces' })).toHaveCount(1);
+  await expect(picker.getByRole('option', { name: 'e2e', exact: true })).toHaveCount(1);
+  await expect(picker.getByRole('option', { name: 'All namespaces', exact: true })).toHaveCount(1);
 });
 
 test('the command palette opens on its shortcut', async ({ page }) => {
   await openHome(page);
-  await page.keyboard.press('ControlOrMeta+k');
+  await primaryShortcut(page, 'k');
   await expect(page.getByPlaceholder('Search')).toBeVisible();
 });
 
