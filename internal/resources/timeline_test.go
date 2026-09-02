@@ -9,11 +9,22 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/cache"
 )
 
 type kept struct {
 	mu    sync.Mutex
 	notes []Note
+}
+
+type handlerState bool
+
+func (h handlerState) HasSynced() bool {
+	return bool(h)
+}
+
+func (handlerState) HasSyncedChecker() cache.DoneChecker {
+	return nil
 }
 
 func (k *kept) Note(note Note) {
@@ -43,6 +54,8 @@ func (k *kept) await(t *testing.T, want int) []Note {
 
 var deployments = Kind{Group: "apps", Resource: "deployments"}
 
+var nodes = Kind{Resource: "nodes"}
+
 func scaledTo(t *testing.T, replicas int64) *unstructured.Unstructured {
 	t.Helper()
 	obj := newDeployment("default", "web")
@@ -71,6 +84,25 @@ func startRecording(t *testing.T, mgr *Manager) (*kept, *stream) {
 	t.Cleanup(mgr.StopRecording)
 	waitForStreams(t, mgr, 1)
 	return held, deploymentStream(t, mgr)
+}
+
+func TestAStreamOnlyCountsRowsAsDeliveredAfterItsHandlerSyncs(t *testing.T) {
+	st := &stream{}
+	if st.delivered() {
+		t.Fatal("a stream with no handler reported that its initial rows were delivered")
+	}
+
+	var registration cache.ResourceEventHandlerRegistration = handlerState(false)
+	st.handler.Store(&registration)
+	if st.delivered() {
+		t.Fatal("an unsynced handler reported that its initial rows were delivered")
+	}
+
+	registration = handlerState(true)
+	st.handler.Store(&registration)
+	if !st.delivered() {
+		t.Fatal("a synced handler still reported its rows as pending")
+	}
 }
 
 func TestRecordingWatchesTheKindsItWasGivenRatherThanWhatIsOnScreen(t *testing.T) {
@@ -127,6 +159,22 @@ func TestAKindTheClusterDoesNotHaveIsSkipped(t *testing.T) {
 	defer mgr.StopRecording()
 
 	waitForStreams(t, mgr, 1)
+}
+
+func TestRecordedKindsHaveAStableOrder(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	found := mgr.recorded([]Kind{deployments, nodes})
+
+	if len(found) != 2 {
+		t.Fatalf("recorded = %+v, want both known kinds", found)
+	}
+	first := gvrOf(found[0]).String()
+	second := gvrOf(found[1]).String()
+	if first > second {
+		t.Fatalf("recorded order = %q, %q", first, second)
+	}
 }
 
 func TestARowThatDidNotChangeIsNotRecordedTwice(t *testing.T) {
