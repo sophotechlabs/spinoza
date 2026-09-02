@@ -59,6 +59,19 @@ func pingUntilSettled(t *testing.T, srv *Server) {
 	}
 }
 
+func TestAClusterThatClosesBeforeItsPingIsSkipped(t *testing.T) {
+	srv, _ := twoClusters(t, &pinger{}, nil)
+
+	srv.pingOne(t.Context(), mk2)
+
+	if sink := srv.sinkOf(mk2); sink != nil {
+		t.Fatalf("sink = %v, want none for a closed cluster", sink)
+	}
+	if !srv.healthOfCluster(mk2).Reachable {
+		t.Fatal("a cluster that closed during the ping was marked unreachable")
+	}
+}
+
 func TestOneClusterGoingDownDoesNotCondemnTheOther(t *testing.T) {
 	srv, _ := twoClusters(t,
 		&pinger{},
