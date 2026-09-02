@@ -39,34 +39,34 @@ type Limits struct {
 }
 
 func (l Limits) orDefaults() Limits {
-	if l.Budget == 0 {
+	if l.Budget <= 0 {
 		l.Budget = defaultBudget
 	}
-	if l.StallBudget == 0 {
+	if l.StallBudget <= 0 {
 		l.StallBudget = defaultStallBudget
 	}
-	if l.StallGrace == 0 {
+	if l.StallGrace <= 0 {
 		l.StallGrace = defaultStallGrace
 	}
-	if l.ReadyGrace == 0 {
+	if l.ReadyGrace <= 0 {
 		l.ReadyGrace = defaultReadyGrace
 	}
-	if l.Rows == 0 {
+	if l.Rows <= 0 {
 		l.Rows = defaultRows
 	}
-	if l.Children == 0 {
+	if l.Children <= 0 {
 		l.Children = defaultChildren
 	}
-	if l.Candidates == 0 {
+	if l.Candidates <= 0 {
 		l.Candidates = defaultCandidates
 	}
-	if l.Fallback == 0 {
+	if l.Fallback <= 0 {
 		l.Fallback = defaultFallback
 	}
-	if l.Readers == 0 {
+	if l.Readers <= 0 {
 		l.Readers = defaultReaders
 	}
-	if l.StallReader == 0 {
+	if l.StallReader <= 0 {
 		l.StallReader = defaultStallReaders
 	}
 	return l

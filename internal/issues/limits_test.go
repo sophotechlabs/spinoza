@@ -50,6 +50,25 @@ func TestALimitThatIsSetIsLeftAlone(t *testing.T) {
 	}
 }
 
+func TestNonpositiveLimitsAreReplacedWithSafeDefaults(t *testing.T) {
+	got := Limits{
+		Budget:      -1,
+		StallBudget: -1,
+		StallGrace:  -1,
+		ReadyGrace:  -1,
+		Rows:        -1,
+		Children:    -1,
+		Candidates:  -1,
+		Fallback:    -1,
+		Readers:     -1,
+		StallReader: -1,
+	}.orDefaults()
+
+	if got != (Limits{}).orDefaults() {
+		t.Fatalf("limits = %+v, want safe defaults", got)
+	}
+}
+
 type blockingLister struct {
 	reached chan struct{}
 	once    bool

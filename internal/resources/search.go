@@ -39,13 +39,13 @@ var searchable = []string{
 }
 
 func searchLimits(limits CountLimits) CountLimits {
-	if limits.Budget == 0 {
+	if limits.Budget <= 0 {
 		limits.Budget = searchTimeout
 	}
-	if limits.PerType == 0 {
+	if limits.PerType <= 0 {
 		limits.PerType = searchPerType
 	}
-	if limits.Concurrency == 0 {
+	if limits.Concurrency <= 0 {
 		limits.Concurrency = searchConcurrency
 	}
 	return limits

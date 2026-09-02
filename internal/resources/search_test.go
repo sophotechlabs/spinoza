@@ -25,6 +25,20 @@ func searchScheme() *runtime.Scheme {
 	return scheme
 }
 
+func TestSearchReplacesNonpositiveLimitsWithSafeDefaults(t *testing.T) {
+	got := searchLimits(CountLimits{Budget: -1, PerType: -1, Concurrency: -1})
+
+	if got.Budget != searchTimeout {
+		t.Fatalf("budget = %s, want %s", got.Budget, searchTimeout)
+	}
+	if got.PerType != searchPerType {
+		t.Fatalf("per-type budget = %s, want %s", got.PerType, searchPerType)
+	}
+	if got.Concurrency != searchConcurrency {
+		t.Fatalf("concurrency = %d, want %d", got.Concurrency, searchConcurrency)
+	}
+}
+
 func meta(group, version, kind, namespace, name string) *metav1.PartialObjectMetadata {
 	return &metav1.PartialObjectMetadata{
 		TypeMeta: metav1.TypeMeta{
