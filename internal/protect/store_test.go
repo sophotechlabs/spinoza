@@ -1,14 +1,18 @@
 package protect
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
 
 const remote = "https://10.0.0.5:6443"
@@ -25,6 +29,31 @@ func openStore(t *testing.T, path string) *Store {
 		t.Fatalf("open: %v", err)
 	}
 	return store
+}
+
+func holdTransaction(t *testing.T, path string) func() {
+	t.Helper()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- filetx.Exclusive(path, func() error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	select {
+	case <-entered:
+	case err := <-done:
+		t.Fatalf("hold transaction: %v", err)
+	}
+	return func() {
+		close(release)
+		if err := <-done; err != nil {
+			t.Fatalf("release transaction: %v", err)
+		}
+	}
 }
 
 func TestAClusterNobodyDecidedOnIsUnknown(t *testing.T) {
@@ -314,6 +343,53 @@ func TestConcurrentProtectionDecisionsAreAllPersisted(t *testing.T) {
 	}
 }
 
+func TestSimultaneousProcessesDoNotLoseProtectionDecisions(t *testing.T) {
+	path := storePath(t)
+	first := openStore(t, path)
+	second := openStore(t, path)
+	unlock := holdTransaction(t, path)
+	done := make(chan error, 2)
+	go func() {
+		done <- first.Set("https://10.0.2.1:6443", true)
+	}()
+	go func() {
+		done <- second.Set("https://10.0.2.2:6443", false)
+	}()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("a write escaped the transaction lock: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlock()
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatalf("set: %v", err)
+		}
+	}
+
+	reopened := openStore(t, path)
+	if reopened.Verdict("https://10.0.2.1:6443") != api.ProtectionProtected {
+		t.Fatal("the first process's protection decision was lost")
+	}
+	if reopened.Verdict("https://10.0.2.2:6443") != api.ProtectionOpen {
+		t.Fatal("the second process's protection decision was lost")
+	}
+}
+
+func TestAVerdictPicksUpAnotherProcessesDecision(t *testing.T) {
+	path := storePath(t)
+	first := openStore(t, path)
+	second := openStore(t, path)
+	if err := second.Set(remote, true); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	if first.Verdict(remote) != api.ProtectionProtected {
+		t.Fatal("the first process retained its stale protection verdict")
+	}
+}
+
 func readOnlyDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "locked")
@@ -352,6 +428,44 @@ func TestAFileThatIsNotJsonIsReported(t *testing.T) {
 	}
 	if store == nil {
 		t.Fatal("a store that could not be read must still be usable")
+	}
+}
+
+func TestSetDoesNotReplaceMalformedDecisionsFromStaleMemory(t *testing.T) {
+	path := storePath(t)
+	store := openStore(t, path)
+	if err := store.Set(remote, true); err != nil {
+		t.Fatalf("initial set: %v", err)
+	}
+	broken := []byte("{not json")
+	if err := os.WriteFile(path, broken, 0o600); err != nil {
+		t.Fatalf("break decisions: %v", err)
+	}
+
+	err := store.Set("https://10.0.0.6:6443", true)
+
+	if err == nil {
+		t.Fatal("a write over malformed decisions reported success")
+	}
+	body, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read broken decisions: %v", readErr)
+	}
+	if !bytes.Equal(body, broken) {
+		t.Fatalf("malformed decisions were replaced with %q", body)
+	}
+	if store.Verdict(remote) != api.ProtectionProtected {
+		t.Fatal("the last readable decision was discarded")
+	}
+}
+
+func TestDecisionsLargerThanTheReadLimitAreNotWritten(t *testing.T) {
+	store := openStore(t, storePath(t))
+
+	err := store.write(map[string]bool{strings.Repeat("x", maxFileBytes): true})
+
+	if err == nil {
+		t.Fatal("oversized protection decisions were written")
 	}
 }
 

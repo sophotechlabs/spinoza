@@ -11,7 +11,10 @@ import (
 	"sync"
 
 	"github.com/sophotechlabs/spinoza/internal/atomicfile"
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
+
+const maxFileBytes = 1 << 20
 
 type state struct {
 	Kubeconfigs []string `json:"kubeconfigs"`
@@ -33,58 +36,110 @@ func DefaultPath() (string, error) {
 
 func Open(path string) (*Store, error) {
 	store := &Store{path: path}
-	body, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return store, nil
-	}
+	paths, err := readStore(path)
 	if err != nil {
 		return store, fmt.Errorf("kubeconfig list %s: %w", path, err)
 	}
-	var saved state
-	unmarshalErr := json.Unmarshal(body, &saved)
-	if unmarshalErr != nil {
-		return store, fmt.Errorf("kubeconfig list %s: %w", path, unmarshalErr)
-	}
-	store.paths = saved.Kubeconfigs
+	store.paths = paths
 	return store, nil
 }
 
 func (s *Store) Paths() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.refresh()
 	return slices.Clone(s.paths)
 }
 
 func (s *Store) Add(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if slices.Contains(s.paths, path) {
-		return fmt.Errorf("%s is already on the list", path)
+	if s.path == "" {
+		return s.add(path)
 	}
-	next := append(slices.Clone(s.paths), path)
-	err := s.write(next)
+	err := filetx.Exclusive(s.path, func() error {
+		paths, readErr := readStore(s.path)
+		if readErr != nil {
+			return fmt.Errorf("%s: %w", s.path, readErr)
+		}
+		s.paths = paths
+		return s.add(path)
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("kubeconfig list: %w", err)
 	}
-	s.paths = next
 	return nil
 }
 
 func (s *Store) Remove(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.path == "" {
+		return s.remove(path)
+	}
+	err := filetx.Exclusive(s.path, func() error {
+		paths, readErr := readStore(s.path)
+		if readErr != nil {
+			return fmt.Errorf("%s: %w", s.path, readErr)
+		}
+		s.paths = paths
+		return s.remove(path)
+	})
+	if err != nil {
+		return fmt.Errorf("kubeconfig list: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) add(path string) error {
+	if slices.Contains(s.paths, path) {
+		return fmt.Errorf("%s is already on the list", path)
+	}
+	next := append(slices.Clone(s.paths), path)
+	if err := s.write(next); err != nil {
+		return err
+	}
+	s.paths = next
+	return nil
+}
+
+func (s *Store) remove(path string) error {
 	next := slices.DeleteFunc(slices.Clone(s.paths), func(kept string) bool {
 		return kept == path
 	})
 	if len(next) == len(s.paths) {
 		return fmt.Errorf("%s is not on the list", path)
 	}
-	err := s.write(next)
-	if err != nil {
+	if err := s.write(next); err != nil {
 		return err
 	}
 	s.paths = next
 	return nil
+}
+
+func readStore(path string) ([]string, error) {
+	body, err := filetx.Read(path, maxFileBytes)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var saved state
+	if err := json.Unmarshal(body, &saved); err != nil {
+		return nil, err
+	}
+	return slices.Clone(saved.Kubeconfigs), nil
+}
+
+func (s *Store) refresh() {
+	if s.path == "" {
+		return
+	}
+	paths, err := readStore(s.path)
+	if err == nil {
+		s.paths = paths
+	}
 }
 
 func (s *Store) write(paths []string) error {
@@ -94,6 +149,9 @@ func (s *Store) write(paths []string) error {
 	body, err := json.MarshalIndent(state{Kubeconfigs: paths}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("kubeconfig list: %w", err)
+	}
+	if len(body)+1 > maxFileBytes {
+		return fmt.Errorf("kubeconfig list is larger than %d bytes", maxFileBytes)
 	}
 	saveErr := atomicfile.Save(s.path, "kubeconfigs-*.json", append(body, '\n'))
 	if saveErr != nil {

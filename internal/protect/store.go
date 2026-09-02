@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"net"
 	"net/url"
 	"os"
@@ -15,7 +14,10 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/atomicfile"
 	"github.com/sophotechlabs/spinoza/internal/clusterid"
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
+
+const maxFileBytes = 1 << 20
 
 type state struct {
 	Clusters map[string]bool `json:"clusters"`
@@ -37,19 +39,11 @@ func DefaultPath() (string, error) {
 
 func Open(path string) (*Store, error) {
 	store := &Store{path: path, clusters: map[string]bool{}}
-	body, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return store, nil
-	}
+	clusters, err := read(path)
 	if err != nil {
 		return store, fmt.Errorf("protected clusters %s: %w", path, err)
 	}
-	var saved state
-	unmarshalErr := json.Unmarshal(body, &saved)
-	if unmarshalErr != nil {
-		return store, fmt.Errorf("protected clusters %s: %w", path, unmarshalErr)
-	}
-	adopt(store.clusters, saved.Clusters)
+	store.clusters = clusters
 	return store, nil
 }
 
@@ -87,6 +81,7 @@ func (s *Store) Verdict(server string) string {
 func (s *Store) decision(key string) (bool, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.refresh()
 	protected, decided := s.clusters[key]
 	return protected, decided
 }
@@ -98,14 +93,56 @@ func (s *Store) Set(server string, protected bool) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next := maps.Clone(s.clusters)
-	next[key] = protected
-	err := s.write(next)
-	if err != nil {
-		return err
+	if s.path == "" {
+		if s.clusters == nil {
+			s.clusters = map[string]bool{}
+		}
+		s.clusters[key] = protected
+		return nil
 	}
-	s.clusters = next
+	err := filetx.Exclusive(s.path, func() error {
+		next, readErr := read(s.path)
+		if readErr != nil {
+			return fmt.Errorf("%s: %w", s.path, readErr)
+		}
+		next[key] = protected
+		if err := s.write(next); err != nil {
+			return err
+		}
+		s.clusters = next
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("protected clusters: %w", err)
+	}
 	return nil
+}
+
+func read(path string) (map[string]bool, error) {
+	body, err := filetx.Read(path, maxFileBytes)
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[string]bool{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var saved state
+	if err := json.Unmarshal(body, &saved); err != nil {
+		return nil, err
+	}
+	found := map[string]bool{}
+	adopt(found, saved.Clusters)
+	return found, nil
+}
+
+func (s *Store) refresh() {
+	if s.path == "" {
+		return
+	}
+	found, err := read(s.path)
+	if err == nil {
+		s.clusters = found
+	}
 }
 
 func Local(server string) bool {
@@ -131,6 +168,9 @@ func (s *Store) write(clusters map[string]bool) error {
 	body, err := json.MarshalIndent(state{Clusters: clusters}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("protected clusters: %w", err)
+	}
+	if len(body)+1 > maxFileBytes {
+		return fmt.Errorf("protected clusters are larger than %d bytes", maxFileBytes)
 	}
 	saveErr := atomicfile.Save(s.path, "protected-*.json", append(body, '\n'))
 	if saveErr != nil {

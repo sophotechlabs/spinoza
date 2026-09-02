@@ -1,6 +1,7 @@
 package kubeconfig
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
 
 func storePath(t *testing.T) string {
@@ -23,6 +27,31 @@ func openStore(t *testing.T, path string) *Store {
 		t.Fatalf("open: %v", err)
 	}
 	return store
+}
+
+func holdTransaction(t *testing.T, path string) func() {
+	t.Helper()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- filetx.Exclusive(path, func() error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	select {
+	case <-entered:
+	case err := <-done:
+		t.Fatalf("hold transaction: %v", err)
+	}
+	return func() {
+		close(release)
+		if err := <-done; err != nil {
+			t.Fatalf("release transaction: %v", err)
+		}
+	}
 }
 
 func TestAnAbsentListStartsEmpty(t *testing.T) {
@@ -93,6 +122,51 @@ func TestConcurrentAddsAreAllPersisted(t *testing.T) {
 	slices.Sort(persisted)
 	if !slices.Equal(persisted, want) {
 		t.Fatalf("persisted paths = %v, want every concurrent addition", persisted)
+	}
+}
+
+func TestSimultaneousProcessesDoNotLoseKubeconfigs(t *testing.T) {
+	path := storePath(t)
+	first := openStore(t, path)
+	second := openStore(t, path)
+	unlock := holdTransaction(t, path)
+	done := make(chan error, 2)
+	go func() {
+		done <- first.Add("/tmp/one.yaml")
+	}()
+	go func() {
+		done <- second.Add("/tmp/two.yaml")
+	}()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("a write escaped the transaction lock: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlock()
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatalf("add: %v", err)
+		}
+	}
+
+	paths := openStore(t, path).Paths()
+	slices.Sort(paths)
+	if !slices.Equal(paths, []string{"/tmp/one.yaml", "/tmp/two.yaml"}) {
+		t.Fatalf("paths = %v, want both processes' kubeconfigs", paths)
+	}
+}
+
+func TestPathsPickUpAnotherProcessesAddition(t *testing.T) {
+	path := storePath(t)
+	first := openStore(t, path)
+	second := openStore(t, path)
+	if err := second.Add("/tmp/other.yaml"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+
+	if !slices.Equal(first.Paths(), []string{"/tmp/other.yaml"}) {
+		t.Fatalf("paths = %v, want the other process's addition", first.Paths())
 	}
 }
 
@@ -244,6 +318,44 @@ func TestABrokenListSurfacesAndStartsEmpty(t *testing.T) {
 	}
 	if len(store.Paths()) != 0 {
 		t.Fatalf("paths = %v", store.Paths())
+	}
+}
+
+func TestAddDoesNotReplaceAMalformedListFromStaleMemory(t *testing.T) {
+	path := storePath(t)
+	store := openStore(t, path)
+	if err := store.Add("/tmp/held.yaml"); err != nil {
+		t.Fatalf("initial add: %v", err)
+	}
+	broken := []byte("{not json")
+	if err := os.WriteFile(path, broken, 0o600); err != nil {
+		t.Fatalf("break list: %v", err)
+	}
+
+	err := store.Add("/tmp/new.yaml")
+
+	if err == nil {
+		t.Fatal("an add over a malformed list reported success")
+	}
+	body, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read broken list: %v", readErr)
+	}
+	if !bytes.Equal(body, broken) {
+		t.Fatalf("malformed list was replaced with %q", body)
+	}
+	if !slices.Equal(store.Paths(), []string{"/tmp/held.yaml"}) {
+		t.Fatalf("paths = %v, want the last readable list", store.Paths())
+	}
+}
+
+func TestAListLargerThanTheReadLimitIsNotWritten(t *testing.T) {
+	store := openStore(t, storePath(t))
+
+	err := store.write([]string{strings.Repeat("x", maxFileBytes)})
+
+	if err == nil {
+		t.Fatal("an oversized kubeconfig list was written")
 	}
 }
 

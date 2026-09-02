@@ -1,12 +1,17 @@
 package settings
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
 
 func tempPath(t *testing.T) string {
@@ -21,6 +26,31 @@ func openAt(t *testing.T, path string) *Store {
 		t.Fatalf("open: %v", err)
 	}
 	return store
+}
+
+func holdTransaction(t *testing.T, path string) func() {
+	t.Helper()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- filetx.Exclusive(path, func() error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	select {
+	case <-entered:
+	case err := <-done:
+		t.Fatalf("hold transaction: %v", err)
+	}
+	return func() {
+		close(release)
+		if err := <-done; err != nil {
+			t.Fatalf("release transaction: %v", err)
+		}
+	}
 }
 
 func TestAFreshStoreHasNothingInIt(t *testing.T) {
@@ -141,6 +171,40 @@ func TestAKeyWrittenByAnotherProcessSurvives(t *testing.T) {
 	}
 }
 
+func TestSimultaneousProcessesDoNotLoseSettings(t *testing.T) {
+	path := tempPath(t)
+	first := openAt(t, path)
+	second := openAt(t, path)
+	unlock := holdTransaction(t, path)
+	done := make(chan error, 2)
+	go func() {
+		done <- first.Merge(map[string]string{"spinoza.theme.v1": "borg"})
+	}()
+	go func() {
+		done <- second.Merge(map[string]string{"spinoza.namespace.v1": "kube-system"})
+	}()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("a write escaped the transaction lock: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlock()
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatalf("merge: %v", err)
+		}
+	}
+
+	values := openAt(t, path).All()
+	if values["spinoza.theme.v1"] != "borg" {
+		t.Fatalf("theme = %q, want the first process's value", values["spinoza.theme.v1"])
+	}
+	if values["spinoza.namespace.v1"] != "kube-system" {
+		t.Fatalf("namespace = %q, want the second process's value", values["spinoza.namespace.v1"])
+	}
+}
+
 func TestAllPicksUpWhatAnotherProcessWrote(t *testing.T) {
 	path := tempPath(t)
 	store := openAt(t, path)
@@ -149,6 +213,22 @@ func TestAllPicksUpWhatAnotherProcessWrote(t *testing.T) {
 
 	if got := store.All()["a"]; got != "2" {
 		t.Fatalf("a = %q, want what the file holds now", got)
+	}
+}
+
+func TestBooleanReadsPickUpWhatAnotherProcessWrote(t *testing.T) {
+	path := tempPath(t)
+	first := openAt(t, path)
+	second := openAt(t, path)
+	if err := second.Merge(map[string]string{NodeShellKey: enabled, UpdateCheckKey: disabled}); err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+
+	if !first.On(NodeShellKey) {
+		t.Fatal("an enabled setting written by another process stayed stale")
+	}
+	if !first.Off(UpdateCheckKey) {
+		t.Fatal("a disabled setting written by another process stayed stale")
 	}
 }
 
@@ -235,6 +315,44 @@ func TestUnreadableSettingsAreReported(t *testing.T) {
 	}
 	if len(store.All()) != 0 {
 		t.Fatalf("the broken file left values behind: %v", store.All())
+	}
+}
+
+func TestMergeDoesNotReplaceMalformedSettingsFromStaleMemory(t *testing.T) {
+	path := tempPath(t)
+	store := openAt(t, path)
+	if err := store.Merge(map[string]string{"held": "value"}); err != nil {
+		t.Fatalf("initial merge: %v", err)
+	}
+	broken := []byte("{not json")
+	if err := os.WriteFile(path, broken, 0o600); err != nil {
+		t.Fatalf("break settings: %v", err)
+	}
+
+	err := store.Merge(map[string]string{"new": "value"})
+
+	if err == nil {
+		t.Fatal("a merge over malformed settings reported success")
+	}
+	body, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read broken settings: %v", readErr)
+	}
+	if !bytes.Equal(body, broken) {
+		t.Fatalf("malformed settings were replaced with %q", body)
+	}
+	if store.All()["held"] != "value" {
+		t.Fatal("the last readable settings were discarded")
+	}
+}
+
+func TestSettingsLargerThanTheReadLimitAreNotWritten(t *testing.T) {
+	store := openAt(t, tempPath(t))
+
+	err := store.Merge(map[string]string{"huge": strings.Repeat("x", maxFileBytes)})
+
+	if err == nil {
+		t.Fatal("oversized settings were written")
 	}
 }
 
