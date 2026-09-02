@@ -13,11 +13,11 @@ import (
 )
 
 type releaseConfig struct {
-	LastReleaseSHA string                    `json:"last-release-sha"`
-	Packages       map[string]releasePackage `json:"packages"`
+	Packages map[string]releasePackage `json:"packages"`
 }
 
 type releasePackage struct {
+	Draft      bool        `json:"draft"`
 	ForceTag   bool        `json:"force-tag-creation"`
 	ExtraFiles []extraFile `json:"extra-files"`
 }

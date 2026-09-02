@@ -1,7 +1,6 @@
 package release_test
 
 import (
-	"regexp"
 	"testing"
 )
 
@@ -28,21 +27,21 @@ func TestReleaseVersionsMatch(t *testing.T) {
 	}
 }
 
-func TestReleasePleaseLeavesDraftTagCreationToPublication(t *testing.T) {
+func TestReleasePleaseCreatesTagsForDraftReleases(t *testing.T) {
 	config := readJSON[releaseConfig](t, "release-please-config.json")
 	pkg := requirePackage(t, config)
-	if pkg.ForceTag {
-		t.Fatal("release-please force-creates a tag before the draft can be published")
+	if !pkg.Draft {
+		t.Fatal("release-please does not create draft releases")
+	}
+	if !pkg.ForceTag {
+		t.Fatal("release-please leaves draft releases without discoverable tags")
 	}
 }
 
-func TestConfiguredRecoveryBoundaryIsACommitSHA(t *testing.T) {
-	config := readJSON[releaseConfig](t, "release-please-config.json")
-	if config.LastReleaseSHA == "" {
-		return
-	}
-	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(config.LastReleaseSHA) {
-		t.Fatalf("release recovery boundary %q is not a full commit SHA", config.LastReleaseSHA)
+func TestReleasePleaseHasNoRecoveryBoundary(t *testing.T) {
+	config := readJSON[map[string]any](t, "release-please-config.json")
+	if _, found := config["last-release-sha"]; found {
+		t.Fatal("release-please still uses a one-time recovery boundary")
 	}
 }
 
