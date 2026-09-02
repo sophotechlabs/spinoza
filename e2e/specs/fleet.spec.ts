@@ -27,7 +27,9 @@ test('fleet overview reports both open clusters and its total row', async ({ pag
 test('fleet inventory counts resource kinds per cluster', async ({ page }) => {
   await openFleet(page);
   await page.getByRole('button', { name: 'What is on them', exact: true }).click();
-  await expect(page.getByText(/Deployment/).first()).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('main').getByText('deployments', { exact: true })).toBeVisible({
+    timeout: 90_000,
+  });
   await expect(page.getByText(new RegExp(CONTEXT)).first()).toBeVisible();
 });
 
