@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,23 @@ func modeless(t *testing.T, cfg Config) *Authenticator {
 		t.Fatalf("building the authenticator: %v", err)
 	}
 	return built
+}
+
+func TestBuildingAuthFailsClosedWhenASecretCannotBeGenerated(t *testing.T) {
+	original := rand.Reader
+	rand.Reader = failedRandom{}
+	t.Cleanup(func() {
+		rand.Reader = original
+	})
+
+	built, err := New(t.Context(), Config{Mode: ModeNone})
+
+	if built != nil {
+		t.Fatalf("authenticator = %+v, want none without a signing secret", built)
+	}
+	if err == nil || !strings.Contains(err.Error(), "entropy source failed") {
+		t.Fatalf("error = %v, want the entropy failure", err)
+	}
 }
 
 func TestWithNoAuthEverybodyWhoReachesSpinozaIsAnAdmin(t *testing.T) {
