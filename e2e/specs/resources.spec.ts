@@ -56,8 +56,10 @@ test('a deep link to an object opens it without a click', async ({ page }) => {
 
 test('sorting changes both the announced direction and the row order', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
-  const header = page.getByRole('columnheader', { name: /Name/ });
-  const sort = header.getByRole('button');
+  const header = page
+    .locator('main')
+    .getByRole('columnheader', { name: /^Name(?: [▲▼])? Resize the Name column$/ });
+  const sort = header.getByRole('button', { name: /^Name(?: [▲▼])?$/ });
   const first = page.locator('main tbody tr').first();
   await expect(first).toBeVisible({ timeout: 60_000 });
   await sort.click();
@@ -71,20 +73,22 @@ test('sorting changes both the announced direction and the row order', async ({ 
 test('a field filter becomes a removable chip and filters the real rows', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
   const filter = page.getByRole('combobox', { name: 'Filter' });
-  await filter.fill('status:Running');
+  await filter.fill('restarts:0');
   await filter.press('Enter');
-  await expect(page.getByText('Status:', { exact: true })).toBeVisible();
+  await expect(page.getByText('Restarts:', { exact: true })).toBeVisible();
   await expect(page.locator('main tbody tr').filter({ hasText: 'healthy-' }).first()).toBeVisible({
     timeout: 60_000,
   });
   await expect(page.locator('main tbody tr').filter({ hasText: 'crashing-' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Remove the Status Running filter' }).click();
+  await page.getByRole('button', { name: 'Remove the Restarts 0 filter' }).click();
   await expect(page.locator('main tbody tr').filter({ hasText: 'crashing-' }).first()).toBeVisible({
     timeout: 60_000,
   });
 });
 
-test('the filter shortcut focuses the resource filter without typing into the page', async ({ page }) => {
+test('the filter shortcut focuses the resource filter without typing into the page', async ({
+  page,
+}) => {
   await openResource(page, 'pods', 'Pod');
   const filter = page.getByRole('combobox', { name: 'Filter' });
   await page.keyboard.press('/');
@@ -93,17 +97,25 @@ test('the filter shortcut focuses the resource filter without typing into the pa
 
 test('column visibility survives a reload and can be restored', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
-  await page.getByText('Columns', { exact: true }).click();
-  await page.getByLabel('Namespace', { exact: true }).uncheck();
+  const table = page.locator('main');
+  const saved = page.waitForResponse(
+    (response) => response.url().includes('/api/settings') && response.request().method() === 'PUT',
+    { timeout: 30_000 },
+  );
+  await table.getByText('Columns', { exact: true }).click();
+  await table.getByLabel('Namespace', { exact: true }).uncheck();
   await expect(page.getByRole('columnheader', { name: /Namespace/ })).toHaveCount(0);
+  await saved;
   await page.reload();
   await expect(page.getByRole('columnheader', { name: /Namespace/ })).toHaveCount(0);
-  await page.getByText('Columns', { exact: true }).click();
-  await page.getByLabel('Namespace', { exact: true }).check();
+  await table.getByText('Columns', { exact: true }).click();
+  await table.getByLabel('Namespace', { exact: true }).check();
   await expect(page.getByRole('columnheader', { name: /Namespace/ })).toBeVisible();
 });
 
-test('namespace scoping removes objects from other namespaces and is reversible', async ({ page }) => {
+test('namespace scoping removes objects from other namespaces and is reversible', async ({
+  page,
+}) => {
   await openResource(page, 'pods', 'Pod');
   const picker = page.getByRole('combobox', { name: 'Namespace', exact: true });
   await expect(page.locator('main tbody tr').filter({ hasText: 'coredns' }).first()).toBeVisible({
