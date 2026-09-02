@@ -203,6 +203,21 @@ func TestAPageThatFailsMidWalkIsReported(t *testing.T) {
 	}
 }
 
+func TestARepeatedContinuationTokenIsReported(t *testing.T) {
+	dyn := client()
+	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		out := &metav1.List{Items: pods(1)}
+		out.SetContinue("same")
+		return true, out, nil
+	})
+
+	_, err := Count(context.Background(), dyn, "")
+
+	if !errors.Is(err, errRepeatedContinue) {
+		t.Fatalf("count error = %v, want the repeated token", err)
+	}
+}
+
 func TestAnUnfilteredProbeWalksRatherThanTrustingTheServersEstimate(t *testing.T) {
 	dyn := client()
 	remaining := int64(4000)

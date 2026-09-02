@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -303,6 +305,7 @@ func TestBuildSaysWhenTheNodeListFailed(t *testing.T) {
 }
 
 func answerCappedPods(meta *metadatafake.FakeMetadataClient, capped map[string]bool) {
+	var token atomic.Int64
 	meta.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		list, ok := action.(k8stesting.ListAction)
 		if !ok {
@@ -314,7 +317,7 @@ func answerCappedPods(meta *metadatafake.FakeMetadataClient, capped map[string]b
 			out.Items[at] = runtime.RawExtension{Object: &metav1.PartialObjectMetadata{}}
 		}
 		if capped[selector] {
-			out.Continue = "there-is-more"
+			out.Continue = strconv.FormatInt(token.Add(1), 10)
 			return true, out, nil
 		}
 		out.Items = out.Items[:1]
@@ -758,13 +761,14 @@ func TestANodeWithNoAllocatableAtAllStillCounts(t *testing.T) {
 
 func TestBuildSaysWhenThereAreMorePodsThanItWillCount(t *testing.T) {
 	meta := metaClient()
+	var token atomic.Int64
 	meta.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 		out := &metav1.List{Items: []runtime.RawExtension{{
 			Object: &metav1.PartialObjectMetadata{
 				ObjectMeta: metav1.ObjectMeta{Name: "one", Namespace: "default"},
 			},
 		}}}
-		out.Continue = "more"
+		out.Continue = strconv.FormatInt(token.Add(1), 10)
 		return true, out, nil
 	})
 

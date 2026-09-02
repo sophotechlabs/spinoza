@@ -2,11 +2,14 @@ package podcount
 
 import (
 	"context"
+	"errors"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/metadata"
 )
+
+var errRepeatedContinue = errors.New("the apiserver repeated a continuation token while counting pods")
 
 const (
 	probeLimit = 1
@@ -50,6 +53,7 @@ func walk(
 	from string,
 ) (Result, error) {
 	total := counted
+	seen := map[string]bool{from: true}
 	opts := metav1.ListOptions{Limit: pageSize, FieldSelector: selector, Continue: from}
 	for range maxPages {
 		list, err := client.Resource(podsGVR).Namespace(metav1.NamespaceAll).List(ctx, opts)
@@ -57,10 +61,15 @@ func walk(
 			return Result{}, err
 		}
 		total += len(list.Items)
-		if list.GetContinue() == "" {
+		next := list.GetContinue()
+		if next == "" {
 			return Result{Total: total, Complete: true}, nil
 		}
-		opts.Continue = list.GetContinue()
+		if seen[next] {
+			return Result{}, errRepeatedContinue
+		}
+		seen[next] = true
+		opts.Continue = next
 	}
 	if total > Limit() {
 		total = Limit()
