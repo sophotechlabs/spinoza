@@ -547,6 +547,9 @@ func TestAReplacedLogStreamStopsWritingUnderTheReusedSubID(t *testing.T) {
 	if !sess.adopt(streams, "logs", stale, stream) {
 		t.Fatal("adopt refused the current generation")
 	}
+	waitForServer(t, func() bool {
+		return len(stream.Lines) > 0
+	}, "the log stream never buffered its first line")
 
 	sess.claim(streams, "logs")
 
@@ -565,6 +568,24 @@ func TestAReplacedLogStreamStopsWritingUnderTheReusedSubID(t *testing.T) {
 	msg := readMsg(ctx, t, client)
 	if msg.Type != "marker" {
 		t.Fatalf("type = %q, want the replaced pod's lines and end marker to have been dropped", msg.Type)
+	}
+}
+
+func TestAReplacedLogStreamStopsReportingPodCounts(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, _, ctx := rawSession(t, mgr)
+
+	stale := sess.claim(streams, "logs")
+	stream, err := mgr.Logs(ctx, logs.Request{Namespace: "default", Name: "web", Container: "app"})
+	if err != nil {
+		t.Fatalf("logs: %v", err)
+	}
+	t.Cleanup(stream.Close)
+	sess.claim(streams, "logs")
+	reported := api.LogOpened{Type: "log-open", SubID: "logs"}
+
+	if sess.reportPods("logs", stale, stream, &reported) {
+		t.Fatal("the replaced stream reported its pod counts under the new generation")
 	}
 }
 
