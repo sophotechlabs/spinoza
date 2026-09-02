@@ -130,6 +130,18 @@ func TestABatchForAReplacedSubscriptionIsDropped(t *testing.T) {
 	}
 }
 
+func TestAnErrorAfterAReplacedBatchIsDropped(t *testing.T) {
+	mgr, _ := testManager(t)
+	sess, _, _ := rawSession(t, mgr)
+	liveEntry(sess, "main", 2)
+	more := make(chan resources.Event, 1)
+	more <- resources.Event{Kind: msgError, Message: "the old watch broke"}
+
+	if sess.writeBatch("main", 1, rowEvent("added", "u-1"), more) {
+		t.Fatal("the stale batch was written before its error")
+	}
+}
+
 func TestTheRelayStopsWhenTheResyncChannelCloses(t *testing.T) {
 	mgr, _ := testManager(t)
 	sess, _, _ := rawSession(t, mgr)
@@ -190,6 +202,29 @@ func TestTheRelayStopsOnceTheSubscriptionIsReplaced(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("the relay kept going for a subscription that had been replaced")
+	}
+}
+
+func TestTheRelayStopsWhenAResyncBelongsToAReplacedSubscription(t *testing.T) {
+	mgr, _ := testManager(t, newDeployment("default", "web"))
+	sess, _, _ := rawSession(t, mgr)
+	sub, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "default", 1, nil)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	t.Cleanup(sub.Close)
+	liveEntry(sess, "main", 2)
+	sub.SetLimit(2)
+	done := make(chan struct{})
+	go func() {
+		sess.relay("main", 1, sub)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the stale relay kept running after its resync was rejected")
 	}
 }
 
