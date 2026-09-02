@@ -4,6 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/fake"
+
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
 	"github.com/sophotechlabs/spinoza/internal/helm"
@@ -38,8 +42,13 @@ func TestFluxOwnerDiscoveryIgnoresAHelmReleaseListThatCannotStart(t *testing.T) 
 		Kind:       "HelmRelease",
 		Namespaced: true,
 	}
+	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{gvr: "HelmReleaseList"},
+	)
 	mgr := NewManager(ctx, Deps{
-		Dynamic: newClient(t),
+		Dynamic: dyn,
 		Descriptors: map[string]api.ResourceDescriptor{
 			discovery.Key(desc.Group, desc.Version, desc.Resource): desc,
 		},
