@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { TAIL_LINES, useLogStream } from '../../src/lib/useLogStream';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 interface StreamProps {
   container: string;
@@ -108,5 +109,19 @@ describe('useLogStream', () => {
     view.unmount();
 
     expect(unsubscribeLogs).toHaveBeenCalledWith(first);
+  });
+
+  it('replaces the stream after a cluster switch', () => {
+    const { subscribeLogs, unsubscribeLogs, view } = setup('app');
+    const first = subIdOf(subscribeLogs, 0);
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    const second = subIdOf(subscribeLogs, 1);
+    expect(unsubscribeLogs).toHaveBeenCalledWith(first);
+    expect(second).not.toBe(first);
+    expect(view.result.current).toBe(second);
   });
 });

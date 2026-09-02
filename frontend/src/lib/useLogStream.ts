@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { LogRequest } from './types';
+import { useClusterEpoch } from '../store/cluster';
 
 export const TAIL_LINES = 500;
 
@@ -26,6 +27,13 @@ export function useLogStream(stream: LogStream): string {
     stream;
   const [subId, setSubId] = useState('');
   const target = workloadKey(workload);
+  const epoch = useClusterEpoch();
+  const [lastEpoch, setLastEpoch] = useState(epoch);
+
+  if (epoch !== lastEpoch) {
+    setLastEpoch(epoch);
+    setSubId('');
+  }
 
   useEffect(() => {
     if (!enabled) {
@@ -49,7 +57,7 @@ export function useLogStream(stream: LogStream): string {
     return () => {
       unsubscribeLogs(id);
     };
-  }, [prefix, namespace, name, container, target, enabled, subscribeLogs, unsubscribeLogs]);
+  }, [prefix, namespace, name, container, target, enabled, subscribeLogs, unsubscribeLogs, epoch]);
 
   return subId;
 }
