@@ -156,23 +156,45 @@ func (i *Installer) fetch(ctx context.Context) ([]byte, error) {
 }
 
 func saveScript(body []byte) (string, error) {
-	file, err := os.CreateTemp("", "spinoza-install-*.sh")
+	create := func() (temporaryScript, error) {
+		return os.CreateTemp("", "spinoza-install-*.sh")
+	}
+	return saveScriptWith(body, create, os.Chmod, os.Remove)
+}
+
+type temporaryScript interface {
+	Name() string
+	Write(body []byte) (int, error)
+	Close() error
+}
+
+func saveScriptWith(
+	body []byte,
+	create func() (temporaryScript, error),
+	chmod func(string, os.FileMode) error,
+	remove func(string) error,
+) (string, error) {
+	file, err := create()
 	if err != nil {
 		return "", err
 	}
 	name := file.Name()
-	_, writeErr := file.Write(body)
+	written, writeErr := file.Write(body)
 	closeErr := file.Close()
 	if writeErr != nil {
-		_ = os.Remove(name)
+		_ = remove(name)
 		return "", writeErr
 	}
+	if written != len(body) {
+		_ = remove(name)
+		return "", io.ErrShortWrite
+	}
 	if closeErr != nil {
-		_ = os.Remove(name)
+		_ = remove(name)
 		return "", closeErr
 	}
-	if chmodErr := os.Chmod(name, scriptMode); chmodErr != nil {
-		_ = os.Remove(name)
+	if chmodErr := chmod(name, scriptMode); chmodErr != nil {
+		_ = remove(name)
 		return "", chmodErr
 	}
 	return name, nil
