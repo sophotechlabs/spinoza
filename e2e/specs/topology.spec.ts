@@ -4,9 +4,9 @@ import { openView } from '../harness/app';
 test('the graph explains its own edges', async ({ page }) => {
   await openView(page, 'topology');
   const main = page.locator('main');
-  await expect(main).toContainText('Owns', { timeout: 90_000 });
-  await expect(main).toContainText('Routes to');
-  await expect(main).toContainText('Configures');
+  for (const label of ['Owns', 'Routes to', 'Configures', 'Scales']) {
+    await expect(main).toContainText(label, { timeout: 90_000 });
+  }
 });
 
 test('the graph draws the edges the api sent, not just the legend', async ({ page }) => {
@@ -69,4 +69,70 @@ test('an edge is drawn as a path with real geometry, not a zero-length line', as
     .locator('.react-flow__edge-path')
     .evaluateAll((nodes) => nodes.map((node) => (node as SVGPathElement).getTotalLength()));
   expect(lengths.filter((one) => one === 0)).toHaveLength(0);
+});
+
+test('namespace scope is sent to the topology backend and removes other namespaces', async ({
+  page,
+}) => {
+  await openView(page, 'topology');
+  await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 90_000 });
+  const scoped = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/topology' && url.searchParams.get('namespace') === 'e2e';
+  });
+  await page.getByRole('combobox', { name: 'Namespace', exact: true }).selectOption('e2e');
+  await scoped;
+  await expect(page.locator('.react-flow__node').filter({ hasText: 'coredns' })).toHaveCount(0, {
+    timeout: 90_000,
+  });
+  await expect(
+    page
+      .locator('.react-flow__node')
+      .filter({ hasText: /healthy/ })
+      .first(),
+  ).toBeVisible();
+});
+
+test('a leaf in the topology opens the object it represents', async ({ page }) => {
+  await openView(page, 'topology');
+  const scoped = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/topology' && url.searchParams.get('namespace') === 'e2e';
+  });
+  await page.getByRole('combobox', { name: 'Namespace', exact: true }).selectOption('e2e');
+  await scoped;
+  const service = page.locator('.react-flow__node').filter({ hasText: /^healthy$/ });
+  await expect(service).toBeVisible({ timeout: 90_000 });
+  await page.getByRole('button', { name: 'Fit View', exact: true }).click();
+  await service.click();
+  await expect(page).toHaveTitle(/^healthy topology /, { timeout: 60_000 });
+  await expect(page.getByRole('tablist', { name: 'right panels' })).toBeVisible();
+});
+
+test('a folded workload expands through a scoped topology request', async ({ page }) => {
+  await openView(page, 'topology');
+  const scoped = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/topology' && url.searchParams.get('namespace') === 'e2e';
+  });
+  await page.getByRole('combobox', { name: 'Namespace', exact: true }).selectOption('e2e');
+  await scoped;
+  const workload = page.locator('.react-flow__node').filter({ hasText: /^healthy ×\d+/ });
+  await expect(workload).toBeVisible({ timeout: 90_000 });
+  await page.getByRole('button', { name: 'Fit View', exact: true }).click();
+  const expanded = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/topology' && url.searchParams.has('expand');
+  });
+  await workload.click();
+  const request = await expanded;
+  expect(new URL(request.url()).searchParams.get('expand')).not.toBe('');
+  await expect(
+    page
+      .locator('.react-flow__node')
+      .filter({ hasText: /^healthy-/ })
+      .first(),
+  ).toBeVisible({
+    timeout: 90_000,
+  });
 });

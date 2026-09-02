@@ -2,10 +2,23 @@ import { expect, test } from '../harness/test';
 import { openResource, selectRow } from '../harness/app';
 import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
-import type { Page } from '@playwright/test';
 import { editorText, replaceEditor } from '../harness/editor';
+import type { Page } from '@playwright/test';
 
 const EDITED = 'edited-by-e2e';
+
+interface Pod {
+  metadata: {
+    name: string;
+    namespace: string;
+    uid: string;
+    labels?: Record<string, string>;
+    ownerReferences?: { kind: string; name: string }[];
+  };
+  status?: {
+    containerStatuses?: { name: string; restartCount: number }[];
+  };
+}
 
 async function openYaml(page: Page, name: string): Promise<void> {
   await openResource(page, 'configmaps', 'ConfigMap');
@@ -27,8 +40,60 @@ test('the drawer offers every panel the object supports', async ({ page }) => {
   }
 });
 
+test('the overview carries live metadata, ownership, and container state', async ({ page }) => {
+  const name = kubectl([
+    '-n',
+    NAMESPACE,
+    'get',
+    'pods',
+    '-l',
+    'app=crashing',
+    '-o',
+    'jsonpath={.items[0].metadata.name}',
+  ]).trim();
+  const pod = JSON.parse(kubectl(['-n', NAMESPACE, 'get', `pod/${name}`, '-o', 'json'])) as Pod;
+  await openResource(page, 'pods', 'Pod');
+  await selectRow(page, pod.metadata.name);
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Overview' });
+  const metadata = panel.getByRole('heading', { name: 'Metadata' }).locator('..');
+  await expect(metadata).toContainText(pod.metadata.uid, { timeout: 60_000 });
+  await expect(metadata).toContainText(pod.metadata.namespace);
+  const labels = panel.getByRole('heading', { name: 'Labels' }).locator('..');
+  const appLabel = pod.metadata.labels?.app;
+  expect(appLabel).toBeDefined();
+  if (appLabel === undefined) {
+    throw new Error('the crashing pod has no app label');
+  }
+  await expect(labels.getByText('app', { exact: true })).toBeVisible();
+  await expect(labels.getByText(appLabel, { exact: true })).toBeVisible();
+  const owner = pod.metadata.ownerReferences?.[0];
+  expect(owner).toBeDefined();
+  if (owner === undefined) {
+    throw new Error('the crashing pod has no owner reference');
+  }
+  const owners = panel.getByRole('heading', { name: 'Owner references' }).locator('..');
+  await expect(owners).toContainText(owner.kind);
+  await expect(owners).toContainText(owner.name);
+  const container = pod.status?.containerStatuses?.[0];
+  expect(container).toBeDefined();
+  if (container === undefined) {
+    throw new Error('the crashing pod has no container status');
+  }
+  const runtime = panel.getByText(container.name, { exact: true }).locator('..');
+  await expect(runtime).toContainText(/\d+ restarts/);
+  const runtimeText = await runtime.textContent();
+  const restarts = runtimeText?.match(/(\d+) restarts/)?.[1];
+  expect(restarts).toBeDefined();
+  if (restarts === undefined) {
+    throw new Error('the container restart count was not rendered');
+  }
+  expect(Number(restarts)).toBeGreaterThanOrEqual(container.restartCount);
+});
+
 test('the editor shows the object the row selected, not a template', async ({ page }) => {
   await openYaml(page, 'config-sample');
+  await expect.poll(async () => editorText(page), { timeout: 60_000 }).toContain('hello from e2e');
   const text = await editorText(page);
   expect(text).toContain('kind: ConfigMap');
   expect(text).toContain('name: config-sample');
@@ -105,67 +170,94 @@ function dataOf(name: string, key: string): string {
   ]).trim();
 }
 
+function createEdited(): void {
+  kubectl(['-n', NAMESPACE, 'delete', 'configmap', EDITED, '--ignore-not-found']);
+  kubectl(['-n', NAMESPACE, 'create', 'configmap', EDITED, '--from-literal=before=yes']);
+}
+
 test('an apply that names no resourceVersion is refused, and the object is left alone', async ({
   page,
 }) => {
-  kubectl(['-n', NAMESPACE, 'create', 'configmap', EDITED, '--from-literal=before=yes']);
-  await openYaml(page, EDITED);
-  await replaceEditor(page, documentFor(EDITED, null, { before: 'yes', after: 'no-version' }));
-  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  createEdited();
+  try {
+    await openYaml(page, EDITED);
+    await replaceEditor(page, documentFor(EDITED, null, { before: 'yes', after: 'no-version' }));
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
 
-  await expect(alertOf(page)).toContainText('resourceVersion', { timeout: 30_000 });
-  expect(dataOf(EDITED, 'after')).toBe('');
+    await expect(alertOf(page)).toContainText('resourceVersion', { timeout: 30_000 });
+    expect(dataOf(EDITED, 'after')).toBe('');
+  } finally {
+    kubectl(['-n', NAMESPACE, 'delete', 'configmap', EDITED, '--ignore-not-found']);
+  }
 });
 
 test('an edit that carries the resourceVersion reaches the apiserver', async ({ page }) => {
-  await openYaml(page, EDITED);
-  await replaceEditor(
-    page,
-    documentFor(EDITED, liveVersion(EDITED), { before: 'yes', after: 'also-yes' }),
-  );
-  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  createEdited();
+  try {
+    await openYaml(page, EDITED);
+    await replaceEditor(
+      page,
+      documentFor(EDITED, liveVersion(EDITED), { before: 'yes', after: 'also-yes' }),
+    );
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
 
-  await expect(alertOf(page)).toBeEmpty({ timeout: 30_000 });
-  await expect.poll(() => dataOf(EDITED, 'after'), { timeout: 60_000 }).toBe('also-yes');
+    await expect(alertOf(page)).toBeEmpty({ timeout: 30_000 });
+    await expect.poll(() => dataOf(EDITED, 'after'), { timeout: 60_000 }).toBe('also-yes');
+  } finally {
+    kubectl(['-n', NAMESPACE, 'delete', 'configmap', EDITED, '--ignore-not-found']);
+  }
 });
 
 test('an apply built on a read the cluster has moved past is refused', async ({ page }) => {
-  const stale = liveVersion(EDITED);
-  kubectl([
-    '-n',
-    NAMESPACE,
-    'patch',
-    `configmap/${EDITED}`,
-    '--type=merge',
-    '-p',
-    '{"data":{"moved":"by-kubectl"}}',
-  ]);
-  expect(liveVersion(EDITED)).not.toBe(stale);
+  createEdited();
+  try {
+    const stale = liveVersion(EDITED);
+    kubectl([
+      '-n',
+      NAMESPACE,
+      'patch',
+      `configmap/${EDITED}`,
+      '--type=merge',
+      '-p',
+      '{"data":{"moved":"by-kubectl"}}',
+    ]);
+    expect(liveVersion(EDITED)).not.toBe(stale);
 
-  await openYaml(page, EDITED);
-  await replaceEditor(page, documentFor(EDITED, stale, { before: 'yes', after: 'stale-write' }));
-  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+    await openYaml(page, EDITED);
+    await replaceEditor(page, documentFor(EDITED, stale, { before: 'yes', after: 'stale-write' }));
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
 
-  await expect(alertOf(page)).not.toBeEmpty({ timeout: 30_000 });
-  expect(dataOf(EDITED, 'after')).toBe('also-yes');
-  expect(dataOf(EDITED, 'moved')).toBe('by-kubectl');
+    await expect(alertOf(page)).not.toBeEmpty({ timeout: 30_000 });
+    expect(dataOf(EDITED, 'after')).toBe('');
+    expect(dataOf(EDITED, 'moved')).toBe('by-kubectl');
+  } finally {
+    kubectl(['-n', NAMESPACE, 'delete', 'configmap', EDITED, '--ignore-not-found']);
+  }
 });
 
 test('deleting from the drawer takes the object out of the table', async ({ page }) => {
-  await openYaml(page, EDITED);
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  const confirm = page.getByRole('button', { name: 'Confirm', exact: true });
-  await confirm
-    .first()
-    .click({ timeout: 5_000 })
-    .catch(() => undefined);
-  await expect
-    .poll(
-      () =>
-        kubectl(['-n', NAMESPACE, 'get', 'configmaps', '-o', 'jsonpath={.items[*].metadata.name}']),
-      { timeout: 60_000 },
-    )
-    .not.toContain(EDITED);
+  createEdited();
+  try {
+    await openYaml(page, EDITED);
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm', exact: true }).first().click();
+    await expect
+      .poll(
+        () =>
+          kubectl([
+            '-n',
+            NAMESPACE,
+            'get',
+            'configmaps',
+            '-o',
+            'jsonpath={.items[*].metadata.name}',
+          ]),
+        { timeout: 60_000 },
+      )
+      .not.toContain(EDITED);
+  } finally {
+    kubectl(['-n', NAMESPACE, 'delete', 'configmap', EDITED, '--ignore-not-found']);
+  }
 });
 
 test('the events panel reports what the cluster recorded', async ({ page }) => {

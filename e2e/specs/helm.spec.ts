@@ -309,7 +309,7 @@ test('closing an upgrade leaves the installed chart and revision untouched', asy
     timeout: 60_000,
   });
   await dialog.getByRole('button', { name: 'Close the upgrade dialog' }).click();
-  await expect(dialog).toBeHidden();
+  await expect(dialog).toHaveCount(0);
   expect(helm(['list', '--namespace', NAMESPACE, '--filter', RELEASE, '-o', 'json'])).toBe(before);
 });
 

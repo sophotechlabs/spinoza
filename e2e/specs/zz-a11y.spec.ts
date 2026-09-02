@@ -84,6 +84,28 @@ test('the command palette has no detectable accessibility violations', async ({ 
   expect(await violations(page)).toEqual([]);
 });
 
+test('the notification history has no detectable accessibility violations', async ({ page }) => {
+  await openHome(page);
+  await page.getByLabel('Notifications', { exact: true }).click();
+  await expect(page.getByText('Nothing yet.', { exact: true })).toBeVisible();
+  expect(await violations(page)).toEqual([]);
+});
+
+test('the cluster picker has no detectable accessibility violations', async ({ page }) => {
+  await openHome(page);
+  await page.getByLabel('Kubernetes context').click();
+  await expect(page.getByRole('button', { name: 'Manage kubeconfigs', exact: true })).toBeVisible();
+  expect(await violations(page)).toEqual([]);
+});
+
+test('the kubeconfig manager has no detectable accessibility violations', async ({ page }) => {
+  await openHome(page);
+  await page.getByLabel('Kubernetes context').click();
+  await page.getByRole('button', { name: 'Manage kubeconfigs', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Kubeconfigs' })).toBeVisible();
+  expect(await violations(page)).toEqual([]);
+});
+
 test('the settings dialog has no detectable accessibility violations', async ({ page }) => {
   await openHome(page);
   await page.getByRole('button', { name: 'Settings' }).click();

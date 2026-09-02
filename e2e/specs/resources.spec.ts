@@ -1,6 +1,18 @@
 import { expect, test } from '../harness/test';
 import { openResource } from '../harness/app';
 import { CONTEXT } from '../harness/paths';
+import type { Locator, Page } from '@playwright/test';
+
+function settingsWrite(page: Page) {
+  return page.waitForResponse(
+    (response) => response.url().includes('/api/settings') && response.request().method() === 'PUT',
+    { timeout: 30_000 },
+  );
+}
+
+function columnWidth(header: Locator): Promise<number> {
+  return header.evaluate((element) => Math.round(element.getBoundingClientRect().width));
+}
 
 test('discovery lists a table for a core type', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
@@ -62,12 +74,30 @@ test('sorting changes both the announced direction and the row order', async ({ 
   const sort = header.getByRole('button', { name: /^Name(?: [▲▼])?$/ });
   const first = page.locator('main tbody tr').first();
   await expect(first).toBeVisible({ timeout: 60_000 });
-  await sort.click();
-  await expect(header).toHaveAttribute('aria-sort', 'ascending');
-  const ascending = await first.textContent();
-  await sort.click();
-  await expect(header).toHaveAttribute('aria-sort', 'descending');
-  await expect.poll(() => first.textContent()).not.toBe(ascending);
+  try {
+    const ascendingSaved = settingsWrite(page);
+    await sort.click();
+    await ascendingSaved;
+    await expect(header).toHaveAttribute('aria-sort', 'ascending');
+    const ascending = await first.textContent();
+    const descendingSaved = settingsWrite(page);
+    await sort.click();
+    await descendingSaved;
+    await expect(header).toHaveAttribute('aria-sort', 'descending');
+    await expect.poll(() => first.textContent()).not.toBe(ascending);
+  } finally {
+    if ((await header.getAttribute('aria-sort')) !== 'none') {
+      for (let turn = 0; turn < 3; turn += 1) {
+        if ((await header.getAttribute('aria-sort')) === 'none') {
+          break;
+        }
+        const restored = settingsWrite(page);
+        await sort.click();
+        await restored;
+      }
+      await expect(header).toHaveAttribute('aria-sort', 'none');
+    }
+  }
 });
 
 test('a field filter becomes a removable chip and filters the real rows', async ({ page }) => {
@@ -97,20 +127,62 @@ test('the filter shortcut focuses the resource filter without typing into the pa
 
 test('column visibility survives a reload and can be restored', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
-  const table = page.locator('main');
-  const saved = page.waitForResponse(
-    (response) => response.url().includes('/api/settings') && response.request().method() === 'PUT',
-    { timeout: 30_000 },
-  );
-  await table.getByText('Columns', { exact: true }).click();
-  await table.getByLabel('Namespace', { exact: true }).uncheck();
-  await expect(page.getByRole('columnheader', { name: /Namespace/ })).toHaveCount(0);
-  await saved;
-  await page.reload();
-  await expect(page.getByRole('columnheader', { name: /Namespace/ })).toHaveCount(0);
-  await table.getByText('Columns', { exact: true }).click();
-  await table.getByLabel('Namespace', { exact: true }).check();
-  await expect(page.getByRole('columnheader', { name: /Namespace/ })).toBeVisible();
+  const checkbox = page.getByRole('checkbox', { name: 'Namespace', exact: true });
+  let changed = false;
+  try {
+    await page.locator('main').getByText('Columns', { exact: true }).click();
+    const hidden = settingsWrite(page);
+    await checkbox.uncheck();
+    changed = true;
+    await hidden;
+    await expect(page.getByRole('columnheader', { name: /^Namespace\b/ })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('columnheader', { name: /^Namespace\b/ })).toHaveCount(0);
+    await page.locator('main').getByText('Columns', { exact: true }).click();
+    const shown = settingsWrite(page);
+    await checkbox.check();
+    await shown;
+    changed = false;
+    await expect(page.getByRole('columnheader', { name: /^Namespace\b/ })).toBeVisible();
+  } finally {
+    if (changed) {
+      if (!(await checkbox.isVisible())) {
+        await page.locator('main').getByText('Columns', { exact: true }).click();
+      }
+      if (!(await checkbox.isChecked())) {
+        const restored = settingsWrite(page);
+        await checkbox.check();
+        await restored;
+      }
+    }
+  }
+});
+
+test('a keyboard-resized column survives reload and can be restored exactly', async ({ page }) => {
+  await openResource(page, 'pods', 'Pod');
+  const header = page.getByRole('columnheader', { name: /^Name\b/ });
+  const handle = page.getByRole('button', { name: 'Resize the Name column' });
+  await expect(header).toBeVisible({ timeout: 60_000 });
+  const original = await columnWidth(header);
+  let adjusted = false;
+  try {
+    const saved = settingsWrite(page);
+    await handle.press('ArrowRight');
+    adjusted = true;
+    await saved;
+    await expect.poll(() => columnWidth(header)).toBeGreaterThan(original);
+    const widened = await columnWidth(header);
+    await page.reload();
+    await expect(header).toBeVisible({ timeout: 60_000 });
+    await expect.poll(() => columnWidth(header)).toBe(widened);
+  } finally {
+    if (adjusted) {
+      const restored = settingsWrite(page);
+      await handle.press('Home');
+      await restored;
+      await expect.poll(() => columnWidth(header)).toBe(original);
+    }
+  }
 });
 
 test('namespace scoping removes objects from other namespaces and is reversible', async ({

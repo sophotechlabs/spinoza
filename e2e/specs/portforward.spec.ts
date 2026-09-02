@@ -77,6 +77,9 @@ test('a forward survives navigating away and back', async ({ page }) => {
   await openHealthy(page);
   await clearForwards(page);
   await page.getByRole('button', { name: 'Forward', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop forwarding port 8080' })).toBeVisible({
+    timeout: 60_000,
+  });
   await openResource(page, 'configmaps', 'ConfigMap');
   await openHealthy(page);
   await page.getByRole('tab', { name: 'Forwards', exact: true }).click();

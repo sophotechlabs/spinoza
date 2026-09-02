@@ -52,12 +52,7 @@ export function seed(): void {
   kubectl(['apply', '-f', RBAC]);
   kubectl(['apply', '-f', PROMETHEUS]);
   kubectl(['apply', '-f', CRD]);
-  kubectl([
-    'wait',
-    '--for=condition=Established',
-    'crd/widgets.spinoza.test',
-    '--timeout=120s',
-  ]);
+  kubectl(['wait', '--for=condition=Established', 'crd/widgets.spinoza.test', '--timeout=120s']);
   kubectl(['apply', '-f', WIDGETS]);
 }
 
@@ -101,11 +96,7 @@ export function seedHelm(): void {
 }
 
 export function installFlux(): void {
-  kubectl([
-    'apply',
-    '-f',
-    'https://github.com/fluxcd/flux2/releases/latest/download/install.yaml',
-  ]);
+  kubectl(['apply', '-f', 'https://github.com/fluxcd/flux2/releases/latest/download/install.yaml']);
   kubectl([
     'wait',
     '--for=condition=Established',
@@ -132,6 +123,8 @@ export const SCALE_NAMESPACE = 'e2e-scale';
 
 export const SCALE_CONFIGMAPS = 1500;
 
+export const SCALE_EVENTS = 125;
+
 export const SCALE_WORKLOADS = 300;
 
 function scaleDocuments(): string {
@@ -146,6 +139,31 @@ function scaleDocuments(): string {
         `  namespace: ${SCALE_NAMESPACE}`,
         'data:',
         `  index: "${String(index)}"`,
+      ].join('\n'),
+    );
+  }
+  for (let index = 0; index < SCALE_EVENTS; index += 1) {
+    const suffix = String(index).padStart(4, '0');
+    parts.push(
+      [
+        'apiVersion: v1',
+        'kind: Event',
+        'metadata:',
+        `  name: scale-${suffix}`,
+        `  namespace: ${SCALE_NAMESPACE}`,
+        'involvedObject:',
+        '  apiVersion: v1',
+        '  kind: ConfigMap',
+        `  name: bulk-${suffix}`,
+        `  namespace: ${SCALE_NAMESPACE}`,
+        'reason: ScaleFixture',
+        `message: scale event ${suffix}`,
+        'source:',
+        '  component: spinoza-e2e',
+        'firstTimestamp: 2026-01-01T00:00:00Z',
+        'lastTimestamp: 2026-01-01T00:00:00Z',
+        'count: 1',
+        'type: Normal',
       ].join('\n'),
     );
   }

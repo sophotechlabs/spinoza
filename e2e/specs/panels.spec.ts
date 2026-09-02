@@ -1,6 +1,22 @@
 import { expect, test } from '../harness/test';
 import { openHome, openResource, selectRow } from '../harness/app';
-import type { Page } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
+
+function settingsWrite(key: string): (response: Response) => boolean {
+  return (response) => {
+    if (!response.url().includes('/api/settings')) {
+      return false;
+    }
+    if (response.request().method() !== 'PUT') {
+      return false;
+    }
+    const body = response.request().postData();
+    if (body === null) {
+      return false;
+    }
+    return body.includes(`"${key}"`);
+  };
+}
 
 async function openPod(page: Page): Promise<void> {
   await openResource(page, 'pods', 'Pod');
@@ -12,10 +28,7 @@ async function openPod(page: Page): Promise<void> {
 
 async function resetDocks(page: Page): Promise<void> {
   await openHome(page);
-  const saved = page.waitForResponse(
-    (response) => response.url().includes('/api/settings') && response.request().method() === 'PUT',
-    { timeout: 30_000 },
-  );
+  const saved = page.waitForResponse(settingsWrite('spinoza.layout.v1'), { timeout: 30_000 });
   await page.getByRole('button', { name: 'Settings' }).click();
   await page
     .getByRole('navigation', { name: 'Settings sections' })
@@ -66,10 +79,7 @@ test('the bottom dock collapses independently from the inspector', async ({ page
 
 test('a collapsed dock stays collapsed through a reload and can be restored', async ({ page }) => {
   await openPod(page);
-  let saved = page.waitForResponse(
-    (response) => response.url().includes('/api/settings') && response.request().method() === 'PUT',
-    { timeout: 30_000 },
-  );
+  let saved = page.waitForResponse(settingsWrite('spinoza.layout.v1'), { timeout: 30_000 });
   await page.getByRole('button', { name: 'Hide the bottom dock' }).click();
   await saved;
   await page.reload();
@@ -77,10 +87,7 @@ test('a collapsed dock stays collapsed through a reload and can be restored', as
     timeout: 60_000,
   });
   await expect(page.getByRole('tablist', { name: 'bottom panels' })).toBeHidden();
-  saved = page.waitForResponse(
-    (response) => response.url().includes('/api/settings') && response.request().method() === 'PUT',
-    { timeout: 30_000 },
-  );
+  saved = page.waitForResponse(settingsWrite('spinoza.layout.v1'), { timeout: 30_000 });
   await page.getByRole('button', { name: 'Show the bottom dock' }).click();
   await saved;
   await expect(page.getByRole('tablist', { name: 'bottom panels' })).toBeVisible();
@@ -132,10 +139,7 @@ test('the empty left dock takes a panel and stops being empty', async ({ page })
 test('where a panel was put survives a reload', async ({ page }) => {
   await openPod(page);
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-  const saved = page.waitForResponse(
-    (response) => response.url().includes('/api/settings') && response.request().method() === 'PUT',
-    { timeout: 30_000 },
-  );
+  const saved = page.waitForResponse(settingsWrite('spinoza.panels.v1'), { timeout: 30_000 });
   await page.getByRole('button', { name: 'Move Overview to the bottom' }).click();
   const moved = page
     .getByRole('tablist', { name: 'bottom panels' })
@@ -196,11 +200,7 @@ test('the keyboard-resized sidebar survives reload and the layout reset restores
     throw new Error('the sidebar has no measurable box');
   }
   try {
-    const saved = page.waitForResponse(
-      (response) =>
-        response.url().includes('/api/settings') && response.request().method() === 'PUT',
-      { timeout: 30_000 },
-    );
+    const saved = page.waitForResponse(settingsWrite('spinoza.layout.v1'), { timeout: 30_000 });
     await handle.press('ArrowRight');
     await saved;
     const resized = await sidebar.boundingBox();
