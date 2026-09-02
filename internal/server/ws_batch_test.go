@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -181,6 +182,25 @@ func TestTheRelayStopsWhenTheEventChannelCloses(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("the relay did not stop when its event channel closed")
+	}
+}
+
+func TestTheRelayStopsWhenTheSessionIsCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	sess := &wsSession{ctx: ctx}
+	sub := &resources.Subscription{Events: make(chan resources.Event), Resync: make(chan struct{})}
+	done := make(chan struct{})
+
+	go func() {
+		sess.relay("main", 1, sub)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the canceled session left its resource relay running")
 	}
 }
 
