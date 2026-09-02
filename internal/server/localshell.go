@@ -58,6 +58,12 @@ func (s *Server) handleLocalShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, noLocalShell)
 		return
 	}
+	release, allowed := s.claimLiveConnection(r)
+	if !allowed {
+		writeError(w, http.StatusTooManyRequests, "too many live connections are already open")
+		return
+	}
+	defer release()
 	socket, err := accept(w, r)
 	if err != nil {
 		slog.Warn("a local shell upgrade was refused", "error", err)

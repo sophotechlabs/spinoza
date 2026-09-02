@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -96,6 +97,10 @@ func TestAuthorizationWatcherEndsAConnectionWhoseIdentityChanged(t *testing.T) {
 func TestEveryLiveEndpointRefusesAnUpgradeWhenTheGlobalBudgetIsFull(t *testing.T) {
 	srv := New(nil, nil, "")
 	srv.liveLimit = 1
+	srv.UseLocalShell(func(uint16, uint16) (LocalShell, error) {
+		t.Fatal("the local shell opener ran without a connection slot")
+		return nil, errors.New("the local shell opener ran")
+	})
 	release, ok := srv.claimLiveConnection(liveRequest(t, "alice"))
 	if !ok {
 		t.Fatal("the setup connection was refused")
@@ -110,6 +115,7 @@ func TestEveryLiveEndpointRefusesAnUpgradeWhenTheGlobalBudgetIsFull(t *testing.T
 		{name: "feed", path: "/ws", call: srv.handleWS},
 		{name: "exec", path: "/api/exec?namespace=default&pod=web", call: srv.handleExec},
 		{name: "node shell", path: "/api/nodeshell?node=worker-1", call: srv.handleNodeShell},
+		{name: "local shell", path: "/api/shell", call: srv.handleLocalShell},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			recorded := httptest.NewRecorder()
