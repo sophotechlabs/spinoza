@@ -24,6 +24,11 @@ type sessionClaims struct {
 	User    string   `json:"u"`
 }
 
+type stashClaims struct {
+	Expires int64           `json:"e"`
+	Payload json.RawMessage `json:"p"`
+}
+
 type session struct {
 	who     Identity
 	issued  time.Time
@@ -178,7 +183,11 @@ func (ss *sessions) renewable(issued time.Time) bool {
 }
 
 func (ss *sessions) stash(w http.ResponseWriter, name string, payload any, age time.Duration) error {
-	value, err := ss.seal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	value, err := ss.seal(stashClaims{Expires: ss.now().Add(age).Unix(), Payload: body})
 	if err != nil {
 		return err
 	}
@@ -195,7 +204,14 @@ func (ss *sessions) unstashNamed(r *http.Request, name string, into any) bool {
 	if err != nil {
 		return false
 	}
-	return ss.unseal(cookie.Value, into)
+	var claims stashClaims
+	if !ss.unseal(cookie.Value, &claims) {
+		return false
+	}
+	if !ss.now().Before(time.Unix(claims.Expires, 0)) {
+		return false
+	}
+	return json.Unmarshal(claims.Payload, into) == nil
 }
 
 func (ss *sessions) drop(w http.ResponseWriter, name string) {

@@ -194,6 +194,28 @@ func TestAStashedFlowComesBackAndCanBeDropped(t *testing.T) {
 	}
 }
 
+func TestAStashedFlowExpiresOnTheServer(t *testing.T) {
+	held := testSessions(t, false)
+	now := time.Now().Truncate(time.Second)
+	held.now = func() time.Time { return now }
+	recorded := httptest.NewRecorder()
+
+	err := held.stash(recorded, flowCookie, flowState{State: "s"}, time.Minute)
+	if err != nil {
+		t.Fatalf("stashing: %v", err)
+	}
+	req := withCookie(t, recorded)
+	var flow flowState
+	if !held.unstash(req, &flow) {
+		t.Fatal("a fresh login flow was already expired")
+	}
+
+	held.now = func() time.Time { return now.Add(time.Minute) }
+	if held.unstash(req, &flow) {
+		t.Fatal("a login flow past its lifetime was still accepted")
+	}
+}
+
 func TestAnEditedFlowCookieIsIgnored(t *testing.T) {
 	held := testSessions(t, false)
 	recorded := httptest.NewRecorder()
