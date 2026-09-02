@@ -28,6 +28,23 @@ func TestE2EUsesAConcurrencyGroupForEachPullRequest(t *testing.T) {
 	}
 }
 
+func TestInstallSupersedesValidationButPreservesPublishedReleaseChecks(t *testing.T) {
+	workflow := readYAML[workflowFile](t, ".github/workflows/install.yaml")
+	wantGroup := "install-${{ inputs.version || github.event.pull_request.number || github.ref }}"
+	if workflow.Concurrency.Group != wantGroup {
+		t.Fatalf("concurrency group = %q, want %q", workflow.Concurrency.Group, wantGroup)
+	}
+	wantCancellation := workflowScalar("${{ !inputs.version }}")
+	if workflow.Concurrency.CancelInProgress != wantCancellation {
+		t.Fatalf("cancel-in-progress = %q, want %q", workflow.Concurrency.CancelInProgress, wantCancellation)
+	}
+	release := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
+	version, ok := requireJob(t, release, "install").With["version"].(string)
+	if !ok || version != "${{ needs.version.outputs.tag }}" {
+		t.Fatalf("release install version = %q, want the detected release tag", version)
+	}
+}
+
 func TestOrdinaryPushesSupersedeValidationButReleaseCommitsDoNot(t *testing.T) {
 	want := workflowScalar("${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(main): release ') }}")
 	release := "startsWith(github.event.head_commit.message, 'chore(main): release ')"

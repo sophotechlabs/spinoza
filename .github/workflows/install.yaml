@@ -23,6 +23,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: install-${{ inputs.version || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: "${{ !inputs.version }}"
+
 jobs:
   containers:
     name: ${{ matrix.name }}

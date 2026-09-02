@@ -36,4 +36,25 @@ jobs:
         run: |
           branch=$(jq -er '.headBranchName' <<< "$RELEASE_PR")
           number=$(jq -er '.number' <<< "$RELEASE_PR")
-          gh workflow run e2e.yaml --ref "$branch" -f pull_request="$number"
+          workflows=(
+            codeql.yaml
+            commits.yaml
+            frontend.yaml
+            go-fuzz.yaml
+            go-mutation.yaml
+            go.yaml
+            install.yaml
+            integration.yaml
+            repo.yaml
+            windows.yaml
+          )
+          failed=0
+          for workflow in "${workflows[@]}"; do
+            if ! gh workflow run "$workflow" --ref "$branch"; then
+              failed=1
+            fi
+          done
+          if ! gh workflow run e2e.yaml --ref "$branch" -f pull_request="$number"; then
+            failed=1
+          fi
+          exit "$failed"

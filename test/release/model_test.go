@@ -70,6 +70,7 @@ type workflowJob struct {
 	Outputs     map[string]string `yaml:"outputs"`
 	Permissions map[string]string `yaml:"permissions"`
 	Steps       []workflowStep    `yaml:"steps"`
+	With        map[string]any    `yaml:"with"`
 }
 
 type workflowStep struct {
