@@ -51,6 +51,19 @@ type stubSources struct {
 	removeErr error
 }
 
+type pausedSources struct {
+	*stubSources
+
+	listed chan struct{}
+	resume chan struct{}
+}
+
+func (s *pausedSources) List() []api.Kubeconfig {
+	close(s.listed)
+	<-s.resume
+	return s.stubSources.List()
+}
+
 func newStubSources() *stubSources {
 	return &stubSources{entries: []api.Kubeconfig{{
 		Label: "default",
@@ -556,6 +569,46 @@ func TestTheProtectionOfTheClusterInUseIsReported(t *testing.T) {
 	}
 	if !cluster.Protected(cluster.ID()) {
 		t.Fatal("the gate on destructive actions would be open")
+	}
+}
+
+func TestContextsKeepsTheCurrentContextAndProtectionTogether(t *testing.T) {
+	protection := newStubProtection()
+	sources := &pausedSources{
+		stubSources: newStubSources(),
+		listed:      make(chan struct{}),
+		resume:      make(chan struct{}),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster := newCluster(ctx, (&recorder{}).build, sources, protection, testOpenTimeout, api.ContextRef{})
+	first := cluster.ID()
+	second, err := cluster.Open(api.ContextRef{Name: "p-mk2"})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := cluster.Activate(first); err != nil {
+		t.Fatalf("activate first: %v", err)
+	}
+	protection.verdicts[first] = api.ProtectionProtected
+	protection.verdicts[second] = api.ProtectionOpen
+
+	got := make(chan api.ContextList, 1)
+	go func() {
+		got <- cluster.Contexts()
+	}()
+	<-sources.listed
+	if err := cluster.Activate(second); err != nil {
+		t.Fatalf("activate second: %v", err)
+	}
+	close(sources.resume)
+	list := <-got
+
+	if list.Current.Name != "default-context" {
+		t.Fatalf("current = %q, want the context selected when the snapshot began", list.Current.Name)
+	}
+	if list.Protection != api.ProtectionProtected {
+		t.Fatalf("protection = %q, want the verdict for %q", list.Protection, first)
 	}
 }
 

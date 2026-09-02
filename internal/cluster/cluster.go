@@ -151,11 +151,20 @@ func (c *Cluster) Current() api.ContextRef {
 }
 
 func (c *Cluster) Contexts() api.ContextList {
+	c.mu.Lock()
+	current := api.ContextRef{}
+	held := c.held("")
+	if held != nil {
+		current = held.ref
+	}
+	failed := c.startErr
+	active := c.active
+	c.mu.Unlock()
 	return api.ContextList{
-		Current:     c.Current(),
-		Error:       c.unreached(),
+		Current:     current,
+		Error:       failed,
 		Kubeconfigs: c.sources.List(),
-		Protection:  c.protection.Verdict(c.ID()),
+		Protection:  c.protection.Verdict(active),
 	}
 }
 
