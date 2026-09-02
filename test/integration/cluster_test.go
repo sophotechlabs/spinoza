@@ -478,11 +478,23 @@ func TestHelmDetailAndActionsAgainstRealHelm(t *testing.T) {
 	if detail.Release.Revision != 2 {
 		t.Fatalf("revision = %d, want the upgrade", detail.Release.Revision)
 	}
-	if len(detail.History) != 2 {
-		t.Fatalf("history = %d, want both revisions", len(detail.History))
+	if len(detail.History) != 0 {
+		t.Fatalf("detail history = %d, want revisions loaded separately", len(detail.History))
 	}
-	if detail.History[0].Revision != 2 {
-		t.Fatalf("history = %v, want newest first", detail.History)
+	history, historyErr := mgr.HelmHistory(
+		context.Background(),
+		namespace,
+		"smoke-release",
+		detail.Release.Revision,
+	)
+	if historyErr != nil {
+		t.Fatalf("history: %v", historyErr)
+	}
+	if len(history.Revisions) != 2 {
+		t.Fatalf("history = %d, want both revisions", len(history.Revisions))
+	}
+	if history.Revisions[0].Revision != 2 {
+		t.Fatalf("history = %v, want newest first", history.Revisions)
 	}
 	if !strings.Contains(detail.Manifest, "kind: ConfigMap") {
 		t.Fatalf("manifest = %q, want the rendered configmap", detail.Manifest)
