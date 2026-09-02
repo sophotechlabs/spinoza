@@ -242,13 +242,14 @@ func volumeRefs(spec map[string]any) []configRef {
 
 func projectedRefs(volume map[string]any) []configRef {
 	sources := sliceAt(volume, "projected", "sources")
-	if injectedByKubelet(sources) {
-		return nil
-	}
+	injected := injectedByKubelet(volume)
 	refs := []configRef{}
 	for _, raw := range sources {
 		source, ok := raw.(map[string]any)
 		if !ok {
+			continue
+		}
+		if injected && unstr.At(mapAt(source, "configMap"), "name") == "kube-root-ca.crt" {
 			continue
 		}
 		refs = appendRef(refs, kindConfigMap, unstr.At(mapAt(source, "configMap"), "name"))
@@ -257,8 +258,11 @@ func projectedRefs(volume map[string]any) []configRef {
 	return refs
 }
 
-func injectedByKubelet(sources []any) bool {
-	for _, raw := range sources {
+func injectedByKubelet(volume map[string]any) bool {
+	if !strings.HasPrefix(unstr.At(volume, "name"), "kube-api-access-") {
+		return false
+	}
+	for _, raw := range sliceAt(volume, "projected", "sources") {
 		source, ok := raw.(map[string]any)
 		if !ok {
 			continue

@@ -334,6 +334,10 @@ func TestAPodTemplateNamesEveryConfigItMounts(t *testing.T) {
 				map[string]any{"configMap": map[string]any{"name": "bundle"}},
 				map[string]any{"secret": map[string]any{"name": "signing"}},
 			}}},
+			map[string]any{"name": "identity", "projected": map[string]any{"sources": []any{
+				map[string]any{"serviceAccountToken": map[string]any{"path": "token"}},
+				map[string]any{"configMap": map[string]any{"name": "identity-policy"}},
+			}}},
 			map[string]any{"emptyDir": map[string]any{}},
 			"not-a-map",
 		},
@@ -364,6 +368,7 @@ func TestAPodTemplateNamesEveryConfigItMounts(t *testing.T) {
 	expected := []configRef{
 		{kind: kindConfigMap, name: "bundle"},
 		{kind: kindConfigMap, name: "debug"},
+		{kind: kindConfigMap, name: "identity-policy"},
 		{kind: kindConfigMap, name: "settings"},
 		{kind: kindConfigMap, name: "shared"},
 		{kind: kindSecret, name: "registry"},
@@ -383,29 +388,44 @@ func TestAPodTemplateNamesEveryConfigItMounts(t *testing.T) {
 
 func TestTheVolumeTheKubeletInjectsIsRecognised(t *testing.T) {
 	cases := []struct {
-		name    string
-		sources []any
-		want    bool
+		name   string
+		volume map[string]any
+		want   bool
 	}{
 		{
 			name: "the injected token volume",
-			sources: []any{
-				map[string]any{"serviceAccountToken": map[string]any{"path": "token"}},
-				map[string]any{"configMap": map[string]any{"name": "kube-root-ca.crt"}},
+			volume: map[string]any{
+				"name": "kube-api-access-x9k2p",
+				"projected": map[string]any{"sources": []any{
+					map[string]any{"serviceAccountToken": map[string]any{"path": "token"}},
+					map[string]any{"configMap": map[string]any{"name": "kube-root-ca.crt"}},
+				}},
 			},
 			want: true,
 		},
 		{
-			name:    "a projection the author wrote",
-			sources: []any{map[string]any{"configMap": map[string]any{"name": "bundle"}}},
-			want:    false,
+			name: "a projection the author wrote",
+			volume: map[string]any{
+				"name": "bundle",
+				"projected": map[string]any{"sources": []any{
+					map[string]any{"configMap": map[string]any{"name": "bundle"}},
+				}},
+			},
+			want: false,
 		},
-		{name: "no sources at all", sources: nil, want: false},
-		{name: "a source that is not a map", sources: []any{"not-a-map"}, want: false},
+		{name: "no sources at all", volume: map[string]any{"name": "kube-api-access-empty"}, want: false},
+		{
+			name: "a source that is not a map",
+			volume: map[string]any{
+				"name":      "kube-api-access-broken",
+				"projected": map[string]any{"sources": []any{"not-a-map"}},
+			},
+			want: false,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := injectedByKubelet(tc.sources); got != tc.want {
+			if got := injectedByKubelet(tc.volume); got != tc.want {
 				t.Fatalf("injected = %v, want %v", got, tc.want)
 			}
 		})
