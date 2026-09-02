@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -107,8 +108,8 @@ func foldToNamespaces(nodes []api.TrafficNode, edges []api.TrafficEdge) ([]api.T
 		if !seen {
 			folded = api.TrafficEdge{From: from, To: to}
 		}
-		folded.Rate += edge.Rate
-		folded.Dropped += edge.Dropped
+		folded.Rate = finiteSum(folded.Rate, edge.Rate)
+		folded.Dropped = finiteSum(folded.Dropped, edge.Dropped)
 		between[key] = folded
 	}
 	return sortedNodes(kept), sortedEdges(between)
@@ -170,7 +171,7 @@ func (r *Reader) probe(ctx context.Context, entry mesh, at time.Time) (state, er
 func seriesCount(samples []prom.Sample) float64 {
 	total := 0.0
 	for _, sample := range samples {
-		total += sample.Value
+		total = finiteSum(total, sample.Value)
 	}
 	return total
 }
@@ -179,7 +180,7 @@ func mostlyLabeled(labeled, present float64) bool {
 	if labeled == 0 {
 		return false
 	}
-	return labeled*2 > present
+	return labeled > present/2
 }
 
 func anyLabeled(entry mesh, samples []prom.Sample) bool {
@@ -238,14 +239,25 @@ func build(entry mesh, samples []prom.Sample) ([]api.TrafficNode, []api.TrafficE
 			edge = api.TrafficEdge{From: pair.from.ID, To: pair.to.ID}
 		}
 		if verdict == forwarded {
-			edge.Rate += sample.Value
+			edge.Rate = finiteSum(edge.Rate, sample.Value)
 		}
 		if verdict == dropped {
-			edge.Dropped += sample.Value
+			edge.Dropped = finiteSum(edge.Dropped, sample.Value)
 		}
 		edges[key] = edge
 	}
 	return sortedNodes(nodes), sortedEdges(edges)
+}
+
+func finiteSum(left, right float64) float64 {
+	total := left + right
+	if math.IsInf(total, 1) {
+		return math.MaxFloat64
+	}
+	if math.IsInf(total, -1) {
+		return -math.MaxFloat64
+	}
+	return total
 }
 
 func sortedNodes(found map[string]api.TrafficNode) []api.TrafficNode {

@@ -2,8 +2,10 @@ package traffic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -89,6 +91,24 @@ func TestGraphBuildsWorkloadEdges(t *testing.T) {
 	}
 	if web.Dropped != 0.5 {
 		t.Fatalf("dropped rate is %v, want 0.5", web.Dropped)
+	}
+}
+
+func TestGraphSaturatesAnOverflowingWorkloadRate(t *testing.T) {
+	querier := &stubQuerier{answers: map[string][]prom.Sample{
+		cilium.flows: {
+			flow("web", "api", forwarded, math.MaxFloat64),
+			flow("web", "api", forwarded, math.MaxFloat64),
+		},
+	}}
+
+	graph := New(querier).Graph(context.Background(), at())
+
+	if len(graph.Edges) != 1 || graph.Edges[0].Rate != math.MaxFloat64 {
+		t.Fatalf("edges = %+v, want a finite saturated rate", graph.Edges)
+	}
+	if _, err := json.Marshal(graph); err != nil {
+		t.Fatalf("marshal graph: %v", err)
 	}
 }
 
@@ -336,6 +356,39 @@ func TestFoldingSumsTheRatesItMerges(t *testing.T) {
 	want := float64(2 * (nodeBudget + 10))
 	if total != want {
 		t.Fatalf("folded rate = %v, want the %v the workloads carried", total, want)
+	}
+}
+
+func TestFoldingSaturatesOverflowingNamespaceRates(t *testing.T) {
+	samples := crowded(nodeBudget + 10)
+	for i := range samples {
+		samples[i].Value = math.MaxFloat64
+	}
+	querier := &stubQuerier{answers: map[string][]prom.Sample{cilium.flows: samples}}
+
+	graph := New(querier).Graph(context.Background(), at())
+
+	if !graph.Folded {
+		t.Fatal("the crowded graph was not folded")
+	}
+	for _, edge := range graph.Edges {
+		if math.IsInf(edge.Rate, 0) || math.IsNaN(edge.Rate) {
+			t.Fatalf("folded edge has a non-finite rate: %+v", edge)
+		}
+	}
+	if _, err := json.Marshal(graph); err != nil {
+		t.Fatalf("marshal folded graph: %v", err)
+	}
+}
+
+func TestSeriesCountsSaturateBeforeLabelCoverageIsCompared(t *testing.T) {
+	total := seriesCount([]prom.Sample{{Value: math.MaxFloat64}, {Value: math.MaxFloat64}})
+
+	if total != math.MaxFloat64 {
+		t.Fatalf("series count = %v, want the largest finite value", total)
+	}
+	if !mostlyLabeled(math.MaxFloat64, math.MaxFloat64) {
+		t.Fatal("fully labeled maximum counts were reported as mostly unlabeled")
 	}
 }
 
