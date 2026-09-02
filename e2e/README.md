@@ -25,6 +25,11 @@ just test-e2e '' specs/history.spec.ts                                    # one 
 just test-e2e 'clearing the history' specs/history.spec.ts                # both
 ```
 
+`just test-traffic-live [kubeconfig]` is the read-only check against a live cluster. It uses the
+current kube context when the path is omitted, asks a real Prometheus for real Cilium Hubble
+metrics, and requires at least one workload-to-workload edge. It does not create or change cluster
+resources.
+
 The name is a `--grep` pattern and the path is passed to Playwright as-is. The cluster is reused
 when it is already up, so a second filtered run costs seconds. Mind that a spec written to run
 after its neighbours may fail alone, or pass alone and fail in the tier — `history` reads what

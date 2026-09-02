@@ -358,6 +358,15 @@ test-integration name='': cluster-base
     go test -tags integration -count=1 -timeout 15m -covermode=atomic -coverprofile=coverage.integration.out -coverpkg=./internal/... ./test/integration/...
     go tool cover -func=coverage.integration.out | tail -1
 
+test-traffic-live kubeconfig='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    kubeconfig={{ quote(kubeconfig) }}
+    if [ -n "$kubeconfig" ]; then
+        export KUBECONFIG="$kubeconfig"
+    fi
+    SPINOZA_LIVE_TRAFFIC=1 go test -v -count=1 -timeout 1m ./test/live
+
 test-e2e name='' spec='': cluster-e2e (e2e-run 'core' name spec)
 
 shots name='' spec='': cluster-down cluster-e2e cluster-second
