@@ -8,10 +8,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coder/websocket"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -171,6 +173,36 @@ func TestANodeShellRunsAPodAndTakesItAwayWhenTheSocketCloses(t *testing.T) {
 	waitForServer(t, func() bool {
 		return shellPods(t, cs) == 0
 	}, "the privileged pod outlived the socket that opened it")
+}
+
+func TestANodeShellCleanupFailureDoesNotWedgeTheServer(t *testing.T) {
+	cs := shellCluster(t)
+	deleting := make(chan struct{})
+	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		close(deleting)
+		return true, nil, apierrors.NewForbidden(
+			schema.GroupResource{Resource: "pods"},
+			"spinoza-node-shell-abc",
+			errors.New("cleanup was refused"),
+		)
+	})
+	ts := nodeShellServer(t, cs, &fakeImages{digest: "sha256:shelled"}, true)
+
+	conn := dialNodeShell(t, ts, "?node=p-mk1")
+	readFrame(t, conn)
+	_ = conn.CloseNow()
+
+	select {
+	case <-deleting:
+	case <-time.After(10 * time.Second):
+		t.Fatal("closing the socket never tried to remove the node shell pod")
+	}
+	waitForServer(t, func() bool {
+		return nodeShells.count() == 0
+	}, "a rejected pod cleanup left server shutdown waiting forever")
+	if shellPods(t, cs) != 1 {
+		t.Fatal("the fake cluster removed a pod after rejecting its deletion")
+	}
 }
 
 func TestANodeShellThatCannotStartLeavesNoPodBehind(t *testing.T) {
