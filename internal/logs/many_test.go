@@ -13,6 +13,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -744,6 +745,52 @@ func TestAPodThatComesBackIsReadAgain(t *testing.T) {
 	found := gather(t, stream, 1)
 	if found["web-0"] == nil {
 		t.Fatalf("lines = %v, want the pod read again after it came back", found)
+	}
+}
+
+func TestAPodRecreatedWithoutAListingGapIsReadAgain(t *testing.T) {
+	restore := hurryResolve(t)
+	defer restore()
+	var mu sync.Mutex
+	generation := "first"
+	logReads := 0
+	client := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		current := generation
+		if strings.HasSuffix(r.URL.Path, "/log") {
+			logReads++
+			mu.Unlock()
+			_, _ = fmt.Fprintln(w, current)
+			return
+		}
+		mu.Unlock()
+		list := corev1.PodList{Items: []corev1.Pod{{
+			ObjectMeta: metav1.ObjectMeta{Name: "web-0", Namespace: "prod", UID: types.UID(current)},
+		}}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(list)
+	})
+
+	stream, err := Open(t.Context(), client, Request{Namespace: "prod", Selector: "app=web", Follow: true})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	gather(t, stream, 1)
+
+	mu.Lock()
+	generation = "second"
+	mu.Unlock()
+	select {
+	case line := <-stream.Lines:
+		if line.Text != "second" {
+			t.Fatalf("line = %q, want the replacement pod", line.Text)
+		}
+	case <-time.After(time.Second):
+		mu.Lock()
+		reads := logReads
+		mu.Unlock()
+		t.Fatalf("the replacement pod was not read; log endpoint was opened %d time(s)", reads)
 	}
 }
 

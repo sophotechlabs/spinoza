@@ -29,6 +29,14 @@ const defaultContainer = "kubectl.kubernetes.io/default-container"
 type podRef struct {
 	name      string
 	container string
+	identity  string
+}
+
+func (p podRef) key() string {
+	if p.identity != "" {
+		return p.identity
+	}
+	return p.name
 }
 
 func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Stream, error) {
@@ -140,6 +148,7 @@ func attach(
 	wg *sync.WaitGroup,
 ) error {
 	name := pod.name
+	key := pod.key()
 	one := req
 	one.Name = name
 	one.Selector = ""
@@ -147,20 +156,20 @@ func attach(
 		one.Container = pod.container
 	}
 	podCtx, stop := context.WithCancel(ctx)
-	if !held.claim(name, stop) {
+	if !held.claim(key, stop) {
 		stop()
 		return nil
 	}
 	stream, err := openOne(podCtx, cs, one)
 	if err != nil {
-		held.forget(name)
+		held.forget(key)
 		stop()
 		return err
 	}
 	wg.Add(1)
 	safe.Go("reading logs from "+name, func() {
 		defer wg.Done()
-		defer held.release(name)
+		defer held.release(key)
 		defer stream.Close()
 		for line := range stream.Lines {
 			select {
@@ -221,6 +230,7 @@ func podsMatching(
 		found = append(found, podRef{
 			name:      list.Items[i].Name,
 			container: containerOf(&list.Items[i]),
+			identity:  string(list.Items[i].UID),
 		})
 	}
 	slices.SortFunc(found, func(left, right podRef) int {
@@ -264,7 +274,7 @@ func containerOf(pod *corev1.Pod) string {
 func namesOf(pods []podRef) []string {
 	out := make([]string, 0, len(pods))
 	for _, pod := range pods {
-		out = append(out, pod.name)
+		out = append(out, pod.key())
 	}
 	return out
 }
