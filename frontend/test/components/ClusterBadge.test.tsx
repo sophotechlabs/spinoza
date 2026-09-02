@@ -22,7 +22,7 @@ describe('the cluster a dialog is about', () => {
 
     const { container } = render(<ClusterBadge />);
 
-    expect(screen.getByLabelText('p-mk2 is colour 2')).toHaveStyle({
+    expect(screen.getByRole('img', { name: 'p-mk2 is colour 2' })).toHaveStyle({
       backgroundColor: 'var(--cluster-2)',
     });
     expect(container).not.toBeEmptyDOMElement();
