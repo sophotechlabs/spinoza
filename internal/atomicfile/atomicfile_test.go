@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -311,5 +312,17 @@ func TestTheOriginalFailureSurvivesATidyUpThatFailsToo(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "cross-device") {
 		t.Fatalf("error = %v, want the failure that mattered", err)
+	}
+}
+
+func TestSyncDirectoryReportsAnOpenFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory syncing is intentionally skipped on Windows")
+	}
+
+	err := syncDirectory(filepath.Join(t.TempDir(), "missing"))
+
+	if err == nil {
+		t.Fatal("error = nil, want the directory open failure")
 	}
 }
