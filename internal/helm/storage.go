@@ -52,6 +52,7 @@ func revisionSecrets(
 ) ([]stored, error) {
 	out := []stored{}
 	opts := metav1.ListOptions{LabelSelector: selector, Limit: pageSize}
+	seen := map[string]bool{}
 	for {
 		listed, err := cs.CoreV1().Secrets(namespace).List(ctx, opts)
 		if err != nil {
@@ -64,10 +65,13 @@ func revisionSecrets(
 			}
 			out = append(out, storedOf(DriverSecret, &secret.ObjectMeta, secret.Data[releaseKey]))
 		}
-		if listed.Continue == "" {
+		more, nextErr := advancePage(&opts, listed.Continue, seen)
+		if nextErr != nil {
+			return nil, nextErr
+		}
+		if !more {
 			return out, nil
 		}
-		opts.Continue = listed.Continue
 	}
 }
 
@@ -78,6 +82,7 @@ func revisionConfigMaps(
 ) ([]stored, error) {
 	out := []stored{}
 	opts := metav1.ListOptions{LabelSelector: selector, Limit: pageSize}
+	seen := map[string]bool{}
 	for {
 		listed, err := cs.CoreV1().ConfigMaps(namespace).List(ctx, opts)
 		if err != nil {
@@ -91,10 +96,13 @@ func revisionConfigMaps(
 			}
 			out = append(out, storedOf(DriverConfigMap, &entry.ObjectMeta, []byte(body)))
 		}
-		if listed.Continue == "" {
+		more, nextErr := advancePage(&opts, listed.Continue, seen)
+		if nextErr != nil {
+			return nil, nextErr
+		}
+		if !more {
 			return out, nil
 		}
-		opts.Continue = listed.Continue
 	}
 }
 

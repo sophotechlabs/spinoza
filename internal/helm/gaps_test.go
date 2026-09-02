@@ -90,6 +90,26 @@ func TestAListFailureThatIsNotForbiddenStopsTheWalk(t *testing.T) {
 	}
 }
 
+func TestANamespaceListFailureOtherThanDenialIsReported(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	meta := mirrorMeta(cs)
+	meta.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, forbiddenSecrets("no cluster-wide secrets")
+	})
+	meta.PrependReactor("list", "namespaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("namespace discovery fell over")
+	})
+
+	_, err := serviceWithMeta(cs, meta, nil).List(context.Background())
+
+	if err == nil {
+		t.Fatal("List returned nil error when namespace discovery failed")
+	}
+	if !strings.Contains(err.Error(), "namespace discovery fell over") {
+		t.Fatalf("error = %q, want the namespace-list failure", err.Error())
+	}
+}
+
 func TestTheNamespaceWalkFollowsItsContinueToken(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	meta := mirrorMeta(cs)
@@ -118,6 +138,19 @@ func TestTheNamespaceWalkFollowsItsContinueToken(t *testing.T) {
 	}
 	if !strings.Contains(got.Error, "2 namespaces") {
 		t.Fatalf("note = %q, want both namespaces counted", got.Error)
+	}
+}
+
+func TestTheNamespaceWalkRejectsARepeatedContinueToken(t *testing.T) {
+	meta := mirrorMeta(k8sfake.NewClientset())
+	meta.PrependReactor("list", "namespaces", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &metav1.List{ListMeta: metav1.ListMeta{Continue: "same"}}, nil
+	})
+
+	_, err := namespaceRefs(t.Context(), meta)
+
+	if !errors.Is(err, errRepeatedContinue) {
+		t.Fatalf("namespace list error = %v, want the repeated token", err)
 	}
 }
 

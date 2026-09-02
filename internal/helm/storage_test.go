@@ -2,6 +2,7 @@ package helm
 
 import (
 	"errors"
+	"strconv"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -41,7 +42,7 @@ func pagesOf(cs *k8sfake.Clientset, resource string, pages [][]runtime.Object) {
 		more := ""
 		if at < len(pages)-1 {
 			at++
-			more = "next"
+			more = strconv.Itoa(at)
 		}
 		switch resource {
 		case "secrets":
@@ -96,6 +97,45 @@ func TestEveryPageOfReleaseConfigMapsIsRead(t *testing.T) {
 	}
 	if len(found) != 2 {
 		t.Fatalf("found %d revisions, want both pages", len(found))
+	}
+}
+
+func TestReleaseStorageRejectsARepeatedContinueToken(t *testing.T) {
+	tests := []struct {
+		name string
+		read func(*k8sfake.Clientset) error
+		page runtime.Object
+	}{
+		{
+			name: "secrets",
+			page: &corev1.SecretList{ListMeta: metav1.ListMeta{Continue: "same"}},
+			read: func(cs *k8sfake.Clientset) error {
+				_, err := revisionSecrets(t.Context(), cs, "prod", "owner=helm")
+				return err
+			},
+		},
+		{
+			name: "configmaps",
+			page: &corev1.ConfigMapList{ListMeta: metav1.ListMeta{Continue: "same"}},
+			read: func(cs *k8sfake.Clientset) error {
+				_, err := revisionConfigMaps(t.Context(), cs, "prod", "owner=helm")
+				return err
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cs := k8sfake.NewClientset()
+			cs.PrependReactor("list", test.name, func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, test.page, nil
+			})
+
+			err := test.read(cs)
+
+			if !errors.Is(err, errRepeatedContinue) {
+				t.Fatalf("storage list error = %v, want the repeated token", err)
+			}
+		})
 	}
 }
 

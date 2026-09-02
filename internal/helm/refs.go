@@ -85,11 +85,14 @@ func refsWithFallback(
 	}
 	names, nsErr := namespaceRefs(ctx, client)
 	if nsErr != nil {
+		if !apierrors.IsForbidden(nsErr) {
+			return refPage{}, nsErr
+		}
 		return refPage{}, err
 	}
 	out := refPage{}
 	allowed := []string{}
-	for _, name := range names {
+	for at, name := range names {
 		one, oneErr := listRefs(ctx, client, driver, gvr, name)
 		if apierrors.IsForbidden(oneErr) {
 			continue
@@ -98,12 +101,20 @@ func refsWithFallback(
 			return refPage{}, oneErr
 		}
 		allowed = append(allowed, name)
+		available := maxObjects - len(out.items)
+		if len(one.items) > available {
+			out.items = append(out.items, one.items[:available]...)
+			out.truncated = true
+			break
+		}
 		out.items = append(out.items, one.items...)
 		if one.truncated {
 			out.truncated = true
 		}
-		if len(out.items) >= maxObjects {
-			out.truncated = true
+		if len(out.items) == maxObjects {
+			if at < len(names)-1 {
+				out.truncated = true
+			}
 			break
 		}
 	}
@@ -120,28 +131,41 @@ func listRefs(
 ) (refPage, error) {
 	out := refPage{}
 	opts := metav1.ListOptions{LabelSelector: ownerLabel, Limit: pageSize}
+	seen := map[string]bool{}
 	for {
 		listed, err := client.Resource(gvr).Namespace(namespace).List(ctx, opts)
 		if err != nil {
 			return refPage{}, err
 		}
-		for i := range listed.Items {
-			out.items = append(out.items, refOf(driver, &listed.Items[i]))
-		}
-		if listed.Continue == "" {
-			return out, nil
-		}
-		if len(out.items) >= maxObjects {
+		available := maxObjects - len(out.items)
+		if len(listed.Items) > available {
+			for i := range listed.Items[:available] {
+				out.items = append(out.items, refOf(driver, &listed.Items[i]))
+			}
 			out.truncated = true
 			return out, nil
 		}
-		opts.Continue = listed.Continue
+		for i := range listed.Items {
+			out.items = append(out.items, refOf(driver, &listed.Items[i]))
+		}
+		more, nextErr := advancePage(&opts, listed.Continue, seen)
+		if nextErr != nil {
+			return refPage{}, nextErr
+		}
+		if !more {
+			return out, nil
+		}
+		if len(out.items) == maxObjects {
+			out.truncated = true
+			return out, nil
+		}
 	}
 }
 
 func namespaceRefs(ctx context.Context, client metadata.Interface) ([]string, error) {
 	names := []string{}
 	opts := metav1.ListOptions{Limit: pageSize}
+	seen := map[string]bool{}
 	for {
 		listed, err := client.Resource(namespacesGVR).List(ctx, opts)
 		if err != nil {
@@ -150,10 +174,13 @@ func namespaceRefs(ctx context.Context, client metadata.Interface) ([]string, er
 		for i := range listed.Items {
 			names = append(names, listed.Items[i].Name)
 		}
-		if listed.Continue == "" {
+		more, nextErr := advancePage(&opts, listed.Continue, seen)
+		if nextErr != nil {
+			return nil, nextErr
+		}
+		if !more {
 			return names, nil
 		}
-		opts.Continue = listed.Continue
 	}
 }
 
