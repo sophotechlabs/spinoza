@@ -14,15 +14,18 @@ vi.mock('@xyflow/react', () => {
     edges,
     onNodeClick,
     children,
+    minZoom,
   }: {
     nodes: GitopsFlowNode[];
     edges: { id: string }[];
     onNodeClick?: (event: unknown, node: GitopsFlowNode) => void;
     children?: ReactNode;
+    minZoom?: number;
   }) => (
     <div
       data-testid="react-flow"
       data-edges={edges.length}
+      data-min-zoom={minZoom}
       data-sized={
         nodes.filter((node) => node.width !== undefined && node.height !== undefined).length
       }
@@ -113,6 +116,14 @@ afterEach(() => {
 });
 
 describe('TopologyGraph', () => {
+  it("lets fitView zoom below React Flow's default floor", async () => {
+    urlsFor({}, { nodes: [leaf], edges: [] });
+
+    render(<TopologyGraph openedOn={null} />);
+
+    expect(await screen.findByTestId('react-flow')).toHaveAttribute('data-min-zoom', '0.01');
+  });
+
   it('says how much a folded node is hiding', async () => {
     urlsFor({}, { nodes: [folded], edges: [] });
 

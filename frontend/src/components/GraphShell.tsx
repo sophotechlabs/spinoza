@@ -82,6 +82,7 @@ export default function GraphShell<N extends Node>({
           nodesConnectable={false}
           elementsSelectable={false}
           onlyRenderVisibleElements
+          minZoom={0.01}
           fitView
         >
           {children}
