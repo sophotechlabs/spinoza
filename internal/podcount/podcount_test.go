@@ -64,7 +64,7 @@ type metav1ListCall struct {
 	fields string
 }
 
-func TestAnUnfilteredCountTrustsTheRemainingItemCount(t *testing.T) {
+func TestARemainingEstimateWithoutAContinueTokenDoesNotInventPods(t *testing.T) {
 	dyn := client()
 	remaining := int64(41)
 	answerPages(dyn, [][]runtime.RawExtension{pods(1)}, &remaining)
@@ -74,11 +74,11 @@ func TestAnUnfilteredCountTrustsTheRemainingItemCount(t *testing.T) {
 		t.Fatalf("count: %v", err)
 	}
 
-	if got.Total != 42 {
-		t.Fatalf("total = %d, want 42", got.Total)
+	if got.Total != 1 {
+		t.Fatalf("total = %d, want the item actually returned", got.Total)
 	}
 	if !got.Complete {
-		t.Fatal("an exact count was reported as partial")
+		t.Fatal("a list with no continuation was reported as partial")
 	}
 }
 
@@ -203,21 +203,28 @@ func TestAPageThatFailsMidWalkIsReported(t *testing.T) {
 	}
 }
 
-func TestAnUnfilteredProbeStillTrustsTheServersCount(t *testing.T) {
+func TestAnUnfilteredProbeWalksRatherThanTrustingTheServersEstimate(t *testing.T) {
 	dyn := client()
 	remaining := int64(4000)
-	answerPages(dyn, [][]runtime.RawExtension{pods(1)}, &remaining)
+	calls := answerPages(dyn, [][]runtime.RawExtension{
+		pods(1),
+		pods(500),
+		pods(7),
+	}, &remaining)
 
 	got, err := Count(context.Background(), dyn, "")
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
 
-	if got.Total != 4001 {
-		t.Fatalf("total = %d, want the page plus what the server said remained", got.Total)
+	if got.Total != 508 {
+		t.Fatalf("total = %d, want the items actually returned", got.Total)
 	}
 	if !got.Complete {
-		t.Fatal("a count the server sized was reported as partial")
+		t.Fatal("a walk that reached the final page was reported as partial")
+	}
+	if len(*calls) != 3 {
+		t.Fatalf("list calls = %d, want the estimate verified through pagination", len(*calls))
 	}
 }
 

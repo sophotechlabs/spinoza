@@ -29,10 +29,6 @@ func Count(ctx context.Context, client metadata.Interface, selector string) (Res
 	if err != nil {
 		return Result{}, err
 	}
-	remaining := probe.GetRemainingItemCount()
-	if remaining != nil {
-		return Result{Total: len(probe.Items) + int(clamp(*remaining)), Complete: true}, nil
-	}
 	if probe.GetContinue() == "" {
 		return Result{Total: len(probe.Items), Complete: true}, nil
 	}
@@ -70,13 +66,6 @@ func walk(
 		total = Limit()
 	}
 	return Result{Total: total, Complete: false}, nil
-}
-
-func clamp(remaining int64) int64 {
-	if remaining < 0 {
-		return 0
-	}
-	return remaining
 }
 
 func Limit() int {
