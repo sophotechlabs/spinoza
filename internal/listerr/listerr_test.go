@@ -49,8 +49,17 @@ func TestTheSameResourceIsNotCountedTwice(t *testing.T) {
 	collector.Record("pods", errors.New("boom"))
 	collector.Record("pods", errors.New("boom"))
 
-	if !strings.HasPrefix(collector.Message(), "1 of 2 resource types could not be listed") {
+	if !strings.HasPrefix(collector.Message(), "1 of 1 resource types could not be listed") {
 		t.Fatalf("message = %q", collector.Message())
+	}
+}
+
+func TestAListingFailureCannotMakeTheBannerUnbounded(t *testing.T) {
+	collector := New()
+	collector.Record("pods", errors.New(strings.Repeat("x", 1<<20)))
+
+	if got := collector.Message(); len(got) > 512 {
+		t.Fatalf("message is %d bytes, want a bounded banner", len(got))
 	}
 }
 
