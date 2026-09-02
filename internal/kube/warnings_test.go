@@ -78,6 +78,24 @@ func TestTheRememberedWarningsAreBounded(t *testing.T) {
 	}
 }
 
+func TestWarningsPastTheMemoryLimitDoNotFloodTheLog(t *testing.T) {
+	logger, out := recorded(t)
+
+	for i := range warningsRemembered {
+		logger.HandleWarningHeader(deprecationCode, "", "warning "+strconv.Itoa(i))
+	}
+	for range 20 {
+		logger.HandleWarningHeader(deprecationCode, "", "warning beyond the limit")
+	}
+
+	if strings.Count(out.String(), "warning beyond the limit") > 1 {
+		t.Fatalf("overflow warning was logged %d times", strings.Count(out.String(), "warning beyond the limit"))
+	}
+	if strings.Count(out.String(), "additional apiserver warnings were omitted") != 1 {
+		t.Fatalf("overflow summary was logged %d times", strings.Count(out.String(), "additional apiserver warnings were omitted"))
+	}
+}
+
 func TestEveryClientCarriesTheWarningLogger(t *testing.T) {
 	t.Setenv("KUBECONFIG", writeKubeconfig(t, validKubeconfig))
 

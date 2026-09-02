@@ -15,6 +15,7 @@ type WarningSink struct {
 
 	mu   sync.Mutex
 	seen map[string]struct{}
+	full bool
 }
 
 func newWarningLogger(log *slog.Logger) *WarningSink {
@@ -25,23 +26,32 @@ func (w *WarningSink) HandleWarningHeader(code int, agent, text string) {
 	if code != deprecationCode || text == "" {
 		return
 	}
-	if !w.first(text) {
+	first, full := w.remember(text)
+	if full {
+		w.log.Warn("additional apiserver warnings were omitted")
+	}
+	if !first {
 		return
 	}
 	w.log.Warn("the apiserver answered with a warning", "warning", text)
 }
 
-func (w *WarningSink) first(text string) bool {
+func (w *WarningSink) remember(text string) (bool, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	_, repeated := w.seen[text]
 	if repeated {
-		return false
+		return false, false
 	}
-	if len(w.seen) < warningsRemembered {
-		w.seen[text] = struct{}{}
+	if len(w.seen) >= warningsRemembered {
+		if w.full {
+			return false, false
+		}
+		w.full = true
+		return false, true
 	}
-	return true
+	w.seen[text] = struct{}{}
+	return true, false
 }
 
 func (w *WarningSink) Seen() []string {
