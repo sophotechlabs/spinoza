@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -92,6 +93,12 @@ func finishedPod(name string, phase corev1.PodPhase) *corev1.Pod {
 type evictionLog struct {
 	mu    sync.Mutex
 	names []string
+}
+
+type actionRoundTrip func(*http.Request) (*http.Response, error)
+
+func (fn actionRoundTrip) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }
 
 func (e *evictionLog) add(name string) {
@@ -597,6 +604,96 @@ func TestDrainLimitsConcurrentEvictions(t *testing.T) {
 		if outcome.Outcome != api.OutcomeEvicted {
 			t.Fatalf("outcome for %s = %q, want evicted", outcome.Name, outcome.Outcome)
 		}
+	}
+}
+
+func TestCancelingADrainStopsEvictionsWaitingForCapacity(t *testing.T) {
+	const pods = evictConcurrency * 4
+	plans := make([]podPlan, 0, pods)
+	for index := range pods {
+		pod := replicaSetPod(fmt.Sprintf("pod-%02d", index))
+		plans = append(plans, podPlan{
+			pod: pod,
+			outcome: api.PodOutcome{
+				Namespace: pod.Namespace,
+				Name:      pod.Name,
+				Outcome:   api.OutcomeEvict,
+			},
+		})
+	}
+	started := make(chan struct{}, pods)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		started <- struct{}{}
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Success"}`))
+	}))
+	t.Cleanup(func() {
+		releaseOnce.Do(func() {
+			close(release)
+		})
+		server.Close()
+	})
+	cs, err := kubernetes.NewForConfig(&rest.Config{
+		Host: server.URL,
+		WrapTransport: func(base http.RoundTripper) http.RoundTripper {
+			return actionRoundTrip(func(req *http.Request) (*http.Response, error) {
+				return base.RoundTrip(req.Clone(context.WithoutCancel(req.Context())))
+			})
+		},
+	})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	service := newWithDelay(dynClient(newNode(false)), cs, time.Millisecond)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan []api.PodOutcome, 1)
+	go func() {
+		done <- service.evictAll(ctx, plans)
+	}()
+
+	for range evictConcurrency {
+		select {
+		case <-started:
+		case <-time.After(3 * time.Second):
+			t.Fatal("the eviction workers did not fill")
+		}
+	}
+	cancel()
+	for range pods {
+		goruntime.Gosched()
+	}
+	releaseOnce.Do(func() {
+		close(release)
+	})
+	outcomes := <-done
+
+	if len(started) != 0 {
+		t.Fatalf("%d queued evictions reached the API after cancellation", len(started))
+	}
+	failed := 0
+	evicted := 0
+	for _, outcome := range outcomes {
+		if outcome.Outcome == api.OutcomeEvicted {
+			evicted++
+			continue
+		}
+		if outcome.Outcome != api.OutcomeFailed {
+			t.Fatalf("outcome for %s = %q, want evicted or canceled", outcome.Name, outcome.Outcome)
+		}
+		failed++
+		if !strings.Contains(outcome.Reason, "before this pod was evicted") {
+			t.Fatalf("failure reason = %q, want the queued cancellation", outcome.Reason)
+		}
+	}
+	if failed != pods-evictConcurrency {
+		t.Fatalf("failed while queued = %d, want %d", failed, pods-evictConcurrency)
+	}
+	if evicted != evictConcurrency {
+		t.Fatalf("evicted = %d, want the %d already in progress", evicted, evictConcurrency)
 	}
 }
 
