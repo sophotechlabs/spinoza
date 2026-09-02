@@ -308,6 +308,27 @@ func TestABigClusterCanRaiseEveryLimit(t *testing.T) {
 	}
 }
 
+func TestNonPositiveBigClusterLimitsAreRefused(t *testing.T) {
+	cases := [][]string{
+		{"-qps", "0"},
+		{"-qps", "NaN"},
+		{"-qps", "+Inf"},
+		{"-burst", "0"},
+		{"-sync-timeout", "0s"},
+		{"-warm-concurrency", "-1"},
+		{"-count-budget", "-1s"},
+		{"-count-timeout", "0s"},
+		{"-count-concurrency", "-1"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, "="), func(t *testing.T) {
+			if _, err := parseFlags(args); err == nil {
+				t.Fatalf("arguments %v were accepted", args)
+			}
+		})
+	}
+}
+
 func TestTheEnvironmentCanRaiseTheLimitsToo(t *testing.T) {
 	t.Setenv("SPINOZA_KUBECONFIG", "/tmp/kubeconfig")
 	t.Setenv("SPINOZA_QPS", "150")

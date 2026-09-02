@@ -35,6 +35,13 @@ func countObject(name string) *metav1.PartialObjectMetadata {
 	}
 }
 
+func TestNonPositiveCountLimitsFallBackToUsableDefaults(t *testing.T) {
+	limits := (CountLimits{Budget: -1, PerType: -1, Concurrency: -1}).orDefaults()
+	if limits.Budget <= 0 || limits.PerType <= 0 || limits.Concurrency <= 0 {
+		t.Fatalf("limits = %+v, want usable defaults", limits)
+	}
+}
+
 func TestCountReportsZeroForAnEmptyType(t *testing.T) {
 	counts := Count(context.Background(), countClient(t), []api.ResourceDescriptor{countDesc("deployments")}, CountLimits{})
 

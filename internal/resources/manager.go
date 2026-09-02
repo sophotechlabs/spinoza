@@ -182,25 +182,25 @@ type Limits struct {
 }
 
 func (l Limits) orDefaults() Limits {
-	if l.CheckFindings == 0 {
+	if l.CheckFindings <= 0 {
 		l.CheckFindings = defaultCheckFindings
 	}
-	if l.SyncTimeout == 0 {
+	if l.SyncTimeout <= 0 {
 		l.SyncTimeout = defaultSyncTimeout
 	}
-	if l.IdleGrace == 0 {
+	if l.IdleGrace <= 0 {
 		l.IdleGrace = defaultIdleGrace
 	}
-	if l.MetricsTTL == 0 {
+	if l.MetricsTTL <= 0 {
 		l.MetricsTTL = defaultMetricsTTL
 	}
-	if l.CountsTTL == 0 {
+	if l.CountsTTL <= 0 {
 		l.CountsTTL = defaultCountsTTL
 	}
-	if l.TrafficTTL == 0 {
+	if l.TrafficTTL <= 0 {
 		l.TrafficTTL = defaultTrafficTTL
 	}
-	if l.WarmConcurrency == 0 {
+	if l.WarmConcurrency <= 0 {
 		l.WarmConcurrency = warmConcurrency
 	}
 	l.Counts = l.Counts.orDefaults()

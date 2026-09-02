@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"strconv"
 	"time"
@@ -83,10 +84,32 @@ func parseFlags(args []string) (settings, error) {
 	if servedErr != nil {
 		return settings{}, servedErr
 	}
+	clusterSettings := cluster.Options{
+		Impersonate:      served.on && served.impersonate,
+		DebugImage:       *debugImage,
+		NodeShellImage:   *nodeShellImage,
+		NodeShellNS:      *nodeShellNamespace,
+		KubectlBinary:    *kubectlBinary,
+		HelmBinary:       *helmBinary,
+		PromSpec:         *promSpec,
+		Kubeconfig:       *kubeconfig,
+		Context:          *startContext,
+		ClientQPS:        float32(*clientQPS),
+		ClientBurst:      *clientBurst,
+		SyncTimeout:      *syncTimeout,
+		WarmConcurrency:  *warmConcurrency,
+		CountBudget:      *countBudget,
+		CountPerType:     *countPerType,
+		CountConcurrency: *countConcurrency,
+	}
 	if !*showVersion && !*showLicense {
 		checkErr := served.check()
 		if checkErr != nil {
 			return settings{}, checkErr
+		}
+		limitErr := validateClusterLimits(clusterSettings)
+		if limitErr != nil {
+			return settings{}, limitErr
 		}
 	}
 	return settings{
@@ -100,25 +123,34 @@ func parseFlags(args []string) (settings, error) {
 		nodeShell:   *nodeShell,
 		startView:   *startView,
 		serve:       served,
-		cluster: cluster.Options{
-			Impersonate:      served.on && served.impersonate,
-			DebugImage:       *debugImage,
-			NodeShellImage:   *nodeShellImage,
-			NodeShellNS:      *nodeShellNamespace,
-			KubectlBinary:    *kubectlBinary,
-			HelmBinary:       *helmBinary,
-			PromSpec:         *promSpec,
-			Kubeconfig:       *kubeconfig,
-			Context:          *startContext,
-			ClientQPS:        float32(*clientQPS),
-			ClientBurst:      *clientBurst,
-			SyncTimeout:      *syncTimeout,
-			WarmConcurrency:  *warmConcurrency,
-			CountBudget:      *countBudget,
-			CountPerType:     *countPerType,
-			CountConcurrency: *countConcurrency,
-		},
+		cluster:     clusterSettings,
 	}, nil
+}
+
+func validateClusterLimits(options cluster.Options) error {
+	qps := float64(options.ClientQPS)
+	if qps <= 0 || math.IsNaN(qps) || math.IsInf(qps, 0) {
+		return errors.New("qps must be a finite positive number")
+	}
+	if options.ClientBurst <= 0 {
+		return errors.New("burst must be positive")
+	}
+	if options.SyncTimeout <= 0 {
+		return errors.New("sync-timeout must be positive")
+	}
+	if options.WarmConcurrency <= 0 {
+		return errors.New("warm-concurrency must be positive")
+	}
+	if options.CountBudget <= 0 {
+		return errors.New("count-budget must be positive")
+	}
+	if options.CountPerType <= 0 {
+		return errors.New("count-timeout must be positive")
+	}
+	if options.CountConcurrency <= 0 {
+		return errors.New("count-concurrency must be positive")
+	}
+	return nil
 }
 
 func wasGiven(flags *flag.FlagSet, name string) bool {

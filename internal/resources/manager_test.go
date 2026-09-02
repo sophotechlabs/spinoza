@@ -35,6 +35,27 @@ var nodeGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "n
 
 var eventGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}
 
+func TestNonPositiveManagerLimitsFallBackToUsableDefaults(t *testing.T) {
+	limits := (Limits{
+		SyncTimeout:     -1,
+		IdleGrace:       -1,
+		MetricsTTL:      -1,
+		CountsTTL:       -1,
+		TrafficTTL:      -1,
+		WarmConcurrency: -1,
+		CheckFindings:   -1,
+	}).orDefaults()
+	if limits.SyncTimeout <= 0 || limits.IdleGrace <= 0 {
+		t.Fatalf("timeouts = %+v, want usable defaults", limits)
+	}
+	if limits.MetricsTTL <= 0 || limits.CountsTTL <= 0 || limits.TrafficTTL <= 0 {
+		t.Fatalf("cache limits = %+v, want usable defaults", limits)
+	}
+	if limits.WarmConcurrency <= 0 || limits.CheckFindings <= 0 {
+		t.Fatalf("concurrency limits = %+v, want usable defaults", limits)
+	}
+}
+
 func listKinds() map[schema.GroupVersionResource]string {
 	return map[schema.GroupVersionResource]string{
 		depGVR:   "DeploymentList",

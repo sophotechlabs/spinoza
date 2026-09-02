@@ -29,13 +29,13 @@ type CountLimits struct {
 }
 
 func (l CountLimits) orDefaults() CountLimits {
-	if l.Budget == 0 {
+	if l.Budget <= 0 {
 		l.Budget = countTimeout
 	}
-	if l.PerType == 0 {
+	if l.PerType <= 0 {
 		l.PerType = countPerType
 	}
-	if l.Concurrency == 0 {
+	if l.Concurrency <= 0 {
 		l.Concurrency = countConcurrency
 	}
 	return l
