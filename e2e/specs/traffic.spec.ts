@@ -50,3 +50,34 @@ test('the source of the numbers is named', async ({ browser }) => {
   await expect(page.locator('main')).toContainText('Cilium Hubble', { timeout: 90_000 });
   await close();
 });
+
+test('the graph keeps every workload named by the flow data', async ({ browser }) => {
+  const [page, close] = await openTraffic(browser);
+  const main = page.locator('main');
+  for (const workload of ['e2e/healthy', 'e2e/chatty', 'e2e/risky', 'kube-system/coredns']) {
+    await expect(main.getByText(workload, { exact: true })).toBeVisible({ timeout: 90_000 });
+  }
+  await close();
+});
+
+test('the traffic legend distinguishes forwarded and dropped flows', async ({ browser }) => {
+  const [page, close] = await openTraffic(browser);
+  const main = page.locator('main');
+  await expect(main).toContainText('Forwarded flows per second', { timeout: 90_000 });
+  await expect(main).toContainText('Some flows dropped');
+  await close();
+});
+
+test('traffic edges have drawable geometry rather than empty paths', async ({ browser }) => {
+  const [page, close] = await openTraffic(browser);
+  const paths = page.locator('.react-flow__edge-path');
+  await expect(paths.first()).toBeVisible({ timeout: 90_000 });
+  const lengths = await paths.evaluateAll((elements) =>
+    elements.map((element) => (element as SVGGeometryElement).getTotalLength()),
+  );
+  expect(lengths.length).toBeGreaterThan(0);
+  for (const length of lengths) {
+    expect(length).toBeGreaterThan(0);
+  }
+  await close();
+});
