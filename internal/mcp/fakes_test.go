@@ -98,7 +98,7 @@ func (f *fakeCluster) HelmReleases(context.Context) (api.HelmReleases, error) {
 	return f.releases, f.relErr
 }
 
-func (f *fakeCluster) HelmRelease(context.Context, string, string) (api.HelmReleaseDetail, error) {
+func (f *fakeCluster) HelmRelease(context.Context, string, string, int64) (api.HelmReleaseDetail, error) {
 	return f.release, f.oneRelErr
 }
 

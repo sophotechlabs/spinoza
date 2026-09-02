@@ -388,6 +388,8 @@ HelmChartValues.Version version string
 HelmChartVersions.Chart chart string
 HelmChartVersions.Error error,omitempty string
 HelmChartVersions.Repos repos []HelmRepoVersions
+HelmHistoryPage.Next next,omitempty int64
+HelmHistoryPage.Revisions revisions []HelmRevision
 HelmRelease.AppVersion appVersion string
 HelmRelease.Chart chart string
 HelmRelease.ChartVersion chartVersion string

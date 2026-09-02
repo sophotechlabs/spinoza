@@ -143,7 +143,7 @@ func TestHelmReleaseDetailCarriesTheFluxOwner(t *testing.T) {
 		helmReleaseCR("demo", "podinfo", nil),
 	)
 
-	got, err := mgr.HelmRelease(context.Background(), "demo", "podinfo")
+	got, err := mgr.HelmRelease(context.Background(), "demo", "podinfo", 0)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}

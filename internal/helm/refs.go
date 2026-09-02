@@ -129,15 +129,26 @@ func listRefs(
 	gvr schema.GroupVersionResource,
 	namespace string,
 ) (refPage, error) {
+	return listRefsLimited(ctx, client, driver, gvr, namespace, ownerLabel, maxObjects)
+}
+
+func listRefsLimited(
+	ctx context.Context,
+	client metadata.Interface,
+	driver string,
+	gvr schema.GroupVersionResource,
+	namespace, selector string,
+	limit int,
+) (refPage, error) {
 	out := refPage{}
-	opts := metav1.ListOptions{LabelSelector: ownerLabel, Limit: pageSize}
+	opts := metav1.ListOptions{LabelSelector: selector, Limit: pageSize}
 	seen := map[string]bool{}
 	for {
 		listed, err := client.Resource(gvr).Namespace(namespace).List(ctx, opts)
 		if err != nil {
 			return refPage{}, err
 		}
-		available := maxObjects - len(out.items)
+		available := limit - len(out.items)
 		if len(listed.Items) > available {
 			for i := range listed.Items[:available] {
 				out.items = append(out.items, refOf(driver, &listed.Items[i]))
@@ -155,7 +166,7 @@ func listRefs(
 		if !more {
 			return out, nil
 		}
-		if len(out.items) == maxObjects {
+		if len(out.items) == limit {
 			out.truncated = true
 			return out, nil
 		}

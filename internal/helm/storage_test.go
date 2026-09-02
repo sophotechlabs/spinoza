@@ -110,7 +110,7 @@ func TestReleaseStorageRejectsARepeatedContinueToken(t *testing.T) {
 			name: "secrets",
 			page: &corev1.SecretList{ListMeta: metav1.ListMeta{Continue: "same"}},
 			read: func(cs *k8sfake.Clientset) error {
-				_, err := revisionSecrets(t.Context(), cs, "prod", "owner=helm")
+				_, err := revisionSecrets(t.Context(), cs, "prod", "owner=helm", maxObjects)
 				return err
 			},
 		},
@@ -118,7 +118,7 @@ func TestReleaseStorageRejectsARepeatedContinueToken(t *testing.T) {
 			name: "configmaps",
 			page: &corev1.ConfigMapList{ListMeta: metav1.ListMeta{Continue: "same"}},
 			read: func(cs *k8sfake.Clientset) error {
-				_, err := revisionConfigMaps(t.Context(), cs, "prod", "owner=helm")
+				_, err := revisionConfigMaps(t.Context(), cs, "prod", "owner=helm", maxObjects)
 				return err
 			},
 		},

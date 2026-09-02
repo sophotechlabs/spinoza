@@ -36,6 +36,7 @@ import type {
   HelmChartSearch,
   HelmChartValues,
   HelmChartVersions,
+  HelmHistoryPage,
   HelmRelease,
   HelmReleaseDetail,
   HelmReleases,
@@ -847,6 +848,14 @@ function parseHelmRevision(item: Record<string, unknown>): HelmRevision {
     appVersion: asString(item.appVersion),
     updated: asString(item.updated),
     description: optionalString(item.description),
+  };
+}
+
+export function parseHelmHistoryPage(body: unknown): HelmHistoryPage {
+  const item = asRecord(body);
+  return {
+    revisions: listOf(item.revisions, parseHelmRevision),
+    next: optionalNumber(item.next),
   };
 }
 

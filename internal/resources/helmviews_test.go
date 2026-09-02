@@ -139,7 +139,7 @@ func TestHelmMethodsSayWhenHelmIsNotWiredUp(t *testing.T) {
 	mgr := viewManager(t, nil)
 
 	_, listErr := mgr.HelmReleases(context.Background())
-	_, detailErr := mgr.HelmRelease(context.Background(), "demo", "podinfo")
+	_, detailErr := mgr.HelmRelease(context.Background(), "demo", "podinfo", 0)
 	_, rollbackErr := mgr.HelmRollback(context.Background(), "demo", "podinfo", 1)
 	_, uninstallErr := mgr.HelmUninstall(context.Background(), "demo", "podinfo")
 	support := mgr.HelmSupport()
@@ -178,7 +178,7 @@ func TestHelmMethodsReachTheService(t *testing.T) {
 		t.Fatalf("releases = %v, want none", list.Releases)
 	}
 
-	_, detailErr := mgr.HelmRelease(context.Background(), "demo", "podinfo")
+	_, detailErr := mgr.HelmRelease(context.Background(), "demo", "podinfo", 0)
 	if detailErr == nil {
 		t.Fatal("a release that is not there reported success")
 	}

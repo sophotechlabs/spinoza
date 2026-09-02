@@ -173,8 +173,13 @@ func (n notStubbed) HelmInstall(_ context.Context, _ helm.InstallRequest) (r0 ap
 	return r0, r1
 }
 
-func (n notStubbed) HelmRelease(_ context.Context, _, _ string) (r0 api.HelmReleaseDetail, r1 error) {
+func (n notStubbed) HelmRelease(_ context.Context, _, _ string, _ int64) (r0 api.HelmReleaseDetail, r1 error) {
 	n.missing("HelmRelease")
+	return r0, r1
+}
+
+func (n notStubbed) HelmHistory(_ context.Context, _, _ string, _ int64) (r0 api.HelmHistoryPage, r1 error) {
+	n.missing("HelmHistory")
 	return r0, r1
 }
 

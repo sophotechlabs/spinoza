@@ -906,6 +906,11 @@ export interface HelmRevision {
   description?: string;
 }
 
+export interface HelmHistoryPage {
+  revisions: HelmRevision[];
+  next?: number;
+}
+
 export interface HelmResource {
   apiVersion: string;
   kind: string;

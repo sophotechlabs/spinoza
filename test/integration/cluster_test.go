@@ -471,7 +471,7 @@ func TestHelmDetailAndActionsAgainstRealHelm(t *testing.T) {
 	installRelease(t, loaded)
 	upgradeRelease(t)
 
-	detail, err := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	detail, err := mgr.HelmRelease(context.Background(), namespace, "smoke-release", 0)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}
@@ -512,7 +512,7 @@ func TestHelmDetailAndActionsAgainstRealHelm(t *testing.T) {
 	if rolled.Revision != 1 {
 		t.Fatalf("rollback revision = %d, want 1", rolled.Revision)
 	}
-	after, afterErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	after, afterErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release", 0)
 	if afterErr != nil {
 		t.Fatalf("detail after rollback: %v", afterErr)
 	}
@@ -527,7 +527,7 @@ func TestHelmDetailAndActionsAgainstRealHelm(t *testing.T) {
 	if removeErr != nil {
 		t.Fatalf("uninstall: %v", removeErr)
 	}
-	_, goneErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	_, goneErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release", 0)
 	if goneErr == nil {
 		t.Fatal("the release still reads back after an uninstall")
 	}
@@ -607,7 +607,7 @@ func TestHelmUpgradeThroughAChartRepo(t *testing.T) {
 	if !strings.Contains(rendered.Manifest, "kind: ConfigMap") {
 		t.Fatalf("manifest = %q, want the rendered configmap", rendered.Manifest)
 	}
-	before, beforeErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	before, beforeErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release", 0)
 	if beforeErr != nil {
 		t.Fatalf("detail after the dry run: %v", beforeErr)
 	}
@@ -622,7 +622,7 @@ func TestHelmUpgradeThroughAChartRepo(t *testing.T) {
 	if result.Action != helm.ActionUpgrade {
 		t.Fatalf("action = %q, want upgrade", result.Action)
 	}
-	after, afterErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	after, afterErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release", 0)
 	if afterErr != nil {
 		t.Fatalf("detail after the upgrade: %v", afterErr)
 	}
@@ -643,7 +643,7 @@ func TestHelmUpgradeThroughAChartRepo(t *testing.T) {
 	if rolled.Revision != 1 {
 		t.Fatalf("rollback revision = %d, want 1", rolled.Revision)
 	}
-	undone, undoneErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release")
+	undone, undoneErr := mgr.HelmRelease(context.Background(), namespace, "smoke-release", 0)
 	if undoneErr != nil {
 		t.Fatalf("detail after the rollback: %v", undoneErr)
 	}

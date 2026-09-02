@@ -2,6 +2,8 @@ package helm
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -32,33 +34,55 @@ func revisionsIn(
 	namespace, name string,
 ) ([]stored, error) {
 	selector := ownerLabel + "," + nameLabel + "=" + name
+	return revisionsMatching(ctx, cs, namespace, selector, maxObjects)
+}
+
+func revisionsMatching(
+	ctx context.Context,
+	cs kubernetes.Interface,
+	namespace, selector string,
+	limit int,
+) ([]stored, error) {
+	if limit < 1 {
+		return nil, errors.New("revision limit must be positive")
+	}
 	out := []stored{}
-	secrets, err := revisionSecrets(ctx, cs, namespace, selector)
+	secrets, err := revisionSecrets(ctx, cs, namespace, selector, limit+1)
 	if err != nil {
 		return nil, err
 	}
 	out = append(out, secrets...)
-	maps, mapErr := revisionConfigMaps(ctx, cs, namespace, selector)
+	maps, mapErr := revisionConfigMaps(ctx, cs, namespace, selector, limit+1)
 	if mapErr != nil {
 		return nil, mapErr
 	}
-	return append(out, maps...), nil
+	out = append(out, maps...)
+	if len(out) > limit {
+		return nil, fmt.Errorf("more than %d stored revisions matched", limit)
+	}
+	return out, nil
 }
 
 func revisionSecrets(
 	ctx context.Context,
 	cs kubernetes.Interface,
 	namespace, selector string,
+	limit int,
 ) ([]stored, error) {
 	out := []stored{}
 	opts := metav1.ListOptions{LabelSelector: selector, Limit: pageSize}
 	seen := map[string]bool{}
+	scanned := 0
 	for {
 		listed, err := cs.CoreV1().Secrets(namespace).List(ctx, opts)
 		if err != nil {
 			return nil, err
 		}
 		for i := range listed.Items {
+			scanned++
+			if scanned > limit {
+				return nil, fmt.Errorf("more than %d release secrets matched", limit)
+			}
 			secret := &listed.Items[i]
 			if secret.Type != storageType {
 				continue
@@ -79,16 +103,22 @@ func revisionConfigMaps(
 	ctx context.Context,
 	cs kubernetes.Interface,
 	namespace, selector string,
+	limit int,
 ) ([]stored, error) {
 	out := []stored{}
 	opts := metav1.ListOptions{LabelSelector: selector, Limit: pageSize}
 	seen := map[string]bool{}
+	scanned := 0
 	for {
 		listed, err := cs.CoreV1().ConfigMaps(namespace).List(ctx, opts)
 		if err != nil {
 			return nil, err
 		}
 		for i := range listed.Items {
+			scanned++
+			if scanned > limit {
+				return nil, fmt.Errorf("more than %d release config maps matched", limit)
+			}
 			entry := &listed.Items[i]
 			body, ok := entry.Data[releaseKey]
 			if !ok {

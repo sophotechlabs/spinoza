@@ -196,14 +196,31 @@ func (s *Service) run(ctx context.Context, args []string, driver string) (string
 func (s *Service) driverFor(ctx context.Context, namespace, name string) (string, error) {
 	bounded, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
-	revisions, err := revisionsIn(bounded, s.cs, namespace, name)
+	if s.meta == nil {
+		revisions, err := revisionsIn(bounded, s.cs, namespace, name)
+		if err != nil {
+			return "", err
+		}
+		if len(revisions) == 0 {
+			return "", fmt.Errorf("%w: %s/%s", ErrNoRelease, namespace, name)
+		}
+		latest := revisions[0]
+		for _, revision := range revisions[1:] {
+			if revision.revision > latest.revision {
+				latest = revision
+				continue
+			}
+			if revision.revision == latest.revision {
+				return "", fmt.Errorf("%w: revision %d", errAmbiguousRevision, revision.revision)
+			}
+		}
+		return latest.driver, nil
+	}
+	latest, err := s.latestRef(bounded, namespace, name)
 	if err != nil {
 		return "", err
 	}
-	for _, item := range revisions {
-		return item.driver, nil
-	}
-	return "", fmt.Errorf("%w: %s/%s", ErrNoRelease, namespace, name)
+	return latest.driver, nil
 }
 
 func orDefault(out, fallback string) string {

@@ -44,7 +44,7 @@ type Streams interface {
 
 type Releases interface {
 	HelmReleases(ctx context.Context) (api.HelmReleases, error)
-	HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error)
+	HelmRelease(ctx context.Context, namespace, name string, revision int64) (api.HelmReleaseDetail, error)
 }
 
 type Writes interface {

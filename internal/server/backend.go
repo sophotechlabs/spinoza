@@ -102,7 +102,8 @@ type Traffic interface {
 type Releases interface {
 	ChartRepos
 	HelmReleases(ctx context.Context) (api.HelmReleases, error)
-	HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error)
+	HelmRelease(ctx context.Context, namespace, name string, revision int64) (api.HelmReleaseDetail, error)
+	HelmHistory(ctx context.Context, namespace, name string, through int64) (api.HelmHistoryPage, error)
 	HelmSupport() api.HelmSupport
 }
 

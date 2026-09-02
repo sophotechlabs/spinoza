@@ -34,6 +34,7 @@ GET /api/helm role=- local=no whole=no writes=no
 GET /api/helm/access role=- local=no whole=no writes=no
 GET /api/helm/charts role=- local=no whole=no writes=no
 GET /api/helm/fleet role=- local=no whole=yes writes=no
+GET /api/helm/history role=- local=no whole=no writes=no
 GET /api/helm/release role=- local=no whole=no writes=no
 GET /api/helm/values role=- local=no whole=no writes=no
 GET /api/helm/versions role=- local=no whole=no writes=no

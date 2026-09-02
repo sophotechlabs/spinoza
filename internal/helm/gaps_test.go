@@ -161,7 +161,7 @@ func TestSecretsThatAreNotHelmStorageAreSkipped(t *testing.T) {
 	}
 	cs := k8sfake.NewClientset(other)
 
-	found, err := revisionSecrets(context.Background(), cs, "apps", "owner=helm")
+	found, err := revisionSecrets(context.Background(), cs, "apps", "owner=helm", maxObjects)
 	if err != nil {
 		t.Fatalf("revisionSecrets: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestARefusedSecretListIsReported(t *testing.T) {
 		return true, nil, errors.New("secrets are forbidden")
 	})
 
-	_, err := revisionSecrets(context.Background(), cs, "apps", "owner=helm")
+	_, err := revisionSecrets(context.Background(), cs, "apps", "owner=helm", maxObjects)
 
 	if err == nil {
 		t.Fatal("revisionSecrets returned nil error")
@@ -189,7 +189,7 @@ func TestARefusedConfigMapListIsReported(t *testing.T) {
 		return true, nil, errors.New("config maps are forbidden")
 	})
 
-	_, err := revisionConfigMaps(context.Background(), cs, "apps", "owner=helm")
+	_, err := revisionConfigMaps(context.Background(), cs, "apps", "owner=helm", maxObjects)
 
 	if err == nil {
 		t.Fatal("revisionConfigMaps returned nil error when config maps were refused")
@@ -203,7 +203,7 @@ func TestAConfigMapWithoutAReleaseIsSkipped(t *testing.T) {
 	}
 	cs := k8sfake.NewClientset(entry)
 
-	found, err := revisionConfigMaps(context.Background(), cs, "apps", "owner=helm")
+	found, err := revisionConfigMaps(context.Background(), cs, "apps", "owner=helm", maxObjects)
 	if err != nil {
 		t.Fatalf("revisionConfigMaps: %v", err)
 	}

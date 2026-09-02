@@ -94,7 +94,7 @@ func TestDetailCarriesValuesNotesAndManifest(t *testing.T) {
 	spec := sampleRelease()
 	service := newService(k8sfake.NewClientset(detailSecret(spec)), nil, nil)
 
-	got, err := service.Detail(context.Background(), "demo", "podinfo", resolver)
+	got, err := service.Detail(context.Background(), "demo", "podinfo", 0, resolver)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestDetailCarriesValuesNotesAndManifest(t *testing.T) {
 func TestDetailListsTheResourcesTheManifestRenders(t *testing.T) {
 	service := newService(k8sfake.NewClientset(detailSecret(sampleRelease())), nil, nil)
 
-	got, err := service.Detail(context.Background(), "demo", "podinfo", resolver)
+	got, err := service.Detail(context.Background(), "demo", "podinfo", 0, resolver)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestDetailListsTheResourcesTheManifestRenders(t *testing.T) {
 func TestDetailLeavesAnUnknownKindUnresolved(t *testing.T) {
 	service := newService(k8sfake.NewClientset(detailSecret(sampleRelease())), nil, nil)
 
-	got, err := service.Detail(context.Background(), "demo", "podinfo",
+	got, err := service.Detail(context.Background(), "demo", "podinfo", 0,
 		func(string, string) (Kind, bool) {
 			return Kind{}, false
 		})
@@ -171,7 +171,7 @@ func TestDetailLeavesAnUnknownKindUnresolved(t *testing.T) {
 func TestDetailWorksWithNoResolverAtAll(t *testing.T) {
 	service := newService(k8sfake.NewClientset(detailSecret(sampleRelease())), nil, nil)
 
-	got, err := service.Detail(context.Background(), "demo", "podinfo", nil)
+	got, err := service.Detail(context.Background(), "demo", "podinfo", 0, nil)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestDetailWorksWithNoResolverAtAll(t *testing.T) {
 	}
 }
 
-func TestDetailOrdersTheHistoryNewestFirst(t *testing.T) {
+func TestHistoryOrdersARequestedPageNewestFirst(t *testing.T) {
 	first := sampleRelease()
 	first.revision = 1
 	first.status = "superseded"
@@ -195,29 +195,29 @@ func TestDetailOrdersTheHistoryNewestFirst(t *testing.T) {
 		detailSecret(second), detailSecret(third), detailSecret(first),
 	), nil, nil)
 
-	got, err := service.Detail(context.Background(), "demo", "podinfo", resolver)
+	got, err := service.History(context.Background(), "demo", "podinfo", 3)
 	if err != nil {
-		t.Fatalf("detail: %v", err)
+		t.Fatalf("history: %v", err)
 	}
 
-	if len(got.History) != 3 {
-		t.Fatalf("history = %d, want every revision", len(got.History))
+	if len(got.Revisions) != 3 {
+		t.Fatalf("history = %d, want the requested revisions", len(got.Revisions))
 	}
-	if got.History[0].Revision != 3 || got.History[2].Revision != 1 {
-		t.Fatalf("history = %v, want newest first", got.History)
+	if got.Revisions[0].Revision != 3 || got.Revisions[2].Revision != 1 {
+		t.Fatalf("history = %v, want newest first", got.Revisions)
 	}
-	if got.History[1].ChartVersion != "6.9.1" {
-		t.Fatalf("chart version = %q, want each revision's own", got.History[1].ChartVersion)
+	if got.Revisions[1].ChartVersion != "6.9.1" {
+		t.Fatalf("chart version = %q, want each revision's own", got.Revisions[1].ChartVersion)
 	}
-	if got.Release.Revision != 3 {
-		t.Fatalf("release = revision %d, want the newest", got.Release.Revision)
+	if got.Next != 0 {
+		t.Fatalf("next = %d, want the end of history", got.Next)
 	}
 }
 
 func TestDetailRefusesAReleaseThatIsNotThere(t *testing.T) {
 	service := newService(k8sfake.NewClientset(), nil, nil)
 
-	_, err := service.Detail(context.Background(), "demo", "missing", resolver)
+	_, err := service.Detail(context.Background(), "demo", "missing", 0, resolver)
 
 	if !errors.Is(err, ErrNoRelease) {
 		t.Fatalf("err = %v, want it to say there is no such release", err)
@@ -227,7 +227,7 @@ func TestDetailRefusesAReleaseThatIsNotThere(t *testing.T) {
 func TestDetailRefusesNamesThatCouldBeFlags(t *testing.T) {
 	service := newService(k8sfake.NewClientset(), nil, nil)
 
-	_, err := service.Detail(context.Background(), "demo", "--kubeconfig=/etc/shadow", resolver)
+	_, err := service.Detail(context.Background(), "demo", "--kubeconfig=/etc/shadow", 0, resolver)
 
 	if err == nil {
 		t.Fatal("a flag-shaped release name was accepted")
@@ -238,7 +238,7 @@ func TestDetailStillAnswersWhenTheNewestPayloadIsUnreadable(t *testing.T) {
 	spec := sampleRelease()
 	service := newService(k8sfake.NewClientset(storedSecret(spec, []byte("rubbish"))), nil, nil)
 
-	got, err := service.Detail(context.Background(), "demo", "podinfo", resolver)
+	got, err := service.Detail(context.Background(), "demo", "podinfo", 0, resolver)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}
@@ -249,11 +249,19 @@ func TestDetailStillAnswersWhenTheNewestPayloadIsUnreadable(t *testing.T) {
 	if !strings.Contains(got.Error, "could not be read") {
 		t.Fatalf("error = %q, want it to say the payload is unreadable", got.Error)
 	}
-	if len(got.History) != 1 {
-		t.Fatalf("history = %d, want the revision still listed", len(got.History))
+	if len(got.History) != 0 {
+		t.Fatalf("history = %d, want history loaded separately", len(got.History))
 	}
-	if got.History[0].Description != "this revision's payload could not be read" {
-		t.Fatalf("description = %q, want the unreadable note", got.History[0].Description)
+
+	history, historyErr := service.History(context.Background(), "demo", "podinfo", 3)
+	if historyErr != nil {
+		t.Fatalf("history: %v", historyErr)
+	}
+	if len(history.Revisions) != 1 {
+		t.Fatalf("history = %d, want the revision listed separately", len(history.Revisions))
+	}
+	if history.Revisions[0].Description != "this revision's payload could not be read" {
+		t.Fatalf("description = %q, want the unreadable note", history.Revisions[0].Description)
 	}
 }
 
@@ -264,7 +272,7 @@ func TestDetailReportsARefusedList(t *testing.T) {
 	})
 	service := newService(cs, nil, nil)
 
-	_, err := service.Detail(context.Background(), "demo", "podinfo", resolver)
+	_, err := service.Detail(context.Background(), "demo", "podinfo", 0, resolver)
 
 	if err == nil {
 		t.Fatal("a refused list reported success")
@@ -276,7 +284,7 @@ func TestAReleaseWithNoSuppliedValuesReadsEmpty(t *testing.T) {
 	body := []byte(base64.StdEncoding.EncodeToString(gzipped(`{"name":"podinfo","namespace":"demo","version":3,"info":{"status":"deployed"}}`)))
 	service := newService(k8sfake.NewClientset(storedSecret(spec, body)), nil, nil)
 
-	got, err := service.Detail(context.Background(), "demo", "podinfo", resolver)
+	got, err := service.Detail(context.Background(), "demo", "podinfo", 0, resolver)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}
@@ -322,7 +330,7 @@ func TestDetailReadsAReleaseStoredInAConfigMap(t *testing.T) {
 	}
 	service := newService(k8sfake.NewClientset(entry), nil, nil)
 
-	got, err := service.Detail(context.Background(), "demo", "podinfo", resolver)
+	got, err := service.Detail(context.Background(), "demo", "podinfo", 0, resolver)
 	if err != nil {
 		t.Fatalf("detail: %v", err)
 	}
@@ -332,6 +340,32 @@ func TestDetailReadsAReleaseStoredInAConfigMap(t *testing.T) {
 	}
 	if got.Release.ChartVersion != "6.9.2" {
 		t.Fatalf("chart version = %q, want the configmap payload decoded", got.Release.ChartVersion)
+	}
+}
+
+func TestDetailUsesTheNewestRevisionAcrossStorageDrivers(t *testing.T) {
+	old := sampleRelease()
+	old.revision = 1
+	newest := sampleRelease()
+	newest.revision = 2
+	newest.version = "6.9.3"
+	newestSecret := detailSecret(newest)
+	entry := &corev1.ConfigMap{
+		ObjectMeta: newestSecret.ObjectMeta,
+		Data:       map[string]string{releaseKey: string(newestSecret.Data[releaseKey])},
+	}
+	service := newService(k8sfake.NewClientset(detailSecret(old), entry), nil, nil)
+
+	got, err := service.Detail(context.Background(), "demo", "podinfo", 0, resolver)
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	if got.Driver != DriverConfigMap || got.Release.Revision != 2 {
+		t.Fatalf("detail = %+v, want configmap revision 2", got)
+	}
+	if got.Release.ChartVersion != "6.9.3" {
+		t.Fatalf("chart version = %q, want the newest payload", got.Release.ChartVersion)
 	}
 }
 

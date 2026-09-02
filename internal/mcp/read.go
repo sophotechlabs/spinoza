@@ -540,7 +540,7 @@ func (s *Server) helmRelease(ctx context.Context, args arguments) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	detail, err := s.cluster.HelmRelease(ctx, namespace, name)
+	detail, err := s.cluster.HelmRelease(ctx, namespace, name, 0)
 	if err != nil {
 		return nil, err
 	}

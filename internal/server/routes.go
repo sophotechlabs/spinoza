@@ -43,6 +43,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/issues", s.handleIssues, false, false},
 		{http.MethodGet, "/api/issues/fleet", s.fleetIssues, true, false},
 		{http.MethodGet, "/api/helm/access", s.helmAccess, false, false},
+		{http.MethodGet, "/api/helm/history", s.handleHelmHistory, false, false},
 		{http.MethodGet, "/api/helm/release", s.handleHelmRelease, false, false},
 		{http.MethodGet, "/api/helm/versions", s.handleHelmVersions, false, false},
 		{http.MethodGet, "/api/helm/charts", s.handleHelmCharts, false, false},

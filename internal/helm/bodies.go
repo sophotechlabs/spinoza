@@ -63,8 +63,19 @@ func (c *releaseCache) keep(refs []storedRef) {
 }
 
 func (s *Service) read(ctx context.Context, refs []storedRef) ([]api.HelmRelease, int) {
-	out := make([]api.HelmRelease, len(refs))
+	out, readable := s.readWithStatus(ctx, refs)
 	undecodable := 0
+	for _, ok := range readable {
+		if !ok {
+			undecodable++
+		}
+	}
+	return out, undecodable
+}
+
+func (s *Service) readWithStatus(ctx context.Context, refs []storedRef) ([]api.HelmRelease, []bool) {
+	out := make([]api.HelmRelease, len(refs))
+	readable := make([]bool, len(refs))
 	var mu sync.Mutex
 	var group sync.WaitGroup
 	slots := make(chan struct{}, readConcurrency)
@@ -83,7 +94,7 @@ func (s *Service) read(ctx context.Context, refs []storedRef) ([]api.HelmRelease
 				safe.Log(what, caught)
 				mu.Lock()
 				out[index] = fallbackOf(stored)
-				undecodable++
+				readable[index] = false
 				mu.Unlock()
 			}()
 			slots <- struct{}{}
@@ -91,14 +102,12 @@ func (s *Service) read(ctx context.Context, refs []storedRef) ([]api.HelmRelease
 			release, ok := s.releaseFor(ctx, stored)
 			mu.Lock()
 			out[index] = release
-			if !ok {
-				undecodable++
-			}
+			readable[index] = ok
 			mu.Unlock()
 		})
 	}
 	group.Wait()
-	return out, undecodable
+	return out, readable
 }
 
 func (s *Service) releaseFor(ctx context.Context, ref storedRef) (api.HelmRelease, bool) {

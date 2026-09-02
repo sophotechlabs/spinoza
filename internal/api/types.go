@@ -444,6 +444,11 @@ type HelmRevision struct {
 	Description  string `json:"description,omitempty"`
 }
 
+type HelmHistoryPage struct {
+	Revisions []HelmRevision `json:"revisions"`
+	Next      int64          `json:"next,omitempty"`
+}
+
 type HelmResource struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`

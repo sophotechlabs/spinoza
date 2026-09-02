@@ -4,8 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"fmt"
-	"slices"
 	"strings"
 
 	"sigs.k8s.io/yaml"
@@ -24,35 +22,53 @@ type Kind struct {
 
 type Resolver func(apiVersion, kind string) (Kind, bool)
 
-func (s *Service) Detail(ctx context.Context, namespace, name string, resolve Resolver) (api.HelmReleaseDetail, error) {
+func (s *Service) Detail(
+	ctx context.Context,
+	namespace, name string,
+	revision int64,
+	resolve Resolver,
+) (api.HelmReleaseDetail, error) {
 	if !nameFormat.MatchString(namespace) || !nameFormat.MatchString(name) {
 		return api.HelmReleaseDetail{}, errors.New("namespace and name must be valid kubernetes names")
 	}
 	bounded, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 
-	revisions, err := revisionsIn(bounded, s.cs, namespace, name)
+	var ref storedRef
+	var err error
+	if revision < 1 {
+		ref, err = s.latestRef(bounded, namespace, name)
+	} else {
+		ref, err = s.refAt(bounded, namespace, name, revision)
+	}
 	if err != nil {
 		return api.HelmReleaseDetail{}, err
 	}
-	if len(revisions) == 0 {
-		return api.HelmReleaseDetail{}, fmt.Errorf("%w: %s/%s", ErrNoRelease, namespace, name)
+	body, bodyErr := s.body(bounded, ref)
+	if bodyErr != nil {
+		return api.HelmReleaseDetail{}, bodyErr
 	}
-	slices.SortFunc(revisions, newerRevision)
-
-	newest := revisions[0]
-	release, decodeErr := newest.release()
+	selected := stored{
+		driver:    ref.driver,
+		namespace: ref.namespace,
+		name:      ref.name,
+		revision:  ref.revision,
+		status:    ref.status,
+		created:   ref.created,
+		body:      body,
+	}
+	release, decodeErr := selected.release()
 	detail := api.HelmReleaseDetail{
 		Release: release,
-		Driver:  newest.driver,
-		History: historyOf(revisions),
+		Driver:  selected.driver,
+		History: []api.HelmRevision{},
 	}
 	if decodeErr != nil {
-		detail.Error = "the newest revision's payload could not be read: " + decodeErr.Error()
+		detail.Error = "the selected revision's payload could not be read: " + decodeErr.Error()
 		return detail, nil
 	}
 
-	decoded, _ := decode(newest.body)
+	decoded, _ := decode(selected.body)
 	detail.Values = valuesOf(decoded)
 	detail.Notes = decoded.Info.Notes
 	detail.Manifest = decoded.Manifest
@@ -63,26 +79,6 @@ func (s *Service) Detail(ctx context.Context, namespace, name string, resolve Re
 
 func newerRevision(left, right stored) int {
 	return cmp.Compare(right.revision, left.revision)
-}
-
-func historyOf(revisions []stored) []api.HelmRevision {
-	out := make([]api.HelmRevision, 0, len(revisions))
-	for _, item := range revisions {
-		release, err := item.release()
-		entry := api.HelmRevision{
-			Revision:     release.Revision,
-			Status:       release.Status,
-			ChartVersion: release.ChartVersion,
-			AppVersion:   release.AppVersion,
-			Updated:      release.Updated,
-			Description:  release.Description,
-		}
-		if err != nil {
-			entry.Description = "this revision's payload could not be read"
-		}
-		out = append(out, entry)
-	}
-	return out
 }
 
 func valuesOf(decoded payload) string {

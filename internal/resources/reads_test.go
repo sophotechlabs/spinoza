@@ -299,7 +299,7 @@ func TestWhatAManagerWithNothingWiredUpSays(t *testing.T) {
 		}
 	})
 	t.Run("helm release", func(t *testing.T) {
-		_, err := mgr.HelmRelease(t.Context(), "prod", "web")
+		_, err := mgr.HelmRelease(t.Context(), "prod", "web", 0)
 		if !errors.Is(err, api.ErrInternal) {
 			t.Fatalf("error = %v", err)
 		}

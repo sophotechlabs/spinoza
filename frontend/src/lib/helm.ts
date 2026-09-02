@@ -4,6 +4,7 @@ import type {
   HelmChartSearch,
   HelmChartValues,
   HelmChartVersions,
+  HelmHistoryPage,
   HelmReleaseDetail,
   HelmReleases,
   HelmResource,
@@ -18,6 +19,7 @@ import {
   parseHelmChartSearch,
   parseHelmChartValues,
   parseHelmChartVersions,
+  parseHelmHistoryPage,
   parseHelmReleaseDetail,
   parseHelmReleases,
 } from './parse';
@@ -130,13 +132,30 @@ export function latestNote(release: { latest?: string; outdated?: boolean }): st
 export async function fetchHelmRelease(
   namespace: string,
   name: string,
+  revision?: number,
 ): Promise<HelmReleaseDetail> {
   const params = new URLSearchParams({ namespace, name });
+  if (revision !== undefined) {
+    params.set('revision', String(revision));
+  }
   const response = await request(`/api/helm/release?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `helm release request failed with status ${response.status}`);
   }
   return parseHelmReleaseDetail(await response.json());
+}
+
+export async function fetchHelmHistory(
+  namespace: string,
+  name: string,
+  through: number,
+): Promise<HelmHistoryPage> {
+  const params = new URLSearchParams({ namespace, name, through: String(through) });
+  const response = await request(`/api/helm/history?${params.toString()}`);
+  if (!response.ok) {
+    throw await failure(response, `helm history request failed with status ${response.status}`);
+  }
+  return parseHelmHistoryPage(await response.json());
 }
 
 export async function fetchHelmSupport(): Promise<HelmSupport> {

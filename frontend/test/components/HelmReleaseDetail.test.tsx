@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { HelmRelease, HelmReleaseDetail as Detail } from '../../src/lib/types';
+import type {
+  HelmHistoryPage,
+  HelmRelease,
+  HelmReleaseDetail as Detail,
+} from '../../src/lib/types';
 import HelmReleaseDetail from '../../src/components/HelmReleaseDetail';
 import { useToastsStore } from '../../src/store/toasts';
 import { capabilities } from '../helpers';
@@ -64,23 +68,7 @@ function detail(patch: Partial<Detail> = {}): Detail {
       },
       { apiVersion: 'acme.io/v1', kind: 'Widget', name: 'thing' },
     ],
-    history: [
-      {
-        revision: 3,
-        status: 'deployed',
-        chartVersion: '6.9.2',
-        appVersion: '6.9.2',
-        updated: release.updated,
-        description: 'Upgrade complete',
-      },
-      {
-        revision: 2,
-        status: 'superseded',
-        chartVersion: '6.9.1',
-        appVersion: '6.9.1',
-        updated: release.updated,
-      },
-    ],
+    history: [],
     ...patch,
   };
 }
@@ -97,6 +85,8 @@ interface Stubs {
   support?: { available: boolean; reason?: string; binary: string };
   actionStatus?: number;
   actionBody?: unknown;
+  history?: HelmHistoryPage | ((through: number) => HelmHistoryPage);
+  revisionDetails?: Record<number, Detail>;
 }
 
 function stub(options: Stubs = {}) {
@@ -131,11 +121,43 @@ function stub(options: Stubs = {}) {
           ),
       });
     }
+    if (url.startsWith('/api/helm/history')) {
+      const through = Number(new URL(url, 'http://spinoza').searchParams.get('through'));
+      const fallback: HelmHistoryPage = {
+        revisions: [
+          {
+            revision: 3,
+            status: 'deployed',
+            chartVersion: '6.9.2',
+            appVersion: '6.9.2',
+            updated: release.updated,
+            description: 'Upgrade complete',
+          },
+          {
+            revision: 2,
+            status: 'superseded',
+            chartVersion: '6.9.1',
+            appVersion: '6.9.1',
+            updated: release.updated,
+          },
+        ],
+      };
+      let page = options.history ?? fallback;
+      if (typeof page === 'function') {
+        page = page(through);
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(page) });
+    }
     const status = options.detailStatus ?? 200;
+    const revision = Number(new URL(url, 'http://spinoza').searchParams.get('revision'));
+    let responseDetail = options.detail ?? detail();
+    if (revision > 0) {
+      responseDetail = options.revisionDetails?.[revision] ?? responseDetail;
+    }
     return Promise.resolve({
       ok: status === 200,
       status,
-      json: () => Promise.resolve(options.detail ?? detail()),
+      json: () => Promise.resolve(responseDetail),
     });
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -257,7 +279,7 @@ describe('HelmReleaseDetail', () => {
     await screen.findByText('Upgrade complete');
 
     await user.click(screen.getByRole('button', { name: 'History' }));
-    expect(screen.getByText('superseded')).toBeInTheDocument();
+    expect(await screen.findByText('superseded')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Roll back' }));
 
     await waitFor(() => {
@@ -268,6 +290,102 @@ describe('HelmReleaseDetail', () => {
     expect(action?.url).toContain('action=rollback');
     expect(action?.url).toContain('revision=2');
     expect(useToastsStore.getState().toasts.at(-1)?.message).toBe('rolled back');
+  });
+
+  it('does not load history until its tab is opened', async () => {
+    const calls = stub();
+    renderDetail();
+
+    await screen.findByText('Upgrade complete');
+
+    expect(calls.some((call) => call.url.startsWith('/api/helm/history'))).toBe(false);
+  });
+
+  it('loads older history pages only when requested', async () => {
+    const user = userEvent.setup();
+    const calls = stub({
+      history: (through) => {
+        if (through === 3) {
+          return {
+            revisions: [
+              {
+                revision: 3,
+                status: 'deployed',
+                chartVersion: '6.9.2',
+                appVersion: '6.9.2',
+                updated: release.updated,
+              },
+              {
+                revision: 2,
+                status: 'superseded',
+                chartVersion: '6.9.1',
+                appVersion: '6.9.1',
+                updated: release.updated,
+              },
+            ],
+            next: 1,
+          };
+        }
+        return {
+          revisions: [
+            {
+              revision: 1,
+              status: 'superseded',
+              chartVersion: '6.9.0',
+              appVersion: '6.9.0',
+              updated: release.updated,
+              description: 'Initial install',
+            },
+          ],
+        };
+      },
+    });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await screen.findByText('6.9.1');
+    expect(screen.queryByText('Initial install')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Load older revisions' }));
+
+    expect(await screen.findByText('Initial install')).toBeInTheDocument();
+    const historyCalls = calls.filter((call) => call.url.startsWith('/api/helm/history'));
+    expect(historyCalls).toHaveLength(2);
+    expect(historyCalls[0]?.url).toContain('through=3');
+    expect(historyCalls[1]?.url).toContain('through=1');
+  });
+
+  it('loads the full payload for an inspected revision only', async () => {
+    const user = userEvent.setup();
+    const calls = stub({
+      revisionDetails: {
+        2: detail({
+          release: {
+            ...release,
+            revision: 2,
+            chartVersion: '6.9.1',
+            description: 'Previous deployment',
+          },
+          values: 'replicaCount: 1\n',
+        }),
+      },
+    });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Inspect' }));
+
+    expect(await screen.findByText('Viewing stored revision 2.')).toBeInTheDocument();
+    expect(screen.getByText('Previous deployment')).toBeInTheDocument();
+    const inspected = calls.find(
+      (call) => call.url.startsWith('/api/helm/release') && call.url.includes('revision=2'),
+    );
+    expect(inspected).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: 'Values' }));
+    expect(screen.getByText(/replicaCount: 1/)).toBeInTheDocument();
   });
 
   it('offers no rollback for the revision already deployed', async () => {
@@ -511,7 +629,10 @@ describe('HelmReleaseDetail', () => {
 
   it('says when a release rendered nothing to show', async () => {
     const user = userEvent.setup();
-    stub({ detail: detail({ resources: [], notes: '', manifest: '', history: [] }) });
+    stub({
+      detail: detail({ resources: [], notes: '', manifest: '', history: [] }),
+      history: { revisions: [] },
+    });
     renderDetail();
     await screen.findByText('Upgrade complete');
 
@@ -525,7 +646,7 @@ describe('HelmReleaseDetail', () => {
     expect(screen.getByText('This release rendered no manifest.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'History' }));
-    expect(screen.getByText('This release has no stored revisions.')).toBeInTheDocument();
+    expect(await screen.findByText('This release has no stored revisions.')).toBeInTheDocument();
   });
 });
 

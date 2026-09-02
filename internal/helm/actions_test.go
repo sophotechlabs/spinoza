@@ -113,6 +113,36 @@ func TestActionsTellHelmWhichDriverHoldsTheRelease(t *testing.T) {
 	}
 }
 
+func TestActionsUseTheDriverHoldingTheNewestRevision(t *testing.T) {
+	runner := &stubRunner{}
+	old := sampleRelease()
+	old.revision = 1
+	oldSecret := helmSecret(old)
+	newest := sampleRelease()
+	newest.revision = 2
+	newConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sh.helm.release.v1.podinfo.v2",
+			Namespace: "demo",
+			Labels: map[string]string{
+				"owner": "helm", "name": "podinfo", "version": "2",
+			},
+		},
+		Data: map[string]string{releaseKey: detailPayload(newest)},
+	}
+	client := k8sfake.NewClientset(oldSecret, newConfigMap)
+	service := NewService(client, mirrorMeta(client), runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+
+	_, err := service.Uninstall(context.Background(), "demo", "podinfo")
+	if err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+
+	if len(runner.envs[0]) != 1 || runner.envs[0][0] != "HELM_DRIVER=configmap" {
+		t.Fatalf("env = %v, want the newest revision's configmap driver", runner.envs[0])
+	}
+}
+
 func TestActionsSayNothingAboutTheDriverForTheDefaultOne(t *testing.T) {
 	runner := &stubRunner{}
 	service := acting(t, runner, helmSecret(sampleRelease()))

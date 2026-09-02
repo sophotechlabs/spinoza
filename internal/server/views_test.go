@@ -25,6 +25,7 @@ type stubViews struct {
 	issues     api.IssueQueue
 	releases   api.HelmReleases
 	detail     api.HelmReleaseDetail
+	history    api.HelmHistoryPage
 	support    api.HelmSupport
 	traffic    api.TrafficSupport
 	helmErr    error
@@ -34,6 +35,8 @@ type stubViews struct {
 	rollbacks  []int64
 	uninstalls []string
 	calls      int
+	revisions  []int64
+	through    []int64
 
 	versions      api.HelmChartVersions
 	versionsAsked []string
@@ -70,14 +73,34 @@ func (s *stubViews) HelmInstall(_ context.Context, req helm.InstallRequest) (api
 	return s.action, nil
 }
 
-func (s *stubViews) HelmRelease(_ context.Context, namespace, name string) (api.HelmReleaseDetail, error) {
+func (s *stubViews) HelmRelease(
+	_ context.Context,
+	namespace, name string,
+	revision int64,
+) (api.HelmReleaseDetail, error) {
 	s.calls++
+	s.revisions = append(s.revisions, revision)
 	if s.detailErr != nil {
 		return api.HelmReleaseDetail{}, s.detailErr
 	}
 	s.detail.Release.Namespace = namespace
 	s.detail.Release.Name = name
+	if revision > 0 {
+		s.detail.Release.Revision = revision
+	}
 	return s.detail, nil
+}
+
+func (s *stubViews) HelmHistory(
+	_ context.Context,
+	_, _ string,
+	through int64,
+) (api.HelmHistoryPage, error) {
+	s.through = append(s.through, through)
+	if s.detailErr != nil {
+		return api.HelmHistoryPage{}, s.detailErr
+	}
+	return s.history, nil
 }
 
 func (s *stubViews) HelmSupport() api.HelmSupport {
@@ -498,6 +521,85 @@ func TestTheReleaseEndpointNeedsBothCoordinates(t *testing.T) {
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Fatalf("status for %q = %d, want 400", query, resp.StatusCode)
 		}
+	}
+}
+
+func TestTheReleaseEndpointLoadsOneRequestedRevision(t *testing.T) {
+	backend := &stubViews{}
+	ts := stubbedServer(t, backend)
+
+	var got api.HelmReleaseDetail
+	resp := getJSON(t, ts.URL+"/api/helm/release?namespace=demo&name=podinfo&revision=7", &got)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if len(backend.revisions) != 1 || backend.revisions[0] != 7 {
+		t.Fatalf("revisions = %v, want revision 7", backend.revisions)
+	}
+	if got.Release.Revision != 7 {
+		t.Fatalf("revision = %d, want 7", got.Release.Revision)
+	}
+}
+
+func TestTheReleaseEndpointRejectsAnInvalidRevision(t *testing.T) {
+	backend := &stubViews{}
+	ts := stubbedServer(t, backend)
+
+	for _, revision := range []string{"0", "-1", "not-a-number"} {
+		resp := getJSON(
+			t,
+			ts.URL+"/api/helm/release?namespace=demo&name=podinfo&revision="+url.QueryEscape(revision),
+			nil,
+		)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status for revision %q = %d, want 400", revision, resp.StatusCode)
+		}
+	}
+	if backend.calls != 0 {
+		t.Fatalf("backend calls = %d, want none", backend.calls)
+	}
+}
+
+func TestTheHistoryEndpointServesOnePage(t *testing.T) {
+	backend := &stubViews{history: api.HelmHistoryPage{
+		Revisions: []api.HelmRevision{{Revision: 7, Status: "deployed"}},
+		Next:      6,
+	}}
+	ts := stubbedServer(t, backend)
+
+	var got api.HelmHistoryPage
+	resp := getJSON(t, ts.URL+"/api/helm/history?namespace=demo&name=podinfo&through=7", &got)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if len(backend.through) != 1 || backend.through[0] != 7 {
+		t.Fatalf("through = %v, want revision 7", backend.through)
+	}
+	if len(got.Revisions) != 1 || got.Revisions[0].Revision != 7 || got.Next != 6 {
+		t.Fatalf("page = %+v, want revision 7 and cursor 6", got)
+	}
+}
+
+func TestTheHistoryEndpointRejectsInvalidCoordinatesAndCursors(t *testing.T) {
+	backend := &stubViews{}
+	ts := stubbedServer(t, backend)
+	queries := []string{
+		"?namespace=demo",
+		"?name=podinfo",
+		"?namespace=demo&name=podinfo&through=0",
+		"?namespace=demo&name=podinfo&through=bad",
+	}
+
+	for _, query := range queries {
+		resp := getJSON(t, ts.URL+"/api/helm/history"+query, nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status for %q = %d, want 400", query, resp.StatusCode)
+		}
+	}
+	if len(backend.through) != 0 {
+		t.Fatalf("backend calls = %d, want none", len(backend.through))
 	}
 }
 

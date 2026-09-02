@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { HelmResource, ObjectRef } from '../lib/types';
+import type {
+  HelmReleaseDetail as HelmReleaseDetailData,
+  HelmResource,
+  HelmRevision,
+  ObjectRef,
+} from '../lib/types';
 import {
+  fetchHelmHistory,
+  fetchHelmRelease,
   refOf,
   rollbackRelease,
   statusText,
@@ -106,12 +113,21 @@ export default function HelmReleaseDetail({
   const [upgrading, setUpgrading] = useState(false);
   const protectedCluster = useProtectedCluster();
   const [failure, setFailure] = useState<string | null>(null);
+  const [history, setHistory] = useState<HelmRevision[]>([]);
+  const [historyNext, setHistoryNext] = useState<number | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyKey, setHistoryKey] = useState('');
+  const [inspected, setInspected] = useState<HelmReleaseDetailData | null>(null);
+  const [inspecting, setInspecting] = useState<number | null>(null);
   const now = useNow();
   const clusterScope = useContextScope();
   const actionScope = `${clusterScope}|${namespace}/${name}`;
   const liveAction = useRef(actionScope);
   liveAction.current = actionScope;
   const operation = useRef(0);
+  const historyOperation = useRef(0);
+  const inspectOperation = useRef(0);
   const [stateScope, setStateScope] = useState(actionScope);
 
   useHelmAccess(namespace, name);
@@ -122,6 +138,7 @@ export default function HelmReleaseDetail({
   const helmReady = support?.available === true;
   const helmReason = support?.reason ?? 'checking whether helm is available';
   const fluxRef = data?.release.fluxRef;
+  const shown = inspected ?? data;
 
   if (stateScope !== actionScope) {
     setStateScope(actionScope);
@@ -130,6 +147,13 @@ export default function HelmReleaseDetail({
     setTyped(null);
     setUpgrading(false);
     setFailure(null);
+    setHistory([]);
+    setHistoryNext(null);
+    setHistoryError(null);
+    setHistoryLoading(false);
+    setHistoryKey('');
+    setInspected(null);
+    setInspecting(null);
   }
 
   useEffect(() => {
@@ -140,6 +164,123 @@ export default function HelmReleaseDetail({
       }
     };
   }, [actionScope]);
+
+  useEffect(() => {
+    if (tab !== 'History' || data === null) {
+      return;
+    }
+    const key = `${actionScope}|${String(data.release.revision)}`;
+    if (historyKey === key) {
+      return;
+    }
+    const scope = actionScope;
+    historyOperation.current += 1;
+    const token = historyOperation.current;
+    setHistoryKey(key);
+    setHistory([]);
+    setHistoryNext(null);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    fetchHelmHistory(namespace, name, data.release.revision)
+      .then((page) => {
+        if (liveAction.current !== scope || historyOperation.current !== token) {
+          return;
+        }
+        setHistory(page.revisions);
+        setHistoryNext(page.next ?? null);
+      })
+      .catch((err: unknown) => {
+        if (liveAction.current !== scope || historyOperation.current !== token) {
+          return;
+        }
+        if (err instanceof Error) {
+          setHistoryError(err.message);
+        } else {
+          setHistoryError('the release history could not be loaded');
+        }
+      })
+      .finally(() => {
+        if (liveAction.current === scope && historyOperation.current === token) {
+          setHistoryLoading(false);
+        }
+      });
+  }, [actionScope, data, historyKey, name, namespace, tab]);
+
+  async function loadOlderHistory() {
+    if (historyNext === null || historyLoading) {
+      return;
+    }
+    const scope = actionScope;
+    const through = historyNext;
+    historyOperation.current += 1;
+    const token = historyOperation.current;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const page = await fetchHelmHistory(namespace, name, through);
+      if (liveAction.current !== scope || historyOperation.current !== token) {
+        return;
+      }
+      setHistory((loaded) => {
+        const revisions = new Map(loaded.map((entry) => [entry.revision, entry]));
+        for (const entry of page.revisions) {
+          revisions.set(entry.revision, entry);
+        }
+        return [...revisions.values()].sort((left, right) => right.revision - left.revision);
+      });
+      setHistoryNext(page.next ?? null);
+    } catch (err: unknown) {
+      if (liveAction.current !== scope || historyOperation.current !== token) {
+        return;
+      }
+      if (err instanceof Error) {
+        setHistoryError(err.message);
+      } else {
+        setHistoryError('the older release history could not be loaded');
+      }
+    } finally {
+      if (liveAction.current === scope && historyOperation.current === token) {
+        setHistoryLoading(false);
+      }
+    }
+  }
+
+  async function inspectRevision(revision: number) {
+    if (data === null) {
+      return;
+    }
+    if (revision === data.release.revision) {
+      setInspected(null);
+      setTab('Overview');
+      return;
+    }
+    const scope = actionScope;
+    inspectOperation.current += 1;
+    const token = inspectOperation.current;
+    setInspecting(revision);
+    setFailure(null);
+    try {
+      const detail = await fetchHelmRelease(namespace, name, revision);
+      if (liveAction.current !== scope || inspectOperation.current !== token) {
+        return;
+      }
+      setInspected(detail);
+      setTab('Overview');
+    } catch (err: unknown) {
+      if (liveAction.current !== scope || inspectOperation.current !== token) {
+        return;
+      }
+      if (err instanceof Error) {
+        setFailure(err.message);
+      } else {
+        setFailure('the selected revision could not be loaded');
+      }
+    } finally {
+      if (liveAction.current === scope && inspectOperation.current === token) {
+        setInspecting(null);
+      }
+    }
+  }
 
   async function act(what: 'rollback' | 'uninstall', revision: number) {
     const scope = actionScope;
@@ -166,6 +307,8 @@ export default function HelmReleaseDetail({
         onClose();
         return;
       }
+      setInspected(null);
+      setHistoryKey('');
       reload();
     } catch (err: unknown) {
       if (liveAction.current !== scope || operation.current !== token) {
@@ -229,6 +372,8 @@ export default function HelmReleaseDetail({
           }}
           onUpgraded={() => {
             bumpHelmEpoch();
+            setInspected(null);
+            setHistoryKey('');
             reload();
           }}
         />
@@ -334,64 +479,92 @@ export default function HelmReleaseDetail({
           {error}
         </p>
       )}
-      {data?.error !== undefined && (
+      {shown?.error !== undefined && (
         <p role="status" className="px-3 py-1 text-warn">
-          {data.error}
+          {shown.error}
         </p>
       )}
 
-      {data !== null && (
+      {inspected !== null && data !== null && (
+        <div className="flex items-center gap-2 border-b border-edge px-3 py-1 text-warn">
+          <span>Viewing stored revision {inspected.release.revision}.</span>
+          <button
+            type="button"
+            onClick={() => {
+              setInspected(null);
+            }}
+            className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+          >
+            Back to current revision {data.release.revision}
+          </button>
+        </div>
+      )}
+
+      {shown !== null && (
         <div className="min-h-0 flex-1 overflow-auto">
           {tab === 'Overview' && (
             <div className="space-y-1 p-3">
-              {data.release.fluxRef !== undefined && (
+              {shown.release.fluxRef !== undefined && (
                 <Field
                   label="Managed by"
-                  value={`Flux ${data.release.fluxRef.namespace}/${data.release.fluxRef.name}`}
+                  value={`Flux ${shown.release.fluxRef.namespace}/${shown.release.fluxRef.name}`}
                 />
               )}
-              <Field label="Chart" value={orDash(data.release.chart)} />
-              <Field label="Chart version" value={orDash(data.release.chartVersion)} />
-              <Field label="App version" value={orDash(data.release.appVersion)} />
-              <Field label="Latest" value={orDash(data.release.latest ?? '')} />
-              <Field label="Revision" value={String(data.release.revision)} />
-              <Field label="Status" value={orDash(data.release.status)} />
-              <Field label="Description" value={orDash(data.release.description ?? '')} />
-              <Field label="First deployed" value={orDash(data.firstDeployed ?? '')} />
-              <Field label="Last deployed" value={orDash(data.release.updated)} />
-              <Field label="Stored in" value={`${data.driver}s`} />
+              <Field label="Chart" value={orDash(shown.release.chart)} />
+              <Field label="Chart version" value={orDash(shown.release.chartVersion)} />
+              <Field label="App version" value={orDash(shown.release.appVersion)} />
+              <Field label="Latest" value={orDash(shown.release.latest ?? '')} />
+              <Field label="Revision" value={String(shown.release.revision)} />
+              <Field label="Status" value={orDash(shown.release.status)} />
+              <Field label="Description" value={orDash(shown.release.description ?? '')} />
+              <Field label="First deployed" value={orDash(shown.firstDeployed ?? '')} />
+              <Field label="Last deployed" value={orDash(shown.release.updated)} />
+              <Field label="Stored in" value={`${shown.driver}s`} />
             </div>
           )}
           {tab === 'Values' && (
             <div>
               <div className="flex justify-end px-3 pt-2">
-                <CopyButton what="release values" text={data.values} />
+                <CopyButton what="release values" text={shown.values} />
               </div>
               <Pane
-                body={data.values}
+                body={shown.values}
                 empty="This release was installed with the chart defaults."
               />
             </div>
           )}
-          {tab === 'Notes' && <Pane body={data.notes} empty="This chart renders no notes." />}
+          {tab === 'Notes' && <Pane body={shown.notes} empty="This chart renders no notes." />}
           {tab === 'Manifest' && (
             <div>
               <div className="flex justify-end px-3 pt-2">
-                <CopyButton what="release manifest" text={data.manifest} />
+                <CopyButton what="release manifest" text={shown.manifest} />
               </div>
-              <Pane body={data.manifest} empty="This release rendered no manifest." />
+              <Pane body={shown.manifest} empty="This release rendered no manifest." />
             </div>
           )}
-          {tab === 'Resources' && <Resources resources={data.resources} onOpen={onOpenResource} />}
+          {tab === 'Resources' && <Resources resources={shown.resources} onOpen={onOpenResource} />}
           {tab === 'History' && (
             <History
-              revisions={data.history}
-              current={data.release.revision}
+              revisions={history}
+              current={data?.release.revision ?? shown.release.revision}
               now={now}
               busy={busy}
+              loading={historyLoading}
+              error={historyError}
+              next={historyNext}
+              inspecting={inspecting}
               helmReady={helmReady}
               helmReason={helmReason}
               refused={noRollback}
+              onInspect={(revision) => {
+                void inspectRevision(revision);
+              }}
+              onLoadOlder={() => {
+                void loadOlderHistory();
+              }}
+              onRetry={() => {
+                setHistoryKey('');
+              }}
               onRollback={(revision) => {
                 askRollback(revision);
               }}
@@ -470,74 +643,127 @@ function History({
   current,
   now,
   busy,
+  loading,
+  error,
+  next,
+  inspecting,
   helmReady,
   helmReason,
   refused,
+  onInspect,
+  onLoadOlder,
+  onRetry,
   onRollback,
 }: {
-  revisions: {
-    revision: number;
-    status: string;
-    chartVersion: string;
-    updated: string;
-    description?: string;
-  }[];
+  revisions: HelmRevision[];
   current: number;
   now: number;
   busy: boolean;
+  loading: boolean;
+  error: string | null;
+  next: number | null;
+  inspecting: number | null;
   helmReady: boolean;
   helmReason: string;
   refused: string | null;
+  onInspect: (revision: number) => void;
+  onLoadOlder: () => void;
+  onRetry: () => void;
   onRollback: (revision: number) => void;
 }) {
+  if (loading && revisions.length === 0) {
+    return <p className="p-3 text-fg-muted">Loading release history…</p>;
+  }
+  if (error !== null && revisions.length === 0) {
+    return (
+      <div className="flex items-center gap-2 p-3 text-error">
+        <p role="alert">{error}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+        >
+          Retry history
+        </button>
+      </div>
+    );
+  }
   if (revisions.length === 0) {
     return <p className="p-3 text-fg-muted">This release has no stored revisions.</p>;
   }
   return (
-    <table className="w-full border-collapse text-left">
-      <thead className="text-fg-muted">
-        <tr className="border-b border-edge">
-          <th className="px-3 py-1 text-right font-medium">Rev</th>
-          <th className="px-3 py-1 font-medium">Status</th>
-          <th className="px-3 py-1 font-medium">Chart</th>
-          <th className="px-3 py-1 font-medium">Description</th>
-          <th className="px-3 py-1 text-right font-medium">Updated</th>
-          <th className="px-3 py-1 text-right font-medium" />
-        </tr>
-      </thead>
-      <tbody>
-        {revisions.map((entry) => (
-          <tr key={entry.revision} className="border-b border-edge hover:bg-surface-raised">
-            <td className="px-3 py-1 text-right text-fg-strong">{entry.revision}</td>
-            <td className={`px-3 py-1 ${statusText(entry.status)}`}>{entry.status}</td>
-            <td className="px-3 py-1 text-fg-muted">{orDash(entry.chartVersion)}</td>
-            <td className="px-3 py-1 text-fg-muted">{orDash(entry.description ?? '')}</td>
-            <td className="px-3 py-1 text-right text-fg-muted" title={entry.updated}>
-              {ago(entry.updated, now)}
-            </td>
-            <td className="px-3 py-1 text-right">
-              {entry.revision !== current && (
-                <button
-                  type="button"
-                  disabled={busy || !helmReady || refused !== null}
-                  title={reasonFor(
-                    `Roll back to revision ${String(entry.revision)}`,
-                    helmReady,
-                    helmReason,
-                    refused,
-                  )}
-                  onClick={() => {
-                    onRollback(entry.revision);
-                  }}
-                  className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
-                >
-                  Roll back
-                </button>
-              )}
-            </td>
+    <div>
+      <table className="w-full border-collapse text-left">
+        <thead className="text-fg-muted">
+          <tr className="border-b border-edge">
+            <th className="px-3 py-1 text-right font-medium">Rev</th>
+            <th className="px-3 py-1 font-medium">Status</th>
+            <th className="px-3 py-1 font-medium">Chart</th>
+            <th className="px-3 py-1 font-medium">Description</th>
+            <th className="px-3 py-1 text-right font-medium">Updated</th>
+            <th className="px-3 py-1 text-right font-medium" />
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {revisions.map((entry) => (
+            <tr key={entry.revision} className="border-b border-edge hover:bg-surface-raised">
+              <td className="px-3 py-1 text-right text-fg-strong">{entry.revision}</td>
+              <td className={`px-3 py-1 ${statusText(entry.status)}`}>{entry.status}</td>
+              <td className="px-3 py-1 text-fg-muted">{orDash(entry.chartVersion)}</td>
+              <td className="px-3 py-1 text-fg-muted">{orDash(entry.description ?? '')}</td>
+              <td className="px-3 py-1 text-right text-fg-muted" title={entry.updated}>
+                {ago(entry.updated, now)}
+              </td>
+              <td className="flex justify-end gap-1 px-3 py-1">
+                {entry.revision === current && <span className="text-fg-muted">Current</span>}
+                {entry.revision !== current && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={inspecting !== null}
+                      onClick={() => {
+                        onInspect(entry.revision);
+                      }}
+                      className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+                    >
+                      {inspecting === entry.revision ? 'Loading…' : 'Inspect'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || !helmReady || refused !== null}
+                      title={reasonFor(
+                        `Roll back to revision ${String(entry.revision)}`,
+                        helmReady,
+                        helmReason,
+                        refused,
+                      )}
+                      onClick={() => {
+                        onRollback(entry.revision);
+                      }}
+                      className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+                    >
+                      Roll back
+                    </button>
+                  </>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex items-center gap-2 p-3">
+        {error !== null && <p className="text-error">{error}</p>}
+        {next !== null && (
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onLoadOlder}
+            className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+          >
+            {loading ? 'Loading…' : 'Load older revisions'}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

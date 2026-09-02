@@ -20,16 +20,31 @@ func (m *Manager) HelmReleases(ctx context.Context) (api.HelmReleases, error) {
 	return list, nil
 }
 
-func (m *Manager) HelmRelease(ctx context.Context, namespace, name string) (api.HelmReleaseDetail, error) {
+func (m *Manager) HelmRelease(
+	ctx context.Context,
+	namespace, name string,
+	revision int64,
+) (api.HelmReleaseDetail, error) {
 	if m.helm == nil {
 		return api.HelmReleaseDetail{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
 	}
-	detail, err := m.helm.Detail(ctx, namespace, name, m.resolveKind)
+	detail, err := m.helm.Detail(ctx, namespace, name, revision, m.resolveKind)
 	if err != nil {
 		return detail, err
 	}
 	detail.Release.FluxRef = ownerRef(m.fluxOwners(ctx), namespace, name)
 	return detail, nil
+}
+
+func (m *Manager) HelmHistory(
+	ctx context.Context,
+	namespace, name string,
+	through int64,
+) (api.HelmHistoryPage, error) {
+	if m.helm == nil {
+		return api.HelmHistoryPage{}, fmt.Errorf("%w: helm is not wired up", api.ErrInternal)
+	}
+	return m.helm.History(ctx, namespace, name, through)
 }
 
 func (m *Manager) HelmSupport() api.HelmSupport {

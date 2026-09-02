@@ -12,19 +12,65 @@ import (
 )
 
 func (s *Server) handleHelmRelease(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	namespace := query.Get("namespace")
-	name := query.Get("name")
-	if namespace == "" || name == "" {
-		writeError(w, http.StatusBadRequest, "namespace and name are required")
+	namespace, name, ok := helmCoordinates(w, r)
+	if !ok {
 		return
 	}
-	detail, err := s.managerFor(r).HelmRelease(r.Context(), namespace, name)
+	revision, ok := optionalPositive(w, r, "revision", "revision must be a positive number")
+	if !ok {
+		return
+	}
+	detail, err := s.managerFor(r).HelmRelease(r.Context(), namespace, name, revision)
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
 	writeJSON(w, detail)
+}
+
+func (s *Server) handleHelmHistory(w http.ResponseWriter, r *http.Request) {
+	namespace, name, ok := helmCoordinates(w, r)
+	if !ok {
+		return
+	}
+	through, ok := optionalPositive(w, r, "through", "through must be a positive revision")
+	if !ok {
+		return
+	}
+	page, err := s.managerFor(r).HelmHistory(r.Context(), namespace, name, through)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, page)
+}
+
+func helmCoordinates(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	query := r.URL.Query()
+	namespace := query.Get("namespace")
+	name := query.Get("name")
+	if namespace == "" || name == "" {
+		writeError(w, http.StatusBadRequest, "namespace and name are required")
+		return "", "", false
+	}
+	return namespace, name, true
+}
+
+func optionalPositive(
+	w http.ResponseWriter,
+	r *http.Request,
+	key, message string,
+) (int64, bool) {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return 0, true
+	}
+	parsed, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || parsed < 1 {
+		writeError(w, http.StatusBadRequest, message)
+		return 0, false
+	}
+	return parsed, true
 }
 
 func (s *Server) handleHelmAction(w http.ResponseWriter, r *http.Request) {
