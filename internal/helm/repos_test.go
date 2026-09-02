@@ -76,6 +76,19 @@ func TestRepositoriesIgnoresAConfigItCannotParse(t *testing.T) {
 	}
 }
 
+func TestRepositoriesIgnoresAConfigAboveItsSizeLimit(t *testing.T) {
+	body := "ignored: " + strings.Repeat("x", maxRepositoryConfigSize) + `
+repositories:
+  - name: too-large
+    url: https://charts.example.com
+`
+	path := writeConfig(t, body)
+
+	if len(Repositories(path)) != 0 {
+		t.Fatal("an oversized repository config was loaded")
+	}
+}
+
 func TestTheConfigPathFollowsHelmsOwnEnvironment(t *testing.T) {
 	t.Setenv(repoConfigEnv, "/somewhere/repositories.yaml")
 

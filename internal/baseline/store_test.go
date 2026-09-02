@@ -256,6 +256,21 @@ func TestABaselineTooLargeToReadBackIsNotSaved(t *testing.T) {
 	}
 }
 
+func TestAnOversizedBaselineFileIsNotLoaded(t *testing.T) {
+	held := store(t)
+	path := held.fileFor(cluster)
+	if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.Truncate(path, maxBytes+1); err != nil {
+		t.Fatalf("enlarge: %v", err)
+	}
+
+	if _, ok := held.Load(cluster); ok {
+		t.Fatal("an oversized baseline file was loaded")
+	}
+}
+
 func TestAStoreWithNoDirectoryKeepsNothingAndSaysNothing(t *testing.T) {
 	held := Open("")
 

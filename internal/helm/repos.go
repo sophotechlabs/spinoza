@@ -11,11 +11,13 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/sophotechlabs/spinoza/internal/charts"
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
 
 const (
-	repoConfigEnv = "HELM_REPOSITORY_CONFIG"
-	repoCacheEnv  = "HELM_REPOSITORY_CACHE"
+	repoConfigEnv           = "HELM_REPOSITORY_CONFIG"
+	repoCacheEnv            = "HELM_REPOSITORY_CACHE"
+	maxRepositoryConfigSize = 8 << 20
 )
 
 type repoFile struct {
@@ -92,7 +94,7 @@ func Repositories(path string) []RepoEntry {
 	if path == "" {
 		return nil
 	}
-	body, err := os.ReadFile(path)
+	body, err := filetx.Read(path, maxRepositoryConfigSize)
 	if err != nil {
 		return nil
 	}

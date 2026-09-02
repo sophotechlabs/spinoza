@@ -309,6 +309,19 @@ func TestASecretFileThatIsNotThereStopsSpinozaStarting(t *testing.T) {
 	}
 }
 
+func TestAnOversizedSecretFileStopsSpinozaStarting(t *testing.T) {
+	path := fileHolding(t, "secret")
+	if err := os.Truncate(path, maxSecretBytes+1); err != nil {
+		t.Fatalf("enlarge secret: %v", err)
+	}
+
+	_, err := readSecret(path, "")
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("reading oversized secret = %v, want the size limit", err)
+	}
+}
+
 func TestTheSessionSecretCanComeFromTheEnvironment(t *testing.T) {
 	t.Setenv(secretEnv, "from-the-environment")
 

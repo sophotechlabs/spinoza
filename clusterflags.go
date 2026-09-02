@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/auth"
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
 
 const (
@@ -20,6 +21,7 @@ const (
 	//nolint:gosec // the name of an environment variable, not a secret
 	clientSecretEnv = "SPINOZA_AUTH_OIDC_CLIENT_SECRET"
 	proxyAuthEnv    = "SPINOZA_AUTH_PROXY_SECRET"
+	maxSecretBytes  = 1 << 20
 )
 
 type serving struct {
@@ -212,7 +214,7 @@ func readSecret(path, fallbackEnv string) ([]byte, error) {
 		}
 		return []byte(os.Getenv(fallbackEnv)), nil
 	}
-	body, err := os.ReadFile(path)
+	body, err := filetx.Read(path, maxSecretBytes)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}

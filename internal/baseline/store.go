@@ -13,6 +13,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/atomicfile"
 	"github.com/sophotechlabs/spinoza/internal/checks"
+	"github.com/sophotechlabs/spinoza/internal/filetx"
 )
 
 const maxKeys = 500_000
@@ -58,7 +59,7 @@ func (s *Store) Load(cluster string) (checks.Baseline, bool) {
 	if s.dir == "" {
 		return checks.Baseline{}, false
 	}
-	body, err := os.ReadFile(s.fileFor(cluster))
+	body, err := filetx.Read(s.fileFor(cluster), maxBytes)
 	if err != nil {
 		return checks.Baseline{}, false
 	}
