@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -231,6 +232,30 @@ func TestAWriteThatFailsLeavesTheOldFileAndNoLitter(t *testing.T) {
 	}
 }
 
+func TestAShortWriteLeavesTheOldFileAndNoLitter(t *testing.T) {
+	path := target(t)
+	if err := Save(path, "state-*.json", []byte("first")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	saver := New()
+	saver.write = func(file *os.File, body []byte) (int, error) {
+		return file.Write(body[:1])
+	}
+
+	err := saver.Save(path, "state-*.json", []byte("second"))
+
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("error = %v, want a short write", err)
+	}
+	body, _ := os.ReadFile(path)
+	if string(body) != "first" {
+		t.Fatalf("body = %q, want the file that was already there", body)
+	}
+	if left, _ := os.ReadDir(filepath.Dir(path)); len(left) != 1 {
+		t.Fatalf("directory holds %d files, want the temporary one taken away", len(left))
+	}
+}
+
 func TestAFlushThatFailsLeavesTheOldFileAndNoLitter(t *testing.T) {
 	path := target(t)
 	if err := Save(path, "state-*.json", []byte("first")); err != nil {
@@ -245,6 +270,33 @@ func TestAFlushThatFailsLeavesTheOldFileAndNoLitter(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "disk went away") {
 		t.Fatalf("error = %v", err)
+	}
+	body, _ := os.ReadFile(path)
+	if string(body) != "first" {
+		t.Fatalf("body = %q, want the file that was already there", body)
+	}
+	if left, _ := os.ReadDir(filepath.Dir(path)); len(left) != 1 {
+		t.Fatalf("directory holds %d files, want the temporary one taken away", len(left))
+	}
+}
+
+func TestACloseThatFailsLeavesTheOldFileAndNoLitter(t *testing.T) {
+	path := target(t)
+	if err := Save(path, "state-*.json", []byte("first")); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	saver := New()
+	saver.close = func(file *os.File) error {
+		if err := file.Close(); err != nil {
+			return err
+		}
+		return errors.New("close failed")
+	}
+
+	err := saver.Save(path, "state-*.json", []byte("second"))
+
+	if err == nil || !strings.Contains(err.Error(), "close failed") {
+		t.Fatalf("error = %v, want the close failure", err)
 	}
 	body, _ := os.ReadFile(path)
 	if string(body) != "first" {

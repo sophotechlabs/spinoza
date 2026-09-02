@@ -1,6 +1,7 @@
 package atomicfile
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,6 +17,7 @@ type Saver struct {
 	create  func(dir, pattern string) (*os.File, error)
 	write   func(file *os.File, body []byte) (int, error)
 	sync    func(file *os.File) error
+	close   func(file *os.File) error
 	chmod   func(path string, mode os.FileMode) error
 	rename  func(from, to string) error
 	remove  func(path string) error
@@ -28,6 +30,7 @@ func New() *Saver {
 		create:  os.CreateTemp,
 		write:   func(file *os.File, body []byte) (int, error) { return file.Write(body) },
 		sync:    func(file *os.File) error { return file.Sync() },
+		close:   func(file *os.File) error { return file.Close() },
 		chmod:   os.Chmod,
 		rename:  os.Rename,
 		remove:  os.Remove,
@@ -69,12 +72,18 @@ func (s *Saver) replace(file *os.File, path string, body []byte) error {
 }
 
 func (s *Saver) fill(file *os.File, body []byte) error {
-	defer func() { _ = file.Close() }()
-	_, err := s.write(file, body)
-	if err != nil {
-		return err
+	written, writeErr := s.write(file, body)
+	if writeErr == nil && written != len(body) {
+		writeErr = io.ErrShortWrite
 	}
-	return s.sync(file)
+	if writeErr == nil {
+		writeErr = s.sync(file)
+	}
+	closeErr := s.close(file)
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
 }
 
 func Save(path, pattern string, body []byte) error {
