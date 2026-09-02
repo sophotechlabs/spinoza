@@ -198,6 +198,38 @@ describe('InspectYaml', () => {
     expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
   });
 
+  it('drops an apply failure after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let failApply: (reason: unknown) => void = () => undefined;
+    const applying = new Promise((_resolve, reject) => {
+      failApply = reject;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          return applying;
+        }
+        return Promise.resolve(okResponse({}));
+      }),
+    );
+    const { onApplied } = renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      failApply(new Error('old cluster failed'));
+      await Promise.resolve();
+    });
+
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(screen.queryByText('old cluster failed')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
+  });
+
   it('asks for confirmation before deleting', async () => {
     const user = userEvent.setup();
     const { onDeleted } = renderYaml();
@@ -281,6 +313,39 @@ describe('InspectYaml', () => {
     });
     await act(async () => {
       finishDelete(okResponse({}));
+      await Promise.resolve();
+    });
+
+    expect(onDeleted).not.toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+  });
+
+  it('drops a delete failure after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let failDelete: (reason: unknown) => void = () => undefined;
+    const deleting = new Promise((_resolve, reject) => {
+      failDelete = reject;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return deleting;
+        }
+        return Promise.resolve(okResponse({}));
+      }),
+    );
+    useToastsStore.getState().clear();
+    const { onDeleted } = renderYaml();
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      failDelete(new Error('old cluster failed'));
       await Promise.resolve();
     });
 

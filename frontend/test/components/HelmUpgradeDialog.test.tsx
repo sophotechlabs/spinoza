@@ -87,7 +87,7 @@ function stub(options: Stubs = {}) {
 function renderDialog() {
   const onClose = vi.fn();
   const onUpgraded = vi.fn();
-  render(
+  const view = render(
     <HelmUpgradeDialog
       release={release}
       currentValues={'replicaCount: 2\n'}
@@ -96,7 +96,7 @@ function renderDialog() {
       onUpgraded={onUpgraded}
     />,
   );
-  return { onClose, onUpgraded };
+  return { ...view, onClose, onUpgraded };
 }
 
 async function pickAndPreview(user: ReturnType<typeof userEvent.setup>) {
@@ -318,11 +318,69 @@ describe('HelmUpgradeDialog', () => {
     expect(body.version).toBe('1.0.0');
   });
 
-  it('drops an upgrade completion after the dialog is gone', async () => {
+  it.each([
+    ['answer', false],
+    ['failure', true],
+  ])('drops a preview %s after the dialog is gone', async (_outcome, fails) => {
     const user = userEvent.setup();
-    let finishUpgrade!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
-    const upgrade = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
-      finishUpgrade = resolve;
+    let settle!: () => void;
+    const preview = new Promise((resolve, reject) => {
+      if (fails) {
+        settle = () => {
+          reject(new Error('old cluster failed'));
+        };
+        return;
+      }
+      settle = () => {
+        resolve({
+          ok: true,
+          json: () => Promise.resolve({ action: 'upgrade', dryRun: true, manifest: 'old' }),
+        });
+      };
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/versions')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(versionsPayload) });
+        }
+        return preview;
+      }),
+    );
+    const view = renderDialog();
+    await screen.findByLabelText('Chart version');
+    await user.selectOptions(screen.getByLabelText('Chart version'), '0:6.15.1');
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    view.unmount();
+    await act(async () => {
+      settle();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByTestId('manifest-diff')).not.toBeInTheDocument();
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
+  it.each([
+    ['completion', false],
+    ['failure', true],
+  ])('drops an upgrade %s after the dialog is gone', async (_outcome, fails) => {
+    const user = userEvent.setup();
+    let settleUpgrade!: () => void;
+    const upgrade = new Promise((resolve, reject) => {
+      if (fails) {
+        settleUpgrade = () => {
+          reject(new Error('old cluster failed'));
+        };
+        return;
+      }
+      settleUpgrade = () => {
+        resolve({
+          ok: true,
+          json: () => Promise.resolve({ action: 'upgrade', message: 'old cluster upgraded' }),
+        });
+      };
     });
     let upgrades = 0;
     vi.stubGlobal(
@@ -358,11 +416,7 @@ describe('HelmUpgradeDialog', () => {
     view.unmount();
 
     await act(async () => {
-      finishUpgrade({
-        ok: true,
-        json: () => Promise.resolve({ action: 'upgrade', message: 'old cluster upgraded' }),
-      });
-      await upgrade;
+      settleUpgrade();
       await Promise.resolve();
     });
 

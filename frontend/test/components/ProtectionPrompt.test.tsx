@@ -181,6 +181,31 @@ describe('ProtectionPrompt', () => {
     expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 
+  it('drops an answer failure after the active context changes', async () => {
+    const user = userEvent.setup();
+    let fail!: (reason: unknown) => void;
+    const answer = new Promise((_resolve, reject) => {
+      fail = reject;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => answer),
+    );
+    show('unknown');
+    await user.click(screen.getByRole('button', { name: 'Protect it' }));
+
+    act(() => {
+      useContextsStore.getState().setList(list('unknown', 'p-mk2'));
+    });
+    await act(async () => {
+      fail(new Error('old cluster failed'));
+      await Promise.resolve();
+    });
+
+    expect(useContextsStore.getState().list.current.name).toBe('p-mk2');
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
   it('drops an answer after the same context reconnects', async () => {
     const user = userEvent.setup();
     let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;

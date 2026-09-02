@@ -43,13 +43,8 @@ const PAGE_SIZE = 200;
 
 const NAMESPACES_SHOWN = 20;
 
-function useScopedOperation(scope: string) {
+function useScopedOperation() {
   const operation = useRef(0);
-  const liveScope = useRef(scope);
-  if (liveScope.current !== scope) {
-    liveScope.current = scope;
-    operation.current += 1;
-  }
   useEffect(() => {
     return () => {
       operation.current += 1;
@@ -258,7 +253,7 @@ function MuteControl({
   onFailed: (message: string) => void;
 }) {
   const scope = useContextScope();
-  const operation = useScopedOperation(scope);
+  const operation = useScopedOperation();
   const [working, setWorking] = useState(false);
 
   useEffect(() => {
@@ -328,7 +323,7 @@ function MuteReason({
   const [failed, setFailed] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const clusterScope = useContextScope();
-  const operation = useScopedOperation(clusterScope);
+  const operation = useScopedOperation();
 
   useEffect(() => {
     setWorking(false);
@@ -882,7 +877,7 @@ function BaselineBar({ report, onChanged }: { report: CheckReportView; onChanged
   const [working, setWorking] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const scope = useContextScope();
-  const operation = useScopedOperation(scope);
+  const operation = useScopedOperation();
 
   useEffect(() => {
     setWorking(false);
@@ -976,8 +971,7 @@ function BaselineFile({
   onFailed: (message: string) => void;
 }) {
   const pick = useRef<HTMLInputElement>(null);
-  const scope = useContextScope();
-  const operation = useScopedOperation(scope);
+  const operation = useScopedOperation();
 
   function save() {
     operation.current += 1;
@@ -1059,7 +1053,7 @@ function ExportButton({ onFailed }: { onFailed: (message: string) => void }) {
   const keep = useChecksFilter();
   const [working, setWorking] = useState(false);
   const scope = useContextScope();
-  const operation = useScopedOperation(scope);
+  const operation = useScopedOperation();
 
   useEffect(() => {
     setWorking(false);

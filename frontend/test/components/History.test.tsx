@@ -262,6 +262,42 @@ describe('History', () => {
     expect(screen.getByRole('button', { name: 'Clear' })).toBeEnabled();
   });
 
+  it('drops a clear failure after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let failClear: (reason: unknown) => void = () => undefined;
+    const clearing = new Promise((_resolve, reject) => {
+      failClear = reject;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return clearing;
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry()] }),
+        });
+      }),
+    );
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await screen.findByText('web');
+    await act(async () => {
+      failClear(new Error('old cluster failed'));
+      await Promise.resolve();
+    });
+
+    expect(useToastsStore.getState().toasts).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeEnabled();
+  });
+
   it('cannot be cleared when there is nothing to clear', async () => {
     stub({ entries: [] });
 

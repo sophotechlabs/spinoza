@@ -139,8 +139,10 @@ function stub(options: Stubs = {}) {
 function renderDialog() {
   const onClose = vi.fn();
   const onInstalled = vi.fn();
-  render(<HelmInstallDialog namespace="demo" onClose={onClose} onInstalled={onInstalled} />);
-  return { onClose, onInstalled };
+  const view = render(
+    <HelmInstallDialog namespace="demo" onClose={onClose} onInstalled={onInstalled} />,
+  );
+  return { ...view, onClose, onInstalled };
 }
 
 async function search(user: ReturnType<typeof userEvent.setup>, text = 'podinfo') {
@@ -662,11 +664,124 @@ describe('the corners of the install dialog', () => {
     expect(screen.queryByLabelText('Chart version')).not.toBeInTheDocument();
   });
 
-  it('drops an install completion after the dialog is gone', async () => {
+  it.each([
+    ['answer', false],
+    ['failure', true],
+  ])('drops a values %s after the dialog is gone', async (_outcome, fails) => {
     const user = userEvent.setup();
-    let finishInstall!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
-    const install = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
-      finishInstall = resolve;
+    let settle!: () => void;
+    const values = new Promise((resolve, reject) => {
+      if (fails) {
+        settle = () => {
+          reject(new Error('old cluster failed'));
+        };
+        return;
+      }
+      settle = () => {
+        resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ values: 'replicaCount: 3\n' }),
+        });
+      };
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/charts')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(searchPayload) });
+        }
+        if (url.startsWith('/api/helm/access')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
+        }
+        if (url.startsWith('/api/helm/versions')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(versionsPayload) });
+        }
+        return values;
+      }),
+    );
+    const view = renderDialog();
+    await reachTheForm(user);
+    await user.click(screen.getByRole('button', { name: 'Load the chart defaults' }));
+
+    view.unmount();
+    await act(async () => {
+      settle();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByLabelText('yaml')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['answer', false],
+    ['failure', true],
+  ])('drops a preview %s after the dialog is gone', async (_outcome, fails) => {
+    const user = userEvent.setup();
+    let settle!: () => void;
+    const preview = new Promise((resolve, reject) => {
+      if (fails) {
+        settle = () => {
+          reject(new Error('old cluster failed'));
+        };
+        return;
+      }
+      settle = () => {
+        resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ action: 'install', dryRun: true, manifest: 'old' }),
+        });
+      };
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/helm/charts')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(searchPayload) });
+        }
+        if (url.startsWith('/api/helm/access')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
+        }
+        if (url.startsWith('/api/helm/versions')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(versionsPayload) });
+        }
+        return preview;
+      }),
+    );
+    const view = renderDialog();
+    await reachTheForm(user);
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    view.unmount();
+    await act(async () => {
+      settle();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByTestId('manifest-diff')).not.toBeInTheDocument();
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
+  it.each([
+    ['completion', false],
+    ['failure', true],
+  ])('drops an install %s after the dialog is gone', async (_outcome, fails) => {
+    const user = userEvent.setup();
+    let settleInstall!: () => void;
+    const install = new Promise((resolve, reject) => {
+      if (fails) {
+        settleInstall = () => {
+          reject(new Error('old cluster failed'));
+        };
+        return;
+      }
+      settleInstall = () => {
+        resolve({
+          ok: true,
+          json: () => Promise.resolve({ action: 'install', message: 'old cluster installed' }),
+        });
+      };
     });
     let installs = 0;
     vi.stubGlobal(
@@ -704,11 +819,7 @@ describe('the corners of the install dialog', () => {
     view.unmount();
 
     await act(async () => {
-      finishInstall({
-        ok: true,
-        json: () => Promise.resolve({ action: 'install', message: 'old cluster installed' }),
-      });
-      await install;
+      settleInstall();
       await Promise.resolve();
     });
 

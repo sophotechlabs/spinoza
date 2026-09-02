@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ContextPicker from '../../src/components/ContextPicker';
 import { useToastsStore } from '../../src/store/toasts';
@@ -566,6 +566,73 @@ describe('ContextPicker', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(await screen.findByRole('button', { name: 'staging' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['answer', false],
+    ['failure', true],
+  ])('drops an open-cluster %s after the kubeconfig list changes', async (_outcome, fails) => {
+    const user = userEvent.setup();
+    const healthy = listOf(['p-mk1', 'p-mk2'], 'p-mk1');
+    const added = {
+      label: '/home/arch/.kube/work.yaml',
+      path: '/home/arch/.kube/work.yaml',
+      removable: true,
+      contexts: [{ name: 'staging', cluster: 'work' }],
+    };
+    const changed = { ...healthy, kubeconfigs: [...healthy.kubeconfigs, added] };
+    let settle!: () => void;
+    const listing = new Promise((resolve, reject) => {
+      if (fails) {
+        settle = () => {
+          reject(new Error('old cluster failed'));
+        };
+        return;
+      }
+      settle = () => {
+        resolve({ ok: true, json: () => Promise.resolve(healthy) });
+      };
+    });
+    let contextLists = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string }) => {
+        if (url.startsWith('/api/kubeconfigs/picker')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ available: false }) });
+        }
+        if (url.startsWith('/api/kubeconfigs?')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(changed) });
+        }
+        if (init?.method === 'POST') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+        }
+        contextLists += 1;
+        if (contextLists === 1) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(healthy) });
+        }
+        return listing;
+      }),
+    );
+    const onSwitched = vi.fn();
+    render(<ContextPicker onSwitched={onSwitched} />);
+    await pick(user, 'Manage kubeconfigs');
+    fireEvent.click(screen.getByRole('button', { name: 'p-mk2', hidden: true }));
+    await waitFor(() => {
+      expect(contextLists).toBe(2);
+    });
+
+    await user.type(screen.getByLabelText('Add a kubeconfig'), '/home/arch/.kube/work.yaml');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await act(async () => {
+      settle();
+      await Promise.resolve();
+    });
+
+    expect(
+      await screen.findByRole('button', { name: 'staging', hidden: true }),
+    ).toBeInTheDocument();
+    expect(onSwitched).not.toHaveBeenCalled();
+    expect(screen.queryByText('old cluster failed')).not.toBeInTheDocument();
   });
 
   it('notices on its own that a kubeconfig stopped reading', async () => {

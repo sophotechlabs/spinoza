@@ -142,6 +142,30 @@ describe('the strip of open clusters', () => {
     expect(screen.getByRole('button', { name: 'p-mk3' })).toBeEnabled();
   });
 
+  it('does not close a tab while a cluster switch is running', async () => {
+    let finishSwitch: (response: unknown) => void = () => undefined;
+    const switching = new Promise((resolve) => {
+      finishSwitch = resolve;
+    });
+    const fetchMock = vi.fn(() => switching);
+    vi.stubGlobal('fetch', fetchMock);
+    open(MK1);
+    act(() => {
+      useTerminalsStore.getState().open('prod', 'web', 'app');
+    });
+    render(<ClusterStrip onShown={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close p-mk1' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'p-mk2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close it' }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finishSwitch({ ok: true, status: 200, json: () => Promise.resolve(listOf(MK1)) });
+      await switching;
+    });
+  });
+
   it('does nothing when the tab in front is clicked', async () => {
     const user = userEvent.setup();
     const calls = stub();

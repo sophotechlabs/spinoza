@@ -6,6 +6,7 @@ import { useSettingsStore } from '../../src/store/settings';
 import { useClustersStore } from '../../src/store/clusters';
 import { MK1, showing } from '../helpers-clusters';
 import type { CheckFinding, CheckGroup, CheckObject, CheckReport } from '../../src/lib/types';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const OBJECTS: CheckObject[] = [
   {
@@ -115,6 +116,25 @@ afterEach(() => {
 });
 
 describe('Checks', () => {
+  it('invalidates pending work when the cluster reconnects', async () => {
+    stub({
+      groups: [makeGroup('privileged', { findings: [makeFinding()] })],
+      objects: OBJECTS,
+      scanned: 1,
+    });
+    render(<Checks onOpen={vi.fn()} />);
+    await screen.findByRole('button', { name: /Privileged containers/ });
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await Promise.resolve();
+    });
+
+    expect(
+      await screen.findByRole('button', { name: /Privileged containers/ }),
+    ).toBeInTheDocument();
+  });
+
   it('says it is loading before the first answer', () => {
     stub({ groups: [], objects: OBJECTS, scanned: 0 });
 
@@ -368,6 +388,62 @@ describe('Checks', () => {
     expect(
       screen.getByRole('button', { name: 'Deployment · apps/current · container app' }),
     ).toBeInTheDocument();
+  });
+
+  it('drops a pending page failure when a refreshed report replaces its group', async () => {
+    let failPage: (reason: unknown) => void = () => undefined;
+    const pendingPage = new Promise((_resolve, reject) => {
+      failPage = reject;
+    });
+    let reports = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/checks/findings')) {
+          return pendingPage;
+        }
+        if (url.startsWith('/api/checks/baseline') && init?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ message: 'taken' }),
+          });
+        }
+        reports += 1;
+        const report = cappedReport();
+        if (reports > 1) {
+          report.objects = [{ ...OBJECTS[0], name: 'current' }];
+          report.groups = [
+            makeGroup('limits-missing', {
+              total: 1,
+              findings: [makeFinding()],
+            }),
+          ];
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(report),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Take a baseline' }));
+    expect(
+      await screen.findByRole('button', {
+        name: 'Deployment · apps/current · container app',
+      }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      failPage(new Error('stale page failed'));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('stale page failed')).not.toBeInTheDocument();
   });
 
   it('stops offering more once every finding is on screen', async () => {

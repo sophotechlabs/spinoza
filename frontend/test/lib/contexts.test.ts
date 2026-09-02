@@ -106,6 +106,26 @@ describe('a cluster announcing itself', () => {
 
     expect(useContextsStore.getState().list).toBe(EMPTY_CONTEXTS);
   });
+
+  it('does not apply an announcement after a newer one starts', async () => {
+    let finishFirst!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const first = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishFirst = resolve;
+    });
+    const newer = { ...list, current: { kubeconfig: '', name: 'p-mk2' } };
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => first)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(newer) });
+    vi.stubGlobal('fetch', fetchMock);
+    const olderAnnouncement = contextAnnounced('p-mk1');
+
+    await contextAnnounced('p-mk2');
+    finishFirst({ ok: true, json: () => Promise.resolve(list) });
+    await olderAnnouncement;
+
+    expect(useContextsStore.getState().list.current.name).toBe('p-mk2');
+  });
 });
 
 describe('contextGroups', () => {

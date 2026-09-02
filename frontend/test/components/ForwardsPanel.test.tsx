@@ -155,6 +155,35 @@ describe('ForwardsPanel', () => {
     expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 
+  it('drops a stop failure after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let fail!: (reason: unknown) => void;
+    const stopping = new Promise((_resolve, reject) => {
+      fail = reject;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return stopping;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([forward()]) });
+      }),
+    );
+    render(<ForwardsPanel />);
+    await user.click(await screen.findByRole('button', { name: 'Stop' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      fail(new Error('old cluster failed'));
+      await Promise.resolve();
+    });
+
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
   it('falls back to a generic message for a non-Error rejection', async () => {
     const user = userEvent.setup();
     vi.stubGlobal(

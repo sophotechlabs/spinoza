@@ -410,6 +410,46 @@ describe('HelmReleaseDetail', () => {
     expect(useToastsStore.getState().toasts).toHaveLength(0);
   });
 
+  it('drops a release action failure after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let failAction!: (reason: unknown) => void;
+    const action = new Promise((_resolve, reject) => {
+      failAction = reject;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/capabilities')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(capabilities()) });
+        }
+        if (url.startsWith('/api/helm/access')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
+        }
+        if (url.startsWith('/api/helm/action')) {
+          return action;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(detail()) });
+      }),
+    );
+    const { onClose } = renderDetail();
+    await screen.findByText('Upgrade complete');
+    await user.click(screen.getByRole('button', { name: 'Uninstall' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      failAction(new Error('old cluster failed'));
+      await Promise.resolve();
+    });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useHelmStore.getState().epoch).toBe(0);
+    expect(useToastsStore.getState().toasts).toHaveLength(0);
+  });
+
   it('swaps the upgrade button for the flux owner', async () => {
     const user = userEvent.setup();
     const fluxRef = {

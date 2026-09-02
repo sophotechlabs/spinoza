@@ -262,4 +262,27 @@ describe('ColumnSettings', () => {
     expect(screen.queryByRole('option', { name: 'Pod' })).not.toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Service' })).toBeInTheDocument();
   });
+
+  it('drops a discovery failure that lands after unmount', async () => {
+    clearCatalog();
+    let fail: (reason: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = reject;
+          }),
+      ),
+    );
+    const view = render(<ColumnSettings />);
+
+    view.unmount();
+    await act(async () => {
+      fail(new Error('too late'));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('too late')).not.toBeInTheDocument();
+  });
 });
