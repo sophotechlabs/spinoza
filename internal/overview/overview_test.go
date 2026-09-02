@@ -563,7 +563,7 @@ func eventPage(names []string, seen, reason string, more bool) *unstructured.Uns
 		list.Items = append(list.Items, *warning(name, reason, "web", seen))
 	}
 	if more {
-		list.SetContinue("more")
+		list.SetContinue(strings.Join(names, ","))
 	}
 	return list
 }
@@ -609,6 +609,24 @@ func TestPagingWarningsCountsAsOneAttemptNotOnePerPage(t *testing.T) {
 	if !strings.HasPrefix(failures.Message(), want) {
 		t.Fatalf("message = %q, want it to start %q; paging one type must count once",
 			failures.Message(), want)
+	}
+}
+
+func TestBuildRejectsARepeatedWarningContinueToken(t *testing.T) {
+	dyn := dynClient()
+	pages := 0
+	dyn.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		pages++
+		return true, eventPage([]string{"same"}, "2026-08-11T10:00:00Z", "BackOff", true), nil
+	})
+
+	got := Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
+
+	if pages != 2 {
+		t.Fatalf("listed %d pages, want the repeated second response rejected", pages)
+	}
+	if !strings.Contains(got.Error, "repeated a continuation token") {
+		t.Fatalf("error = %q, want the repeated token named", got.Error)
 	}
 }
 

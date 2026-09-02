@@ -281,22 +281,31 @@ func warnings(
 	// The list is cut every page, so what was read has to be counted as it
 	// arrives rather than measured off the end.
 	seen := 0
+	tokens := map[string]bool{}
 	for range warningPages {
 		list, err := dyn.Resource(eventsGVR).List(bounded, opts)
 		if err != nil {
 			failures.Record(eventsKey, err)
 			return out, seen
 		}
+		next := list.GetContinue()
+		if next != "" && tokens[next] {
+			failures.Record(eventsKey, errors.New("the apiserver repeated a continuation token while listing warning events"))
+			return out, seen
+		}
+		if next != "" {
+			tokens[next] = true
+		}
 		for i := range list.Items {
 			out = append(out, eventOf(&list.Items[i]))
 			seen++
 		}
 		out = newestFirst(out)
-		if list.GetContinue() == "" {
+		if next == "" {
 			failures.Record(eventsKey, nil)
 			return out, seen
 		}
-		opts.Continue = list.GetContinue()
+		opts.Continue = next
 	}
 	failures.Record(eventsKey, fmt.Errorf(
 		"more than %d warning events, so the newest are taken from the first %d",
