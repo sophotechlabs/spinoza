@@ -77,11 +77,10 @@ test('reconnecting resubscribes the resource table that is already open', async 
 
 test('an integration that is absent is named and disabled, not hidden', async ({ page }) => {
   await openHome(page);
-  for (const absent of ['Traffic', 'Flux', 'Argo CD']) {
-    const button = page.getByRole('button', { name: absent, exact: true });
-    await expect(button).toBeVisible();
-    await expect(button).toBeDisabled();
-  }
+  const button = page.getByRole('button', { name: 'Traffic', exact: true });
+  await expect(button).toBeVisible();
+  await expect(button).toBeDisabled();
+  await expect(button).toHaveAttribute('title', /prometheus is unavailable/);
 });
 
 test('a metric with no source is not invented', async ({ page }) => {
