@@ -21,8 +21,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-${{ github.event.pull_request.number || inputs.pull_request || github.ref }}-${{ github.event.head_commit.id }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  group: >-
+    e2e-${{ github.event.pull_request.number || inputs.pull_request || github.ref }}-${{
+    github.event_name == 'push' &&
+    startsWith(github.event.head_commit.message, 'chore(main): release ') &&
+    github.sha || 'latest' }}
+  cancel-in-progress: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(main): release ') }}"
 
 jobs:
   select:

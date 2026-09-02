@@ -6,15 +6,15 @@ import (
 )
 
 func TestLongRunningChecksUsePerRefConcurrencyGroups(t *testing.T) {
-	want := "${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ github.event.head_commit.id }}"
+	want := "${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-"
 	for _, name := range []string{
 		".github/workflows/go-fuzz.yaml",
 		".github/workflows/go-mutation.yaml",
 	} {
 		t.Run(name, func(t *testing.T) {
 			workflow := readYAML[workflowFile](t, name)
-			if workflow.Concurrency.Group != want {
-				t.Fatalf("concurrency group = %q, want %q", workflow.Concurrency.Group, want)
+			if !strings.HasPrefix(workflow.Concurrency.Group, want) {
+				t.Fatalf("concurrency group = %q, want prefix %q", workflow.Concurrency.Group, want)
 			}
 		})
 	}
@@ -22,15 +22,16 @@ func TestLongRunningChecksUsePerRefConcurrencyGroups(t *testing.T) {
 
 func TestE2EUsesAConcurrencyGroupForEachPullRequest(t *testing.T) {
 	workflow := readYAML[workflowFile](t, ".github/workflows/e2e.yaml")
-	want := "e2e-${{ github.event.pull_request.number || inputs.pull_request || github.ref }}-${{ github.event.head_commit.id }}"
-	if workflow.Concurrency.Group != want {
-		t.Fatalf("concurrency group = %q, want %q", workflow.Concurrency.Group, want)
+	want := "e2e-${{ github.event.pull_request.number || inputs.pull_request || github.ref }}-"
+	if !strings.HasPrefix(workflow.Concurrency.Group, want) {
+		t.Fatalf("concurrency group = %q, want prefix %q", workflow.Concurrency.Group, want)
 	}
 }
 
-func TestMainPushValidationCannotBeCancelledByLaterPush(t *testing.T) {
-	want := workflowScalar("${{ github.event_name != 'push' }}")
-	pushID := "${{ github.event.head_commit.id }}"
+func TestOrdinaryPushesSupersedeValidationButReleaseCommitsDoNot(t *testing.T) {
+	want := workflowScalar("${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(main): release ') }}")
+	release := "startsWith(github.event.head_commit.message, 'chore(main): release ')"
+	pushID := "github.sha"
 	for _, name := range []string{
 		".github/workflows/badges.yaml",
 		".github/workflows/codeql.yaml",
@@ -49,8 +50,14 @@ func TestMainPushValidationCannotBeCancelledByLaterPush(t *testing.T) {
 			if workflow.Concurrency.CancelInProgress != want {
 				t.Fatalf("cancel-in-progress = %q, want %q", workflow.Concurrency.CancelInProgress, want)
 			}
+			if !strings.Contains(workflow.Concurrency.Group, release) {
+				t.Fatalf("concurrency group %q does not recognize release commits", workflow.Concurrency.Group)
+			}
 			if !strings.Contains(workflow.Concurrency.Group, pushID) {
-				t.Fatalf("concurrency group %q does not distinguish main pushes", workflow.Concurrency.Group)
+				t.Fatalf("concurrency group %q does not isolate the release commit", workflow.Concurrency.Group)
+			}
+			if !strings.Contains(workflow.Concurrency.Group, "'latest'") {
+				t.Fatalf("concurrency group %q does not coalesce ordinary pushes", workflow.Concurrency.Group)
 			}
 		})
 	}

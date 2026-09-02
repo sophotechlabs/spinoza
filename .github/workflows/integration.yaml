@@ -16,8 +16,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ github.event.head_commit.id }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  group: >-
+    ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{
+    github.event_name == 'push' &&
+    startsWith(github.event.head_commit.message, 'chore(main): release ') &&
+    github.sha || 'latest' }}
+  cancel-in-progress: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(main): release ') }}"
 
 jobs:
   kind:
