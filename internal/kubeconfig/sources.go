@@ -109,6 +109,10 @@ func (s *Sources) Resolve(path string) (string, error) {
 }
 
 func Resolve(path string) (string, error) {
+	return resolveWith(path, filepath.Abs)
+}
+
+func resolveWith(path string, makeAbsolute func(string) (string, error)) (string, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
 		return "", errors.New("a kubeconfig path is required")
@@ -117,7 +121,7 @@ func Resolve(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	absolutePath, absErr := filepath.Abs(expanded)
+	absolutePath, absErr := makeAbsolute(expanded)
 	if absErr != nil {
 		return "", fmt.Errorf("kubeconfig %s: %w", trimmed, absErr)
 	}

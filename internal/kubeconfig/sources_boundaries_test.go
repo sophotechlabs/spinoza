@@ -1,22 +1,27 @@
 package kubeconfig
 
 import (
-	"os"
+	"errors"
 	"strings"
 	"testing"
 )
 
-func TestResolveReportsAWorkingDirectoryThatDisappeared(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
-	if err := os.Remove(dir); err != nil {
-		t.Skipf("this platform keeps the working directory in place: %v", err)
+func TestResolveReportsAnAbsolutePathFailure(t *testing.T) {
+	cause := errors.New("working directory unavailable")
+	makeAbsolute := func(path string) (string, error) {
+		if path != "config" {
+			t.Fatalf("absolute path input = %q, want config", path)
+		}
+		return "", cause
 	}
 
-	_, err := Resolve("config")
+	_, err := resolveWith("config", makeAbsolute)
 
 	if err == nil {
-		t.Fatal("a relative path resolved without a working directory")
+		t.Fatal("an absolute path failure was ignored")
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("resolve error = %v, want the absolute path failure", err)
 	}
 	if !strings.Contains(err.Error(), "kubeconfig config") {
 		t.Fatalf("resolve error = %q, want the path named", err.Error())
