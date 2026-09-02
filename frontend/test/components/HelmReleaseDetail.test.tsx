@@ -85,8 +85,11 @@ interface Stubs {
   support?: { available: boolean; reason?: string; binary: string };
   actionStatus?: number;
   actionBody?: unknown;
-  history?: HelmHistoryPage | ((through: number) => HelmHistoryPage);
-  revisionDetails?: Record<number, Detail>;
+  history?:
+    | HelmHistoryPage
+    | Promise<HelmHistoryPage>
+    | ((through: number) => HelmHistoryPage | Promise<HelmHistoryPage>);
+  revisionDetails?: Record<number, Detail | Promise<Detail>>;
 }
 
 function stub(options: Stubs = {}) {
@@ -150,7 +153,7 @@ function stub(options: Stubs = {}) {
     }
     const status = options.detailStatus ?? 200;
     const revision = Number(new URL(url, 'http://spinoza').searchParams.get('revision'));
-    let responseDetail = options.detail ?? detail();
+    let responseDetail: Detail | Promise<Detail> = options.detail ?? detail();
     if (revision > 0) {
       responseDetail = options.revisionDetails?.[revision] ?? responseDetail;
     }
@@ -168,7 +171,7 @@ function renderDetail() {
   const onSelectResource = vi.fn();
   const onOpenResource = vi.fn();
   const onClose = vi.fn();
-  render(
+  const view = render(
     <HelmReleaseDetail
       namespace="demo"
       name="podinfo"
@@ -177,7 +180,17 @@ function renderDetail() {
       onClose={onClose}
     />,
   );
-  return { onSelectResource, onOpenResource, onClose };
+  return { onSelectResource, onOpenResource, onClose, unmount: view.unmount };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((accept, decline) => {
+    resolve = accept;
+    reject = decline;
+  });
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -301,6 +314,99 @@ describe('HelmReleaseDetail', () => {
     expect(calls.some((call) => call.url.startsWith('/api/helm/history'))).toBe(false);
   });
 
+  it('shows and retries an initial history failure', async () => {
+    const user = userEvent.setup();
+    const first = deferred<HelmHistoryPage>();
+    let attempts = 0;
+    stub({
+      history: () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return first.promise;
+        }
+        return {
+          revisions: [
+            {
+              revision: 2,
+              status: 'superseded',
+              chartVersion: '6.9.1',
+              appVersion: '6.9.1',
+              updated: release.updated,
+            },
+          ],
+        };
+      },
+    });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await act(async () => {
+      first.reject(new Error('history unavailable'));
+      await expect(first.promise).rejects.toThrow('history unavailable');
+    });
+
+    expect(await screen.findByText('history unavailable')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retry history' }));
+
+    expect(await screen.findByText('6.9.1')).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
+
+  it('uses a stable message for a non-error history failure', async () => {
+    const user = userEvent.setup();
+    const pending = deferred<HelmHistoryPage>();
+    stub({ history: () => pending.promise });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await act(async () => {
+      pending.reject('offline');
+      await expect(pending.promise).rejects.toBe('offline');
+    });
+
+    expect(await screen.findByText('the release history could not be loaded')).toBeInTheDocument();
+  });
+
+  it('drops initial history that completes after the detail closes', async () => {
+    const user = userEvent.setup();
+    const pending = deferred<HelmHistoryPage>();
+    const calls = stub({ history: () => pending.promise });
+    const { unmount } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await screen.findByText('Loading release history…');
+    unmount();
+    await act(async () => {
+      pending.resolve({ revisions: [] });
+      await pending.promise;
+      await Promise.resolve();
+    });
+
+    expect(calls.filter((call) => call.url.startsWith('/api/helm/history'))).toHaveLength(1);
+  });
+
+  it('drops an initial history failure after the detail closes', async () => {
+    const user = userEvent.setup();
+    const pending = deferred<HelmHistoryPage>();
+    const calls = stub({ history: () => pending.promise });
+    const { unmount } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await screen.findByText('Loading release history…');
+    unmount();
+    await act(async () => {
+      pending.reject(new Error('late history failure'));
+      await expect(pending.promise).rejects.toThrow('late history failure');
+      await Promise.resolve();
+    });
+
+    expect(calls.filter((call) => call.url.startsWith('/api/helm/history'))).toHaveLength(1);
+  });
+
   it('loads older history pages only when requested', async () => {
     const user = userEvent.setup();
     const calls = stub({
@@ -356,6 +462,191 @@ describe('HelmReleaseDetail', () => {
     expect(historyCalls[1]?.url).toContain('through=1');
   });
 
+  it('disables older-page loading while a request is pending', async () => {
+    const user = userEvent.setup();
+    const older = deferred<HelmHistoryPage>();
+    const calls = stub({
+      history: (through) => {
+        if (through === 3) {
+          return {
+            revisions: [
+              {
+                revision: 3,
+                status: 'deployed',
+                chartVersion: '6.9.2',
+                appVersion: '6.9.2',
+                updated: release.updated,
+              },
+            ],
+            next: 1,
+          };
+        }
+        return older.promise;
+      },
+    });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    const load = await screen.findByRole('button', { name: 'Load older revisions' });
+    await user.click(load);
+    const loading = await screen.findByRole('button', { name: 'Loading…' });
+
+    expect(loading).toBeDisabled();
+    expect(calls.filter((call) => call.url.startsWith('/api/helm/history'))).toHaveLength(2);
+    await act(async () => {
+      older.resolve({ revisions: [] });
+      await older.promise;
+    });
+  });
+
+  it('shows an older-page error without discarding loaded history', async () => {
+    const user = userEvent.setup();
+    const older = deferred<HelmHistoryPage>();
+    stub({
+      history: (through) => {
+        if (through === 3) {
+          return {
+            revisions: [
+              {
+                revision: 3,
+                status: 'deployed',
+                chartVersion: '6.9.2',
+                appVersion: '6.9.2',
+                updated: release.updated,
+              },
+            ],
+            next: 1,
+          };
+        }
+        return older.promise;
+      },
+    });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Load older revisions' }));
+    await act(async () => {
+      older.reject(new Error('older history unavailable'));
+      await expect(older.promise).rejects.toThrow('older history unavailable');
+    });
+
+    expect(await screen.findByText('older history unavailable')).toBeInTheDocument();
+    expect(screen.getByText('6.9.2')).toBeInTheDocument();
+  });
+
+  it('uses a stable message for a non-error older-page failure', async () => {
+    const user = userEvent.setup();
+    const older = deferred<HelmHistoryPage>();
+    stub({
+      history: (through) => {
+        if (through === 3) {
+          return {
+            revisions: [
+              {
+                revision: 3,
+                status: 'deployed',
+                chartVersion: '6.9.2',
+                appVersion: '6.9.2',
+                updated: release.updated,
+              },
+            ],
+            next: 1,
+          };
+        }
+        return older.promise;
+      },
+    });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Load older revisions' }));
+    await act(async () => {
+      older.reject('offline');
+      await expect(older.promise).rejects.toBe('offline');
+    });
+
+    expect(
+      await screen.findByText('the older release history could not be loaded'),
+    ).toBeInTheDocument();
+  });
+
+  it('drops an older page that completes after the detail closes', async () => {
+    const user = userEvent.setup();
+    const older = deferred<HelmHistoryPage>();
+    const calls = stub({
+      history: (through) => {
+        if (through === 3) {
+          return {
+            revisions: [
+              {
+                revision: 3,
+                status: 'deployed',
+                chartVersion: '6.9.2',
+                appVersion: '6.9.2',
+                updated: release.updated,
+              },
+            ],
+            next: 1,
+          };
+        }
+        return older.promise;
+      },
+    });
+    const { unmount } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Load older revisions' }));
+    unmount();
+    await act(async () => {
+      older.resolve({ revisions: [] });
+      await older.promise;
+      await Promise.resolve();
+    });
+
+    expect(calls.filter((call) => call.url.startsWith('/api/helm/history'))).toHaveLength(2);
+  });
+
+  it('drops an older-page failure after the detail closes', async () => {
+    const user = userEvent.setup();
+    const older = deferred<HelmHistoryPage>();
+    const calls = stub({
+      history: (through) => {
+        if (through === 3) {
+          return {
+            revisions: [
+              {
+                revision: 3,
+                status: 'deployed',
+                chartVersion: '6.9.2',
+                appVersion: '6.9.2',
+                updated: release.updated,
+              },
+            ],
+            next: 1,
+          };
+        }
+        return older.promise;
+      },
+    });
+    const { unmount } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Load older revisions' }));
+    unmount();
+    await act(async () => {
+      older.reject(new Error('late older-page failure'));
+      await expect(older.promise).rejects.toThrow('late older-page failure');
+      await Promise.resolve();
+    });
+
+    expect(calls.filter((call) => call.url.startsWith('/api/helm/history'))).toHaveLength(2);
+  });
+
   it('loads the full payload for an inspected revision only', async () => {
     const user = userEvent.setup();
     const calls = stub({
@@ -386,6 +677,96 @@ describe('HelmReleaseDetail', () => {
 
     await user.click(screen.getByRole('button', { name: 'Values' }));
     expect(screen.getByText(/replicaCount: 1/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Back to current revision 3' }));
+    expect(screen.queryByText('Viewing stored revision 2.')).not.toBeInTheDocument();
+    expect(screen.getByText(/replicaCount: 2/)).toBeInTheDocument();
+  });
+
+  it('shows a failed revision inspection', async () => {
+    const user = userEvent.setup();
+    const inspected = deferred<Detail>();
+    stub({ revisionDetails: { 2: inspected.promise } });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Inspect' }));
+    await act(async () => {
+      inspected.reject(new Error('revision payload unavailable'));
+      await expect(inspected.promise).rejects.toThrow('revision payload unavailable');
+    });
+
+    expect(await screen.findByText('revision payload unavailable')).toBeInTheDocument();
+  });
+
+  it('uses a stable message for a non-error inspection failure', async () => {
+    const user = userEvent.setup();
+    const inspected = deferred<Detail>();
+    stub({ revisionDetails: { 2: inspected.promise } });
+    renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Inspect' }));
+    await act(async () => {
+      inspected.reject('offline');
+      await expect(inspected.promise).rejects.toBe('offline');
+    });
+
+    expect(
+      await screen.findByText('the selected revision could not be loaded'),
+    ).toBeInTheDocument();
+  });
+
+  it('drops an inspected revision that completes after the detail closes', async () => {
+    const user = userEvent.setup();
+    const inspected = deferred<Detail>();
+    const calls = stub({ revisionDetails: { 2: inspected.promise } });
+    const { unmount } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Inspect' }));
+    unmount();
+    await act(async () => {
+      inspected.resolve(
+        detail({
+          release: { ...release, revision: 2, description: 'Late inspected revision' },
+        }),
+      );
+      await inspected.promise;
+      await Promise.resolve();
+    });
+
+    expect(
+      calls.filter(
+        (call) => call.url.startsWith('/api/helm/release') && call.url.includes('revision=2'),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('drops an inspection failure after the detail closes', async () => {
+    const user = userEvent.setup();
+    const inspected = deferred<Detail>();
+    const calls = stub({ revisionDetails: { 2: inspected.promise } });
+    const { unmount } = renderDetail();
+    await screen.findByText('Upgrade complete');
+
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(await screen.findByRole('button', { name: 'Inspect' }));
+    unmount();
+    await act(async () => {
+      inspected.reject(new Error('late inspection failure'));
+      await expect(inspected.promise).rejects.toThrow('late inspection failure');
+      await Promise.resolve();
+    });
+
+    expect(
+      calls.filter(
+        (call) => call.url.startsWith('/api/helm/release') && call.url.includes('revision=2'),
+      ),
+    ).toHaveLength(1);
   });
 
   it('offers no rollback for the revision already deployed', async () => {

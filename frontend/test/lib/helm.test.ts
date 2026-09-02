@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import {
+  fetchHelmHistory,
   fetchHelmRelease,
   fetchHelmReleases,
   fetchHelmSupport,
@@ -258,6 +259,22 @@ describe('reading one release', () => {
     expect(got.values).toBe('');
     expect(got.resources).toEqual([]);
     expect(got.history).toEqual([]);
+  });
+});
+
+describe('reading release history', () => {
+  it('surfaces a failed history request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve({ message: 'history is unavailable' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchHelmHistory('demo', 'podinfo', 3)).rejects.toThrow('history is unavailable');
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/helm/history?namespace=demo&name=podinfo&through=3',
+    );
   });
 });
 

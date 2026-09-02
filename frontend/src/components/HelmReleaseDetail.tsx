@@ -206,12 +206,8 @@ export default function HelmReleaseDetail({
       });
   }, [actionScope, data, historyKey, name, namespace, tab]);
 
-  async function loadOlderHistory() {
-    if (historyNext === null || historyLoading) {
-      return;
-    }
+  async function loadOlderHistory(through: number) {
     const scope = actionScope;
-    const through = historyNext;
     historyOperation.current += 1;
     const token = historyOperation.current;
     setHistoryLoading(true);
@@ -246,14 +242,6 @@ export default function HelmReleaseDetail({
   }
 
   async function inspectRevision(revision: number) {
-    if (data === null) {
-      return;
-    }
-    if (revision === data.release.revision) {
-      setInspected(null);
-      setTab('Overview');
-      return;
-    }
     const scope = actionScope;
     inspectOperation.current += 1;
     const token = inspectOperation.current;
@@ -559,8 +547,8 @@ export default function HelmReleaseDetail({
               onInspect={(revision) => {
                 void inspectRevision(revision);
               }}
-              onLoadOlder={() => {
-                void loadOlderHistory();
+              onLoadOlder={(through) => {
+                void loadOlderHistory(through);
               }}
               onRetry={() => {
                 setHistoryKey('');
@@ -667,7 +655,7 @@ function History({
   helmReason: string;
   refused: string | null;
   onInspect: (revision: number) => void;
-  onLoadOlder: () => void;
+  onLoadOlder: (through: number) => void;
   onRetry: () => void;
   onRollback: (revision: number) => void;
 }) {
@@ -757,7 +745,9 @@ function History({
           <button
             type="button"
             disabled={loading}
-            onClick={onLoadOlder}
+            onClick={() => {
+              onLoadOlder(next);
+            }}
             className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             {loading ? 'Loading…' : 'Load older revisions'}
