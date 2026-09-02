@@ -51,6 +51,13 @@ func benchmarkInformerPod(tb testing.TB, index int) *unstructured.Unstructured {
 			"f:volumes":            map[string]any{},
 		},
 	}
+	annotations := map[string]any{
+		"checksum/config":      fmt.Sprintf("%064d", index),
+		"prometheus.io/path":   "/metrics",
+		"prometheus.io/port":   "9090",
+		"prometheus.io/scrape": "true",
+	}
+	annotations["kubectl.kubernetes.io/last-applied-configuration"] = lastApplied
 	value := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Pod",
@@ -65,13 +72,7 @@ func benchmarkInformerPod(tb testing.TB, index int) *unstructured.Unstructured {
 				"pod-template-hash":            strconv.Itoa(1000000000 + index),
 				"team":                         namespace,
 			},
-			"annotations": map[string]any{
-				"checksum/config": fmt.Sprintf("%064d", index),
-				"kubectl.kubernetes.io/last-applied-configuration": lastApplied,
-				"prometheus.io/path":                               "/metrics",
-				"prometheus.io/port":                               "9090",
-				"prometheus.io/scrape":                             "true",
-			},
+			"annotations": annotations,
 			"managedFields": []any{
 				map[string]any{
 					"apiVersion": "v1",

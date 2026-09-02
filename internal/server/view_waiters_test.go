@@ -24,7 +24,7 @@ func TestStoppingOneBrowserWaiterLeavesTheOthersWaiting(t *testing.T) {
 	}
 }
 
-func TestCancelledBrowserSwitchRemovesItsWaiterAndKeepsTheWindowVisible(t *testing.T) {
+func TestCanceledBrowserSwitchRemovesItsWaiterAndKeepsTheWindowVisible(t *testing.T) {
 	window := &stubWindow{}
 	srv := New(&stubBackendCluster{}, testAssets(), "")
 	srv.UseWindow(window)

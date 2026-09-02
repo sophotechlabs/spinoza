@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"net/http/httptest"
 	"testing"
 )
@@ -12,7 +13,7 @@ func TestARefusedLocalShellUpgradeReleasesItsConnectionSlot(t *testing.T) {
 	opened := false
 	srv.UseLocalShell(func(uint16, uint16) (LocalShell, error) {
 		opened = true
-		return nil, nil
+		return nil, errors.New("local shell must not open")
 	})
 	req := liveRequest(t, "alice")
 	recorded := httptest.NewRecorder()

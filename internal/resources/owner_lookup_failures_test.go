@@ -13,7 +13,7 @@ func TestAConsumerListFailureDoesNotHideTheSource(t *testing.T) {
 	mgr := sourceManager(t, gitRepository())
 	mgr.syncTimeout = 10 * time.Millisecond
 	dyn, ok := mgr.dyn.(interface {
-		PrependReactor(string, string, k8stesting.ReactionFunc)
+		PrependReactor(verb, resource string, reaction k8stesting.ReactionFunc)
 	})
 	if !ok {
 		t.Fatalf("dynamic client = %T, want a reactor", mgr.dyn)
@@ -35,7 +35,7 @@ func TestAnOwnerListFailureDoesNotLeaveAnUnresolvedOwner(t *testing.T) {
 	mgr := argoManager(t, trackedDeployment())
 	mgr.syncTimeout = 10 * time.Millisecond
 	dyn, ok := mgr.dyn.(interface {
-		PrependReactor(string, string, k8stesting.ReactionFunc)
+		PrependReactor(verb, resource string, reaction k8stesting.ReactionFunc)
 	})
 	if !ok {
 		t.Fatalf("dynamic client = %T, want a reactor", mgr.dyn)
