@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -537,24 +538,27 @@ func TestTheWarningColumnSaysHowManyThereWereNotHowManyWereKept(t *testing.T) {
 }
 
 func TestOneClusterThatNeverAnswersDoesNotHoldTheFleet(t *testing.T) {
-	if perClusterTimeout <= 0 {
-		t.Fatal("the fan-out has no per-cluster deadline")
-	}
 	held := &fleet{
 		held:     []api.OpenCluster{{ID: mk1, Context: "p-mk1", Active: true}},
 		active:   mk1,
 		backends: map[string]Backend{mk1: &surveying{}},
 	}
 	srv := New(held, testAssets(), testToken)
-
-	asked, giveUp := context.WithCancel(t.Context())
-	giveUp()
-	found := eachCluster(asked, srv, func(ctx context.Context, _ Backend) string {
-		<-ctx.Done()
-		return ctx.Err().Error()
+	release := make(chan struct{})
+	stopped := make(chan struct{})
+	found := eachOpenClusterWithin(t.Context(), srv, 20*time.Millisecond, func(
+		context.Context,
+		api.OpenCluster,
+		Backend,
+	) string {
+		defer close(stopped)
+		<-release
+		return "late"
 	})
+	close(release)
+	<-stopped
 
-	if len(found) != 1 || found[0].answer == "" {
-		t.Fatalf("the fan-out did not hand the cluster a context it could give up on: %+v", found)
+	if len(found) != 1 || !strings.Contains(found[0].failure, "fleet deadline") {
+		t.Fatalf("the non-cooperative cluster did not time out: %+v", found)
 	}
 }

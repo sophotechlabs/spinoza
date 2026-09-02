@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -14,6 +13,8 @@ import (
 )
 
 const fleetSearchCap = 200
+
+const fleetReadFailure = "spinoza could not finish reading this cluster"
 
 // One cluster that accepts the connection and never answers must not decide how
 // long the whole fleet takes, so every cluster gets its own deadline.
@@ -30,32 +31,67 @@ func eachCluster[T any](
 func eachOpenCluster[T any](
 	ctx context.Context, srv *Server, read func(context.Context, api.OpenCluster, Backend) T,
 ) []clusterAnswer[T] {
+	return eachOpenClusterWithin(ctx, srv, perClusterTimeout, read)
+}
+
+func eachOpenClusterWithin[T any](
+	ctx context.Context,
+	srv *Server,
+	timeout time.Duration,
+	read func(context.Context, api.OpenCluster, Backend) T,
+) []clusterAnswer[T] {
 	open := srv.cluster.Opened()
 	found := make([]clusterAnswer[T], len(open))
 	var asking sync.WaitGroup
 	for at, one := range open {
+		index := at
+		cluster := one
 		asking.Add(1)
-		go func(at int, one api.OpenCluster) {
+		safe.Go("reading fleet cluster "+nameOf(cluster), func() {
 			defer asking.Done()
-			found[at] = clusterAnswer[T]{cluster: one.ID, context: nameOf(one)}
+			found[index] = clusterAnswer[T]{cluster: cluster.ID, context: nameOf(cluster)}
 			defer func() {
-				failure := recovered("asking "+nameOf(one), recover())
+				failure := recovered("reading fleet cluster "+nameOf(cluster), recover())
 				if failure != "" {
-					found[at].failure = failure
+					found[index].failure = failure
 				}
 			}()
-			backend := srv.managerOf(one.ID)
+			backend := srv.managerOf(cluster.ID)
 			if backend == nil {
-				found[at].failure = "cluster is unavailable"
+				found[index].failure = "cluster is unavailable"
 				return
 			}
-			asked, giveUp := context.WithTimeout(ctx, perClusterTimeout)
+			asked, giveUp := context.WithTimeout(ctx, timeout)
 			defer giveUp()
-			found[at].answer = read(asked, one, backend)
-		}(at, one)
+			answered := make(chan clusterRead[T], 1)
+			safe.Go("asking "+nameOf(cluster), func() {
+				result := clusterRead[T]{}
+				defer func() {
+					result.failure = recovered("asking "+nameOf(cluster), recover())
+					answered <- result
+				}()
+				result.answer = read(asked, cluster, backend)
+			})
+			select {
+			case result := <-answered:
+				found[index].answer = result.answer
+				found[index].failure = result.failure
+			case <-asked.Done():
+				if ctx.Err() != nil {
+					found[index].failure = ctx.Err().Error()
+					return
+				}
+				found[index].failure = "cluster stopped answering before the fleet deadline"
+			}
+		})
 	}
 	asking.Wait()
 	return found
+}
+
+type clusterRead[T any] struct {
+	answer  T
+	failure string
 }
 
 func recovered(what string, caught any) string {
@@ -63,7 +99,7 @@ func recovered(what string, caught any) string {
 		return ""
 	}
 	safe.Log(what, caught)
-	return "panicked: " + fmt.Sprint(caught)
+	return fleetReadFailure
 }
 
 type clusterAnswer[T any] struct {

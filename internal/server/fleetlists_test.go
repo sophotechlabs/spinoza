@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -183,6 +184,18 @@ func TestFleetSearchIncludesAClusterPanicAlongsideResourceErrors(t *testing.T) {
 	}
 	if got.Errors["p-mk2"] != "panicked: informer cache changed" {
 		t.Fatalf("errors = %v, want the panicking cluster", got.Errors)
+	}
+}
+
+func TestARecoveredClusterPanicDoesNotExposeItsPayload(t *testing.T) {
+	payload := strings.Repeat("registry-token", 10_000)
+	got := recovered("asking p-mk2", payload)
+
+	if got != fleetReadFailure {
+		t.Fatalf("failure = %q, want the bounded generic message", got)
+	}
+	if strings.Contains(got, "registry-token") {
+		t.Fatal("the panic payload was exposed to the fleet response")
 	}
 }
 

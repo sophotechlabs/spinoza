@@ -353,7 +353,7 @@ func TestFleetCheckPageContainsAClusterPanic(t *testing.T) {
 	if resp.StatusCode != http.StatusBadGateway {
 		t.Fatalf("status = %d, want 502: %s", resp.StatusCode, body)
 	}
-	if !contains(string(body), "p-mk2") || !contains(string(body), "panicked") {
+	if !contains(string(body), "p-mk2") || !contains(string(body), "could not finish") {
 		t.Fatalf("body = %s, want the panicking cluster named", body)
 	}
 }
@@ -383,7 +383,7 @@ func TestAClusterThatPanickedIsNamedAndTheOthersStillAnswer(t *testing.T) {
 	if len(got.Groups) != 1 || got.Groups[0].Total != 1 {
 		t.Fatalf("groups = %+v, want the cluster that answered still counted", got.Groups)
 	}
-	if !contains(got.Error, "p-mk2") || !contains(got.Error, "panicked") {
+	if !contains(got.Error, "p-mk2") || !contains(got.Error, "could not finish") {
 		t.Fatalf("error = %q, want the cluster that panicked named", got.Error)
 	}
 }
@@ -399,7 +399,7 @@ func TestAPanicInOneClustersIssuesDoesNotTakeTheProcessDown(t *testing.T) {
 	if len(merged.Rows) != 1 {
 		t.Fatalf("rows = %d, want the cluster that answered still in the queue", len(merged.Rows))
 	}
-	if !contains(merged.Error, "p-mk2") || !contains(merged.Error, "panicked") {
+	if !contains(merged.Error, "p-mk2") || !contains(merged.Error, "could not finish") {
 		t.Fatalf("error = %q, want the cluster that panicked named", merged.Error)
 	}
 }
