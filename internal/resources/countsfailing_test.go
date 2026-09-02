@@ -3,6 +3,8 @@ package resources
 import (
 	"context"
 	"slices"
+	"strconv"
+	"sync/atomic"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,6 +51,7 @@ func TestMoreFailingPodsThanOnePageAreCountedRatherThanCappedAtIt(t *testing.T) 
 }
 
 func answerUnhealthyEndlessly(client *metadatafake.FakeMetadataClient, perPage int) {
+	var page atomic.Int64
 	client.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		list, ok := action.(k8stesting.ListAction)
 		if !ok {
@@ -61,7 +64,7 @@ func answerUnhealthyEndlessly(client *metadatafake.FakeMetadataClient, perPage i
 		for at := range out.Items {
 			out.Items[at] = runtime.RawExtension{Object: podObject("held")}
 		}
-		out.Continue = "there-is-more"
+		out.Continue = strconv.FormatInt(page.Add(1), 10)
 		return true, out, nil
 	})
 }

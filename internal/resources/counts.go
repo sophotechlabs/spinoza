@@ -20,6 +20,7 @@ const (
 	countTimeout     = 20 * time.Second
 	countPerType     = 5 * time.Second
 	countUnknown     = -1
+	countPageSize    = 500
 )
 
 type CountLimits struct {
@@ -154,13 +155,27 @@ func countOne(
 	bounded, cancel := context.WithTimeout(ctx, limits.PerType)
 	defer cancel()
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
-	list, err := client.Resource(gvr).
-		Namespace(metav1.NamespaceAll).
-		List(bounded, metav1.ListOptions{Limit: 1})
-	if err != nil {
-		return countUnknown, countReason(ctx, err, limits)
+	total := 0
+	seen := map[string]bool{}
+	opts := metav1.ListOptions{Limit: countPageSize}
+	for {
+		list, err := client.Resource(gvr).
+			Namespace(metav1.NamespaceAll).
+			List(bounded, opts)
+		if err != nil {
+			return countUnknown, countReason(ctx, err, limits)
+		}
+		total += len(list.Items)
+		next := list.GetContinue()
+		if next == "" {
+			return total, ""
+		}
+		if seen[next] {
+			return countUnknown, "the apiserver repeated a continuation token while counting this type"
+		}
+		seen[next] = true
+		opts.Continue = next
 	}
-	return len(list.Items) + int(remainingOf(list.GetRemainingItemCount())), ""
 }
 
 func countReason(budget context.Context, err error, limits CountLimits) string {
@@ -171,14 +186,4 @@ func countReason(budget context.Context, err error, limits CountLimits) string {
 		return "counting took longer than " + limits.PerType.String()
 	}
 	return err.Error()
-}
-
-func remainingOf(remaining *int64) int64 {
-	if remaining == nil {
-		return 0
-	}
-	if *remaining < 0 {
-		return 0
-	}
-	return *remaining
 }

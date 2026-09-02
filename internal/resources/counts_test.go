@@ -160,17 +160,54 @@ func TestCountReasonTellsTheBudgetFromTheTypeFromTheApiserver(t *testing.T) {
 	}
 }
 
-func TestRemainingOfIgnoresANegativeOrAbsentCount(t *testing.T) {
-	positive := int64(4)
-	if remainingOf(&positive) != 4 {
-		t.Fatal("a positive remainder was not added to the total")
+func TestCountFollowsPagesInsteadOfTreatingTheRemainingEstimateAsExact(t *testing.T) {
+	dyn := countClient(t)
+	calls := 0
+	estimate := int64(999)
+	dyn.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		calls++
+		if calls == 1 {
+			return true, &metav1.List{
+				ListMeta: metav1.ListMeta{Continue: "next", RemainingItemCount: &estimate},
+				Items: []runtime.RawExtension{
+					{Object: countObject("one")},
+					{Object: countObject("two")},
+				},
+			}, nil
+		}
+		return true, &metav1.List{
+			Items: []runtime.RawExtension{{Object: countObject("three")}},
+		}, nil
+	})
+
+	total, reason := countOne(context.Background(), dyn, countDesc("deployments"), CountLimits{}.orDefaults())
+
+	if total != 3 {
+		t.Fatalf("count = %d, want the exact three items", total)
 	}
-	negative := int64(-4)
-	if remainingOf(&negative) != 0 {
-		t.Fatal("a negative remainder was added to the total")
+	if reason != "" {
+		t.Fatalf("reason = %q, want a complete count", reason)
 	}
-	if remainingOf(nil) != 0 {
-		t.Fatal("an absent remainder was not treated as zero")
+	if calls != 2 {
+		t.Fatalf("list calls = %d, want two pages", calls)
+	}
+}
+
+func TestCountStopsWhenTheApiserverRepeatsAContinuationToken(t *testing.T) {
+	dyn := countClient(t)
+	dyn.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &metav1.List{
+			ListMeta: metav1.ListMeta{Continue: "same"},
+		}, nil
+	})
+
+	total, reason := countOne(context.Background(), dyn, countDesc("deployments"), CountLimits{}.orDefaults())
+
+	if total != countUnknown {
+		t.Fatalf("count = %d, want unknown", total)
+	}
+	if !strings.Contains(reason, "continuation token") {
+		t.Fatalf("reason = %q, want the repeated token", reason)
 	}
 }
 
