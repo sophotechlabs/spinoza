@@ -379,7 +379,7 @@ test-e2e-full name='' spec='': cluster-full
     set -euo pipefail
     SPINOZA_E2E_TIER=full just e2e-run full {{ quote(name) }} {{ quote(spec) }}
 
-test-e2e-group group browser='chromium' name='':
+test-e2e-group group browser='chromium' name='' spec='':
     #!/usr/bin/env bash
     set -euo pipefail
     group={{ quote(group) }}
@@ -405,7 +405,7 @@ test-e2e-group group browser='chromium' name='':
     export SPINOZA_E2E_GROUP="$group"
     export SPINOZA_E2E_BROWSER="$browser"
     export SPINOZA_E2E_TIER="$profile"
-    just e2e-run "$browser" {{ quote(name) }} ''
+    just e2e-run "$browser" {{ quote(name) }} {{ quote(spec) }}
 
 validate-e2e-suite:
     node e2e/scripts/validate-suite.mjs
@@ -428,7 +428,15 @@ e2e-run project name='' spec='':
             browser=chromium
             ;;
     esac
+    install_deps=no
     if [ -n "${CI:-}" ]; then
+        if command -v sudo > /dev/null 2>&1; then
+            if sudo -n true > /dev/null 2>&1; then
+                install_deps=yes
+            fi
+        fi
+    fi
+    if [ "$install_deps" = yes ]; then
         npx playwright install --with-deps "$browser"
     else
         npx playwright install "$browser"

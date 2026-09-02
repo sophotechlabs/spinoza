@@ -8,7 +8,8 @@ const repo = resolve(e2e, '..');
 const suite = loadSuite();
 const expectedGroups = [
   'foundation-security',
-  'navigation-visual-a11y',
+  'navigation-interaction',
+  'visual-accessibility',
   'resources-live-tables',
   'inspect-compare-rbac-topology',
   'mutations-protection-history',
@@ -126,5 +127,7 @@ for (const path of files) {
 }
 
 if (process.exitCode === undefined) {
-  process.stdout.write(`validated ${String(suite.groups.length)} groups and ${String(claimed.size)} specs\n`);
+  process.stdout.write(
+    `validated ${String(suite.groups.length)} groups and ${String(claimed.size)} specs\n`,
+  );
 }
