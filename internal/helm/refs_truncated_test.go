@@ -78,3 +78,24 @@ func TestTruncationTravelsUpToTheWholeRead(t *testing.T) {
 		t.Fatal("a read that stopped at the cap was reported as complete")
 	}
 }
+
+func TestANamespaceFallbackThatHitsTheCapStillSaysItWasTruncated(t *testing.T) {
+	client := metadatafake.NewSimpleMetadataClient(metaScheme(), namespaceMeta("prod"))
+	client.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetNamespace() == "" {
+			return true, nil, forbiddenSecrets("no cluster-wide secrets")
+		}
+		return pageOf(maxObjects)(action)
+	})
+
+	page, err := allRefs(t.Context(), client)
+	if err != nil {
+		t.Fatalf("refs: %v", err)
+	}
+	if len(page.items) != maxObjects {
+		t.Fatalf("read %d objects, want the cap of %d", len(page.items), maxObjects)
+	}
+	if !page.truncated {
+		t.Fatal("a namespace fallback that stopped at the cap was reported as complete")
+	}
+}
