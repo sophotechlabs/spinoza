@@ -41,7 +41,20 @@ func dynClient(objs ...runtime.Object) *dynamicfake.FakeDynamicClient {
 		cronJobGVR:    "CronJobList",
 		jobGVR:        "JobList",
 	}
-	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, objs...)
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds, objs...)
+	client.PrependReactor("create", "*", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		object, ok := create.GetObject().(*unstructured.Unstructured)
+		if !ok || object.GetName() != "" || object.GetGenerateName() == "" {
+			return false, nil, nil
+		}
+		object.SetName(object.GetGenerateName() + "abcde")
+		return false, nil, nil
+	})
+	return client
 }
 
 func recordPatches(client *dynamicfake.FakeDynamicClient) *[]patchRecord {

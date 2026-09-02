@@ -600,6 +600,32 @@ func TestDrainLimitsConcurrentEvictions(t *testing.T) {
 	}
 }
 
+func TestAnEvictionPanicIsReportedAsAFailure(t *testing.T) {
+	pod := replicaSetPod("web")
+	cs := k8sfake.NewClientset(pod)
+	recordEvictions(cs, func(string, int) error {
+		panic("broken eviction client")
+	})
+	service := serviceFor(dynClient(newNode(false)), cs)
+	plans := []podPlan{{
+		pod: pod,
+		outcome: api.PodOutcome{
+			Namespace: pod.Namespace,
+			Name:      pod.Name,
+			Outcome:   api.OutcomeEvict,
+		},
+	}}
+
+	outcomes := service.evictAll(t.Context(), plans)
+
+	if outcomes[0].Outcome != api.OutcomeFailed {
+		t.Fatalf("outcome = %q, want failed", outcomes[0].Outcome)
+	}
+	if outcomes[0].Reason == "" {
+		t.Fatal("panic failure has no reason")
+	}
+}
+
 func TestDrainTreatsAVanishedPodAsGone(t *testing.T) {
 	cs := k8sfake.NewClientset(replicaSetPod("web"))
 	recordEvictions(cs, func(name string, _ int) error {

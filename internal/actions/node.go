@@ -157,16 +157,34 @@ func (s *Service) evictAll(ctx context.Context, plans []podPlan) []api.PodOutcom
 		if plans[i].outcome.Outcome != api.OutcomeEvict {
 			continue
 		}
+		index := i
+		plan := plans[i]
+		what := "evicting " + plan.pod.Namespace + "/" + plan.pod.Name
 		group.Add(1)
-		go safe.Run("evicting "+plans[i].pod.Namespace+"/"+plans[i].pod.Name, func() {
+		safe.Go(what, func() {
 			defer group.Done()
-			slots <- struct{}{}
+			defer func() {
+				caught := recover()
+				if caught == nil {
+					return
+				}
+				safe.Log(what, caught)
+				outcomes[index].Outcome = api.OutcomeFailed
+				outcomes[index].Reason = "spinoza could not finish the eviction"
+			}()
+			select {
+			case slots <- struct{}{}:
+			case <-ctx.Done():
+				outcomes[index].Outcome = api.OutcomeFailed
+				outcomes[index].Reason = "the drain ran out of time before this pod was evicted"
+				return
+			}
 			defer func() {
 				<-slots
 			}()
-			outcome, reason := s.evictOne(ctx, plans[i].pod)
-			outcomes[i].Outcome = outcome
-			outcomes[i].Reason = reason
+			outcome, reason := s.evictOne(ctx, plan.pod)
+			outcomes[index].Outcome = outcome
+			outcomes[index].Reason = reason
 		})
 	}
 	group.Wait()

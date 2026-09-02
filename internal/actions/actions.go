@@ -129,7 +129,7 @@ func (s *Service) Do(ctx context.Context, req Request, now time.Time) (api.Actio
 	case Resume:
 		return s.setSuspended(ctx, req.Ref, false)
 	case Trigger:
-		return s.trigger(ctx, req.Ref, now)
+		return s.trigger(ctx, req.Ref)
 	default:
 		return api.ActionResult{}, fmt.Errorf("unknown action %q", req.Action)
 	}

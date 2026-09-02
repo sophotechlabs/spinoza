@@ -3,7 +3,6 @@ package actions
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -166,17 +165,17 @@ func TestTriggerMakesAJobFromTheTemplate(t *testing.T) {
 	}
 }
 
-func TestATriggeredJobIsNamedAfterTheCronJobAndTheMoment(t *testing.T) {
-	client := dynClient(newCronJob(false))
-	service := serviceFor(client, k8sfake.NewClientset())
-
-	if _, err := service.Do(context.Background(), Request{Ref: cronJobRef(), Action: Trigger}, stamp); err != nil {
-		t.Fatalf("trigger: %v", err)
+func TestATriggeredJobLeavesAUniqueNameToTheAPIServer(t *testing.T) {
+	job, err := jobFrom(newCronJob(false))
+	if err != nil {
+		t.Fatalf("job from cron job: %v", err)
 	}
 
-	want := fmt.Sprintf("nightly-%d", stamp.Unix())
-	if got := triggeredJob(t, client).GetName(); got != want {
-		t.Fatalf("job name = %q, want %q", got, want)
+	if job.GetName() != "" {
+		t.Fatalf("job name = %q, want the apiserver to choose it", job.GetName())
+	}
+	if job.GetGenerateName() != "nightly-" {
+		t.Fatalf("generated name prefix = %q, want nightly-", job.GetGenerateName())
 	}
 }
 

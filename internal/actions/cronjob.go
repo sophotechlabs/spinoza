@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -44,12 +43,12 @@ func (s *Service) setSuspended(ctx context.Context, ref api.ObjectRef, suspended
 	}, nil
 }
 
-func (s *Service) trigger(ctx context.Context, ref api.ObjectRef, now time.Time) (api.ActionResult, error) {
+func (s *Service) trigger(ctx context.Context, ref api.ObjectRef) (api.ActionResult, error) {
 	cron, err := s.target(ref).Get(ctx, ref.Name, metav1.GetOptions{})
 	if err != nil {
 		return api.ActionResult{}, err
 	}
-	job, err := jobFrom(cron, now)
+	job, err := jobFrom(cron)
 	if err != nil {
 		return api.ActionResult{}, err
 	}
@@ -67,7 +66,7 @@ func (s *Service) jobs(ref api.ObjectRef) dynamic.ResourceInterface {
 	return s.dyn.Resource(jobsGVR).Namespace(ref.Namespace)
 }
 
-func jobFrom(cron *unstructured.Unstructured, now time.Time) (*unstructured.Unstructured, error) {
+func jobFrom(cron *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	spec, found := unstr.Map(cron, specField, "jobTemplate", specField)
 	if !found {
 		return nil, errors.New("the cron job carries no job template")
@@ -78,9 +77,9 @@ func jobFrom(cron *unstructured.Unstructured, now time.Time) (*unstructured.Unst
 	}
 	annotations[instantiateAnnotation] = "manual"
 	meta := map[string]any{
-		"name":        fmt.Sprintf("%s-%d", cron.GetName(), now.Unix()),
-		"namespace":   cron.GetNamespace(),
-		"annotations": annotations,
+		"generateName": cron.GetName() + "-",
+		"namespace":    cron.GetNamespace(),
+		"annotations":  annotations,
 		"ownerReferences": []any{map[string]any{
 			"apiVersion": batchGroup + "/v1",
 			"kind":       "CronJob",
