@@ -209,6 +209,7 @@ func watch(
 		case <-ticker.C:
 			fresh, matched, err := podsMatching(ctx, cs, req)
 			if err != nil {
+				stream.fail(fmt.Errorf("refresh pods matching %q in %s: %w", req.Selector, req.Namespace, err))
 				continue
 			}
 			held.forgetGone(namesOf(fresh))

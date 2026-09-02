@@ -425,6 +425,47 @@ func TestAPodThatIsNotReadyYetIsAskedAgain(t *testing.T) {
 	}
 }
 
+func TestAFollowingStreamReportsASelectorRefreshFailure(t *testing.T) {
+	restore := hurryResolve(t)
+	defer restore()
+	apiserver := newCluster()
+	apiserver.holdOpen()
+	apiserver.add("web-0", "ready")
+	var mu sync.Mutex
+	listed := 0
+	client := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/log") {
+			mu.Lock()
+			listed++
+			current := listed
+			mu.Unlock()
+			if current > 1 {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"kind":"Status","message":"pods are forbidden","code":403}`))
+				return
+			}
+		}
+		apiserver.handler(t)(w, r)
+	})
+
+	stream, err := Open(t.Context(), client, Request{
+		Namespace: "prod",
+		Selector:  "app=web",
+		Follow:    true,
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	deadline := time.Now().Add(time.Second)
+	for stream.Err() == nil && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if stream.Err() == nil || !strings.Contains(stream.Err().Error(), "refresh pods matching") {
+		t.Fatalf("error = %v, want the failed selector refresh reported", stream.Err())
+	}
+}
+
 func TestAPodWithSeveralContainersIsAskedAboutOneOfThem(t *testing.T) {
 	asked := make(chan string, 4)
 	client := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
