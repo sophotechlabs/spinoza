@@ -152,6 +152,37 @@ func TestNewBuildsTheDefaultContext(t *testing.T) {
 	}
 }
 
+func TestCancelingTheRootStopsWaitingForAStalledOpen(t *testing.T) {
+	root, cancel := context.WithCancel(context.Background())
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	held := &Cluster{
+		openWithin: testOpenTimeout,
+		build: func(context.Context, api.ContextRef) (*connection, error) {
+			close(entered)
+			<-release
+			return &connection{host: "https://p-mk2:6443"}, nil
+		},
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := held.dial(root, api.ContextRef{Name: "p-mk2"})
+		done <- err
+	}()
+	<-entered
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("error = %v, want the root cancellation", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("a stalled open kept waiting after the cluster root was canceled")
+	}
+}
+
 func TestUseSwapsTheManager(t *testing.T) {
 	rec := &recorder{}
 	cluster := newTestCluster(t, rec)

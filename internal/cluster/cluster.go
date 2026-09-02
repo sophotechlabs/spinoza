@@ -378,6 +378,9 @@ func (c *Cluster) dial(root context.Context, ref api.ContextRef) (*connection, e
 		answer.conn.id = clusterid.Normalize(answer.conn.host)
 		answer.conn.cancel = cancel
 		return answer.conn, nil
+	case <-root.Done():
+		cancel()
+		return nil, root.Err()
 	case <-timer.C:
 		cancel()
 		return nil, fmt.Errorf("context %q did not answer within %s", ref.Name, c.openWithin)
