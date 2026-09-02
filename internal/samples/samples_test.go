@@ -207,6 +207,30 @@ func TestAPodAlreadyRememberedKeepsItsPlaceAtTheLimit(t *testing.T) {
 	}
 }
 
+func TestRememberedPodsNeverPushTheStorePastItsLimit(t *testing.T) {
+	for attempt := range 8 {
+		store := New()
+		store.limit = 2
+		store.Record(start, map[string]api.ResourceUsage{
+			"flux-system/apps":  {CPUMilli: 100},
+			"flux-system/infra": {CPUMilli: 100},
+		})
+		crowd := map[string]api.ResourceUsage{
+			"flux-system/apps":  {CPUMilli: 100},
+			"flux-system/infra": {CPUMilli: 100},
+		}
+		for i := range 64 {
+			crowd[fmt.Sprintf("default/pod-%d", i)] = api.ResourceUsage{CPUMilli: 100}
+		}
+
+		store.Record(start.Add(Every), crowd)
+
+		if len(store.pods) > store.limit {
+			t.Fatalf("attempt %d remembered %d pods, limit %d", attempt, len(store.pods), store.limit)
+		}
+	}
+}
+
 func TestTheStoreIsWrittenAndReadAtOnce(t *testing.T) {
 	store := New()
 	var group sync.WaitGroup

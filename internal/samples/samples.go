@@ -47,13 +47,29 @@ func (s *Store) Record(at time.Time, pods map[string]api.ResourceUsage) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	kept := make(map[string][]sample, len(pods))
-	for key, use := range pods {
-		held, seen := s.pods[key]
-		if !seen && len(kept) >= s.limit {
+	kept := map[string][]sample{}
+	if s.limit <= 0 {
+		s.pods = kept
+		return
+	}
+	for key, held := range s.pods {
+		if len(kept) >= s.limit {
+			break
+		}
+		use, present := pods[key]
+		if !present {
 			continue
 		}
 		kept[key] = s.append(held, at, use)
+	}
+	for key, use := range pods {
+		if len(kept) >= s.limit {
+			break
+		}
+		if _, seen := kept[key]; seen {
+			continue
+		}
+		kept[key] = s.append(nil, at, use)
 	}
 	s.pods = kept
 }
