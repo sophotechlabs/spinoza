@@ -382,12 +382,22 @@ func TestAnnounceIgnoresAForwarderThatIsNotReady(t *testing.T) {
 	}
 }
 
-func TestShouldFallbackOnlyForUpgradeFailures(t *testing.T) {
-	if shouldFallback(errors.New("connection refused")) {
-		t.Fatalf("a plain error must not trigger the spdy fallback")
+func TestShouldFallbackOnlyForTransportCompatibilityFailures(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "connection failure", err: errors.New("connection refused")},
+		{name: "upgrade failure", err: &streamhttp.UpgradeFailureError{Cause: errors.New("no")}, want: true},
+		{name: "https proxy", err: errors.New("proxy: unknown scheme: https"), want: true},
 	}
-	if !shouldFallback(&streamhttp.UpgradeFailureError{Cause: errors.New("no")}) {
-		t.Fatalf("an upgrade failure must trigger the spdy fallback")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shouldFallback(tc.err); got != tc.want {
+				t.Fatalf("shouldFallback(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 
