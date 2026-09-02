@@ -8,6 +8,7 @@ import {
   useGitopsApp,
 } from '../../src/lib/gitopsApp';
 import type { ObjectRef } from '../../src/lib/types';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
 const ref: ObjectRef = {
   group: 'argoproj.io',
@@ -61,6 +62,7 @@ const full = {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  useClusterStore.getState().reset();
 });
 
 describe('recognising a gitops applier', () => {
@@ -255,6 +257,69 @@ describe('watching one application', () => {
 
     await waitFor(() => {
       expect(result.current.error).toBe('gone');
+    });
+  });
+
+  it('drops the previous application error while a different application loads', async () => {
+    let finishNext!: (response: { ok: boolean; json: () => Promise<typeof full> }) => void;
+    const next = new Promise<{ ok: boolean; json: () => Promise<typeof full> }>((resolve) => {
+      finishNext = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ message: 'the old application is gone' }),
+      })
+      .mockImplementationOnce(() => next);
+    vi.stubGlobal('fetch', fetchMock);
+    const replacement = { ...ref, name: 'checkout' };
+    const { result, rerender } = renderHook(
+      ({ target }: { target: ObjectRef }) => useGitopsApp(target),
+      { initialProps: { target: ref } },
+    );
+    await waitFor(() => {
+      expect(result.current.error).toBe('the old application is gone');
+    });
+
+    rerender({ target: replacement });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.error).toBeNull();
+    finishNext({
+      ok: true,
+      json: () => Promise.resolve({ ...full, ref: replacement, name: 'checkout' }),
+    });
+    await waitFor(() => {
+      expect(result.current.data?.name).toBe('checkout');
+    });
+  });
+
+  it('drops the previous application when the cluster changes', async () => {
+    let finishNext!: (response: { ok: boolean; json: () => Promise<typeof full> }) => void;
+    const next = new Promise<{ ok: boolean; json: () => Promise<typeof full> }>((resolve) => {
+      finishNext = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(full) })
+      .mockImplementationOnce(() => next);
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useGitopsApp(ref));
+    await waitFor(() => {
+      expect(result.current.data?.name).toBe('podinfo');
+    });
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.error).toBeNull();
+    finishNext({ ok: true, json: () => Promise.resolve(full) });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
   });
 

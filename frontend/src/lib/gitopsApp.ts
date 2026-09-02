@@ -16,6 +16,7 @@ import { parseEvents, parseGraph } from './parse';
 import { request } from './http';
 import { isArgoApplication } from './argoActions';
 import { groupOf } from './fluxActions';
+import { useClusterEpoch } from '../store/cluster';
 
 const REFRESH_MS = 10000;
 
@@ -164,6 +165,23 @@ export function useGitopsApp(target: ObjectRef | null, active = true): GitopsApp
   const [data, setData] = useState<GitopsApp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
+  const epoch = useClusterEpoch();
+  let targetKey = '';
+  if (target !== null) {
+    targetKey = refQuery(target);
+  }
+  let activeKey = 'inactive';
+  if (active) {
+    activeKey = 'active';
+  }
+  const stateKey = `${String(epoch)}:${activeKey}:${targetKey}`;
+  const [lastStateKey, setLastStateKey] = useState(stateKey);
+
+  if (stateKey !== lastStateKey) {
+    setLastStateKey(stateKey);
+    setData(null);
+    setError(null);
+  }
 
   useEffect(() => {
     if (target === null || !active) {
@@ -199,7 +217,7 @@ export function useGitopsApp(target: ObjectRef | null, active = true): GitopsApp
       mounted = false;
       clearInterval(timer);
     };
-  }, [target, active, reloads]);
+  }, [target, active, reloads, epoch]);
 
   const reload = useCallback(() => {
     setReloads((value) => value + 1);
