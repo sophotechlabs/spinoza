@@ -7,6 +7,7 @@ import type { MetricPoint } from '../../src/lib/types';
 import { canvasColors } from '../../src/lib/themeColors';
 import { BUILT_IN_THEMES, themeById } from '../../src/lib/theme';
 import { useThemeStore } from '../../src/store/theme';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const createChart = vi.fn<(node: HTMLElement, options: unknown) => ChartHandle>();
 const updates: MetricPoint[][] = [];
@@ -328,6 +329,70 @@ describe('InspectMetrics', () => {
     view.rerender(<InspectMetrics namespace="monitoring" pod="loki-1" />);
 
     expect(screen.queryByTestId('metric-chart')).not.toBeInTheDocument();
+  });
+
+  it("clears the previous cluster's charts before the replacement loads", async () => {
+    let finishNext!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const next = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishNext = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(history()) })
+      .mockImplementationOnce(() => next);
+    vi.stubGlobal('fetch', fetchMock);
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+    await screen.findAllByTestId('metric-chart');
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(screen.queryByTestId('metric-chart')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('monitoring/prometheus-operated:9090 (https)'),
+    ).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      finishNext({ ok: true, json: () => Promise.resolve(history({ source: 'new cluster' })) });
+      await next;
+      await Promise.resolve();
+    });
+    expect(screen.getByText('new cluster')).toBeInTheDocument();
+  });
+
+  it('does not apply a metric answer from the previous cluster', async () => {
+    let finishOld!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const old = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishOld = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementationOnce(() => old)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(history({ source: 'new cluster' })),
+        }),
+    );
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    expect(await screen.findByText('new cluster')).toBeInTheDocument();
+    await act(async () => {
+      finishOld({
+        ok: true,
+        json: () => Promise.resolve(history({ source: 'old cluster' })),
+      });
+      await old;
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('old cluster')).not.toBeInTheDocument();
+    expect(screen.getByText('new cluster')).toBeInTheDocument();
   });
 
   it('drops an answer that lands after unmount', () => {

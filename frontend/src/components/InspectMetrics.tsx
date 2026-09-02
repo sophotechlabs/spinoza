@@ -13,6 +13,7 @@ import { createChart } from '../lib/chart';
 import type { ChartHandle } from '../lib/chart';
 import { canvasColors } from '../lib/themeColors';
 import { useResolvedTheme } from '../store/theme';
+import { useClusterEpoch } from '../store/cluster';
 import Announce from './Announce';
 
 interface InspectMetricsProps {
@@ -86,17 +87,19 @@ export function Chart({ points, stroke, fill, axis, grid, format, metric }: Char
 
 export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) {
   const colors = canvasColors(useResolvedTheme());
+  const epoch = useClusterEpoch();
   const [span, setSpan] = useState<MetricRange>(DEFAULT_RANGE);
   const [history, setHistory] = useState<MetricHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sampled, setSampled] = useState(false);
 
-  const podKey = `${namespace}/${pod}`;
+  const podKey = `${String(epoch)}|${namespace}/${pod}`;
   const [lastPod, setLastPod] = useState(podKey);
   if (podKey !== lastPod) {
     setLastPod(podKey);
     setHistory(null);
     setError(null);
+    setSampled(false);
   }
 
   const offered = rangesFor(sampled);
@@ -145,7 +148,7 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
       live = false;
       clearInterval(timer);
     };
-  }, [namespace, pod, span, sampled]);
+  }, [namespace, pod, span, sampled, epoch]);
 
   function handleSpan(event: React.ChangeEvent<HTMLSelectElement>) {
     setSpan(event.target.value as MetricRange);

@@ -13,6 +13,7 @@ vi.mock('../../src/components/YamlDiff', () => ({
 import ComparePanel from '../../src/components/ComparePanel';
 import type { ObjectRef } from '../../src/lib/types';
 import { useContextsStore } from '../../src/store/contexts';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const target: ObjectRef = {
   group: 'apps',
@@ -248,6 +249,36 @@ describe('running a comparison', () => {
 
     expect(screen.queryByText('the old comparison failed')).not.toBeInTheDocument();
     expect(screen.queryByText('reading')).not.toBeInTheDocument();
+  });
+
+  it('drops a pending result after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let answerRequest: (body: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            answerRequest = resolve;
+          }),
+      ),
+    );
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
+    await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+    expect(screen.getByText('reading')).toBeInTheDocument();
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    expect(screen.queryByText('reading')).not.toBeInTheDocument();
+
+    await act(async () => {
+      answerRequest({ ok: true, status: 200, json: () => Promise.resolve(answer) });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByTestId('yaml-diff')).not.toBeInTheDocument();
   });
 
   it('clears a completed result when its comparison inputs change', async () => {

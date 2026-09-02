@@ -11,6 +11,7 @@ import ConfirmByName from './ConfirmByName';
 import { useProtectedCluster } from '../store/contexts';
 import { useRefusal } from '../store/access';
 import { confirmName } from '../lib/contexts';
+import { useClusterEpoch } from '../store/cluster';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 
@@ -52,8 +53,11 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   const owner = detail.managedBy;
   const noEdit = useRefusal(target, 'edit');
   const noDelete = useRefusal(target, 'delete');
+  const clusterEpoch = useClusterEpoch();
+  const operation = useRef(0);
 
   const targetKey = refKey(target);
+  const actionKey = `${String(clusterEpoch)}:${targetKey}`;
   const [lastTarget, setLastTarget] = useState(targetKey);
   if (targetKey !== lastTarget) {
     setLastTarget(targetKey);
@@ -66,6 +70,20 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     setBase(yaml);
     setDraft(yaml);
   }
+
+  useEffect(() => {
+    operation.current += 1;
+    setBusy(false);
+    setError(null);
+    setNotice(null);
+    setAsking(null);
+  }, [actionKey]);
+
+  useEffect(() => {
+    return () => {
+      operation.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -141,35 +159,55 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   }
 
   async function handleApply() {
+    operation.current += 1;
+    const token = operation.current;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       await applyObject(target, draft, confirmName(protectedCluster, target.name));
+      if (operation.current !== token) {
+        return;
+      }
       setBase(draft);
       setNotice('Applied.');
       onApplied();
     } catch (err: unknown) {
+      if (operation.current !== token) {
+        return;
+      }
       setError(errorMessage(err, 'apply failed'));
     } finally {
-      setBusy(false);
-      setAsking(null);
+      if (operation.current === token) {
+        setBusy(false);
+        setAsking(null);
+      }
     }
   }
 
   async function handleDelete() {
+    operation.current += 1;
+    const token = operation.current;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       await deleteObject(target, confirmName(protectedCluster, target.name));
+      if (operation.current !== token) {
+        return;
+      }
       notifyOk(`Deleted ${detail.kind} ${target.name}`, target);
       onDeleted();
     } catch (err: unknown) {
+      if (operation.current !== token) {
+        return;
+      }
       setError(errorMessage(err, 'delete failed'));
     } finally {
-      setBusy(false);
-      setAsking(null);
+      if (operation.current === token) {
+        setBusy(false);
+        setAsking(null);
+      }
     }
   }
 

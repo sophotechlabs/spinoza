@@ -16,6 +16,7 @@ import {
 } from '../../src/lib/issues';
 import type { IssueOrder } from '../../src/lib/issues';
 import { anySignal, rejectsWith } from '../helpers';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 function issue(patch: Partial<Issue> = {}): Issue {
   return {
@@ -663,5 +664,57 @@ describe('usePagedIssues', () => {
     await waitFor(() => {
       expect(result.current.moreError).toBe('issues request failed');
     });
+  });
+
+  it('drops a pending page after the cluster reconnects', async () => {
+    let finishOld!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const oldPage = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishOld = resolve;
+    });
+    let heads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const after = new URL(url, 'http://localhost').searchParams.get('after') ?? '';
+        if (after !== '') {
+          return oldPage;
+        }
+        heads += 1;
+        const id = heads === 1 ? 'old-head' : 'new-head';
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ rows: [issue({ id })], dropped: 0, next: `${id}-cursor` }),
+        });
+      }),
+    );
+    const { result } = renderHook(() => usePagedIssues());
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['old-head']);
+    });
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => {
+      expect(result.current.loadingMore).toBe(true);
+    });
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await waitFor(() => {
+      expect(result.current.rows.map((row) => row.id)).toEqual(['new-head']);
+    });
+
+    await act(async () => {
+      finishOld({
+        ok: true,
+        json: () => Promise.resolve({ rows: [issue({ id: 'old-tail' })], dropped: 0 }),
+      });
+      await oldPage;
+      await Promise.resolve();
+    });
+
+    expect(result.current.rows.map((row) => row.id)).toEqual(['new-head']);
+    expect(result.current.loadingMore).toBe(false);
   });
 });

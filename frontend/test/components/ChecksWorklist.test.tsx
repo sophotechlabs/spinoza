@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Checks from '../../src/components/Checks';
 import { useSettingsStore } from '../../src/store/settings';
 import type { CheckFinding, CheckGroup, CheckObject, CheckReport } from '../../src/lib/types';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const OBJECTS: CheckObject[] = [
   {
@@ -79,17 +80,20 @@ function answers(report: Partial<CheckReport>) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
-  useSettingsStore.setState({
-    checksDisabled: [],
-    checksSkipNamespaces: [],
-    checksMinSeverity: '',
-    checksWholeCluster: true,
-    checksEveryKind: false,
-    checksNamespace: '',
-    checksOnlyNew: false,
-    checksShowMuted: false,
-    checkRules: '',
+  act(() => {
+    useSettingsStore.setState({
+      checksDisabled: [],
+      checksSkipNamespaces: [],
+      checksMinSeverity: '',
+      checksWholeCluster: true,
+      checksEveryKind: false,
+      checksNamespace: '',
+      checksOnlyNew: false,
+      checksShowMuted: false,
+      checkRules: '',
+    });
   });
 });
 
@@ -257,6 +261,47 @@ describe('muting a finding', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Mute this one' }));
 
     expect(await screen.findByText('the settings file is read only')).toBeInTheDocument();
+  });
+
+  it('drops a mute completion after the cluster reconnects', async () => {
+    let finishMute: (response: unknown) => void = () => undefined;
+    const muting = new Promise((resolve) => {
+      finishMute = resolve;
+    });
+    let audits = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/checks/mutes') && init?.method === 'POST') {
+          return muting;
+        }
+        audits += 1;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Mute Deployment/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Mute this one' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await waitFor(() => {
+      expect(audits).toBe(2);
+    });
+    await act(async () => {
+      finishMute({ ok: true, status: 200, json: () => Promise.resolve({ mutes: [] }) });
+      await muting;
+      await Promise.resolve();
+    });
+
+    expect(audits).toBe(2);
   });
 });
 
@@ -432,6 +477,50 @@ describe('the baseline', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Take a baseline' }));
 
     expect(await screen.findByText('the disk is full')).toBeInTheDocument();
+  });
+
+  it('drops a baseline completion after the cluster reconnects', async () => {
+    let finishBaseline: (response: unknown) => void = () => undefined;
+    const taking = new Promise((resolve) => {
+      finishBaseline = resolve;
+    });
+    let audits = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/baseline')) {
+          return taking;
+        }
+        audits += 1;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Take a baseline' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await waitFor(() => {
+      expect(audits).toBe(2);
+    });
+    await act(async () => {
+      finishBaseline({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ takenAt: '2026-09-02T00:00:00Z' }),
+      });
+      await taking;
+      await Promise.resolve();
+    });
+
+    expect(audits).toBe(2);
+    expect(screen.getByRole('button', { name: 'Take a baseline' })).toBeEnabled();
   });
 });
 
@@ -757,6 +846,84 @@ describe('what you have muted', () => {
     });
   });
 
+  it('drops an unmute completion after a newer audit replaces its mute list', async () => {
+    vi.useFakeTimers();
+    let finishDelete!: (response: {
+      ok: boolean;
+      status: number;
+      json: () => Promise<unknown>;
+    }) => void;
+    const removal = new Promise<{
+      ok: boolean;
+      status: number;
+      json: () => Promise<unknown>;
+    }>((resolve) => {
+      finishDelete = resolve;
+    });
+    let auditRequests = 0;
+    let muteReads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/checks/mutes')) {
+          if (init?.method === 'DELETE') {
+            return removal;
+          }
+          muteReads += 1;
+          const check = muteReads === 1 ? 'old-cluster-mute' : 'new-cluster-mute';
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                mutes: [{ check, reason: `${check} reason`, at: '2026-09-02' }],
+              }),
+          });
+        }
+        auditRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    useSettingsStore.setState({ checksInterval: 15 });
+    render(<Checks onOpen={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.click(screen.getByText('What you have muted'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText(/old-cluster-mute ·/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Unmute old-cluster-mute/ }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText(/new-cluster-mute ·/)).toBeInTheDocument();
+    expect(auditRequests).toBe(2);
+
+    await act(async () => {
+      finishDelete({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ mutes: [] }),
+      });
+      await removal;
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/new-cluster-mute ·/)).toBeInTheDocument();
+    expect(auditRequests).toBe(2);
+  });
+
   it('says so when one could not be removed', async () => {
     vi.stubGlobal(
       'fetch',
@@ -818,6 +985,82 @@ describe('what you have muted', () => {
     await userEvent.click(await screen.findByText('What you have muted'));
 
     expect(await screen.findByText('the settings file is unreadable')).toBeInTheDocument();
+  });
+
+  it('keeps a newer mute list when an older request finishes last', async () => {
+    vi.useFakeTimers();
+    let finishOld!: (response: {
+      ok: boolean;
+      status: number;
+      json: () => Promise<unknown>;
+    }) => void;
+    const oldRequest = new Promise<{
+      ok: boolean;
+      status: number;
+      json: () => Promise<unknown>;
+    }>((resolve) => {
+      finishOld = resolve;
+    });
+    let muteRequests = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/mutes')) {
+          muteRequests += 1;
+          if (muteRequests === 1) {
+            return oldRequest;
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                mutes: [{ check: 'new-cluster-mute', reason: 'new', at: '2026-09-02' }],
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    useSettingsStore.setState({ checksInterval: 15 });
+    render(<Checks onOpen={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.click(screen.getByText('What you have muted'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(muteRequests).toBe(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(muteRequests).toBe(2);
+    expect(screen.getByText(/new-cluster-mute/)).toBeInTheDocument();
+    await act(async () => {
+      finishOld({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            mutes: [{ check: 'old-cluster-mute', reason: 'old', at: '2026-09-01' }],
+          }),
+      });
+      await oldRequest;
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(/old-cluster-mute/)).not.toBeInTheDocument();
+    expect(screen.getByText(/new-cluster-mute/)).toBeInTheDocument();
   });
 });
 
@@ -951,6 +1194,49 @@ describe('exporting the audit', () => {
 
     expect(await screen.findByText('the audit could not be written')).toBeInTheDocument();
   });
+
+  it('does not download an export from the previous cluster', async () => {
+    let finishExport: (response: unknown) => void = () => undefined;
+    const exporting = new Promise((resolve) => {
+      finishExport = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/export')) {
+          return exporting;
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:x', revokeObjectURL: vi.fn() });
+    await userEvent.click(await screen.findByRole('button', { name: 'Export' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      finishExport({
+        ok: true,
+        status: 200,
+        blob: () => Promise.resolve(new Blob(['old cluster'])),
+      });
+      await exporting;
+      await Promise.resolve();
+    });
+
+    expect(click).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Export' })).toBeEnabled();
+  });
 });
 
 describe('a finding a rule of your own silenced', () => {
@@ -1030,6 +1316,54 @@ describe('carrying a baseline to another cluster', () => {
     expect(link.download).toBe('spinoza-baseline.json');
   });
 
+  it('does not save a baseline from the previous cluster', async () => {
+    let finishSave: (response: unknown) => void = () => undefined;
+    const saving = new Promise((resolve) => {
+      finishSave = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/baseline/file')) {
+          return saving;
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              groups: [group()],
+              objects: OBJECTS,
+              namespaces: [],
+              baseline: '2026-08-29T00:00:00Z',
+              scanned: 1,
+            }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:x', revokeObjectURL: vi.fn() });
+    await userEvent.click(await screen.findByRole('button', { name: 'Save it to a file' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      finishSave({
+        ok: true,
+        status: 200,
+        blob: () => Promise.resolve(new Blob(['old cluster'])),
+      });
+      await saving;
+      await Promise.resolve();
+    });
+
+    expect(click).not.toHaveBeenCalled();
+  });
+
   it('loads one that was picked', async () => {
     const calls: { url: string; method: string; body: unknown }[] = [];
     vi.stubGlobal(
@@ -1063,6 +1397,46 @@ describe('carrying a baseline to another cluster', () => {
       expect(calls.some((call) => call.method === 'PUT')).toBe(true);
     });
     expect(calls.find((call) => call.method === 'PUT')?.body).toContain('2026-08-28');
+  });
+
+  it('does not load a file into a different cluster', async () => {
+    const calls: { url: string; method: string }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method ?? 'GET' });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ groups: [group()], objects: OBJECTS, namespaces: [], scanned: 1 }),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await screen.findByText(/No baseline taken/);
+    let finishRead: (body: string) => void = () => undefined;
+    const reading = new Promise<string>((resolve) => {
+      finishRead = resolve;
+    });
+    const file = new File(['old cluster'], 'b.json', { type: 'application/json' });
+    vi.spyOn(file, 'text').mockImplementation(() => reading);
+    await userEvent.upload(screen.getByLabelText('A baseline to load'), file);
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      finishRead('{"takenAt":"2026-08-28T00:00:00Z"}');
+      await reading;
+      await Promise.resolve();
+    });
+
+    expect(
+      calls.some(
+        (call) => call.url.startsWith('/api/checks/baseline/file') && call.method === 'PUT',
+      ),
+    ).toBe(false);
   });
 
   it('opens the picker when asked', async () => {

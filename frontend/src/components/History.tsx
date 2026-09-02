@@ -138,20 +138,37 @@ function OnCluster({ cluster }: { cluster: string }) {
 function Recording() {
   const tab = useActiveTab();
   const [busy, setBusy] = useState(false);
-  if (tab === null) {
-    return null;
-  }
-  const on = tab.id;
+  const operation = useRef(0);
+  const on = tab?.id ?? '';
+
+  useEffect(() => {
+    operation.current += 1;
+    setBusy(false);
+    return () => {
+      operation.current += 1;
+    };
+  }, [on]);
 
   async function change(kinds: string) {
+    operation.current += 1;
+    const token = operation.current;
     setBusy(true);
     try {
       await recordCluster(on, kinds);
     } catch (err: unknown) {
+      if (operation.current !== token) {
+        return;
+      }
       notifyError(recordFailure(err));
     } finally {
-      setBusy(false);
+      if (operation.current === token) {
+        setBusy(false);
+      }
     }
+  }
+
+  if (tab === null) {
+    return null;
   }
 
   return (
@@ -209,7 +226,15 @@ export default function History({ onOpen }: HistoryProps) {
     setOlder([]);
     setTail(null);
     setReaching(false);
+    setClearing(false);
   }, [pageKey]);
+
+  useEffect(() => {
+    return () => {
+      pageGeneration.current += 1;
+      currentPage.current = '';
+    };
+  }, []);
 
   if (data === null) {
     if (error !== null) {
@@ -263,17 +288,28 @@ export default function History({ onOpen }: HistoryProps) {
 
   async function handleClear() {
     pageGeneration.current += 1;
+    const requestedPage = pageKey;
+    const requestedGeneration = pageGeneration.current;
     setReaching(false);
     setClearing(true);
     try {
       await forgetHistory();
+      if (currentPage.current !== requestedPage || pageGeneration.current !== requestedGeneration) {
+        return;
+      }
       notifyOk('History cleared');
+      setClearing(false);
       startOver();
       reload();
     } catch (err: unknown) {
+      if (currentPage.current !== requestedPage || pageGeneration.current !== requestedGeneration) {
+        return;
+      }
       notifyError(clearFailure(err));
     } finally {
-      setClearing(false);
+      if (currentPage.current === requestedPage && pageGeneration.current === requestedGeneration) {
+        setClearing(false);
+      }
     }
   }
 

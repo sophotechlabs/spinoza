@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { Comparison, ObjectRef, ResourceDescriptor } from '../lib/types';
 import type { CompareTarget } from '../lib/compare';
 import { changedSections, differingLines, fetchComparison } from '../lib/compare';
@@ -6,6 +6,7 @@ import { contextGroups, sameContext } from '../lib/contexts';
 import type { ContextEntry } from '../lib/contexts';
 import { useContextList } from '../store/contexts';
 import { useElementWidth } from '../lib/useElementWidth';
+import { useClusterEpoch } from '../store/cluster';
 import Announce from './Announce';
 import Loading from './Loading';
 
@@ -44,6 +45,7 @@ function reason(err: unknown): string {
 
 export default function ComparePanel({ target, kind, namespace, onOpen }: ComparePanelProps) {
   const list = useContextList();
+  const clusterEpoch = useClusterEpoch();
   const [chosen, setChosen] = useState('');
 
   const others = useMemo(() => {
@@ -66,6 +68,7 @@ export default function ComparePanel({ target, kind, namespace, onOpen }: Compar
   }
 
   const identity = JSON.stringify({
+    clusterEpoch,
     current: list.current,
     kind,
     namespace,
@@ -106,6 +109,12 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const asked = useRef(0);
   const width = useElementWidth(host);
+
+  useEffect(() => {
+    return () => {
+      asked.current += 1;
+    };
+  }, []);
 
   const picked = others.find((entry) => entry.value === chosen) ?? null;
 

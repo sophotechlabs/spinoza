@@ -302,6 +302,74 @@ describe('Checks', () => {
     expect(asked).toContain('/api/checks/findings?check=limits-missing&after=Y3Vyc29yLTI');
   });
 
+  it('drops a pending page when a refreshed report replaces its group', async () => {
+    let finishPage: (response: unknown) => void = () => undefined;
+    const pendingPage = new Promise((resolve) => {
+      finishPage = resolve;
+    });
+    let reports = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/checks/findings')) {
+          return pendingPage;
+        }
+        if (url.startsWith('/api/checks/baseline') && init?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ message: 'taken' }),
+          });
+        }
+        reports += 1;
+        const report = cappedReport();
+        if (reports > 1) {
+          report.objects = [{ ...OBJECTS[0], name: 'current' }];
+          report.groups = [
+            makeGroup('limits-missing', {
+              total: 1,
+              findings: [makeFinding()],
+            }),
+          ];
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(report),
+        });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Take a baseline' }));
+    expect(
+      await screen.findByRole('button', {
+        name: 'Deployment · apps/current · container app',
+      }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      finishPage({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            findings: [{ ref: 0 }],
+            objects: [{ ...OBJECTS[0], name: 'stale-page' }],
+            next: '',
+          }),
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('button', { name: /apps\/stale-page/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Deployment · apps/current · container app' }),
+    ).toBeInTheDocument();
+  });
+
   it('stops offering more once every finding is on screen', async () => {
     stubReportThenPages(cappedReport(), [
       { findings: [{ ref: 0 }, { ref: 1 }], objects: [{ name: 'web' }, { name: 'db' }], next: '' },

@@ -5,7 +5,8 @@ import History from '../../src/components/History';
 import type { HistoryEntry } from '../../src/lib/types';
 import { useClustersStore } from '../../src/store/clusters';
 import { useToastsStore } from '../../src/store/toasts';
-import { MK1, showing } from '../helpers-clusters';
+import { MK1, MK2, showing } from '../helpers-clusters';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 function entry(extra: Partial<HistoryEntry> = {}): HistoryEntry {
   return {
@@ -224,6 +225,43 @@ describe('History', () => {
     expect(screen.getByText('web')).toBeTruthy();
   });
 
+  it('drops a clear completion after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finishClear: (response: unknown) => void = () => undefined;
+    const clearing = new Promise((resolve) => {
+      finishClear = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return clearing;
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry()] }),
+        });
+      }),
+    );
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await screen.findByText('web');
+
+    await act(async () => {
+      finishClear({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      await Promise.resolve();
+    });
+
+    expect(useToastsStore.getState().toasts).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeEnabled();
+  });
+
   it('cannot be cleared when there is nothing to clear', async () => {
     stub({ entries: [] });
 
@@ -360,6 +398,44 @@ describe('History', () => {
       const said = useToastsStore.getState().toasts.map((toast) => toast.message);
       expect(said.some((message) => message.includes('Changing what is recorded'))).toBe(true);
     });
+  });
+
+  it('drops a recording failure after another cluster is selected', async () => {
+    const user = userEvent.setup();
+    let failRecording: (reason?: unknown) => void = () => undefined;
+    const recording = new Promise((_resolve, reject) => {
+      failRecording = reject;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/clusters/timeline')) {
+          return recording;
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry()] }),
+        });
+      }),
+    );
+    act(() => {
+      showing(MK1);
+    });
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('web');
+    await user.selectOptions(screen.getByLabelText('What to record'), 'workloads');
+
+    act(() => {
+      showing(MK2);
+    });
+    await act(async () => {
+      failRecording(new Error('the old cluster stopped recording'));
+      await Promise.resolve();
+    });
+
+    expect(useToastsStore.getState().toasts).toEqual([]);
+    expect(screen.getByLabelText('What to record')).toBeEnabled();
   });
   it('folds repeated changes to one object into a single row', async () => {
     stub({

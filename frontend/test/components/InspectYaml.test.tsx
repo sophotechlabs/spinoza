@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 interface EditorStubProps {
@@ -27,9 +27,10 @@ import InspectYaml from '../../src/components/InspectYaml';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { accessKey, useAccessStore } from '../../src/store/access';
-import { EMPTY_CONTEXTS } from '../../src/store/contexts';
+import { contextScope, EMPTY_CONTEXTS } from '../../src/store/contexts';
 import { hasUnsaved, setUnsaved } from '../../src/lib/unsaved';
 import type { ObjectDetail, ObjectRef } from '../../src/lib/types';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 const target: ObjectRef = {
   group: 'apps',
@@ -38,6 +39,8 @@ const target: ObjectRef = {
   namespace: 'flux-system',
   name: 'web',
 };
+
+const clusterScope = contextScope({ kubeconfig: '', name: 'p-mk1' }, 0);
 
 const YAML = 'kind: Deployment\n';
 
@@ -163,6 +166,38 @@ describe('InspectYaml', () => {
     expect(await screen.findByText('apply failed')).toBeInTheDocument();
   });
 
+  it('drops an apply completion after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finishApply: (response: unknown) => void = () => undefined;
+    const applying = new Promise((resolve) => {
+      finishApply = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          return applying;
+        }
+        return Promise.resolve(okResponse({}));
+      }),
+    );
+    const { onApplied } = renderYaml();
+    await user.type(await screen.findByLabelText('yaml'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      finishApply(okResponse(detailFor(`${YAML}x`)));
+      await Promise.resolve();
+    });
+
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(screen.queryByText('Applied.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
+  });
+
   it('asks for confirmation before deleting', async () => {
     const user = userEvent.setup();
     const { onDeleted } = renderYaml();
@@ -219,6 +254,39 @@ describe('InspectYaml', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
     expect(await screen.findByText('delete failed')).toBeInTheDocument();
+  });
+
+  it('drops a delete completion after the cluster reconnects', async () => {
+    const user = userEvent.setup();
+    let finishDelete: (response: unknown) => void = () => undefined;
+    const deleting = new Promise((resolve) => {
+      finishDelete = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          return deleting;
+        }
+        return Promise.resolve(okResponse({}));
+      }),
+    );
+    useToastsStore.getState().clear();
+    const { onDeleted } = renderYaml();
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+    await act(async () => {
+      finishDelete(okResponse({}));
+      await Promise.resolve();
+    });
+
+    expect(onDeleted).not.toHaveBeenCalled();
+    expect(useToastsStore.getState().toasts).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
   });
 
   it('reseeds an untouched draft when the object is refetched', async () => {
@@ -565,7 +633,7 @@ describe('InspectYaml on a protected cluster', () => {
 });
 
 describe('editing and deleting what the cluster would refuse', () => {
-  const deploymentKey = accessKey('p-mk1', target);
+  const deploymentKey = accessKey(clusterScope, target);
 
   beforeEach(() => {
     useAccessStore.getState().forget();

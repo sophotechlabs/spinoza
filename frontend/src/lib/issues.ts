@@ -5,6 +5,7 @@ import { parseIssueQueue } from './parse';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
 import { failure } from './object';
+import { useClusterEpoch } from '../store/cluster';
 
 const ISSUES_POLL_MS = 5000;
 
@@ -46,6 +47,7 @@ export function useIssues(
   fleet = false,
   order: IssueOrder = 'worst',
 ): Polled<IssueQueue> {
+  const epoch = useClusterEpoch();
   const read = useCallback(
     async () => queueFrom(`${queuePath(fleet)}?sort=${order}`),
     [fleet, order],
@@ -54,12 +56,12 @@ export function useIssues(
     intervalMs: ISSUES_POLL_MS,
     enabled,
     fallback: 'issues request failed',
-    resetKey: queueKey(fleet, order),
+    resetKey: queueKey(fleet, order, epoch),
   });
 }
 
-function queueKey(fleet: boolean, order: IssueOrder): string {
-  return `${queuePath(fleet)}?sort=${order}`;
+function queueKey(fleet: boolean, order: IssueOrder, epoch: number): string {
+  return `${String(epoch)}:${queuePath(fleet)}?sort=${order}`;
 }
 
 async function fetchIssuePage(
@@ -85,13 +87,14 @@ export function usePagedIssues(
   fleet = false,
   order: IssueOrder = 'worst',
 ): PagedIssues {
+  const epoch = useClusterEpoch();
   const polled = useIssues(enabled, fleet, order);
   const [tail, setTail] = useState<Issue[]>([]);
   const [builtOn, setBuiltOn] = useState('');
   const [next, setNext] = useState<IssueCursor | ''>('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState('');
-  const asked = queueKey(fleet, order);
+  const asked = queueKey(fleet, order, epoch);
   const [lastAsked, setLastAsked] = useState(asked);
   const pageGeneration = useRef(0);
 

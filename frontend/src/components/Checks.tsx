@@ -37,10 +37,26 @@ import StaleBanner from './StaleBanner';
 import Loading from './Loading';
 import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters';
 import { colorVar } from '../lib/clusterColor';
+import { useContextScope } from '../store/contexts';
 
 const PAGE_SIZE = 200;
 
 const NAMESPACES_SHOWN = 20;
+
+function useScopedOperation(scope: string) {
+  const operation = useRef(0);
+  const liveScope = useRef(scope);
+  if (liveScope.current !== scope) {
+    liveScope.current = scope;
+    operation.current += 1;
+  }
+  useEffect(() => {
+    return () => {
+      operation.current += 1;
+    };
+  }, []);
+  return operation;
+}
 
 function baselineLabel(report: CheckReportView): string {
   if (report.baseline === '') {
@@ -241,6 +257,14 @@ function MuteControl({
   onChanged: () => void;
   onFailed: (message: string) => void;
 }) {
+  const scope = useContextScope();
+  const operation = useScopedOperation(scope);
+  const [working, setWorking] = useState(false);
+
+  useEffect(() => {
+    setWorking(false);
+  }, [scope]);
+
   if (finding.mutedBy === 'convention' || finding.mutedBy === 'rule') {
     return <span className="shrink-0 text-fg-subtle">{silencedLabel(finding.mutedBy)}</span>;
   }
@@ -248,13 +272,28 @@ function MuteControl({
     return (
       <button
         type="button"
+        disabled={working}
         aria-label={`Unmute ${findingLabel(finding)}`}
-        className="shrink-0 text-fg-soft hover:underline"
+        className="shrink-0 text-fg-soft hover:underline disabled:text-fg-subtle"
         onClick={() => {
+          operation.current += 1;
+          const token = operation.current;
+          setWorking(true);
           unmuteFinding({ check, ...refFor(scopeOf(finding), finding) })
-            .then(onChanged)
+            .then(() => {
+              if (operation.current === token) {
+                onChanged();
+              }
+            })
             .catch((err: unknown) => {
-              onFailed(messageOf(err));
+              if (operation.current === token) {
+                onFailed(messageOf(err));
+              }
+            })
+            .finally(() => {
+              if (operation.current === token) {
+                setWorking(false);
+              }
             });
         }}
       >
@@ -287,13 +326,35 @@ function MuteReason({
 }) {
   const [reason, setReason] = useState('');
   const [failed, setFailed] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+  const clusterScope = useContextScope();
+  const operation = useScopedOperation(clusterScope);
+
+  useEffect(() => {
+    setWorking(false);
+    setFailed(null);
+  }, [clusterScope]);
 
   function save(scope: MuteScope) {
+    operation.current += 1;
+    const token = operation.current;
+    setWorking(true);
     const mute = { check, reason, ...refFor(scope, finding) };
     muteFinding(mute)
-      .then(onDone)
+      .then(() => {
+        if (operation.current === token) {
+          onDone();
+        }
+      })
       .catch((err: unknown) => {
-        setFailed(messageOf(err));
+        if (operation.current === token) {
+          setFailed(messageOf(err));
+        }
+      })
+      .finally(() => {
+        if (operation.current === token) {
+          setWorking(false);
+        }
       });
   }
 
@@ -311,6 +372,7 @@ function MuteReason({
       />
       <button
         type="button"
+        disabled={working}
         className="rounded border border-edge px-2 py-0.5 text-fg-strong"
         onClick={() => {
           save('object');
@@ -321,6 +383,7 @@ function MuteReason({
       {finding.object.namespace !== '' && (
         <button
           type="button"
+          disabled={working}
           className="rounded border border-edge px-2 py-0.5 text-fg-soft"
           onClick={() => {
             save('namespace');
@@ -396,30 +459,58 @@ function Group({
   const [cursor, setCursor] = useState('');
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const pageRequest = useRef(0);
   const empty = group.findings.length === 0;
   const shown = paged ?? group.findings;
   const nextCursor = paged === null ? (group.next ?? '') : cursor;
+  const pageScope = JSON.stringify({ group, keep, fleet });
+
+  useEffect(() => {
+    pageRequest.current += 1;
+    setPaged(null);
+    setCursor('');
+    setLoading(false);
+    setFailed(null);
+  }, [pageScope]);
+
+  useEffect(() => {
+    return () => {
+      pageRequest.current += 1;
+    };
+  }, []);
 
   function toggle() {
     if (open) {
+      pageRequest.current += 1;
       setPaged(null);
       setCursor('');
+      setLoading(false);
       setFailed(null);
     }
     setOpen(!open);
   }
 
   async function loadMore() {
+    pageRequest.current += 1;
+    const token = pageRequest.current;
     setLoading(true);
     setFailed(null);
     try {
       const page = await fetchCheckPage(group.id, nextCursor, keep, fleet);
+      if (pageRequest.current !== token) {
+        return;
+      }
       setPaged([...shown, ...page.findings]);
       setCursor(page.next);
     } catch (err: unknown) {
+      if (pageRequest.current !== token) {
+        return;
+      }
       setFailed(messageOf(err));
     } finally {
-      setLoading(false);
+      if (pageRequest.current === token) {
+        setLoading(false);
+      }
     }
   }
 
@@ -684,19 +775,38 @@ function MutesPanel({ audit, onChanged }: { audit: unknown; onChanged: () => voi
   const [open, setOpen] = useState(false);
   const [mutes, setMutes] = useState<Mute[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  const latestAudit = useRef(audit);
+  const mounted = useRef(true);
+  latestAudit.current = audit;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) {
       return;
     }
+    let live = true;
     fetchMutes()
       .then((found) => {
+        if (!live) {
+          return;
+        }
         setMutes(found);
         setFailed(null);
       })
       .catch((err: unknown) => {
-        setFailed(messageOf(err));
+        if (live) {
+          setFailed(messageOf(err));
+        }
       });
+    return () => {
+      live = false;
+    };
   }, [open, audit]);
 
   return (
@@ -724,13 +834,19 @@ function MutesPanel({ audit, onChanged }: { audit: unknown; onChanged: () => voi
               aria-label={`Unmute ${muteKey(mute)}`}
               className="shrink-0 text-fg-soft hover:underline"
               onClick={() => {
+                const startedOn = audit;
                 unmuteFinding(mute)
                   .then((left) => {
+                    if (!mounted.current || latestAudit.current !== startedOn) {
+                      return;
+                    }
                     setMutes(left);
                     onChanged();
                   })
                   .catch((err: unknown) => {
-                    setFailed(messageOf(err));
+                    if (mounted.current && latestAudit.current === startedOn) {
+                      setFailed(messageOf(err));
+                    }
                   });
               }}
             >
@@ -765,19 +881,34 @@ function BaselineBar({ report, onChanged }: { report: CheckReportView; onChanged
   const setShowMuted = useSettingsStore((state) => state.setChecksShowMuted);
   const [working, setWorking] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const scope = useContextScope();
+  const operation = useScopedOperation(scope);
+
+  useEffect(() => {
+    setWorking(false);
+    setFailed(null);
+  }, [scope]);
 
   function run(action: () => Promise<string>) {
+    operation.current += 1;
+    const token = operation.current;
     setWorking(true);
     setFailed(null);
     action()
       .then(() => {
-        onChanged();
+        if (operation.current === token) {
+          onChanged();
+        }
       })
       .catch((err: unknown) => {
-        setFailed(messageOf(err));
+        if (operation.current === token) {
+          setFailed(messageOf(err));
+        }
       })
       .finally(() => {
-        setWorking(false);
+        if (operation.current === token) {
+          setWorking(false);
+        }
       });
   }
 
@@ -845,6 +976,43 @@ function BaselineFile({
   onFailed: (message: string) => void;
 }) {
   const pick = useRef<HTMLInputElement>(null);
+  const scope = useContextScope();
+  const operation = useScopedOperation(scope);
+
+  function save() {
+    operation.current += 1;
+    const token = operation.current;
+    saveBaselineFile()
+      .then((body) => {
+        if (operation.current === token) {
+          saveAs('spinoza-baseline.json', body);
+        }
+      })
+      .catch((err: unknown) => {
+        if (operation.current === token) {
+          onFailed(messageOf(err));
+        }
+      });
+  }
+
+  async function load(file: File) {
+    operation.current += 1;
+    const token = operation.current;
+    try {
+      const body = await file.text();
+      if (operation.current !== token) {
+        return;
+      }
+      await loadBaselineFile(body);
+      if (operation.current === token) {
+        onChanged();
+      }
+    } catch (err: unknown) {
+      if (operation.current === token) {
+        onFailed(messageOf(err));
+      }
+    }
+  }
 
   return (
     <>
@@ -853,13 +1021,7 @@ function BaselineFile({
           type="button"
           className="rounded border border-edge px-2 py-0.5 text-fg-soft"
           onClick={() => {
-            saveBaselineFile()
-              .then((body) => {
-                saveAs('spinoza-baseline.json', body);
-              })
-              .catch((err: unknown) => {
-                onFailed(messageOf(err));
-              });
+            save();
           }}
         >
           Save it to a file
@@ -886,13 +1048,7 @@ function BaselineFile({
           if (file === undefined) {
             return;
           }
-          file
-            .text()
-            .then(loadBaselineFile)
-            .then(onChanged)
-            .catch((err: unknown) => {
-              onFailed(messageOf(err));
-            });
+          void load(file);
         }}
       />
     </>
@@ -902,6 +1058,12 @@ function BaselineFile({
 function ExportButton({ onFailed }: { onFailed: (message: string) => void }) {
   const keep = useChecksFilter();
   const [working, setWorking] = useState(false);
+  const scope = useContextScope();
+  const operation = useScopedOperation(scope);
+
+  useEffect(() => {
+    setWorking(false);
+  }, [scope]);
 
   return (
     <button
@@ -909,16 +1071,24 @@ function ExportButton({ onFailed }: { onFailed: (message: string) => void }) {
       disabled={working}
       className="rounded border border-edge px-2 py-0.5 text-fg-soft disabled:text-fg-subtle"
       onClick={() => {
+        operation.current += 1;
+        const token = operation.current;
         setWorking(true);
         exportChecks(keep)
           .then((body) => {
-            saveAs('spinoza-checks.csv', body);
+            if (operation.current === token) {
+              saveAs('spinoza-checks.csv', body);
+            }
           })
           .catch((err: unknown) => {
-            onFailed(messageOf(err));
+            if (operation.current === token) {
+              onFailed(messageOf(err));
+            }
           })
           .finally(() => {
-            setWorking(false);
+            if (operation.current === token) {
+              setWorking(false);
+            }
           });
       }}
     >
