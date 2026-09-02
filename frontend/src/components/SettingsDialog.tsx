@@ -16,6 +16,7 @@ import {
 import { usePanelsStore } from '../store/panels';
 import { useContextList } from '../store/contexts';
 import { useNamespaceStore } from '../store/namespace';
+import { useActiveCluster } from '../store/clusters';
 import { shortcuts } from '../lib/hotkeys';
 import { copyText } from '../lib/clipboard';
 import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
@@ -120,8 +121,13 @@ export default function SettingsDialog({
   const setLogView = useSettingsStore((state) => state.setLogView);
   const screenReader = useScreenReader();
   const setScreenReader = useSettingsStore((state) => state.setScreenReader);
-  const cluster = useContextList().current.name;
-  const start = useNamespaceStart(cluster);
+  const context = useContextList().current.name;
+  const activeCluster = useActiveCluster();
+  let cluster = activeCluster;
+  if (cluster === '') {
+    cluster = context;
+  }
+  const start = useNamespaceStart(cluster, context);
   const setStart = useSettingsStore((state) => state.setNamespaceStart);
   const checksInterval = useChecksInterval();
   const setChecksInterval = useSettingsStore((state) => state.setChecksInterval);
@@ -142,7 +148,7 @@ export default function SettingsDialog({
     }
   }, []);
   const setNodeShell = useSettingsStore((state) => state.setNodeShell);
-  const openOn = useNamespaceStore((state) => state.reset);
+  const applyNamespaceStart = useNamespaceStore((state) => state.applyStart);
   const resetPanels = usePanelsStore((state) => state.reset);
   const themes = useThemes();
   const sortedThemes = [...themes].sort((a, b) => a.name.localeCompare(b.name));
@@ -454,13 +460,13 @@ export default function SettingsDialog({
           )}
           {section === 'Cluster' && (
             <>
-              <Row label="Open on" hint={openOnHint(cluster)}>
+              <Row label="Open on" hint={openOnHint(context)}>
                 <select
                   aria-label="Namespace to open on"
                   value={start}
                   onChange={(event) => {
                     setStart(cluster, event.target.value as NamespaceStart);
-                    openOn();
+                    applyNamespaceStart(context);
                   }}
                   className="rounded border border-edge-strong bg-surface-raised px-2 py-0.5 text-fg"
                 >

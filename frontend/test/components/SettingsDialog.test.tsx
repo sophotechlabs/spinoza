@@ -6,7 +6,8 @@ import { useThemeStore } from '../../src/store/theme';
 import { useSettingsStore } from '../../src/store/settings';
 import { useContextsStore } from '../../src/store/contexts';
 import { usePanelsStore } from '../../src/store/panels';
-import { namespaceNow } from '../../src/store/namespace';
+import { namespaceNow, useNamespaceStore } from '../../src/store/namespace';
+import { useClustersStore } from '../../src/store/clusters';
 import { DEFAULT_PLACEMENT } from '../../src/lib/panels';
 import { readStored, resetStored, startSaving, stopSaving } from '../../src/lib/persist';
 import { NODE_SHELL_KEY, UPDATE_CHECK_KEY } from '../../src/lib/settings';
@@ -32,6 +33,7 @@ afterEach(() => {
     useSettingsStore.getState().setLogView('pretty');
     useSettingsStore.setState({ nodeShell: false });
     usePanelsStore.getState().reset();
+    useClustersStore.getState().reset();
   });
   vi.unstubAllGlobals();
   stopSaving();
@@ -165,6 +167,33 @@ describe('the settings dialog', () => {
 
     expect(useSettingsStore.getState().namespaceStarts['gke-prod']).toBe('default');
     expect(useSettingsStore.getState().namespaceStart).toBe('all');
+  });
+
+  it('applies a context preference to the active cluster immediately', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useClustersStore.setState({ active: 'cluster-id' });
+      useContextsStore.getState().setList({
+        current: { kubeconfig: '', name: 'gke-prod' },
+        kubeconfigs: [],
+        protection: 'open',
+      });
+      useSettingsStore.setState({ namespaceStart: 'all', namespaceStarts: {} });
+      useNamespaceStore.getState().reset();
+      useNamespaceStore.getState().offer('cluster-id', ['default', 'shop']);
+    });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Cluster' }));
+    await user.selectOptions(screen.getByLabelText('Namespace to open on'), 'default');
+
+    expect(useSettingsStore.getState().namespaceStarts['cluster-id']).toBe('default');
+    expect(useSettingsStore.getState().namespaceStarts['gke-prod']).toBeUndefined();
+    expect(namespaceNow()).toBe('default');
+    expect(useNamespaceStore.getState().byCluster['cluster-id']?.names).toEqual([
+      'default',
+      'shop',
+    ]);
   });
 
   it('shows the answer that cluster already has', async () => {

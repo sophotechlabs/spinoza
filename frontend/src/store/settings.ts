@@ -204,11 +204,15 @@ export function useUpdateCheck(): boolean {
   return useSettingsStore((state) => state.updateCheck);
 }
 
-export function useNamespaceStart(context: string): NamespaceStart {
-  const held = useSettingsStore((state) => state.namespaceStarts[context]);
+export function useNamespaceStart(cluster: string, context = ''): NamespaceStart {
+  const own = useSettingsStore((state) => state.namespaceStarts[cluster]);
+  const legacy = useSettingsStore((state) => state.namespaceStarts[context]);
   const fallback = useSettingsStore((state) => state.namespaceStart);
-  if (held !== undefined) {
-    return held;
+  if (own !== undefined) {
+    return own;
+  }
+  if (legacy !== undefined) {
+    return legacy;
   }
   return fallback;
 }
