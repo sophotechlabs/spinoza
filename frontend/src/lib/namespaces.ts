@@ -3,6 +3,7 @@ import type { Namespaces } from './types';
 import { failure } from './object';
 import { request } from './http';
 import { useClusterEpoch } from '../store/cluster';
+import { useActiveCluster } from '../store/clusters';
 import { useNamespaceStore } from '../store/namespace';
 
 export async function fetchNamespaces(): Promise<Namespaces> {
@@ -15,20 +16,24 @@ export async function fetchNamespaces(): Promise<Namespaces> {
 }
 
 export function useNamespaces(): void {
+  const cluster = useActiveCluster();
   const epoch = useClusterEpoch();
   const offer = useNamespaceStore((state) => state.offer);
 
   useEffect(() => {
+    if (cluster === '') {
+      return;
+    }
     let live = true;
     fetchNamespaces()
       .then((found) => {
         if (live) {
-          offer(found.names);
+          offer(cluster, found.names);
         }
       })
       .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [epoch, offer]);
+  }, [cluster, epoch, offer]);
 }

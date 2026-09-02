@@ -17,7 +17,7 @@ interface Scope {
 interface NamespaceState {
   byCluster: ByCluster<Scope>;
   choose: (namespace: string) => void;
-  offer: (names: string[]) => void;
+  offer: (cluster: string, names: string[]) => void;
   openOn: (context: string) => void;
   forget: (cluster: string) => void;
   reset: () => void;
@@ -70,10 +70,9 @@ export const useNamespaceStore = create<NamespaceState>((set) => ({
       }),
     );
   },
-  offer: (names) => {
-    const on = activeClusterNow();
+  offer: (cluster, names) => {
     set((state) =>
-      change(state, on, (scope) => ({
+      change(state, cluster, (scope) => ({
         ...scope,
         names,
         namespace: settle(scope.namespace, names),

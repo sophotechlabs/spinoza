@@ -46,7 +46,7 @@ describe('the namespace the app works in', () => {
   });
 
   it('takes the names the cluster reported without narrowing the view', () => {
-    state().offer(['default', 'shop']);
+    state().offer(MK1, ['default', 'shop']);
 
     expect(namesOf()).toEqual(['default', 'shop']);
     expect(namespaceNow()).toBe(ALL);
@@ -55,7 +55,7 @@ describe('the namespace the app works in', () => {
   it('widens back out when the kept namespace is not in this cluster', () => {
     state().choose('shop');
 
-    state().offer(['default', 'kube-system']);
+    state().offer(MK1, ['default', 'kube-system']);
 
     expect(namespaceNow()).toBe(ALL);
   });
@@ -63,7 +63,7 @@ describe('the namespace the app works in', () => {
   it('keeps a kept namespace this cluster does have', () => {
     state().choose('shop');
 
-    state().offer(['default', 'shop']);
+    state().offer(MK1, ['default', 'shop']);
 
     expect(namespaceNow()).toBe('shop');
   });
@@ -83,7 +83,7 @@ describe('the namespace a new cluster opens on', () => {
   it('is what a reset goes back to', () => {
     useSettingsStore.setState({ namespaceStart: 'default' });
     state().choose('shop');
-    state().offer(['shop', 'default']);
+    state().offer(MK1, ['shop', 'default']);
 
     state().reset();
 

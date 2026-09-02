@@ -385,7 +385,7 @@ describe('completing what is typed', () => {
 });
 
 function setScope(namespace: string, names: string[]): void {
-  useNamespaceStore.getState().offer(names);
+  useNamespaceStore.getState().offer(activeClusterNow(), names);
   useNamespaceStore.getState().choose(namespace);
 }
 

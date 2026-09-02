@@ -6,6 +6,7 @@ import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { useNamespaceStore } from '../../src/store/namespace';
 import { useHelmAccessStore } from '../../src/store/helmAccess';
+import { activeClusterNow } from '../../src/store/clusters';
 
 vi.mock('../../src/lib/monaco', () => ({
   defineEditorTheme: vi.fn(),
@@ -166,7 +167,7 @@ const close = vi.fn(function close(this: HTMLDialogElement) {
 beforeEach(() => {
   useToastsStore.getState().clear();
   useHelmAccessStore.setState({ answers: {} });
-  useNamespaceStore.getState().offer(['default', 'demo']);
+  useNamespaceStore.getState().offer(activeClusterNow(), ['default', 'demo']);
   showModal.mockClear();
   close.mockClear();
   HTMLDialogElement.prototype.showModal = showModal;

@@ -3,10 +3,12 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
 import { useClusterHealthStore } from '../../src/store/clusterHealth';
-import { namespaceNow } from '../../src/store/namespace';
+import { useClustersStore } from '../../src/store/clusters';
+import { namespaceNow, useNamespaceStore } from '../../src/store/namespace';
 import type { ObjectRef } from '../../src/lib/types';
 import { notifyOk, useToastsStore } from '../../src/store/toasts';
 import { reportHealth } from '../../src/store/clusterHealth';
+import { MK1, showing } from '../helpers-clusters';
 
 const podRef: ObjectRef = {
   group: '',
@@ -23,6 +25,12 @@ vi.mock('../../src/components/ContextPicker', () => ({
     </button>
   ),
 }));
+
+afterEach(() => {
+  useClustersStore.getState().reset();
+  useNamespaceStore.getState().reset();
+  vi.unstubAllGlobals();
+});
 
 function dotFor(container: HTMLElement): Element {
   const dot = container.querySelector('[data-testid="connection-dot"]');
@@ -249,6 +257,7 @@ describe('the top bar entry points', () => {
   });
 
   it('offers the namespaces the cluster reported', async () => {
+    showing(MK1);
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -268,11 +277,11 @@ describe('the top bar entry points', () => {
       expect(within(picker).getByRole('option', { name: 'kube-system' })).toBeInTheDocument();
     });
     expect(picker).toHaveValue('');
-    vi.unstubAllGlobals();
   });
 
   it('takes the namespace that was chosen', async () => {
     const user = userEvent.setup();
+    showing(MK1);
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -292,7 +301,6 @@ describe('the top bar entry points', () => {
     await user.selectOptions(picker, 'shop');
 
     expect(namespaceNow()).toBe('shop');
-    vi.unstubAllGlobals();
   });
 
   it('stays open while nothing says the kind is cluster-scoped', () => {
