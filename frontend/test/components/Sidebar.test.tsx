@@ -188,7 +188,11 @@ describe('Sidebar', () => {
   });
 
   it('offers one row per view in each gitops group', async () => {
-    stubFetch([...withFlux, ...withArgo.slice(categories.length)]);
+    const customResources = makeCategory('Custom resources', [
+      ...withFlux[withFlux.length - 1].resources,
+      ...withArgo[withArgo.length - 1].resources,
+    ]);
+    stubFetch([...categories, customResources]);
     renderSidebar();
     await screen.findByRole('button', { name: 'Flux Graph' });
 
@@ -518,6 +522,59 @@ describe('Sidebar', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByText('discovery request failed with status 503')).toBeInTheDocument();
+  });
+
+  it('does not apply a manual retry after the cluster changes', async () => {
+    const user = userEvent.setup();
+    stubCatalog([], 'connection refused');
+    renderSidebar({});
+    await screen.findByText('Discovery failed');
+    let finishRetry: (response: unknown) => void = () => undefined;
+    const pendingRetry = new Promise((resolve) => {
+      finishRetry = resolve;
+    });
+    const oldCategories = [
+      makeCategory('Old cluster', [
+        makeDescriptor({ group: '', version: 'v1', resource: 'pods', kind: 'Pod' }),
+      ]),
+    ];
+    const newCategories = [
+      makeCategory('New cluster', [
+        makeDescriptor({ group: '', version: 'v1', resource: 'configmaps', kind: 'ConfigMap' }),
+      ]),
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/resources/counts')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ counts: {} }) });
+        }
+        if (init?.method === 'POST') {
+          return pendingRetry;
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ categories: newCategories }),
+        });
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(await screen.findByRole('button', { name: /New cluster/ })).toBeInTheDocument();
+    await act(async () => {
+      finishRetry({
+        ok: true,
+        json: () => Promise.resolve({ categories: oldCategories }),
+      });
+      await pendingRetry;
+    });
+
+    expect(screen.queryByRole('button', { name: /Old cluster/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /New cluster/ })).toBeInTheDocument();
   });
 
   it('drops a catalog that lands after unmount', async () => {

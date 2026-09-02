@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ResourceDescriptor } from '../../src/lib/types';
 import KindCompare from '../../src/components/KindCompare';
@@ -257,6 +257,60 @@ describe('comparing a whole kind', () => {
     await compare(user);
 
     expect(screen.getByText(/matched by name across namespaces/)).toBeInTheDocument();
+  });
+
+  it('drops a completed comparison when its target changes', async () => {
+    const user = userEvent.setup();
+    stub(answer);
+    const view = render(
+      <KindCompare kind={kind} namespace="flux-system" target={target} onOpen={vi.fn()} />,
+    );
+    await compare(user);
+
+    view.rerender(
+      <KindCompare
+        kind={kind}
+        namespace="flux-system"
+        target={{ ...target, name: 'p-mk3' }}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/p-mk1 against p-mk2/)).not.toBeInTheDocument();
+  });
+
+  it('ignores a comparison that completes after its target changes', async () => {
+    const user = userEvent.setup();
+    let finish: (response: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    const view = render(
+      <KindCompare kind={kind} namespace="flux-system" target={target} onOpen={vi.fn()} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Compare every Deployment' }));
+
+    view.rerender(
+      <KindCompare
+        kind={kind}
+        namespace="flux-system"
+        target={{ ...target, name: 'p-mk3' }}
+        onOpen={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      finish({ ok: true, status: 200, json: () => Promise.resolve(answer) });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(/p-mk1 against p-mk2/)).not.toBeInTheDocument();
+    expect(screen.queryByText('reading both clusters')).not.toBeInTheDocument();
   });
 });
 

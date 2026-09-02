@@ -106,7 +106,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  clearRecents();
+  act(() => {
+    clearRecents();
+  });
 });
 
 describe('CommandPalette', () => {
@@ -263,6 +265,38 @@ describe('CommandPalette', () => {
     });
 
     expect(screen.getByLabelText(/Search resources/)).toHaveValue('');
+  });
+
+  it("clears the previous cluster's catalog while the replacement loads", async () => {
+    const nextType = makeDescriptor({ resource: 'configmaps', kind: 'ConfigMap' });
+    let finishNext!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const next = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishNext = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ categories }) })
+      .mockImplementationOnce(() => next);
+    vi.stubGlobal('fetch', fetchMock);
+    renderPalette();
+    await screen.findByRole('button', { name: /Pod/ });
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(screen.queryByRole('button', { name: /Pod/ })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      finishNext({
+        ok: true,
+        json: () => Promise.resolve({ categories: [makeCategory('Config', [nextType])] }),
+      });
+      await next;
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: /ConfigMap/ })).toBeInTheDocument();
   });
 
   it('does nothing on Enter when nothing matches', async () => {

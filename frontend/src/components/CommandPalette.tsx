@@ -83,6 +83,7 @@ export default function CommandPalette({
       return;
     }
     let live = true;
+    setCategories([]);
     fetchResources()
       .then((catalog) => {
         if (live) {
@@ -93,7 +94,7 @@ export default function CommandPalette({
     return () => {
       live = false;
     };
-  }, [open]);
+  }, [open, epoch]);
 
   useEffect(() => {
     asked.current += 1;

@@ -20,6 +20,7 @@ import { notifyError } from '../store/toasts';
 import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import Loading from './Loading';
+import { useClusterEpoch } from '../store/cluster';
 
 function Powers({ powers }: { powers: string[] }) {
   if (powers.length === 0) {
@@ -178,8 +179,10 @@ function Question({ onAnswer }: { onAnswer: (found: RBACIndex | null) => void })
 }
 
 export default function Rbac() {
+  const epoch = useClusterEpoch();
   const { data, error } = useRBAC();
   const [answer, setAnswer] = useState<RBACIndex | null>(null);
+  const [answeredOn, setAnsweredOn] = useState(epoch);
   const [query, setQuery] = useState('');
 
   if (data === null) {
@@ -189,12 +192,21 @@ export default function Rbac() {
     return <Loading what="who can do what" />;
   }
 
-  const shown = answer ?? data;
+  let visibleAnswer = answer;
+  if (answeredOn !== epoch) {
+    visibleAnswer = null;
+  }
+  const shown = visibleAnswer ?? data;
   const subjects = shown.subjects.filter((one) => matches(one, query));
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
       {shown.error !== undefined && shown.error !== '' && <LoadWarning message={shown.error} />}
-      <Question onAnswer={setAnswer} />
+      <Question
+        onAnswer={(found) => {
+          setAnswer(found);
+          setAnsweredOn(epoch);
+        }}
+      />
       <div className="flex shrink-0 items-center gap-3 border-b border-edge px-2 py-1.5 text-fg-muted">
         <input
           aria-label="Filter subjects"
@@ -206,7 +218,7 @@ export default function Rbac() {
           className={`${FIELD} w-56`}
         />
         <span>
-          {subjects.length} {answer === null ? 'subjects' : 'can'}
+          {subjects.length} {visibleAnswer === null ? 'subjects' : 'can'}
         </span>
         {shown.dropped !== undefined && shown.dropped > 0 && (
           <span>{shown.dropped} more are not shown</span>

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BulkAccess, ObjectRef } from '../lib/types';
 import { fetchBulkAccess } from '../lib/access';
-import { deleteObject } from '../lib/object';
+import { deleteObject, refQuery } from '../lib/object';
 import { canRestart, runAction } from '../lib/objectActions';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useContextList } from '../store/contexts';
+import { useClusterEpoch } from '../store/cluster';
 import ConfirmByName from './ConfirmByName';
 
 interface BulkBarProps {
@@ -124,7 +125,7 @@ function refusesEverything(checked: Checked | null): boolean {
 }
 
 function selectionKey(targets: ObjectRef[]): string {
-  return targets.map((ref) => `${ref.namespace}/${ref.name}`).join(',');
+  return JSON.stringify(targets.map((ref) => refQuery(ref)));
 }
 
 export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps) {
@@ -133,10 +134,12 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
   const [checked, setChecked] = useState<Checked | null>(null);
   const asked = useRef(0);
   const list = useContextList();
+  const epoch = useClusterEpoch();
   const protectedCluster = list.protection === 'protected';
-  const key = selectionKey(targets);
+  const key = `${epoch}|${selectionKey(targets)}`;
 
   useEffect(() => {
+    asked.current += 1;
     setConfirming(null);
     setChecked(null);
   }, [key]);

@@ -53,16 +53,14 @@ export default function GraphShell<N extends Node>({
 
   if (flow === null) {
     if (error !== null) {
-      return (
-        <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
-      );
+      return <LoadFailure what={what} message={error} onRetry={onRetry} />;
     }
     return <Loading what={loading} />;
   }
 
   if (flow.nodes.length === 0) {
     if (partial !== null) {
-      return <LoadFailure what={what} message={partial} />;
+      return <LoadFailure what={what} message={partial} onRetry={onRetry} />;
     }
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">{empty}</div>

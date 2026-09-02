@@ -436,6 +436,57 @@ describe('the per-application panel', () => {
     });
   });
 
+  it('hides the previous topology while an action refreshes it', async () => {
+    const user = userEvent.setup();
+    const pending = new Promise<never>(() => undefined);
+    let graphCalls = 0;
+    const node = {
+      id: 'a',
+      kind: 'Deployment',
+      group: 'apps',
+      version: 'v1',
+      resource: 'deployments',
+      name: 'web',
+      namespace: 'shop',
+      status: 'Synced',
+      ready: 'True',
+      category: 'managed',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/gitops/app/graph')) {
+          graphCalls += 1;
+          if (graphCalls === 1) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ nodes: [node], edges: [] }),
+            });
+          }
+          return pending;
+        }
+        if (url.includes('/api/gitops/app')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(appWith({ resources: [deployment] })),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ action: 'sync' }) });
+      }),
+    );
+    renderPanel();
+
+    await user.click(await screen.findByLabelText('Mark Deployment web'));
+    await user.click(screen.getByRole('button', { name: 'Topology' }));
+    await screen.findByRole('button', { name: 'web' });
+    await user.click(screen.getByRole('button', { name: 'Sync 1 marked' }));
+
+    await waitFor(() => {
+      expect(graphCalls).toBe(2);
+    });
+    expect(screen.queryByRole('button', { name: 'web' })).not.toBeInTheDocument();
+  });
+
   it('stops the writes while the application is being deleted', async () => {
     const user = userEvent.setup();
     serve(

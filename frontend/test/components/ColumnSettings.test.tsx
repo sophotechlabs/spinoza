@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ColumnSettings from '../../src/components/ColumnSettings';
 import { clearCatalog, rememberCatalog } from '../../src/store/catalog';
 import { readColumns, writeColumns } from '../../src/lib/settings';
 import { resetStored } from '../../src/lib/persist';
 import { makeCategory, makeDescriptor, rejectsWith } from '../helpers';
+import { useClustersStore } from '../../src/store/clusters';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
 function seedCatalog(): void {
   rememberCatalog([
@@ -30,6 +32,8 @@ function stubSettings(): ReturnType<typeof vi.fn> {
 }
 
 beforeEach(() => {
+  useClustersStore.setState({ active: '' });
+  useClusterStore.getState().reset();
   resetStored();
   seedCatalog();
   stubSettings();
@@ -37,8 +41,12 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  clearCatalog();
-  resetStored();
+  act(() => {
+    clearCatalog();
+    useClustersStore.setState({ active: '' });
+    useClusterStore.getState().reset();
+    resetStored();
+  });
 });
 
 describe('ColumnSettings', () => {
@@ -146,14 +154,15 @@ describe('ColumnSettings', () => {
 
   it('says why when the cluster cannot be read', async () => {
     clearCatalog();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({}) })),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 503, json: () => Promise.resolve({}) });
+    vi.stubGlobal('fetch', fetchMock);
 
     render(<ColumnSettings />);
 
     expect(await screen.findByText(/status 503/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('says something even when the failure is not an error', async () => {
@@ -178,5 +187,79 @@ describe('ColumnSettings', () => {
     render(<ColumnSettings />);
 
     expect(screen.getByText('Reading what this cluster has…')).toBeInTheDocument();
+  });
+
+  it('does not store an old discovery answer under the replacement cluster', async () => {
+    clearCatalog();
+    useClustersStore.setState({ active: 'first' });
+    let finishFirst: (response: unknown) => void = () => undefined;
+    const first = new Promise((resolve) => {
+      finishFirst = resolve;
+    });
+    const second = {
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          categories: [
+            {
+              name: 'Network',
+              resources: [
+                {
+                  group: '',
+                  version: 'v1',
+                  resource: 'services',
+                  kind: 'Service',
+                  namespaced: true,
+                  category: 'Network',
+                },
+              ],
+            },
+          ],
+        }),
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementationOnce(() => first)
+        .mockResolvedValue(second),
+    );
+    render(<ColumnSettings />);
+
+    act(() => {
+      useClustersStore.setState({ active: 'second' });
+      bumpClusterEpoch();
+    });
+
+    expect(await screen.findByRole('option', { name: 'Service' })).toBeInTheDocument();
+    await act(async () => {
+      finishFirst({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            categories: [
+              {
+                name: 'Workloads',
+                resources: [
+                  {
+                    group: '',
+                    version: 'v1',
+                    resource: 'pods',
+                    kind: 'Pod',
+                    namespaced: true,
+                    category: 'Workloads',
+                  },
+                ],
+              },
+            ],
+          }),
+      });
+      await first;
+    });
+
+    expect(screen.queryByRole('option', { name: 'Pod' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Service' })).toBeInTheDocument();
   });
 });

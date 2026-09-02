@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ClusterStrip from '../../src/components/ClusterStrip';
 import { adoptClusters, useClustersStore } from '../../src/store/clusters';
@@ -104,6 +104,42 @@ describe('the strip of open clusters', () => {
     await waitFor(() => {
       expect(calls.some((call) => call.url.includes('/api/clusters/active'))).toBe(true);
     });
+  });
+
+  it('does not overlap cluster switches', async () => {
+    const list = listOf(MK1);
+    list.clusters.push({
+      id: 'https://p-mk3:6443',
+      context: 'p-mk3',
+      active: false,
+      color: 3,
+      reopen: true,
+      protection: 'open',
+      reachable: true,
+    });
+    let finishSwitch: (response: unknown) => void = () => undefined;
+    const switching = new Promise((resolve) => {
+      finishSwitch = resolve;
+    });
+    const fetchMock = vi.fn(() => switching);
+    vi.stubGlobal('fetch', fetchMock);
+    act(() => {
+      adoptClusters(list);
+    });
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'p-mk2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'p-mk3' }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'p-mk3' })).toBeDisabled();
+    await act(async () => {
+      finishSwitch({ ok: true, status: 200, json: () => Promise.resolve(list) });
+      await switching;
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'p-mk3' })).toBeEnabled();
   });
 
   it('does nothing when the tab in front is clicked', async () => {

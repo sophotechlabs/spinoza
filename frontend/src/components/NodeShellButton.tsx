@@ -4,6 +4,7 @@ import { fetchNodeShellSupport } from '../lib/exec';
 import { useTerminalsStore } from '../store/terminals';
 import { useNodeShell } from '../store/settings';
 import { revealPanel } from '../store/panels';
+import { useClusterEpoch } from '../store/cluster';
 
 interface NodeShellButtonProps {
   node: string;
@@ -23,9 +24,12 @@ function why(support: NodeShellSupport | null): string {
 }
 
 export default function NodeShellButton({ node }: NodeShellButtonProps) {
+  const epoch = useClusterEpoch();
   const [support, setSupport] = useState<NodeShellSupport | null>(null);
+  const [askedFor, setAskedFor] = useState('');
   const openNode = useTerminalsStore((state) => state.openNode);
   const turnedOn = useNodeShell();
+  const targetKey = `${epoch}|${node}|${String(turnedOn)}`;
 
   useEffect(() => {
     let live = true;
@@ -34,18 +38,23 @@ export default function NodeShellButton({ node }: NodeShellButtonProps) {
       .then((found) => {
         if (live) {
           setSupport(found);
+          setAskedFor(targetKey);
         }
       })
       .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [node, turnedOn]);
+  }, [node, turnedOn, targetKey, epoch]);
 
-  const ready = support !== null && support.enabled && support.allowed;
+  let visibleSupport = support;
+  if (askedFor !== targetKey) {
+    visibleSupport = null;
+  }
+  const ready = visibleSupport !== null && visibleSupport.enabled && visibleSupport.allowed;
 
   return (
-    <span title={why(support)}>
+    <span title={why(visibleSupport)}>
       <button
         type="button"
         disabled={!ready}

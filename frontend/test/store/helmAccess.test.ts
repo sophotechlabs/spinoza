@@ -1,23 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import {
   helmAccessKey,
   useHelmAccessStore,
   useHelmRefusal,
   useHelmRefusals,
 } from '../../src/store/helmAccess';
-import { useContextsStore, EMPTY_CONTEXTS } from '../../src/store/contexts';
+import { contextScope, useContextsStore, EMPTY_CONTEXTS } from '../../src/store/contexts';
 import { useHelmAccess } from '../../src/lib/useHelmAccess';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
-const releaseKey = helmAccessKey('p-mk1', 'demo', 'podinfo');
-const installKey = helmAccessKey('p-mk1', 'demo', '');
+const clusterKey = contextScope({ kubeconfig: '', name: 'p-mk1' }, 0);
+const releaseKey = helmAccessKey(clusterKey, 'demo', 'podinfo');
+const installKey = helmAccessKey(clusterKey, 'demo', '');
 
-function onCluster(name: string): void {
-  useContextsStore.getState().setList({ ...EMPTY_CONTEXTS, current: { kubeconfig: '', name } });
+function onCluster(name: string, kubeconfig = ''): void {
+  useContextsStore.getState().setList({ ...EMPTY_CONTEXTS, current: { kubeconfig, name } });
 }
 
 function reset(): void {
   useHelmAccessStore.setState({ answers: {} });
+  useClusterStore.getState().reset();
   onCluster('p-mk1');
 }
 
@@ -65,6 +68,15 @@ describe('what the cluster refuses a helm action', () => {
   it('keeps the answers for one cluster off another', () => {
     useHelmAccessStore.getState().setRefused(releaseKey, { upgrade: 'no creating secrets' });
     onCluster('p-mk2');
+
+    const { result } = renderHook(() => useHelmRefusal('demo', 'podinfo', 'upgrade'));
+
+    expect(result.current).toBeNull();
+  });
+
+  it('keeps same-named contexts from different kubeconfigs apart', () => {
+    useHelmAccessStore.getState().setRefused(releaseKey, { upgrade: 'no creating secrets' });
+    onCluster('p-mk1', '/other/config');
 
     const { result } = renderHook(() => useHelmRefusal('demo', 'podinfo', 'upgrade'));
 
@@ -209,5 +221,23 @@ describe('asking when a release is opened', () => {
     rerender();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again when the cluster epoch changes under the release', async () => {
+    const fetchMock = replies([]);
+    renderHook(() => {
+      useHelmAccess('demo', 'podinfo');
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Capability } from '../lib/access';
 import type { ObjectRef } from '../lib/types';
 import { refQuery } from '../lib/object';
-import { useContextsStore } from './contexts';
+import { useContextScope } from './contexts';
 
 export type Refusals = Partial<Record<Capability, string>>;
 
@@ -34,7 +34,7 @@ export function accessKey(context: string, ref: ObjectRef | null): string {
 }
 
 export function useRefusalsFor(ref: ObjectRef | null): Refusals {
-  const context = useContextsStore((state) => state.list.current.name);
+  const context = useContextScope();
   const key = useAccessStore((state) => state.key);
   const refused = useAccessStore((state) => state.refused);
   if (ref === null) {

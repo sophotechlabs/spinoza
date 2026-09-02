@@ -35,6 +35,7 @@ function listOf(names: string[], current: string) {
   return {
     current: { kubeconfig: '', name: current },
     kubeconfigs: [defaultKubeconfig(names)],
+    protection: 'open' as const,
   };
 }
 
@@ -148,6 +149,43 @@ describe('ContextPicker', () => {
     expect(useToastsStore.getState().toasts).toEqual([
       expect.objectContaining({ tone: 'ok', message: 'Opened p-mk1' }),
     ]);
+  });
+
+  it('does not let an older context listing undo a completed switch', async () => {
+    const user = userEvent.setup();
+    const before = listOf(['p-mk1', 'p-mk2'], 'p-mk1');
+    const after = listOf(['p-mk1', 'p-mk2'], 'p-mk2');
+    useContextsStore.getState().setList(before);
+    let finishOld!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const oldListing = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishOld = resolve;
+    });
+    let reads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: { method?: string }) => {
+        if (init?.method === 'POST') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(after) });
+        }
+        reads += 1;
+        if (reads === 1) {
+          return oldListing;
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(after) });
+      }),
+    );
+    render(<ContextPicker onSwitched={vi.fn()} />);
+
+    await pick(user, 'p-mk2');
+    expect(await screen.findByLabelText('Kubernetes context')).toHaveTextContent('p-mk2');
+    await act(async () => {
+      finishOld({ ok: true, json: () => Promise.resolve(before) });
+      await oldListing;
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText('Kubernetes context')).toHaveTextContent('p-mk2');
+    expect(useContextsStore.getState().list.current.name).toBe('p-mk2');
   });
 
   it('names the kubeconfig the chosen context came from', async () => {

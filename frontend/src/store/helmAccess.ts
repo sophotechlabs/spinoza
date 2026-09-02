@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { HelmCapability, HelmRefusals } from '../lib/helmAccess';
-import { useContextsStore } from './contexts';
+import { useContextScope } from './contexts';
 
 interface HelmAccessState {
   answers: Record<string, HelmRefusals>;
@@ -42,7 +42,7 @@ export function helmAccessKey(context: string, namespace: string, name: string):
 }
 
 export function useHelmRefusals(namespace: string, name: string): HelmRefusals {
-  const context = useContextsStore((state) => state.list.current.name);
+  const context = useContextScope();
   const key = helmAccessKey(context, namespace, name);
   const answers = useHelmAccessStore((state) => state.answers);
   return answers[key] ?? NONE;

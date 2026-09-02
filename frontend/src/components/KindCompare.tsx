@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type {
   KindComparison,
   KindDiff,
@@ -43,22 +43,54 @@ function detail(object: KindDiff): string {
   return `${String(object.lines)} lines`;
 }
 
+function scopeOf(kind: ResourceDescriptor, namespace: string, target: CompareTarget): string {
+  return JSON.stringify([
+    kind.group,
+    kind.version,
+    kind.resource,
+    namespace,
+    target.kubeconfig,
+    target.name,
+    target.namespace,
+    target.object,
+  ]);
+}
+
 export default function KindCompare({ kind, namespace, target, onOpen }: KindCompareProps) {
+  const scope = scopeOf(kind, namespace, target);
+  const latestScope = useRef(scope);
+  latestScope.current = scope;
   const [result, setResult] = useState<KindComparison | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [driftOnly, setDriftOnly] = useState(true);
+  const [heldScope, setHeldScope] = useState(scope);
+
+  if (scope !== heldScope) {
+    setHeldScope(scope);
+    setResult(null);
+    setError(null);
+    setBusy(false);
+  }
 
   async function run() {
+    const startedOn = scope;
     setBusy(true);
     setError(null);
     try {
-      setResult(await fetchKindComparison(kind, namespace, target));
+      const next = await fetchKindComparison(kind, namespace, target);
+      if (latestScope.current === startedOn) {
+        setResult(next);
+      }
     } catch (err: unknown) {
-      setResult(null);
-      setError(err instanceof Error ? err.message : 'the comparison did not run');
+      if (latestScope.current === startedOn) {
+        setResult(null);
+        setError(err instanceof Error ? err.message : 'the comparison did not run');
+      }
     } finally {
-      setBusy(false);
+      if (latestScope.current === startedOn) {
+        setBusy(false);
+      }
     }
   }
 

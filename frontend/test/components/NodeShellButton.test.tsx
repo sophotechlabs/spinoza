@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import NodeShellButton from '../../src/components/NodeShellButton';
 import { terminalsNow, useTerminalsStore } from '../../src/store/terminals';
 import { useSettingsStore } from '../../src/store/settings';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
 function support(overrides: Record<string, unknown> = {}) {
   return {
@@ -27,6 +28,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
   useTerminalsStore.getState().reset();
   useSettingsStore.setState({ nodeShell: false });
+  act(() => {
+    useClusterStore.getState().reset();
+  });
 });
 
 describe('the node shell button', () => {
@@ -116,5 +120,34 @@ describe('the node shell button', () => {
     view.rerender(<NodeShellButton node="p-mk2" />);
 
     expect(await screen.findByTitle(/Opens a root shell on p-mk2/)).toBeInTheDocument();
+  });
+
+  it('disables the old clusters answer while the replacement loads', async () => {
+    const pending = new Promise<never>(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(support()),
+      })
+      .mockImplementationOnce(() => pending);
+    vi.stubGlobal('fetch', fetchMock);
+    const view = render(<NodeShellButton node="p-mk1" />);
+    await vi.waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Node shell' })).toBeEnabled();
+    });
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
+    expect(screen.getByTitle('Checking whether a node shell can be opened')).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    view.unmount();
   });
 });

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { useObjectDetail } from '../../src/lib/useObjectDetail';
 import type { ObjectRef, Row } from '../../src/lib/types';
 import { makeRow } from '../helpers';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
 const ref: ObjectRef = {
   group: '',
@@ -41,6 +42,9 @@ function renderDetail(props: Props) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  act(() => {
+    useClusterStore.getState().reset();
+  });
 });
 
 describe('useObjectDetail', () => {
@@ -113,6 +117,30 @@ describe('useObjectDetail', () => {
     rerender({ target: { ...ref, name: 'other' }, live: null });
 
     expect(result.current.detail).toBeNull();
+  });
+
+  it('drops the old object as soon as the cluster changes', async () => {
+    const pending = new Promise<never>(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(detail) })
+      .mockImplementationOnce(() => pending);
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, unmount } = renderHook(() => useObjectDetail(ref, null));
+    await waitFor(() => {
+      expect(result.current.detail).toEqual(detail);
+    });
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await Promise.resolve();
+    });
+
+    expect(result.current.detail).toBeNull();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    unmount();
   });
 });
 

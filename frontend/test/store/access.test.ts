@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { accessKey, useAccessStore, useRefusal, useRefusalsFor } from '../../src/store/access';
-import { useContextsStore, EMPTY_CONTEXTS } from '../../src/store/contexts';
+import { contextScope, useContextsStore, EMPTY_CONTEXTS } from '../../src/store/contexts';
 import { useAccess } from '../../src/lib/useAccess';
 import type { ObjectRef } from '../../src/lib/types';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
 const pod: ObjectRef = {
   group: '',
@@ -15,14 +16,15 @@ const pod: ObjectRef = {
 
 const otherPod: ObjectRef = { ...pod, name: 'calico-node-77xyz' };
 
-const podKey = accessKey('p-mk1', pod);
+const podKey = accessKey(contextScope({ kubeconfig: '', name: 'p-mk1' }, 0), pod);
 
-function onCluster(name: string): void {
-  useContextsStore.getState().setList({ ...EMPTY_CONTEXTS, current: { kubeconfig: '', name } });
+function onCluster(name: string, kubeconfig = ''): void {
+  useContextsStore.getState().setList({ ...EMPTY_CONTEXTS, current: { kubeconfig, name } });
 }
 
 function reset(): void {
   useAccessStore.getState().forget();
+  useClusterStore.getState().reset();
   onCluster('p-mk1');
 }
 
@@ -173,12 +175,13 @@ describe('asking on selection', () => {
 describe('the same object in another cluster', () => {
   beforeEach(() => {
     useAccessStore.getState().forget();
+    useClusterStore.getState().reset();
     onCluster('p-mk1');
     vi.unstubAllGlobals();
   });
 
   it('does not reuse the answers from the cluster they were asked in', () => {
-    useAccessStore.getState().setRefused(accessKey('p-mk1', pod), { logs: 'no logs here' });
+    useAccessStore.getState().setRefused(podKey, { logs: 'no logs here' });
 
     onCluster('gke-staging');
     const { result } = renderHook(() => useRefusal(pod, 'logs'));
@@ -202,6 +205,37 @@ describe('the same object in another cluster', () => {
 
     onCluster('gke-staging');
     rerender();
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('does not reuse a same-named context from another kubeconfig', () => {
+    useAccessStore.getState().setRefused(podKey, { logs: 'no logs here' });
+
+    onCluster('p-mk1', '/other/config');
+    const { result } = renderHook(() => useRefusal(pod, 'logs'));
+
+    expect(result.current).toBeNull();
+  });
+
+  it('asks again when the cluster epoch changes without changing context', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ refused: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderHook(() => {
+      useAccess(pod);
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      bumpClusterEpoch();
+    });
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2);

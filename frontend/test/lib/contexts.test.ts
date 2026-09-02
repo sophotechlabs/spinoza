@@ -13,6 +13,7 @@ import {
 } from '../../src/lib/contexts';
 import type { ContextList } from '../../src/lib/types';
 import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
+import { bumpClusterEpoch } from '../../src/store/cluster';
 
 function stub(body: unknown, ok = true, status = 200) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -67,6 +68,43 @@ describe('a cluster announcing itself', () => {
     await contextAnnounced('p-mk2');
 
     expect(useContextsStore.getState().list).toBe(list);
+  });
+
+  it('does not overwrite a context list changed while an announcement was loading', async () => {
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const response = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => response),
+    );
+    const loading = contextAnnounced('p-mk1');
+    const newer = { ...list, current: { kubeconfig: '', name: 'p-mk2' } };
+    useContextsStore.getState().setList(newer);
+
+    finish({ ok: true, json: () => Promise.resolve(list) });
+    await loading;
+
+    expect(useContextsStore.getState().list).toBe(newer);
+  });
+
+  it('does not apply an announcement from the previous cluster epoch', async () => {
+    let finish!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const response = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finish = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => response),
+    );
+    const loading = contextAnnounced('p-mk1');
+    bumpClusterEpoch();
+
+    finish({ ok: true, json: () => Promise.resolve(list) });
+    await loading;
+
+    expect(useContextsStore.getState().list).toBe(EMPTY_CONTEXTS);
   });
 });
 

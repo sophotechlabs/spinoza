@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BulkBar from '../../src/components/BulkBar';
 import type { ObjectRef } from '../../src/lib/types';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
 function podRef(name: string): ObjectRef {
   return { group: '', version: 'v1', resource: 'pods', namespace: 'prod', name };
@@ -86,6 +87,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   useToastsStore.getState().clear();
+  act(() => {
+    useClusterStore.getState().reset();
+  });
 });
 
 describe('BulkBar', () => {
@@ -346,6 +350,56 @@ describe('BulkBar asking what the cluster allows', () => {
 
     expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('drops the question when the selected kind changes under the same name', async () => {
+    const user = userEvent.setup();
+    stub(ALLOWED);
+    const { view } = renderBar([podRef('web')]);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await screen.findByRole('button', { name: 'Confirm' });
+
+    view.rerender(
+      <BulkBar
+        kind="Deployment"
+        targets={[deploymentRef('web')]}
+        onDone={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('drops an access answer that returns after the cluster changes', async () => {
+    const user = userEvent.setup();
+    let answer: (body: unknown) => void = noop;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/access') {
+          return new Promise((resolve) => {
+            answer = resolve;
+          });
+        }
+        return ok({});
+      }),
+    );
+    renderBar([podRef('web')]);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByText('Checking what the cluster allows…')).toBeInTheDocument();
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    await act(async () => {
+      answer({ ok: true, json: () => Promise.resolve(ALLOWED) });
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
   });
 
   it('never shows an answer about a selection that has been left behind', async () => {

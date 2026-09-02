@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { fetchHelmAccess, helmRefusalsOf } from './helmAccess';
 import { helmAccessKey, useHelmAccessStore } from '../store/helmAccess';
-import { useContextsStore } from '../store/contexts';
+import { useContextScope } from '../store/contexts';
 
 export function useHelmAccess(namespace: string, name: string): void {
-  const context = useContextsStore((state) => state.list.current.name);
+  const context = useContextScope();
   const key = helmAccessKey(context, namespace, name);
 
   useEffect(() => {

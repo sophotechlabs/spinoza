@@ -10,6 +10,7 @@ import type {
 import { failure } from './object';
 import { SLOW_REQUEST_TIMEOUT_MS, request } from './http';
 import { useContextsStore } from '../store/contexts';
+import { useClusterStore } from '../store/cluster';
 
 export interface ContextEntry {
   cluster: string;
@@ -120,15 +121,31 @@ export async function fetchContexts(): Promise<ContextList> {
   return normalize((await response.json()) as WireContexts);
 }
 
+let contextAnnouncementRequest = 0;
+
 export async function contextAnnounced(name: string): Promise<void> {
+  contextAnnouncementRequest += 1;
+  const token = contextAnnouncementRequest;
   if (name === '') {
     return;
   }
-  if (useContextsStore.getState().list.current.name === name) {
+  const before = useContextsStore.getState().list;
+  const epoch = useClusterStore.getState().epoch;
+  if (before.current.name === name) {
     return;
   }
   try {
-    useContextsStore.getState().setList(await fetchContexts());
+    const found = await fetchContexts();
+    if (contextAnnouncementRequest !== token) {
+      return;
+    }
+    if (useContextsStore.getState().list !== before) {
+      return;
+    }
+    if (useClusterStore.getState().epoch !== epoch) {
+      return;
+    }
+    useContextsStore.getState().setList(found);
   } catch {
     return;
   }

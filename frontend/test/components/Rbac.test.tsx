@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Rbac from '../../src/components/Rbac';
 import { useToastsStore } from '../../src/store/toasts';
 import type { RBACIndex, RBACSubject } from '../../src/lib/types';
+import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
 function subject(extra: Partial<RBACSubject> = {}): RBACSubject {
   return {
@@ -38,6 +39,9 @@ function stub(body: RBACIndex, who?: RBACIndex) {
 afterEach(() => {
   vi.unstubAllGlobals();
   useToastsStore.setState({ toasts: [], history: [] });
+  act(() => {
+    useClusterStore.getState().reset();
+  });
 });
 
 describe('who can do what', () => {
@@ -157,6 +161,25 @@ describe('who can do what', () => {
     await user.click(screen.getByRole('button', { name: 'Everyone' }));
 
     expect(await screen.findByText('2 subjects')).toBeTruthy();
+  });
+
+  it('drops a filtered answer when the cluster changes', async () => {
+    const user = userEvent.setup();
+    stub({ subjects: [subject(), subject({ name: 'other', label: 'other' })] }, { subjects: [] });
+    const view = render(<Rbac />);
+    await screen.findByText('2 subjects');
+    await user.type(screen.getByLabelText('Verb'), 'create');
+    await user.type(screen.getByLabelText('Resource'), 'pods');
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+    await screen.findByText('0 can');
+
+    act(() => {
+      bumpClusterEpoch();
+    });
+
+    expect(await screen.findByText('2 subjects')).toBeTruthy();
+    expect(screen.queryByText('0 can')).not.toBeInTheDocument();
+    view.unmount();
   });
 
   it('says so when the question fails', async () => {

@@ -8,6 +8,7 @@ import type {
   ObjectRef,
 } from '../lib/types';
 import { fetchGitopsAppGraph, useGitopsApp } from '../lib/gitopsApp';
+import { refQuery } from '../lib/object';
 import type { ArgoResourceRef } from '../lib/argoActions';
 import { runArgoAction } from '../lib/argoActions';
 import { confirmName } from '../lib/contexts';
@@ -337,7 +338,10 @@ function Topology({
 }) {
   const [graph, setGraph] = useState<Graph | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [graphAskedFor, setGraphAskedFor] = useState('');
+  const [errorAskedFor, setErrorAskedFor] = useState('');
   const [reloads, setReloads] = useState(0);
+  const targetKey = `${epoch}|${refQuery(target)}`;
 
   useEffect(() => {
     let mounted = true;
@@ -345,25 +349,36 @@ function Topology({
       .then((found) => {
         if (mounted) {
           setGraph(found);
+          setGraphAskedFor(targetKey);
           setError(null);
         }
       })
       .catch((err: unknown) => {
         if (mounted) {
           setError(errorMessage(err, 'the graph request failed'));
+          setErrorAskedFor(targetKey);
         }
       });
     return () => {
       mounted = false;
     };
-  }, [target, reloads, epoch]);
+  }, [target, targetKey, reloads, epoch]);
+
+  let visibleGraph = graph;
+  if (graphAskedFor !== targetKey) {
+    visibleGraph = null;
+  }
+  let visibleError = error;
+  if (errorAskedFor !== targetKey) {
+    visibleError = null;
+  }
 
   return (
     <GraphCanvas
       what="The managed resources"
       empty="This object manages nothing yet."
-      data={graph}
-      error={error}
+      data={visibleGraph}
+      error={visibleError}
       onRetry={() => {
         setReloads((value) => value + 1);
       }}

@@ -4,6 +4,7 @@ import { descriptorKey } from '../lib/discovery';
 import { rememberCatalog, useCategories } from '../store/catalog';
 import { fetchResources } from '../lib/discovery';
 import { readColumns, writeColumns } from '../lib/settings';
+import { useClusterEpoch } from '../store/cluster';
 
 const MAX_COLUMNS = 8;
 
@@ -24,13 +25,19 @@ function kindLabel(resource: ResourceDescriptor): string {
 }
 
 export default function ColumnSettings() {
+  const epoch = useClusterEpoch();
   const kinds = everyKind(useCategories());
-  const [looking, setLooking] = useState(false);
   const [failed, setFailed] = useState('');
   const [held, setHeld] = useState<Record<string, CustomColumn[]>>(() => readColumns());
   const [kind, setKind] = useState('');
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
+  const [lastEpoch, setLastEpoch] = useState(epoch);
+
+  if (epoch !== lastEpoch) {
+    setLastEpoch(epoch);
+    setFailed('');
+  }
 
   const chosen =
     kind === '' ? (kinds[0] ?? null) : (kinds.find((one) => descriptorKey(one) === kind) ?? null);
@@ -38,25 +45,30 @@ export default function ColumnSettings() {
   const columns = held[key] ?? [];
 
   useEffect(() => {
-    if (kinds.length > 0 || looking) {
+    if (kinds.length > 0) {
       return;
     }
-    setLooking(true);
+    let live = true;
     fetchResources()
       .then((catalog) => {
-        rememberCatalog(catalog.categories);
+        if (live) {
+          rememberCatalog(catalog.categories);
+        }
       })
       .catch((reason: unknown) => {
+        if (!live) {
+          return;
+        }
         if (reason instanceof Error) {
           setFailed(reason.message);
           return;
         }
         setFailed('the discovery request failed');
-      })
-      .finally(() => {
-        setLooking(false);
       });
-  }, [kinds.length, looking]);
+    return () => {
+      live = false;
+    };
+  }, [kinds.length, epoch]);
 
   function save(next: Record<string, CustomColumn[]>) {
     setHeld(next);

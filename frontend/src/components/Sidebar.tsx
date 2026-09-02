@@ -243,6 +243,8 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   const [capped, setCapped] = useState<string[]>([]);
   const [byPhase, setByPhase] = useState<string[]>([]);
   const discoveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestEpoch = useRef(epoch);
+  latestEpoch.current = epoch;
 
   useEffect(() => {
     let mounted = true;
@@ -255,6 +257,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     setCapped([]);
     setByPhase([]);
     setCountsError(null);
+    setRetrying(false);
     const again = () => {
       if (attempt >= MAX_DISCOVERY_ATTEMPTS) {
         return;
@@ -322,20 +325,28 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   }
 
   async function retry() {
+    const startedOn = epoch;
     stopDiscoveryRetry();
     setRetrying(true);
     try {
       const catalog = await refreshResources();
+      if (latestEpoch.current !== startedOn) {
+        return;
+      }
       setCategories(catalog.categories);
       rememberCatalog(catalog.categories);
       setError(catalog.error ?? null);
+      await loadCounts(() => latestEpoch.current === startedOn);
     } catch (err: unknown) {
-      setError(errorMessage(err, 'discovery request failed'));
-      setRetrying(false);
+      if (latestEpoch.current === startedOn) {
+        setError(errorMessage(err, 'discovery request failed'));
+      }
       return;
+    } finally {
+      if (latestEpoch.current === startedOn) {
+        setRetrying(false);
+      }
     }
-    await loadCounts(() => true);
-    setRetrying(false);
   }
 
   function toggle(name: string) {

@@ -19,8 +19,10 @@ import type { PodTarget } from '../../src/lib/pods';
 import { useTerminalsStore } from '../../src/store/terminals';
 import { accessKey, useAccessStore } from '../../src/store/access';
 import { capabilities } from '../helpers';
-import { EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
+import { contextScope, EMPTY_CONTEXTS, useContextsStore } from '../../src/store/contexts';
 import { podRef } from '../../src/lib/pods';
+
+const clusterScope = contextScope({ kubeconfig: '', name: 'p-mk1' }, 0);
 
 function pod(overrides: Partial<PodTarget> = {}): PodTarget {
   return { namespace: 'prod', name: 'web', containers: ['app'], ...overrides };
@@ -255,7 +257,7 @@ describe('a node shell tab', () => {
 });
 
 describe('a shell the cluster would refuse', () => {
-  const podKey = accessKey('p-mk1', podRef(pod()));
+  const podKey = accessKey(clusterScope, podRef(pod()));
 
   beforeEach(() => {
     useAccessStore.getState().forget();

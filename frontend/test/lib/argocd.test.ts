@@ -298,6 +298,33 @@ describe('useArgo', () => {
     holdNext();
   });
 
+  it('hides the previous clusters dashboard while the replacement loads', async () => {
+    const pending = new Promise<never>(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(dashboard({ apps: [makeApp('first')] })),
+      })
+      .mockImplementationOnce(() => pending);
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, unmount } = renderHook(() => useArgo());
+    await waitFor(() => {
+      expect(result.current.data?.apps[0].name).toBe('first');
+    });
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await Promise.resolve();
+    });
+
+    expect(result.current.data).toBeNull();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    unmount();
+  });
+
   it('does not overlap scheduled refreshes', async () => {
     vi.useFakeTimers();
     let finishFirst!: (response: { ok: boolean; json: () => Promise<ArgoDashboard> }) => void;

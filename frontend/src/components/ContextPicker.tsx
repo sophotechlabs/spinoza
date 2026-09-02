@@ -68,6 +68,8 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   const [attempt, setAttempt] = useState(0);
   const [managing, setManaging] = useState(false);
   const menuRef = useRef<HTMLDetailsElement | null>(null);
+  const listRequest = useRef(0);
+  const busyRef = useRef(false);
 
   useDismissMenu(menuRef);
 
@@ -76,16 +78,18 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    const generation = listRequest.current + 1;
+    listRequest.current = generation;
     fetchContexts()
       .then((found) => {
-        if (!live) {
+        if (!live || listRequest.current !== generation) {
           return;
         }
         setList(found);
         setLoadError(found.error ?? null);
       })
       .catch((err: unknown) => {
-        if (!live) {
+        if (!live || listRequest.current !== generation) {
           return;
         }
         setLoadError(errorMessage(err, 'the context list could not be loaded'));
@@ -105,13 +109,15 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
     let live = true;
     let inFlight = false;
     const timer = setInterval(() => {
-      if (busy || inFlight || sessionExpired()) {
+      if (busyRef.current || inFlight || sessionExpired()) {
         return;
       }
       inFlight = true;
+      const generation = listRequest.current + 1;
+      listRequest.current = generation;
       fetchContexts()
         .then((found) => {
-          if (live) {
+          if (live && listRequest.current === generation) {
             setList(found);
           }
         })
@@ -140,26 +146,40 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
 
   async function handleChoose(entry: ContextEntry) {
     closeMenu();
-    if (busy) {
+    if (busyRef.current) {
       return;
     }
+    busyRef.current = true;
     setBusy(true);
     setError(null);
+    const generation = listRequest.current + 1;
+    listRequest.current = generation;
     try {
       await openCluster(entry.kubeconfig, entry.name);
-      setList(await fetchContexts());
+      const found = await fetchContexts();
+      if (listRequest.current !== generation) {
+        return;
+      }
+      setList(found);
       notifyOk(`Opened ${entry.name}`);
       onSwitched();
     } catch (err: unknown) {
+      if (listRequest.current !== generation) {
+        return;
+      }
       const message = errorMessage(err, 'opening the cluster failed');
       setError(message);
       notifyError(`Opening ${entry.name}: ${message}`);
     } finally {
-      setBusy(false);
+      if (listRequest.current === generation) {
+        busyRef.current = false;
+        setBusy(false);
+      }
     }
   }
 
   function handleChanged(found: ContextList) {
+    listRequest.current += 1;
     setList(found);
     setLoadError(found.error ?? null);
   }

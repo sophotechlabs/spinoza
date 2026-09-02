@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ObjectDetail, ObjectRef, Row } from './types';
 import { fetchObject, refQuery } from './object';
+import { useClusterEpoch } from '../store/cluster';
 
 export interface ObjectDetailState {
   detail: ObjectDetail | null;
@@ -24,13 +25,14 @@ function errorMessage(err: unknown): string {
 }
 
 export function useObjectDetail(target: ObjectRef | null, live: Row | null): ObjectDetailState {
+  const epoch = useClusterEpoch();
   const [detail, setDetail] = useState<ObjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const [reloads, setReloads] = useState(0);
   const [watched, setWatched] = useState(live);
 
-  const targetKey = keyOf(target);
+  const targetKey = `${epoch}|${keyOf(target)}`;
   const [lastKey, setLastKey] = useState(targetKey);
   if (targetKey !== lastKey) {
     setLastKey(targetKey);
@@ -75,7 +77,7 @@ export function useObjectDetail(target: ObjectRef | null, live: Row | null): Obj
     return () => {
       mounted = false;
     };
-  }, [target, reloads]);
+  }, [target, reloads, epoch]);
 
   function reload() {
     setReloads((value) => value + 1);

@@ -237,6 +237,64 @@ describe('watching one application', () => {
     });
   });
 
+  it('hides the previous application while another target loads', async () => {
+    const other: ObjectRef = { ...ref, name: 'other' };
+    let finishNext!: (response: { ok: boolean; json: () => Promise<typeof full> }) => void;
+    const next = new Promise<{ ok: boolean; json: () => Promise<typeof full> }>((resolve) => {
+      finishNext = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(full) })
+      .mockImplementationOnce(() => next);
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, rerender } = renderHook(
+      ({ target }: { target: ObjectRef }) => useGitopsApp(target),
+      { initialProps: { target: ref } },
+    );
+    await waitFor(() => {
+      expect(result.current.data?.name).toBe('podinfo');
+    });
+
+    rerender({ target: other });
+
+    expect(result.current.data).toBeNull();
+    await act(async () => {
+      finishNext({
+        ok: true,
+        json: () => Promise.resolve({ ...full, ref: other, name: 'other' }),
+      });
+      await next;
+    });
+    await waitFor(() => {
+      expect(result.current.data?.name).toBe('other');
+    });
+  });
+
+  it('hides the previous clusters application while the replacement loads', async () => {
+    const pending = new Promise<never>(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(full) })
+      .mockImplementationOnce(() => pending);
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, unmount } = renderHook(() => useGitopsApp(ref));
+    await waitFor(() => {
+      expect(result.current.data?.name).toBe('podinfo');
+    });
+
+    await act(async () => {
+      bumpClusterEpoch();
+      await Promise.resolve();
+    });
+
+    expect(result.current.data).toBeNull();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    unmount();
+  });
+
   it('holds nothing when there is no object to watch', () => {
     const { result } = renderHook(() => useGitopsApp(null));
 

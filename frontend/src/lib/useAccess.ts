@@ -3,10 +3,10 @@ import type { ObjectRef } from './types';
 import { fetchAccess, refusalsOf } from './access';
 import { refQuery } from './object';
 import { accessKey, useAccessStore } from '../store/access';
-import { useContextsStore } from '../store/contexts';
+import { useContextScope } from '../store/contexts';
 
 export function useAccess(target: ObjectRef | null): void {
-  const context = useContextsStore((state) => state.list.current.name);
+  const context = useContextScope();
   const key = accessKey(context, target);
   const query = target === null ? '' : refQuery(target);
 

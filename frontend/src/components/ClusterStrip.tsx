@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { activateCluster, closeCluster, clusterFailure } from '../lib/clusters';
 import { colorVar } from '../lib/clusterColor';
 import { attachedTo, forgetTab, tabWidth } from '../lib/tabs';
@@ -61,6 +61,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
   const active = useActiveCluster();
   const health = useClusterHealthStore((state) => state.byCluster);
   const [busy, setBusy] = useState(false);
+  const working = useRef(false);
   const [asking, setAsking] = useState<Tab | null>(null);
   const [painting, setPainting] = useState('');
 
@@ -82,19 +83,28 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
   }
 
   async function show(tab: Tab) {
-    if (tab.id === active) {
+    if (tab.id === active || working.current) {
       return;
     }
+    working.current = true;
+    setBusy(true);
     try {
       await activateCluster(tab.id);
     } catch (err: unknown) {
       notifyError(`Switching to ${tab.context}: ${clusterFailure(err, 'the request failed')}`);
       return;
+    } finally {
+      working.current = false;
+      setBusy(false);
     }
     onShown();
   }
 
   async function drop(tab: Tab) {
+    if (working.current) {
+      return;
+    }
+    working.current = true;
     setAsking(null);
     setBusy(true);
     try {
@@ -104,6 +114,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
     } catch (err: unknown) {
       notifyError(`Closing ${tab.context}: ${clusterFailure(err, 'the request failed')}`);
     } finally {
+      working.current = false;
       setBusy(false);
     }
   }
@@ -147,8 +158,9 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
                 type="button"
                 aria-current={tab.id === active}
                 title={tab.id}
+                disabled={busy}
                 onClick={() => void show(tab)}
-                className="truncate"
+                className="truncate disabled:text-fg-subtle"
               >
                 {nameOf(tab)}
               </button>
