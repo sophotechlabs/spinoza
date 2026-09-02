@@ -88,6 +88,25 @@ func TestTheDefaultKubeconfigIsAlwaysListedFirst(t *testing.T) {
 	}
 }
 
+func TestTheDefaultKubeconfigUsesItsPublicEmptyPath(t *testing.T) {
+	fallback := writeFile(t, "config", oneContext)
+	sources := newSources(t, fallback)
+
+	if got := sources.PublicPath(fallback); got != "" {
+		t.Fatalf("public path = %q, want the default source's empty path", got)
+	}
+}
+
+func TestAnAddedKubeconfigKeepsItsPublicPath(t *testing.T) {
+	fallback := writeFile(t, "config", oneContext)
+	other := writeFile(t, "other.yaml", otherContext)
+	sources := newSources(t, fallback)
+
+	if got := sources.PublicPath(other); got != other {
+		t.Fatalf("public path = %q, want %q", got, other)
+	}
+}
+
 func TestAKubeconfigRememberedBeforeItBecameTheDefaultIsListedOnce(t *testing.T) {
 	fallback := writeFile(t, "config", oneContext)
 	t.Setenv("KUBECONFIG", fallback)

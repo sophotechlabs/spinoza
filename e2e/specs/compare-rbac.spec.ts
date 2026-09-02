@@ -29,20 +29,21 @@ test('the permission index names subjects and where their grants apply', async (
 
 test('asking who can read pods returns concrete grants', async ({ page }) => {
   await openView(page, 'rbac');
-  await page.getByLabel('Verb').fill('get');
-  await page.getByLabel('Resource').fill('pods');
-  await page.getByLabel('Namespace').fill(NAMESPACE);
+  await page.getByRole('textbox', { name: 'Verb', exact: true }).fill('get');
+  await page.getByRole('textbox', { name: 'Resource', exact: true }).fill('pods');
+  await page.getByRole('textbox', { name: 'Namespace', exact: true }).fill(NAMESPACE);
   await page.getByRole('button', { name: 'Ask', exact: true }).click();
   await expect(page.getByText(/ can$/).first()).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole('button', { name: 'Everyone', exact: true })).toBeEnabled();
 });
 
-test('an impossible permission question answers nobody', async ({ page }) => {
+test('wildcard grants cover a resource the cluster does not know', async ({ page }) => {
   await openView(page, 'rbac');
-  await page.getByLabel('Verb').fill('teleport');
-  await page.getByLabel('Resource').fill('planets');
+  await page.getByRole('textbox', { name: 'Verb', exact: true }).fill('teleport');
+  await page.getByRole('textbox', { name: 'Resource', exact: true }).fill('planets');
   await page.getByRole('button', { name: 'Ask', exact: true }).click();
-  await expect(page.getByText('Nobody.', { exact: true })).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText('system:masters', { exact: true })).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText('cluster-admin', { exact: true }).first()).toBeVisible();
 });
 
 test('compare explains that a second context is required', async ({ page }) => {
@@ -52,7 +53,9 @@ test('compare explains that a second context is required', async ({ page }) => {
   await expect(page.getByText(/Comparing needs a second context/)).toBeVisible();
 });
 
-test('object comparison reads both clusters and renders their actual difference', async ({ page }) => {
+test('object comparison reads both clusters and renders their actual difference', async ({
+  page,
+}) => {
   kubectlSoft(['-n', NAMESPACE, 'delete', 'configmap', COMPARED, '--ignore-not-found']);
   kubectl(['-n', NAMESPACE, 'create', 'configmap', COMPARED, '--from-literal=side=primary']);
   const namespace = kubectlSecond([

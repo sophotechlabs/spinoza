@@ -65,6 +65,7 @@ type Kubeconfigs interface {
 	Add(path string) error
 	Remove(path string) error
 	Resolve(path string) (string, error)
+	PublicPath(path string) string
 }
 
 type Cluster struct {
@@ -160,6 +161,7 @@ func (c *Cluster) Contexts() api.ContextList {
 	failed := c.startErr
 	active := c.active
 	c.mu.Unlock()
+	current.Kubeconfig = c.sources.PublicPath(current.Kubeconfig)
 	return api.ContextList{
 		Current:     current,
 		Error:       failed,

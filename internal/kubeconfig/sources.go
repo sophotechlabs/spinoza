@@ -56,6 +56,13 @@ func (s *Sources) isDefault(path string) bool {
 	return found
 }
 
+func (s *Sources) PublicPath(path string) string {
+	if s.isDefault(path) {
+		return ""
+	}
+	return path
+}
+
 func read(entry api.Kubeconfig, file string) api.Kubeconfig {
 	entry.Contexts = []api.KubeContext{}
 	contexts, err := kube.Read(file)

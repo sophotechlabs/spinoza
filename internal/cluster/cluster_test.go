@@ -45,6 +45,7 @@ func (s *stubProtection) Set(server string, protected bool) error {
 
 type stubSources struct {
 	entries   []api.Kubeconfig
+	public    map[string]string
 	added     []string
 	removed   []string
 	addErr    error
@@ -65,7 +66,7 @@ func (s *pausedSources) List() []api.Kubeconfig {
 }
 
 func newStubSources() *stubSources {
-	return &stubSources{entries: []api.Kubeconfig{{
+	return &stubSources{public: map[string]string{}, entries: []api.Kubeconfig{{
 		Label: "default",
 		Contexts: []api.KubeContext{
 			{Name: "alpha", Cluster: "c1"},
@@ -76,6 +77,14 @@ func newStubSources() *stubSources {
 
 func (s *stubSources) List() []api.Kubeconfig {
 	return s.entries
+}
+
+func (s *stubSources) PublicPath(path string) string {
+	shown, found := s.public[path]
+	if found {
+		return shown
+	}
+	return path
 }
 
 func (s *stubSources) Add(path string) error {
@@ -310,6 +319,31 @@ func TestContextsReportsTheCurrentSelection(t *testing.T) {
 	}
 	if len(list.Kubeconfigs) != 1 {
 		t.Fatalf("kubeconfigs = %v, want the ones spinoza reads", list.Kubeconfigs)
+	}
+}
+
+func TestContextsUsesThePublicIdentityOfTheDefaultKubeconfig(t *testing.T) {
+	rec := &recorder{}
+	sources := newStubSources()
+	sources.public["/default.yaml"] = ""
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cluster := newCluster(
+		ctx,
+		rec.build,
+		sources,
+		newStubProtection(),
+		testOpenTimeout,
+		api.ContextRef{Kubeconfig: "/default.yaml", Name: "alpha"},
+	)
+
+	current := cluster.Contexts().Current
+
+	if current.Kubeconfig != "" {
+		t.Fatalf("current kubeconfig = %q, want its public empty path", current.Kubeconfig)
+	}
+	if current.Name != "alpha" {
+		t.Fatalf("current context = %q, want alpha", current.Name)
 	}
 }
 
