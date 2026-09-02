@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.27.4](https://github.com/sophotechlabs/spinoza/compare/v1.27.3...v1.27.4) (2026-09-02)
+
+
+### Bug Fixes
+
+* **atomicfile:** reject incomplete replacements ([514e5e2](https://github.com/sophotechlabs/spinoza/commit/514e5e23cb47628af515bff2467685fa59615663))
+* **ci:** rerun all release PR checks ([9f8379f](https://github.com/sophotechlabs/spinoza/commit/9f8379f428f2c5387a491dbe71f4f88ee216c944))
+* **helm:** harden paginated release reads ([b9d4ad1](https://github.com/sophotechlabs/spinoza/commit/b9d4ad149d8497c607a8d983a0af8095d45823cb))
+* **helm:** load release history lazily ([82bbfd4](https://github.com/sophotechlabs/spinoza/commit/82bbfd470759b1d8cb67216dd12855390c01142b))
+* **helm:** reject incomplete values files ([2847cc7](https://github.com/sophotechlabs/spinoza/commit/2847cc708defd30f2f2f19f3b5f8c40da6913ab4))
+* **issues:** preserve revision characters ([c1a0f56](https://github.com/sophotechlabs/spinoza/commit/c1a0f56751c10e4a92841996590066088fc49b0a))
+* **issues:** use readable duration labels ([6b8d7fd](https://github.com/sophotechlabs/spinoza/commit/6b8d7fdf75f03f83120d18e9cf6118823dfad32e))
+* **overview:** reject stalled warning pagination ([4fe06fa](https://github.com/sophotechlabs/spinoza/commit/4fe06fa919028163864653ff8d9f462cf056d310))
+* **prom:** discard non-finite samples ([3b02491](https://github.com/sophotechlabs/spinoza/commit/3b02491df360df924dbbe549368786889cdbd3d2))
+* **traffic:** keep aggregated rates finite ([1058bd0](https://github.com/sophotechlabs/spinoza/commit/1058bd095676263038d73d7d846635fbd9ec3963))
+
+
+### Tests
+
+* **auth:** cover issuer endpoint rewriting ([cb320b1](https://github.com/sophotechlabs/spinoza/commit/cb320b144ab59cf1cdf87658f18fc161f46a4a6d))
+* **cluster:** cover degraded store startup ([67a6391](https://github.com/sophotechlabs/spinoza/commit/67a6391654ab8ef5642f8cb6e4efa2b033f3c007))
+* **filetx:** cover inspected path open failure ([5a303aa](https://github.com/sophotechlabs/spinoza/commit/5a303aa6770d48adcd827fb35f2de253b9f37ac3))
+* **kubeconfig:** cover missing working directory ([9a15d3b](https://github.com/sophotechlabs/spinoza/commit/9a15d3b3398a3518042daa77491ae8cebf2bb1b3))
+* **kubeconfig:** make path failure deterministic ([48faff0](https://github.com/sophotechlabs/spinoza/commit/48faff0333c7c57bfac1eeefd898f6daa8715fa3))
+* **kube:** cover partial rate limit defaults ([2e36614](https://github.com/sophotechlabs/spinoza/commit/2e36614ade6d10e57695b099e9f4b97c1ee25250))
+* **server:** cover fleet cancellation boundaries ([a857870](https://github.com/sophotechlabs/spinoza/commit/a857870935750d6a5bb8d7413efd03adbd50d828))
+* **toolpath:** cover rejected environment paths ([b637ec8](https://github.com/sophotechlabs/spinoza/commit/b637ec8883935ad44051e9b6abf3765a2ac3be55))
+* **update:** cover installer script persistence failures ([2f8aaa7](https://github.com/sophotechlabs/spinoza/commit/2f8aaa782982884d2181f0485dfba8d6e2a6462b))
+
 ## [1.27.3](https://github.com/sophotechlabs/spinoza/compare/v1.27.2...v1.27.3) (2026-09-02)
 
 
