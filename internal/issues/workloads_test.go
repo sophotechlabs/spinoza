@@ -130,6 +130,9 @@ func TestReplicasShortOfDesiredAreReportedAfterTheGrace(t *testing.T) {
 	if row.Title != "NotEnoughReplicas" || !contains(row.Detail, "1 of 3") {
 		t.Fatalf("row = %+v, want the replica shortfall", row)
 	}
+	if !contains(row.Detail, "longer than 2m") {
+		t.Fatalf("detail = %q, want the grace in interface units", row.Detail)
+	}
 	if row.Severity != api.SeverityDegraded {
 		t.Fatalf("severity = %q, want degraded while one replica serves", row.Severity)
 	}

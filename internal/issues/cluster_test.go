@@ -187,7 +187,7 @@ func terminating(kind, name string, ago time.Duration, grace int64, finalizers [
 }
 
 func TestAPodStuckTerminatingIsReportedOnceItsGraceIsSpent(t *testing.T) {
-	snap := snapshotOf(terminating(kindPod, "api", 20*time.Minute, 30, []string{"kubernetes.io/pvc-protection"}))
+	snap := snapshotOf(terminating(kindPod, "api", 19*time.Minute+31*time.Second, 30, []string{"kubernetes.io/pvc-protection"}))
 
 	found := terminatingFindings(snap, testNow)
 
@@ -196,6 +196,9 @@ func TestAPodStuckTerminatingIsReportedOnceItsGraceIsSpent(t *testing.T) {
 	}
 	if !contains(found[0].detail, "kubernetes.io/pvc-protection") {
 		t.Fatalf("detail was %q, want the finalizer named", found[0].detail)
+	}
+	if !contains(found[0].detail, "20m ago") {
+		t.Fatalf("detail was %q, want the elapsed time in interface units", found[0].detail)
 	}
 }
 
@@ -372,7 +375,7 @@ func certificate(name, notAfter string) object {
 }
 
 func TestACertificateNearingItsEndIsReported(t *testing.T) {
-	snap := snapshotOf(certificate("wildcard", testNow.Add(72*time.Hour).Format(time.RFC3339)))
+	snap := snapshotOf(certificate("wildcard", testNow.Add(71*time.Hour+31*time.Minute).Format(time.RFC3339)))
 
 	found := expiryFindings(snap, testNow)
 
@@ -382,10 +385,13 @@ func TestACertificateNearingItsEndIsReported(t *testing.T) {
 	if found[0].severity != severityDegraded {
 		t.Fatalf("severity was %d, want degraded", found[0].severity)
 	}
+	if found[0].detail != "the certificate is valid for another 3d" {
+		t.Fatalf("detail = %q, want the remaining days", found[0].detail)
+	}
 }
 
 func TestACertificateAlreadyPastItsEndIsFatal(t *testing.T) {
-	snap := snapshotOf(certificate("wildcard", testNow.Add(-2*time.Hour).Format(time.RFC3339)))
+	snap := snapshotOf(certificate("wildcard", testNow.Add(-time.Hour-31*time.Minute).Format(time.RFC3339)))
 
 	found := expiryFindings(snap, testNow)
 
@@ -394,6 +400,9 @@ func TestACertificateAlreadyPastItsEndIsFatal(t *testing.T) {
 	}
 	if found[0].severity != severityFatal {
 		t.Fatalf("severity was %d, want fatal", found[0].severity)
+	}
+	if found[0].detail != "the certificate expired 2h ago" {
+		t.Fatalf("detail = %q, want the elapsed hours", found[0].detail)
 	}
 }
 

@@ -85,14 +85,14 @@ func expirySymptom(obj *unstructured.Unstructured, now time.Time) (symptom, bool
 		return symptom{
 			severity: severityFatal,
 			title:    "Expired",
-			detail:   "the certificate expired " + left.Abs().Round(time.Hour).String() + " ago",
+			detail:   "the certificate expired " + durationLabel(left.Abs().Round(time.Hour)) + " ago",
 			action:   "renew it, and find out why the issuer did not",
 		}, true
 	}
 	return symptom{
 		severity: severityDegraded,
 		title:    "ExpiringSoon",
-		detail:   "the certificate is valid for another " + left.Round(time.Hour).String(),
+		detail:   "the certificate is valid for another " + durationLabel(left.Round(time.Hour)),
 		action:   "check the issuer is renewing it",
 	}, true
 }
@@ -353,7 +353,7 @@ func graceOf(obj *unstructured.Unstructured, kind string) time.Duration {
 
 func stuckDetail(obj *unstructured.Unstructured, now time.Time) string {
 	waited := now.Sub(obj.GetDeletionTimestamp().Time).Round(time.Minute)
-	detail := "asked to go " + waited.String() + " ago and still here"
+	detail := "asked to go " + durationLabel(waited) + " ago and still here"
 	held := finalizersOf(obj)
 	if held == "" {
 		return detail

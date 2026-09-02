@@ -42,6 +42,9 @@ func TestAPodThatWentQuietAfterBindingIsReported(t *testing.T) {
 	if !contains(row.Detail, "bound to node-a") || !contains(row.Detail, "no events at all") {
 		t.Fatalf("detail = %q, want what was observed", row.Detail)
 	}
+	if !contains(row.Detail, "10m ago") {
+		t.Fatalf("detail = %q, want the elapsed time in interface units", row.Detail)
+	}
 	if row.Severity != api.SeverityWarning {
 		t.Fatalf("severity = %q, want warning", row.Severity)
 	}

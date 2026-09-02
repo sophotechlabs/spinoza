@@ -179,5 +179,5 @@ func anyContainerRunning(pod *unstructured.Unstructured) bool {
 func stallDetail(pod *unstructured.Unstructured, now time.Time) string {
 	node := unstr.String(pod, "spec", "nodeName")
 	waited := now.Sub(podBoundAt(pod)).Round(time.Minute)
-	return "bound to " + node + " " + waited.String() + " ago, no container running and no events at all"
+	return "bound to " + node + " " + durationLabel(waited) + " ago, no container running and no events at all"
 }

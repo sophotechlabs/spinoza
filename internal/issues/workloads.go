@@ -182,7 +182,7 @@ func shortOfReplicas(obj *unstructured.Unstructured, kind string, now time.Time,
 		severity: severity,
 		title:    titleShortOfReplicas,
 		detail: strconv.FormatInt(ready, 10) + " of " + strconv.FormatInt(want, 10) +
-			" replicas ready for longer than " + limits.ReadyGrace.String(),
+			" replicas ready for longer than " + durationLabel(limits.ReadyGrace),
 		action: "look at the pods it owns",
 	}, true
 }
