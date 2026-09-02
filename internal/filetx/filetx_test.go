@@ -3,6 +3,8 @@ package filetx
 import (
 	"context"
 	"errors"
+	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,6 +15,27 @@ import (
 
 	"github.com/gofrs/flock"
 )
+
+type stubReadCloser struct {
+	reader   io.Reader
+	closeErr error
+}
+
+func (s stubReadCloser) Read(body []byte) (int, error) {
+	return s.reader.Read(body)
+}
+
+func (s stubReadCloser) Close() error {
+	return s.closeErr
+}
+
+type errorReader struct {
+	err error
+}
+
+func (r errorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
 
 func TestReadReturnsAFileAtItsExactLimit(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
@@ -25,6 +48,21 @@ func TestReadReturnsAFileAtItsExactLimit(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 	if string(body) != "1234" {
+		t.Fatalf("body = %q, want the complete file", body)
+	}
+}
+
+func TestReadAcceptsTheMaximumByteLimitWithoutOverflowing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path, []byte("complete"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	body, err := Read(path, math.MaxInt64)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(body) != "complete" {
 		t.Fatalf("body = %q, want the complete file", body)
 	}
 }
@@ -65,6 +103,40 @@ func TestReadRejectsAFileAboveItsLimit(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "larger than 3 bytes") {
 		t.Fatalf("read error = %v, want the size limit", err)
+	}
+}
+
+func TestReadReturnsACloseFailure(t *testing.T) {
+	want := errors.New("close failed")
+	file := stubReadCloser{
+		reader:   strings.NewReader("ok"),
+		closeErr: want,
+	}
+
+	body, err := read("state.json", file, 2)
+
+	if body != nil {
+		t.Fatalf("body = %q, want no body after close failure", body)
+	}
+	if !errors.Is(err, want) {
+		t.Fatalf("read error = %v, want %v", err, want)
+	}
+}
+
+func TestReadReturnsAReadFailureBeforeACloseFailure(t *testing.T) {
+	wantRead := errors.New("read failed")
+	file := stubReadCloser{
+		reader:   errorReader{err: wantRead},
+		closeErr: errors.New("close failed"),
+	}
+
+	body, err := read("state.json", file, 2)
+
+	if body != nil {
+		t.Fatalf("body = %q, want no body after read failure", body)
+	}
+	if !errors.Is(err, wantRead) {
+		t.Fatalf("read error = %v, want %v", err, wantRead)
 	}
 }
 

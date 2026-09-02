@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,12 +26,9 @@ func Exclusive(ctx context.Context, path string, action func() error) (err error
 	guard := flock.New(path+".lock", flock.SetPermissions(fileMode))
 	ctx, cancel := context.WithTimeout(ctx, lockWait)
 	defer cancel()
-	locked, lockErr := guard.TryLockContext(ctx, retryWait)
+	_, lockErr := guard.TryLockContext(ctx, retryWait)
 	if lockErr != nil {
 		return lockErr
-	}
-	if !locked {
-		return fmt.Errorf("lock %s: %w", path, ctx.Err())
 	}
 	defer func() {
 		unlockErr := guard.Unlock()
@@ -49,7 +47,15 @@ func Read(path string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, readErr := io.ReadAll(io.LimitReader(file, limit+1))
+	return read(path, file, limit)
+}
+
+func read(path string, file io.ReadCloser, limit int64) ([]byte, error) {
+	reader := io.Reader(file)
+	if limit < math.MaxInt64 {
+		reader = io.LimitReader(file, limit+1)
+	}
+	body, readErr := io.ReadAll(reader)
 	closeErr := file.Close()
 	if readErr != nil {
 		return nil, readErr
