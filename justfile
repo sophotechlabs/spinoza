@@ -655,7 +655,7 @@ cluster-mode-down:
     kind delete cluster --name {{ cm_cluster }}
 
 # every cluster-mode path, against a real cluster and a real identity provider
-test-cluster-mode name='': cluster-mode-up cluster-mode-image
+test-cluster-mode name='': stub-assets cluster-mode-up cluster-mode-image
     #!/usr/bin/env bash
     set -euo pipefail
     args=(-tags clustermode -count=1 -timeout 45m -v)
