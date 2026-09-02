@@ -283,6 +283,48 @@ func TestAPodThatAppearsLaterIsPickedUp(t *testing.T) {
 	}
 }
 
+func TestAPodThatAppearsLaterAndRefusesLogsIsReported(t *testing.T) {
+	restore := hurryResolve(t)
+	defer restore()
+	apiserver := newCluster()
+	apiserver.holdOpen()
+	apiserver.add("web-0", "from web-0")
+	client := clientFor(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "web-1") && strings.HasSuffix(r.URL.Path, "/log") {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"kind":"Status","message":"pods/log is forbidden","code":403}`))
+			return
+		}
+		apiserver.handler(t)(w, r)
+	})
+	stream, err := Open(t.Context(), client, Request{
+		Namespace: "prod",
+		Selector:  "app=web",
+		Follow:    true,
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+	gather(t, stream, 1)
+
+	apiserver.add("web-1", "from web-1")
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if stream.Matched() == 2 && stream.Err() != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if stream.Attached() != 1 || stream.Matched() != 2 {
+		t.Fatalf("attached %d of %d, want the original pod only", stream.Attached(), stream.Matched())
+	}
+	if stream.Err() == nil || !strings.Contains(stream.Err().Error(), "web-1") {
+		t.Fatalf("error = %v, want the refusing pod named", stream.Err())
+	}
+}
+
 func TestTheCountOfPodsFollowsTheRollout(t *testing.T) {
 	restore := hurryResolve(t)
 	defer restore()
@@ -375,6 +417,45 @@ func TestClosingAMergedStreamStopsEveryPod(t *testing.T) {
 		case <-deadline:
 			t.Fatal("the merged channel never closed after the stream was closed")
 		}
+	}
+}
+
+func TestClosingAMergedStreamUnblocksAFullOutputBuffer(t *testing.T) {
+	apiserver := newCluster()
+	apiserver.add("web-0", strings.Repeat("line\n", lineBuffer*4))
+
+	stream, err := Open(t.Context(), manyClient(t, apiserver), Request{
+		Namespace: "prod",
+		Selector:  "app=web",
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for len(stream.Lines) < lineBuffer*2 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if len(stream.Lines) != lineBuffer*2 {
+		t.Fatalf("buffered lines = %d, want the merged buffer full", len(stream.Lines))
+	}
+
+	stream.Close()
+	drained := make(chan int, 1)
+	go func() {
+		count := 0
+		for range stream.Lines {
+			count++
+		}
+		drained <- count
+	}()
+	select {
+	case count := <-drained:
+		if count < lineBuffer*2 {
+			t.Fatalf("drained lines = %d, want at least the full output buffer", count)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the merged stream stayed blocked after it was closed")
 	}
 }
 
