@@ -588,6 +588,27 @@ func TestAPodThatRefusesDoesNotStopTheOthers(t *testing.T) {
 	if stream.Attached() != 1 {
 		t.Fatalf("attached = %d, want only the pod actually being read", stream.Attached())
 	}
+	if stream.Err() == nil {
+		t.Fatal("the partial refusal was hidden")
+	}
+}
+
+func TestAMergedStreamReportsAPodWhoseLogsBreakMidRead(t *testing.T) {
+	apiserver := newCluster()
+	apiserver.add("web-0", strings.Repeat("x", maxLineBytes+1))
+	apiserver.add("web-1", "hello")
+
+	stream, err := Open(t.Context(), manyClient(t, apiserver), Request{Namespace: "prod", Selector: "app=web"})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stream.Close()
+
+	drainLines(t, stream)
+
+	if stream.Err() == nil || !strings.Contains(stream.Err().Error(), "web-0") {
+		t.Fatalf("error = %v, want the broken pod named", stream.Err())
+	}
 }
 
 func TestASinglePodThatIsStillStartingDoesNotFailAFollowingStream(t *testing.T) {

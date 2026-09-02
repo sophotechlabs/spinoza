@@ -53,14 +53,16 @@ func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Strea
 
 	req.TailLines = share(req.TailLines, len(names))
 	lines := make(chan Line, lineBuffer*2)
+	stream := &Stream{Lines: lines, cancel: cancel, matched: matched}
 	held := newAttachments()
 	var wg sync.WaitGroup
 	opened := 0
 	var refused error
 	for _, pod := range names {
-		attachErr := attach(streamCtx, cs, req, pod, lines, held, &wg)
+		attachErr := attach(streamCtx, cs, req, pod, lines, held, &wg, stream)
 		if attachErr != nil {
 			refused = attachErr
+			stream.fail(fmt.Errorf("logs for %s: %w", pod.name, attachErr))
 			continue
 		}
 		opened++
@@ -69,7 +71,7 @@ func openMany(ctx context.Context, cs kubernetes.Interface, req Request) (*Strea
 		cancel()
 		return nil, refused
 	}
-	stream := &Stream{Lines: lines, cancel: cancel, attached: opened, matched: matched}
+	stream.setCounts(opened, matched)
 
 	safe.Go("tailing "+req.Selector+" in "+req.Namespace, func() {
 		defer close(lines)
@@ -146,6 +148,7 @@ func attach(
 	lines chan<- Line,
 	held *attachments,
 	wg *sync.WaitGroup,
+	combined *Stream,
 ) error {
 	name := pod.name
 	key := pod.key()
@@ -169,7 +172,6 @@ func attach(
 	wg.Add(1)
 	safe.Go("reading logs from "+name, func() {
 		defer wg.Done()
-		defer held.release(key)
 		defer stream.Close()
 		for line := range stream.Lines {
 			select {
@@ -178,6 +180,13 @@ func attach(
 			case lines <- Line{Pod: name, Text: line.Text}:
 			}
 		}
+		readErr := stream.Err()
+		if readErr != nil && ctx.Err() == nil {
+			held.forget(key)
+			combined.fail(fmt.Errorf("logs for %s: %w", name, readErr))
+			return
+		}
+		held.release(key)
 	})
 	return nil
 }
@@ -207,7 +216,10 @@ func watch(
 				if held.count() >= maxPods {
 					break
 				}
-				_ = attach(ctx, cs, req, pod, lines, held, wg)
+				attachErr := attach(ctx, cs, req, pod, lines, held, wg, stream)
+				if attachErr != nil {
+					stream.fail(fmt.Errorf("logs for %s: %w", pod.name, attachErr))
+				}
 			}
 			stream.setCounts(held.count(), matched)
 		}

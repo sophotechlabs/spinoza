@@ -153,9 +153,10 @@ func TestAttachSkipsAPodThatIsAlreadyClaimed(t *testing.T) {
 	}
 	client := fake.NewClientset()
 	lines := make(chan Line)
+	combined := &Stream{}
 	var group sync.WaitGroup
 
-	err := attach(t.Context(), client, Request{}, podRef{name: "web-0"}, lines, held, &group)
+	err := attach(t.Context(), client, Request{}, podRef{name: "web-0"}, lines, held, &group, combined)
 	if err != nil {
 		t.Fatalf("attach duplicate: %v", err)
 	}

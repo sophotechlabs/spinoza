@@ -70,8 +70,13 @@ func (s *Stream) Err() error {
 }
 
 func (s *Stream) fail(err error) {
+	if err == nil {
+		return
+	}
 	s.mu.Lock()
-	s.err = err
+	if s.err == nil {
+		s.err = err
+	}
 	s.mu.Unlock()
 }
 
