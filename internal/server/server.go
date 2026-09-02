@@ -97,6 +97,7 @@ type Server struct {
 	feedPingEvery time.Duration
 	feedPingWait  time.Duration
 	authEvery     time.Duration
+	terminalDrain time.Duration
 	authn         *auth.Authenticator
 	publicOrigin  string
 	served        bool
@@ -124,6 +125,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		feedPingEvery: defaultFeedPingInterval,
 		feedPingWait:  defaultFeedPingTimeout,
 		authEvery:     defaultAuthorizationCheckInterval,
+		terminalDrain: defaultTerminalDrain,
 		views:         views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}
 }

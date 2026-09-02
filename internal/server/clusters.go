@@ -11,13 +11,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/coder/websocket"
-
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
-const terminalDrain = 20 * time.Second
+const defaultTerminalDrain = 20 * time.Second
 
 const drainStep = 20 * time.Millisecond
 
@@ -368,9 +366,9 @@ func (s *Server) drainTerminals(ctx context.Context, id string) {
 		return
 	}
 	for _, conn := range open {
-		_ = conn.Close(websocket.StatusGoingAway, "that cluster was closed")
+		_ = conn.CloseNow()
 	}
-	waiting, stop := context.WithTimeout(context.WithoutCancel(ctx), terminalDrain)
+	waiting, stop := context.WithTimeout(context.WithoutCancel(ctx), s.terminalDrain)
 	defer stop()
 	for len(s.terminalsOn(id)) > 0 {
 		select {

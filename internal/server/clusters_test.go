@@ -405,6 +405,19 @@ func TestAShellOnAClosedClusterIsHungUpBeforeTheConnectionGoes(t *testing.T) {
 	}
 }
 
+func TestClosingAClusterDoesNotWaitForATerminalCloseHandshake(t *testing.T) {
+	srv := New(&fleet{}, testAssets(), testToken)
+	srv.terminalDrain = 20 * time.Millisecond
+	srv.trackExec(heldSocket(t), "https://p-mk1:6443")
+
+	started := time.Now()
+	srv.drainTerminals(t.Context(), "https://p-mk1:6443")
+
+	if took := time.Since(started); took >= time.Second {
+		t.Fatalf("terminal drain took %s, want it bounded independently of the peer handshake", took)
+	}
+}
+
 func TestALocalShellSurvivesAClusterClosing(t *testing.T) {
 	held := &fleet{}
 	srv := New(held, testAssets(), testToken)
