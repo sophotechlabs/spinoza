@@ -74,3 +74,23 @@ test('a limited user is told which namespaces refused the read', async ({ browse
   );
   await close();
 });
+
+test('a readable workload still keeps mutation controls disabled for a limited user', async ({
+  browser,
+}) => {
+  const hash = `#context=${CONTEXT}&group=apps&version=v1&resource=deployments&kind=Deployment`;
+  const [page, close] = await openReadonly(browser, hash);
+  const row = page.locator('main tbody tr').filter({ hasText: 'healthy' }).first();
+  await expect(row).toBeVisible({ timeout: 60_000 });
+  await row.getByRole('button', { name: 'healthy', exact: true }).click();
+  await expect(page).toHaveTitle(/^healthy deployments /, { timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Scale', exact: true })).toBeDisabled({
+    timeout: 60_000,
+  });
+  await expect(page.getByRole('button', { name: 'Restart', exact: true })).toBeDisabled();
+  await page.getByRole('tab', { name: 'YAML', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled({
+    timeout: 60_000,
+  });
+  await close();
+});
