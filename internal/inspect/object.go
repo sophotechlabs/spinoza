@@ -483,7 +483,7 @@ func readPorts(holder any, field, numberKey string) []api.ObjectPort {
 			continue
 		}
 		protocol := stringField(mapped, "protocol")
-		if protocol == "UDP" {
+		if protocol != "" && protocol != "TCP" {
 			continue
 		}
 		number := intField(mapped, numberKey)

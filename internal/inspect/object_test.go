@@ -412,6 +412,7 @@ func TestPorts(t *testing.T) {
 							map[string]any{"name": "http", "containerPort": int64(8080), "protocol": "TCP"},
 							map[string]any{"name": "metrics", "containerPort": int64(9090)},
 							map[string]any{"name": "dns", "containerPort": int64(53), "protocol": "UDP"},
+							map[string]any{"name": "signaling", "containerPort": int64(38412), "protocol": "SCTP"},
 							map[string]any{"name": "broken"},
 							"not-a-map",
 						},
@@ -465,6 +466,7 @@ func TestPorts(t *testing.T) {
 						"ports": []any{
 							map[string]any{"name": "http", "port": int64(9090), "protocol": "TCP"},
 							map[string]any{"name": "gossip", "port": int64(7946), "protocol": "UDP"},
+							map[string]any{"name": "signaling", "port": int64(38412), "protocol": "SCTP"},
 						},
 					},
 				}}
