@@ -50,7 +50,7 @@ func TestBehindAnAuthProxy(t *testing.T) {
 	})
 
 	t.Run("signing out hands the browser to the proxy", func(t *testing.T) {
-		resp := proxiedRequest(t, http.MethodGet, "/auth/logout", "alice@example.com", "platform-admins", false)
+		resp := proxiedRequest(t, http.MethodPost, "/auth/logout", "alice@example.com", "platform-admins", false)
 		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusFound {
 			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusFound)

@@ -133,7 +133,7 @@ func TestSigningInThroughKeycloak(t *testing.T) {
 
 	t.Run("signing out ends the provider's session too", func(t *testing.T) {
 		alice := signIn(t, "alice")
-		resp := get(t, alice, "/auth/logout")
+		resp := request(t, alice, http.MethodPost, "/auth/logout")
 		defer func() { _ = resp.Body.Close() }()
 		if signedIn(t, alice) {
 			t.Fatal("the session survived signing out")
