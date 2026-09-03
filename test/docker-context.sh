@@ -9,6 +9,8 @@ output="$work/output"
 mkdir -p "$context" "$output"
 cp "$root/.dockerignore" "$context/.dockerignore"
 touch "$context/source.go"
+mkdir -p "$context/internal/kubeconfig"
+touch "$context/internal/kubeconfig/source.go"
 
 credentials=(
     .env
@@ -50,6 +52,11 @@ docker buildx build \
 
 if [ ! -f "$output/context/source.go" ]; then
     echo "Docker context excluded required source" >&2
+    exit 1
+fi
+
+if [ ! -f "$output/context/internal/kubeconfig/source.go" ]; then
+    echo "Docker context excluded the kubeconfig source package" >&2
     exit 1
 fi
 

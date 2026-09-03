@@ -25,6 +25,8 @@
 **/*.p12
 **/*.pfx
 **/*.jks
+!internal/kubeconfig/
+!internal/kubeconfig/*.go
 build
 dist
 docs
