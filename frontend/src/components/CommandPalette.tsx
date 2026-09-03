@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Category, ResourceDescriptor, View } from '../lib/types';
 import { fetchResources } from '../lib/discovery';
-import { clusterItems, matchItems, paletteItems } from '../lib/palette';
-import type { PaletteItem, PaletteOpen } from '../lib/palette';
+import { clusterItems, groupPaletteItems, paletteItems } from '../lib/palette';
+import type { PaletteGroup, PaletteItem, PaletteOpen } from '../lib/palette';
 import { SEARCH_DELAY_MS, searchObjects, worthSearching } from '../lib/search';
 import type { SearchHit } from '../lib/types';
 import { useRecents } from '../store/recents';
@@ -26,6 +26,20 @@ function rowClass(active: boolean): string {
     return `${base} bg-surface-active text-fg-strong`;
   }
   return `${base} text-fg-soft hover:bg-surface-raised`;
+}
+
+function limitGroups(groups: PaletteGroup[], limit: number): PaletteGroup[] {
+  const shown: PaletteGroup[] = [];
+  let left = limit;
+  for (const group of groups) {
+    if (left === 0) {
+      break;
+    }
+    const items = group.items.slice(0, left);
+    shown.push({ ...group, items });
+    left -= items.length;
+  }
+  return shown;
 }
 
 export default function CommandPalette({
@@ -127,13 +141,15 @@ export default function CommandPalette({
     };
   }, [open, query, several]);
 
-  const matches = [
-    ...matchItems(paletteItems(categories, recents, traffic.available), query),
-    ...clusterItems(hits, categories),
-  ];
-  const shownMatches = matches.slice(0, MAX_MATCHES);
+  const allGroups = groupPaletteItems(
+    [...paletteItems(categories, recents, traffic.available), ...clusterItems(hits, categories)],
+    query,
+  );
+  const groups = limitGroups(allGroups, MAX_MATCHES);
+  const allMatches = allGroups.flatMap((group) => group.items);
+  const matches = groups.flatMap((group) => group.items);
   let active = cursor;
-  if (active < 0 || active >= shownMatches.length) {
+  if (active < 0 || active >= matches.length) {
     active = 0;
   }
 
@@ -147,22 +163,26 @@ export default function CommandPalette({
       onSelectResource(item.descriptor);
       return;
     }
+    let cluster: string | undefined;
+    if (item.kind === 'object') {
+      cluster = item.cluster;
+    }
     onOpenObject({
       ref: item.ref,
       type: item.type,
       filter: query.trim(),
-      cluster: item.cluster,
+      cluster,
     });
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      if (shownMatches.length === 0) {
+      if (matches.length === 0) {
         setCursor(0);
         return;
       }
-      setCursor((value) => Math.min(value + 1, shownMatches.length - 1));
+      setCursor((value) => Math.min(value + 1, matches.length - 1));
       return;
     }
     if (event.key === 'ArrowUp') {
@@ -174,10 +194,10 @@ export default function CommandPalette({
       return;
     }
     event.preventDefault();
-    if (shownMatches.length === 0) {
+    if (matches.length === 0) {
       return;
     }
-    run(shownMatches[active]);
+    run(matches[active]);
   }
 
   return (
@@ -207,31 +227,46 @@ export default function CommandPalette({
             Some of the cluster could not be searched.
           </p>
         )}
-        {shownMatches.length < matches.length && (
+        {matches.length < allMatches.length && (
           <p className="border-b border-edge px-3 py-1 text-fg-muted">
             Showing the first {MAX_MATCHES} matches. Narrow the search to see the rest.
           </p>
         )}
-        <ul className="max-h-80 overflow-y-auto py-1">
-          {shownMatches.map((item, index) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                aria-current={index === active}
-                onClick={() => {
-                  run(item);
-                }}
-                onMouseEnter={() => {
-                  setCursor(index);
-                }}
-                className={rowClass(index === active)}
+        <div className="max-h-80 overflow-y-auto py-1">
+          {groups.map((group) => (
+            <section key={group.id} aria-labelledby={`palette-group-${group.id}`}>
+              <h2
+                id={`palette-group-${group.id}`}
+                className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-fg-muted uppercase"
               >
-                <span className="truncate">{item.label}</span>
-                <span className="ml-auto shrink-0 truncate text-fg-muted">{item.hint}</span>
-              </button>
-            </li>
+                {group.label}
+              </h2>
+              <ul>
+                {group.items.map((item) => {
+                  const index = matches.indexOf(item);
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        aria-current={index === active}
+                        onClick={() => {
+                          run(item);
+                        }}
+                        onMouseEnter={() => {
+                          setCursor(index);
+                        }}
+                        className={rowClass(index === active)}
+                      >
+                        <span className="truncate">{item.label}</span>
+                        <span className="ml-auto shrink-0 truncate text-fg-muted">{item.hint}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       </div>
     </dialog>
   );

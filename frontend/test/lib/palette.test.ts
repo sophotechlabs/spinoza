@@ -3,7 +3,7 @@ import { act } from '@testing-library/react';
 import { useClustersStore } from '../../src/store/clusters';
 import { MK1, showing } from '../helpers-clusters';
 import type { ObjectRef } from '../../src/lib/types';
-import { clusterItems, matchItems, paletteItems } from '../../src/lib/palette';
+import { clusterItems, groupPaletteItems, matchItems, paletteItems } from '../../src/lib/palette';
 import { VIEW_LABELS } from '../../src/lib/views';
 import { makeCategory, makeDescriptor } from '../helpers';
 import { VIEWS } from '../../src/lib/types';
@@ -47,10 +47,10 @@ const recent: ObjectRef = {
 };
 
 describe('paletteItems', () => {
-  it('puts recent objects first, then views, then every discovered kind', () => {
+  it('marks recent objects separately from live object hits', () => {
     const items = paletteItems(categories, [recent], false);
 
-    expect(items[0]).toMatchObject({ kind: 'object', label: 'prod/web-0', hint: 'recent pods' });
+    expect(items[0]).toMatchObject({ kind: 'recent', label: 'prod/web-0', hint: 'pods' });
     expect(items[1]).toMatchObject({ kind: 'view', label: VIEW_LABELS.cluster });
     expect(items.filter((item) => item.kind === 'view').map((item) => item.label)).toContain(
       VIEW_LABELS.helm,
@@ -87,6 +87,36 @@ describe('paletteItems', () => {
     const items = paletteItems(categories, [{ ...recent, resource: 'widgets' }], false);
 
     expect(items[0]).toMatchObject({ type: null });
+  });
+});
+
+describe('groupPaletteItems', () => {
+  it('groups by intent while preserving rank inside each group', () => {
+    const live = clusterItems(
+      [
+        {
+          group: 'apps',
+          version: 'v1',
+          resource: 'deployments',
+          kind: 'Deployment',
+          namespace: 'prod',
+          name: 'pod-api',
+        },
+      ],
+      categories,
+    );
+    const items = [...paletteItems(categories, [recent], false), ...live];
+
+    const groups = groupPaletteItems(items, 'pod');
+
+    expect(groups.map((group) => group.label)).toEqual([
+      'Resource kinds',
+      'Objects',
+      'Recent objects',
+    ]);
+    expect(groups[0].items.map((item) => item.label)).toEqual(['Pod']);
+    expect(groups[1].items.map((item) => item.label)).toEqual(['prod/pod-api']);
+    expect(groups[2].items.map((item) => item.label)).toEqual(['prod/web-0']);
   });
 });
 

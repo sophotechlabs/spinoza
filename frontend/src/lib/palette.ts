@@ -37,7 +37,28 @@ export type PaletteItem =
       ref: ObjectRef;
       cluster?: string;
       type: ResourceDescriptor | null;
+    }
+  | {
+      id: string;
+      label: string;
+      hint: string;
+      kind: 'recent';
+      ref: ObjectRef;
+      type: ResourceDescriptor | null;
     };
+
+export interface PaletteGroup {
+  id: PaletteItem['kind'];
+  label: string;
+  items: PaletteItem[];
+}
+
+const PALETTE_GROUPS: { id: PaletteItem['kind']; label: string }[] = [
+  { id: 'view', label: 'Views' },
+  { id: 'resource', label: 'Resource kinds' },
+  { id: 'object', label: 'Objects' },
+  { id: 'recent', label: 'Recent objects' },
+];
 
 export interface PaletteOpen {
   ref: ObjectRef;
@@ -106,8 +127,8 @@ export function paletteItems(
     items.push({
       id: `object:${ref.group}/${ref.version}/${ref.resource}/${ref.namespace}/${ref.name}`,
       label: refLabel(ref),
-      hint: `recent ${ref.resource}`,
-      kind: 'object',
+      hint: ref.resource,
+      kind: 'recent',
       ref,
       type: typeFor(categories, ref),
     });
@@ -166,4 +187,19 @@ export function matchItems(items: PaletteItem[], query: string): PaletteItem[] {
     return a.at - b.at;
   });
   return scored.map((entry) => entry.item);
+}
+
+export function groupPaletteItems(items: PaletteItem[], query: string): PaletteGroup[] {
+  const groups: PaletteGroup[] = [];
+  for (const group of PALETTE_GROUPS) {
+    const matches = matchItems(
+      items.filter((item) => item.kind === group.id),
+      query,
+    );
+    if (matches.length === 0) {
+      continue;
+    }
+    groups.push({ ...group, items: matches });
+  }
+  return groups;
 }

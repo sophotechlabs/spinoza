@@ -125,6 +125,54 @@ describe('CommandPalette', () => {
     expect(await screen.findByRole('button', { name: /Flux Graph/ })).toBeInTheDocument();
   });
 
+  it('groups views, resource kinds, live objects, and recent objects', async () => {
+    const user = userEvent.setup();
+    rememberObject({
+      group: '',
+      version: 'v1',
+      resource: 'pods',
+      namespace: 'prod',
+      name: 'pod-runner',
+    });
+    stubSearch({ hits: [{ ...clusterHit, name: 'pod-api' }] });
+    renderPalette();
+
+    await user.type(screen.getByLabelText(/Search resources/), 'pod');
+
+    expect(await screen.findByRole('heading', { name: 'Resource kinds' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: /pod-api/ })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Objects' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Recent objects' })).toBeVisible();
+  });
+
+  it('caps the grouped result list without crossing the global limit', async () => {
+    const resources = Array.from({ length: 80 }, (_, index) =>
+      makeDescriptor({ resource: `widgets-${String(index)}`, kind: `Widget${String(index)}` }),
+    );
+    rememberObject({
+      group: '',
+      version: 'v1',
+      resource: 'pods',
+      namespace: 'prod',
+      name: 'recent-pod',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ categories: [makeCategory('Widgets', resources)] }),
+      }),
+    );
+
+    renderPalette();
+
+    await screen.findByRole('button', { name: /Widget0/ });
+    await waitFor(() => {
+      expect(screen.getAllByRole('button')).toHaveLength(60);
+    });
+    expect(screen.queryByRole('heading', { name: 'Recent objects' })).not.toBeInTheDocument();
+  });
+
   it('does not fetch the catalog while it is closed', () => {
     renderPalette(false);
 
@@ -186,6 +234,25 @@ describe('CommandPalette', () => {
     await user.keyboard('{ArrowDown}{Enter}');
 
     expect(onSelectView).toHaveBeenCalledWith('resources');
+  });
+
+  it('walks across group boundaries with the arrow keys', async () => {
+    const user = userEvent.setup();
+    const { onSelectResource } = renderPalette();
+    await screen.findByRole('button', { name: /Pod/ });
+    const viewList = screen.getByRole('heading', { name: 'Views' }).nextElementSibling;
+    if (viewList === null) {
+      throw new Error('view group list not found');
+    }
+    const viewCount = viewList.children.length;
+
+    await user.click(screen.getByLabelText(/Search resources/));
+    for (let index = 0; index < viewCount; index += 1) {
+      await user.keyboard('{ArrowDown}');
+    }
+    await user.keyboard('{Enter}');
+
+    expect(onSelectResource).toHaveBeenCalledWith(expect.objectContaining({ kind: 'Pod' }));
   });
 
   it('stops at the ends of the list', async () => {
