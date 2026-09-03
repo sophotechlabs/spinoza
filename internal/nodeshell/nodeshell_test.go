@@ -30,7 +30,7 @@ func running(name string) *corev1.Pod {
 func service(t *testing.T, enabled bool, objs ...runtime.Object) (*Service, *k8sfake.Clientset) {
 	t.Helper()
 	cs := k8sfake.NewClientset(objs...)
-	return NewService(cs, "busybox:1.37", "", func() bool { return enabled }, access.New(cs)), cs
+	return NewService(cs, "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return enabled }, access.New(cs)), cs
 }
 
 func creates(cs *k8sfake.Clientset, name string, phase corev1.PodPhase, reason string) {
@@ -73,7 +73,7 @@ func TestTurningItOnIsSeenWithoutARestart(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	allow(cs, true)
 	on := false
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return on }, access.New(cs))
+	svc := NewService(cs, "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return on }, access.New(cs))
 
 	before := svc.Support(t.Context(), "p-mk1")
 	on = true
@@ -88,7 +88,7 @@ func TestTurningItOnIsSeenWithoutARestart(t *testing.T) {
 }
 
 func TestNoWayToAskLeavesItOff(t *testing.T) {
-	svc := NewService(k8sfake.NewClientset(), "busybox:1.37", "", nil, nil)
+	svc := NewService(k8sfake.NewClientset(), "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", nil, nil)
 
 	support := svc.Support(t.Context(), "p-mk1")
 
@@ -103,7 +103,7 @@ func TestItReportsTheImageAndNamespaceItWouldUse(t *testing.T) {
 
 	support := svc.Support(t.Context(), "p-mk1")
 
-	if support.Image != "busybox:1.37" || support.Namespace != DefaultNamespace {
+	if support.Image != "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0" || support.Namespace != DefaultNamespace {
 		t.Fatalf("support = %+v, want the image and namespace named", support)
 	}
 	if !support.Allowed {
@@ -131,6 +131,25 @@ func TestItNeedsANodeToCheckAgainst(t *testing.T) {
 
 	if svc.Support(t.Context(), "").Reason != "no node was named" {
 		t.Fatal("an empty node was not refused")
+	}
+}
+
+func TestMutableImageCannotStartAPrivilegedNodeShell(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	svc := NewService(cs, "busybox:1.37", DefaultNamespace, func() bool { return true }, access.New(cs))
+	support := svc.Support(t.Context(), "worker-1")
+	if support.Allowed {
+		t.Fatal("a mutable node-shell image was reported as allowed")
+	}
+	if support.Reason != "node shells require an image pinned by sha256 digest" {
+		t.Fatalf("reason = %q", support.Reason)
+	}
+	_, err := svc.Start(t.Context(), "worker-1")
+	if err == nil || !strings.Contains(err.Error(), "node shells require an image pinned by sha256 digest") {
+		t.Fatalf("start error = %v", err)
+	}
+	if len(cs.Actions()) != 0 {
+		t.Fatalf("the refusal made %d Kubernetes calls", len(cs.Actions()))
 	}
 }
 
@@ -490,7 +509,7 @@ func TestItRepeatsWhyTheApiserverSaidNo(t *testing.T) {
 			Reason:  `no RBAC policy matched for user "arch"`,
 		}}, nil
 	})
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
+	svc := NewService(cs, "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return true }, access.New(cs))
 
 	support := svc.Support(t.Context(), "p-mk1")
 
@@ -511,7 +530,7 @@ func TestAPodTheClusterRefusesIsReported(t *testing.T) {
 			errors.New("privileged pods are not allowed in this namespace"),
 		)
 	})
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
+	svc := NewService(cs, "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return true }, access.New(cs))
 
 	_, err := svc.Start(t.Context(), "p-mk1")
 
@@ -529,7 +548,7 @@ func TestAPodThatNeverStartsIsTakenAwayAgain(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	allow(cs, true)
 	creates(cs, "spinoza-node-shell-slow", corev1.PodPending, "")
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
+	svc := NewService(cs, "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return true }, access.New(cs))
 
 	_, err := svc.Start(t.Context(), "p-mk1")
 
@@ -552,7 +571,7 @@ func TestACancelledStartStillRetriesPodCleanup(t *testing.T) {
 	cs := k8sfake.NewClientset()
 	allow(cs, true)
 	creates(cs, "spinoza-node-shell-slow", corev1.PodPending, "")
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
+	svc := NewService(cs, "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return true }, access.New(cs))
 	svc.removeEvery = time.Millisecond
 	deletes := 0
 	cs.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
@@ -591,7 +610,7 @@ func TestAPodThatCannotBeReadWhileWaitingIsReported(t *testing.T) {
 	cs.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, errors.New("the connection was reset")
 	})
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
+	svc := NewService(cs, "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return true }, access.New(cs))
 
 	_, err := svc.Start(t.Context(), "p-mk1")
 
@@ -619,7 +638,7 @@ func TestItRemembersWhatTheClusterSaid(t *testing.T) {
 			Status: authv1.SubjectAccessReviewStatus{Allowed: true},
 		}, nil
 	})
-	svc := NewService(cs, "busybox:1.37", "", func() bool { return true }, access.New(cs))
+	svc := NewService(cs, "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return true }, access.New(cs))
 
 	svc.Support(t.Context(), "p-mk1")
 	svc.Support(t.Context(), "p-mk1")
@@ -651,7 +670,7 @@ func TestAQuestionThatCouldNotBePutLeavesItUnoffered(t *testing.T) {
 }
 
 func TestAServiceWithNothingToAskWithSaysSo(t *testing.T) {
-	svc := NewService(k8sfake.NewClientset(), "busybox:1.37", "", func() bool { return true }, nil)
+	svc := NewService(k8sfake.NewClientset(), "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0", "", func() bool { return true }, nil)
 
 	support := svc.Support(t.Context(), "p-mk1")
 

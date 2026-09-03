@@ -13,6 +13,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/cluster"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/helm"
+	"github.com/sophotechlabs/spinoza/internal/imagepin"
 	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 )
 
@@ -110,6 +111,9 @@ func parseFlags(args []string) (settings, error) {
 		limitErr := validateClusterLimits(clusterSettings)
 		if limitErr != nil {
 			return settings{}, limitErr
+		}
+		if *nodeShell && !imagepin.Valid(clusterSettings.NodeShellImage) {
+			return settings{}, errors.New("node-shell-image must be pinned by sha256 digest")
 		}
 	}
 	return settings{

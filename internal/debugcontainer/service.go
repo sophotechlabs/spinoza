@@ -17,10 +17,11 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
+	"github.com/sophotechlabs/spinoza/internal/imagepin"
 )
 
 const (
-	DefaultImage   = "busybox:1.37"
+	DefaultImage   = "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0"
 	DefaultProfile = "general"
 
 	namePrefix     = "spinoza-debug-"
@@ -159,6 +160,9 @@ func (s *Service) Ensure(ctx context.Context, req Request) (api.DebugSession, er
 	}
 	if !Supported(profile) {
 		return api.DebugSession{}, fmt.Errorf("unknown debug profile %q", profile)
+	}
+	if profile == sysadminProfile && !imagepin.Valid(s.image) {
+		return api.DebugSession{}, errors.New("the sysadmin debug profile requires an image pinned by sha256 digest")
 	}
 
 	pod, err := s.cs.CoreV1().Pods(req.Namespace).Get(ctx, req.Pod, metav1.GetOptions{})

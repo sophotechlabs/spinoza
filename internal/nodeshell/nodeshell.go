@@ -13,6 +13,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/imagepin"
 )
 
 const (
@@ -83,6 +84,10 @@ func (s *Service) Support(ctx context.Context, node string) api.NodeShellSupport
 		support.Reason = "no node was named"
 		return support
 	}
+	if !imagepin.Valid(s.image) {
+		support.Reason = "node shells require an image pinned by sha256 digest"
+		return support
+	}
 	decision := s.perms.Ask(ctx, access.Check{
 		Verb:      "create",
 		Resource:  "pods",
@@ -111,6 +116,9 @@ func (s *Service) Start(ctx context.Context, node string) (api.NodeShellSession,
 	}
 	if node == "" {
 		return api.NodeShellSession{}, fmt.Errorf("%w: no node was named", api.ErrInternal)
+	}
+	if !imagepin.Valid(s.image) {
+		return api.NodeShellSession{}, fmt.Errorf("%w: node shells require an image pinned by sha256 digest", api.ErrInternal)
 	}
 	created, err := s.cs.CoreV1().Pods(s.namespace).Create(ctx, s.pod(node), metav1.CreateOptions{})
 	if err != nil {

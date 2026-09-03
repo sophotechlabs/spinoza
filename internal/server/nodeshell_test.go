@@ -69,7 +69,7 @@ func nodeShellServer(t *testing.T, cs *k8sfake.Clientset, images *fakeImages, en
 		Shells:    exec.NewService(shell, images),
 		NodeShells: nodeshell.NewService(
 			cs,
-			"busybox:1.37",
+			"busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0",
 			nodeshell.DefaultNamespace,
 			func() bool { return enabled },
 			access.New(cs),
@@ -125,7 +125,7 @@ func TestNodeShellSupportAnswersForTheNodeItWasAskedAbout(t *testing.T) {
 	if support.Node != "p-mk1" || !support.Enabled || !support.Allowed {
 		t.Fatalf("support = %+v, want it on and allowed", support)
 	}
-	if support.Image != "busybox:1.37" || support.Namespace != nodeshell.DefaultNamespace {
+	if support.Image != "busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0" || support.Namespace != nodeshell.DefaultNamespace {
 		t.Fatalf("support = %+v, want the image and namespace it would use", support)
 	}
 }

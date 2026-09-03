@@ -69,6 +69,13 @@ func TestEveryFlagIsCarriedThrough(t *testing.T) {
 	}
 }
 
+func TestNodeShellFlagRequiresAPinnedImage(t *testing.T) {
+	_, err := parseFlags([]string{"-node-shell", "-node-shell-image", "busybox:1.37"})
+	if err == nil || err.Error() != "node-shell-image must be pinned by sha256 digest" {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestTheTokenFileIsWrittenForScriptsOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "token")
 

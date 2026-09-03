@@ -582,6 +582,16 @@ func TestReuseReportsTheImageTheContainerActuallyRuns(t *testing.T) {
 	}
 }
 
+func TestSysadminProfileRefusesAMutableImage(t *testing.T) {
+	service := NewService(&stubRunner{}, k8sfake.NewClientset(), "busybox:1.37", api.ContextRef{}, nil)
+	req := request()
+	req.Profile = "sysadmin"
+	_, err := service.Ensure(t.Context(), req)
+	if err == nil || err.Error() != "the sysadmin debug profile requires an image pinned by sha256 digest" {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestReuseReportsTheProfileTheContainerActuallyHas(t *testing.T) {
 	yes := true
 	pod := debugPodWith("spinoza-debug-1", corev1.EphemeralContainerCommon{
