@@ -1,7 +1,7 @@
 import { expect, test } from '../harness/test';
 import { openView } from '../harness/app';
 import { kubectl } from '../harness/cluster';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 async function openGuestbook(page: Page): Promise<void> {
   await openView(page, 'argo-apps');
@@ -22,6 +22,15 @@ function application(path: string): string {
     '-o',
     `jsonpath={${path}}`,
   ]).trim();
+}
+
+function annotationValue(page: Page, name: string): Locator {
+  const overview = page.getByRole('tabpanel', { name: 'Overview' });
+  const annotations = overview
+    .getByRole('heading', { name: 'Annotations', exact: true })
+    .locator('..');
+  const term = annotations.getByText(name, { exact: true });
+  return term.locator('..').getByRole('definition').locator('span').first();
 }
 
 test('the application list names what argo reports about each app', async ({ page }) => {
@@ -127,11 +136,9 @@ test('refreshing an Argo application stamps the live object through the backend'
   await expect(page.getByText('Refresh requested.', { exact: true })).toBeVisible({
     timeout: 60_000,
   });
-  await expect
-    .poll(() => application(".metadata.annotations['argocd\\.argoproj\\.io/refresh']"), {
-      timeout: 60_000,
-    })
-    .toBe('normal');
+  await expect(annotationValue(page, 'argocd.argoproj.io/refresh')).toHaveText('normal', {
+    timeout: 60_000,
+  });
 });
 
 test('hard refreshing an Argo application requests an uncached repository read', async ({
@@ -143,9 +150,7 @@ test('hard refreshing an Argo application requests an uncached repository read',
   await expect(page.getByText('Hard refresh requested.', { exact: true })).toBeVisible({
     timeout: 60_000,
   });
-  await expect
-    .poll(() => application(".metadata.annotations['argocd\\.argoproj\\.io/refresh']"), {
-      timeout: 60_000,
-    })
-    .toBe('hard');
+  await expect(annotationValue(page, 'argocd.argoproj.io/refresh')).toHaveText('hard', {
+    timeout: 60_000,
+  });
 });
