@@ -1,7 +1,7 @@
 import { expect, test } from '../harness/test';
 import { openHome } from '../harness/app';
 import { CONTEXT, NOWHERE_CONTEXT, NOWHERE_KUBECONFIG } from '../harness/paths';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 interface Opened {
   id: string;
@@ -10,6 +10,10 @@ interface Opened {
   reachable: boolean;
   color: number;
   protection: string;
+}
+
+function contextPicker(page: Page): Locator {
+  return page.locator('header summary[aria-label="Kubernetes context"]');
 }
 
 async function opened(page: Page): Promise<Opened[]> {
@@ -72,7 +76,7 @@ async function openManager(page: Page): Promise<void> {
   });
   await openHome(page);
   await loaded;
-  await page.getByLabel('Kubernetes context').click();
+  await contextPicker(page).click();
   await page.getByRole('button', { name: 'Manage kubeconfigs', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Kubeconfigs' })).toBeVisible();
 }
@@ -98,7 +102,7 @@ test('one cluster is open, and it is the one spinoza was pointed at', async ({ p
 
 test('the picker names the cluster and the file it came from', async ({ page }) => {
   await openHome(page);
-  const picker = page.getByLabel('Kubernetes context');
+  const picker = contextPicker(page);
   await expect(picker).toContainText(CONTEXT, { timeout: 30_000 });
   await picker.click();
   await expect(page.getByRole('button', { name: 'Manage kubeconfigs', exact: true })).toBeVisible();
@@ -113,7 +117,7 @@ test('a second kubeconfig puts its context in the picker', async ({ page }) => {
   try {
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('header').getByRole('group').first().click();
+    await contextPicker(page).click();
     await expect(
       page.locator('header').getByRole('button', { name: NOWHERE_CONTEXT, exact: true }),
     ).toBeVisible({ timeout: 30_000 });
@@ -142,7 +146,7 @@ test('a failed cluster switch is retained in failure notifications', async ({ pa
   }
   await page.reload();
   try {
-    await page.getByLabel('Kubernetes context').click();
+    await contextPicker(page).click();
     await page.getByRole('button', { name: NOWHERE_CONTEXT, exact: true }).click();
     await expect(page.getByRole('status', { name: 'Latest notifications' })).toContainText(
       `Opening ${NOWHERE_CONTEXT}`,
@@ -267,11 +271,11 @@ test('removing a kubeconfig removes its context from the picker and adding it ba
     const dialog = page.getByRole('dialog', { name: 'Kubeconfigs' });
     await dialog.getByRole('button', { name: /Remove .*kubeconfig-nowhere$/ }).click();
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-    await page.getByLabel('Kubernetes context').click();
+    await contextPicker(page).click();
     await expect(page.getByRole('button', { name: NOWHERE_CONTEXT, exact: true })).toHaveCount(0);
     await addSecond(page);
     await page.reload();
-    await page.getByLabel('Kubernetes context').click();
+    await contextPicker(page).click();
     await expect(page.getByRole('button', { name: NOWHERE_CONTEXT, exact: true })).toBeVisible({
       timeout: 30_000,
     });
