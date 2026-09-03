@@ -1,7 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../harness/test';
-import { openGrouped, openHome, openResource, openView, selectRow } from '../harness/app';
-import { primaryShortcut } from '../harness/keyboard';
+import {
+  openGrouped,
+  openHome,
+  openPalette,
+  openResource,
+  openView,
+  selectRow,
+} from '../harness/app';
 import type { Page } from '@playwright/test';
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
@@ -79,7 +85,7 @@ test('the yaml editor has no detectable accessibility violations', async ({ page
 
 test('the command palette has no detectable accessibility violations', async ({ page }) => {
   await openHome(page);
-  await primaryShortcut(page, 'k');
+  await openPalette(page);
   await expect(page.getByPlaceholder('Search')).toBeVisible();
   expect(await violations(page)).toEqual([]);
 });

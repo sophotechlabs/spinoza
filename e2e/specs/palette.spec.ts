@@ -1,13 +1,8 @@
 import { expect, test } from '../harness/test';
-import { openHome } from '../harness/app';
+import { openHome, openPalette } from '../harness/app';
 import { primaryShortcut } from '../harness/keyboard';
-import type { Page } from '@playwright/test';
 
 const SEARCH = 'Search resources, views and recent objects';
-
-async function openPalette(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /^Search / }).click();
-}
 
 test('the palette opens on its shortcut and closes on escape', async ({ page }) => {
   await openHome(page);
@@ -20,7 +15,7 @@ test('the palette opens on its shortcut and closes on escape', async ({ page }) 
 
 test('the palette offers views and types before anything is typed', async ({ page }) => {
   await openHome(page);
-  await primaryShortcut(page, 'k');
+  await openPalette(page);
   const palette = page.getByRole('dialog', { name: 'Command palette' });
   await expect(palette.getByRole('button', { name: 'Issues view' })).toBeVisible();
   await expect(palette.getByRole('button', { name: /^Pod Workloads/ })).toBeVisible();
@@ -28,7 +23,7 @@ test('the palette offers views and types before anything is typed', async ({ pag
 
 test('typing narrows the palette to objects the cluster actually holds', async ({ page }) => {
   await openHome(page);
-  await primaryShortcut(page, 'k');
+  await openPalette(page);
   await page.getByRole('textbox', { name: SEARCH }).fill('healthy');
   const palette = page.getByRole('dialog', { name: 'Command palette' });
   await expect(palette.getByRole('button', { name: 'e2e/healthy deployment' })).toBeVisible({
@@ -42,7 +37,7 @@ test('typing narrows the palette to objects the cluster actually holds', async (
 
 test('a search that matches nothing offers nothing rather than everything', async ({ page }) => {
   await openHome(page);
-  await primaryShortcut(page, 'k');
+  await openPalette(page);
   await page.getByRole('textbox', { name: SEARCH }).fill('nothing-matches-this-at-all');
   const palette = page.getByRole('dialog', { name: 'Command palette' });
   await expect(palette.getByRole('button')).toHaveCount(0, { timeout: 30_000 });
@@ -50,7 +45,7 @@ test('a search that matches nothing offers nothing rather than everything', asyn
 
 test('choosing a view from the palette goes there', async ({ page }) => {
   await openHome(page);
-  await primaryShortcut(page, 'k');
+  await openPalette(page);
   await page
     .getByRole('dialog', { name: 'Command palette' })
     .getByRole('button', { name: 'Cluster checks view' })
@@ -60,7 +55,7 @@ test('choosing a view from the palette goes there', async ({ page }) => {
 
 test('choosing an object from the palette opens it', async ({ page }) => {
   await openHome(page);
-  await primaryShortcut(page, 'k');
+  await openPalette(page);
   await page.getByRole('textbox', { name: SEARCH }).fill('healthy');
   const palette = page.getByRole('dialog', { name: 'Command palette' });
   const hit = palette.getByRole('button', { name: 'e2e/healthy deployment' });

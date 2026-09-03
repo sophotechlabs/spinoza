@@ -1,5 +1,5 @@
 import { expect, test } from '../harness/test';
-import { openHome } from '../harness/app';
+import { openHome, openPalette } from '../harness/app';
 import { CONTEXT, SECOND_CONTEXT, SECOND_KUBECONFIG } from '../harness/paths';
 import { kubectl, kubectlSecond } from '../harness/cluster';
 import type { Page } from '@playwright/test';
@@ -196,7 +196,7 @@ test('the command palette searches every cluster and opens the hit where it live
   expect(pod).not.toBe('');
   try {
     await activate(page, primary);
-    await page.keyboard.press('ControlOrMeta+k');
+    await openPalette(page);
     const searched = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.pathname === '/api/search/fleet' && url.searchParams.get('q') === pod;

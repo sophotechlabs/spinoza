@@ -60,6 +60,10 @@ export async function openHome(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded');
 }
 
+export async function openPalette(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /^Search / }).click();
+}
+
 export async function expandCategory(page: Page, name: string): Promise<void> {
   const button = page.getByRole('button', { name: new RegExp(`^${name} \\d+$`) });
   await button.waitFor({ state: 'visible', timeout: 60_000 });
