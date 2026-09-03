@@ -41,12 +41,14 @@ function renderTable(
   onSelect = vi.fn(),
   scope: boolean | null = null,
   onMore?: (limit: number) => void,
+  cluster = 'p-mk1',
 ) {
   return render(
     <ResourceTable
       active={active}
       subId={SUB}
       scope={scope}
+      cluster={cluster}
       selected={selected}
       onSelect={onSelect}
       onMore={onMore}
@@ -103,6 +105,25 @@ describe('ResourceTable', () => {
 
     expect(screen.getByText('Pod could not be loaded')).toBeInTheDocument();
     expect(screen.getByText(/cannot list resource/)).toBeInTheDocument();
+  });
+
+  it('keeps the resource Kind and cluster scope visible', () => {
+    seed(makeColumns(['Ready']), true, []);
+
+    renderTable(descriptor, null, vi.fn(), null, undefined, 'production-west');
+
+    expect(screen.getByRole('heading', { name: 'Pod resources' })).toBeInTheDocument();
+    expect(screen.getByText('Cluster: production-west')).toBeInTheDocument();
+  });
+
+  it('keeps the resource Kind and cluster scope visible when loading fails', () => {
+    useResourcesStore.getState().failSub(SUB, 'the cluster refused');
+
+    renderTable(descriptor, null, vi.fn(), null, undefined, 'production-west');
+
+    expect(screen.getByRole('heading', { name: 'Pod resources' })).toBeInTheDocument();
+    expect(screen.getByText('Cluster: production-west')).toBeInTheDocument();
+    expect(screen.getByText('the cluster refused')).toBeInTheDocument();
   });
 
   it('does not pretend the resource is empty while it is failing', () => {
@@ -924,7 +945,14 @@ describe('filter chips', () => {
       .getState()
       .applySnapshot('s2', makeColumns([]), false, [makeRow({ uid: 'c', name: 'node-1' })]);
     view.rerender(
-      <ResourceTable active={other} subId="s2" scope={null} selected={null} onSelect={vi.fn()} />,
+      <ResourceTable
+        active={other}
+        subId="s2"
+        scope={null}
+        cluster="p-mk1"
+        selected={null}
+        onSelect={vi.fn()}
+      />,
     );
 
     expect(screen.getByLabelText('Filter')).toHaveValue('');
@@ -1040,6 +1068,7 @@ describe('selecting several rows at once', () => {
         active={descriptor}
         subId="s2"
         scope={null}
+        cluster="p-mk1"
         selected={null}
         onSelect={vi.fn()}
       />,
@@ -1133,7 +1162,14 @@ describe('a sort the user chose', () => {
       .getState()
       .applySnapshot('s2', makeColumns([]), false, [makeRow({ uid: 'c', name: 'node-1' })]);
     view.rerender(
-      <ResourceTable active={other} subId="s2" scope={null} selected={null} onSelect={vi.fn()} />,
+      <ResourceTable
+        active={other}
+        subId="s2"
+        scope={null}
+        cluster="p-mk1"
+        selected={null}
+        onSelect={vi.fn()}
+      />,
     );
 
     expect(screen.getAllByRole('columnheader')[1].textContent).not.toContain('▲');

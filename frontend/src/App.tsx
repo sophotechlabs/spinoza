@@ -562,6 +562,7 @@ export default function App() {
       active={active}
       subId={subId}
       scope={scope}
+      cluster={shownAs}
       selected={selectedRow}
       onSelect={handleSelectRow}
       onMore={handleMore}
