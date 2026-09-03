@@ -95,7 +95,7 @@ func baseValues() map[string]string {
 func oidcValues() map[string]string {
 	values := baseValues()
 	values["auth.mode"] = "oidc"
-	values["auth.sessionSecret"] = "a-cluster-mode-test-key"
+	values["auth.sessionSecret"] = "a-cluster-mode-session-secret-for-tests"
 	values["auth.oidc.issuerURL"] = realm
 	values["auth.oidc.internalIssuerURL"] = innerRealm
 	values["auth.oidc.clientID"] = "spinoza"
