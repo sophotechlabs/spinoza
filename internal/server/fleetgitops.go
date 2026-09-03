@@ -29,6 +29,7 @@ func mergeGitops(found []clusterAnswer[delivery]) api.FleetGitops {
 		merged.Apps = append(merged.Apps, argoApps(one)...)
 		trouble = append(trouble, named(one.context, one.answer.flux.Error)...)
 		trouble = append(trouble, named(one.context, one.answer.argo.Error)...)
+		trouble = append(trouble, named(one.context, one.failure)...)
 	}
 	markSpread(merged.Apps)
 	slices.SortStableFunc(merged.Apps, byApp)
@@ -93,14 +94,19 @@ func argoApps(one clusterAnswer[delivery]) []api.FleetApp {
 func markSpread(apps []api.FleetApp) {
 	on := map[string]map[string]struct{}{}
 	for _, one := range apps {
-		if on[one.Name] == nil {
-			on[one.Name] = map[string]struct{}{}
+		key := appKey(one)
+		if on[key] == nil {
+			on[key] = map[string]struct{}{}
 		}
-		on[one.Name][one.Cluster] = struct{}{}
+		on[key][one.Cluster] = struct{}{}
 	}
 	for at := range apps {
-		apps[at].Spread = len(on[apps[at].Name])
+		apps[at].Spread = len(on[appKey(apps[at])])
 	}
+}
+
+func appKey(app api.FleetApp) string {
+	return strings.Join([]string{app.Group, app.Resource, app.Namespace, app.Name}, "/")
 }
 
 func byApp(left, right api.FleetApp) int {

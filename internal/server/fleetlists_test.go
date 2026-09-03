@@ -496,6 +496,22 @@ func TestAnAppOnTwoClustersSaysHowFarItSpreads(t *testing.T) {
 	}
 }
 
+func TestSameNamedAppsInDifferentNamespacesDoNotShareSpread(t *testing.T) {
+	first := fluxOne("platform")
+	second := fluxOne("platform")
+	second.Groups[0].Resources[0].Namespace = "prod"
+	got := mergeGitops([]clusterAnswer[delivery]{
+		{cluster: "mk1", answer: delivery{flux: first}},
+		{cluster: "mk2", answer: delivery{flux: second}},
+	})
+
+	for _, one := range got.Apps {
+		if one.Spread != 1 {
+			t.Fatalf("spread = %d on %s/%s, want 1", one.Spread, one.Namespace, one.Name)
+		}
+	}
+}
+
 func TestAnAppOnOneClusterSaysSo(t *testing.T) {
 	ts := listServer(t, &listing{flux: fluxOne("platform")}, &listing{flux: fluxOne("other")})
 
@@ -518,6 +534,17 @@ func TestAGitopsEngineThatFailedIsNamed(t *testing.T) {
 	readFleet(t, ts, "/api/gitops/fleet", &got)
 
 	if got.Error != "p-mk2: argocd is not installed" {
+		t.Fatalf("error = %q", got.Error)
+	}
+}
+
+func TestAClusterThatCouldNotAnswerFleetGitopsIsNamed(t *testing.T) {
+	got := mergeGitops([]clusterAnswer[delivery]{
+		{context: "p-mk1", answer: delivery{flux: fluxOne("platform")}},
+		{context: "p-mk2", failure: "cluster stopped answering before the fleet deadline"},
+	})
+
+	if got.Error != "p-mk2: cluster stopped answering before the fleet deadline" {
 		t.Fatalf("error = %q", got.Error)
 	}
 }
