@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { NodeShellSupport } from '../lib/types';
 import { fetchNodeShellSupport } from '../lib/exec';
 import { useTerminalsStore } from '../store/terminals';
 import { useNodeShell } from '../store/settings';
 import { revealPanel } from '../store/panels';
 import { useClusterEpoch } from '../store/cluster';
+import DisabledActionReasons from './DisabledActionReasons';
+import { actionTitle, describedBy } from '../lib/actionAvailability';
 
 interface NodeShellButtonProps {
   node: string;
@@ -41,6 +43,7 @@ export default function NodeShellButton({ node }: NodeShellButtonProps) {
   const openNode = useTerminalsStore((state) => state.openNode);
   const turnedOn = useNodeShell();
   const targetKey = `${epoch}|${node}|${String(turnedOn)}`;
+  const reasonPrefix = useId();
 
   useEffect(() => {
     let live = true;
@@ -72,20 +75,31 @@ export default function NodeShellButton({ node }: NodeShellButtonProps) {
     visibleFailure = '';
   }
   const ready = visibleSupport !== null && visibleSupport.enabled && visibleSupport.allowed;
+  let unavailableReason: string | null = why(visibleSupport, visibleFailure);
+  if (ready) {
+    unavailableReason = null;
+  }
+  const reasonId = `${reasonPrefix}-node-shell`;
 
   return (
-    <span title={why(visibleSupport, visibleFailure)}>
-      <button
-        type="button"
-        disabled={!ready}
-        onClick={() => {
-          openNode(node);
-          revealPanel('terminal');
-        }}
-        className={BUTTON}
-      >
-        Node shell
-      </button>
-    </span>
+    <>
+      <span title={actionTitle(unavailableReason, why(visibleSupport, visibleFailure))}>
+        <button
+          type="button"
+          disabled={!ready}
+          aria-describedby={describedBy(unavailableReason, reasonId)}
+          onClick={() => {
+            openNode(node);
+            revealPanel('terminal');
+          }}
+          className={BUTTON}
+        >
+          Node shell
+        </button>
+      </span>
+      <DisabledActionReasons
+        reasons={[{ id: reasonId, label: 'Node shell', reason: unavailableReason }]}
+      />
+    </>
   );
 }

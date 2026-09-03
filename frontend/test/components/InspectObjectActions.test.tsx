@@ -1047,7 +1047,12 @@ describe('an action the cluster would refuse', () => {
 
     const button = screen.getByRole('button', { name: 'Scale' });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'requires container.deployments.update in Cloud IAM');
+    expect(button).toHaveAccessibleDescription(
+      'Scale unavailable: requires container.deployments.update in Cloud IAM',
+    );
+    expect(
+      screen.getByText(/Scale unavailable: requires container.deployments.update in Cloud IAM/),
+    ).toBeVisible();
   });
 
   it('greys out Restart and says why', () => {
@@ -1073,9 +1078,8 @@ describe('an action the cluster would refuse', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Cordon' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Drain' })).toHaveAttribute(
-      'title',
-      'no evicting pods',
+    expect(screen.getByRole('button', { name: 'Drain' })).toHaveAccessibleDescription(
+      'Drain unavailable: no evicting pods',
     );
   });
 
@@ -1108,7 +1112,7 @@ describe('an action the cluster would refuse', () => {
 
     const button = screen.getByRole('button', { name: 'Suspend' });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'no patching cron jobs');
+    expect(button).toHaveAccessibleDescription('Suspend unavailable: no patching cron jobs');
   });
 
   it('greys out Run now on its own refusal', () => {
@@ -1170,6 +1174,6 @@ describe('an action the cluster would refuse', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Scale' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Scale' })).not.toHaveAttribute('title');
+    expect(screen.getByRole('button', { name: 'Scale' })).not.toHaveAttribute('aria-describedby');
   });
 });

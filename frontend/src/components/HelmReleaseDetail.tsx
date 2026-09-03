@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type {
   HelmReleaseDetail as HelmReleaseDetailData,
   HelmResource,
@@ -28,6 +28,9 @@ import ConfirmByName from './ConfirmByName';
 import CopyButton from './CopyButton';
 import HelmUpgradeDialog from './HelmUpgradeDialog';
 import Loading from './Loading';
+import DisabledActionReasons from './DisabledActionReasons';
+import { actionTitle, describedBy } from '../lib/actionAvailability';
+import type { DisabledActionReason } from '../lib/actionAvailability';
 
 const TABS = ['Overview', 'Values', 'Notes', 'Manifest', 'Resources', 'History'] as const;
 
@@ -75,19 +78,18 @@ interface TypedConfirm {
   question: string;
 }
 
-function reasonFor(
-  what: string,
+function blockedReason(
   helmReady: boolean,
   helmReason: string,
   refused: string | null,
-): string {
+): string | null {
   if (!helmReady) {
     return helmReason;
   }
   if (refused !== null) {
     return refused;
   }
-  return what;
+  return null;
 }
 
 function orDash(value: string): string {
@@ -139,6 +141,26 @@ export default function HelmReleaseDetail({
   const helmReason = support?.reason ?? 'checking whether helm is available';
   const fluxRef = data?.release.fluxRef;
   const shown = inspected ?? data;
+  const reasonPrefix = useId();
+  const upgradeReason = blockedReason(helmReady, helmReason, noUpgrade);
+  const uninstallReason = blockedReason(helmReady, helmReason, noUninstall);
+  const actionReasons: DisabledActionReason[] = [];
+  if (fluxRef === undefined) {
+    if (confirming === null) {
+      actionReasons.push({
+        id: `${reasonPrefix}-upgrade`,
+        label: 'Upgrade',
+        reason: upgradeReason,
+      });
+    }
+  }
+  if (confirming === null) {
+    actionReasons.push({
+      id: `${reasonPrefix}-uninstall`,
+      label: 'Uninstall',
+      reason: uninstallReason,
+    });
+  }
 
   if (stateScope !== actionScope) {
     setStateScope(actionScope);
@@ -399,7 +421,8 @@ export default function HelmReleaseDetail({
             <button
               type="button"
               disabled={busy || !helmReady || data === null || noUpgrade !== null}
-              title={reasonFor('Upgrade this release', helmReady, helmReason, noUpgrade)}
+              aria-describedby={describedBy(upgradeReason, `${reasonPrefix}-upgrade`)}
+              title={actionTitle(upgradeReason, 'Upgrade this release')}
               onClick={() => {
                 setUpgrading(true);
               }}
@@ -412,7 +435,8 @@ export default function HelmReleaseDetail({
             <button
               type="button"
               disabled={busy || !helmReady || noUninstall !== null}
-              title={reasonFor('Uninstall this release', helmReady, helmReason, noUninstall)}
+              aria-describedby={describedBy(uninstallReason, `${reasonPrefix}-uninstall`)}
+              title={actionTitle(uninstallReason, 'Uninstall this release')}
               onClick={() => {
                 askUninstall();
               }}
@@ -454,12 +478,10 @@ export default function HelmReleaseDetail({
         </div>
       </div>
 
+      <div className="px-3">
+        <DisabledActionReasons reasons={actionReasons} />
+      </div>
       <Announce message={failure} urgent className="px-3 py-1 text-error" />
-      {!helmReady && support !== null && (
-        <p role="status" className="px-3 py-1 text-warn">
-          Upgrade, rollback and uninstall need the helm binary: {helmReason}
-        </p>
-      )}
 
       {loading && data === null && <Loading what="the release" />}
       {error !== null && (
@@ -610,7 +632,14 @@ function ResourceName({
 }) {
   const ref = refOf(resource);
   if (ref === null) {
-    return <span title="this cluster does not report that kind">{resource.name}</span>;
+    return (
+      <span
+        aria-label={`${resource.name}: unavailable because this cluster does not report that kind`}
+      >
+        {resource.name}
+        <span className="ml-1 text-[10px] text-fg-muted">· kind unavailable in this cluster</span>
+      </span>
+    );
   }
   return (
     <button
@@ -659,6 +688,9 @@ function History({
   onRetry: () => void;
   onRollback: (revision: number) => void;
 }) {
+  const rollbackReason = blockedReason(helmReady, helmReason, refused);
+  const reasonPrefix = useId();
+  const rollbackReasonId = `${reasonPrefix}-rollback`;
   if (loading && revisions.length === 0) {
     return <p className="p-3 text-fg-muted">Loading release history…</p>;
   }
@@ -681,6 +713,11 @@ function History({
   }
   return (
     <div>
+      <div className="px-3">
+        <DisabledActionReasons
+          reasons={[{ id: rollbackReasonId, label: 'Roll back', reason: rollbackReason }]}
+        />
+      </div>
       <table className="w-full border-collapse text-left">
         <thead className="text-fg-muted">
           <tr className="border-b border-edge">
@@ -719,11 +756,10 @@ function History({
                     <button
                       type="button"
                       disabled={busy || !helmReady || refused !== null}
-                      title={reasonFor(
+                      aria-describedby={describedBy(rollbackReason, rollbackReasonId)}
+                      title={actionTitle(
+                        rollbackReason,
                         `Roll back to revision ${String(entry.revision)}`,
-                        helmReady,
-                        helmReason,
-                        refused,
                       )}
                       onClick={() => {
                         onRollback(entry.revision);

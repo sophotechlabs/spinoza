@@ -390,7 +390,12 @@ describe('gitops buttons the cluster would refuse', () => {
 
     const reconcile = screen.getByRole('button', { name: 'Reconcile' });
     expect(reconcile).toBeDisabled();
-    expect(reconcile).toHaveAttribute('title', 'no patching kustomizations');
+    expect(reconcile).toHaveAccessibleDescription(
+      'GitOps actions unavailable: no patching kustomizations',
+    );
+    expect(
+      screen.getByText(/GitOps actions unavailable: no patching kustomizations/),
+    ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Suspend' })).toBeDisabled();
   });
 
@@ -417,7 +422,9 @@ describe('a flux object that is being deleted', () => {
 
     const reconcile = screen.getByRole('button', { name: 'Reconcile' });
     expect(reconcile).toBeDisabled();
-    expect(reconcile).toHaveAttribute('title', 'this object is being deleted');
+    expect(reconcile).toHaveAccessibleDescription(
+      'GitOps actions unavailable: this object is being deleted',
+    );
     expect(screen.getByRole('button', { name: 'Suspend' })).toBeDisabled();
   });
 });

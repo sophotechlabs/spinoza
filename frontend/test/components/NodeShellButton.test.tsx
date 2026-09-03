@@ -74,8 +74,12 @@ describe('the node shell button', () => {
 
     render(<NodeShellButton node="p-mk1" />);
 
-    expect(await screen.findByTitle('node shells are off; turn them on')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
+    const button = screen.getByRole('button', { name: 'Node shell' });
+    expect(await screen.findByText(/Node shell unavailable: node shells are off/)).toBeVisible();
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription(
+      'Node shell unavailable: node shells are off; turn them on',
+    );
   });
 
   it('stays off when the cluster refuses the pod', async () => {
@@ -83,7 +87,9 @@ describe('the node shell button', () => {
 
     render(<NodeShellButton node="p-mk1" />);
 
-    expect(await screen.findByTitle('you may not create pods in kube-system')).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Node shell unavailable: you may not create pods in kube-system/),
+    ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
   });
 
@@ -109,7 +115,7 @@ describe('the node shell button', () => {
   it('asks again when the setting turns node shells on', async () => {
     stub(support({ enabled: false, allowed: false, reason: 'node shells are off' }));
     render(<NodeShellButton node="p-mk1" />);
-    await screen.findByTitle('node shells are off');
+    await screen.findByText(/Node shell unavailable: node shells are off/);
 
     stub(support());
     act(() => {
@@ -154,7 +160,7 @@ describe('the node shell button', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
-    expect(screen.getByTitle('Checking whether a node shell can be opened')).toBeInTheDocument();
+    expect(screen.getByText(/Checking whether a node shell can be opened/)).toBeInTheDocument();
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });

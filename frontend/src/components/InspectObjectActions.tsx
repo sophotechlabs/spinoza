@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ActionResult, ObjectDetail, ObjectRef, PodOutcome } from '../lib/types';
 import {
   canRestart,
@@ -21,6 +21,9 @@ import { useProtectedCluster } from '../store/contexts';
 import { useClusterEpoch } from '../store/cluster';
 import { useRefusal } from '../store/access';
 import ClusterBadge from './ClusterBadge';
+import DisabledActionReasons from './DisabledActionReasons';
+import { actionTitle, describedBy } from '../lib/actionAvailability';
+import type { DisabledActionReason } from '../lib/actionAvailability';
 
 interface InspectObjectActionsProps {
   target: ObjectRef;
@@ -99,6 +102,7 @@ export default function InspectObjectActions({
   const noSuspend = useRefusal(target, 'suspend');
   const noTrigger = useRefusal(target, 'trigger');
   const epoch = useClusterEpoch();
+  const reasonPrefix = useId();
 
   const refKey = `${epoch}|${refQuery(target)}`;
 
@@ -219,6 +223,29 @@ export default function InspectObjectActions({
   const cordoned = isCordoned(detail);
   const suspended = isSuspended(detail);
   const confirmDisabled = busy || (blocked > 0 && !force);
+  const actionReasons: DisabledActionReason[] = [];
+  if (canScale(target)) {
+    actionReasons.push({ id: `${reasonPrefix}-scale`, label: 'Scale', reason: noScale });
+  }
+  if (canRestart(target)) {
+    actionReasons.push({ id: `${reasonPrefix}-restart`, label: 'Restart', reason: noRestart });
+  }
+  if (isNode(target)) {
+    let cordonLabel = 'Cordon';
+    if (cordoned) {
+      cordonLabel = 'Uncordon';
+    }
+    actionReasons.push({ id: `${reasonPrefix}-cordon`, label: cordonLabel, reason: noCordon });
+    actionReasons.push({ id: `${reasonPrefix}-drain`, label: 'Drain', reason: noDrain });
+  }
+  if (isCronJob(target)) {
+    let suspendLabel = 'Suspend';
+    if (suspended) {
+      suspendLabel = 'Resume';
+    }
+    actionReasons.push({ id: `${reasonPrefix}-trigger`, label: 'Run now', reason: noTrigger });
+    actionReasons.push({ id: `${reasonPrefix}-suspend`, label: suspendLabel, reason: noSuspend });
+  }
 
   return (
     <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
@@ -242,7 +269,8 @@ export default function InspectObjectActions({
               type="button"
               onClick={handleScale}
               disabled={busy || noScale !== null}
-              title={noScale ?? undefined}
+              aria-describedby={describedBy(noScale, `${reasonPrefix}-scale`)}
+              title={actionTitle(noScale)}
               className={buttonClass}
             >
               Scale
@@ -256,7 +284,8 @@ export default function InspectObjectActions({
               ask('restart', {}, `Restart ${target.name}? Every pod is replaced.`);
             }}
             disabled={busy || noRestart !== null}
-            title={noRestart ?? undefined}
+            aria-describedby={describedBy(noRestart, `${reasonPrefix}-restart`)}
+            title={actionTitle(noRestart)}
             className={buttonClass}
           >
             Restart
@@ -269,7 +298,8 @@ export default function InspectObjectActions({
               ask('cordon', {}, `Cordon ${target.name}? Nothing new will be scheduled on it.`);
             }}
             disabled={busy || noCordon !== null}
-            title={noCordon ?? undefined}
+            aria-describedby={describedBy(noCordon, `${reasonPrefix}-cordon`)}
+            title={actionTitle(noCordon)}
             className={dangerClass}
           >
             Cordon
@@ -280,7 +310,8 @@ export default function InspectObjectActions({
             type="button"
             onClick={() => void run('uncordon')}
             disabled={busy || noCordon !== null}
-            title={noCordon ?? undefined}
+            aria-describedby={describedBy(noCordon, `${reasonPrefix}-cordon`)}
+            title={actionTitle(noCordon)}
             className={resumeClass}
           >
             Uncordon
@@ -291,7 +322,8 @@ export default function InspectObjectActions({
             type="button"
             onClick={() => void run('drain', { dryRun: true })}
             disabled={busy || noDrain !== null}
-            title={noDrain ?? undefined}
+            aria-describedby={describedBy(noDrain, `${reasonPrefix}-drain`)}
+            title={actionTitle(noDrain)}
             className={dangerClass}
           >
             Drain
@@ -304,7 +336,8 @@ export default function InspectObjectActions({
               ask('trigger', {}, `Run ${target.name} now? A job is started outside the schedule.`);
             }}
             disabled={busy || noTrigger !== null}
-            title={noTrigger ?? undefined}
+            aria-describedby={describedBy(noTrigger, `${reasonPrefix}-trigger`)}
+            title={actionTitle(noTrigger)}
             className={buttonClass}
           >
             Run now
@@ -317,7 +350,8 @@ export default function InspectObjectActions({
               ask('suspend', {}, `Suspend ${target.name}? No new runs are started.`);
             }}
             disabled={busy || noSuspend !== null}
-            title={noSuspend ?? undefined}
+            aria-describedby={describedBy(noSuspend, `${reasonPrefix}-suspend`)}
+            title={actionTitle(noSuspend)}
             className={dangerClass}
           >
             Suspend
@@ -328,7 +362,8 @@ export default function InspectObjectActions({
             type="button"
             onClick={() => void run('resume')}
             disabled={busy || noSuspend !== null}
-            title={noSuspend ?? undefined}
+            aria-describedby={describedBy(noSuspend, `${reasonPrefix}-suspend`)}
+            title={actionTitle(noSuspend)}
             className={resumeClass}
           >
             Resume
@@ -339,6 +374,7 @@ export default function InspectObjectActions({
         {suspended && <span className="text-warn-muted">suspended</span>}
         {busy && <span className="text-fg-muted">working</span>}
       </div>
+      <DisabledActionReasons reasons={actionReasons} />
 
       {pending !== null && pending.typed && (
         <ConfirmByName

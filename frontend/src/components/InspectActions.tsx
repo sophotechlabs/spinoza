@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ObjectRef } from '../lib/types';
 import { pollReconcile, runFluxAction } from '../lib/fluxActions';
 import type { FluxAction, ReconcileProgress, ReconcileState } from '../lib/fluxActions';
@@ -7,6 +7,8 @@ import Announce from './Announce';
 import { useRefusal } from '../store/access';
 import { useClusterEpoch } from '../store/cluster';
 import { useGitopsKeys } from '../lib/gitopsKeys';
+import DisabledActionReasons from './DisabledActionReasons';
+import { actionTitle, describedBy } from '../lib/actionAvailability';
 
 interface InspectActionsProps {
   target: ObjectRef;
@@ -62,6 +64,8 @@ export default function InspectActions({
   const epoch = useClusterEpoch();
   const watchRef = useRef(0);
   const targetKey = `${epoch}|${refQuery(target)}`;
+  const reasonPrefix = useId();
+  const blockedReasonId = `${reasonPrefix}-gitops`;
 
   useEffect(() => {
     setBusy(null);
@@ -150,7 +154,8 @@ export default function InspectActions({
           type="button"
           onClick={() => void run('reconcile')}
           disabled={disabled}
-          title={blocked ?? undefined}
+          aria-describedby={describedBy(blocked, blockedReasonId)}
+          title={actionTitle(blocked)}
           className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
         >
           Reconcile
@@ -160,7 +165,8 @@ export default function InspectActions({
             type="button"
             onClick={() => void run('reconcile-with-source')}
             disabled={disabled}
-            title={blocked ?? 'Ask the repository to fetch first, then reconcile this'}
+            aria-describedby={describedBy(blocked, blockedReasonId)}
+            title={actionTitle(blocked, 'Ask the repository to fetch first, then reconcile this')}
             className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             With source
@@ -171,7 +177,8 @@ export default function InspectActions({
             type="button"
             onClick={() => void run('resume')}
             disabled={disabled}
-            title={blocked ?? undefined}
+            aria-describedby={describedBy(blocked, blockedReasonId)}
+            title={actionTitle(blocked)}
             className="rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Resume
@@ -182,7 +189,8 @@ export default function InspectActions({
             type="button"
             onClick={() => void run('suspend')}
             disabled={disabled}
-            title={blocked ?? undefined}
+            aria-describedby={describedBy(blocked, blockedReasonId)}
+            title={actionTitle(blocked)}
             className="rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint"
           >
             Suspend
@@ -191,6 +199,9 @@ export default function InspectActions({
         {suspended === true && <span className="text-warn-muted">suspended</span>}
         {busy !== null && <span className="text-fg-muted">working</span>}
       </div>
+      <DisabledActionReasons
+        reasons={[{ id: blockedReasonId, label: 'GitOps actions', reason: blocked }]}
+      />
       <Announce message={error} urgent className="mt-1.5 break-words text-error" />
       <Announce message={notice} className={noticeClass(state)} />
     </div>

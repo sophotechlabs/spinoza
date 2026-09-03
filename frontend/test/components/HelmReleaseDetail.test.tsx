@@ -283,6 +283,7 @@ describe('HelmReleaseDetail', () => {
 
     expect(screen.queryByRole('button', { name: 'thing' })).not.toBeInTheDocument();
     expect(screen.getByText('thing')).toBeInTheDocument();
+    expect(screen.getByText(/kind unavailable in this cluster/)).toBeVisible();
   });
 
   it('lists the revision history newest first and offers a rollback', async () => {
@@ -817,9 +818,15 @@ describe('HelmReleaseDetail', () => {
     stub({ support: { available: false, reason: 'helm was not found on PATH', binary: 'helm' } });
     renderDetail();
 
-    expect(await screen.findByText(/helm was not found on PATH/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Uninstall' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Upgrade' })).toBeDisabled();
+    expect(await screen.findAllByText(/helm was not found on PATH/)).toHaveLength(2);
+    const uninstall = screen.getByRole('button', { name: 'Uninstall' });
+    const upgrade = screen.getByRole('button', { name: 'Upgrade' });
+    expect(uninstall).toBeDisabled();
+    expect(uninstall).toHaveAccessibleDescription(
+      'Uninstall unavailable: helm was not found on PATH',
+    );
+    expect(upgrade).toBeDisabled();
+    expect(upgrade).toHaveAccessibleDescription('Upgrade unavailable: helm was not found on PATH');
   });
 
   it('opens the upgrade dialog seeded with the loaded release', async () => {
@@ -1124,7 +1131,8 @@ describe('HelmReleaseDetail when the cluster refuses', () => {
     await waitFor(() => {
       expect(upgrade).toBeDisabled();
     });
-    expect(upgrade).toHaveAttribute('title', 'no creating secrets in demo');
+    expect(upgrade).toHaveAccessibleDescription('Upgrade unavailable: no creating secrets in demo');
+    expect(screen.getByText(/Upgrade unavailable: no creating secrets in demo/)).toBeVisible();
   });
 
   it('holds back Uninstall and says why', async () => {
@@ -1136,7 +1144,9 @@ describe('HelmReleaseDetail when the cluster refuses', () => {
     await waitFor(() => {
       expect(uninstall).toBeDisabled();
     });
-    expect(uninstall).toHaveAttribute('title', 'no deleting secrets in demo');
+    expect(uninstall).toHaveAccessibleDescription(
+      'Uninstall unavailable: no deleting secrets in demo',
+    );
   });
 
   it('holds back every Roll back and says why', async () => {
@@ -1150,7 +1160,9 @@ describe('HelmReleaseDetail when the cluster refuses', () => {
     await waitFor(() => {
       expect(rollback).toBeDisabled();
     });
-    expect(rollback).toHaveAttribute('title', 'no creating secrets in demo');
+    expect(rollback).toHaveAccessibleDescription(
+      'Roll back unavailable: no creating secrets in demo',
+    );
   });
 
   it('leaves the actions it was not told about alone', async () => {
@@ -1173,7 +1185,7 @@ describe('HelmReleaseDetail when the cluster refuses', () => {
     await waitFor(() => {
       expect(upgrade).toBeEnabled();
     });
-    expect(upgrade).toHaveAttribute('title', 'Upgrade this release');
+    expect(upgrade).not.toHaveAttribute('aria-describedby');
   });
 
   it('asks about the release that is open', async () => {
@@ -1199,6 +1211,8 @@ describe('HelmReleaseDetail when the cluster refuses', () => {
     await waitFor(() => {
       expect(uninstall).toBeDisabled();
     });
-    expect(uninstall).toHaveAttribute('title', 'helm was not found on PATH');
+    expect(uninstall).toHaveAccessibleDescription(
+      'Uninstall unavailable: helm was not found on PATH',
+    );
   });
 });
