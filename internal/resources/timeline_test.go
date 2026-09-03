@@ -83,7 +83,15 @@ func startRecording(t *testing.T, mgr *Manager) (*kept, *stream) {
 	mgr.Record(context.Background(), held, []Kind{deployments})
 	t.Cleanup(mgr.StopRecording)
 	waitForStreams(t, mgr, 1)
-	return held, deploymentStream(t, mgr)
+	st := deploymentStream(t, mgr)
+	for range 200 {
+		if st.delivered() {
+			return held, st
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("the deployment stream did not deliver its initial rows")
+	return nil, nil
 }
 
 func TestAStreamOnlyCountsRowsAsDeliveredAfterItsHandlerSyncs(t *testing.T) {
