@@ -57,7 +57,7 @@ func (s *Service) Detail(
 		created:   ref.created,
 		body:      body,
 	}
-	release, decodeErr := selected.release()
+	release, decoded, decodeErr := selected.decoded()
 	detail := api.HelmReleaseDetail{
 		Release: release,
 		Driver:  selected.driver,
@@ -68,7 +68,6 @@ func (s *Service) Detail(
 		return detail, nil
 	}
 
-	decoded, _ := decode(selected.body)
 	detail.Values = valuesOf(decoded)
 	detail.Notes = decoded.Info.Notes
 	detail.Manifest = decoded.Manifest

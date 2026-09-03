@@ -20,6 +20,12 @@ func (s *Server) handleHelmRelease(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	release, claimed := s.releaseReads.claim(liveIdentity(r), 1)
+	if !claimed {
+		writeError(w, http.StatusTooManyRequests, "helm release reads are busy; try again")
+		return
+	}
+	defer release()
 	detail, err := s.managerFor(r).HelmRelease(r.Context(), namespace, name, revision)
 	if err != nil {
 		writeAPIError(w, err)
@@ -37,6 +43,12 @@ func (s *Server) handleHelmHistory(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	release, claimed := s.releaseReads.claim(liveIdentity(r), 1)
+	if !claimed {
+		writeError(w, http.StatusTooManyRequests, "helm release reads are busy; try again")
+		return
+	}
+	defer release()
 	page, err := s.managerFor(r).HelmHistory(r.Context(), namespace, name, through)
 	if err != nil {
 		writeAPIError(w, err)
@@ -114,6 +126,12 @@ func (s *Server) handleHelmVersions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "chart is required")
 		return
 	}
+	release, claimed := s.chartFetches.claim(liveIdentity(r), 1)
+	if !claimed {
+		writeError(w, http.StatusTooManyRequests, "helm chart searches are busy; try again")
+		return
+	}
+	defer release()
 	found, err := s.managerFor(r).HelmVersions(r.Context(), chart)
 	if err != nil {
 		writeAPIError(w, err)
@@ -123,6 +141,12 @@ func (s *Server) handleHelmVersions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHelmCharts(w http.ResponseWriter, r *http.Request) {
+	release, claimed := s.chartFetches.claim(liveIdentity(r), 1)
+	if !claimed {
+		writeError(w, http.StatusTooManyRequests, "helm chart searches are busy; try again")
+		return
+	}
+	defer release()
 	found, err := s.managerFor(r).HelmChartSearch(r.Context(), r.URL.Query().Get("query"))
 	if err != nil {
 		writeAPIError(w, err)
@@ -140,6 +164,12 @@ func (s *Server) handleHelmChartValues(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "chart, repo and version are required")
 		return
 	}
+	release, claimed := s.helmProcesses.claim(liveIdentity(r), 1)
+	if !claimed {
+		writeError(w, http.StatusTooManyRequests, "helm values reads are busy; try again")
+		return
+	}
+	defer release()
 	found, err := s.managerFor(r).HelmChartValues(r.Context(), helm.ValuesRequest{
 		Chart:   chart,
 		Version: wanted,
@@ -281,6 +311,12 @@ func (s *Server) finishHelmAction(
 }
 
 func (s *Server) handleHelm(w http.ResponseWriter, r *http.Request) {
+	release, claimed := s.releaseReads.claim(liveIdentity(r), 1)
+	if !claimed {
+		writeError(w, http.StatusTooManyRequests, "helm release reads are busy; try again")
+		return
+	}
+	defer release()
 	releases, err := s.managerFor(r).HelmReleases(r.Context())
 	if err != nil {
 		writeAPIError(w, err)

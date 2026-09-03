@@ -1,7 +1,7 @@
 package server
 
 import (
-	"io"
+	"errors"
 	"net/http"
 	"time"
 
@@ -42,7 +42,7 @@ func (s *Server) baselines() Baselines {
 	return s.baseline
 }
 
-const maxBaselineBytes = 64 << 20
+const maxBaselineBytes = 8 << 20
 
 func (s *Server) saveBaselineFile(w http.ResponseWriter, r *http.Request) {
 	taken, ok := s.baselines().Load(s.clusterKey(r))
@@ -61,13 +61,18 @@ func (s *Server) saveBaselineFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) loadBaselineFile(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBaselineBytes))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "the baseline could not be read")
+	release, claimed := s.baselineImports.claim(liveIdentity(r), 1)
+	if !claimed {
+		writeError(w, http.StatusTooManyRequests, "baseline import is busy; try again")
 		return
 	}
-	taken, decodeErr := baseline.Decode(body)
+	defer release()
+	taken, decodeErr := baseline.DecodeReader(http.MaxBytesReader(w, r.Body, maxBaselineBytes))
 	if decodeErr != nil {
+		if errors.Is(decodeErr, baseline.ErrRead) {
+			writeError(w, http.StatusBadRequest, "the baseline could not be read")
+			return
+		}
 		writeError(w, http.StatusBadRequest, decodeErr.Error())
 		return
 	}

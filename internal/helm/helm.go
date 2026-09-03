@@ -11,6 +11,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -27,7 +28,7 @@ const (
 	listTimeout  = 15 * time.Second
 	pageSize     = 200
 	maxObjects   = 5000
-	maxPayload   = 32 << 20
+	maxPayload   = 8 << 20
 	nameLabel    = "name"
 	versionLabel = "version"
 	statusLabel  = "status"
@@ -39,6 +40,23 @@ var errNotRelease = errors.New("the object does not hold a helm release")
 
 var errNoMetadata = errors.New("this cluster connection has no metadata client, so releases cannot be listed")
 
+var releaseDecodes = newDecodeBudget(2)
+
+type decodeBudget struct {
+	slots chan struct{}
+}
+
+func newDecodeBudget(limit int) *decodeBudget {
+	return &decodeBudget{slots: make(chan struct{}, limit)}
+}
+
+func (b *decodeBudget) claim() func() {
+	b.slots <- struct{}{}
+	return func() {
+		<-b.slots
+	}
+}
+
 type Charts interface {
 	Latest(repo charts.Repo, chart string) string
 	Warm(repo charts.Repo, chart string)
@@ -47,13 +65,28 @@ type Charts interface {
 }
 
 type Service struct {
-	cs      kubernetes.Interface
-	meta    metadata.Interface
-	runner  Runner
-	index   Charts
-	repos   []RepoEntry
-	kubeRef api.ContextRef
-	cache   *releaseCache
+	cs             kubernetes.Interface
+	meta           metadata.Interface
+	runner         Runner
+	index          Charts
+	repos          []RepoEntry
+	kubeRef        api.ContextRef
+	cache          *releaseCache
+	valuesMu       sync.Mutex
+	values         map[ValuesRequest]cachedValues
+	valuesInflight map[ValuesRequest]*valuesFlight
+	valuesNow      func() time.Time
+}
+
+type cachedValues struct {
+	value   api.HelmChartValues
+	fetched time.Time
+}
+
+type valuesFlight struct {
+	done  chan struct{}
+	value api.HelmChartValues
+	err   error
 }
 
 func NewService(
@@ -65,13 +98,16 @@ func NewService(
 	kubeRef api.ContextRef,
 ) *Service {
 	return &Service{
-		cs:      cs,
-		meta:    meta,
-		runner:  runner,
-		index:   index,
-		repos:   repos,
-		kubeRef: kubeRef,
-		cache:   newReleaseCache(),
+		cs:             cs,
+		meta:           meta,
+		runner:         runner,
+		index:          index,
+		repos:          repos,
+		kubeRef:        kubeRef,
+		cache:          newReleaseCache(),
+		values:         map[ValuesRequest]cachedValues{},
+		valuesInflight: map[ValuesRequest]*valuesFlight{},
+		valuesNow:      time.Now,
 	}
 }
 
@@ -177,6 +213,8 @@ type payload struct {
 }
 
 func decode(raw []byte) (payload, error) {
+	release := releaseDecodes.claim()
+	defer release()
 	if len(raw) == 0 {
 		return payload{}, errors.New("release payload is empty")
 	}
@@ -188,6 +226,9 @@ func decode(raw []byte) (payload, error) {
 	if err != nil {
 		if !errors.Is(err, errNotGzip) {
 			return payload{}, err
+		}
+		if len(body) > maxPayload {
+			return payload{}, fmt.Errorf("release payload is larger than %d bytes", maxPayload)
 		}
 		plain = body
 	}

@@ -216,6 +216,34 @@ func TestActionsSayNothingAboutTheDriverForTheDefaultOne(t *testing.T) {
 	}
 }
 
+func TestHelmChildEnvironmentExcludesServerCredentials(t *testing.T) {
+	t.Setenv("SPINOZA_AUTH_OIDC_CLIENT_SECRET", "must-not-leak")
+	t.Setenv("HELM_CACHE_HOME", "/tmp/helm-cache")
+	t.Setenv("KUBECONFIG", "/tmp/kubeconfig")
+
+	env := helmEnvironment([]string{"HELM_DRIVER=configmap"})
+	found := map[string]string{}
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			t.Fatalf("environment entry = %q", entry)
+		}
+		found[key] = value
+	}
+	if _, ok := found["SPINOZA_AUTH_OIDC_CLIENT_SECRET"]; ok {
+		t.Fatal("the oidc client secret entered the helm child environment")
+	}
+	if found["HELM_CACHE_HOME"] != "/tmp/helm-cache" {
+		t.Fatalf("HELM_CACHE_HOME = %q", found["HELM_CACHE_HOME"])
+	}
+	if found["KUBECONFIG"] != "/tmp/kubeconfig" {
+		t.Fatalf("KUBECONFIG = %q", found["KUBECONFIG"])
+	}
+	if found["HELM_DRIVER"] != "configmap" {
+		t.Fatalf("HELM_DRIVER = %q", found["HELM_DRIVER"])
+	}
+}
+
 func TestActionsRefuseNamesThatCouldBeFlags(t *testing.T) {
 	runner := &stubRunner{}
 	service := acting(t, runner)

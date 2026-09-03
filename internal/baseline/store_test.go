@@ -391,6 +391,66 @@ func TestSomethingThatIsNotABaselineIsRefusedRatherThanStored(t *testing.T) {
 	}
 }
 
+func TestMalformedBaselineShapesAreRefused(t *testing.T) {
+	cases := []struct {
+		name      string
+		body      string
+		want      string
+		alternate string
+	}{
+		{name: "empty", body: "", want: "EOF"},
+		{name: "top level list", body: `[]`, want: "top-level value is not an object"},
+		{name: "unknown field", body: `{"unknown":1}`, want: `unknown field "unknown"`},
+		{name: "cluster type", body: `{"cluster":1}`, want: "cannot unmarshal number"},
+		{name: "trailing value", body: `{} {}`, want: "baseline has a trailing value"},
+		{name: "broken trailing value", body: `{} {`, want: "unexpected EOF"},
+		{name: "checks opening", body: `{"checks":`, want: "EOF"},
+		{name: "checks shape", body: `{"checks":{}}`, want: "baseline checks are not a list"},
+		{name: "check type", body: `{"checks":[{}]}`, want: "cannot unmarshal object"},
+		{name: "checks closing", body: `{"checks":["one"`, want: "EOF", alternate: "unexpected end of JSON input"},
+		{name: "counts opening", body: `{"counts":`, want: "EOF"},
+		{name: "counts shape", body: `{"counts":[]}`, want: "baseline counts are not an object"},
+		{name: "count type", body: `{"counts":{"one":"bad"}}`, want: "cannot unmarshal string"},
+		{name: "counts closing", body: `{"counts":{"one":1`, want: "EOF", alternate: "unexpected end of JSON input"},
+		{name: "keys opening", body: `{"keys":`, want: "EOF"},
+		{name: "keys shape", body: `{"keys":[]}`, want: "baseline keys are not an object"},
+		{name: "key value type", body: `{"keys":{"one":1}}`, want: "cannot unmarshal number"},
+		{name: "keys closing", body: `{"keys":{"one":"value"`, want: "EOF", alternate: "unexpected end of JSON input"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Decode([]byte(tc.body))
+			if err == nil {
+				t.Fatal("malformed baseline was accepted")
+			}
+			if strings.Contains(err.Error(), tc.want) {
+				return
+			}
+			if tc.alternate != "" {
+				if strings.Contains(err.Error(), tc.alternate) {
+					return
+				}
+			}
+			t.Fatalf("error = %q, want %q or %q", err, tc.want, tc.alternate)
+		})
+	}
+}
+
+func TestNullOptionalBaselineMapsBecomeEmptyMaps(t *testing.T) {
+	body := []byte(`{"takenAt":"2026-09-03T12:00:00Z","checks":["one"],"counts":null,"keys":null}`)
+
+	baseline, err := Decode(body)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if baseline.Counts == nil {
+		t.Fatal("counts remained nil")
+	}
+	if baseline.Keys == nil {
+		t.Fatal("keys remained nil")
+	}
+}
+
 func TestABaselineTooLargeToBeOneIsRefused(t *testing.T) {
 	if _, err := Decode(make([]byte, maxBytes+1)); err == nil {
 		t.Fatal("a body past the cap was read as a baseline")
@@ -411,6 +471,123 @@ func TestAnImportedBaselineCannotExceedTheFindingCap(t *testing.T) {
 	if _, err := Decode(body); err == nil {
 		t.Fatal("a baseline past the finding cap was imported")
 	}
+}
+
+func TestAnImportedBaselineAcceptsTheFindingCap(t *testing.T) {
+	held := taken()
+	held.Keys = make(map[string]string, maxKeys)
+	for at := range maxKeys {
+		held.Keys[strconv.Itoa(at)] = "Deployment apps/api"
+	}
+	body, err := json.Marshal(flatten(held))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	back, err := Decode(body)
+	if err != nil {
+		t.Fatalf("decode the maximum finding set: %v", err)
+	}
+	if len(back.Keys) != maxKeys {
+		t.Fatalf("findings = %d, want %d", len(back.Keys), maxKeys)
+	}
+}
+
+func TestImportedBaselineKeyContentHasAnExactByteLimit(t *testing.T) {
+	accepted := taken()
+	accepted.Keys = map[string]string{"k": strings.Repeat("x", maxKeyValueBytes-1)}
+	body, err := json.Marshal(flatten(accepted))
+	if err != nil {
+		t.Fatalf("marshal accepted baseline: %v", err)
+	}
+	if _, decodeErr := Decode(body); decodeErr != nil {
+		t.Fatalf("decode the maximum key content: %v", decodeErr)
+	}
+	rejected := taken()
+	rejected.Keys = map[string]string{"k": strings.Repeat("x", maxKeyValueBytes)}
+	body, err = json.Marshal(flatten(rejected))
+	if err != nil {
+		t.Fatalf("marshal rejected baseline: %v", err)
+	}
+	if _, err := Decode(body); err == nil || !strings.Contains(err.Error(), "keys and values exceed") {
+		t.Fatalf("one extra content byte returned %v", err)
+	}
+}
+
+func TestImportedBaselineAcceptsTheExactFileByteLimit(t *testing.T) {
+	body, err := json.Marshal(flatten(taken()))
+	if err != nil {
+		t.Fatalf("marshal baseline: %v", err)
+	}
+	body = append(body, []byte(strings.Repeat(" ", maxBytes-len(body)))...)
+	if _, err := Decode(body); err != nil {
+		t.Fatalf("decode the maximum file size: %v", err)
+	}
+}
+
+func TestImportedBaselineChecksAndCountsHaveExactEntryLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		accepted stored
+		rejected stored
+	}{
+		{
+			name: "checks",
+			accepted: stored{
+				TakenAt: "2026-09-03T12:00:00Z",
+				Checks:  numberedStrings(maxChecks),
+			},
+			rejected: stored{
+				TakenAt: "2026-09-03T12:00:00Z",
+				Checks:  numberedStrings(maxChecks + 1),
+			},
+		},
+		{
+			name: "counts",
+			accepted: stored{
+				TakenAt: "2026-09-03T12:00:00Z",
+				Checks:  []string{"one"},
+				Counts:  numberedCounts(maxCounts),
+			},
+			rejected: stored{
+				TakenAt: "2026-09-03T12:00:00Z",
+				Checks:  []string{"one"},
+				Counts:  numberedCounts(maxCounts + 1),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			accepted, err := json.Marshal(tc.accepted)
+			if err != nil {
+				t.Fatalf("marshal accepted shape: %v", err)
+			}
+			if _, decodeErr := Decode(accepted); decodeErr != nil {
+				t.Fatalf("decode accepted shape: %v", decodeErr)
+			}
+			rejected, err := json.Marshal(tc.rejected)
+			if err != nil {
+				t.Fatalf("marshal rejected shape: %v", err)
+			}
+			if _, err := Decode(rejected); err == nil {
+				t.Fatal("one extra entry was accepted")
+			}
+		})
+	}
+}
+
+func numberedStrings(count int) []string {
+	out := make([]string, count)
+	for at := range out {
+		out[at] = strconv.Itoa(at)
+	}
+	return out
+}
+
+func numberedCounts(count int) map[string]int {
+	out := make(map[string]int, count)
+	for at := range count {
+		out[strconv.Itoa(at)] = at
+	}
+	return out
 }
 
 func TestABaselineWithNoFingerprintsStillReads(t *testing.T) {

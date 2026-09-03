@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -246,6 +248,7 @@ func TestWarmSurvivesAFailedFetch(t *testing.T) {
 
 func TestAFailedWarmDoesNotHideTheNextSuccessfulFetch(t *testing.T) {
 	hits := 0
+	now := time.Date(2026, 9, 3, 18, 0, 0, 0, time.UTC)
 	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
 		hits++
 		if hits == 1 {
@@ -254,9 +257,11 @@ func TestAFailedWarmDoesNotHideTheNextSuccessfulFetch(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(indexBody))
 	})
+	cache.now = func() time.Time { return now }
 	repo := Repo{URL: ts.URL}
 	cache.Warm(repo, "podinfo")
 	cache.Wait()
+	now = now.Add(negativeTTL)
 
 	versions, err := cache.Versions(t.Context(), repo, "podinfo")
 	if err != nil {
@@ -267,6 +272,131 @@ func TestAFailedWarmDoesNotHideTheNextSuccessfulFetch(t *testing.T) {
 	}
 	if hits != 2 {
 		t.Fatalf("repository fetched %d times, want the failed warm and the recovery", hits)
+	}
+}
+
+func TestConcurrentIdenticalOCIMissesShareOneRegistryRequest(t *testing.T) {
+	var hits atomic.Int32
+	started := make(chan struct{})
+	proceed := make(chan struct{})
+	var once sync.Once
+	cache, ts := tlsCacheFor(t, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		once.Do(func() { close(started) })
+		<-proceed
+		_, _ = w.Write([]byte(`{"tags":["1.2.3"]}`))
+	})
+	repo := ociRepo(ts)
+
+	const callers = 16
+	errs := make(chan error, callers)
+	for range callers {
+		go func() {
+			_, err := cache.Versions(t.Context(), repo, "keycloak")
+			errs <- err
+		}()
+	}
+	<-started
+	close(proceed)
+	for range callers {
+		if err := <-errs; err != nil {
+			t.Fatalf("versions: %v", err)
+		}
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("registry requests = %d, want 1", hits.Load())
+	}
+}
+
+func TestRegistryFetchWaiterCanCancelWithoutStartingAnotherRequest(t *testing.T) {
+	var hits atomic.Int32
+	var once sync.Once
+	started := make(chan struct{})
+	proceed := make(chan struct{})
+	cache, ts := tlsCacheFor(t, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		once.Do(func() { close(started) })
+		<-proceed
+		_, _ = w.Write([]byte(`{"tags":["1.2.3"]}`))
+	})
+	repo := ociRepo(ts)
+	leader := make(chan error, 1)
+	go func() {
+		_, err := cache.Versions(t.Context(), repo, "keycloak")
+		leader <- err
+	}()
+	<-started
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := cache.Versions(canceled, repo, "keycloak")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("waiter error = %v, want context cancellation", err)
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("registry requests = %d, want 1", hits.Load())
+	}
+	close(proceed)
+	if err := <-leader; err != nil {
+		t.Fatalf("leader versions: %v", err)
+	}
+}
+
+func TestFailedFetchesAreCachedBriefly(t *testing.T) {
+	var hits atomic.Int32
+	now := time.Date(2026, 9, 3, 18, 0, 0, 0, time.UTC)
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusBadGateway)
+	})
+	cache.now = func() time.Time { return now }
+	repo := Repo{URL: ts.URL}
+
+	for range 2 {
+		_, err := cache.Versions(t.Context(), repo, "podinfo")
+		if err == nil {
+			t.Fatal("failed repository reported success")
+		}
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("requests inside the negative ttl = %d, want 1", hits.Load())
+	}
+	now = now.Add(negativeTTL)
+	_, err := cache.Versions(t.Context(), repo, "podinfo")
+	if err == nil {
+		t.Fatal("failed repository reported success after the negative ttl")
+	}
+	if hits.Load() != 2 {
+		t.Fatalf("requests at the negative ttl boundary = %d, want 2", hits.Load())
+	}
+}
+
+func TestCallerControlledOCICacheEntriesAreEvictedByCapacity(t *testing.T) {
+	cache := New(t.Context(), nil, DefaultTTL)
+	cache.capacity = 2
+	now := time.Date(2026, 9, 3, 18, 0, 0, 0, time.UTC)
+	cache.now = func() time.Time { return now }
+	repo := Repo{URL: "oci://registry.example.com/team", OCI: true}
+
+	for _, chart := range []string{"first", "second", "third"} {
+		unit := fetchUnit(repo, chart)
+		flight, leader, err := cache.begin(unit)
+		if err != nil || !leader {
+			t.Fatalf("begin %s: leader=%v error=%v", chart, leader, err)
+		}
+		found := listing{versions: map[string][]string{chart: {"1.0.0"}}}
+		cache.complete(unit, repo, found, flight, nil)
+		now = now.Add(time.Second)
+	}
+
+	if cache.Latest(repo, "first") != "" {
+		t.Fatal("oldest oci entry survived the capacity boundary")
+	}
+	if cache.Latest(repo, "second") != "1.0.0" || cache.Latest(repo, "third") != "1.0.0" {
+		t.Fatalf("newer entries were evicted: second=%q third=%q", cache.Latest(repo, "second"), cache.Latest(repo, "third"))
+	}
+	if len(cache.fetched) != 2 || len(cache.lists) != 2 {
+		t.Fatalf("cache sizes = fetched %d, lists %d, want 2 each", len(cache.fetched), len(cache.lists))
 	}
 }
 
@@ -1415,6 +1545,16 @@ func TestJSONLargerThanItsLimitIsNotAcceptedPartially(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "larger than") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRepositoryResponseLimitAcceptsTheBoundaryAndRejectsOneMoreByte(t *testing.T) {
+	if _, err := readBounded(strings.NewReader(strings.Repeat("x", maxBodyBytes)), maxBodyBytes); err != nil {
+		t.Fatalf("boundary response: %v", err)
+	}
+	_, err := readBounded(strings.NewReader(strings.Repeat("x", maxBodyBytes+1)), maxBodyBytes)
+	if err == nil || err.Error() != "response body is larger than 8388608 bytes" {
+		t.Fatalf("error = %v", err)
 	}
 }
 

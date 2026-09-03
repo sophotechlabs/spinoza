@@ -163,10 +163,15 @@ func (s stored) fallback() api.HelmRelease {
 }
 
 func (s stored) release() (api.HelmRelease, error) {
+	release, _, err := s.decoded()
+	return release, err
+}
+
+func (s stored) decoded() (api.HelmRelease, payload, error) {
 	fallback := s.fallback()
 	decoded, err := decode(s.body)
 	if err != nil {
-		return fallback, err
+		return fallback, payload{}, err
 	}
 	release := api.HelmRelease{
 		Name:         decoded.Name,
@@ -179,7 +184,7 @@ func (s stored) release() (api.HelmRelease, error) {
 		Updated:      decoded.Info.LastDeployed,
 		Description:  decoded.Info.Description,
 	}
-	return completed(release, fallback), nil
+	return completed(release, fallback), decoded, nil
 }
 
 func completed(release, fallback api.HelmRelease) api.HelmRelease {

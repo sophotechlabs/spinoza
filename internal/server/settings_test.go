@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -194,6 +195,147 @@ func TestServedSettingsBelongToTheSignedInUser(t *testing.T) {
 	}
 	if users != 2 {
 		t.Fatalf("stored user settings = %d, want 2: %v", users, stored)
+	}
+}
+
+func TestPersonalSettingsAcceptTheAggregateLimitAndRejectTheNextByte(t *testing.T) {
+	store := settings.Memory()
+	_, ts := settingsServerForUsers(t, store)
+	keys := []string{
+		"spinoza.theme.v1",
+		"spinoza.panels.v1",
+		"spinoza.layout.v1",
+		"spinoza.sidebar.v1",
+	}
+	keyBytes := 0
+	for _, key := range keys {
+		keyBytes += len(key)
+	}
+	remaining := maxPersonalSettingsBytes - keyBytes
+	values := map[string]string{}
+	for at, key := range keys {
+		length := remaining / len(keys)
+		if at < remaining%len(keys) {
+			length++
+		}
+		values[key] = strings.Repeat("x", length)
+	}
+	accepted, body := putUserSettings(t, ts, "alice@example.com", values)
+	if accepted.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", accepted.StatusCode, http.StatusOK, body)
+	}
+	values[keys[0]] += "x"
+	rejected, body := putUserSettings(t, ts, "alice@example.com", values)
+	if rejected.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rejected.StatusCode, http.StatusBadRequest)
+	}
+	if !strings.Contains(string(body), "personal settings are larger than 65536 bytes") {
+		t.Fatalf("body = %s", body)
+	}
+}
+
+func TestPersonalSettingSchemasHaveExactValueLimits(t *testing.T) {
+	_, ts := settingsServerForUsers(t, settings.Memory())
+	for _, tc := range []struct {
+		name  string
+		key   string
+		limit int
+	}{
+		{name: "ordinary", key: "spinoza.theme.v1", limit: defaultPersonalSettingBytes},
+		{name: "custom rules", key: checks.RulesKey, limit: personalSettingLimits[checks.RulesKey]},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			accepted, body := putUserSettings(t, ts, tc.name+"-accepted", map[string]string{
+				tc.key: strings.Repeat("x", tc.limit),
+			})
+			if accepted.StatusCode != http.StatusOK {
+				t.Fatalf("accepted status = %d: %s", accepted.StatusCode, body)
+			}
+			rejected, body := putUserSettings(t, ts, tc.name+"-rejected", map[string]string{
+				tc.key: strings.Repeat("x", tc.limit+1),
+			})
+			if rejected.StatusCode != http.StatusBadRequest {
+				t.Fatalf("rejected status = %d, want %d", rejected.StatusCode, http.StatusBadRequest)
+			}
+			if !strings.Contains(string(body), "is larger than") {
+				t.Fatalf("body = %s", body)
+			}
+		})
+	}
+}
+
+func TestOneViewerCannotConsumeAnotherUsersOrSharedSettingsCapacity(t *testing.T) {
+	store := settings.Memory()
+	_, ts := settingsServerForUsers(t, store)
+	attacker, _ := putUserSettings(t, ts, "alice@example.com", map[string]string{
+		"spinoza.theme.v1": strings.Repeat("x", 900<<10),
+	})
+	if attacker.StatusCode != http.StatusBadRequest {
+		t.Fatalf("oversized viewer status = %d, want %d", attacker.StatusCode, http.StatusBadRequest)
+	}
+	bob, body := putUserSettings(t, ts, "bob@example.com", map[string]string{
+		"spinoza.theme.v1": `"nord"`,
+	})
+	if bob.StatusCode != http.StatusOK {
+		t.Fatalf("bob status = %d: %s", bob.StatusCode, body)
+	}
+	if err := store.Merge(map[string]string{checks.MutesKey: `{"cluster":[]}`}); err != nil {
+		t.Fatalf("shared settings write: %v", err)
+	}
+}
+
+func TestPersonalSettingsRequestHasAnExactByteLimit(t *testing.T) {
+	_, ts := settingsServerForUsers(t, settings.Memory())
+	prefix := `{"values":{}}`
+	exact := prefix + strings.Repeat(" ", maxSettingsBytes-len(prefix))
+	accepted, body := settingsAsUser(t, ts, http.MethodPut, "/api/settings", "alice", exact)
+	if accepted.StatusCode != http.StatusOK {
+		t.Fatalf("exact status = %d: %s", accepted.StatusCode, body)
+	}
+	rejected, _ := settingsAsUser(t, ts, http.MethodPut, "/api/settings", "alice", exact+" ")
+	if rejected.StatusCode != http.StatusBadRequest {
+		t.Fatalf("one extra byte status = %d, want %d", rejected.StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestConcurrentPersonalWritesCannotBypassTheAggregateQuota(t *testing.T) {
+	store := settings.Memory()
+	_, ts := settingsServerForUsers(t, store)
+	keys := []string{
+		"spinoza.theme.v1",
+		"spinoza.panels.v1",
+		"spinoza.layout.v1",
+		"spinoza.sidebar.v1",
+		"spinoza.settings.v1",
+		"spinoza.painted.v1",
+		"spinoza.nodeshell.v1",
+		"spinoza.update.check.v1",
+	}
+	start := make(chan struct{})
+	var group sync.WaitGroup
+	for _, key := range keys {
+		group.Go(func() {
+			<-start
+			putUserSettings(t, ts, "alice@example.com", map[string]string{key: strings.Repeat("x", 12<<10)})
+		})
+	}
+	close(start)
+	group.Wait()
+	prefix, ok := settingsPrefix(httptest.NewRequest(http.MethodGet, "/", http.NoBody).WithContext(
+		auth.WithIdentity(t.Context(), auth.Identity{User: "alice@example.com"}),
+	))
+	if !ok {
+		t.Fatal("alice had no settings prefix")
+	}
+	personal := map[string]string{}
+	for key, value := range store.All() {
+		personalKey, found := strings.CutPrefix(key, prefix)
+		if found {
+			personal[personalKey] = value
+		}
+	}
+	if size := personalSettingsSize(personal); size > maxPersonalSettingsBytes {
+		t.Fatalf("concurrent settings use %d bytes, want at most %d", size, maxPersonalSettingsBytes)
 	}
 }
 

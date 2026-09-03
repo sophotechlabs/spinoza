@@ -155,6 +155,12 @@ func byWhere(left, right api.SearchHit) int {
 }
 
 func (s *Server) fleetHelm(w http.ResponseWriter, r *http.Request) {
+	release, claimed := s.releaseReads.claim(liveIdentity(r), 1)
+	if !claimed {
+		writeError(w, http.StatusTooManyRequests, "helm release reads are busy; try again")
+		return
+	}
+	defer release()
 	found := eachCluster(r.Context(), s, func(ctx context.Context, backend Backend) api.HelmReleases {
 		held, err := backend.HelmReleases(ctx)
 		if err != nil {

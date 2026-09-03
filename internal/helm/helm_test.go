@@ -672,6 +672,65 @@ func TestAnExpandedPayloadLargerThanItsLimitIsRefused(t *testing.T) {
 	}
 }
 
+func TestReleasePayloadLimitAcceptsTheBoundaryAndRejectsOneMoreByte(t *testing.T) {
+	prefix := `{"name":"`
+	suffix := `"}`
+	atLimit := prefix + strings.Repeat("x", maxPayload-len(prefix)-len(suffix)) + suffix
+	if _, err := decode(gzipped(atLimit)); err != nil {
+		t.Fatalf("payload at boundary: %v", err)
+	}
+	overLimit := prefix + strings.Repeat("x", maxPayload-len(prefix)-len(suffix)+1) + suffix
+	_, err := decode(gzipped(overLimit))
+	if err == nil || err.Error() != "release payload is larger than 8388608 bytes" {
+		t.Fatalf("compressed over-limit error = %v", err)
+	}
+	_, err = decode([]byte(overLimit))
+	if err == nil || err.Error() != "release payload is larger than 8388608 bytes" {
+		t.Fatalf("plain over-limit error = %v", err)
+	}
+}
+
+func TestReleaseDecodeBudgetAdmitsOnlyTwoAtOnce(t *testing.T) {
+	budget := newDecodeBudget(2)
+	start := make(chan struct{})
+	admitted := make(chan struct{})
+	releases := make(chan struct{})
+	const callers = 8
+	var group sync.WaitGroup
+	for range callers {
+		group.Go(func() {
+			<-start
+			release := budget.claim()
+			admitted <- struct{}{}
+			<-releases
+			release()
+		})
+	}
+	close(start)
+	for range 2 {
+		<-admitted
+	}
+	select {
+	case <-admitted:
+		t.Fatal("more than two decodes were admitted")
+	default:
+	}
+	for range callers - 2 {
+		releases <- struct{}{}
+		<-admitted
+	}
+	for range 2 {
+		releases <- struct{}{}
+	}
+	group.Wait()
+}
+
+func TestReleaseListDecodeConcurrencyMatchesTheProcessBudget(t *testing.T) {
+	if readConcurrency != 2 {
+		t.Fatalf("release list concurrency = %d, want 2", readConcurrency)
+	}
+}
+
 func TestALabelWithANonNumericRevisionReadsAsZero(t *testing.T) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{

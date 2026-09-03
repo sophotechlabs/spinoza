@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -64,7 +65,7 @@ func (h *helmRunner) Run(ctx context.Context, args, env []string) (string, error
 	command.Stdout = stdout
 	command.Stderr = stderr
 	command.Stdin = nil
-	command.Env = append(os.Environ(), env...)
+	command.Env = helmEnvironment(env)
 
 	err := command.Run()
 	if stdout.Exceeded() {
@@ -85,6 +86,55 @@ func (h *helmRunner) Run(ctx context.Context, args, env []string) (string, error
 		return "", err
 	}
 	return "", errors.New(message)
+}
+
+func helmEnvironment(extra []string) []string {
+	held := map[string]string{}
+	for _, entry := range os.Environ() {
+		key, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if !allowedHelmEnvironment(key) {
+			continue
+		}
+		held[key] = entry
+	}
+	for _, entry := range extra {
+		key, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		held[key] = entry
+	}
+	keys := make([]string, 0, len(held))
+	for key := range held {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, held[key])
+	}
+	return out
+}
+
+func allowedHelmEnvironment(key string) bool {
+	if strings.HasPrefix(key, "HELM_") {
+		return true
+	}
+	if strings.HasPrefix(key, "XDG_") {
+		return true
+	}
+	switch key {
+	case "HOME", "KUBECONFIG", "PATH", "TMPDIR",
+		"SSL_CERT_DIR", "SSL_CERT_FILE",
+		"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+		"http_proxy", "https_proxy", "no_proxy":
+		return true
+	default:
+		return false
+	}
 }
 
 func firstMeaningful(stderr string) string {

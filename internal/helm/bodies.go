@@ -11,7 +11,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
-const readConcurrency = 8
+const readConcurrency = 2
 
 type decoded struct {
 	version string

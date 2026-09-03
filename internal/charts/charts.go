@@ -22,11 +22,14 @@ import (
 )
 
 const (
-	maxBodyBytes  = 64 << 20
-	fetchTimeout  = 30 * time.Second
-	DefaultTTL    = 30 * time.Minute
-	indexFilename = "index.yaml"
-	maxRedirects  = 10
+	maxBodyBytes   = 8 << 20
+	fetchTimeout   = 30 * time.Second
+	DefaultTTL     = 30 * time.Minute
+	indexFilename  = "index.yaml"
+	maxRedirects   = 10
+	negativeTTL    = 30 * time.Second
+	ociCapacity    = 256
+	warmConcurrent = 8
 )
 
 type Repo struct {
@@ -50,22 +53,36 @@ type listing struct {
 	charts   []Chart
 }
 
+type fetchFlight struct {
+	done chan struct{}
+	err  error
+}
+
+type failedFetch struct {
+	err error
+	at  time.Time
+}
+
 type lookupIPs func(context.Context, string, string) ([]netip.Addr, error)
 
 type dialContext func(context.Context, string, string) (net.Conn, error)
 
 type Cache struct {
-	ctx    context.Context
-	client *http.Client
-	ttl    time.Duration
-	now    func() time.Time
-	wg     sync.WaitGroup
+	ctx       context.Context
+	client    *http.Client
+	ttl       time.Duration
+	now       func() time.Time
+	wg        sync.WaitGroup
+	warmSlots chan struct{}
 
-	mu       sync.Mutex
-	lists    map[key][]string
-	catalog  map[Repo][]Chart
-	fetched  map[key]time.Time
-	inflight map[key]bool
+	mu         sync.Mutex
+	lists      map[key][]string
+	catalog    map[Repo][]Chart
+	fetched    map[key]time.Time
+	inflight   map[key]*fetchFlight
+	failures   map[key]failedFetch
+	failureTTL time.Duration
+	capacity   int
 }
 
 func New(ctx context.Context, client *http.Client, ttl time.Duration) *Cache {
@@ -75,14 +92,18 @@ func New(ctx context.Context, client *http.Client, ttl time.Duration) *Cache {
 
 func newCache(ctx context.Context, client *http.Client, ttl time.Duration, lookup lookupIPs, dial dialContext) *Cache {
 	return &Cache{
-		ctx:      ctx,
-		client:   publicOnly(client, lookup, dial),
-		ttl:      ttl,
-		now:      time.Now,
-		lists:    map[key][]string{},
-		catalog:  map[Repo][]Chart{},
-		fetched:  map[key]time.Time{},
-		inflight: map[key]bool{},
+		ctx:        ctx,
+		client:     publicOnly(client, lookup, dial),
+		ttl:        ttl,
+		now:        time.Now,
+		lists:      map[key][]string{},
+		catalog:    map[Repo][]Chart{},
+		fetched:    map[key]time.Time{},
+		inflight:   map[key]*fetchFlight{},
+		failures:   map[key]failedFetch{},
+		failureTTL: negativeTTL,
+		capacity:   ociCapacity,
+		warmSlots:  make(chan struct{}, warmConcurrent),
 	}
 }
 
@@ -388,25 +409,24 @@ func rank(chart Chart, needle string) int {
 
 func (c *Cache) ensure(ctx context.Context, repo Repo, chart string) error {
 	unit := fetchUnit(repo, chart)
-
-	c.mu.Lock()
-	last, seen := c.fetched[unit]
-	fresh := seen && c.now().Sub(last) < c.ttl
-	c.mu.Unlock()
-	if fresh {
-		return nil
-	}
-
-	found, err := c.resolve(ctx, repo, chart)
+	flight, leader, err := c.begin(unit)
 	if err != nil {
 		return err
 	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.fetched[unit] = c.now()
-	c.keep(repo, found)
-	return nil
+	if flight == nil {
+		return nil
+	}
+	if !leader {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-flight.done:
+			return flight.err
+		}
+	}
+	found, resolveErr := c.resolve(ctx, repo, chart)
+	c.complete(unit, repo, found, flight, resolveErr)
+	return resolveErr
 }
 
 func (c *Cache) keep(repo Repo, found listing) {
@@ -426,22 +446,20 @@ func (c *Cache) Warm(repo Repo, chart string) {
 		return
 	}
 	unit := fetchUnit(repo, chart)
-
-	c.mu.Lock()
-	if c.inflight[unit] {
-		c.mu.Unlock()
+	select {
+	case c.warmSlots <- struct{}{}:
+	default:
 		return
 	}
-	last, seen := c.fetched[unit]
-	if seen && c.now().Sub(last) < c.ttl {
-		c.mu.Unlock()
+	flight, leader, err := c.begin(unit)
+	if err != nil || !leader {
+		<-c.warmSlots
 		return
 	}
-	c.inflight[unit] = true
-	c.mu.Unlock()
 
 	c.wg.Go(func() {
-		c.refresh(unit, repo, chart)
+		defer func() { <-c.warmSlots }()
+		c.refresh(unit, repo, chart, flight)
 	})
 }
 
@@ -449,20 +467,95 @@ func (c *Cache) Wait() {
 	c.wg.Wait()
 }
 
-func (c *Cache) refresh(unit key, repo Repo, chart string) {
+func (c *Cache) refresh(unit key, repo Repo, chart string, flight *fetchFlight) {
 	ctx, cancel := context.WithTimeout(c.ctx, fetchTimeout)
 	defer cancel()
 
 	found, err := c.resolve(ctx, repo, chart)
+	c.complete(unit, repo, found, flight, err)
+}
 
+func (c *Cache) begin(unit key) (*fetchFlight, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.inflight[unit] = false
+	now := c.now()
+	last, seen := c.fetched[unit]
+	if seen && now.Sub(last) < c.ttl {
+		return nil, false, nil
+	}
+	failed, seen := c.failures[unit]
+	if seen && now.Sub(failed.at) < c.failureTTL {
+		return nil, false, failed.err
+	}
+	delete(c.failures, unit)
+	flight, running := c.inflight[unit]
+	if running {
+		return flight, false, nil
+	}
+	flight = &fetchFlight{done: make(chan struct{})}
+	c.inflight[unit] = flight
+	return flight, true, nil
+}
+
+func (c *Cache) complete(unit key, repo Repo, found listing, flight *fetchFlight, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.inflight, unit)
+	flight.err = err
 	if err != nil {
+		c.failures[unit] = failedFetch{err: err, at: c.now()}
+		c.evictOCI()
+		close(flight.done)
 		return
 	}
+	delete(c.failures, unit)
 	c.fetched[unit] = c.now()
 	c.keep(repo, found)
+	c.evictOCI()
+	close(flight.done)
+}
+
+func (c *Cache) evictOCI() {
+	for {
+		seen := c.ociAccessTimes()
+		if len(seen) <= c.capacity {
+			return
+		}
+		oldest := oldestChartKey(seen)
+		delete(c.fetched, oldest)
+		delete(c.failures, oldest)
+		delete(c.lists, oldest)
+	}
+}
+
+func (c *Cache) ociAccessTimes() map[key]time.Time {
+	seen := map[key]time.Time{}
+	for unit, at := range c.fetched {
+		if unit.repo.OCI && unit.chart != "" {
+			seen[unit] = at
+		}
+	}
+	for unit, failed := range c.failures {
+		if unit.repo.OCI && unit.chart != "" {
+			seen[unit] = failed.at
+		}
+	}
+	return seen
+}
+
+func oldestChartKey(seen map[key]time.Time) key {
+	var oldest key
+	var oldestAt time.Time
+	first := true
+	for unit, at := range seen {
+		if !first && !at.Before(oldestAt) {
+			continue
+		}
+		oldest = unit
+		oldestAt = at
+		first = false
+	}
+	return oldest
 }
 
 func (c *Cache) Resolve(ctx context.Context, repo Repo, chart string) (map[string][]string, error) {

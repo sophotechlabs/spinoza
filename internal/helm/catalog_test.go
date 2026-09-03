@@ -1,16 +1,48 @@
 package helm
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 )
+
+type controlledValuesRunner struct {
+	started  chan struct{}
+	proceed  chan struct{}
+	once     sync.Once
+	calls    atomic.Int32
+	deadline time.Time
+}
+
+func (r *controlledValuesRunner) Run(ctx context.Context, _, _ []string) (string, error) {
+	r.calls.Add(1)
+	deadline, ok := ctx.Deadline()
+	if ok {
+		r.deadline = deadline
+	}
+	r.once.Do(func() { close(r.started) })
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-r.proceed:
+		return "replicaCount: 1\n", nil
+	}
+}
+
+func (r *controlledValuesRunner) Available() error {
+	return nil
+}
 
 func searcher(t *testing.T, index Charts, repos []RepoEntry) *Service {
 	t.Helper()
@@ -156,6 +188,144 @@ func TestChartValuesAsksHelmForTheDefaults(t *testing.T) {
 	}
 	if found.Values != "replicaCount: 1\n" {
 		t.Fatalf("values = %q", found.Values)
+	}
+}
+
+func TestChartValuesCacheUsesOneBoundedFetchForConcurrentReaders(t *testing.T) {
+	runner := &controlledValuesRunner{started: make(chan struct{}), proceed: make(chan struct{})}
+	svc := NewService(
+		k8sfake.NewClientset(),
+		nil,
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{Name: "kind-spinoza"},
+	)
+	req := ValuesRequest{Chart: "podinfo", Version: "6.10.0", RepoURL: "https://charts.example.com"}
+	startedAt := time.Now()
+
+	const callers = 16
+	errs := make(chan error, callers)
+	for range callers {
+		go func() {
+			_, err := svc.ChartValues(t.Context(), req)
+			errs <- err
+		}()
+	}
+	<-runner.started
+	close(runner.proceed)
+	for range callers {
+		if err := <-errs; err != nil {
+			t.Fatalf("values: %v", err)
+		}
+	}
+	if runner.calls.Load() != 1 {
+		t.Fatalf("helm calls = %d, want 1", runner.calls.Load())
+	}
+	if runner.deadline.Before(startedAt.Add(valuesTimeout - time.Second)) {
+		t.Fatalf("helm deadline = %s, want about %s", runner.deadline.Sub(startedAt), valuesTimeout)
+	}
+	if runner.deadline.After(startedAt.Add(valuesTimeout + time.Second)) {
+		t.Fatalf("helm deadline = %s, want at most %s", runner.deadline.Sub(startedAt), valuesTimeout)
+	}
+}
+
+func TestChartValuesWaiterCanCancelWithoutStartingAnotherFetch(t *testing.T) {
+	runner := &controlledValuesRunner{started: make(chan struct{}), proceed: make(chan struct{})}
+	svc := NewService(
+		k8sfake.NewClientset(),
+		nil,
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{},
+	)
+	req := ValuesRequest{Chart: "podinfo", Version: "6.10.0", RepoURL: "https://charts.example.com"}
+	leader := make(chan error, 1)
+	go func() {
+		_, err := svc.ChartValues(t.Context(), req)
+		leader <- err
+	}()
+	<-runner.started
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := svc.ChartValues(canceled, req)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("waiter error = %v, want context cancellation", err)
+	}
+	if runner.calls.Load() != 1 {
+		t.Fatalf("helm calls = %d, want 1", runner.calls.Load())
+	}
+	close(runner.proceed)
+	if err := <-leader; err != nil {
+		t.Fatalf("leader values: %v", err)
+	}
+}
+
+func TestChartValuesCacheExpiresAtTheTTLBoundary(t *testing.T) {
+	runner := &stubRunner{out: "{}"}
+	svc := NewService(
+		k8sfake.NewClientset(),
+		nil,
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{},
+	)
+	now := time.Date(2026, 9, 3, 18, 0, 0, 0, time.UTC)
+	svc.valuesNow = func() time.Time { return now }
+	req := ValuesRequest{Chart: "podinfo", Version: "6.10.0", RepoURL: "https://charts.example.com"}
+
+	if _, err := svc.ChartValues(t.Context(), req); err != nil {
+		t.Fatalf("first values: %v", err)
+	}
+	now = now.Add(valuesTTL - time.Nanosecond)
+	if _, err := svc.ChartValues(t.Context(), req); err != nil {
+		t.Fatalf("cached values: %v", err)
+	}
+	if len(runner.args) != 1 {
+		t.Fatalf("helm calls inside ttl = %d, want 1", len(runner.args))
+	}
+	now = now.Add(time.Nanosecond)
+	if _, err := svc.ChartValues(t.Context(), req); err != nil {
+		t.Fatalf("values at ttl: %v", err)
+	}
+	if len(runner.args) != 2 {
+		t.Fatalf("helm calls at ttl = %d, want 2", len(runner.args))
+	}
+}
+
+func TestChartValuesCacheHasAFixedCapacity(t *testing.T) {
+	runner := &stubRunner{out: "{}"}
+	svc := NewService(
+		k8sfake.NewClientset(),
+		nil,
+		runner,
+		nil,
+		actionRepositories(),
+		api.ContextRef{},
+	)
+	now := time.Date(2026, 9, 3, 18, 0, 0, 0, time.UTC)
+	svc.valuesNow = func() time.Time { return now }
+
+	for at := range valuesCapacity + 1 {
+		req := ValuesRequest{
+			Chart:   "podinfo",
+			Version: fmt.Sprintf("1.0.%d", at),
+			RepoURL: "https://charts.example.com",
+		}
+		if _, err := svc.ChartValues(t.Context(), req); err != nil {
+			t.Fatalf("values %d: %v", at, err)
+		}
+		now = now.Add(time.Second)
+	}
+	if len(svc.values) != valuesCapacity {
+		t.Fatalf("cache size = %d, want %d", len(svc.values), valuesCapacity)
+	}
+	oldest := ValuesRequest{Chart: "podinfo", Version: "1.0.0", RepoURL: "https://charts.example.com"}
+	if _, ok := svc.values[oldest]; ok {
+		t.Fatal("the oldest values entry survived capacity eviction")
 	}
 }
 

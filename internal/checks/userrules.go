@@ -2,7 +2,9 @@ package checks
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -34,19 +36,30 @@ func (r UserRule) silencer() bool {
 
 const userRuleObject = ScopeObject
 
+const (
+	maxUserRules          = 128
+	maxUserRuleExpression = 4096
+	maxUserRuleCost       = 10_000
+)
+
+var (
+	errTooManyUserRules                         = fmt.Errorf("a rule list cannot contain more than %d rules", maxUserRules)
+	userRuleEnvironment, userRuleEnvironmentErr = cel.NewEnv(cel.Variable(userRuleObject, cel.DynType))
+)
+
 const RulesKey = "spinoza.checks.rules.v1"
 
 func ParseRules(raw string) []UserRule {
 	if strings.TrimSpace(raw) == "" {
 		return nil
 	}
-	var out []UserRule
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+	out, err := decodeRules(raw)
+	if err != nil {
 		return nil
 	}
 	kept := make([]UserRule, 0, len(out))
 	for _, one := range out {
-		if one.ID == "" || one.Expr == "" {
+		if one.ID == "" || one.Expr == "" || len(one.Expr) > maxUserRuleExpression {
 			continue
 		}
 		kept = append(kept, one)
@@ -60,8 +73,11 @@ func Faults(raw string) []RuleFault {
 	if strings.TrimSpace(raw) == "" {
 		return []RuleFault{}
 	}
-	var out []UserRule
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+	out, err := decodeRules(raw)
+	if err != nil {
+		if errors.Is(err, errTooManyUserRules) {
+			return []RuleFault{{Reason: err.Error()}}
+		}
 		return []RuleFault{{Reason: "this is not a list of rules: " + err.Error()}}
 	}
 	faults := []RuleFault{}
@@ -69,6 +85,41 @@ func Faults(raw string) []RuleFault {
 		faults = append(faults, one.faults(at)...)
 	}
 	return faults
+}
+
+func decodeRules(raw string) ([]UserRule, error) {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	opening, err := decoder.Token()
+	if err != nil {
+		return nil, err
+	}
+	delim, isDelim := opening.(json.Delim)
+	if !isDelim || delim != '[' {
+		return nil, errors.New("the top-level value is not a list")
+	}
+	out := make([]UserRule, 0, min(maxUserRules, 16))
+	for decoder.More() {
+		if len(out) == maxUserRules {
+			return nil, errTooManyUserRules
+		}
+		var one UserRule
+		if decodeErr := decoder.Decode(&one); decodeErr != nil {
+			return nil, decodeErr
+		}
+		out = append(out, one)
+	}
+	if _, closingErr := decoder.Token(); closingErr != nil {
+		return nil, closingErr
+	}
+	var trailing any
+	err = decoder.Decode(&trailing)
+	if !errors.Is(err, io.EOF) {
+		if err == nil {
+			return nil, errors.New("the list has a trailing value")
+		}
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r UserRule) faults(at int) []RuleFault {
@@ -81,6 +132,9 @@ func (r UserRule) faults(at int) []RuleFault {
 	}
 	if r.Expr == "" {
 		return []RuleFault{{ID: name, Reason: "a rule needs an expression to judge by"}}
+	}
+	if len(r.Expr) > maxUserRuleExpression {
+		return []RuleFault{{ID: name, Reason: fmt.Sprintf("an expression cannot be longer than %d bytes", maxUserRuleExpression)}}
 	}
 	_, parsed, err := parseRule(r.Expr)
 	if err != nil {
@@ -267,19 +321,21 @@ func knownCategory(name string) string {
 }
 
 func compileRule(expr string) (cel.Program, error) {
+	if len(expr) > maxUserRuleExpression {
+		return nil, fmt.Errorf("an expression cannot be longer than %d bytes", maxUserRuleExpression)
+	}
 	env, parsed, err := parseRule(expr)
 	if err != nil {
 		return nil, err
 	}
-	return env.Program(parsed)
+	return env.Program(parsed, cel.CostLimit(maxUserRuleCost), cel.InterruptCheckFrequency(100))
 }
 
 func parseRule(expr string) (*cel.Env, *cel.Ast, error) {
-	env, err := cel.NewEnv(cel.Variable(userRuleObject, cel.DynType))
-	if err != nil {
-		return nil, nil, err
+	if userRuleEnvironmentErr != nil {
+		return nil, nil, userRuleEnvironmentErr
 	}
-	parsed, issues := env.Compile(expr)
+	parsed, issues := userRuleEnvironment.Compile(expr)
 	if issues != nil && issues.Err() != nil {
 		return nil, nil, fmt.Errorf("the expression did not compile: %w", issues.Err())
 	}
@@ -287,7 +343,7 @@ func parseRule(expr string) (*cel.Env, *cel.Ast, error) {
 		return nil, nil, fmt.Errorf("the expression has to return true or false, not %s",
 			cel.FormatCELType(parsed.OutputType()))
 	}
-	return env, parsed, nil
+	return userRuleEnvironment, parsed, nil
 }
 
 func refuses(reason string) finder {

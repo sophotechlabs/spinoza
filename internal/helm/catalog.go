@@ -16,6 +16,9 @@ const (
 	searchLimit      = 200
 	searchTimeout    = 90 * time.Second
 	searchConcurrent = 8
+	valuesTimeout    = 30 * time.Second
+	valuesTTL        = 30 * time.Minute
+	valuesCapacity   = 128
 )
 
 type repoHits struct {
@@ -156,13 +159,83 @@ func (s *Service) ChartValues(ctx context.Context, req ValuesRequest) (api.HelmC
 	if repoErr != nil {
 		return api.HelmChartValues{}, repoErr
 	}
+	return s.cachedChartValues(ctx, req)
+}
+
+func (s *Service) cachedChartValues(ctx context.Context, req ValuesRequest) (api.HelmChartValues, error) {
+	now := s.valuesNow()
+	s.valuesMu.Lock()
+	s.pruneValues(now)
+	held, ok := s.values[req]
+	if ok {
+		s.valuesMu.Unlock()
+		return held.value, nil
+	}
+	flight, running := s.valuesInflight[req]
+	if running {
+		s.valuesMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return api.HelmChartValues{}, ctx.Err()
+		case <-flight.done:
+			return flight.value, flight.err
+		}
+	}
+	flight = &valuesFlight{done: make(chan struct{})}
+	s.valuesInflight[req] = flight
+	s.valuesMu.Unlock()
+
+	value, err := s.fetchChartValues(ctx, req)
+
+	s.valuesMu.Lock()
+	delete(s.valuesInflight, req)
+	flight.value = value
+	flight.err = err
+	if err == nil {
+		s.values[req] = cachedValues{value: value, fetched: s.valuesNow()}
+		s.evictValues()
+	}
+	close(flight.done)
+	s.valuesMu.Unlock()
+	return value, err
+}
+
+func (s *Service) fetchChartValues(ctx context.Context, req ValuesRequest) (api.HelmChartValues, error) {
+	bounded, cancel := context.WithTimeout(ctx, valuesTimeout)
+	defer cancel()
 	args := []string{"show", "values", chartRef(req.Chart, req.RepoURL, req.OCI), "--version", req.Version}
 	if !req.OCI {
 		args = append(args, "--repo", req.RepoURL)
 	}
-	out, err := s.run(ctx, args, "")
+	out, err := s.run(bounded, args, "")
 	if err != nil {
 		return api.HelmChartValues{}, err
 	}
 	return api.HelmChartValues{Chart: req.Chart, Version: req.Version, Values: out}, nil
+}
+
+func (s *Service) pruneValues(now time.Time) {
+	for req, held := range s.values {
+		if now.Sub(held.fetched) < valuesTTL {
+			continue
+		}
+		delete(s.values, req)
+	}
+}
+
+func (s *Service) evictValues() {
+	for len(s.values) > valuesCapacity {
+		var oldest ValuesRequest
+		var oldestAt time.Time
+		first := true
+		for req, held := range s.values {
+			if !first && !held.fetched.Before(oldestAt) {
+				continue
+			}
+			oldest = req
+			oldestAt = held.fetched
+			first = false
+		}
+		delete(s.values, oldest)
+	}
 }
