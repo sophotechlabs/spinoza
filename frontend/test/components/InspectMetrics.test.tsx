@@ -111,6 +111,40 @@ describe('InspectMetrics', () => {
     });
   });
 
+  it('clears the previous range while its replacement is loading', async () => {
+    const user = userEvent.setup();
+    let finishNext!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const next = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+      finishNext = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(history({ source: 'one-hour samples' })),
+      })
+      .mockImplementationOnce(() => next);
+    vi.stubGlobal('fetch', fetchMock);
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+    expect(await screen.findByText('one-hour samples')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Metric range'), '24h');
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(screen.queryByText('one-hour samples')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('metric-chart')).not.toBeInTheDocument();
+
+    await act(async () => {
+      finishNext({
+        ok: true,
+        json: () => Promise.resolve(history({ source: 'day samples' })),
+      });
+      await next;
+    });
+  });
+
   it('says so when prometheus has no samples for the pod', async () => {
     stub(history({ cpu: [], memory: [] }));
     render(<InspectMetrics namespace="monitoring" pod="loki-0" />);

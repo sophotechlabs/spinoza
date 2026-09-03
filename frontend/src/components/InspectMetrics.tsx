@@ -102,6 +102,13 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
     setSampled(false);
   }
 
+  const [lastSpan, setLastSpan] = useState(span);
+  if (span !== lastSpan) {
+    setLastSpan(span);
+    setHistory(null);
+    setError(null);
+  }
+
   const offered = rangesFor(sampled);
   if (!offered.includes(span)) {
     setSpan(DEFAULT_RANGE);
