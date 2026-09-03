@@ -74,6 +74,12 @@ func TestScrubbingALine(t *testing.T) {
 			gone: strings.Repeat("QUJDRA", 9),
 			kept: "payload",
 		},
+		{
+			name: "a standalone github token",
+			line: "clone failed for ghp_1234567890abcdefghijklmnopqrstuvwxyz",
+			gone: "ghp_1234567890abcdefghijklmnopqrstuvwxyz",
+			kept: "clone failed",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

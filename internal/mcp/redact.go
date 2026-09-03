@@ -20,6 +20,7 @@ var (
 	marker     = `(?:` + strings.Join(secretish, "|") + `)`
 	assignment = regexp.MustCompile(`(?i)\b([\w.-]*` + marker + `[\w.-]*)"?[ \t]*[:=][ \t]*("?)([^\s",}]{4,})("?)`)
 	envPair    = regexp.MustCompile(`(?im)^(\s*-?\s*name:\s*["']?[\w.-]*` + marker + `[\w.-]*["']?\s*\r?\n\s*value:\s*)(\S.*)$`)
+	github     = regexp.MustCompile(`\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}\b`)
 	jwt        = regexp.MustCompile(`\beyJ[A-Za-z0-9._-]{16,}`)
 	pemBlock   = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`)
 	longBlob   = regexp.MustCompile(`\b[A-Za-z0-9+/]{40,}={0,2}\b`)
@@ -41,6 +42,7 @@ func scrub(text string) string {
 	}
 	text = pemBlock.ReplaceAllString(text, hidden)
 	text = bearer.ReplaceAllString(text, "$1 "+hidden)
+	text = github.ReplaceAllString(text, hidden)
 	text = jwt.ReplaceAllString(text, hidden)
 	text = envPair.ReplaceAllString(text, "${1}"+hidden)
 	text = assignment.ReplaceAllString(text, "$1: $2"+hidden+"$4")
