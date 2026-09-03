@@ -48,6 +48,8 @@ func spreadsheetCells(cells []string) []string {
 		switch first {
 		case '=', '+', '-', '@', '\t', '\r', '\n', 0, '＝', '＋', '－', '＠':
 			cells[at] = "'" + value
+		default:
+			continue
 		}
 	}
 	return cells
