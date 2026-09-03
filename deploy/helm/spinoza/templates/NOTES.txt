@@ -29,6 +29,6 @@ ends when it restarts. Set auth.sessionSecret or auth.existingSecret.
 {{- end }}
 {{- if not .Values.impersonate }}
 
-Impersonation is off, so every change runs as spinoza's own service account
-rather than the person who asked for it.
+Impersonation is off. Kubernetes reads use spinoza's restricted service account,
+and writes remain unavailable unless rbac.write is explicitly enabled.
 {{- end }}

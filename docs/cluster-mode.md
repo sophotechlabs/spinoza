@@ -15,7 +15,7 @@ Turn it on with `--cluster-mode` and `--public-url`. The published Helm chart at
 |---|---|---|
 | listens on | loopback only | whatever `--addr` says, `0.0.0.0:8080` by default |
 | who gets in | the token printed at startup | whoever your identity provider says |
-| what it acts as | your kubeconfig | the pod's service account, impersonating the signed-in user |
+| what it acts as | your kubeconfig | a restricted pod service account by default; optionally the signed-in user through scoped impersonation |
 | when it stops | when the last view closes | when the pod does |
 | kubeconfigs, context switching, several clusters at once | yes | no; there is one cluster, the one it runs in |
 | port-forwarding | yes | no; the forward would land on the server, not on you |
@@ -49,13 +49,15 @@ Without an ingress, reach it with a port-forward:
 kubectl -n spinoza port-forward svc/spinoza 8080:8080
 ```
 
-`publicURL` is the HTTP(S) origin browsers use, such as
+`publicURL` is the HTTPS origin browsers use, such as
 `https://spinoza.example.com`. It may end in `/`, but cannot contain a path,
 query, fragment, or credentials. Spinoza refuses a request whose `Origin` is
 some other site, marks the session cookie `Secure` when it is https, and derives
 the OIDC callback from it. A request with no `Origin` — a kubelet probe, `curl`,
 the page's own navigation — is not one a browser made across sites, so it goes
-through.
+through. Plaintext HTTP is accepted only for loopback development addresses or
+with the explicit `unsafeAllowHTTP` compatibility setting, which exposes
+sessions, WebSockets, and cluster data to network interception.
 
 ## Signing in
 
@@ -110,14 +112,19 @@ public URL and the pod reaches it through service DNS, set `issuerURL` to the
 public one and `internalIssuerURL` to the internal one. Spinoza fetches
 discovery internally, keeps validating the token's `iss` against the public
 issuer, and sends the browser to the public authorize and logout endpoints.
+Both addresses must use HTTPS outside loopback. Use `caCert` with an internal
+certificate authority. The separate `auth.oidc.unsafeAllowHTTP` setting exists
+for disposable labs and permits a network attacker to compromise authentication
+and observe the OIDC client secret.
 
 The RBAC index — who may do what across the cluster — is admin-only here.
 It is served from the shared cache, so it would otherwise show every binding to
 anyone who can read the cluster, which the built-in `view` role does not grant.
 
 `--pprof` still works, and the profiles it serves answer to admins only: a heap
-dump carries whatever the caches hold, which under the default read role is
-every object in the cluster.
+dump carries whatever the caches hold, which under the default read role
+excludes Secrets. The process-argument profile is not served because arguments
+can contain credentials supplied through command-line flags.
 
 **Signing out.** Spinoza clears its own cookie and, when the provider advertises
 `end_session_endpoint`, sends the browser there so the SSO session ends too.
@@ -154,6 +161,10 @@ auth:
 Configure the proxy to set `X-Spinoza-Proxy-Secret` from the same Kubernetes
 Secret. It must still strip the identity and secret headers from incoming
 requests. Direct requests cannot forge an identity without knowing this secret.
+The original upgrade headers remain inside an open WebSocket, so Spinoza closes
+proxy-authenticated live sessions after `auth.proxy.webSocketMaxAge`, five
+minutes by default and at most fifteen minutes. The browser reconnects through
+the proxy with current identity headers.
 
 ### `none`
 
@@ -210,8 +221,8 @@ another user, and do not require an elevated role. Cluster-wide mute decisions,
 timeline retention and other deployment state are kept outside that personal
 settings endpoint.
 
-**Kubernetes RBAC**, through impersonation. With `impersonate: true` — the
-default — every apiserver call spinoza makes for a request carries
+**Kubernetes RBAC**, through optional impersonation. With `impersonate: true`,
+every apiserver call spinoza makes for a request carries
 `Impersonate-User` and `Impersonate-Group`, so the cluster answers as if the
 person had asked it themselves. A write they have no binding for comes back 403
 from the apiserver, not from spinoza. The buttons follow the same answer: the
@@ -224,8 +235,21 @@ Verify what somebody has:
 kubectl auth can-i --list --as=alice@example.com --as-group=platform
 ```
 
-The service account needs `impersonate` on users and groups, and `create` on
-subject access reviews. The chart adds both when `impersonate` is on.
+Impersonation is off by default. When it is enabled, the chart requires exact
+usernames in `rbac.impersonation.users`. List permitted groups in
+`rbac.impersonation.groups` too. Large deployments may explicitly select
+`unsafeAllowAnyUser` or `unsafeAllowAnyGroup` for compatibility, but the latter
+allows a claimed group such as `system:masters` and should only be used when the
+identity proxy or provider enforces that boundary. The chart never grants
+permission to impersonate service accounts.
+
+```yaml
+impersonate: true
+rbac:
+  impersonation:
+    users: [alice@example.com, bob@example.com]
+    groups: [platform, sre]
+```
 
 ## What each person may see
 
@@ -233,13 +257,12 @@ Reads are the one place where spinoza and radar-style dashboards have to make a
 choice, because tables are served from shared informer caches that were filled
 with the service account's own rights, not the reader's.
 
-Spinoza resolves it this way:
+When impersonation is enabled, Spinoza resolves it this way:
 
 - **Namespaces.** On the first read of a request, spinoza asks the cluster which
-  namespaces the signed-in user may `list pods` or `list deployments` in. If the
-  answer is cluster-wide, nothing is held back. Otherwise the row feeds, the
-  namespace picker and search are filtered to those namespaces, and so are the
-  live deltas.
+  namespaces the signed-in user may read. Every shared table feed then checks
+  exact `list` and `watch` access for its API group, resource, and namespace.
+  Search, metrics, counts, and custom checks use the same identity boundary.
 - **Kinds that belong to no namespace** — nodes, persistent volumes, storage
   classes, cluster-scoped custom resources — are not shown to an account that
   reads named namespaces only. Subscribing to one comes back refused rather than
@@ -262,26 +285,24 @@ An answer the cluster refuses to give — a webhook authorizer that times out, s
 names how many namespaces the cluster would not decide about, so a narrower list
 than you expect reads as an unanswered question rather than as a refusal.
 
-A table already open re-reads the account's namespaces on every resync, so
-narrowing somebody's bindings closes those rows within about thirty seconds
-rather than at their next reload. Widening is the one direction that still needs
-a reload, because the informer was pinned to the namespace they had when they
-opened the table. Everything they *do* from that table is checked by the
-apiserver at the moment they do it, either way.
+A live feed, log stream, exec, or node shell rechecks its admitted Kubernetes
+permissions on a short interval. A denial, authorizer error, or timeout closes
+the session. Everything a person changes is also checked by the apiserver at
+the moment they do it.
 
 ## The service account's own rights
 
 `rbac.read` picks what the pod itself may cache.
 
-- `everything` (default): `get`, `list` and `watch` on every group and resource.
-  That is what a GUI which discovers every kind your cluster has needs, and it
-  includes secrets, which is where Helm keeps its release history.
-- `workloads`: the common groups without secrets. Custom resources then need
+- `workloads` (default): the common groups without Secrets. Custom resources then need
   `rbac.extraRules`, and the Helm view stays empty.
+- `everything`: the explicit unsafe compatibility mode with `get`, `list` and
+  `watch` on every group and resource. It includes Secrets, which is where Helm
+  keeps its release history.
 
 With `impersonate: true` the service account needs no write rights at all —
-changes ride the signed-in user's own bindings. `rbac.write: true` is only for
-`impersonate: false`, where everything runs as the pod.
+changes ride the signed-in user's own bindings. `rbac.write: true` is an unsafe
+compatibility setting for `impersonate: false`, where changes run as the pod.
 
 ## Helm and kubectl inside the pod
 

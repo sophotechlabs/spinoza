@@ -153,7 +153,7 @@ Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan b
 - **Exec** over `v5.channel.k8s.io` into xterm. Shell-less images get an ephemeral debug container, on a verdict cached per image digest.
 - **Logs** per container. Pausing follow stops the scroll, not the stream.
 - **Metrics**: metrics-server in the tables, CPU and memory history from Prometheus through the apiserver proxy. `--prometheus namespace/service:port` overrides discovery. With no Prometheus to ask, spinoza samples metrics-server itself while the window is open and says so on the chart.
-- **Update check**: asks spinoza.tech once per run whether a newer release exists, and offers the install command if so. It never installs anything.
+- **Update check**: asks spinoza.tech once per run whether a newer release exists, and offers the install command if so. Automatic replacement is disabled because the remote installer script has no independent authenticity proof. `SPINOZA_UNSAFE_SELF_UPDATE=true` restores the legacy download-and-execute path for compatibility and lets mutable remote code run with your user's privileges.
 - **Kubeconfigs** added by path, referenced in place, never copied or merged. Contexts grouped per file, listed in `kubeconfigs.json`. `--kubeconfig PATH` replaces the default lookup for one run.
 - **MCP server**: `spinoza-mcp`, a separate binary giving an agent 21 tools and 3 resources over one cluster.
 - **Node shell**: a root shell in the node's own namespaces, off until you turn it on. It asks the apiserver whether you may create the pod first, and the pod carries a two-hour deadline.
@@ -180,11 +180,12 @@ helm upgrade --install spinoza deploy/helm/spinoza \
 
 Signing in is authorization code with PKCE, the ID token verified against the
 provider's JWKS, and a signed session cookie. Groups from the token map to
-viewer, editor and admin. Every call spinoza then makes to the apiserver
-impersonates the person who asked for it, so Kubernetes RBAC decides what they
-may do and the buttons they may not use say why. Reads from the shared cache are
-filtered to the namespaces they may list. Proxy-header auth and back-channel
-logout are both there.
+viewer, editor and admin. The secure chart default uses a read-only workload
+service account with no Secret access and no impersonation power. Deployments
+that need Kubernetes RBAC per person can enable impersonation for explicit
+usernames and groups. Shared feeds then check the signed-in person's exact
+resource access before returning cached data and recheck it while the feed is
+open. Proxy-header auth and back-channel logout are both there.
 
 Full guide, including what changes when it runs this way: [docs/cluster-mode.md](docs/cluster-mode.md).
 
