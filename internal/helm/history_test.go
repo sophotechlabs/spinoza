@@ -14,6 +14,24 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+func TestRevisionSelectorNamesOneRevisionExactly(t *testing.T) {
+	got := revisionSelector("podinfo", []int64{7})
+	want := "owner=helm,name=podinfo,version=7"
+
+	if got != want {
+		t.Fatalf("selector = %q, want %q", got, want)
+	}
+}
+
+func TestRevisionSelectorKeepsEveryRequestedRevision(t *testing.T) {
+	got := revisionSelector("podinfo", []int64{3, 8})
+	want := "owner=helm,name=podinfo,version in (3,8)"
+
+	if got != want {
+		t.Fatalf("selector = %q, want %q", got, want)
+	}
+}
+
 func TestHistoryIsLoadedInBoundedRevisionPages(t *testing.T) {
 	objects := make([]runtime.Object, 0, historyPageSize+3)
 	for revision := int64(1); revision <= historyPageSize+3; revision++ {

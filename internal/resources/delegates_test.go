@@ -392,6 +392,18 @@ func TestHelmReleasesSayTheyAreNotWiredUp(t *testing.T) {
 	}
 }
 
+func TestHelmHistorySaysItIsNotWiredUp(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+
+	_, err := mgr.HelmHistory(t.Context(), "demo", "podinfo", 7)
+
+	want := "spinoza could not do that: helm is not wired up"
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
 type stubCacheLister struct {
 	objects []runtime.Object
 	err     error

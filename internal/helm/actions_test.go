@@ -143,6 +143,65 @@ func TestActionsUseTheDriverHoldingTheNewestRevision(t *testing.T) {
 	}
 }
 
+func TestDriverFallbackReportsAReleaseListFailure(t *testing.T) {
+	want := errors.New("release storage was refused")
+	client := k8sfake.NewClientset()
+	client.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, want
+	})
+	service := NewService(client, nil, nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+
+	_, err := service.driverFor(t.Context(), "prod", "web")
+
+	if !errors.Is(err, want) {
+		t.Fatalf("error = %v, want %v", err, want)
+	}
+}
+
+func TestDriverFallbackRefusesAReleaseThatIsNotStored(t *testing.T) {
+	client := k8sfake.NewClientset()
+	service := NewService(client, nil, nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+
+	_, err := service.driverFor(t.Context(), "prod", "web")
+
+	if !errors.Is(err, ErrNoRelease) {
+		t.Fatalf("error = %v, want %v", err, ErrNoRelease)
+	}
+}
+
+func TestDriverFallbackUsesTheNewestStoredRevision(t *testing.T) {
+	client := k8sfake.NewClientset(
+		releaseSecret("sh.helm.release.v1.web.v1", "1"),
+		releaseConfigMap("sh.helm.release.v1.web.v2", "2"),
+	)
+	service := NewService(client, nil, nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+
+	got, err := service.driverFor(t.Context(), "prod", "web")
+	if err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	if got != DriverConfigMap {
+		t.Fatalf("driver = %q, want %q", got, DriverConfigMap)
+	}
+}
+
+func TestDriverFallbackRefusesAnAmbiguousNewestRevision(t *testing.T) {
+	client := k8sfake.NewClientset(
+		releaseSecret("sh.helm.release.v1.web.v2", "2"),
+		releaseConfigMap("sh.helm.release.v1.web.v2", "2"),
+	)
+	service := NewService(client, nil, nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
+
+	_, err := service.driverFor(t.Context(), "prod", "web")
+
+	if !errors.Is(err, errAmbiguousRevision) {
+		t.Fatalf("error = %v, want %v", err, errAmbiguousRevision)
+	}
+	if !strings.Contains(err.Error(), "revision 2") {
+		t.Fatalf("error = %q, want the duplicate revision named", err)
+	}
+}
+
 func TestActionsSayNothingAboutTheDriverForTheDefaultOne(t *testing.T) {
 	runner := &stubRunner{}
 	service := acting(t, runner, helmSecret(sampleRelease()))
