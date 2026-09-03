@@ -120,7 +120,6 @@ test('an opened object becomes a recent result on the next opening', async ({ pa
   await palette.getByRole('button', { name: 'e2e/healthy deployment' }).click();
   await expect(page).toHaveTitle(/^healthy deployments /, { timeout: 60_000 });
   await openPalette(page);
-  await expect(
-    palette.getByRole('button', { name: 'e2e/healthy recent deployments' }),
-  ).toBeVisible();
+  const recents = palette.getByRole('region', { name: 'Recent objects' });
+  await expect(recents.getByRole('button', { name: 'e2e/healthy deployments' })).toBeVisible();
 });

@@ -54,6 +54,14 @@ func TestSavedRulesCannotBypassRuleShapeLimits(t *testing.T) {
 	}
 }
 
+func TestRuleListsRejectATrailingValue(t *testing.T) {
+	faults := Faults(`[{"id":"safe","expr":"true"}] {}`)
+
+	if len(faults) != 1 || !strings.Contains(faults[0].Reason, "trailing value") {
+		t.Fatalf("faults = %v, want the trailing value refused", faults)
+	}
+}
+
 func TestUserRuleEvaluationStopsAtItsCostLimit(t *testing.T) {
 	items := make([]any, maxUserRuleCost*2)
 	for at := range items {

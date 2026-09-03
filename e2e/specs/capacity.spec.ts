@@ -15,48 +15,74 @@ test('one live connection accepts 64 subscriptions and refuses the 65th', async 
     if (location.protocol === 'https:') {
       protocol = 'wss:';
     }
-    const socket = new WebSocket(`${protocol}//${location.host}/ws?view=browser`);
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<SocketResult>((resolve, reject) => {
+      const socket = new WebSocket(`${protocol}//${location.host}/ws?view=browser`);
+      const errors: string[] = [];
+      let snapshots = 0;
+      const timer = window.setTimeout(() => {
+        socket.close();
+        reject(
+          new Error(
+            `the capacity subscription did not complete: ${String(snapshots)} snapshots, ${errors.join(', ')}`,
+          ),
+        );
+      }, 60_000);
+      const subscribe = (index: number) => {
+        socket.send(
+          JSON.stringify({
+            type: 'subscribe',
+            subId: `capacity-${String(index)}`,
+            group: '',
+            version: 'v1',
+            resource: 'configmaps',
+            namespace: 'e2e',
+            limit: 1,
+            filters: [],
+          }),
+        );
+      };
       socket.addEventListener('open', () => {
-        resolve();
+        subscribe(0);
       });
       socket.addEventListener('error', () => {
+        window.clearTimeout(timer);
+        socket.close();
         reject(new Error('the capacity socket did not open'));
       });
-    });
-    const errors: string[] = [];
-    let snapshots = 0;
-    socket.addEventListener('message', (event) => {
-      const message = JSON.parse(String(event.data)) as { type?: string; message?: string };
-      if (message.type === 'snapshot') {
-        snapshots += 1;
-      }
-      if (message.type === 'error' && message.message !== undefined) {
+      socket.addEventListener('message', (event) => {
+        const message = JSON.parse(String(event.data)) as {
+          type?: string;
+          subId?: string;
+          message?: string;
+        };
+        if (message.type === 'snapshot') {
+          snapshots += 1;
+          if (snapshots < 64) {
+            subscribe(snapshots);
+            return;
+          }
+          subscribe(64);
+          return;
+        }
+        if (message.type !== 'error' || message.message === undefined) {
+          return;
+        }
         errors.push(message.message);
-      }
-    });
-    for (let index = 0; index < 65; index += 1) {
-      socket.send(
-        JSON.stringify({
-          type: 'subscribe',
-          subId: `capacity-${String(index)}`,
-          group: '',
-          version: 'v1',
-          resource: 'configmaps',
-          namespace: 'e2e',
-          limit: 1,
-          filters: [],
-        }),
-      );
-    }
-    const deadline = Date.now() + 90_000;
-    while ((errors.length === 0 || snapshots < 64) && Date.now() < deadline) {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 100);
+        if (snapshots < 64) {
+          window.clearTimeout(timer);
+          socket.close();
+          reject(
+            new Error(
+              `${message.subId ?? 'a subscription'} was refused after ${String(snapshots)} snapshots: ${message.message}`,
+            ),
+          );
+          return;
+        }
+        window.clearTimeout(timer);
+        socket.close();
+        resolve({ errors, snapshots });
       });
-    }
-    socket.close();
-    return { errors, snapshots };
+    });
   });
   expect(result.snapshots).toBe(64);
   expect(result.errors).toContain(

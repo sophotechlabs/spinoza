@@ -101,7 +101,7 @@ test('a leaf in the topology opens the object it represents', async ({ page }) =
   });
   await page.getByRole('combobox', { name: 'Namespace', exact: true }).selectOption('e2e');
   await scoped;
-  const service = page.locator('.react-flow__node').filter({ hasText: /^healthy$/ });
+  const service = page.locator('.react-flow__node').filter({ hasText: /^healthy · Service$/ });
   await expect(service).toBeVisible({ timeout: 90_000 });
   await page.getByRole('button', { name: 'Fit View', exact: true }).click();
   await service.click();
@@ -117,7 +117,9 @@ test('a folded workload expands through a scoped topology request', async ({ pag
   });
   await page.getByRole('combobox', { name: 'Namespace', exact: true }).selectOption('e2e');
   await scoped;
-  const workload = page.locator('.react-flow__node').filter({ hasText: /^healthy ×\d+/ });
+  const workload = page
+    .locator('.react-flow__node')
+    .filter({ hasText: /^healthy · Deployment ×\d+$/ });
   await expect(workload).toBeVisible({ timeout: 90_000 });
   await page.getByRole('button', { name: 'Fit View', exact: true }).click();
   const expanded = page.waitForRequest((request) => {

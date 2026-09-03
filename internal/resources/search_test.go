@@ -286,6 +286,27 @@ func TestSearchSaysWhyAKindCouldNotBeRead(t *testing.T) {
 	}
 }
 
+func TestNamespacedSearchErrorsNameTheNamespace(t *testing.T) {
+	client := fakeMeta(t)
+	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("pods are forbidden in payments")
+	})
+	desc := descriptorsFor("/v1/pods")[0]
+
+	_, _, failures := searchResource(
+		t.Context(),
+		client,
+		desc,
+		"airbyte",
+		searchLimits(CountLimits{}),
+		[]string{"payments"},
+	)
+
+	if failures["/v1/pods/payments"] == nil {
+		t.Fatalf("failures = %v, want the refused namespace distinguished", failures)
+	}
+}
+
 func TestSearchCarriesOnWhenOneKindFails(t *testing.T) {
 	client := fakeMeta(t, meta("apps", "v1", "Deployment", "airbyte", "airbyte-server"))
 	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {

@@ -90,6 +90,17 @@ func TestManagerAuthorizationNeedsNoReviewerOutsideClusterMode(t *testing.T) {
 	}
 }
 
+func TestImpersonatedCountsNeedAMetadataClient(t *testing.T) {
+	mgr := &Manager{}
+	ctx := auth.WithIdentity(t.Context(), auth.Identity{User: "alice"})
+
+	counts := mgr.Counts(ctx)
+
+	if counts.Counts == nil || len(counts.Counts) != 0 {
+		t.Fatalf("counts = %v, want a known empty result without a metadata client", counts.Counts)
+	}
+}
+
 func securedDeploymentDescriptor() api.ResourceDescriptor {
 	return api.ResourceDescriptor{
 		Group:      "apps",

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,22 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/auth"
 )
+
+func TestFeedReauthorizationChecksTableSubscriptions(t *testing.T) {
+	want := errors.New("table access was revoked")
+	sess := &wsSession{
+		tables: map[string]*entry{
+			"pods": {authorize: func(context.Context) error { return want }},
+		},
+		logs: map[string]*entry{},
+	}
+
+	err := sess.reauthorize(t.Context())
+
+	if !errors.Is(err, want) {
+		t.Fatalf("reauthorize error = %v, want %v", err, want)
+	}
+}
 
 func TestAuthorizationWatcherKeepsAValidProxyIdentityConnected(t *testing.T) {
 	secret := strings.Repeat("p", 32)

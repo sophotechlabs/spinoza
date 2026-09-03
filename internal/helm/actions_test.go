@@ -221,7 +221,7 @@ func TestHelmChildEnvironmentExcludesServerCredentials(t *testing.T) {
 	t.Setenv("HELM_CACHE_HOME", "/tmp/helm-cache")
 	t.Setenv("KUBECONFIG", "/tmp/kubeconfig")
 
-	env := helmEnvironment([]string{"HELM_DRIVER=configmap"})
+	env := helmEnvironment([]string{"not-an-assignment", "HELM_DRIVER=configmap"})
 	found := map[string]string{}
 	for _, entry := range env {
 		key, value, ok := strings.Cut(entry, "=")

@@ -18,6 +18,7 @@ const cluster = "https://one.example:6443"
 func taken() checks.Baseline {
 	return checks.Baseline{
 		TakenAt: "2026-08-30T00:00:00Z",
+		Scanned: 7,
 		Checks:  []string{"privileged-containers"},
 		Counts:  map[string]int{"privileged-containers": 2},
 		Keys: map[string]string{
@@ -43,7 +44,7 @@ func TestABaselineComesBackAsItWasSaved(t *testing.T) {
 	if !ok {
 		t.Fatal("a baseline that was just saved could not be read")
 	}
-	if back.TakenAt != taken().TakenAt || back.Counts["privileged-containers"] != 2 {
+	if back.TakenAt != taken().TakenAt || back.Scanned != 7 || back.Counts["privileged-containers"] != 2 {
 		t.Fatalf("read back %+v", back)
 	}
 	if back.Keys["privileged-containers\x00aaaaaaaaaaa"] != "Deployment apps/api" || len(back.Keys) != 2 {
@@ -352,7 +353,7 @@ func TestABaselineComesBackFromTheFileItWasWrittenTo(t *testing.T) {
 	if decodeErr != nil {
 		t.Fatalf("decode: %v", decodeErr)
 	}
-	if back.TakenAt != taken().TakenAt || len(back.Keys) != 2 {
+	if back.TakenAt != taken().TakenAt || back.Scanned != 7 || len(back.Keys) != 2 {
 		t.Fatalf("read back %+v", back)
 	}
 }

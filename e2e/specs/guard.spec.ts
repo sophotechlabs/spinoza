@@ -113,12 +113,12 @@ test('the token file is readable only by the user that started spinoza', async (
 test('the profiler mounts behind the same token when it is asked for', async () => {
   const profiled = side('profiled');
   const bare = await request.newContext();
-  const refused = await bare.get(`${profiled.baseURL}/debug/pprof/cmdline`);
+  const refused = await bare.get(`${profiled.baseURL}/debug/pprof/`);
   expect(refused.status()).toBe(401);
-  const allowed = await bare.get(`${profiled.baseURL}/debug/pprof/cmdline`, {
+  const allowed = await bare.get(`${profiled.baseURL}/debug/pprof/`, {
     headers: { 'X-Spinoza-Token': profiled.token },
   });
   expect(allowed.status()).toBe(200);
-  expect(await allowed.text()).toContain('--kubeconfig');
+  expect(await allowed.text()).toContain('goroutine');
   await bare.dispose();
 });

@@ -83,10 +83,13 @@ test('a check can be turned off and restored without losing the audit', async ({
   const original = await settingsValue(page, 'spinoza.settings.v1');
   const check = page.getByRole('button', { name: /Privileged containers/ });
   await expect(check).toBeVisible({ timeout: 60_000 });
+  await check.click();
+  await expect(check).toHaveAttribute('aria-expanded', 'true');
+  const turnOff = page.getByRole('button', { name: 'Turn off privileged-containers' });
   const disabled = page.waitForResponse(
     (response) => response.url().includes('/api/settings') && response.request().method() === 'PUT',
   );
-  await page.getByRole('button', { name: 'Turn off privileged-containers' }).click();
+  await turnOff.click();
   await disabled;
   try {
     await expect(check).toHaveCount(0, { timeout: 60_000 });

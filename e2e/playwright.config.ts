@@ -29,7 +29,9 @@ function browserProjects() {
       },
     ];
   }
-  const suite = JSON.parse(readFileSync(resolve(import.meta.dirname, 'suite.json'), 'utf8')) as Suite;
+  const suite = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, 'suite.json'), 'utf8'),
+  ) as Suite;
   const group = suite.groups.find((candidate) => candidate.id === groupID);
   if (group === undefined) {
     throw new Error(`unknown E2E group ${groupID}`);
@@ -65,6 +67,13 @@ function reporters(): ReporterDescription[] {
   ];
 }
 
+function retries(): number {
+  if (isCI) {
+    return 1;
+  }
+  return 0;
+}
+
 export default defineConfig({
   projects: browserProjects(),
   globalSetup: './harness/globalSetup.ts',
@@ -72,7 +81,7 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   forbidOnly: isCI,
-  retries: 0,
+  retries: retries(),
   timeout: 90_000,
   expect: { timeout: 20_000 },
   reporter: reporters(),

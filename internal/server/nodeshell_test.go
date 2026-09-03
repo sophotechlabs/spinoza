@@ -23,10 +23,23 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
+
+type refusedNodeShell struct {
+	notStubbed
+}
+
+func (refusedNodeShell) NodeShellSupport(context.Context, string) api.NodeShellSupport {
+	return api.NodeShellSupport{Allowed: true, Namespace: nodeshell.DefaultNamespace}
+}
+
+func (refusedNodeShell) Authorize(context.Context, ...access.Check) error {
+	return access.ErrDenied
+}
 
 func shellCluster(t *testing.T) *k8sfake.Clientset {
 	t.Helper()
@@ -151,6 +164,20 @@ func TestANodeShellNeedsANode(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestANodeShellStopsBeforeUpgradeWhenAuthorizationIsDenied(t *testing.T) {
+	backend := refusedNodeShell{notStubbed{t: t}}
+	srv := New(&stubBackendCluster{backend: backend}, testAssets(), testToken)
+	req := httptest.NewRequest(http.MethodGet, "/api/nodeshell?node=p-mk1", http.NoBody)
+	req = req.WithContext(auth.WithIdentity(req.Context(), auth.Identity{User: "alice"}))
+	recorded := httptest.NewRecorder()
+
+	srv.handleNodeShell(recorded, req)
+
+	if recorded.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want authorization refused before websocket upgrade", recorded.Code)
 	}
 }
 
