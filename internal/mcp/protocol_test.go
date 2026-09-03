@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 )
@@ -286,5 +287,26 @@ func TestAToolThatFailsAnswersWithAnErrorResultNotAProtocolError(t *testing.T) {
 	body := as[string](t, as[map[string]any](t, contents[0])["text"])
 	if !strings.Contains(body, "query is required") {
 		t.Fatalf("text = %q, want it to name the missing argument", body)
+	}
+}
+
+func TestAToolResultThatJSONCannotEncodeIsAProtocolError(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{})
+	server.register(tool{
+		name: "unencodable",
+		run: func(context.Context, arguments) (any, error) {
+			return math.Inf(1), nil
+		},
+	})
+
+	reply := ask(t, server, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"unencodable","arguments":{}}}`)
+
+	failure := errorOf(t, reply)
+	if failure["code"] != float64(codeInternal) {
+		t.Fatalf("code = %v, want %d", failure["code"], codeInternal)
+	}
+	want := "the result could not be encoded: json: unsupported value: +Inf"
+	if failure["message"] != want {
+		t.Fatalf("message = %q, want %q", failure["message"], want)
 	}
 }
