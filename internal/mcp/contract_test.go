@@ -42,6 +42,7 @@ func everyArgument(tool string) arguments {
 		argNamespace: "prod",
 		argQuery:     "up",
 		argYAML:      "spec: {}",
+		"uid":        "uid-1",
 		argEngine:    "flux",
 		argReplicas:  float64(1),
 	}
@@ -190,12 +191,10 @@ func TestEveryWriteToolAsksTheAccessCheckFirst(t *testing.T) {
 				{Capability: "restart", Reason: "no"},
 				{Capability: "drain", Reason: "no"},
 				{Capability: "trigger", Reason: "no"},
+				{Capability: "reconcile", Reason: "no"},
 				{Capability: "edit", Reason: "no"},
 			}}
 			server := serverFor(cluster, Options{AllowWrite: true})
-			if name == "manage_gitops" {
-				t.Skip("gitops actions are gated by the controller, not by a capability spinoza names")
-			}
 
 			_, err := server.tools[name].run(context.Background(), everyArgument(name))
 

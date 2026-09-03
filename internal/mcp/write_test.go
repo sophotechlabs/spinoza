@@ -153,6 +153,69 @@ func TestARefusedCapabilityStopsTheWriteAndCarriesTheReason(t *testing.T) {
 	}
 }
 
+func TestInverseActionsUseTheCapabilityTheyShare(t *testing.T) {
+	cases := []struct {
+		name       string
+		tool       string
+		arguments  arguments
+		capability string
+	}{
+		{
+			name:       "uncordon uses cordon access",
+			tool:       "manage_node",
+			arguments:  arguments{"name": "worker-1", "action": "uncordon"},
+			capability: "cordon",
+		},
+		{
+			name: "resume uses suspend access",
+			tool: "manage_cronjob",
+			arguments: arguments{
+				"name": "nightly", "namespace": "prod", "action": "resume",
+			},
+			capability: "suspend",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := writableCluster()
+			cluster.refused = api.Access{Refused: []api.Refusal{{
+				Capability: tc.capability,
+				Reason:     "the access review refused the shared capability",
+			}}}
+			server := serverFor(cluster, Options{AllowWrite: true})
+
+			err := refuses(t, server, tc.tool, tc.arguments)
+
+			if err.Error() != "the access review refused the shared capability" {
+				t.Fatalf("error = %q, want the access review's reason", err)
+			}
+			if len(cluster.acted) != 0 {
+				t.Fatalf("the action ran after its shared capability was refused: %v", cluster.acted)
+			}
+		})
+	}
+}
+
+func TestARefusedGitopsCapabilityStopsTheWriteAndCarriesTheReason(t *testing.T) {
+	cluster := writableCluster()
+	cluster.refused = api.Access{Refused: []api.Refusal{
+		{Capability: "reconcile", Reason: "you may not patch GitOps objects here"},
+	}}
+	server := serverFor(cluster, Options{AllowWrite: true})
+
+	err := refuses(t, server, "manage_gitops", arguments{
+		"engine": "flux", "resource": "kustomizations", "name": "apps",
+		"namespace": "flux-system", "action": "reconcile",
+	})
+
+	if err.Error() != "you may not patch GitOps objects here" {
+		t.Fatalf("error = %q, want the apiserver's own reason", err)
+	}
+	if len(cluster.fluxCalls) != 0 {
+		t.Fatalf("the GitOps action ran anyway: %v", cluster.fluxCalls)
+	}
+}
+
 func TestARefusalOfAnotherCapabilityDoesNotBlockThisOne(t *testing.T) {
 	cluster := writableCluster()
 	cluster.refused = api.Access{Refused: []api.Refusal{{Capability: "delete", Reason: "no"}}}

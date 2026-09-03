@@ -9,7 +9,6 @@ import (
 const (
 	healthURI   = "cluster://health"
 	topologyURI = "cluster://topology"
-	eventsURI   = "cluster://events"
 	jsonMime    = "application/json"
 )
 
@@ -17,7 +16,6 @@ func resourceCards() []resourceCard {
 	return []resourceCard{
 		{URI: healthURI, Name: "Cluster health", Description: "Versions, node and pod counts, and what is failing now.", MimeType: jsonMime},
 		{URI: topologyURI, Name: "Cluster topology", Description: "The folded ownership and wiring graph.", MimeType: jsonMime},
-		{URI: eventsURI, Name: "Cluster events", Description: "Recent events, deduplicated by reason and message.", MimeType: jsonMime},
 	}
 }
 
@@ -47,8 +45,6 @@ func (s *Server) resourceBody(ctx context.Context, uri string) (any, error) {
 		return s.dashboard(ctx, arguments{})
 	case topologyURI:
 		return s.topology(ctx, arguments{})
-	case eventsURI:
-		return s.events(ctx, arguments{})
 	default:
 		return nil, fmt.Errorf("spinoza serves no resource at %s", uri)
 	}

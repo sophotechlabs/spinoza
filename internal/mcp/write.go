@@ -167,7 +167,11 @@ func (s *Server) manageNode(ctx context.Context, args arguments) (any, error) {
 		Force:  args.flag("force"),
 		DryRun: verb == "drain" && args.flag("dryRun"),
 	}
-	return s.act(ctx, ref, req, verb)
+	capability := verb
+	if verb == "uncordon" {
+		capability = "cordon"
+	}
+	return s.act(ctx, ref, req, capability)
 }
 
 func (s *Server) manageCronJob(ctx context.Context, args arguments) (any, error) {
@@ -191,7 +195,11 @@ func (s *Server) manageCronJob(ctx context.Context, args arguments) (any, error)
 		Name:      name,
 	}
 	req := actions.Request{Ref: ref, Action: actions.Action(verb)}
-	return s.act(ctx, ref, req, verb)
+	capability := verb
+	if verb == "resume" {
+		capability = "suspend"
+	}
+	return s.act(ctx, ref, req, capability)
 }
 
 func (s *Server) manageGitops(ctx context.Context, args arguments) (any, error) {
@@ -202,6 +210,9 @@ func (s *Server) manageGitops(ctx context.Context, args arguments) (any, error) 
 	ref, err := args.refIn(s.cluster.Resources())
 	if err != nil {
 		return nil, err
+	}
+	if refused := s.permitted(ctx, ref, "reconcile"); refused != nil {
+		return nil, refused
 	}
 	if engine == "flux" {
 		verb, wrong := args.oneOf(argAction, fluxVerbs...)

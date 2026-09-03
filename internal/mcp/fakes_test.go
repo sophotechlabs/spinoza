@@ -19,41 +19,43 @@ import (
 )
 
 type fakeCluster struct {
-	overview  api.ClusterOverview
-	counts    api.ResourceCounts
-	queue     api.IssueQueue
-	report    api.CheckReport
-	catalog   api.ResourceCatalog
-	spaces    api.Namespaces
-	listed    []*unstructured.Unstructured
-	listErr   error
-	detail    api.ObjectDetail
-	detailErr error
-	events    []api.Event
-	eventsErr error
-	hits      api.SearchResults
-	graph     api.Graph
-	usage     api.Metrics
-	lines     []string
-	linesErr  error
-	selector  string
-	selErr    error
-	releases  api.HelmReleases
-	relErr    error
-	release   api.HelmReleaseDetail
-	oneRelErr error
-	refused   api.Access
-	acted     []actions.Request
-	actResult api.ActionResult
-	actErr    error
-	applied   []byte
-	applyErr  error
-	fluxCalls []flux.Action
-	argoCalls []argocd.Request
-	gitopsErr error
-	lastKind  api.ObjectRef
-	lastTopo  topology.Request
-	lastLogs  logs.Request
+	overview   api.ClusterOverview
+	counts     api.ResourceCounts
+	queue      api.IssueQueue
+	report     api.CheckReport
+	catalog    api.ResourceCatalog
+	spaces     api.Namespaces
+	listed     []*unstructured.Unstructured
+	listErr    error
+	detail     api.ObjectDetail
+	detailErr  error
+	events     []api.Event
+	eventsErr  error
+	hits       api.SearchResults
+	graph      api.Graph
+	usage      api.Metrics
+	lines      []string
+	linesErr   error
+	selector   string
+	selErr     error
+	releases   api.HelmReleases
+	relErr     error
+	release    api.HelmReleaseDetail
+	oneRelErr  error
+	history    api.HelmHistoryPage
+	historyErr error
+	refused    api.Access
+	acted      []actions.Request
+	actResult  api.ActionResult
+	actErr     error
+	applied    []byte
+	applyErr   error
+	fluxCalls  []flux.Action
+	argoCalls  []argocd.Request
+	gitopsErr  error
+	lastKind   api.ObjectRef
+	lastTopo   topology.Request
+	lastLogs   logs.Request
 }
 
 func (f *fakeCluster) Overview(context.Context) api.ClusterOverview          { return f.overview }
@@ -100,6 +102,10 @@ func (f *fakeCluster) HelmReleases(context.Context) (api.HelmReleases, error) {
 
 func (f *fakeCluster) HelmRelease(context.Context, string, string, int64) (api.HelmReleaseDetail, error) {
 	return f.release, f.oneRelErr
+}
+
+func (f *fakeCluster) HelmHistory(context.Context, string, string, int64) (api.HelmHistoryPage, error) {
+	return f.history, f.historyErr
 }
 
 func (f *fakeCluster) Access(context.Context, api.ObjectRef) api.Access { return f.refused }

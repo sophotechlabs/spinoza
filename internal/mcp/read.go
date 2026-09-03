@@ -76,13 +76,14 @@ func (s *Server) registerReads() {
 	s.register(tool{
 		name:        "get_events",
 		title:       "Events",
-		description: "Events deduplicated by reason and message, newest first.",
+		description: "One object's events, deduplicated by reason and message, newest first.",
 		properties: map[string]propOf{
-			argNamespace: text("Namespace to limit to."),
-			"uid":        text("Object uid, to scope to one object."),
+			argNamespace: text("Object namespace."),
+			"uid":        text("Object uid."),
 			argLimit:     number("How many to return. Defaults to 100."),
 		},
-		run: s.events,
+		required: []string{"uid"},
+		run:      s.events,
 	})
 	s.register(tool{
 		name:        "get_topology",
@@ -205,17 +206,19 @@ func (s *Server) dashboard(ctx context.Context, _ arguments) (any, error) {
 	queue := s.cluster.Issues(ctx)
 	report := s.cluster.Checks(ctx, checks.Filter{WholeCluster: true})
 	return map[string]any{
-		"context":     s.context,
-		"kubernetes":  overview.Version,
-		"nodes":       overview.Nodes,
-		"pods":        overview.Pods,
-		"warnings":    overview.Warnings,
-		"failing":     failingSummary(counts),
-		"issues":      issueLines(queue, 10),
-		"issueCount":  len(queue.Rows),
-		"auditGroups": len(report.Groups),
-		"auditFound":  findingCount(report),
-		"errors":      trimErrors(overview.Error, queue.Error, report.Error),
+		"context":          s.context,
+		"kubernetes":       overview.Version,
+		"nodes":            overview.Nodes,
+		"pods":             overview.Pods,
+		"warnings":         overview.Warnings,
+		"warningCount":     overview.WarningCount,
+		"failing":          failingSummary(counts),
+		"issues":           issueLines(queue, 10),
+		"issueCount":       len(queue.Rows) + queue.Dropped,
+		"auditGroups":      len(report.Groups),
+		"auditFound":       findingCount(report),
+		"incompleteChecks": incompleteChecks(report.Groups, ""),
+		"errors":           trimErrors(overview.Error, queue.Error, report.Error),
 	}, nil
 }
 
@@ -313,7 +316,10 @@ func (s *Server) getResource(ctx context.Context, args arguments) (any, error) {
 		if eventsErr != nil {
 			return nil, eventsErr
 		}
-		out["events"] = dedupeEvents(events, defaultRows)
+		sample, total := dedupeEvents(events, defaultRows)
+		out["events"] = sample
+		out["eventTotal"] = total
+		out["eventsReturned"] = len(sample)
 	}
 	return out, nil
 }
@@ -332,14 +338,19 @@ func resourceVersionOf(document string) string {
 }
 
 func (s *Server) events(ctx context.Context, args arguments) (any, error) {
-	found, err := s.cluster.Events(ctx, args.text(argNamespace), args.text("uid"))
+	uid, err := args.required("uid")
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"events": dedupeEvents(found, args.limit(argLimit, defaultRows))}, nil
+	found, err := s.cluster.Events(ctx, args.text(argNamespace), uid)
+	if err != nil {
+		return nil, err
+	}
+	sample, total := dedupeEvents(found, args.limit(argLimit, defaultRows))
+	return map[string]any{"events": sample, "total": total, "returned": len(sample)}, nil
 }
 
-func dedupeEvents(found []api.Event, limit int) []map[string]any {
+func dedupeEvents(found []api.Event, limit int) ([]map[string]any, int) {
 	seen := map[string]int{}
 	out := []map[string]any{}
 	for _, event := range found {
@@ -362,10 +373,11 @@ func dedupeEvents(found []api.Event, limit int) []map[string]any {
 			"count":    int(event.Count),
 		})
 	}
-	if len(out) > limit {
-		return out[:limit]
+	total := len(out)
+	if total > limit {
+		out = out[:limit]
 	}
-	return out
+	return out, total
 }
 
 func (s *Server) topology(ctx context.Context, args arguments) (any, error) {
@@ -507,10 +519,17 @@ func (s *Server) top(ctx context.Context, args arguments) (any, error) {
 		return cmp.Compare(right.CPU, left.CPU)
 	})
 	limit := args.limit(argLimit, defaultTop)
-	if len(rows) > limit {
+	total := len(rows)
+	if total > limit {
 		rows = rows[:limit]
 	}
-	return map[string]any{"by": rankedBy(by), "pods": rows, keyError: usage.Error}, nil
+	return map[string]any{
+		"by":       rankedBy(by),
+		"pods":     rows,
+		"total":    total,
+		"returned": len(rows),
+		keyError:   usage.Error,
+	}, nil
 }
 
 func rankedBy(by string) string {
@@ -550,6 +569,10 @@ func (s *Server) helmRelease(ctx context.Context, args arguments) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	history, err := s.cluster.HelmHistory(ctx, namespace, name, detail.Release.Revision)
+	if err != nil {
+		return nil, err
+	}
 	values := ""
 	rawOutput := rawOutputWithheld
 	if s.unsafeRawOutput {
@@ -557,11 +580,12 @@ func (s *Server) helmRelease(ctx context.Context, args arguments) (any, error) {
 		rawOutput = "best-effort redaction enabled by unsafe raw-output option"
 	}
 	return map[string]any{
-		"release":   detail.Release,
-		"history":   detail.History,
-		"values":    values,
-		"rawOutput": rawOutput,
-		keyError:    detail.Error,
+		"release":     detail.Release,
+		"history":     history.Revisions,
+		"historyNext": history.Next,
+		"values":      values,
+		"rawOutput":   rawOutput,
+		keyError:      detail.Error,
 	}, nil
 }
 
@@ -571,21 +595,28 @@ func (s *Server) audit(ctx context.Context, args arguments) (any, error) {
 	only := args.text("check")
 	limit := args.limit(argLimit, defaultRows)
 	rows := []map[string]any{}
+	truncated := false
 	for _, group := range report.Groups {
 		if only != "" && group.ID != only {
 			continue
 		}
-		if severity != "" && group.Severity != severity {
-			continue
-		}
+		truncated = truncated || group.Truncated
 		for _, finding := range group.Findings {
+			foundSeverity := finding.Severity
+			if foundSeverity == "" {
+				foundSeverity = group.Severity
+			}
+			if severity != "" && foundSeverity != severity {
+				continue
+			}
 			if len(rows) == limit {
-				break
+				truncated = true
+				continue
 			}
 			rows = append(rows, map[string]any{
 				"check":    group.ID,
 				"title":    group.Title,
-				"severity": group.Severity,
+				"severity": foundSeverity,
 				"wrong":    group.Wrong,
 				"remedy":   group.Remedy,
 				"object":   objectAt(report, finding.Ref),
@@ -593,7 +624,33 @@ func (s *Server) audit(ctx context.Context, args arguments) (any, error) {
 			})
 		}
 	}
-	return map[string]any{"scanned": report.Scanned, "findings": rows, keyError: report.Error}, nil
+	return map[string]any{
+		"scanned":          report.Scanned,
+		"findings":         rows,
+		"returned":         len(rows),
+		"truncated":        truncated,
+		"incompleteChecks": incompleteChecks(report.Groups, only),
+		keyError:           report.Error,
+	}, nil
+}
+
+func incompleteChecks(groups []api.CheckGroup, only string) []map[string]any {
+	incomplete := []map[string]any{}
+	for _, group := range groups {
+		if only != "" && group.ID != only {
+			continue
+		}
+		if group.Skipped == "" && len(group.PartialOn) == 0 {
+			continue
+		}
+		incomplete = append(incomplete, map[string]any{
+			"check":     group.ID,
+			"title":     group.Title,
+			"skipped":   group.Skipped,
+			"partialOn": group.PartialOn,
+		})
+	}
+	return incomplete
 }
 
 func objectAt(report api.CheckReport, ref int) any {
@@ -605,7 +662,9 @@ func objectAt(report api.CheckReport, ref int) any {
 
 func (s *Server) issues(ctx context.Context, args arguments) (any, error) {
 	queue := s.cluster.Issues(ctx)
-	return map[string]any{"rows": issueRows(queue, args.limit(argLimit, defaultRows)), keyError: queue.Error}, nil
+	rows := issueRows(queue, args.limit(argLimit, defaultRows))
+	dropped := queue.Dropped + len(queue.Rows) - len(rows)
+	return map[string]any{"rows": rows, "dropped": dropped, keyError: queue.Error}, nil
 }
 
 func issueRows(queue api.IssueQueue, limit int) []map[string]any {
@@ -647,7 +706,8 @@ func failingSummary(counts api.ResourceCounts) map[string]int {
 func findingCount(report api.CheckReport) int {
 	total := 0
 	for _, group := range report.Groups {
-		total += len(group.Findings)
+		found := max(group.Total, len(group.Findings))
+		total += found
 	}
 	return total
 }

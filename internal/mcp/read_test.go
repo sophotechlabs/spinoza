@@ -109,6 +109,56 @@ func TestTheDashboardReportsEachFailureOnce(t *testing.T) {
 	}
 }
 
+func TestTheDashboardCountsSignalsOutsideItsSamples(t *testing.T) {
+	cluster := &fakeCluster{
+		overview: api.ClusterOverview{
+			Warnings:     []api.OverviewEvent{{Reason: "BackOff"}},
+			WarningCount: 5,
+		},
+		queue: api.IssueQueue{
+			Rows:    []api.Issue{{Title: "kept"}, {Title: "also kept"}},
+			Dropped: 3,
+		},
+		report: api.CheckReport{Groups: []api.CheckGroup{{
+			ID:       "many",
+			Total:    4,
+			Findings: []api.CheckFinding{{Detail: "kept"}},
+		}}},
+	}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "get_dashboard", arguments{})
+
+	if result["warningCount"] != 5 {
+		t.Errorf("warningCount = %v, want every known warning", result["warningCount"])
+	}
+	if result["issueCount"] != 5 {
+		t.Errorf("issueCount = %v, want every known issue", result["issueCount"])
+	}
+	if result["auditFound"] != 4 {
+		t.Errorf("auditFound = %v, want every finding", result["auditFound"])
+	}
+}
+
+func TestTheDashboardNamesAuditChecksThatDidNotRunCompletely(t *testing.T) {
+	cluster := &fakeCluster{report: api.CheckReport{Groups: []api.CheckGroup{
+		{ID: "not-run", Title: "RBAC", Skipped: "cluster-wide resources were not read"},
+		{
+			ID:        "partial",
+			Title:     "Requests compared with usage",
+			PartialOn: []string{"p-mk2: metrics-server did not answer"},
+		},
+	}}}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "get_dashboard", arguments{})
+	incomplete := as[[]map[string]any](t, result["incompleteChecks"])
+
+	if len(incomplete) != 2 {
+		t.Fatalf("incompleteChecks = %v, want both incomplete checks", incomplete)
+	}
+}
+
 func TestNamespacesComeBackAsRows(t *testing.T) {
 	cluster := &fakeCluster{spaces: api.Namespaces{Names: []string{"default", "prod"}}}
 	server := serverFor(cluster, Options{})
@@ -326,7 +376,7 @@ func TestEventsAreFoldedByReasonAndMessage(t *testing.T) {
 	}}
 	server := serverFor(cluster, Options{})
 
-	rows := as[[]map[string]any](t, run(t, server, "get_events", arguments{})["events"])
+	rows := as[[]map[string]any](t, run(t, server, "get_events", arguments{"uid": "uid-1"})["events"])
 
 	if len(rows) != 2 {
 		t.Fatalf("events = %v, want the repeat folded", rows)
@@ -339,37 +389,70 @@ func TestEventsAreFoldedByReasonAndMessage(t *testing.T) {
 	}
 }
 
+func TestEventsNeedTheObjectUIDTheyAreScopedTo(t *testing.T) {
+	server := serverFor(&fakeCluster{events: []api.Event{{Reason: "Pulled"}}}, Options{})
+
+	err := refuses(t, server, "get_events", arguments{})
+	if !strings.Contains(err.Error(), "uid") {
+		t.Fatalf("error = %v, want the missing uid named", err)
+	}
+	if _, err := server.resourceBody(context.Background(), "cluster://events"); err == nil {
+		t.Fatal("an object-scoped event reader is still advertised as a parameterless resource")
+	}
+}
+
 func TestAnEventMessageIsScrubbed(t *testing.T) {
 	cluster := &fakeCluster{events: []api.Event{
 		{Reason: "Failed", Message: "auth failed with password=hunter2000"},
 	}}
 	server := serverFor(cluster, Options{})
 
-	rows := as[[]map[string]any](t, run(t, server, "get_events", arguments{})["events"])
+	rows := as[[]map[string]any](t, run(t, server, "get_events", arguments{"uid": "uid-1"})["events"])
 
 	if strings.Contains(as[string](t, rows[0]["message"]), "hunter2000") {
 		t.Fatalf("an event message leaked a secret: %q", rows[0]["message"])
 	}
 }
 
-func TestEventsAreCapped(t *testing.T) {
-	found := make([]api.Event, 0, 5)
-	for index := range 5 {
+func TestAnEventSampleSaysHowManyGroupsItOmitted(t *testing.T) {
+	found := make([]api.Event, 0, defaultRows+1)
+	for index := range defaultRows + 1 {
 		found = append(found, api.Event{Reason: "R", Message: string(rune('a' + index))})
 	}
-	server := serverFor(&fakeCluster{events: found}, Options{})
+	server := serverFor(&fakeCluster{
+		catalog: catalogOf(descriptor("", "v1", "pods", "Pod")),
+		detail:  api.ObjectDetail{Kind: "Pod", Name: "web-0", UID: "uid-1"},
+		events:  found,
+	}, Options{})
 
-	rows := as[[]map[string]any](t, run(t, server, "get_events", arguments{"limit": float64(2)})["events"])
+	object := run(t, server, "get_resource", arguments{
+		"resource": "pods", "name": "web-0", "events": true,
+	})
+	if object["eventTotal"] != defaultRows+1 || object["eventsReturned"] != defaultRows {
+		t.Errorf(
+			"object eventTotal/eventsReturned = %v/%v, want %d/%d",
+			object["eventTotal"], object["eventsReturned"], defaultRows+1, defaultRows,
+		)
+	}
+
+	result := run(t, server, "get_events", arguments{"uid": "uid-1", "limit": float64(2)})
+	rows := as[[]map[string]any](t, result["events"])
 
 	if len(rows) != 2 {
 		t.Fatalf("events = %d, want 2", len(rows))
+	}
+	if result["total"] != defaultRows+1 || result["returned"] != 2 {
+		t.Errorf(
+			"total/returned = %v/%v, want %d/2",
+			result["total"], result["returned"], defaultRows+1,
+		)
 	}
 }
 
 func TestANegativeEventLimitFallsBackWithoutPanicking(t *testing.T) {
 	server := serverFor(&fakeCluster{events: []api.Event{{Reason: "Failed", Message: "one"}}}, Options{})
 
-	rows := as[[]map[string]any](t, run(t, server, "get_events", arguments{"limit": float64(-1)})["events"])
+	rows := as[[]map[string]any](t, run(t, server, "get_events", arguments{"uid": "uid-1", "limit": float64(-1)})["events"])
 
 	if len(rows) != 1 {
 		t.Fatalf("events = %d, want the default limit to keep the event", len(rows))
@@ -379,7 +462,7 @@ func TestANegativeEventLimitFallsBackWithoutPanicking(t *testing.T) {
 func TestEventsPassTheRefusalBack(t *testing.T) {
 	server := serverFor(&fakeCluster{eventsErr: errRefused}, Options{})
 
-	if err := refuses(t, server, "get_events", arguments{}); !errors.Is(err, errRefused) {
+	if err := refuses(t, server, "get_events", arguments{"uid": "uid-1"}); !errors.Is(err, errRefused) {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -602,6 +685,21 @@ func TestTopKeepsToOneNamespaceWhenAsked(t *testing.T) {
 	}
 }
 
+func TestTopSaysWhenItsRankingIsIncomplete(t *testing.T) {
+	cluster := &fakeCluster{usage: api.Metrics{Pods: map[string]api.ResourceUsage{
+		"prod/web-0": {CPUMilli: 30},
+		"prod/web-1": {CPUMilli: 20},
+		"prod/web-2": {CPUMilli: 10},
+	}}}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "top_resources", arguments{"limit": float64(1)})
+
+	if result["total"] != 3 || result["returned"] != 1 {
+		t.Fatalf("total/returned = %v/%v, want 3/1", result["total"], result["returned"])
+	}
+}
+
 func stringify(value any) string {
 	return fmt.Sprint(value)
 }
@@ -657,6 +755,29 @@ func TestHelmValuesAreWithheldByDefault(t *testing.T) {
 	}
 	if !strings.Contains(as[string](t, one["rawOutput"]), "withheld") {
 		t.Fatalf("raw output note = %v", one["rawOutput"])
+	}
+}
+
+func TestAHelmReleaseLoadsTheHistoryThatDetailLeavesLazy(t *testing.T) {
+	cluster := &fakeCluster{
+		release: api.HelmReleaseDetail{Release: api.HelmRelease{
+			Name: "podinfo", Revision: 12,
+		}},
+		history: api.HelmHistoryPage{
+			Revisions: []api.HelmRevision{{Revision: 12}, {Revision: 11}},
+			Next:      10,
+		},
+	}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "get_helm_release", arguments{"namespace": "demo", "name": "podinfo"})
+
+	history := as[[]api.HelmRevision](t, result["history"])
+	if len(history) != 2 || history[1].Revision != 11 {
+		t.Fatalf("history = %v, want the separately loaded release history", history)
+	}
+	if result["historyNext"] != int64(10) {
+		t.Fatalf("historyNext = %v, want the older-history cursor", result["historyNext"])
 	}
 }
 
@@ -740,14 +861,86 @@ func TestTheAuditFiltersBySeverityAndCheck(t *testing.T) {
 	}
 }
 
-func TestTheIssueQueueScrubsAndCaps(t *testing.T) {
-	cluster := &fakeCluster{queue: api.IssueQueue{Rows: []api.Issue{
-		{Title: "CrashLoopBackOff", Detail: "exited after password=hunter2000", Folded: 3},
-		{Title: "NotProgressing"},
+func TestTheAuditSaysWhenItsFindingSampleIsIncomplete(t *testing.T) {
+	cluster := &fakeCluster{report: api.CheckReport{Groups: []api.CheckGroup{
+		{ID: "producer-cap", Truncated: true, Findings: []api.CheckFinding{{Detail: "a"}}},
+		{ID: "tool-cap", Findings: []api.CheckFinding{{Detail: "b"}, {Detail: "c"}}},
 	}}}
 	server := serverFor(cluster, Options{})
 
-	rows := as[[]map[string]any](t, run(t, server, "get_issues", arguments{"limit": float64(1)})["rows"])
+	producer := run(t, server, "get_cluster_audit", arguments{"check": "producer-cap"})
+	if truncated := as[bool](t, producer["truncated"]); !truncated || producer["returned"] != 1 {
+		t.Errorf(
+			"producer truncated/returned = %v/%v, want true/1",
+			producer["truncated"], producer["returned"],
+		)
+	}
+
+	tool := run(t, server, "get_cluster_audit", arguments{"check": "tool-cap", "limit": float64(1)})
+	if truncated := as[bool](t, tool["truncated"]); !truncated || tool["returned"] != 1 {
+		t.Errorf(
+			"tool truncated/returned = %v/%v, want true/1",
+			tool["truncated"], tool["returned"],
+		)
+	}
+}
+
+func TestTheAuditNamesChecksThatDidNotRunCompletely(t *testing.T) {
+	cluster := &fakeCluster{report: api.CheckReport{Groups: []api.CheckGroup{
+		{ID: "not-run", Title: "RBAC", Skipped: "cluster-wide resources were not read"},
+		{
+			ID:        "partial",
+			Title:     "Requests compared with usage",
+			PartialOn: []string{"p-mk2: metrics-server did not answer"},
+		},
+	}}}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "get_cluster_audit", arguments{})
+	incomplete := as[[]map[string]any](t, result["incompleteChecks"])
+
+	if len(incomplete) != 2 {
+		t.Fatalf("incompleteChecks = %v, want both incomplete checks", incomplete)
+	}
+	if incomplete[0]["check"] != "not-run" || incomplete[0]["skipped"] != "cluster-wide resources were not read" {
+		t.Errorf("skipped check = %v", incomplete[0])
+	}
+	partialOn := as[[]string](t, incomplete[1]["partialOn"])
+	if incomplete[1]["check"] != "partial" || len(partialOn) != 1 || partialOn[0] != "p-mk2: metrics-server did not answer" {
+		t.Errorf("partial check = %v", incomplete[1])
+	}
+}
+
+func TestTheAuditUsesEachFindingsEffectiveSeverity(t *testing.T) {
+	cluster := &fakeCluster{report: api.CheckReport{Groups: []api.CheckGroup{{
+		ID:       "raised",
+		Severity: "medium",
+		Findings: []api.CheckFinding{{Detail: "three replicas are affected", Severity: "high"}},
+	}}}}
+	server := serverFor(cluster, Options{})
+
+	rows := as[[]map[string]any](t, run(t, server, "get_cluster_audit", arguments{"severity": "high"})["findings"])
+
+	if len(rows) != 1 {
+		t.Fatalf("findings = %v, want the raised high-severity finding", rows)
+	}
+	if rows[0]["severity"] != "high" {
+		t.Fatalf("severity = %v, want the finding's effective severity", rows[0]["severity"])
+	}
+}
+
+func TestTheIssueQueueScrubsAndCaps(t *testing.T) {
+	cluster := &fakeCluster{queue: api.IssueQueue{
+		Rows: []api.Issue{
+			{Title: "CrashLoopBackOff", Detail: "exited after password=hunter2000", Folded: 3},
+			{Title: "NotProgressing"},
+		},
+		Dropped: 3,
+	}}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "get_issues", arguments{"limit": float64(1)})
+	rows := as[[]map[string]any](t, result["rows"])
 
 	if len(rows) != 1 {
 		t.Fatalf("rows = %v", rows)
@@ -757,6 +950,9 @@ func TestTheIssueQueueScrubsAndCaps(t *testing.T) {
 	}
 	if rows[0]["folded"] != 3 {
 		t.Fatalf("folded = %v", rows[0]["folded"])
+	}
+	if result["dropped"] != 4 {
+		t.Fatalf("dropped = %v, want the three producer omissions and one tool omission", result["dropped"])
 	}
 }
 
