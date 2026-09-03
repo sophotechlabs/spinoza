@@ -715,8 +715,8 @@ func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 }
 
 func validLogRequest(msg api.ClientMsg) error {
-	if msg.TailLines < 0 || msg.TailLines > maxLogTailLines {
-		return errors.New("log tail lines must be between 0 and 5000")
+	if msg.TailLines <= 0 || msg.TailLines > maxLogTailLines {
+		return errors.New("log tail lines must be between 1 and 5000")
 	}
 	return nil
 }

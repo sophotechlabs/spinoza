@@ -188,6 +188,7 @@ func TestALogLineThatCannotBeWrittenDoesNotTakeTheServerDown(t *testing.T) {
 		Namespace: "default",
 		Name:      "web",
 		Container: "app",
+		TailLines: 100,
 		Follow:    true,
 	})
 	waitForWrites(t, socket, before, 1)
@@ -207,6 +208,7 @@ func TestThePodCountFrameFailingAfterALogBatchIsSurvived(t *testing.T) {
 		Namespace: "default",
 		Name:      "web",
 		Container: "app",
+		TailLines: 100,
 		Follow:    true,
 	})
 	waitForWrites(t, socket, before, 2)

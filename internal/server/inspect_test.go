@@ -354,7 +354,7 @@ func TestWSTellsABrokenLogStreamFromAFinishedOne(t *testing.T) {
 	defer func() { _ = conn.CloseNow() }()
 
 	sendMsg(ctx, t, conn, api.ClientMsg{
-		Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web", Follow: true,
+		Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web", TailLines: 100, Follow: true,
 	})
 
 	for {
@@ -386,11 +386,11 @@ func TestWSLogsUnsubscribe(t *testing.T) {
 	}
 	defer func() { _ = conn.CloseNow() }()
 
-	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web"})
+	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web", TailLines: 100})
 	readMsg(ctx, t, conn)
 	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-unsubscribe", SubID: "logs"})
 
-	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "second", Namespace: "flux-system", Name: "web"})
+	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "second", Namespace: "flux-system", Name: "web", TailLines: 100})
 	for {
 		msg := readMsg(ctx, t, conn)
 		if msg.SubID == "second" {
@@ -417,7 +417,7 @@ func TestWSLogsReportsOpenFailure(t *testing.T) {
 	}
 	defer func() { _ = conn.CloseNow() }()
 
-	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web"})
+	sendMsg(ctx, t, conn, api.ClientMsg{Type: "logs-subscribe", SubID: "logs", Namespace: "flux-system", Name: "web", TailLines: 100})
 
 	msg := readMsg(ctx, t, conn)
 	if msg.Type != "error" {

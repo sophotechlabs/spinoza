@@ -44,6 +44,7 @@ func TestTableSubscriptionAtTheConnectionLimitIsRefused(t *testing.T) {
 			SubID:     fmt.Sprintf("logs-%d", index),
 			Namespace: "default",
 			Name:      "web",
+			TailLines: 100,
 		})
 	}
 	sendMsg(ctx, t, conn, api.ClientMsg{

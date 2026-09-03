@@ -168,6 +168,7 @@ func subscribeToWorkload(ctx context.Context, t *testing.T, ts *httptest.Server)
 		Resource:  "deployments",
 		Namespace: "prod",
 		Name:      "web",
+		TailLines: 100,
 		Follow:    true,
 	})
 	return conn

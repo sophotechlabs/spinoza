@@ -153,7 +153,7 @@ func TestALogStreamThatCannotBeOpenedIsReported(t *testing.T) {
 	ctx, conn := openAwkwardFeed(t, ts)
 
 	sendMsg(ctx, t, conn, api.ClientMsg{
-		Type: "logs-subscribe", SubID: "logs", Namespace: "prod", Name: "web", Container: "app",
+		Type: "logs-subscribe", SubID: "logs", Namespace: "prod", Name: "web", Container: "app", TailLines: 100,
 	})
 
 	msg := readMsg(ctx, t, conn)
@@ -177,6 +177,7 @@ func TestAWorkloadWhoseSelectorCannotBeReadIsReported(t *testing.T) {
 		Resource:  "deployments",
 		Namespace: "prod",
 		Name:      "web",
+		TailLines: 100,
 	})
 
 	msg := readMsg(ctx, t, conn)
@@ -306,6 +307,7 @@ func TestALogStreamReplacedWhileItWasBeingOpenedIsDropped(t *testing.T) {
 		Namespace: "prod",
 		Name:      "web",
 		Container: "app",
+		TailLines: 100,
 	}
 
 	sendMsg(ctx, t, conn, subscribe)

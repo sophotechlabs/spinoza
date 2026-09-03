@@ -232,7 +232,7 @@ func TestALogStreamGoesToTheClusterItNames(t *testing.T) {
 	ctx, conn := openAwkwardFeed(t, ts)
 
 	sendClient(ctx, t, conn, api.ClientMsg{
-		Type: "logs-subscribe", SubID: "l1", Cluster: mk2, Namespace: "default", Name: "web",
+		Type: "logs-subscribe", SubID: "l1", Cluster: mk2, Namespace: "default", Name: "web", TailLines: 100,
 	})
 
 	msg := readMsg(ctx, t, conn)
@@ -248,7 +248,7 @@ func TestALogStreamToAClusterThatIsNotOpenIsReported(t *testing.T) {
 	ctx, conn := openAwkwardFeed(t, ts)
 
 	sendClient(ctx, t, conn, api.ClientMsg{
-		Type: "logs-subscribe", SubID: "l1", Cluster: ghost, Namespace: "default", Name: "web",
+		Type: "logs-subscribe", SubID: "l1", Cluster: ghost, Namespace: "default", Name: "web", TailLines: 100,
 	})
 
 	msg := readMsg(ctx, t, conn)

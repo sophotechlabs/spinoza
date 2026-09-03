@@ -75,14 +75,14 @@ func TestRowFilterShapeIsBounded(t *testing.T) {
 }
 
 func TestLogRequestAndReservationsAreBounded(t *testing.T) {
-	for _, tail := range []int64{0, maxLogTailLines} {
+	for _, tail := range []int64{1, maxLogTailLines} {
 		if err := validLogRequest(api.ClientMsg{TailLines: tail}); err != nil {
 			t.Fatalf("tail %d: %v", tail, err)
 		}
 	}
-	for _, tail := range []int64{-1, maxLogTailLines + 1} {
+	for _, tail := range []int64{0, -1, maxLogTailLines + 1} {
 		err := validLogRequest(api.ClientMsg{TailLines: tail})
-		if err == nil || err.Error() != "log tail lines must be between 0 and 5000" {
+		if err == nil || err.Error() != "log tail lines must be between 1 and 5000" {
 			t.Fatalf("tail %d error = %v", tail, err)
 		}
 	}
@@ -91,5 +91,12 @@ func TestLogRequestAndReservationsAreBounded(t *testing.T) {
 	}
 	if got := logStreamUnits(api.ClientMsg{Resource: "deployments"}); got != maxWorkloadLogStreams {
 		t.Fatalf("workload reservation = %d, want %d", got, maxWorkloadLogStreams)
+	}
+}
+
+func TestAZeroTailCannotRequestTheWholeLogHistory(t *testing.T) {
+	err := validLogRequest(api.ClientMsg{TailLines: 0})
+	if err == nil {
+		t.Fatal("a zero tail was accepted even though it omits the Kubernetes tailLines bound")
 	}
 }
