@@ -15,7 +15,7 @@ func recordingFleet(t *testing.T) (*httptest.Server, *heldHistory) {
 	srv, _ := twoClusters(t, &writingBackend{}, &writingBackend{})
 	held := &heldHistory{}
 	srv.now = func() time.Time { return recordedAt }
-	srv.UseHistory(held)
+	srv.UseHistory(t.Context(), held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts, held
@@ -90,7 +90,7 @@ func TestClearingHistoryNamesTheClusterItClears(t *testing.T) {
 func TestClearingHistoryWithNoClusterOpenIsRefused(t *testing.T) {
 	srv := New(noCluster{}, testAssets(), testToken)
 	held := &heldHistory{entries: []store.Entry{{Cluster: mk1, Name: "web"}}}
-	srv.UseHistory(held)
+	srv.UseHistory(t.Context(), held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 

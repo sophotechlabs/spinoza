@@ -137,6 +137,26 @@ func TestTheSignInPageAndItsAssetsAreReachableWithoutSigningIn(t *testing.T) {
 	}
 }
 
+func TestIdentityDependentResponsesCannotBeSharedByCaches(t *testing.T) {
+	ts := proxyServer(t, everyNamespace(), auth.Config{})
+	for _, tc := range []struct {
+		path   string
+		user   string
+		groups string
+		want   string
+	}{
+		{path: pathSession, user: "alice", groups: "platform", want: "no-store"},
+		{path: "/api/overview", want: "no-store"},
+		{path: "/assets/chunk.js", want: "no-store"},
+		{path: "/assets/chunk-Ab12cd34.js", want: "public, max-age=31536000, immutable"},
+	} {
+		resp, _ := asUser(t, ts, http.MethodGet, tc.path, tc.user, tc.groups)
+		if got := resp.Header.Get("Cache-Control"); got != tc.want {
+			t.Fatalf("%s cache control = %q, want %q", tc.path, got, tc.want)
+		}
+	}
+}
+
 func TestTheSessionEndpointSaysWhoIsSignedInAndWhatTheyMayRead(t *testing.T) {
 	ts := proxyServer(t, &servedBackend{scope: api.Scope{Namespaces: []string{"payments"}}}, auth.Config{
 		EditorGroups: []string{"platform"},
@@ -239,6 +259,31 @@ func TestAViewerMayLookAndMayNotChangeAnything(t *testing.T) {
 	}
 	if !strings.Contains(body, "your role here is viewer") {
 		t.Fatalf("body = %q, want it to name the role", body)
+	}
+}
+
+func TestOnlyAnAdministratorMayRebuildSharedDiscovery(t *testing.T) {
+	backend := &stubCatalog{}
+	ts := proxyServer(t, backend, auth.Config{
+		DefaultRole: auth.RoleViewer,
+		AdminGroups: []string{"platform-admins"},
+	})
+	refused, body := asUser(t, ts, http.MethodPost, "/api/resources", "alice", "")
+	if refused.StatusCode != http.StatusForbidden {
+		t.Fatalf("viewer status = %d, want %d", refused.StatusCode, http.StatusForbidden)
+	}
+	if !strings.Contains(body, "this needs admin") {
+		t.Fatalf("viewer body = %q", body)
+	}
+	if backend.refreshed != 0 {
+		t.Fatalf("viewer triggered %d refreshes", backend.refreshed)
+	}
+	accepted, body := asUser(t, ts, http.MethodPost, "/api/resources", "ana", "platform-admins")
+	if accepted.StatusCode != http.StatusOK {
+		t.Fatalf("admin status = %d, want %d: %s", accepted.StatusCode, http.StatusOK, body)
+	}
+	if backend.refreshed != 1 {
+		t.Fatalf("admin triggered %d refreshes, want 1", backend.refreshed)
 	}
 }
 

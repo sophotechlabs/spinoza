@@ -40,7 +40,7 @@ const (
 var errBadTimeline = errors.New("kinds must be workloads, wide, or empty to stop")
 
 var workloadKinds = []resources.Kind{
-	{Group: "", Resource: "pods"},
+	{Group: "", Resource: podResourceName},
 	{Group: "apps", Resource: "deployments"},
 	{Group: "apps", Resource: "statefulsets"},
 	{Group: "apps", Resource: "daemonsets"},
@@ -290,10 +290,7 @@ func (s *Server) pruneTimeline(ctx context.Context) {
 	if err != nil {
 		slog.Warn("the timeline could not be trimmed", "error", err)
 	}
-	auditErr := past.PruneAudit(ctx, store.Retention{Days: auditDays, Rows: auditRows}, s.instant())
-	if auditErr != nil {
-		slog.Warn("the audit could not be trimmed", "error", auditErr)
-	}
+	s.pruneAudit(ctx, past)
 }
 
 func (s *Server) stopRecording(id string) {

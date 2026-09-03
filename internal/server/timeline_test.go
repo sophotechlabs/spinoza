@@ -99,7 +99,7 @@ func tapingServer(t *testing.T, backend Backend) (*Server, *heldHistory, *heldTa
 	srv := New(open, testAssets(), testToken)
 	held := &heldHistory{}
 	tabs := &heldTabs{tabs: []store.Tab{{ID: mk1, Context: "p-mk1"}}}
-	srv.UseHistory(held)
+	srv.UseHistory(t.Context(), held)
 	srv.UseTabs(tabs)
 	return srv, held, tabs
 }
@@ -270,14 +270,15 @@ func TestTimelineAndAuditPruneFailuresDoNotStopEachOther(t *testing.T) {
 	srv, held, _ := tapingServer(t, &taped{})
 	held.pruneErr = errors.New("timeline table is locked")
 	held.auditErr = errors.New("audit table is locked")
+	auditBefore := len(held.auditTrims())
 
 	srv.pruneTimeline(t.Context())
 
 	if len(held.trims()) != 1 {
 		t.Fatalf("timeline prune calls = %d, want 1", len(held.trims()))
 	}
-	if len(held.auditTrims()) != 1 {
-		t.Fatalf("audit prune calls = %d, want 1", len(held.auditTrims()))
+	if len(held.auditTrims()) != auditBefore+1 {
+		t.Fatalf("audit prune calls = %d, want %d", len(held.auditTrims()), auditBefore+1)
 	}
 }
 
@@ -460,7 +461,7 @@ func TestAKindSetNobodyKnowsRecordsNothing(t *testing.T) {
 
 func TestRecordingNeedsSomewhereToWriteAndSomethingToWatch(t *testing.T) {
 	srv, _, _ := tapingServer(t, &taped{})
-	srv.UseHistory(nil)
+	srv.UseHistory(t.Context(), nil)
 
 	srv.startRecording(t.Context(), mk1, timelineWorkloads)
 
@@ -642,7 +643,7 @@ func TestDroppedChangesAreReportedForTheClusterRecordingThem(t *testing.T) {
 func mergingServer(t *testing.T, held *heldHistory) *httptest.Server {
 	t.Helper()
 	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
-	srv.UseHistory(held)
+	srv.UseHistory(t.Context(), held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts

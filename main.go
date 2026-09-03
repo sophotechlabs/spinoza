@@ -90,16 +90,12 @@ func run() error {
 	srv.UseBaselines(baselineStore())
 	past := historyStore(ctx)
 	defer func() { _ = past.Close() }()
-	srv.UseHistory(past)
+	srv.UseHistory(ctx, past)
 	wiredErr := wireMode(ctx, srv, opts, past)
 	if wiredErr != nil {
 		return wiredErr
 	}
-	httpServer := &http.Server{
-		Addr:              opts.addr,
-		Handler:           srv.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	httpServer := configuredHTTPServer(opts.addr, srv.Handler())
 
 	idle := make(chan struct{})
 	announceListening(ctx, srv, opts, token, idle)

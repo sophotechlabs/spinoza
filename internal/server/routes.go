@@ -148,7 +148,6 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) mountProfiler(mux *http.ServeMux) {
 	for path, handler := range map[string]http.HandlerFunc{
 		"GET /debug/pprof/":        pprof.Index,
-		"GET /debug/pprof/cmdline": pprof.Cmdline,
 		"GET /debug/pprof/profile": pprof.Profile,
 		"GET /debug/pprof/symbol":  pprof.Symbol,
 		"GET /debug/pprof/trace":   pprof.Trace,

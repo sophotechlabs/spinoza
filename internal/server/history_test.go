@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -231,6 +232,101 @@ func (h *heldHistory) only(t *testing.T) store.Entry {
 	return held[0]
 }
 
+func TestUsingHistoryPrunesTheAuditWithoutStartingTheTimeline(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
+	srv.now = func() time.Time { return recordedAt }
+	held := &heldHistory{}
+
+	srv.UseHistory(t.Context(), held)
+
+	trims := held.auditTrims()
+	if len(trims) != 1 {
+		t.Fatalf("audit prune calls = %d, want 1", len(trims))
+	}
+	if trims[0].Days != auditDays || trims[0].Rows != auditRows {
+		t.Fatalf("audit retention = %+v", trims[0])
+	}
+	if len(held.trims()) != 0 {
+		t.Fatal("using history started timeline retention")
+	}
+}
+
+func TestDirectActionRecordsScheduleAuditRetentionWithoutTimeline(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
+	srv.now = func() time.Time { return recordedAt }
+	srv.auditPruneEvery = 2
+	held := &heldHistory{}
+	srv.UseHistory(t.Context(), held)
+	req := httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody)
+
+	srv.record(req, change{verb: verbApply})
+	if len(held.auditTrims()) != 1 {
+		t.Fatal("audit retention ran before the write boundary")
+	}
+	srv.record(req, change{verb: verbApply})
+	if len(held.auditTrims()) != 2 {
+		t.Fatalf("audit prune calls = %d, want startup and write-boundary passes", len(held.auditTrims()))
+	}
+	if len(held.trims()) != 0 {
+		t.Fatal("direct records activated timeline retention")
+	}
+}
+
+func TestAuditRetentionFailureDoesNotDisableTheNextPass(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
+	srv.auditPruneEvery = 1
+	held := &heldHistory{auditErr: errors.New("audit table is locked")}
+	srv.UseHistory(t.Context(), held)
+	req := httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody)
+
+	srv.record(req, change{verb: verbApply})
+	held.mu.Lock()
+	held.auditErr = nil
+	held.mu.Unlock()
+	srv.record(req, change{verb: verbApply})
+
+	if len(held.auditTrims()) != 3 {
+		t.Fatalf("audit prune calls = %d, want startup and both write passes", len(held.auditTrims()))
+	}
+}
+
+func TestAuditDetailAndMessageHaveFixedStorageBounds(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
+	held := &heldHistory{}
+	srv.UseHistory(t.Context(), held)
+	req := httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody)
+	long := strings.Repeat("é", maxAuditTextBytes)
+
+	srv.record(req, change{verb: verbApply, detail: long, err: errors.New(long)})
+
+	entry := held.only(t)
+	for field, value := range map[string]string{"detail": entry.Detail, "message": entry.Message} {
+		if len(value) > maxAuditTextBytes {
+			t.Fatalf("%s bytes = %d, want at most %d", field, len(value), maxAuditTextBytes)
+		}
+		if !utf8.ValidString(value) {
+			t.Fatalf("%s is not valid utf-8", field)
+		}
+		if !strings.HasSuffix(value, "...") {
+			t.Fatalf("%s does not show that it was truncated", field)
+		}
+	}
+}
+
+func TestAuditTextLimitAcceptsTheBoundaryAndTruncatesOneMoreByte(t *testing.T) {
+	atLimit := strings.Repeat("x", maxAuditTextBytes)
+	if got := auditText(atLimit); got != atLimit {
+		t.Fatalf("boundary text changed: %d bytes", len(got))
+	}
+	got := auditText(atLimit + "x")
+	if len(got) != maxAuditTextBytes {
+		t.Fatalf("truncated bytes = %d, want %d", len(got), maxAuditTextBytes)
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatal("truncated text does not carry the truncation suffix")
+	}
+}
+
 type writingBackend struct {
 	notStubbed
 
@@ -302,7 +398,7 @@ func recordingServer(t *testing.T, backend Backend) (*httptest.Server, *heldHist
 	held := &heldHistory{}
 	srv := New(&stubBackendCluster{backend: backend}, testAssets(), testToken)
 	srv.now = func() time.Time { return recordedAt }
-	srv.UseHistory(held)
+	srv.UseHistory(t.Context(), held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts, held
@@ -313,7 +409,7 @@ func pastServer(t *testing.T, held History) *httptest.Server {
 	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
 	srv.now = func() time.Time { return recordedAt }
 	if held != nil {
-		srv.UseHistory(held)
+		srv.UseHistory(t.Context(), held)
 	}
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
@@ -348,7 +444,7 @@ func TestHistoryIsReadableWithoutAStore(t *testing.T) {
 
 func TestHistoryIsServedEvenWithoutACluster(t *testing.T) {
 	srv := New(&stubBackendCluster{backend: nil}, testAssets(), testToken)
-	srv.UseHistory(&heldHistory{})
+	srv.UseHistory(t.Context(), &heldHistory{})
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 
@@ -809,7 +905,7 @@ func TestAWriteStillSucceedsWhenItCannotBeRecorded(t *testing.T) {
 	held := &heldHistory{recordErr: errors.New("the database is gone")}
 	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
 	srv.now = func() time.Time { return recordedAt }
-	srv.UseHistory(held)
+	srv.UseHistory(t.Context(), held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 
@@ -974,7 +1070,7 @@ func TestAWriteIsRecordedEvenIfTheBrowserWalkedAway(t *testing.T) {
 	held := &heldHistory{}
 	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
 	srv.now = func() time.Time { return recordedAt }
-	srv.UseHistory(held)
+	srv.UseHistory(t.Context(), held)
 	gone, cancel := context.WithCancel(t.Context())
 	cancel()
 	req := httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody).WithContext(gone)
@@ -1022,7 +1118,7 @@ func realStoreServer(t *testing.T) (*httptest.Server, *store.Store) {
 	t.Cleanup(func() { _ = held.Close() })
 	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
 	srv.now = func() time.Time { return recordedAt }
-	srv.UseHistory(held)
+	srv.UseHistory(t.Context(), held)
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts, held

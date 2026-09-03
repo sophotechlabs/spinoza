@@ -571,6 +571,38 @@ func TestTheExportNeutralizesSpreadsheetFormulas(t *testing.T) {
 	t.Fatal("export carried no row with the mute reason")
 }
 
+func TestEveryExportCellNeutralizesFormulaPrefixes(t *testing.T) {
+	unsafe := []string{
+		"=formula",
+		"+formula",
+		"-formula",
+		"@formula",
+		" \t=hidden",
+		"\u00a0＋full-width",
+		"\rordinary",
+		"\x00formula",
+	}
+	cells := append([]string{}, unsafe...)
+	cells = append(cells, "ordinary", " leading text", "")
+
+	found := spreadsheetCells(cells)
+
+	for at := range unsafe {
+		if found[at] != "'"+unsafe[at] {
+			t.Fatalf("cell %q became %q", unsafe[at], found[at])
+		}
+	}
+	if found[len(unsafe)] != "ordinary" {
+		t.Fatalf("ordinary cell = %q", found[len(unsafe)])
+	}
+	if found[len(unsafe)+1] != " leading text" {
+		t.Fatalf("leading ordinary text = %q", found[len(unsafe)+1])
+	}
+	if found[len(unsafe)+2] != "" {
+		t.Fatalf("empty cell = %q", found[len(unsafe)+2])
+	}
+}
+
 func TestTheBaselineCanBeSavedToAFileAndTakenBack(t *testing.T) {
 	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
 	srv.UseBaselines(newHeldBaselines())
@@ -677,6 +709,46 @@ func TestABaselineUploadThatBreaksWhileReadingIsRefused(t *testing.T) {
 	}
 	if len(held.taken) != 0 {
 		t.Fatalf("baselines = %v, want the partial upload left out", held.taken)
+	}
+}
+
+func TestBaselineImportFailsPromptlyWhenTheIdentityBudgetIsFull(t *testing.T) {
+	srv := New(&stubBackendCluster{}, testAssets(), testToken)
+	srv.baselineImports = newWorkBudget(2, 1)
+	release, claimed := srv.baselineImports.claim("local", 1)
+	if !claimed {
+		t.Fatal("the setup baseline import was refused")
+	}
+	defer release()
+	recorded := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/checks/baseline/file", strings.NewReader(`{}`))
+	srv.loadBaselineFile(recorded, request)
+	if recorded.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusTooManyRequests)
+	}
+	var failure api.Failure
+	bodyOf(t, recorded.Result(), &failure)
+	if failure.Message != "baseline import is busy; try again" {
+		t.Fatalf("message = %q", failure.Message)
+	}
+}
+
+func TestBaselineImportReusesItsReleasedBudget(t *testing.T) {
+	srv := New(&stubBackendCluster{}, testAssets(), testToken)
+	held := newHeldBaselines()
+	srv.UseBaselines(held)
+	srv.baselineImports = newWorkBudget(1, 1)
+	release, claimed := srv.baselineImports.claim("local", 1)
+	if !claimed {
+		t.Fatal("the setup baseline import was refused")
+	}
+	release()
+	body := `{"takenAt":"2026-09-03T12:00:00Z","checks":["requests-missing"],"keys":{}}`
+	recorded := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/checks/baseline/file", strings.NewReader(body))
+	srv.loadBaselineFile(recorded, request)
+	if recorded.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorded.Code, http.StatusOK, recorded.Body.String())
 	}
 }
 

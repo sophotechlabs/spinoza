@@ -142,16 +142,13 @@ func runDesktop() error {
 	srv.UseBaselines(baselineStore())
 	past := historyStore(ctx)
 	defer func() { _ = past.Close() }()
-	srv.UseHistory(past)
+	srv.UseHistory(ctx, past)
 	srv.RestoreTabs(ctx, past.Tabs())
 	srv.UseUpdates(updateChecker())
 	srv.UseLocalShell(localShell)
 	useViews(srv, &window, addr, token)
 	srv.UseFilePicker(filePicker(&window))
-	httpServer := &http.Server{
-		Handler:           srv.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	httpServer := configuredHTTPServer("", srv.Handler())
 	go func() {
 		serveErr := httpServer.Serve(listener)
 		if serveErr != nil && serveErr != http.ErrServerClosed {

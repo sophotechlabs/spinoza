@@ -20,6 +20,10 @@ const desktopHost = "wails.localhost"
 
 const readLimit = 64 << 10
 
+var ordinaryReadTimeout = 15 * time.Second
+
+var ordinaryWriteTimeout = 2 * time.Minute
+
 const AuthHeader = "X-Spinoza-Token"
 
 const AuthParam = "token"
@@ -39,9 +43,18 @@ func accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 
 func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		noStore(w)
+		if !upgrading(r) {
+			setOrdinaryDeadlines(w)
+		}
 		admitted, ok := s.admit(w, r)
 		if !ok {
 			return
+		}
+		if fingerprintedAsset(admitted.URL.Path) && publicAsset(admitted) {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.Header().Del("Pragma")
+			w.Header().Del("Expires")
 		}
 		if upgrading(admitted) {
 			defer safe.Recover("the socket on " + admitted.URL.Path)
@@ -55,6 +68,47 @@ func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 		}()
 		handler(recorded, admitted)
 	}
+}
+
+func noStore(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+}
+
+func setOrdinaryDeadlines(w http.ResponseWriter) {
+	controller := http.NewResponseController(w)
+	now := time.Now()
+	_ = controller.SetReadDeadline(now.Add(ordinaryReadTimeout))
+	_ = controller.SetWriteDeadline(now.Add(ordinaryWriteTimeout))
+}
+
+func fingerprintedAsset(path string) bool {
+	if !strings.HasPrefix(path, "/assets/") {
+		return false
+	}
+	name := path[strings.LastIndex(path, "/")+1:]
+	dot := strings.LastIndexByte(name, '.')
+	if dot < 0 {
+		return false
+	}
+	dash := strings.LastIndexByte(name[:dot], '-')
+	if dash < 0 {
+		return false
+	}
+	digest := name[dash+1 : dot]
+	if len(digest) < 8 {
+		return false
+	}
+	for _, letter := range digest {
+		alpha := letter >= 'a' && letter <= 'z'
+		alpha = alpha || letter >= 'A' && letter <= 'Z'
+		digit := letter >= '0' && letter <= '9'
+		if !alpha && !digit && letter != '_' && letter != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) admitLocal(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
@@ -105,7 +159,15 @@ func upgrading(r *http.Request) bool {
 	if r.Method != http.MethodGet {
 		return false
 	}
-	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	switch r.URL.Path {
+	case "/ws", "/api/exec", "/api/nodeshell", "/api/shell":
+		return true
+	default:
+		return false
+	}
 }
 
 func mutating(method string) bool {

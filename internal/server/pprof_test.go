@@ -59,6 +59,18 @@ func TestTheProfilerNeedsTheTokenLikeEverythingElse(t *testing.T) {
 	}
 }
 
+func TestTheProfilerDoesNotExposeProcessArguments(t *testing.T) {
+	ts := profilerServer(t)
+
+	res := get(t, ts, "/debug/pprof/cmdline", func(r *http.Request) {
+		r.Header.Set(AuthHeader, testToken)
+	})
+
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 so CLI credentials cannot be read", res.StatusCode)
+	}
+}
+
 func TestTheProfilerRefusesAForeignOrigin(t *testing.T) {
 	mgr, _ := testManager(t)
 	srv := New(fixed(mgr), testAssets(), testToken)

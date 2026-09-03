@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
@@ -17,6 +18,11 @@ import (
 )
 
 const recordTimeout = 10 * time.Second
+
+const (
+	auditPruneInterval = 256
+	maxAuditTextBytes  = 4096
+)
 
 const (
 	verbApply     = "apply"
@@ -37,7 +43,7 @@ const (
 )
 
 func podRef(namespace, pod string) api.ObjectRef {
-	return api.ObjectRef{Version: "v1", Resource: "pods", Namespace: namespace, Name: pod}
+	return api.ObjectRef{Version: "v1", Resource: podResourceName, Namespace: namespace, Name: pod}
 }
 
 func nodeRef(node string) api.ObjectRef {
@@ -61,10 +67,16 @@ type History interface {
 	Reason() string
 }
 
-func (s *Server) UseHistory(past History) {
+func (s *Server) UseHistory(ctx context.Context, past History) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.past = past
+	s.mu.Unlock()
+	if past == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, recordTimeout)
+	defer cancel()
+	s.pruneAudit(ctx, past)
 }
 
 type Tabs interface {
@@ -131,12 +143,51 @@ func (s *Server) record(r *http.Request, made change) {
 		Kind:      made.kind,
 		Namespace: made.ref.Namespace,
 		Name:      made.ref.Name,
-		Detail:    made.detail,
+		Detail:    auditText(made.detail),
 		Outcome:   outcomeOf(made.err),
-		Message:   messageOf(made.err),
+		Message:   auditText(messageOf(made.err)),
 	})
 	if err != nil {
 		slog.Warn("what spinoza just did was not recorded", "verb", made.verb, "name", made.ref.Name, "error", err)
+		return
+	}
+	s.auditRecorded(kept, past)
+}
+
+func auditText(value string) string {
+	if len(value) <= maxAuditTextBytes {
+		return value
+	}
+	const suffix = "..."
+	end := maxAuditTextBytes - len(suffix)
+	for end > 0 && !utf8.ValidString(value[:end]) {
+		end--
+	}
+	return value[:end] + suffix
+}
+
+func (s *Server) auditRecorded(ctx context.Context, past History) {
+	s.auditMu.Lock()
+	interval := s.auditPruneEvery
+	if interval <= 0 {
+		interval = auditPruneInterval
+	}
+	s.auditWritten++
+	if s.auditWritten < interval {
+		s.auditMu.Unlock()
+		return
+	}
+	s.auditWritten = 0
+	s.auditMu.Unlock()
+	s.pruneAudit(ctx, past)
+}
+
+func (s *Server) pruneAudit(ctx context.Context, past History) {
+	s.auditPruneMu.Lock()
+	defer s.auditPruneMu.Unlock()
+	err := past.PruneAudit(ctx, store.Retention{Days: auditDays, Rows: auditRows}, s.instant())
+	if err != nil {
+		slog.Warn("the audit could not be trimmed", "error", err)
 	}
 }
 

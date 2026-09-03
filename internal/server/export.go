@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"net/http"
 	"strconv"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -41,16 +42,27 @@ func writeGroup(out *csv.Writer, report api.CheckReport, group api.CheckGroup) {
 
 func spreadsheetCells(cells []string) []string {
 	for at, value := range cells {
-		if value == "" {
-			continue
-		}
-		first, _ := utf8.DecodeRuneInString(value)
-		switch first {
-		case '=', '+', '-', '@', '\t', '\r', '\n', 0, '＝', '＋', '－', '＠':
+		if spreadsheetFormula(value) {
 			cells[at] = "'" + value
-		default:
-			continue
 		}
 	}
 	return cells
+}
+
+func spreadsheetFormula(value string) bool {
+	for value != "" {
+		first, size := utf8.DecodeRuneInString(value)
+		switch first {
+		case '=', '+', '-', '@', 0, '＝', '＋', '－', '＠':
+			return true
+		}
+		if unicode.IsControl(first) {
+			return true
+		}
+		if !unicode.IsSpace(first) {
+			return false
+		}
+		value = value[size:]
+	}
+	return false
 }
