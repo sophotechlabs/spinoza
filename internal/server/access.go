@@ -12,7 +12,7 @@ import (
 
 const (
 	maxAccessBytes = 1 << 20
-	maxAccessRefs  = 500
+	maxAccessRefs  = 100
 	accessTimeout  = 10 * time.Second
 )
 

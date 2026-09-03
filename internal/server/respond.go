@@ -11,6 +11,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
 	"github.com/sophotechlabs/spinoza/internal/checks"
@@ -103,23 +104,42 @@ func askedForSomethingWrong(err error) bool {
 }
 
 func statusFor(err error) int {
+	status, found := applicationStatusFor(err)
+	if found {
+		return status
+	}
+	return connectionStatusFor(err)
+}
+
+func applicationStatusFor(err error) (int, bool) {
 	switch {
 	case errors.Is(err, api.ErrInternal):
-		return http.StatusInternalServerError
+		return http.StatusInternalServerError, true
 	case oversized(err):
-		return http.StatusRequestEntityTooLarge
+		return http.StatusRequestEntityTooLarge, true
 	case askedForSomethingWrong(err):
-		return http.StatusBadRequest
+		return http.StatusBadRequest, true
 	case errors.Is(err, api.ErrNotOpen):
-		return http.StatusNotFound
+		return http.StatusNotFound, true
 	case errors.Is(err, jsonschema.ErrNoSchema):
-		return http.StatusNotFound
+		return http.StatusNotFound, true
 	case errors.Is(err, helm.ErrNoRelease):
-		return http.StatusNotFound
+		return http.StatusNotFound, true
 	case errors.Is(err, helm.ErrFluxManaged):
-		return http.StatusConflict
+		return http.StatusConflict, true
 	case errors.Is(err, resources.ErrOutOfScope):
-		return http.StatusForbidden
+		return http.StatusForbidden, true
+	case errors.Is(err, access.ErrDenied):
+		return http.StatusForbidden, true
+	case errors.Is(err, access.ErrUnanswered):
+		return http.StatusServiceUnavailable, true
+	default:
+		return 0, false
+	}
+}
+
+func connectionStatusFor(err error) int {
+	switch {
 	case errors.Is(err, argocd.ErrRefused):
 		return http.StatusConflict
 	case errors.Is(err, flux.ErrNoSource):

@@ -30,6 +30,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/charts"
 	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
@@ -65,6 +66,7 @@ const (
 	defaultCountsTTL   = 10 * time.Second
 	defaultTrafficTTL  = 10 * time.Second
 	listKindTimeout    = 60 * time.Second
+	refreshCooldown    = 30 * time.Second
 )
 
 type Event struct {
@@ -85,6 +87,7 @@ type Subscription struct {
 	owner      *Manager
 	namespace  string
 	filters    []api.RowFilter
+	checks     []access.Check
 	cancel     func()
 }
 
@@ -114,6 +117,10 @@ func (s *Subscription) Refresh(ctx context.Context) {
 	s.entry.seen.Store(&seen)
 }
 
+func (s *Subscription) Reauthorize(ctx context.Context) error {
+	return s.owner.perms.RequireFresh(ctx, s.checks...)
+}
+
 type Manager struct {
 	rootCtx     context.Context
 	dyn         dynamic.Interface
@@ -139,6 +146,10 @@ type Manager struct {
 	descs       map[string]api.ResourceDescriptor
 	discErr     string
 	now         func() time.Time
+	refreshMu   sync.Mutex
+	refreshing  chan struct{}
+	refreshedAt time.Time
+	refreshWait time.Duration
 	mu          sync.Mutex
 	streams     map[streamKey]*stream
 	layoutMu    sync.Mutex
@@ -232,33 +243,34 @@ type Deps struct {
 func NewManager(ctx context.Context, deps Deps) *Manager {
 	limits := deps.Limits.orDefaults()
 	return &Manager{
-		limits:     limits,
-		rootCtx:    ctx,
-		dyn:        deps.Dynamic,
-		meta:       deps.Metadata,
-		cs:         deps.Clientset,
-		schemas:    deps.Schemas,
-		charts:     chartCache(ctx, deps.Charts),
-		forwards:   deps.Forwards,
-		shells:     deps.Shells,
-		debugger:   deps.Debugger,
-		nodeShells: deps.NodeShells,
-		perms:      permsFor(deps),
-		answers:    deps.Reach,
-		warnings:   deps.Warnings,
-		helm:       deps.Helm,
-		prom:       deps.Prometheus,
-		traffic:    trafficFor(deps),
-		samples:    samples.New(),
-		cats:       deps.Categories,
-		descs:      deps.Descriptors,
-		now:        time.Now,
-		streams:    map[streamKey]*stream{},
-		layouts:    map[schema.GroupVersionResource]*recent[layout]{},
-		columns:    deps.Columns,
-		surveys:    checks.NewSurveys(time.Now),
-		building:   map[streamKey]*buildGate{},
-		failures:   map[streamKey]buildFailure{},
+		limits:      limits,
+		rootCtx:     ctx,
+		dyn:         deps.Dynamic,
+		meta:        deps.Metadata,
+		cs:          deps.Clientset,
+		schemas:     deps.Schemas,
+		charts:      chartCache(ctx, deps.Charts),
+		forwards:    deps.Forwards,
+		shells:      deps.Shells,
+		debugger:    deps.Debugger,
+		nodeShells:  deps.NodeShells,
+		perms:       permsFor(deps),
+		answers:     deps.Reach,
+		warnings:    deps.Warnings,
+		helm:        deps.Helm,
+		prom:        deps.Prometheus,
+		traffic:     trafficFor(deps),
+		samples:     samples.New(),
+		cats:        deps.Categories,
+		descs:       deps.Descriptors,
+		now:         time.Now,
+		refreshWait: refreshCooldown,
+		streams:     map[streamKey]*stream{},
+		layouts:     map[schema.GroupVersionResource]*recent[layout]{},
+		columns:     deps.Columns,
+		surveys:     checks.NewSurveys(time.Now),
+		building:    map[streamKey]*buildGate{},
+		failures:    map[streamKey]buildFailure{},
 
 		syncTimeout: limits.SyncTimeout,
 	}
@@ -300,19 +312,53 @@ func (m *Manager) RefreshResources() api.ResourceCatalog {
 	if m.disco == nil {
 		return m.Resources()
 	}
-	m.disco.Invalidate()
-	if m.schemas != nil {
-		m.schemas.Refresh()
+	if !m.beginRefresh() {
+		return m.Resources()
 	}
+	defer m.finishRefresh()
+	m.disco.Invalidate()
 	cats, descs, err := discovery.List(m.disco)
 	if len(descs) == 0 {
 		m.keepCatalog(emptyDiscovery(err))
 		return m.Resources()
 	}
+	if err != nil {
+		m.keepCatalog(fmt.Errorf("kept the resource types already known after partial discovery: %w", err))
+		return m.Resources()
+	}
+	if m.schemas != nil {
+		m.schemas.Refresh()
+	}
 	m.setCatalog(cats, descs, err)
 	m.forgetLayouts()
 	m.dropVanished(descs)
 	return m.Resources()
+}
+
+func (m *Manager) beginRefresh() bool {
+	m.refreshMu.Lock()
+	if m.refreshing != nil {
+		done := m.refreshing
+		m.refreshMu.Unlock()
+		<-done
+		return false
+	}
+	now := m.now()
+	if !m.refreshedAt.IsZero() && now.Before(m.refreshedAt.Add(m.refreshWait)) {
+		m.refreshMu.Unlock()
+		return false
+	}
+	m.refreshing = make(chan struct{})
+	m.refreshMu.Unlock()
+	return true
+}
+
+func (m *Manager) finishRefresh() {
+	m.refreshMu.Lock()
+	m.refreshedAt = m.now()
+	close(m.refreshing)
+	m.refreshing = nil
+	m.refreshMu.Unlock()
 }
 
 func emptyDiscovery(err error) error {
@@ -547,20 +593,23 @@ func (m *Manager) Ping(ctx context.Context) error {
 	if m.cs == nil {
 		return fmt.Errorf("%w: no kubernetes client is wired up", api.ErrInternal)
 	}
-	done := make(chan error, 1)
-	safe.Go("asking the apiserver for its version", func() {
-		_, err := m.cs.Discovery().ServerVersion()
-		done <- err
-	})
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-done:
-		if answered(err) {
-			return nil
-		}
+	discoveryClient := m.cs.Discovery()
+	restClient := discoveryClient.RESTClient()
+	if restClient != nil {
+		return pingResult(restClient.Get().AbsPath("/version").Do(ctx).Error())
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
+	_, err := discoveryClient.ServerVersion()
+	return pingResult(err)
+}
+
+func pingResult(err error) error {
+	if answered(err) {
+		return nil
+	}
+	return err
 }
 
 func (m *Manager) Reach() *reach.Sink {
@@ -608,6 +657,17 @@ func (m *Manager) nodeCount(ctx context.Context) int {
 }
 
 func (m *Manager) Counts(ctx context.Context) api.ResourceCounts {
+	if _, acting := auth.ActingAs(ctx); acting {
+		if m.meta == nil {
+			return api.ResourceCounts{Counts: map[string]int{}}
+		}
+		descs := m.descriptors()
+		flat := make([]api.ResourceDescriptor, 0, len(descs))
+		for _, desc := range descs {
+			flat = append(flat, desc)
+		}
+		return Count(ctx, m.meta, flat, m.limits.Counts)
+	}
 	return withWatched(m.tallied(ctx), m.failingFromCaches())
 }
 
@@ -777,6 +837,10 @@ func (m *Manager) Subscribe(
 	if admitErr != nil {
 		return nil, admitErr
 	}
+	required, accessErr := m.requireRead(ctx, seen, desc, namespace)
+	if accessErr != nil {
+		return nil, accessErr
+	}
 	effNs := namespace
 	if !desc.Namespaced {
 		effNs = ""
@@ -804,6 +868,7 @@ func (m *Manager) Subscribe(
 		owner:      m,
 		namespace:  effNs,
 		filters:    filters,
+		checks:     required,
 		Events:     entry.events,
 		Resync:     entry.resync,
 		stream:     st,
@@ -879,6 +944,9 @@ func (m *Manager) Lease(ctx context.Context, desc api.ResourceDescriptor) ([]*un
 	seen := m.filter(ctx)
 	if !seen.all {
 		return nil, fmt.Errorf("%w: %s", ErrClusterWide, desc.Kind)
+	}
+	if _, err := m.requireRead(ctx, seen, desc, ""); err != nil {
+		return nil, err
 	}
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
 	key := streamKey{gvr: gvr}

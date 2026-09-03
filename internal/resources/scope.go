@@ -8,6 +8,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
 )
@@ -102,6 +103,60 @@ func (m *Manager) admits(seen nsFilter, desc api.ResourceDescriptor, namespace s
 		return nil
 	}
 	return fmt.Errorf("%w: %s", ErrOutOfScope, namespace)
+}
+
+func readChecks(desc api.ResourceDescriptor, namespace string, watch bool) []access.Check {
+	checks := []access.Check{{
+		Verb:      "list",
+		Group:     desc.Group,
+		Resource:  desc.Resource,
+		Namespace: namespace,
+	}}
+	if watch {
+		checks = append(checks, access.Check{
+			Verb:      "watch",
+			Group:     desc.Group,
+			Resource:  desc.Resource,
+			Namespace: namespace,
+		})
+	}
+	return checks
+}
+
+func authorizationNamespaces(seen nsFilter, desc api.ResourceDescriptor, namespace string) []string {
+	if !desc.Namespaced {
+		return []string{""}
+	}
+	if namespace != "" {
+		return []string{namespace}
+	}
+	if seen.all {
+		return []string{""}
+	}
+	names := make([]string, 0, len(seen.names))
+	for name := range seen.names {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+func (m *Manager) requireRead(
+	ctx context.Context,
+	seen nsFilter,
+	desc api.ResourceDescriptor,
+	namespace string,
+) ([]access.Check, error) {
+	namespaces := authorizationNamespaces(seen, desc, namespace)
+	required := make([]access.Check, 0, len(namespaces)*2)
+	for _, name := range namespaces {
+		required = append(required, readChecks(desc, name, true)...)
+	}
+	err := m.perms.Require(ctx, required...)
+	if err != nil {
+		return nil, err
+	}
+	return required, nil
 }
 
 func (m *Manager) scopedHits(seen nsFilter, found api.SearchResults) api.SearchResults {

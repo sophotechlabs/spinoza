@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/auth"
 )
 
@@ -82,7 +84,7 @@ func TestAuthorizationWatcherEndsAConnectionWhoseIdentityChanged(t *testing.T) {
 	who, known := auth.IdentityFrom(req.Context())
 	done := make(chan struct{})
 	go func() {
-		srv.watchAuthorization(ctx, cancel, req, who, known, liveIdentity(req))
+		srv.watchAuthorization(ctx, cancel, req, who, known, liveIdentity(req), nil)
 		close(done)
 	}()
 
@@ -92,6 +94,65 @@ func TestAuthorizationWatcherEndsAConnectionWhoseIdentityChanged(t *testing.T) {
 		t.Fatal("the invalid live identity was not disconnected")
 	}
 	<-done
+}
+
+func TestAuthorizationWatcherEndsAConnectionAfterKubernetesRevocation(t *testing.T) {
+	for _, revoked := range []error{access.ErrDenied, access.ErrUnanswered} {
+		t.Run(revoked.Error(), func(t *testing.T) {
+			srv := New(nil, nil, "")
+			srv.authEvery = time.Millisecond
+			req := liveRequest(t, "alice")
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			who, known := auth.IdentityFrom(req.Context())
+			done := make(chan struct{})
+			go func() {
+				srv.watchAuthorization(ctx, cancel, req, who, known, liveIdentity(req), func(context.Context) error {
+					return revoked
+				})
+				close(done)
+			}()
+
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Second):
+				t.Fatal("the revoked Kubernetes permission did not end the connection")
+			}
+			<-done
+		})
+	}
+}
+
+func TestProxyLiveConnectionHasABoundedLifetime(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		authn, err := auth.New(t.Context(), auth.Config{
+			Mode: auth.ModeProxy,
+			Proxy: auth.ProxyConfig{
+				SharedSecret:    auth.NewSecret(),
+				WebSocketMaxAge: 2 * time.Minute,
+			},
+		})
+		if err != nil {
+			t.Fatalf("build authenticator: %v", err)
+		}
+		srv := New(nil, nil, "")
+		srv.UseClusterAuth(ClusterAuth{Authenticator: authn})
+		srv.authEvery = time.Hour
+		req := liveRequest(t, "alice")
+		ctx, cancel := context.WithCancel(t.Context())
+		who, known := auth.IdentityFrom(req.Context())
+		done := make(chan struct{})
+		started := time.Now()
+		go func() {
+			srv.watchAuthorization(ctx, cancel, req, who, known, liveIdentity(req), nil)
+			close(done)
+		}()
+		<-ctx.Done()
+		<-done
+		if elapsed := time.Since(started); elapsed != 2*time.Minute {
+			t.Fatalf("connection lifetime = %s, want 2m", elapsed)
+		}
+	})
 }
 
 func TestEveryLiveEndpointRefusesAnUpgradeWhenTheGlobalBudgetIsFull(t *testing.T) {

@@ -762,3 +762,129 @@ func TestAskOnAServiceThatIsNotThereAllowsEverything(t *testing.T) {
 		t.Fatalf("decision = %+v, want it clear that nothing was asked", decision)
 	}
 }
+
+func TestRequireDistinguishesDeniedAndUnansweredChecks(t *testing.T) {
+	ctx := spinozaauth.WithIdentity(t.Context(), spinozaauth.Identity{User: "alice"})
+	check := Check{Verb: "list", Group: "apps", Resource: "deployments", Namespace: "prod"}
+
+	denied := serviceFor(t, refusing(map[string]string{"list apps deployments ": "not for alice"}))
+	err := denied.Require(ctx, check)
+	if !errors.Is(err, ErrDenied) {
+		t.Fatalf("denied error = %v", err)
+	}
+	if err.Error() != "kubernetes authorization denied: not for alice" {
+		t.Fatalf("denied error = %q", err)
+	}
+
+	unanswered := serviceFor(t, &authorizer{broken: true})
+	err = unanswered.Require(ctx, check)
+	if !errors.Is(err, ErrUnanswered) {
+		t.Fatalf("unanswered error = %v", err)
+	}
+	if !strings.Contains(err.Error(), "the apiserver would not answer") {
+		t.Fatalf("unanswered error = %q", err)
+	}
+}
+
+func TestRequireFreshDoesNotReuseAnAllowedDecision(t *testing.T) {
+	rules := refusing(nil)
+	service := serviceFor(t, rules)
+	ctx := spinozaauth.WithIdentity(t.Context(), spinozaauth.Identity{User: "alice"})
+	check := Check{Verb: "watch", Group: "apps", Resource: "deployments", Namespace: "prod"}
+	if err := service.Require(ctx, check); err != nil {
+		t.Fatalf("initial requirement: %v", err)
+	}
+	rules.mu.Lock()
+	rules.refuse = map[string]string{"watch apps deployments ": "revoked"}
+	rules.mu.Unlock()
+	err := service.RequireFresh(ctx, check)
+	if !errors.Is(err, ErrDenied) {
+		t.Fatalf("fresh error = %v", err)
+	}
+	if rules.count() != 2 {
+		t.Fatalf("questions = %d, want a fresh review", rules.count())
+	}
+}
+
+func TestEquivalentGroupOrderSharesAnAccessDecision(t *testing.T) {
+	rules := refusing(nil)
+	service := serviceFor(t, rules)
+	check := Check{Verb: "get", Resource: "pods", Namespace: "prod", Name: "web"}
+	first := spinozaauth.WithIdentity(t.Context(), spinozaauth.Identity{
+		User:   "alice",
+		Groups: []string{"platform", "sre"},
+	})
+	second := spinozaauth.WithIdentity(t.Context(), spinozaauth.Identity{
+		User:   "alice",
+		Groups: []string{"sre", "platform"},
+	})
+	service.Ask(first, check)
+	service.Ask(second, check)
+	if rules.count() != 1 {
+		t.Fatalf("questions = %d, want equivalent group sets cached once", rules.count())
+	}
+}
+
+func TestRememberedAccessDecisionsStayWithinCapacity(t *testing.T) {
+	service := serviceFor(t, refusing(nil))
+	service.capacity = 2
+	ctx := spinozaauth.WithIdentity(t.Context(), spinozaauth.Identity{User: "alice"})
+	for index := range 3 {
+		service.Ask(ctx, Check{Verb: "get", Resource: "pods", Name: string(rune('a' + index))})
+	}
+	service.mu.Lock()
+	count := len(service.seen)
+	service.mu.Unlock()
+	if count != 2 {
+		t.Fatalf("remembered = %d, want the capacity of 2", count)
+	}
+}
+
+func TestAccessReviewCapacityFailsPromptlyAndCanBeReused(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return true, nil, errors.New("action is not a create")
+		}
+		review, ok := create.GetObject().(*authv1.SelfSubjectAccessReview)
+		if !ok {
+			return true, nil, errors.New("created object is not an access review")
+		}
+		entered <- struct{}{}
+		<-release
+		review.Status.Allowed = true
+		return true, review, nil
+	})
+	service := New(cs)
+	service.identityLimit = 1
+	service.globalSlots = make(chan struct{}, 1)
+	ctx := spinozaauth.WithIdentity(t.Context(), spinozaauth.Identity{User: "alice"})
+	firstDone := make(chan Decision)
+	go func() {
+		firstDone <- service.AskFresh(ctx, Check{Verb: "get", Resource: "pods", Name: "first"})
+	}()
+	<-entered
+	second := service.AskFresh(ctx, Check{Verb: "get", Resource: "pods", Name: "second"})
+	if second.Answered || second.Allowed {
+		t.Fatalf("saturated decision = %+v", second)
+	}
+	if second.Reason != "authorization check capacity is full" {
+		t.Fatalf("saturated reason = %q", second.Reason)
+	}
+	release <- struct{}{}
+	if first := <-firstDone; !first.Allowed || !first.Answered {
+		t.Fatalf("first decision = %+v", first)
+	}
+	thirdDone := make(chan Decision)
+	go func() {
+		thirdDone <- service.AskFresh(ctx, Check{Verb: "get", Resource: "pods", Name: "third"})
+	}()
+	<-entered
+	release <- struct{}{}
+	if third := <-thirdDone; !third.Allowed || !third.Answered {
+		t.Fatalf("reused decision = %+v", third)
+	}
+}

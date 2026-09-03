@@ -33,6 +33,7 @@ var neededRole = map[string]string{
 	routeKey(http.MethodGet, "/api/nodeshell"):            auth.RoleAdmin,
 	routeKey(http.MethodPost, "/api/clusters/timeline"):   auth.RoleAdmin,
 	routeKey(http.MethodDelete, "/api/history"):           auth.RoleAdmin,
+	routeKey(http.MethodPost, "/api/resources"):           auth.RoleAdmin,
 }
 
 var onlyWhenLocal = map[string]bool{

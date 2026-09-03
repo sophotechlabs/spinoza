@@ -37,7 +37,7 @@ func TestAuthorizationWatcherKeepsAValidProxyIdentityConnected(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
-		srv.watchAuthorization(ctx, cancel, req, who, known, who.User)
+		srv.watchAuthorization(ctx, cancel, req, who, known, who.User, nil)
 		close(done)
 	}()
 

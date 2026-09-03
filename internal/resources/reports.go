@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/checks"
 	"github.com/sophotechlabs/spinoza/internal/gitops"
 	"github.com/sophotechlabs/spinoza/internal/issues"
@@ -75,17 +76,25 @@ func (m *Manager) CheckFingerprint(ctx context.Context, keep checks.Filter) chec
 }
 
 func (m *Manager) Metrics(ctx context.Context) api.Metrics {
+	if _, acting := auth.ActingAs(ctx); acting {
+		return m.buildMetrics(ctx)
+	}
 	value, ok := shared(ctx, &m.usage, m.now, m.limits.MetricsTTL, func(ctx context.Context) (api.Metrics, bool) {
-		built := metrics.Build(ctx, m.dyn, m.nodeSource())
-		if built.Error == "" {
-			m.samples.Record(m.now(), built.Pods)
-		}
+		built := m.buildMetrics(ctx)
 		return built, built.Error == ""
 	})
 	if !ok {
 		return api.Metrics{Error: ctx.Err().Error()}
 	}
 	return value
+}
+
+func (m *Manager) buildMetrics(ctx context.Context) api.Metrics {
+	built := metrics.Build(ctx, m.dyn, m.nodeSource())
+	if built.Error == "" {
+		m.samples.Record(m.now(), built.Pods)
+	}
+	return built
 }
 
 func (m *Manager) Overview(ctx context.Context) api.ClusterOverview {

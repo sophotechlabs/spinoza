@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
@@ -54,6 +55,8 @@ type Permissions interface {
 	AccessEach(ctx context.Context, capability string, refs []api.ObjectRef) api.BulkAccess
 	HelmAccess(ctx context.Context, namespace, name string) api.Access
 	Scope(ctx context.Context) api.Scope
+	Authorize(ctx context.Context, checks ...access.Check) error
+	Reauthorize(ctx context.Context, checks ...access.Check) error
 }
 
 type Feeds interface {

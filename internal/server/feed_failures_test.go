@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,29 +124,26 @@ func TestASubscriptionThatCannotBeBuiltIsReported(t *testing.T) {
 	}
 }
 
-func TestAConnectionCannotHoldUnboundedSubscriptions(t *testing.T) {
+func TestAConnectionCannotStartUnboundedSnapshots(t *testing.T) {
 	hold := make(chan struct{})
 	t.Cleanup(func() { close(hold) })
 	ts := awkwardServer(t, &awkward{hold: hold})
 	ctx, conn := openAwkwardFeed(t, ts)
 
-	for index := range maxSubscriptions {
+	for index := range defaultIdentitySnapshotLimit + 1 {
 		sendMsg(ctx, t, conn, api.ClientMsg{
 			Type: "subscribe", SubID: fmt.Sprintf("s%d", index), Resource: "pods",
 		})
 	}
-	sendMsg(ctx, t, conn, api.ClientMsg{
-		Type: "logs-subscribe", SubID: "one-too-many", Namespace: "default", Name: "web",
-	})
 
 	msg := readMsg(ctx, t, conn)
 	if msg.Type != msgError {
 		t.Fatalf("type = %q, want an error frame", msg.Type)
 	}
-	if msg.SubID != "one-too-many" {
-		t.Fatalf("subId = %q, want the refused subscription", msg.SubID)
+	if !strings.HasPrefix(msg.SubID, "s") {
+		t.Fatalf("subId = %q, want one of the saturated subscriptions", msg.SubID)
 	}
-	if msg.Message != "this connection already holds the maximum number of subscriptions" {
+	if msg.Message != "table snapshot capacity is full; try again later" {
 		t.Fatalf("message = %q", msg.Message)
 	}
 }

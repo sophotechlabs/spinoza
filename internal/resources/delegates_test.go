@@ -740,7 +740,7 @@ func managerWithNodeShells(t *testing.T, cs *k8sfake.Clientset) (*Manager, conte
 		Clientset: cs,
 		NodeShells: nodeshell.NewService(
 			cs,
-			"busybox:1.37",
+			"busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0",
 			nodeshell.DefaultNamespace,
 			func() bool { return true },
 			access.New(cs),

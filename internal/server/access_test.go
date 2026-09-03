@@ -221,6 +221,20 @@ func TestASelectionLargerThanTheCapIsRefused(t *testing.T) {
 	}
 }
 
+func TestASelectionAtTheCapIsReadable(t *testing.T) {
+	refs := make([]api.ObjectRef, 0, maxAccessRefs)
+	for index := range maxAccessRefs {
+		refs = append(refs, api.ObjectRef{
+			Version:  "v1",
+			Resource: "pods",
+			Name:     fmt.Sprintf("web-%d", index),
+		})
+	}
+	if err := readable(api.AccessQuery{Capability: "delete", Refs: refs}); err != nil {
+		t.Fatalf("query at the cap: %v", err)
+	}
+}
+
 func TestASelectionOfNothingIsAnsweredWithNothing(t *testing.T) {
 	ts := inspectServerWith(t, decidingClient(t, true, ""), newPod())
 

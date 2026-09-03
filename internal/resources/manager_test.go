@@ -671,6 +671,38 @@ type stubDiscovery struct {
 	version     string
 }
 
+type blockingDiscovery struct {
+	kubediscovery.CachedDiscoveryInterface
+
+	started     chan struct{}
+	release     chan struct{}
+	once        sync.Once
+	mu          sync.Mutex
+	invalidated int
+	calls       int
+}
+
+func (s *blockingDiscovery) Invalidate() {
+	s.mu.Lock()
+	s.invalidated++
+	s.mu.Unlock()
+}
+
+func (s *blockingDiscovery) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
+	s.once.Do(func() { close(s.started) })
+	<-s.release
+	s.mu.Lock()
+	s.calls++
+	s.mu.Unlock()
+	return podList(), nil
+}
+
+func (s *blockingDiscovery) counts() (int, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.invalidated, s.calls
+}
+
 func (s *stubDiscovery) ServerVersion() (*version.Info, error) {
 	if s.version == "" {
 		return &version.Info{}, nil
@@ -777,6 +809,75 @@ func TestRefreshResourcesWithoutADiscoveryClient(t *testing.T) {
 	catalog := mgr.RefreshResources()
 	if len(catalog.Categories) != 1 {
 		t.Fatalf("categories = %d, want the startup catalog", len(catalog.Categories))
+	}
+}
+
+func TestConcurrentDiscoveryRefreshesShareOneRebuild(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+	disco := &blockingDiscovery{started: make(chan struct{}), release: make(chan struct{})}
+	mgr.UseDiscovery(disco, nil)
+	results := make(chan api.ResourceCatalog, 2)
+	go func() { results <- mgr.RefreshResources() }()
+	<-disco.started
+	go func() { results <- mgr.RefreshResources() }()
+	close(disco.release)
+	for range 2 {
+		select {
+		case catalog := <-results:
+			if len(catalog.Categories) == 0 {
+				t.Fatal("a joined refresh returned no catalog")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("a joined refresh did not return")
+		}
+	}
+	invalidated, calls := disco.counts()
+	if invalidated != 1 || calls != 1 {
+		t.Fatalf("discovery invalidations/calls = %d/%d, want 1/1", invalidated, calls)
+	}
+}
+
+func TestDiscoveryRefreshHasAGlobalCooldown(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t))
+	defer cancel()
+	disco := &stubDiscovery{results: []discoveryResult{{lists: podList()}, {lists: podList()}}}
+	mgr.UseDiscovery(disco, nil)
+	now := time.Unix(1_800_000_000, 0)
+	mgr.now = func() time.Time { return now }
+	mgr.refreshWait = time.Minute
+	mgr.RefreshResources()
+	mgr.RefreshResources()
+	if disco.calls != 1 {
+		t.Fatalf("discovery calls during cooldown = %d, want 1", disco.calls)
+	}
+	now = now.Add(time.Minute)
+	mgr.RefreshResources()
+	if disco.calls != 2 {
+		t.Fatalf("discovery calls after cooldown = %d, want 2", disco.calls)
+	}
+}
+
+func TestPartialDiscoveryDoesNotDropExistingResourceState(t *testing.T) {
+	mgr, cancel := newManager(t, newClient(t, newDeployment("default", "web")))
+	defer cancel()
+	sub, err := mgr.Subscribe(context.Background(), "apps", "v1", "deployments", "default", 0, nil)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+	disco := &stubDiscovery{results: []discoveryResult{{lists: podList(), err: errors.New("partial discovery")}}}
+	mgr.UseDiscovery(disco, nil)
+	catalog := mgr.RefreshResources()
+	if !strings.Contains(catalog.Error, "kept the resource types already known") {
+		t.Fatalf("catalog error = %q", catalog.Error)
+	}
+	key := streamKey{gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}}
+	if _, present := mgr.lookupStream(key); !present {
+		t.Fatal("partial discovery dropped an existing deployment stream")
+	}
+	if _, present := mgr.descriptors()[discovery.Key("apps", "v1", "deployments")]; !present {
+		t.Fatal("partial discovery replaced the existing resource catalog")
 	}
 }
 

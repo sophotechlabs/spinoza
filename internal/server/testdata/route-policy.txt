@@ -93,7 +93,7 @@ POST /api/kubeconfigs role=- local=yes whole=no writes=no
 POST /api/kubeconfigs/picker role=- local=yes whole=no writes=no
 POST /api/portforward role=- local=yes whole=no writes=no
 POST /api/protection role=admin local=no whole=no writes=no
-POST /api/resources role=- local=no whole=no writes=no
+POST /api/resources role=admin local=no whole=no writes=no
 POST /api/update role=- local=yes whole=no writes=no
 POST /api/view/browser role=- local=yes whole=no writes=no
 POST /api/view/desktop role=- local=yes whole=no writes=no

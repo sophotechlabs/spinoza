@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/logs"
@@ -25,6 +27,17 @@ const (
 	defaultFeedPingInterval           = 30 * time.Second
 	defaultFeedPingTimeout            = 10 * time.Second
 	defaultAuthorizationCheckInterval = 5 * time.Second
+	authorizationRecheckTimeout       = 3 * time.Second
+	defaultSnapshotLimit              = 8
+	defaultIdentitySnapshotLimit      = 2
+	defaultLogStreamLimit             = 512
+	defaultIdentityLogStreamLimit     = 80
+	maxLogTailLines                   = 5000
+	maxWorkloadLogStreams             = 20
+	maxRowFilters                     = 8
+	maxFilterFieldBytes               = 64
+	maxFilterValueBytes               = 256
+	podResourceName                   = "pods"
 )
 
 const msgError = "error"
@@ -81,9 +94,10 @@ type stoppable interface {
 }
 
 type entry struct {
-	resource stoppable
-	gen      uint64
-	cluster  string
+	resource  stoppable
+	authorize func(context.Context) error
+	gen       uint64
+	cluster   string
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -104,13 +118,16 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	sess := &wsSession{
-		conn:      conn,
-		ctx:       ctx,
-		lookup:    s.lookup,
-		tables:    map[string]*entry{},
-		logs:      map[string]*entry{},
-		pingEvery: s.feedPingEvery,
-		pingWait:  s.feedPingWait,
+		conn:       conn,
+		ctx:        ctx,
+		lookup:     s.lookup,
+		identity:   liveIdentity(r),
+		snapshots:  s.snapshots,
+		logStreams: s.logStreams,
+		tables:     map[string]*entry{},
+		logs:       map[string]*entry{},
+		pingEvery:  s.feedPingEvery,
+		pingWait:   s.feedPingWait,
 	}
 	defer sess.closeAll()
 	kind := viewOf(r)
@@ -124,7 +141,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	s.watchCluster(ctx)
 	safe.Go("watching a feed websocket", func() { sess.keepAlive(ctx, cancel) })
-	s.revalidateLive(ctx, cancel, r, "revalidating a feed websocket")
+	s.revalidateLive(ctx, cancel, r, "revalidating a feed websocket", sess.reauthorize)
 
 	for {
 		var msg api.ClientMsg
@@ -192,10 +209,16 @@ func (s *Server) claimLiveConnection(r *http.Request) (func(), bool) {
 	}, true
 }
 
-func (s *Server) revalidateLive(ctx context.Context, cancel context.CancelFunc, r *http.Request, task string) {
+func (s *Server) revalidateLive(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	r *http.Request,
+	task string,
+	authorize func(context.Context) error,
+) {
 	who, known := auth.IdentityFrom(ctx)
 	identity := identityName(who, known)
-	safe.Go(task, func() { s.watchAuthorization(ctx, cancel, r, who, known, identity) })
+	safe.Go(task, func() { s.watchAuthorization(ctx, cancel, r, who, known, identity, authorize) })
 }
 
 func (s *Server) watchAuthorization(
@@ -205,43 +228,98 @@ func (s *Server) watchAuthorization(
 	who auth.Identity,
 	known bool,
 	identity string,
+	authorize func(context.Context) error,
 ) {
-	interval := s.authEvery
-	if interval <= 0 {
-		interval = defaultAuthorizationCheckInterval
+	authn := s.authenticator()
+	expiryTimer, expiry := liveExpiry(authn)
+	if expiryTimer != nil {
+		defer expiryTimer.Stop()
 	}
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(s.authorizationInterval())
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-expiry:
+			slog.Info("a proxy-authenticated live connection reached its maximum lifetime", "identity", identity)
+			cancel()
+			return
 		case <-ticker.C:
-			authn := s.authenticator()
-			if authn == nil {
+			if s.liveAuthorizationValid(ctx, r, who, known, identity, authn, authorize) {
 				continue
 			}
-			if known && authn.StillValid(r, who) {
-				continue
-			}
-			slog.Info("a live connection ended because its authentication is no longer valid", "identity", identity)
 			cancel()
 			return
 		}
 	}
 }
 
+func liveExpiry(authn *auth.Authenticator) (*time.Timer, <-chan time.Time) {
+	if authn == nil {
+		return nil, nil
+	}
+	limit := authn.LiveSessionLimit()
+	if limit <= 0 {
+		return nil, nil
+	}
+	timer := time.NewTimer(limit)
+	return timer, timer.C
+}
+
+func (s *Server) authorizationInterval() time.Duration {
+	if s.authEvery > 0 {
+		return s.authEvery
+	}
+	return defaultAuthorizationCheckInterval
+}
+
+func (s *Server) liveAuthorizationValid(
+	ctx context.Context,
+	r *http.Request,
+	who auth.Identity,
+	known bool,
+	identity string,
+	authn *auth.Authenticator,
+	authorize func(context.Context) error,
+) bool {
+	if authn != nil {
+		if !known {
+			slog.Info("a live connection ended because its authentication is no longer valid", "identity", identity)
+			return false
+		}
+		if !authn.StillValid(r, who) {
+			slog.Info("a live connection ended because its authentication is no longer valid", "identity", identity)
+			return false
+		}
+	}
+	if authorize == nil {
+		return true
+	}
+	bounded, stop := context.WithTimeout(ctx, authorizationRecheckTimeout)
+	err := authorize(bounded)
+	stop()
+	if err == nil {
+		return true
+	}
+	slog.Info("a live connection ended because kubernetes access is no longer valid", "identity", identity, "error", err)
+	return false
+}
+
 type wsSession struct {
-	conn      *websocket.Conn
-	ctx       context.Context
-	lookup    clusterLookup
-	mu        sync.Mutex
-	tables    map[string]*entry
-	logs      map[string]*entry
-	nextGen   uint64
-	writeMu   sync.Mutex
-	pingEvery time.Duration
-	pingWait  time.Duration
+	conn       *websocket.Conn
+	ctx        context.Context
+	lookup     clusterLookup
+	identity   string
+	snapshots  *workBudget
+	logStreams *workBudget
+	mu         sync.Mutex
+	tables     map[string]*entry
+	logs       map[string]*entry
+	nextGen    uint64
+	writeMu    sync.Mutex
+	pingEvery  time.Duration
+	pingWait   time.Duration
 }
 
 func (sess *wsSession) keepAlive(ctx context.Context, cancel context.CancelFunc) {
@@ -290,6 +368,16 @@ func (sess *wsSession) tryClaim(which feed, subID, cluster string) (uint64, bool
 }
 
 func (sess *wsSession) adopt(which feed, subID string, gen uint64, resource stoppable) bool {
+	return sess.adoptAuthorized(which, subID, gen, resource, nil)
+}
+
+func (sess *wsSession) adoptAuthorized(
+	which feed,
+	subID string,
+	gen uint64,
+	resource stoppable,
+	authorize func(context.Context) error,
+) bool {
 	sess.mu.Lock()
 	defer sess.mu.Unlock()
 	held, ok := sess.entriesOf(which)[subID]
@@ -300,7 +388,30 @@ func (sess *wsSession) adopt(which feed, subID string, gen uint64, resource stop
 		return false
 	}
 	held.resource = resource
+	held.authorize = authorize
 	return true
+}
+
+func (sess *wsSession) reauthorize(ctx context.Context) error {
+	sess.mu.Lock()
+	checks := make([]func(context.Context) error, 0, len(sess.tables)+len(sess.logs))
+	for _, held := range sess.tables {
+		if held.authorize != nil {
+			checks = append(checks, held.authorize)
+		}
+	}
+	for _, held := range sess.logs {
+		if held.authorize != nil {
+			checks = append(checks, held.authorize)
+		}
+	}
+	sess.mu.Unlock()
+	for _, check := range checks {
+		if err := check(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (sess *wsSession) isCurrent(which feed, subID string, gen uint64) bool {
@@ -392,7 +503,26 @@ func (sess *wsSession) subscribe(msg api.ClientMsg) {
 		sess.failAndForget(tables, msg.SubID, gen, notOpen(msg.Cluster))
 		return
 	}
+	if err := validFilters(msg.Filters); err != nil {
+		sess.failAndForget(tables, msg.SubID, gen, err)
+		return
+	}
 	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(backend, msg, gen) })
+}
+
+func validFilters(filters []api.RowFilter) error {
+	if len(filters) > maxRowFilters {
+		return errors.New("a subscription cannot contain more than 8 row filters")
+	}
+	for _, filter := range filters {
+		if len(filter.Field) > maxFilterFieldBytes {
+			return errors.New("a row filter field cannot exceed 64 bytes")
+		}
+		if len(filter.Value) > maxFilterValueBytes {
+			return errors.New("a row filter value cannot exceed 256 bytes")
+		}
+	}
+	return nil
 }
 
 func (sess *wsSession) refuse(subID string) {
@@ -430,14 +560,20 @@ func (sess *wsSession) resourceOf(which feed, subID string) stoppable {
 }
 
 func (sess *wsSession) buildSub(backend Reader, msg api.ClientMsg, gen uint64) {
+	release, ok := sess.snapshots.claim(sess.identity, 1)
+	if !ok {
+		sess.failAndForget(tables, msg.SubID, gen, errors.New("table snapshot capacity is full; try again later"))
+		return
+	}
 	sub, err := backend.Subscribe(
 		sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit, msg.Filters,
 	)
+	release()
 	if err != nil {
 		sess.failAndForget(tables, msg.SubID, gen, err)
 		return
 	}
-	if !sess.adopt(tables, msg.SubID, gen, sub) {
+	if !sess.adoptAuthorized(tables, msg.SubID, gen, sub, sub.Reauthorize) {
 		sub.Close()
 		return
 	}
@@ -485,6 +621,15 @@ func (sess *wsSession) relay(subID string, gen uint64, sub *resources.Subscripti
 }
 
 func (sess *wsSession) sendResync(subID string, gen uint64, sub *resources.Subscription) bool {
+	release, ok := sess.snapshots.claim(sess.identity, 1)
+	if !ok {
+		return sess.writeCurrent(tables, subID, gen, api.FeedError{
+			Type:    msgError,
+			SubID:   subID,
+			Message: "table snapshot capacity is full; try again later",
+		})
+	}
+	defer release()
 	drainEvents(sub.Events)
 	sub.Refresh(sess.ctx)
 	rows, total, err := sub.Snapshot()
@@ -562,12 +707,36 @@ func (sess *wsSession) subscribeLogs(msg api.ClientMsg) {
 		sess.failAndForget(streams, msg.SubID, gen, notOpen(msg.Cluster))
 		return
 	}
+	if err := validLogRequest(msg); err != nil {
+		sess.failAndForget(streams, msg.SubID, gen, err)
+		return
+	}
 	safe.Go("opening the log stream "+msg.SubID, func() { sess.buildLogs(backend, msg, gen) })
 }
 
+func validLogRequest(msg api.ClientMsg) error {
+	if msg.TailLines < 0 || msg.TailLines > maxLogTailLines {
+		return errors.New("log tail lines must be between 0 and 5000")
+	}
+	return nil
+}
+
 func (sess *wsSession) buildLogs(backend Reader, msg api.ClientMsg, gen uint64) {
+	units := logStreamUnits(msg)
+	release, ok := sess.logStreams.claim(sess.identity, units)
+	if !ok {
+		sess.failAndForget(streams, msg.SubID, gen, errors.New("log stream capacity is full; close another log stream and try again"))
+		return
+	}
+	checks := logAccessChecks(msg)
+	if err := authorizeBackend(sess.ctx, backend, false, checks...); err != nil {
+		release()
+		sess.failAndForget(streams, msg.SubID, gen, err)
+		return
+	}
 	selector, selErr := sess.selectorFor(backend, msg)
 	if selErr != nil {
+		release()
 		sess.failAndForget(streams, msg.SubID, gen, selErr)
 		return
 	}
@@ -580,19 +749,70 @@ func (sess *wsSession) buildLogs(backend Reader, msg api.ClientMsg, gen uint64) 
 		Selector:  selector,
 	})
 	if err != nil {
+		release()
 		sess.failAndForget(streams, msg.SubID, gen, err)
 		return
 	}
-	if !sess.adopt(streams, msg.SubID, gen, stream) {
-		stream.Close()
+	reauthorize := func(ctx context.Context) error {
+		return authorizeBackend(ctx, backend, true, checks...)
+	}
+	reserved := &reservedResource{stoppable: stream, release: release}
+	if !sess.adoptAuthorized(streams, msg.SubID, gen, reserved, reauthorize) {
+		reserved.Close()
 		return
 	}
 	sess.writeCurrent(streams, msg.SubID, gen, openedBy(msg.SubID, stream))
 	sess.relayLogs(msg.SubID, gen, stream)
 }
 
+func logStreamUnits(msg api.ClientMsg) int {
+	if msg.Resource == "" || msg.Resource == podResourceName {
+		return 1
+	}
+	return maxWorkloadLogStreams
+}
+
+func authorizeBackend(ctx context.Context, backend Reader, fresh bool, checks ...access.Check) error {
+	if _, known := auth.IdentityFrom(ctx); !known {
+		return nil
+	}
+	if fresh {
+		return backend.Reauthorize(ctx, checks...)
+	}
+	return backend.Authorize(ctx, checks...)
+}
+
+func logAccessChecks(msg api.ClientMsg) []access.Check {
+	logsCheck := access.Check{
+		Verb:        "get",
+		Resource:    podResourceName,
+		Subresource: "log",
+		Namespace:   msg.Namespace,
+		Name:        msg.Name,
+	}
+	if msg.Resource == "" || msg.Resource == podResourceName {
+		return []access.Check{logsCheck}
+	}
+	logsCheck.Name = ""
+	return []access.Check{
+		{
+			Verb:      "get",
+			Group:     msg.Group,
+			Resource:  msg.Resource,
+			Namespace: msg.Namespace,
+			Name:      msg.Name,
+		},
+		{
+			Verb:      "list",
+			Resource:  podResourceName,
+			Namespace: msg.Namespace,
+		},
+		logsCheck,
+	}
+}
+
 func (sess *wsSession) selectorFor(backend Reader, msg api.ClientMsg) (string, error) {
-	if msg.Resource == "" || msg.Resource == "pods" {
+	if msg.Resource == "" || msg.Resource == podResourceName {
 		return "", nil
 	}
 	return backend.PodSelector(sess.ctx, api.ObjectRef{

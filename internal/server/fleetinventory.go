@@ -54,7 +54,7 @@ func mergeCounts(found []clusterAnswer[api.ResourceCounts]) api.FleetInventory {
 	return merged
 }
 
-var podsEverywhere = api.ObjectRef{Version: "v1", Resource: "pods"}
+var podsEverywhere = api.ObjectRef{Version: "v1", Resource: podResourceName}
 
 func (s *Server) fleetImages(w http.ResponseWriter, r *http.Request) {
 	found := eachCluster(r.Context(), s, func(ctx context.Context, backend Backend) imageAnswer {

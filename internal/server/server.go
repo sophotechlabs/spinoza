@@ -61,76 +61,96 @@ type FilePicker func(ctx context.Context) (string, error)
 const noFilePicker = "only the desktop window can open a file dialog; type the path instead"
 
 type Server struct {
-	cluster       Cluster
-	assets        fs.FS
-	files         http.Handler
-	token         string
-	mu            sync.Mutex
-	picker        FilePicker
-	localShell    LocalShellOpener
-	settings      Settings
-	baseline      Baselines
-	window        Window
-	browser       BrowserOpener
-	views         views
-	sessions      map[*wsSession]struct{}
-	sessionChange chan struct{}
-	terminals     map[*websocket.Conn]string
-	live          int
-	liveByUser    map[string]int
-	liveLimit     int
-	identityLimit int
-	profiler      bool
-	health        map[string]api.ClusterHealth
-	healthGen     map[string]uint64
-	misses        map[string]int
-	start         startRoute
-	watching      bool
-	updates       Updates
-	installer     Installs
-	past          History
-	open          Tabs
-	tapeMu        sync.Mutex
-	taping        map[string]*recording
-	tapingClosed  bool
-	now           func() time.Time
-	pingEvery     time.Duration
-	feedPingEvery time.Duration
-	feedPingWait  time.Duration
-	authEvery     time.Duration
-	stdinWait     time.Duration
-	terminalDrain time.Duration
-	authn         *auth.Authenticator
-	publicOrigin  string
-	served        bool
+	cluster         Cluster
+	assets          fs.FS
+	files           http.Handler
+	token           string
+	mu              sync.Mutex
+	picker          FilePicker
+	localShell      LocalShellOpener
+	settings        Settings
+	settingsWrite   sync.Mutex
+	baseline        Baselines
+	window          Window
+	browser         BrowserOpener
+	views           views
+	sessions        map[*wsSession]struct{}
+	sessionChange   chan struct{}
+	terminals       map[*websocket.Conn]string
+	live            int
+	liveByUser      map[string]int
+	liveLimit       int
+	identityLimit   int
+	snapshots       *workBudget
+	logStreams      *workBudget
+	ruleCompiles    *workBudget
+	baselineImports *workBudget
+	helmProcesses   *workBudget
+	chartFetches    *workBudget
+	releaseReads    *workBudget
+	auditMu         sync.Mutex
+	auditPruneMu    sync.Mutex
+	auditWritten    int
+	auditPruneEvery int
+	profiler        bool
+	health          map[string]api.ClusterHealth
+	healthGen       map[string]uint64
+	misses          map[string]int
+	start           startRoute
+	watching        bool
+	updates         Updates
+	installer       Installs
+	past            History
+	open            Tabs
+	tapeMu          sync.Mutex
+	taping          map[string]*recording
+	tapingClosed    bool
+	now             func() time.Time
+	pingEvery       time.Duration
+	feedPingEvery   time.Duration
+	feedPingWait    time.Duration
+	authEvery       time.Duration
+	stdinWait       time.Duration
+	terminalDrain   time.Duration
+	authn           *auth.Authenticator
+	publicOrigin    string
+	served          bool
 }
 
 func New(cluster Cluster, assets fs.FS, token string) *Server {
 	return &Server{
-		cluster:       cluster,
-		assets:        assets,
-		files:         http.FileServerFS(assets),
-		token:         token,
-		settings:      settings.Memory(),
-		baseline:      noBaselines{},
-		sessions:      map[*wsSession]struct{}{},
-		sessionChange: make(chan struct{}, 1),
-		terminals:     map[*websocket.Conn]string{},
-		liveByUser:    map[string]int{},
-		liveLimit:     defaultLiveConnectionLimit,
-		identityLimit: defaultIdentityConnectionLimit,
-		health:        map[string]api.ClusterHealth{},
-		healthGen:     map[string]uint64{},
-		misses:        map[string]int{},
-		taping:        map[string]*recording{},
-		now:           time.Now,
-		pingEvery:     defaultPingInterval,
-		feedPingEvery: defaultFeedPingInterval,
-		feedPingWait:  defaultFeedPingTimeout,
-		authEvery:     defaultAuthorizationCheckInterval,
-		stdinWait:     defaultStdinTimeout,
-		terminalDrain: defaultTerminalDrain,
-		views:         views{grace: defaultIdleGrace, await: defaultBrowserAwait},
+		cluster:         cluster,
+		assets:          assets,
+		files:           http.FileServerFS(assets),
+		token:           token,
+		settings:        settings.Memory(),
+		baseline:        noBaselines{},
+		sessions:        map[*wsSession]struct{}{},
+		sessionChange:   make(chan struct{}, 1),
+		terminals:       map[*websocket.Conn]string{},
+		liveByUser:      map[string]int{},
+		liveLimit:       defaultLiveConnectionLimit,
+		identityLimit:   defaultIdentityConnectionLimit,
+		snapshots:       newWorkBudget(defaultSnapshotLimit, defaultIdentitySnapshotLimit),
+		logStreams:      newWorkBudget(defaultLogStreamLimit, defaultIdentityLogStreamLimit),
+		ruleCompiles:    newWorkBudget(4, 1),
+		baselineImports: newWorkBudget(2, 1),
+		helmProcesses:   newWorkBudget(4, 1),
+		chartFetches:    newWorkBudget(8, 2),
+		releaseReads:    newWorkBudget(2, 1),
+		auditPruneEvery: auditPruneInterval,
+		health:          map[string]api.ClusterHealth{},
+		healthGen:       map[string]uint64{},
+		misses:          map[string]int{},
+		taping:          map[string]*recording{},
+		now:             time.Now,
+		pingEvery:       defaultPingInterval,
+		feedPingEvery:   defaultFeedPingInterval,
+		feedPingWait:    defaultFeedPingTimeout,
+		authEvery:       defaultAuthorizationCheckInterval,
+		stdinWait:       defaultStdinTimeout,
+		terminalDrain:   defaultTerminalDrain,
+		views:           views{grace: defaultIdleGrace, await: defaultBrowserAwait},
 	}
 }
 

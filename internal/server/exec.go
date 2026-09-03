@@ -14,7 +14,9 @@ import (
 	"github.com/coder/websocket"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/debugcontainer"
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/nodeshell"
@@ -140,6 +142,20 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	backend := s.managerFor(r)
+	checks := []access.Check(nil)
+	if _, known := auth.IdentityFrom(r.Context()); known {
+		support := backend.NodeShellSupport(r.Context(), node)
+		if !support.Allowed {
+			writeError(w, http.StatusForbidden, support.Reason)
+			return
+		}
+		checks = nodeShellAccessChecks(support.Namespace)
+		if err := authorizeBackend(r.Context(), backend, false, checks...); err != nil {
+			writeAPIError(w, err)
+			return
+		}
+	}
 	socket, err := accept(w, r)
 	if err != nil {
 		slog.Warn("a node shell upgrade was refused", "node", node, "error", err)
@@ -151,9 +167,9 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	s.revalidateLive(ctx, cancel, r, "revalidating the node shell on "+node)
-
-	backend := s.managerFor(r)
+	s.revalidateLive(ctx, cancel, r, "revalidating the node shell on "+node, func(ctx context.Context) error {
+		return authorizeBackend(ctx, backend, true, checks...)
+	})
 	conn := &execConn{conn: socket, ctx: ctx}
 	shell, startErr := writer.StartNodeShell(ctx, node)
 	s.record(r, change{verb: verbNodeShell, ref: nodeRef(node), kind: kindNode, err: startErr})
@@ -210,6 +226,12 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer release()
+	backend := s.managerFor(r)
+	checks := execAccessChecks(req)
+	if err := authorizeBackend(r.Context(), backend, false, checks...); err != nil {
+		writeAPIError(w, err)
+		return
+	}
 	socket, err := accept(w, r)
 	if err != nil {
 		slog.Warn("a terminal upgrade was refused", "namespace", req.Namespace, "pod", req.Pod, "error", err)
@@ -221,9 +243,9 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	s.revalidateLive(ctx, cancel, r, "revalidating the terminal in "+req.Namespace+"/"+req.Pod)
-
-	backend := s.managerFor(r)
+	s.revalidateLive(ctx, cancel, r, "revalidating the terminal in "+req.Namespace+"/"+req.Pod, func(ctx context.Context) error {
+		return authorizeBackend(ctx, backend, true, checks...)
+	})
 	conn := &execConn{conn: socket, ctx: ctx}
 	session, startErr := backend.StartExec(ctx, req, conn)
 	s.record(r, change{
@@ -246,6 +268,32 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	})
 
 	conn.pump(ctx, socket, session)
+}
+
+func execAccessChecks(req exec.Request) []access.Check {
+	return []access.Check{{
+		Verb:        "create",
+		Resource:    podResourceName,
+		Subresource: "exec",
+		Namespace:   req.Namespace,
+		Name:        req.Pod,
+	}}
+}
+
+func nodeShellAccessChecks(namespace string) []access.Check {
+	return []access.Check{
+		{
+			Verb:      "create",
+			Resource:  podResourceName,
+			Namespace: namespace,
+		},
+		{
+			Verb:        "create",
+			Resource:    podResourceName,
+			Subresource: "exec",
+			Namespace:   namespace,
+		},
+	}
 }
 
 func endMessage(err error) []byte {

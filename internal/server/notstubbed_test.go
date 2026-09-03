@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/actions"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/argocd"
@@ -51,6 +52,16 @@ func (n notStubbed) Access(_ context.Context, _ api.ObjectRef) (r0 api.Access) {
 func (n notStubbed) AccessEach(_ context.Context, _ string, _ []api.ObjectRef) (r0 api.BulkAccess) {
 	n.missing("AccessEach")
 	return r0
+}
+
+func (n notStubbed) Authorize(_ context.Context, _ ...access.Check) error {
+	n.missing("Authorize")
+	return nil
+}
+
+func (n notStubbed) Reauthorize(_ context.Context, _ ...access.Check) error {
+	n.missing("Reauthorize")
+	return nil
 }
 
 func (n notStubbed) Action(_ context.Context, _ actions.Request) (r0 api.ActionResult, r1 error) {

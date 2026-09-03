@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,8 +19,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/openapi"
+	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/access"
@@ -442,6 +447,57 @@ func TestAPingGivesUpWhenTheCallerDoes(t *testing.T) {
 
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want it to stop when the caller did", err)
+	}
+}
+
+func TestAPingCancelsTheApiserverRequestWithItsCaller(t *testing.T) {
+	started := make(chan struct{})
+	stopped := make(chan struct{})
+	var startOnce sync.Once
+	var stopOnce sync.Once
+	apiserver := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		startOnce.Do(func() {
+			close(started)
+		})
+		<-r.Context().Done()
+		stopOnce.Do(func() {
+			close(stopped)
+		})
+	}))
+	t.Cleanup(func() {
+		apiserver.CloseClientConnections()
+		apiserver.Close()
+	})
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: apiserver.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := NewManager(t.Context(), Deps{Clientset: cs})
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	pinged := make(chan error, 1)
+	go func() {
+		pinged <- mgr.Ping(ctx)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("the apiserver received no ping")
+	}
+	cancel()
+	select {
+	case pingErr := <-pinged:
+		if !errors.Is(pingErr, context.Canceled) {
+			t.Fatalf("error = %v, want cancellation", pingErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the ping did not return after cancellation")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("the apiserver request survived cancellation")
 	}
 }
 

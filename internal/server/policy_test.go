@@ -54,7 +54,6 @@ func keysOfBool(held map[string]bool) []string {
 }
 
 var readOnlyWrites = map[string]bool{
-	routeKey(http.MethodPost, "/api/resources"):           true,
 	routeKey(http.MethodPost, "/api/access"):              true,
 	routeKey(http.MethodPost, "/api/checks/rules/faults"): true,
 	routeKey(http.MethodPost, "/api/kubeconfigs"):         true,
@@ -150,6 +149,7 @@ func TestExecAndPortForwardingAreAdminOnly(t *testing.T) {
 		routeKey(http.MethodGet, "/api/exec"),
 		routeKey(http.MethodGet, "/api/nodeshell"),
 		routeKey(http.MethodPost, "/api/debug"),
+		routeKey(http.MethodPost, "/api/resources"),
 	}
 	for _, key := range admin {
 		if neededRole[key] != auth.RoleAdmin {

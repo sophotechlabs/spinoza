@@ -12,7 +12,6 @@ import (
 	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
-	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
@@ -72,6 +71,17 @@ func Search(
 	query string,
 	limits CountLimits,
 ) api.SearchResults {
+	return searchScoped(ctx, meta, descs, query, limits, nil)
+}
+
+func searchScoped(
+	ctx context.Context,
+	meta metadata.Interface,
+	descs []api.ResourceDescriptor,
+	query string,
+	limits CountLimits,
+	namespaces []string,
+) api.SearchResults {
 	needle := strings.ToLower(strings.TrimSpace(query))
 	if len([]rune(needle)) < searchShortest {
 		return api.SearchResults{}
@@ -105,12 +115,11 @@ func Search(
 			}()
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			found, cut, err := searchOne(bounded, meta, desc, needle, limits)
+			found, cut, errs := searchResource(bounded, meta, desc, needle, limits, namespaces)
 			mu.Lock()
 			defer mu.Unlock()
-			if err != nil {
-				reasons[key] = countReason(ctx, err, limits)
-				return
+			for place, err := range errs {
+				reasons[place] = countReason(ctx, err, limits)
 			}
 			hits = append(hits, found...)
 			if cut {
@@ -136,17 +145,51 @@ func Search(
 	return api.SearchResults{Hits: hits, Truncated: truncated, Errors: reasons}
 }
 
+func searchResource(
+	ctx context.Context,
+	meta metadata.Interface,
+	desc api.ResourceDescriptor,
+	needle string,
+	limits CountLimits,
+	namespaces []string,
+) ([]api.SearchHit, bool, map[string]error) {
+	wanted := namespaces
+	if len(wanted) == 0 {
+		wanted = []string{metav1.NamespaceAll}
+	}
+	hits := []api.SearchHit{}
+	errs := map[string]error{}
+	truncated := false
+	for _, namespace := range wanted {
+		found, cut, err := searchOne(ctx, meta, desc, namespace, needle, limits)
+		if err != nil {
+			place := keyOf(desc)
+			if namespace != "" {
+				place += "/" + namespace
+			}
+			errs[place] = err
+			continue
+		}
+		hits = append(hits, found...)
+		if cut {
+			truncated = true
+		}
+	}
+	return hits, truncated, errs
+}
+
 func searchOne(
 	ctx context.Context,
 	meta metadata.Interface,
 	desc api.ResourceDescriptor,
+	namespace string,
 	needle string,
 	limits CountLimits,
 ) ([]api.SearchHit, bool, error) {
 	bounded, cancel := context.WithTimeout(ctx, limits.PerType)
 	defer cancel()
 	gvr := schema.GroupVersionResource{Group: desc.Group, Version: desc.Version, Resource: desc.Resource}
-	list, err := meta.Resource(gvr).Namespace(metav1.NamespaceAll).List(bounded, metav1.ListOptions{})
+	list, err := meta.Resource(gvr).Namespace(namespace).List(bounded, metav1.ListOptions{})
 	if err != nil {
 		return nil, false, err
 	}
@@ -182,8 +225,15 @@ func (m *Manager) Search(ctx context.Context, query string) api.SearchResults {
 		flat = append(flat, desc)
 	}
 	seen := m.filter(ctx)
-	found := Search(auth.AsServer(ctx), m.meta, flat, query, m.limits.Search)
-	return m.scopedHits(seen, found)
+	if seen.all {
+		return searchScoped(ctx, m.meta, flat, query, m.limits.Search, nil)
+	}
+	namespaces := make([]string, 0, len(seen.names))
+	for name := range seen.names {
+		namespaces = append(namespaces, name)
+	}
+	slices.Sort(namespaces)
+	return searchScoped(ctx, m.meta, flat, query, m.limits.Search, namespaces)
 }
 
 const namespaceResource = "namespaces"

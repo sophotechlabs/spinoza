@@ -23,7 +23,7 @@ func TestAuthorizationWatcherUsesTheDefaultInterval(t *testing.T) {
 		done := make(chan struct{})
 		started := time.Now()
 		go func() {
-			srv.watchAuthorization(ctx, cancel, req, who, known, who.User)
+			srv.watchAuthorization(ctx, cancel, req, who, known, who.User, nil)
 			close(done)
 		}()
 
