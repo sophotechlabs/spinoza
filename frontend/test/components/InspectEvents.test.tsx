@@ -75,7 +75,7 @@ describe('InspectEvents', () => {
     expect(screen.getByText('Loading events')).toBeInTheDocument();
     expect(screen.queryByText('OldObject')).not.toBeInTheDocument();
 
-    await act(async () => {
+    act(() => {
       finishNext({
         ok: true,
         json: () => Promise.resolve([event({ reason: 'NewObject' })]),
