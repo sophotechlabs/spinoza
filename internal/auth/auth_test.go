@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -25,13 +24,7 @@ func modeless(t *testing.T, cfg Config) *Authenticator {
 }
 
 func TestBuildingAuthFailsClosedWhenASecretCannotBeGenerated(t *testing.T) {
-	original := rand.Reader
-	rand.Reader = failedRandom{}
-	t.Cleanup(func() {
-		rand.Reader = original
-	})
-
-	built, err := New(t.Context(), Config{Mode: ModeNone})
+	built, err := newAuthenticator(t.Context(), Config{Mode: ModeNone}, failedRandom{})
 
 	if built != nil {
 		t.Fatalf("authenticator = %+v, want none without a signing secret", built)

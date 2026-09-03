@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -30,6 +31,10 @@ type Authenticator struct {
 }
 
 func New(ctx context.Context, cfg Config) (*Authenticator, error) {
+	return newAuthenticator(ctx, cfg, rand.Reader)
+}
+
+func newAuthenticator(ctx context.Context, cfg Config, entropy io.Reader) (*Authenticator, error) {
 	cfg = cfg.withDefaults()
 	err := cfg.Validate()
 	if err != nil {
@@ -37,7 +42,7 @@ func New(ctx context.Context, cfg Config) (*Authenticator, error) {
 	}
 	secret := cfg.SessionSecret
 	if len(secret) == 0 {
-		secret, err = secretFrom(rand.Reader)
+		secret, err = secretFrom(entropy)
 		if err != nil {
 			return nil, err
 		}
