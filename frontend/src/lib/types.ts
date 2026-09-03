@@ -408,6 +408,7 @@ export interface GitopsResource {
   driftOwners?: boolean;
   driftNote?: string;
   events?: K8sEvent[];
+  eventsTruncated?: boolean;
 }
 
 export interface GitopsDeployment {

@@ -259,13 +259,14 @@ describe('the per-application panel', () => {
   });
 
   it('lists managed resources with their drift and events', async () => {
-    serve(appWith({ resources: [deployment] }));
+    serve(appWith({ resources: [{ ...deployment, eventsTruncated: true }] }));
     renderPanel();
 
     expect(await screen.findByText('spec.replicas')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Scaled')).toBeInTheDocument();
+    expect(screen.getByText('More recent events are available.')).toBeInTheDocument();
   });
 
   it('names the writer that took a field on a server-side applied resource', async () => {

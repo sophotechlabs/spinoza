@@ -62,6 +62,7 @@ function resourceOf(raw: unknown): GitopsResource {
     driftOwners: item.driftOwners,
     driftNote: item.driftNote,
     events: parseEvents(item.events ?? []),
+    eventsTruncated: item.eventsTruncated,
   };
 }
 

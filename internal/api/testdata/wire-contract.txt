@@ -325,6 +325,7 @@ GitopsResource.Drift drift,omitempty []FieldDrift
 GitopsResource.DriftNote driftNote,omitempty string
 GitopsResource.DriftOwners driftOwners,omitempty bool
 GitopsResource.Events events,omitempty []Event
+GitopsResource.EventsTruncated eventsTruncated,omitempty bool
 GitopsResource.Finalizers finalizers,omitempty []string
 GitopsResource.Group group,omitempty string
 GitopsResource.Health health,omitempty string

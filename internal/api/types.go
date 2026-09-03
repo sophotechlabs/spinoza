@@ -1030,21 +1030,22 @@ type FieldDrift struct {
 }
 
 type GitopsResource struct {
-	Group       string       `json:"group,omitempty"`
-	Version     string       `json:"version,omitempty"`
-	Resource    string       `json:"resource,omitempty"`
-	Kind        string       `json:"kind"`
-	Name        string       `json:"name"`
-	Namespace   string       `json:"namespace,omitempty"`
-	Sync        string       `json:"sync,omitempty"`
-	Health      string       `json:"health,omitempty"`
-	Message     string       `json:"message,omitempty"`
-	Terminating bool         `json:"terminating,omitempty"`
-	Finalizers  []string     `json:"finalizers,omitempty"`
-	Drift       []FieldDrift `json:"drift,omitempty"`
-	DriftOwners bool         `json:"driftOwners,omitempty"`
-	DriftNote   string       `json:"driftNote,omitempty"`
-	Events      []Event      `json:"events,omitempty"`
+	Group           string       `json:"group,omitempty"`
+	Version         string       `json:"version,omitempty"`
+	Resource        string       `json:"resource,omitempty"`
+	Kind            string       `json:"kind"`
+	Name            string       `json:"name"`
+	Namespace       string       `json:"namespace,omitempty"`
+	Sync            string       `json:"sync,omitempty"`
+	Health          string       `json:"health,omitempty"`
+	Message         string       `json:"message,omitempty"`
+	Terminating     bool         `json:"terminating,omitempty"`
+	Finalizers      []string     `json:"finalizers,omitempty"`
+	Drift           []FieldDrift `json:"drift,omitempty"`
+	DriftOwners     bool         `json:"driftOwners,omitempty"`
+	DriftNote       string       `json:"driftNote,omitempty"`
+	Events          []Event      `json:"events,omitempty"`
+	EventsTruncated bool         `json:"eventsTruncated,omitempty"`
 }
 
 type GitopsDeployment struct {

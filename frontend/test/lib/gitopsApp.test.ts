@@ -51,6 +51,7 @@ const full = {
       driftOwners: true,
       driftNote: 'more',
       events: [{ type: 'Warning', reason: 'Failed', message: 'nope', lastSeen: 'now' }],
+      eventsTruncated: true,
     },
   ],
   history: [
@@ -97,6 +98,7 @@ describe('reading one application', () => {
     expect(app.resources?.[0].finalizers).toEqual(['foregroundDeletion']);
     expect(app.resources?.[0].driftOwners).toBe(true);
     expect(app.resources?.[0].events?.[0].reason).toBe('Failed');
+    expect(app.resources?.[0].eventsTruncated).toBe(true);
     expect(app.history?.[0].id).toBe(2);
     expect(app.operation?.running).toBe(true);
   });

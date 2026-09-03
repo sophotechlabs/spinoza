@@ -1,6 +1,7 @@
 package gitops
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -249,6 +250,36 @@ func TestDetailAttachesTheRecentEventsOfEachResource(t *testing.T) {
 	}
 	if attached[0].LastSeen < attached[1].LastSeen {
 		t.Fatalf("events = %+v, want the newest first", attached)
+	}
+}
+
+func TestDetailMarksACappedEventSampleIncomplete(t *testing.T) {
+	events := make([]runtime.Object, 0, maxEventsPer+1)
+	for at := range maxEventsPer + 1 {
+		events = append(events, gitopsEvent(
+			"event"+string(rune('a'+at)), "Scaled", "deployment-controller", "scaled",
+		))
+	}
+	objects := append([]runtime.Object{
+		managingApplication(managed("Deployment", "podinfo")),
+		liveDeployment(`{"spec":{"replicas":3}}`),
+	}, events...)
+
+	got, err := Detail(t.Context(), detailClient(objects...), detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+	body, err := json.Marshal(got.Resources[0])
+	if err != nil {
+		t.Fatalf("marshal resource: %v", err)
+	}
+	wire := map[string]any{}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatalf("unmarshal resource: %v", err)
+	}
+	truncated, known := wire["eventsTruncated"].(bool)
+	if !known || !truncated {
+		t.Fatalf("eventsTruncated = %v, want the five-event sample marked incomplete", wire["eventsTruncated"])
 	}
 }
 
@@ -567,6 +598,45 @@ func TestEventsAreAskedForByTheObjectTheyBelongTo(t *testing.T) {
 	want := "involvedObject.kind=Deployment,involvedObject.name=podinfo"
 	if seen != want {
 		t.Fatalf("field selector = %q, want %q so a busy namespace cannot hide them", seen, want)
+	}
+}
+
+func TestDetailDoesNotAttachEventsFromAnOlderObjectWithTheSameName(t *testing.T) {
+	const currentUID = "6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84"
+	live := liveDeployment(`{"spec":{"replicas":3}}`)
+	live.SetUID(currentUID)
+	client := detailClient(managingApplication(managed("Deployment", "podinfo")), live)
+	oldEvent := gitopsEvent("old", "Failed", "deployment-controller", "the former deployment failed")
+	currentEvent := gitopsEvent("current", "Scaled", "deployment-controller", "the current deployment scaled")
+	if err := unstructured.SetNestedField(oldEvent.Object, "1a2b3c4d-5e6f-4789-8abc-def012345678", "involvedObject", "uid"); err != nil {
+		t.Fatalf("set old uid: %v", err)
+	}
+	if err := unstructured.SetNestedField(currentEvent.Object, currentUID, "involvedObject", "uid"); err != nil {
+		t.Fatalf("set current uid: %v", err)
+	}
+	client.PrependReactor("list", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		listing, ok := action.(k8stesting.ListAction)
+		if !ok {
+			t.Fatalf("event action = %T, want a list", action)
+		}
+		items := []unstructured.Unstructured{*oldEvent, *currentEvent}
+		if listing.GetListRestrictions().Fields.String() == "involvedObject.uid="+currentUID {
+			items = items[1:]
+		}
+		return true, &unstructured.UnstructuredList{
+			Object: map[string]any{"apiVersion": "v1", "kind": "EventList"},
+			Items:  items,
+		}, nil
+	})
+
+	got, err := Detail(t.Context(), client, detailDescs(), applicationRef())
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+
+	events := got.Resources[0].Events
+	if len(events) != 1 || events[0].Message != "the current deployment scaled" {
+		t.Fatalf("events = %+v, want only the current object's event", events)
 	}
 }
 

@@ -193,6 +193,9 @@ function Events({ one }: { one: GitopsResource }) {
           {event.message}
         </li>
       ))}
+      {one.eventsTruncated === true && (
+        <li className="text-fg-subtle">More recent events are available.</li>
+      )}
     </ul>
   );
 }

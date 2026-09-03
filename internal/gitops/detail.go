@@ -159,6 +159,7 @@ func enrich(
 	identify(descs, app.Resources)
 	order := readingOrder(app.Resources)
 	read := []int{}
+	uids := map[int]string{}
 	for _, at := range order {
 		if len(read) == maxLiveReads {
 			break
@@ -168,6 +169,7 @@ func enrich(
 		if live == nil {
 			continue
 		}
+		uids[at] = string(live.GetUID())
 		apply(&app.Resources[at], live, app.Controller)
 	}
 	if len(order) > len(read) {
@@ -178,7 +180,7 @@ func enrich(
 		})
 	}
 	if events {
-		attachEvents(ctx, dyn, app, read)
+		attachEvents(ctx, dyn, app, read, uids)
 	}
 }
 
@@ -267,24 +269,27 @@ func apply(resource *api.GitopsResource, live *unstructured.Unstructured, contro
 	}
 }
 
-func attachEvents(ctx context.Context, dyn dynamic.Interface, app *api.GitopsApp, read []int) {
+func attachEvents(ctx context.Context, dyn dynamic.Interface, app *api.GitopsApp, read []int, uids map[int]string) {
 	for _, at := range read {
 		resource := &app.Resources[at]
 		if resource.Namespace == "" {
 			continue
 		}
-		resource.Events = eventsFor(ctx, dyn, resource)
+		resource.Events, resource.EventsTruncated = eventsFor(ctx, dyn, resource, uids[at])
 	}
 }
 
-func eventsFor(ctx context.Context, dyn dynamic.Interface, resource *api.GitopsResource) []api.Event {
+func eventsFor(ctx context.Context, dyn dynamic.Interface, resource *api.GitopsResource, uid string) ([]api.Event, bool) {
 	bounded, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 	selector := "involvedObject.kind=" + resource.Kind + ",involvedObject.name=" + resource.Name
+	if uid != "" {
+		selector = "involvedObject.uid=" + uid
+	}
 	list, err := dyn.Resource(eventsGVR).Namespace(resource.Namespace).
 		List(bounded, metav1.ListOptions{FieldSelector: selector, Limit: eventPageSize})
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	found := make([]api.Event, 0, len(list.Items))
 	for i := range list.Items {
@@ -296,13 +301,14 @@ func eventsFor(ctx context.Context, dyn dynamic.Interface, resource *api.GitopsR
 		}
 		return strings.Compare(gitopsEventKey(left), gitopsEventKey(right))
 	})
+	truncated := list.GetContinue() != "" || len(found) > maxEventsPer
 	if len(found) > maxEventsPer {
 		found = found[:maxEventsPer]
 	}
 	if len(found) == 0 {
-		return nil
+		return nil, truncated
 	}
-	return found
+	return found, truncated
 }
 
 func gitopsEventKey(one api.Event) string {
