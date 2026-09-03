@@ -71,7 +71,7 @@ type workflowJob struct {
 	Permissions    map[string]string `yaml:"permissions"`
 	Steps          []workflowStep    `yaml:"steps"`
 	Strategy       map[string]any    `yaml:"strategy"`
-	TimeoutMinutes int               `yaml:"timeout-minutes"`
+	TimeoutMinutes any               `yaml:"timeout-minutes"`
 	With           map[string]any    `yaml:"with"`
 }
 

@@ -23,8 +23,9 @@ func TestLongRunningChecksUsePerRefConcurrencyGroups(t *testing.T) {
 func TestMutationTestingIsBoundedAndSplitIntoPackageShards(t *testing.T) {
 	workflow := readYAML[workflowFile](t, ".github/workflows/go-mutation.yaml")
 	mutation := requireJob(t, workflow, "mutation")
-	if mutation.TimeoutMinutes != 60 {
-		t.Fatalf("mutation timeout = %d minutes, want 60", mutation.TimeoutMinutes)
+	mutationTimeout, timeoutIsInt := mutation.TimeoutMinutes.(int)
+	if !timeoutIsInt || mutationTimeout != 60 {
+		t.Fatalf("mutation timeout = %v minutes, want 60", mutation.TimeoutMinutes)
 	}
 	matrix, ok := mutation.Strategy["matrix"].(map[string]any)
 	if !ok {
@@ -76,8 +77,9 @@ func TestMutationTestingIsBoundedAndSplitIntoPackageShards(t *testing.T) {
 		t.Fatalf("missing mutation shards: %v", wantShards)
 	}
 	total := requireJob(t, workflow, "mutation-total")
-	if total.TimeoutMinutes != 10 {
-		t.Fatalf("mutation total timeout = %d minutes, want 10", total.TimeoutMinutes)
+	totalTimeout, timeoutIsInt := total.TimeoutMinutes.(int)
+	if !timeoutIsInt || totalTimeout != 10 {
+		t.Fatalf("mutation total timeout = %v minutes, want 10", total.TimeoutMinutes)
 	}
 	if len(total.Needs) != 1 || total.Needs[0] != "mutation" {
 		t.Fatalf("mutation total needs = %v, want mutation", total.Needs)
