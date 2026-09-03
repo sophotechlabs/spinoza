@@ -5,6 +5,8 @@ export const SETTINGS_PATH = '/api/settings';
 
 export const SAVE_DELAY_MS = 400;
 
+const SAVE_RETRY_MS = 5000;
+
 const KEYS = [
   'spinoza.theme.v1',
   'spinoza.themes.v1',
@@ -168,6 +170,16 @@ function schedule(): void {
   }, SAVE_DELAY_MS);
 }
 
+function scheduleRetry(): void {
+  if (!saving || timer !== null) {
+    return;
+  }
+  timer = setTimeout(() => {
+    timer = null;
+    void save();
+  }, SAVE_RETRY_MS);
+}
+
 export async function refresh(): Promise<boolean> {
   let body: unknown = null;
   try {
@@ -238,6 +250,7 @@ export function save(): Promise<void> {
   }
   const settings: Settings = { values: sending };
   const epoch = saveEpoch;
+  let stored = false;
   const sendingNow = request(SETTINGS_PATH, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -249,11 +262,15 @@ export function save(): Promise<void> {
       }
       accepted(sending);
       removeMigrated(sending);
+      stored = true;
     })
     .catch(() => undefined);
   const settled = sendingNow.finally(() => {
     if (activeSave === settled) {
       activeSave = null;
+    }
+    if (!stored && saveEpoch === epoch && Object.keys(pending()).length > 0) {
+      scheduleRetry();
     }
   });
   activeSave = settled;

@@ -351,6 +351,24 @@ describe('sending only what this window changed', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('retries a setting after a transient write failure without another change', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
+    startSaving();
+
+    writeStored('spinoza.theme.v1', '"borg"');
+    await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps a key written again while the save was in flight', async () => {
     const fetchMock = stubFetch();
     startSaving();
