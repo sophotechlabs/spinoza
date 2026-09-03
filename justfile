@@ -511,7 +511,8 @@ mutation mode='default' output='dist/mutation/default.json': stub-assets
     mode={{ quote(mode) }}
     output={{ quote(output) }}
     mkdir -p "$(dirname "$output")"
-    args=(unleash --output "$output" --output-statuses lc)
+    cached_build_timeout_coefficient=60
+    args=(unleash --timeout-coefficient "$cached_build_timeout_coefficient" --output "$output" --output-statuses lc)
     # Pin Gremlins' unmapped declarations, inactive build tags, and tagless switch cases so the remainder can only shrink.
     if [ "$mode" = desktop ]; then
         args+=(--tags desktop)
@@ -524,6 +525,182 @@ mutation mode='default' output='dist/mutation/default.json': stub-assets
     fi
     gremlins "${args[@]}"
     scripts/check-mutation-report.sh "$output" "$max_not_covered"
+
+[private]
+mutation-package path tags output exclude='': stub-assets
+    #!/usr/bin/env bash
+    set -euo pipefail
+    path={{ quote(path) }}
+    tags={{ quote(tags) }}
+    output={{ quote(output) }}
+    exclude={{ quote(exclude) }}
+    mkdir -p "$(dirname "$output")"
+    cached_build_timeout_coefficient=60
+    args=(unleash "$path" --timeout-coefficient "$cached_build_timeout_coefficient" --output "$output" --output-statuses lc)
+    if [ -n "$tags" ]; then
+        args+=(--tags "$tags")
+    fi
+    if [ -n "$exclude" ]; then
+        args+=(--exclude-files "$exclude")
+    fi
+    echo "mutation: testing $path"
+    gremlins "${args[@]}"
+    if [ ! -f "$output" ]; then
+        echo "mutation: $path has no supported mutants"
+        printf '%s\n' '{"test_efficacy":0,"mutants_killed":0,"mutants_lived":0,"mutants_not_covered":0,"files":[]}' > "$output"
+        exit 0
+    fi
+    scripts/check-mutation-report.sh "$output"
+
+mutation-shard shard output='dist/mutation': stub-assets
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shard={{ quote(shard) }}
+    output={{ quote(output) }}
+    tags=
+    exclude=
+    paths=()
+    case "$shard" in
+        root-default)
+            paths=(.)
+            exclude='^(cmd|internal|scripts|test)/'
+            ;;
+        root-desktop)
+            paths=(.)
+            tags=desktop
+            exclude='^(cmd|internal|scripts|test)/'
+            ;;
+        cmd)
+            for path in cmd/*; do
+                if [ -d "$path" ]; then
+                    paths+=("$path")
+                fi
+            done
+            ;;
+        internal-a-d)
+            for path in internal/[a-d]*; do
+                if [ ! -d "$path" ]; then
+                    continue
+                fi
+                if [ "$path" = internal/checks ]; then
+                    continue
+                fi
+                paths+=("$path")
+            done
+            ;;
+        checks-a-e)
+            paths=(internal/checks)
+            exclude='^[f-z]'
+            ;;
+        checks-f-j)
+            paths=(internal/checks)
+            exclude='^([a-e]|[k-z])'
+            ;;
+        checks-k-o)
+            paths=(internal/checks)
+            exclude='^([a-j]|[p-z])'
+            ;;
+        checks-p-r)
+            paths=(internal/checks)
+            exclude='^([a-o]|[s-z])'
+            ;;
+        checks-s-t)
+            paths=(internal/checks)
+            exclude='^([a-r]|[u-z])'
+            ;;
+        checks-u-z)
+            paths=(internal/checks)
+            exclude='^[a-t]'
+            ;;
+        internal-e-l)
+            for path in internal/[e-l]*; do
+                if [ -d "$path" ]; then
+                    paths+=("$path")
+                fi
+            done
+            ;;
+        internal-m-r)
+            for path in internal/[m-r]*; do
+                if [ ! -d "$path" ]; then
+                    continue
+                fi
+                if [ "$path" = internal/resources ]; then
+                    continue
+                fi
+                paths+=("$path")
+            done
+            ;;
+        resources-a-f)
+            paths=(internal/resources)
+            exclude='^[g-z]'
+            ;;
+        resources-g-l)
+            paths=(internal/resources)
+            exclude='^([a-f]|[m-z])'
+            ;;
+        resources-m-r)
+            paths=(internal/resources)
+            exclude='^([a-l]|[s-z])'
+            ;;
+        resources-s-z)
+            paths=(internal/resources)
+            exclude='^[a-r]'
+            ;;
+        server-a-c)
+            paths=(internal/server)
+            exclude='^[d-z]'
+            ;;
+        server-d-e)
+            paths=(internal/server)
+            exclude='^([a-c]|[f-z])'
+            ;;
+        server-f)
+            paths=(internal/server)
+            exclude='^([a-e]|[g-z])'
+            ;;
+        server-g-l)
+            paths=(internal/server)
+            exclude='^([a-f]|[m-z])'
+            ;;
+        server-m-r)
+            paths=(internal/server)
+            exclude='^([a-l]|[s-z])'
+            ;;
+        server-s-z)
+            paths=(internal/server)
+            exclude='^[a-r]'
+            ;;
+        internal-s-z)
+            for path in internal/[s-z]*; do
+                if [ ! -d "$path" ]; then
+                    continue
+                fi
+                if [ "$path" = internal/server ]; then
+                    continue
+                fi
+                paths+=("$path")
+            done
+            ;;
+        *)
+            echo "mutation: unknown shard $shard" >&2
+            exit 1
+            ;;
+    esac
+    if [ "${#paths[@]}" -eq 0 ]; then
+        echo "mutation: shard $shard has no packages" >&2
+        exit 1
+    fi
+    for path in "${paths[@]}"; do
+        name=${path#./}
+        if [ "$name" = . ]; then
+            name=root
+        fi
+        name=${name//\//-}
+        just mutation-package "$path" "$tags" "$output/$shard-$name.json" "$exclude"
+    done
+
+mutation-total reports='dist/mutation':
+    scripts/check-mutation-total.sh {{ quote(reports) }} 225 212
 
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml
@@ -859,7 +1036,7 @@ workflow-triggers:
 hygiene:
     typos
     just editorconfig
-    shellcheck install.sh scripts/check-mutation-report.sh scripts/release-commit.sh scripts/release-pending.sh \
+    shellcheck install.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/release-commit.sh scripts/release-pending.sh \
         test/release-commit.sh test/release-pending.sh test/install/container.sh \
         test/install/uninstall.sh test/install/editorconfig-name.sh packaging/render.sh
     just --unstable --fmt --check

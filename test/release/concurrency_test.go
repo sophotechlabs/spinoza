@@ -20,6 +20,70 @@ func TestLongRunningChecksUsePerRefConcurrencyGroups(t *testing.T) {
 	}
 }
 
+func TestMutationTestingIsBoundedAndSplitIntoPackageShards(t *testing.T) {
+	workflow := readYAML[workflowFile](t, ".github/workflows/go-mutation.yaml")
+	mutation := requireJob(t, workflow, "mutation")
+	if mutation.TimeoutMinutes != 60 {
+		t.Fatalf("mutation timeout = %d minutes, want 60", mutation.TimeoutMinutes)
+	}
+	matrix, ok := mutation.Strategy["matrix"].(map[string]any)
+	if !ok {
+		t.Fatalf("mutation matrix = %#v, want a mapping", mutation.Strategy["matrix"])
+	}
+	shards, ok := matrix["shard"].([]any)
+	if !ok {
+		t.Fatalf("mutation shards = %#v, want a list", matrix["shard"])
+	}
+	if len(shards) != 23 {
+		t.Fatalf("mutation shard count = %d, want 23", len(shards))
+	}
+	wantShards := map[string]bool{
+		"root-default":  true,
+		"root-desktop":  true,
+		"cmd":           true,
+		"internal-a-d":  true,
+		"checks-a-e":    true,
+		"checks-f-j":    true,
+		"checks-k-o":    true,
+		"checks-p-r":    true,
+		"checks-s-t":    true,
+		"checks-u-z":    true,
+		"internal-e-l":  true,
+		"internal-m-r":  true,
+		"resources-a-f": true,
+		"resources-g-l": true,
+		"resources-m-r": true,
+		"resources-s-z": true,
+		"server-a-c":    true,
+		"server-d-e":    true,
+		"server-f":      true,
+		"server-g-l":    true,
+		"server-m-r":    true,
+		"server-s-z":    true,
+		"internal-s-z":  true,
+	}
+	for _, raw := range shards {
+		shard, ok := raw.(string)
+		if !ok {
+			t.Fatalf("mutation shard = %#v, want a string", raw)
+		}
+		if !wantShards[shard] {
+			t.Fatalf("unexpected mutation shard %q", shard)
+		}
+		delete(wantShards, shard)
+	}
+	if len(wantShards) != 0 {
+		t.Fatalf("missing mutation shards: %v", wantShards)
+	}
+	total := requireJob(t, workflow, "mutation-total")
+	if total.TimeoutMinutes != 10 {
+		t.Fatalf("mutation total timeout = %d minutes, want 10", total.TimeoutMinutes)
+	}
+	if len(total.Needs) != 1 || total.Needs[0] != "mutation" {
+		t.Fatalf("mutation total needs = %v, want mutation", total.Needs)
+	}
+}
+
 func TestE2EUsesAConcurrencyGroupForEachPullRequest(t *testing.T) {
 	workflow := readYAML[workflowFile](t, ".github/workflows/e2e.yaml")
 	want := "e2e-${{ github.event.pull_request.number || inputs.pull_request || github.ref }}-"

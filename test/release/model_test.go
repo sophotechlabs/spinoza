@@ -65,12 +65,14 @@ func (value *workflowScalar) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type workflowJob struct {
-	If          string            `yaml:"if"`
-	Needs       stringList        `yaml:"needs"`
-	Outputs     map[string]string `yaml:"outputs"`
-	Permissions map[string]string `yaml:"permissions"`
-	Steps       []workflowStep    `yaml:"steps"`
-	With        map[string]any    `yaml:"with"`
+	If             string            `yaml:"if"`
+	Needs          stringList        `yaml:"needs"`
+	Outputs        map[string]string `yaml:"outputs"`
+	Permissions    map[string]string `yaml:"permissions"`
+	Steps          []workflowStep    `yaml:"steps"`
+	Strategy       map[string]any    `yaml:"strategy"`
+	TimeoutMinutes int               `yaml:"timeout-minutes"`
+	With           map[string]any    `yaml:"with"`
 }
 
 type workflowStep struct {
