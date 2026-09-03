@@ -238,6 +238,45 @@ describe('useChecks', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/checks', expect.anything());
   });
 
+  it('does not present the previous filter report while its replacement loads', async () => {
+    let finishNext: (response: { ok: boolean; json: () => Promise<unknown> }) => void = () =>
+      undefined;
+    const fetchMock = vi.fn((url: string) => {
+      if (!url.includes('minSeverity=high')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ groups: [{ id: 'unfiltered' }], objects: [] }),
+        });
+      }
+      return new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+        finishNext = resolve;
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useChecks());
+    await waitFor(() => {
+      expect(result.current.data?.groups[0].id).toBe('unfiltered');
+    });
+
+    act(() => {
+      useSettingsStore.getState().setChecksMinSeverity('high');
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect(result.current.data).toBeNull();
+
+    act(() => {
+      finishNext({
+        ok: true,
+        json: () => Promise.resolve({ groups: [{ id: 'filtered' }], objects: [] }),
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.data?.groups[0].id).toBe('filtered');
+    });
+  });
+
   it('refreshes on exactly the cadence the settings hold', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetchMock = stub({ groups: [], objects: [], scanned: 0 });

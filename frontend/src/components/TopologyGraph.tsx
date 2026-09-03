@@ -33,6 +33,7 @@ export default function TopologyGraph({ openedOn, onSelect }: TopologyGraphProps
   const { data, error, reload } = usePoll(fetcher, {
     intervalMs: POLL_INTERVAL_MS,
     fallback: 'topology request failed',
+    resetKey: JSON.stringify({ namespace, expanded, root }),
   });
 
   function handleNode(node: GraphNode) {

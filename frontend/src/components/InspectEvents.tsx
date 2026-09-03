@@ -30,6 +30,7 @@ export default function InspectEvents({ namespace, uid, active = true }: Inspect
     intervalMs: EVENTS_POLL_MS,
     enabled: active,
     fallback: 'events request failed',
+    resetKey: `${namespace}/${uid}`,
   });
 
   if (events === null) {

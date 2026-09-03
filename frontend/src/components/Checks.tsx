@@ -1283,10 +1283,13 @@ export default function Checks({ onOpen }: ChecksProps) {
   const namespace = useSettingsStore((state) => state.checksNamespace);
 
   if (data === null) {
-    if (error !== null) {
-      return <LoadFailure what="The cluster audit" message={error} />;
-    }
-    return <Loading what="the cluster audit" />;
+    return (
+      <div className="flex h-full min-h-0 flex-col text-xs">
+        <AuditControls key="audit-controls" />
+        {error !== null && <LoadFailure what="The cluster audit" message={error} />}
+        {error === null && <Loading what="the cluster audit" />}
+      </div>
+    );
   }
 
   return (
@@ -1299,7 +1302,7 @@ export default function Checks({ onOpen }: ChecksProps) {
           {data.error}
         </p>
       )}
-      <AuditControls />
+      <AuditControls key="audit-controls" />
       <BaselineBar report={data} onChanged={reload} />
       <MutesPanel audit={data} onChanged={reload} />
       <Namespaces counts={data.namespaces} />

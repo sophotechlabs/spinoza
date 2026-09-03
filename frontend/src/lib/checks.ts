@@ -407,7 +407,11 @@ export function useChecks(fleet = false): Polled<CheckReportView> {
   const keep = useChecksFilter();
   const query = filterParams(keep).toString();
   const load = useCallback(() => fetchChecks(fromParams(query), fleet), [query, fleet]);
-  return usePoll(load, { intervalMs: seconds * 1000, fallback: 'the checks request failed' });
+  return usePoll(load, {
+    intervalMs: seconds * 1000,
+    fallback: 'the checks request failed',
+    resetKey: JSON.stringify({ fleet, query }),
+  });
 }
 
 export function totalFindings(report: CheckReportView): number {

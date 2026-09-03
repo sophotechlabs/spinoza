@@ -53,6 +53,37 @@ describe('InspectEvents', () => {
     expect(screen.getAllByText('2026-07-27T09:30:00Z')).toHaveLength(2);
   });
 
+  it("does not show the previous object's events while the next object loads", async () => {
+    let finishNext: (response: { ok: boolean; json: () => Promise<unknown> }) => void = () =>
+      undefined;
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('uid=old-uid')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([event({ reason: 'OldObject' })]),
+        });
+      }
+      return new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+        finishNext = resolve;
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const view = render(<InspectEvents namespace="apps" uid="old-uid" />);
+    expect(await screen.findByText('OldObject')).toBeInTheDocument();
+
+    view.rerender(<InspectEvents namespace="apps" uid="new-uid" />);
+    expect(screen.getByText('Loading events')).toBeInTheDocument();
+    expect(screen.queryByText('OldObject')).not.toBeInTheDocument();
+
+    await act(async () => {
+      finishNext({
+        ok: true,
+        json: () => Promise.resolve([event({ reason: 'NewObject' })]),
+      });
+    });
+    expect(await screen.findByText('NewObject')).toBeInTheDocument();
+  });
+
   it('surfaces a request failure', async () => {
     vi.stubGlobal(
       'fetch',

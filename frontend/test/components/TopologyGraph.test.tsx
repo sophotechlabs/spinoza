@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Graph } from '../../src/lib/types';
 import type { GitopsFlowNode } from '../../src/lib/graphLayout';
@@ -378,6 +378,43 @@ describe('TopologyGraph', () => {
     expect(screen.queryByText('Around deployments/api')).not.toBeInTheDocument();
     expect(seen.every((url) => !url.includes('rootName'))).toBe(true);
     expect(seen.every((url) => !url.includes('expand'))).toBe(true);
+  });
+
+  it('does not draw the previous namespace while the next graph loads', async () => {
+    let finishNext: (response: { ok: boolean; json: () => Promise<unknown> }) => void = () =>
+      undefined;
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('namespace=staging')) {
+        return new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
+          finishNext = resolve;
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ nodes: [folded], edges: [] }),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    act(() => {
+      useNamespaceStore.getState().choose('prod');
+    });
+    render(<TopologyGraph openedOn={null} />);
+    expect(await screen.findByText('api ×3 · 1 not ready')).toBeInTheDocument();
+
+    act(() => {
+      useNamespaceStore.getState().choose('staging');
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByText('api ×3 · 1 not ready')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading graph')).toBeInTheDocument();
+
+    await act(async () => {
+      finishNext({ ok: true, json: () => Promise.resolve({ nodes: [leaf], edges: [] }) });
+      await Promise.resolve();
+    });
+    expect(await screen.findByText('api')).toBeInTheDocument();
   });
 
   it('opens around the object it was reached from, and widens on demand', async () => {
