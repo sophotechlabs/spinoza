@@ -764,7 +764,8 @@ vulns: vulnerability-exceptions
     trivy fs --exit-code 1 --scanners secret,misconfig \
         --skip-dirs e2e/fixtures --skip-dirs test/clustermode --skip-dirs .tmp \
         --skip-files test/integration/metrics-server.yaml \
-        --helm-set publicURL=https://spinoza.example.com .
+        --helm-set publicURL=https://spinoza.example.com \
+        --helm-set auth.mode=none --helm-set auth.allowAnonymous=true .
     osv-scanner scan source --recursive .
 
 vulnerability-exceptions: stub-assets

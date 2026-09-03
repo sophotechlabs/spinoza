@@ -1,6 +1,9 @@
 package release_test
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +69,34 @@ func TestReleasePleaseUpdatesBothChartVersions(t *testing.T) {
 	for path, found := range want {
 		if !found {
 			t.Errorf("release-please does not update Chart.yaml at %s", path)
+		}
+	}
+}
+
+func TestVulnerabilityScanCanRenderHelmChart(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(repositoryRoot(t), "justfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, found := strings.CutPrefix(string(data), "vulns:")
+	if !found {
+		_, after, found = strings.Cut(string(data), "\nvulns:")
+	}
+	if !found {
+		t.Fatal("justfile has no vulns recipe")
+	}
+	recipe, _, found := strings.Cut(after, "\n\n")
+	if !found {
+		t.Fatal("vulns recipe has no ending boundary")
+	}
+	want := []string{
+		"--helm-set publicURL=https://spinoza.example.com",
+		"--helm-set auth.mode=none",
+		"--helm-set auth.allowAnonymous=true",
+	}
+	for _, flag := range want {
+		if !strings.Contains(recipe, flag) {
+			t.Errorf("vulns recipe does not supply %s", flag)
 		}
 	}
 }
