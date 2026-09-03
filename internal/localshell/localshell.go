@@ -119,8 +119,7 @@ func exitError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
+	if _, exit := errors.AsType[*exec.ExitError](err); exit {
 		return nil
 	}
 	return err

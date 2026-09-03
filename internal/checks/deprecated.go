@@ -41,7 +41,7 @@ func collectRemovals() []removal {
 		if strings.HasSuffix(gvk.Kind, "List") {
 			continue
 		}
-		marked, ok := reflect.New(typ).Interface().(removedAPI)
+		marked, ok := reflect.TypeAssert[removedAPI](reflect.New(typ))
 		if !ok {
 			continue
 		}

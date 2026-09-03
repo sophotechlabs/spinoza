@@ -16,7 +16,7 @@ func fieldsEntry(manager, fields string) metav1.ManagedFieldsEntry {
 		Manager:    manager,
 		Operation:  metav1.ManagedFieldsOperationApply,
 		FieldsType: "FieldsV1",
-		FieldsV1:   &metav1.FieldsV1{Raw: []byte(fields)},
+		FieldsV1:   metav1.NewFieldsV1(fields),
 	}
 }
 

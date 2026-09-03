@@ -74,8 +74,7 @@ func (h *helmRunner) Run(ctx context.Context, args, env []string) (string, error
 	if err == nil {
 		return strings.TrimSpace(stdout.String()), nil
 	}
-	var missing *exec.Error
-	if errors.As(err, &missing) {
+	if _, missing := errors.AsType[*exec.Error](err); missing {
 		return "", fmt.Errorf("%w: %s", ErrNoHelmBinary, h.binary)
 	}
 	message := firstMeaningful(stderr.String())

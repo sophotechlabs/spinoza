@@ -561,8 +561,7 @@ func TestJSONBodiesEnforceTheirByteLimitAfterACompleteValue(t *testing.T) {
 
 	err := decodeJSONBody(recorder, request, 2, &value)
 
-	var tooBig *http.MaxBytesError
-	if !errors.As(err, &tooBig) {
+	if _, tooBig := errors.AsType[*http.MaxBytesError](err); !tooBig {
 		t.Fatalf("err = %v, want a body-size error", err)
 	}
 }

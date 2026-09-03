@@ -783,7 +783,7 @@ func ssaDeployment(managers ...string) *unstructured.Unstructured {
 			Manager:    manager,
 			Operation:  metav1.ManagedFieldsOperationApply,
 			FieldsType: "FieldsV1",
-			FieldsV1:   &metav1.FieldsV1{Raw: []byte(fields[manager])},
+			FieldsV1:   metav1.NewFieldsV1(fields[manager]),
 		})
 	}
 	live.SetManagedFields(entries)
@@ -848,7 +848,7 @@ func TestADeclarationStillWinsOverOwnership(t *testing.T) {
 		Manager:    "argocd-controller",
 		Operation:  metav1.ManagedFieldsOperationApply,
 		FieldsType: "FieldsV1",
-		FieldsV1:   &metav1.FieldsV1{Raw: []byte(`{"f:spec":{"f:replicas":{}}}`)},
+		FieldsV1:   metav1.NewFieldsV1(`{"f:spec":{"f:replicas":{}}}`),
 	}})
 	client := detailClient(managingApplication(managed("Deployment", "podinfo")), live)
 

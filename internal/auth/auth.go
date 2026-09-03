@@ -328,8 +328,7 @@ func (a *Authenticator) BackchannelLogout(w http.ResponseWriter, r *http.Request
 	r.Body = http.MaxBytesReader(w, r.Body, maxBackchannelLogoutBytes)
 	parseErr := r.ParseForm()
 	if parseErr != nil {
-		var tooBig *http.MaxBytesError
-		if errors.As(parseErr, &tooBig) {
+		if _, tooBig := errors.AsType[*http.MaxBytesError](parseErr); tooBig {
 			writeAuthError(w, http.StatusRequestEntityTooLarge, "the back-channel logout request is too large")
 			return
 		}
