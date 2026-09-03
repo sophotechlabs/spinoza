@@ -265,6 +265,19 @@ kind-config tier:
 cluster-up tier:
     #!/usr/bin/env bash
     set -euo pipefail
+    pull_image() {
+        local image="$1"
+        local attempt
+        for attempt in 1 2 3; do
+            if docker pull "$image"; then
+                return 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 5))
+            fi
+        done
+        return 1
+    }
     just kind-config {{ tier }}
     config={{ kind_merged }}/{{ tier }}.yaml
     if ! kind get clusters | grep -qx {{ test_cluster }}; then
@@ -286,7 +299,7 @@ cluster-up tier:
     fi
     for image in "${images[@]}"; do
         if ! docker image inspect "$image" > /dev/null 2>&1; then
-            docker pull "$image"
+            pull_image "$image"
         fi
         for node in $(kind get nodes --name {{ test_cluster }}); do
             if ! docker exec "$node" crictl inspecti "$image" > /dev/null 2>&1; then
