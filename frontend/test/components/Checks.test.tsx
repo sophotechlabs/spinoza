@@ -698,20 +698,39 @@ describe('audit controls', () => {
 
   it('turns one check off and offers to put it back', async () => {
     show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    const group = await screen.findByRole('button', { name: /Privileged containers/ });
 
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Turn off privileged-containers' }),
-    );
+    expect(
+      screen.queryByRole('button', { name: 'Turn off privileged-containers' }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(group);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Turn off privileged-containers' }));
 
     expect(useSettingsStore.getState().checksDisabled).toEqual(['privileged-containers']);
-    expect(await screen.findByRole('button', { name: /1 turned off/ })).toBeInTheDocument();
+    await userEvent.click(await screen.findByText(/1 turned off/));
+    expect(screen.getByText('privileged-containers')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Turn privileged-containers back on' }),
+    ).toBeInTheDocument();
+  });
+
+  it('puts one turned-off check back without changing the others', async () => {
+    useSettingsStore.setState({ checksDisabled: ['a', 'b'] });
+    show({ groups: [] });
+
+    await userEvent.click(await screen.findByText(/2 turned off/));
+    await userEvent.click(screen.getByRole('button', { name: 'Turn a back on' }));
+
+    expect(useSettingsStore.getState().checksDisabled).toEqual(['b']);
   });
 
   it('puts every turned-off check back at once', async () => {
     useSettingsStore.setState({ checksDisabled: ['a', 'b'] });
     show({ groups: [] });
 
-    await userEvent.click(await screen.findByRole('button', { name: /2 turned off/ }));
+    await userEvent.click(await screen.findByText(/2 turned off/));
+    await userEvent.click(screen.getByRole('button', { name: 'Turn all back on' }));
 
     expect(useSettingsStore.getState().checksDisabled).toEqual([]);
   });
@@ -728,14 +747,18 @@ describe('audit controls', () => {
     ]);
   });
 
-  it('does not open a check when its off button is pressed', async () => {
+  it('lets a keyboard user open a check and turn it off', async () => {
+    const user = userEvent.setup();
     show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    const group = await screen.findByRole('button', { name: /Privileged containers/ });
+    group.focus();
 
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Turn off privileged-containers' }),
-    );
+    await user.keyboard('{Enter}');
+    const turnOff = screen.getByRole('button', { name: 'Turn off privileged-containers' });
+    turnOff.focus();
+    await user.keyboard('{Enter}');
 
-    expect(screen.queryByText(/holds every capability/)).not.toBeInTheDocument();
+    expect(useSettingsStore.getState().checksDisabled).toEqual(['privileged-containers']);
   });
   it('widens to every open cluster when asked', async () => {
     const user = userEvent.setup();

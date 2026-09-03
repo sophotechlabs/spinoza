@@ -544,11 +544,13 @@ function Group({
             {countLabel(group)}
           </span>
         </button>
-        <TurnOff id={group.id} />
       </div>
       {open && !empty && (
         <div className="pb-1">
-          <p className="px-3 py-1 pl-9 text-fg-muted">{group.wrong}</p>
+          <div className="flex items-baseline gap-3 pr-3">
+            <p className="min-w-0 flex-1 px-3 py-1 pl-9 text-fg-muted">{group.wrong}</p>
+            <TurnOff id={group.id} />
+          </div>
           <p className="px-3 py-1 pl-9 text-fg-soft">{group.remedy}</p>
           {(group.partialOn ?? []).map((stood) => (
             <p key={stood} className="px-3 py-1 pl-9 text-warn">
@@ -1201,18 +1203,57 @@ function AuditControls() {
         />
         Read every kind
       </label>
-      {off.length > 0 && (
-        <button
-          type="button"
-          className="ml-auto hover:underline"
-          onClick={() => {
-            setOff([]);
-          }}
-        >
-          {off.length} turned off · turn back on
-        </button>
-      )}
+      <TurnedOffChecks off={off} onChange={setOff} />
     </div>
+  );
+}
+
+function TurnedOffChecks({
+  off,
+  onChange,
+}: {
+  off: string[];
+  onChange: (checks: string[]) => void;
+}) {
+  if (off.length === 0) {
+    return null;
+  }
+  return (
+    <details className="relative ml-auto">
+      <summary className="cursor-pointer text-fg-soft hover:underline">
+        {off.length} turned off · manage
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-72 rounded border border-edge-strong bg-surface-raised p-2 shadow">
+        <ul aria-label="Checks that are turned off">
+          {off.map((id) => (
+            <li key={id} className="flex items-center gap-2 py-0.5">
+              <span className="min-w-0 flex-1 truncate text-fg-muted">{id}</span>
+              <button
+                type="button"
+                aria-label={`Turn ${id} back on`}
+                className="shrink-0 text-fg-soft hover:underline"
+                onClick={() => {
+                  onChange(off.filter((one) => one !== id));
+                }}
+              >
+                turn on
+              </button>
+            </li>
+          ))}
+        </ul>
+        {off.length > 1 && (
+          <button
+            type="button"
+            className="mt-1 text-fg-soft hover:underline"
+            onClick={() => {
+              onChange([]);
+            }}
+          >
+            Turn all back on
+          </button>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -1224,12 +1265,12 @@ function TurnOff({ id }: { id: string }) {
     <button
       type="button"
       aria-label={`Turn off ${id}`}
-      className="ml-3 shrink-0 text-fg-soft hover:underline"
+      className="shrink-0 text-fg-soft hover:underline"
       onClick={() => {
         setOff([...off, id]);
       }}
     >
-      off
+      Turn off this check
     </button>
   );
 }
