@@ -37,6 +37,7 @@ function stub(body: unknown, ok = true, status = 200) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   useClustersStore.getState().reset();
   useToastsStore.setState({ toasts: [], history: [] });
@@ -609,6 +610,55 @@ describe('History', () => {
 
     expect(await screen.findByText('older-one')).toBeTruthy();
     expect(calls.mock.calls.some((call) => call[0].includes('after=40'))).toBe(true);
+  });
+
+  it('keeps the old page boundary when the newest page advances', async () => {
+    vi.useFakeTimers();
+    const initial = Array.from({ length: 200 }, (_, at) =>
+      entry({ id: 400 - at, name: `row-${String(400 - at)}` }),
+    );
+    const refreshed = Array.from({ length: 200 }, (_, at) =>
+      entry({ id: 401 - at, name: `row-${String(401 - at)}` }),
+    );
+    let heads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        let body: unknown = {};
+        if (url.includes('afterAction=201')) {
+          body = { entries: [entry({ id: 200, name: 'row-200' })], nextAction: 200 };
+        } else if (url.includes('/api/history')) {
+          heads += 1;
+          body = {
+            entries: heads === 1 ? initial : refreshed,
+            more: true,
+            nextAction: heads === 1 ? 201 : 202,
+          };
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(body),
+        });
+      }),
+    );
+    render(<History onOpen={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('row-201')).toBeTruthy();
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Show older' }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('row-200')).toBeTruthy();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+
+    expect(screen.getByText('row-201')).toBeTruthy();
   });
 
   it('drops an older page when the history scope changes', async () => {

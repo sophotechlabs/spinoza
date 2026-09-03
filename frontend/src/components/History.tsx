@@ -203,6 +203,22 @@ function nothingYet(source: HistorySource): string {
   return 'There is nothing here yet.';
 }
 
+function mergePages(...pages: HistoryEntry[][]): HistoryEntry[] {
+  const seen = new Set<string>();
+  const merged: HistoryEntry[] = [];
+  for (const page of pages) {
+    for (const entry of page) {
+      const key = `${entry.source}-${String(entry.id)}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(entry);
+    }
+  }
+  return merged;
+}
+
 export default function History({ onOpen }: HistoryProps) {
   const [source, setSource] = useState<HistorySource>('all');
   const [fleet, setFleet] = useState(false);
@@ -235,6 +251,13 @@ export default function History({ onOpen }: HistoryProps) {
       currentPage.current = '';
     };
   }, []);
+
+  useEffect(() => {
+    if (data === null || tail === null) {
+      return;
+    }
+    setOlder((have) => mergePages(data.entries, have));
+  }, [data, tail]);
 
   if (data === null) {
     if (error !== null) {
@@ -314,6 +337,7 @@ export default function History({ onOpen }: HistoryProps) {
   }
 
   const notRecording = data.reason ?? '';
+  const rows = mergePages(data.entries, older);
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
       {error !== null && <StaleBanner what="History" message={error} onRetry={reload} />}
@@ -375,12 +399,12 @@ export default function History({ onOpen }: HistoryProps) {
           Clear
         </button>
       </div>
-      {data.entries.length === 0 && (
+      {rows.length === 0 && (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
           {nothingYet(source)}
         </div>
       )}
-      {data.entries.length > 0 && (
+      {rows.length > 0 && (
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full table-fixed border-collapse text-left whitespace-nowrap">
             <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">
@@ -393,7 +417,7 @@ export default function History({ onOpen }: HistoryProps) {
               </tr>
             </thead>
             <tbody>
-              {foldRepeats([...data.entries, ...older]).map((folded) => (
+              {foldRepeats(rows).map((folded) => (
                 <Row
                   key={`${folded.entry.source}-${String(folded.entry.id)}`}
                   folded={folded}
