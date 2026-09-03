@@ -44,6 +44,26 @@ export function awaitNamespaceSettled(namespace: string): void {
   throw new Error(`namespace ${namespace} was still terminating after three minutes`);
 }
 
+function awaitCRDEstablished(name: string, timeoutSeconds: number): void {
+  for (let attempt = 0; attempt < timeoutSeconds; attempt += 1) {
+    const result = run('kubectl', [
+      '--kubeconfig',
+      KUBECONFIG,
+      '--context',
+      CONTEXT,
+      'get',
+      `crd/${name}`,
+      '-o',
+      'jsonpath={.status.conditions[?(@.type=="Established")].status}',
+    ]);
+    if (result.code === 0 && result.stdout.trim() === 'True') {
+      return;
+    }
+    run('sleep', ['1']);
+  }
+  throw new Error(`CRD ${name} was not established after ${String(timeoutSeconds)} seconds`);
+}
+
 export function seed(): void {
   for (const namespace of [NAMESPACE, 'e2e-gitops', 'e2e-scale']) {
     awaitNamespaceSettled(namespace);
@@ -52,7 +72,7 @@ export function seed(): void {
   kubectl(['apply', '-f', RBAC]);
   kubectl(['apply', '-f', PROMETHEUS]);
   kubectl(['apply', '-f', CRD]);
-  kubectl(['wait', '--for=condition=Established', 'crd/widgets.spinoza.test', '--timeout=120s']);
+  awaitCRDEstablished('widgets.spinoza.test', 120);
   kubectl(['apply', '-f', WIDGETS]);
 }
 
@@ -97,13 +117,8 @@ export function seedHelm(): void {
 
 export function installFlux(): void {
   kubectl(['apply', '-f', 'https://github.com/fluxcd/flux2/releases/latest/download/install.yaml']);
-  kubectl([
-    'wait',
-    '--for=condition=Established',
-    'crd/gitrepositories.source.toolkit.fluxcd.io',
-    'crd/kustomizations.kustomize.toolkit.fluxcd.io',
-    '--timeout=180s',
-  ]);
+  awaitCRDEstablished('gitrepositories.source.toolkit.fluxcd.io', 180);
+  awaitCRDEstablished('kustomizations.kustomize.toolkit.fluxcd.io', 180);
   kubectl([
     '-n',
     'flux-system',

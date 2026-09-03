@@ -55,7 +55,7 @@ async function activate(page: Page, id: string): Promise<void> {
   }
   const picker = page.getByLabel('Kubernetes context');
   await picker.click();
-  await page.getByRole('button', { name: cluster.context, exact: true }).click();
+  await page.locator('header').getByRole('button', { name: cluster.context, exact: true }).click();
   await expect
     .poll(async () => (await opened(page)).find((one) => one.active)?.id, { timeout: 60_000 })
     .toBe(id);
@@ -331,7 +331,7 @@ test('reopening a cluster next time is a persisted, reversible choice', async ({
   try {
     await openSettings(page, SECOND_CONTEXT);
     const choice = page.getByRole('checkbox', { name: 'Open this cluster again next time' });
-    await choice.setChecked(!before);
+    await choice.click();
     await expect
       .poll(async () => (await opened(page)).find((one) => one.context === SECOND_CONTEXT)?.reopen)
       .toBe(!before);

@@ -276,6 +276,7 @@ test('removing a kubeconfig removes its context from the picker and adding it ba
       timeout: 30_000,
     });
   } finally {
+    await openHome(page);
     const after = await secondManaged(page);
     if (before && !after) {
       await addSecond(page);
