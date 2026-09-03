@@ -112,6 +112,14 @@ func TestGraphSaturatesAnOverflowingWorkloadRate(t *testing.T) {
 	}
 }
 
+func TestFiniteSumSaturatesANegativeOverflow(t *testing.T) {
+	got := finiteSum(-math.MaxFloat64, -math.MaxFloat64)
+
+	if got != -math.MaxFloat64 {
+		t.Fatalf("sum = %v, want %v", got, -math.MaxFloat64)
+	}
+}
+
 func TestGraphSortsEdgesBySourceThenDestination(t *testing.T) {
 	querier := &stubQuerier{answers: map[string][]prom.Sample{
 		cilium.flows: {
