@@ -50,7 +50,11 @@ func newSessions(secret []byte, ttl, maxAge time.Duration, secure bool) *session
 }
 
 func NewSecret() []byte {
-	secret, err := secretFrom(rand.Reader)
+	return newSecret(rand.Reader)
+}
+
+func newSecret(source io.Reader) []byte {
+	secret, err := secretFrom(source)
 	if err != nil {
 		panic(err)
 	}

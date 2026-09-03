@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"crypto/rand"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -28,11 +27,6 @@ func TestASecretGenerationFailureIsNotTurnedIntoAWeakKey(t *testing.T) {
 }
 
 func TestNewSecretPanicsRatherThanReturningAWeakKey(t *testing.T) {
-	original := rand.Reader
-	rand.Reader = failedRandom{}
-	t.Cleanup(func() {
-		rand.Reader = original
-	})
 	defer func() {
 		caught, ok := recover().(error)
 		if !ok || !strings.Contains(caught.Error(), "entropy source failed") {
@@ -40,7 +34,7 @@ func TestNewSecretPanicsRatherThanReturningAWeakKey(t *testing.T) {
 		}
 	}()
 
-	NewSecret()
+	newSecret(failedRandom{})
 }
 
 func testSessions(t *testing.T, secure bool) *sessions {
