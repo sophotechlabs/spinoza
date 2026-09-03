@@ -121,6 +121,7 @@ test('the filter shortcut focuses the resource filter without typing into the pa
 }) => {
   await openResource(page, 'pods', 'Pod');
   const filter = page.getByRole('combobox', { name: 'Filter' });
+  await expect(page.locator('main tbody tr').first()).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('/');
   await expect(filter).toBeFocused();
 });
