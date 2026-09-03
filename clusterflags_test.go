@@ -117,6 +117,21 @@ func TestHTTPOriginsAreAcceptedAsPublicURLs(t *testing.T) {
 	}
 }
 
+func TestRemotePublicHTTPRequiresAnExplicitUnsafeOptIn(t *testing.T) {
+	_, err := parseFlags([]string{"--cluster-mode", "--public-url", "http://spinoza.example.com"})
+	if err == nil || !strings.Contains(err.Error(), "--unsafe-allow-http") {
+		t.Fatalf("plaintext public url error = %v", err)
+	}
+	_, err = parseFlags([]string{
+		"--cluster-mode",
+		"--public-url", "http://spinoza.example.com",
+		"--unsafe-allow-http",
+	})
+	if err != nil {
+		t.Fatalf("explicit plaintext public url: %v", err)
+	}
+}
+
 func TestServingMovesTheListenAddressOffLoopback(t *testing.T) {
 	if got := servedListen(t); got != clusterAddr {
 		t.Fatalf("addr = %q, want %q so the service can reach the pod", got, clusterAddr)
@@ -213,6 +228,7 @@ func TestEveryAuthFlagReachesTheConfig(t *testing.T) {
 		"--auth-proxy-secret-header", "X-Proxy-Token",
 		"--auth-proxy-secret-file", fileHolding(t, "proxy-secret\n"),
 		"--auth-proxy-logout-url", "https://proxy/sign_out",
+		"--auth-proxy-websocket-max-age", "7m",
 		"--auth-oidc-issuer", "https://keycloak.example.com/realms/main",
 		"--auth-oidc-internal-issuer", "http://keycloak.keycloak.svc/realms/main",
 		"--auth-oidc-client-id", "spinoza",
@@ -223,6 +239,7 @@ func TestEveryAuthFlagReachesTheConfig(t *testing.T) {
 		"--auth-oidc-username-prefix", "oidc:",
 		"--auth-oidc-groups-prefix", "oidc:",
 		"--auth-oidc-ca-cert", "/etc/spinoza/ca.crt",
+		"--auth-oidc-unsafe-allow-http",
 		"--auth-oidc-backchannel-logout",
 	)
 
@@ -253,6 +270,9 @@ func TestEveryAuthFlagReachesTheConfig(t *testing.T) {
 	if got.auth.Proxy.LogoutURL != "https://proxy/sign_out" {
 		t.Fatalf("proxy logout = %q", got.auth.Proxy.LogoutURL)
 	}
+	if got.auth.Proxy.WebSocketMaxAge != 7*time.Minute {
+		t.Fatalf("proxy websocket max age = %s", got.auth.Proxy.WebSocketMaxAge)
+	}
 	oidc := got.auth.OIDC
 	if oidc.IssuerURL != "https://keycloak.example.com/realms/main" {
 		t.Fatalf("issuer = %q", oidc.IssuerURL)
@@ -274,6 +294,9 @@ func TestEveryAuthFlagReachesTheConfig(t *testing.T) {
 	}
 	if oidc.CACertFile != "/etc/spinoza/ca.crt" || !oidc.BackchannelLogout {
 		t.Fatalf("oidc = %+v", oidc)
+	}
+	if !oidc.UnsafeAllowHTTP {
+		t.Fatal("the oidc plaintext opt-in was dropped")
 	}
 }
 

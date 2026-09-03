@@ -1,5 +1,6 @@
 # The address browsers reach spinoza at. Cluster mode will not start without it.
 publicURL: ""
+unsafeAllowHTTP: false
 
 replicaCount: 1
 
@@ -15,9 +16,8 @@ nameOverride: ""
 fullnameOverride: ""
 
 # Act on the cluster as the person who is signed in, so kubernetes rbac decides
-# what each of them may do. With this off, everything runs as spinoza's own
-# service account and rbac.write has to be on.
-impersonate: true
+# what each of them may do. This needs an explicit impersonation scope below.
+impersonate: false
 
 logLevel: info
 
@@ -59,6 +59,7 @@ auth:
     existingSecretKey: proxy-secret
     # Where signing out sends the browser, such as oauth2-proxy's /oauth2/sign_out.
     logoutURL: ""
+    webSocketMaxAge: 5m
 
   oidc:
     # Your keycloak realm, or any other provider: https://keycloak.example.com/realms/main
@@ -83,18 +84,24 @@ auth:
     # Mount a ca certificate yourself with extraVolumes and name its path here.
     caCert: ""
     insecureSkipVerify: false
+    unsafeAllowHTTP: false
     backchannelLogout: false
 
 rbac:
   create: true
-  # everything: get, list and watch on every resource, which is what a gui that
-  # shows every kind your cluster has needs, secrets included.
+  # everything: get, list and watch on every resource, secrets included. This
+  # is an explicit unsafe compatibility mode for unrestricted discovery.
   # workloads: the common kinds without secrets. Custom resources then need
   # extraRules, and the helm view stays empty.
-  read: everything
+  read: workloads
   # Write verbs for the service account itself. Only needed with impersonate
   # off; with it on, every change runs as the person who asked for it.
   write: false
+  impersonation:
+    users: []
+    groups: []
+    unsafeAllowAnyUser: false
+    unsafeAllowAnyGroup: false
   extraRules: []
 
 serviceAccount:

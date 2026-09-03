@@ -78,17 +78,21 @@ func maybeKubectl(t *testing.T, args ...string) (string, error) {
 
 func baseValues() map[string]string {
 	return map[string]string{
-		"image.repository":               "spinoza",
-		"image.tag":                      "cluster-mode",
-		"image.pullPolicy":               "Never",
-		"publicURL":                      base,
-		"ingress.enabled":                "true",
-		"ingress.className":              "nginx",
-		"ingress.hosts[0].host":          "spinoza.localtest.me",
-		"ingress.hosts[0].paths[0].path": "/",
-		"ingress.tls[0].secretName":      "localtest-tls",
-		"ingress.tls[0].hosts[0]":        "spinoza.localtest.me",
-		"logLevel":                       "debug",
+		"image.repository":                       "spinoza",
+		"image.tag":                              "cluster-mode",
+		"image.pullPolicy":                       "Never",
+		"publicURL":                              base,
+		"ingress.enabled":                        "true",
+		"ingress.className":                      "nginx",
+		"ingress.hosts[0].host":                  "spinoza.localtest.me",
+		"ingress.hosts[0].paths[0].path":         "/",
+		"ingress.tls[0].secretName":              "localtest-tls",
+		"ingress.tls[0].hosts[0]":                "spinoza.localtest.me",
+		"logLevel":                               "debug",
+		"impersonate":                            "true",
+		"rbac.read":                              "everything",
+		"rbac.impersonation.unsafeAllowAnyUser":  "true",
+		"rbac.impersonation.unsafeAllowAnyGroup": "true",
 	}
 }
 
@@ -98,6 +102,7 @@ func oidcValues() map[string]string {
 	values["auth.sessionSecret"] = "a-cluster-mode-session-secret-for-tests"
 	values["auth.oidc.issuerURL"] = realm
 	values["auth.oidc.internalIssuerURL"] = innerRealm
+	values["auth.oidc.unsafeAllowHTTP"] = "true"
 	values["auth.oidc.clientID"] = "spinoza"
 	values["auth.oidc.clientSecret"] = "spinoza-client-secret"
 	values["auth.oidc.backchannelLogout"] = "true"

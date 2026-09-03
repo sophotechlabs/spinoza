@@ -35,7 +35,11 @@ func encodePart(value any) string {
 }
 
 func signJWT(claims map[string]any) string {
-	header := map[string]any{"alg": "RS256", "typ": "JWT", "kid": testKeyID}
+	return signJWTWithKeyID(claims, testKeyID)
+}
+
+func signJWTWithKeyID(claims map[string]any, keyID string) string {
+	header := map[string]any{"alg": "RS256", "typ": "JWT", "kid": keyID}
 	signing := encodePart(header) + "." + encodePart(claims)
 	sum := sha256.Sum256([]byte(signing))
 	signature, err := rsa.SignPKCS1v15(rand.Reader, testKey(), crypto.SHA256, sum[:])
@@ -69,8 +73,10 @@ type fakeIDP struct {
 	noSIDs    bool
 	scopes    []string
 
-	mu   sync.Mutex
-	seen map[string]string
+	mu         sync.Mutex
+	seen       map[string]string
+	tokenCalls int
+	jwksCalls  int
 }
 
 func newIDP(t *testing.T) *fakeIDP {
@@ -79,6 +85,9 @@ func newIDP(t *testing.T) *fakeIDP {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", idp.metadata)
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
+		idp.mu.Lock()
+		idp.jwksCalls++
+		idp.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(jwks())
 	})
@@ -118,6 +127,7 @@ func (idp *fakeIDP) discovery() map[string]any {
 func (idp *fakeIDP) token(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	idp.mu.Lock()
+	idp.tokenCalls++
 	for key := range r.Form {
 		idp.seen[key] = r.Form.Get(key)
 	}
@@ -133,6 +143,18 @@ func (idp *fakeIDP) token(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+func (idp *fakeIDP) exchanges() int {
+	idp.mu.Lock()
+	defer idp.mu.Unlock()
+	return idp.tokenCalls
+}
+
+func (idp *fakeIDP) keyReads() int {
+	idp.mu.Lock()
+	defer idp.mu.Unlock()
+	return idp.jwksCalls
 }
 
 func (idp *fakeIDP) received(key string) string {

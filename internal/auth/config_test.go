@@ -21,6 +21,9 @@ func TestDefaultsFillInEverythingLeftOut(t *testing.T) {
 	if got.Proxy.UserHeader != DefaultUserHeader || got.Proxy.GroupsHeader != DefaultGroupsHeader || got.Proxy.SecretHeader != DefaultProxyAuthHeader {
 		t.Fatalf("proxy headers = %+v, want the oauth2-proxy ones", got.Proxy)
 	}
+	if got.Proxy.WebSocketMaxAge != DefaultProxyWSMaxAge {
+		t.Fatalf("proxy websocket max age = %s, want %s", got.Proxy.WebSocketMaxAge, DefaultProxyWSMaxAge)
+	}
 	if got.OIDC.GroupsClaim != DefaultGroupsClaim {
 		t.Fatalf("groups claim = %q, want %q", got.OIDC.GroupsClaim, DefaultGroupsClaim)
 	}
@@ -73,6 +76,30 @@ func TestValidateRefusesWhatCannotWork(t *testing.T) {
 			name: "proxy mode without an authenticated proxy",
 			cfg:  Config{Mode: ModeProxy, DefaultRole: RoleViewer},
 			want: "shared secret of at least 32 bytes",
+		},
+		{
+			name: "negative proxy websocket max age",
+			cfg: Config{
+				Mode:        ModeProxy,
+				DefaultRole: RoleViewer,
+				Proxy: ProxyConfig{
+					SharedSecret:    []byte(strings.Repeat("p", minimumSecretBytes)),
+					WebSocketMaxAge: -time.Second,
+				},
+			},
+			want: "proxy websocket max age must be positive",
+		},
+		{
+			name: "excessive proxy websocket max age",
+			cfg: Config{
+				Mode:        ModeProxy,
+				DefaultRole: RoleViewer,
+				Proxy: ProxyConfig{
+					SharedSecret:    []byte(strings.Repeat("p", minimumSecretBytes)),
+					WebSocketMaxAge: maximumProxyWSMaxAge + time.Second,
+				},
+			},
+			want: "may not exceed",
 		},
 		{
 			name: "oidc with no issuer",
@@ -198,6 +225,22 @@ func TestValidateAcceptsAWorkableOIDCConfig(t *testing.T) {
 
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("a workable config was refused: %v", err)
+	}
+}
+
+func TestOIDCEndpointsRequireAuthenticatedTransport(t *testing.T) {
+	if err := secureEndpoint("issuer", "https://keycloak.example.com/realms/main", false); err != nil {
+		t.Fatalf("https issuer: %v", err)
+	}
+	if err := secureEndpoint("issuer", "http://127.0.0.1:5556", false); err != nil {
+		t.Fatalf("loopback issuer: %v", err)
+	}
+	err := secureEndpoint("issuer", "http://keycloak.sso.svc/realms/main", false)
+	if err == nil || !strings.Contains(err.Error(), "explicit unsafe opt-in") {
+		t.Fatalf("plaintext issuer error = %v", err)
+	}
+	if err := secureEndpoint("issuer", "http://keycloak.sso.svc/realms/main", true); err != nil {
+		t.Fatalf("explicit plaintext issuer: %v", err)
 	}
 }
 

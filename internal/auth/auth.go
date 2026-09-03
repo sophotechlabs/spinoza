@@ -20,14 +20,20 @@ const returnParam = "next"
 
 const flashCookie = "spinoza_login_error"
 
-const maxBackchannelLogoutBytes = 1 << 20
+const (
+	maxLogoutTokenBytes       = 16 << 10
+	maxBackchannelLogoutBytes = maxLogoutTokenBytes + 1024
+)
 
 type Authenticator struct {
-	cfg      Config
-	sessions *sessions
-	roles    roleMap
-	oidc     *provider
-	revoked  *revocations
+	cfg       Config
+	sessions  *sessions
+	roles     roleMap
+	oidc      *provider
+	revoked   *revocations
+	flows     *consumedFlows
+	exchanges *exchangeBudget
+	logouts   *logoutVerificationBudget
 }
 
 func New(ctx context.Context, cfg Config) (*Authenticator, error) {
@@ -49,10 +55,13 @@ func newAuthenticator(ctx context.Context, cfg Config, entropy io.Reader) (*Auth
 		slog.Warn("no session secret was given, so a new one was generated; every login ends when spinoza restarts")
 	}
 	auth := &Authenticator{
-		cfg:      cfg,
-		sessions: newSessions(secret, cfg.SessionTTL, cfg.SessionMaxAge, secureFor(cfg)),
-		roles:    newRoleMap(cfg),
-		revoked:  newRevocations(cfg.SessionMaxAge),
+		cfg:       cfg,
+		sessions:  newSessions(secret, cfg.SessionTTL, cfg.SessionMaxAge, secureFor(cfg)),
+		roles:     newRoleMap(cfg),
+		revoked:   newRevocations(cfg.SessionMaxAge),
+		flows:     newConsumedFlows(maxConsumedFlows, time.Now),
+		exchanges: newExchangeBudget(8, 4),
+		logouts:   newLogoutVerificationBudget(time.Now),
 	}
 	if cfg.Mode != ModeOIDC {
 		return auth, nil
@@ -67,6 +76,9 @@ func newAuthenticator(ctx context.Context, cfg Config, entropy io.Reader) (*Auth
 }
 
 func announce(found *provider, cfg OIDCConfig) {
+	if cfg.UnsafeAllowHTTP {
+		slog.Warn("oidc plaintext http is enabled; network interception can compromise authentication and the client secret")
+	}
 	if found.endSession == "" {
 		slog.Info("your identity provider advertises no logout endpoint, so signing out here leaves its own session alone")
 	}
@@ -100,6 +112,13 @@ func (a *Authenticator) Enabled() bool {
 
 func (a *Authenticator) SignsIn() bool {
 	return a.oidc != nil
+}
+
+func (a *Authenticator) LiveSessionLimit() time.Duration {
+	if a == nil || a.cfg.Mode != ModeProxy {
+		return 0
+	}
+	return a.cfg.Proxy.WebSocketMaxAge
 }
 
 func (a *Authenticator) Identify(w http.ResponseWriter, r *http.Request) (Identity, bool) {
@@ -202,7 +221,31 @@ func (a *Authenticator) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sessions.drop(w, flowCookie)
-	claims, back, err := a.oidc.finish(r.Context(), r, a.sessions)
+	flow, err := a.oidc.readFlow(r, a.sessions)
+	if err != nil {
+		a.refuse(w, r, "a login did not complete", err)
+		return
+	}
+	consumeErr := a.flows.consume(flow.State, a.sessions.now().Add(flowLifetime))
+	if errors.Is(consumeErr, errFlowRegistryFull) {
+		writeAuthError(w, http.StatusTooManyRequests, consumeErr.Error())
+		return
+	}
+	if consumeErr != nil {
+		a.refuse(w, r, "a login did not complete", consumeErr)
+		return
+	}
+	if r.URL.Query().Get("code") == "" {
+		a.refuse(w, r, "a login did not complete", refusedBy(r))
+		return
+	}
+	release, claimed := a.exchanges.claim(callbackSource(r))
+	if !claimed {
+		writeAuthError(w, http.StatusTooManyRequests, "login exchange is busy; try again")
+		return
+	}
+	defer release()
+	claims, back, err := a.oidc.exchange(r.Context(), r, flow)
 	if err != nil {
 		a.refuse(w, r, "a login did not complete", err)
 		return
@@ -298,8 +341,20 @@ func (a *Authenticator) BackchannelLogout(w http.ResponseWriter, r *http.Request
 		writeAuthError(w, http.StatusBadRequest, "the request carried no logout_token")
 		return
 	}
+	if len(raw) > maxLogoutTokenBytes {
+		writeAuthError(w, http.StatusRequestEntityTooLarge, "the logout token is too large")
+		return
+	}
+	release, claimed := a.logouts.claim(callbackSource(r))
+	if !claimed {
+		w.Header().Set("Retry-After", "5")
+		writeAuthError(w, http.StatusTooManyRequests, "back-channel logout verification is busy; try again")
+		return
+	}
+	defer release()
 	claims, err := a.oidc.verifyLogoutToken(r.Context(), raw)
 	if err != nil {
+		a.logouts.failed()
 		writeAuthError(w, http.StatusBadRequest, err.Error())
 		return
 	}

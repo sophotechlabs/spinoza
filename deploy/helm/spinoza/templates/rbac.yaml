@@ -36,12 +36,35 @@ rules:
     verbs: ["get", "list", "watch"]
   {{- end }}
   - apiGroups: ["authorization.k8s.io"]
-    resources: ["selfsubjectaccessreviews", "selfsubjectrulesreviews", "subjectaccessreviews"]
+    resources: ["selfsubjectaccessreviews", "selfsubjectrulesreviews"]
     verbs: ["create"]
   {{- if .Values.impersonate }}
+  {{- if .Values.rbac.impersonation.unsafeAllowAnyUser }}
   - apiGroups: [""]
-    resources: ["users", "groups", "serviceaccounts"]
+    resources: ["users"]
     verbs: ["impersonate"]
+  {{- else }}
+  {{- with .Values.rbac.impersonation.users }}
+  - apiGroups: [""]
+    resources: ["users"]
+    resourceNames:
+      {{- toYaml . | nindent 6 }}
+    verbs: ["impersonate"]
+  {{- end }}
+  {{- end }}
+  {{- if .Values.rbac.impersonation.unsafeAllowAnyGroup }}
+  - apiGroups: [""]
+    resources: ["groups"]
+    verbs: ["impersonate"]
+  {{- else }}
+  {{- with .Values.rbac.impersonation.groups }}
+  - apiGroups: [""]
+    resources: ["groups"]
+    resourceNames:
+      {{- toYaml . | nindent 6 }}
+    verbs: ["impersonate"]
+  {{- end }}
+  {{- end }}
   {{- end }}
   {{- if .Values.rbac.write }}
   - apiGroups: ["*"]

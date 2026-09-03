@@ -61,6 +61,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if not .Values.publicURL -}}
 {{- fail "spinoza needs publicURL, the address browsers reach it at" -}}
 {{- end -}}
+{{- if and (hasPrefix "http://" .Values.publicURL) (not .Values.unsafeAllowHTTP) -}}
+{{- fail "publicURL must use https; plaintext http requires unsafeAllowHTTP=true" -}}
+{{- end -}}
 {{- if not .Values.auth.mode -}}
 {{- fail "auth.mode must be set explicitly to oidc, proxy or none" -}}
 {{- end -}}
@@ -90,9 +93,15 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if not .Values.auth.oidc.clientID -}}
 {{- fail "auth.oidc.clientID is required in oidc mode" -}}
 {{- end -}}
+{{- if and (hasPrefix "http://" .Values.auth.oidc.issuerURL) (not .Values.auth.oidc.unsafeAllowHTTP) -}}
+{{- fail "auth.oidc.issuerURL must use https; plaintext http requires auth.oidc.unsafeAllowHTTP=true" -}}
 {{- end -}}
-{{- if and (not .Values.impersonate) (not .Values.rbac.write) -}}
-{{- fail "with impersonate off, spinoza acts as its own service account, so rbac.write has to be on for anything to change" -}}
+{{- if and (hasPrefix "http://" .Values.auth.oidc.internalIssuerURL) (not .Values.auth.oidc.unsafeAllowHTTP) -}}
+{{- fail "auth.oidc.internalIssuerURL must use https; plaintext http requires auth.oidc.unsafeAllowHTTP=true" -}}
+{{- end -}}
+{{- end -}}
+{{- if and .Values.impersonate (not .Values.rbac.impersonation.unsafeAllowAnyUser) (empty .Values.rbac.impersonation.users) -}}
+{{- fail "impersonate=true requires rbac.impersonation.users or the explicit unsafe rbac.impersonation.unsafeAllowAnyUser=true compatibility mode" -}}
 {{- end -}}
 {{- if gt (int .Values.replicaCount) 1 -}}
 {{- fail "spinoza keeps back-channel logouts, the timeline and running port-forwards in the process, so a second replica would answer without them; replicaCount has to be 1" -}}

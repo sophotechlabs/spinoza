@@ -3,10 +3,12 @@ package auth
 import (
 	"bytes"
 	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -145,6 +147,63 @@ func TestAFinishedLoginBecomesASessionWithTheProvidersClaims(t *testing.T) {
 	}
 	if idp.received("code_verifier") == "" {
 		t.Fatal("the token exchange sent no pkce verifier")
+	}
+}
+
+func TestParallelCallbackReplayCausesOneTokenExchange(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, nil)
+	login := startLogin(t, held, "/")
+	idp.claims = idp.standardClaims(login.nonce)
+	const attempts = 16
+	start := make(chan struct{})
+	var group sync.WaitGroup
+	for range attempts {
+		group.Go(func() {
+			<-start
+			callback(t, held, login, url.Values{"state": {login.state}, "code": {"abc"}})
+		})
+	}
+	close(start)
+	group.Wait()
+	if got := idp.exchanges(); got != 1 {
+		t.Fatalf("token exchanges = %d, want 1", got)
+	}
+	replayed := callback(t, held, login, url.Values{"state": {login.state}, "code": {"abc"}})
+	if message := errorFrom(t, held, replayed); !strings.Contains(message, "already used") {
+		t.Fatalf("replay message = %q", message)
+	}
+}
+
+func TestSaturatedTokenExchangeReturns429BeforeContactingTheProvider(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, nil)
+	held.exchanges = newExchangeBudget(1, 1)
+	probe := httptest.NewRequest(http.MethodGet, "/auth/callback", http.NoBody)
+	release, claimed := held.exchanges.claim(callbackSource(probe))
+	if !claimed {
+		t.Fatal("the setup token exchange was refused")
+	}
+	login := startLogin(t, held, "/")
+	refused := callback(t, held, login, url.Values{"state": {login.state}, "code": {"abc"}})
+	if refused.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", refused.Code, http.StatusTooManyRequests)
+	}
+	if !strings.Contains(refused.Body.String(), "login exchange is busy; try again") {
+		t.Fatalf("body = %q", refused.Body.String())
+	}
+	if got := idp.exchanges(); got != 0 {
+		t.Fatalf("provider exchanges = %d, want 0", got)
+	}
+	release()
+	next := startLogin(t, held, "/")
+	idp.claims = idp.standardClaims(next.nonce)
+	accepted := callback(t, held, next, url.Values{"state": {next.state}, "code": {"abc"}})
+	if accepted.Code != http.StatusFound {
+		t.Fatalf("status after release = %d, want %d", accepted.Code, http.StatusFound)
+	}
+	if got := idp.exchanges(); got != 1 {
+		t.Fatalf("provider exchanges after release = %d, want 1", got)
 	}
 }
 
@@ -459,6 +518,103 @@ func TestAnOversizedBackChannelLogoutIsRefusedBeforeItIsParsed(t *testing.T) {
 
 	if recorded.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestBackChannelLogoutTokenLimitAcceptsTheBoundaryAndRejectsOneMoreByte(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, func(cfg *Config) {
+		cfg.OIDC.BackchannelLogout = true
+	})
+	recorded := httptest.NewRecorder()
+
+	held.BackchannelLogout(recorded, logoutRequest(strings.Repeat("x", maxLogoutTokenBytes)))
+
+	if recorded.Code != http.StatusBadRequest {
+		t.Fatalf("boundary status = %d, want %d", recorded.Code, http.StatusBadRequest)
+	}
+	other := authFor(t, idp, func(cfg *Config) {
+		cfg.OIDC.BackchannelLogout = true
+	})
+	recorded = httptest.NewRecorder()
+	other.BackchannelLogout(recorded, logoutRequest(strings.Repeat("x", maxLogoutTokenBytes+1)))
+	if recorded.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over-limit status = %d, want %d", recorded.Code, http.StatusRequestEntityTooLarge)
+	}
+	if !strings.Contains(recorded.Body.String(), "the logout token is too large") {
+		t.Fatalf("body = %q", recorded.Body.String())
+	}
+}
+
+func TestFailedLogoutVerificationStartsAJWKSRefreshCooldown(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, func(cfg *Config) {
+		cfg.OIDC.BackchannelLogout = true
+	})
+	now := time.Date(2026, 9, 3, 18, 0, 0, 0, time.UTC)
+	held.logouts.now = func() time.Time { return now }
+	claims := idp.standardClaims("")
+	claims["events"] = map[string]any{backchannelEvent: map[string]any{}}
+
+	first := httptest.NewRecorder()
+	held.BackchannelLogout(first, logoutRequest(signJWTWithKeyID(claims, "unknown-one")))
+	if first.Code != http.StatusBadRequest {
+		t.Fatalf("first status = %d, want %d", first.Code, http.StatusBadRequest)
+	}
+	second := httptest.NewRecorder()
+	held.BackchannelLogout(second, logoutRequest(signJWTWithKeyID(claims, "unknown-two")))
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("cooldown status = %d, want %d", second.Code, http.StatusTooManyRequests)
+	}
+	if second.Header().Get("Retry-After") != "5" {
+		t.Fatalf("retry-after = %q", second.Header().Get("Retry-After"))
+	}
+	if idp.keyReads() != 1 {
+		t.Fatalf("jwks reads inside cooldown = %d, want 1", idp.keyReads())
+	}
+	now = now.Add(logoutFailureCooldown)
+	third := httptest.NewRecorder()
+	held.BackchannelLogout(third, logoutRequest(signJWTWithKeyID(claims, "unknown-three")))
+	if third.Code != http.StatusBadRequest {
+		t.Fatalf("post-cooldown status = %d, want %d", third.Code, http.StatusBadRequest)
+	}
+	if idp.keyReads() != 2 {
+		t.Fatalf("jwks reads at cooldown boundary = %d, want 2", idp.keyReads())
+	}
+}
+
+func TestBackChannelLogoutSaturationDoesNotContactTheProvider(t *testing.T) {
+	idp := newIDP(t)
+	held := authFor(t, idp, func(cfg *Config) {
+		cfg.OIDC.BackchannelLogout = true
+	})
+	releases := make([]func(), 0, logoutGlobalConcurrent)
+	for at := range logoutGlobalConcurrent {
+		release, ok := held.logouts.claim(fmt.Sprintf("source-%d", at))
+		if !ok {
+			t.Fatalf("claim %d was refused", at)
+		}
+		releases = append(releases, release)
+	}
+	claims := idp.standardClaims("")
+	claims["events"] = map[string]any{backchannelEvent: map[string]any{}}
+	recorded := httptest.NewRecorder()
+
+	held.BackchannelLogout(recorded, logoutRequest(signJWT(claims)))
+
+	if recorded.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusTooManyRequests)
+	}
+	if idp.keyReads() != 0 {
+		t.Fatalf("jwks reads = %d, want 0", idp.keyReads())
+	}
+	for _, release := range releases {
+		release()
+	}
+	recorded = httptest.NewRecorder()
+	held.BackchannelLogout(recorded, logoutRequest(signJWT(claims)))
+	if recorded.Code != http.StatusOK {
+		t.Fatalf("status after release = %d, want %d", recorded.Code, http.StatusOK)
 	}
 }
 

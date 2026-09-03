@@ -4,6 +4,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -27,6 +29,7 @@ const (
 type serving struct {
 	on          bool
 	publicURL   string
+	unsafeHTTP  bool
 	impersonate bool
 	auth        auth.Config
 }
@@ -34,6 +37,7 @@ type serving struct {
 type clusterFlags struct {
 	on            *bool
 	publicURL     *string
+	unsafeHTTP    *bool
 	impersonate   *bool
 	mode          *string
 	allowAnon     *bool
@@ -49,6 +53,7 @@ type clusterFlags struct {
 	proxyHeader   *string
 	proxyFile     *string
 	proxyLogout   *string
+	proxyWSMaxAge *time.Duration
 	issuer        *string
 	inner         *string
 	clientID      *string
@@ -63,6 +68,7 @@ type clusterFlags struct {
 	postLogout    *string
 	caCert        *string
 	skipVerify    *bool
+	issuerHTTP    *bool
 	backchannel   *bool
 }
 
@@ -70,6 +76,7 @@ func registerCluster(flags *flag.FlagSet) *clusterFlags {
 	return &clusterFlags{
 		on:            flags.Bool("cluster-mode", envBool("SPINOZA_CLUSTER_MODE"), "serve a cluster to a team instead of running as your own local window"),
 		publicURL:     flags.String("public-url", envOr("SPINOZA_PUBLIC_URL", ""), "the http(s) origin browsers reach spinoza at, such as https://spinoza.example.com"),
+		unsafeHTTP:    flags.Bool("unsafe-allow-http", envBool("SPINOZA_UNSAFE_ALLOW_HTTP"), "allow plaintext non-loopback browser sessions; exposes credentials and cluster data to the network"),
 		impersonate:   flags.Bool("impersonate", envUnless("SPINOZA_IMPERSONATE"), "act on the cluster as the signed-in user, so kubernetes rbac decides what they may do"),
 		mode:          flags.String("auth-mode", envOr("SPINOZA_AUTH_MODE", auth.ModeNone), "how people sign in: none, proxy or oidc"),
 		allowAnon:     flags.Bool("allow-anonymous-admin", envBool("SPINOZA_ALLOW_ANONYMOUS_ADMIN"), "allow unauthenticated cluster-mode requests to act as administrators"),
@@ -85,6 +92,7 @@ func registerCluster(flags *flag.FlagSet) *clusterFlags {
 		proxyHeader:   flags.String("auth-proxy-secret-header", envOr("SPINOZA_AUTH_PROXY_SECRET_HEADER", auth.DefaultProxyAuthHeader), "header your auth proxy puts its shared secret in"),
 		proxyFile:     flags.String("auth-proxy-secret-file", envOr("SPINOZA_AUTH_PROXY_SECRET_FILE", ""), "file holding the secret that authenticates your proxy"),
 		proxyLogout:   flags.String("auth-proxy-logout-url", envOr("SPINOZA_AUTH_PROXY_LOGOUT_URL", ""), "where signing out sends the browser when a proxy holds the session"),
+		proxyWSMaxAge: flags.Duration("auth-proxy-websocket-max-age", envDuration("SPINOZA_AUTH_PROXY_WEBSOCKET_MAX_AGE", auth.DefaultProxyWSMaxAge), "maximum lifetime of a proxy-authenticated websocket before fresh proxy headers are required"),
 		issuer:        flags.String("auth-oidc-issuer", envOr("SPINOZA_AUTH_OIDC_ISSUER", ""), "your identity provider, such as https://keycloak.example.com/realms/main"),
 		inner:         flags.String("auth-oidc-internal-issuer", envOr("SPINOZA_AUTH_OIDC_INTERNAL_ISSUER", ""), "the same provider on the address this pod can reach, when it differs from the browser's"),
 		clientID:      flags.String("auth-oidc-client-id", envOr("SPINOZA_AUTH_OIDC_CLIENT_ID", ""), "the client spinoza is registered as"),
@@ -99,6 +107,7 @@ func registerCluster(flags *flag.FlagSet) *clusterFlags {
 		postLogout:    flags.String("auth-oidc-post-logout-url", envOr("SPINOZA_AUTH_OIDC_POST_LOGOUT_URL", ""), "where the provider sends the browser after signing out; register it there first"),
 		caCert:        flags.String("auth-oidc-ca-cert", envOr("SPINOZA_AUTH_OIDC_CA_CERT", ""), "certificate authority to trust when talking to the provider"),
 		skipVerify:    flags.Bool("auth-oidc-insecure-skip-verify", envBool("SPINOZA_AUTH_OIDC_INSECURE_SKIP_VERIFY"), "do not verify the provider's certificate; for a lab, never for real use"),
+		issuerHTTP:    flags.Bool("auth-oidc-unsafe-allow-http", envBool("SPINOZA_AUTH_OIDC_UNSAFE_ALLOW_HTTP"), "allow plaintext non-loopback oidc endpoints; permits network authentication compromise"),
 		backchannel:   flags.Bool("auth-oidc-backchannel-logout", envBool("SPINOZA_AUTH_OIDC_BACKCHANNEL_LOGOUT"), "accept back-channel logout, so disabling somebody at the provider ends their session here"),
 	}
 }
@@ -107,6 +116,7 @@ func (cf *clusterFlags) settings() (serving, error) {
 	out := serving{
 		on:          *cf.on,
 		publicURL:   *cf.publicURL,
+		unsafeHTTP:  *cf.unsafeHTTP,
 		impersonate: *cf.impersonate,
 	}
 	if !out.on {
@@ -139,11 +149,12 @@ func (cf *clusterFlags) settings() (serving, error) {
 		EditorGroups:   auth.ParseList(*cf.editorGroups),
 		ViewerGroups:   auth.ParseList(*cf.viewerGroups),
 		Proxy: auth.ProxyConfig{
-			UserHeader:   *cf.userHeader,
-			GroupsHeader: *cf.groupsHeader,
-			SecretHeader: *cf.proxyHeader,
-			SharedSecret: proxySecret,
-			LogoutURL:    *cf.proxyLogout,
+			UserHeader:      *cf.userHeader,
+			GroupsHeader:    *cf.groupsHeader,
+			SecretHeader:    *cf.proxyHeader,
+			SharedSecret:    proxySecret,
+			LogoutURL:       *cf.proxyLogout,
+			WebSocketMaxAge: *cf.proxyWSMaxAge,
 		},
 		OIDC: auth.OIDCConfig{
 			IssuerURL:          *cf.issuer,
@@ -159,6 +170,7 @@ func (cf *clusterFlags) settings() (serving, error) {
 			PostLogoutURL:      underPublic(*cf.postLogout, out.publicURL, "/"),
 			CACertFile:         *cf.caCert,
 			InsecureSkipVerify: *cf.skipVerify,
+			UnsafeAllowHTTP:    *cf.issuerHTTP,
 			BackchannelLogout:  *cf.backchannel,
 		},
 	}
@@ -169,16 +181,44 @@ func (sv serving) check() error {
 	if !sv.on {
 		return nil
 	}
+	parsed, err := sv.parsePublicURL()
+	if err != nil {
+		return err
+	}
+	if err := sv.checkPublicTransport(parsed); err != nil {
+		return err
+	}
+	if err := sv.checkPublicShape(parsed); err != nil {
+		return err
+	}
+	if sv.unsafeHTTP {
+		slog.Warn("plaintext public http is enabled; network interception can steal sessions and cluster data")
+	}
+	return nil
+}
+
+func (sv serving) parsePublicURL() (*url.URL, error) {
 	if sv.publicURL == "" {
-		return errors.New("cluster mode needs --public-url, the address browsers reach spinoza at")
+		return nil, errors.New("cluster mode needs --public-url, the address browsers reach spinoza at")
 	}
 	parsed, err := url.Parse(sv.publicURL)
 	if err != nil {
-		return fmt.Errorf("public url %q: %w", sv.publicURL, err)
+		return nil, fmt.Errorf("public url %q: %w", sv.publicURL, err)
 	}
+	return parsed, nil
+}
+
+func (sv serving) checkPublicTransport(parsed *url.URL) error {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return fmt.Errorf("public url %q needs to start with http:// or https://", sv.publicURL)
 	}
+	if parsed.Scheme == "http" && !loopbackEndpoint(parsed.Hostname()) && !sv.unsafeHTTP {
+		return fmt.Errorf("public url %q must use https; plaintext http requires --unsafe-allow-http", sv.publicURL)
+	}
+	return nil
+}
+
+func (sv serving) checkPublicShape(parsed *url.URL) error {
 	if parsed.Host == "" {
 		return fmt.Errorf("public url %q names no host", sv.publicURL)
 	}
@@ -205,6 +245,17 @@ func underPublic(given, public, path string) string {
 		return ""
 	}
 	return strings.TrimSuffix(public, "/") + path
+}
+
+func loopbackEndpoint(host string) bool {
+	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
 }
 
 func readSecret(path, fallbackEnv string) ([]byte, error) {

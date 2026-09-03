@@ -44,6 +44,9 @@ spec:
             - --cluster-mode
             - --addr=0.0.0.0:{{ .Values.service.port }}
             - --public-url={{ .Values.publicURL }}
+            {{- if .Values.unsafeAllowHTTP }}
+            - --unsafe-allow-http
+            {{- end }}
             - --log-level={{ .Values.logLevel }}
             - --impersonate={{ .Values.impersonate }}
             - --auth-mode={{ .Values.auth.mode }}
@@ -69,6 +72,7 @@ spec:
             {{- with .Values.auth.proxy.logoutURL }}
             - --auth-proxy-logout-url={{ . }}
             {{- end }}
+            - --auth-proxy-websocket-max-age={{ .Values.auth.proxy.webSocketMaxAge }}
             {{- end }}
             {{- if eq .Values.auth.mode "oidc" }}
             - --auth-oidc-issuer={{ .Values.auth.oidc.issuerURL }}
@@ -100,6 +104,9 @@ spec:
             {{- end }}
             {{- if .Values.auth.oidc.insecureSkipVerify }}
             - --auth-oidc-insecure-skip-verify
+            {{- end }}
+            {{- if .Values.auth.oidc.unsafeAllowHTTP }}
+            - --auth-oidc-unsafe-allow-http
             {{- end }}
             {{- if .Values.auth.oidc.backchannelLogout }}
             - --auth-oidc-backchannel-logout

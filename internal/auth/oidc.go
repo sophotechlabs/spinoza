@@ -235,15 +235,19 @@ func forcedLogin(r *http.Request) bool {
 
 type claimSet map[string]any
 
-func (pr *provider) finish(ctx context.Context, r *http.Request, ss *sessions) (claimSet, string, error) {
+func (pr *provider) readFlow(r *http.Request, ss *sessions) (flowState, error) {
 	var flow flowState
 	held := ss.unstash(r, &flow)
 	if !held {
-		return nil, "", errStateMismatch
+		return flowState{}, errStateMismatch
 	}
 	if r.URL.Query().Get("state") != flow.State {
-		return nil, "", errStateMismatch
+		return flowState{}, errStateMismatch
 	}
+	return flow, nil
+}
+
+func (pr *provider) exchange(ctx context.Context, r *http.Request, flow flowState) (claimSet, string, error) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		return nil, "", refusedBy(r)

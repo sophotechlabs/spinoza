@@ -8,6 +8,10 @@ var errNoProvider = errors.New("spinoza was not started with an identity provide
 
 var errStateMismatch = errors.New("the login did not come back with the state spinoza sent; start again")
 
+var errFlowReplay = errors.New("this login callback was already used; start again")
+
+var errFlowRegistryFull = errors.New("too many login callbacks are awaiting expiry; try again")
+
 var errNoIDToken = errors.New("the identity provider returned no id token")
 
 var errNonceMismatch = errors.New("the id token carries a nonce spinoza did not send")
