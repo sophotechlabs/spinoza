@@ -9,6 +9,8 @@ import type {
   GraphNodeCategory,
   ReadyState,
 } from './types';
+import { entityLabelText } from './entityLabel';
+import type { EntityDetail } from './entityLabel';
 
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 44;
@@ -92,14 +94,34 @@ export function busiestNamespace(graph: Graph): string {
   return busiest;
 }
 
-export function nodeLabel(node: GraphNode): string {
+function graphIdentityDetail(node: GraphNode, nodes: GraphNode[]): EntityDetail {
+  const named = nodes.filter((other) => other.name === node.name);
+  if (named.length < 2) {
+    return {};
+  }
+  const detail: EntityDetail = { kind: true };
+  const sameKind = named.filter((other) => other.kind === node.kind);
+  if (sameKind.length < 2) {
+    return detail;
+  }
+  detail.namespace = true;
+  const sameScope = sameKind.filter((other) => other.namespace === node.namespace);
+  if (sameScope.length < 2) {
+    return detail;
+  }
+  detail.apiVersion = true;
+  return detail;
+}
+
+export function nodeLabel(node: GraphNode, nodes: GraphNode[] = [node]): string {
+  const label = entityLabelText(node, graphIdentityDetail(node, nodes));
   if (node.contains === 0) {
-    return node.name;
+    return label;
   }
   if (node.unhealthy === 0) {
-    return `${node.name} ×${String(node.contains)}`;
+    return `${label} ×${String(node.contains)}`;
   }
-  return `${node.name} ×${String(node.contains)} · ${String(node.unhealthy)} not ready`;
+  return `${label} ×${String(node.contains)} · ${String(node.unhealthy)} not ready`;
 }
 
 function edgeAnimated(kind: GraphEdgeKind): boolean {
@@ -121,14 +143,14 @@ function layoutPosition(laid: NodeLabel): { x: number; y: number } {
   return { x, y };
 }
 
-function toFlowNode(g: LayoutGraph, node: GraphNode): GitopsFlowNode {
+function toFlowNode(g: LayoutGraph, node: GraphNode, nodes: GraphNode[]): GitopsFlowNode {
   const laid = g.node(node.id);
   return {
     id: node.id,
     position: layoutPosition(laid),
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
-    data: { label: nodeLabel(node), node },
+    data: { label: nodeLabel(node, nodes), node },
     className: nodeClassName(node.category, node.ready),
   };
 }
@@ -198,6 +220,18 @@ export function sameGraph(a: Graph, b: Graph): boolean {
     if (node.unhealthy !== other.unhealthy) {
       return false;
     }
+    if (node.kind !== other.kind) {
+      return false;
+    }
+    if (node.group !== other.group) {
+      return false;
+    }
+    if (node.version !== other.version) {
+      return false;
+    }
+    if (node.resource !== other.resource) {
+      return false;
+    }
     return node.namespace === other.namespace;
   });
 }
@@ -209,7 +243,7 @@ export function restyle(flow: GitopsFlow, graph: Graph): GitopsFlow {
       ...node,
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
-      data: { label: nodeLabel(next), node: next },
+      data: { label: nodeLabel(next, graph.nodes), node: next },
       className: nodeClassName(next.category, next.ready),
     };
   });
@@ -227,7 +261,7 @@ export function toFlow(graph: Graph): GitopsFlow {
     g.setEdge(edge.from, edge.to);
   }
   dagre.layout(g);
-  const nodes = graph.nodes.map((node) => toFlowNode(g, node));
+  const nodes = graph.nodes.map((node) => toFlowNode(g, node, graph.nodes));
   const edges = graph.edges.map((edge) => toFlowEdge(edge));
   return { nodes, edges };
 }

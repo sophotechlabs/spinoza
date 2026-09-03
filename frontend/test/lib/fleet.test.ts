@@ -7,10 +7,10 @@ import {
   fetchFleetReleases,
   nodesLabel,
   podsLabel,
-  shortKey,
   skewLabel,
   spreadLabel,
 } from '../../src/lib/fleet';
+import { resourceIdentity } from '../../src/lib/entityLabel';
 
 function stub(body: unknown, ok = true, status = 200) {
   const fetcher = vi.fn((url: string) => {
@@ -118,9 +118,13 @@ describe('what the rows say', () => {
     expect(podsLabel({ running: 0, total: 0, known: false } as never)).toBe('—');
   });
 
-  it('shortens a resource key to its kind', () => {
-    expect(shortKey('apps/v1/deployments')).toBe('deployments');
-    expect(shortKey('pods')).toBe('pods');
+  it('keeps resource, API group, and version identity from an inventory key', () => {
+    expect(resourceIdentity('apps/v1/deployments')).toEqual({
+      name: 'deployments',
+      group: 'apps',
+      version: 'v1',
+    });
+    expect(resourceIdentity('/v1/pods')).toEqual({ name: 'pods', group: '', version: 'v1' });
   });
 
   it('names the drift when a repo runs at two tags', () => {

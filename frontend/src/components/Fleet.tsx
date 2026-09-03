@@ -3,7 +3,6 @@ import type { FleetApp, FleetCluster, FleetImage, FleetKind, HelmRelease } from 
 import {
   nodesLabel,
   podsLabel,
-  shortKey,
   skewLabel,
   spreadLabel,
   useFleetGitops,
@@ -18,6 +17,8 @@ import { CONTROL } from '../lib/controls';
 import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import Loading from './Loading';
+import EntityLabel from './EntityLabel';
+import { resourceIdentity } from '../lib/entityLabel';
 
 interface FleetProps {
   onPick: (cluster: string) => void;
@@ -79,11 +80,11 @@ function Clusters({ onPick }: FleetProps) {
           ))}
           <tr className="border-t border-edge-strong text-fg-soft">
             <td className="px-2 py-1">Everything open</td>
-            <td className="px-2 py-1">{warnings}</td>
+            <td className="px-2 py-1 text-fg-muted">—</td>
             <td className="px-2 py-1">{nodesLabel(data.nodes)}</td>
             <td className="px-2 py-1">{podsLabel(data.pods)}</td>
-            <td className="px-2 py-1" />
-            <td className="px-2 py-1" />
+            <td className="px-2 py-1">{warnings}</td>
+            <td className="px-2 py-1 text-fg-muted">—</td>
           </tr>
         </tbody>
       </table>
@@ -128,19 +129,33 @@ function Inventory() {
     <div className="min-h-0 flex-1 overflow-auto">
       {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
       <ul>
-        {data.kinds.map((kind) => (
-          <Kind key={kind.key} kind={kind} />
-        ))}
+        {data.kinds.map((kind) => {
+          const identity = resourceIdentity(kind.key);
+          const collision = data.kinds.some((other) => {
+            if (other.key === kind.key) {
+              return false;
+            }
+            return resourceIdentity(other.key).name === identity.name;
+          });
+          return <Kind key={kind.key} kind={kind} showApiVersion={collision} />;
+        })}
       </ul>
       {data.kinds.length === 0 && <p className="p-3 text-fg-muted">Nothing counted yet.</p>}
     </div>
   );
 }
 
-function Kind({ kind }: { kind: FleetKind }) {
+function Kind({ kind, showApiVersion }: { kind: FleetKind; showApiVersion: boolean }) {
+  const identity = resourceIdentity(kind.key);
   return (
     <li className="flex items-baseline gap-3 border-b border-edge px-2 py-1">
-      <span className="w-56 shrink-0 truncate text-fg-strong">{shortKey(kind.key)}</span>
+      <EntityLabel
+        name={identity.name}
+        group={identity.group}
+        version={identity.version}
+        detail={{ apiVersion: showApiVersion }}
+        className="w-56 shrink-0"
+      />
       <span className="w-16 shrink-0 text-right text-fg-soft">{kind.total}</span>
       <span className="w-20 shrink-0 text-right text-error">
         {kind.failing !== undefined && kind.failing > 0 ? `${String(kind.failing)} unwell` : ''}
@@ -256,7 +271,32 @@ function Delivery() {
       {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
       <ul>
         {data.apps.map((app) => (
-          <App key={`${app.cluster}/${app.namespace}/${app.name}`} app={app} open={open} />
+          <App
+            key={`${app.cluster}/${app.group}/${app.version}/${app.resource}/${app.namespace}/${app.name}`}
+            app={app}
+            open={open}
+            showApiVersion={data.apps.some((other) => {
+              if (other === app) {
+                return false;
+              }
+              if (other.name !== app.name) {
+                return false;
+              }
+              if (other.kind !== app.kind) {
+                return false;
+              }
+              if (other.namespace !== app.namespace) {
+                return false;
+              }
+              if (other.cluster !== app.cluster) {
+                return false;
+              }
+              if (other.group !== app.group) {
+                return true;
+              }
+              return other.version !== app.version;
+            })}
+          />
         ))}
       </ul>
       {data.apps.length === 0 && <p className="p-3 text-fg-muted">Nothing is delivered here.</p>}
@@ -264,13 +304,26 @@ function Delivery() {
   );
 }
 
-function App({ app, open }: { app: FleetApp; open: number }) {
+function App({
+  app,
+  open,
+  showApiVersion,
+}: {
+  app: FleetApp;
+  open: number;
+  showApiVersion: boolean;
+}) {
   const spread = spreadLabel(app.spread, open);
   return (
     <li className="flex items-baseline gap-3 border-b border-edge px-2 py-1">
-      <span className="w-56 shrink-0 truncate text-fg-strong" title={app.name}>
-        {app.name}
-      </span>
+      <EntityLabel
+        name={app.name}
+        kind={app.kind}
+        group={app.group}
+        version={app.version}
+        detail={{ kind: true, apiVersion: showApiVersion }}
+        className="w-56 shrink-0"
+      />
       <span className="w-20 shrink-0 truncate text-fg-muted">{app.engine}</span>
       <span className="w-40 shrink-0 truncate text-fg-muted">{app.namespace}</span>
       <span className="w-40 shrink-0">

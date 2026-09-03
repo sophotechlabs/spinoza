@@ -129,11 +129,6 @@ export function podsLabel(pods: PodSummary): string {
   return `${String(pods.running)}/${String(pods.total)}`;
 }
 
-export function shortKey(key: string): string {
-  const parts = key.split('/');
-  return parts[parts.length - 1];
-}
-
 export function spreadLabel(spread: number | undefined, open: number): string {
   if (spread === undefined || open < 2) {
     return '';

@@ -448,7 +448,7 @@ describe('the canvas fits itself to the graph it was given', () => {
     );
 
     render(<TopologyGraph openedOn={null} />);
-    await screen.findByText('api ×3 · 1 not ready');
+    await screen.findByText('api · Deployment ×3 · 1 not ready');
 
     expect(fitViewSpy).toHaveBeenCalled();
   });
@@ -460,7 +460,7 @@ describe('the canvas fits itself to the graph it was given', () => {
     );
 
     render(<TopologyGraph openedOn={null} />);
-    await screen.findByText('api ×3 · 1 not ready');
+    await screen.findByText('api · Deployment ×3 · 1 not ready');
 
     expect(screen.getByTestId('react-flow').getAttribute('data-edges')).toBe('1');
   });
@@ -469,7 +469,7 @@ describe('the canvas fits itself to the graph it was given', () => {
     urlsFor({}, { nodes: [folded, leaf], edges: [] });
 
     render(<TopologyGraph openedOn={null} />);
-    await screen.findByText('api ×3 · 1 not ready');
+    await screen.findByText('api · Deployment ×3 · 1 not ready');
 
     expect(screen.getByTestId('react-flow').getAttribute('data-sized')).toBe('2');
   });

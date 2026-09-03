@@ -239,6 +239,31 @@ describe('comparing one poll against the last', () => {
     expect(sameGraph(single, moved)).toBe(false);
   });
 
+  it('spots node identity changes that affect the visible label', () => {
+    const identity = makeGraphNode({
+      id: 'a',
+      name: 'alpha',
+      kind: 'Deployment',
+      group: 'apps',
+      version: 'v1',
+      resource: 'deployments',
+    });
+    const before: Graph = { nodes: [identity], edges: [] };
+
+    expect(sameGraph(before, { nodes: [{ ...identity, kind: 'StatefulSet' }], edges: [] })).toBe(
+      false,
+    );
+    expect(sameGraph(before, { nodes: [{ ...identity, group: 'extensions' }], edges: [] })).toBe(
+      false,
+    );
+    expect(sameGraph(before, { nodes: [{ ...identity, version: 'v1beta1' }], edges: [] })).toBe(
+      false,
+    );
+    expect(
+      sameGraph(before, { nodes: [{ ...identity, resource: 'statefulsets' }], edges: [] }),
+    ).toBe(false);
+  });
+
   it('spots a partial-failure message that appeared', () => {
     expect(sameGraph(graph(), graph({ error: 'buckets: forbidden' }))).toBe(false);
   });
@@ -326,6 +351,44 @@ describe('nodeLabel', () => {
     expect(nodeLabel(makeGraphNode({ name: 'api', contains: 40, unhealthy: 2 }))).toBe(
       'api ×40 · 2 not ready',
     );
+  });
+
+  it('adds Kind only when node names collide', () => {
+    const deployment = makeGraphNode({ id: 'deployment', name: 'podinfo', kind: 'Deployment' });
+    const service = makeGraphNode({ id: 'service', name: 'podinfo', kind: 'Service' });
+
+    expect(nodeLabel(deployment, [deployment, service])).toBe('podinfo · Deployment');
+    expect(nodeLabel(service, [deployment, service])).toBe('podinfo · Service');
+  });
+
+  it('adds namespace when names and Kinds still collide', () => {
+    const production = makeGraphNode({ id: 'production', name: 'podinfo', namespace: 'prod' });
+    const staging = makeGraphNode({ id: 'staging', name: 'podinfo', namespace: 'staging' });
+
+    expect(nodeLabel(production, [production, staging])).toBe('podinfo · GitRepository · prod');
+    expect(nodeLabel(staging, [production, staging])).toBe('podinfo · GitRepository · staging');
+  });
+
+  it('adds scope and API identity only while a collision remains', () => {
+    const stable = makeGraphNode({
+      id: 'stable',
+      name: 'events',
+      kind: 'Event',
+      group: '',
+      version: 'v1',
+      namespace: 'prod',
+    });
+    const newer = makeGraphNode({
+      id: 'newer',
+      name: 'events',
+      kind: 'Event',
+      group: 'events.k8s.io',
+      version: 'v1',
+      namespace: 'prod',
+    });
+
+    expect(nodeLabel(stable, [stable, newer])).toBe('events · Event · prod · core/v1');
+    expect(nodeLabel(newer, [stable, newer])).toBe('events · Event · prod · events.k8s.io/v1');
   });
 });
 

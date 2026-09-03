@@ -65,8 +65,10 @@ describe('the fleet view', () => {
     expect(await screen.findByText('v1.34.1')).toBeTruthy();
     expect(screen.getByText('v1.33.0')).toBeTruthy();
     const total = screen.getByRole('row', { name: /Everything open/ });
-    expect(within(total).getByText('Everything open')).toBeTruthy();
-    expect(within(total).getByText('5')).toBeTruthy();
+    const cells = within(total)
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent);
+    expect(cells).toEqual(['Everything open', '—', '6/6', '57/60', '5', '—']);
     expect(screen.getByText('60/57'.replace('60/57', '57/60'))).toBeTruthy();
   });
 
@@ -126,6 +128,32 @@ describe('the fleet view', () => {
 
     expect(await screen.findByText('pods')).toBeTruthy();
     expect(screen.getByText('2 unwell')).toBeTruthy();
+  });
+
+  it('adds API identity only when inventory resource names collide', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      '/api/overview/fleet': { clusters: [], nodes: nodes(0, 0), pods: pods(0, 0, false) },
+      '/api/resources/fleet': {
+        kinds: [
+          { key: '/v1/events', total: 4, perCluster: { [MK1]: 4 } },
+          { key: 'events.k8s.io/v1/events', total: 6, perCluster: { [MK1]: 6 } },
+          { key: '/v1/pods', total: 2, perCluster: { [MK1]: 2 } },
+        ],
+      },
+    });
+    render(<Fleet onPick={vi.fn()} />);
+    await screen.findByText('Everything open');
+
+    await user.click(screen.getByRole('button', { name: 'What is on them' }));
+
+    expect(await screen.findByText('core/v1', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('events.k8s.io/v1', { exact: false })).toBeInTheDocument();
+    const podsLabel = screen.getByText('pods').parentElement;
+    expect(podsLabel).toHaveTextContent(/^pods$/);
   });
 
   it('lists the images and the drift between them', async () => {
@@ -304,6 +332,105 @@ describe('the fleet view', () => {
 
     expect(await screen.findByText('platform')).toBeTruthy();
     expect(screen.getByText('everywhere')).toBeTruthy();
+  });
+
+  it('shows the kinds of same-name delivery objects', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      '/api/overview/fleet': { clusters: [], nodes: nodes(0, 0), pods: pods(0, 0, false) },
+      '/api/gitops/fleet': {
+        apps: [
+          {
+            cluster: MK1,
+            engine: 'flux',
+            kind: 'Kustomization',
+            group: 'kustomize.toolkit.fluxcd.io',
+            version: 'v1',
+            resource: 'kustomizations',
+            name: 'podinfo',
+            namespace: 'flux-system',
+            ready: 'True',
+          },
+          {
+            cluster: MK2,
+            engine: 'argo',
+            kind: 'Application',
+            group: 'argoproj.io',
+            version: 'v1alpha1',
+            resource: 'applications',
+            name: 'podinfo',
+            namespace: 'argocd',
+            ready: 'True',
+          },
+        ],
+      },
+    });
+    render(<Fleet onPick={vi.fn()} />);
+    await screen.findByText('Everything open');
+
+    await user.click(screen.getByRole('button', { name: 'Delivery' }));
+
+    expect(await screen.findByText('Kustomization', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Application', { exact: false })).toBeInTheDocument();
+    expect(screen.getAllByText('podinfo')).toHaveLength(2);
+  });
+
+  it('adds API identity only after name, Kind, namespace, and cluster still collide', async () => {
+    const user = userEvent.setup();
+    const base = {
+      cluster: MK1,
+      engine: 'flux',
+      kind: 'Kustomization',
+      group: 'kustomize.toolkit.fluxcd.io',
+      version: 'v1',
+      resource: 'kustomizations',
+      name: 'checkout',
+      namespace: 'flux-system',
+      ready: 'True',
+    };
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      '/api/overview/fleet': { clusters: [], nodes: nodes(0, 0), pods: pods(0, 0, false) },
+      '/api/gitops/fleet': {
+        apps: [
+          base,
+          { ...base, name: 'different' },
+          {
+            ...base,
+            kind: 'HelmRelease',
+            group: 'helm.toolkit.fluxcd.io',
+            resource: 'helmreleases',
+          },
+          { ...base, namespace: 'staging' },
+          { ...base, cluster: MK2 },
+          {
+            ...base,
+            group: 'argoproj.io',
+            version: 'v1alpha1',
+            resource: 'applications',
+          },
+          { ...base, name: 'billing' },
+          { ...base, name: 'billing', version: 'v1beta1' },
+        ],
+      },
+    });
+    render(<Fleet onPick={vi.fn()} />);
+    await screen.findByText('Everything open');
+
+    await user.click(screen.getByRole('button', { name: 'Delivery' }));
+
+    expect(
+      await screen.findAllByText('· Kustomization · kustomize.toolkit.fluxcd.io/v1'),
+    ).toHaveLength(2);
+    expect(screen.getByText('· Kustomization · argoproj.io/v1alpha1')).toBeInTheDocument();
+    expect(
+      screen.getByText('· Kustomization · kustomize.toolkit.fluxcd.io/v1beta1'),
+    ).toBeInTheDocument();
   });
 
   it('says so when the releases cannot be read', async () => {
