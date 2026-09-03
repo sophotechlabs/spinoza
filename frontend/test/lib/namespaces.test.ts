@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { fetchNamespaces, useNamespaces } from '../../src/lib/namespaces';
 import { ALL, settle, useNamespaceStore } from '../../src/store/namespace';
 import { useClustersStore } from '../../src/store/clusters';
+import { useToastsStore } from '../../src/store/toasts';
 import { MK1, MK2, showing } from '../helpers-clusters';
 
 function stub(body: unknown, ok = true, status = 200) {
@@ -16,6 +17,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   useNamespaceStore.getState().reset();
   useClustersStore.getState().reset();
+  useToastsStore.getState().clear();
 });
 
 describe('fetchNamespaces', () => {
@@ -66,6 +68,38 @@ describe('settle', () => {
 });
 
 describe('useNamespaces', () => {
+  it('keeps the last namespace list and reports a failed refresh', async () => {
+    showing(MK1);
+    useNamespaceStore.getState().offer(MK1, ['default', 'shop']);
+    stub({ names: [], error: 'namespaces is forbidden' });
+
+    renderHook(() => {
+      useNamespaces();
+    });
+
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts.at(-1)?.message).toBe(
+        'Listing namespaces: namespaces is forbidden',
+      );
+    });
+    expect(useNamespaceStore.getState().byCluster[MK1]?.names).toEqual(['default', 'shop']);
+  });
+
+  it('reports a namespace request that failed outright', async () => {
+    showing(MK1);
+    stub({ message: 'no cluster' }, false, 503);
+
+    renderHook(() => {
+      useNamespaces();
+    });
+
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts.at(-1)?.message).toBe(
+        'Listing namespaces: no cluster',
+      );
+    });
+  });
+
   it('waits for a cluster before asking for its namespaces', async () => {
     useClustersStore.getState().reset();
     stub({ names: ['default', 'e2e'] });
