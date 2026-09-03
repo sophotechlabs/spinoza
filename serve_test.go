@@ -6,12 +6,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"k8s.io/klog/v2"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
@@ -27,6 +30,81 @@ type wiredMode struct {
 
 type idleExitRecorder struct {
 	quit func()
+}
+
+func useServerArgs(t *testing.T, args ...string) {
+	t.Helper()
+	original := os.Args
+	os.Args = append([]string{"spinoza"}, args...)
+	t.Cleanup(func() {
+		os.Args = original
+	})
+}
+
+func preserveServerLogger(t *testing.T) {
+	t.Helper()
+	previous := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+		klog.SetSlogLogger(previous)
+	})
+}
+
+func TestRunReportsAnInvalidLogLevel(t *testing.T) {
+	useServerArgs(t, "-log-level", "verbose")
+
+	err := run()
+
+	if err == nil || !strings.Contains(err.Error(), "log level") {
+		t.Fatalf("error = %v, want the invalid log level", err)
+	}
+}
+
+func TestRunRefusesANonLoopbackLocalAddress(t *testing.T) {
+	preserveServerLogger(t)
+	useServerArgs(t, "-addr", "0.0.0.0:34115")
+
+	err := run()
+
+	if err == nil || !strings.Contains(err.Error(), "not loopback") {
+		t.Fatalf("error = %v, want the loopback boundary", err)
+	}
+}
+
+func TestRunReportsAnExplicitContextThatCannotOpen(t *testing.T) {
+	preserveServerLogger(t)
+	config := filepath.Join(t.TempDir(), "missing-kubeconfig")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	useServerArgs(t, "-kubeconfig", config, "-context", "missing")
+
+	err := run()
+
+	if err == nil || !strings.Contains(err.Error(), config) {
+		t.Fatalf("error = %v, want kubeconfig %q named", err, config)
+	}
+}
+
+func TestRunRemovesItsTokenAfterServerStartupFails(t *testing.T) {
+	preserveServerLogger(t)
+	configDir := t.TempDir()
+	config := filepath.Join(configDir, "missing-kubeconfig")
+	token := filepath.Join(configDir, "access-token")
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+	useServerArgs(
+		t,
+		"-addr", "127.0.0.1:not-a-port",
+		"-kubeconfig", config,
+		"-token-file", token,
+	)
+
+	err := run()
+
+	if err == nil || !strings.Contains(err.Error(), "server:") {
+		t.Fatalf("error = %v, want the listener startup failure", err)
+	}
+	if _, statErr := os.Stat(token); !os.IsNotExist(statErr) {
+		t.Fatalf("token file error = %v, want it removed", statErr)
+	}
 }
 
 func (r *idleExitRecorder) UseIdleExit(quit func()) {
