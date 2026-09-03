@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"net/http"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -29,11 +30,25 @@ func writeGroup(out *csv.Writer, report api.CheckReport, group api.CheckGroup) {
 		if finding.Ref >= 0 && finding.Ref < len(report.Objects) {
 			object = report.Objects[finding.Ref]
 		}
-		_ = out.Write([]string{
+		_ = out.Write(spreadsheetCells([]string{
 			group.ID, group.Title, group.Category, group.Severity,
 			object.Kind, object.Namespace, object.Name,
 			finding.Container, finding.Detail,
 			strconv.FormatBool(finding.New), strconv.FormatBool(finding.Muted), finding.Reason,
-		})
+		}))
 	}
+}
+
+func spreadsheetCells(cells []string) []string {
+	for at, value := range cells {
+		if value == "" {
+			continue
+		}
+		first, _ := utf8.DecodeRuneInString(value)
+		switch first {
+		case '=', '+', '-', '@', '\t', '\r', '\n', 0, '＝', '＋', '－', '＠':
+			cells[at] = "'" + value
+		}
+	}
+	return cells
 }

@@ -549,6 +549,28 @@ func TestTheExportObeysTheFilterTheViewIsShowing(t *testing.T) {
 	}
 }
 
+func TestTheExportNeutralizesSpreadsheetFormulas(t *testing.T) {
+	ts, _ := dashboardPair(t, newPodObject("prod", "web-0"))
+	reason := `=HYPERLINK("https://attacker.example","Open")`
+	resp := send(t, http.MethodPost, ts.URL+"/api/checks/mutes", api.Mute{
+		Check: "requests-missing", Ref: "/v1/pods/prod/web-0", Reason: reason,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("mute status = %d, want 200", resp.StatusCode)
+	}
+
+	rows := readCSV(t, getRaw(t, ts.URL+"/api/checks/export?showMuted=true"))
+	for _, row := range rows[1:] {
+		if row[11] == "'"+reason {
+			return
+		}
+		if row[11] == reason {
+			t.Fatalf("exported executable spreadsheet formula %q", row[11])
+		}
+	}
+	t.Fatal("export carried no row with the mute reason")
+}
+
 func TestTheBaselineCanBeSavedToAFileAndTakenBack(t *testing.T) {
 	ts, srv := dashboardPair(t, newPodObject("prod", "web-0"))
 	srv.UseBaselines(newHeldBaselines())
