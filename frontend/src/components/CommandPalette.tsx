@@ -18,6 +18,8 @@ interface CommandPaletteProps {
   onOpenObject: (found: PaletteOpen) => void;
 }
 
+const MAX_MATCHES = 60;
+
 function rowClass(active: boolean): string {
   const base = 'flex w-full items-baseline gap-2 px-3 py-1.5 text-left';
   if (active) {
@@ -129,8 +131,9 @@ export default function CommandPalette({
     ...matchItems(paletteItems(categories, recents, traffic.available), query),
     ...clusterItems(hits, categories),
   ];
+  const shownMatches = matches.slice(0, MAX_MATCHES);
   let active = cursor;
-  if (active >= matches.length) {
+  if (active < 0 || active >= shownMatches.length) {
     active = 0;
   }
 
@@ -155,7 +158,11 @@ export default function CommandPalette({
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setCursor((value) => Math.min(value + 1, matches.length - 1));
+      if (shownMatches.length === 0) {
+        setCursor(0);
+        return;
+      }
+      setCursor((value) => Math.min(value + 1, shownMatches.length - 1));
       return;
     }
     if (event.key === 'ArrowUp') {
@@ -167,10 +174,10 @@ export default function CommandPalette({
       return;
     }
     event.preventDefault();
-    if (matches.length === 0) {
+    if (shownMatches.length === 0) {
       return;
     }
-    run(matches[active]);
+    run(shownMatches[active]);
   }
 
   return (
@@ -200,8 +207,13 @@ export default function CommandPalette({
             Some of the cluster could not be searched.
           </p>
         )}
+        {shownMatches.length < matches.length && (
+          <p className="border-b border-edge px-3 py-1 text-fg-muted">
+            Showing the first {MAX_MATCHES} matches. Narrow the search to see the rest.
+          </p>
+        )}
         <ul className="max-h-80 overflow-y-auto py-1">
-          {matches.slice(0, 60).map((item, index) => (
+          {shownMatches.map((item, index) => (
             <li key={item.id}>
               <button
                 type="button"

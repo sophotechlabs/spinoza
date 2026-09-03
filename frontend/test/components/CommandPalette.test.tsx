@@ -144,12 +144,16 @@ describe('CommandPalette', () => {
 
   it('says so when nothing matches', async () => {
     const user = userEvent.setup();
-    renderPalette();
+    const { onSelectView, onSelectResource, onOpenObject } = renderPalette();
     await screen.findByRole('button', { name: /Pod/ });
 
     await user.type(screen.getByLabelText(/Search resources/), 'zzzz');
+    await user.keyboard('{ArrowDown}{Enter}');
 
     expect(screen.getByText('Nothing matches that.')).toBeInTheDocument();
+    expect(onSelectView).not.toHaveBeenCalled();
+    expect(onSelectResource).not.toHaveBeenCalled();
+    expect(onOpenObject).not.toHaveBeenCalled();
   });
 
   it('opens the clicked kind and closes', async () => {
@@ -193,6 +197,36 @@ describe('CommandPalette', () => {
     await user.keyboard('{ArrowUp}{ArrowUp}{Enter}');
 
     expect(onSelectView).toHaveBeenCalledWith('cluster');
+  });
+
+  it('keeps keyboard selection inside the rendered result cap', async () => {
+    const user = userEvent.setup();
+    const hits = Array.from({ length: 61 }, (_, index) => ({
+      ...clusterHit,
+      name: `web-${String(index).padStart(2, '0')}`,
+    }));
+    stubSearch({ hits });
+    const { onOpenObject } = renderPalette();
+
+    await user.type(screen.getByLabelText(/Search resources/), 'web');
+    expect(await screen.findByRole('button', { name: /web-59/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /web-60/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Showing the first 60 matches/)).toBeInTheDocument();
+    await user.keyboard('{ArrowDown}'.repeat(80));
+    await user.keyboard('{Enter}');
+
+    expect(onOpenObject).toHaveBeenCalledWith({
+      ref: {
+        group: 'apps',
+        version: 'v1',
+        resource: 'deployments',
+        namespace: 'airbyte',
+        name: 'web-59',
+      },
+      type: deploymentType,
+      filter: 'web',
+      cluster: undefined,
+    });
   });
 
   it('opens a recent object straight from the top of the list', async () => {
