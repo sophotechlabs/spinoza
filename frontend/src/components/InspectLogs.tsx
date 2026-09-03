@@ -147,9 +147,12 @@ export default function InspectLogs({
 
   const podKey = `${namespace}/${pod}`;
   const [lastPod, setLastPod] = useState(podKey);
+  const firstContainer = containers[0] ?? '';
   if (podKey !== lastPod) {
     setLastPod(podKey);
-    setContainer(containers[0] ?? '');
+    setContainer(firstContainer);
+  } else if (!containers.includes(container) && container !== firstContainer) {
+    setContainer(firstContainer);
   }
 
   const subId = useLogStream({

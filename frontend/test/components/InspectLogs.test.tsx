@@ -69,6 +69,27 @@ describe('InspectLogs', () => {
     );
   });
 
+  it('resets a removed container when the same pod name is recreated', async () => {
+    const user = userEvent.setup();
+    const { subscribeLogs, unsubscribeLogs, view } = renderLogs();
+    await user.selectOptions(screen.getByLabelText('Log container'), 'sidecar');
+
+    view.rerender(
+      <InspectLogs
+        namespace="flux-system"
+        pod="web"
+        containers={['app', 'metrics']}
+        subscribeLogs={subscribeLogs}
+        unsubscribeLogs={unsubscribeLogs}
+      />,
+    );
+
+    expect(subscribeLogs).toHaveBeenLastCalledWith(
+      liveSubId(subscribeLogs),
+      expect.objectContaining({ name: 'web', container: 'app' }),
+    );
+  });
+
   it('subscribes with no container when the pod reports none', () => {
     const { subscribeLogs } = renderLogs({ containers: [] });
 
