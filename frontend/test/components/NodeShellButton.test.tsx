@@ -87,13 +87,23 @@ describe('the node shell button', () => {
     expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
   });
 
-  it('stays off when the question itself fails', () => {
+  it('stays off and explains when the question itself fails', async () => {
     stub({ message: 'nope' }, false);
 
     render(<NodeShellButton node="p-mk1" />);
 
     expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
+    expect(await screen.findByTitle('nope')).toBeInTheDocument();
     expect(terminalsNow()).toHaveLength(0);
+  });
+
+  it('explains a support failure that is not an Error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('failed'));
+
+    render(<NodeShellButton node="p-mk1" />);
+
+    expect(await screen.findByTitle('the node shell support check failed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Node shell' })).toBeDisabled();
   });
 
   it('asks again when the setting turns node shells on', async () => {

@@ -13,7 +13,17 @@ interface NodeShellButtonProps {
 const BUTTON =
   'rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint';
 
-function why(support: NodeShellSupport | null): string {
+function failureMessage(err: unknown): string {
+  if (err instanceof Error && err.message !== '') {
+    return err.message;
+  }
+  return 'the node shell support check failed';
+}
+
+function why(support: NodeShellSupport | null, failure: string): string {
+  if (failure !== '') {
+    return failure;
+  }
   if (support === null) {
     return 'Checking whether a node shell can be opened';
   }
@@ -26,6 +36,7 @@ function why(support: NodeShellSupport | null): string {
 export default function NodeShellButton({ node }: NodeShellButtonProps) {
   const epoch = useClusterEpoch();
   const [support, setSupport] = useState<NodeShellSupport | null>(null);
+  const [failure, setFailure] = useState('');
   const [askedFor, setAskedFor] = useState('');
   const openNode = useTerminalsStore((state) => state.openNode);
   const turnedOn = useNodeShell();
@@ -34,27 +45,36 @@ export default function NodeShellButton({ node }: NodeShellButtonProps) {
   useEffect(() => {
     let live = true;
     setSupport(null);
+    setFailure('');
     fetchNodeShellSupport(node)
       .then((found) => {
         if (live) {
           setSupport(found);
+          setFailure('');
           setAskedFor(targetKey);
         }
       })
-      .catch(() => undefined);
+      .catch((err: unknown) => {
+        if (live) {
+          setFailure(failureMessage(err));
+          setAskedFor(targetKey);
+        }
+      });
     return () => {
       live = false;
     };
   }, [node, turnedOn, targetKey, epoch]);
 
   let visibleSupport = support;
+  let visibleFailure = failure;
   if (askedFor !== targetKey) {
     visibleSupport = null;
+    visibleFailure = '';
   }
   const ready = visibleSupport !== null && visibleSupport.enabled && visibleSupport.allowed;
 
   return (
-    <span title={why(visibleSupport)}>
+    <span title={why(visibleSupport, visibleFailure)}>
       <button
         type="button"
         disabled={!ready}
