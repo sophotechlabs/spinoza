@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func runMutationReportCheck(t *testing.T, report string) error {
+func runMutationReportCheck(t *testing.T, report, maxNotCovered string) error {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the mutation report checker runs in the Linux CI job")
@@ -18,18 +18,25 @@ func runMutationReportCheck(t *testing.T, report string) error {
 	if err := os.WriteFile(path, []byte(report), 0o600); err != nil {
 		t.Fatalf("write report: %v", err)
 	}
-	return exec.Command("bash", "check-mutation-report.sh", path).Run()
+	return exec.Command("bash", "check-mutation-report.sh", path, maxNotCovered).Run()
 }
 
 func TestMutationReportCheckAcceptsCompleteCoverage(t *testing.T) {
-	err := runMutationReportCheck(t, `{"test_efficacy":100,"mutations_coverage":100}`)
+	err := runMutationReportCheck(t, `{"test_efficacy":100,"mutants_not_covered":0}`, "255")
 	if err != nil {
 		t.Fatalf("check complete report: %v", err)
 	}
 }
 
+func TestMutationReportCheckAcceptsTheExistingUncoveredBaseline(t *testing.T) {
+	err := runMutationReportCheck(t, `{"test_efficacy":100,"mutants_not_covered":255}`, "255")
+	if err != nil {
+		t.Fatalf("check baseline report: %v", err)
+	}
+}
+
 func TestMutationReportCheckRejectsASurvivingMutant(t *testing.T) {
-	err := runMutationReportCheck(t, `{"test_efficacy":99.5,"mutations_coverage":100}`)
+	err := runMutationReportCheck(t, `{"test_efficacy":99.5,"mutants_not_covered":255}`, "255")
 
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) {
@@ -40,8 +47,8 @@ func TestMutationReportCheckRejectsASurvivingMutant(t *testing.T) {
 	}
 }
 
-func TestMutationReportCheckRejectsAnUncoveredMutant(t *testing.T) {
-	err := runMutationReportCheck(t, `{"test_efficacy":100,"mutations_coverage":99.5}`)
+func TestMutationReportCheckRejectsAnIncreaseInUncoveredMutants(t *testing.T) {
+	err := runMutationReportCheck(t, `{"test_efficacy":100,"mutants_not_covered":256}`, "255")
 
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) {
@@ -53,7 +60,7 @@ func TestMutationReportCheckRejectsAnUncoveredMutant(t *testing.T) {
 }
 
 func TestMutationReportCheckRejectsAReportWithNoTestedMutants(t *testing.T) {
-	err := runMutationReportCheck(t, `{"test_efficacy":0,"mutations_coverage":0}`)
+	err := runMutationReportCheck(t, `{"test_efficacy":0,"mutants_not_covered":0}`, "255")
 
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) {

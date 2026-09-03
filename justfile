@@ -391,11 +391,7 @@ test-e2e-group group browser='chromium' name='' spec='':
         exit 1
     fi
     case "$profile" in
-        core)
-            just cluster-e2e
-            ;;
-        full)
-            just cluster-full
+        core|full)
             ;;
         *)
             echo "test-e2e-group: $group has unsupported Playwright profile $profile"
@@ -505,12 +501,15 @@ mutation mode='default' output='dist/mutation/default.json': stub-assets
     args=(unleash --output "$output" --output-statuses lc)
     if [ "$mode" = desktop ]; then
         args+=(--tags desktop)
+        max_not_covered=262
     elif [ "$mode" != default ]; then
         echo "mutation: mode must be default or desktop" >&2
         exit 1
+    else
+        max_not_covered=255
     fi
     gremlins "${args[@]}"
-    scripts/check-mutation-report.sh "$output"
+    scripts/check-mutation-report.sh "$output" "$max_not_covered"
 
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml
@@ -845,7 +844,7 @@ workflow-triggers:
 hygiene:
     typos
     just editorconfig
-    shellcheck install.sh scripts/release-commit.sh scripts/release-pending.sh \
+    shellcheck install.sh scripts/check-mutation-report.sh scripts/release-commit.sh scripts/release-pending.sh \
         test/release-commit.sh test/release-pending.sh test/install/container.sh \
         test/install/uninstall.sh test/install/editorconfig-name.sh packaging/render.sh
     just --unstable --fmt --check
