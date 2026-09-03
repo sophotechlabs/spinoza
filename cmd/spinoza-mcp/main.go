@@ -30,6 +30,9 @@ func run() error {
 		return err
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	if opts.UnsafeRawOutput {
+		slog.Warn("unsafe raw MCP output is enabled; arbitrary log lines and Helm values can contain credentials that redaction misses")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

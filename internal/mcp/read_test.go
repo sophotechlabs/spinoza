@@ -427,7 +427,7 @@ func TestTopologyWithNothingOpenSendsNoExpandList(t *testing.T) {
 
 func TestPodLogsAreScrubbedAndCapped(t *testing.T) {
 	cluster := &fakeCluster{lines: []string{"starting", "password=hunter2000", "ready"}}
-	server := serverFor(cluster, Options{LogLines: 2})
+	server := serverFor(cluster, Options{LogLines: 2, UnsafeRawOutput: true})
 
 	result := run(t, server, "get_pod_logs", arguments{"namespace": "prod", "name": "web-0"})
 
@@ -440,6 +440,23 @@ func TestPodLogsAreScrubbedAndCapped(t *testing.T) {
 	}
 	if cluster.lastLogs.Namespace != "prod" || cluster.lastLogs.Name != "web-0" {
 		t.Fatalf("request = %+v", cluster.lastLogs)
+	}
+}
+
+func TestRawLogsAreWithheldByDefaultWithoutReadingThePod(t *testing.T) {
+	cluster := &fakeCluster{lines: []string{"ordinary output", "unknown credential"}}
+	server := serverFor(cluster, Options{})
+
+	result := run(t, server, "get_pod_logs", arguments{"namespace": "prod", "name": "web-0"})
+
+	if len(as[[]string](t, result["lines"])) != 0 {
+		t.Fatalf("lines = %v, want none", result["lines"])
+	}
+	if !strings.Contains(as[string](t, result["rawOutput"]), "withheld") {
+		t.Fatalf("raw output note = %v", result["rawOutput"])
+	}
+	if cluster.lastLogs.Name != "" {
+		t.Fatalf("the pod log boundary was called: %+v", cluster.lastLogs)
 	}
 }
 
@@ -456,7 +473,7 @@ func TestPodLogsNeedBothANamespaceAndAName(t *testing.T) {
 
 func TestKeepingOnlyTheLinesThatLookWrong(t *testing.T) {
 	cluster := &fakeCluster{lines: []string{"listening", "ERROR could not connect", "ready"}}
-	server := serverFor(cluster, Options{})
+	server := serverFor(cluster, Options{UnsafeRawOutput: true})
 
 	lines := as[[]string](t, run(t, server, "get_pod_logs", arguments{
 		"namespace": "prod", "name": "web-0", "errorsOnly": true,
@@ -469,7 +486,7 @@ func TestKeepingOnlyTheLinesThatLookWrong(t *testing.T) {
 
 func TestWhenNothingLooksWrongEveryLineComesBack(t *testing.T) {
 	cluster := &fakeCluster{lines: []string{"listening", "ready"}}
-	server := serverFor(cluster, Options{})
+	server := serverFor(cluster, Options{UnsafeRawOutput: true})
 
 	lines := as[[]string](t, run(t, server, "get_pod_logs", arguments{
 		"namespace": "prod", "name": "web-0", "errorsOnly": true,
@@ -486,7 +503,7 @@ func TestWorkloadLogsFollowThePodSelector(t *testing.T) {
 		selector: "app=web",
 		lines:    []string{"one", "two"},
 	}
-	server := serverFor(cluster, Options{})
+	server := serverFor(cluster, Options{UnsafeRawOutput: true})
 
 	result := run(t, server, "get_workload_logs", arguments{
 		"resource": "deployments", "name": "web", "namespace": "prod",
@@ -504,7 +521,7 @@ func TestAWorkloadThatSelectsNoPodsSaysSo(t *testing.T) {
 	cluster := &fakeCluster{
 		catalog: catalogOf(descriptor("apps", "v1", "deployments", "Deployment")),
 	}
-	server := serverFor(cluster, Options{})
+	server := serverFor(cluster, Options{UnsafeRawOutput: true})
 
 	err := refuses(t, server, "get_workload_logs", arguments{
 		"resource": "deployments", "name": "web", "namespace": "prod",
@@ -525,7 +542,7 @@ func TestWorkloadLogsNeedANamespace(t *testing.T) {
 }
 
 func TestLogFailuresComeBack(t *testing.T) {
-	server := serverFor(&fakeCluster{linesErr: errRefused}, Options{})
+	server := serverFor(&fakeCluster{linesErr: errRefused}, Options{UnsafeRawOutput: true})
 
 	if err := refuses(t, server, "get_pod_logs", arguments{"namespace": "prod", "name": "web-0"}); !errors.Is(err, errRefused) {
 		t.Fatalf("error = %v", err)
@@ -534,7 +551,7 @@ func TestLogFailuresComeBack(t *testing.T) {
 		catalog:  catalogOf(descriptor("apps", "v1", "deployments", "Deployment")),
 		selector: "app=web",
 		selErr:   nil,
-	}, Options{})
+	}, Options{UnsafeRawOutput: true})
 	as[*fakeCluster](t, withSelector.cluster).linesErr = errRefused
 	if err := refuses(t, withSelector, "get_workload_logs", arguments{
 		"resource": "deployments", "name": "web", "namespace": "prod",
@@ -544,7 +561,7 @@ func TestLogFailuresComeBack(t *testing.T) {
 	broken := serverFor(&fakeCluster{
 		catalog: catalogOf(descriptor("apps", "v1", "deployments", "Deployment")),
 		selErr:  errRefused,
-	}, Options{})
+	}, Options{UnsafeRawOutput: true})
 	if err := refuses(t, broken, "get_workload_logs", arguments{
 		"resource": "deployments", "name": "web", "namespace": "prod",
 	}); !errors.Is(err, errRefused) {
@@ -614,7 +631,7 @@ func TestHelmReleasesAndOneRelease(t *testing.T) {
 			Values:  "auth:\n  token: not-a-real-value\n",
 		},
 	}
-	server := serverFor(cluster, Options{})
+	server := serverFor(cluster, Options{UnsafeRawOutput: true})
 
 	listed := run(t, server, "list_helm_releases", arguments{})
 	if len(as[[]api.HelmRelease](t, listed["releases"])) != 1 {
@@ -623,6 +640,23 @@ func TestHelmReleasesAndOneRelease(t *testing.T) {
 	one := run(t, server, "get_helm_release", arguments{"namespace": "demo", "name": "podinfo"})
 	if strings.Contains(as[string](t, one["values"]), "not-a-real-value") {
 		t.Fatalf("release values leaked a token: %q", one["values"])
+	}
+}
+
+func TestHelmValuesAreWithheldByDefault(t *testing.T) {
+	cluster := &fakeCluster{release: api.HelmReleaseDetail{
+		Release: api.HelmRelease{Name: "podinfo"},
+		Values:  "license: cannot-be-guaranteed-safe\n",
+	}}
+	server := serverFor(cluster, Options{})
+
+	one := run(t, server, "get_helm_release", arguments{"namespace": "demo", "name": "podinfo"})
+
+	if as[string](t, one["values"]) != "" {
+		t.Fatalf("values = %q, want withheld", one["values"])
+	}
+	if !strings.Contains(as[string](t, one["rawOutput"]), "withheld") {
+		t.Fatalf("raw output note = %v", one["rawOutput"])
 	}
 }
 
@@ -936,7 +970,7 @@ func TestATailOfZeroFallsBackRatherThanLiftingTheLimit(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cluster := &fakeCluster{lines: []string{"one"}}
-			server := serverFor(cluster, Options{LogLines: 25})
+			server := serverFor(cluster, Options{LogLines: 25, UnsafeRawOutput: true})
 
 			run(t, server, "get_pod_logs", arguments{
 				argNamespace: "prod", argName: "web-0", "tail": tc.tail,
@@ -952,7 +986,7 @@ func TestATailOfZeroFallsBackRatherThanLiftingTheLimit(t *testing.T) {
 
 func TestALogReadNeverAsksForEverything(t *testing.T) {
 	cluster := &fakeCluster{lines: []string{"one"}}
-	server := serverFor(cluster, Options{})
+	server := serverFor(cluster, Options{UnsafeRawOutput: true})
 
 	run(t, server, "get_pod_logs", arguments{argNamespace: "prod", argName: "web-0"})
 

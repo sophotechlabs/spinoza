@@ -97,7 +97,7 @@ func (s *Server) registerReads() {
 	s.register(tool{
 		name:        "get_pod_logs",
 		title:       "Pod logs",
-		description: "Logs from one pod, secret-redacted, with errors and warnings kept first.",
+		description: "Logs from one pod. Raw lines are withheld by default because redaction cannot guarantee arbitrary text is safe.",
 		properties: map[string]propOf{
 			argNamespace: text("Pod namespace."),
 			argName:      text("Pod name."),
@@ -111,7 +111,7 @@ func (s *Server) registerReads() {
 	s.register(tool{
 		name:        "get_workload_logs",
 		title:       "Workload logs",
-		description: "Logs from every pod of a workload at once, secret-redacted and deduplicated.",
+		description: "Logs from every pod of a workload. Raw lines are withheld by default because redaction cannot guarantee arbitrary text is safe.",
 		properties: map[string]propOf{
 			argResource:  text("Workload resource or kind, for example deployments."),
 			argName:      text("Workload name."),
@@ -406,6 +406,9 @@ func (s *Server) podLogs(ctx context.Context, args arguments) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !s.unsafeRawOutput {
+		return map[string]any{"pod": name, "lines": []string{}, "rawOutput": rawOutputWithheld}, nil
+	}
 	lines, err := s.readLogs(ctx, logs.Request{
 		Namespace: namespace,
 		Name:      name,
@@ -422,6 +425,9 @@ func (s *Server) workloadLogs(ctx context.Context, args arguments) (any, error) 
 	ref, err := args.refIn(s.cluster.Resources())
 	if err != nil {
 		return nil, err
+	}
+	if !s.unsafeRawOutput {
+		return map[string]any{"workload": ref.Name, "lines": []string{}, "rawOutput": rawOutputWithheld}, nil
 	}
 	selector, err := s.cluster.PodSelector(ctx, ref)
 	if err != nil {
@@ -544,11 +550,18 @@ func (s *Server) helmRelease(ctx context.Context, args arguments) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	values := ""
+	rawOutput := rawOutputWithheld
+	if s.unsafeRawOutput {
+		values = scrubStructuredYAML(detail.Values)
+		rawOutput = "best-effort redaction enabled by unsafe raw-output option"
+	}
 	return map[string]any{
-		"release": detail.Release,
-		"history": detail.History,
-		"values":  scrub(detail.Values),
-		keyError:  detail.Error,
+		"release":   detail.Release,
+		"history":   detail.History,
+		"values":    values,
+		"rawOutput": rawOutput,
+		keyError:    detail.Error,
 	}, nil
 }
 

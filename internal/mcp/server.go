@@ -10,13 +10,14 @@ import (
 )
 
 type Options struct {
-	Version    string
-	Context    string
-	Protected  func() bool
-	AllowWrite bool
-	Prometheus Prometheus
-	LogLines   int
-	CallBudget time.Duration
+	Version         string
+	Context         string
+	Protected       func() bool
+	AllowWrite      bool
+	UnsafeRawOutput bool
+	Prometheus      Prometheus
+	LogLines        int
+	CallBudget      time.Duration
 }
 
 const (
@@ -25,15 +26,16 @@ const (
 )
 
 type Server struct {
-	cluster    Cluster
-	prom       Prometheus
-	tools      map[string]tool
-	version    string
-	context    string
-	protected  func() bool
-	allowWrite bool
-	logLines   int
-	budget     time.Duration
+	cluster         Cluster
+	prom            Prometheus
+	tools           map[string]tool
+	version         string
+	context         string
+	protected       func() bool
+	allowWrite      bool
+	unsafeRawOutput bool
+	logLines        int
+	budget          time.Duration
 }
 
 func New(cluster Cluster, opts Options) *Server {
@@ -46,15 +48,16 @@ func New(cluster Cluster, opts Options) *Server {
 		budget = defaultCallBudget
 	}
 	server := &Server{
-		cluster:    cluster,
-		prom:       opts.Prometheus,
-		tools:      map[string]tool{},
-		version:    opts.Version,
-		context:    opts.Context,
-		protected:  opts.Protected,
-		allowWrite: opts.AllowWrite,
-		logLines:   lines,
-		budget:     budget,
+		cluster:         cluster,
+		prom:            opts.Prometheus,
+		tools:           map[string]tool{},
+		version:         opts.Version,
+		context:         opts.Context,
+		protected:       opts.Protected,
+		allowWrite:      opts.AllowWrite,
+		unsafeRawOutput: opts.UnsafeRawOutput,
+		logLines:        lines,
+		budget:          budget,
 	}
 	server.registerReads()
 	server.registerWrites()
@@ -172,6 +175,11 @@ func (s *Server) instructions() string {
 		lines = append(lines, "Read-only: no tool here can change the cluster.")
 	}
 	lines = append(lines, "Secret values are never returned; key names and sizes are.")
+	if s.unsafeRawOutput {
+		lines = append(lines, "Unsafe raw output is enabled: log lines and Helm values use best-effort redaction that cannot guarantee every credential is removed.")
+	} else {
+		lines = append(lines, "Raw log lines and Helm values are withheld unless the server is explicitly started with the unsafe raw-output option.")
+	}
 	return strings.Join(lines, " ")
 }
 

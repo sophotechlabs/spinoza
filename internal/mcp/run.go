@@ -16,14 +16,15 @@ import (
 var ErrHelp = errors.New("help was asked for")
 
 type Settings struct {
-	Kubeconfig string
-	Context    string
-	PromSpec   string
-	AllowWrite bool
-	LogLines   int
-	SyncWait   time.Duration
-	CallBudget time.Duration
-	Args       []string
+	Kubeconfig      string
+	Context         string
+	PromSpec        string
+	AllowWrite      bool
+	UnsafeRawOutput bool
+	LogLines        int
+	SyncWait        time.Duration
+	CallBudget      time.Duration
+	Args            []string
 }
 
 func Parse(argv []string, out io.Writer) (Settings, error) {
@@ -33,6 +34,7 @@ func Parse(argv []string, out io.Writer) (Settings, error) {
 	kubeContext := flags.String("context", "", "context to use; the kubeconfig's current one when empty")
 	promSpec := flags.String("prometheus", "", "namespace/service:port of Prometheus; discovered when empty")
 	allowWrite := flags.Bool("allow-write", false, "offer the five tools that change the cluster")
+	unsafeRawOutput := flags.Bool("unsafe-raw-output", false, "return best-effort-redacted raw logs and Helm values, which may expose secrets")
 	logLines := flags.Int("log-lines", defaultLogLines, "most log lines any one tool returns")
 	syncWait := flags.Duration("sync-timeout", 30*time.Second, "how long to wait for an informer cache")
 	callBudget := flags.Duration("call-timeout", defaultCallBudget, "how long any one tool may take")
@@ -50,14 +52,15 @@ func Parse(argv []string, out io.Writer) (Settings, error) {
 		return Settings{}, err
 	}
 	return Settings{
-		Kubeconfig: *kubeconfig,
-		Context:    *kubeContext,
-		PromSpec:   *promSpec,
-		AllowWrite: *allowWrite,
-		LogLines:   *logLines,
-		SyncWait:   *syncWait,
-		CallBudget: *callBudget,
-		Args:       flags.Args(),
+		Kubeconfig:      *kubeconfig,
+		Context:         *kubeContext,
+		PromSpec:        *promSpec,
+		AllowWrite:      *allowWrite,
+		UnsafeRawOutput: *unsafeRawOutput,
+		LogLines:        *logLines,
+		SyncWait:        *syncWait,
+		CallBudget:      *callBudget,
+		Args:            flags.Args(),
 	}, nil
 }
 

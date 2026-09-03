@@ -63,9 +63,10 @@ func TestTheMCPOptionsCarryAllSettings(t *testing.T) {
 	}
 	wantBudget := 7 * time.Second
 	opts := optionsFor(clusters, mcp.Settings{
-		AllowWrite: true,
-		LogLines:   42,
-		CallBudget: wantBudget,
+		AllowWrite:      true,
+		UnsafeRawOutput: true,
+		LogLines:        42,
+		CallBudget:      wantBudget,
 	}, nil)
 
 	if opts.Context != "p-mk1" {
@@ -73,6 +74,9 @@ func TestTheMCPOptionsCarryAllSettings(t *testing.T) {
 	}
 	if !opts.AllowWrite {
 		t.Fatal("the write flag was not carried")
+	}
+	if !opts.UnsafeRawOutput {
+		t.Fatal("the unsafe raw-output flag was not carried")
 	}
 	if opts.LogLines != 42 {
 		t.Fatalf("log lines = %d, want 42", opts.LogLines)

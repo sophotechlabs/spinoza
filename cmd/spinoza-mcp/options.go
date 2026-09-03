@@ -19,9 +19,10 @@ func optionsFor(clusters clusterFacts, opts mcp.Settings, prom mcp.Prometheus) m
 		Protected: func() bool {
 			return clusters.Protected(clusters.ID())
 		},
-		AllowWrite: opts.AllowWrite,
-		Prometheus: prom,
-		LogLines:   opts.LogLines,
-		CallBudget: opts.CallBudget,
+		AllowWrite:      opts.AllowWrite,
+		UnsafeRawOutput: opts.UnsafeRawOutput,
+		Prometheus:      prom,
+		LogLines:        opts.LogLines,
+		CallBudget:      opts.CallBudget,
 	}
 }

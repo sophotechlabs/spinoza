@@ -32,6 +32,8 @@ func TestWhichNamesReadAsSecrets(t *testing.T) {
 }
 
 func TestScrubbingALine(t *testing.T) {
+	awsAccessKey := "AKIA" + strings.Repeat("1", 16)
+	stripeToken := "sk_" + "live_" + "1234567890abcdef"
 	cases := []struct {
 		name string
 		line string
@@ -79,6 +81,42 @@ func TestScrubbingALine(t *testing.T) {
 			line: "clone failed for ghp_1234567890abcdefghijklmnopqrstuvwxyz",
 			gone: "ghp_1234567890abcdefghijklmnopqrstuvwxyz",
 			kept: "clone failed",
+		},
+		{
+			name: "a standalone slack token",
+			line: "slack rejected xoxb-1234567890-abcdefghijklmnop",
+			gone: "xoxb-1234567890-abcdefghijklmnop",
+			kept: "slack rejected",
+		},
+		{
+			name: "a standalone stripe token",
+			line: "stripe rejected " + stripeToken,
+			gone: stripeToken,
+			kept: "stripe rejected",
+		},
+		{
+			name: "a standalone gitlab token",
+			line: "gitlab rejected glpat-1234567890abcdef",
+			gone: "glpat-1234567890abcdef",
+			kept: "gitlab rejected",
+		},
+		{
+			name: "a standalone aws access key",
+			line: "aws rejected " + awsAccessKey,
+			gone: awsAccessKey,
+			kept: "aws rejected",
+		},
+		{
+			name: "a standalone google api key",
+			line: "google rejected AIza1234567890abcdefghijklmn",
+			gone: "AIza1234567890abcdefghijklmn",
+			kept: "google rejected",
+		},
+		{
+			name: "a standalone sendgrid token",
+			line: "sendgrid rejected SG.1234567890ab.abcdefghijklmnop",
+			gone: "SG.1234567890ab.abcdefghijklmnop",
+			kept: "sendgrid rejected",
 		},
 	}
 	for _, tc := range cases {
@@ -199,6 +237,37 @@ func TestScrubbingNestedYAML(t *testing.T) {
 				t.Fatalf("scrub kept %q in %q", tc.gone, got)
 			}
 		})
+	}
+}
+
+func TestStructuredUnknownCredentialFieldsAreRedacted(t *testing.T) {
+	body := `ordinary: visible
+nested:
+  license: license-value
+  key: key-value
+  url: https://user:password@example.com/path
+  cookie: cookie-value
+  code: authorization-code
+`
+
+	got := scrubStructuredYAML(body)
+
+	for _, secret := range []string{
+		"license-value",
+		"key-value",
+		"https://user:password@example.com/path",
+		"cookie-value",
+		"authorization-code",
+	} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("structured output kept %q in %q", secret, got)
+		}
+	}
+	if !strings.Contains(got, "ordinary: visible") {
+		t.Fatalf("ordinary field was lost: %q", got)
+	}
+	if strings.Count(got, hidden) != 5 {
+		t.Fatalf("redactions = %d, want 5 in %q", strings.Count(got, hidden), got)
 	}
 }
 

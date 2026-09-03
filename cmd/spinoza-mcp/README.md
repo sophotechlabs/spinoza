@@ -52,10 +52,12 @@ shape in their own config file:
 
 - **Secret values never leave the process.** A Secret comes back as key names,
   sizes and whether each value is binary. The raw document is withheld entirely.
-- **Everything else is scrubbed on the way out**: bearer tokens, JWTs, private
-  key blocks, long base64 blobs, `key=value` pairs whose key looks like a
-  credential, and env pairs in YAML where the name is on one line and the value
-  on the next.
+- **Raw logs and Helm values are withheld by default.** `-unsafe-raw-output`
+  restores them for compatibility, but its redaction is best-effort and cannot
+  guarantee that arbitrary text contains no credentials.
+- **Other text is scrubbed on the way out** using structured credential fields
+  and common token patterns. Treat this as a secondary safeguard, not a secret
+  boundary.
 - **Writes are off unless asked for.** `-allow-write` adds five tools that
   change the cluster. Without it they are not offered at all, and asking for one
   says why rather than pretending it does not exist.
@@ -72,6 +74,7 @@ shape in their own config file:
 | `-context` | Which kubeconfig context to read. The current one when empty |
 | `-kubeconfig` | Which kubeconfig. The usual lookup rules when empty |
 | `-allow-write` | Offer the five tools that change the cluster |
+| `-unsafe-raw-output` | Return best-effort-redacted logs and Helm values; may expose credentials |
 | `-prometheus` | `namespace/service:port`. Discovered when empty |
 | `-log-lines` | Most log lines any one tool returns. Defaults to 200 |
 | `-sync-timeout` | How long to wait for an informer cache |

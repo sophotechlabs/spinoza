@@ -367,7 +367,7 @@ func TestParsingTheCommandLine(t *testing.T) {
 	var out bytes.Buffer
 
 	opts, err := Parse([]string{
-		"-context", "p-mk1", "-allow-write", "-log-lines", "50",
+		"-context", "p-mk1", "-allow-write", "-unsafe-raw-output", "-log-lines", "50",
 		"call", "get_dashboard",
 	}, &out)
 	if err != nil {
@@ -378,6 +378,9 @@ func TestParsingTheCommandLine(t *testing.T) {
 	}
 	if !opts.AllowWrite {
 		t.Fatal("allow-write was not read")
+	}
+	if !opts.UnsafeRawOutput {
+		t.Fatal("unsafe-raw-output was not read")
 	}
 	if opts.LogLines != 50 {
 		t.Fatalf("logLines = %d", opts.LogLines)
@@ -399,6 +402,9 @@ func TestTheDefaultsWhenNothingIsAsked(t *testing.T) {
 	}
 	if opts.AllowWrite {
 		t.Fatal("writes are on by default; they must be asked for")
+	}
+	if opts.UnsafeRawOutput {
+		t.Fatal("raw logs and values are on by default")
 	}
 	if opts.SyncWait == 0 {
 		t.Fatal("no sync timeout was set, so a cold cache would wait forever")

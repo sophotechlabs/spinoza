@@ -197,6 +197,19 @@ func TestInitializeNamesTheProtocolAndWhatItServes(t *testing.T) {
 	if !strings.Contains(instructions, "Secret values are never returned") {
 		t.Fatalf("instructions = %q, want the secret rule stated", instructions)
 	}
+	if !strings.Contains(instructions, "Raw log lines and Helm values are withheld") {
+		t.Fatalf("instructions = %q, want the raw-output default stated", instructions)
+	}
+}
+
+func TestInitializationWarnsWhenUnsafeRawOutputIsEnabled(t *testing.T) {
+	server := serverFor(&fakeCluster{}, Options{UnsafeRawOutput: true})
+	result := as[map[string]any](t, ask(t, server, `{"jsonrpc":"2.0","id":1,"method":"initialize"}`)["result"])
+	instructions := as[string](t, result["instructions"])
+
+	if !strings.Contains(instructions, "best-effort redaction") {
+		t.Fatalf("instructions = %q, want the unsafe-output warning", instructions)
+	}
 }
 
 func TestTheHandshakeSaysWhenTheClusterIsProtected(t *testing.T) {
