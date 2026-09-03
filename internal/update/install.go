@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +28,7 @@ const (
 	maxScript      = 1 << 20
 	maxRunOutput   = 64 << 10
 	scriptMode     = 0o700
+	maxRedirects   = 10
 )
 
 var installable = map[string]bool{"darwin": true, "linux": true}
@@ -45,18 +47,19 @@ type Installer struct {
 }
 
 func NewInstaller(current, script string) *Installer {
-	if script == "" {
-		script = Script
-	}
-	return &Installer{
+	installer := &Installer{
 		current:  current,
 		script:   script,
-		client:   &http.Client{Timeout: fetchTimeout},
 		goos:     runtime.GOOS,
 		locate:   os.Executable,
 		run:      runScript,
 		writable: writableDir,
 	}
+	installer.client = &http.Client{
+		Timeout:       fetchTimeout,
+		CheckRedirect: installer.checkRedirect,
+	}
+	return installer
 }
 
 var ErrUnsupported = errors.New("this build cannot replace itself")
@@ -64,6 +67,9 @@ var ErrUnsupported = errors.New("this build cannot replace itself")
 var ErrBusy = errors.New("an update is already running")
 
 func (i *Installer) Install(ctx context.Context) error {
+	if i.script == "" {
+		return fmt.Errorf("%w: remote installer scripts are disabled by default", ErrUnsupported)
+	}
 	if !installable[i.goos] {
 		return fmt.Errorf("%w: %s has no install script", ErrUnsupported, i.goos)
 	}
@@ -95,6 +101,23 @@ func (i *Installer) Install(ctx context.Context) error {
 	output, runErr := i.run(bounded, path, dir)
 	if runErr != nil {
 		return fmt.Errorf("%w: %s", runErr, lastLine(output))
+	}
+	return nil
+}
+
+func (i *Installer) checkRedirect(request *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return errors.New("install script had too many redirects")
+	}
+	if len(via) == 0 {
+		return nil
+	}
+	origin := via[0].URL
+	if request.URL.Scheme != origin.Scheme {
+		return errors.New("install script redirect changed origin")
+	}
+	if request.URL.Host != origin.Host {
+		return errors.New("install script redirect changed origin")
 	}
 	return nil
 }
@@ -203,7 +226,7 @@ func saveScriptWith(
 func runScript(ctx context.Context, script, dir string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "sh", script)
 	cmd.Env = append(
-		os.Environ(),
+		installerEnvironment(),
 		"SPINOZA_INSTALL_DIR="+dir,
 		skipApp+"=1",
 	)
@@ -218,6 +241,48 @@ func runScript(ctx context.Context, script, dir string) ([]byte, error) {
 		return output.Bytes(), fmt.Errorf("install output exceeded %d bytes", maxRunOutput)
 	}
 	return output.Bytes(), err
+}
+
+func installerEnvironment() []string {
+	allowed := map[string]bool{
+		"HOME":          true,
+		"LANG":          true,
+		"PATH":          true,
+		"SHELL":         true,
+		"TEMP":          true,
+		"TMP":           true,
+		"TMPDIR":        true,
+		"HTTP_PROXY":    true,
+		"HTTPS_PROXY":   true,
+		"NO_PROXY":      true,
+		"http_proxy":    true,
+		"https_proxy":   true,
+		"no_proxy":      true,
+		"SSL_CERT_DIR":  true,
+		"SSL_CERT_FILE": true,
+	}
+	result := make([]string, 0, len(allowed))
+	for _, value := range os.Environ() {
+		name, _, found := strings.Cut(value, "=")
+		if !found {
+			continue
+		}
+		if !allowedInstallerVariable(name, allowed) {
+			continue
+		}
+		result = append(result, value)
+	}
+	return result
+}
+
+func allowedInstallerVariable(name string, allowed map[string]bool) bool {
+	if allowed[name] {
+		return true
+	}
+	if strings.HasPrefix(name, "LC_") {
+		return true
+	}
+	return strings.HasPrefix(name, "XDG_")
 }
 
 func writableDir(dir string) error {

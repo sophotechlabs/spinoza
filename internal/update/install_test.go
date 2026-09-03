@@ -333,9 +333,20 @@ func TestASecondInstallWhileOneIsRunningIsRefused(t *testing.T) {
 	}
 }
 
-func TestNoScriptMeansTheProjectsOwn(t *testing.T) {
-	if got := NewInstaller("v1.0.0", "").script; got != Script {
-		t.Fatalf("script = %q, want %q", got, Script)
+func TestNoScriptDisablesAutomaticUpdate(t *testing.T) {
+	one := NewInstaller("v1.0.0", "")
+	one.locate = func() (string, error) {
+		t.Fatal("disabled update inspected the machine")
+		return "", nil
+	}
+
+	err := one.Install(t.Context())
+
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("error = %v, want unsupported", err)
+	}
+	if err.Error() != "this build cannot replace itself: remote installer scripts are disabled by default" {
+		t.Fatalf("error = %q, want the disabled reason", err)
 	}
 }
 
@@ -378,6 +389,85 @@ func TestTheScriptIsToldWhereToInstallAndToLeaveTheAppAlone(t *testing.T) {
 	}
 	if string(held) != "/somewhere else\n1\n" {
 		t.Fatalf("the script was told %q", string(held))
+	}
+}
+
+func TestTheScriptCannotReadServerCredentials(t *testing.T) {
+	t.Setenv("SPINOZA_AUTH_OIDC_CLIENT_SECRET", "oidc-secret")
+	t.Setenv("KUBECONFIG", "/private/kubeconfig")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "cloud-secret")
+	dir := t.TempDir()
+	out := filepath.Join(dir, "env.txt")
+	saved := filepath.Join(dir, "probe.sh")
+	body := "#!/bin/sh\nenv > " + out + "\n"
+	if err := os.WriteFile(saved, []byte(body), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if _, err := runScript(t.Context(), saved, dir); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	held, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	environment := string(held)
+	for _, secret := range []string{"SPINOZA_AUTH_OIDC_CLIENT_SECRET", "KUBECONFIG", "AWS_SECRET_ACCESS_KEY"} {
+		if strings.Contains(environment, secret+"=") {
+			t.Fatalf("script environment contains %s: %s", secret, environment)
+		}
+	}
+	if !strings.Contains(environment, "SPINOZA_INSTALL_DIR="+dir) {
+		t.Fatalf("script environment = %q, want the install directory", environment)
+	}
+	if !strings.Contains(environment, "SPINOZA_SKIP_APP=1") {
+		t.Fatalf("script environment = %q, want the app skip setting", environment)
+	}
+}
+
+func TestTheInstallerRejectsACrossOriginRedirect(t *testing.T) {
+	var targetCalls atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		targetCalls.Add(1)
+		_, _ = w.Write([]byte(script))
+	}))
+	t.Cleanup(target.Close)
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/install.sh", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+	one := installerFor(t, t.TempDir(), &call{}, nil)
+	one.script = source.URL + "/install.sh"
+
+	err := one.Install(t.Context())
+
+	if err == nil || !strings.Contains(err.Error(), "install script redirect changed origin") {
+		t.Fatalf("error = %v, want the cross-origin redirect refusal", err)
+	}
+	if targetCalls.Load() != 0 {
+		t.Fatalf("redirect target received %d requests, want none", targetCalls.Load())
+	}
+}
+
+func TestTheInstallerAcceptsASameOriginRedirect(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, "/install.sh", http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte(script))
+	}))
+	t.Cleanup(server.Close)
+	var ran call
+	one := installerFor(t, t.TempDir(), &ran, nil)
+	one.script = server.URL + "/start"
+
+	if err := one.Install(t.Context()); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	if ran.dir == "" {
+		t.Fatal("same-origin redirect never ran the installer")
 	}
 }
 
