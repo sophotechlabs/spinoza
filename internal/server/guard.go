@@ -210,6 +210,11 @@ func isLocal(r *http.Request) bool {
 }
 
 func topLevelNavigation(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+	default:
+		return false
+	}
 	if r.Header.Get("Sec-Fetch-Mode") != "navigate" {
 		return false
 	}

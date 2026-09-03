@@ -243,7 +243,7 @@ func TestProxyModeSignsOutThroughTheProxy(t *testing.T) {
 	held := modeless(t, Config{Mode: ModeProxy, Proxy: ProxyConfig{LogoutURL: "https://proxy/oauth2/sign_out"}})
 	recorded := httptest.NewRecorder()
 
-	held.Logout(recorded, httptest.NewRequest(http.MethodGet, "/auth/logout", http.NoBody))
+	held.Logout(recorded, httptest.NewRequest(http.MethodPost, "/auth/logout", http.NoBody))
 
 	if recorded.Header().Get("Location") != "https://proxy/oauth2/sign_out" {
 		t.Fatalf("location = %q, want the proxy's sign-out", recorded.Header().Get("Location"))
@@ -254,7 +254,7 @@ func TestSigningOutWithNothingToSignOutOfLandsBackOnTheApp(t *testing.T) {
 	held := modeless(t, Config{Mode: ModeProxy})
 	recorded := httptest.NewRecorder()
 
-	held.Logout(recorded, httptest.NewRequest(http.MethodGet, "/auth/logout", http.NoBody))
+	held.Logout(recorded, httptest.NewRequest(http.MethodPost, "/auth/logout", http.NoBody))
 
 	if recorded.Header().Get("Location") != "/" {
 		t.Fatalf("location = %q, want the app", recorded.Header().Get("Location"))

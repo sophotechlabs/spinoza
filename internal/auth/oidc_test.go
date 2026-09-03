@@ -349,7 +349,7 @@ func TestSigningOutOfAProviderWithNoLogoutEndpointForcesTheFormNextTime(t *testi
 	held := authFor(t, idp, nil)
 	recorded := httptest.NewRecorder()
 
-	held.Logout(recorded, httptest.NewRequest(http.MethodGet, "/auth/logout", http.NoBody))
+	held.Logout(recorded, httptest.NewRequest(http.MethodPost, "/auth/logout", http.NoBody))
 
 	if recorded.Header().Get("Location") != "/?prompt=login" {
 		t.Fatalf("location = %q, want the sign-in page asking for the form", recorded.Header().Get("Location"))

@@ -50,7 +50,10 @@ describe('the account menu', () => {
     expect(screen.getByLabelText('Account')).toHaveTextContent('alice@example.com');
     expect(screen.getByText(/Role editor, reading every namespace/)).toBeInTheDocument();
     expect(screen.getByText('platform, sre')).toBeInTheDocument();
-    expect(screen.getByTestId('sign-out')).toHaveAttribute('href', '/auth/logout');
+    expect(screen.getByTestId('sign-out').tagName).toBe('FORM');
+    expect(screen.getByTestId('sign-out')).toHaveAttribute('action', '/auth/logout');
+    expect(screen.getByTestId('sign-out')).toHaveAttribute('method', 'post');
+    expect(screen.getByRole('button', { name: 'Sign out' })).toHaveAttribute('type', 'submit');
   });
 
   it('says which namespaces a scoped account reads', () => {

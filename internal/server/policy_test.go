@@ -70,6 +70,7 @@ var readOnlyWrites = map[string]bool{
 	routeKey(http.MethodPost, "/api/view/desktop"):        true,
 	routeKey(http.MethodPost, "/api/update"):              true,
 	routeKey(http.MethodPut, "/api/settings"):             true,
+	routeKey(http.MethodPost, "/auth/logout"):             true,
 	routeKey(http.MethodPost, "/auth/backchannel-logout"): true,
 }
 

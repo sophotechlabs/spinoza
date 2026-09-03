@@ -70,7 +70,6 @@ GET /api/version role=- local=no whole=no writes=no
 GET /api/view role=- local=no whole=no writes=no
 GET /auth/callback role=- local=no whole=no writes=no
 GET /auth/login role=- local=no whole=no writes=no
-GET /auth/logout role=- local=no whole=no writes=no
 GET /healthz role=- local=no whole=no writes=no
 GET /ws role=- local=no whole=no writes=no
 POST /api/access role=- local=no whole=no writes=no
@@ -99,6 +98,7 @@ POST /api/update role=- local=yes whole=no writes=no
 POST /api/view/browser role=- local=yes whole=no writes=no
 POST /api/view/desktop role=- local=yes whole=no writes=no
 POST /auth/backchannel-logout role=- local=no whole=no writes=no
+POST /auth/logout role=- local=no whole=no writes=no
 PUT /api/checks/baseline/file role=editor local=no whole=yes writes=no
 PUT /api/object role=editor local=no whole=no writes=yes
 PUT /api/settings role=- local=no whole=no writes=no

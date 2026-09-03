@@ -82,7 +82,7 @@ func (s *Server) signInRoutes() []endpoint {
 	return []endpoint{
 		{http.MethodGet, pathLogin, s.handleLogin, true, false},
 		{http.MethodGet, pathCallback, s.handleCallback, true, false},
-		{http.MethodGet, pathLogout, s.handleLogout, true, false},
+		{http.MethodPost, pathLogout, s.handleLogout, true, false},
 		{http.MethodPost, pathBackchannel, s.handleBackchannelLogout, true, false},
 	}
 }
@@ -139,7 +139,10 @@ func publicWhenServing(r *http.Request) bool {
 		return true
 	}
 	if r.Method == http.MethodPost {
-		return r.URL.Path == pathBackchannel
+		if r.URL.Path == pathBackchannel {
+			return true
+		}
+		return r.URL.Path == pathLogout
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false

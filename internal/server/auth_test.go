@@ -526,7 +526,7 @@ func TestAClusterServerMountsEveryAuthenticationRoute(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: pathLogin, status: http.StatusNotFound},
 		{method: http.MethodGet, path: pathCallback, status: http.StatusNotFound},
-		{method: http.MethodGet, path: pathLogout, status: http.StatusFound, location: "/"},
+		{method: http.MethodPost, path: pathLogout, status: http.StatusFound, location: "/"},
 		{method: http.MethodPost, path: pathBackchannel, status: http.StatusNotFound},
 	}
 	for _, test := range cases {
@@ -541,6 +541,52 @@ func TestAClusterServerMountsEveryAuthenticationRoute(t *testing.T) {
 			}
 			if recorded.Header().Get("Location") != test.location {
 				t.Fatalf("location = %q, want %q", recorded.Header().Get("Location"), test.location)
+			}
+		})
+	}
+}
+
+func TestACrossSiteNavigationCannotSignSomeoneOut(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: everyNamespace()}, testAssets(), "")
+	authn, err := auth.New(t.Context(), auth.Config{
+		Mode: auth.ModeProxy,
+		Proxy: auth.ProxyConfig{
+			SharedSecret: []byte(testProxySecret),
+			LogoutURL:    "https://proxy.example/logout",
+		},
+	})
+	if err != nil {
+		t.Fatalf("building the authenticator: %v", err)
+	}
+	srv.UseClusterAuth(ClusterAuth{
+		Authenticator: authn,
+		PublicURL:     "https://spinoza.example.com",
+	})
+	for _, test := range []struct {
+		method string
+		want   int
+	}{
+		{method: http.MethodGet, want: http.StatusMethodNotAllowed},
+		{method: http.MethodPost, want: http.StatusForbidden},
+	} {
+		t.Run(test.method, func(t *testing.T) {
+			request := httptest.NewRequest(test.method, pathLogout, http.NoBody)
+			request.Host = "spinoza.example.com"
+			request.Header.Set("Sec-Fetch-Site", "cross-site")
+			request.Header.Set("Sec-Fetch-Mode", "navigate")
+			request.Header.Set("Sec-Fetch-Dest", "document")
+			recorded := httptest.NewRecorder()
+
+			srv.Handler().ServeHTTP(recorded, request)
+
+			if recorded.Code != test.want {
+				t.Fatalf("status = %d, want %d", recorded.Code, test.want)
+			}
+			if recorded.Header().Get("Set-Cookie") != "" {
+				t.Fatal("a cross-site navigation cleared the session cookie")
+			}
+			if recorded.Header().Get("Location") != "" {
+				t.Fatalf("location = %q, want no provider logout redirect", recorded.Header().Get("Location"))
 			}
 		})
 	}

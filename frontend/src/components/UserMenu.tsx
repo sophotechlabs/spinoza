@@ -40,13 +40,14 @@ export default function UserMenu() {
         {session.groups !== undefined && session.groups.length > 0 && (
           <p className="mt-1 break-words text-fg-muted">{session.groups.join(', ')}</p>
         )}
-        <a
-          href={SIGN_OUT_PATH}
-          data-testid="sign-out"
-          className="mt-3 inline-flex items-center rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
-        >
-          Sign out
-        </a>
+        <form action={SIGN_OUT_PATH} method="post" data-testid="sign-out" className="mt-3">
+          <button
+            type="submit"
+            className="inline-flex items-center rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
+          >
+            Sign out
+          </button>
+        </form>
       </div>
     </details>
   );
