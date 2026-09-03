@@ -80,6 +80,7 @@ jobs:
           install_args: just go typos editorconfig-checker shellcheck yq helm
       - run: just hygiene
       - run: just lint-chart
+      - run: just test-docker-context
       - run: just test-release-publication
       - run: just test-packaging
       - run: just test-verify-archives

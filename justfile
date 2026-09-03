@@ -295,7 +295,7 @@ cluster-up tier:
     kubectl --context {{ test_context }} get nodes -L spinoza.test/pool
     images=("$(yq '.spec.template.spec.containers[] | select(.name == "metrics-server") | .image' {{ kind_dir }}/metrics-server.yaml)")
     if [ '{{ tier }}' != base ]; then
-        images+=(busybox:1.37 busybox:latest registry.k8s.io/pause:3.10)
+        images+=(busybox:1.37 busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0 busybox:latest registry.k8s.io/pause:3.10)
     fi
     for image in "${images[@]}"; do
         if ! docker image inspect "$image" > /dev/null 2>&1; then
@@ -866,16 +866,53 @@ test-cluster-mode name='': stub-assets cluster-mode-up cluster-mode-image
 
 lint-chart:
     helm lint deploy/helm/spinoza --set publicURL=https://spinoza.example.com --set auth.mode=none --set auth.allowAnonymous=true
+    helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set auth.mode=none --set auth.allowAnonymous=true \
+        --show-only templates/rbac.yaml | yq -e 'select(.kind == "ClusterRole") | ([.rules[] | select((.resources | contains(["secrets"])) or ((.verbs | contains(["impersonate"])) and ((.resources | contains(["users"])) or (.resources | contains(["groups"])) or (.resources | contains(["serviceaccounts"])))))] | length == 0) | select(. == true)' > /dev/null
     ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
         --set publicURL=https://spinoza.example.com > /dev/null 2>&1
     ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
         --set publicURL=https://spinoza.example.com \
         --set auth.mode=none > /dev/null 2>&1
+    ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=http://spinoza.example.com \
+        --set auth.mode=none --set auth.allowAnonymous=true > /dev/null 2>&1
+    helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=http://spinoza.example.com \
+        --set unsafeAllowHTTP=true \
+        --set auth.mode=none --set auth.allowAnonymous=true > /dev/null
     helm template spinoza deploy/helm/spinoza --namespace spinoza \
         --set publicURL=https://spinoza.example.com \
         --set auth.mode=oidc \
         --set auth.oidc.issuerURL=https://keycloak.example.com/realms/main \
         --set auth.oidc.clientID=spinoza > /dev/null
+    ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set auth.mode=oidc \
+        --set auth.oidc.issuerURL=https://keycloak.example.com/realms/main \
+        --set auth.oidc.clientID=spinoza \
+        --set impersonate=true > /dev/null 2>&1
+    ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set auth.mode=oidc \
+        --set auth.oidc.issuerURL=http://keycloak.sso.svc/realms/main \
+        --set auth.oidc.clientID=spinoza > /dev/null 2>&1
+    helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set auth.mode=oidc \
+        --set auth.oidc.issuerURL=http://keycloak.sso.svc/realms/main \
+        --set auth.oidc.clientID=spinoza \
+        --set auth.oidc.unsafeAllowHTTP=true > /dev/null
+    helm template spinoza deploy/helm/spinoza --namespace spinoza \
+        --set publicURL=https://spinoza.example.com \
+        --set auth.mode=oidc \
+        --set auth.oidc.issuerURL=https://keycloak.example.com/realms/main \
+        --set auth.oidc.clientID=spinoza \
+        --set impersonate=true \
+        --set 'rbac.impersonation.users[0]=alice@example.com' \
+        --set 'rbac.impersonation.groups[0]=platform' \
+        --show-only templates/rbac.yaml | yq -e 'select(.kind == "ClusterRole") | (([.rules[] | select(.resources | contains(["users"])) | .resourceNames[]] | .[0] == "alice@example.com") and ([.rules[] | select(.resources | contains(["groups"])) | .resourceNames[]] | .[0] == "platform") and ([.rules[] | select((.resources | contains(["serviceaccounts"])) and (.verbs | contains(["impersonate"])))] | length == 0)) | select(. == true)' > /dev/null
     ! helm template spinoza deploy/helm/spinoza --namespace spinoza \
         --set publicURL=https://spinoza.example.com \
         --set replicaCount=2 > /dev/null 2>&1
@@ -891,6 +928,9 @@ lint-chart:
 
 test-release-publication:
     go test ./test/release
+
+test-docker-context:
+    bash test/docker-context.sh
 
 image tag='spinoza:dev':
     docker build --build-arg SPINOZA_VERSION="$(just app-version)" -t {{ tag }} .
@@ -951,11 +991,23 @@ sast:
 # e2e/fixtures holds workloads written to be insecure so the checks have
 # something to find; scanning them fails the build on findings we put there.
 vulns: vulnerability-exceptions
-    trivy fs --exit-code 1 --scanners secret,misconfig \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    report=$(mktemp)
+    trap 'rm -f "$report"' EXIT
+    if ! trivy fs --exit-code 1 --scanners secret,misconfig \
+        --format json --output "$report" \
         --skip-dirs e2e/fixtures --skip-dirs test/clustermode --skip-dirs .tmp \
         --skip-files test/integration/metrics-server.yaml \
         --helm-set publicURL=https://spinoza.example.com \
-        --helm-set auth.mode=none --helm-set auth.allowAnonymous=true .
+        --helm-set auth.mode=oidc \
+        --helm-set auth.oidc.issuerURL=https://idp.example.com/realms/spinoza \
+        --helm-set auth.oidc.clientID=spinoza \
+        --helm-set auth.sessionSecret=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx .; then
+        trivy convert --scanners secret,misconfig "$report"
+        exit 1
+    fi
+    bash test/trivy-helm-coverage.sh "$report"
     osv-scanner scan source --recursive .
 
 vulnerability-exceptions: stub-assets
@@ -1038,7 +1090,8 @@ hygiene:
     just editorconfig
     shellcheck install.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/release-commit.sh scripts/release-pending.sh \
         test/release-commit.sh test/release-pending.sh test/install/container.sh \
-        test/install/uninstall.sh test/install/editorconfig-name.sh packaging/render.sh
+        test/install/uninstall.sh test/install/editorconfig-name.sh test/trivy-helm-coverage.sh \
+        test/docker-context.sh packaging/render.sh
     just --unstable --fmt --check
 
 editorconfig:

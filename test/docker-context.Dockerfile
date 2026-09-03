@@ -1,0 +1,4 @@
+FROM scratch
+COPY . /context
+USER 65532:65532
+HEALTHCHECK NONE
