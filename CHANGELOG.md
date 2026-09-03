@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.27.5](https://github.com/sophotechlabs/spinoza/compare/v1.27.4...v1.27.5) (2026-09-03)
+
+
+### Bug Fixes
+
+* **auth:** isolate entropy failure testing ([196ad61](https://github.com/sophotechlabs/spinoza/commit/196ad612384a8ba3249e53926c29519e1370dc56))
+* **auth:** require POST to sign out ([0e26f05](https://github.com/sophotechlabs/spinoza/commit/0e26f05d5484ffa8218847a9ae4ad481cc0c1f79))
+* **ci:** reject incomplete mutation reports ([df2c8d3](https://github.com/sophotechlabs/spinoza/commit/df2c8d335e7f7e1bbc9599e1ee0a17725ea8b501))
+* **ci:** render Helm chart in vulnerability scan ([050fbd7](https://github.com/sophotechlabs/spinoza/commit/050fbd72e0b3f4ec304c9d00e643245fa5ea69e0))
+* **ci:** shard mutation testing ([0130edb](https://github.com/sophotechlabs/spinoza/commit/0130edb32d99cc5e6fe209ff5d89158fb11b2d8c))
+* **ci:** stabilize long-running test jobs ([433add6](https://github.com/sophotechlabs/spinoza/commit/433add6f9e452d3784430af209aeb06372704775))
+* **e2e:** stabilize cluster setup and browser state ([759d09a](https://github.com/sophotechlabs/spinoza/commit/759d09ad2d0cf70bf4be91f108efcc885ef88813))
+* **export:** neutralize spreadsheet formulas ([12b4662](https://github.com/sophotechlabs/spinoza/commit/12b4662ac6d003375892004116545a165f7491a6))
+* **export:** satisfy switch lint ([ccfb637](https://github.com/sophotechlabs/spinoza/commit/ccfb6375b190a7745b1c6f8191dd8857d2d1ecf3))
+* **frontend:** reset parameter-scoped polls ([444aa70](https://github.com/sophotechlabs/spinoza/commit/444aa706db21b5b37ef2c299f7e5dde91bbb3f28))
+* **mcp:** redact GitHub tokens from logs ([c8e9b81](https://github.com/sophotechlabs/spinoza/commit/c8e9b815dc53e7ac959bc548cf263f077d9645d0))
+* **test:** use valid cluster mode session secret ([39da795](https://github.com/sophotechlabs/spinoza/commit/39da795b741762e647c0d513973e2b5ef6a9838a))
+
+
+### CI
+
+* **e2e:** retry prerequisite image pulls ([c48048d](https://github.com/sophotechlabs/spinoza/commit/c48048d6bd422d0d0eb0ca09bb3add47dbb98319))
+* **e2e:** split suite into focused jobs ([1ecb99a](https://github.com/sophotechlabs/spinoza/commit/1ecb99ab192c57c63f8a790a3d4fe31cde0a49f3))
+
+
+### Tests
+
+* **app:** cover startup and desktop boundaries ([6333251](https://github.com/sophotechlabs/spinoza/commit/63332512ef9579bffaaaca12e920d8be5cab2b29))
+* **auth:** avoid global entropy race ([4d6967d](https://github.com/sophotechlabs/spinoza/commit/4d6967dd62aa63d31ad861ef66a5648ec6a0bf46))
+* **auth:** use POST for logout ([3ce48f6](https://github.com/sophotechlabs/spinoza/commit/3ce48f66f5cc1a6d19713c1c60062e6045d0eeae))
+* **ci:** ratchet mutation coverage baselines ([674a355](https://github.com/sophotechlabs/spinoza/commit/674a355603ad9e7be09c58ff38bc9ce0336e40fa))
+* **e2e:** expand application journey coverage ([012c211](https://github.com/sophotechlabs/spinoza/commit/012c21178660c78381cc4e5f771d6355014a606c))
+* **e2e:** expand full-cluster coverage ([9f67cca](https://github.com/sophotechlabs/spinoza/commit/9f67cca75859c5545c19e1de05d0cb4b8ffa20f9))
+* **e2e:** isolate palette shortcut coverage ([4a545cd](https://github.com/sophotechlabs/spinoza/commit/4a545cde38eeab0d438d18e2ef393b313c63d59a))
+* **e2e:** target the Kubernetes context picker ([2a59712](https://github.com/sophotechlabs/spinoza/commit/2a59712223d95827f7ae41c376b25fab3ac384c6))
+* **e2e:** verify Argo refresh through backend state ([a5336d4](https://github.com/sophotechlabs/spinoza/commit/a5336d47b164044a6962a7d98fbff1df9ba70744))
+* **e2e:** wait for resources before filter shortcut ([f2e3b43](https://github.com/sophotechlabs/spinoza/commit/f2e3b4398efae966b33ce8a0fbb35ac3822b3488))
+* **frontend:** cover lazy Helm history lifecycle ([0ea1a2c](https://github.com/sophotechlabs/spinoza/commit/0ea1a2cd0a643948f0147bbfcde89197e561a3b5))
+* **frontend:** satisfy event regression lint ([9f75824](https://github.com/sophotechlabs/spinoza/commit/9f75824b2adfd8c891badeb6ce9d7f08a3669ee9))
+* **helm:** cover release storage boundaries ([d204385](https://github.com/sophotechlabs/spinoza/commit/d20438506d06e2acdf02589f11faa35c356677af))
+* **helm:** verify paged release history ([1c38814](https://github.com/sophotechlabs/spinoza/commit/1c388141d71734f3cc73a295301990257e50a1c2))
+* **mcp:** cover encoding and startup failures ([47261fc](https://github.com/sophotechlabs/spinoza/commit/47261fc2e41facb766dec90566cd3c9352413f0c))
+* **traffic:** cover negative rate saturation ([70983d7](https://github.com/sophotechlabs/spinoza/commit/70983d701c10da70bd330abbe4916d5c04d864bd))
+
 ## [1.27.4](https://github.com/sophotechlabs/spinoza/compare/v1.27.3...v1.27.4) (2026-09-02)
 
 
