@@ -499,14 +499,15 @@ mutation mode='default' output='dist/mutation/default.json': stub-assets
     output={{ quote(output) }}
     mkdir -p "$(dirname "$output")"
     args=(unleash --output "$output" --output-statuses lc)
+    # Pin Gremlins' unmapped declarations, inactive build tags, and tagless switch cases so the remainder can only shrink.
     if [ "$mode" = desktop ]; then
         args+=(--tags desktop)
-        max_not_covered=262
+        max_not_covered=212
     elif [ "$mode" != default ]; then
         echo "mutation: mode must be default or desktop" >&2
         exit 1
     else
-        max_not_covered=255
+        max_not_covered=225
     fi
     gremlins "${args[@]}"
     scripts/check-mutation-report.sh "$output" "$max_not_covered"
