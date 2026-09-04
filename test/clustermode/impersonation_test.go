@@ -76,8 +76,11 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 			t.Fatalf("alice could not open a shell: %s", opened)
 		}
 		refused := shell(t, signIn(t, "bob"), "/api/exec?namespace=default&pod="+defaultPod)
-		if !strings.Contains(refused, `User "bob"`) {
-			t.Fatalf("the cluster refused %q, want it to name bob", refused)
+		if !strings.Contains(refused, "refused before the shell opened (403)") {
+			t.Fatalf("the cluster refused %q, want an HTTP 403", refused)
+		}
+		if !strings.Contains(refused, "you may not create pods/exec here") {
+			t.Fatalf("the cluster refused %q, want an exec authorization denial", refused)
 		}
 	})
 
@@ -122,16 +125,22 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 		if strings.HasPrefix(refused, "OPENED") {
 			t.Fatal("bob opened a root shell on a node with no binding for it")
 		}
-		if !strings.Contains(refused, `"bob"`) {
-			t.Fatalf("the cluster refused %q, want it to name bob", refused)
+		if !strings.Contains(refused, "refused before the shell opened (403)") {
+			t.Fatalf("the cluster refused %q, want an HTTP 403", refused)
+		}
+		if !strings.Contains(refused, "you may not create pods in kube-system") {
+			t.Fatalf("the cluster refused %q, want a node-shell authorization denial", refused)
 		}
 	})
 
 	t.Run("logs", func(t *testing.T) {
 		carol := signIn(t, "carol")
 		reply := subscribe(t, carol, logsFor("default", defaultPod))
-		if !strings.Contains(reply.Message, `"carol"`) {
-			t.Fatalf("the cluster refused %q, want it to name carol", reply.Message)
+		if reply.Type != "error" {
+			t.Fatalf("logs in another namespace returned %q, want an error", reply.Type)
+		}
+		if !strings.Contains(reply.Message, "you may not get pods/log here") {
+			t.Fatalf("the cluster refused %q, want a log authorization denial", reply.Message)
 		}
 		mine := subscribe(t, carol, logsFor("payments", paymentsPod))
 		if mine.Type == "error" {

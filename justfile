@@ -803,6 +803,8 @@ cluster-mode-up:
     fi
     kind export kubeconfig --name {{ cm_cluster }}
     kubectl --context {{ cm_context }} apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.1/deploy/static/provider/kind/deploy.yaml
+    kubectl --context {{ cm_context }} -n ingress-nginx patch deployment ingress-nginx-controller --type=merge \
+        -p '{"spec":{"template":{"spec":{"nodeSelector":{"ingress-ready":"true"}}}}}'
     kubectl --context {{ cm_context }} -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=5m
     kubectl --context {{ cm_context }} -n ingress-nginx wait --for=condition=ready pod \
         --selector=app.kubernetes.io/component=controller --timeout=5m

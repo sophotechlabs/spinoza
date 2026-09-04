@@ -338,10 +338,15 @@ func shell(t *testing.T, held *http.Client, path string) string {
 	})
 	if err != nil {
 		status := 0
+		reason := err.Error()
 		if resp != nil {
 			status = resp.StatusCode
+			defer func() { _ = resp.Body.Close() }()
+			if responseBody := body(t, resp); responseBody != "" {
+				reason = messageOf(t, responseBody)
+			}
 		}
-		return fmt.Sprintf("refused before the shell opened (%d): %v", status, err)
+		return fmt.Sprintf("refused before the shell opened (%d): %s", status, reason)
 	}
 	defer func() { _ = conn.CloseNow() }()
 	for {
