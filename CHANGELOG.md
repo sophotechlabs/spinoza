@@ -1,5 +1,59 @@
 # Changelog
 
+## [1.28.0](https://github.com/sophotechlabs/spinoza/compare/v1.27.5...v1.28.0) (2026-09-04)
+
+
+### Features
+
+* **palette:** group command results ([f38b2a9](https://github.com/sophotechlabs/spinoza/commit/f38b2a9c85241d0b083d38b698a3926c37b5e38c))
+* **resources:** show table scope identity ([fb67eec](https://github.com/sophotechlabs/spinoza/commit/fb67eece43cde6b6bc10ea310bf1f1b226d5cbcd))
+
+
+### Bug Fixes
+
+* **actions:** explain unavailable controls ([0d91c84](https://github.com/sophotechlabs/spinoza/commit/0d91c84475797137921442c1281bb30de1fa95f4))
+* **auth:** harden cluster identity boundaries ([cf9535d](https://github.com/sophotechlabs/spinoza/commit/cf9535d8ccf66bb8b3e20d9da800ef2a50af3080))
+* **build:** retain kubeconfig sources in Docker context ([dac7877](https://github.com/sophotechlabs/spinoza/commit/dac78771e2901fbfa3946dd46941d8ac02569859))
+* **checks:** move rule controls into details ([05ecd83](https://github.com/sophotechlabs/spinoza/commit/05ecd835c8a5889539975508fbe8c58381f39c11))
+* **command-palette:** limit activation to rendered results ([f436191](https://github.com/sophotechlabs/spinoza/commit/f4361915121be507ed6b7df14522d0269b99500f))
+* **deps:** update x/crypto ([e56e01d](https://github.com/sophotechlabs/spinoza/commit/e56e01d76adb7e06fe99b4196defd320cf785222))
+* **fleet:** clarify resource identity ([26baa15](https://github.com/sophotechlabs/spinoza/commit/26baa15ba7d4ff05795b1dc48cacca013e10b173))
+* **fleet:** keep GitOps errors and namespaces distinct ([d8f8d53](https://github.com/sophotechlabs/spinoza/commit/d8f8d53534a25cedf0e96734d649ba76e80e236e))
+* **gitops:** preserve object identity and event completeness ([f24ea07](https://github.com/sophotechlabs/spinoza/commit/f24ea0776c48ef1ae6c548044f758e681d899b52))
+* **history:** preserve loaded page boundaries ([3f9914d](https://github.com/sophotechlabs/spinoza/commit/3f9914d4900f7ea2a291717d9dbf051699751111))
+* **kubernetes:** enforce exact live authorization ([e32d29c](https://github.com/sophotechlabs/spinoza/commit/e32d29c51997cc87017798cb1b76de43e8d8d005))
+* **kubernetes:** pin privileged workload images ([2894922](https://github.com/sophotechlabs/spinoza/commit/2894922dca3d7f458a54bffd35cfcc1c940b04a8))
+* **logs:** reject unbounded zero-tail requests ([66b277d](https://github.com/sophotechlabs/spinoza/commit/66b277d06d5eadc66c1d7e270f791dcafb45ef94))
+* **logs:** stop streams for recreated pods ([50e3e2a](https://github.com/sophotechlabs/spinoza/commit/50e3e2a9b3cd1e3a7781c5e8cbfd231b61d39a93))
+* **mcp:** preserve bounds, completeness, and access checks ([3f77364](https://github.com/sophotechlabs/spinoza/commit/3f77364036069b006053636e2bfa9bacd9623bcd))
+* **mcp:** withhold unsafe credential-bearing output ([5942bb2](https://github.com/sophotechlabs/spinoza/commit/5942bb27b65cfb636216813583261ee1d89b5203))
+* **metrics:** clear stale range data ([e8e14a2](https://github.com/sophotechlabs/spinoza/commit/e8e14a25461c7eaf7ebb2e4a09b54686a3c2e826))
+* **namespaces:** preserve data on refresh failures ([e8b591a](https://github.com/sophotechlabs/spinoza/commit/e8b591a3f63aed72c2535d1f7f01daf373108d40))
+* **node-shell:** surface support check failures ([039476c](https://github.com/sophotechlabs/spinoza/commit/039476c4979abdb9804453bb6c2fb1668ab88218))
+* **runtime:** bound caller-controlled work ([8f28af5](https://github.com/sophotechlabs/spinoza/commit/8f28af5c95c77f65b5585e61c9563580c0040feb))
+* **server:** harden HTTP and audit boundaries ([b3168a2](https://github.com/sophotechlabs/spinoza/commit/b3168a2d385920c53bb955b7bd73ae32e5317705))
+* **settings:** retry transient persistence failures ([566f7db](https://github.com/sophotechlabs/spinoza/commit/566f7db4b8960764aec051b5df4b1081f601c1dc))
+* **update:** disable unauthenticated script execution ([4aedf0c](https://github.com/sophotechlabs/spinoza/commit/4aedf0cf521c43369c5753353b2c4338b72d64cb))
+
+
+### Documentation
+
+* **security:** document secure defaults ([978ea5b](https://github.com/sophotechlabs/spinoza/commit/978ea5b5c4a9c848e3aa67f4512212d406de25c5))
+
+
+### Tests
+
+* **ci:** accept expression workflow timeouts ([c1fd8a8](https://github.com/sophotechlabs/spinoza/commit/c1fd8a8c4653aba6dae3bbf94fe0ae90c9d22b77))
+* **ci:** repair security regression suites ([dbcbf65](https://github.com/sophotechlabs/spinoza/commit/dbcbf6574e954599a898bf7c2dcb369d9fe1e4bb))
+* **clustermode:** preserve impersonation coverage ([6bfa65e](https://github.com/sophotechlabs/spinoza/commit/6bfa65e2f72a128838f657c9f0f5fc79ceb026ba))
+* **resources:** wait for recording readiness ([4be6993](https://github.com/sophotechlabs/spinoza/commit/4be6993124f6efdda626ba013bdfa3f237f1c3a8))
+
+
+### Build
+
+* adopt the Go 1.27 toolchain ([9935a38](https://github.com/sophotechlabs/spinoza/commit/9935a38a54c9c2dc0a6829b99e04a8d4e4400bf7))
+* **security:** verify scanner and Docker coverage ([d5a6dd4](https://github.com/sophotechlabs/spinoza/commit/d5a6dd467d5fc190066af4177623b114f09487d1))
+
 ## [1.27.5](https://github.com/sophotechlabs/spinoza/compare/v1.27.4...v1.27.5) (2026-09-03)
 
 
