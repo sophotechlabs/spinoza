@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.29.0](https://github.com/sophotechlabs/spinoza/compare/v1.28.0...v1.29.0) (2026-09-04)
+
+
+### Features
+
+* **cluster-mode:** refactor cluster mode ([ed4ec06](https://github.com/sophotechlabs/spinoza/commit/ed4ec0609b6fa404ec691628a4010fed386f6509))
+
+
+### Tests
+
+* **e2e:** avoid dock reset reload crash ([5b5c42b](https://github.com/sophotechlabs/spinoza/commit/5b5c42b2f5d56c73fdd6f59dfadbd46468c74e63))
+
 ## [1.28.0](https://github.com/sophotechlabs/spinoza/compare/v1.27.5...v1.28.0) (2026-09-04)
 
 
