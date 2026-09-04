@@ -27,7 +27,6 @@ async function openPod(page: Page): Promise<void> {
 }
 
 async function resetDocks(page: Page): Promise<void> {
-  await openHome(page);
   const saved = page.waitForResponse(settingsWrite('spinoza.layout.v1'), { timeout: 30_000 });
   await page.getByRole('button', { name: 'Settings' }).click();
   await page
@@ -39,14 +38,19 @@ async function resetDocks(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
 }
 
-test.beforeEach(async ({ page }) => {
+async function openAndResetDocks(page: Page): Promise<void> {
+  await openHome(page);
   await resetDocks(page);
+}
+
+test.beforeEach(async ({ page }) => {
+  await openAndResetDocks(page);
 });
 
 test.afterAll(async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
-  await resetDocks(page);
+  await openAndResetDocks(page);
   await context.close();
 });
 
@@ -220,7 +224,7 @@ test('the keyboard-resized sidebar survives reload and the layout reset restores
   await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(before.width);
 });
 
-test('the dock layout can be put back the way it started', async ({ page }) => {
+test('the dock layout can be put back the way it started', async ({ page, browser }) => {
   await openPod(page);
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await page.getByRole('button', { name: 'Move Overview to the bottom' }).click();
@@ -230,12 +234,18 @@ test('the dock layout can be put back the way it started', async ({ page }) => {
       .getByRole('tab', { name: 'Overview', exact: true }),
   ).toBeVisible({ timeout: 20_000 });
   await resetDocks(page);
-  await openPod(page);
-  await expect(
-    page
-      .getByRole('tablist', { name: 'right panels' })
-      .getByRole('tab', { name: 'Overview', exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
+  const context = await browser.newContext();
+  const restored = await context.newPage();
+  try {
+    await openPod(restored);
+    await expect(
+      restored
+        .getByRole('tablist', { name: 'right panels' })
+        .getByRole('tab', { name: 'Overview', exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
+  } finally {
+    await context.close();
+  }
 });
 
 test('the dock tabs move under the arrow keys', async ({ page }) => {
