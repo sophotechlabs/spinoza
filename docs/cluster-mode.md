@@ -24,7 +24,8 @@ Turn it on with `--cluster-mode` and `--public-url`. The published Helm chart at
 | desktop window | yes | off |
 
 Everything else is the same product: the same tables, the same GitOps and Helm
-views, the same inspect drawer, the same exec and port-forwarding.
+views, the same inspect drawer and the same exec. Spinoza's own port-forwarding
+actions stay unavailable in cluster mode.
 
 ## Quick start
 
@@ -166,6 +167,60 @@ proxy-authenticated live sessions after `auth.proxy.webSocketMaxAge`, five
 minutes by default and at most fifteen minutes. The browser reconnects through
 the proxy with current identity headers.
 
+The Cluster Mode gate tests this with oauth2-proxy `v7.15.3`. Its public ingress
+points to oauth2-proxy, while spinoza remains reachable only as a ClusterIP.
+The proxy's structured configuration sends the authenticated claims and the
+secret to that upstream:
+
+```yaml
+upstreamConfig:
+  upstreams:
+    - id: spinoza
+      path: /
+      uri: http://spinoza.spinoza.svc.cluster.local:8080
+      passHostHeader: true
+      proxyWebSockets: true
+providers:
+  - id: identity
+    provider: oidc
+    clientID: spinoza-proxy
+    clientSecretFile: /var/run/secrets/oauth2-proxy/client-secret
+    backendLogoutURL: "https://identity.example.com/realms/main/protocol/openid-connect/logout?id_token_hint={id_token}"
+    oidcConfig:
+      issuerURL: https://identity.example.com/realms/main
+      groupsClaim: groups
+      userIDClaim: preferred_username
+injectRequestHeaders:
+  - name: X-Forwarded-User
+    values:
+      - claimSource:
+          claim: preferred_username
+  - name: X-Forwarded-Groups
+    values:
+      - claimSource:
+          claim: groups
+  - name: X-Spinoza-Proxy-Secret
+    values:
+      - secretSource:
+          fromFile: /var/run/secrets/oauth2-proxy/proxy-secret
+```
+
+Use `--alpha-config` for that file and set the normal cookie, redirect URL,
+email-domain and reverse-proxy options separately. oauth2-proxy strips an
+incoming value for each injected header by default and normalizes header names,
+so alternate capitalization or underscores cannot retain a forged identity.
+Keep `preserveRequestValue` off. The structured format is marked alpha and may
+change between oauth2-proxy releases; validate it with `--config-test` before an
+upgrade. See oauth2-proxy's
+[header injection reference](https://oauth2-proxy.github.io/oauth2-proxy/configuration/alpha-config/)
+for the version-specific schema.
+
+`/oauth2/sign_out` clears only oauth2-proxy's cookie. Set the provider's
+`backendLogoutURL` with `{id_token}` as above, or configure an equivalent `rd`
+redirect to the provider's logout endpoint, so its SSO session ends too. Without
+that, returning to the protected root can silently sign the same person in
+again.
+
 ### `none`
 
 No sign-in at all: everybody who reaches the address is an admin here. The chart
@@ -272,8 +327,8 @@ When impersonation is enabled, Spinoza resolves it this way:
   the RBAC index and the fleet reports — need cluster-wide read. An account without it gets a
   403 that says so, rather than a partial answer that looks complete.
 - **Everything read straight from the apiserver** — a single object's YAML,
-  events, logs, exec, port-forwarding, Helm release storage — is impersonated,
-  so the cluster decides.
+  events, logs, exec and Helm release storage — is impersonated, so the cluster
+  decides.
 
 The practical shape: give people cluster-wide read and let RBAC govern writes,
 or bind them in their own namespaces and accept that the cluster-wide views are
@@ -326,9 +381,10 @@ they go with the pod.
 
 Don't, for now. Sessions are stateless cookies and would survive a load
 balancer, but back-channel revocations are per-pod, the timeline recorder writes
-to local storage, and port-forwards are held by the process that started them.
-`replicaCount: 1` is the supported shape, and the chart refuses to render
-anything else rather than install something that half works.
+to one state database, and live subscriptions and terminal sessions belong to
+the process that accepted them. `replicaCount: 1` is the supported shape, and
+the chart refuses to render anything else rather than install something that
+half works.
 
 ## Troubleshooting
 

@@ -37,6 +37,7 @@ const (
 	pathSession = "/api/auth/me"
 	namespace   = "spinoza"
 	chart       = "../../deploy/helm/spinoza"
+	proxyFile   = "oauth2-proxy.yaml"
 	deployWait  = "8m"
 	rolloutWait = 5 * time.Minute
 )
@@ -77,10 +78,7 @@ func maybeKubectl(t *testing.T, args ...string) (string, error) {
 }
 
 func baseValues() map[string]string {
-	return map[string]string{
-		"image.repository":                       "spinoza",
-		"image.tag":                              "cluster-mode",
-		"image.pullPolicy":                       "Never",
+	values := map[string]string{
 		"publicURL":                              base,
 		"ingress.enabled":                        "true",
 		"ingress.className":                      "nginx",
@@ -94,6 +92,25 @@ func baseValues() map[string]string {
 		"rbac.impersonation.unsafeAllowAnyUser":  "true",
 		"rbac.impersonation.unsafeAllowAnyGroup": "true",
 	}
+	if os.Getenv("SPINOZA_CM_USE_CHART_IMAGE") == "1" {
+		return values
+	}
+	values["image.repository"] = valueFromEnvironment("SPINOZA_CM_IMAGE_REPOSITORY", "spinoza")
+	values["image.tag"] = valueFromEnvironment("SPINOZA_CM_IMAGE_TAG", "cluster-mode")
+	values["image.pullPolicy"] = valueFromEnvironment("SPINOZA_CM_IMAGE_PULL_POLICY", "Never")
+	return values
+}
+
+func valueFromEnvironment(name, fallback string) string {
+	held := os.Getenv(name)
+	if held != "" {
+		return held
+	}
+	return fallback
+}
+
+func chartReference() string {
+	return valueFromEnvironment("SPINOZA_CM_CHART", chart)
 }
 
 func oidcValues() map[string]string {
@@ -113,11 +130,27 @@ func oidcValues() map[string]string {
 
 func deploy(t *testing.T, values map[string]string) {
 	t.Helper()
+	deployVersion(t, values, "")
+}
+
+func deployVersion(t *testing.T, values map[string]string, version string) {
+	t.Helper()
+	removeRealProxy(t)
+	installVersion(t, values, version)
+	waitReachable(t)
+	waitServing(t, values["auth.mode"])
+}
+
+func installVersion(t *testing.T, values map[string]string, version string) {
+	t.Helper()
 	args := []string{
 		"--kube-context", context1(t),
-		"upgrade", "--install", release, chart,
+		"upgrade", "--install", release, chartReference(),
 		"--namespace", namespace,
 		"--wait", "--timeout", deployWait,
+	}
+	if version != "" {
+		args = append(args, "--version", version)
 	}
 	for key, value := range values {
 		args = append(args, "--set", key+"="+value)
@@ -125,8 +158,49 @@ func deploy(t *testing.T, values map[string]string) {
 	run(t, "helm", args...)
 	kubectl(t, "-n", namespace, "rollout", "status", "deployment/"+release, "--timeout="+deployWait)
 	waitEndpoints(t)
-	waitReachable(t)
-	waitServing(t, values["auth.mode"])
+}
+
+func proxyValues() map[string]string {
+	values := baseValues()
+	values["ingress.enabled"] = "false"
+	values["auth.mode"] = "proxy"
+	values["auth.proxy.existingSecret"] = "oauth2-proxy"
+	values["auth.proxy.existingSecretKey"] = "proxy-secret"
+	values["auth.proxy.logoutURL"] = base + "/oauth2/sign_out"
+	values["auth.adminGroups[0]"] = "platform-admins"
+	values["auth.editorGroups[0]"] = "platform"
+	return values
+}
+
+func deployRealProxy(t *testing.T) {
+	t.Helper()
+	removeRealProxy(t)
+	kubectl(t, "-n", namespace, "delete", "ingress", release, "--ignore-not-found=true", "--wait=true")
+	kubectl(t, "apply", "-f", proxyFile)
+	installVersion(t, proxyValues(), "")
+	kubectl(t, "-n", namespace, "rollout", "status", "deployment/oauth2-proxy", "--timeout="+deployWait)
+	waitProxy(t)
+}
+
+func removeRealProxy(t *testing.T) {
+	t.Helper()
+	_, _ = maybeKubectl(t, "delete", "-f", proxyFile, "--ignore-not-found=true", "--wait=true")
+}
+
+func waitProxy(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(rolloutWait)
+	for time.Now().Before(deadline) {
+		resp, err := anonymous(t).Get(base + "/ping")
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatal("oauth2-proxy never answered on its ingress")
 }
 
 // waitEndpoints holds until the ingress has somewhere to send a request. The
@@ -318,9 +392,16 @@ func truncate(text string) string {
 	return text[:400] + "..."
 }
 
-func podIn(t *testing.T, ns string) string {
+func podIn(t *testing.T, ns, selector string) string {
 	t.Helper()
-	return strings.TrimSpace(kubectl(t, "-n", ns, "get", "pod", "-o", "jsonpath={.items[0].metadata.name}"))
+	name := strings.TrimSpace(kubectl(t, "-n", ns, "get", "pod", "-l", selector,
+		"--field-selector=status.phase=Running", "--sort-by=.metadata.creationTimestamp",
+		"-o", "jsonpath={.items[-1].metadata.name}"))
+	if name == "" {
+		t.Fatalf("no running pod in %s matched %s", ns, selector)
+	}
+	kubectl(t, "-n", ns, "wait", "pod/"+name, "--for=condition=Ready", "--timeout=5m")
+	return name
 }
 
 func aNode(t *testing.T) string {

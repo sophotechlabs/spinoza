@@ -31,7 +31,7 @@
         "http://localhost:8080"
       ],
       "attributes": {
-        "post.logout.redirect.uris": "https://spinoza.localtest.me:8443/*+http://localhost:8080/*",
+        "post.logout.redirect.uris": "+",
         "backchannel.logout.session.required": "true",
         "backchannel.logout.url": "http://spinoza.spinoza.svc.cluster.local:8080/auth/backchannel-logout"
       },
@@ -68,6 +68,35 @@
         "backchannel.logout.session.required": "false",
         "backchannel.logout.url": "http://spinoza.spinoza.svc.cluster.local:8080/auth/backchannel-logout"
       },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "oauth2-proxy",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "oauth2-proxy-client-secret",
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "https://spinoza.localtest.me:8443/oauth2/callback"
+      ],
+      "webOrigins": [
+        "https://spinoza.localtest.me:8443"
+      ],
       "protocolMappers": [
         {
           "name": "groups",

@@ -878,6 +878,98 @@ test-cluster-mode name='': stub-assets cluster-mode-up cluster-mode-image
     SPINOZA_CM_CONTEXT={{ cm_context }} SPINOZA_CM_CA="$PWD/.tmp/cm/tls.crt" \
         go test "${args[@]}" ./{{ cm_dir }}/...
 
+test-cluster-mode-browser browser='chromium' mode='' name='': stub-assets cluster-mode-up cluster-mode-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    browser={{ quote(browser) }}
+    case "$browser" in
+        chromium|firefox|webkit)
+            ;;
+        *)
+            echo "test-cluster-mode-browser: unsupported browser $browser"
+            exit 1
+            ;;
+    esac
+    requested={{ quote(mode) }}
+    modes=(oidc proxy)
+    if [ -n "$requested" ]; then
+        case "$requested" in
+            oidc|proxy)
+                modes=("$requested")
+                ;;
+            *)
+                echo "test-cluster-mode-browser: unsupported mode $requested"
+                exit 1
+                ;;
+        esac
+    fi
+    if [ ! -d e2e/node_modules ] || [ e2e/package-lock.json -nt e2e/node_modules ]; then
+        npm --prefix e2e ci
+    fi
+    install_deps=no
+    if [ -n "${CI:-}" ]; then
+        if command -v sudo > /dev/null 2>&1; then
+            if sudo -n true > /dev/null 2>&1; then
+                install_deps=yes
+            fi
+        fi
+    fi
+    if [ "$install_deps" = yes ]; then
+        npx --prefix e2e playwright install --with-deps "$browser"
+    else
+        npx --prefix e2e playwright install "$browser"
+    fi
+    executable="$(node -e "console.log(require('./e2e/node_modules/playwright').${browser}.executablePath())")"
+    if [ ! -x "$executable" ]; then
+        npx --prefix e2e playwright install --force "$browser"
+    fi
+    export SPINOZA_CM_CONTEXT={{ cm_context }}
+    export SPINOZA_CM_CA="$PWD/.tmp/cm/tls.crt"
+    export SPINOZA_CM_BROWSER="$browser"
+    name={{ quote(name) }}
+    for current_mode in "${modes[@]}"; do
+        SPINOZA_CM_BROWSER_FIXTURE="$current_mode" \
+            go test -tags clustermode -count=1 -timeout 20m -v \
+            -run '^TestTheBrowserFixtureIsReady$' ./{{ cm_dir }}/...
+        run=(test --config=e2e/cluster-mode.config.ts)
+        if [ -n "$name" ]; then
+            run+=(--grep "$name")
+        fi
+        SPINOZA_CM_AUTH_MODE="$current_mode" npx --prefix e2e playwright "${run[@]}"
+    done
+
+test-cluster-mode-release previous current: cluster-mode-up
+    #!/usr/bin/env bash
+    set -euo pipefail
+    previous={{ quote(previous) }}
+    current={{ quote(current) }}
+    if [ -z "$previous" ] || [ -z "$current" ]; then
+        echo "test-cluster-mode-release: previous and current versions are required"
+        exit 1
+    fi
+    SPINOZA_CM_CONTEXT={{ cm_context }} \
+    SPINOZA_CM_CA="$PWD/.tmp/cm/tls.crt" \
+    SPINOZA_CM_CHART=oci://ghcr.io/sophotechlabs/charts/spinoza \
+    SPINOZA_CM_USE_CHART_IMAGE=1 \
+    SPINOZA_CM_PREVIOUS_VERSION="$previous" \
+    SPINOZA_CM_CURRENT_VERSION="$current" \
+        go test -tags clustermode -count=1 -timeout 60m -v \
+        -run '^TestOnePublishedReleaseCanBeUpgradedAndRolledBack$' ./{{ cm_dir }}/...
+
+cluster-mode-diagnostics:
+    #!/usr/bin/env bash
+    set -u
+    output="$PWD/.tmp/cm/diagnostics"
+    mkdir -p "$output"
+    kubectl --context {{ cm_context }} get nodes,namespaces -o wide > "$output/cluster.txt" 2>&1
+    kubectl --context {{ cm_context }} get all,ingress,pvc -A -o wide > "$output/resources.txt" 2>&1
+    kubectl --context {{ cm_context }} get events -A --sort-by=.lastTimestamp > "$output/events.txt" 2>&1
+    kubectl --context {{ cm_context }} -n spinoza logs deployment/spinoza --all-containers --tail=-1 > "$output/spinoza.log" 2>&1
+    kubectl --context {{ cm_context }} -n spinoza logs deployment/oauth2-proxy --all-containers --tail=-1 > "$output/oauth2-proxy.log" 2>&1
+    kubectl --context {{ cm_context }} -n keycloak logs deployment/keycloak --all-containers --tail=-1 > "$output/keycloak.log" 2>&1
+    helm --kube-context {{ cm_context }} list -A > "$output/helm-list.txt" 2>&1
+    helm --kube-context {{ cm_context }} history spinoza -n spinoza > "$output/helm-history.txt" 2>&1
+
 lint-chart:
     helm lint deploy/helm/spinoza --set publicURL=https://spinoza.example.com --set auth.mode=none --set auth.allowAnonymous=true
     helm template spinoza deploy/helm/spinoza --namespace spinoza \

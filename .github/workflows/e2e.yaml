@@ -139,6 +139,61 @@ jobs:
         with:
           install_args: just go kind kubectl helm
       - run: just test-cluster-mode
+      - run: just cluster-mode-diagnostics
+        if: failure()
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: failure()
+        with:
+          name: cluster-mode-auth
+          path: .tmp/cm/diagnostics
+          if-no-files-found: ignore
+          retention-days: 14
+      - run: just cluster-mode-down
+        if: always()
+
+  cluster-mode-browser:
+    needs: select
+    if: contains(fromJSON(needs.select.outputs.groups), 'cluster-mode-auth')
+    name: cluster mode / ${{ matrix.browser }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        browser:
+          - chromium
+          - firefox
+          - webkit
+    env:
+      SPINOZA_KIND_CLUSTER: cluster-mode-${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just node go kind kubectl helm
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/.cache/ms-playwright
+          key: cluster-mode-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('go.sum', 'e2e/package-lock.json') }}
+          restore-keys: cluster-mode-${{ runner.os }}-${{ matrix.browser }}-
+      - run: just test-cluster-mode-browser "${{ matrix.browser }}"
+      - run: just cluster-mode-diagnostics
+        if: failure()
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: failure()
+        with:
+          name: cluster-mode-${{ matrix.browser }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            .tmp/cm/diagnostics
+          if-no-files-found: ignore
+          retention-days: 14
       - run: just cluster-mode-down
         if: always()
 

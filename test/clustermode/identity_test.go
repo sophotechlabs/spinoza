@@ -97,6 +97,16 @@ func TestSigningInThroughKeycloak(t *testing.T) {
 		}
 	})
 
+	t.Run("checks refuse a scoped account instead of returning a partial audit", func(t *testing.T) {
+		status, message := read(t, signIn(t, "carol"), "/api/checks")
+		if status != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d", status, http.StatusForbidden)
+		}
+		if !strings.Contains(message, "reads the whole cluster") {
+			t.Fatalf("body = %q, want it to say why", message)
+		}
+	})
+
 	t.Run("a cluster-wide reader gets the whole cluster", func(t *testing.T) {
 		status, overview := read(t, signIn(t, "bob"), "/api/overview")
 		if status != http.StatusOK {

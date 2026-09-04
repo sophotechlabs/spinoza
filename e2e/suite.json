@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "smokeGroup": "foundation-security",
-  "specRoots": ["specs", "specs-full"],
+  "specRoots": ["cluster-mode", "specs", "specs-full"],
   "productionRoots": [
     "*.go",
     "cmd/**",
@@ -337,11 +337,17 @@
       "runner": "cluster-mode",
       "profile": "cluster-mode",
       "timeoutMinutes": 120,
-      "specs": [],
+      "specs": ["cluster-mode/oidc.spec.ts", "cluster-mode/proxy.spec.ts"],
       "paths": [
         "deploy/helm/spinoza/**",
         "docs/cluster-mode.md",
+        "e2e/cluster-mode.config.ts",
+        "e2e/cluster-mode/**",
+        "frontend/src/components/UserMenu.tsx",
+        "frontend/src/lib/identity.ts",
         "internal/auth/**",
+        "internal/server/auth.go",
+        "internal/server/guard.go",
         "serve.go",
         "test/clustermode/**"
       ]

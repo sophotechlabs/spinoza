@@ -183,6 +183,9 @@ func (s *Server) admitServed(w http.ResponseWriter, r *http.Request) (*http.Requ
 
 func (s *Server) ownAddress(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
+	if origin == "null" {
+		return r.Header.Get("Sec-Fetch-Site") == "same-origin"
+	}
 	if origin == "" {
 		if topLevelNavigation(r) {
 			return true

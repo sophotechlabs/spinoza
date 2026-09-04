@@ -608,16 +608,22 @@ func TestACrossSiteNavigationCannotSignSomeoneOut(t *testing.T) {
 		PublicURL:     "https://spinoza.example.com",
 	})
 	for _, test := range []struct {
-		method string
-		want   int
+		name      string
+		method    string
+		fetchSite string
+		want      int
 	}{
-		{method: http.MethodGet, want: http.StatusMethodNotAllowed},
-		{method: http.MethodPost, want: http.StatusForbidden},
+		{name: "GET cross site", method: http.MethodGet, fetchSite: "cross-site", want: http.StatusForbidden},
+		{name: "POST cross site", method: http.MethodPost, fetchSite: "cross-site", want: http.StatusForbidden},
+		{name: "POST without metadata", method: http.MethodPost, want: http.StatusForbidden},
 	} {
-		t.Run(test.method, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest(test.method, pathLogout, http.NoBody)
 			request.Host = "spinoza.example.com"
-			request.Header.Set("Sec-Fetch-Site", "cross-site")
+			request.Header.Set("Origin", "null")
+			if test.fetchSite != "" {
+				request.Header.Set("Sec-Fetch-Site", test.fetchSite)
+			}
 			request.Header.Set("Sec-Fetch-Mode", "navigate")
 			request.Header.Set("Sec-Fetch-Dest", "document")
 			recorded := httptest.NewRecorder()
@@ -634,6 +640,40 @@ func TestACrossSiteNavigationCannotSignSomeoneOut(t *testing.T) {
 				t.Fatalf("location = %q, want no provider logout redirect", recorded.Header().Get("Location"))
 			}
 		})
+	}
+}
+
+func TestASameSiteFormCanSignSomeoneOutWhenTheBrowserWithholdsItsOrigin(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: everyNamespace()}, testAssets(), "")
+	authn, err := auth.New(t.Context(), auth.Config{
+		Mode: auth.ModeProxy,
+		Proxy: auth.ProxyConfig{
+			SharedSecret: []byte(testProxySecret),
+			LogoutURL:    "https://proxy.example/logout",
+		},
+	})
+	if err != nil {
+		t.Fatalf("building the authenticator: %v", err)
+	}
+	srv.UseClusterAuth(ClusterAuth{
+		Authenticator: authn,
+		PublicURL:     "https://spinoza.example.com",
+	})
+	request := httptest.NewRequest(http.MethodPost, pathLogout, http.NoBody)
+	request.Host = "spinoza.example.com"
+	request.Header.Set("Origin", "null")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set("Sec-Fetch-Mode", "navigate")
+	request.Header.Set("Sec-Fetch-Dest", "document")
+	recorded := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(recorded, request)
+
+	if recorded.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", recorded.Code, http.StatusFound)
+	}
+	if recorded.Header().Get("Location") != "https://proxy.example/logout" {
+		t.Fatalf("location = %q, want the provider logout", recorded.Header().Get("Location"))
 	}
 }
 

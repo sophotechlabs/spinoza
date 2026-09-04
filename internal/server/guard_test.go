@@ -150,6 +150,43 @@ func TestGuardAdmissionMatrix(t *testing.T) {
 			want:  http.StatusOK,
 		},
 		{
+			name:  "healthz with an opaque same-origin",
+			path:  "/healthz",
+			token: "header",
+			headers: map[string]string{
+				"Origin":         "null",
+				"Sec-Fetch-Site": "same-origin",
+			},
+			want: http.StatusOK,
+		},
+		{
+			name:    "healthz with an opaque origin and no metadata",
+			path:    "/healthz",
+			token:   "header",
+			headers: map[string]string{"Origin": "null"},
+			want:    http.StatusForbidden,
+		},
+		{
+			name:  "healthz with an opaque same-site origin",
+			path:  "/healthz",
+			token: "header",
+			headers: map[string]string{
+				"Origin":         "null",
+				"Sec-Fetch-Site": "same-site",
+			},
+			want: http.StatusForbidden,
+		},
+		{
+			name:  "healthz with an opaque cross-site origin",
+			path:  "/healthz",
+			token: "header",
+			headers: map[string]string{
+				"Origin":         "null",
+				"Sec-Fetch-Site": "cross-site",
+			},
+			want: http.StatusForbidden,
+		},
+		{
 			name:    "healthz from a foreign origin",
 			path:    "/healthz",
 			token:   "header",

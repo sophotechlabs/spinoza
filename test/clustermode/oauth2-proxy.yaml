@@ -1,0 +1,182 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oauth2-proxy
+  namespace: spinoza
+type: Opaque
+stringData:
+  client-secret: oauth2-proxy-client-secret
+  cookie-secret: 00000000000000000000000000000000
+  proxy-secret: a-cluster-mode-proxy-secret-that-is-long-enough
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy
+  namespace: spinoza
+data:
+  alpha.yaml: |
+    server:
+      bindAddress: 0.0.0.0:4180
+    upstreamConfig:
+      upstreams:
+        - id: spinoza
+          path: /
+          uri: http://spinoza.spinoza.svc.cluster.local:8080
+          passHostHeader: true
+          proxyWebSockets: true
+          timeout: 60s
+    providers:
+      - id: keycloak
+        name: Keycloak
+        provider: oidc
+        clientID: oauth2-proxy
+        clientSecretFile: /var/run/secrets/oauth2-proxy/client-secret
+        loginURL: https://keycloak.localtest.me:8443/realms/spinoza/protocol/openid-connect/auth
+        redeemURL: http://keycloak.keycloak.svc.cluster.local:8080/realms/spinoza/protocol/openid-connect/token
+        profileURL: http://keycloak.keycloak.svc.cluster.local:8080/realms/spinoza/protocol/openid-connect/userinfo
+        backendLogoutURL: "http://keycloak.keycloak.svc.cluster.local:8080/realms/spinoza/protocol/openid-connect/logout?id_token_hint={id_token}"
+        skipClaimsFromProfileURL: true
+        scope: openid profile email
+        code_challenge_method: S256
+        oidcConfig:
+          issuerURL: https://keycloak.localtest.me:8443/realms/spinoza
+          skipDiscovery: true
+          jwksURL: http://keycloak.keycloak.svc.cluster.local:8080/realms/spinoza/protocol/openid-connect/certs
+          insecureSkipNonce: false
+          emailClaim: email
+          groupsClaim: groups
+          userIDClaim: preferred_username
+          audienceClaims:
+            - aud
+    injectRequestHeaders:
+      - name: X-Forwarded-User
+        values:
+          - claimSource:
+              claim: preferred_username
+      - name: X-Forwarded-Groups
+        values:
+          - claimSource:
+              claim: groups
+      - name: X-Spinoza-Proxy-Secret
+        values:
+          - secretSource:
+              fromFile: /var/run/secrets/oauth2-proxy/proxy-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: spinoza
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oauth2-proxy
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 2000
+        runAsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: oauth2-proxy
+          image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.3
+          imagePullPolicy: IfNotPresent
+          args:
+            - --alpha-config=/etc/oauth2-proxy/alpha.yaml
+            - --redirect-url=https://spinoza.localtest.me:8443/oauth2/callback
+            - --email-domain=*
+            - --reverse-proxy=true
+            - --skip-provider-button=true
+            - --cookie-name=_spinoza_oauth2_proxy
+            - --cookie-secure=true
+            - --cookie-httponly=true
+            - --cookie-samesite=lax
+          env:
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: oauth2-proxy
+                  key: cookie-secret
+          ports:
+            - name: http
+              containerPort: 4180
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/oauth2-proxy
+              readOnly: true
+            - name: secrets
+              mountPath: /var/run/secrets/oauth2-proxy
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: oauth2-proxy
+        - name: secrets
+          secret:
+            secretName: oauth2-proxy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+  namespace: spinoza
+spec:
+  selector:
+    app.kubernetes.io/name: oauth2-proxy
+  ports:
+    - name: http
+      port: 4180
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oauth2-proxy
+  namespace: spinoza
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: spinoza.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: oauth2-proxy
+                port:
+                  name: http
+  tls:
+    - secretName: localtest-tls
+      hosts:
+        - spinoza.localtest.me

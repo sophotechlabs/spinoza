@@ -58,15 +58,24 @@ func TestALogoutTokenNamingNoSessionLeavesTheCookieAlone(t *testing.T) {
 	}
 }
 
-func TestSettingsSurviveThePodBeingReplaced(t *testing.T) {
+func TestEachPersonsSettingsSurviveThePodBeingReplaced(t *testing.T) {
 	values := oidcValues()
 	values["persistence.enabled"] = "true"
 	deploy(t, values)
 	alice := signIn(t, "alice")
+	bob := signIn(t, "bob")
 
 	status, message := put(t, alice, "/api/settings", `{"values":{"spinoza.theme.v1":"borg"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("writing settings gave %d: %s", status, message)
+	}
+	status, message = put(t, bob, "/api/settings", `{"values":{"spinoza.theme.v1":"matrix"}}`)
+	if status != http.StatusOK {
+		t.Fatalf("writing bob's settings gave %d: %s", status, message)
+	}
+	_, before := read(t, bob, "/api/settings")
+	if strings.Contains(before, "borg") {
+		t.Fatalf("bob received alice's settings: %s", truncate(before))
 	}
 
 	kubectl(t, "-n", namespace, "rollout", "restart", "deployment/"+release)
@@ -77,7 +86,17 @@ func TestSettingsSurviveThePodBeingReplaced(t *testing.T) {
 
 	_, after := read(t, signIn(t, "alice"), "/api/settings")
 	if !strings.Contains(after, "borg") {
-		t.Fatalf("settings did not survive the restart: %s", truncate(after))
+		t.Fatalf("alice's settings did not survive the restart: %s", truncate(after))
+	}
+	if strings.Contains(after, "matrix") {
+		t.Fatalf("alice received bob's settings: %s", truncate(after))
+	}
+	_, bobAfter := read(t, signIn(t, "bob"), "/api/settings")
+	if !strings.Contains(bobAfter, "matrix") {
+		t.Fatalf("bob's settings did not survive the restart: %s", truncate(bobAfter))
+	}
+	if strings.Contains(bobAfter, "borg") {
+		t.Fatalf("bob received alice's settings after restart: %s", truncate(bobAfter))
 	}
 }
 
@@ -224,6 +243,13 @@ func put(t *testing.T, held *http.Client, path, payload string) (int, string) {
 	if doErr != nil {
 		t.Fatalf("PUT %s: %v", path, doErr)
 	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode, body(t, resp)
+}
+
+func delete(t *testing.T, held *http.Client, path string) (int, string) {
+	t.Helper()
+	resp := request(t, held, http.MethodDelete, path)
 	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode, body(t, resp)
 }

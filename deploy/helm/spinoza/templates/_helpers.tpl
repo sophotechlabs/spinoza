@@ -104,6 +104,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- fail "impersonate=true requires rbac.impersonation.users or the explicit unsafe rbac.impersonation.unsafeAllowAnyUser=true compatibility mode" -}}
 {{- end -}}
 {{- if gt (int .Values.replicaCount) 1 -}}
-{{- fail "spinoza keeps back-channel logouts, the timeline and running port-forwards in the process, so a second replica would answer without them; replicaCount has to be 1" -}}
+{{- fail "spinoza keeps back-channel logouts, live sessions and one state database per deployment, so a second replica would answer with different state; replicaCount has to be 1" -}}
 {{- end -}}
 {{- end -}}

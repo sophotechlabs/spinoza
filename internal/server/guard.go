@@ -262,6 +262,9 @@ func isLocal(r *http.Request) bool {
 		return false
 	}
 	origin := r.Header.Get("Origin")
+	if origin == "null" {
+		return r.Header.Get("Sec-Fetch-Site") == "same-origin"
+	}
 	if origin == "" {
 		if topLevelNavigation(r) {
 			return true

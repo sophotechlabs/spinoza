@@ -3,6 +3,7 @@
 package clustermode
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -25,6 +26,28 @@ func scaleTo(namespace, name string, replicas int) string {
 	return "/api/action?" + query.Encode()
 }
 
+func restart(namespace, name string) string {
+	query := url.Values{
+		"action":    {"restart"},
+		"group":     {"apps"},
+		"version":   {"v1"},
+		"resource":  {"deployments"},
+		"namespace": {namespace},
+		"name":      {name},
+	}
+	return "/api/action?" + query.Encode()
+}
+
+func objectPath(namespace, name string) string {
+	query := url.Values{
+		"version":   {"v1"},
+		"resource":  {"configmaps"},
+		"namespace": {namespace},
+		"name":      {name},
+	}
+	return "/api/object?" + query.Encode()
+}
+
 func logsFor(namespace, pod string) api.ClientMsg {
 	return api.ClientMsg{
 		Type:      "logs-subscribe",
@@ -41,8 +64,7 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 	values["extraArgs[0]"] = "--pprof"
 	deploy(t, values)
 
-	paymentsPod := podIn(t, "payments")
-	defaultPod := podIn(t, "default")
+	defaultPod := podIn(t, "default", "app=other")
 
 	t.Run("the service account itself may not do any of this", func(t *testing.T) {
 		account := "system:serviceaccount:spinoza:spinoza"
@@ -56,6 +78,10 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 	})
 
 	t.Run("a write", func(t *testing.T) {
+		defer func() {
+			kubectl(t, "-n", "payments", "scale", "deployment/web", "--replicas=1")
+			kubectl(t, "-n", "payments", "rollout", "status", "deployment/web", "--timeout=5m")
+		}()
 		bob := signIn(t, "bob")
 		status, message := post(t, bob, scaleTo("payments", "web", 2))
 		if status != http.StatusOK {
@@ -70,7 +96,62 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 		}
 	})
 
+	t.Run("a restart", func(t *testing.T) {
+		bob := signIn(t, "bob")
+		status, message := post(t, bob, restart("payments", "web"))
+		if status != http.StatusOK {
+			t.Fatalf("restarting in its own namespace gave %d: %s", status, message)
+		}
+		kubectl(t, "-n", "payments", "rollout", "status", "deployment/web", "--timeout=5m")
+		status, message = post(t, bob, restart("default", "other"))
+		if status != http.StatusForbidden {
+			t.Fatalf("restarting elsewhere gave %d: %s", status, message)
+		}
+		if !strings.Contains(messageOf(t, message), `User "bob"`) {
+			t.Fatalf("the cluster refused %q, want it to name bob", message)
+		}
+	})
+
+	t.Run("an apply and delete", func(t *testing.T) {
+		name := "cluster-mode-edit"
+		defer func() {
+			_, _ = maybeKubectl(t, "-n", "payments", "delete", "configmap", name, "--ignore-not-found=true")
+			_, _ = maybeKubectl(t, "-n", "default", "delete", "configmap", name, "--ignore-not-found=true")
+		}()
+		_, _ = maybeKubectl(t, "-n", "payments", "delete", "configmap", name, "--ignore-not-found=true")
+		_, _ = maybeKubectl(t, "-n", "default", "delete", "configmap", name, "--ignore-not-found=true")
+		kubectl(t, "-n", "payments", "create", "configmap", name, "--from-literal=message=before")
+		kubectl(t, "-n", "default", "create", "configmap", name, "--from-literal=message=before")
+		allowedResourceVersion := strings.TrimSpace(kubectl(t, "-n", "payments", "get", "configmap", name,
+			"-o", "jsonpath={.metadata.resourceVersion}"))
+		deniedResourceVersion := strings.TrimSpace(kubectl(t, "-n", "default", "get", "configmap", name,
+			"-o", "jsonpath={.metadata.resourceVersion}"))
+		bob := signIn(t, "bob")
+		payload := fmt.Sprintf(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"%s","namespace":"payments","resourceVersion":"%s"},"data":{"message":"from-bob"}}`, name, allowedResourceVersion)
+		status, message := put(t, bob, objectPath("payments", name), payload)
+		if status != http.StatusOK {
+			t.Fatalf("applying in its own namespace gave %d: %s", status, message)
+		}
+		stored := kubectl(t, "-n", "payments", "get", "configmap", name, "-o", "jsonpath={.data.message}")
+		if stored != "from-bob" {
+			t.Fatalf("stored message = %q, want from-bob", stored)
+		}
+		status, message = delete(t, bob, objectPath("payments", name))
+		if status != http.StatusNoContent {
+			t.Fatalf("deleting in its own namespace gave %d: %s", status, message)
+		}
+		deniedPayload := fmt.Sprintf(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"%s","namespace":"default","resourceVersion":"%s"},"data":{"message":"from-bob"}}`, name, deniedResourceVersion)
+		status, message = put(t, bob, objectPath("default", name), deniedPayload)
+		if status != http.StatusForbidden {
+			t.Fatalf("applying elsewhere gave %d: %s", status, message)
+		}
+		if !strings.Contains(messageOf(t, message), `User "bob"`) {
+			t.Fatalf("the cluster refused %q, want it to name bob", message)
+		}
+	})
+
 	t.Run("a shell", func(t *testing.T) {
+		paymentsPod := podIn(t, "payments", "app=web")
 		opened := shell(t, signIn(t, "alice"), "/api/exec?namespace=payments&pod="+paymentsPod)
 		if !strings.HasPrefix(opened, "OPENED") {
 			t.Fatalf("alice could not open a shell: %s", opened)
@@ -85,6 +166,7 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 	})
 
 	t.Run("a port forward, which would land on the server rather than on anyone", func(t *testing.T) {
+		paymentsPod := podIn(t, "payments", "app=web")
 		status, message := post(t, signIn(t, "alice"),
 			"/api/portforward?kind=Pod&namespace=payments&name="+paymentsPod+"&port=80")
 		if status != http.StatusForbidden {
@@ -134,6 +216,7 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 	})
 
 	t.Run("logs", func(t *testing.T) {
+		paymentsPod := podIn(t, "payments", "app=web")
 		carol := signIn(t, "carol")
 		reply := subscribe(t, carol, logsFor("default", defaultPod))
 		if reply.Type != "error" {
@@ -165,6 +248,30 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 		status, message = post(t, alice, "/api/helm/action?action=uninstall&namespace=payments&name=probe")
 		if status != http.StatusOK {
 			t.Fatalf("alice could not uninstall a release: %d %s", status, message)
+		}
+	})
+
+	t.Run("helm rollback and uninstall", func(t *testing.T) {
+		installProbe(t, "payments")
+		defer func() {
+			removeProbe(t, "payments")
+		}()
+		run(t, "helm", "--kube-context", context1(t), "upgrade", "probe", "chart",
+			"--namespace", "payments", "--set", "message=changed", "--wait", "--timeout", "2m")
+		bob := signIn(t, "bob")
+		status, message := post(t, bob,
+			"/api/helm/action?action=rollback&revision=1&namespace=payments&name=probe")
+		if status != http.StatusOK {
+			t.Fatalf("bob could not roll back a release in payments: %d %s", status, message)
+		}
+		stored := kubectl(t, "-n", "payments", "get", "configmap", "probe", "-o", "jsonpath={.data.message}")
+		if stored != "hello" {
+			t.Fatalf("rolled back message = %q, want hello", stored)
+		}
+		status, message = post(t, bob,
+			"/api/helm/action?action=uninstall&namespace=payments&name=probe")
+		if status != http.StatusOK {
+			t.Fatalf("bob could not uninstall a release in payments: %d %s", status, message)
 		}
 	})
 }
