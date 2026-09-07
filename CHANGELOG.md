@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.29.0](https://github.com/sophotechlabs/spinoza/compare/v1.28.0...v1.29.0) (2026-09-07)
+
+
+### Features
+
+* **checks:** decide PSS upstream, import scanner findings, widen rule CEL ([5914c2c](https://github.com/sophotechlabs/spinoza/commit/5914c2c9aee31a38e5813894edf8502e3bb08c26))
+* **cluster-mode:** refactor cluster mode ([ed4ec06](https://github.com/sophotechlabs/spinoza/commit/ed4ec0609b6fa404ec691628a4010fed386f6509))
+* **theme:** make Borg the default theme ([4e4bb94](https://github.com/sophotechlabs/spinoza/commit/4e4bb94003ff1f9c03ac8a43026dcf68076fa8cc))
+
+
+### Bug Fixes
+
+* **cluster:** name the host and a possible proxy when a certificate is not trusted ([f7b29d1](https://github.com/sophotechlabs/spinoza/commit/f7b29d1ae0e3326cf93388fc7ab805d7bc496a8f))
+* **desktop:** take the login shell environment and name an untrusted kubeconfig ([d705cc9](https://github.com/sophotechlabs/spinoza/commit/d705cc935452d28dff3daa28952b55789656cef4))
+* **test:** quote the oauth2-proxy cookie secret so the fixture applies ([f2bb7c4](https://github.com/sophotechlabs/spinoza/commit/f2bb7c4144ce5849a9b6f99cf68e111b2648ca45))
+* **theme:** give the editor a readable dimmed line number ([5548812](https://github.com/sophotechlabs/spinoza/commit/5548812fee3711fed0acb0aa79a71953b2bc2885))
+
+
+### Tests
+
+* **e2e:** avoid dock reset reload crash ([5b5c42b](https://github.com/sophotechlabs/spinoza/commit/5b5c42b2f5d56c73fdd6f59dfadbd46468c74e63))
+* **e2e:** wait for dock reset persistence ([1617d7c](https://github.com/sophotechlabs/spinoza/commit/1617d7c63ed3b827d0fa7a43ada5aed2eb016589))
+
+
+### Build
+
+* **just:** add handoff-gate and let pinned tools win over ~/go/bin ([12d3d82](https://github.com/sophotechlabs/spinoza/commit/12d3d82f3e15b5f1ebe329219c55d36c116ee0e1))
+
 ## [1.28.0](https://github.com/sophotechlabs/spinoza/compare/v1.27.5...v1.28.0) (2026-09-04)
 
 
