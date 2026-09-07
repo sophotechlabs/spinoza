@@ -67,6 +67,7 @@ const EDITOR_FILLS: [string, string][] = [
 const EDITOR_TEXT: [string, string, string][] = [
   ['editorLineNumber.foreground', 'fg-muted', 'surface'],
   ['editorLineNumber.activeForeground', 'fg-strong', 'surface'],
+  ['editorLineNumber.dimmedForeground', 'fg-subtle', 'surface'],
   ['editorCursor.foreground', 'fg-strong', 'surface'],
   ['editorWidget.foreground', 'fg', 'surface-raised'],
   ['editorSuggestWidget.foreground', 'fg', 'surface-raised'],

@@ -133,11 +133,13 @@ describe('the colours monaco gets for a theme', () => {
         fg: '#e5e9f0',
         'fg-strong': '#eceff4',
         'fg-muted': '#b8c3d4',
+        'fg-subtle': '#94a3bd',
       },
     });
 
     expect(spec.colors['editorLineNumber.foreground']).toBe('#b8c3d4');
     expect(spec.colors['editorLineNumber.activeForeground']).toBe('#eceff4');
+    expect(spec.colors['editorLineNumber.dimmedForeground']).toBe('#94a3bd');
     expect(spec.colors['editorGutter.background']).toBe('#2e3440');
     expect(spec.colors['editorWidget.background']).toBe('#3b4252');
   });
@@ -164,10 +166,11 @@ describe('the colours monaco gets for a theme', () => {
       id: 'dim',
       name: 'Dim',
       base: 'dark',
-      tokens: { surface: '#2e3440', fg: '#e5e9f0', 'fg-muted': '#3a4050' },
+      tokens: { surface: '#2e3440', fg: '#e5e9f0', 'fg-muted': '#3a4050', 'fg-subtle': '#343a48' },
     });
 
     expect(spec.colors['editorLineNumber.foreground']).toBe('#e5e9f0');
+    expect(spec.colors['editorLineNumber.dimmedForeground']).toBe('#e5e9f0');
   });
 
   it('skips a token that is not a colour rather than handing monaco nonsense', () => {
