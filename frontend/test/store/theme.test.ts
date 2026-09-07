@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readStored, resetStored, writeStored } from '../../src/lib/persist';
-import { BUILT_IN_THEMES, THEME_KEY } from '../../src/lib/theme';
+import { BUILT_IN_THEMES, DEFAULT_THEME, THEME_KEY } from '../../src/lib/theme';
 import { emitSystemDark, setSystemDark } from '../helpers';
 
 async function freshStore() {
@@ -20,12 +20,15 @@ afterEach(() => {
 });
 
 describe('the theme a returning user gets', () => {
-  it('is dark when nothing was ever chosen', async () => {
+  it('is Borg when nothing was ever chosen', async () => {
     const { useThemeStore } = await freshStore();
 
-    expect(useThemeStore.getState().preference).toBe('dark');
-    expect(useThemeStore.getState().resolved.id).toBe('dark');
+    expect(useThemeStore.getState().preference).toBe('borg');
+    expect(useThemeStore.getState().resolved.id).toBe('borg');
     expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.style.getPropertyValue('--surface')).toBe(
+      DEFAULT_THEME.tokens?.surface,
+    );
   });
 
   it('is whatever they picked last time', async () => {
@@ -122,7 +125,9 @@ describe('installing a theme someone imported', () => {
 
     useThemeStore.getState().removeTheme('solarized');
 
-    expect(useThemeStore.getState().resolved.id).toBe('dark');
-    expect(document.documentElement.style.getPropertyValue('--surface')).toBe('');
+    expect(useThemeStore.getState().resolved.id).toBe(DEFAULT_THEME.id);
+    expect(document.documentElement.style.getPropertyValue('--surface')).toBe(
+      DEFAULT_THEME.tokens?.surface,
+    );
   });
 });

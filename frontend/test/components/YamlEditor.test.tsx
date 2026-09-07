@@ -99,7 +99,7 @@ describe('YamlEditor', () => {
       <YamlEditor value="" path="spinoza/core/v1/Pod.yaml" readOnly={false} onChange={vi.fn()} />,
     );
 
-    expect(screen.getByTestId('theme')).toHaveTextContent('spinoza-dark');
+    expect(screen.getByTestId('theme')).toHaveTextContent('spinoza-borg');
 
     act(() => {
       useThemeStore.getState().setPreference('light');

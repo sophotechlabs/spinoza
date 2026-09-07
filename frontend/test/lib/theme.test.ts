@@ -3,6 +3,7 @@ import { readStored } from '../../src/lib/persist';
 import {
   BUILT_IN_THEMES,
   CANVAS_NAMES,
+  DEFAULT_THEME,
   PAINTED_KEY,
   TOKEN_NAMES,
   applyTheme,
@@ -42,9 +43,9 @@ describe('parseTheme', () => {
     expect(parseTheme('system')).toBe('system');
   });
 
-  it('falls back to dark when nothing was stored', () => {
-    expect(parseTheme(null)).toBe('dark');
-    expect(parseTheme('')).toBe('dark');
+  it('falls back to the default theme when nothing was stored', () => {
+    expect(parseTheme(null)).toBe(DEFAULT_THEME.id);
+    expect(parseTheme('')).toBe(DEFAULT_THEME.id);
   });
 
   it('passes a custom id through for the registry to resolve', () => {
@@ -59,16 +60,16 @@ describe('a preference that outlives the tab', () => {
     expect(readTheme()).toBe('light');
   });
 
-  it('defaults to dark when nothing was stored', () => {
-    expect(readTheme()).toBe('dark');
+  it('defaults to the default theme when nothing was stored', () => {
+    expect(readTheme()).toBe(DEFAULT_THEME.id);
   });
 
-  it('falls back to dark when storage refuses to be read', () => {
+  it('falls back to the default theme when storage refuses to be read', () => {
     vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
       throw new Error('denied');
     });
 
-    expect(readTheme()).toBe('dark');
+    expect(readTheme()).toBe(DEFAULT_THEME.id);
   });
 
   it('gives up quietly when storage refuses to be written', () => {
@@ -117,8 +118,20 @@ describe('resolveTheme', () => {
     expect(resolveTheme(BUILT_IN_THEMES, 'system', 'light').id).toBe('light');
   });
 
-  it('falls back to dark for a theme that is no longer installed', () => {
-    expect(themeById(BUILT_IN_THEMES, 'solarized').id).toBe('dark');
+  it('falls back to the default theme for a theme that is no longer installed', () => {
+    expect(themeById(BUILT_IN_THEMES, 'solarized')).toBe(DEFAULT_THEME);
+  });
+});
+
+describe('the default theme', () => {
+  it('is Borg', () => {
+    expect(DEFAULT_THEME.id).toBe('borg');
+    expect(DEFAULT_THEME.name).toBe('Borg');
+  });
+
+  it('is one of the shipped themes, with every token set', () => {
+    expect(BUILT_IN_THEMES).toContain(DEFAULT_THEME);
+    expect(Object.keys(DEFAULT_THEME.tokens ?? {}).sort()).toEqual([...TOKEN_NAMES].sort());
   });
 });
 

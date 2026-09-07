@@ -5,7 +5,7 @@ import TerminalPanel from '../../src/components/TerminalPanel';
 import type { ExecHandlers, ExecSession } from '../../src/lib/exec';
 import type { TerminalHandle, TerminalOptions } from '../../src/lib/terminal';
 import { terminalTheme } from '../../src/lib/themeColors';
-import { BUILT_IN_THEMES, themeById } from '../../src/lib/theme';
+import { BUILT_IN_THEMES, DEFAULT_THEME, themeById } from '../../src/lib/theme';
 import { useThemeStore } from '../../src/store/theme';
 import { useSettingsStore } from '../../src/store/settings';
 
@@ -268,9 +268,7 @@ describe('a live shell when the theme changes', () => {
     const stubs = harness();
     renderPanel();
 
-    expect(stubs.term.setTheme).toHaveBeenCalledWith(
-      terminalTheme(themeById(BUILT_IN_THEMES, 'dark')),
-    );
+    expect(stubs.term.setTheme).toHaveBeenCalledWith(terminalTheme(DEFAULT_THEME));
 
     act(() => {
       useThemeStore.getState().setPreference('light');

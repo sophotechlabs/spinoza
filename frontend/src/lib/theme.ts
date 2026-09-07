@@ -1,3 +1,4 @@
+import { DEFAULT_THEME_FILE } from './defaultTheme';
 import { readStored, writeStored } from './persist';
 export const SYSTEM = 'system';
 
@@ -167,13 +168,15 @@ export const BUILT_IN_THEMES: Theme[] = [
   ...shipped,
 ];
 
+export const DEFAULT_THEME: Theme = themeFiles[`../../themes/${DEFAULT_THEME_FILE.id}.json`];
+
 export const THEME_KEY = 'spinoza.theme.v1';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 export function parseTheme(raw: string | null): ThemePreference {
   if (raw === null || raw === '') {
-    return 'dark';
+    return DEFAULT_THEME.id;
   }
   return raw;
 }
@@ -209,7 +212,7 @@ export function themeById(themes: Theme[], id: string): Theme {
       return theme;
     }
   }
-  return BUILT_IN_THEMES[0];
+  return DEFAULT_THEME;
 }
 
 export function resolveTheme(

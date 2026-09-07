@@ -159,7 +159,7 @@ Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan b
 - **Node shell**: a root shell in the node's own namespaces, off until you turn it on. It asks the apiserver whether you may create the pod first, and the pod carries a two-hour deadline.
 - **Secrets** arrive masked. Reveal one key at a time; the reveal drops the moment you select something else.
 - **Traffic**: a workload graph from Cilium Hubble flow metrics, read through Prometheus.
-- **Nine themes**, contrast-gated in CI, plus your own as JSON. Screenshots here are Borg.
+- **Nine themes**, Borg by default, contrast-gated in CI, plus your own as JSON. Screenshots here are Borg.
 
 ## Cluster mode
 

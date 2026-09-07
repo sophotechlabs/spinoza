@@ -8,7 +8,8 @@
     <script>
       (function () {
         var root = document.documentElement;
-        var stored = 'dark';
+        var fallback = __DEFAULT_THEME__;
+        var stored = fallback.id;
         var last = null;
         function settings() {
           try {
@@ -32,12 +33,15 @@
           }
         }
         try {
-          stored = value('spinoza.theme.v1') || 'dark';
+          stored = value('spinoza.theme.v1') || fallback.id;
           if (stored !== 'dark' && stored !== 'light' && stored !== 'system') {
             last = JSON.parse(value('spinoza.painted.v1') || 'null');
           }
         } catch (err) {
-          stored = 'dark';
+          stored = fallback.id;
+        }
+        if (last === null && stored === fallback.id) {
+          last = fallback;
         }
         var base = 'dark';
         if (last && last.base === 'light') {

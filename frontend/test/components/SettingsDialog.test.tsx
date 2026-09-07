@@ -55,7 +55,7 @@ describe('the settings dialog', () => {
       'aria-current',
       'true',
     );
-    expect(screen.getByLabelText('Theme preference')).toHaveValue('dark');
+    expect(screen.getByLabelText('Theme preference')).toHaveValue('borg');
     expect(screen.getByRole('option', { name: 'Light' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'System' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Logs' })).toBeInTheDocument();
