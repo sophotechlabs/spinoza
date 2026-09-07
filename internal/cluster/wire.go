@@ -143,7 +143,7 @@ func openStore(ctx context.Context) *kubeconfig.Store {
 	return store
 }
 
-func unreachable(name string, discErr error) error {
+func unreachable(name, source string, discErr error) error {
 	if discErr == nil {
 		return fmt.Errorf("context %q lists no resource types", name)
 	}
@@ -151,6 +151,11 @@ func unreachable(name string, discErr error) error {
 	if plugin != "" {
 		slog.Warn("a credential plugin failed", "context", name, "plugin", plugin, "error", discErr)
 		return fmt.Errorf("context %q could not get credentials: %s failed. Check that it runs in your shell", name, plugin)
+	}
+	reason := untrustedCertificate(discErr)
+	if reason != "" {
+		slog.Warn("the cluster's certificate was not trusted", "context", name, "kubeconfig", source, "error", discErr)
+		return fmt.Errorf("context %q in %s carries a certificate authority the cluster did not present (%s). Check that this is the kubeconfig kubectl reads, then recreate the entry", name, source, reason)
 	}
 	return fmt.Errorf("context %q lists no resource types: %w", name, discErr)
 }
@@ -168,7 +173,7 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 	}
 	cats, descs, discErr := discovery.List(bundle.Discovery)
 	if len(descs) == 0 {
-		return nil, nil, unreachable(bundle.Ref.Name, discErr)
+		return nil, nil, unreachable(bundle.Ref.Name, kube.Label(bundle.Ref.Kubeconfig), discErr)
 	}
 	if discErr != nil {
 		slog.Warn("discovery came back incomplete", "error", discErr)

@@ -549,3 +549,26 @@ func TestAnActionLeavesHelmsOwnLookupAloneWhenNoFileIsNamed(t *testing.T) {
 		t.Fatalf("args = %v, want no file forced on helm", runner.args[0])
 	}
 }
+
+func TestTheVariablesCloudCredentialPluginsReadReachHelm(t *testing.T) {
+	read := []string{"AWS_PROFILE", "AWS_SHARED_CREDENTIALS_FILE", "CLOUDSDK_CONFIG", "GOOGLE_APPLICATION_CREDENTIALS", "AZURE_CONFIG_DIR"}
+	for _, key := range read {
+		t.Setenv(key, "/tmp/"+strings.ToLower(key))
+	}
+	t.Setenv("SPINOZA_AUTH_OIDC_CLIENT_SECRET", "must-not-leak")
+
+	env := helmEnvironment(nil)
+	found := map[string]string{}
+	for _, entry := range env {
+		key, value, _ := strings.Cut(entry, "=")
+		found[key] = value
+	}
+	for _, key := range read {
+		if found[key] != "/tmp/"+strings.ToLower(key) {
+			t.Fatalf("%s = %q, want it passed through so the kubeconfig's credential plugin can sign in", key, found[key])
+		}
+	}
+	if _, ok := found["SPINOZA_AUTH_OIDC_CLIENT_SECRET"]; ok {
+		t.Fatal("the oidc client secret entered the helm child environment")
+	}
+}

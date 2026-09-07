@@ -118,12 +118,13 @@ func helmEnvironment(extra []string) []string {
 	return out
 }
 
+var helmEnvironmentPrefixes = []string{"HELM_", "XDG_", "AWS_", "CLOUDSDK_", "GOOGLE_", "AZURE_"}
+
 func allowedHelmEnvironment(key string) bool {
-	if strings.HasPrefix(key, "HELM_") {
-		return true
-	}
-	if strings.HasPrefix(key, "XDG_") {
-		return true
+	for _, prefix := range helmEnvironmentPrefixes {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
 	}
 	switch key {
 	case "HOME", "KUBECONFIG", "PATH", "TMPDIR",
