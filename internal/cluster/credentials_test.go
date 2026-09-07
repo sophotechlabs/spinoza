@@ -45,7 +45,7 @@ func TestAMarkerWithNothingAfterItNamesNoPlugin(t *testing.T) {
 }
 
 func TestACredentialFailureIsSaidInOneLine(t *testing.T) {
-	err := unreachable("gke_prod", "/home/me/.kube/config", errors.New(
+	err := unreachable("gke_prod", "/home/me/.kube/config", "https://35.204.10.181", errors.New(
 		"getting credentials: exec: executable /opt/homebrew/bin/gke-gcloud-auth-plugin failed with exit code 1",
 	))
 
@@ -56,7 +56,7 @@ func TestACredentialFailureIsSaidInOneLine(t *testing.T) {
 }
 
 func TestAnyOtherFailureKeepsTheWholeReason(t *testing.T) {
-	err := unreachable("p-mk1", "/home/me/.kube/config", errors.New("connection refused"))
+	err := unreachable("p-mk1", "/home/me/.kube/config", "https://10.0.0.1:6443", errors.New("connection refused"))
 
 	want := `context "p-mk1" lists no resource types: connection refused`
 	if err.Error() != want {
@@ -65,7 +65,7 @@ func TestAnyOtherFailureKeepsTheWholeReason(t *testing.T) {
 }
 
 func TestNoReasonAtAllStillSaysWhichContext(t *testing.T) {
-	err := unreachable("p-mk1", "/home/me/.kube/config", nil)
+	err := unreachable("p-mk1", "/home/me/.kube/config", "https://10.0.0.1:6443", nil)
 
 	want := `context "p-mk1" lists no resource types`
 	if err.Error() != want {
@@ -74,13 +74,15 @@ func TestNoReasonAtAllStillSaysWhichContext(t *testing.T) {
 }
 
 func TestAnUntrustedCertificateNamesTheKubeconfigThatWasRead(t *testing.T) {
-	err := unreachable("niio-prod", "/Users/me/.kube/config", errors.New(
+	err := unreachable("niio-prod", "/Users/me/.kube/config", "https://96102852A7BB2F1369A62D1695713FC6.gr7.us-east-1.eks.amazonaws.com", errors.New(
 		`Get "https://96102852A7BB2F1369A62D1695713FC6.gr7.us-east-1.eks.amazonaws.com/api?timeout=30s": `+
 			`tls: failed to verify certificate: x509: certificate signed by unknown authority`,
 	))
 
-	want := `context "niio-prod" in /Users/me/.kube/config carries a certificate authority the cluster did not present ` +
-		`(x509: certificate signed by unknown authority). Check that this is the kubeconfig kubectl reads, then recreate the entry`
+	want := `context "niio-prod" in /Users/me/.kube/config does not trust the certificate ` +
+		`https://96102852A7BB2F1369A62D1695713FC6.gr7.us-east-1.eks.amazonaws.com presented ` +
+		`(x509: certificate signed by unknown authority). Either this is not the kubeconfig kubectl reads, ` +
+		`or a TLS-inspecting proxy on this machine re-signs the connection and spinoza needs the exemption kubectl has`
 	if err.Error() != want {
 		t.Fatalf("error = %q, want %q", err.Error(), want)
 	}
@@ -97,7 +99,7 @@ func TestACertificateTheSystemDoesNotTrustIsSaidTheSameWay(t *testing.T) {
 }
 
 func TestAnExpiredCertificateKeepsTheWholeReason(t *testing.T) {
-	err := unreachable("old", "/home/me/.kube/config", errors.New(
+	err := unreachable("old", "/home/me/.kube/config", "https://10.0.0.1", errors.New(
 		`Get "https://10.0.0.1/api": tls: failed to verify certificate: x509: certificate has expired or is not yet valid`,
 	))
 

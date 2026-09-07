@@ -164,8 +164,9 @@ func TestAKubeconfigWhoseAuthorityTheClusterDoesNotPresentNamesTheFile(t *testin
 	t.Cleanup(cancel)
 	_, err := cluster.New(ctx, cluster.Options{Kubeconfig: path, Context: eksAlias, SyncTimeout: 30 * time.Second})
 
-	want := `context "niio-prod" in ` + path + ` carries a certificate authority the cluster did not present ` +
-		`(x509: certificate signed by unknown authority). Check that this is the kubeconfig kubectl reads, then recreate the entry`
+	want := `context "niio-prod" in ` + path + ` does not trust the certificate ` + found.Server + ` presented ` +
+		`(x509: certificate signed by unknown authority). Either this is not the kubeconfig kubectl reads, ` +
+		`or a TLS-inspecting proxy on this machine re-signs the connection and spinoza needs the exemption kubectl has`
 	if err == nil {
 		t.Fatal("the cluster opened with a certificate authority it does not use")
 	}
