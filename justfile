@@ -1,4 +1,4 @@
-export PATH := if os() == 'windows' { env_var('PATH') } else { env_var('HOME') + '/go/bin:' + env_var('PATH') }
+export PATH := if os() == 'windows' { env_var('PATH') } else { env_var('PATH') + ':' + env_var('HOME') + '/go/bin' }
 
 exe := if os() == 'windows' { '.exe' } else { '' }
 go_pkgs := './internal/... ./cmd/... .'
@@ -1233,6 +1233,40 @@ commits:
 fmt:
     golangci-lint fmt
     cd frontend && npm run format
+
+handoff-gate: stub-assets
+    #!/usr/bin/env bash
+    set -euo pipefail
+    changed=$({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+    if [ -z "$changed" ]; then
+        echo "handoff-gate: nothing changed against HEAD"
+    fi
+    if printf '%s\n' "$changed" | grep -qE '(\.go|^go\.mod|^go\.sum)$'; then
+        just ci-go-lint
+        go build ./...
+        packages=$(printf '%s\n' "$changed" | grep -E '\.go$' | xargs -n1 dirname | sort -u)
+        existing=()
+        for package in $packages; do
+            if [ -d "$package" ]; then
+                existing+=("./$package")
+            fi
+        done
+        if [ "${#existing[@]}" -gt 0 ]; then
+            go test "${existing[@]}"
+        fi
+    fi
+    if printf '%s\n' "$changed" | grep -q '^frontend/'; then
+        if [ ! -d frontend/node_modules ] || [ frontend/package-lock.json -nt frontend/node_modules ]; then
+            npm --prefix frontend ci
+        fi
+        just lint-fe
+        cd frontend && npm test && cd ..
+    fi
+    if printf '%s\n' "$changed" | grep -q '^e2e/'; then
+        just lint-e2e
+        just validate-e2e-suite
+    fi
+    git diff --check
 
 ci-go-build: stub-assets cross
     go build ./...
