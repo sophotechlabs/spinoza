@@ -6,7 +6,7 @@ metadata:
 type: Opaque
 stringData:
   client-secret: oauth2-proxy-client-secret
-  cookie-secret: 00000000000000000000000000000000
+  cookie-secret: "00000000000000000000000000000000"
   proxy-secret: a-cluster-mode-proxy-secret-that-is-long-enough
 ---
 apiVersion: v1
