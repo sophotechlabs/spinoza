@@ -2,7 +2,20 @@ import { expect, test } from '../harness/test';
 import { openHome, openResource, selectRow } from '../harness/app';
 import type { Page, Response } from '@playwright/test';
 
-function settingsWrite(key: string): (response: Response) => boolean {
+const DEFAULT_PLACEMENT = JSON.stringify({
+  overview: 'right',
+  yaml: 'right',
+  events: 'right',
+  logs: 'right',
+  metrics: 'right',
+  forwards: 'bottom',
+  terminal: 'bottom',
+  compare: 'bottom',
+  release: 'bottom',
+  app: 'right',
+});
+
+function settingsWrite(key: string, value?: string): (response: Response) => boolean {
   return (response) => {
     if (!response.url().includes('/api/settings')) {
       return false;
@@ -14,7 +27,10 @@ function settingsWrite(key: string): (response: Response) => boolean {
     if (body === null) {
       return false;
     }
-    return body.includes(`"${key}"`);
+    if (value === undefined) {
+      return body.includes(`"${key}"`);
+    }
+    return body.includes(`"${key}":${JSON.stringify(value)}`);
   };
 }
 
@@ -27,7 +43,9 @@ async function openPod(page: Page): Promise<void> {
 }
 
 async function resetDocks(page: Page): Promise<void> {
-  const saved = page.waitForResponse(settingsWrite('spinoza.layout.v1'), { timeout: 30_000 });
+  const saved = page.waitForResponse(settingsWrite('spinoza.panels.v1', DEFAULT_PLACEMENT), {
+    timeout: 30_000,
+  });
   await page.getByRole('button', { name: 'Settings' }).click();
   await page
     .getByRole('navigation', { name: 'Settings sections' })
