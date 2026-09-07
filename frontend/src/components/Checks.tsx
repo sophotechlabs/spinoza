@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckCategory, Mute, NamespaceCount, ObjectRef, RuleFault } from '../lib/types';
 import type { CheckFindingView, CheckGroupView, CheckReportView } from '../lib/checks';
-import { fetchCheckPage } from '../lib/checks';
+import { fetchCheckPage, sourceLabel, sourceStale } from '../lib/checks';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -31,6 +31,7 @@ import {
 } from '../lib/checks';
 import type { SeverityFloor } from '../lib/settings';
 import { useChecksFilter, useSettingsStore } from '../store/settings';
+import { useClusterMode } from '../store/identity';
 import type { ChecksFilter } from '../store/settings';
 import LoadFailure from './LoadFailure';
 import StaleBanner from './StaleBanner';
@@ -161,6 +162,38 @@ function OnCluster({ cluster }: { cluster: string }) {
   );
 }
 
+function FindingName({
+  finding,
+  onOpen,
+}: {
+  finding: CheckFindingView;
+  onOpen: (ref: ObjectRef, kind: string) => void;
+}) {
+  if (finding.unmatched) {
+    return (
+      <span className="min-w-0 shrink-0 truncate text-fg-strong">{findingLabel(finding)}</span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onOpen(finding.object, finding.kind);
+      }}
+      className="min-w-0 shrink-0 truncate text-fg-strong hover:underline"
+    >
+      {findingLabel(finding)}
+    </button>
+  );
+}
+
+function sourceClass(group: CheckGroupView): string {
+  if (sourceStale(group, Date.now())) {
+    return 'text-warn';
+  }
+  return 'text-fg-subtle';
+}
+
 function Finding({
   finding,
   check,
@@ -178,15 +211,12 @@ function Finding({
   return (
     <li className="border-t border-edge px-3 py-1.5 pl-9">
       <div className="flex items-baseline gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            onOpen(finding.object, finding.kind);
-          }}
-          className="min-w-0 shrink-0 truncate text-fg-strong hover:underline"
-        >
-          {findingLabel(finding)}
-        </button>
+        <FindingName finding={finding} onOpen={onOpen} />
+        {finding.unmatched && (
+          <span className="shrink-0 rounded border border-edge px-1 text-[10px] text-fg-soft">
+            not in this cluster
+          </span>
+        )}
         {finding.cluster !== undefined && finding.cluster !== '' && (
           <OnCluster cluster={finding.cluster} />
         )}
@@ -537,6 +567,14 @@ function Group({
               {framework}
             </span>
           ))}
+          {sourceLabel(group, Date.now()) !== '' && (
+            <span
+              title={(group.sources ?? []).join('\n')}
+              className={`shrink-0 text-[11px] ${sourceClass(group)}`}
+            >
+              {sourceLabel(group, Date.now())}
+            </span>
+          )}
           <span className={`w-16 shrink-0 text-right ${severityClass(group.severity)}`}>
             {group.severity}
           </span>
@@ -648,11 +686,17 @@ function YourRules() {
     <details className="shrink-0 border-b border-edge px-3 py-1.5 text-fg-muted">
       <summary className="cursor-pointer">Your own rules</summary>
       <p className="py-1 text-fg-soft">
-        A list of {'{ id, match, expr }'} objects. The expression is CEL, with the workload bound to
-        object, and a rule that matches becomes a finding. Give a rule {'{ silences, reason }'}{' '}
-        instead and it quietens that check where it matches, saying why. Copy the list to keep it in
-        a repository, and paste one back here to use it on another cluster. If a field is absent,
-        the expression does not match that object and the audit names the evaluation fault.
+        A list of {'{ id, match, expr }'} objects. The expression is CEL, with the object bound to
+        object, and a rule that matches becomes a finding. Name a kind in match to judge that kind;
+        without one the rule judges the workloads. The expression can reach the rest of what the
+        audit read through cluster.list(group, resource) and cluster.get(group, resource, namespace,
+        name), compare quantities with quantity(), read a certificate with x509.notAfter() and
+        x509.notBefore(), and use now, along with the string, list, set, math, regex and encoder
+        libraries of CEL. Give a rule {'{ silences, reason }'} instead and it quietens that check
+        where it matches, saying why. Copy the list to keep it in a repository, and paste one back
+        here to use it on another cluster. If a field is absent, the expression does not match that
+        object and the audit names the fault; asking for a kind the audit did not read is a fault in
+        the same way.
       </p>
       <textarea
         aria-label="Your own rules"
@@ -723,6 +767,61 @@ function YourRules() {
         {failed !== null && <span className="text-warn">{failed}</span>}
       </div>
       <RuleFaults faults={faults} />
+    </details>
+  );
+}
+
+function ImportedFindings({ onChanged }: { onChanged: () => void }) {
+  const saved = useSettingsStore((state) => state.checkImports);
+  const save = useSettingsStore((state) => state.setCheckImports);
+  const served = useClusterMode();
+  const [draft, setDraft] = useState(saved);
+  const [failed, setFailed] = useState<string | null>(null);
+  const dirty = draft !== saved;
+
+  if (served) {
+    return null;
+  }
+
+  return (
+    <details className="shrink-0 border-b border-edge px-3 py-1.5 text-fg-muted">
+      <summary className="cursor-pointer">Imported findings</summary>
+      <p className="py-1 text-fg-soft">
+        One file path per line, read from this machine again on every audit. A trivy Kubernetes
+        report, a kubescape report or a SARIF file is read as it is; spinoza's own format is a JSON
+        object with a findings list, each naming its rule and the object it is about. A finding that
+        names an object this audit did not read is kept and marked, without reach ranking.
+      </p>
+      <textarea
+        aria-label="Imported findings"
+        spellCheck={false}
+        rows={3}
+        className="w-full rounded border border-edge bg-surface px-2 py-1 font-mono text-[11px] text-fg"
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+        }}
+      />
+      <div className="flex items-center gap-3 py-1">
+        <button
+          type="button"
+          disabled={!dirty}
+          className="rounded border border-edge px-2 py-0.5 text-fg-strong disabled:text-fg-subtle"
+          onClick={() => {
+            save(draft)
+              .then(() => {
+                setFailed(null);
+                onChanged();
+              })
+              .catch((reason: unknown) => {
+                setFailed(messageOf(reason));
+              });
+          }}
+        >
+          Save paths
+        </button>
+        {failed !== null && <span className="text-warn">{failed}</span>}
+      </div>
     </details>
   );
 }
@@ -1348,6 +1447,7 @@ export default function Checks({ onOpen }: ChecksProps) {
       <MutesPanel audit={data} onChanged={reload} />
       <Namespaces counts={data.namespaces} />
       <YourRules />
+      <ImportedFindings onChanged={reload} />
       <div className="flex shrink-0 items-baseline gap-3 border-b border-edge px-3 py-1.5 text-fg-muted">
         <span className="min-w-0 flex-1">
           {scannedLabel(data.scanned, totalFindings(data), namespace)}

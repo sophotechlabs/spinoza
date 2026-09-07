@@ -1236,6 +1236,7 @@ export interface CheckFinding {
   muted?: boolean;
   mutedBy?: string;
   reason?: string;
+  unmatched?: boolean;
 }
 
 export interface CheckGroup {
@@ -1259,6 +1260,8 @@ export interface CheckGroup {
   measured?: boolean;
   truncated?: boolean;
   next?: string;
+  sources?: string[];
+  taken?: string;
   findings: CheckFinding[];
 }
 

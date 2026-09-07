@@ -86,7 +86,7 @@ func TestNoCheckInTheRegistryWritesThroughTheCache(t *testing.T) {
 	sc, _, _ := survey(t.Context(), lister, descriptors(), api.Metrics{}, keep)
 	stillIdentical(t, before, objects, "survey")
 
-	entries := registryWith(nil)
+	entries := registryWith(nil, nil)
 	if len(entries) == 0 {
 		t.Fatal("the registry came back empty; this guard would pass without checking anything")
 	}

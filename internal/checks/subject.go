@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	ownerDepth = 4
-	specField  = "spec"
+	ownerDepth    = 4
+	specField     = "spec"
+	metadataField = "metadata"
 )
 
 type Lister interface {

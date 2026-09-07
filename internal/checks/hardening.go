@@ -64,80 +64,84 @@ func hardeningChecks() []check {
 	return []check{
 		{
 			id:         "seccomp-unset",
+			upstream:   "seccompProfile_restricted",
 			title:      "No seccomp profile",
 			category:   categorySecurity,
 			severity:   severityMedium,
-			frameworks: []string{pssRestricted, nsaCisa},
+			frameworks: []string{nsaCisa},
 			wrong:      "Every syscall the kernel offers is reachable, including the ones no container needs.",
 			remedy:     "Set securityContext.seccompProfile.type to RuntimeDefault on the pod or the container.",
 			find:       overContainers(seccompUnset),
 		},
 		{
 			id:         "seccomp-unconfined",
+			upstream:   "seccompProfile_baseline",
 			title:      "Seccomp explicitly disabled",
 			category:   categorySecurity,
 			severity:   severityHigh,
-			frameworks: []string{pssBaseline, nsaCisa},
+			frameworks: []string{nsaCisa},
 			wrong:      "Unconfined turns the syscall filter off, which is weaker than leaving it unset on most runtimes.",
 			remedy:     "Change securityContext.seccompProfile.type to RuntimeDefault.",
 			find:       overContainers(seccompUnconfined),
 		},
 		{
-			id:         "apparmor-unconfined",
-			title:      "AppArmor disabled",
-			category:   categorySecurity,
-			severity:   severityHigh,
-			frameworks: []string{pssBaseline},
-			wrong:      "The container is exempt from the node's AppArmor policy.",
-			remedy:     "Drop the unconfined profile and let the runtime default apply.",
-			find:       overContainers(apparmorUnconfined),
+			id:       "apparmor-unconfined",
+			upstream: "appArmorProfile",
+			title:    "AppArmor disabled",
+			category: categorySecurity,
+			severity: severityHigh,
+			wrong:    "The container is exempt from the node's AppArmor policy.",
+			remedy:   "Drop the unconfined profile and let the runtime default apply.",
+			find:     overContainers(apparmorUnconfined),
 		},
 		{
-			id:         "selinux-options-set",
-			title:      "SELinux type or role overridden",
-			category:   categorySecurity,
-			severity:   severityHigh,
-			frameworks: []string{pssBaseline},
-			wrong:      "Choosing your own SELinux user, role or type can hand the container a domain wider than the default.",
-			remedy:     "Remove seLinuxOptions.user, .role and .type; level is the only field that is safe to set.",
-			find:       overContainers(seLinuxWidened),
+			id:       "selinux-options-set",
+			upstream: "seLinuxOptions",
+			title:    "SELinux type or role overridden",
+			category: categorySecurity,
+			severity: severityHigh,
+			wrong:    "Choosing your own SELinux user, role or type can hand the container a domain wider than the default.",
+			remedy:   "Remove seLinuxOptions.user, .role and .type; level is the only field that is safe to set.",
+			find:     overContainers(seLinuxWidened),
 		},
 		{
-			id:         "proc-mount-unmasked",
-			title:      "/proc mounted unmasked",
-			category:   categorySecurity,
-			severity:   severityHigh,
-			frameworks: []string{pssBaseline},
-			wrong:      "The masked and read-only paths under /proc are exposed, which is a documented break-out surface.",
-			remedy:     "Remove securityContext.procMount, which defaults to Default.",
-			find:       overContainers(procMountUnmasked),
+			id:       "proc-mount-unmasked",
+			upstream: "procMount",
+			title:    "/proc mounted unmasked",
+			category: categorySecurity,
+			severity: severityHigh,
+			wrong:    "The masked and read-only paths under /proc are exposed, which is a documented break-out surface.",
+			remedy:   "Remove securityContext.procMount, which defaults to Default.",
+			find:     overContainers(procMountUnmasked),
 		},
 		{
-			id:         "unsafe-sysctls",
-			title:      "Unsafe sysctls set",
-			category:   categorySecurity,
-			severity:   severityHigh,
-			frameworks: []string{pssBaseline},
-			wrong:      "An unsafe sysctl is namespaced badly or not at all, so it can reach the node and the pods beside it.",
-			remedy:     "Remove the sysctl, or move the setting into the node's own configuration.",
-			find:       overSubjects(unsafeSysctls),
+			id:       "unsafe-sysctls",
+			upstream: "sysctls",
+			title:    "Unsafe sysctls set",
+			category: categorySecurity,
+			severity: severityHigh,
+			wrong:    "An unsafe sysctl is namespaced badly or not at all, so it can reach the node and the pods beside it.",
+			remedy:   "Remove the sysctl, or move the setting into the node's own configuration.",
+			find:     overSubjects(unsafeSysctls),
 		},
 		{
-			id:         "host-ports",
-			title:      "Host port bound",
-			category:   categorySecurity,
-			severity:   severityMedium,
-			frameworks: []string{pssBaseline},
-			wrong:      "The port is claimed on the node itself, so the pod is reachable around any Service and collides with anything else wanting it.",
-			remedy:     "Drop hostPort and publish the container through a Service.",
-			find:       overContainers(hostPorts),
+			id:       "host-ports",
+			upstream: "hostPorts",
+			title:    "Host port bound",
+			category: categorySecurity,
+			severity: severityMedium,
+			wrong:    "The port is claimed on the node itself, so the pod is reachable around any Service and collides with anything else wanting it.",
+			remedy:   "Drop hostPort and publish the container through a Service.",
+			find:     overContainers(hostPorts),
 		},
 		{
 			id:         "host-path-volume",
+			upstream:   "hostPathVolumes",
+			presented:  hasHostPathVolume,
 			title:      "Node filesystem mounted",
 			category:   categorySecurity,
 			severity:   severityMedium,
-			frameworks: []string{pssBaseline, nsaCisa},
+			frameworks: []string{nsaCisa},
 			wrong:      "The pod reads and writes the node's own disk, so it outlives the pod and is shared with everything else on that node.",
 			remedy:     "Use a PersistentVolumeClaim, an emptyDir or a ConfigMap instead.",
 			find:       overSubjects(hostPathVolume),
@@ -164,10 +168,11 @@ func hardeningChecks() []check {
 		},
 		{
 			id:         "capabilities-not-dropped",
+			upstream:   "capabilities_restricted",
 			title:      "Capabilities not dropped",
 			category:   categorySecurity,
 			severity:   severityMedium,
-			frameworks: []string{pssRestricted, nsaCisa},
+			frameworks: []string{nsaCisa},
 			wrong:      "The container keeps the runtime's whole default capability set rather than only what it needs.",
 			remedy:     "Set securityContext.capabilities.drop to [ALL], then add back what the process actually needs.",
 			find:       overContainers(capabilitiesNotDropped),
@@ -183,14 +188,14 @@ func hardeningChecks() []check {
 			find:       overContainers(netRawKept),
 		},
 		{
-			id:         "restricted-volume-types",
-			title:      "Volume type outside the restricted set",
-			category:   categorySecurity,
-			severity:   severityMedium,
-			frameworks: []string{pssRestricted},
-			wrong:      "The restricted profile allows only volume types the pod cannot use to reach the node or the network directly.",
-			remedy:     "Move the data behind a PersistentVolumeClaim, a projected volume or a CSI driver.",
-			find:       overSubjects(restrictedVolumes),
+			id:       "restricted-volume-types",
+			upstream: "restrictedVolumes",
+			title:    "Volume type outside the restricted set",
+			category: categorySecurity,
+			severity: severityMedium,
+			wrong:    "The restricted profile allows only volume types the pod cannot use to reach the node or the network directly.",
+			remedy:   "Move the data behind a PersistentVolumeClaim, a projected volume or a CSI driver.",
+			find:     overSubjects(restrictedVolumes),
 		},
 		{
 			id:         "root-group",
@@ -203,14 +208,14 @@ func hardeningChecks() []check {
 			find:       overContainers(rootGroup),
 		},
 		{
-			id:         "host-process",
-			title:      "Windows HostProcess container",
-			category:   categorySecurity,
-			severity:   severityHigh,
-			frameworks: []string{pssBaseline},
-			wrong:      "A HostProcess container runs directly on the Windows node with the node's own privileges.",
-			remedy:     "Set windowsOptions.hostProcess to false.",
-			find:       overContainers(hostProcess),
+			id:       "host-process",
+			upstream: "windowsHostProcess",
+			title:    "Windows HostProcess container",
+			category: categorySecurity,
+			severity: severityHigh,
+			wrong:    "A HostProcess container runs directly on the Windows node with the node's own privileges.",
+			remedy:   "Set windowsOptions.hostProcess to false.",
+			find:     overContainers(hostProcess),
 		},
 		{
 			id:         "automount-token",
@@ -233,6 +238,37 @@ func hardeningChecks() []check {
 			wrong:      "Every workload that names no account shares one identity, so a grant to any of them is a grant to all. A judgement call on a cluster where the default account holds nothing.",
 			remedy:     "Give the workload its own ServiceAccount and name it in serviceAccountName.",
 			find:       overSubjects(defaultServiceAccount),
+		},
+		{
+			id:       "run-as-user-zero",
+			upstream: "runAsUser",
+			title:    "Runs as uid 0 by request",
+			category: categorySecurity,
+			severity: severityMedium,
+			wrong:    "runAsUser is 0, so the process is root whatever user the image names, and runAsNonRoot cannot save it.",
+			remedy:   "Remove runAsUser: 0 from the pod and its containers, or set a non-zero uid.",
+			find:     upstreamOnly,
+		},
+		{
+			id:       "probe-host-set",
+			upstream: "hostProbesAndHostLifecycle",
+			title:    "A probe or hook targets another host",
+			category: categorySecurity,
+			severity: severityMedium,
+			wrong:    "A liveness, readiness or startup probe, or a lifecycle hook, names a host, so the kubelet talks to something other than the container it is meant to check.",
+			remedy:   "Remove host from every httpGet and tcpSocket in probes and lifecycle hooks; the container is the default target.",
+			find:     upstreamOnly,
+		},
+		{
+			id:        "proc-mount-in-user-namespace",
+			upstream:  "procMount_restricted",
+			presented: outsideUserNamespace,
+			title:     "/proc unmasked inside a user namespace",
+			category:  categorySecurity,
+			severity:  severityMedium,
+			wrong:     "Baseline lets a pod in its own user namespace unmask /proc; restricted does not, so the pod is refused there.",
+			remedy:    "Remove securityContext.procMount, or keep the workload out of a restricted namespace.",
+			find:      upstreamOnly,
 		},
 	}
 }
@@ -303,8 +339,11 @@ func apparmorUnconfined(subject Subject, container Container) (string, string) {
 }
 
 func apparmorAnnotation(subject Subject, container Container) string {
-	annotations := subject.Object.GetAnnotations()
-	value, ok := annotations[apparmorPrefix+container.Name]
+	annotations, listed := templateMetaOf(subject)["annotations"].(map[string]any)
+	if !listed {
+		return ""
+	}
+	value, ok := annotations[apparmorPrefix+container.Name].(string)
 	if !ok || !strings.EqualFold(value, "unconfined") {
 		return ""
 	}
@@ -461,6 +500,15 @@ func writableHostMount(subject Subject, container Container) (string, string) {
 		}
 	}
 	return "", ""
+}
+
+func outsideUserNamespace(subject Subject) bool {
+	value, set := boolAt(subject.Pod, "hostUsers")
+	return !set || value
+}
+
+func hasHostPathVolume(subject Subject) bool {
+	return len(hostPathVolumeNames(subject)) > 0
 }
 
 func hostPathVolumeNames(subject Subject) []string {

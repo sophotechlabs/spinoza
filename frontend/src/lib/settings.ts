@@ -240,3 +240,14 @@ export function writeCheckRules(rules: string): Promise<void> {
   writeStored(CHECK_RULES_KEY, rules);
   return flush();
 }
+
+const CHECK_IMPORTS_KEY = 'spinoza.checks.imports.v1';
+
+export function readCheckImports(): string {
+  return readStored(CHECK_IMPORTS_KEY) ?? '';
+}
+
+export function writeCheckImports(imports: string): Promise<void> {
+  writeStored(CHECK_IMPORTS_KEY, imports);
+  return flush();
+}

@@ -47,6 +47,7 @@ CheckFinding.Patch patch,omitempty string
 CheckFinding.Reason reason,omitempty string
 CheckFinding.Ref ref int
 CheckFinding.Severity severity string
+CheckFinding.Unmatched unmatched,omitempty bool
 CheckGroup.Baselined baselined,omitempty bool
 CheckGroup.Category category string
 CheckGroup.Findings findings []CheckFinding
@@ -63,6 +64,8 @@ CheckGroup.Ran ran,omitempty bool
 CheckGroup.Remedy remedy string
 CheckGroup.Severity severity string
 CheckGroup.Skipped skipped,omitempty string
+CheckGroup.Sources sources,omitempty []string
+CheckGroup.Taken taken,omitempty string
 CheckGroup.Title title string
 CheckGroup.Total total int
 CheckGroup.Truncated truncated,omitempty bool

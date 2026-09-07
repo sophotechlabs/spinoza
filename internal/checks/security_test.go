@@ -269,7 +269,7 @@ func TestRunAsRootReadsTheContainerThenThePod(t *testing.T) {
 	}
 }
 
-func TestRunAsUserZeroIsFlaggedAndANonZeroUserIsNot(t *testing.T) {
+func TestRunAsUserZeroIsFlaggedAndANonZeroUserStillNeedsTheFlag(t *testing.T) {
 	root := report(t, deployment("api", podSpec(container("app", withSecurity(map[string]any{
 		"runAsUser": int64(0),
 	})))))
@@ -280,8 +280,17 @@ func TestRunAsUserZeroIsFlaggedAndANonZeroUserIsNot(t *testing.T) {
 	other := report(t, deployment("api", podSpec(container("app", withSecurity(map[string]any{
 		"runAsUser": int64(1000),
 	})))))
-	if findingCount(t, other, "run-as-root") != 0 {
-		t.Fatal("a non-zero runAsUser was reported")
+	detail := onlyFinding(t, other, "run-as-root").Detail
+	if !strings.Contains(detail, "runAsNonRoot != true") {
+		t.Fatalf("detail was %q, want upstream's reason that a uid alone does not satisfy restricted", detail)
+	}
+
+	flagged := report(t, deployment("api", podSpec(container("app", withSecurity(map[string]any{
+		"runAsUser":    int64(1000),
+		"runAsNonRoot": true,
+	})))))
+	if findingCount(t, flagged, "run-as-root") != 0 {
+		t.Fatal("a non-zero user with runAsNonRoot set was reported")
 	}
 }
 

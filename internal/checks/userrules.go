@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"cel.dev/cel-go/cel"
 	celast "cel.dev/cel-go/common/ast"
@@ -44,7 +45,7 @@ const (
 
 var (
 	errTooManyUserRules                         = fmt.Errorf("a rule list cannot contain more than %d rules", maxUserRules)
-	userRuleEnvironment, userRuleEnvironmentErr = cel.NewEnv(cel.Variable(userRuleObject, cel.DynType))
+	userRuleEnvironment, userRuleEnvironmentErr = userRuleEnv()
 )
 
 const RulesKey = "spinoza.checks.rules.v1"
@@ -136,7 +137,7 @@ func (r UserRule) faults(at int) []RuleFault {
 	if len(r.Expr) > maxUserRuleExpression {
 		return []RuleFault{{ID: name, Reason: fmt.Sprintf("an expression cannot be longer than %d bytes", maxUserRuleExpression)}}
 	}
-	_, parsed, err := parseRule(r.Expr)
+	parsed, err := parseRule(r.Expr)
 	if err != nil {
 		return []RuleFault{{ID: name, Reason: err.Error()}}
 	}
@@ -182,10 +183,10 @@ func readsPastMetadata(parsed *cel.Ast) bool {
 		if slices.Equal(path, []string{"kind"}) {
 			continue
 		}
-		if slices.Equal(path, []string{"metadata", "name"}) {
+		if slices.Equal(path, []string{metadataField, "name"}) {
 			continue
 		}
-		if slices.Equal(path, []string{"metadata", "namespace"}) {
+		if slices.Equal(path, []string{metadataField, "namespace"}) {
 			continue
 		}
 		return true
@@ -288,7 +289,7 @@ func (r UserRule) asCheck() check {
 		entry.find = refuses(err.Error())
 		return entry
 	}
-	entry.find = overSubjects(judgeWith(r, program))
+	entry.find = judgedBy(r, program)
 	return entry
 }
 
@@ -324,26 +325,26 @@ func compileRule(expr string) (cel.Program, error) {
 	if len(expr) > maxUserRuleExpression {
 		return nil, fmt.Errorf("an expression cannot be longer than %d bytes", maxUserRuleExpression)
 	}
-	env, parsed, err := parseRule(expr)
+	parsed, err := parseRule(expr)
 	if err != nil {
 		return nil, err
 	}
-	return env.Program(parsed, cel.CostLimit(maxUserRuleCost), cel.InterruptCheckFrequency(100))
+	return userRuleEnvironment.Program(parsed, cel.CostLimit(costFor(parsed)), cel.InterruptCheckFrequency(100))
 }
 
-func parseRule(expr string) (*cel.Env, *cel.Ast, error) {
+func parseRule(expr string) (*cel.Ast, error) {
 	if userRuleEnvironmentErr != nil {
-		return nil, nil, userRuleEnvironmentErr
+		return nil, userRuleEnvironmentErr
 	}
 	parsed, issues := userRuleEnvironment.Compile(expr)
 	if issues != nil && issues.Err() != nil {
-		return nil, nil, fmt.Errorf("the expression did not compile: %w", issues.Err())
+		return nil, fmt.Errorf("the expression did not compile: %w", issues.Err())
 	}
 	if !parsed.OutputType().IsExactType(cel.BoolType) {
-		return nil, nil, fmt.Errorf("the expression has to return true or false, not %s",
+		return nil, fmt.Errorf("the expression has to return true or false, not %s",
 			cel.FormatCELType(parsed.OutputType()))
 	}
-	return userRuleEnvironment, parsed, nil
+	return parsed, nil
 }
 
 func refuses(reason string) finder {
@@ -358,28 +359,52 @@ func refuses(reason string) finder {
 	}
 }
 
-func judgeWith(rule UserRule, program cel.Program) subjectRule {
-	return func(subject Subject) (string, string) {
-		if !rule.matches(subject) {
-			return "", ""
+func judgedBy(rule UserRule, program cel.Program) finder {
+	return func(sc scan) []found {
+		now := time.Now()
+		out := []found{}
+		for _, subject := range rule.targets(sc) {
+			value, _, evalErr := program.Eval(activationFor(subject, now, sc.held))
+			if evalErr != nil {
+				sc.faults.record(rule, subject, evalErr)
+				continue
+			}
+			if !truthy(value) {
+				continue
+			}
+			out = append(out, found{subject: subject, detail: "matches " + rule.ID})
 		}
-		value, _, err := program.Eval(map[string]any{userRuleObject: subject.Object.Object})
-		if err != nil {
-			return "", ""
-		}
-		if !truthy(value) {
-			return "", ""
-		}
-		return "matches " + rule.ID, ""
+		return out
 	}
 }
 
-func (r UserRule) holds(subject Subject) (bool, error) {
+var workloadKinds = map[string]bool{
+	"Pod": true, "Deployment": true, "StatefulSet": true, "DaemonSet": true, "ReplicaSet": true,
+	"ReplicationController": true, "Job": true, "CronJob": true,
+}
+
+func (r UserRule) targets(sc scan) []Subject {
+	if r.Match == "" || r.Match == anything {
+		return sc.subjects
+	}
+	if !workloadKinds[r.Match] {
+		return sc.held.subjectsOfKind(r.Match)
+	}
+	out := []Subject{}
+	for _, subject := range sc.subjects {
+		if subject.Kind == r.Match {
+			out = append(out, subject)
+		}
+	}
+	return out
+}
+
+func (r UserRule) holds(subject Subject, held *corpus) (bool, error) {
 	program, err := compileRule(r.Expr)
 	if err != nil {
 		return false, err
 	}
-	value, _, evalErr := program.Eval(map[string]any{userRuleObject: subject.Object.Object})
+	value, _, evalErr := program.Eval(activationFor(subject, time.Now(), held))
 	if evalErr != nil {
 		return false, evalErr
 	}

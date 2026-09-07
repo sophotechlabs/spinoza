@@ -16,6 +16,7 @@ var severityOrder = []string{severityLow, severityMedium, severityHigh}
 
 type Filter struct {
 	Rules          []UserRule
+	Imports        []string
 	Silencers      []UserRule
 	Mutes          []Mute
 	Base           *Baseline
@@ -160,7 +161,7 @@ func (f Filter) keeps(item found) bool {
 	return f.Namespace == item.subject.Ref.Namespace
 }
 
-func (f Filter) silenced(id string, item found) (Mute, bool) {
+func (f Filter) silenced(id string, item found, held *corpus) (Mute, bool) {
 	for _, one := range f.Silencers {
 		if one.Silences != id {
 			continue
@@ -168,7 +169,7 @@ func (f Filter) silenced(id string, item found) (Mute, bool) {
 		if !one.matches(item.subject) {
 			continue
 		}
-		holds, err := one.holds(item.subject)
+		holds, err := one.holds(item.subject, held)
 		if err != nil {
 			f.ruleFailures.record(one, item.subject, err)
 			continue

@@ -78,7 +78,7 @@ func (s *Surveys) keep(key string, one surveyed) {
 
 func surveyKey(descs map[string]api.ResourceDescriptor, usage api.Metrics, keep Filter) string {
 	ids := make([]string, 0, 32)
-	for _, entry := range keep.chosen(registryWith(keep.Rules)) {
+	for _, entry := range keep.chosen(keep.checks()) {
 		ids = append(ids, entry.id)
 	}
 	slices.Sort(ids)

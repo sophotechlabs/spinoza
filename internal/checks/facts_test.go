@@ -502,7 +502,7 @@ func TestPodSecurityOnlyJudgesTheLevelTheNamespaceEnforces(t *testing.T) {
 	}
 
 	strict := report(t, namespaceObj(testNamespace, map[string]any{enforceLabel: profileStrict}), escalating)
-	if detail := onlyFinding(t, strict, "pod-security-would-reject").Detail; !strings.Contains(detail, "privilege escalation") {
+	if detail := onlyFinding(t, strict, "pod-security-would-reject").Detail; !strings.Contains(detail, "allowPrivilegeEscalation != false") {
 		t.Fatalf("detail was %q, want the restricted control named", detail)
 	}
 }

@@ -71,7 +71,7 @@ releases and GitOps, without switching tab.
 
 ## Checks
 
-125 checks over security, reliability and efficiency, decided against the live cluster rather than a
+128 checks over security, reliability and efficiency, decided against the live cluster rather than a
 parsed manifest, and labelled PSS baseline, PSS restricted or NSA/CISA where a framework covers them.
 They read workloads, RBAC, networking, storage and your own custom resources, and warn about APIs a
 coming release removes and certificates about to expire.
@@ -79,7 +79,10 @@ coming release removes and certificates about to expire.
 ![Spinoza cluster checks: findings across the cluster, each rule labelled with its framework, severity and the number of objects that tripped it](docs/images/checks.png)
 
 Findings rank by how far the problem reaches, not by rule severity alone. Mute a rule with one of your
-own, take a baseline and compare a cluster against it, or write a check as a CEL expression.
+own, take a baseline and compare a cluster against it, or write a check as a CEL expression. A rule
+sees the cluster the audit read through `cluster.list(group, resource)` and `cluster.get(...)`,
+compares quantities with `quantity()`, reads a certificate's dates with `x509.notAfter()`, and has
+the string, list, set, math, regex and encoder libraries of CEL.
 
 ## Issues
 

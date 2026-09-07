@@ -1,0 +1,71 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "fullName": "Trivy Vulnerability Scanner",
+          "informationUri": "https://github.com/aquasecurity/trivy",
+          "name": "Trivy",
+          "rules": [
+            {
+              "id": "KSV-0001",
+              "name": "Misconfiguration",
+              "shortDescription": {"text": "Can elevate its own privileges"},
+              "fullDescription": {"text": "A program inside the container can elevate its own privileges and run as root, which might give the program control over the container and node."},
+              "defaultConfiguration": {"level": "warning"},
+              "helpUri": "https://avd.aquasec.com/misconfig/ksv-0001",
+              "help": {
+                "text": "Misconfiguration KSV-0001\nType: Kubernetes Security Check\nSeverity: MEDIUM\nCheck: Can elevate its own privileges\nMessage: Container 'app' of Deployment 'api' should set 'securityContext.allowPrivilegeEscalation' to false\nLink: [KSV-0001](https://avd.aquasec.com/misconfig/ksv-0001)\nA program inside the container can elevate its own privileges and run as root, which might give the program control over the container and node.",
+                "markdown": "**Misconfiguration KSV-0001**"
+              },
+              "properties": {"precision": "very-high", "security-severity": "5.5", "tags": ["misconfiguration", "security", "MEDIUM"]}
+            }
+          ],
+          "version": "0.72.0"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "KSV-0001",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {"text": "Artifact: split.yaml\nType: kubernetes\nVulnerability KSV-0001\nSeverity: MEDIUM\nMessage: Container 'app' of Deployment 'api' should set 'securityContext.allowPrivilegeEscalation' to false\nLink: [KSV-0001](https://avd.aquasec.com/misconfig/ksv-0001)"},
+          "locations": [
+            {
+              "physicalLocation": {"artifactLocation": {"uri": "split.yaml", "uriBaseId": "ROOTPATH"}, "region": {"startLine": 7345, "startColumn": 1, "endLine": 7402, "endColumn": 1}},
+              "message": {"text": "split.yaml"}
+            }
+          ]
+        },
+        {
+          "ruleId": "KSV-0001",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {"text": "Artifact: split.yaml\nType: kubernetes\nVulnerability KSV-0001\nSeverity: MEDIUM\nMessage: Container 'app' of Deployment 'twin' should set 'securityContext.allowPrivilegeEscalation' to false\nLink: [KSV-0001](https://avd.aquasec.com/misconfig/ksv-0001)"},
+          "locations": [
+            {
+              "physicalLocation": {"artifactLocation": {"uri": "split.yaml", "uriBaseId": "ROOTPATH"}, "region": {"startLine": 8000, "startColumn": 1, "endLine": 8050, "endColumn": 1}},
+              "message": {"text": "split.yaml"}
+            }
+          ]
+        },
+        {
+          "ruleId": "KSV-0001",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {"text": "Artifact: other.yaml\nType: kubernetes\nVulnerability KSV-0001\nSeverity: MEDIUM\nMessage: the file has a problem nothing here names\nLink: [KSV-0001](https://avd.aquasec.com/misconfig/ksv-0001)"},
+          "locations": [
+            {
+              "physicalLocation": {"artifactLocation": {"uri": "other.yaml", "uriBaseId": "ROOTPATH"}, "region": {"startLine": 1, "startColumn": 1, "endLine": 9, "endColumn": 1}},
+              "message": {"text": "other.yaml"}
+            }
+          ]
+        }
+      ],
+      "columnKind": "utf16CodeUnits",
+      "originalUriBaseIds": {"ROOTPATH": {"uri": "file:///tmp/manifests/"}}
+    }
+  ]
+}

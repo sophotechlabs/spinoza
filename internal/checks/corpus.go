@@ -10,9 +10,11 @@ import (
 )
 
 type corpus struct {
+	items      []held
 	byResource map[target][]*unstructured.Unstructured
 	names      map[target]map[string]Named
 	absent     map[target]bool
+	asked      map[target]bool
 	unread     []target
 	mentioned  map[string]int
 }
@@ -21,6 +23,7 @@ func newCorpus(
 	items []held, names []Named, absent []string, asked, unread []target, mentions map[string]int,
 ) *corpus {
 	out := &corpus{
+		items:      items,
 		byResource: map[target][]*unstructured.Unstructured{},
 		names:      map[target]map[string]Named{},
 		absent:     map[target]bool{},
@@ -44,6 +47,7 @@ func newCorpus(
 	for _, want := range asked {
 		requested[want] = true
 	}
+	out.asked = requested
 	for _, want := range allTargets() {
 		if !requested[want] {
 			out.absent[want] = true
@@ -108,6 +112,48 @@ func gatherStrings(value any, into map[string]bool) {
 
 func (c *corpus) mentionedElsewhere(name string) bool {
 	return c.mentioned[name] > 0
+}
+
+func (c *corpus) everything() []held {
+	return c.items
+}
+
+func (c *corpus) read(group, resource string) bool {
+	key := target{group: group, resource: resource}
+	if _, held := c.byResource[key]; held {
+		return true
+	}
+	return c.asked[key] && !c.absent[key]
+}
+
+func (c *corpus) subjectsOfKind(kind string) []Subject {
+	out := []Subject{}
+	for _, item := range c.items {
+		if item.obj.GetKind() != kind {
+			continue
+		}
+		out = append(out, subjectFromHeld(item))
+	}
+	return out
+}
+
+func subjectFromHeld(item held) Subject {
+	origin, managedBy := originOf(item.obj)
+	return Subject{
+		Ref: api.ObjectRef{
+			Group:     item.desc.Group,
+			Version:   item.desc.Version,
+			Resource:  item.desc.Resource,
+			Namespace: item.obj.GetNamespace(),
+			Name:      item.obj.GetName(),
+		},
+		Kind:      item.obj.GetKind(),
+		Object:    item.obj,
+		Pod:       map[string]any{},
+		Replicas:  1,
+		Origin:    origin,
+		ManagedBy: managedBy,
+	}
 }
 
 func (c *corpus) of(group, resource string) []*unstructured.Unstructured {

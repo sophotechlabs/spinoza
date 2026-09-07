@@ -22,6 +22,18 @@ func mount(name, path string, readOnly bool) map[string]any {
 	return map[string]any{"name": name, "mountPath": path, "readOnly": readOnly}
 }
 
+func probeAimedAt(host string) map[string]any {
+	return map[string]any{"httpGet": map[string]any{"host": host, "port": int64(8080)}}
+}
+
+func templateAnnotated(obj *unstructured.Unstructured, key, value string) *unstructured.Unstructured {
+	path := append(templateMetaPath(obj.GetKind()), "annotations")
+	if err := unstructured.SetNestedField(obj.Object, map[string]any{key: value}, path...); err != nil {
+		panic(err)
+	}
+	return obj
+}
+
 func annotated(obj *unstructured.Unstructured, key, value string) *unstructured.Unstructured {
 	meta, ok := obj.Object["metadata"].(map[string]any)
 	if !ok {
@@ -165,6 +177,25 @@ func TestEveryHardeningCheckFiresOnItsOwnFaultAndOnNothingElse(t *testing.T) {
 				"serviceAccountName":           defaultNamespace,
 			}, container("app", withSecurity(hardened(nil)))),
 		},
+		{
+			id: "run-as-user-zero",
+			trips: podSpecWith(nil, container("app", withSecurity(hardened(map[string]any{
+				"runAsUser": int64(0),
+			})))),
+		},
+		{
+			id: "probe-host-set",
+			trips: podSpecWith(nil, container("app", map[string]any{
+				"securityContext": hardened(nil),
+				"livenessProbe":   probeAimedAt("10.0.0.9"),
+			})),
+		},
+		{
+			id: "proc-mount-in-user-namespace",
+			trips: podSpecWith(map[string]any{"hostUsers": false}, container("app", withSecurity(hardened(map[string]any{
+				"procMount": procMountUnmask,
+			})))),
+		},
 	}
 
 	registered := map[string]bool{}
@@ -216,15 +247,16 @@ func TestAPodLevelSeccompProfileSatisfiesItsContainers(t *testing.T) {
 	}
 }
 
-func TestAContainerProfileOverridesAnUnconfinedPod(t *testing.T) {
+func TestAnUnconfinedPodProfileIsReportedEvenWhenEveryContainerOverridesIt(t *testing.T) {
 	found := report(t, deployment("api", podSpecWith(map[string]any{
 		"securityContext": map[string]any{"seccompProfile": map[string]any{"type": unconfined}},
 	}, container("app", withSecurity(map[string]any{
 		"seccompProfile": map[string]any{"type": runtimeDefault},
 	})))))
 
-	if findingCount(t, found, "seccomp-unconfined") != 0 {
-		t.Fatal("the container's own RuntimeDefault did not override the pod's Unconfined")
+	detail := onlyFinding(t, found, "seccomp-unconfined").Detail
+	if !strings.Contains(detail, `pod must not set securityContext.seccompProfile.type to "Unconfined"`) {
+		t.Fatalf("detail was %q, want upstream's refusal of the pod-level profile", detail)
 	}
 }
 
@@ -239,13 +271,37 @@ func TestAnUnconfinedPodProfileIsReportedAtPodLevel(t *testing.T) {
 	}
 }
 
-func TestTheLegacyAppArmorAnnotationIsRead(t *testing.T) {
-	obj := annotated(deployment("api", podSpec(container("app", nil))), apparmorPrefix+"app", "unconfined")
+func TestTheLegacyAppArmorAnnotationIsReadFromThePodTemplate(t *testing.T) {
+	obj := templateAnnotated(deployment("api", podSpec(container("app", nil))), apparmorPrefix+"app", "unconfined")
 
 	found := report(t, obj)
 
 	if !strings.Contains(onlyFinding(t, found, "apparmor-unconfined").Detail, apparmorPrefix+"app") {
-		t.Fatal("the legacy apparmor annotation was not read")
+		t.Fatal("the legacy apparmor annotation on the pod template was not read")
+	}
+}
+
+func TestAnAppArmorAnnotationOnTheWorkloadItselfGovernsNoPod(t *testing.T) {
+	obj := annotated(deployment("api", podSpec(container("app", nil))), apparmorPrefix+"app", "unconfined")
+
+	if findingCount(t, report(t, obj), "apparmor-unconfined") != 0 {
+		t.Fatal("an annotation on the Deployment rather than its template was reported as if it reached the pods")
+	}
+}
+
+func TestABarePodsOwnAnnotationsAreRead(t *testing.T) {
+	obj := annotated(pod("api", podSpec(container("app", nil))), apparmorPrefix+"app", "unconfined")
+
+	if !strings.Contains(onlyFinding(t, report(t, obj), "apparmor-unconfined").Detail, apparmorPrefix+"app") {
+		t.Fatal("a bare pod's own annotation was not read")
+	}
+}
+
+func TestACronJobsTemplateAnnotationsAreRead(t *testing.T) {
+	obj := templateAnnotated(cronJob("nightly", podSpec(container("app", nil))), apparmorPrefix+"app", "unconfined")
+
+	if !strings.Contains(onlyFinding(t, report(t, obj), "apparmor-unconfined").Detail, apparmorPrefix+"app") {
+		t.Fatal("a CronJob's pod template annotation was not read")
 	}
 }
 
@@ -336,14 +392,28 @@ func TestAReadOnlyHostMountIsNotReportedAsWritable(t *testing.T) {
 
 func TestDroppingAllSatisfiesBothCapabilityChecks(t *testing.T) {
 	found := report(t, deployment("api", podSpec(container("app", withSecurity(map[string]any{
-		"capabilities": map[string]any{"drop": []any{"all"}},
+		"capabilities": map[string]any{"drop": []any{dropAll}},
 	})))))
 
 	if findingCount(t, found, "capabilities-not-dropped") != 0 {
-		t.Fatal("a lowercase drop of all was not accepted")
+		t.Fatal("dropping ALL was not accepted")
 	}
 	if findingCount(t, found, "net-raw-kept") != 0 {
 		t.Fatal("dropping ALL did not satisfy the NET_RAW check")
+	}
+}
+
+func TestALowercaseDropOfAllIsWhatAdmissionRefuses(t *testing.T) {
+	found := report(t, deployment("api", podSpec(container("app", withSecurity(map[string]any{
+		"capabilities": map[string]any{"drop": []any{"all"}},
+	})))))
+
+	detail := onlyFinding(t, found, "capabilities-not-dropped").Detail
+	if !strings.Contains(detail, `must set securityContext.capabilities.drop=["ALL"]`) {
+		t.Fatalf("detail was %q, want upstream's exact-case requirement", detail)
+	}
+	if findingCount(t, found, "net-raw-kept") != 0 {
+		t.Fatal("the NET_RAW check, which is spinoza's own, stopped accepting a lowercase all")
 	}
 }
 

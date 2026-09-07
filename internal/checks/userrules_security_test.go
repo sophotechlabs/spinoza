@@ -69,7 +69,7 @@ func TestUserRuleEvaluationStopsAtItsCostLimit(t *testing.T) {
 	}
 	rule := UserRule{Expr: `object.items.exists(item, item == "found")`}
 	subject := Subject{Object: &unstructured.Unstructured{Object: map[string]any{"items": items}}}
-	_, err := rule.holds(subject)
+	_, err := rule.holds(subject, newCorpus(nil, nil, nil, nil, nil, nil))
 	if err == nil || !strings.Contains(err.Error(), "actual cost limit exceeded") {
 		t.Fatalf("cost-limited evaluation error = %v", err)
 	}

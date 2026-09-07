@@ -24,6 +24,7 @@ import {
 import type { CheckFindingView, CheckGroupView, CheckReportView } from '../../src/lib/checks';
 import type { CheckObject, ObjectRef } from '../../src/lib/types';
 import { useSettingsStore } from '../../src/store/settings';
+import { sourceLabel, sourceStale } from '../../src/lib/checks';
 
 function ref(name: string, namespace = 'apps'): ObjectRef {
   return { group: 'apps', version: 'v1', resource: 'deployments', namespace, name };
@@ -48,6 +49,7 @@ function viewFinding(name: string, extra: Partial<CheckFindingView> = {}): Check
     severity: 'high',
     fresh: false,
     muted: false,
+    unmatched: false,
     ...extra,
   };
 }
@@ -695,5 +697,69 @@ describe('driftLabel', () => {
   it('leaves the ratio out when neither cluster scanned anything', () => {
     expect(driftLabel(counted({ was: 3, total: 4 }), 0, 396)).toBe('3 there, 4 here');
     expect(driftLabel(counted({ was: 3, total: 4 }), 2284, 0)).toBe('3 there, 4 here');
+  });
+});
+
+describe('imported groups', () => {
+  const now = Date.parse('2026-09-07T12:00:00Z');
+
+  it('labels a group with its file and how old it is', () => {
+    const group = viewGroup('trivy/KSV-0001', {
+      sources: ['/scans/trivy-p-mk1.json', '/scans/second.json'],
+      taken: '2026-09-07T09:00:00Z',
+    });
+    expect(sourceLabel(group, now)).toBe('trivy-p-mk1.json, second.json · 3h old');
+    expect(sourceStale(group, now)).toBe(false);
+  });
+
+  it('says nothing about a group that came from no file', () => {
+    expect(sourceLabel(viewGroup('privileged-containers'), now)).toBe('');
+    expect(sourceStale(viewGroup('privileged-containers'), now)).toBe(false);
+    expect(sourceLabel(viewGroup('x', { sources: [] }), now)).toBe('');
+  });
+
+  it('names the file alone when its time cannot be read', () => {
+    const group = viewGroup('x', { sources: ['scan.json'], taken: 'yesterday' });
+    expect(sourceLabel(group, now)).toBe('scan.json');
+    expect(sourceStale(group, now)).toBe(false);
+  });
+
+  it('calls a file stale once it is older than a week', () => {
+    expect(
+      sourceStale(viewGroup('x', { sources: ['a.json'], taken: '2026-08-30T00:00:00Z' }), now),
+    ).toBe(true);
+    expect(
+      sourceStale(viewGroup('x', { sources: ['a.json'], taken: '2026-09-01T00:00:00Z' }), now),
+    ).toBe(false);
+  });
+
+  it('marks a finding the audit could not place', async () => {
+    stub({
+      scanned: 1,
+      objects: [wireObject('api'), { ...wireObject('ghost'), resource: '' }],
+      groups: [
+        {
+          id: 'trivy/KSV-0001',
+          title: 'Can elevate its own privileges',
+          category: 'security',
+          severity: 'medium',
+          wrong: 'it can',
+          remedy: 'stop it',
+          total: 2,
+          sources: ['/scans/trivy.json'],
+          taken: '2026-09-07T09:00:00Z',
+          findings: [
+            { ref: 0, detail: 'seen' },
+            { ref: 1, detail: 'never seen', unmatched: true },
+          ],
+        },
+      ],
+    });
+
+    const found = await fetchChecks();
+
+    expect(found.groups[0].findings[0].unmatched).toBe(false);
+    expect(found.groups[0].findings[1].unmatched).toBe(true);
+    expect(found.groups[0].sources).toEqual(['/scans/trivy.json']);
   });
 });

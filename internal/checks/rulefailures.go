@@ -8,6 +8,7 @@ import (
 
 type ruleFailure struct {
 	rule   string
+	role   string
 	object string
 	reason string
 	seen   map[string]struct{}
@@ -38,6 +39,7 @@ func (f *ruleDiagnostics) record(rule UserRule, subject Subject, err error) {
 	f.byRule[rule.ID] = len(f.list)
 	f.list = append(f.list, ruleFailure{
 		rule:   rule.ID,
+		role:   roleOf(rule),
 		object: subject.Kind + " " + refLabel(subject.Ref),
 		reason: err.Error(),
 		seen:   map[string]struct{}{key: {}},
@@ -57,10 +59,17 @@ func (f *ruleDiagnostics) message() string {
 		if others > 0 {
 			object += fmt.Sprintf(" and %d other %s", others, objectWord(others))
 		}
-		out = append(out, fmt.Sprintf("silencer %q could not evaluate for %s: %s",
-			failure.rule, object, failure.reason))
+		out = append(out, fmt.Sprintf("%s %q could not evaluate for %s: %s",
+			failure.role, failure.rule, object, failure.reason))
 	}
 	return strings.Join(out, "; ")
+}
+
+func roleOf(rule UserRule) string {
+	if rule.silencer() {
+		return "silencer"
+	}
+	return "rule"
 }
 
 func objectWord(count int) string {

@@ -1,0 +1,100 @@
+{
+  "ClusterName": "p-mk1",
+  "Resources": [
+    {
+      "Namespace": "apps",
+      "Kind": "Deployment",
+      "Name": "api",
+      "Metadata": [{}],
+      "Results": [
+        {
+          "Target": "Deployment/api",
+          "Class": "config",
+          "Type": "kubernetes",
+          "MisconfSummary": {"Successes": 27, "Failures": 2},
+          "Misconfigurations": [
+            {
+              "Type": "Kubernetes Security Check",
+              "ID": "KSV-0001",
+              "AVDID": "AVD-KSV-0001",
+              "Title": "Can elevate its own privileges",
+              "Description": "A program inside the container can elevate its own privileges and run as root, which might give the program control over the container and node.",
+              "Message": "Container 'app' of Deployment 'api' should set 'securityContext.allowPrivilegeEscalation' to false",
+              "Namespace": "builtin.kubernetes.KSV001",
+              "Query": "data.builtin.kubernetes.KSV001.deny",
+              "Resolution": "Set 'set containers[].securityContext.allowPrivilegeEscalation' to 'false'.",
+              "Severity": "MEDIUM",
+              "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0001",
+              "References": ["https://avd.aquasec.com/misconfig/ksv-0001"],
+              "Status": "FAIL",
+              "CauseMetadata": {"Provider": "Kubernetes", "Service": "general", "StartLine": 47, "EndLine": 58, "Code": {"Lines": null}}
+            },
+            {
+              "Type": "Kubernetes Security Check",
+              "ID": "KSV-0003",
+              "AVDID": "AVD-KSV-0003",
+              "Title": "Default capabilities: some containers do not drop all",
+              "Description": "The container should drop all default capabilities and add only those that are needed for its execution.",
+              "Message": "Container 'app' of Deployment 'api' should add 'ALL' to 'securityContext.capabilities.drop'",
+              "Namespace": "builtin.kubernetes.KSV003",
+              "Query": "data.builtin.kubernetes.KSV003.deny",
+              "Resolution": "Add 'ALL' to containers[].securityContext.capabilities.drop.",
+              "Severity": "LOW",
+              "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0003",
+              "References": ["https://avd.aquasec.com/misconfig/ksv-0003"],
+              "Status": "PASS",
+              "CauseMetadata": {"Provider": "Kubernetes", "Service": "general", "StartLine": 47, "EndLine": 58, "Code": {"Lines": null}}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Kind": "ClusterRole",
+      "Name": "admin",
+      "Metadata": [{}],
+      "Results": [
+        {
+          "Target": "ClusterRole/admin",
+          "Class": "config",
+          "Type": "kubernetes",
+          "MisconfSummary": {"Successes": 4, "Failures": 1},
+          "Misconfigurations": [
+            {
+              "Type": "Kubernetes Security Check",
+              "ID": "KSV-0041",
+              "AVDID": "AVD-KSV-0041",
+              "Title": "Manage secrets",
+              "Description": "Viewing secrets at the cluster-scope is akin to cluster-admin in most clusters as there are typically at least one service accounts (their token stored in a secret) bound to cluster-admin directly or a role/clusterrole that gives similar permissions.",
+              "Message": "ClusterRole 'admin' shouldn't have access to manage resource 'secrets'",
+              "Namespace": "builtin.kubernetes.KSV041",
+              "Query": "data.builtin.kubernetes.KSV041.deny",
+              "Resolution": "Manage secrets are not allowed. Remove resource 'secrets' from cluster role",
+              "Severity": "CRITICAL",
+              "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0041",
+              "References": ["https://avd.aquasec.com/misconfig/ksv-0041"],
+              "Status": "FAIL",
+              "CauseMetadata": {"Provider": "Kubernetes", "Service": "general", "StartLine": 2, "EndLine": 19, "Code": {"Lines": null}}
+            },
+            {
+              "Type": "Kubernetes Security Check",
+              "ID": "KSV-0113",
+              "AVDID": "AVD-KSV-0113",
+              "Title": "Manage namespace secrets",
+              "Description": "Viewing secrets at the namespace scope can lead to escalation if another service account in that namespace has a higher privileged rolebinding or clusterrolebinding bound.",
+              "Message": "ClusterRole 'admin' should not have access to resources [\"secrets\"] for verbs [\"get\" \"list\" \"watch\"]",
+              "Namespace": "builtin.kubernetes.KSV113",
+              "Query": "data.builtin.kubernetes.KSV113.deny",
+              "Resolution": "Remove access to secrets from the cluster role",
+              "Severity": "LOW",
+              "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0113",
+              "References": ["https://avd.aquasec.com/misconfig/ksv-0113"],
+              "Status": "FAIL",
+              "CauseMetadata": {"Provider": "Kubernetes", "Service": "general", "StartLine": 2, "EndLine": 19, "Code": {"Lines": null}}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

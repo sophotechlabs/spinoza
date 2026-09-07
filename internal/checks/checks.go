@@ -5,6 +5,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"strings"
+	"time"
+
+	"k8s.io/pod-security-admission/policy"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -45,6 +48,8 @@ type scan struct {
 	usage     map[string]api.ResourceUsage
 	held      *corpus
 	facts     Facts
+	upstream  *upstreamScan
+	faults    *ruleDiagnostics
 	everyKind bool
 	custom    bool
 }
@@ -60,6 +65,7 @@ type found struct {
 	patch      string
 	convention string
 	severity   string
+	unmatched  bool
 }
 
 type objects struct {
@@ -104,6 +110,9 @@ type factRule func(Subject, *corpus) (string, string)
 
 type check struct {
 	id         string
+	upstream   policy.CheckID
+	presented  func(Subject) bool
+	enforced   bool
 	title      string
 	category   string
 	severity   string
@@ -115,6 +124,7 @@ type check struct {
 	needsEvery bool
 	arguable   bool
 	needs      []target
+	imported   *importOrigin
 	find       finder
 }
 
@@ -221,7 +231,7 @@ type tally struct {
 }
 
 func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
-	all := c.ranked(c.find(sc))
+	all := c.ranked(c.findings(sc))
 	out := make([]marked, 0, len(all))
 	count := tally{}
 	here := map[string]bool{}
@@ -235,7 +245,7 @@ func (c check) matching(sc scan, keep Filter) ([]marked, tally) {
 		by, muted := keep.mutes(c.id, item)
 		rule := false
 		if !muted {
-			by, muted = keep.silenced(c.id, item)
+			by, muted = keep.silenced(c.id, item, sc.held)
 			rule = muted
 		}
 		if !muted && item.convention != "" {
@@ -295,6 +305,7 @@ func page(all []marked, objs *objects, after string, limit int) ([]api.CheckFind
 			Muted:     item.muted,
 			MutedBy:   mutedBy(item),
 			Reason:    item.by.Reason,
+			Unmatched: item.unmatched,
 		})
 		last = key
 	}
@@ -302,7 +313,7 @@ func page(all []marked, objs *objects, after string, limit int) ([]api.CheckFind
 }
 
 func wantsCorpus(keep Filter) bool {
-	for _, entry := range keep.chosen(registryWith(keep.Rules)) {
+	for _, entry := range keep.chosen(keep.checks()) {
 		if entry.needsEvery {
 			return true
 		}
@@ -330,6 +341,14 @@ func (c check) standsDown(sc scan) string {
 	if missing := missingResources(c.needs, sc.held); len(missing) > 0 {
 		return skippedBecause(missing)
 	}
+	if c.upstream != "" {
+		if down := sc.upstream.standsDown(c.upstream); down != "" {
+			return down
+		}
+	}
+	if c.enforced && sc.upstream.err != nil {
+		return upstreamUnloaded + sc.upstream.err.Error()
+	}
 	return ""
 }
 
@@ -339,13 +358,17 @@ func (c check) group(sc scan, objs *objects, spread *namespaces, keep Filter, sh
 		Title:      c.title,
 		Category:   c.category,
 		Severity:   c.severity,
-		Frameworks: c.frameworks,
+		Frameworks: c.frameworksFor(sc),
 		Wrong:      c.wrong,
 		Remedy:     c.remedy,
 		Findings:   []api.CheckFinding{},
 	}
 	if sc.everyKind && c.wrongEvery != "" {
 		out.Wrong = c.wrongEvery
+	}
+	if c.imported != nil {
+		out.Sources = c.imported.sources
+		out.Taken = c.imported.taken.UTC().Format(time.RFC3339)
 	}
 	if down := c.standsDown(sc); down != "" {
 		out.Skipped = down
@@ -379,8 +402,19 @@ func joined(parts ...string) string {
 	return strings.Join(kept, "; ")
 }
 
-func registryWith(rules []UserRule) []check {
-	return append(registry(), userChecks(rules)...)
+func registryWith(rules []UserRule, files []importFile) []check {
+	out := append(registry(), userChecks(rules)...)
+	return append(out, importedChecks(files)...)
+}
+
+func registryFor(keep Filter) ([]check, []string) {
+	files, faults := readImports(keep.Imports)
+	return registryWith(keep.Rules, files), faults
+}
+
+func (f Filter) checks() []check {
+	out, _ := registryFor(f)
+	return out
 }
 
 func registry() []check {
@@ -423,7 +457,7 @@ func (s *Surveys) Page(
 	shown int,
 ) (api.CheckPage, error) {
 	var wanted check
-	for _, entry := range registryWith(keep.Rules) {
+	for _, entry := range keep.checks() {
 		if entry.id == id {
 			wanted = entry
 		}
@@ -469,11 +503,13 @@ func survey(
 		wanted = append(wanted, alsoWarm(lister, wanted)...)
 	}
 	items, names, unread, mentions, failure := gather(ctx, lister, wanted)
+	facts := lister.Facts()
 	return scan{
 		subjects:  subjectsOf(items),
 		usage:     usage.Pods,
 		held:      newCorpus(items, names, absent, targetsFor(keep.WholeCluster), unread, mentions),
-		facts:     lister.Facts(),
+		facts:     facts,
+		upstream:  newUpstreamScan(facts.ServerVersion),
 		everyKind: keep.EveryKind,
 		custom:    custom,
 	}, failure, absent
@@ -500,7 +536,9 @@ func (s *Surveys) Run(
 ) api.CheckReport {
 	sc, failure, absent := s.take(ctx, lister, descs, usage, keep)
 	keep.ruleFailures = newRuleDiagnostics()
-	checks := keep.chosen(registryWith(keep.Rules))
+	sc.faults = keep.ruleFailures
+	registered, importFaults := registryFor(keep)
+	checks := keep.chosen(registered)
 	objs := newObjects()
 	spread := newNamespaces()
 	groups := make([]api.CheckGroup, 0, len(checks))
@@ -522,6 +560,6 @@ func (s *Surveys) Run(
 		BaselineFrom: keep.takenFrom(),
 		WasScanned:   keep.scannedBefore(),
 		Scanned:      len(sc.subjects),
-		Error:        joined(failure, undiscovered(absent), keep.ruleFailures.message()),
+		Error:        joined(failure, undiscovered(absent), keep.ruleFailures.message(), strings.Join(importFaults, "; ")),
 	}
 }

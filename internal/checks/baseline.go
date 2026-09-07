@@ -83,14 +83,14 @@ func Fingerprint(
 		Keys:    map[string]string{},
 		Scanned: len(sc.subjects),
 	}
-	for _, entry := range registryWith(wide.Rules) {
+	for _, entry := range wide.checks() {
 		if ctx.Err() != nil {
 			return Baseline{Checks: []string{}, Counts: map[string]int{}, Keys: map[string]string{}}
 		}
 		if entry.standsDown(sc) != "" || !entry.comparable() {
 			continue
 		}
-		found := entry.find(sc)
+		found := entry.findings(sc)
 		out.Checks = append(out.Checks, entry.id)
 		out.Counts[entry.id] = len(found)
 		for _, item := range found {

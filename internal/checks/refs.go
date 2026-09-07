@@ -661,7 +661,7 @@ func claimTemplatePrefixes(subject Subject) []string {
 		if !ok {
 			continue
 		}
-		meta, hasMeta := entry["metadata"].(map[string]any)
+		meta, hasMeta := entry[metadataField].(map[string]any)
 		if !hasMeta {
 			continue
 		}
@@ -697,9 +697,9 @@ func isDigits(text string) bool {
 
 func emptyObject(ref api.ObjectRef, kind string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       kind,
-		"metadata":   map[string]any{"name": ref.Name, "namespace": ref.Namespace},
+		"apiVersion":  "v1",
+		"kind":        kind,
+		metadataField: map[string]any{"name": ref.Name, "namespace": ref.Namespace},
 	}}
 }
 

@@ -103,6 +103,7 @@ func factChecks() []check {
 		},
 		{
 			id:         "pod-security-would-reject",
+			enforced:   true,
 			title:      "The namespace's Pod Security level would reject this",
 			category:   categorySecurity,
 			severity:   severityHigh,
@@ -110,7 +111,7 @@ func factChecks() []check {
 			needs:      []target{namespaceTarget},
 			wrong:      "The namespace enforces a Pod Security level this pod does not meet, so the pods are refused at admission.",
 			remedy:     "Fix what the level forbids, or move the workload to a namespace at a lower level.",
-			find:       overFacts(podSecurityWouldReject),
+			find:       enforcedLevelRejects,
 		},
 	}
 }
@@ -481,52 +482,4 @@ func fullestEntry(hard, used any) (name string, share int64) {
 		}
 	}
 	return name, share
-}
-
-func podSecurityWouldReject(subject Subject, held *corpus) (string, string) {
-	space := held.namespace(subject.Ref.Namespace)
-	if space == nil {
-		return "", ""
-	}
-	level := space.GetLabels()[enforceLabel]
-	if level != profileBaseline && level != profileStrict {
-		return "", ""
-	}
-	broken := brokenControls(subject, level)
-	if len(broken) == 0 {
-		return "", ""
-	}
-	return "the namespace enforces " + level + " and this breaks " + strings.Join(broken, ", "), ""
-}
-
-func brokenControls(subject Subject, level string) []string {
-	out := []string{}
-	if detail, _ := hostNamespaces(subject); detail != "" {
-		out = append(out, "host namespaces")
-	}
-	for _, container := range subject.Containers {
-		if detail, _ := privileged(subject, container); detail != "" {
-			out = append(out, "privileged")
-			break
-		}
-	}
-	if _, path := firstHostPath(subject, false); path != "" {
-		out = append(out, "hostPath volumes")
-	}
-	if level != profileStrict {
-		return slices.Compact(out)
-	}
-	for _, container := range subject.Containers {
-		if detail, _ := escalation(subject, container); detail != "" {
-			out = append(out, "privilege escalation")
-			break
-		}
-	}
-	for _, container := range subject.Containers {
-		if detail, _ := capabilitiesNotDropped(subject, container); detail != "" {
-			out = append(out, "capabilities not dropped")
-			break
-		}
-	}
-	return slices.Compact(out)
 }

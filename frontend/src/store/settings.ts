@@ -9,10 +9,12 @@ import type {
 import {
   readNodeShell,
   readSettings,
+  readCheckImports,
   readCheckRules,
   readUpdateCheck,
   writeNodeShell,
   writeSettings,
+  writeCheckImports,
   writeCheckRules,
   writeUpdateCheck,
 } from '../lib/settings';
@@ -21,6 +23,7 @@ interface SettingsState extends Settings {
   nodeShell: boolean;
   updateCheck: boolean;
   checkRules: string;
+  checkImports: string;
   setLogView: (logView: LogView) => void;
   setScreenReader: (screenReader: boolean) => void;
   setNamespaceStart: (cluster: string, namespaceStart: NamespaceStart) => void;
@@ -36,6 +39,7 @@ interface SettingsState extends Settings {
   setNodeShell: (nodeShell: boolean) => Promise<void>;
   setUpdateCheck: (updateCheck: boolean) => Promise<void>;
   setCheckRules: (checkRules: string) => Promise<void>;
+  setCheckImports: (checkImports: string) => Promise<void>;
   adoptStored: () => void;
 }
 
@@ -76,6 +80,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   nodeShell: readNodeShell(),
   updateCheck: readUpdateCheck(),
   checkRules: readCheckRules(),
+  checkImports: readCheckImports(),
   setLogView: (logView) => {
     writeSettings({ ...saved(get()), logView });
     set({ logView });
@@ -142,12 +147,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await writeCheckRules(checkRules);
     set({ checkRules });
   },
+  setCheckImports: async (checkImports) => {
+    await writeCheckImports(checkImports);
+    set({ checkImports });
+  },
   adoptStored: () => {
     set({
       ...readSettings(),
       nodeShell: readNodeShell(),
       updateCheck: readUpdateCheck(),
       checkRules: readCheckRules(),
+      checkImports: readCheckImports(),
     });
   },
 }));

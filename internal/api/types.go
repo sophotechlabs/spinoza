@@ -1265,6 +1265,7 @@ type CheckFinding struct {
 	Muted     bool   `json:"muted,omitempty"`
 	MutedBy   string `json:"mutedBy,omitempty"`
 	Reason    string `json:"reason,omitempty"`
+	Unmatched bool   `json:"unmatched,omitempty"`
 }
 
 type CheckGroup struct {
@@ -1288,6 +1289,8 @@ type CheckGroup struct {
 	Measured   bool           `json:"measured,omitempty"`
 	Truncated  bool           `json:"truncated,omitempty"`
 	Next       string         `json:"next,omitempty"`
+	Sources    []string       `json:"sources,omitempty"`
+	Taken      string         `json:"taken,omitempty"`
 	Findings   []CheckFinding `json:"findings"`
 }
 

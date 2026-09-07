@@ -337,7 +337,7 @@ func templateLabels(subject Subject) map[string]any {
 	if len(path) < 2 {
 		return nil
 	}
-	meta := specAt(subject.Object, append(path[:len(path)-1], "metadata")...)
+	meta := specAt(subject.Object, append(path[:len(path)-1], metadataField)...)
 	labels, ok := meta["labels"].(map[string]any)
 	if !ok {
 		return nil

@@ -7,6 +7,8 @@ import { useClustersStore } from '../../src/store/clusters';
 import { MK1, showing } from '../helpers-clusters';
 import type { CheckFinding, CheckGroup, CheckObject, CheckReport } from '../../src/lib/types';
 import { bumpClusterEpoch } from '../../src/store/cluster';
+import { adoptSession } from '../../src/store/identity';
+import { OWN_WINDOW } from '../../src/lib/identity';
 
 const OBJECTS: CheckObject[] = [
   {
@@ -58,6 +60,13 @@ function stub(body: unknown, ok = true) {
   });
   vi.stubGlobal('fetch', fetcher);
   return fetcher;
+}
+
+function auditRequests(): number {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map((call) => askedFor(call[0]))
+    .filter((url) => url.split('?')[0] === '/api/checks').length;
 }
 
 function asked(fetcher: ReturnType<typeof stub>): string[] {
@@ -112,7 +121,9 @@ afterEach(() => {
     checksWholeCluster: true,
     checksEveryKind: false,
     checkRules: '',
+    checkImports: '',
   });
+  adoptSession(OWN_WINDOW);
 });
 
 describe('Checks', () => {
@@ -880,5 +891,97 @@ describe('a finding shows how much it matters here', () => {
     const badge = await screen.findByText('low');
 
     expect(badge.getAttribute('title')).toContain('do not own');
+  });
+});
+
+describe('imported findings', () => {
+  it('names the file an imported group came from and how old it is', async () => {
+    const taken = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    show({
+      groups: [
+        makeGroup('trivy/KSV-0001', {
+          title: 'Can elevate its own privileges',
+          sources: ['/scans/trivy-p-mk1.json'],
+          taken,
+          findings: [makeFinding()],
+        }),
+      ],
+    });
+
+    const label = await screen.findByText('trivy-p-mk1.json · 3h old');
+
+    expect(label).not.toHaveClass('text-warn');
+    expect(label).toHaveAttribute('title', '/scans/trivy-p-mk1.json');
+  });
+
+  it('warns when the file is older than a week', async () => {
+    const taken = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    show({
+      groups: [
+        makeGroup('trivy/KSV-0001', {
+          sources: ['/scans/a.json', '/scans/b.json'],
+          taken,
+          findings: [makeFinding()],
+        }),
+      ],
+    });
+
+    expect(await screen.findByText('a.json, b.json · 10d old')).toHaveClass('text-warn');
+  });
+
+  it('keeps a finding about an object not in this cluster and does not offer to open it', async () => {
+    const { onOpen } = show({
+      objects: [{ ...OBJECTS[0], name: 'ghost', resource: '' }],
+      groups: [
+        makeGroup('trivy/KSV-0001', {
+          sources: ['/scans/a.json'],
+          findings: [makeFinding({ unmatched: true, container: undefined })],
+        }),
+      ],
+    });
+    await screen.findByText('Privileged containers');
+    await userEvent.click(screen.getByRole('button', { name: /Privileged containers/ }));
+
+    await screen.findByText('not in this cluster');
+    await userEvent.click(screen.getByText(/ghost/));
+
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Deployment · apps/ghost' })).toBeNull();
+  });
+
+  it('saves the paths you listed, stops offering to, and audits again', async () => {
+    show({ groups: [] });
+    await screen.findByLabelText('Imported findings');
+    const before = auditRequests();
+
+    await userEvent.type(screen.getByLabelText('Imported findings'), '/scans/trivy.json');
+    await userEvent.click(screen.getByRole('button', { name: 'Save paths' }));
+
+    await waitFor(() => {
+      expect(useSettingsStore.getState().checkImports).toBe('/scans/trivy.json');
+    });
+    expect(screen.getByRole('button', { name: 'Save paths' })).toBeDisabled();
+    await waitFor(() => {
+      expect(auditRequests()).toBeGreaterThan(before);
+    });
+  });
+
+  it('says so when the paths could not be saved', async () => {
+    show({ groups: [] });
+    await screen.findByLabelText('Imported findings');
+    vi.spyOn(useSettingsStore.getState(), 'setCheckImports').mockRejectedValue(new Error('nope'));
+
+    await userEvent.type(screen.getByLabelText('Imported findings'), 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Save paths' }));
+
+    expect(await screen.findByText(/nope/)).toBeInTheDocument();
+  });
+
+  it('keeps the editor off a served cluster, whose files are not yours to point at', async () => {
+    adoptSession({ ...OWN_WINDOW, cluster: true, mode: 'oidc', user: 'alice' });
+    show({ groups: [] });
+    await screen.findByLabelText('Your own rules');
+
+    expect(screen.queryByLabelText('Imported findings')).toBeNull();
   });
 });

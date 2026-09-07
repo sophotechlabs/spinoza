@@ -17,6 +17,7 @@ import type {
   ObjectRef,
 } from './types';
 import { failure } from './object';
+import { ago } from './time';
 import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { usePoll } from './usePoll';
 import type { Polled } from './usePoll';
@@ -50,6 +51,7 @@ export interface CheckFindingView {
   muted: boolean;
   mutedBy?: string;
   reason?: string;
+  unmatched: boolean;
 }
 
 export type CheckGroupView = Omit<CheckGroup, 'findings'> & { findings: CheckFindingView[] };
@@ -116,7 +118,33 @@ function findingOf(raw: unknown, objects: CheckObject[]): CheckFindingView {
     muted: item.muted === true,
     mutedBy: item.mutedBy,
     reason: item.reason,
+    unmatched: item.unmatched === true,
   };
+}
+
+const STALE_IMPORT_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function sourceLabel(group: CheckGroupView, now: number): string {
+  if (group.sources === undefined || group.sources.length === 0) {
+    return '';
+  }
+  const names = group.sources.map((path) => path.split('/').pop() ?? path).join(', ');
+  const age = ago(group.taken ?? '', now);
+  if (age === '') {
+    return names;
+  }
+  return `${names} · ${age} old`;
+}
+
+export function sourceStale(group: CheckGroupView, now: number): boolean {
+  if (group.taken === undefined) {
+    return false;
+  }
+  const at = new Date(group.taken).getTime();
+  if (Number.isNaN(at)) {
+    return false;
+  }
+  return now - at > STALE_IMPORT_MS;
 }
 
 function originOf(value: string | undefined): CheckOrigin | undefined {
@@ -185,6 +213,8 @@ function groupOf(raw: unknown, objects: CheckObject[]): CheckGroupView {
     measured: item.measured,
     truncated: item.truncated,
     next: item.next,
+    sources: item.sources,
+    taken: item.taken,
     findings,
   };
 }

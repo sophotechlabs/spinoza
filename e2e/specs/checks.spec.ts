@@ -1,5 +1,8 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from '../harness/test';
 import { openView } from '../harness/app';
+import { TMP_DIR } from '../harness/paths';
 
 async function settingsValue(page: import('@playwright/test').Page, key: string): Promise<string> {
   return page.evaluate(async (wanted) => {
@@ -200,4 +203,112 @@ test('a valid personal rules document is checked without replacing the audit', a
   await page.getByRole('button', { name: 'Check', exact: true }).click();
   await expect(page.getByText('Every rule reads.', { exact: true })).toBeVisible();
   await expect(page.getByText('Privileged containers')).toBeVisible({ timeout: 60_000 });
+});
+
+test('findings imported from a file land on the objects they name and say when they do not', async ({
+  page,
+}) => {
+  const file = join(TMP_DIR, 'imported-findings.json');
+  writeFileSync(
+    file,
+    JSON.stringify({
+      tool: 'e2escan',
+      findings: [
+        {
+          id: 'floating-tag',
+          title: 'Image tag floats',
+          severity: 'medium',
+          category: 'security',
+          wrong: 'A floating tag can change under the deployment.',
+          remedy: 'Pin the image.',
+          detail: 'container app runs a floating tag',
+          container: 'app',
+          object: { apiVersion: 'apps/v1', kind: 'Deployment', namespace: 'e2e', name: 'healthy' },
+        },
+        {
+          id: 'floating-tag',
+          detail: 'container app runs a floating tag',
+          object: { apiVersion: 'apps/v1', kind: 'Deployment', namespace: 'e2e', name: 'nowhere' },
+        },
+      ],
+    }),
+  );
+  await openView(page, 'checks');
+  const key = 'spinoza.checks.imports.v1';
+  if ((await settingsValue(page, key)) !== '') {
+    await storeSetting(page, key, '');
+    await openView(page, 'checks');
+  }
+  await page.getByText('Imported findings', { exact: true }).click();
+  const editor = page.getByLabel('Imported findings');
+  const save = page.getByRole('button', { name: 'Save paths', exact: true });
+  try {
+    await editor.fill(file);
+    await save.click();
+    await expect(save).toBeDisabled();
+
+    const group = page.getByRole('button', { name: /Image tag floats/ });
+    await expect(group).toBeVisible({ timeout: 60_000 });
+    await expect(group).toContainText('imported-findings.json');
+    await group.click();
+    await expect(page.getByText('not in this cluster', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Deployment · e2e/healthy · container app', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Deployment · e2e/nowhere', { exact: true })).toBeVisible();
+
+    await editor.fill('');
+    await save.click();
+    await expect(page.getByRole('button', { name: /Image tag floats/ })).toHaveCount(0, {
+      timeout: 60_000,
+    });
+  } finally {
+    await storeSetting(page, key, '');
+  }
+});
+
+test('a personal rule can reach the rest of the cluster and judge a Service', async ({ page }) => {
+  test.setTimeout(180_000);
+  const rules = JSON.stringify([
+    {
+      id: 'service-without-notes',
+      match: 'Service',
+      expr: "cluster.get('', 'configmaps', object.metadata.namespace, 'notes') == null",
+    },
+  ]);
+  await openView(page, 'checks');
+  const key = 'spinoza.checks.rules.v1';
+  const original = await settingsValue(page, key);
+  await storeSetting(page, key, '');
+  await page.reload();
+  try {
+    await page.getByText('Your own rules', { exact: true }).click();
+    const editor = page.getByLabel('Your own rules');
+    await editor.fill(rules);
+    await page.getByRole('button', { name: 'Check', exact: true }).click();
+    await expect(page.getByText('Every rule reads.', { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/settings') && response.request().method() === 'PUT',
+      { timeout: 30_000 },
+    );
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await saved;
+    await page.reload();
+
+    const group = page.getByRole('button', { name: /service-without-notes/ });
+    await expect(group).toBeVisible({ timeout: 90_000 });
+    await group.click();
+    await expect(
+      page.getByRole('button', { name: 'Service · e2e/healthy', exact: true }),
+    ).toBeVisible();
+  } finally {
+    await storeSetting(page, key, original);
+    await page.reload();
+  }
+  await expect(page.getByRole('button', { name: /service-without-notes/ })).toHaveCount(0, {
+    timeout: 60_000,
+  });
 });

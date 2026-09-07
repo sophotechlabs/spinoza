@@ -35,6 +35,7 @@ var personalSettingKeys = map[string]bool{
 	"spinoza.columns.v1":      true,
 	"spinoza.update.check.v1": true,
 	"spinoza.checks.rules.v1": true,
+	checks.ImportsKey:         true,
 }
 
 var personalSettingLimits = map[string]int{

@@ -1,0 +1,87 @@
+{
+  "clusterName": "p-mk1",
+  "generationTime": "2026-09-07T08:31:59Z",
+  "summaryDetails": {
+    "controls": {
+      "C-0016": {
+        "controlID": "C-0016",
+        "name": "Allow privilege escalation",
+        "status": "failed",
+        "severity": "Medium",
+        "category": {"name": "Workload", "id": "Cat-5"},
+        "scoreFactor": 6
+      },
+      "C-0053": {
+        "controlID": "C-0053",
+        "name": "Access container service account",
+        "status": "failed",
+        "severity": "Medium",
+        "category": {"name": "Access control", "id": "Cat-2"},
+        "scoreFactor": 6
+      },
+      "C-0002": {
+        "controlID": "C-0002",
+        "name": "Prevent containers from allowing command execution",
+        "status": "passed",
+        "severity": "Medium",
+        "category": {"name": "Access control", "id": "Cat-2"},
+        "scoreFactor": 5
+      }
+    }
+  },
+  "resources": [
+    {
+      "resourceID": "apps/v1/apps/Deployment/api",
+      "object": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": {"name": "api", "namespace": "apps"},
+        "spec": {}
+      }
+    },
+    {
+      "resourceID": "/apps/ServiceAccount/robot/rbac.authorization.k8s.io/v1/apps/Role/reader",
+      "object": {
+        "kind": "ServiceAccount",
+        "name": "robot",
+        "namespace": "apps",
+        "relatedObjects": [
+          {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role", "metadata": {"name": "reader", "namespace": "apps"}}
+        ]
+      }
+    }
+  ],
+  "results": [
+    {
+      "resourceID": "apps/v1/apps/Deployment/api",
+      "controls": [
+        {
+          "controlID": "C-0016",
+          "name": "Allow privilege escalation",
+          "status": {"status": "failed"},
+          "rules": [{"name": "rule-allow-privilege-escalation", "status": "failed", "subStatus": ""}],
+          "severity": "Medium"
+        },
+        {
+          "controlID": "C-0002",
+          "name": "Prevent containers from allowing command execution",
+          "status": {"status": "passed"},
+          "rules": [{"name": "exec-into-container-v1", "status": "passed", "subStatus": ""}],
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "resourceID": "/apps/ServiceAccount/robot/rbac.authorization.k8s.io/v1/apps/Role/reader",
+      "controls": [
+        {
+          "controlID": "C-0053",
+          "name": "Access container service account",
+          "status": {"status": "failed"},
+          "rules": [{"name": "access-container-service-account-v1", "status": "failed", "subStatus": ""}],
+          "severity": "Medium"
+        }
+      ]
+    }
+  ]
+}
