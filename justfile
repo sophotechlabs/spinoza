@@ -425,7 +425,10 @@ validate-e2e-suite:
     node e2e/scripts/validate-suite.mjs
 
 test-e2e-scripts:
-    node --test 'e2e/scripts/*.test.mjs'
+    node --test 'e2e/scripts/*.test.mjs' 'scripts/*.test.mjs'
+
+test-scripts:
+    go test ./scripts/... -count=1
 
 e2e-cover dir='e2e/.tmp/cover':
     scripts/e2e-cover.sh {{ quote(dir) }} e2e/coverage.out
@@ -1145,7 +1148,7 @@ vulnerability-exceptions: stub-assets
     done
     echo "vulnerability-exceptions: no build imports deprecated openpgp code"
 
-workflows: scoped-tools workflow-triggers
+workflows: scoped-tools workflow-triggers ci-tiers
     yamllint .forgejo .github
     actionlint -config-file .forgejo/actionlint.yaml .forgejo/workflows/*.yaml
     actionlint .github/workflows/*.yaml
@@ -1175,14 +1178,7 @@ workflow-triggers:
         deploy/helm/spinoza/Chart.yaml
         wails.json
     )
-    validation=(
-        codeql.yaml
-        commits.yaml
-        frontend.yaml
-        integration.yaml
-        repo.yaml
-        windows.yaml
-    )
+    mapfile -t validation < <(jq -r '.workflows | to_entries[] | select(.value.tier == "commit") | .key' .github/ci-tiers.json)
     for name in "${validation[@]}"; do
         workflow=".github/workflows/$name"
         ignored=$(yq -r '.on.pull_request.paths-ignore[]' "$workflow")
@@ -1193,21 +1189,42 @@ workflow-triggers:
             fi
         done
     done
-    if [ "$(yq -r '.on | (has("pull_request") and has("workflow_dispatch") and (has("pull_request_target") | not))' .github/workflows/e2e.yaml)" != "true" ]; then
-        echo ".github/workflows/e2e.yaml does not support pull requests and trusted release dispatches" >&2
+    if [ "$(yq -r '.on | (has("pull_request") and has("workflow_call") and (has("pull_request_target") | not))' .github/workflows/e2e.yaml)" != "true" ]; then
+        echo ".github/workflows/e2e.yaml does not support pull requests and trusted reuse" >&2
         exit 1
     fi
-    ignored=$(yq -r '.on.pull_request.paths-ignore[]' .github/workflows/e2e.yaml)
-    for path in "${release_files[@]}"; do
-        if ! grep -Fxq "$path" <<< "$ignored"; then
-            echo ".github/workflows/e2e.yaml reruns the approval-gated workflow for release-only change $path" >&2
-            exit 1
-        fi
+ci-tiers:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    work=$(mktemp -d)
+    trap 'rm -rf "$work"' EXIT
+    for workflow in .github/workflows/*.yaml; do
+        yq -o=json "$workflow" > "$work/$(basename "$workflow" .yaml).json"
     done
+    node scripts/ci-tiers.mjs "$work"
+
+nightly-report dir sha url trigger coverage='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--jobs {{ quote(dir) }}/jobs.json --out docs/ci/nightly --status {{ quote(dir) }}/status.json)
+    args+=(--sha {{ quote(sha) }} --run-url {{ quote(url) }} --trigger {{ quote(trigger) }})
+    if [ -d {{ quote(dir) }}/reports ]; then
+        args+=(--reports {{ quote(dir) }}/reports)
+    fi
+    if [ -d {{ quote(dir) }}/mutation ]; then
+        args+=(--mutation {{ quote(dir) }}/mutation)
+    fi
+    coverage={{ quote(coverage) }}
+    if [ -n "$coverage" ]; then
+        args+=(--coverage "$coverage")
+    fi
+    node scripts/nightly-report.mjs "${args[@]}"
+
 hygiene:
     typos
     just editorconfig
     shellcheck install.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/create-kind-cluster.sh \
+        scripts/nightly-credential-helper.sh scripts/nightly-due.sh scripts/nightly-publish.sh \
         scripts/release-commit.sh scripts/release-pending.sh \
         test/release-commit.sh test/release-pending.sh test/install/container.sh \
         test/install/uninstall.sh test/install/editorconfig-name.sh test/trivy-helm-coverage.sh \

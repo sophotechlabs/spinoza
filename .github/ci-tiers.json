@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "budgetMinutes": 220,
+  "releaseOnlyPaths": [
+    ".release-please-manifest.json",
+    "CHANGELOG.md",
+    "deploy/helm/spinoza/Chart.yaml",
+    "wails.json"
+  ],
+  "reportPath": "docs/ci/nightly/**",
+  "workflows": {
+    "badges.yaml": { "tier": "main", "jobMinutes": 6 },
+    "codeql.yaml": { "tier": "commit", "jobMinutes": 9 },
+    "commits.yaml": { "tier": "commit", "jobMinutes": 1 },
+    "e2e.yaml": {
+      "tier": "commit",
+      "jobMinutes": 0,
+      "costedBy": "e2e/suite.json"
+    },
+    "frontend.yaml": { "tier": "commit", "jobMinutes": 10 },
+    "go-fuzz.yaml": { "tier": "commit", "jobMinutes": 11 },
+    "go-mutation.yaml": { "tier": "called", "jobMinutes": 237 },
+    "go.yaml": { "tier": "commit", "jobMinutes": 18 },
+    "install.yaml": { "tier": "scoped", "jobMinutes": 9 },
+    "integration.yaml": { "tier": "commit", "jobMinutes": 7 },
+    "nightly.yaml": { "tier": "nightly", "jobMinutes": 0 },
+    "release-artifacts.yaml": { "tier": "main", "jobMinutes": 1 },
+    "release-please.yaml": { "tier": "main", "jobMinutes": 1 },
+    "repo.yaml": { "tier": "commit", "jobMinutes": 6 },
+    "scheduled.yaml": { "tier": "weekly", "jobMinutes": 0 },
+    "windows.yaml": { "tier": "commit", "jobMinutes": 7 }
+  }
+}
