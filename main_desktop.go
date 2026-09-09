@@ -35,6 +35,8 @@ import (
 
 const shutdownGrace = 3 * time.Second
 
+const desktopDrainGrace = 3 * time.Second
+
 const logFileLimit = 4 << 20
 
 func main() {
@@ -94,7 +96,7 @@ func runDesktop() error {
 	if opts.serve.on {
 		return errors.New("the desktop app cannot serve a cluster; run the spinoza binary with --cluster-mode instead")
 	}
-	kept := startLogging(opts.logLevel)
+	kept := startLogging(opts.logLevel, opts.logFormat)
 	if kept != nil {
 		defer func() { _ = kept.Close() }()
 	}
@@ -157,6 +159,9 @@ func runDesktop() error {
 	}()
 
 	defer func() {
+		drainCtx, stopDraining := context.WithTimeout(context.WithoutCancel(ctx), desktopDrainGrace)
+		srv.Drain(drainCtx)
+		stopDraining()
 		srv.Close()
 		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 		defer cancel()
@@ -182,13 +187,13 @@ func runDesktop() error {
 	return nil
 }
 
-func startLogging(level slog.Leveler) io.Closer {
+func startLogging(level slog.Leveler, format string) io.Closer {
 	kept, err := logFile()
 	out := io.Writer(os.Stderr)
 	if err == nil {
 		out = io.MultiWriter(os.Stderr, kept)
 	}
-	slog.SetDefault(slog.New(logHandler(out, level)))
+	slog.SetDefault(slog.New(logHandler(out, level, format)))
 	klog.SetSlogLogger(slog.Default())
 	if err != nil {
 		slog.Warn("this run will not be written to a log file", "error", err)

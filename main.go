@@ -47,7 +47,7 @@ func run() error {
 	if printedNotice(os.Stdout, opts) {
 		return nil
 	}
-	slog.SetDefault(slog.New(logHandler(os.Stderr, opts.logLevel)))
+	slog.SetDefault(slog.New(logHandler(os.Stderr, opts.logLevel, opts.logFormat)))
 	klog.SetSlogLogger(slog.Default())
 
 	listenErr := checkListen(opts)
@@ -90,12 +90,18 @@ func run() error {
 	srv.UseBaselines(baselineStore())
 	past := historyStore(ctx)
 	defer func() { _ = past.Close() }()
-	srv.UseHistory(ctx, past)
+	srv.UseAuditRetention(auditRetention(opts.auditRetention))
+	srv.UseAuditEvery(opts.auditInterval)
+	srv.UseTranscripts(transcriptStore(opts.recordSessions))
+	srv.UseHistory(ctx, auditedHistory(past, opts.serve.on, opts.logFormat))
+	srv.UseAuditSchedule(ctx, server.AuditSchedule{Every: opts.auditInterval, Webhook: opts.auditWebhook})
 	wiredErr := wireMode(ctx, srv, opts, past)
 	if wiredErr != nil {
 		return wiredErr
 	}
 	httpServer := configuredHTTPServer(opts.addr, srv.Handler())
+	metrics := metricsServer(opts.metricsAddr)
+	go serveMetrics(metrics)
 
 	idle := make(chan struct{})
 	announceListening(ctx, srv, opts, token, idle)
@@ -110,9 +116,13 @@ func run() error {
 		case <-idle:
 		case <-ctx.Done():
 		}
+		drainCtx, stopDraining := context.WithTimeout(context.WithoutCancel(ctx), drainGrace)
+		srv.Drain(drainCtx)
+		stopDraining()
 		srv.Close()
 		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 		defer cancel()
+		stopMetrics(shutCtx, metrics)
 		_ = httpServer.Shutdown(shutCtx)
 	}()
 

@@ -165,7 +165,7 @@ func TestStartLoggingKeepsAFileWhenOneCanBeCreated(t *testing.T) {
 	preserveDesktopLogger(t)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	kept := startLogging(slog.LevelInfo)
+	kept := startLogging(slog.LevelInfo, logText)
 
 	if kept == nil {
 		t.Fatal("logging did not keep the file it created")
@@ -189,7 +189,7 @@ func TestStartLoggingFallsBackWhenNoConfigDirectoryExists(t *testing.T) {
 		os.Stderr = original
 	})
 
-	kept := startLogging(slog.LevelInfo)
+	kept := startLogging(slog.LevelInfo, logText)
 	if closeErr := write.Close(); closeErr != nil {
 		t.Fatalf("close stderr: %v", closeErr)
 	}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -19,6 +21,8 @@ import (
 
 var errHelp = errors.New("help requested")
 
+var errUnknownLogFormat = errors.New("log-format has to be json or text")
+
 const (
 	defaultQPS              = 50
 	defaultBurst            = 100
@@ -30,17 +34,23 @@ const (
 )
 
 type settings struct {
-	addr        string
-	openBrowser bool
-	tokenFile   string
-	logLevel    slog.Level
-	showVersion bool
-	showLicense bool
-	pprof       bool
-	nodeShell   bool
-	startView   string
-	serve       serving
-	cluster     cluster.Options
+	addr           string
+	openBrowser    bool
+	tokenFile      string
+	logLevel       slog.Level
+	logFormat      string
+	metricsAddr    string
+	recordSessions bool
+	auditInterval  time.Duration
+	auditWebhook   string
+	auditRetention time.Duration
+	showVersion    bool
+	showLicense    bool
+	pprof          bool
+	nodeShell      bool
+	startView      string
+	serve          serving
+	cluster        cluster.Options
 }
 
 func parseFlags(args []string) (settings, error) {
@@ -49,6 +59,12 @@ func parseFlags(args []string) (settings, error) {
 	openBrowser := flags.Bool("open", envBool("SPINOZA_OPEN"), "open the default browser on start")
 	tokenFile := flags.String("token-file", envOr("SPINOZA_TOKEN_FILE", ""), "write this run's access token to this file (mode 0600) so scripts can read it")
 	logLevel := flags.String("log-level", envOr("SPINOZA_LOG_LEVEL", "info"), "log level: debug, info, warn or error")
+	logFormat := flags.String("log-format", envOr("SPINOZA_LOG_FORMAT", ""), "log format: json or text; text on your own machine and json when serving a cluster")
+	metricsAddr := flags.String("metrics-addr", envOr("SPINOZA_METRICS_ADDR", ""), "extra listen address serving only /metrics, with no session; keep it inside the cluster")
+	recordSessions := flags.Bool("record-sessions", envBool("SPINOZA_RECORD_SESSIONS"), "keep a transcript of every exec and node shell beside its audit entry; admins read them")
+	auditInterval := flags.Duration("audit-interval", envDuration("SPINOZA_AUDIT_INTERVAL", 0), "re-run the checks on this interval and keep what each run found; off when zero")
+	auditWebhook := flags.String("audit-webhook", envOr("SPINOZA_AUDIT_WEBHOOK", ""), "post a json summary here when a scheduled run differs from the baseline")
+	auditRetention := flags.Duration("audit-retention", envDuration("SPINOZA_AUDIT_RETENTION", 0), "how long recorded changes and audit runs are kept; kept for good when zero")
 	showVersion := flags.Bool("version", false, "print the version and exit")
 	showLicense := flags.Bool("license", false, "print the license and exit")
 	profiler := flags.Bool("pprof", envBool("SPINOZA_PPROF"), "mount net/http/pprof under /debug/pprof, behind the same auth; off by default")
@@ -81,6 +97,10 @@ func parseFlags(args []string) (settings, error) {
 	if levelErr != nil {
 		return settings{}, levelErr
 	}
+	format, formatErr := parseLogFormat(*logFormat)
+	if formatErr != nil {
+		return settings{}, formatErr
+	}
 	served, servedErr := serving.settings()
 	if servedErr != nil {
 		return settings{}, servedErr
@@ -104,31 +124,108 @@ func parseFlags(args []string) (settings, error) {
 		CountConcurrency: *countConcurrency,
 	}
 	if !*showVersion && !*showLicense {
-		checkErr := served.check()
+		runnable := runnableSettings{
+			served:    served,
+			cluster:   clusterSettings,
+			nodeShell: *nodeShell,
+			addr:      *addr,
+			metrics:   *metricsAddr,
+			webhook:   *auditWebhook,
+			interval:  *auditInterval,
+		}
+		checkErr := runnable.check()
 		if checkErr != nil {
 			return settings{}, checkErr
 		}
-		limitErr := validateClusterLimits(clusterSettings)
-		if limitErr != nil {
-			return settings{}, limitErr
-		}
-		if *nodeShell && !imagepin.Valid(clusterSettings.NodeShellImage) {
-			return settings{}, errors.New("node-shell-image must be pinned by sha256 digest")
-		}
 	}
 	return settings{
-		addr:        listenAddress(*addr, served.on, wasGiven(flags, "addr")),
-		openBrowser: *openBrowser,
-		tokenFile:   *tokenFile,
-		logLevel:    level,
-		showVersion: *showVersion,
-		showLicense: *showLicense,
-		pprof:       *profiler,
-		nodeShell:   *nodeShell,
-		startView:   *startView,
-		serve:       served,
-		cluster:     clusterSettings,
+		addr:           listenAddress(*addr, served.on, wasGiven(flags, "addr")),
+		openBrowser:    *openBrowser,
+		tokenFile:      *tokenFile,
+		logLevel:       level,
+		logFormat:      logFormatFor(format, served.on),
+		metricsAddr:    *metricsAddr,
+		recordSessions: *recordSessions,
+		auditInterval:  *auditInterval,
+		auditWebhook:   *auditWebhook,
+		auditRetention: *auditRetention,
+		showVersion:    *showVersion,
+		showLicense:    *showLicense,
+		pprof:          *profiler,
+		nodeShell:      *nodeShell,
+		startView:      *startView,
+		serve:          served,
+		cluster:        clusterSettings,
 	}, nil
+}
+
+const minAuditInterval = time.Minute
+
+type runnableSettings struct {
+	served    serving
+	cluster   cluster.Options
+	nodeShell bool
+	addr      string
+	metrics   string
+	webhook   string
+	interval  time.Duration
+}
+
+func (rs runnableSettings) check() error {
+	servedErr := rs.served.check()
+	if servedErr != nil {
+		return servedErr
+	}
+	limitErr := validateClusterLimits(rs.cluster)
+	if limitErr != nil {
+		return limitErr
+	}
+	if rs.nodeShell && !imagepin.Valid(rs.cluster.NodeShellImage) {
+		return errors.New("node-shell-image must be pinned by sha256 digest")
+	}
+	metricsErr := checkMetricsAddr(rs.metrics, rs.addr)
+	if metricsErr != nil {
+		return metricsErr
+	}
+	webhookErr := checkAuditWebhook(rs.webhook)
+	if webhookErr != nil {
+		return webhookErr
+	}
+	if rs.interval != 0 && rs.interval < minAuditInterval {
+		return fmt.Errorf("audit-interval has to be at least %s; the checks read the whole cluster", minAuditInterval)
+	}
+	return nil
+}
+
+func checkMetricsAddr(metrics, main string) error {
+	if metrics == "" {
+		return nil
+	}
+	_, _, err := net.SplitHostPort(metrics)
+	if err != nil {
+		return fmt.Errorf("metrics-addr %q must be host:port", metrics)
+	}
+	if metrics == main {
+		return errors.New("metrics-addr has to differ from addr; the metrics port answers without a session")
+	}
+	return nil
+}
+
+func checkAuditWebhook(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("audit-webhook %q is not a url", raw)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("audit-webhook %q has to be http or https", raw)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("audit-webhook %q names no host", raw)
+	}
+	return nil
 }
 
 func validateClusterLimits(options cluster.Options) error {
