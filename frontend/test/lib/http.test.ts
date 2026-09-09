@@ -3,6 +3,7 @@ import {
   REQUEST_TIMEOUT_MS,
   SLOW_REQUEST_TIMEOUT_MS,
   TIMEOUT_MESSAGE,
+  UNREACHABLE_MESSAGE,
   TOKEN_HEADER,
   authToken,
   request,
@@ -161,6 +162,35 @@ describe('request', () => {
 
     await expect(request('/api/contexts', { timeoutMs: 10 })).rejects.toThrow(TIMEOUT_MESSAGE);
     expect(signalOf(mock).aborted).toBe(true);
+  });
+
+  it('gives up when the caller says so, not only when the budget runs out', async () => {
+    const giveUp = new AbortController();
+    stubFetch(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        }),
+    );
+
+    const asked = request('/api/clusters', { signal: giveUp.signal, timeoutMs: 60_000 });
+    giveUp.abort();
+
+    await expect(asked).rejects.toThrow('aborted');
+  });
+
+  it('names spinoza rather than repeating the browser at a backend that is gone', async () => {
+    stubFetch(() => Promise.reject(new TypeError('Failed to fetch')));
+
+    await expect(request('/api/contexts')).rejects.toThrow(UNREACHABLE_MESSAGE);
+  });
+
+  it('passes on a failure that is neither a timeout nor a dead backend', async () => {
+    stubFetch(() => Promise.reject(new Error('something else entirely')));
+
+    await expect(request('/api/contexts')).rejects.toThrow('something else entirely');
   });
 
   it('lets a slow answer through while it is still inside the budget', async () => {

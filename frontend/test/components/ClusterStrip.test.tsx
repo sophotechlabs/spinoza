@@ -8,6 +8,7 @@ import { rememberObject, useRecentsStore } from '../../src/store/recents';
 import { useTerminalsStore } from '../../src/store/terminals';
 import { setForwards, useForwardsStore } from '../../src/store/forwards';
 import { useToastsStore } from '../../src/store/toasts';
+import { useFeedStore } from '../../src/store/feed';
 import { MK1, MK2, listOf } from '../helpers-clusters';
 
 interface Call {
@@ -463,5 +464,33 @@ describe('the strip of open clusters', () => {
     render(<ClusterStrip onShown={vi.fn()} />);
 
     expect(screen.getByRole('navigation')).toHaveClass('overflow-x-auto');
+  });
+});
+
+describe('the strip while the feed itself is down', () => {
+  it('says a cluster health is not known rather than claiming it answers', () => {
+    open(MK1);
+    act(() => {
+      useFeedStore.getState().report('disconnected', 2);
+    });
+
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    expect(
+      screen.getAllByRole('button', { name: /is of unknown health; open its settings/ }),
+    ).toHaveLength(2);
+  });
+
+  it('goes back to what each cluster said once the feed is back', () => {
+    open(MK1);
+    act(() => {
+      useFeedStore.getState().report('connected', 0);
+    });
+
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    expect(screen.getAllByRole('button', { name: /is answering; open its settings/ })).toHaveLength(
+      2,
+    );
   });
 });

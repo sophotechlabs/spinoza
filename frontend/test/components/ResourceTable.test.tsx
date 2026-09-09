@@ -1752,3 +1752,21 @@ describe('a table showing what the cluster last sent', () => {
     expect(screen.queryByText(/^as of /)).toBeNull();
   });
 });
+
+describe('a table whose watch broke under it', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it('keeps the rows it already had and says the feed stopped', () => {
+    seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'coredns' })]);
+    useResourcesStore.getState().failSub(SUB, 'the watch on pods broke: too old resource version');
+
+    renderTable(makeDescriptor({}), null);
+
+    expect(screen.getByText('coredns')).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'the watch on pods broke: too old resource version',
+    );
+  });
+});

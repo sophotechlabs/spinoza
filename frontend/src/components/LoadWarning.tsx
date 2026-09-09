@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { WARNING_LIMIT, shortened } from '../lib/warningText';
+import { useShellExplains } from '../lib/health';
 
 interface LoadWarningProps {
   message: string;
@@ -14,10 +15,15 @@ function moreLabel(open: boolean): string {
 
 export default function LoadWarning({ message }: LoadWarningProps) {
   const [open, setOpen] = useState(false);
+  const explained = useShellExplains();
   const long = message.length > WARNING_LIMIT;
   let shown = message;
   if (long && !open) {
     shown = shortened(message);
+  }
+
+  if (explained) {
+    return null;
   }
 
   return (

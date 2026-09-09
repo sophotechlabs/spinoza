@@ -11,6 +11,7 @@ import { useContextsStore } from '../src/store/contexts';
 import { useForwardsStore } from '../src/store/forwards';
 import { useClustersStore } from '../src/store/clusters';
 import { useClusterHealthStore } from '../src/store/clusterHealth';
+import { useFeedStore } from '../src/store/feed';
 import { useNamespaceStore } from '../src/store/namespace';
 import { useFiltersStore } from '../src/store/filters';
 import { useRecentsStore } from '../src/store/recents';
@@ -37,6 +38,7 @@ beforeEach(() => {
     useForwardsStore.getState().clear();
     useClustersStore.getState().reset();
     useClusterHealthStore.getState().reset();
+    useFeedStore.getState().reset();
     useNamespaceStore.getState().reset();
     useFiltersStore.getState().clear();
     useRecentsStore.getState().clear();

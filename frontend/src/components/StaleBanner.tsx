@@ -1,10 +1,31 @@
+import { useShellExplains } from '../lib/health';
+
 interface StaleBannerProps {
   what: string;
   message: string;
-  onRetry: () => void;
+  onRetry?: () => void;
 }
 
 export default function StaleBanner({ what, message, onRetry }: StaleBannerProps) {
+  const explained = useShellExplains();
+
+  if (explained) {
+    return null;
+  }
+
+  let retry = null;
+  if (onRetry !== undefined) {
+    retry = (
+      <button
+        type="button"
+        onClick={onRetry}
+        className="shrink-0 rounded border border-warn-line-strong px-1.5 py-0.5 text-warn-strong hover:bg-warn-tint"
+      >
+        Retry
+      </button>
+    );
+  }
+
   return (
     <div
       role="status"
@@ -14,13 +35,7 @@ export default function StaleBanner({ what, message, onRetry }: StaleBannerProps
       <span className="min-w-0 flex-1 truncate" title={message}>
         {message}
       </span>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="shrink-0 rounded border border-warn-line-strong px-1.5 py-0.5 text-warn-strong hover:bg-warn-tint"
-      >
-        Retry
-      </button>
+      {retry}
     </div>
   );
 }

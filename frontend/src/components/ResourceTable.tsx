@@ -641,7 +641,7 @@ export default function ResourceTable({
     );
   }
 
-  if (error !== null) {
+  if (error !== null && rows.length === 0) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center border-b border-edge bg-surface px-2 py-1.5 text-xs">
@@ -659,6 +659,7 @@ export default function ResourceTable({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {error !== null && <StaleBanner what={active.kind} message={error} />}
       {metricsStale && metricsError !== null && (
         <StaleBanner what="Metrics" message={metricsError} onRetry={reloadMetrics} />
       )}

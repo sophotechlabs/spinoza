@@ -7,6 +7,7 @@ import type { Tab } from '../store/clusters';
 import TabMenu from './TabMenu';
 import { useClusterHealthStore } from '../store/clusterHealth';
 import { notifyError } from '../store/toasts';
+import { useFeedDown } from '../lib/health';
 
 interface ClusterStripProps {
   onShown: () => void;
@@ -42,24 +43,38 @@ function inGroups(tabs: Tab[]): { name: string; tabs: Tab[] }[] {
   return runs;
 }
 
-function dotLabel(reachable: boolean): string {
+function dotLabel(reachable: boolean, unknown: boolean): string {
+  if (unknown) {
+    return 'of unknown health';
+  }
   if (reachable) {
     return 'answering';
   }
   return 'not answering';
 }
 
-function swatchClass(reachable: boolean): string {
+function swatchClass(reachable: boolean, unknown: boolean): string {
+  if (unknown) {
+    return 'h-2.5 w-2.5 shrink-0 rounded-sm opacity-50 ring-1 ring-edge-strong';
+  }
   if (reachable) {
     return 'h-2.5 w-2.5 shrink-0 rounded-sm';
   }
   return 'h-2.5 w-2.5 shrink-0 rounded-sm ring-1 ring-error-solid';
 }
 
+function swatchTitle(reason: string | undefined, unknown: boolean): string {
+  if (unknown) {
+    return 'The feed is down, so this cluster\u2019s health is not known';
+  }
+  return reason ?? 'Settings for this tab';
+}
+
 export default function ClusterStrip({ onShown }: ClusterStripProps) {
   const tabs = useTabs();
   const active = useActiveCluster();
   const health = useClusterHealthStore((state) => state.byCluster);
+  const unknown = useFeedDown();
   const [busy, setBusy] = useState(false);
   const working = useRef(false);
   const [asking, setAsking] = useState<Tab | null>(null);
@@ -143,8 +158,8 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
             <span key={tab.id} className={`relative ${tabClass(tab.id === active, tabs.length)}`}>
               <button
                 type="button"
-                aria-label={`${nameOf(tab)} is ${dotLabel(health[tab.id]?.reachable ?? true)}; open its settings`}
-                title={health[tab.id]?.reason ?? 'Settings for this tab'}
+                aria-label={`${nameOf(tab)} is ${dotLabel(health[tab.id]?.reachable ?? true, unknown)}; open its settings`}
+                title={swatchTitle(health[tab.id]?.reason, unknown)}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                 }}
@@ -152,7 +167,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
                   setPainting(showing(painting, tab.id));
                 }}
                 style={{ backgroundColor: colorVar(tab.color) }}
-                className={swatchClass(health[tab.id]?.reachable ?? true)}
+                className={swatchClass(health[tab.id]?.reachable ?? true, unknown)}
               />
               <button
                 type="button"

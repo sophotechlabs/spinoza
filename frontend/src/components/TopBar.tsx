@@ -17,6 +17,7 @@ import {
 import UserMenu from './UserMenu';
 import Wordmark from './Wordmark';
 import { useClusterMode } from '../store/identity';
+import { useFeedStore } from '../store/feed';
 
 interface TopBarProps {
   status: ConnectionStatus;
@@ -38,10 +39,11 @@ function pickerTitle(scoped: boolean | null): string {
 
 function statusColor(
   status: ConnectionStatus,
+  attempt: number,
   clusterReachable: boolean,
   wobbling: boolean,
 ): string {
-  if (status === 'connecting') {
+  if (status === 'connecting' && attempt === 0) {
     return 'bg-warn-solid';
   }
   if (status !== 'connected') {
@@ -91,6 +93,7 @@ export default function TopBar({
   const clusterReachable = useClusterReachable();
   const unreachableReason = useClusterUnreachableReason();
   const wobbling = useClusterWobbling();
+  const attempt = useFeedStore((state) => state.attempt);
   const namespace = useNamespace();
   const names = useNamespaceNames();
   const choose = useNamespaceStore((state) => state.choose);
@@ -148,7 +151,7 @@ export default function TopBar({
         >
           <span
             data-testid="connection-dot"
-            className={`h-2 w-2 rounded-full ${statusColor(status, clusterReachable, wobbling)}`}
+            className={`h-2 w-2 rounded-full ${statusColor(status, attempt, clusterReachable, wobbling)}`}
           />
         </span>
         {status === 'connected' && !clusterReachable && (

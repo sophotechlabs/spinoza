@@ -1,4 +1,8 @@
 import { since as elapsed } from './time';
+import { offline } from './feed';
+import { useFeedStore } from '../store/feed';
+import { useClusterReachable } from '../store/clusterHealth';
+import { useSessionExpired } from '../store/session';
 
 const UNKNOWN = 'no answer';
 
@@ -27,4 +31,23 @@ export function quietFor(from: number, now: number): string {
     return '';
   }
   return elapsed(Math.floor((now - from) / 1000));
+}
+
+export function useFeedDown(): boolean {
+  const status = useFeedStore((state) => state.status);
+  const attempt = useFeedStore((state) => state.attempt);
+  return offline(status, attempt);
+}
+
+export function useShellExplains(): boolean {
+  const down = useFeedDown();
+  const reachable = useClusterReachable();
+  const expired = useSessionExpired();
+  if (expired) {
+    return true;
+  }
+  if (down) {
+    return true;
+  }
+  return !reachable;
 }

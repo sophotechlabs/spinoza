@@ -6,6 +6,8 @@ export const SLOW_REQUEST_TIMEOUT_MS = 120000;
 
 export const TIMEOUT_MESSAGE = 'the backend did not answer in time';
 
+export const UNREACHABLE_MESSAGE = 'spinoza is not answering';
+
 const UNAUTHORIZED = 401;
 
 export const TOKEN_HEADER = 'X-Spinoza-Token';
@@ -52,6 +54,14 @@ function timedOut(err: unknown): boolean {
   return false;
 }
 
+function within(limit: number, asked: AbortSignal | null | undefined): AbortSignal {
+  const budget = AbortSignal.timeout(limit);
+  if (asked === null || asked === undefined) {
+    return budget;
+  }
+  return AbortSignal.any([budget, asked]);
+}
+
 export async function request(url: string, options: RequestOptions = {}): Promise<Response> {
   const { timeoutMs, ...init } = options;
   let limit = REQUEST_TIMEOUT_MS;
@@ -61,7 +71,7 @@ export async function request(url: string, options: RequestOptions = {}): Promis
   try {
     const response = await fetch(onCluster(url), {
       ...withToken(init),
-      signal: AbortSignal.timeout(limit),
+      signal: within(limit, init.signal),
     });
     if (response.status === UNAUTHORIZED) {
       expireSession();
@@ -70,6 +80,9 @@ export async function request(url: string, options: RequestOptions = {}): Promis
   } catch (err: unknown) {
     if (timedOut(err)) {
       throw new Error(TIMEOUT_MESSAGE);
+    }
+    if (err instanceof TypeError) {
+      throw new Error(UNREACHABLE_MESSAGE);
     }
     throw err;
   }

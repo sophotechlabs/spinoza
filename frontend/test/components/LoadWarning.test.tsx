@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LoadWarning from '../../src/components/LoadWarning';
 import { WARNING_LIMIT, shortened } from '../../src/lib/warningText';
+import { useFeedStore } from '../../src/store/feed';
 
 const short = 'secrets could not be listed cluster-wide';
 
@@ -72,5 +73,15 @@ describe('LoadWarning', () => {
 
   it('leaves a message that already fits alone', () => {
     expect(shortened(short)).toBe(short);
+  });
+});
+
+describe('a partial-data warning while the shell already explains the silence', () => {
+  it('stays out of the way when the cluster feed dropped', () => {
+    useFeedStore.getState().report('disconnected', 1);
+
+    render(<LoadWarning message="3 of 31 resource types could not be listed" />);
+
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

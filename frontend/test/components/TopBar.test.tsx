@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import TopBar from '../../src/components/TopBar';
 import { useClusterHealthStore } from '../../src/store/clusterHealth';
 import { useClustersStore } from '../../src/store/clusters';
+import { useFeedStore } from '../../src/store/feed';
 import { namespaceNow, useNamespaceStore } from '../../src/store/namespace';
 import type { ObjectRef } from '../../src/lib/types';
 import { notifyOk, useToastsStore } from '../../src/store/toasts';
@@ -461,5 +462,23 @@ describe('a cluster that missed a ping', () => {
     const { container } = render(<TopBar status="connected" />);
 
     expect(dotFor(container).className).toContain('bg-ok-solid');
+  });
+});
+
+describe('the dot while the feed is retrying', () => {
+  it('stays red between attempts instead of blinking yellow on each one', () => {
+    useFeedStore.getState().report('connecting', 3);
+
+    const { container } = render(<TopBar status="connecting" />);
+
+    expect(dotFor(container).className).toContain('bg-error-solid');
+  });
+
+  it('is yellow on the very first connect, before any retry', () => {
+    useFeedStore.getState().report('connecting', 0);
+
+    const { container } = render(<TopBar status="connecting" />);
+
+    expect(dotFor(container).className).toContain('bg-warn-solid');
   });
 });
