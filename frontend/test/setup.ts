@@ -24,8 +24,6 @@ import { hydrate, resetStored, withoutTrackingChanges } from '../src/lib/persist
 configure({ asyncUtilTimeout: 5000 });
 
 beforeEach(() => {
-  window.innerWidth = 1600;
-  window.innerHeight = 1000;
   window.localStorage.clear();
   delete window.__SPINOZA_SETTINGS__;
   resetStored();
