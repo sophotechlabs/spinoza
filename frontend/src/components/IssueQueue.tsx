@@ -68,7 +68,7 @@ function Where({ object, kind }: { object: ObjectRef; kind: string }) {
 function OnCluster({ cluster }: { cluster: string }) {
   const tab = useClustersStore((state) => tabOn(state.tabs, cluster));
   if (tab === null) {
-    return <span className="w-32 shrink-0 text-fg-faint">unknown</span>;
+    return <span className="w-32 shrink-0 text-fg-subtle">unknown</span>;
   }
   return (
     <span className="flex w-32 shrink-0 items-center gap-1.5 truncate text-fg-muted">
@@ -84,7 +84,7 @@ function OnCluster({ cluster }: { cluster: string }) {
 
 function Change({ row, now }: { row: Issue; now: number }) {
   if (row.change === undefined || row.change === '') {
-    return <span className="text-fg-faint">-</span>;
+    return <span className="text-fg-subtle">-</span>;
   }
   if (row.changedAt === undefined || row.changedAt === '') {
     return <span className="text-fg-muted">{row.change}</span>;

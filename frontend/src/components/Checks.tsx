@@ -148,7 +148,7 @@ function scannedLabel(scanned: number, findings: number, namespace: string): str
 function OnCluster({ cluster }: { cluster: string }) {
   const tab = useClustersStore((state) => tabOn(state.tabs, cluster));
   if (tab === null) {
-    return <span className="shrink-0 text-fg-faint">unknown</span>;
+    return <span className="shrink-0 text-fg-subtle">unknown</span>;
   }
   return (
     <span

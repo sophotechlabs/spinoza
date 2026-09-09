@@ -36,7 +36,7 @@ type Pane = (typeof TABS)[number]['id'];
 function Swatch({ cluster }: { cluster: string }) {
   const tab = useClustersStore((state) => tabOn(state.tabs, cluster));
   if (tab === null) {
-    return <span className="text-fg-faint">unknown</span>;
+    return <span className="text-fg-subtle">unknown</span>;
   }
   return (
     <span className="flex items-center gap-1.5 truncate">

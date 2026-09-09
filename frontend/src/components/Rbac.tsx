@@ -24,7 +24,7 @@ import CapabilityState from './CapabilityState';
 
 function Powers({ powers }: { powers: string[] }) {
   if (powers.length === 0) {
-    return <span className="text-fg-faint">nothing worth naming</span>;
+    return <span className="text-fg-subtle">nothing worth naming</span>;
   }
   return (
     <span className="flex flex-wrap gap-1">

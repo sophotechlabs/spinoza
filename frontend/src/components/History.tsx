@@ -106,7 +106,7 @@ function Row({
       <td className="truncate px-2 py-1 text-fg-muted" title={detailText(entry)}>
         {wasText(entry)}
         {detailText(entry)}
-        {repeats !== '' && <span className="ml-2 text-fg-faint">· {repeats}</span>}
+        {repeats !== '' && <span className="ml-2 text-fg-subtle">· {repeats}</span>}
       </td>
     </tr>
   );
@@ -121,7 +121,7 @@ const KIND_SETS = [
 function OnCluster({ cluster }: { cluster: string }) {
   const tab = useClustersStore((state) => tabOn(state.tabs, cluster));
   if (tab === null) {
-    return <span className="text-fg-faint">unknown</span>;
+    return <span className="text-fg-subtle">unknown</span>;
   }
   return (
     <span className="flex items-center gap-1.5 truncate text-fg-muted">
