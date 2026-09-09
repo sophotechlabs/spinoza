@@ -9,7 +9,7 @@ import { useContextsStore } from '../../src/store/contexts';
 import { expireSession } from '../../src/store/session';
 
 async function openMenu(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
-  const summary = await screen.findByLabelText('Kubernetes context');
+  const summary = await screen.findByLabelText('Open a cluster');
   await user.click(summary);
   const menu = summary.parentElement;
   if (menu === null) {
@@ -84,7 +84,6 @@ describe('ContextPicker', () => {
     render(<ContextPicker onSwitched={vi.fn()} />);
     await openMenu(user);
 
-    expect(screen.getByLabelText('Kubernetes context')).toHaveTextContent('p-mk2');
     expect(screen.getByRole('button', { name: 'p-mk1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'p-mk2' })).toHaveAttribute('aria-current', 'true');
   });
@@ -178,14 +177,15 @@ describe('ContextPicker', () => {
     render(<ContextPicker onSwitched={vi.fn()} />);
 
     await pick(user, 'p-mk2');
-    expect(await screen.findByLabelText('Kubernetes context')).toHaveTextContent('p-mk2');
+    await waitFor(() => {
+      expect(useContextsStore.getState().list.current.name).toBe('p-mk2');
+    });
     await act(async () => {
       finishOld({ ok: true, json: () => Promise.resolve(before) });
       await oldListing;
       await Promise.resolve();
     });
 
-    expect(screen.getByLabelText('Kubernetes context')).toHaveTextContent('p-mk2');
     expect(useContextsStore.getState().list.current.name).toBe('p-mk2');
   });
 
@@ -235,21 +235,13 @@ describe('ContextPicker', () => {
     expect(onSwitched).not.toHaveBeenCalled();
   });
 
-  it('shows a plain label when the kubeconfig has no contexts', async () => {
+  it('offers only the kubeconfigs when there is no context to open', async () => {
     stubContexts({ current: { kubeconfig: '', name: 'embedded' }, kubeconfigs: [] });
 
     render(<ContextPicker onSwitched={vi.fn()} />);
 
-    expect(await screen.findByText('embedded')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
-  });
-
-  it('says there is no cluster when nothing is connected', async () => {
-    stubContexts({ current: { kubeconfig: '', name: '' }, kubeconfigs: [] });
-
-    render(<ContextPicker onSwitched={vi.fn()} />);
-
-    expect(await screen.findByText('no cluster')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Kubeconfigs' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Open a cluster')).not.toBeInTheDocument();
   });
 
   it('keeps the connected context visible when no kubeconfig lists it', async () => {
@@ -260,7 +252,8 @@ describe('ContextPicker', () => {
 
     render(<ContextPicker onSwitched={vi.fn()} />);
 
-    expect(await screen.findByLabelText('Kubernetes context')).toHaveTextContent('orphan');
+    expect(await screen.findByLabelText('Open a cluster')).toBeInTheDocument();
+    expect(screen.queryByText('orphan')).toBeNull();
   });
 
   it('shows why a kubeconfig produced no contexts next to the ones that did', async () => {
@@ -301,7 +294,7 @@ describe('ContextPicker', () => {
 
     expect(await screen.findByText(/kubeconfig is unreadable/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Open a cluster')).not.toBeInTheDocument();
   });
 
   it('recovers from the retry button once the backend answers', async () => {
@@ -319,7 +312,7 @@ describe('ContextPicker', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByLabelText('Kubernetes context')).toHaveTextContent('p-mk1');
+    expect(await screen.findByLabelText('Open a cluster')).toBeInTheDocument();
   });
 
   it('keeps retrying on its own until the backend comes back', async () => {
@@ -334,7 +327,7 @@ describe('ContextPicker', () => {
     render(<ContextPicker onSwitched={vi.fn()} />);
     await screen.findByRole('button', { name: 'Retry' });
 
-    expect(await screen.findByLabelText('Kubernetes context')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Open a cluster')).toBeInTheDocument();
   });
 
   it('surfaces the reason spinoza reached no cluster', async () => {
@@ -401,7 +394,7 @@ describe('ContextPicker', () => {
     view.unmount();
     deferred.settle();
 
-    expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Open a cluster')).not.toBeInTheDocument();
   });
 
   it('drops a listing failure that lands after unmount', async () => {
@@ -428,31 +421,6 @@ describe('ContextPicker', () => {
     await Promise.resolve();
 
     expect(screen.queryByText(/too late/)).not.toBeInTheDocument();
-  });
-
-  it('calls the cluster by the name it was given', async () => {
-    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
-    act(() => {
-      adoptClusters({
-        clusters: [
-          {
-            id: 'https://p-mk1:6443',
-            context: 'p-mk1',
-            active: true,
-            color: 1,
-            label: 'client a prod',
-            reopen: true,
-            protection: 'open',
-            reachable: true,
-          },
-        ],
-        remembered: [],
-      });
-    });
-
-    render(<ContextPicker onSwitched={vi.fn()} />);
-
-    expect(await screen.findAllByText('client a prod')).not.toHaveLength(0);
   });
 
   it('opens once while the first open is still going', async () => {
@@ -499,7 +467,7 @@ describe('ContextPicker', () => {
     render(<ContextPicker onSwitched={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Open a cluster')).not.toBeInTheDocument();
     });
   });
 
@@ -766,7 +734,7 @@ describe('ContextPicker', () => {
     await pick(user, 'Manage kubeconfigs');
 
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0);
-    expect(await screen.findByLabelText('Kubernetes context')).toHaveTextContent('p-mk1');
+    expect(await screen.findByLabelText('Open a cluster')).toBeInTheDocument();
   });
 
   it('still reaches the kubeconfigs when there is no context to pick', async () => {

@@ -5,6 +5,7 @@ import { attachedTo, forgetTab, tabWidth } from '../lib/tabs';
 import { nameOf, useActiveCluster, useTabs } from '../store/clusters';
 import type { Tab } from '../store/clusters';
 import TabMenu from './TabMenu';
+import ContextPicker from './ContextPicker';
 import { useClusterHealthStore } from '../store/clusterHealth';
 import { notifyError } from '../store/toasts';
 import { useFeedDown } from '../lib/health';
@@ -92,10 +93,6 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
       document.removeEventListener('pointerdown', away);
     };
   }, [painting]);
-
-  if (tabs.length < 2) {
-    return null;
-  }
 
   async function show(tab: Tab) {
     if (tab.id === active || working.current) {
@@ -203,6 +200,9 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
           ))}
         </span>
       ))}
+      <span className="flex shrink-0 items-center pb-1">
+        <ContextPicker onSwitched={onShown} />
+      </span>
       {asking !== null && (
         <dialog
           open

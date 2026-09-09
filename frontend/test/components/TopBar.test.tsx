@@ -19,14 +19,6 @@ const podRef: ObjectRef = {
   name: 'web-0',
 };
 
-vi.mock('../../src/components/ContextPicker', () => ({
-  default: ({ onSwitched }: { onSwitched: () => void }) => (
-    <button type="button" onClick={onSwitched}>
-      switch context
-    </button>
-  ),
-}));
-
 afterEach(() => {
   useClustersStore.getState().reset();
   useNamespaceStore.getState().reset();
@@ -88,29 +80,12 @@ describe('TopBar', () => {
   });
 });
 
-describe('TopBar context switch', () => {
-  it('reports the switch to the owner', async () => {
-    const user = userEvent.setup();
-    const onContextChanged = vi.fn();
-    const onReconnect = vi.fn();
-    render(
-      <TopBar status="connected" onReconnect={onReconnect} onContextChanged={onContextChanged} />,
-    );
+describe('TopBar cluster controls', () => {
+  it('leaves choosing a cluster to the strip', () => {
+    render(<TopBar status="connected" />);
 
-    await user.click(screen.getByRole('button', { name: 'switch context' }));
-
-    expect(onContextChanged).toHaveBeenCalledOnce();
-    expect(onReconnect).not.toHaveBeenCalled();
-  });
-
-  it('falls back to a reconnect when no owner is listening', async () => {
-    const user = userEvent.setup();
-    const onReconnect = vi.fn();
-    render(<TopBar status="connected" onReconnect={onReconnect} />);
-
-    await user.click(screen.getByRole('button', { name: 'switch context' }));
-
-    expect(onReconnect).toHaveBeenCalledOnce();
+    expect(screen.queryByLabelText('Open a cluster')).toBeNull();
+    expect(screen.queryByLabelText('Kubernetes context')).toBeNull();
   });
 });
 

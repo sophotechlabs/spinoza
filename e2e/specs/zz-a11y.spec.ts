@@ -99,14 +99,14 @@ test('the notification history has no detectable accessibility violations', asyn
 
 test('the cluster picker has no detectable accessibility violations', async ({ page }) => {
   await openHome(page);
-  await page.getByLabel('Kubernetes context').click();
+  await page.getByLabel('Open a cluster').click();
   await expect(page.getByRole('button', { name: 'Manage kubeconfigs', exact: true })).toBeVisible();
   expect(await violations(page)).toEqual([]);
 });
 
 test('the kubeconfig manager has no detectable accessibility violations', async ({ page }) => {
   await openHome(page);
-  await page.getByLabel('Kubernetes context').click();
+  await page.getByLabel('Open a cluster').click();
   await page.getByRole('button', { name: 'Manage kubeconfigs', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Kubeconfigs' })).toBeVisible();
   expect(await violations(page)).toEqual([]);

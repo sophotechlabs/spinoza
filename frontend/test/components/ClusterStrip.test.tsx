@@ -11,6 +11,14 @@ import { useToastsStore } from '../../src/store/toasts';
 import { useFeedStore } from '../../src/store/feed';
 import { MK1, MK2, listOf } from '../helpers-clusters';
 
+vi.mock('../../src/components/ContextPicker', () => ({
+  default: () => (
+    <button type="button" aria-label="Open a cluster">
+      +
+    </button>
+  ),
+}));
+
 interface Call {
   url: string;
   method: string;
@@ -51,14 +59,15 @@ describe('the strip of open clusters', () => {
     vi.unstubAllGlobals();
   });
 
-  it('stays out of the way while one cluster is open', () => {
+  it('shows the one open cluster and the way to open another', () => {
     act(() => {
       adoptClusters({ clusters: listOf(MK1).clusters.slice(0, 1), remembered: [] });
     });
 
     render(<ClusterStrip onShown={vi.fn()} />);
 
-    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Open clusters' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Open a cluster')).toBeInTheDocument();
   });
 
   it('names every open cluster once a second one is open', () => {

@@ -13,8 +13,6 @@ import { sessionExpired } from '../store/session';
 import { CONTROL } from '../lib/controls';
 import { useDismissMenu } from '../lib/useDismissMenu';
 import KubeconfigDialog from './KubeconfigDialog';
-import ClusterSwatch from './ClusterSwatch';
-import { useActiveTab } from '../store/clusters';
 
 interface ContextPickerProps {
   onSwitched: () => void;
@@ -61,16 +59,6 @@ function current(active: boolean): 'true' | undefined {
   return undefined;
 }
 
-function currentLabel(list: ContextList, named: string): string {
-  if (named !== '') {
-    return named;
-  }
-  if (list.current.name === '') {
-    return 'no cluster';
-  }
-  return list.current.name;
-}
-
 export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   const list = useContextList();
   const tabs = useTabs();
@@ -78,7 +66,6 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   const rememberChoice = useSettingsStore((state) => state.setOpenContext);
   const [asking, setAsking] = useState<ContextEntry | null>(null);
   const [remember, setRemember] = useState(false);
-  const named = useActiveTab()?.label ?? '';
   const setList = useContextsStore((state) => state.setList);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -371,7 +358,6 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   if (groups.length === 0) {
     return (
       <span className="flex items-center gap-2">
-        <span className="font-semibold text-fg-strong">{currentLabel(list, named)}</span>
         {manageButton()}
         {dialog()}
       </span>
@@ -382,15 +368,11 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
     <span className="flex items-center gap-2">
       <details ref={menuRef} className="relative">
         <summary
-          aria-label="Kubernetes context"
-          title={currentLabel(list, named)}
-          className={`${CONTROL} max-w-64 cursor-pointer list-none border-edge-strong bg-surface-raised font-semibold text-fg-strong hover:bg-surface-active [&::-webkit-details-marker]:hidden`}
+          aria-label="Open a cluster"
+          title="Open another cluster"
+          className={`${CONTROL} cursor-pointer list-none border-edge-strong bg-surface text-fg-soft hover:bg-surface-active [&::-webkit-details-marker]:hidden`}
         >
-          <ClusterSwatch />
-          <span className="truncate">{currentLabel(list, named)}</span>
-          <span aria-hidden="true" className="ml-auto pl-2 text-fg-muted">
-            ▾
-          </span>
+          <span aria-hidden="true">+</span>
         </summary>
         <div className="absolute left-0 z-30 mt-1 flex max-h-[70vh] w-max max-w-[36rem] min-w-full flex-col overflow-y-auto rounded border border-edge-strong bg-surface-raised shadow">
           {groups.map((group) => (

@@ -2,7 +2,6 @@ import type { ConnectionStatus } from '../lib/connection';
 import type { ObjectRef } from '../lib/types';
 import { CONTROL, ICON_CONTROL } from '../lib/controls';
 import { paletteChordLabel } from '../lib/hotkeys';
-import ContextPicker from './ContextPicker';
 import NotificationsMenu from './NotificationsMenu';
 import ProtectionToggle from './ProtectionToggle';
 import ViewSwitch from './ViewSwitch';
@@ -20,7 +19,6 @@ interface TopBarProps {
   status: ConnectionStatus;
   scoped?: boolean | null;
   onReconnect?: () => void;
-  onContextChanged?: () => void;
   onOpenPalette?: () => void;
   onOpenSettings?: () => void;
   onSelectObject?: (ref: ObjectRef) => void;
@@ -81,7 +79,6 @@ export default function TopBar({
   status,
   scoped = null,
   onReconnect,
-  onContextChanged,
   onOpenPalette,
   onOpenSettings,
   onSelectObject,
@@ -127,18 +124,9 @@ export default function TopBar({
     }
   }
 
-  function handleContextChanged() {
-    if (onContextChanged) {
-      onContextChanged();
-      return;
-    }
-    handleReconnect();
-  }
-
   return (
     <header className="flex h-10 shrink-0 items-center gap-4 border-b border-edge bg-surface-raised px-3 text-xs">
       <Wordmark />
-      {!served && <ContextPicker onSwitched={handleContextChanged} />}
       <div className="flex items-center gap-1.5">
         <ProtectionToggle />
         <span

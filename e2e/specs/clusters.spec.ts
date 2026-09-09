@@ -13,7 +13,7 @@ interface Opened {
 }
 
 function contextPicker(page: Page): Locator {
-  return page.locator('header summary[aria-label="Kubernetes context"]');
+  return page.locator('summary[aria-label="Open a cluster"]');
 }
 
 async function opened(page: Page): Promise<Opened[]> {
@@ -100,11 +100,11 @@ test('one cluster is open, and it is the one spinoza was pointed at', async ({ p
   expect(clusters[0].reachable).toBe(true);
 });
 
-test('the picker names the cluster and the file it came from', async ({ page }) => {
+test('the strip names the open cluster and leads to the kubeconfigs', async ({ page }) => {
   await openHome(page);
-  const picker = contextPicker(page);
-  await expect(picker).toContainText(CONTEXT, { timeout: 30_000 });
-  await picker.click();
+  const strip = page.getByRole('navigation', { name: 'Open clusters' });
+  await expect(strip).toContainText(CONTEXT, { timeout: 30_000 });
+  await contextPicker(page).click();
   await expect(page.getByRole('button', { name: 'Manage kubeconfigs', exact: true })).toBeVisible();
 });
 
@@ -119,7 +119,9 @@ test('a second kubeconfig puts its context in the picker', async ({ page }) => {
     await page.waitForLoadState('domcontentloaded');
     await contextPicker(page).click();
     await expect(
-      page.locator('header').getByRole('button', { name: NOWHERE_CONTEXT, exact: true }),
+      page
+        .getByRole('navigation', { name: 'Open clusters' })
+        .getByRole('button', { name: NOWHERE_CONTEXT, exact: true }),
     ).toBeVisible({ timeout: 30_000 });
   } finally {
     if (!before) {

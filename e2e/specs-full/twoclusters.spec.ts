@@ -53,17 +53,18 @@ async function activate(page: Page, id: string): Promise<void> {
   if (cluster === undefined) {
     throw new Error(`no open cluster for ${id}`);
   }
-  const picker = page.getByLabel('Kubernetes context');
-  await picker.click();
-  await page.locator('header').getByRole('button', { name: cluster.context, exact: true }).click();
-  await expect
-    .poll(async () => (await opened(page)).find((one) => one.active)?.id, { timeout: 60_000 })
-    .toBe(id);
   let shown = cluster.context;
   if (cluster.label !== undefined && cluster.label !== '') {
     shown = cluster.label;
   }
-  await expect(picker).toContainText(shown, { timeout: 60_000 });
+  const tab = page
+    .getByRole('navigation', { name: 'Open clusters' })
+    .getByRole('button', { name: shown, exact: true });
+  await tab.click();
+  await expect
+    .poll(async () => (await opened(page)).find((one) => one.active)?.id, { timeout: 60_000 })
+    .toBe(id);
+  await expect(tab).toHaveAttribute('aria-current', 'true', { timeout: 60_000 });
 }
 
 async function changeCluster(
