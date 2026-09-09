@@ -1,9 +1,19 @@
 {
   "schemaVersion": 3,
   "smokeGroup": "foundation-security",
-  "specRoots": ["cluster-mode", "specs", "specs-full"],
-  "commitBrowsers": ["chromium"],
-  "nightlyBrowsers": ["chromium", "firefox", "webkit"],
+  "specRoots": [
+    "cluster-mode",
+    "specs",
+    "specs-full"
+  ],
+  "commitBrowsers": [
+    "chromium"
+  ],
+  "nightlyBrowsers": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
   "commitBudgetMinutes": 130,
   "productionRoots": [
     "*.go",
@@ -140,31 +150,37 @@
       "tier": "commit",
       "timeoutMinutes": 45,
       "observedMinutes": 4,
-      "specs": ["specs/access.spec.ts", "specs/degrade.spec.ts", "specs/guard.spec.ts"],
+      "specs": [
+        "specs/access.spec.ts",
+        "specs/degrade.spec.ts",
+        "specs/guard.spec.ts"
+      ],
       "paths": [
-        "internal/access/**",
-        "internal/auth/**",
-        "internal/kubeconfig/**",
-        "internal/protect/**",
-        "frontend/src/components/ConnectionBanner.tsx",
-        "frontend/src/components/KubeconfigBanner.tsx",
-        "frontend/src/components/SignIn.tsx",
-        "frontend/src/lib/access.ts",
-        "frontend/src/lib/identity.ts",
         "e2e/specs/access.spec.ts",
         "e2e/specs/degrade.spec.ts",
         "e2e/specs/guard.spec.ts",
+        "frontend/src/components/ConnectionBanner.tsx",
+        "frontend/src/components/KubeconfigBanner.tsx",
         "frontend/src/components/KubeconfigDialog.tsx",
+        "frontend/src/components/SignIn.tsx",
+        "frontend/src/components/SupportBundle.tsx",
         "frontend/src/components/Wordmark.tsx",
+        "frontend/src/lib/access.ts",
         "frontend/src/lib/capabilities.ts",
+        "frontend/src/lib/identity.ts",
         "frontend/src/lib/useAccess.ts",
         "frontend/src/lib/wsBase.ts",
         "frontend/src/store/clusterHealth.ts",
         "frontend/src/store/logs.ts",
+        "internal/access/**",
+        "internal/auth/**",
+        "internal/kubeconfig/**",
+        "internal/protect/**",
         "internal/server/access.go",
         "internal/server/capabilities.go",
         "internal/server/health.go",
-        "internal/server/sinkwatch.go"
+        "internal/server/sinkwatch.go",
+        "internal/server/support.go"
       ]
     },
     {
@@ -179,35 +195,38 @@
         "specs/navigation.spec.ts",
         "specs/palette.spec.ts",
         "specs/panels.spec.ts",
-        "specs/settings.spec.ts"
+        "specs/settings.spec.ts",
+        "specs/views.spec.ts"
       ],
       "paths": [
-        "frontend/src/components/CommandPalette.tsx",
-        "frontend/src/components/Panel*.tsx",
-        "frontend/src/components/SettingsDialog.tsx",
-        "frontend/src/components/Sidebar.tsx",
-        "frontend/src/components/TopBar.tsx",
-        "frontend/src/lib/customThemes.ts",
-        "frontend/src/lib/hotkeys.ts",
-        "frontend/src/lib/palette.ts",
-        "frontend/src/lib/panels.ts",
-        "frontend/src/lib/router.ts",
-        "frontend/src/lib/theme*.ts",
-        "frontend/themes/**",
         "e2e/specs/navigation.spec.ts",
         "e2e/specs/palette.spec.ts",
         "e2e/specs/panels.spec.ts",
         "e2e/specs/settings.spec.ts",
+        "frontend/src/components/CommandPalette.tsx",
         "frontend/src/components/Notifications*.tsx",
+        "frontend/src/components/Panel*.tsx",
+        "frontend/src/components/SaveViewButton.tsx",
+        "frontend/src/components/SavedViewsList.tsx",
+        "frontend/src/components/SettingsDialog.tsx",
+        "frontend/src/components/Sidebar.tsx",
+        "frontend/src/components/TopBar.tsx",
         "frontend/src/components/ViewSwitch.tsx",
         "frontend/src/components/Wordmark.tsx",
         "frontend/src/lib/containers.ts",
+        "frontend/src/lib/customThemes.ts",
         "frontend/src/lib/defaultTheme.ts",
+        "frontend/src/lib/hotkeys.ts",
         "frontend/src/lib/kindLabels.ts",
         "frontend/src/lib/namespaces.ts",
+        "frontend/src/lib/palette.ts",
+        "frontend/src/lib/panels.ts",
         "frontend/src/lib/platform.ts",
         "frontend/src/lib/pods.ts",
+        "frontend/src/lib/router.ts",
+        "frontend/src/lib/savedViews.ts",
         "frontend/src/lib/sidebar*.ts",
+        "frontend/src/lib/theme*.ts",
         "frontend/src/lib/useAccess.ts",
         "frontend/src/lib/useDismissMenu.ts",
         "frontend/src/lib/useObjectDetail.ts",
@@ -220,6 +239,8 @@
         "frontend/src/store/forwards.ts",
         "frontend/src/store/logs.ts",
         "frontend/src/store/traffic.ts",
+        "frontend/themes/**",
+        "internal/server/savedviews.go",
         "internal/server/settings.go"
       ]
     },
@@ -231,7 +252,10 @@
       "tier": "commit",
       "timeoutMinutes": 75,
       "observedMinutes": 12,
-      "specs": ["specs/zz-a11y.spec.ts", "specs-full/design-review.spec.ts"],
+      "specs": [
+        "specs/zz-a11y.spec.ts",
+        "specs-full/design-review.spec.ts"
+      ],
       "paths": [
         "frontend/src/index.css",
         "frontend/src/components/TooltipHost.tsx",
@@ -354,26 +378,42 @@
       "tier": "commit",
       "timeoutMinutes": 75,
       "observedMinutes": 4,
-      "specs": ["specs/actions.spec.ts", "specs/guarded.spec.ts", "specs/history.spec.ts"],
+      "specs": [
+        "specs/actions.spec.ts",
+        "specs/guarded.spec.ts",
+        "specs/history.spec.ts",
+        "specs/rollout.spec.ts"
+      ],
       "paths": [
-        "internal/actions/**",
-        "internal/store/**",
-        "frontend/src/components/BulkBar.tsx",
-        "frontend/src/components/ConfirmByName.tsx",
-        "frontend/src/components/History.tsx",
-        "frontend/src/components/InspectActions.tsx",
-        "frontend/src/components/InspectObjectActions.tsx",
-        "frontend/src/components/Protection*.tsx",
-        "frontend/src/lib/objectActions.ts",
-        "frontend/src/lib/history.ts",
         "e2e/specs/actions.spec.ts",
         "e2e/specs/guarded.spec.ts",
         "e2e/specs/history.spec.ts",
+        "frontend/src/components/BulkBar.tsx",
+        "frontend/src/components/ConfirmByName.tsx",
         "frontend/src/components/DisabledActionReasons.tsx",
+        "frontend/src/components/History.tsx",
+        "frontend/src/components/InspectActions.tsx",
+        "frontend/src/components/InspectObjectActions.tsx",
         "frontend/src/components/NodeShellButton.tsx",
+        "frontend/src/components/Protection*.tsx",
+        "frontend/src/components/RecordedSessions.tsx",
+        "frontend/src/components/RolloutRevisions.tsx",
         "frontend/src/lib/actionAvailability.ts",
+        "frontend/src/lib/history.ts",
+        "frontend/src/lib/objectActions.ts",
+        "frontend/src/lib/rollout.ts",
+        "frontend/src/lib/transcripts.ts",
+        "internal/actions/**",
+        "internal/actions/rollout.go",
+        "internal/rollout/**",
         "internal/server/history.go",
-        "internal/server/objects.go"
+        "internal/server/historyexport.go",
+        "internal/server/objects.go",
+        "internal/server/rollout.go",
+        "internal/server/transcript.go",
+        "internal/store/**",
+        "internal/store/mirror.go",
+        "internal/transcript/**"
       ]
     },
     {
@@ -384,7 +424,11 @@
       "tier": "commit",
       "timeoutMinutes": 75,
       "observedMinutes": 5,
-      "specs": ["specs/exec.spec.ts", "specs/portforward.spec.ts", "specs/terminals.spec.ts"],
+      "specs": [
+        "specs/exec.spec.ts",
+        "specs/portforward.spec.ts",
+        "specs/terminals.spec.ts"
+      ],
       "paths": [
         "internal/debugcontainer/**",
         "internal/exec/**",
@@ -430,27 +474,41 @@
       "tier": "commit",
       "timeoutMinutes": 75,
       "observedMinutes": 5,
-      "specs": ["specs/checks.spec.ts", "specs/issues.spec.ts", "specs/worklist.spec.ts"],
+      "specs": [
+        "specs/checks.spec.ts",
+        "specs/issues.spec.ts",
+        "specs/posture.spec.ts",
+        "specs/worklist.spec.ts"
+      ],
       "paths": [
-        "internal/baseline/**",
-        "internal/checks/**",
-        "internal/faults/**",
-        "internal/issues/**",
-        "frontend/src/components/Checks.tsx",
-        "frontend/src/components/IssueQueue.tsx",
-        "frontend/src/lib/checks.ts",
-        "frontend/src/lib/issues.ts",
         "e2e/specs/checks.spec.ts",
         "e2e/specs/issues.spec.ts",
         "e2e/specs/worklist.spec.ts",
+        "frontend/src/components/Checks.tsx",
+        "frontend/src/components/FrameworkPosture.tsx",
+        "frontend/src/components/IssueQueue.tsx",
+        "frontend/src/lib/checks.ts",
+        "frontend/src/lib/issues.ts",
         "frontend/src/store/issues.ts",
+        "internal/baseline/**",
+        "internal/checks/**",
+        "internal/checks/cis.go",
+        "internal/checks/sarif.go",
+        "internal/faults/**",
+        "internal/issues/**",
+        "internal/server/auditschedule.go",
         "internal/server/baselines.go",
         "internal/server/export.go",
+        "internal/server/exportformats.go",
         "internal/server/fleetchecks.go",
+        "internal/server/frameworks.go",
         "internal/server/mutes.go",
+        "internal/server/ready.go",
         "internal/server/rules.go",
+        "internal/server/selfmetrics.go",
         "internal/server/settings.go",
-        "internal/server/views.go"
+        "internal/server/views.go",
+        "internal/telemetry/**"
       ]
     },
     {
@@ -461,7 +519,9 @@
       "tier": "commit",
       "timeoutMinutes": 90,
       "observedMinutes": 4,
-      "specs": ["specs/helm.spec.ts"],
+      "specs": [
+        "specs/helm.spec.ts"
+      ],
       "paths": [
         "internal/charts/**",
         "internal/helm/**",
@@ -492,7 +552,11 @@
       "tier": "commit",
       "timeoutMinutes": 120,
       "observedMinutes": 7,
-      "specs": ["specs-full/argo.spec.ts", "specs-full/flux.spec.ts", "specs-full/gitops.spec.ts"],
+      "specs": [
+        "specs-full/argo.spec.ts",
+        "specs-full/flux.spec.ts",
+        "specs-full/gitops.spec.ts"
+      ],
       "paths": [
         "internal/argocd/**",
         "internal/flux/**",
@@ -525,25 +589,33 @@
       "tier": "commit",
       "timeoutMinutes": 90,
       "observedMinutes": 3,
-      "specs": ["specs/metrics.spec.ts", "specs/traffic.spec.ts"],
+      "specs": [
+        "specs/metrics.spec.ts",
+        "specs/traffic.spec.ts",
+        "specs/waste.spec.ts"
+      ],
       "paths": [
-        "internal/metrics/**",
-        "internal/prom/**",
-        "internal/samples/**",
-        "internal/traffic/**",
-        "frontend/src/components/InspectMetrics.tsx",
-        "frontend/src/components/Traffic.tsx",
-        "frontend/src/lib/metrics*.ts",
-        "frontend/src/lib/traffic*.ts",
         "e2e/fixtures/prometheus.yaml",
         "e2e/specs/metrics.spec.ts",
         "e2e/specs/traffic.spec.ts",
         "frontend/src/components/Graph*.tsx",
+        "frontend/src/components/InspectMetrics.tsx",
+        "frontend/src/components/Traffic.tsx",
+        "frontend/src/components/Waste.tsx",
         "frontend/src/lib/capabilities.ts",
         "frontend/src/lib/graph*.ts",
+        "frontend/src/lib/metrics*.ts",
+        "frontend/src/lib/traffic*.ts",
         "frontend/src/lib/useTrafficProbe.ts",
+        "frontend/src/lib/waste.ts",
         "frontend/src/store/traffic.ts",
-        "internal/server/views.go"
+        "internal/metrics/**",
+        "internal/prom/**",
+        "internal/samples/**",
+        "internal/server/views.go",
+        "internal/server/waste.go",
+        "internal/traffic/**",
+        "internal/waste/**"
       ]
     },
     {
@@ -554,7 +626,11 @@
       "tier": "commit",
       "timeoutMinutes": 120,
       "observedMinutes": 7,
-      "specs": ["specs/clusters.spec.ts", "specs/fleet.spec.ts", "specs-full/twoclusters.spec.ts"],
+      "specs": [
+        "specs/clusters.spec.ts",
+        "specs/fleet.spec.ts",
+        "specs-full/twoclusters.spec.ts"
+      ],
       "paths": [
         "internal/clusterid/**",
         "internal/kube/**",
@@ -597,20 +673,36 @@
       "timeoutMinutes": 120,
       "observedMinutes": 10,
       "browserMinutes": 7,
-      "specs": ["cluster-mode/oidc.spec.ts", "cluster-mode/proxy.spec.ts"],
+      "specs": [
+        "cluster-mode/oidc.spec.ts",
+        "cluster-mode/proxy.spec.ts",
+        "cluster-mode/restart.spec.ts"
+      ],
       "paths": [
         "deploy/helm/spinoza/**",
         "docs/cluster-mode.md",
         "e2e/cluster-mode.config.ts",
         "e2e/cluster-mode/**",
+        "flags.go",
         "frontend/src/components/UserMenu.tsx",
         "frontend/src/lib/identity.ts",
+        "frontend/src/lib/useDismissMenu.ts",
         "internal/auth/**",
+        "internal/server/auditstream.go",
         "internal/server/auth.go",
+        "internal/server/drain.go",
         "internal/server/guard.go",
+        "internal/server/measured.go",
+        "internal/server/ready.go",
+        "internal/server/requestid.go",
+        "internal/server/support.go",
+        "internal/store/mirror.go",
+        "internal/telemetry/**",
+        "logging.go",
+        "main.go",
         "serve.go",
         "test/clustermode/**",
-        "frontend/src/lib/useDismissMenu.ts"
+        "wiring.go"
       ]
     },
     {
@@ -621,7 +713,9 @@
       "tier": "commit",
       "timeoutMinutes": 45,
       "observedMinutes": 4,
-      "specs": ["specs/outage.spec.ts"],
+      "specs": [
+        "specs/outage.spec.ts"
+      ],
       "paths": [
         "frontend/src/components/ClusterBanner.tsx",
         "frontend/src/components/ConnectionBanner.tsx",
@@ -643,7 +737,10 @@
       "tier": "commit",
       "timeoutMinutes": 120,
       "observedMinutes": 6,
-      "specs": ["specs/resilience.spec.ts", "specs/capacity.spec.ts"],
+      "specs": [
+        "specs/resilience.spec.ts",
+        "specs/capacity.spec.ts"
+      ],
       "paths": [
         "internal/reach/**",
         "internal/safe/**",
@@ -665,7 +762,12 @@
       "timeoutMinutes": 75,
       "observedMinutes": 4,
       "specs": [],
-      "paths": ["cmd/spinoza-mcp/**", "internal/mcp/**", "test/integration/mcp_test.go", "main.go"]
+      "paths": [
+        "cmd/spinoza-mcp/**",
+        "internal/mcp/**",
+        "test/integration/mcp_test.go",
+        "main.go"
+      ]
     },
     {
       "id": "distribution-desktop-install",
