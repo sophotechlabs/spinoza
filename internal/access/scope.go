@@ -36,7 +36,7 @@ func WithScopeSlot(ctx context.Context) context.Context {
 func clusterWide() []Check {
 	return []Check{
 		{Verb: listVerb, Resource: pods},
-		{Verb: listVerb, Group: appsGroup, Resource: "deployments"},
+		{Verb: listVerb, Group: appsGroup, Resource: deployments},
 	}
 }
 

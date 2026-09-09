@@ -27,15 +27,16 @@ var writeToolNames = map[string]bool{
 func (s *Server) registerWrites() {
 	s.register(tool{
 		name:        "manage_workload",
-		title:       "Scale or restart a workload",
-		description: "Scale a workload to a replica count, or roll its pods by stamping a restart annotation.",
+		title:       "Scale, restart or roll back a workload",
+		description: "Scale a workload to a replica count, roll its pods by stamping a restart annotation, or put its pod template back to an earlier revision. list_revisions says which revisions there are.",
 		properties: map[string]propOf{
 			argResource:  text("Workload resource or kind, for example deployments."),
 			argName:      text("Workload name."),
 			argNamespace: text("Namespace."),
 			argGroup:     text("API group, when ambiguous."),
-			argAction:    choice("What to do.", "scale", "restart"),
+			argAction:    choice("What to do.", "scale", "restart", "undo"),
 			argReplicas:  number("Replica count, for scale."),
+			argRevision:  number("Revision to go back to, for undo."),
 		},
 		required:   []string{argResource, argName, argNamespace, argAction},
 		writes:     true,
@@ -133,7 +134,7 @@ func (s *Server) manageWorkload(ctx context.Context, args arguments) (any, error
 	if err != nil {
 		return nil, err
 	}
-	verb, err := args.oneOf(argAction, "scale", "restart")
+	verb, err := args.oneOf(argAction, "scale", "restart", "undo")
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +148,16 @@ func (s *Server) manageWorkload(ctx context.Context, args arguments) (any, error
 			return nil, errors.New("replicas cannot be negative")
 		}
 		req.Replicas = replicas
+	}
+	if verb == "undo" {
+		revision, err := args.count(argRevision)
+		if err != nil {
+			return nil, err
+		}
+		if revision <= 0 {
+			return nil, errors.New("revision has to name a revision to go back to")
+		}
+		req.Revision = revision
 	}
 	return s.act(ctx, ref, req, verb)
 }

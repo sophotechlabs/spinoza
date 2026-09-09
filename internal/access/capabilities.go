@@ -13,6 +13,7 @@ const (
 	Delete      = "delete"
 	Scale       = "scale"
 	Restart     = "restart"
+	Undo        = "undo"
 	Cordon      = "cordon"
 	Drain       = "drain"
 	Logs        = "logs"
@@ -24,10 +25,11 @@ const (
 )
 
 const (
-	appsGroup  = "apps"
-	batchGroup = "batch"
-	pods       = "pods"
-	nodes      = "nodes"
+	appsGroup   = "apps"
+	batchGroup  = "batch"
+	pods        = "pods"
+	nodes       = "nodes"
+	deployments = "deployments"
 )
 
 var cronJobs = groupResource{group: batchGroup, resource: "cronjobs"}
@@ -47,20 +49,26 @@ type groupResource struct {
 }
 
 var scalable = map[groupResource]bool{
-	{group: appsGroup, resource: "deployments"}:     true,
+	{group: appsGroup, resource: deployments}:       true,
 	{group: appsGroup, resource: "statefulsets"}:    true,
 	{group: appsGroup, resource: "replicasets"}:     true,
 	{group: "", resource: "replicationcontrollers"}: true,
 }
 
 var restartable = map[groupResource]bool{
-	{group: appsGroup, resource: "deployments"}:  true,
+	{group: appsGroup, resource: deployments}:    true,
+	{group: appsGroup, resource: "statefulsets"}: true,
+	{group: appsGroup, resource: "daemonsets"}:   true,
+}
+
+var revertible = map[groupResource]bool{
+	{group: appsGroup, resource: deployments}:    true,
 	{group: appsGroup, resource: "statefulsets"}: true,
 	{group: appsGroup, resource: "daemonsets"}:   true,
 }
 
 var ownsPods = map[groupResource]bool{
-	{group: appsGroup, resource: "deployments"}:     true,
+	{group: appsGroup, resource: deployments}:       true,
 	{group: appsGroup, resource: "statefulsets"}:    true,
 	{group: appsGroup, resource: "daemonsets"}:      true,
 	{group: appsGroup, resource: "replicasets"}:     true,
@@ -82,6 +90,9 @@ func capabilitiesFor(ref api.ObjectRef) []capability {
 	}
 	if restartable[here] {
 		held = append(held, needs(Restart, with(object, "patch")))
+	}
+	if revertible[here] {
+		held = append(held, needs(Undo, with(object, "patch"), historyOf(here, ref.Namespace)))
 	}
 	if gitops(ref.Group) {
 		held = append(held, needs(Reconcile, with(object, "patch")))
@@ -131,6 +142,13 @@ func podCapabilities(ref api.ObjectRef) []capability {
 		needs(Exec, podCheck("create", ref.Namespace, ref.Name, "exec")),
 		needs(PortForward, podCheck("create", ref.Namespace, ref.Name, "portforward")),
 	}
+}
+
+func historyOf(here groupResource, namespace string) Check {
+	if here.resource == deployments {
+		return Check{Verb: "list", Group: appsGroup, Resource: "replicasets", Namespace: namespace}
+	}
+	return Check{Verb: "list", Group: appsGroup, Resource: "controllerrevisions", Namespace: namespace}
 }
 
 func podCheck(verb, namespace, name, subresource string) Check {

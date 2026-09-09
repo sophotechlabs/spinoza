@@ -84,7 +84,7 @@ func guarded(req actions.Request) bool {
 		return false
 	}
 	switch req.Action {
-	case actions.Scale, actions.Restart, actions.Cordon, actions.Uncordon, actions.Drain, actions.Suspend, actions.Resume, actions.Trigger:
+	case actions.Scale, actions.Restart, actions.Cordon, actions.Uncordon, actions.Drain, actions.Suspend, actions.Resume, actions.Trigger, actions.Undo:
 		return true
 	default:
 		return false
@@ -102,6 +102,14 @@ func actionRequest(r *http.Request) (actions.Request, error) {
 		Action: actions.Action(query.Get("action")),
 		Force:  query.Get("force") == queryTrue,
 		DryRun: query.Get("dryRun") == queryTrue,
+	}
+	if req.Action == actions.Undo {
+		revision, err := strconv.ParseInt(query.Get("revision"), 10, 64)
+		if err != nil {
+			return actions.Request{}, fmt.Errorf("revision must be the number of a revision to go back to: %w", err)
+		}
+		req.Revision = revision
+		return req, nil
 	}
 	replicas := query.Get("replicas")
 	if req.Action != actions.Scale {

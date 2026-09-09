@@ -20,6 +20,7 @@ const (
 	argAction    = "action"
 	argYAML      = "yaml"
 	argReplicas  = "replicas"
+	argRevision  = "revision"
 	argEngine    = "engine"
 	keyError     = "error"
 )
