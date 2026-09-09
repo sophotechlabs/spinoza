@@ -1945,6 +1945,42 @@ describe('a backend that stops sending anything at all', () => {
     expect(sessionExpired()).toBe(false);
   });
 
+  it('gives a socket a fresh budget when the tab comes back', () => {
+    vi.useFakeTimers();
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(SILENCE_LIMIT_MS - 1000);
+      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it('does not reset the budget when the tab merely lost focus', () => {
+    vi.useFakeTimers();
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(SILENCE_LIMIT_MS - 1000);
+      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(socket.close).toHaveBeenCalled();
+    hidden.mockRestore();
+  });
+
   it('leaves a socket that has not opened yet alone', () => {
     vi.useFakeTimers();
     renderHook(() => useResourceFeed());

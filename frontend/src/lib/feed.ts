@@ -492,12 +492,21 @@ export function useResourceFeed(): ResourceFeed {
       socket.close();
     }
 
+    function onVisible() {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      heard = Date.now();
+    }
+
+    document.addEventListener('visibilitychange', onVisible);
     const watchdog = setInterval(watchSilence, WATCHDOG_TICK_MS);
     reconnectRef.current = reconnect;
     connect();
 
     return () => {
       disposed = true;
+      document.removeEventListener('visibilitychange', onVisible);
       clearInterval(watchdog);
       clearTimer();
       clearFlush();

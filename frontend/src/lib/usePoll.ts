@@ -82,9 +82,17 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
     const timer = setInterval(() => {
       void load();
     }, intervalMs);
+    function onVisible() {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      void load();
+    }
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       mounted = false;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [fetcher, intervalMs, enabled, fallback, epoch, recoveries, reloads, refreshKey, resetKey]);
 

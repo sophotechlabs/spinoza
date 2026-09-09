@@ -313,3 +313,40 @@ describe('polling on a page whose token died', () => {
     vi.useRealTimers();
   });
 });
+
+describe('a view the reader came back to', () => {
+  it('reads again as soon as the tab is visible, rather than waiting out the interval', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn().mockResolvedValue('one');
+    renderHook(() => usePoll(fetcher, options({ intervalMs: 60_000 })));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('stays quiet when the tab goes away', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn().mockResolvedValue('one');
+    renderHook(() => usePoll(fetcher, options({ intervalMs: 60_000 })));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    hidden.mockRestore();
+  });
+});
