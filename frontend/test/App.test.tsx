@@ -699,7 +699,14 @@ function stubFetch(pods?: number, catalog: Category[] = categories): void {
 
 function resetStore(): void {
   useResourcesStore.setState({ subs: new Map() });
+  openWorkspace();
 }
+
+function openWorkspace(): void {
+  usePanelsStore.setState({ collapsed: { left: false, right: false, bottom: false } });
+}
+
+beforeEach(openWorkspace);
 
 function openAt(hash: string): void {
   window.history.replaceState(null, '', hash);

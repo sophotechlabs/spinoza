@@ -209,7 +209,7 @@ export interface Layout {
 
 export const DEFAULT_LAYOUT: Layout = {
   sizes: { left: null, right: null, bottom: null },
-  collapsed: { left: false, right: false, bottom: false },
+  collapsed: { left: false, right: true, bottom: true },
   active: { left: null, right: null, bottom: null },
   sidebar: null,
 };

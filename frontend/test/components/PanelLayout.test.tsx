@@ -76,6 +76,10 @@ vi.mock('../../src/components/GitopsAppPanel', () => ({
 import PanelLayout from '../../src/components/PanelLayout';
 import { PLACEMENT_KEY } from '../../src/lib/panels';
 import { usePanelsStore } from '../../src/store/panels';
+
+function openWorkspace(): void {
+  usePanelsStore.setState({ collapsed: { left: false, right: false, bottom: false } });
+}
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { useAccessStore } from '../../src/store/access';
@@ -179,6 +183,7 @@ describe('PanelLayout', () => {
     window.localStorage.clear();
     useToastsStore.getState().clear();
     stubApi();
+    openWorkspace();
   });
 
   afterEach(() => {
@@ -448,6 +453,7 @@ describe('the layout a session leaves behind', () => {
     window.localStorage.clear();
     useToastsStore.getState().clear();
     stubApi();
+    openWorkspace();
   });
 
   afterEach(() => {
@@ -506,7 +512,8 @@ describe('the layout a session leaves behind', () => {
     });
     renderLayout();
 
-    expect(await screen.findByRole('button', { name: 'Hide the right dock' })).toBeInTheDocument();
+    expect(usePanelsStore.getState().sizes.right).toBeNull();
+    expect(usePanelsStore.getState().collapsed.right).toBe(true);
   });
 });
 
@@ -523,6 +530,7 @@ describe('PanelLayout width', () => {
 describe('an object deleted out from under the panels', () => {
   beforeEach(() => {
     stubApi();
+    openWorkspace();
   });
 
   afterEach(() => {
@@ -557,6 +565,8 @@ describe('an object deleted out from under the panels', () => {
 });
 
 describe('gitops actions above the overview', () => {
+  beforeEach(openWorkspace);
+
   const argoRef: ObjectRef = {
     group: 'argoproj.io',
     version: 'v1alpha1',
@@ -618,6 +628,7 @@ describe('the release panel', () => {
     usePanelsStore.getState().reset();
     useToastsStore.getState().clear();
     stubApi();
+    openWorkspace();
   });
 
   afterEach(() => {
@@ -680,6 +691,7 @@ describe('the compare tab', () => {
       ],
       protection: 'open',
     });
+    openWorkspace();
   });
 
   afterEach(() => {
@@ -722,6 +734,7 @@ describe('a panel the cluster would refuse', () => {
     usePanelsStore.getState().reset();
     useToastsStore.getState().clear();
     useAccessStore.getState().forget();
+    openWorkspace();
   });
 
   afterEach(() => {
@@ -772,6 +785,8 @@ describe('a panel the cluster would refuse', () => {
 });
 
 describe('the application panel', () => {
+  beforeEach(openWorkspace);
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });

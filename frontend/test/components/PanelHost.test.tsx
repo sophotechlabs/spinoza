@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PanelHost from '../../src/components/PanelHost';
 import type { PanelTab } from '../../src/components/PanelHost';
 import type { DockSide, PanelId } from '../../src/lib/panels';
 import { panelById } from '../../src/lib/panels';
+import { usePanelsStore } from '../../src/store/panels';
 
 function tabs(...ids: PanelId[]): PanelTab[] {
   return ids.map((id) => ({ id, label: panelById(id).label, disabled: false, title: id }));
@@ -51,6 +52,10 @@ function parentOf(node: HTMLElement): HTMLElement {
 function dockStrip(side: DockSide = 'right'): HTMLElement {
   return screen.getByRole('group', { name: `${side} dock` });
 }
+
+beforeEach(() => {
+  usePanelsStore.setState({ collapsed: { left: false, right: false, bottom: false } });
+});
 
 describe('PanelHost', () => {
   it('lets the tablist own tabs and nothing else', () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ObjectPort, ObjectRef, PortForward } from '../lib/types';
 import { refreshForwards, startForward, stopForward } from '../lib/portForward';
+import { revealPanel } from '../store/panels';
 import { forwardURL, openExternal } from '../lib/openExternal';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useForwards } from '../store/forwards';
@@ -87,6 +88,7 @@ export default function InspectPorts({ target, kind, ports }: InspectPortsProps)
     setError(null);
     try {
       const started = await startForward(kind, target, port);
+      revealPanel('forwards');
       await refreshForwards();
       if (operation.current !== token) {
         return;

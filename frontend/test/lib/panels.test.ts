@@ -298,3 +298,22 @@ describe('stored layout', () => {
     }).not.toThrow();
   });
 });
+
+describe('a workspace nobody has arranged yet', () => {
+  it('keeps the inspector and the dock out of the way until they hold something', () => {
+    const layout = parseLayout(null);
+
+    expect(layout.collapsed.right).toBe(true);
+    expect(layout.collapsed.bottom).toBe(true);
+    expect(layout.collapsed.left).toBe(false);
+  });
+
+  it('leaves a workspace somebody did arrange exactly as they left it', () => {
+    const layout = parseLayout(
+      JSON.stringify({ collapsed: { left: false, right: false, bottom: false } }),
+    );
+
+    expect(layout.collapsed.right).toBe(false);
+    expect(layout.collapsed.bottom).toBe(false);
+  });
+});

@@ -65,8 +65,15 @@ describe('the rest of the layout', () => {
 
     expect(usePanelsStore.getState().sizes).toEqual({ left: null, right: null, bottom: null });
     expect(usePanelsStore.getState().sidebar).toBeNull();
-    expect(usePanelsStore.getState().collapsed.right).toBe(false);
+    expect(usePanelsStore.getState().collapsed.left).toBe(false);
     expect(usePanelsStore.getState().active.right).toBeNull();
+  });
+
+  it('holds the inspector and the dock closed until the workspace has something in them', async () => {
+    const { usePanelsStore } = await freshStore();
+
+    expect(usePanelsStore.getState().collapsed.right).toBe(true);
+    expect(usePanelsStore.getState().collapsed.bottom).toBe(true);
   });
 
   it('remembers a dock size for the next session', async () => {
@@ -117,7 +124,7 @@ describe('the rest of the layout', () => {
 
     expect(usePanelsStore.getState().sizes).toEqual({ left: null, right: null, bottom: null });
     expect(usePanelsStore.getState().sidebar).toBeNull();
-    expect(usePanelsStore.getState().collapsed.bottom).toBe(false);
+    expect(usePanelsStore.getState().collapsed.bottom).toBe(true);
     expect(usePanelsStore.getState().active.right).toBeNull();
     const reopened = await freshStore();
     expect(reopened.usePanelsStore.getState().sizes.right).toBeNull();
