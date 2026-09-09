@@ -9,7 +9,8 @@ import type {
   Row,
   View,
 } from './lib/types';
-import { offline, useResourceFeed } from './lib/feed';
+import { useResourceFeed } from './lib/feed';
+import { offline } from './lib/connection';
 import { fetchContexts } from './lib/contexts';
 import { activateCluster, fetchClusters, openCluster, stillToOpen } from './lib/clusters';
 import {

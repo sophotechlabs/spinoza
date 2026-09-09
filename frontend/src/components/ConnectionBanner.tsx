@@ -1,5 +1,5 @@
-import type { ConnectionStatus } from '../lib/feed';
-import { offline } from '../lib/feed';
+import type { ConnectionStatus } from '../lib/connection';
+import { offline } from '../lib/connection';
 import { useSessionExpired } from '../store/session';
 
 interface ConnectionBannerProps {

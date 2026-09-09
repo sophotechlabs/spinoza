@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectionStatus } from '../lib/feed';
+import type { ConnectionStatus } from '../lib/connection';
 
 interface FeedState {
   status: ConnectionStatus;

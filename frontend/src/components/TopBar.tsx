@@ -1,4 +1,4 @@
-import type { ConnectionStatus } from '../lib/feed';
+import type { ConnectionStatus } from '../lib/connection';
 import type { ObjectRef } from '../lib/types';
 import { CONTROL, ICON_CONTROL } from '../lib/controls';
 import { paletteChordLabel } from '../lib/hotkeys';

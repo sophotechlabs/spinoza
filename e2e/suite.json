@@ -47,6 +47,7 @@
     "frontend/src/components/StaleBanner.tsx",
     "frontend/src/components/Toasts.tsx",
     "frontend/src/components/icons.tsx",
+    "frontend/src/lib/connection.ts",
     "frontend/src/lib/clipboard.ts",
     "frontend/src/lib/contexts.ts",
     "frontend/src/lib/controls.ts",
@@ -128,7 +129,7 @@
     "update.go",
     "wails.json"
   ],
-  "fullRunBudget": 93,
+  "fullRunBudget": 94,
   "groups": [
     {
       "id": "foundation-security",

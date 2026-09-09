@@ -1,5 +1,5 @@
 import { since as elapsed } from './time';
-import { offline } from './feed';
+import { offline } from './connection';
 import { useFeedStore } from '../store/feed';
 import { useClusterReachable } from '../store/clusterHealth';
 import { useSessionExpired } from '../store/session';

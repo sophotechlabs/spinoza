@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { expireSession, sessionExpired } from '../store/session';
+import type { ConnectionStatus } from './connection';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { parseColumn, parseRow } from './parse';
 import {
@@ -21,18 +22,6 @@ import { reportFeed } from '../store/feed';
 import { wsURL } from './wsBase';
 import { viewKind } from './view';
 import { activeCluster } from './cluster';
-
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
-
-export function offline(status: ConnectionStatus, attempt: number): boolean {
-  if (status === 'disconnected') {
-    return true;
-  }
-  if (status === 'connected') {
-    return false;
-  }
-  return attempt > 0;
-}
 
 interface Subscription {
   descriptor: ResourceDescriptor;

@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConnectionBanner from '../../src/components/ConnectionBanner';
 import { expireSession } from '../../src/store/session';
-import { offline } from '../../src/lib/feed';
+import { offline } from '../../src/lib/connection';
 
 describe('offline', () => {
   it('is true once the socket has dropped', () => {
