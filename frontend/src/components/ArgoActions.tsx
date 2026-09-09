@@ -11,6 +11,7 @@ import { useGitopsKeys } from '../lib/gitopsKeys';
 import Announce from './Announce';
 import ArgoSyncDialog from './ArgoSyncDialog';
 import ConfirmByName from './ConfirmByName';
+import ActionGroup, { Action, ActionNote } from './ActionGroup';
 
 interface ArgoActionsProps {
   target: ObjectRef;
@@ -32,15 +33,6 @@ const NOTICES: Record<ArgoAction, string> = {
 };
 
 const NEEDS_NAME: ArgoAction[] = ['sync', 'suspend', 'resume', 'rollback'];
-
-const buttonClass =
-  'rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint';
-
-const warnClass =
-  'rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint';
-
-const okClass =
-  'rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -150,80 +142,64 @@ export default function ArgoActions({ target, suspended, terminating, onDone }: 
 
   return (
     <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
+      <ActionGroup label="Argo CD actions">
+        <Action
+          label="Sync"
           onClick={() => {
             setChoosing(true);
           }}
           disabled={writesDisabled}
           title={blocked ?? undefined}
-          className={buttonClass}
-        >
-          Sync
-        </button>
-        <button
-          type="button"
+        />
+        <Action
+          label="Refresh"
           onClick={() => {
             ask('refresh');
           }}
           disabled={disabled}
           title={refused ?? undefined}
-          className={buttonClass}
-        >
-          Refresh
-        </button>
-        <button
-          type="button"
+        />
+        <Action
+          label="Hard refresh"
           onClick={() => {
             ask('hard-refresh');
           }}
           disabled={disabled}
           title={refused ?? 'Re-read the repository, ignoring the cache'}
-          className={buttonClass}
-        >
-          Hard refresh
-        </button>
-        <button
-          type="button"
+        />
+        <Action
+          label="Terminate"
           onClick={() => {
             ask('terminate');
           }}
           disabled={disabled}
           title={refused ?? 'Stop the running operation'}
-          className={buttonClass}
-        >
-          Terminate
-        </button>
+        />
         {suspended === true && (
-          <button
-            type="button"
+          <Action
+            label="Resume auto-sync"
+            tone="good"
             onClick={() => {
               ask('resume');
             }}
             disabled={writesDisabled}
             title={blocked ?? undefined}
-            className={okClass}
-          >
-            Resume auto-sync
-          </button>
+          />
         )}
         {suspended !== true && (
-          <button
-            type="button"
+          <Action
+            label="Suspend auto-sync"
+            tone="caution"
             onClick={() => {
               ask('suspend');
             }}
             disabled={writesDisabled}
             title={blocked ?? undefined}
-            className={warnClass}
-          >
-            Suspend auto-sync
-          </button>
+          />
         )}
         {suspended === true && <span className="text-warn-muted">auto-sync off</span>}
-        {busy !== null && <span className="text-fg-muted">working</span>}
-      </div>
+        {busy !== null && <ActionNote>working</ActionNote>}
+      </ActionGroup>
       {choosing && (
         <ArgoSyncDialog
           name={target.name}

@@ -8,6 +8,7 @@ import { useRefusal } from '../store/access';
 import { useClusterEpoch } from '../store/cluster';
 import { useGitopsKeys } from '../lib/gitopsKeys';
 import DisabledActionReasons from './DisabledActionReasons';
+import ActionGroup, { Action, ActionNote } from './ActionGroup';
 import { actionTitle, describedBy } from '../lib/actionAvailability';
 
 interface InspectActionsProps {
@@ -149,56 +150,46 @@ export default function InspectActions({
 
   return (
     <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
+      <ActionGroup label="GitOps actions">
+        <Action
+          label="Reconcile"
           onClick={() => void run('reconcile')}
           disabled={disabled}
-          aria-describedby={describedBy(blocked, blockedReasonId)}
+          describedBy={describedBy(blocked, blockedReasonId)}
           title={actionTitle(blocked)}
-          className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
-        >
-          Reconcile
-        </button>
+        />
         {sourced === true && (
-          <button
-            type="button"
+          <Action
+            label="With source"
             onClick={() => void run('reconcile-with-source')}
             disabled={disabled}
-            aria-describedby={describedBy(blocked, blockedReasonId)}
+            describedBy={describedBy(blocked, blockedReasonId)}
             title={actionTitle(blocked, 'Ask the repository to fetch first, then reconcile this')}
-            className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
-          >
-            With source
-          </button>
+          />
         )}
         {suspended === true && (
-          <button
-            type="button"
+          <Action
+            label="Resume"
+            tone="good"
             onClick={() => void run('resume')}
             disabled={disabled}
-            aria-describedby={describedBy(blocked, blockedReasonId)}
+            describedBy={describedBy(blocked, blockedReasonId)}
             title={actionTitle(blocked)}
-            className="rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint"
-          >
-            Resume
-          </button>
+          />
         )}
         {suspended !== true && (
-          <button
-            type="button"
+          <Action
+            label="Suspend"
+            tone="caution"
             onClick={() => void run('suspend')}
             disabled={disabled}
-            aria-describedby={describedBy(blocked, blockedReasonId)}
+            describedBy={describedBy(blocked, blockedReasonId)}
             title={actionTitle(blocked)}
-            className="rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint"
-          >
-            Suspend
-          </button>
+          />
         )}
         {suspended === true && <span className="text-warn-muted">suspended</span>}
-        {busy !== null && <span className="text-fg-muted">working</span>}
-      </div>
+        {busy !== null && <ActionNote>working</ActionNote>}
+      </ActionGroup>
       <DisabledActionReasons
         reasons={[{ id: blockedReasonId, label: 'GitOps actions', reason: blocked }]}
       />

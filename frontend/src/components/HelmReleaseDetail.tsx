@@ -25,6 +25,7 @@ import { confirmName } from '../lib/contexts';
 import { bumpHelmEpoch } from '../store/helm';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
+import { actionClass } from '../lib/actions';
 import CopyButton from './CopyButton';
 import HelmUpgradeDialog from './HelmUpgradeDialog';
 import DisabledActionReasons from './DisabledActionReasons';
@@ -412,7 +413,7 @@ export default function HelmReleaseDetail({
               onClick={() => {
                 onSelectResource(fluxRef);
               }}
-              className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+              className={actionClass('plain', 'dense')}
             >
               Managed by Flux
             </button>
@@ -426,7 +427,7 @@ export default function HelmReleaseDetail({
               onClick={() => {
                 setUpgrading(true);
               }}
-              className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:border-edge disabled:text-fg-faint"
+              className={actionClass('plain', 'dense')}
             >
               Upgrade
             </button>
@@ -440,7 +441,7 @@ export default function HelmReleaseDetail({
               onClick={() => {
                 askUninstall();
               }}
-              className="rounded border border-error-line-strong px-1.5 py-0.5 text-error hover:bg-error-tint disabled:cursor-not-allowed disabled:border-edge disabled:text-fg-faint"
+              className={actionClass('danger', 'dense')}
             >
               Uninstall
             </button>
@@ -452,7 +453,7 @@ export default function HelmReleaseDetail({
                 type="button"
                 disabled={busy}
                 onClick={() => void act('uninstall', 0)}
-                className="rounded border border-error-line-strong px-1.5 py-0.5 text-error hover:bg-error-tint"
+                className={actionClass('danger', 'dense')}
               >
                 Confirm
               </button>
@@ -461,7 +462,7 @@ export default function HelmReleaseDetail({
                 onClick={() => {
                   setConfirming(null);
                 }}
-                className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+                className={actionClass('plain', 'dense')}
               >
                 Cancel
               </button>
@@ -471,7 +472,7 @@ export default function HelmReleaseDetail({
             type="button"
             aria-label="Close the release detail"
             onClick={onClose}
-            className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+            className={actionClass('plain', 'dense')}
           >
             ✕
           </button>
@@ -503,7 +504,7 @@ export default function HelmReleaseDetail({
             onClick={() => {
               setInspected(null);
             }}
-            className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
+            className={actionClass('plain', 'dense')}
           >
             Back to current revision {data.release.revision}
           </button>
@@ -698,11 +699,7 @@ function History({
     return (
       <div className="flex items-center gap-2 p-3 text-error">
         <p role="alert">{error}</p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active"
-        >
+        <button type="button" onClick={onRetry} className={actionClass('plain', 'dense')}>
           Retry history
         </button>
       </div>
@@ -749,7 +746,7 @@ function History({
                       onClick={() => {
                         onInspect(entry.revision);
                       }}
-                      className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+                      className={actionClass('plain', 'dense')}
                     >
                       {inspecting === entry.revision ? 'Loading…' : 'Inspect'}
                     </button>
@@ -764,7 +761,7 @@ function History({
                       onClick={() => {
                         onRollback(entry.revision);
                       }}
-                      className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+                      className={actionClass('plain', 'dense')}
                     >
                       Roll back
                     </button>
@@ -784,7 +781,7 @@ function History({
             onClick={() => {
               onLoadOlder(next);
             }}
-            className="rounded border border-edge-strong px-1.5 py-0.5 text-fg-soft hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
+            className={actionClass('plain', 'dense')}
           >
             {loading ? 'Loading…' : 'Load older revisions'}
           </button>

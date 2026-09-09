@@ -22,6 +22,8 @@ import { useClusterEpoch } from '../store/cluster';
 import { useRefusal } from '../store/access';
 import ClusterBadge from './ClusterBadge';
 import DisabledActionReasons from './DisabledActionReasons';
+import ActionGroup, { Action, ActionNote } from './ActionGroup';
+import { actionClass } from '../lib/actions';
 import { actionTitle, describedBy } from '../lib/actionAvailability';
 import type { DisabledActionReason } from '../lib/actionAvailability';
 
@@ -30,15 +32,6 @@ interface InspectObjectActionsProps {
   detail: ObjectDetail | null;
   onDone: () => void;
 }
-
-const buttonClass =
-  'rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint';
-
-const dangerClass =
-  'rounded border border-warn-line px-2 py-1 text-warn hover:bg-warn-tint disabled:cursor-not-allowed disabled:text-fg-faint';
-
-const resumeClass =
-  'rounded border border-ok-line px-2 py-1 text-ok hover:bg-ok-tint disabled:cursor-not-allowed disabled:text-fg-faint';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -249,7 +242,7 @@ export default function InspectObjectActions({
 
   return (
     <div className="shrink-0 border-b border-edge px-3 py-2 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
+      <ActionGroup label="Object actions">
         {canScale(target) && (
           <>
             <label className="text-fg-muted" htmlFor="replica-count">
@@ -265,115 +258,96 @@ export default function InspectObjectActions({
               }}
               className="w-16 rounded border border-edge-strong bg-surface-raised px-1 py-0.5 text-fg"
             />
-            <button
-              type="button"
+            <Action
+              label="Scale"
               onClick={handleScale}
               disabled={busy || noScale !== null}
-              aria-describedby={describedBy(noScale, `${reasonPrefix}-scale`)}
+              describedBy={describedBy(noScale, `${reasonPrefix}-scale`)}
               title={actionTitle(noScale)}
-              className={buttonClass}
-            >
-              Scale
-            </button>
+            />
           </>
         )}
         {canRestart(target) && (
-          <button
-            type="button"
+          <Action
+            label="Restart"
             onClick={() => {
               ask('restart', {}, `Restart ${target.name}? Every pod is replaced.`);
             }}
             disabled={busy || noRestart !== null}
-            aria-describedby={describedBy(noRestart, `${reasonPrefix}-restart`)}
+            describedBy={describedBy(noRestart, `${reasonPrefix}-restart`)}
             title={actionTitle(noRestart)}
-            className={buttonClass}
-          >
-            Restart
-          </button>
+          />
         )}
         {isNode(target) && !cordoned && (
-          <button
-            type="button"
+          <Action
+            label="Cordon"
+            tone="caution"
             onClick={() => {
               ask('cordon', {}, `Cordon ${target.name}? Nothing new will be scheduled on it.`);
             }}
             disabled={busy || noCordon !== null}
-            aria-describedby={describedBy(noCordon, `${reasonPrefix}-cordon`)}
+            describedBy={describedBy(noCordon, `${reasonPrefix}-cordon`)}
             title={actionTitle(noCordon)}
-            className={dangerClass}
-          >
-            Cordon
-          </button>
+          />
         )}
         {isNode(target) && cordoned && (
-          <button
-            type="button"
+          <Action
+            label="Uncordon"
+            tone="good"
             onClick={() => void run('uncordon')}
             disabled={busy || noCordon !== null}
-            aria-describedby={describedBy(noCordon, `${reasonPrefix}-cordon`)}
+            describedBy={describedBy(noCordon, `${reasonPrefix}-cordon`)}
             title={actionTitle(noCordon)}
-            className={resumeClass}
-          >
-            Uncordon
-          </button>
+          />
         )}
         {isNode(target) && (
-          <button
-            type="button"
+          <Action
+            label="Drain"
+            tone="caution"
             onClick={() => void run('drain', { dryRun: true })}
             disabled={busy || noDrain !== null}
-            aria-describedby={describedBy(noDrain, `${reasonPrefix}-drain`)}
+            describedBy={describedBy(noDrain, `${reasonPrefix}-drain`)}
             title={actionTitle(noDrain)}
-            className={dangerClass}
-          >
-            Drain
-          </button>
+          />
         )}
         {isCronJob(target) && (
-          <button
-            type="button"
+          <Action
+            label="Run now"
             onClick={() => {
               ask('trigger', {}, `Run ${target.name} now? A job is started outside the schedule.`);
             }}
             disabled={busy || noTrigger !== null}
-            aria-describedby={describedBy(noTrigger, `${reasonPrefix}-trigger`)}
+            describedBy={describedBy(noTrigger, `${reasonPrefix}-trigger`)}
             title={actionTitle(noTrigger)}
-            className={buttonClass}
-          >
-            Run now
-          </button>
+          />
         )}
         {isCronJob(target) && !suspended && (
-          <button
-            type="button"
+          <Action
+            label="Suspend"
+            tone="caution"
             onClick={() => {
               ask('suspend', {}, `Suspend ${target.name}? No new runs are started.`);
             }}
             disabled={busy || noSuspend !== null}
-            aria-describedby={describedBy(noSuspend, `${reasonPrefix}-suspend`)}
+            describedBy={describedBy(noSuspend, `${reasonPrefix}-suspend`)}
             title={actionTitle(noSuspend)}
-            className={dangerClass}
-          >
-            Suspend
-          </button>
+          />
         )}
         {isCronJob(target) && suspended && (
-          <button
-            type="button"
+          <Action
+            label="Resume"
+            tone="good"
             onClick={() => void run('resume')}
             disabled={busy || noSuspend !== null}
-            aria-describedby={describedBy(noSuspend, `${reasonPrefix}-suspend`)}
+            describedBy={describedBy(noSuspend, `${reasonPrefix}-suspend`)}
             title={actionTitle(noSuspend)}
-            className={resumeClass}
-          >
-            Resume
-          </button>
+          />
         )}
         {isNode(target) && <NodeShellButton node={target.name} />}
         {cordoned && <span className="text-warn-muted">cordoned</span>}
         {suspended && <span className="text-warn-muted">suspended</span>}
-        {busy && <span className="text-fg-muted">working</span>}
-      </div>
+        {busy && <ActionNote>working</ActionNote>}
+      </ActionGroup>
       <DisabledActionReasons reasons={actionReasons} />
 
       {pending !== null && pending.typed && (
@@ -397,11 +371,11 @@ export default function InspectObjectActions({
               confirmPending(pending);
             }}
             disabled={busy}
-            className={dangerClass}
+            className={actionClass('caution')}
           >
             Confirm
           </button>
-          <button type="button" onClick={cancelPending} disabled={busy} className={buttonClass}>
+          <button type="button" onClick={cancelPending} disabled={busy} className={actionClass()}>
             Cancel
           </button>
         </div>
@@ -430,7 +404,7 @@ export default function InspectObjectActions({
                 drainNow();
               }}
               disabled={confirmDisabled}
-              className={dangerClass}
+              className={actionClass('caution')}
             >
               Drain now
             </button>
@@ -440,7 +414,7 @@ export default function InspectObjectActions({
                 setPlan(null);
               }}
               disabled={busy}
-              className={buttonClass}
+              className={actionClass()}
             >
               Cancel
             </button>

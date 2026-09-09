@@ -7,6 +7,8 @@ import { notifyError, notifyOk } from '../store/toasts';
 import { useContextList } from '../store/contexts';
 import { useClusterEpoch } from '../store/cluster';
 import ConfirmByName from './ConfirmByName';
+import { Action } from './ActionGroup';
+import { actionClass } from '../lib/actions';
 
 interface BulkBarProps {
   kind: string;
@@ -213,27 +215,24 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
       {confirming === null && (
         <>
           {restartable && (
-            <button
-              type="button"
+            <Action
+              label="Restart"
+              size="dense"
               disabled={busy}
               onClick={() => {
                 ask('restart');
               }}
-              className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:text-fg-faint"
-            >
-              Restart
-            </button>
+            />
           )}
-          <button
-            type="button"
+          <Action
+            label="Delete"
+            tone="danger"
+            size="dense"
             disabled={busy}
             onClick={() => {
               ask('delete');
             }}
-            className="rounded border border-error-line px-2 py-0.5 text-error hover:bg-error-tint disabled:cursor-not-allowed disabled:text-fg-faint"
-          >
-            Delete
-          </button>
+          />
         </>
       )}
       {typedGate && (
@@ -272,7 +271,7 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
             onClick={() => {
               setConfirming(null);
             }}
-            className="rounded border border-edge px-2 py-0.5 text-fg-muted hover:bg-surface-raised disabled:cursor-not-allowed"
+            className={actionClass('plain', 'dense')}
           >
             Cancel
           </button>
@@ -281,7 +280,7 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
       <button
         type="button"
         onClick={onClear}
-        className="ml-auto rounded border border-edge px-2 py-0.5 text-fg-muted hover:bg-surface-raised"
+        className={`ml-auto ${actionClass('plain', 'dense')}`}
       >
         Clear selection
       </button>

@@ -38,6 +38,7 @@
     "frontend/package-lock.json",
     "frontend/src/App.tsx",
     "frontend/src/Root.tsx",
+    "frontend/src/components/ActionGroup.tsx",
     "frontend/src/components/Announce.tsx",
     "frontend/src/components/CapabilityState.tsx",
     "frontend/src/components/ErrorBoundary.tsx",
@@ -45,6 +46,7 @@
     "frontend/src/components/Toasts.tsx",
     "frontend/src/components/WorkspaceHeader.tsx",
     "frontend/src/components/icons.tsx",
+    "frontend/src/lib/actions.ts",
     "frontend/src/lib/clipboard.ts",
     "frontend/src/lib/connection.ts",
     "frontend/src/lib/contexts.ts",
@@ -127,7 +129,7 @@
     "update.go",
     "wails.json"
   ],
-  "fullRunBudget": 92,
+  "fullRunBudget": 94,
   "groups": [
     {
       "id": "foundation-security",
