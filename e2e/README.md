@@ -88,8 +88,8 @@ reloads must wait on the request, not on a sleep.
 
 ## Which groups a change runs
 
-`suite.json` maps the repository onto sixteen capability groups, and `scripts/select-groups.mjs`
-picks the groups a diff needs; CI runs only those, on every browser. Per changed file, in order:
+`suite.json` maps the repository onto seventeen capability groups, and `scripts/select-groups.mjs`
+picks the groups a diff needs. Per changed file, in order:
 
 1. `unitOnlyPaths` — Go unit tests and testdata inside the production trees. They cannot change
     the binary, so they select nothing beyond the smoke group.
@@ -111,6 +111,26 @@ node e2e/scripts/select-groups.mjs --files changed.txt
 ```
 
 The stderr line names the file that forced a full run, and CI's step summary repeats it.
+
+## Which tier a group runs on
+
+Selection says *which* groups a diff needs. The tier says *when* they run and on how many browsers.
+
+Each group carries a `tier`, either `commit` or `nightly`, and an `observedMinutes` measured from a
+real run. `commitBrowsers` is chromium alone; `nightlyBrowsers` is all three. A push runs the selected
+commit-tier groups on chromium; the nightly runs every group on every browser, whatever the diff.
+
+```sh
+node e2e/scripts/select-groups.mjs --files changed.txt --tier commit
+node e2e/scripts/select-groups.mjs --all --tier nightly
+```
+
+`commitBudgetMinutes` is what the commit tier is allowed to cost, and `validate-suite.mjs` refuses a
+tier assignment that exceeds it, saying by how much and how much room is left. A Playwright group
+costs `observedMinutes` per browser; a cluster-mode group costs its own job plus one browser job each,
+which is what `browserMinutes` is for. So a new group is `nightly` and free until someone decides it
+is worth part of the per-commit budget, and moving one to `commit` fails the gate unless another
+leaves. The same shape one level up governs whole workflows, in `.github/ci-tiers.json`.
 
 ## Coverage and flakes
 

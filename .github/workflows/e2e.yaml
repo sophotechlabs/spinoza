@@ -4,14 +4,34 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - docs/ci/nightly/**
   pull_request:
     paths-ignore:
       - .release-please-manifest.json
       - CHANGELOG.md
       - deploy/helm/spinoza/Chart.yaml
       - wails.json
+      - docs/ci/nightly/**
+  workflow_call:
+    inputs:
+      tier:
+        description: Which cadence to run, commit or nightly
+        required: false
+        default: commit
+        type: string
+      ref:
+        description: Commit to check out, empty for the triggering ref
+        required: false
+        default: ""
+        type: string
   workflow_dispatch:
     inputs:
+      tier:
+        description: Which cadence to run, commit or nightly
+        required: false
+        default: commit
+        type: string
       pull_request:
         description: Pull request number used to cancel superseded release validation
         required: false
@@ -22,7 +42,8 @@ permissions:
 
 concurrency:
   group: >-
-    e2e-${{ github.event.pull_request.number || inputs.pull_request || github.ref }}-${{
+    e2e-${{ inputs.tier || 'commit' }}-${{
+    github.event.pull_request.number || inputs.pull_request || github.ref }}-${{
     github.event_name == 'push' &&
     startsWith(github.event.head_commit.message, 'chore(main): release ') &&
     github.sha || 'latest' }}
@@ -33,12 +54,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       browser: ${{ steps.groups.outputs.browser }}
+      browsers: ${{ steps.groups.outputs.browsers }}
       groups: ${{ steps.groups.outputs.groups }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: node
@@ -48,8 +71,12 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           HEAD_REF: ${{ github.head_ref }}
           EVENT: ${{ github.event_name }}
+          TIER: ${{ inputs.tier || 'commit' }}
         run: |
-          args=(--base "$BASE" --head "$HEAD")
+          args=(--base "$BASE" --head "$HEAD" --tier "$TIER")
+          if [ "$TIER" = nightly ]; then
+            args+=(--all)
+          fi
           if [[ "$HEAD_REF" == release-please--branches--main* ]]; then
             args+=(--all)
           fi
@@ -62,14 +89,21 @@ jobs:
           fi
           selected=$(node e2e/scripts/select-groups.mjs "${args[@]}")
           browser=$(printf '%s' "$selected" | jq -c '{include: [.include[] | select(.runner == "playwright")]}')
+          browsers=$(printf '%s' "$selected" | jq -c '.browsers')
           groups=$(printf '%s' "$selected" | jq -c '[.include[].group]')
           reason=$(printf '%s' "$selected" | jq -r '.reason')
-          echo "browser=$browser" >> "$GITHUB_OUTPUT"
-          echo "groups=$groups" >> "$GITHUB_OUTPUT"
-          printf 'Selected groups: %s\n' "$groups" >> "$GITHUB_STEP_SUMMARY"
-          if [ -n "$reason" ]; then
-            printf 'Why: %s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "browser=$browser"
+            echo "browsers=$browsers"
+            echo "groups=$groups"
+          } >> "$GITHUB_OUTPUT"
+          {
+            printf 'Tier: %s on %s\n' "$TIER" "$browsers"
+            printf 'Selected groups: %s\n' "$groups"
+            if [ -n "$reason" ]; then
+              printf 'Why: %s\n' "$reason"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   suite-contract:
     needs: select
@@ -78,11 +112,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
-          install_args: node
-      - run: node e2e/scripts/validate-suite.mjs
-      - run: node --test 'e2e/scripts/*.test.mjs'
+          install_args: just node go
+      - run: just validate-e2e-suite
+      - run: just test-e2e-scripts
+      - run: just test-scripts
 
   browser:
     needs: select
@@ -92,10 +128,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser:
-          - chromium
-          - firefox
-          - webkit
+        browser: ${{ fromJSON(needs.select.outputs.browsers) }}
         group: ${{ fromJSON(needs.select.outputs.browser).include }}
     env:
       SPINOZA_KIND_CLUSTER: e2e-${{ matrix.group.group }}-${{ matrix.browser }}
@@ -103,6 +136,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just node go kind kubectl helm
@@ -159,6 +193,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just go
@@ -168,9 +203,11 @@ jobs:
           path: e2e/.tmp/cover-all
       - env:
           INCLUDE: ${{ needs.select.outputs.browser }}
+          BROWSERS: ${{ needs.select.outputs.browsers }}
           SELECTED: ${{ needs.select.outputs.groups }}
         run: |
-          expected=$(( $(printf '%s' "$INCLUDE" | jq '.include | length') * 3 ))
+          browsers=$(printf '%s' "$BROWSERS" | jq 'length')
+          expected=$(( $(printf '%s' "$INCLUDE" | jq '.include | length') * browsers ))
           selected=$(printf '%s' "$SELECTED" | jq 'length')
           total=$(jq '.groups | length' e2e/suite.json)
           just e2e-cover-merge e2e/.tmp/cover-all "$expected" "$selected" "$total"
@@ -189,6 +226,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just go kind kubectl helm
@@ -214,16 +252,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser:
-          - chromium
-          - firefox
-          - webkit
+        browser: ${{ fromJSON(needs.select.outputs.browsers) }}
     env:
       SPINOZA_KIND_CLUSTER: cluster-mode-${{ matrix.browser }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just node go kind kubectl helm
@@ -235,7 +271,9 @@ jobs:
             ~/.cache/ms-playwright
           key: cluster-mode-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('go.sum', 'e2e/package-lock.json') }}
           restore-keys: cluster-mode-${{ runner.os }}-${{ matrix.browser }}-
-      - run: just test-cluster-mode-browser "${{ matrix.browser }}"
+      - env:
+          BROWSER: ${{ matrix.browser }}
+        run: just test-cluster-mode-browser "$BROWSER"
       - run: just cluster-mode-diagnostics
         if: failure()
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -260,6 +298,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just go kind kubectl helm
@@ -276,6 +315,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just yq

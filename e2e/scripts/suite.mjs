@@ -126,3 +126,43 @@ export function selectGroups(suite, files, options = {}) {
   }
   return { groups: everything.filter((id) => selected.has(id)), reason: '' };
 }
+
+export const COMMIT = 'commit';
+export const NIGHTLY = 'nightly';
+
+export function knownTier(tier) {
+  return tier === COMMIT || tier === NIGHTLY;
+}
+
+export function browsersFor(suite, tier) {
+  if (tier === NIGHTLY) {
+    return suite.nightlyBrowsers;
+  }
+  return suite.commitBrowsers;
+}
+
+export function tierGroups(suite, tier) {
+  if (tier === NIGHTLY) {
+    return allGroups(suite);
+  }
+  return suite.groups.filter((group) => group.tier === COMMIT).map((group) => group.id);
+}
+
+export function groupCost(group, browsers) {
+  if (group.runner === 'playwright') {
+    return group.observedMinutes * browsers.length;
+  }
+  if (group.runner === 'cluster-mode') {
+    return group.observedMinutes + group.browserMinutes * browsers.length;
+  }
+  return group.observedMinutes;
+}
+
+export function tierCost(suite, tier) {
+  const browsers = browsersFor(suite, tier);
+  let total = 0;
+  for (const id of tierGroups(suite, tier)) {
+    total += groupCost(groupByID(suite, id), browsers);
+  }
+  return total;
+}

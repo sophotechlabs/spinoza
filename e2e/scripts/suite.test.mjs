@@ -1,15 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  COMMIT,
   FULL,
+  NIGHTLY,
   OWNED,
   UNIT_ONLY,
   UNMAPPED,
   UNRELATED,
+  browsersFor,
   classify,
+  groupCost,
+  knownTier,
   loadSuite,
   matches,
   selectGroups,
+  tierCost,
+  tierGroups,
 } from './suite.mjs';
 
 const suite = {
@@ -145,4 +152,65 @@ test('the checked-in suite maps an owned Go file to its group only', () => {
     'foundation-security',
   ]);
   assert.equal(selectGroups(real, ['internal/server/ws.go']).groups.length, real.groups.length);
+});
+
+const tiered = {
+  commitBrowsers: ['chromium'],
+  nightlyBrowsers: ['chromium', 'firefox', 'webkit'],
+  groups: [
+    { id: 'smoke', runner: 'playwright', tier: COMMIT, observedMinutes: 4 },
+    { id: 'slow', runner: 'playwright', tier: NIGHTLY, observedMinutes: 10 },
+    { id: 'cm', runner: 'cluster-mode', tier: COMMIT, observedMinutes: 10, browserMinutes: 7 },
+    { id: 'cli', runner: 'mcp-cli', tier: COMMIT, observedMinutes: 4 },
+  ],
+};
+
+test('only commit-tier groups are eligible per commit, every group at night', () => {
+  assert.deepEqual(tierGroups(tiered, COMMIT), ['smoke', 'cm', 'cli']);
+  assert.deepEqual(tierGroups(tiered, NIGHTLY), ['smoke', 'slow', 'cm', 'cli']);
+});
+
+test('each tier runs its own browsers', () => {
+  assert.deepEqual(browsersFor(tiered, COMMIT), ['chromium']);
+  assert.deepEqual(browsersFor(tiered, NIGHTLY), ['chromium', 'firefox', 'webkit']);
+});
+
+test('a Playwright group costs one job per browser', () => {
+  const group = { runner: 'playwright', observedMinutes: 4 };
+  assert.equal(groupCost(group, ['chromium']), 4);
+  assert.equal(groupCost(group, ['chromium', 'firefox', 'webkit']), 12);
+});
+
+test('a cluster-mode group costs its own job plus one browser job each', () => {
+  const group = { runner: 'cluster-mode', observedMinutes: 10, browserMinutes: 7 };
+  assert.equal(groupCost(group, ['chromium']), 17);
+  assert.equal(groupCost(group, ['chromium', 'firefox', 'webkit']), 31);
+});
+
+test('a group with no browser fan-out costs the same on either tier', () => {
+  const group = { runner: 'mcp-cli', observedMinutes: 4 };
+  assert.equal(groupCost(group, ['chromium']), 4);
+  assert.equal(groupCost(group, ['chromium', 'firefox', 'webkit']), 4);
+});
+
+test('a tier costs the sum of the groups it runs', () => {
+  assert.equal(tierCost(tiered, COMMIT), 25);
+  assert.equal(tierCost(tiered, NIGHTLY), 77);
+});
+
+test('only the two declared tiers are known', () => {
+  assert.equal(knownTier(COMMIT), true);
+  assert.equal(knownTier(NIGHTLY), true);
+  assert.equal(knownTier('weekly'), false);
+  assert.equal(knownTier(undefined), false);
+});
+
+test('the checked-in commit tier fits its declared budget', () => {
+  const checked = loadSuite();
+  assert.ok(tierCost(checked, COMMIT) <= checked.commitBudgetMinutes);
+  assert.ok(tierCost(checked, NIGHTLY) > tierCost(checked, COMMIT));
+  assert.equal(
+    checked.groups.every((group) => knownTier(group.tier)),
+    true,
+  );
 });

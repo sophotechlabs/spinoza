@@ -1,6 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { groupByID, loadSuite, selectGroups } from './suite.mjs';
+import {
+  COMMIT,
+  browsersFor,
+  groupByID,
+  knownTier,
+  loadSuite,
+  selectGroups,
+  tierGroups,
+} from './suite.mjs';
 
 function argument(name) {
   const index = process.argv.indexOf(name);
@@ -44,10 +52,20 @@ function changedFiles() {
 
 const suite = loadSuite();
 const files = changedFiles();
-const { groups: ids, reason } = selectGroups(suite, files, {
+let tier = argument('--tier');
+if (tier === '') {
+  tier = COMMIT;
+}
+if (!knownTier(tier)) {
+  throw new Error(`unknown E2E tier ${tier}`);
+}
+const browsers = browsersFor(suite, tier);
+const eligible = new Set(tierGroups(suite, tier));
+const { groups: selected, reason } = selectGroups(suite, files, {
   all: flag('--all'),
   push: flag('--push'),
 });
+const ids = selected.filter((id) => eligible.has(id));
 const include = ids.map((id) => {
   const group = groupByID(suite, id);
   return {
@@ -62,6 +80,7 @@ if (reason !== '') {
   why = ` because ${reason}`;
 }
 process.stderr.write(
-  `selected ${ids.join(', ')} for ${String(files.length)} changed files${why}\n`,
+  `selected ${String(ids.length)} ${tier} groups on ${browsers.join(', ')} ` +
+    `for ${String(files.length)} changed files${why}: ${ids.join(', ')}\n`,
 );
-process.stdout.write(`${JSON.stringify({ include, reason })}\n`);
+process.stdout.write(`${JSON.stringify({ include, browsers, tier, reason })}\n`);

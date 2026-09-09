@@ -1,7 +1,19 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
-import { FULL, UNMAPPED, classify, loadSuite, matches, matchesAny } from './suite.mjs';
+import {
+  COMMIT,
+  FULL,
+  NIGHTLY,
+  UNMAPPED,
+  browsersFor,
+  classify,
+  knownTier,
+  loadSuite,
+  matches,
+  matchesAny,
+  tierCost,
+} from './suite.mjs';
 
 const e2e = resolve(import.meta.dirname, '..');
 const repo = resolve(e2e, '..');
@@ -40,8 +52,29 @@ function fail(message) {
   process.exitCode = 1;
 }
 
-if (suite.schemaVersion !== 2) {
-  fail(`suite schema is ${String(suite.schemaVersion)}, want 2`);
+if (suite.schemaVersion !== 3) {
+  fail(`suite schema is ${String(suite.schemaVersion)}, want 3`);
+}
+
+const knownBrowsers = new Set(['chromium', 'firefox', 'webkit']);
+for (const [field, browsers] of [
+  ['commitBrowsers', suite.commitBrowsers],
+  ['nightlyBrowsers', suite.nightlyBrowsers],
+]) {
+  if (!Array.isArray(browsers) || browsers.length === 0) {
+    fail(`suite ${field} is empty`);
+    continue;
+  }
+  for (const browser of browsers) {
+    if (!knownBrowsers.has(browser)) {
+      fail(`suite ${field} names unknown browser ${browser}`);
+    }
+  }
+}
+for (const browser of suite.commitBrowsers ?? []) {
+  if (!(suite.nightlyBrowsers ?? []).includes(browser)) {
+    fail(`commitBrowsers has ${browser}, which nightlyBrowsers does not run`);
+  }
 }
 
 const actualGroups = suite.groups.map((group) => group.id);
@@ -60,6 +93,23 @@ for (const group of suite.groups) {
   }
   if (group.runner === 'playwright' && group.specs.length === 0) {
     fail(`${group.id} has no Playwright specs`);
+  }
+  if (!knownTier(group.tier)) {
+    fail(`${group.id} declares tier ${String(group.tier)}, want ${COMMIT} or ${NIGHTLY}`);
+  }
+  if (!Number.isInteger(group.observedMinutes) || group.observedMinutes < 1) {
+    fail(
+      `${group.id} observedMinutes is ${String(group.observedMinutes)}, want a positive integer`,
+    );
+  }
+  if (group.runner === 'cluster-mode') {
+    if (!Number.isInteger(group.browserMinutes) || group.browserMinutes < 1) {
+      fail(`${group.id} runs a browser fan-out and needs a positive browserMinutes`);
+    }
+  } else if (group.browserMinutes !== undefined) {
+    fail(
+      `${group.id} declares browserMinutes but its ${group.runner} runner has no browser fan-out`,
+    );
   }
   for (const spec of group.specs) {
     const owners = claimed.get(spec);
@@ -106,6 +156,29 @@ for (const path of files) {
     crossCutting += 1;
   }
 }
+const smoke = suite.groups.find((group) => group.id === suite.smokeGroup);
+if (smoke === undefined) {
+  fail(`smokeGroup ${suite.smokeGroup} is not a group`);
+} else if (smoke.tier !== COMMIT) {
+  fail(
+    `smokeGroup ${suite.smokeGroup} is on the ${String(smoke.tier)} tier and would never run per commit`,
+  );
+}
+
+let commitCost = 0;
+if (typeof suite.commitBudgetMinutes !== 'number') {
+  fail('suite has no commitBudgetMinutes');
+} else {
+  commitCost = tierCost(suite, COMMIT);
+  if (commitCost > suite.commitBudgetMinutes) {
+    fail(
+      `the commit tier costs ${String(commitCost)} job-minutes on ` +
+        `${browsersFor(suite, COMMIT).join(', ')}, budget is ` +
+        `${String(suite.commitBudgetMinutes)}; move a group to ${NIGHTLY} or raise the budget`,
+    );
+  }
+}
+
 if (typeof suite.fullRunBudget !== 'number') {
   fail('suite has no fullRunBudget');
 } else if (crossCutting > suite.fullRunBudget) {
@@ -153,9 +226,16 @@ if (process.exitCode === undefined) {
   if (crossCutting < suite.fullRunBudget) {
     slack = `; fullRunBudget can come down to ${String(crossCutting)}`;
   }
+  let room = '';
+  if (commitCost < suite.commitBudgetMinutes) {
+    room = `, ${String(suite.commitBudgetMinutes - commitCost)} to spare`;
+  }
   process.stdout.write(
     `validated ${String(suite.groups.length)} groups and ${String(claimed.size)} specs; ` +
       `${String(crossCutting)} of the production files select every group ` +
-      `(budget ${String(suite.fullRunBudget)})${slack}\n`,
+      `(budget ${String(suite.fullRunBudget)})${slack}\n` +
+      `the ${COMMIT} tier costs ${String(commitCost)} job-minutes of ` +
+      `${String(suite.commitBudgetMinutes)}${room}; ${NIGHTLY} costs ` +
+      `${String(tierCost(suite, NIGHTLY))}\n`,
   );
 }
