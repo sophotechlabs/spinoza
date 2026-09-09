@@ -30,7 +30,12 @@ test('a cluster that stops answering says so, keeps its rows, and is not explain
       .toContain('stopped answering');
 
     expect(await rows.count()).toBe(before);
-    await expect(page.locator('main').getByText(/as of \d\d:\d\d:\d\d/).first()).toBeVisible();
+    await expect(
+      page
+        .locator('main')
+        .getByText(/as of \d\d:\d\d:\d\d/)
+        .first(),
+    ).toBeVisible();
     await expect(page.getByText(/stopped updating/)).toHaveCount(0);
   } finally {
     answerAgain();
@@ -39,5 +44,7 @@ test('a cluster that stops answering says so, keeps its rows, and is not explain
   await expect(page.getByRole('status', { name: 'The cluster stopped answering' })).toBeHidden({
     timeout: 120_000,
   });
-  await expect(page.getByText(/is answering again/)).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByRole('status', { name: 'Latest notifications' }).getByText(/is answering again/),
+  ).toBeVisible({ timeout: 30_000 });
 });
