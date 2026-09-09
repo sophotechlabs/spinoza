@@ -148,6 +148,10 @@ test('a failed cluster switch is retained in failure notifications', async ({ pa
   try {
     await contextPicker(page).click();
     await page.getByRole('button', { name: NOWHERE_CONTEXT, exact: true }).click();
+    await page
+      .getByRole('dialog', { name: `Open ${NOWHERE_CONTEXT}` })
+      .getByRole('button', { name: 'Open a new tab' })
+      .click();
     await expect(page.getByRole('status', { name: 'Latest notifications' })).toContainText(
       `Opening ${NOWHERE_CONTEXT}`,
       { timeout: 60_000 },

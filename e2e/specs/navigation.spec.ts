@@ -215,10 +215,11 @@ test('the sidebar reflects the integrations available in the full profile', asyn
   }
 });
 
-test('the desktop switch explains why it is unavailable in a browser', async ({ page }) => {
+test('a build with no desktop window offers no switch to it', async ({ page }) => {
   await openHome(page);
-  await expect(sidebar(page, 'Desktop')).toBeDisabled();
-  await expect(page.getByRole('banner')).toContainText('only available when Spinoza starts');
+  await expect(page.getByRole('banner')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Desktop', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Browser', exact: true })).toHaveCount(0);
 });
 
 test('every namespace in the cluster is offered for scoping', async ({ page }) => {
