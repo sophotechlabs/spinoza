@@ -1,6 +1,7 @@
 package scripts_test
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,7 +10,12 @@ import (
 	"testing"
 )
 
-func runMutationTotalCheck(t *testing.T, reports map[string]string) (string, error) {
+type mutationRun struct {
+	console string
+	summary string
+}
+
+func runMutationTotalCheck(t *testing.T, reports map[string]string) (mutationRun, error) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the mutation total checker runs in the Linux CI job")
@@ -21,7 +27,19 @@ func runMutationTotalCheck(t *testing.T, reports map[string]string) (string, err
 			t.Fatalf("write report: %v", err)
 		}
 	}
-	out, err := exec.Command("bash", "check-mutation-total.sh", dir).CombinedOutput()
+	summary := filepath.Join(t.TempDir(), "summary.md")
+	console, err := runMutationTotalCheckWithSummary(dir, summary)
+	written, readErr := os.ReadFile(summary)
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		t.Fatalf("read summary: %v", readErr)
+	}
+	return mutationRun{console: console, summary: string(written)}, err
+}
+
+func runMutationTotalCheckWithSummary(dir, summary string) (string, error) {
+	cmd := exec.Command("bash", "check-mutation-total.sh", dir)
+	cmd.Env = append(os.Environ(), "GITHUB_STEP_SUMMARY="+summary)
+	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
 
@@ -37,22 +55,25 @@ func mutationTotalReports() map[string]string {
 }
 
 func TestMutationTotalCheckSeparatesTheTwoBuilds(t *testing.T) {
-	out, err := runMutationTotalCheck(t, mutationTotalReports())
+	run, err := runMutationTotalCheck(t, mutationTotalReports())
 	if err != nil {
 		t.Fatalf("check mutation totals: %v", err)
 	}
-	if !strings.Contains(out, "60 killed, 0 survived; uncovered 15 default, 13 desktop") {
-		t.Fatalf("output = %q, want the per-build totals", out)
+	if !strings.Contains(run.console, "60 killed, 0 survived; uncovered 15 default, 13 desktop") {
+		t.Fatalf("console = %q, want the per-build totals", run.console)
 	}
 }
 
 func TestMutationTotalCheckNamesTheFilesNoTestReaches(t *testing.T) {
-	out, err := runMutationTotalCheck(t, mutationTotalReports())
+	run, err := runMutationTotalCheck(t, mutationTotalReports())
 	if err != nil {
 		t.Fatalf("check mutation totals: %v", err)
 	}
-	if !strings.Contains(out, "| 2 | internal-a-d-auth | auth.go |") {
-		t.Fatalf("output = %q, want the uncovered file listed", out)
+	if !strings.Contains(run.summary, "## Mutation testing") {
+		t.Fatalf("summary = %q, want the mutation heading", run.summary)
+	}
+	if !strings.Contains(run.summary, "| 2 | internal-a-d-auth | auth.go |") {
+		t.Fatalf("summary = %q, want the uncovered file listed", run.summary)
 	}
 }
 
@@ -61,19 +82,19 @@ func TestMutationTotalCheckWarnsAboutASurvivingMutantWithoutFailing(t *testing.T
 	reports["internal-a-d-auth.json"] = `{"mutants_killed":10,"mutants_lived":1,"mutants_not_covered":0,` +
 		`"files":[{"file_name":"auth.go","mutations":[{"status":"LIVED","line":42,"type":"REMOVE_SELF_ASSIGNMENTS"}]}]}`
 
-	out, err := runMutationTotalCheck(t, reports)
+	run, err := runMutationTotalCheck(t, reports)
 	if err != nil {
 		t.Fatalf("check surviving mutant: %v", err)
 	}
-	if !strings.Contains(out, "::warning title=Mutant survived::REMOVE_SELF_ASSIGNMENTS changed auth.go:42") {
-		t.Fatalf("output = %q, want a warning annotation", out)
+	if !strings.Contains(run.console, "::warning title=Mutant survived::REMOVE_SELF_ASSIGNMENTS changed auth.go:42") {
+		t.Fatalf("console = %q, want a warning annotation", run.console)
 	}
-	if !strings.Contains(out, "| internal-a-d-auth | auth.go | 42 | REMOVE_SELF_ASSIGNMENTS |") {
-		t.Fatalf("output = %q, want the survivor in the summary", out)
+	if !strings.Contains(run.summary, "| internal-a-d-auth | auth.go | 42 | REMOVE_SELF_ASSIGNMENTS |") {
+		t.Fatalf("summary = %q, want the survivor in the summary", run.summary)
 	}
 }
 
-func TestMutationTotalCheckWritesTheSummaryWhereActionsShowsIt(t *testing.T) {
+func TestMutationTotalCheckPrintsTheSummaryWhenActionsIsNotListening(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the mutation total checker runs in the Linux CI job")
 	}
@@ -83,19 +104,13 @@ func TestMutationTotalCheckWritesTheSummaryWhereActionsShowsIt(t *testing.T) {
 			t.Fatalf("write report: %v", err)
 		}
 	}
-	summary := filepath.Join(t.TempDir(), "summary.md")
-	cmd := exec.Command("bash", "check-mutation-total.sh", dir)
-	cmd.Env = append(os.Environ(), "GITHUB_STEP_SUMMARY="+summary)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("check mutation totals: %v: %s", err, out)
-	}
 
-	written, err := os.ReadFile(summary)
+	console, err := runMutationTotalCheckWithSummary(dir, "")
 	if err != nil {
-		t.Fatalf("read summary: %v", err)
+		t.Fatalf("check mutation totals: %v", err)
 	}
-	if !strings.Contains(string(written), "## Mutation testing") {
-		t.Fatalf("summary = %q, want the mutation heading", written)
+	if !strings.Contains(console, "## Mutation testing") {
+		t.Fatalf("console = %q, want the summary on stdout without a step summary to write to", console)
 	}
 }
 

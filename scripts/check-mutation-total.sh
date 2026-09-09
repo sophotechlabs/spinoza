@@ -104,11 +104,12 @@ done <"$survivors"
         printf 'Go does not instrument const and var declarations or the case expressions of a\n'
         printf 'conditionless switch, so mutants on those lines can never be reached at all.\n\n'
         printf '| mutants | package | file |\n| --- | --- | --- |\n'
-        sort -t "$(printf '\t')" -k1,1nr -k2,2 -k3,3 "$uncovered" | head -n "$rows" |
-            while IFS=$'\t' read -r count report file; do
-                printf '| %s | %s | %s |\n' "$count" "$report" "$file"
-            done
-        listed=$(wc -l <"$uncovered")
+        sort -t "$(printf '\t')" -k1,1nr -k2,2 -k3,3 "$uncovered" >"$work/sorted"
+        head -n "$rows" "$work/sorted" >"$work/shown"
+        while IFS=$'\t' read -r count report file; do
+            printf '| %s | %s | %s |\n' "$count" "$report" "$file"
+        done <"$work/shown"
+        listed=$(wc -l <"$work/sorted")
         if [ "$listed" -gt "$rows" ]; then
             printf '\n%d more files are not listed.\n' "$((listed - rows))"
         fi
