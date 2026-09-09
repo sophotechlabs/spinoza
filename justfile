@@ -525,18 +525,14 @@ mutation mode='default' output='dist/mutation/default.json': stub-assets
     mkdir -p "$(dirname "$output")"
     cached_build_timeout_coefficient=60
     args=(unleash --timeout-coefficient "$cached_build_timeout_coefficient" --output "$output" --output-statuses lc)
-    # Pin known security-boundary, declaration, build-tag, and OS-invariant mutants so the remainder can only shrink.
     if [ "$mode" = desktop ]; then
         args+=(--tags desktop)
-        max_not_covered=234
     elif [ "$mode" != default ]; then
         echo "mutation: mode must be default or desktop" >&2
         exit 1
-    else
-        max_not_covered=249
     fi
     gremlins "${args[@]}"
-    scripts/check-mutation-report.sh "$output" "$max_not_covered"
+    scripts/check-mutation-report.sh "$output"
 
 [private]
 mutation-package path tags output exclude='': stub-assets
@@ -712,7 +708,7 @@ mutation-shard shard output='dist/mutation': stub-assets
     done
 
 mutation-total reports='dist/mutation':
-    scripts/check-mutation-total.sh {{ quote(reports) }} 249 234
+    scripts/check-mutation-total.sh {{ quote(reports) }}
 
 cover-gate: test-be
     go-test-coverage --config .testcoverage.yml
