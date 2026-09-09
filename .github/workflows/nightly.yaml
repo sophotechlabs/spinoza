@@ -1,0 +1,151 @@
+name: nightly
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - docs/ci/nightly/**
+  schedule:
+    - cron: "37 2 * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types:
+      - nightly
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.due.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: due
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          due=$(scripts/nightly-due.sh)
+          echo "run=$due" >> "$GITHUB_OUTPUT"
+          printf 'Nightly due: %s\n' "$due" >> "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yaml
+    with:
+      tier: nightly
+
+  mutation:
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/go-mutation.yaml
+
+  fuzz:
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/go-fuzz.yaml
+    with:
+      duration: 10m
+
+  repeat:
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just go
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+      - run: just test-repeat
+
+  report:
+    needs:
+      - guard
+      - e2e
+      - mutation
+      - fuzz
+      - repeat
+    if: ${{ always() && needs.guard.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just node go
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: e2e-report-*
+          path: .tmp/nightly/reports
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        continue-on-error: true
+        with:
+          pattern: go-mutation-*
+          path: .tmp/nightly/mutation
+          merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        continue-on-error: true
+        with:
+          name: e2e-coverage
+          path: .tmp/nightly/coverage
+      - id: numbers
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs?per_page=100" > .tmp/nightly/jobs.json
+          coverage=
+          if [ -f .tmp/nightly/coverage/coverage.out ]; then
+            coverage=$(go tool cover -func=.tmp/nightly/coverage/coverage.out | awk '$1 == "total:" { sub("%", "", $3); print $3 }')
+          fi
+          echo "coverage=$coverage" >> "$GITHUB_OUTPUT"
+      - id: report
+        env:
+          COVERAGE: ${{ steps.numbers.outputs.coverage }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          TRIGGER: ${{ github.event_name }}
+        run: |
+          verdict=$(just nightly-report .tmp/nightly "$SHA" "$RUN_URL" "$TRIGGER" "$COVERAGE")
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          cat docs/ci/nightly/report.md >> "$GITHUB_STEP_SUMMARY"
+      - env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERDICT: ${{ steps.report.outputs.verdict }}
+        run: scripts/nightly-publish.sh "$VERDICT"

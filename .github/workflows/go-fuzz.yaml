@@ -4,20 +4,41 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - docs/ci/nightly/**
   pull_request:
     paths-ignore:
       - .release-please-manifest.json
       - CHANGELOG.md
       - deploy/helm/spinoza/Chart.yaml
       - wails.json
+      - docs/ci/nightly/**
+  workflow_call:
+    inputs:
+      duration:
+        description: How long to fuzz each target
+        required: false
+        default: 30s
+        type: string
+      ref:
+        description: Commit to check out, empty for the triggering ref
+        required: false
+        default: ""
+        type: string
   workflow_dispatch:
+    inputs:
+      duration:
+        description: How long to fuzz each target
+        required: false
+        default: 30s
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
   group: >-
-    ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{
+    ${{ github.workflow }}-${{ inputs.duration || '30s' }}-${{ github.event_name }}-${{ github.ref }}-${{
     github.event_name == 'push' &&
     startsWith(github.event.head_commit.message, 'chore(main): release ') &&
     github.sha || 'latest' }}
@@ -26,6 +47,7 @@ concurrency:
 jobs:
   fuzz:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +78,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just go
@@ -66,4 +89,8 @@ jobs:
             ~/go/pkg/mod
           key: go-fuzz-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: go-fuzz-${{ runner.os }}-
-      - run: just fuzz-one '${{ matrix.package }}' '${{ matrix.target }}'
+      - env:
+          PACKAGE: ${{ matrix.package }}
+          TARGET: ${{ matrix.target }}
+          DURATION: ${{ inputs.duration || '30s' }}
+        run: just fuzz-one "$PACKAGE" "$TARGET" '' "$DURATION"
