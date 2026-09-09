@@ -137,6 +137,7 @@ func workloadRefChecks() []check {
 			needs:    []target{policyTarget},
 			frameworks: []string{
 				nsaCisa,
+				cisBenchmark,
 			},
 			wrong:  "Every pod in the cluster can open a connection to it, while the pods beside it are behind a policy. A cluster with no NetworkPolicy at all is left alone; this only fires once you have started using them.",
 			remedy: "Add a NetworkPolicy selecting these pods and naming what may reach them.",

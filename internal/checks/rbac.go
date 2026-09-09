@@ -66,7 +66,7 @@ func rbacChecks() []check {
 					return ""
 				}
 				return "grants every verb on " + listed(one.resources)
-			}),
+			}, cisBenchmark),
 		ruleCheck("rbac-wildcard-resources", "Role grants every resource", severityHigh,
 			"A rule with * resources reaches kinds nobody had in mind when they wrote it, including ones installed later.",
 			"Name the resources the subject needs.",
@@ -75,7 +75,7 @@ func rbacChecks() []check {
 					return ""
 				}
 				return "grants " + listed(one.verbs) + " on every resource"
-			}),
+			}, cisBenchmark),
 		ruleCheck("rbac-wildcard-api-groups", "Role reaches every API group", severityHigh,
 			"A rule with * apiGroups covers every CRD in the cluster, present and future.",
 			"Name the API groups the subject needs.",
@@ -84,19 +84,19 @@ func rbacChecks() []check {
 					return ""
 				}
 				return "reaches every API group"
-			}),
+			}, cisBenchmark),
 		ruleCheck("rbac-escalate-or-bind", "Role may grant itself more", severityHigh,
 			"escalate and bind let the holder award permissions it does not have, which is a way around every other limit.",
 			"Remove escalate and bind unless this is a controller that genuinely delegates.",
 			func(one rule) string {
 				return namesVerb(one, []string{"escalate", "bind"}, "may ")
-			}),
+			}, cisBenchmark),
 		ruleCheck("rbac-impersonate", "Role may act as somebody else", severityHigh,
 			"impersonate lets the holder make requests as any user, group or service account.",
 			"Remove impersonate.",
 			func(one rule) string {
 				return namesVerb(one, []string{"impersonate"}, "may ")
-			}),
+			}, cisBenchmark),
 		ruleCheck("rbac-read-secrets", "Role reads Secrets", severityHigh,
 			"Reading Secrets across a namespace is reading every credential in it.",
 			"Name the individual secrets with resourceNames, or drop the rule.",
@@ -108,7 +108,7 @@ func rbacChecks() []check {
 					return ""
 				}
 				return "reads every Secret it can reach"
-			}),
+			}, cisBenchmark),
 		ruleCheck("rbac-pod-exec", "Role may exec into pods", severityHigh,
 			"A shell in any pod is that pod's service account token and everything it can read.",
 			"Remove pods/exec and pods/attach.",
@@ -135,7 +135,7 @@ func rbacChecks() []check {
 					return ""
 				}
 				return "may create pods, and so run as any account in the namespace"
-			}),
+			}, cisBenchmark),
 		ruleCheck("rbac-write-bindings", "Role may grant permissions", severityHigh,
 			"Writing role bindings is writing the permission model itself.",
 			"Remove write access to roles, rolebindings and their cluster-scoped forms.",
@@ -149,19 +149,19 @@ func rbacChecks() []check {
 			func(one rule) string {
 				return namesResource(one,
 					[]string{"validatingwebhookconfigurations", "mutatingwebhookconfigurations"}, writeVerbs)
-			}),
+			}, cisBenchmark),
 		ruleCheck("rbac-node-proxy", "Role reaches the kubelet directly", severityHigh,
 			"nodes/proxy talks to the kubelet API, which serves every pod on the node without the API server's checks.",
 			"Remove nodes/proxy.",
 			func(one rule) string {
 				return namesResource(one, []string{"nodes/proxy"}, readVerbs)
-			}),
+			}, cisBenchmark),
 		{
 			id:         "cluster-admin-bound",
 			title:      "cluster-admin granted",
 			category:   categorySecurity,
 			severity:   severityHigh,
-			frameworks: []string{nsaCisa},
+			frameworks: []string{nsaCisa, cisBenchmark},
 			needs:      []target{clusterBindTarget},
 			wrong:      "cluster-admin is every verb on every resource in every namespace, with no exceptions.",
 			remedy:     "Bind a role that names what the subject actually needs.",
@@ -172,7 +172,7 @@ func rbacChecks() []check {
 			title:      "Permissions granted to everyone",
 			category:   categorySecurity,
 			severity:   severityHigh,
-			frameworks: []string{nsaCisa},
+			frameworks: []string{nsaCisa, cisBenchmark},
 			needs:      []target{bindingTarget, clusterBindTarget},
 			wrong:      "The subject is a group every request already belongs to, so this grants the permission to the whole cluster.",
 			remedy:     "Bind the role to the specific service account or user that needs it.",
@@ -181,13 +181,13 @@ func rbacChecks() []check {
 	}
 }
 
-func ruleCheck(id, title, severity, wrong, remedy string, judge func(rule) string) check {
+func ruleCheck(id, title, severity, wrong, remedy string, judge func(rule) string, also ...string) check {
 	return check{
 		id:         id,
 		title:      title,
 		category:   categorySecurity,
 		severity:   severity,
-		frameworks: []string{nsaCisa},
+		frameworks: append([]string{nsaCisa}, also...),
 		needs:      []target{roleTarget, clusterRoleTarget},
 		wrong:      wrong,
 		remedy:     remedy,

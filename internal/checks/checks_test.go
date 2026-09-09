@@ -46,7 +46,7 @@ func TestEveryCheckCarriesItsOwnDescription(t *testing.T) {
 	}
 }
 
-func TestOnlySecurityChecksCarryFrameworkLabels(t *testing.T) {
+func TestOnlySecurityChecksAndCatalogedControlsCarryFrameworkLabels(t *testing.T) {
 	for _, group := range report(t).Groups {
 		if group.Category == categorySecurity {
 			if len(group.Frameworks) == 0 {
@@ -54,8 +54,10 @@ func TestOnlySecurityChecksCarryFrameworkLabels(t *testing.T) {
 			}
 			continue
 		}
-		if len(group.Frameworks) != 0 {
-			t.Fatalf("%s claims a framework label it cannot cite", group.ID)
+		for _, label := range group.Frameworks {
+			if label != cisBenchmark {
+				t.Fatalf("%s claims a framework label it cannot cite: %s", group.ID, label)
+			}
 		}
 	}
 }
@@ -348,7 +350,7 @@ func TestATypeDiscoveryHasNotListedIsNamedInTheReport(t *testing.T) {
 	}
 }
 
-func TestAnEmptyCatalogueSaysNothingWasAudited(t *testing.T) {
+func TestAnEmptyCatalogSaysNothingWasAudited(t *testing.T) {
 	found := Run(t.Context(), newLister(), map[string]api.ResourceDescriptor{}, api.Metrics{}, wholeCluster(), 0)
 
 	if found.Scanned != 0 {

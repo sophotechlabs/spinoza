@@ -26,6 +26,7 @@ const (
 	pssBaseline   = "PSS baseline"
 	pssRestricted = "PSS restricted"
 	nsaCisa       = "NSA/CISA"
+	cisBenchmark  = "CIS Kubernetes Benchmark"
 
 	noUsage = "metrics-server did not answer, so usage is unknown"
 

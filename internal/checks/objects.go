@@ -50,7 +50,7 @@ func objectChecks() []check {
 			"Move what the snippet does into the controller's own configuration.",
 			overObjects(networkGroup, "ingresses", "Ingress", ingressTarget, injectsSnippet)),
 		corpusCheck("policy-allows-everything", "NetworkPolicy that allows everything",
-			categorySecurity, severityMedium, []target{policyTarget}, []string{nsaCisa},
+			categorySecurity, severityMedium, []target{policyTarget}, []string{nsaCisa, cisBenchmark},
 			"An empty selector with an empty rule matches every pod and permits every source, which is the same as having no policy while looking like one.",
 			"Name the pods it covers and the sources they may accept.",
 			overObjects(networkGroup, "networkpolicies", "NetworkPolicy", policyTarget, allowsEverything)),
