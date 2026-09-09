@@ -20,6 +20,7 @@ const expectedGroups = [
   'observability-traffic',
   'multicluster-fleet',
   'cluster-mode-auth',
+  'outage',
   'resilience-capacity-soak',
   'mcp-cli',
   'distribution-desktop-install',

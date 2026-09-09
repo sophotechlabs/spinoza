@@ -1,7 +1,11 @@
 {
   "schemaVersion": 2,
   "smokeGroup": "foundation-security",
-  "specRoots": ["cluster-mode", "specs", "specs-full"],
+  "specRoots": [
+    "cluster-mode",
+    "specs",
+    "specs-full"
+  ],
   "productionRoots": [
     "*.go",
     "cmd/**",
@@ -132,7 +136,11 @@
       "runner": "playwright",
       "profile": "core",
       "timeoutMinutes": 45,
-      "specs": ["specs/access.spec.ts", "specs/degrade.spec.ts", "specs/guard.spec.ts"],
+      "specs": [
+        "specs/access.spec.ts",
+        "specs/degrade.spec.ts",
+        "specs/guard.spec.ts"
+      ],
       "paths": [
         "internal/access/**",
         "internal/auth/**",
@@ -219,7 +227,10 @@
       "runner": "playwright",
       "profile": "full",
       "timeoutMinutes": 75,
-      "specs": ["specs/zz-a11y.spec.ts", "specs-full/design-review.spec.ts"],
+      "specs": [
+        "specs/zz-a11y.spec.ts",
+        "specs-full/design-review.spec.ts"
+      ],
       "paths": [
         "frontend/src/index.css",
         "frontend/src/components/TooltipHost.tsx",
@@ -336,7 +347,11 @@
       "runner": "playwright",
       "profile": "core",
       "timeoutMinutes": 75,
-      "specs": ["specs/actions.spec.ts", "specs/guarded.spec.ts", "specs/history.spec.ts"],
+      "specs": [
+        "specs/actions.spec.ts",
+        "specs/guarded.spec.ts",
+        "specs/history.spec.ts"
+      ],
       "paths": [
         "internal/actions/**",
         "internal/store/**",
@@ -364,7 +379,11 @@
       "runner": "playwright",
       "profile": "core",
       "timeoutMinutes": 75,
-      "specs": ["specs/exec.spec.ts", "specs/portforward.spec.ts", "specs/terminals.spec.ts"],
+      "specs": [
+        "specs/exec.spec.ts",
+        "specs/portforward.spec.ts",
+        "specs/terminals.spec.ts"
+      ],
       "paths": [
         "internal/debugcontainer/**",
         "internal/exec/**",
@@ -408,7 +427,11 @@
       "runner": "playwright",
       "profile": "core",
       "timeoutMinutes": 75,
-      "specs": ["specs/checks.spec.ts", "specs/issues.spec.ts", "specs/worklist.spec.ts"],
+      "specs": [
+        "specs/checks.spec.ts",
+        "specs/issues.spec.ts",
+        "specs/worklist.spec.ts"
+      ],
       "paths": [
         "internal/baseline/**",
         "internal/checks/**",
@@ -437,7 +460,9 @@
       "runner": "playwright",
       "profile": "core",
       "timeoutMinutes": 90,
-      "specs": ["specs/helm.spec.ts"],
+      "specs": [
+        "specs/helm.spec.ts"
+      ],
       "paths": [
         "internal/charts/**",
         "internal/helm/**",
@@ -466,7 +491,11 @@
       "runner": "playwright",
       "profile": "full",
       "timeoutMinutes": 120,
-      "specs": ["specs-full/argo.spec.ts", "specs-full/flux.spec.ts", "specs-full/gitops.spec.ts"],
+      "specs": [
+        "specs-full/argo.spec.ts",
+        "specs-full/flux.spec.ts",
+        "specs-full/gitops.spec.ts"
+      ],
       "paths": [
         "internal/argocd/**",
         "internal/flux/**",
@@ -497,7 +526,10 @@
       "runner": "playwright",
       "profile": "core",
       "timeoutMinutes": 90,
-      "specs": ["specs/metrics.spec.ts", "specs/traffic.spec.ts"],
+      "specs": [
+        "specs/metrics.spec.ts",
+        "specs/traffic.spec.ts"
+      ],
       "paths": [
         "internal/metrics/**",
         "internal/prom/**",
@@ -524,7 +556,11 @@
       "runner": "playwright",
       "profile": "full",
       "timeoutMinutes": 120,
-      "specs": ["specs/clusters.spec.ts", "specs/fleet.spec.ts", "specs-full/twoclusters.spec.ts"],
+      "specs": [
+        "specs/clusters.spec.ts",
+        "specs/fleet.spec.ts",
+        "specs-full/twoclusters.spec.ts"
+      ],
       "paths": [
         "internal/clusterid/**",
         "internal/kube/**",
@@ -564,7 +600,10 @@
       "runner": "cluster-mode",
       "profile": "cluster-mode",
       "timeoutMinutes": 120,
-      "specs": ["cluster-mode/oidc.spec.ts", "cluster-mode/proxy.spec.ts"],
+      "specs": [
+        "cluster-mode/oidc.spec.ts",
+        "cluster-mode/proxy.spec.ts"
+      ],
       "paths": [
         "deploy/helm/spinoza/**",
         "docs/cluster-mode.md",
@@ -581,12 +620,38 @@
       ]
     },
     {
+      "id": "outage",
+      "label": "Cluster outage",
+      "runner": "playwright",
+      "profile": "core",
+      "timeoutMinutes": 45,
+      "specs": [
+        "specs/outage.spec.ts"
+      ],
+      "paths": [
+        "frontend/src/components/ClusterBanner.tsx",
+        "frontend/src/components/ConnectionBanner.tsx",
+        "frontend/src/components/StaleBanner.tsx",
+        "frontend/src/lib/feed.ts",
+        "frontend/src/lib/health.ts",
+        "frontend/src/store/clusterHealth.ts",
+        "frontend/src/store/feed.ts",
+        "internal/reach/**",
+        "internal/server/health.go",
+        "internal/server/ws.go",
+        "e2e/specs/outage.spec.ts"
+      ]
+    },
+    {
       "id": "resilience-capacity-soak",
       "label": "Resilience, capacity and soak",
       "runner": "playwright",
       "profile": "full",
       "timeoutMinutes": 120,
-      "specs": ["specs/resilience.spec.ts", "specs/capacity.spec.ts"],
+      "specs": [
+        "specs/resilience.spec.ts",
+        "specs/capacity.spec.ts"
+      ],
       "paths": [
         "internal/reach/**",
         "internal/safe/**",
@@ -606,7 +671,12 @@
       "profile": "integration",
       "timeoutMinutes": 75,
       "specs": [],
-      "paths": ["cmd/spinoza-mcp/**", "internal/mcp/**", "test/integration/mcp_test.go", "main.go"]
+      "paths": [
+        "cmd/spinoza-mcp/**",
+        "internal/mcp/**",
+        "test/integration/mcp_test.go",
+        "main.go"
+      ]
     },
     {
       "id": "distribution-desktop-install",
