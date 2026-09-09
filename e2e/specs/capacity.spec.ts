@@ -156,10 +156,7 @@ test('the scale fixture converges without rendering every row', async ({ page })
   const rendered = await page.locator('main tbody tr').count();
   expect(rendered).toBeLessThan(500);
   await expect(page.getByText(/bulk-1499/)).toHaveCount(0);
-  await page
-    .getByPlaceholder(/filter/i)
-    .first()
-    .fill('bulk-1499');
+  await page.getByPlaceholder('Filter by name, or field:value').fill('bulk-1499');
   await expect(page.getByText('bulk-1499', { exact: true })).toBeVisible({ timeout: 120_000 });
 });
 
