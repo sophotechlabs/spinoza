@@ -250,7 +250,7 @@ export default function SettingsDialog({
       ref={ref}
       aria-label="Settings"
       onClose={onClose}
-      className="backdrop:bg-black/50 m-auto w-[34rem] rounded border border-edge-strong bg-surface p-0 text-fg"
+      className="backdrop:bg-black/50 m-auto w-[34rem] max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
       <div className="flex items-center justify-between border-b border-edge px-3 py-2">
         <h2 className="text-xs font-semibold tracking-wide text-fg-strong uppercase">Settings</h2>

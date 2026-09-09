@@ -20,7 +20,7 @@ export default function SignIn({ session }: SignInProps) {
   return (
     <div className="flex h-screen flex-col items-center justify-center gap-6 bg-surface font-mono text-sm text-fg">
       <Wordmark className="text-2xl text-fg-strong" />
-      <div className="w-96 rounded border border-edge-strong bg-surface-raised p-5">
+      <div className="w-96 max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface-raised p-5">
         <p className="font-semibold text-fg-strong">Sign in</p>
         <p className="mt-2 text-xs text-fg-soft">{reason(session)}</p>
         {session.signIn && (

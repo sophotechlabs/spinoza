@@ -175,7 +175,7 @@ export default function HelmUpgradeDialog({
       ref={ref}
       aria-label={`Upgrade ${release.name}`}
       onClose={onClose}
-      className="backdrop:bg-black/50 m-auto w-[44rem] rounded border border-edge-strong bg-surface p-0 text-fg"
+      className="backdrop:bg-black/50 m-auto w-[44rem] max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
       {typing && (
         <ConfirmByName

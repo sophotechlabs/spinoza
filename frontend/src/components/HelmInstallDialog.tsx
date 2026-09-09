@@ -284,7 +284,7 @@ export default function HelmInstallDialog({
       ref={ref}
       aria-label="Install a chart"
       onClose={onClose}
-      className="backdrop:bg-black/50 m-auto w-[46rem] rounded border border-edge-strong bg-surface p-0 text-fg"
+      className="backdrop:bg-black/50 m-auto w-[46rem] max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
       {typing && (
         <ConfirmByName

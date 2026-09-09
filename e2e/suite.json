@@ -71,6 +71,7 @@
     "frontend/src/lib/useNow.ts",
     "frontend/src/lib/usePoll.ts",
     "frontend/src/lib/view.ts",
+    "frontend/src/lib/viewport.ts",
     "frontend/src/lib/warningText.ts",
     "frontend/src/lib/wire.ts",
     "frontend/src/main.tsx",
@@ -131,7 +132,7 @@
     "update.go",
     "wails.json"
   ],
-  "fullRunBudget": 96,
+  "fullRunBudget": 97,
   "groups": [
     {
       "id": "foundation-security",

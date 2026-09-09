@@ -13,7 +13,7 @@ export default function MovedToDesktop({ open, onStay }: MovedToDesktopProps) {
       role="status"
       className="fixed inset-0 z-50 flex items-center justify-center bg-surface/95 text-xs"
     >
-      <div className="w-96 rounded border border-edge-strong bg-surface-raised p-4">
+      <div className="w-96 max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface-raised p-4">
         <p className="font-semibold text-fg-strong">Spinoza is back in its window</p>
         <p className="mt-2 text-fg-soft">You can close this tab.</p>
         <button

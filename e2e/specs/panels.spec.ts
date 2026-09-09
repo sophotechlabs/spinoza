@@ -303,3 +303,33 @@ test('the inspector opens itself for the first row that is selected', async ({ p
     timeout: 60_000,
   });
 });
+
+test('a window too narrow for the canvas keeps the canvas, not the docks', async ({ page }) => {
+  await openPod(page);
+  await expect(page.getByRole('tablist', { name: 'right panels' })).toBeVisible();
+
+  await page.setViewportSize({ width: 1000, height: 720 });
+
+  await expect(page.getByRole('group', { name: 'Collapsed right dock' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Collapsed bottom dock' })).toBeVisible();
+
+  await page.setViewportSize({ width: 1600, height: 1000 });
+
+  await expect(page.getByRole('tablist', { name: 'right panels' })).toBeVisible();
+});
+
+test('a dialog fits a window zoomed to 200%', async ({ page }) => {
+  await openHome(page);
+  await page.setViewportSize({ width: 640, height: 720 });
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await expect(dialog).toBeVisible();
+  const box = await dialog.boundingBox();
+  expect(box).not.toBeNull();
+  if (box === null) {
+    throw new Error('the settings dialog has no measurable box');
+  }
+  expect(box.width).toBeLessThanOrEqual(640);
+});

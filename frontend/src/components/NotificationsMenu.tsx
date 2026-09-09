@@ -31,7 +31,7 @@ export default function NotificationsMenu({ onSelectObject }: NotificationsMenuP
       >
         <BellIcon />
       </summary>
-      <div className="absolute right-0 z-30 mt-1 flex max-h-[60vh] w-[28rem] flex-col overflow-hidden rounded border border-edge-strong bg-surface-raised shadow">
+      <div className="absolute right-0 z-30 mt-1 flex max-h-[60vh] w-[28rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded border border-edge-strong bg-surface-raised shadow">
         <NotificationsPanel onSelectObject={handleSelectObject} />
       </div>
     </details>

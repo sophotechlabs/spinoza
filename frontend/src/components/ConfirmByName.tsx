@@ -37,7 +37,7 @@ export default function ConfirmByName({
       ref={ref}
       aria-label="Confirm on a protected cluster"
       onClose={onCancel}
-      className="backdrop:bg-black/50 m-auto w-[28rem] rounded border border-warn-line bg-surface p-0 text-fg"
+      className="backdrop:bg-black/50 m-auto w-[28rem] max-w-[calc(100vw-2rem)] rounded border border-warn-line bg-surface p-0 text-fg"
     >
       <div className="flex items-center gap-2 border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-warn uppercase">
         Protected cluster

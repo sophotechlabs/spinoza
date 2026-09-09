@@ -3,6 +3,7 @@ import type { DockSide, PanelId } from '../lib/panels';
 import { DOCK_SIDES, SIDE_GLYPHS, SIDE_LABELS, panelBodyId, tabId } from '../lib/panels';
 import { NUDGE_STEP, useDockSize } from '../lib/usePanelWidth';
 import { usePanelsStore } from '../store/panels';
+import { useNarrowWindow } from '../lib/viewport';
 
 function arrowStep(key: string): number {
   if (key === 'ArrowRight' || key === 'ArrowDown') {
@@ -132,8 +133,21 @@ export default function PanelHost({
   hostRef,
   emptyHint,
 }: PanelHostProps) {
-  const collapsed = usePanelsStore((state) => state.collapsed[side]);
+  const stored = usePanelsStore((state) => state.collapsed[side]);
   const collapse = usePanelsStore((state) => state.collapse);
+  const narrow = useNarrowWindow();
+  const [asked, setAsked] = useState(false);
+  const collapsed = stored || (narrow && !asked);
+
+  function show() {
+    setAsked(true);
+    collapse(side, false);
+  }
+
+  function hide() {
+    setAsked(false);
+    collapse(side, true);
+  }
   const [over, setOver] = useState(false);
   const insideRef = useRef(0);
   const { size, startResize, nudge } = useDockSize(side);
@@ -262,9 +276,7 @@ export default function PanelHost({
         <button
           type="button"
           aria-label={`Show the ${SIDE_LABELS[side]} dock`}
-          onClick={() => {
-            collapse(side, false);
-          }}
+          onClick={show}
           className="rounded px-1 py-0.5 text-xs text-fg-muted hover:bg-surface-raised hover:text-fg"
         >
           {expandGlyph(side)}
@@ -286,9 +298,7 @@ export default function PanelHost({
       <button
         type="button"
         aria-label={`Hide the ${SIDE_LABELS[side]} dock`}
-        onClick={() => {
-          collapse(side, true);
-        }}
+        onClick={hide}
         className="px-1 py-1.5 text-fg-muted hover:text-fg"
       >
         {collapseGlyph(side)}

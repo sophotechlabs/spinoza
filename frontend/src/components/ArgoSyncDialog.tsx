@@ -84,7 +84,7 @@ export default function ArgoSyncDialog({ name, resources, onRun, onCancel }: Arg
       ref={ref}
       aria-label={`Sync ${name}`}
       onClose={onCancel}
-      className="backdrop:bg-black/50 m-auto w-[30rem] rounded border border-edge-strong bg-surface p-0 text-fg"
+      className="backdrop:bg-black/50 m-auto w-[30rem] max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
       <div className="flex items-center gap-2 border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
         Sync {name}

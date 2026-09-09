@@ -118,7 +118,7 @@ export default function KubeconfigDialog({
       ref={ref}
       aria-label="Kubeconfigs"
       onClose={onClose}
-      className="backdrop:bg-black/50 m-auto w-[36rem] rounded border border-edge-strong bg-surface p-0 text-fg"
+      className="backdrop:bg-black/50 m-auto w-[36rem] max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
       <div className="flex items-center justify-between border-b border-edge px-3 py-2">
         <h2 className="text-xs font-semibold tracking-wide text-fg-strong uppercase">

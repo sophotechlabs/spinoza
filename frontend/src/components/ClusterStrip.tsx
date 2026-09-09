@@ -208,7 +208,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
         <dialog
           open
           aria-label={`Close ${asking.context}`}
-          className="fixed inset-0 z-40 m-auto w-[26rem] rounded border border-warn-line bg-surface p-0 text-fg"
+          className="fixed inset-0 z-40 m-auto w-[26rem] max-w-[calc(100vw-2rem)] rounded border border-warn-line bg-surface p-0 text-fg"
         >
           <div className="border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-warn uppercase">
             Something is still attached

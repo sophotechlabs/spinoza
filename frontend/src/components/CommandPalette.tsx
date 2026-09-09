@@ -205,7 +205,7 @@ export default function CommandPalette({
       ref={ref}
       aria-label="Command palette"
       onClose={onClose}
-      className="backdrop:bg-black/50 mx-auto mt-24 w-[32rem] rounded border border-edge-strong bg-surface p-0 text-fg"
+      className="backdrop:bg-black/50 mx-auto mt-24 w-[32rem] max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface p-0 text-fg"
     >
       <div className="text-xs">
         <input

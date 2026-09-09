@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PanelHost from '../../src/components/PanelHost';
 import type { PanelTab } from '../../src/components/PanelHost';
@@ -551,5 +551,56 @@ describe('the tab strip keeps the semantics screen readers rely on', () => {
     renderHost({ tabs: [], active: null });
 
     expect(screen.getByRole('group', { name: 'Empty right dock' })).toBeInTheDocument();
+  });
+});
+
+describe('a window too narrow for the canvas', () => {
+  function resizeTo(width: number): void {
+    act(() => {
+      window.innerWidth = width;
+      window.dispatchEvent(new Event('resize'));
+    });
+  }
+
+  afterEach(() => {
+    resizeTo(1600);
+  });
+
+  it('gives the canvas the room, without touching the layout that was arranged', () => {
+    renderHost({});
+    resizeTo(1000);
+
+    expect(screen.getByRole('group', { name: 'Collapsed right dock' })).toBeInTheDocument();
+    expect(usePanelsStore.getState().collapsed.right).toBe(false);
+  });
+
+  it('brings the dock back when the window is wide again', () => {
+    renderHost({});
+    resizeTo(1000);
+    resizeTo(1600);
+
+    expect(screen.getByRole('tablist', { name: 'right panels' })).toBeInTheDocument();
+  });
+
+  it('still opens the dock when the reader asks for it', async () => {
+    const user = userEvent.setup();
+    renderHost({});
+    resizeTo(1000);
+
+    await user.click(screen.getByRole('button', { name: 'Show the right dock' }));
+
+    expect(screen.getByRole('tablist', { name: 'right panels' })).toBeInTheDocument();
+  });
+
+  it('takes the dock away again when the reader hides it', async () => {
+    const user = userEvent.setup();
+    renderHost({});
+    resizeTo(1000);
+    await user.click(screen.getByRole('button', { name: 'Show the right dock' }));
+
+    await user.click(screen.getByRole('button', { name: 'Hide the right dock' }));
+
+    expect(screen.getByRole('group', { name: 'Collapsed right dock' })).toBeInTheDocument();
+    expect(usePanelsStore.getState().collapsed.right).toBe(true);
   });
 });

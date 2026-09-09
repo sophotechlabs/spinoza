@@ -269,7 +269,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
       <dialog
         open
         aria-label={`Open ${entry.name}`}
-        className="fixed inset-0 z-40 m-auto w-[28rem] rounded border border-edge-strong bg-surface p-0 text-fg"
+        className="fixed inset-0 z-40 m-auto w-[28rem] max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface p-0 text-fg"
       >
         <div className="border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
           Open {entry.name}

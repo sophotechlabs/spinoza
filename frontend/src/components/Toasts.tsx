@@ -36,7 +36,7 @@ export default function Toasts() {
       role="status"
       aria-live="polite"
       aria-label="Latest notifications"
-      className="pointer-events-none fixed right-3 bottom-3 z-50 flex w-96 flex-col gap-1.5 text-xs"
+      className="pointer-events-none fixed right-3 bottom-3 z-50 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-1.5 text-xs"
     >
       {toasts.map((toast) => (
         <div key={toast.id} className={`pointer-events-auto flex gap-2 ${toneClass(toast.tone)}`}>
