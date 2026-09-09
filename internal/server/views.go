@@ -41,8 +41,18 @@ func (s *Server) checkFilter(r *http.Request) checks.Filter {
 
 func (s *Server) checkFilterOn(r *http.Request, cluster string) checks.Filter {
 	keep := checks.ParseFilter(r.URL.Query())
+	keep.Rules = checks.ParseRules(s.settingFor(r, s.stored().All(), checks.RulesKey))
+	return s.settleCheckFilter(keep, cluster)
+}
+
+func (s *Server) scheduledCheckFilter(cluster string) checks.Filter {
+	keep := checks.Filter{WholeCluster: true, EveryKind: true}
+	keep.Rules = checks.ParseRules(s.stored().All()[checks.RulesKey])
+	return s.settleCheckFilter(keep, cluster)
+}
+
+func (s *Server) settleCheckFilter(keep checks.Filter, cluster string) checks.Filter {
 	held := s.stored().All()
-	keep.Rules = checks.ParseRules(s.settingFor(r, held, checks.RulesKey))
 	if !s.inCluster() {
 		keep.Imports = checks.ParseImports(held[checks.ImportsKey])
 	}
