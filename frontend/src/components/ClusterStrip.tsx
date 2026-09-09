@@ -158,7 +158,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
     >
       <nav
         aria-label="Open clusters"
-        className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto"
+        className="flex min-w-0 shrink items-end gap-1 overflow-x-auto"
       >
         {inGroups(tabs).map((run) => (
           <span key={run.name} className="flex shrink-0 items-end gap-1">

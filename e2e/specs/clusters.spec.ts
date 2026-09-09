@@ -317,6 +317,14 @@ test('the plus opens the context list clear of the strip', async ({ page }) => {
   }
   expect(menu.y).toBeGreaterThan(bar.y + bar.height - 1);
   expect(menu.height).toBeGreaterThan(0);
+
+  const room = page.viewportSize();
+  expect(room).not.toBeNull();
+  if (room === null) {
+    throw new Error('the page has no viewport');
+  }
+  expect(menu.x).toBeGreaterThanOrEqual(0);
+  expect(menu.x + menu.width).toBeLessThanOrEqual(room.width);
 });
 
 test('the tab swatch opens its menu clear of the strip', async ({ page }) => {
