@@ -25,10 +25,10 @@ type marker struct {
 }
 
 var markers = []marker{
-	{Timeout, []string{"deadline exceeded", "timeout", "timed out", "client.timeout"}},
+	{Timeout, []string{"deadline exceeded", "timed out", "i/o timeout", "handshake timeout", "client.timeout", "request timeout", "timeout awaiting"}},
 	{Refused, []string{"connection refused", "no route to host", "network is unreachable", "connection reset"}},
 	{Untrusted, []string{"x509:", "tls: failed to verify certificate", "certificate signed by unknown authority", "certificate is not trusted", "tls: "}},
-	{Unresolved, []string{"no such host", "server misbehaving", "dns"}},
+	{Unresolved, []string{"no such host", "server misbehaving", "dns error"}},
 	{Unauthorized, []string{"unauthorized", "is forbidden", "getting credentials", "could not get credentials", "invalid bearer token"}},
 }
 
