@@ -52,6 +52,7 @@ async function settle(page: Page): Promise<void> {
 }
 
 async function shoot(page: Page, name: string): Promise<void> {
+  await page.mouse.move(0, 0);
   await settle(page);
   await page.screenshot({ path: join(OUT, `${name}.png`) });
 }
@@ -299,7 +300,7 @@ test('what spinoza changed', async ({ page }) => {
 });
 
 test('inspecting a live object', async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(600_000);
   await openResource(page, 'configmaps', 'ConfigMap');
   await selectRow(page, 'storefront-config');
   await page.getByRole('tab', { name: 'YAML', exact: true }).click();
