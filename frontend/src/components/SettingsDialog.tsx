@@ -278,7 +278,12 @@ export default function SettingsDialog({
             </button>
           ))}
         </nav>
-        <div className="min-w-0 flex-1 overflow-y-auto p-3">
+        <div
+          role="tabpanel"
+          aria-label={section}
+          tabIndex={0}
+          className="min-w-0 flex-1 overflow-y-auto p-3"
+        >
           {section === 'Appearance' && (
             <>
               <Row label="Theme" hint="Follow the system, or pick one and keep it.">

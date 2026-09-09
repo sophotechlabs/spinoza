@@ -45,6 +45,7 @@ export default tseslint.config(
       'src/components/PanelHost.tsx',
       'src/components/ClusterOverview.tsx',
       'src/components/FluxRoles.tsx',
+      'src/components/SettingsDialog.tsx',
     ],
     rules: {
       'jsx-a11y/no-noninteractive-tabindex': ['error', { roles: ['tabpanel', 'group'] }],
