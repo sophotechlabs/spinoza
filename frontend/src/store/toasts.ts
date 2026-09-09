@@ -16,7 +16,7 @@ export interface Toast {
   id: number;
   tone: ToastTone;
   message: string;
-  action?: ToastAction;
+  actions?: ToastAction[];
 }
 
 export interface Notification extends Toast {
@@ -28,7 +28,7 @@ interface ToastsState {
   toasts: Toast[];
   history: Notification[];
   push: (tone: ToastTone, message: string, ref?: ObjectRef) => void;
-  ask: (message: string, action: ToastAction) => number;
+  ask: (message: string, actions: ToastAction[]) => number;
   dismiss: (id: number) => void;
   clear: () => void;
   clearHistory: () => void;
@@ -65,9 +65,9 @@ export const useToastsStore = create<ToastsState>((set) => ({
       history: cap([...state.history, note]),
     }));
   },
-  ask: (message, action) => {
+  ask: (message, actions) => {
     seq += 1;
-    const toast: Toast = { id: seq, tone: 'ok', message, action };
+    const toast: Toast = { id: seq, tone: 'ok', message, actions };
     const note: Notification = { ...toast, at: new Date().toISOString() };
     set((state) => ({
       toasts: trim([...state.toasts, toast]),
@@ -98,8 +98,8 @@ export function notifyError(message: string, ref?: ObjectRef): void {
   useToastsStore.getState().push('error', message, ref);
 }
 
-export function askToast(message: string, action: ToastAction): number {
-  return useToastsStore.getState().ask(message, action);
+export function askToast(message: string, actions: ToastAction[]): number {
+  return useToastsStore.getState().ask(message, actions);
 }
 
 export function dismissToast(id: number): void {

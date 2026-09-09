@@ -42,7 +42,7 @@ describe('an offer in the history', () => {
     act(() => {
       useToastsStore
         .getState()
-        .ask('Read only the default namespace instead?', { label: 'Open on default', run });
+        .ask('Read only the default namespace instead?', [{ label: 'Open on default', run }]);
     });
     render(<NotificationsPanel onSelectObject={vi.fn()} />);
 

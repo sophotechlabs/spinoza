@@ -27,7 +27,7 @@ describe('Toasts', () => {
     const run = vi.fn();
     render(<Toasts />);
     act(() => {
-      askToast('Open on default instead?', { label: 'Open on default', run });
+      askToast('Open on default instead?', [{ label: 'Open on default', run }]);
     });
 
     await user.click(screen.getByRole('button', { name: 'Open on default' }));
@@ -40,7 +40,7 @@ describe('Toasts', () => {
     vi.useFakeTimers();
     render(<Toasts />);
     act(() => {
-      askToast('Open on default instead?', { label: 'Open on default', run: vi.fn() });
+      askToast('Open on default instead?', [{ label: 'Open on default', run: vi.fn() }]);
     });
 
     act(() => {
@@ -54,7 +54,7 @@ describe('Toasts', () => {
     vi.useFakeTimers();
     render(<Toasts />);
     act(() => {
-      askToast('Open on default instead?', { label: 'Open on default', run: vi.fn() });
+      askToast('Open on default instead?', [{ label: 'Open on default', run: vi.fn() }]);
       notifyOk('pod-a deleted');
     });
 
@@ -71,7 +71,7 @@ describe('Toasts', () => {
     const run = vi.fn();
     render(<Toasts />);
     act(() => {
-      askToast('Open on default instead?', { label: 'Open on default', run });
+      askToast('Open on default instead?', [{ label: 'Open on default', run }]);
     });
 
     await user.click(screen.getByRole('button', { name: 'Dismiss: Open on default instead?' }));

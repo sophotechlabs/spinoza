@@ -35,12 +35,14 @@ export async function announceUpdate(): Promise<void> {
     return;
   }
   const command = status.command;
-  askToast(updateMessage(status), {
-    label: 'Copy install command',
-    run: () => {
-      void copyText('the install command', command);
+  askToast(updateMessage(status), [
+    {
+      label: 'Copy install command',
+      run: () => {
+        void copyText('the install command', command);
+      },
     },
-  });
+  ]);
 }
 
 export async function installUpdate(): Promise<UpdateResult> {

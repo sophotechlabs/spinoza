@@ -73,7 +73,7 @@ import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
 import KubeconfigBanner from './components/KubeconfigBanner';
-import ProtectionPrompt from './components/ProtectionPrompt';
+import ProtectionOffer from './components/ProtectionOffer';
 import MovedToDesktop from './components/MovedToDesktop';
 import CommandPalette from './components/CommandPalette';
 import type { Section } from './components/SettingsDialog';
@@ -338,13 +338,15 @@ export default function App() {
     useSettingsStore.getState().setNamespaceStart(onCluster, EVERY_NAMESPACE);
     askToast(
       `Watching every namespace on ${shownAs} holds all ${String(podsIn(counts))} pods in memory here.`,
-      {
-        label: 'Open on default',
-        run: () => {
-          useSettingsStore.getState().setNamespaceStart(onCluster, ONLY_DEFAULT);
-          chooseNamespace(DEFAULT_NAMESPACE);
+      [
+        {
+          label: 'Open on default',
+          run: () => {
+            useSettingsStore.getState().setNamespaceStart(onCluster, ONLY_DEFAULT);
+            chooseNamespace(DEFAULT_NAMESPACE);
+          },
         },
-      },
+      ],
     );
   }, [chooseNamespace, contextName, counts, onCluster, shownAs]);
 
@@ -748,7 +750,7 @@ export default function App() {
       </div>
       <Toasts />
       <TooltipHost />
-      <ProtectionPrompt />
+      <ProtectionOffer />
       <MovedToDesktop
         open={moved}
         onStay={() => {

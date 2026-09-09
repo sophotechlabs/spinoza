@@ -68,8 +68,8 @@ describe('announceUpdate', () => {
 
     const [toast] = useToastsStore.getState().toasts;
     expect(toast.message).toContain('v1.15.0');
-    expect(toast.action?.label).toBe('Copy install command');
-    toast.action?.run();
+    expect(toast.actions?.[0].label).toBe('Copy install command');
+    toast.actions?.[0].run();
     await vi.waitFor(() => {
       expect(writeText).toHaveBeenCalledWith('curl -fsSL https://spinoza.tech/install.sh | sh');
     });

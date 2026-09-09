@@ -59,13 +59,13 @@ describe('an offer toast', () => {
   it('carries its action on screen and into the history', () => {
     const run = () => undefined;
 
-    useToastsStore.getState().ask('Open on default instead?', { label: 'Open on default', run });
+    useToastsStore.getState().ask('Open on default instead?', [{ label: 'Open on default', run }]);
 
     const [toast] = useToastsStore.getState().toasts;
-    expect(toast.action?.label).toBe('Open on default');
+    expect(toast.actions?.[0].label).toBe('Open on default');
     expect(history()).toHaveLength(1);
     expect(history()[0].message).toBe('Open on default instead?');
-    expect(history()[0].action?.label).toBe('Open on default');
+    expect(history()[0].actions?.[0].label).toBe('Open on default');
   });
 });
 
@@ -109,5 +109,17 @@ describe('the notification history', () => {
 
     expect(history()).toHaveLength(0);
     expect(useToastsStore.getState().toasts).toHaveLength(1);
+  });
+});
+
+describe('an offer with more than one answer', () => {
+  it('carries every answer, in the order they were given', () => {
+    useToastsStore.getState().ask('Protect p-mk2?', [
+      { label: 'Protect', run: () => undefined },
+      { label: 'Leave unprotected', run: () => undefined },
+    ]);
+
+    const [toast] = useToastsStore.getState().toasts;
+    expect(toast.actions?.map((one) => one.label)).toEqual(['Protect', 'Leave unprotected']);
   });
 });

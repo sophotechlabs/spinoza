@@ -19,7 +19,7 @@ export default function Toasts() {
   const dismiss = useToastsStore((state) => state.dismiss);
 
   useEffect(() => {
-    const oldest = toasts.find((toast) => toast.action === undefined);
+    const oldest = toasts.find((toast) => toast.actions === undefined);
     if (oldest === undefined) {
       return;
     }
@@ -41,18 +41,19 @@ export default function Toasts() {
       {toasts.map((toast) => (
         <div key={toast.id} className={`pointer-events-auto flex gap-2 ${toneClass(toast.tone)}`}>
           <span className="min-w-0 flex-1 break-words">{toast.message}</span>
-          {toast.action !== undefined && (
+          {(toast.actions ?? []).map((action) => (
             <button
+              key={action.label}
               type="button"
               onClick={() => {
-                toast.action?.run();
+                action.run();
                 dismiss(toast.id);
               }}
               className="shrink-0 self-start rounded border border-edge-strong px-1.5 py-0.5 text-fg hover:bg-surface-active"
             >
-              {toast.action.label}
+              {action.label}
             </button>
-          )}
+          ))}
           <button
             type="button"
             aria-label={`Dismiss: ${toast.message}`}
