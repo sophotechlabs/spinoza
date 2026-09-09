@@ -119,9 +119,16 @@ export function latestColor(release: { outdated?: boolean }): string {
   return 'text-fg-muted';
 }
 
+export function noRepositoryKnowsAnyChart(releases: { latest?: string }[]): boolean {
+  if (releases.length === 0) {
+    return false;
+  }
+  return releases.every((one) => one.latest === undefined || one.latest === '');
+}
+
 export function latestNote(release: { latest?: string; outdated?: boolean }): string {
   if (release.latest === undefined || release.latest === '') {
-    return 'no chart repository knows this chart';
+    return '';
   }
   if (release.outdated === true) {
     return 'a newer chart version is available';

@@ -344,3 +344,69 @@ describe('the gitops controllers card', () => {
     expect(screen.queryByText('GitOps controllers')).not.toBeInTheDocument();
   });
 });
+
+describe('what the overview says about warnings and controllers', () => {
+  it('dates the warnings rather than calling ten-day-old events recent', async () => {
+    const old = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
+    stub(
+      overview({
+        warnings: [
+          {
+            namespace: 'kube-system',
+            object: 'Pod/coredns',
+            reason: 'Unhealthy',
+            message: 'probe failed',
+            count: 1,
+            lastSeen: old,
+          },
+        ],
+      }),
+    );
+
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText('newest 10d ago')).toBeVisible();
+  });
+
+  it('falls back when an event carries no time at all', async () => {
+    stub(
+      overview({
+        warnings: [
+          {
+            namespace: 'kube-system',
+            object: 'Pod/coredns',
+            reason: 'Unhealthy',
+            message: 'probe failed',
+            count: 1,
+            lastSeen: '',
+          },
+        ],
+      }),
+    );
+
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText('the newest events shown')).toBeVisible();
+  });
+
+  it('says a controller scaled to zero is scaled to zero, not failing', async () => {
+    stub(
+      overview({
+        controllers: [
+          {
+            controller: 'argocd',
+            namespace: 'argocd',
+            name: 'applicationset',
+            ready: 0,
+            wanted: 0,
+          },
+        ],
+      }),
+    );
+
+    render(<ClusterOverview />);
+
+    const cell = await screen.findByText('scaled to 0');
+    expect(cell.className).not.toContain('error');
+  });
+});

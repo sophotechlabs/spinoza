@@ -160,10 +160,20 @@ function controllerLabel(controller: string): string {
 }
 
 function controllerClass(one: GitopsController): string {
-  if (one.ready >= one.wanted && one.wanted > 0) {
+  if (one.wanted === 0) {
+    return 'text-fg-muted';
+  }
+  if (one.ready >= one.wanted) {
     return 'text-ok';
   }
   return 'text-error';
+}
+
+function controllerCount(one: GitopsController): string {
+  if (one.wanted === 0) {
+    return 'scaled to 0';
+  }
+  return `${String(one.ready)} of ${String(one.wanted)}`;
 }
 
 function Controllers({ controllers }: { controllers: GitopsController[] }) {
@@ -186,15 +196,34 @@ function Controllers({ controllers }: { controllers: GitopsController[] }) {
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-fg-muted">{controllerLabel(one.controller)}</span>
-              <span className={`ml-auto ${controllerClass(one)}`}>
-                {one.ready} of {one.wanted}
-              </span>
+              <span className={`ml-auto ${controllerClass(one)}`}>{controllerCount(one)}</span>
             </div>
           </div>
         ))}
       </div>
     </>
   );
+}
+
+function newestWarning(warnings: OverviewEvent[]): string {
+  let newest = '';
+  for (const warning of warnings) {
+    if (warning.lastSeen > newest) {
+      newest = warning.lastSeen;
+    }
+  }
+  return newest;
+}
+
+function warningHint(warnings: OverviewEvent[], now: number): string {
+  if (warnings.length === 0) {
+    return 'none right now';
+  }
+  const newest = ago(newestWarning(warnings), now);
+  if (newest === '') {
+    return 'the newest events shown';
+  }
+  return `newest ${newest} ago`;
 }
 
 function eventKey(warning: OverviewEvent): string {
@@ -235,7 +264,7 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
           <Tile
             label="Recent warnings"
             value={String(data.warnings.length)}
-            hint="the newest events shown"
+            hint={warningHint(data.warnings, now)}
           />
         </div>
 

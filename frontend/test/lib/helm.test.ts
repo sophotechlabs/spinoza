@@ -18,6 +18,7 @@ import {
   latestColor,
   latestLabel,
   latestNote,
+  noRepositoryKnowsAnyChart,
   statusDot,
   statusLabel,
   statusText,
@@ -198,7 +199,7 @@ describe('the newest chart version a repository offers', () => {
       'a newer chart version is available',
     );
     expect(latestNote({ latest: '6.9.2', outdated: false })).toBe('up to date');
-    expect(latestNote({})).toBe('no chart repository knows this chart');
+    expect(latestNote({})).toBe('');
   });
 });
 
@@ -883,5 +884,23 @@ describe('installing a chart', () => {
     );
 
     await expect(installRelease(args, false)).rejects.toThrow('the install failed with status 502');
+  });
+});
+
+describe('when no chart repository knows anything', () => {
+  it('is true only when every release lacks a latest version', () => {
+    expect(noRepositoryKnowsAnyChart([{ latest: '' }, {}])).toBe(true);
+    expect(noRepositoryKnowsAnyChart([{ latest: '' }, { latest: '1.2.3' }])).toBe(false);
+  });
+
+  it('is false when there is nothing to say it about', () => {
+    expect(noRepositoryKnowsAnyChart([])).toBe(false);
+  });
+
+  it('leaves the per-row note empty so the fact is said once', () => {
+    expect(latestNote({ latest: '' })).toBe('');
+    expect(latestNote({ latest: '1.2.3', outdated: true })).toBe(
+      'a newer chart version is available',
+    );
   });
 });

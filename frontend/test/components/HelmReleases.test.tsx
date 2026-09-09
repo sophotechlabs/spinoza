@@ -61,7 +61,7 @@ describe('HelmReleases', () => {
     render(<HelmReleases selected={null} onSelect={vi.fn()} />);
 
     await screen.findByText('demo');
-    const cells = screen.getAllByRole('cell').map((cell) => cell.textContent);
+    const cells = screen.getAllByRole('cell').map((cell) => cell.textContent.trim());
 
     expect(cells.slice(0, 6)).toEqual([
       'podinfo',
@@ -110,12 +110,20 @@ describe('HelmReleases', () => {
     expect(latest).toHaveTextContent('6.9.2');
   });
 
-  it('says nothing about a chart no repository knows', async () => {
-    stub({ releases: [release()] });
+  it('says once, above the table, that no repository knows these charts', async () => {
+    stub({ releases: [release(), release({ name: 'other' })] });
     render(<HelmReleases selected={null} onSelect={vi.fn()} />);
 
     await screen.findAllByText('podinfo');
-    expect(screen.getByText(/no chart repository knows this chart/)).toBeInTheDocument();
+    expect(screen.getAllByText(/No chart repository here knows these charts/)).toHaveLength(1);
+  });
+
+  it('says nothing of the sort once a repository knows one of them', async () => {
+    stub({ releases: [release({ latest: '7.1.0' })] });
+    render(<HelmReleases selected={null} onSelect={vi.fn()} />);
+
+    await screen.findAllByText('podinfo');
+    expect(screen.queryByText(/No chart repository here knows these charts/)).toBeNull();
   });
 
   it('colours a failed release apart from a deployed one', async () => {

@@ -50,18 +50,15 @@ afterEach(() => {
 });
 
 describe('ViewSwitch', () => {
-  it('says why the switch is unavailable when this build has no window', async () => {
+  it('offers nothing at all when this build has no window to switch to', async () => {
     stub({ view: { window: false } });
 
-    render(<ViewSwitch onLeft={vi.fn()} />);
+    const { container } = render(<ViewSwitch onLeft={vi.fn()} />);
 
-    const button = await screen.findByRole('button', { name: 'Desktop' });
-    expect(button).toBeDisabled();
-    expect(
-      screen.getByTitle(
-        'Switching between window and browser is only available when Spinoza starts as the desktop app',
-      ),
-    ).toContainElement(button);
+    await waitFor(() => {
+      expect(container.textContent).toBe('');
+    });
+    expect(screen.queryByRole('button', { name: 'Desktop' })).toBeNull();
   });
 
   it('offers nothing until the server has answered', () => {

@@ -5,6 +5,7 @@ import {
   latestColor,
   latestLabel,
   latestNote,
+  noRepositoryKnowsAnyChart,
   statusDot,
   statusLabel,
   statusText,
@@ -142,6 +143,11 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
           Nothing matches that filter.
         </div>
       )}
+      {noRepositoryKnowsAnyChart(visible) && (
+        <p className="shrink-0 px-2 py-1 text-fg-muted">
+          No chart repository here knows these charts, so no newer versions are shown.
+        </p>
+      )}
       {visible.length > 0 && (
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full border-collapse text-left whitespace-nowrap">
@@ -178,7 +184,7 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
                       className="max-w-full truncate hover:underline"
                     >
                       {release.name}
-                    </button>
+                    </button>{' '}
                     {release.fluxRef !== undefined && (
                       <span
                         title="Flux installed this release. A helm upgrade here goes back at the next reconcile."

@@ -571,7 +571,7 @@ describe('History', () => {
 
     render(<History onOpen={vi.fn()} />);
 
-    expect(await screen.findByText('325 MB held')).toBeTruthy();
+    expect(await screen.findByText('325 MB held by spinoza')).toBeTruthy();
   });
 
   it('offers nothing older when the page holds everything', async () => {

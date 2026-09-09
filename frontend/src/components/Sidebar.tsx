@@ -47,7 +47,14 @@ const BASE_DISCOVERY_BACKOFF_MS = 500;
 const MAX_DISCOVERY_BACKOFF_MS = 5000;
 const MAX_DISCOVERY_ATTEMPTS = 6;
 
-function isActive(active: ResourceDescriptor | null, descriptor: ResourceDescriptor): boolean {
+function isActive(
+  view: View,
+  active: ResourceDescriptor | null,
+  descriptor: ResourceDescriptor,
+): boolean {
+  if (view !== 'resources') {
+    return false;
+  }
   if (active === null) {
     return false;
   }
@@ -558,7 +565,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                     <button
                       key={descriptorKey(resource)}
                       type="button"
-                      aria-current={current(isActive(activeResource, resource))}
+                      aria-current={current(isActive(view, activeResource, resource))}
                       onClick={() => {
                         onSelect(resource);
                       }}
@@ -570,7 +577,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                         capped.includes(descriptorKey(resource)),
                       )}
                       className={resourceClass(
-                        isActive(activeResource, resource),
+                        isActive(view, activeResource, resource),
                         false,
                         isEmpty(counts[descriptorKey(resource)]),
                       )}
@@ -628,7 +635,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                               <button
                                 key={descriptorKey(resource)}
                                 type="button"
-                                aria-current={current(isActive(activeResource, resource))}
+                                aria-current={current(isActive(view, activeResource, resource))}
                                 onClick={() => {
                                   onSelect(resource);
                                 }}
@@ -640,7 +647,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                                   capped.includes(descriptorKey(resource)),
                                 )}
                                 className={resourceClass(
-                                  isActive(activeResource, resource),
+                                  isActive(view, activeResource, resource),
                                   true,
                                   isEmpty(counts[descriptorKey(resource)]),
                                 )}

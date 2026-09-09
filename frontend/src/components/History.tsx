@@ -380,7 +380,7 @@ export default function History({ onOpen }: HistoryProps) {
         )}
         {held.data !== null && (
           <span className="text-fg-muted" title="what spinoza is holding while it watches">
-            {held.data.heapMi} MB held
+            {held.data.heapMi} MB held by spinoza
           </span>
         )}
         {(data.dropped ?? 0) > 0 && (

@@ -254,6 +254,42 @@ describe('IssueQueue', () => {
     expect(await screen.findByText(/revision 4/)).toBeInTheDocument();
   });
 
+  it('dates the change when it is older than the failure', async () => {
+    stub(
+      queue({
+        rows: [
+          issue({
+            change: 'revision 4',
+            changedAt: '2026-08-01T10:00:00Z',
+            since: '2026-08-28T11:00:00Z',
+          }),
+        ],
+      }),
+    );
+
+    render(<IssueQueue />);
+
+    expect(await screen.findByText(/revision 4 ·/)).toBeInTheDocument();
+  });
+
+  it('says the age once when the change and the failure are the same moment', async () => {
+    stub(
+      queue({
+        rows: [
+          issue({
+            change: 'revision 4',
+            changedAt: '2026-08-28T11:00:00Z',
+            since: '2026-08-28T11:00:00Z',
+          }),
+        ],
+      }),
+    );
+
+    render(<IssueQueue />);
+
+    expect(await screen.findByText('revision 4')).toBeInTheDocument();
+  });
+
   it('shows a change with no timestamp on its own', async () => {
     stub(queue({ rows: [issue({ change: 'revision 4' })] }));
 

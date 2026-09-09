@@ -39,3 +39,11 @@ export function scopedBy(scope: boolean | null, namespaced: boolean): boolean {
   }
   return scope;
 }
+
+export function kindFor(categories: Category[], gvr: Gvr): string {
+  const found = typeFor(categories, gvr);
+  if (found === null) {
+    return gvr.resource;
+  }
+  return found.kind;
+}

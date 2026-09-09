@@ -90,6 +90,13 @@ function Change({ row, now }: { row: Issue; now: number }) {
   if (row.changedAt === undefined || row.changedAt === '') {
     return <span className="text-fg-muted">{row.change}</span>;
   }
+  if (ago(row.changedAt, now) === ago(row.since, now)) {
+    return (
+      <span className="text-fg-muted" title={row.changedAt}>
+        {row.change}
+      </span>
+    );
+  }
   return (
     <span className="text-fg-muted" title={row.changedAt}>
       {row.change} · {ago(row.changedAt, now)}

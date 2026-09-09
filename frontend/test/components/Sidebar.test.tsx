@@ -1177,3 +1177,30 @@ describe('the fleet entry', () => {
 function categoriesNow(): Category[] {
   return useCatalogStore.getState().categories[activeClusterNow()] ?? [];
 }
+
+describe('which sidebar entry is the current one', () => {
+  const pods = makeDescriptor({ group: '', version: 'v1', resource: 'pods', kind: 'Pod' });
+
+  it('marks only the view when the table is not what is on screen', async () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'issues', activeResource: pods });
+    const header = await screen.findByRole('button', { name: /Workloads/ });
+    await userEvent.click(header);
+
+    const current = screen
+      .getAllByRole('button')
+      .filter((one) => one.getAttribute('aria-current') === 'page');
+
+    expect(current).toHaveLength(1);
+    expect(current[0].textContent).toContain('Issues');
+  });
+
+  it('marks the kind while the table is what is on screen', async () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'resources', activeResource: pods });
+    const header = await screen.findByRole('button', { name: /Workloads/ });
+    await userEvent.click(header);
+
+    expect(screen.getByRole('button', { name: 'Pod' }).getAttribute('aria-current')).toBe('page');
+  });
+});

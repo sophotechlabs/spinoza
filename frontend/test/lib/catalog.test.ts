@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kindScope, scopedBy, typeFor } from '../../src/lib/catalog';
+import { kindFor, kindScope, scopedBy, typeFor } from '../../src/lib/catalog';
 import { makeCategory, makeDescriptor } from '../helpers';
 
 const podType = makeDescriptor({ resource: 'pods', kind: 'Pod', namespaced: true });
@@ -45,5 +45,24 @@ describe('settling on a scope', () => {
   it('falls back to the snapshot while discovery has nothing to say', () => {
     expect(scopedBy(null, true)).toBe(true);
     expect(scopedBy(null, false)).toBe(false);
+  });
+});
+
+describe('naming the kind behind an object', () => {
+  it('takes the Kind the catalog knows', () => {
+    const pods = {
+      group: '',
+      version: 'v1',
+      resource: 'pods',
+      kind: 'Pod',
+      namespaced: true,
+      category: 'Workloads',
+    };
+
+    expect(kindFor([{ name: 'Workloads', resources: [pods] }], pods)).toBe('Pod');
+  });
+
+  it('falls back to the resource name for a kind nobody discovered', () => {
+    expect(kindFor([], { group: '', version: 'v1', resource: 'widgets' })).toBe('widgets');
   });
 });

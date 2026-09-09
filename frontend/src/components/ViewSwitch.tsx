@@ -14,9 +14,6 @@ function reason(err: unknown): string {
   return 'the switch did not happen';
 }
 
-const NO_WINDOW =
-  'Switching between window and browser is only available when Spinoza starts as the desktop app';
-
 export default function ViewSwitch({ onLeft }: ViewSwitchProps) {
   const [window_, setWindow] = useState(false);
   const [asked, setAsked] = useState(false);
@@ -69,21 +66,7 @@ export default function ViewSwitch({ onLeft }: ViewSwitchProps) {
   }
 
   if (!window_) {
-    return (
-      <span title={NO_WINDOW}>
-        <button
-          type="button"
-          disabled
-          className={`${CONTROL} border-edge text-fg-subtle`}
-          aria-describedby="view-switch-why"
-        >
-          Desktop
-        </button>
-        <span id="view-switch-why" className="sr-only">
-          {NO_WINDOW}
-        </span>
-      </span>
-    );
+    return null;
   }
 
   if (desktop) {
