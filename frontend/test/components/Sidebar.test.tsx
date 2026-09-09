@@ -1204,3 +1204,74 @@ describe('which sidebar entry is the current one', () => {
     expect(screen.getByRole('button', { name: 'Pod' }).getAttribute('aria-current')).toBe('page');
   });
 });
+
+describe('finding a kind in a long list', () => {
+  const pods = makeDescriptor({ group: '', version: 'v1', resource: 'pods', kind: 'Pod' });
+
+  it('narrows the list to what was typed', async () => {
+    stubFetch(categories);
+    renderSidebar();
+    await screen.findByRole('button', { name: /Workloads/ });
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Filter resource types' }), 'conf');
+
+    expect(screen.getByRole('button', { name: /ConfigMap/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /^Workloads/ })).toBeNull();
+  });
+
+  it('opens the groups that match, without touching what the reader collapsed', async () => {
+    stubFetch(categories);
+    renderSidebar();
+    const box = screen.getByRole('searchbox', { name: 'Filter resource types' });
+
+    await userEvent.type(box, 'pod');
+
+    expect(screen.getByRole('button', { name: /^Pod/ })).toBeVisible();
+
+    await userEvent.clear(box);
+
+    expect(screen.queryByRole('button', { name: /^Pod/ })).toBeNull();
+  });
+
+  it('says so when nothing matches', async () => {
+    stubFetch(categories);
+    renderSidebar();
+    await screen.findByRole('button', { name: /Workloads/ });
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Filter resource types' }), 'zzz');
+
+    expect(screen.getByText('No resource type matches zzz.')).toBeVisible();
+  });
+
+  it('keeps the kind on screen in reach while its group is collapsed', async () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'resources', activeResource: pods });
+
+    const pinned = await screen.findByRole('button', { name: /^Pod/ });
+
+    expect(pinned).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByLabelText('The kind on screen')).toContainElement(pinned);
+  });
+
+  it('stops pinning it once its group is open', async () => {
+    stubFetch(categories);
+    renderSidebar({ view: 'resources', activeResource: pods });
+    const header = await screen.findByRole('button', { name: /Workloads/ });
+
+    await userEvent.click(header);
+
+    expect(screen.queryByLabelText('The kind on screen')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Pod/ })).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+describe('the two regions of the sidebar', () => {
+  it('names what leads to a workflow and what leads to a kind', async () => {
+    stubFetch(categories);
+    renderSidebar();
+    await screen.findByRole('button', { name: /Workloads/ });
+
+    expect(screen.getByRole('heading', { name: 'Workflows' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Resources' })).toBeVisible();
+  });
+});

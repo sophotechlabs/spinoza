@@ -13,7 +13,7 @@ import {
   fetchResources,
   refreshResources,
 } from '../lib/discovery';
-import { groupByApiGroup, isNested } from '../lib/sidebarTree';
+import { filterCategories, groupByApiGroup, isNested, shownInTree } from '../lib/sidebarTree';
 import { NUDGE_STEP, useSidebarWidth } from '../lib/usePanelWidth';
 import { useClusterEpoch } from '../store/cluster';
 import { rememberCatalog, rememberCounts } from '../store/catalog';
@@ -31,6 +31,7 @@ import { kindLabels } from '../lib/kindLabels';
 import type { SidebarSections } from '../lib/sidebarState';
 import { useTabStrip } from '../store/clusters';
 import { VIEW_LABELS } from '../lib/views';
+import { FilterInput } from './DenseToolbar';
 
 interface SidebarProps {
   view: View;
@@ -232,6 +233,67 @@ function engineMark(found: boolean, open: boolean): string {
   return chevron(!open);
 }
 
+interface Tallies {
+  counts: Record<string, number>;
+  failing: Record<string, number>;
+  capped: string[];
+  byPhase: string[];
+}
+
+interface KindButtonProps {
+  resource: ResourceDescriptor;
+  label: string;
+  tallies: Tallies;
+  active: boolean;
+  nested?: boolean;
+  onSelect: (descriptor: ResourceDescriptor) => void;
+}
+
+function KindButton({
+  resource,
+  label,
+  tallies,
+  active,
+  nested = false,
+  onSelect,
+}: KindButtonProps) {
+  const key = descriptorKey(resource);
+  const count = tallies.counts[key];
+  const failing = tallies.failing[key];
+  const capped = tallies.capped.includes(key);
+  const byPhase = tallies.byPhase.includes(key);
+  return (
+    <button
+      type="button"
+      aria-current={current(active)}
+      onClick={() => {
+        onSelect(resource);
+      }}
+      title={kindTitle(label, count, failing, byPhase, capped)}
+      className={resourceClass(active, nested, isEmpty(count))}
+    >
+      <span className="truncate">{label}</span>{' '}
+      <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
+        {failingBadge(failing, capped) !== '' && (
+          <span aria-hidden="true" className="text-error">
+            {failingBadge(failing, capped)}
+          </span>
+        )}
+        <span>{countLabel(count)}</span>
+        <span className="sr-only">{failingNote(failing, byPhase, capped)}</span>
+      </span>
+    </button>
+  );
+}
+
+function RegionHeading({ children }: { children: string }) {
+  return (
+    <h2 className="px-3 pt-1 pb-0.5 text-[10px] font-semibold tracking-widest text-fg-subtle uppercase">
+      {children}
+    </h2>
+  );
+}
+
 export default function Sidebar({ view, activeResource, onSelect, onSelectView }: SidebarProps) {
   const epoch = useClusterEpoch();
   const several = useTabStrip();
@@ -242,6 +304,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
   useTrafficProbe();
   const traffic = useTrafficSupport();
   const [sections, setSections] = useState<SidebarSections>(() => readSections());
+  const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [countsError, setCountsError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
@@ -379,12 +442,28 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
     }
   }
 
+  const tallies = { counts, failing, capped, byPhase };
+  const filtering = query.trim() !== '';
+  const shown = filterCategories(categories, query);
+  const isOpen = (section: string) => {
+    if (filtering) {
+      return true;
+    }
+    return sectionOpen(sections, section);
+  };
+  const allLabels = kindLabels(categories.flatMap((one) => one.resources));
+  let pinned: ResourceDescriptor | null = null;
+  if (view === 'resources' && !shownInTree(shown, isOpen, activeResource)) {
+    pinned = activeResource;
+  }
+
   return (
     <div
       style={{ width: `${width}px` }}
       className="flex min-h-0 shrink-0 border-r border-edge bg-surface"
     >
       <nav className="min-w-0 flex-1 overflow-y-auto py-2">
+        <RegionHeading>Workflows</RegionHeading>
         <div className="mb-1" aria-label="Cluster views">
           {overviewAtTop(categories, error) && (
             <OverviewButton
@@ -530,11 +609,37 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
             Object counts unavailable: {countsError}
           </div>
         )}
+        <RegionHeading>Resources</RegionHeading>
+        <div className="px-2 pb-1">
+          <FilterInput
+            label="Filter resource types"
+            placeholder="Filter kinds"
+            value={query}
+            onChange={setQuery}
+            width="w-full"
+          />
+        </div>
+        {pinned !== null && (
+          <div className="mb-1" aria-label="The kind on screen">
+            <KindButton
+              resource={pinned}
+              label={allLabels[descriptorKey(pinned)] ?? pinned.kind}
+              tallies={tallies}
+              active
+              onSelect={onSelect}
+            />
+          </div>
+        )}
         {error === null && categories.length === 0 && (
           <div className="px-3 py-1 text-[11px] text-fg-muted">No resource types discovered.</div>
         )}
-        {categories.map((category) => {
-          const isCollapsed = !sectionOpen(sections, category.name);
+        {error === null && filtering && shown.length === 0 && (
+          <div className="px-3 py-1 text-[11px] text-fg-muted">
+            No resource type matches {query}.
+          </div>
+        )}
+        {shown.map((category) => {
+          const isCollapsed = !isOpen(category.name);
           const labels = kindLabels(category.resources);
           return (
             <div key={category.name} className="mb-1">
@@ -562,49 +667,14 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
               {!isCollapsed && !isNested(category.name) && (
                 <div>
                   {byPopulated(category.resources, counts).map((resource) => (
-                    <button
+                    <KindButton
                       key={descriptorKey(resource)}
-                      type="button"
-                      aria-current={current(isActive(view, activeResource, resource))}
-                      onClick={() => {
-                        onSelect(resource);
-                      }}
-                      title={kindTitle(
-                        labels[descriptorKey(resource)],
-                        counts[descriptorKey(resource)],
-                        failing[descriptorKey(resource)],
-                        byPhase.includes(descriptorKey(resource)),
-                        capped.includes(descriptorKey(resource)),
-                      )}
-                      className={resourceClass(
-                        isActive(view, activeResource, resource),
-                        false,
-                        isEmpty(counts[descriptorKey(resource)]),
-                      )}
-                    >
-                      <span className="truncate">{labels[descriptorKey(resource)]}</span>{' '}
-                      <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
-                        {failingBadge(
-                          failing[descriptorKey(resource)],
-                          capped.includes(descriptorKey(resource)),
-                        ) !== '' && (
-                          <span aria-hidden="true" className="text-error">
-                            {failingBadge(
-                              failing[descriptorKey(resource)],
-                              capped.includes(descriptorKey(resource)),
-                            )}
-                          </span>
-                        )}
-                        <span>{countLabel(counts[descriptorKey(resource)])}</span>
-                        <span className="sr-only">
-                          {failingNote(
-                            failing[descriptorKey(resource)],
-                            byPhase.includes(descriptorKey(resource)),
-                            capped.includes(descriptorKey(resource)),
-                          )}
-                        </span>
-                      </span>
-                    </button>
+                      resource={resource}
+                      label={labels[descriptorKey(resource)]}
+                      tallies={tallies}
+                      active={isActive(view, activeResource, resource)}
+                      onSelect={onSelect}
+                    />
                   ))}
                 </div>
               )}
@@ -612,7 +682,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                 <div>
                   {groupByApiGroup(category.resources).map((group) => {
                     const key = `${category.name}/${group.name}`;
-                    const groupCollapsed = !sectionOpen(sections, key);
+                    const groupCollapsed = !isOpen(key);
                     return (
                       <div key={key}>
                         <button
@@ -632,49 +702,15 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
                         {!groupCollapsed && (
                           <div>
                             {byPopulated(group.resources, counts).map((resource) => (
-                              <button
+                              <KindButton
                                 key={descriptorKey(resource)}
-                                type="button"
-                                aria-current={current(isActive(view, activeResource, resource))}
-                                onClick={() => {
-                                  onSelect(resource);
-                                }}
-                                title={kindTitle(
-                                  labels[descriptorKey(resource)],
-                                  counts[descriptorKey(resource)],
-                                  failing[descriptorKey(resource)],
-                                  byPhase.includes(descriptorKey(resource)),
-                                  capped.includes(descriptorKey(resource)),
-                                )}
-                                className={resourceClass(
-                                  isActive(view, activeResource, resource),
-                                  true,
-                                  isEmpty(counts[descriptorKey(resource)]),
-                                )}
-                              >
-                                <span className="truncate">{labels[descriptorKey(resource)]}</span>{' '}
-                                <span className="flex shrink-0 items-center gap-1 text-fg-subtle">
-                                  {failingBadge(
-                                    failing[descriptorKey(resource)],
-                                    capped.includes(descriptorKey(resource)),
-                                  ) !== '' && (
-                                    <span aria-hidden="true" className="text-error">
-                                      {failingBadge(
-                                        failing[descriptorKey(resource)],
-                                        capped.includes(descriptorKey(resource)),
-                                      )}
-                                    </span>
-                                  )}
-                                  <span>{countLabel(counts[descriptorKey(resource)])}</span>
-                                  <span className="sr-only">
-                                    {failingNote(
-                                      failing[descriptorKey(resource)],
-                                      byPhase.includes(descriptorKey(resource)),
-                                      capped.includes(descriptorKey(resource)),
-                                    )}
-                                  </span>
-                                </span>
-                              </button>
+                                resource={resource}
+                                label={labels[descriptorKey(resource)]}
+                                tallies={tallies}
+                                active={isActive(view, activeResource, resource)}
+                                nested
+                                onSelect={onSelect}
+                              />
                             ))}
                           </div>
                         )}
