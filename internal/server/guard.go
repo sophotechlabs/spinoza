@@ -58,6 +58,9 @@ func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 		if !upgrading(r) {
 			setOrdinaryDeadlines(w)
 		}
+		named := newRequestID()
+		w.Header().Set(requestHeader, named)
+		r = withRequestID(r, named)
 		admitted, ok := s.admit(w, r)
 		if !ok {
 			return
@@ -126,6 +129,7 @@ func (s *Server) admitLocal(w http.ResponseWriter, r *http.Request) (*http.Reque
 	if !isLocal(r) {
 		slog.Warn(
 			"refused a request that did not look local",
+			"request", requestIDOf(r.Context()),
 			"path", r.URL.Path,
 			"host", r.Host,
 			"origin", r.Header.Get("Origin"),
@@ -137,6 +141,7 @@ func (s *Server) admitLocal(w http.ResponseWriter, r *http.Request) (*http.Reque
 	if !publicAsset(r) && !s.authorize(w, r) {
 		slog.Warn(
 			"refused a request without this run's token",
+			"request", requestIDOf(r.Context()),
 			"path", r.URL.Path,
 			"origin", r.Header.Get("Origin"),
 		)
@@ -157,16 +162,19 @@ func finish(recorded *recorder, r *http.Request, started time.Time, caught any) 
 			writeError(recorded, http.StatusInternalServerError, "spinoza broke handling that request; the terminal has the details")
 		}
 	}
+	took := time.Since(started)
+	measureRequest(r, recorded.status, took)
 	if !mutating(r.Method) {
 		return
 	}
 	slog.Info(
 		"acted on the cluster",
+		"request", requestIDOf(r.Context()),
 		"method", r.Method,
 		"path", r.URL.Path,
 		"query", loggableQuery(r),
 		"status", recorded.status,
-		"took", time.Since(started).Round(time.Millisecond),
+		"took", took.Round(time.Millisecond),
 	)
 }
 

@@ -19,6 +19,7 @@ type stubCatalog struct {
 	catalog   api.ResourceCatalog
 	counts    api.ResourceCounts
 	refreshed int
+	syncing   bool
 }
 
 func (s *stubCatalog) Resources() api.ResourceCatalog {
@@ -28,6 +29,10 @@ func (s *stubCatalog) Resources() api.ResourceCatalog {
 func (s *stubCatalog) RefreshResources() api.ResourceCatalog {
 	s.refreshed++
 	return s.catalog
+}
+
+func (s *stubCatalog) Syncing() bool {
+	return s.syncing
 }
 
 func (s *stubCatalog) Counts(context.Context) api.ResourceCounts {

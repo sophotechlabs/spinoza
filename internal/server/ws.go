@@ -103,9 +103,8 @@ type entry struct {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	release, ok := s.claimLiveConnection(r)
+	release, ok := s.admitLive(w, r)
 	if !ok {
-		writeError(w, http.StatusTooManyRequests, "too many live connections are already open")
 		return
 	}
 	defer release()
@@ -986,13 +985,18 @@ func (s *Server) track(sess *wsSession) {
 	s.mu.Lock()
 	s.sessions[sess] = struct{}{}
 	s.mu.Unlock()
+	measureSocketOpened()
 	s.signalSessionChange()
 }
 
 func (s *Server) forget(sess *wsSession) {
 	s.mu.Lock()
+	_, held := s.sessions[sess]
 	delete(s.sessions, sess)
 	s.mu.Unlock()
+	if held {
+		measureSocketClosed()
+	}
 	s.signalSessionChange()
 }
 
@@ -1082,6 +1086,9 @@ func (s *Server) dropSessions() {
 	s.sessions = map[*wsSession]struct{}{}
 	s.terminals = map[*websocket.Conn]string{}
 	s.mu.Unlock()
+	for range open {
+		measureSocketClosed()
+	}
 	s.signalSessionChange()
 	for _, sess := range open {
 		_ = sess.conn.CloseNow()

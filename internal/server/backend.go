@@ -29,6 +29,7 @@ import (
 type Catalog interface {
 	Resources() api.ResourceCatalog
 	RefreshResources() api.ResourceCatalog
+	Syncing() bool
 	Counts(ctx context.Context) api.ResourceCounts
 	Search(ctx context.Context, query string) api.SearchResults
 	Namespaces(ctx context.Context) api.Namespaces

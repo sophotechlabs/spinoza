@@ -302,6 +302,11 @@ func (n notStubbed) RefreshResources() (r0 api.ResourceCatalog) {
 	return r0
 }
 
+func (n notStubbed) Syncing() (r0 bool) {
+	n.missing("Syncing")
+	return r0
+}
+
 func (n notStubbed) RemoveNodeShell(_ context.Context, _ string) error {
 	n.missing("RemoveNodeShell")
 	return nil

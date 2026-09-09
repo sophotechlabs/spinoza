@@ -56,7 +56,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, limit int64, into an
 func writeError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	err := json.NewEncoder(w).Encode(api.Failure{Message: message})
+	err := json.NewEncoder(w).Encode(api.Failure{Message: message, Request: w.Header().Get(requestHeader)})
 	if err != nil {
 		slog.Warn("an error response could not be encoded", "error", err)
 	}

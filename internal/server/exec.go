@@ -21,6 +21,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/exec"
 	"github.com/sophotechlabs/spinoza/internal/nodeshell"
 	"github.com/sophotechlabs/spinoza/internal/safe"
+	"github.com/sophotechlabs/spinoza/internal/transcript"
 )
 
 const execWriteTimeout = 10 * time.Second
@@ -132,9 +133,8 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "node is required")
 		return
 	}
-	release, allowed := s.claimLiveConnection(r)
+	release, allowed := s.admitLive(w, r)
 	if !allowed {
-		writeError(w, http.StatusTooManyRequests, "too many live connections are already open")
 		return
 	}
 	defer release()
@@ -163,6 +163,7 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = socket.CloseNow() }()
 	s.trackExec(socket, s.clusterKey(r))
+	measureTerminal("nodeShell")
 	defer s.forgetExec(socket)
 
 	ctx, cancel := context.WithCancel(r.Context())
@@ -170,7 +171,9 @@ func (s *Server) handleNodeShell(w http.ResponseWriter, r *http.Request) {
 	s.revalidateLive(ctx, cancel, r, "revalidating the node shell on "+node, func(ctx context.Context) error {
 		return authorizeBackend(ctx, backend, true, checks...)
 	})
-	conn := &execConn{conn: socket, ctx: ctx}
+	tape := s.startTranscript(r, "nodeShell", node)
+	defer tape.Close()
+	conn := &execConn{conn: socket, ctx: ctx, tape: tape}
 	shell, startErr := writer.StartNodeShell(ctx, node)
 	s.record(r, change{verb: verbNodeShell, ref: nodeRef(node), kind: kindNode, err: startErr})
 	if startErr != nil {
@@ -220,9 +223,8 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "namespace and pod are required")
 		return
 	}
-	release, allowed := s.claimLiveConnection(r)
+	release, allowed := s.admitLive(w, r)
 	if !allowed {
-		writeError(w, http.StatusTooManyRequests, "too many live connections are already open")
 		return
 	}
 	defer release()
@@ -239,6 +241,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = socket.CloseNow() }()
 	s.trackExec(socket, s.clusterKey(r))
+	measureTerminal("exec")
 	defer s.forgetExec(socket)
 
 	ctx, cancel := context.WithCancel(r.Context())
@@ -246,7 +249,9 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	s.revalidateLive(ctx, cancel, r, "revalidating the terminal in "+req.Namespace+"/"+req.Pod, func(ctx context.Context) error {
 		return authorizeBackend(ctx, backend, true, checks...)
 	})
-	conn := &execConn{conn: socket, ctx: ctx}
+	tape := s.startTranscript(r, "exec", req.Namespace+"/"+req.Pod)
+	defer tape.Close()
+	conn := &execConn{conn: socket, ctx: ctx, tape: tape}
 	session, startErr := backend.StartExec(ctx, req, conn)
 	s.record(r, change{
 		verb:   verbExec,
@@ -338,6 +343,7 @@ func brokenConnection(text string) bool {
 type execConn struct {
 	conn *websocket.Conn
 	ctx  context.Context
+	tape *transcript.Session
 	mu   sync.Mutex
 }
 
@@ -353,12 +359,13 @@ func (e *execConn) send(ctx context.Context, channel byte, payload []byte) error
 	return e.conn.Write(writeCtx, websocket.MessageBinary, frame)
 }
 
-func (e *execConn) Write(p []byte) (int, error) {
-	err := e.send(e.ctx, api.ExecChannelStdout, p)
+func (e *execConn) Write(payload []byte) (int, error) {
+	e.tape.Shown(payload)
+	err := e.send(e.ctx, api.ExecChannelStdout, payload)
 	if err != nil {
 		return 0, fmt.Errorf("the terminal stopped reading: %w", err)
 	}
-	return len(p), nil
+	return len(payload), nil
 }
 
 func (e *execConn) pump(ctx context.Context, c *websocket.Conn, session *exec.Session) {
@@ -372,6 +379,9 @@ func (e *execConn) pump(ctx context.Context, c *websocket.Conn, session *exec.Se
 		}
 		if len(data) == 0 {
 			continue
+		}
+		if data[0] == api.ExecChannelStdin {
+			e.tape.Typed(data[1:])
 		}
 		if !route(session, data[0], data[1:]) {
 			return

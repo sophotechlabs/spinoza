@@ -59,9 +59,8 @@ func (s *Server) handleLocalShell(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, noLocalShell)
 		return
 	}
-	release, allowed := s.claimLiveConnection(r)
+	release, allowed := s.admitLive(w, r)
 	if !allowed {
-		writeError(w, http.StatusTooManyRequests, "too many live connections are already open")
 		return
 	}
 	defer release()
@@ -72,6 +71,7 @@ func (s *Server) handleLocalShell(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = socket.CloseNow() }()
 	s.trackExec(socket, localShellCluster)
+	measureTerminal("localShell")
 	defer s.forgetExec(socket)
 
 	ctx, cancel := context.WithCancel(r.Context())

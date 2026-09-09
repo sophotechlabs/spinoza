@@ -53,6 +53,17 @@ func (m *Manager) syncedTypes() map[string]watchedType {
 	return out
 }
 
+func (m *Manager) Syncing() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, st := range m.streams {
+		if !st.informer.HasSynced() {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Manager) Cached() []api.ResourceDescriptor {
 	synced := m.syncedTypes()
 	descs := m.descriptors()
