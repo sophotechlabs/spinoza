@@ -312,12 +312,10 @@ type GitopsController struct {
 }
 
 type ClusterOverview struct {
-	Version  string          `json:"version"`
-	Nodes    NodeSummary     `json:"nodes"`
-	Pods     PodSummary      `json:"pods"`
-	Warnings []OverviewEvent `json:"warnings"`
-	// WarningCount is how many there were, which is more than len(Warnings)
-	// once the list is cut. A tile that renders the length reports the cap.
+	Version      string             `json:"version"`
+	Nodes        NodeSummary        `json:"nodes"`
+	Pods         PodSummary         `json:"pods"`
+	Warnings     []OverviewEvent    `json:"warnings"`
 	WarningCount int                `json:"warningCount"`
 	Controllers  []GitopsController `json:"controllers,omitempty"`
 	Error        string             `json:"error,omitempty"`
