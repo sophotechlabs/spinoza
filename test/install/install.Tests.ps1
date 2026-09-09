@@ -253,6 +253,36 @@ Describe 'Get-InstalledVersion' {
     }
 }
 
+Describe 'Move-Aside' {
+    BeforeEach {
+        $script:work = NewWorkspace
+        $script:target = Join-Path $script:work 'target.bin'
+        $script:retired = "$($script:target).old"
+    }
+    AfterEach { Remove-Item -LiteralPath $script:work -Recurse -Force -ErrorAction SilentlyContinue }
+
+    It 'moves a binary nothing is holding' {
+        Set-Content -LiteralPath $script:target -Value 'one' -NoNewline
+        Move-Aside -Target $script:target -Retired $script:retired
+        Test-Path -LiteralPath $script:target | Should -BeFalse
+        Get-Content -LiteralPath $script:retired -Raw | Should -Be 'one'
+    }
+    It 'keeps trying while the binary is still held open' {
+        Set-Content -LiteralPath $script:target -Value 'one' -NoNewline
+        $stream = [System.IO.File]::Open($script:target, 'Open', 'Read', 'None')
+        try {
+            $timer = [System.Diagnostics.Stopwatch]::StartNew()
+            { Move-Aside -Target $script:target -Retired $script:retired -Attempts 3 -WaitMs 250 } |
+                Should -Throw
+            $timer.Stop()
+            $timer.ElapsedMilliseconds | Should -BeGreaterThan 400
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+}
+
 Describe 'Install-Binary' {
     BeforeEach {
         $script:work = NewWorkspace

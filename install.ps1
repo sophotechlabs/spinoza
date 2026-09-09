@@ -146,6 +146,27 @@ function Install-Copyright {
     Copy-Item -LiteralPath $source -Destination (Join-Path $Directory 'LICENSE.txt') -Force
 }
 
+function Move-Aside {
+    param(
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)][string]$Retired,
+        [int]$Attempts = 20,
+        [int]$WaitMs = 250
+    )
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            Move-Item -LiteralPath $Target -Destination $Retired -Force
+            return
+        }
+        catch {
+            if ($attempt -eq $Attempts) {
+                throw
+            }
+            Start-Sleep -Milliseconds $WaitMs
+        }
+    }
+}
+
 function Install-Binary {
     param(
         [Parameter(Mandatory = $true)][string]$Source,
@@ -156,7 +177,7 @@ function Install-Binary {
         Remove-Item -LiteralPath $retired -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $Target) {
-        Move-Item -LiteralPath $Target -Destination $retired -Force
+        Move-Aside -Target $Target -Retired $retired
     }
     try {
         Copy-Item -LiteralPath $Source -Destination $Target -Force
