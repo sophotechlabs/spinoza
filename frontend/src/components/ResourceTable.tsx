@@ -33,6 +33,7 @@ import {
   useSubLimit,
   useSubLoaded,
   useSubNamespaced,
+  useSubReceivedAt,
   useSubRows,
   useSubTotal,
 } from '../store/resources';
@@ -43,7 +44,7 @@ import { useElementWidth } from '../lib/useElementWidth';
 import { useDismissMenu } from '../lib/useDismissMenu';
 import { extraWidths, widthOf } from '../lib/columnFit';
 import { useNow } from '../lib/useNow';
-import { ago } from '../lib/time';
+import { ago, clockAt } from '../lib/time';
 import { fieldsOf, filterRows, parseChip } from '../lib/filterChips';
 import { scopedBy } from '../lib/catalog';
 import { useChips, useFiltersStore } from '../store/filters';
@@ -71,6 +72,7 @@ interface ResourceTableProps {
   subId: string;
   scope: boolean | null;
   cluster: string;
+  stale?: boolean;
   selected: Row | null;
   onSelect: (row: Row) => void;
   onMore?: (limit: number) => void;
@@ -80,10 +82,29 @@ const ROW_HEIGHT = 28;
 
 const SELECT_COLUMN_ID = 'select';
 
-function ResourceIdentity({ kind, cluster }: { kind: string; cluster: string }) {
+function ResourceIdentity({
+  kind,
+  cluster,
+  asOf,
+}: {
+  kind: string;
+  cluster: string;
+  asOf: string;
+}) {
   let namedCluster = cluster.trim();
   if (namedCluster === '') {
     namedCluster = 'unavailable';
+  }
+  let stamp = null;
+  if (asOf !== '') {
+    stamp = (
+      <>
+        <span aria-hidden="true" className="text-fg-faint">
+          ·
+        </span>
+        <span className="shrink-0 whitespace-nowrap text-warn">as of {asOf}</span>
+      </>
+    );
   }
   return (
     <div className="flex min-w-0 shrink-0 items-baseline gap-1.5">
@@ -92,6 +113,7 @@ function ResourceIdentity({ kind, cluster }: { kind: string; cluster: string }) 
         ·
       </span>
       <span className="max-w-48 truncate text-fg-muted">Cluster: {namedCluster}</span>
+      {stamp}
     </div>
   );
 }
@@ -304,6 +326,7 @@ export default function ResourceTable({
   subId,
   scope,
   cluster,
+  stale = false,
   selected,
   onSelect,
   onMore,
@@ -312,7 +335,12 @@ export default function ResourceTable({
   const namespaced = useSubNamespaced(subId);
   const error = useSubError(subId);
   const loaded = useSubLoaded(subId);
+  const receivedAt = useSubReceivedAt(subId);
   const now = useNow();
+  let asOf = '';
+  if (stale) {
+    asOf = clockAt(receivedAt);
+  }
   const stateKey = tableKey(active);
   const [sorting, setSorting] = useState<SortingState>(() => readTableState(stateKey).sorting);
   const total = useSubTotal(subId);
@@ -617,7 +645,7 @@ export default function ResourceTable({
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center border-b border-edge bg-surface px-2 py-1.5 text-xs">
-          <ResourceIdentity kind={active.kind} cluster={cluster} />
+          <ResourceIdentity kind={active.kind} cluster={cluster} asOf={asOf} />
         </div>
         <div className="flex flex-1 items-start justify-center p-6 text-xs">
           <div className="max-w-2xl rounded border border-error-line bg-error-tint/40 px-3 py-2">
@@ -635,7 +663,7 @@ export default function ResourceTable({
         <StaleBanner what="Metrics" message={metricsError} onRetry={reloadMetrics} />
       )}
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface px-2 py-1.5 text-xs">
-        <ResourceIdentity kind={active.kind} cluster={cluster} />
+        <ResourceIdentity kind={active.kind} cluster={cluster} asOf={asOf} />
         <FilterBar stateKey={stateKey} fields={fields} rows={rows} text={text} onText={setText} />
         <details ref={columnsRef} className="relative">
           <summary className="cursor-pointer rounded border border-edge px-2 py-1 text-fg-soft hover:bg-surface-raised">

@@ -38,5 +38,13 @@ export function clock(stamp: string): string {
   if (Number.isNaN(at.getTime())) {
     return '';
   }
-  return `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
+  return clockAt(at.getTime());
+}
+
+export function clockAt(at: number): string {
+  const when = new Date(at);
+  if (Number.isNaN(when.getTime())) {
+    return '';
+  }
+  return `${pad(when.getHours())}:${pad(when.getMinutes())}:${pad(when.getSeconds())}`;
 }

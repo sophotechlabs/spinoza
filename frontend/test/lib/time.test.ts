@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ago, clock, since } from '../../src/lib/time';
+import { ago, clock, clockAt, since } from '../../src/lib/time';
 
 const NOW = Date.parse('2026-08-11T12:00:00Z');
 
@@ -56,5 +56,17 @@ describe('clock', () => {
 
   it('says nothing for a stamp it cannot read', () => {
     expect(clock('not a time')).toBe('');
+  });
+});
+
+describe('the clock beside data that stopped moving', () => {
+  it('reads a moment back as a wall clock time', () => {
+    const at = new Date('2026-09-09T08:31:04Z').getTime();
+
+    expect(clockAt(at)).toMatch(/^\d\d:\d\d:04$/);
+  });
+
+  it('says nothing about a moment that is not a moment', () => {
+    expect(clockAt(Number.NaN)).toBe('');
   });
 });

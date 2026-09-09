@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useClusterEpoch } from '../store/cluster';
+import { useRecoveries } from '../store/clusterHealth';
 import { sessionExpired } from '../store/session';
 
 export interface Polled<T> {
@@ -34,6 +35,7 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
     resetKey = '',
   } = options;
   const epoch = useClusterEpoch();
+  const recoveries = useRecoveries();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorAskedFor, setErrorAskedFor] = useState(resetKey);
@@ -84,7 +86,7 @@ export function usePoll<T>(fetcher: () => Promise<T>, options: PollOptions): Pol
       mounted = false;
       clearInterval(timer);
     };
-  }, [fetcher, intervalMs, enabled, fallback, epoch, reloads, refreshKey, resetKey]);
+  }, [fetcher, intervalMs, enabled, fallback, epoch, recoveries, reloads, refreshKey, resetKey]);
 
   const reload = useCallback(() => {
     setReloads((value) => value + 1);

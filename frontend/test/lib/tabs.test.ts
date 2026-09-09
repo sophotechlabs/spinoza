@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { attachedTo, contextOf, displayName, forgetTab, tabWidth } from '../../src/lib/tabs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  attachedTo,
+  contextOf,
+  displayName,
+  forgetTab,
+  reopenTab,
+  tabWidth,
+} from '../../src/lib/tabs';
 import { adoptClusters, useClustersStore } from '../../src/store/clusters';
 import { rememberObject, useRecentsStore } from '../../src/store/recents';
 import { rememberCatalog, useCatalogStore } from '../../src/store/catalog';
@@ -149,5 +156,37 @@ describe('how much room a tab gets', () => {
   it('gives up label width before the strip grows the window', () => {
     expect(tabWidth(7)).toBe('max-w-32');
     expect(tabWidth(20)).toBe('max-w-32');
+  });
+});
+
+describe('reconnecting one open cluster', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('closes the cluster, lets go of what it held, then opens it again', async () => {
+    const calls: { url: string; method: string }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string }) => {
+        calls.push({ url, method: init?.method ?? 'GET' });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ clusters: [], remembered: [] }),
+        });
+      }),
+    );
+    adoptClusters(listOf(MK1));
+    rememberObject({ group: '', version: 'v1', resource: 'pods', namespace: 'a', name: 'b' });
+
+    const tab = useClustersStore.getState().tabs[0];
+    await reopenTab(tab);
+
+    expect(calls[0].method).toBe('DELETE');
+    expect(calls[0].url).toContain('/api/clusters?cluster=');
+    expect(calls[1].method).toBe('POST');
+    expect(calls[1].url).toContain('/api/clusters?kubeconfig=');
+    expect(useRecentsStore.getState().byCluster[MK1]).toBeUndefined();
   });
 });

@@ -9,6 +9,7 @@ interface SubState {
   total: number;
   limit: number;
   revision: number;
+  receivedAt: number;
 }
 
 interface ResourcesState {
@@ -65,7 +66,15 @@ export const useResourcesStore = create<ResourcesState>((set) => ({
         rowMap.set(row.uid, row);
       }
       const subs = new Map(state.subs);
-      subs.set(subId, { columns, namespaced, rows: rowMap, total, limit, revision: 0 });
+      subs.set(subId, {
+        columns,
+        namespaced,
+        rows: rowMap,
+        total,
+        limit,
+        revision: 0,
+        receivedAt: Date.now(),
+      });
       const errors = new Map(state.errors);
       errors.delete(subId);
       return { subs, errors };
@@ -94,7 +103,7 @@ export const useResourcesStore = create<ResourcesState>((set) => ({
         return state;
       }
       const subs = new Map(state.subs);
-      subs.set(subId, { ...existing, revision: existing.revision + 1 });
+      subs.set(subId, { ...existing, revision: existing.revision + 1, receivedAt: Date.now() });
       return { subs };
     });
   },
@@ -146,6 +155,14 @@ export function useSubLimit(subId: string): number {
 
 export function useSubLoaded(subId: string): boolean {
   return useResourcesStore((state) => state.subs.has(subId));
+}
+
+export function useSubReceivedAt(subId: string): number {
+  const at = useResourcesStore((state) => state.subs.get(subId)?.receivedAt);
+  if (at === undefined) {
+    return 0;
+  }
+  return at;
 }
 
 export function useSubError(subId: string): string | null {

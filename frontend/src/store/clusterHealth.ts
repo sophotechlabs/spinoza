@@ -23,6 +23,7 @@ const ANSWERING: Health = { reachable: true, wobbling: false, reason: '', cause:
 interface ClusterHealthState {
   byCluster: ByCluster<Health>;
   recoveries: number;
+  recovered: string;
   report: (cluster: string, next: HealthReport) => void;
   forget: (cluster: string) => void;
   reset: () => void;
@@ -51,13 +52,14 @@ function recovered(was: Health | undefined, next: HealthReport): boolean {
 export const useClusterHealthStore = create<ClusterHealthState>((set) => ({
   byCluster: {},
   recoveries: 0,
+  recovered: '',
   report: (cluster, next) => {
     set((state) => {
       const was = state.byCluster[cluster];
       const now = Date.now();
       const byCluster = put(state.byCluster, cluster, settled(was, next, now));
       if (recovered(was, next)) {
-        return { byCluster, recoveries: state.recoveries + 1 };
+        return { byCluster, recoveries: state.recoveries + 1, recovered: cluster };
       }
       return { byCluster };
     });
@@ -66,7 +68,7 @@ export const useClusterHealthStore = create<ClusterHealthState>((set) => ({
     set((state) => ({ byCluster: drop(state.byCluster, cluster) }));
   },
   reset: () => {
-    set({ byCluster: {}, recoveries: 0 });
+    set({ byCluster: {}, recoveries: 0, recovered: '' });
   },
 }));
 
@@ -91,6 +93,10 @@ export function useReachable(cluster: string): boolean {
 
 export function useRecoveries(): number {
   return useClusterHealthStore((state) => state.recoveries);
+}
+
+export function whatCameBack(): string {
+  return useClusterHealthStore.getState().recovered;
 }
 
 export function reportHealth(cluster: string, next: HealthReport): void {

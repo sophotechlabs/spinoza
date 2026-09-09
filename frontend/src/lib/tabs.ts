@@ -1,4 +1,5 @@
 import type { Tab } from '../store/clusters';
+import { closeCluster, openCluster } from './clusters';
 import { useForwardsStore } from '../store/forwards';
 import { useTerminalsStore } from '../store/terminals';
 import { forgetCatalog } from '../store/catalog';
@@ -63,4 +64,10 @@ export function tabWidth(open: number): string {
     return 'max-w-32';
   }
   return 'max-w-56';
+}
+
+export async function reopenTab(tab: Tab): Promise<void> {
+  await closeCluster(tab.id);
+  forgetTab(tab.id);
+  await openCluster(tab.kubeconfig, tab.context);
 }

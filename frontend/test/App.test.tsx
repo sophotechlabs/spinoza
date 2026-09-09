@@ -471,6 +471,7 @@ import { ALL, namespaceNow, useNamespaceStore } from '../src/store/namespace';
 import { useSettingsStore } from '../src/store/settings';
 import { notifyOk, useToastsStore } from '../src/store/toasts';
 import { bumpClusterEpoch } from '../src/store/cluster';
+import { reportHealth, useClusterHealthStore } from '../src/store/clusterHealth';
 import { setUnsaved } from '../src/lib/unsaved';
 import { capabilities, makeCategory, makeColumns, makeDescriptor, makeRow } from './helpers';
 import { adoptSession } from '../src/store/identity';
@@ -2231,6 +2232,155 @@ describe('a feed that dropped', () => {
     expect(screen.getByRole('status', { name: 'The cluster feed dropped' })).toHaveTextContent(
       'attempt 1',
     );
+  });
+});
+
+describe('a cluster that stopped answering while the window watched', () => {
+  beforeEach(() => {
+    resetStore();
+    stubFetch();
+    useClusterHealthStore.getState().reset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useToastsStore.getState().clear();
+    useClusterHealthStore.getState().reset();
+    resetStore();
+  });
+
+  function quietCluster(): unknown {
+    const list = oneCluster('kind-dev') as ClusterList;
+    return {
+      clusters: list.clusters.map((one) => ({
+        ...one,
+        reachable: false,
+        reason: 'net/http: TLS handshake timeout',
+        cause: 'timeout',
+      })),
+      remembered: [],
+    };
+  }
+
+  async function stops(): Promise<void> {
+    await waitFor(() => {
+      expect(useClustersStore.getState().active).not.toBe('');
+    });
+    vi.mocked(fetch).mockImplementation((url: string | URL | Request) => {
+      if (String(url).startsWith('/api/clusters')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(quietCluster()),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
+    });
+    act(() => {
+      reportHealth(useClustersStore.getState().active, {
+        reachable: false,
+        wobbling: false,
+        reason: 'net/http: TLS handshake timeout',
+        cause: 'timeout',
+      });
+    });
+  }
+
+  function answers(): void {
+    act(() => {
+      reportHealth(useClustersStore.getState().active, {
+        reachable: true,
+        wobbling: false,
+        reason: '',
+        cause: '',
+      });
+    });
+  }
+
+  it('says so in a banner rather than leaving the screen unchanged', async () => {
+    render(<App />);
+    await stops();
+
+    const banner = await screen.findByRole('status', { name: 'The cluster stopped answering' });
+    expect(banner).toHaveTextContent('stopped answering');
+    expect(banner).toHaveTextContent('timed out');
+  });
+
+  it('marks the content area as no longer live, as it does for a dropped feed', async () => {
+    render(<App />);
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
+
+    await stops();
+
+    await waitFor(() => {
+      expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+    });
+  });
+
+  it('closes and reopens the cluster when asked to reconnect', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await stops();
+    await screen.findByRole('status', { name: 'The cluster stopped answering' });
+
+    await user.click(screen.getByRole('button', { name: 'Reconnect now' }));
+
+    await waitFor(() => {
+      const calls = vi.mocked(fetch).mock.calls.map((one) => String(one[0]));
+      expect(calls.some((url) => url.startsWith('/api/clusters?cluster='))).toBe(true);
+      expect(calls.some((url) => url.includes('/api/clusters?kubeconfig='))).toBe(true);
+    });
+  });
+
+  it('says why a reconnect failed rather than looking like it worked', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await stops();
+    await screen.findByRole('status', { name: 'The cluster stopped answering' });
+    vi.mocked(fetch).mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: 'the cluster is still gone' }),
+      } as Response),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Reconnect now' }));
+
+    await waitFor(() => {
+      expect(
+        useToastsStore
+          .getState()
+          .toasts.some((one) => one.tone === 'error' && one.message.includes('Reconnecting to')),
+      ).toBe(true);
+    });
+  });
+
+  it('falls back to the feed when no tab owns the cluster', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await stops();
+    await screen.findByRole('status', { name: 'The cluster stopped answering' });
+    act(() => {
+      useClustersStore.setState({ tabs: [] });
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Reconnect now' }));
+
+    expect(feedMocks.reconnect).toHaveBeenCalled();
+  });
+
+  it('says out loud when the cluster answers again', async () => {
+    render(<App />);
+    await stops();
+    await screen.findByRole('status', { name: 'The cluster stopped answering' });
+
+    answers();
+
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts).toHaveLength(1);
+    });
+    expect(useToastsStore.getState().toasts[0].tone).toBe('ok');
+    expect(useToastsStore.getState().toasts[0].message).toContain('answering again');
   });
 });
 

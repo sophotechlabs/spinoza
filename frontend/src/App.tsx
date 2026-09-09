@@ -15,12 +15,15 @@ import { activateCluster, fetchClusters, openCluster, stillToOpen } from './lib/
 import {
   activeOf,
   rememberRoute,
+  tabOn,
   useActiveCluster,
   useClustersStore,
   useTabs,
 } from './store/clusters';
-import { contextOf, displayName } from './lib/tabs';
+import { contextOf, displayName, reopenTab } from './lib/tabs';
 import ClusterStrip from './components/ClusterStrip';
+import ClusterBanner from './components/ClusterBanner';
+import { useClusterHealth, useRecoveries, whatCameBack } from './store/clusterHealth';
 import { announceUpdate } from './lib/update';
 import { watchSettings } from './lib/settingsSync';
 import { useContextsStore } from './store/contexts';
@@ -345,6 +348,21 @@ export default function App() {
     );
   }, [chooseNamespace, contextName, counts, onCluster, shownAs]);
 
+  const health = useClusterHealth();
+  const recoveries = useRecoveries();
+  const [seenRecoveries, setSeenRecoveries] = useState(0);
+  useEffect(() => {
+    if (recoveries === seenRecoveries) {
+      return;
+    }
+    setSeenRecoveries(recoveries);
+    const back = whatCameBack();
+    if (back === '') {
+      return;
+    }
+    notifyOk(`${displayName(tabs, back, contextOf(tabs, back))} is answering again`);
+  }, [recoveries, seenRecoveries, tabs]);
+
   const [wasDown, setWasDown] = useState(false);
   useEffect(() => {
     if (feed.status === 'disconnected') {
@@ -360,6 +378,19 @@ export default function App() {
     setWasDown(false);
     notifyOk('Reconnected to the cluster');
   }, [feed.status, wasDown]);
+
+  async function reconnectCluster() {
+    const tab = tabOn(useClustersStore.getState().tabs, onCluster);
+    if (tab === null) {
+      feed.reconnect();
+      return;
+    }
+    try {
+      await reopenTab(tab);
+    } catch (err: unknown) {
+      notifyError(`Reconnecting to ${tab.context}: ${switchFailed(err)}`);
+    }
+  }
 
   function clearSelection() {
     if (!mayDiscard()) {
@@ -555,7 +586,7 @@ export default function App() {
     remember(refFromFlux(resource));
   }
 
-  const stale = offline(feed.status, feed.attempt);
+  const stale = offline(feed.status, feed.attempt) || !health.reachable;
 
   let mainArea = (
     <ResourceTable
@@ -563,6 +594,7 @@ export default function App() {
       subId={subId}
       scope={scope}
       cluster={shownAs}
+      stale={stale}
       selected={selectedRow}
       onSelect={handleSelectRow}
       onMore={handleMore}
@@ -673,6 +705,13 @@ export default function App() {
         </ErrorBoundary>
       )}
       <ConnectionBanner status={feed.status} attempt={feed.attempt} onReconnect={feed.reconnect} />
+      <ClusterBanner
+        cluster={shownAs}
+        health={health}
+        onReconnect={() => {
+          void reconnectCluster();
+        }}
+      />
       <KubeconfigBanner />
       <div className="flex min-h-0 flex-1">
         <ErrorBoundary label="The sidebar">

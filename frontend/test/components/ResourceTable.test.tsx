@@ -42,6 +42,7 @@ function renderTable(
   scope: boolean | null = null,
   onMore?: (limit: number) => void,
   cluster = 'p-mk1',
+  stale = false,
 ) {
   return render(
     <ResourceTable
@@ -49,6 +50,7 @@ function renderTable(
       subId={SUB}
       scope={scope}
       cluster={cluster}
+      stale={stale}
       selected={selected}
       onSelect={onSelect}
       onMore={onMore}
@@ -1728,3 +1730,25 @@ describe('sorting a node by memory', () => {
 function chipsByKind(): Partial<Record<string, Chip[]>> {
   return useFiltersStore.getState().byCluster[activeClusterNow()] ?? {};
 }
+
+describe('a table showing what the cluster last sent', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it('says when the rows were last heard, once the cluster stopped answering', () => {
+    seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'coredns' })]);
+
+    renderTable(makeDescriptor({}), null, vi.fn(), null, undefined, 'p-mk1', true);
+
+    expect(screen.getByText(/^as of \d\d:\d\d:\d\d$/)).toBeVisible();
+  });
+
+  it('does not date the rows while the cluster is answering', () => {
+    seed(makeColumns(['Ready']), true, [makeRow({ uid: 'a', name: 'coredns' })]);
+
+    renderTable(makeDescriptor({}), null, vi.fn(), null, undefined, 'p-mk1', false);
+
+    expect(screen.queryByText(/^as of /)).toBeNull();
+  });
+});
