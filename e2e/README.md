@@ -92,12 +92,12 @@ reloads must wait on the request, not on a sleep.
 picks the groups a diff needs; CI runs only those, on every browser. Per changed file, in order:
 
 1. `unitOnlyPaths` — Go unit tests and testdata inside the production trees. They cannot change
-   the binary, so they select nothing beyond the smoke group.
+    the binary, so they select nothing beyond the smoke group.
 2. `fullRunPaths` — cross-cutting code: the harness, the router, the WebSocket, the stores, the
-   shared frontend libraries. One such file runs every group.
+    shared frontend libraries. One such file runs every group.
 3. A group's `paths` — the file selects that group. A file may belong to several.
 4. Anything else under `productionRoots` is production code no group owns. It runs every group,
-   and `scripts/validate-suite.mjs` refuses to let one be committed.
+    and `scripts/validate-suite.mjs` refuses to let one be committed.
 
 The smoke group always runs. `fullRunBudget` is how many production files sit in `fullRunPaths`;
 the validator fails when the number grows, so a new file gets an owning group instead of a free
