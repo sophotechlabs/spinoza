@@ -10,7 +10,7 @@ import type { ContextEntry } from '../lib/contexts';
 import { askToast, dismissToast, notifyError, notifyOk } from '../store/toasts';
 import { useContextList, useContextsStore } from '../store/contexts';
 import { sessionExpired } from '../store/session';
-import { CONTROL } from '../lib/controls';
+import { CONTROL, TAB_CONTROL } from '../lib/controls';
 import { useDismissMenu } from '../lib/useDismissMenu';
 import KubeconfigDialog from './KubeconfigDialog';
 
@@ -365,12 +365,12 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   }
 
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex items-end gap-2">
       <details ref={menuRef} className="relative">
         <summary
           aria-label="Open a cluster"
           title="Open another cluster"
-          className={`${CONTROL} cursor-pointer list-none border-edge-strong bg-surface text-fg-soft hover:bg-surface-active [&::-webkit-details-marker]:hidden`}
+          className={`${TAB_CONTROL} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
         >
           <span aria-hidden="true">+</span>
         </summary>
