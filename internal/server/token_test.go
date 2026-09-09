@@ -173,10 +173,18 @@ func TestAServerWithoutATokenAnswersNobody(t *testing.T) {
 func TestTheWebsocketNeedsTheToken(t *testing.T) {
 	ts := tokenServer(t)
 
-	_, _, err := websocket.Dial(context.Background(), wsURL(ts.URL), nil)
+	conn, _, err := websocket.Dial(context.Background(), wsURL(ts.URL), nil)
+	if err != nil {
+		return
+	}
+	defer func() { _ = conn.CloseNow() }()
 
-	if err == nil {
-		t.Fatal("the socket opened without the token")
+	_, _, readErr := conn.Read(context.Background())
+	if readErr == nil {
+		t.Fatal("a socket without the token carried a frame")
+	}
+	if websocket.CloseStatus(readErr) != CloseStaleToken {
+		t.Fatalf("close status = %v, want the socket refused with %d", readErr, CloseStaleToken)
 	}
 }
 
@@ -194,10 +202,18 @@ func TestTheExecSocketNeedsTheToken(t *testing.T) {
 	ts := tokenServer(t)
 	url := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/exec?namespace=default&pod=web"
 
-	_, _, err := websocket.Dial(context.Background(), url, nil)
+	conn, _, err := websocket.Dial(context.Background(), url, nil)
+	if err != nil {
+		return
+	}
+	defer func() { _ = conn.CloseNow() }()
 
-	if err == nil {
-		t.Fatal("the exec socket opened without the token")
+	_, _, readErr := conn.Read(context.Background())
+	if readErr == nil {
+		t.Fatal("an exec socket without the token carried a frame")
+	}
+	if websocket.CloseStatus(readErr) != CloseStaleToken {
+		t.Fatalf("close status = %v, want the socket refused with %d", readErr, CloseStaleToken)
 	}
 }
 

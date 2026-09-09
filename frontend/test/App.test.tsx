@@ -2266,8 +2266,8 @@ describe('a cluster that stopped answering while the window watched', () => {
     await waitFor(() => {
       expect(useClustersStore.getState().active).not.toBe('');
     });
-    vi.mocked(fetch).mockImplementation((url: string | URL | Request) => {
-      if (String(url).startsWith('/api/clusters')) {
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (typeof url === 'string' && url.startsWith('/api/clusters')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve(quietCluster()),
@@ -2325,7 +2325,10 @@ describe('a cluster that stopped answering while the window watched', () => {
     await user.click(screen.getByRole('button', { name: 'Reconnect now' }));
 
     await waitFor(() => {
-      const calls = vi.mocked(fetch).mock.calls.map((one) => String(one[0]));
+      const calls = vi
+        .mocked(fetch)
+        .mock.calls.map((one) => one[0])
+        .filter((one) => typeof one === 'string');
       expect(calls.some((url) => url.startsWith('/api/clusters?cluster='))).toBe(true);
       expect(calls.some((url) => url.includes('/api/clusters?kubeconfig='))).toBe(true);
     });

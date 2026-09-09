@@ -306,6 +306,7 @@ export type ServerMsg =
       reason?: string;
       cause?: string;
     }
+  | { type: 'alive' }
   | { type: 'error'; subId: string; message: string };
 
 export const VIEWS = [

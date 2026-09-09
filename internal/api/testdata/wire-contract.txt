@@ -5,6 +5,7 @@ ActionResult.Action action string
 ActionResult.DryRun dryRun,omitempty bool
 ActionResult.Message message string
 ActionResult.Pods pods,omitempty []PodOutcome
+Alive.Type type string
 ArgoActionResult.Action action string
 ArgoApp.Automation automation,omitempty string
 ArgoApp.CreatedAt createdAt string

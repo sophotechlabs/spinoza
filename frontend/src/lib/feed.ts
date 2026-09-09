@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { sessionExpired } from '../store/session';
+import { expireSession, sessionExpired } from '../store/session';
 import type { ClientMsg, LogRequest, ResourceDescriptor, ServerMsg } from './types';
 import { parseColumn, parseRow } from './parse';
 import {
@@ -17,6 +17,7 @@ import { useResourcesStore } from '../store/resources';
 import { useLogsStore } from '../store/logs';
 import { contextAnnounced } from './contexts';
 import { reportHealth } from '../store/clusterHealth';
+import { reportFeed } from '../store/feed';
 import { wsURL } from './wsBase';
 import { viewKind } from './view';
 import { activeCluster } from './cluster';
@@ -63,11 +64,19 @@ export interface ResourceFeed {
 }
 
 const BASE_BACKOFF_MS = 500;
+export const SILENCE_LIMIT_MS = 45000;
+const WATCHDOG_TICK_MS = 5000;
 const MAX_BACKOFF_MS = 5000;
 const OPEN_STATE = 1;
 export const DELTA_FLUSH_MS = 100;
+export const STALE_TOKEN_CLOSE = 4401;
 
 type SubscribeMsg = Extract<ClientMsg, { type: 'subscribe' }>;
+
+type RowMsg = Extract<ServerMsg, { type: 'added' | 'modified' | 'deleted' }>;
+
+type ParsedMsg =
+  Exclude<ServerMsg, { type: 'batch' }> | { type: 'batch'; subId: string; changes: RowMsg[] };
 
 type LogsSubscribeMsg = Extract<ClientMsg, { type: 'logs-subscribe' }>;
 
@@ -119,8 +128,8 @@ function canSend(socket: WebSocket | null): socket is WebSocket {
   return socket.readyState === OPEN_STATE;
 }
 
-function changesOf(subId: string, raw: unknown): ServerMsg[] {
-  const out: ServerMsg[] = [];
+function changesOf(subId: string, raw: unknown): RowMsg[] {
+  const out: RowMsg[] = [];
   for (const change of asList(raw)) {
     const msg = changeMsg(subId, asRecord(change));
     if (msg !== null) {
@@ -130,7 +139,7 @@ function changesOf(subId: string, raw: unknown): ServerMsg[] {
   return out;
 }
 
-function changeMsg(subId: string, item: Record<string, unknown>): ServerMsg | null {
+function changeMsg(subId: string, item: Record<string, unknown>): RowMsg | null {
   switch (item.type) {
     case 'added':
       return { type: 'added', subId, row: parseRow(asRecord(item.row)) };
@@ -143,7 +152,7 @@ function changeMsg(subId: string, item: Record<string, unknown>): ServerMsg | nu
   }
 }
 
-function serverMsg(raw: unknown): ServerMsg | null {
+function serverMsg(raw: unknown): ParsedMsg | null {
   const item = asRecord(raw);
   const subId = asString(item.subId);
   switch (item.type) {
@@ -193,6 +202,8 @@ function serverMsg(raw: unknown): ServerMsg | null {
         reason: optionalString(item.reason),
         cause: optionalString(item.cause),
       };
+    case 'alive':
+      return { type: 'alive' };
     case 'error':
       return { type: 'error', subId, message: asString(item.message) };
     default:
@@ -203,6 +214,10 @@ function serverMsg(raw: unknown): ServerMsg | null {
 export function useResourceFeed(): ResourceFeed {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    reportFeed(status, attempt);
+  }, [status, attempt]);
   const socketRef = useRef<WebSocket | null>(null);
   const subsRef = useRef<Map<string, Subscription>>(new Map());
   const logSubsRef = useRef<Map<string, LogSubscription>>(new Map());
@@ -212,9 +227,10 @@ export function useResourceFeed(): ResourceFeed {
     let disposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
+    let heard = Date.now();
     const store = useResourcesStore.getState();
     const logs = useLogsStore.getState();
-    const pending = new Map<string, ServerMsg[]>();
+    const pending = new Map<string, RowMsg[]>();
     const pendingLines = new Map<string, { lines: string[]; source: string }[]>();
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -239,7 +255,7 @@ export function useResourceFeed(): ResourceFeed {
       flushTimer ??= setTimeout(flush, DELTA_FLUSH_MS);
     }
 
-    function queue(msg: ServerMsg) {
+    function queue(msg: RowMsg) {
       const waiting = pending.get(msg.subId);
       if (waiting === undefined) {
         pending.set(msg.subId, [msg]);
@@ -305,7 +321,10 @@ export function useResourceFeed(): ResourceFeed {
       }
     }
 
-    function knownSub(msg: ServerMsg): boolean {
+    function knownSub(msg: ParsedMsg): boolean {
+      if (msg.type === 'alive') {
+        return true;
+      }
       if (msg.type === 'context' || msg.type === 'cluster') {
         return true;
       }
@@ -325,6 +344,7 @@ export function useResourceFeed(): ResourceFeed {
       if (disposed) {
         return;
       }
+      heard = Date.now();
       let raw: unknown = null;
       try {
         raw = JSON.parse(event.data as string);
@@ -337,11 +357,13 @@ export function useResourceFeed(): ResourceFeed {
       }
     }
 
-    function apply(msg: ServerMsg) {
+    function apply(msg: ParsedMsg) {
       if (!knownSub(msg)) {
         return;
       }
       switch (msg.type) {
+        case 'alive':
+          break;
         case 'snapshot':
           dropPending(msg.subId);
           store.applySnapshot(
@@ -415,6 +437,7 @@ export function useResourceFeed(): ResourceFeed {
         if (disposed) {
           return;
         }
+        heard = Date.now();
         attempt = 0;
         setAttempt(0);
         setStatus('connected');
@@ -427,11 +450,15 @@ export function useResourceFeed(): ResourceFeed {
         ws.close();
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event: CloseEvent) => {
         if (disposed) {
           return;
         }
         setStatus('disconnected');
+        if (event.code === STALE_TOKEN_CLOSE) {
+          expireSession();
+          return;
+        }
         scheduleReconnect();
       };
     }
@@ -453,11 +480,25 @@ export function useResourceFeed(): ResourceFeed {
       connect();
     }
 
+    function watchSilence() {
+      const socket = socketRef.current;
+      if (socket?.readyState !== OPEN_STATE) {
+        return;
+      }
+      if (Date.now() - heard < SILENCE_LIMIT_MS) {
+        return;
+      }
+      heard = Date.now();
+      socket.close();
+    }
+
+    const watchdog = setInterval(watchSilence, WATCHDOG_TICK_MS);
     reconnectRef.current = reconnect;
     connect();
 
     return () => {
       disposed = true;
+      clearInterval(watchdog);
       clearTimer();
       clearFlush();
       const socket = socketRef.current;

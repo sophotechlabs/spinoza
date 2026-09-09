@@ -298,3 +298,19 @@ func TestGuardRefusesACrossOriginWebsocket(t *testing.T) {
 		t.Fatal("a cross-origin page reached the socket")
 	}
 }
+
+func TestASocketFromAnEarlierRunIsToldSoRatherThanJustDropped(t *testing.T) {
+	srv := guardServer(t)
+
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+	conn, _, err := websocket.Dial(context.Background(), url, nil)
+	if err != nil {
+		t.Fatalf("dial: %v, want the upgrade completed so the page can be told why", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+
+	_, _, readErr := conn.Read(context.Background())
+	if websocket.CloseStatus(readErr) != CloseStaleToken {
+		t.Fatalf("close status = %v, want %d so the page stops retrying", readErr, CloseStaleToken)
+	}
+}

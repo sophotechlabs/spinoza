@@ -41,6 +41,17 @@ func accept(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 	return conn, nil
 }
 
+const CloseStaleToken = 4401
+
+func refuseSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := accept(w, r)
+	if err != nil {
+		slog.Warn("a socket from an earlier run could not be told so", "path", r.URL.Path, "error", err)
+		return
+	}
+	_ = conn.Close(CloseStaleToken, "this page belongs to an earlier run")
+}
+
 func (s *Server) guard(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		noStore(w)
@@ -129,6 +140,10 @@ func (s *Server) admitLocal(w http.ResponseWriter, r *http.Request) (*http.Reque
 			"path", r.URL.Path,
 			"origin", r.Header.Get("Origin"),
 		)
+		if upgrading(r) {
+			refuseSocket(w, r)
+			return nil, false
+		}
 		writeError(w, http.StatusUnauthorized, "spinoza needs the token it printed at startup")
 		return nil, false
 	}

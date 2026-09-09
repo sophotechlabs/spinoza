@@ -42,6 +42,8 @@ const (
 
 const msgError = "error"
 
+const msgAlive = "alive"
+
 var podCountInterval = 2 * time.Second
 
 type relayStep int
@@ -330,6 +332,7 @@ func (sess *wsSession) keepAlive(ctx context.Context, cancel context.CancelFunc)
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			sess.write(ctx, api.Alive{Type: msgAlive})
 			pingCtx, stop := context.WithTimeout(ctx, sess.pingWait)
 			err := sess.conn.Ping(pingCtx)
 			stop()

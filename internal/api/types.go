@@ -834,6 +834,10 @@ type ServerMsg struct {
 	Changes    []RowChange `json:"changes,omitempty"`
 }
 
+type Alive struct {
+	Type string `json:"type"`
+}
+
 type ClusterHealth struct {
 	Type      string `json:"type"`
 	Cluster   string `json:"cluster,omitempty"`

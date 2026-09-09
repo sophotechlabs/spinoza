@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Row } from '../../src/lib/types';
-import { expireSession } from '../../src/store/session';
-import { DELTA_FLUSH_MS, useResourceFeed } from '../../src/lib/feed';
+import { expireSession, sessionExpired } from '../../src/store/session';
+import {
+  DELTA_FLUSH_MS,
+  SILENCE_LIMIT_MS,
+  STALE_TOKEN_CLOSE,
+  useResourceFeed,
+} from '../../src/lib/feed';
 import { useResourcesStore } from '../../src/store/resources';
 import { useLogsStore } from '../../src/store/logs';
 import { useContextsStore } from '../../src/store/contexts';
@@ -1867,5 +1872,99 @@ describe('which cluster a subscription is for', () => {
     });
 
     expect(sentMessages(second)[0]).toMatchObject({ subId: 'l1', cluster: mk2 });
+  });
+});
+
+describe('a backend that stops sending anything at all', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    resetStore();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('closes a socket that has gone silent for too long', () => {
+    vi.useFakeTimers();
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(SILENCE_LIMIT_MS + 5000);
+    });
+
+    expect(socket.close).toHaveBeenCalled();
+  });
+
+  it('leaves a socket alone while frames keep arriving', () => {
+    vi.useFakeTimers();
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    for (let elapsed = 0; elapsed < SILENCE_LIMIT_MS * 2; elapsed += 10000) {
+      act(() => {
+        vi.advanceTimersByTime(10000);
+        socket.onmessage?.(
+          new MessageEvent('message', { data: JSON.stringify({ type: 'alive' }) }),
+        );
+      });
+    }
+
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it('stops retrying when the socket says the page belongs to an earlier run', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+      socket.onclose?.(new CloseEvent('close', { code: STALE_TOKEN_CLOSE }));
+    });
+
+    expect(sessionExpired()).toBe(true);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it('keeps retrying an ordinary close', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+      socket.onclose?.(new CloseEvent('close', { code: 1006 }));
+    });
+
+    expect(sessionExpired()).toBe(false);
+  });
+
+  it('leaves a socket that has not opened yet alone', () => {
+    vi.useFakeTimers();
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+
+    act(() => {
+      vi.advanceTimersByTime(SILENCE_LIMIT_MS + 5000);
+    });
+
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it('takes a keepalive frame as a sign of life, not as a subscription', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+      socket.onmessage?.(new MessageEvent('message', { data: JSON.stringify({ type: 'alive' }) }));
+    });
+
+    expect(useResourcesStore.getState().subs.size).toBe(0);
   });
 });
