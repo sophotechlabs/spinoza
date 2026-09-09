@@ -1648,6 +1648,32 @@ describe('the server saying whether the cluster answers', () => {
     });
   }
 
+  it('records the cause the server named beside the reason', () => {
+    renderHook(() => useResourceFeed());
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      openSocket(socket);
+    });
+
+    act(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'cluster',
+            reachable: false,
+            reason: 'net/http: TLS handshake timeout',
+            cause: 'timeout',
+          }),
+        }),
+      );
+    });
+
+    expect(useClusterHealthStore.getState().byCluster['']).toMatchObject({
+      reachable: false,
+      cause: 'timeout',
+    });
+  });
+
   it('records a cluster that stopped answering, with the reason', () => {
     renderHook(() => useResourceFeed());
     const socket = FakeWebSocket.instances[0];

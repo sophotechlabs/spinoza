@@ -81,6 +81,7 @@ type OpenCluster struct {
 	Reachable  bool   `json:"reachable"`
 	Wobbling   bool   `json:"wobbling,omitempty"`
 	Reason     string `json:"reason,omitempty"`
+	Cause      string `json:"cause,omitempty"`
 }
 
 const ClusterColors = 8
@@ -829,6 +830,7 @@ type ServerMsg struct {
 	Reachable  bool        `json:"reachable,omitempty"`
 	Wobbling   bool        `json:"wobbling,omitempty"`
 	Reason     string      `json:"reason,omitempty"`
+	Cause      string      `json:"cause,omitempty"`
 	Changes    []RowChange `json:"changes,omitempty"`
 }
 
@@ -838,6 +840,7 @@ type ClusterHealth struct {
 	Reachable bool   `json:"reachable"`
 	Wobbling  bool   `json:"wobbling,omitempty"`
 	Reason    string `json:"reason,omitempty"`
+	Cause     string `json:"cause,omitempty"`
 }
 
 type ContextChanged struct {

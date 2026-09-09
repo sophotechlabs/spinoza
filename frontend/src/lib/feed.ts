@@ -191,6 +191,7 @@ function serverMsg(raw: unknown): ServerMsg | null {
         reachable: asBoolean(item.reachable),
         wobbling: optionalBoolean(item.wobbling),
         reason: optionalString(item.reason),
+        cause: optionalString(item.cause),
       };
     case 'error':
       return { type: 'error', subId, message: asString(item.message) };
@@ -376,7 +377,12 @@ export function useResourceFeed(): ResourceFeed {
           void contextAnnounced(msg.context);
           break;
         case 'cluster':
-          reportHealth(msg.cluster ?? '', msg.reachable, msg.wobbling ?? false, msg.reason ?? '');
+          reportHealth(msg.cluster ?? '', {
+            reachable: msg.reachable,
+            wobbling: msg.wobbling ?? false,
+            reason: msg.reason ?? '',
+            cause: msg.cause ?? '',
+          });
           break;
         case 'error':
           flush();

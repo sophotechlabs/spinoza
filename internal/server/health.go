@@ -121,7 +121,7 @@ func healthOf(err error) api.ClusterHealth {
 	if err == nil {
 		return answering()
 	}
-	return notAnswering(err.Error())
+	return failedHealth(err.Error(), reach.Cause(err))
 }
 
 func answering() api.ClusterHealth {
@@ -129,7 +129,11 @@ func answering() api.ClusterHealth {
 }
 
 func notAnswering(reason string) api.ClusterHealth {
-	return api.ClusterHealth{Type: "cluster", Reachable: false, Reason: reason}
+	return failedHealth(reason, reach.CauseOf(reason))
+}
+
+func failedHealth(reason, cause string) api.ClusterHealth {
+	return api.ClusterHealth{Type: "cluster", Reachable: false, Reason: reason, Cause: cause}
 }
 
 func assumedHealthOf(id string) api.ClusterHealth {
@@ -173,7 +177,17 @@ func (s *Server) settleHealthAt(id string, generation uint64, seen api.ClusterHe
 		was = held
 	}
 	s.health[id] = now
-	return now, was != now
+	return now, differentVerdict(was, now)
+}
+
+func differentVerdict(was, now api.ClusterHealth) bool {
+	if was.Reachable != now.Reachable {
+		return true
+	}
+	if was.Wobbling != now.Wobbling {
+		return true
+	}
+	return was.Cause != now.Cause
 }
 
 func (s *Server) verdictHeld(id string, now api.ClusterHealth) api.ClusterHealth {
@@ -191,6 +205,7 @@ func (s *Server) verdictHeld(id string, now api.ClusterHealth) api.ClusterHealth
 		Reachable: true,
 		Wobbling:  true,
 		Reason:    now.Reason,
+		Cause:     now.Cause,
 	}
 }
 

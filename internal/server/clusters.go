@@ -48,6 +48,7 @@ func (s *Server) clusterList(ctx context.Context) api.ClusterList {
 		opened[i].Reachable = health.Reachable
 		opened[i].Wobbling = health.Wobbling
 		opened[i].Reason = health.Reason
+		opened[i].Cause = health.Cause
 		opened[i].Color = known[opened[i].ID].Color
 		opened[i].Label = known[opened[i].ID].Label
 		opened[i].Grouping = known[opened[i].ID].Grouping

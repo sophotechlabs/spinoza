@@ -338,3 +338,59 @@ func (noCluster) Opened() []api.OpenCluster {
 func (noCluster) Close(string) error {
 	return errors.New("this stub connects to nothing")
 }
+
+func TestOneOutageIsAnnouncedOnceEvenWhenItsWordsChange(t *testing.T) {
+	backend := &flaky{probed: make(chan struct{}, 16)}
+	ts := flakyServer(t, backend)
+	ctx, conn := openAwkwardFeed(t, ts)
+	nextHealth(ctx, t, conn)
+
+	backend.breaks(errors.New(`Get "https://127.0.0.1:6443/version": context deadline exceeded`))
+	gone := awaitHealth(ctx, t, conn, false)
+	if gone.Cause != reach.Timeout {
+		t.Fatalf("cause = %q, want %q", gone.Cause, reach.Timeout)
+	}
+
+	backend.breaks(errors.New("net/http: TLS handshake timeout"))
+	for range 4 {
+		select {
+		case <-backend.probed:
+		case <-time.After(time.Second):
+			t.Fatal("the cluster was not probed four more times")
+		}
+	}
+
+	quiet, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	for {
+		var msg api.ServerMsg
+		if err := wsjson.Read(quiet, conn, &msg); err != nil {
+			return
+		}
+		if msg.Type == "cluster" {
+			t.Fatalf("one outage was announced twice because its words changed: %q", msg.Reason)
+		}
+	}
+}
+
+func TestAnOutageThatChangesItsKindIsAnnouncedAgain(t *testing.T) {
+	backend := &flaky{probed: make(chan struct{}, 16)}
+	ts := flakyServer(t, backend)
+	ctx, conn := openAwkwardFeed(t, ts)
+	nextHealth(ctx, t, conn)
+
+	backend.breaks(errors.New("net/http: TLS handshake timeout"))
+	if timedOut := awaitHealth(ctx, t, conn, false); timedOut.Cause != reach.Timeout {
+		t.Fatalf("cause = %q, want %q", timedOut.Cause, reach.Timeout)
+	}
+
+	backend.breaks(errors.New("dial tcp 10.0.0.1:6443: connect: connection refused"))
+
+	for range 60 {
+		msg := nextHealth(ctx, t, conn)
+		if msg.Cause == reach.Refused {
+			return
+		}
+	}
+	t.Fatal("a refused connection after a timeout was never announced")
+}

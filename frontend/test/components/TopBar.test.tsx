@@ -330,7 +330,12 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('turns the dot red even though the feed is connected', () => {
-    reportHealth('', false, false, 'connection refused');
+    reportHealth('', {
+      reachable: false,
+      wobbling: false,
+      reason: 'connection refused',
+      cause: '',
+    });
 
     const { container } = render(<TopBar status="connected" />);
 
@@ -338,7 +343,12 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('says so in words, not only in colour', () => {
-    reportHealth('', false, false, 'connection refused');
+    reportHealth('', {
+      reachable: false,
+      wobbling: false,
+      reason: 'connection refused',
+      cause: '',
+    });
 
     render(<TopBar status="connected" />);
 
@@ -346,7 +356,12 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('carries the reason the cluster gave', () => {
-    reportHealth('', false, false, 'dial tcp 10.0.0.1:6443: connection refused');
+    reportHealth('', {
+      reachable: false,
+      wobbling: false,
+      reason: 'dial tcp 10.0.0.1:6443: connection refused',
+      cause: '',
+    });
 
     render(<TopBar status="connected" />);
 
@@ -358,7 +373,7 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('still says something useful when no reason came with it', () => {
-    reportHealth('', false, false, '');
+    reportHealth('', { reachable: false, wobbling: false, reason: '', cause: '' });
 
     render(<TopBar status="connected" />);
 
@@ -370,12 +385,17 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('goes back to green when the cluster answers again', () => {
-    reportHealth('', false, false, 'connection refused');
+    reportHealth('', {
+      reachable: false,
+      wobbling: false,
+      reason: 'connection refused',
+      cause: '',
+    });
     const { container, rerender } = render(<TopBar status="connected" />);
     expect(dotFor(container).className).toContain('bg-error-solid');
 
     act(() => {
-      reportHealth('', true, false, '');
+      reportHealth('', { reachable: true, wobbling: false, reason: '', cause: '' });
     });
     rerender(<TopBar status="connected" />);
 
@@ -384,7 +404,12 @@ describe('a cluster that stopped answering', () => {
   });
 
   it('leaves a disconnected feed reading as disconnected', () => {
-    reportHealth('', false, false, 'connection refused');
+    reportHealth('', {
+      reachable: false,
+      wobbling: false,
+      reason: 'connection refused',
+      cause: '',
+    });
 
     render(<TopBar status="disconnected" />);
 
@@ -403,7 +428,7 @@ describe('a cluster that missed a ping', () => {
   });
 
   it('turns the dot amber, not red', () => {
-    reportHealth('', true, true, 'i/o timeout');
+    reportHealth('', { reachable: true, wobbling: true, reason: 'i/o timeout', cause: '' });
 
     const { container } = render(<TopBar status="connected" />);
 
@@ -412,7 +437,7 @@ describe('a cluster that missed a ping', () => {
   });
 
   it('says a ping was missed rather than that the cluster is gone', () => {
-    reportHealth('', true, true, 'i/o timeout');
+    reportHealth('', { reachable: true, wobbling: true, reason: 'i/o timeout', cause: '' });
 
     render(<TopBar status="connected" />);
 
@@ -421,7 +446,7 @@ describe('a cluster that missed a ping', () => {
   });
 
   it('says so without a reason when the cluster gave none', () => {
-    reportHealth('', true, true, '');
+    reportHealth('', { reachable: true, wobbling: true, reason: '', cause: '' });
 
     render(<TopBar status="connected" />);
 
@@ -431,7 +456,7 @@ describe('a cluster that missed a ping', () => {
   });
 
   it('is green again once the cluster answers', () => {
-    reportHealth('', true, false, '');
+    reportHealth('', { reachable: true, wobbling: false, reason: '', cause: '' });
 
     const { container } = render(<TopBar status="connected" />);
 

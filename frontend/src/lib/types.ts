@@ -304,6 +304,7 @@ export type ServerMsg =
       reachable: boolean;
       wobbling?: boolean;
       reason?: string;
+      cause?: string;
     }
   | { type: 'error'; subId: string; message: string };
 
@@ -559,6 +560,7 @@ export interface OpenCluster {
   reachable: boolean;
   wobbling?: boolean;
   reason?: string;
+  cause?: string;
 }
 
 export interface RememberedCluster {

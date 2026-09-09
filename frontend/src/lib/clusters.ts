@@ -18,6 +18,7 @@ interface WireOpenCluster {
   reachable?: boolean;
   wobbling?: boolean;
   reason?: string;
+  cause?: string;
 }
 
 interface WireRemembered {
@@ -46,6 +47,7 @@ function openClusterOf(entry: WireOpenCluster): OpenCluster {
     reachable: entry.reachable ?? true,
     wobbling: entry.wobbling,
     reason: entry.reason,
+    cause: entry.cause,
   };
 }
 
@@ -77,7 +79,12 @@ async function clustersFrom(response: Response, what: string): Promise<ClusterLi
 
 function adoptHealth(list: ClusterList): void {
   for (const one of list.clusters) {
-    reportHealth(one.id, one.reachable, one.wobbling ?? false, one.reason ?? '');
+    reportHealth(one.id, {
+      reachable: one.reachable,
+      wobbling: one.wobbling ?? false,
+      reason: one.reason ?? '',
+      cause: one.cause ?? '',
+    });
   }
 }
 

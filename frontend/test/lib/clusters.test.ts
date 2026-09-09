@@ -96,12 +96,12 @@ describe('what the server says is open', () => {
     const list = await fetchClusters();
 
     expect(list.clusters[1].wobbling).toBe(true);
-    expect(useClusterHealthStore.getState().byCluster[MK2]).toEqual({
+    expect(useClusterHealthStore.getState().byCluster[MK2]).toMatchObject({
       reachable: true,
       wobbling: true,
       reason: 'no route to host',
     });
-    expect(useClusterHealthStore.getState().byCluster[MK1]).toEqual({
+    expect(useClusterHealthStore.getState().byCluster[MK1]).toMatchObject({
       reachable: true,
       wobbling: false,
       reason: '',
@@ -211,5 +211,27 @@ describe('what the server says is open', () => {
   it('has words for a rejection that is not an error', () => {
     expect(clusterFailure('nope', 'the request failed')).toBe('the request failed');
     expect(clusterFailure(new Error('gone'), 'the request failed')).toBe('gone');
+  });
+});
+
+describe('what the cluster list says about why a cluster is quiet', () => {
+  it('takes the cause the server named off the list', async () => {
+    stub({
+      clusters: [
+        {
+          id: MK1,
+          context: 'p-mk1',
+          active: true,
+          reachable: false,
+          reason: 'net/http: TLS handshake timeout',
+          cause: 'timeout',
+        },
+      ],
+      remembered: [],
+    });
+
+    await fetchClusters();
+
+    expect(useClusterHealthStore.getState().byCluster[MK1]?.cause).toBe('timeout');
   });
 });
