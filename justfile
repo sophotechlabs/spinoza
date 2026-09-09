@@ -2,6 +2,9 @@ export PATH := if os() == 'windows' { env_var('PATH') } else { env_var('PATH') +
 
 exe := if os() == 'windows' { '.exe' } else { '' }
 go_pkgs := './internal/... ./cmd/... .'
+
+# mise pins the linter; a stale golangci-lint earlier on PATH is built against an older Go and panics
+golangci := 'mise exec -- golangci-lint'
 addr := env_var_or_default('SPINOZA_ADDR', '127.0.0.1:34115')
 test_cluster := env_var_or_default('SPINOZA_KIND_CLUSTER', 'spinoza')
 test_context := 'kind-' + test_cluster
@@ -778,9 +781,9 @@ publish-badges:
     git -C "$work" push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges:badges
 
 lint-be: stub-assets
-    golangci-lint run {{ go_pkgs }}
-    golangci-lint run --build-tags desktop {{ go_pkgs }}
-    golangci-lint run --build-tags integration ./test/...
+    {{ golangci }} run {{ go_pkgs }}
+    {{ golangci }} run --build-tags desktop {{ go_pkgs }}
+    {{ golangci }} run --build-tags integration ./test/...
     go vet {{ go_pkgs }}
     go vet -tags desktop {{ go_pkgs }}
     go vet -tags integration ./test/...
@@ -1054,7 +1057,7 @@ image tag='spinoza:dev':
 lint: lint-be lint-fe lint-e2e lint-chart
 
 fmt-check:
-    golangci-lint fmt --diff
+    {{ golangci }} fmt --diff
 
 mod-check:
     go mod tidy -diff
@@ -1242,7 +1245,7 @@ commits:
     npx --yes --package @commitlint/cli@21.2.2 --package @commitlint/config-conventional@21.2.2 commitlint --from "$from" --to HEAD
 
 fmt:
-    golangci-lint fmt
+    {{ golangci }} fmt
     cd frontend && npm run format
 
 handoff-gate: stub-assets
