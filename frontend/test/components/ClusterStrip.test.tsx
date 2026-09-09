@@ -493,7 +493,7 @@ describe('the strip while the feed itself is down', () => {
     render(<ClusterStrip onShown={vi.fn()} />);
 
     expect(
-      screen.getAllByRole('button', { name: /is of unknown health; open its settings/ }),
+      screen.getAllByRole('button', { name: /is of unknown health; open its tab menu/ }),
     ).toHaveLength(2);
   });
 
@@ -505,7 +505,7 @@ describe('the strip while the feed itself is down', () => {
 
     render(<ClusterStrip onShown={vi.fn()} />);
 
-    expect(screen.getAllByRole('button', { name: /is answering; open its settings/ })).toHaveLength(
+    expect(screen.getAllByRole('button', { name: /is answering; open its tab menu/ })).toHaveLength(
       2,
     );
   });

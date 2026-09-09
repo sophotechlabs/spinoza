@@ -155,7 +155,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
             <span key={tab.id} className={`relative ${tabClass(tab.id === active, tabs.length)}`}>
               <button
                 type="button"
-                aria-label={`${nameOf(tab)} is ${dotLabel(health[tab.id]?.reachable ?? true, unknown)}; open its settings`}
+                aria-label={`${nameOf(tab)} is ${dotLabel(health[tab.id]?.reachable ?? true, unknown)}; open its tab menu`}
                 title={swatchTitle(health[tab.id]?.reason, unknown)}
                 onPointerDown={(event) => {
                   event.stopPropagation();

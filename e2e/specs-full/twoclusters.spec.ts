@@ -94,7 +94,7 @@ function idOf(clusters: Opened[], context: string): string {
 
 async function openSettings(page: Page, name: string): Promise<void> {
   await page
-    .getByRole('button', { name: `${name} is answering; open its settings`, exact: true })
+    .getByRole('button', { name: `${name} is answering; open its tab menu`, exact: true })
     .click();
   await expect(page.getByRole('group', { name: `Settings for ${name}` })).toBeVisible();
 }
