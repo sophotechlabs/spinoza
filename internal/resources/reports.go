@@ -14,6 +14,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/metrics"
 	"github.com/sophotechlabs/spinoza/internal/overview"
 	"github.com/sophotechlabs/spinoza/internal/prom"
+	"github.com/sophotechlabs/spinoza/internal/telemetry"
 )
 
 func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error) {
@@ -64,11 +65,17 @@ func (m *Manager) Facts() checks.Facts {
 }
 
 func (m *Manager) Checks(ctx context.Context, keep checks.Filter) api.CheckReport {
+	defer measureCheckRun(time.Now())
 	return m.surveys.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, m.limits.CheckFindings)
 }
 
 func (m *Manager) CheckExport(ctx context.Context, keep checks.Filter) api.CheckReport {
+	defer measureCheckRun(time.Now())
 	return checks.Run(ctx, m, m.descriptors(), m.Metrics(ctx), keep, everyFinding)
+}
+
+func measureCheckRun(started time.Time) {
+	telemetry.Default().CheckRunSeconds.Observe(time.Since(started).Seconds())
 }
 
 func (m *Manager) CheckFingerprint(ctx context.Context, keep checks.Filter) checks.Baseline {

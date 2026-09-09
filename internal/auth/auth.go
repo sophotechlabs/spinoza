@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/sophotechlabs/spinoza/internal/telemetry"
 )
 
 const flashLifetime = time.Minute
@@ -260,12 +262,14 @@ func (a *Authenticator) Callback(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, http.StatusInternalServerError, issueErr.Error())
 		return
 	}
+	telemetry.Default().SignIns.Add(1, who.Role)
 	slog.Info("somebody signed in", "user", who.User, "role", who.Role, "groups", len(who.Groups))
 	//nolint:gosec // landingFrom keeps this to a path on spinoza itself
 	http.Redirect(w, r, back, http.StatusFound)
 }
 
 func (a *Authenticator) refuse(w http.ResponseWriter, r *http.Request, what string, err error) {
+	telemetry.Default().AuthFailures.Add(1, what)
 	slog.Warn(what, "error", err)
 	stashErr := a.sessions.stash(w, flashCookie, err.Error(), flashLifetime)
 	if stashErr != nil {

@@ -50,6 +50,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 	"github.com/sophotechlabs/spinoza/internal/samples"
+	"github.com/sophotechlabs/spinoza/internal/telemetry"
 	"github.com/sophotechlabs/spinoza/internal/traffic"
 )
 
@@ -1100,6 +1101,7 @@ func (m *Manager) retire(key streamKey, st *stream) {
 		return
 	}
 	delete(m.streams, key)
+	telemetry.Default().Informers.Set(float64(len(m.streams)))
 	st.cancel()
 }
 
@@ -1133,7 +1135,9 @@ func (m *Manager) streamFor(ctx context.Context, key streamKey, desc api.Resourc
 	m.mu.Lock()
 	delete(m.failures, key)
 	m.streams[key] = created
+	watching := len(m.streams)
 	m.mu.Unlock()
+	telemetry.Default().Informers.Set(float64(watching))
 	return created, nil
 }
 
@@ -1261,12 +1265,14 @@ func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.Resourc
 	stopRootCancel := m.cancelSyncWhenClosed(cancelSync)
 	defer stopRootCancel()
 	synced := make(chan bool, 1)
+	syncing := time.Now()
 	go func() {
 		synced <- cache.WaitForCacheSync(syncCtx.Done(), informer.HasSynced)
 	}()
 	select {
 	case ok := <-synced:
 		if ok {
+			telemetry.Default().InformerSyncSeconds.Observe(time.Since(syncing).Seconds())
 			return st, nil
 		}
 		cancel()

@@ -18,6 +18,7 @@ import (
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/reach"
+	"github.com/sophotechlabs/spinoza/internal/telemetry"
 )
 
 type Bundle struct {
@@ -127,6 +128,7 @@ func LoadContext(ref api.ContextRef, options Options) (*Bundle, error) {
 	restConfig.WarningHandler = warnings
 	answers := reach.New()
 	restConfig.Wrap(answers.Wrap)
+	restConfig.Wrap(telemetry.CountCalls)
 	if options.Impersonate {
 		restConfig.Wrap(Impersonating)
 	}
