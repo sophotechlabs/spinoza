@@ -225,6 +225,11 @@ describe('the shortcut list', () => {
       'r',
       'Shift R',
       't',
+      '↑ ↓',
+      'Home End',
+      'Enter',
+      'Space',
+      '⌘ Enter',
     ]);
   });
 

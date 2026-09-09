@@ -32,6 +32,11 @@ export function shortcuts(): Hotkey[] {
     { keys: 'r', description: 'Refresh the selected Argo application' },
     { keys: 'Shift R', description: 'Hard refresh it, or reconcile a Flux object with its source' },
     { keys: 't', description: 'Terminate the operation running on it' },
+    { keys: '↑ ↓', description: 'Move between rows in the table' },
+    { keys: 'Home End', description: 'Jump to the first or last row' },
+    { keys: 'Enter', description: 'Open the row on the inspector' },
+    { keys: 'Space', description: 'Select the row for a bulk action' },
+    { keys: `${modLabel()} Enter`, description: 'Open the row and move into the inspector' },
   ];
 }
 

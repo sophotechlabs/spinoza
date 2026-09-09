@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import {
   createColumnHelper,
   flexRender,
@@ -262,6 +262,13 @@ function ariaSort(dir: false | SortDirection): 'ascending' | 'descending' | 'non
   return 'none';
 }
 
+function rowTabIndex(uid: string, focused: string | null): number {
+  if (uid === focused) {
+    return 0;
+  }
+  return -1;
+}
+
 function rowClass(selected: boolean): string {
   const base = 'cursor-pointer border-b border-edge';
   if (selected) {
@@ -378,6 +385,8 @@ export default function ResourceTable({
   const columnsRef = useRef<HTMLDetailsElement | null>(null);
   useDismissMenu(columnsRef);
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const [focusUid, setFocusUid] = useState<string | null>(null);
+  const wantFocus = useRef(false);
   const setScroll = useCallback((node: HTMLDivElement | null) => {
     scrollRef.current = node;
     setScrollEl(node);
@@ -563,6 +572,84 @@ export default function ResourceTable({
     onSelect(row);
   }
 
+  function focusRow(index: number) {
+    wantFocus.current = true;
+    setFocusUid(tableRows[index].original.uid);
+    virtualizer.scrollToIndex(index);
+  }
+
+  function walk(from: number, delta: number) {
+    const wanted = from + delta;
+    if (wanted < 0) {
+      return;
+    }
+    if (wanted > tableRows.length - 1) {
+      return;
+    }
+    focusRow(wanted);
+  }
+
+  function reachInspector() {
+    const first = document.querySelector(
+      '[role="tablist"][aria-label="right panels"] [role="tab"]',
+    );
+    if (first instanceof HTMLElement) {
+      first.focus();
+    }
+  }
+
+  function onRowKey(event: ReactKeyboardEvent<HTMLTableRowElement>, row: TanRow<Row>, at: number) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      walk(at, 1);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      walk(at, -1);
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      focusRow(0);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      focusRow(tableRows.length - 1);
+      return;
+    }
+    if (event.key === ' ') {
+      event.preventDefault();
+      row.toggleSelected();
+      return;
+    }
+    if (event.key !== 'Enter') {
+      return;
+    }
+    event.preventDefault();
+    onSelect(row.original);
+    if (event.metaKey || event.ctrlKey) {
+      reachInspector();
+    }
+  }
+
+  let focused = focusUid;
+  if (focused === null && tableRows.length > 0) {
+    focused = tableRows[0].original.uid;
+  }
+
+  useEffect(() => {
+    if (!wantFocus.current) {
+      return;
+    }
+    const row = scrollEl?.querySelector(`tr[data-uid="${CSS.escape(focusUid ?? '')}"]`);
+    if (row instanceof HTMLElement) {
+      wantFocus.current = false;
+      row.focus();
+    }
+  });
+
   const virtualItems = virtualizer.getVirtualItems();
   let paddingTop = 0;
   let paddingBottom = 0;
@@ -683,6 +770,7 @@ export default function ResourceTable({
       />
       <div ref={setScroll} className="min-h-0 flex-1 overflow-auto">
         <table
+          aria-rowcount={tableRows.length}
           className="table-fixed border-collapse text-left text-xs"
           style={{ width: `${tableWidth}px` }}
         >
@@ -745,16 +833,19 @@ export default function ResourceTable({
               return (
                 <tr
                   key={row.id}
+                  data-uid={row.original.uid}
+                  aria-rowindex={virtualRow.index + 2}
+                  tabIndex={rowTabIndex(row.original.uid, focused)}
                   className={rowClass(row.original.uid === selectedUid)}
                   style={{ height: `${ROW_HEIGHT}px` }}
+                  onFocus={() => {
+                    setFocusUid(row.original.uid);
+                  }}
                   onClick={(event) => {
                     openRow(row.original, event.target);
                   }}
                   onKeyDown={(event) => {
-                    if (event.key !== 'Enter') {
-                      return;
-                    }
-                    openRow(row.original, event.target);
+                    onRowKey(event, row, virtualRow.index);
                   }}
                 >
                   {row.getVisibleCells().map((cell) => (

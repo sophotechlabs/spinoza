@@ -1770,3 +1770,159 @@ describe('a table whose watch broke under it', () => {
     );
   });
 });
+
+describe('driving the table from the keyboard', () => {
+  beforeEach(() => {
+    resetStore();
+    seed(makeColumns(['Ready']), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: ['1/1'] }),
+      makeRow({ uid: 'b', name: 'pod-b', namespace: 'prod', cells: ['1/1'] }),
+      makeRow({ uid: 'c', name: 'pod-c', namespace: 'prod', cells: ['1/1'] }),
+    ]);
+  });
+
+  function bodyRows(): HTMLElement[] {
+    return screen.getAllByRole('row').slice(1);
+  }
+
+  it('offers the first row to the keyboard and holds the rest out of the tab order', async () => {
+    renderTable(descriptor, null);
+    await screen.findByText('pod-a');
+
+    const rows = bodyRows();
+
+    expect(rows[0]).toHaveAttribute('tabindex', '0');
+    expect(rows[1]).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('says how many rows there are and where each one sits', async () => {
+    renderTable(descriptor, null);
+    await screen.findByText('pod-a');
+
+    expect(screen.getByRole('table')).toHaveAttribute('aria-rowcount', '3');
+    expect(bodyRows()[1]).toHaveAttribute('aria-rowindex', '3');
+  });
+
+  it('walks down and back up the rows', async () => {
+    const user = userEvent.setup();
+    renderTable(descriptor, null);
+    await screen.findByText('pod-a');
+    bodyRows()[0].focus();
+
+    await user.keyboard('{ArrowDown}');
+    expect(bodyRows()[1]).toHaveFocus();
+
+    await user.keyboard('{ArrowUp}');
+    expect(bodyRows()[0]).toHaveFocus();
+  });
+
+  it('stops at the ends instead of wrapping', async () => {
+    const user = userEvent.setup();
+    renderTable(descriptor, null);
+    await screen.findByText('pod-a');
+    bodyRows()[0].focus();
+
+    await user.keyboard('{ArrowUp}');
+    expect(bodyRows()[0]).toHaveFocus();
+
+    await user.keyboard('{End}');
+    expect(bodyRows()[2]).toHaveFocus();
+
+    await user.keyboard('{ArrowDown}');
+    expect(bodyRows()[2]).toHaveFocus();
+
+    await user.keyboard('{Home}');
+    expect(bodyRows()[0]).toHaveFocus();
+  });
+
+  it('opens the focused row on Enter', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    renderTable(descriptor, null, onSelect);
+    await screen.findByText('pod-a');
+    bodyRows()[0].focus();
+
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'pod-b' }));
+  });
+
+  it('selects the focused row for a bulk action on Space', async () => {
+    const user = userEvent.setup();
+    renderTable(descriptor, null);
+    await screen.findByText('pod-a');
+    bodyRows()[0].focus();
+
+    await user.keyboard(' ');
+
+    expect(screen.getByRole('checkbox', { name: 'Select pod-a' })).toBeChecked();
+  });
+
+  it('leaves other keys to the rest of the page', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    renderTable(descriptor, null, onSelect);
+    await screen.findByText('pod-a');
+    bodyRows()[0].focus();
+
+    await user.keyboard('x');
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(bodyRows()[0]).toHaveFocus();
+  });
+});
+
+describe('opening a row straight into the inspector', () => {
+  beforeEach(() => {
+    resetStore();
+    seed(makeColumns(['Ready']), true, [
+      makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod', cells: ['1/1'] }),
+    ]);
+  });
+
+  afterEach(() => {
+    for (const stray of document.querySelectorAll('[role="tablist"][aria-label="right panels"]')) {
+      stray.remove();
+    }
+  });
+
+  function inspector(): HTMLElement {
+    const tabs = document.createElement('div');
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', 'right panels');
+    const tab = document.createElement('button');
+    tab.setAttribute('role', 'tab');
+    tab.textContent = 'Overview';
+    tabs.appendChild(tab);
+    document.body.appendChild(tabs);
+    return tab;
+  }
+
+  it('moves focus onto the inspector once it is open', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    renderTable(descriptor, null, onSelect);
+    await screen.findByText('pod-a');
+    const tab = inspector();
+    screen.getAllByRole('row')[1].focus();
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'pod-a' }));
+    expect(tab).toHaveFocus();
+  });
+
+  it('still opens the row when there is no inspector to move to', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    renderTable(descriptor, null, onSelect);
+    await screen.findByText('pod-a');
+    const row = screen.getAllByRole('row')[1];
+    row.focus();
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(row).toHaveFocus();
+  });
+});
