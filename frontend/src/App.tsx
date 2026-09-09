@@ -481,6 +481,7 @@ export default function App() {
       return;
     }
     rememberObject(ref);
+    revealDetails();
     if (ref.namespace !== '') {
       chooseNamespace(ref.namespace);
     }

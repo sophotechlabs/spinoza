@@ -2809,6 +2809,18 @@ describe('the helm release panel', () => {
     expect(screen.getByTestId('inspect-target')).toHaveTextContent('configmaps:demo/live-check');
   });
 
+  it('opens the inspector for a rendered resource even when the dock was collapsed', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await openRelease(user);
+    await user.click(screen.getByRole('button', { name: 'Hide the right dock' }));
+
+    await user.click(screen.getByRole('button', { name: 'open-release-resource' }));
+
+    expect(usePanelsStore.getState().collapsed.right).toBe(false);
+    expect(screen.getByTestId('inspect-target')).toHaveTextContent('configmaps:demo/live-check');
+  });
+
   it('opens the flux owner in the drawer without leaving the helm view', async () => {
     const user = userEvent.setup();
     render(<App />);
