@@ -216,14 +216,15 @@ func TestOpeningWithoutANameIsRefused(t *testing.T) {
 }
 
 func TestAClusterThatWillNotOpenIsReported(t *testing.T) {
-	ts := fleetServer(t, &fleet{openErr: errors.New("context \"gone\" did not answer within 30s")})
+	silent := fmt.Errorf("%w: %q was still silent after 30s", api.ErrUnreachable, "gone")
+	ts := fleetServer(t, &fleet{openErr: silent})
 
 	resp, body := doRequest(t, http.MethodPost, ts.URL+"/api/clusters?name=gone", nil)
 
-	if resp.StatusCode == http.StatusOK {
-		t.Fatal("opening a cluster that never answered reported success")
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503: %s", resp.StatusCode, body)
 	}
-	if !strings.Contains(string(body), "did not answer") {
+	if !strings.Contains(string(body), "still silent") {
 		t.Fatalf("body = %s, want it to say what went wrong", body)
 	}
 }

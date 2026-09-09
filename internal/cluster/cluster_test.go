@@ -903,8 +903,11 @@ func TestAnApiserverThatNeverAnswersIsAnErrorNotAHang(t *testing.T) {
 	if err == nil {
 		t.Fatal("an apiserver that never answered opened successfully")
 	}
-	if !strings.Contains(err.Error(), "did not answer") {
-		t.Fatalf("error = %q, want it to say the cluster never answered", err.Error())
+	if !errors.Is(err, api.ErrUnreachable) {
+		t.Fatalf("error = %v, want one the api reports as unreachable", err)
+	}
+	if !strings.Contains(err.Error(), "wedged") {
+		t.Fatalf("error = %q, want it to name the context", err.Error())
 	}
 }
 

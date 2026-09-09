@@ -6,6 +6,8 @@ var ErrNotOpen = errors.New("that cluster is not open")
 
 var ErrInternal = errors.New("spinoza could not do that")
 
+var ErrUnreachable = errors.New("the cluster could not be reached")
+
 type Health struct {
 	Status string `json:"status"`
 }

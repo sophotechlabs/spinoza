@@ -3,6 +3,8 @@ package cluster
 import (
 	"errors"
 	"testing"
+
+	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 func TestTheGkePluginIsNamed(t *testing.T) {
@@ -69,9 +71,12 @@ func TestNothingListeningIsSaidPlainlyWithTheAddress(t *testing.T) {
 		`Get "https://10.0.0.1:6443/api?timeout=30s": dial tcp 10.0.0.1:6443: connect: connection refused`,
 	))
 
-	want := `context "p-mk1": nothing is listening at https://10.0.0.1:6443. Check the address in /home/me/.kube/config`
+	want := `the cluster could not be reached: context "p-mk1" found nothing listening at https://10.0.0.1:6443. Check the address in /home/me/.kube/config`
 	if err.Error() != want {
 		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+	if !errors.Is(err, api.ErrUnreachable) {
+		t.Fatalf("error = %v, want one the api reports as unreachable", err)
 	}
 }
 

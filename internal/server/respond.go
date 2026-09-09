@@ -66,6 +66,9 @@ func cannotReachCluster(err error) bool {
 	if errors.Is(err, prom.ErrUnavailable) {
 		return true
 	}
+	if errors.Is(err, api.ErrUnreachable) {
+		return true
+	}
 	return errors.Is(err, resources.ErrNotSynced)
 }
 

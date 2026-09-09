@@ -159,7 +159,7 @@ func unreachable(name, source, host string, discErr error) error {
 		return fmt.Errorf("context %q in %s does not trust the certificate %s presented (%s). Either this is not the kubeconfig kubectl reads, or a TLS-inspecting proxy on this machine re-signs the connection and spinoza needs the exemption kubectl has", name, source, host, reason)
 	}
 	if reach.CauseOf(discErr.Error()) == reach.Refused {
-		return fmt.Errorf("context %q: nothing is listening at %s. Check the address in %s", name, host, source)
+		return fmt.Errorf("%w: context %q found nothing listening at %s. Check the address in %s", api.ErrUnreachable, name, host, source)
 	}
 	return fmt.Errorf("context %q lists no resource types: %w", name, discErr)
 }

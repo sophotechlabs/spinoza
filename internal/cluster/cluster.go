@@ -389,7 +389,8 @@ func (c *Cluster) dial(root, until context.Context, ref api.ContextRef) (*connec
 	case <-timer.C:
 		cancel()
 		return nil, fmt.Errorf(
-			"context %q did not answer within %s. Check that its apiserver is reachable from here; a VPN that is down looks exactly like this",
+			"%w: %q was still silent after %s. Check that its apiserver is reachable from here; a VPN that is down looks exactly like this",
+			api.ErrUnreachable,
 			ref.Name,
 			c.openWithin,
 		)
