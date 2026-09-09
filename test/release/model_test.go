@@ -66,6 +66,7 @@ func (value *workflowScalar) UnmarshalYAML(node *yaml.Node) error {
 
 type workflowJob struct {
 	If             string            `yaml:"if"`
+	Uses           string            `yaml:"uses"`
 	Needs          stringList        `yaml:"needs"`
 	Outputs        map[string]string `yaml:"outputs"`
 	Permissions    map[string]string `yaml:"permissions"`
@@ -169,17 +170,6 @@ func requireStep(t *testing.T, job workflowJob, id string) workflowStep {
 	return workflowStep{}
 }
 
-func requireNamedStep(t *testing.T, job workflowJob, name string) workflowStep {
-	t.Helper()
-	for _, step := range job.Steps {
-		if step.Name == name {
-			return step
-		}
-	}
-	t.Fatalf("job has no %q step", name)
-	return workflowStep{}
-}
-
 func contains(values []string, want string) bool {
 	return slices.Contains(values, want)
 }
@@ -191,4 +181,24 @@ func containsRun(steps []workflowStep, want string) bool {
 		}
 	}
 	return false
+}
+
+type suiteTiers struct {
+	CommitBrowsers      []string `json:"commitBrowsers"`
+	NightlyBrowsers     []string `json:"nightlyBrowsers"`
+	CommitBudgetMinutes int      `json:"commitBudgetMinutes"`
+	Groups              []struct {
+		ID              string `json:"id"`
+		Runner          string `json:"runner"`
+		Tier            string `json:"tier"`
+		ObservedMinutes int    `json:"observedMinutes"`
+	} `json:"groups"`
+}
+
+type ciTiers struct {
+	BudgetMinutes int `json:"budgetMinutes"`
+	Workflows     map[string]struct {
+		Tier       string `json:"tier"`
+		JobMinutes int    `json:"jobMinutes"`
+	} `json:"workflows"`
 }

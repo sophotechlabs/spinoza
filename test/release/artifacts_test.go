@@ -89,21 +89,22 @@ func TestClusterModeBrowsersRunEveryEngine(t *testing.T) {
 	if !ok {
 		t.Fatalf("cluster-mode matrix = %#v, want a mapping", browser.Strategy["matrix"])
 	}
-	rawBrowsers, ok := matrix["browser"].([]any)
+	engines, ok := matrix["browser"].(string)
 	if !ok {
-		t.Fatalf("cluster-mode browsers = %#v, want a list", matrix["browser"])
+		t.Fatalf("cluster-mode browsers = %#v, want the selected engine list", matrix["browser"])
 	}
-	got := make([]string, 0, len(rawBrowsers))
-	for _, raw := range rawBrowsers {
-		name, isString := raw.(string)
-		if !isString {
-			t.Fatalf("cluster-mode browser = %#v, want a string", raw)
-		}
-		got = append(got, name)
+	if !strings.Contains(engines, "needs.select.outputs.browsers") {
+		t.Fatalf("cluster-mode browsers = %q, want the engines the tier selected", engines)
 	}
+	suite := readJSON[suiteTiers](t, "e2e/suite.json")
 	want := []string{"chromium", "firefox", "webkit"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("cluster-mode browsers = %v, want %v", got, want)
+	if !slices.Equal(suite.NightlyBrowsers, want) {
+		t.Fatalf("nightly browsers = %v, want %v", suite.NightlyBrowsers, want)
+	}
+	for _, engine := range suite.CommitBrowsers {
+		if !contains(want, engine) {
+			t.Fatalf("commit browser %q is not an engine the suite knows", engine)
+		}
 	}
 	failFast, ok := browser.Strategy["fail-fast"].(bool)
 	if !ok {
@@ -119,8 +120,8 @@ func TestClusterModeBrowsersRunEveryEngine(t *testing.T) {
 		t.Fatal("cluster-mode browser job does not run the dedicated browser target")
 	}
 	run := requireRunStep(t, browser, "test-cluster-mode-browser")
-	if !strings.Contains(run.Run, "matrix.browser") {
-		t.Fatal("cluster-mode browser target does not receive the selected engine")
+	if run.Env["BROWSER"] != "${{ matrix.browser }}" {
+		t.Fatalf("cluster-mode browser target receives %q, want the selected engine", run.Env["BROWSER"])
 	}
 	requireClusterModeFailureHandling(t, browser)
 	auth := requireJob(t, workflow, "cluster-mode-auth")

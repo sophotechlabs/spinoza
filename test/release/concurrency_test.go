@@ -6,17 +6,43 @@ import (
 )
 
 func TestLongRunningChecksUsePerRefConcurrencyGroups(t *testing.T) {
-	want := "${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-"
 	for _, name := range []string{
 		".github/workflows/go-fuzz.yaml",
 		".github/workflows/go-mutation.yaml",
 	} {
 		t.Run(name, func(t *testing.T) {
 			workflow := readYAML[workflowFile](t, name)
-			if !strings.HasPrefix(workflow.Concurrency.Group, want) {
-				t.Fatalf("concurrency group = %q, want prefix %q", workflow.Concurrency.Group, want)
+			if !strings.Contains(workflow.Concurrency.Group, "github.ref") {
+				t.Fatalf("concurrency group = %q, which does not isolate one ref from another", workflow.Concurrency.Group)
 			}
 		})
+	}
+}
+
+func TestALongCheckRunAtTwoCadencesDoesNotCancelItself(t *testing.T) {
+	fuzz := readYAML[workflowFile](t, ".github/workflows/go-fuzz.yaml")
+	if !strings.Contains(fuzz.Concurrency.Group, "inputs.duration") {
+		t.Fatalf("go-fuzz concurrency group = %q; a nightly 10m run would cancel the 30s run on the same ref", fuzz.Concurrency.Group)
+	}
+	e2e := readYAML[workflowFile](t, ".github/workflows/e2e.yaml")
+	if !strings.Contains(e2e.Concurrency.Group, "inputs.tier") {
+		t.Fatalf("e2e concurrency group = %q; a nightly run would cancel the per-commit run on the same ref", e2e.Concurrency.Group)
+	}
+}
+
+func TestMutationOnlyRunsWhenSomethingCallsIt(t *testing.T) {
+	triggers := readYAML[triggerWorkflow](t, ".github/workflows/go-mutation.yaml")
+	for _, trigger := range []string{"push", "pull_request"} {
+		if _, ok := triggers.On[trigger]; ok {
+			t.Fatalf("go-mutation still runs on %s; twenty-three shards belong to the nightly and the release", trigger)
+		}
+	}
+	if _, ok := triggers.On["workflow_call"]; !ok {
+		t.Fatal("go-mutation runs on nothing at all")
+	}
+	nightly := readYAML[workflowFile](t, ".github/workflows/nightly.yaml")
+	if uses := requireJob(t, nightly, "mutation").Uses; uses != "./.github/workflows/go-mutation.yaml" {
+		t.Fatalf("nightly mutation uses %q, want the mutation workflow", uses)
 	}
 }
 
@@ -88,7 +114,7 @@ func TestMutationTestingIsBoundedAndSplitIntoPackageShards(t *testing.T) {
 
 func TestE2EUsesAConcurrencyGroupForEachPullRequest(t *testing.T) {
 	workflow := readYAML[workflowFile](t, ".github/workflows/e2e.yaml")
-	want := "e2e-${{ github.event.pull_request.number || inputs.pull_request || github.ref }}-"
+	want := "e2e-${{ inputs.tier || 'commit' }}-${{ github.event.pull_request.number || inputs.pull_request || github.ref }}-"
 	if !strings.HasPrefix(workflow.Concurrency.Group, want) {
 		t.Fatalf("concurrency group = %q, want prefix %q", workflow.Concurrency.Group, want)
 	}
@@ -122,7 +148,6 @@ func TestOrdinaryPushesSupersedeValidationButReleaseCommitsDoNot(t *testing.T) {
 		".github/workflows/e2e.yaml",
 		".github/workflows/frontend.yaml",
 		".github/workflows/go-fuzz.yaml",
-		".github/workflows/go-mutation.yaml",
 		".github/workflows/go.yaml",
 		".github/workflows/integration.yaml",
 		".github/workflows/repo.yaml",
