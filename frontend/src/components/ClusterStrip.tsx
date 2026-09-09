@@ -140,67 +140,69 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
   }
 
   return (
-    <nav
-      aria-label="Open clusters"
-      className="flex shrink-0 items-end gap-1 overflow-x-auto border-b border-edge bg-surface px-2 pt-1 text-xs"
-    >
-      {inGroups(tabs).map((run) => (
-        <span key={run.name} className="flex shrink-0 items-end gap-1">
-          {run.name !== '' && (
-            <span className="px-1 pb-1.5 text-[11px] tracking-wide text-fg-muted uppercase">
-              {run.name}
-            </span>
-          )}
-          {run.tabs.map((tab) => (
-            <span key={tab.id} className={`relative ${tabClass(tab.id === active, tabs.length)}`}>
-              <button
-                type="button"
-                aria-label={`${nameOf(tab)} is ${dotLabel(health[tab.id]?.reachable ?? true, unknown)}; open its tab menu`}
-                title={swatchTitle(health[tab.id]?.reason, unknown)}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                }}
-                onClick={() => {
-                  setPainting(showing(painting, tab.id));
-                }}
-                style={{ backgroundColor: colorVar(tab.color) }}
-                className={swatchClass(health[tab.id]?.reachable ?? true, unknown)}
-              />
-              <button
-                type="button"
-                aria-current={tab.id === active}
-                title={tab.id}
-                disabled={busy}
-                onClick={() => void show(tab)}
-                className="truncate font-mono disabled:text-fg-subtle"
-              >
-                {nameOf(tab)}
-              </button>
-              <button
-                type="button"
-                aria-label={`Close ${nameOf(tab)}`}
-                title={`Close ${nameOf(tab)}`}
-                disabled={busy}
-                onClick={() => {
-                  close(tab);
-                }}
-                className="shrink-0 px-0.5 text-fg-muted hover:text-fg disabled:opacity-50"
-              >
-                ×
-              </button>
-              {painting === tab.id && (
-                <TabMenu
-                  tab={tab}
-                  onDone={() => {
-                    setPainting('');
+    <div className="flex shrink-0 items-end gap-1 border-b border-edge bg-surface px-2 pt-1 text-xs">
+      <nav
+        aria-label="Open clusters"
+        className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto"
+      >
+        {inGroups(tabs).map((run) => (
+          <span key={run.name} className="flex shrink-0 items-end gap-1">
+            {run.name !== '' && (
+              <span className="px-1 pb-1.5 text-[11px] tracking-wide text-fg-muted uppercase">
+                {run.name}
+              </span>
+            )}
+            {run.tabs.map((tab) => (
+              <span key={tab.id} className={`relative ${tabClass(tab.id === active, tabs.length)}`}>
+                <button
+                  type="button"
+                  aria-label={`${nameOf(tab)} is ${dotLabel(health[tab.id]?.reachable ?? true, unknown)}; open its tab menu`}
+                  title={swatchTitle(health[tab.id]?.reason, unknown)}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
                   }}
+                  onClick={() => {
+                    setPainting(showing(painting, tab.id));
+                  }}
+                  style={{ backgroundColor: colorVar(tab.color) }}
+                  className={swatchClass(health[tab.id]?.reachable ?? true, unknown)}
                 />
-              )}
-            </span>
-          ))}
-        </span>
-      ))}
-      {tabs.length === 0 && <span className="pb-1.5 text-fg-muted">no cluster</span>}
+                <button
+                  type="button"
+                  aria-current={tab.id === active}
+                  title={tab.id}
+                  disabled={busy}
+                  onClick={() => void show(tab)}
+                  className="truncate font-mono disabled:text-fg-subtle"
+                >
+                  {nameOf(tab)}
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Close ${nameOf(tab)}`}
+                  title={`Close ${nameOf(tab)}`}
+                  disabled={busy}
+                  onClick={() => {
+                    close(tab);
+                  }}
+                  className="shrink-0 px-0.5 text-fg-muted hover:text-fg disabled:opacity-50"
+                >
+                  ×
+                </button>
+                {painting === tab.id && (
+                  <TabMenu
+                    tab={tab}
+                    onDone={() => {
+                      setPainting('');
+                    }}
+                  />
+                )}
+              </span>
+            ))}
+          </span>
+        ))}
+        {tabs.length === 0 && <span className="pb-1.5 text-fg-muted">no cluster</span>}
+      </nav>
       <span className="flex shrink-0 items-center pb-1">
         <ContextPicker onSwitched={onShown} />
       </span>
@@ -239,6 +241,6 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
           </div>
         </dialog>
       )}
-    </nav>
+    </div>
   );
 }

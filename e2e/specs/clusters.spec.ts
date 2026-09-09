@@ -16,6 +16,10 @@ function contextPicker(page: Page): Locator {
   return page.locator('summary[aria-label="Open a cluster"]');
 }
 
+function contextMenu(page: Page): Locator {
+  return page.locator('details:has(> summary[aria-label="Open a cluster"])');
+}
+
 async function opened(page: Page): Promise<Opened[]> {
   return page.evaluate(async () => {
     const response = await fetch('/api/clusters');
@@ -119,9 +123,7 @@ test('a second kubeconfig puts its context in the picker', async ({ page }) => {
     await page.waitForLoadState('domcontentloaded');
     await contextPicker(page).click();
     await expect(
-      page
-        .getByRole('navigation', { name: 'Open clusters' })
-        .getByRole('button', { name: NOWHERE_CONTEXT, exact: true }),
+      contextMenu(page).getByRole('button', { name: NOWHERE_CONTEXT, exact: true }),
     ).toBeVisible({ timeout: 30_000 });
   } finally {
     if (!before) {
@@ -295,4 +297,24 @@ test('removing a kubeconfig removes its context from the picker and adding it ba
       await removeSecond(page);
     }
   }
+});
+
+test('the plus opens the context list clear of the strip', async ({ page }) => {
+  await openHome(page);
+  const strip = page.getByRole('navigation', { name: 'Open clusters' });
+  await expect(strip).toBeVisible({ timeout: 30_000 });
+
+  await contextPicker(page).click();
+
+  const entry = page.getByRole('button', { name: CONTEXT, exact: true }).last();
+  await expect(entry).toBeVisible();
+  const menu = await entry.boundingBox();
+  const bar = await strip.boundingBox();
+  expect(menu).not.toBeNull();
+  expect(bar).not.toBeNull();
+  if (menu === null || bar === null) {
+    throw new Error('the strip or its menu has no measurable box');
+  }
+  expect(menu.y).toBeGreaterThan(bar.y + bar.height - 1);
+  expect(menu.height).toBeGreaterThan(0);
 });
