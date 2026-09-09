@@ -15,15 +15,12 @@ import {
 import type { IssueOrder } from '../lib/issues';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
-import LoadFailure from './LoadFailure';
-import LoadWarning from './LoadWarning';
-import StaleBanner from './StaleBanner';
-import Loading from './Loading';
 import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters';
 import { colorVar } from '../lib/clusterColor';
 import { useFleetIssues, useIssuesStore } from '../store/issues';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 interface IssueQueueProps {
   active?: boolean;
@@ -252,14 +249,14 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
 
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="The issue queue" message={error} />;
+      return <CapabilityState state="failed" what="The issue queue" why={error} />;
     }
-    return <Loading what="the issue queue" />;
+    return <CapabilityState state="loading" what="the issue queue" />;
   }
 
   let notice: ReactNode = null;
   if (error !== null) {
-    notice = <StaleBanner what="The issue queue" message={error} onRetry={reload} />;
+    notice = <CapabilityState state="stale" what="The issue queue" why={error} onRetry={reload} />;
   }
 
   function toggle(id: string) {
@@ -269,7 +266,7 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
       {notice}
-      {data.error !== undefined && <LoadWarning message={data.error} />}
+      {data.error !== undefined && <CapabilityState state="partial" why={data.error} />}
       <WorkspaceHeader
         title="Issues"
         scope={issuesScope(fleet, shownCluster)}

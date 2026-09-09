@@ -3,7 +3,7 @@ import { openExec, openLocalShell, openNodeShell } from '../lib/exec';
 import type { ExecHandlers } from '../lib/exec';
 import { useShellSupport } from '../lib/useShellSupport';
 import DebugPrompt from './DebugPrompt';
-import Loading from './Loading';
+import CapabilityState from './CapabilityState';
 
 const TerminalPanel = lazy(() => import('./TerminalPanel'));
 
@@ -18,7 +18,7 @@ export function NodeTerminalSession({ node }: { node: string }) {
   const missing = useCallback(() => undefined, []);
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <Suspense fallback={<Loading what="terminal" />}>
+      <Suspense fallback={<CapabilityState state="loading" what="terminal" />}>
         <TerminalPanel key={`node/${node}`} openSession={open} onShellMissing={missing} />
       </Suspense>
     </div>
@@ -30,7 +30,7 @@ export function LocalTerminalSession() {
   const missing = useCallback(() => undefined, []);
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <Suspense fallback={<Loading what="terminal" />}>
+      <Suspense fallback={<CapabilityState state="loading" what="terminal" />}>
         <TerminalPanel openSession={open} onShellMissing={missing} />
       </Suspense>
     </div>
@@ -66,7 +66,7 @@ export default function TerminalSession({ namespace, pod, container }: TerminalS
         />
       )}
       {!needsDebugContainer && (
-        <Suspense fallback={<Loading what="terminal" />}>
+        <Suspense fallback={<CapabilityState state="loading" what="terminal" />}>
           <TerminalPanel
             key={`${namespace}/${pod}/${target}`}
             openSession={(handlers) => openExec({ namespace, pod, container: target }, handlers)}

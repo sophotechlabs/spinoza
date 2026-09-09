@@ -14,12 +14,10 @@ import {
 import { nameOf, tabOn, useClustersStore } from '../store/clusters';
 import { colorVar } from '../lib/clusterColor';
 import { CONTROL } from '../lib/controls';
-import LoadFailure from './LoadFailure';
-import LoadWarning from './LoadWarning';
-import Loading from './Loading';
 import EntityLabel from './EntityLabel';
 import { resourceIdentity } from '../lib/entityLabel';
 import WorkspaceHeader from './WorkspaceHeader';
+import CapabilityState from './CapabilityState';
 
 interface FleetProps {
   onPick: (cluster: string) => void;
@@ -56,14 +54,16 @@ function Clusters({ onPick }: FleetProps) {
   const { data, error } = useFleetOverview();
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="The fleet" message={error} />;
+      return <CapabilityState state="failed" what="The fleet" why={error} />;
     }
-    return <Loading what="the fleet" />;
+    return <CapabilityState state="loading" what="the fleet" />;
   }
   const warnings = data.clusters.reduce((total, cluster) => total + cluster.warnings, 0);
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
+      {data.error !== undefined && data.error !== '' && (
+        <CapabilityState state="partial" why={data.error} />
+      )}
       <table className="w-full table-fixed border-collapse text-left whitespace-nowrap">
         <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">
           <tr className="border-b border-edge">
@@ -128,13 +128,15 @@ function Inventory() {
   const { data, error } = useFleetInventory();
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="The fleet inventory" message={error} />;
+      return <CapabilityState state="failed" what="The fleet inventory" why={error} />;
     }
-    return <Loading what="the fleet inventory" />;
+    return <CapabilityState state="loading" what="the fleet inventory" />;
   }
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
+      {data.error !== undefined && data.error !== '' && (
+        <CapabilityState state="partial" why={data.error} />
+      )}
       <ul>
         {data.kinds.map((kind) => {
           const identity = resourceIdentity(kind.key);
@@ -183,13 +185,15 @@ function Images() {
   const { data, error } = useFleetImages();
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="The fleet images" message={error} />;
+      return <CapabilityState state="failed" what="The fleet images" why={error} />;
     }
-    return <Loading what="the fleet images" />;
+    return <CapabilityState state="loading" what="the fleet images" />;
   }
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
+      {data.error !== undefined && data.error !== '' && (
+        <CapabilityState state="partial" why={data.error} />
+      )}
       <ul>
         {data.images.map((image) => (
           <Image key={image.image} image={image} />
@@ -229,13 +233,15 @@ function Releases() {
   const { data, error } = useFleetReleases();
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="The fleet releases" message={error} />;
+      return <CapabilityState state="failed" what="The fleet releases" why={error} />;
     }
-    return <Loading what="the fleet releases" />;
+    return <CapabilityState state="loading" what="the fleet releases" />;
   }
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
+      {data.error !== undefined && data.error !== '' && (
+        <CapabilityState state="partial" why={data.error} />
+      )}
       <ul>
         {data.releases.map((one) => (
           <Release key={`${one.cluster ?? ''}/${one.namespace}/${one.name}`} one={one} />
@@ -269,13 +275,15 @@ function Delivery() {
   const { data, error } = useFleetGitops();
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="The fleet delivery" message={error} />;
+      return <CapabilityState state="failed" what="The fleet delivery" why={error} />;
     }
-    return <Loading what="the fleet delivery" />;
+    return <CapabilityState state="loading" what="the fleet delivery" />;
   }
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      {data.error !== undefined && data.error !== '' && <LoadWarning message={data.error} />}
+      {data.error !== undefined && data.error !== '' && (
+        <CapabilityState state="partial" why={data.error} />
+      )}
       <ul>
         {data.apps.map((app) => (
           <App

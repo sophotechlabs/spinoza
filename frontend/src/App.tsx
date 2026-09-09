@@ -70,7 +70,6 @@ import Checks from './components/Checks';
 import History from './components/History';
 import Fleet from './components/Fleet';
 import Rbac from './components/Rbac';
-import Loading from './components/Loading';
 import SettingsDialog from './components/SettingsDialog';
 import ConnectionBanner from './components/ConnectionBanner';
 import KubeconfigBanner from './components/KubeconfigBanner';
@@ -78,6 +77,7 @@ import ProtectionOffer from './components/ProtectionOffer';
 import MovedToDesktop from './components/MovedToDesktop';
 import CommandPalette from './components/CommandPalette';
 import type { Section } from './components/SettingsDialog';
+import CapabilityState from './components/CapabilityState';
 
 const GitopsGraph = lazy(() => import('./components/GitopsGraph'));
 const ArgoGraph = lazy(() => import('./components/ArgoGraph'));
@@ -611,7 +611,7 @@ export default function App() {
   }
   if (route.view === 'topology') {
     mainArea = (
-      <Suspense fallback={<Loading what="graph" />}>
+      <Suspense fallback={<CapabilityState state="loading" what="graph" />}>
         <TopologyGraph openedOn={route.selection} onSelect={handleSelectNode} />
       </Suspense>
     );
@@ -633,7 +633,7 @@ export default function App() {
   }
   if (route.view === 'gitops') {
     mainArea = (
-      <Suspense fallback={<Loading what="graph" />}>
+      <Suspense fallback={<CapabilityState state="loading" what="graph" />}>
         <GitopsGraph onSelect={handleSelectNode} />
       </Suspense>
     );
@@ -649,7 +649,7 @@ export default function App() {
   }
   if (route.view === 'argo-graph') {
     mainArea = (
-      <Suspense fallback={<Loading what="graph" />}>
+      <Suspense fallback={<CapabilityState state="loading" what="graph" />}>
         <ArgoGraph onSelect={handleSelectNode} />
       </Suspense>
     );
@@ -659,7 +659,7 @@ export default function App() {
   }
   if (route.view === 'traffic') {
     mainArea = (
-      <Suspense fallback={<Loading what="the traffic graph" />}>
+      <Suspense fallback={<CapabilityState state="loading" what="the traffic graph" />}>
         <Traffic />
       </Suspense>
     );

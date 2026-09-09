@@ -1,12 +1,9 @@
 import type { ReactNode } from 'react';
 import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { Edge, Node, NodeMouseHandler } from '@xyflow/react';
-import LoadFailure from './LoadFailure';
-import LoadWarning from './LoadWarning';
-import StaleBanner from './StaleBanner';
-import Loading from './Loading';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useResolvedTheme } from '../store/theme';
+import CapabilityState from './CapabilityState';
 
 interface Flow<N extends Node> {
   nodes: N[];
@@ -56,14 +53,14 @@ export default function GraphShell<N extends Node>({
 
   if (flow === null) {
     if (error !== null) {
-      return <LoadFailure what={what} message={error} onRetry={onRetry} />;
+      return <CapabilityState state="failed" what={what} why={error} onRetry={onRetry} />;
     }
-    return <Loading what={loading} />;
+    return <CapabilityState state="loading" what={loading} />;
   }
 
   if (flow.nodes.length === 0) {
     if (partial !== null) {
-      return <LoadFailure what={what} message={partial} onRetry={onRetry} />;
+      return <CapabilityState state="failed" what={what} why={partial} onRetry={onRetry} />;
     }
     return (
       <div className="flex h-full items-center justify-center text-xs text-fg-muted">{empty}</div>
@@ -72,8 +69,10 @@ export default function GraphShell<N extends Node>({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      {error !== null && <StaleBanner what={what} message={error} onRetry={onRetry} />}
-      {partial !== null && <LoadWarning message={partial} />}
+      {error !== null && (
+        <CapabilityState state="stale" what={what} why={error} onRetry={onRetry} />
+      )}
+      {partial !== null && <CapabilityState state="partial" why={partial} />}
       {heading !== undefined && <WorkspaceHeader title={what} scope={heading} />}
       {banner}
       <div className="relative min-h-0 w-full flex-1">

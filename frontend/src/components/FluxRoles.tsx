@@ -4,11 +4,10 @@ import { useFlux, useFluxOverview } from '../lib/flux';
 import { allReady, readyOf, readySummary, reportingOf } from '../lib/readiness';
 import type { FluxResource } from '../lib/types';
 import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
-import StaleBanner from './StaleBanner';
 import FluxStatus from './FluxStatus';
-import Loading from './Loading';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 interface Section {
   name: string;
@@ -177,12 +176,12 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
         <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
-    return <Loading what="Flux resources" />;
+    return <CapabilityState state="loading" what="Flux resources" />;
   }
 
   let notice: ReactNode = null;
   if (error !== null) {
-    notice = <StaleBanner what="Flux resources" message={error} onRetry={reload} />;
+    notice = <CapabilityState state="stale" what="Flux resources" why={error} onRetry={reload} />;
   }
 
   const map = byKind(data.groups.flatMap((group) => group.resources));

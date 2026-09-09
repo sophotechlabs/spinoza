@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
-import Loading from './components/Loading';
 import SignIn from './components/SignIn';
 import { OWN_WINDOW, fetchSession, signedOut } from './lib/identity';
 import { adoptSession, useSession, useSessionKnown } from './store/identity';
+import CapabilityState from './components/CapabilityState';
 
 export default function Root() {
   const session = useSession();
@@ -29,7 +29,7 @@ export default function Root() {
   }, []);
 
   if (!known) {
-    return <Loading what="spinoza" />;
+    return <CapabilityState state="loading" what="spinoza" />;
   }
   if (signedOut(session)) {
     return <SignIn session={session} />;

@@ -17,12 +17,9 @@ import { useNow } from '../lib/useNow';
 import { ALL, DEFAULT_NAMESPACE, useNamespace } from '../store/namespace';
 import { bumpHelmEpoch } from '../store/helm';
 import { useContextScope } from '../store/contexts';
-import LoadFailure from './LoadFailure';
-import LoadWarning from './LoadWarning';
-import StaleBanner from './StaleBanner';
-import Loading from './Loading';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 const HelmInstallDialog = lazy(() => import('./HelmInstallDialog'));
 
@@ -82,14 +79,14 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
 
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="Helm releases" message={error} />;
+      return <CapabilityState state="failed" what="Helm releases" why={error} />;
     }
-    return <Loading what="Helm releases" />;
+    return <CapabilityState state="loading" what="Helm releases" />;
   }
 
   let notice: ReactNode = null;
   if (error !== null) {
-    notice = <StaleBanner what="Helm releases" message={error} onRetry={reload} />;
+    notice = <CapabilityState state="stale" what="Helm releases" why={error} onRetry={reload} />;
   }
 
   const visible = matching(data.releases, query);
@@ -97,7 +94,7 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
       {notice}
-      {data.error !== undefined && <LoadWarning message={data.error} />}
+      {data.error !== undefined && <CapabilityState state="partial" why={data.error} />}
       <WorkspaceHeader title="Helm releases" scope={shownCluster} />
       <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-1.5">
         <input

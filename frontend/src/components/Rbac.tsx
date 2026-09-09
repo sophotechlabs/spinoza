@@ -17,12 +17,10 @@ import { CONTROL } from '../lib/controls';
 
 const FIELD = 'rounded border border-edge-strong bg-surface px-2 py-1 text-fg';
 import { notifyError } from '../store/toasts';
-import LoadFailure from './LoadFailure';
-import LoadWarning from './LoadWarning';
-import Loading from './Loading';
 import { useClusterEpoch } from '../store/cluster';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 function Powers({ powers }: { powers: string[] }) {
   if (powers.length === 0) {
@@ -190,9 +188,9 @@ export default function Rbac() {
 
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="The permission index" message={error} />;
+      return <CapabilityState state="failed" what="The permission index" why={error} />;
     }
-    return <Loading what="who can do what" />;
+    return <CapabilityState state="loading" what="who can do what" />;
   }
 
   let visibleAnswer = answer;
@@ -203,7 +201,9 @@ export default function Rbac() {
   const subjects = shown.subjects.filter((one) => matches(one, query));
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
-      {shown.error !== undefined && shown.error !== '' && <LoadWarning message={shown.error} />}
+      {shown.error !== undefined && shown.error !== '' && (
+        <CapabilityState state="partial" why={shown.error} />
+      )}
       <WorkspaceHeader title="Who can do what" scope={shownCluster} />
       <Question
         onAnswer={(found) => {

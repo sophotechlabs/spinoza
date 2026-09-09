@@ -1,8 +1,8 @@
 import { useArgo, refOf, tree } from '../lib/argocd';
 import { argoSummary, argoSummaryLabel, healthClass, orDash, syncClass } from '../lib/argoStatus';
 import type { ArgoApp } from '../lib/types';
-import Loading from './Loading';
 import WorkspaceHeader from './WorkspaceHeader';
+import CapabilityState from './CapabilityState';
 
 interface ArgoAppsProps {
   onSelect: (ref: ReturnType<typeof refOf>) => void;
@@ -57,7 +57,7 @@ export default function ArgoApps({ onSelect }: ArgoAppsProps) {
   }
 
   if (data === null) {
-    return <Loading what="Argo CD applications" />;
+    return <CapabilityState state="loading" what="Argo CD applications" />;
   }
 
   const rows = tree(data.apps);

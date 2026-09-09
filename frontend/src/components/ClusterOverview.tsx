@@ -4,13 +4,10 @@ import { percentOf, useOverview } from '../lib/overview';
 import { cpuFromMilli, memFromMi } from '../lib/units';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
-import LoadFailure from './LoadFailure';
-import LoadWarning from './LoadWarning';
-import StaleBanner from './StaleBanner';
 import UsageBar from './UsageBar';
-import Loading from './Loading';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 interface ClusterOverviewProps {
   active?: boolean;
@@ -239,20 +236,22 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
 
   if (data === null) {
     if (error !== null) {
-      return <LoadFailure what="The cluster overview" message={error} />;
+      return <CapabilityState state="failed" what="The cluster overview" why={error} />;
     }
-    return <Loading what="the cluster overview" />;
+    return <CapabilityState state="loading" what="the cluster overview" />;
   }
 
   let notice: ReactNode = null;
   if (error !== null) {
-    notice = <StaleBanner what="The cluster overview" message={error} onRetry={reload} />;
+    notice = (
+      <CapabilityState state="stale" what="The cluster overview" why={error} onRetry={reload} />
+    );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
       {notice}
-      {data.error !== undefined && <LoadWarning message={data.error} />}
+      {data.error !== undefined && <CapabilityState state="partial" why={data.error} />}
       <WorkspaceHeader title="Cluster overview" scope={shownCluster} />
       <div
         role="group"

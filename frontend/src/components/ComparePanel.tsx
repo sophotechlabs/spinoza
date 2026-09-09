@@ -8,7 +8,7 @@ import { useContextList } from '../store/contexts';
 import { useElementWidth } from '../lib/useElementWidth';
 import { useClusterEpoch } from '../store/cluster';
 import Announce from './Announce';
-import Loading from './Loading';
+import CapabilityState from './CapabilityState';
 
 const YamlDiff = lazy(() => import('./YamlDiff'));
 const KindCompare = lazy(() => import('./KindCompare'));
@@ -242,7 +242,7 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
         <p className="px-3 py-2 text-xs text-fg-muted">Pick a context to compare against.</p>
       )}
       {where === 'kind' && kind !== null && picked !== null && (
-        <Suspense fallback={<Loading what="the comparison" />}>
+        <Suspense fallback={<CapabilityState state="loading" what="the comparison" />}>
           <KindCompare
             key={`${picked.value}/${namespace}`}
             kind={kind}
@@ -269,7 +269,7 @@ function Comparing({ target, kind, scope, others, chosen, onChoose, onOpen }: Co
                 {result.leftContext} against {result.rightContext} · {summary(result)}
               </p>
               <div className="min-h-0 flex-1">
-                <Suspense fallback={<Loading what="the diff" />}>
+                <Suspense fallback={<CapabilityState state="loading" what="the diff" />}>
                   <YamlDiff
                     left={result.left}
                     right={result.right}

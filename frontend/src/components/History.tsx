@@ -34,11 +34,9 @@ import { colorVar } from '../lib/clusterColor';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useNow } from '../lib/useNow';
 import { useClusterEpoch } from '../store/cluster';
-import LoadWarning from './LoadWarning';
-import StaleBanner from './StaleBanner';
-import Loading from './Loading';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 interface HistoryProps {
   onOpen: (ref: ObjectRef) => void;
@@ -268,7 +266,7 @@ export default function History({ onOpen }: HistoryProps) {
         <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
-    return <Loading what="history" />;
+    return <CapabilityState state="loading" what="history" />;
   }
 
   let deepest = data;
@@ -343,8 +341,10 @@ export default function History({ onOpen }: HistoryProps) {
   const rows = mergePages(data.entries, older);
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
-      {error !== null && <StaleBanner what="History" message={error} onRetry={reload} />}
-      {notRecording !== '' && <LoadWarning message={notRecording} />}
+      {error !== null && (
+        <CapabilityState state="stale" what="History" why={error} onRetry={reload} />
+      )}
+      {notRecording !== '' && <CapabilityState state="partial" why={notRecording} />}
       <WorkspaceHeader title="History" scope={shownCluster} />
       <div className="flex shrink-0 items-center gap-2 border-b border-edge px-2 py-1.5">
         <label className="flex items-center gap-1.5 text-fg-soft">

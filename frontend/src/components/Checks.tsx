@@ -33,14 +33,12 @@ import type { SeverityFloor } from '../lib/settings';
 import { useChecksFilter, useSettingsStore } from '../store/settings';
 import { useClusterMode } from '../store/identity';
 import type { ChecksFilter } from '../store/settings';
-import LoadFailure from './LoadFailure';
-import StaleBanner from './StaleBanner';
-import Loading from './Loading';
 import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters';
 import { colorVar } from '../lib/clusterColor';
 import { useContextScope } from '../store/contexts';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 const PAGE_SIZE = 200;
 
@@ -1432,8 +1430,8 @@ export default function Checks({ onOpen }: ChecksProps) {
     return (
       <div className="flex h-full min-h-0 flex-col text-xs">
         <AuditControls key="audit-controls" />
-        {error !== null && <LoadFailure what="The cluster audit" message={error} />}
-        {error === null && <Loading what="the cluster audit" />}
+        {error !== null && <CapabilityState state="failed" what="The cluster audit" why={error} />}
+        {error === null && <CapabilityState state="loading" what="the cluster audit" />}
       </div>
     );
   }
@@ -1441,7 +1439,7 @@ export default function Checks({ onOpen }: ChecksProps) {
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
       {stale && error !== null && (
-        <StaleBanner what="The cluster audit" message={error} onRetry={reload} />
+        <CapabilityState state="stale" what="The cluster audit" why={error} onRetry={reload} />
       )}
       <WorkspaceHeader
         title="Cluster checks"

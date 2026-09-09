@@ -21,13 +21,10 @@ import {
 import { useElementWidth } from '../lib/useElementWidth';
 import { extraWidths, widthOf } from '../lib/columnFit';
 import { columnLabel } from '../lib/tableState';
-import LoadWarning from './LoadWarning';
-import LoadFailure from './LoadFailure';
-import StaleBanner from './StaleBanner';
 import ColumnResizeHandle from './ColumnResizeHandle';
-import Loading from './Loading';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 const EMPTY: FluxResource[] = [];
 
@@ -121,17 +118,17 @@ export default function FluxList({ onSelect }: FluxListProps) {
         <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
-    return <Loading what="Flux resources" />;
+    return <CapabilityState state="loading" what="Flux resources" />;
   }
 
   let notice: ReactNode = null;
   if (error !== null) {
-    notice = <StaleBanner what="Flux resources" message={error} onRetry={reload} />;
+    notice = <CapabilityState state="stale" what="Flux resources" why={error} onRetry={reload} />;
   }
 
   if (data.groups.length === 0) {
     if (data.error !== undefined) {
-      return <LoadFailure what="Flux resources" message={data.error} />;
+      return <CapabilityState state="failed" what="Flux resources" why={data.error} />;
     }
     return (
       <div className="flex h-full min-h-0 flex-col">
@@ -162,7 +159,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
     <div className="flex h-full min-h-0 flex-col">
       {notice}
       <WorkspaceHeader title="Flux resources" scope={shownCluster} />
-      {data.error !== undefined && <LoadWarning message={data.error} />}
+      {data.error !== undefined && <CapabilityState state="partial" why={data.error} />}
       <div ref={setScrollEl} className="min-h-0 flex-1 overflow-auto">
         <table
           className="table-fixed border-collapse text-left text-xs whitespace-nowrap"

@@ -39,7 +39,7 @@ import TerminalTab from './TerminalTab';
 import ReleasePanel from './ReleasePanel';
 import GitopsAppPanel from './GitopsAppPanel';
 import ComparePanel from './ComparePanel';
-import Loading from './Loading';
+import CapabilityState from './CapabilityState';
 
 const InspectMetrics = lazy(() => import('./InspectMetrics'));
 
@@ -251,7 +251,7 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
     )),
   metrics: (ctx) =>
     objectPanel(ctx, (_selection, detail) => (
-      <Suspense fallback={<Loading what="charts" />}>
+      <Suspense fallback={<CapabilityState state="loading" what="charts" />}>
         <InspectMetrics namespace={detail.namespace} pod={detail.name} />
       </Suspense>
     )),

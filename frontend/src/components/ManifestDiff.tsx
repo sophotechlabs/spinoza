@@ -3,7 +3,7 @@ import { DiffEditor } from '@monaco-editor/react';
 import { defineEditorTheme } from '../lib/monaco';
 import { editorTheme } from '../lib/themeColors';
 import { useResolvedTheme } from '../store/theme';
-import Loading from './Loading';
+import CapabilityState from './CapabilityState';
 
 interface ManifestDiffProps {
   original: string;
@@ -23,7 +23,7 @@ export default function ManifestDiff({ original, modified }: ManifestDiffProps) 
       theme={spec.name}
       original={original}
       modified={modified}
-      loading={<Loading what="the diff" />}
+      loading={<CapabilityState state="loading" what="the diff" />}
       options={{
         readOnly: true,
         renderSideBySide: false,

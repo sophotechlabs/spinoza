@@ -2,8 +2,7 @@ import { useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { fetchEvents } from '../lib/object';
 import { usePoll } from '../lib/usePoll';
-import StaleBanner from './StaleBanner';
-import Loading from './Loading';
+import CapabilityState from './CapabilityState';
 
 const EVENTS_POLL_MS = 10000;
 
@@ -37,12 +36,12 @@ export default function InspectEvents({ namespace, uid, active = true }: Inspect
     if (error !== null) {
       return <div className="p-4 text-xs text-error">{error}</div>;
     }
-    return <Loading what="events" />;
+    return <CapabilityState state="loading" what="events" />;
   }
 
   let notice: ReactNode = null;
   if (error !== null) {
-    notice = <StaleBanner what="Events" message={error} onRetry={reload} />;
+    notice = <CapabilityState state="stale" what="Events" why={error} onRetry={reload} />;
   }
 
   if (events.length === 0) {

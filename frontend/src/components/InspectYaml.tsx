@@ -4,7 +4,6 @@ import { applyObject, deleteObject } from '../lib/object';
 import { notifyOk } from '../store/toasts';
 import { fetchSchema, gvkOf, registerSchema, schemaPath } from '../lib/schema';
 import { setUnsaved } from '../lib/unsaved';
-import Loading from './Loading';
 import CopyButton from './CopyButton';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
@@ -12,6 +11,7 @@ import { useProtectedCluster } from '../store/contexts';
 import { useRefusal } from '../store/access';
 import { confirmName } from '../lib/contexts';
 import { useClusterEpoch } from '../store/cluster';
+import CapabilityState from './CapabilityState';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 
@@ -229,7 +229,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1">
-        <Suspense fallback={<Loading what="editor" />}>
+        <Suspense fallback={<CapabilityState state="loading" what="editor" />}>
           <YamlEditor value={draft} path={path} readOnly={busy} onChange={setDraft} />
         </Suspense>
       </div>

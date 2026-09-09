@@ -17,7 +17,7 @@ import { healthClass, orDash, syncClass } from '../lib/argoStatus';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import GraphCanvas from './GraphCanvas';
-import Loading from './Loading';
+import CapabilityState from './CapabilityState';
 
 const TABS = ['resources', 'activity', 'topology'] as const;
 
@@ -577,7 +577,7 @@ export default function GitopsAppPanel({
     return <p className="p-4 text-xs text-error">{error}</p>;
   }
   if (data === null) {
-    return <Loading what="the application" />;
+    return <CapabilityState state="loading" what="the application" />;
   }
   return <AppView target={target} app={data} reload={reload} onSelectResource={onSelectResource} />;
 }

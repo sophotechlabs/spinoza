@@ -5,8 +5,8 @@ import { notifyError, notifyOk } from '../store/toasts';
 import { useProtectedCluster } from '../store/contexts';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
-import Loading from './Loading';
 import ClusterBadge from './ClusterBadge';
+import CapabilityState from './CapabilityState';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 const ManifestDiff = lazy(() => import('./ManifestDiff'));
@@ -207,7 +207,9 @@ export default function HelmUpgradeDialog({
         </button>
       </div>
       <div className="p-3 text-xs">
-        {versions === null && versionsError === null && <Loading what="versions" />}
+        {versions === null && versionsError === null && (
+          <CapabilityState state="loading" what="versions" />
+        )}
         {versionsError !== null && (
           <p role="alert" className="text-error">
             {versionsError}
@@ -256,7 +258,7 @@ export default function HelmUpgradeDialog({
             </div>
             {step === 'edit' && (
               <div className="mt-2 h-64 overflow-hidden rounded border border-edge">
-                <Suspense fallback={<Loading what="editor" />}>
+                <Suspense fallback={<CapabilityState state="loading" what="editor" />}>
                   <YamlEditor
                     value={values}
                     path={`values/${release.namespace}/${release.name}.yaml`}
@@ -268,7 +270,7 @@ export default function HelmUpgradeDialog({
             )}
             {step === 'diff' && (
               <div className="mt-2 h-80 overflow-hidden rounded border border-edge">
-                <Suspense fallback={<Loading what="diff" />}>
+                <Suspense fallback={<CapabilityState state="loading" what="diff" />}>
                   <ManifestDiff original={currentManifest} modified={proposed} />
                 </Suspense>
               </div>

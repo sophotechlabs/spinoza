@@ -8,8 +8,8 @@ import { useHelmRefusal } from '../store/helmAccess';
 import { useNamespaceNames } from '../store/namespace';
 import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
-import Loading from './Loading';
 import ClusterBadge from './ClusterBadge';
+import CapabilityState from './CapabilityState';
 
 const YamlEditor = lazy(() => import('./YamlEditor'));
 const ManifestDiff = lazy(() => import('./ManifestDiff'));
@@ -389,7 +389,7 @@ export default function HelmInstallDialog({
               >
                 Change chart
               </button>
-              {versions === null && <Loading what="versions" />}
+              {versions === null && <CapabilityState state="loading" what="versions" />}
               {versions !== null && (
                 <>
                   <label htmlFor="install-version" className="text-fg">
@@ -488,7 +488,7 @@ export default function HelmInstallDialog({
                   </button>
                 </div>
                 <div className="mt-1 h-64 overflow-hidden rounded border border-edge">
-                  <Suspense fallback={<Loading what="editor" />}>
+                  <Suspense fallback={<CapabilityState state="loading" what="editor" />}>
                     <YamlEditor
                       value={values}
                       path={`values/${target}/${name}.yaml`}
@@ -501,7 +501,7 @@ export default function HelmInstallDialog({
             )}
             {step === 'preview' && (
               <div className="mt-2 h-80 overflow-hidden rounded border border-edge">
-                <Suspense fallback={<Loading what="diff" />}>
+                <Suspense fallback={<CapabilityState state="loading" what="diff" />}>
                   <ManifestDiff original="" modified={rendered} />
                 </Suspense>
               </div>

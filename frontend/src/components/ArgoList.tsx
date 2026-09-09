@@ -3,11 +3,9 @@ import type { ArgoApp } from '../lib/types';
 import { refOf, useArgo } from '../lib/argocd';
 import { healthClass, orDash, syncClass } from '../lib/argoStatus';
 import { created } from '../lib/fluxStatus';
-import LoadWarning from './LoadWarning';
-import StaleBanner from './StaleBanner';
-import Loading from './Loading';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
+import CapabilityState from './CapabilityState';
 
 interface ArgoListProps {
   onSelect: (ref: ReturnType<typeof refOf>) => void;
@@ -83,7 +81,7 @@ export default function ArgoList({ onSelect }: ArgoListProps) {
         <div className="flex h-full items-center justify-center text-xs text-error">{error}</div>
       );
     }
-    return <Loading what="Argo CD resources" />;
+    return <CapabilityState state="loading" what="Argo CD resources" />;
   }
 
   const groups: KindGroup[] = [
@@ -94,8 +92,10 @@ export default function ArgoList({ onSelect }: ArgoListProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
-      {error !== null && <StaleBanner what="Argo CD resources" message={error} onRetry={reload} />}
-      {data.error !== undefined && <LoadWarning message={data.error} />}
+      {error !== null && (
+        <CapabilityState state="stale" what="Argo CD resources" why={error} onRetry={reload} />
+      )}
+      {data.error !== undefined && <CapabilityState state="partial" why={data.error} />}
       <WorkspaceHeader title="Argo CD resources" scope={shownCluster} />
       {groups.length === 0 && (
         <div className="flex flex-1 items-center justify-center text-fg-muted">

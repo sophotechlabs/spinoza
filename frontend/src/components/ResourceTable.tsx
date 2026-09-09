@@ -62,11 +62,10 @@ import FilterBar from './FilterBar';
 import WorkspaceHeader from './WorkspaceHeader';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
-import StaleBanner from './StaleBanner';
 import BulkBar from './BulkBar';
 import CopyButton from './CopyButton';
 import ColumnResizeHandle from './ColumnResizeHandle';
-import Loading from './Loading';
+import CapabilityState from './CapabilityState';
 
 interface ResourceTableProps {
   active: ResourceDescriptor | null;
@@ -634,9 +633,9 @@ export default function ResourceTable({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {error !== null && <StaleBanner what={active.kind} message={error} />}
+      {error !== null && <CapabilityState state="stale" what={active.kind} why={error} />}
       {metricsStale && metricsError !== null && (
-        <StaleBanner what="Metrics" message={metricsError} onRetry={reloadMetrics} />
+        <CapabilityState state="stale" what="Metrics" why={metricsError} onRetry={reloadMetrics} />
       )}
       <WorkspaceHeader
         title={`${active.kind} resources`}
@@ -779,7 +778,7 @@ export default function ResourceTable({
             )}
           </tbody>
         </table>
-        {!loaded && <Loading what={active.kind} />}
+        {!loaded && <CapabilityState state="loading" what={active.kind} />}
         {loaded && rows.length === 0 && (
           <p className="p-6 text-center text-xs text-fg-muted">
             This cluster has no {active.kind} objects.

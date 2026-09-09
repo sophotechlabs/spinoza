@@ -11,9 +11,9 @@ import { useForwards } from '../store/forwards';
 import { useClusterMode } from '../store/identity';
 import { notifyError, notifyOk } from '../store/toasts';
 import { useClusterEpoch } from '../store/cluster';
-import StaleBanner from './StaleBanner';
 import CopyButton from './CopyButton';
 import Announce from './Announce';
+import CapabilityState from './CapabilityState';
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -75,7 +75,14 @@ export default function ForwardsPanel({ active = true }: ForwardsPanelProps) {
 
   let notice: ReactNode = null;
   if (poll.error !== null) {
-    notice = <StaleBanner what="The forward list" message={poll.error} onRetry={poll.reload} />;
+    notice = (
+      <CapabilityState
+        state="stale"
+        what="The forward list"
+        why={poll.error}
+        onRetry={poll.reload}
+      />
+    );
   }
 
   if (served) {

@@ -27,10 +27,10 @@ import Announce from './Announce';
 import ConfirmByName from './ConfirmByName';
 import CopyButton from './CopyButton';
 import HelmUpgradeDialog from './HelmUpgradeDialog';
-import Loading from './Loading';
 import DisabledActionReasons from './DisabledActionReasons';
 import { actionTitle, describedBy } from '../lib/actionAvailability';
 import type { DisabledActionReason } from '../lib/actionAvailability';
+import CapabilityState from './CapabilityState';
 
 const TABS = ['Overview', 'Values', 'Notes', 'Manifest', 'Resources', 'History'] as const;
 
@@ -483,7 +483,7 @@ export default function HelmReleaseDetail({
       </div>
       <Announce message={failure} urgent className="px-3 py-1 text-error" />
 
-      {loading && data === null && <Loading what="the release" />}
+      {loading && data === null && <CapabilityState state="loading" what="the release" />}
       {error !== null && (
         <p role="alert" className="p-3 text-error">
           {error}
