@@ -134,6 +134,7 @@ test('a saved baseline can be cleared and restored from its file', async ({ page
 test('severity and namespace controls change the actual findings request', async ({ page }) => {
   await openView(page, 'checks');
   const severity = page.getByLabel('Lowest severity to show');
+  await openConfigure(page);
   const namespaces = page.getByLabel('Namespaces to skip');
   const originalSeverity = await severity.inputValue();
   const originalNamespaces = await namespaces.inputValue();
