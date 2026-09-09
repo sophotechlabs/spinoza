@@ -26,6 +26,8 @@ import LoadFailure from './LoadFailure';
 import StaleBanner from './StaleBanner';
 import ColumnResizeHandle from './ColumnResizeHandle';
 import Loading from './Loading';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 const EMPTY: FluxResource[] = [];
 
@@ -100,6 +102,7 @@ interface FluxListProps {
 }
 
 export default function FluxList({ onSelect }: FluxListProps) {
+  const shownCluster = useShownCluster();
   const { data, error, reload } = useFlux();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const containerWidth = useElementWidth(scrollEl);
@@ -133,6 +136,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         {notice}
+        <WorkspaceHeader title="Flux resources" scope={shownCluster} />
         <div className="flex flex-1 items-center justify-center text-xs text-fg-muted">
           No Flux resources found.
         </div>
@@ -157,6 +161,7 @@ export default function FluxList({ onSelect }: FluxListProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {notice}
+      <WorkspaceHeader title="Flux resources" scope={shownCluster} />
       {data.error !== undefined && <LoadWarning message={data.error} />}
       <div ref={setScrollEl} className="min-h-0 flex-1 overflow-auto">
         <table

@@ -22,6 +22,8 @@ import Loading from './Loading';
 import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters';
 import { colorVar } from '../lib/clusterColor';
 import { useFleetIssues, useIssuesStore } from '../store/issues';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 interface IssueQueueProps {
   active?: boolean;
@@ -221,7 +223,15 @@ function moreLabel(loading: boolean): string {
   return 'Show more';
 }
 
+function issuesScope(fleet: boolean, cluster: string): string {
+  if (fleet) {
+    return 'every open cluster';
+  }
+  return cluster;
+}
+
 export default function IssueQueue({ active = true, onSelect, onSelectOn }: IssueQueueProps) {
+  const shownCluster = useShownCluster();
   const several = useTabStrip();
   const fleet = useFleetIssues();
   const setFleet = useIssuesStore((state) => state.setFleet);
@@ -260,6 +270,11 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
     <div className="flex h-full min-h-0 flex-col text-xs">
       {notice}
       {data.error !== undefined && <LoadWarning message={data.error} />}
+      <WorkspaceHeader
+        title="Issues"
+        scope={issuesScope(fleet, shownCluster)}
+        scale="broken, degraded and warning, by how far the problem reaches"
+      />
       <div className="flex items-center justify-between border-b border-edge px-2 py-1.5">
         <div className="flex items-center gap-3">
           <h2 className="text-[11px] tracking-wide text-fg-muted uppercase">Issues</h2>

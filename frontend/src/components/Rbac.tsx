@@ -21,6 +21,8 @@ import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import Loading from './Loading';
 import { useClusterEpoch } from '../store/cluster';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 function Powers({ powers }: { powers: string[] }) {
   if (powers.length === 0) {
@@ -179,6 +181,7 @@ function Question({ onAnswer }: { onAnswer: (found: RBACIndex | null) => void })
 }
 
 export default function Rbac() {
+  const shownCluster = useShownCluster();
   const epoch = useClusterEpoch();
   const { data, error } = useRBAC();
   const [answer, setAnswer] = useState<RBACIndex | null>(null);
@@ -201,6 +204,7 @@ export default function Rbac() {
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
       {shown.error !== undefined && shown.error !== '' && <LoadWarning message={shown.error} />}
+      <WorkspaceHeader title="Who can do what" scope={shownCluster} />
       <Question
         onAnswer={(found) => {
           setAnswer(found);

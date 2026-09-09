@@ -6,6 +6,8 @@ import { created } from '../lib/fluxStatus';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 interface ArgoListProps {
   onSelect: (ref: ReturnType<typeof refOf>) => void;
@@ -72,6 +74,7 @@ const HEADERS = [
 ];
 
 export default function ArgoList({ onSelect }: ArgoListProps) {
+  const shownCluster = useShownCluster();
   const { data, error, reload } = useArgo();
 
   if (data === null) {
@@ -93,6 +96,7 @@ export default function ArgoList({ onSelect }: ArgoListProps) {
     <div className="flex h-full min-h-0 flex-col text-xs">
       {error !== null && <StaleBanner what="Argo CD resources" message={error} onRetry={reload} />}
       {data.error !== undefined && <LoadWarning message={data.error} />}
+      <WorkspaceHeader title="Argo CD resources" scope={shownCluster} />
       {groups.length === 0 && (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
           No Argo CD resources on this cluster.

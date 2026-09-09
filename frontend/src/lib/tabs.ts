@@ -1,4 +1,5 @@
 import type { Tab } from '../store/clusters';
+import { useActiveCluster, useTabs } from '../store/clusters';
 import { closeCluster, openCluster } from './clusters';
 import { useForwardsStore } from '../store/forwards';
 import { useTerminalsStore } from '../store/terminals';
@@ -55,6 +56,12 @@ export function displayName(tabs: Tab[], cluster: string, fallback: string): str
     }
   }
   return fallback;
+}
+
+export function useShownCluster(): string {
+  const tabs = useTabs();
+  const active = useActiveCluster();
+  return displayName(tabs, active, contextOf(tabs, active));
 }
 
 const ROOMY = 6;

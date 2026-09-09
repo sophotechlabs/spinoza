@@ -21,6 +21,8 @@ import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 const HelmInstallDialog = lazy(() => import('./HelmInstallDialog'));
 
@@ -68,6 +70,7 @@ function matching(releases: HelmRelease[], query: string): HelmRelease[] {
 }
 
 export default function HelmReleases({ active = true, selected, onSelect }: HelmReleasesProps) {
+  const shownCluster = useShownCluster();
   const { data, error, reload } = useHelmReleases(active);
   const [query, setQuery] = useState('');
   const [installingOn, setInstallingOn] = useState('');
@@ -95,6 +98,7 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
     <div className="flex h-full min-h-0 flex-col text-xs">
       {notice}
       {data.error !== undefined && <LoadWarning message={data.error} />}
+      <WorkspaceHeader title="Helm releases" scope={shownCluster} />
       <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-1.5">
         <input
           type="search"

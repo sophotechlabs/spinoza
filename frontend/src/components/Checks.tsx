@@ -39,6 +39,8 @@ import Loading from './Loading';
 import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters';
 import { colorVar } from '../lib/clusterColor';
 import { useContextScope } from '../store/contexts';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 const PAGE_SIZE = 200;
 
@@ -151,7 +153,10 @@ function OnCluster({ cluster }: { cluster: string }) {
     return <span className="shrink-0 text-fg-faint">unknown</span>;
   }
   return (
-    <span className="flex shrink-0 items-center gap-1.5 text-fg-muted">
+    <span
+      aria-label={`on ${nameOf(tab)}`}
+      className="flex shrink-0 items-center gap-1.5 text-fg-muted"
+    >
       <span
         aria-hidden="true"
         style={{ backgroundColor: colorVar(tab.color) }}
@@ -1415,6 +1420,7 @@ function Category({
 }
 
 export default function Checks({ onOpen }: ChecksProps) {
+  const shownCluster = useShownCluster();
   const several = useTabStrip();
   const [fleet, setFleet] = useState(false);
   const showing = fleet && several;
@@ -1437,6 +1443,11 @@ export default function Checks({ onOpen }: ChecksProps) {
       {stale && error !== null && (
         <StaleBanner what="The cluster audit" message={error} onRetry={reload} />
       )}
+      <WorkspaceHeader
+        title="Cluster checks"
+        scope={shownCluster}
+        scale="high, medium and low, by how serious the rule is"
+      />
       {data.error !== undefined && (
         <p role="status" className="border-b border-edge px-3 py-1 text-warn">
           {data.error}

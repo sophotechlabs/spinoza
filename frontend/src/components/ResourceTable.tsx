@@ -59,6 +59,7 @@ import {
 } from '../lib/tableState';
 import type { MetricBasis } from '../lib/tableState';
 import FilterBar from './FilterBar';
+import WorkspaceHeader from './WorkspaceHeader';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
 import StaleBanner from './StaleBanner';
@@ -82,40 +83,12 @@ const ROW_HEIGHT = 28;
 
 const SELECT_COLUMN_ID = 'select';
 
-function ResourceIdentity({
-  kind,
-  cluster,
-  asOf,
-}: {
-  kind: string;
-  cluster: string;
-  asOf: string;
-}) {
-  let namedCluster = cluster.trim();
-  if (namedCluster === '') {
-    namedCluster = 'unavailable';
+function identityScope(cluster: string): string {
+  const named = cluster.trim();
+  if (named === '') {
+    return 'Cluster: unavailable';
   }
-  let stamp = null;
-  if (asOf !== '') {
-    stamp = (
-      <>
-        <span aria-hidden="true" className="text-fg-faint">
-          ·
-        </span>
-        <span className="shrink-0 whitespace-nowrap text-warn">as of {asOf}</span>
-      </>
-    );
-  }
-  return (
-    <div className="flex min-w-0 shrink-0 items-baseline gap-1.5">
-      <h2 className="font-semibold whitespace-nowrap text-fg-strong">{kind} resources</h2>
-      <span aria-hidden="true" className="text-fg-faint">
-        ·
-      </span>
-      <span className="max-w-48 truncate text-fg-muted">Cluster: {namedCluster}</span>
-      {stamp}
-    </div>
-  );
+  return `Cluster: ${named}`;
 }
 
 function cellAt(row: Row, index: number): string {
@@ -644,9 +617,11 @@ export default function ResourceTable({
   if (error !== null && rows.length === 0) {
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 items-center border-b border-edge bg-surface px-2 py-1.5 text-xs">
-          <ResourceIdentity kind={active.kind} cluster={cluster} asOf={asOf} />
-        </div>
+        <WorkspaceHeader
+          title={`${active.kind} resources`}
+          scope={identityScope(cluster)}
+          stale={asOf}
+        />
         <div className="flex flex-1 items-start justify-center p-6 text-xs">
           <div className="max-w-2xl rounded border border-error-line bg-error-tint/40 px-3 py-2">
             <div className="font-semibold text-error">{active.kind} could not be loaded</div>
@@ -663,8 +638,11 @@ export default function ResourceTable({
       {metricsStale && metricsError !== null && (
         <StaleBanner what="Metrics" message={metricsError} onRetry={reloadMetrics} />
       )}
-      <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface px-2 py-1.5 text-xs">
-        <ResourceIdentity kind={active.kind} cluster={cluster} asOf={asOf} />
+      <WorkspaceHeader
+        title={`${active.kind} resources`}
+        scope={identityScope(cluster)}
+        stale={asOf}
+      >
         <FilterBar stateKey={stateKey} fields={fields} rows={rows} text={text} onText={setText} />
         <details ref={columnsRef} className="relative">
           <summary className="cursor-pointer rounded border border-edge px-2 py-1 text-fg-soft hover:bg-surface-raised">
@@ -697,7 +675,7 @@ export default function ResourceTable({
             Load {LOAD_STEP} more
           </button>
         )}
-      </div>
+      </WorkspaceHeader>
       <BulkBar
         kind={active.kind}
         targets={targets}

@@ -5,6 +5,7 @@ import LoadFailure from './LoadFailure';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
+import WorkspaceHeader from './WorkspaceHeader';
 import { useResolvedTheme } from '../store/theme';
 
 interface Flow<N extends Node> {
@@ -73,15 +74,7 @@ export default function GraphShell<N extends Node>({
     <div className="flex h-full min-h-0 w-full flex-col">
       {error !== null && <StaleBanner what={what} message={error} onRetry={onRetry} />}
       {partial !== null && <LoadWarning message={partial} />}
-      {heading !== undefined && (
-        <div className="flex shrink-0 items-baseline gap-1.5 border-b border-edge bg-surface px-2 py-1.5 text-xs">
-          <h2 className="font-semibold whitespace-nowrap text-fg-strong">{what}</h2>
-          <span aria-hidden="true" className="text-fg-faint">
-            ·
-          </span>
-          <span className="min-w-0 truncate text-fg-muted">{heading}</span>
-        </div>
-      )}
+      {heading !== undefined && <WorkspaceHeader title={what} scope={heading} />}
       {banner}
       <div className="relative min-h-0 w-full flex-1">
         <ReactFlow

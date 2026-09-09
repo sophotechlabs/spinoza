@@ -7,6 +7,8 @@ import { created, statusDot, statusLabel, statusText } from '../lib/fluxStatus';
 import StaleBanner from './StaleBanner';
 import FluxStatus from './FluxStatus';
 import Loading from './Loading';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 interface Section {
   name: string;
@@ -164,6 +166,7 @@ interface FluxRolesProps {
 }
 
 export default function FluxRoles({ onSelect }: FluxRolesProps) {
+  const shownCluster = useShownCluster();
   const { data, error, reload } = useFlux();
   const status = useFluxOverview();
   const [kind, setKind] = useState<string | null>(null);
@@ -188,6 +191,7 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
     return (
       <div className="flex h-full min-h-0 flex-col">
         {notice}
+        <WorkspaceHeader title="Flux overview" scope={shownCluster} />
         <KindList
           kind={kind}
           resources={kindResources(map, kind)}
@@ -203,6 +207,7 @@ export default function FluxRoles({ onSelect }: FluxRolesProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {notice}
+      <WorkspaceHeader title="Flux overview" scope={shownCluster} />
       <div
         role="group"
         aria-label="Flux resources"

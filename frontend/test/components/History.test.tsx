@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import History from '../../src/components/History';
 import type { HistoryEntry } from '../../src/lib/types';
@@ -534,7 +534,8 @@ describe('History', () => {
     await user.click(screen.getByLabelText('Every open cluster'));
 
     expect(await screen.findByText('Cluster')).toBeTruthy();
-    expect(await screen.findByText('p-mk1')).toBeTruthy();
+    const table = screen.getByRole('table');
+    expect(await within(table).findByText('p-mk1')).toBeTruthy();
   });
 
   it('says so when a row is on a cluster that is gone', async () => {

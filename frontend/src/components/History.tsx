@@ -37,6 +37,8 @@ import { useClusterEpoch } from '../store/cluster';
 import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import Loading from './Loading';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 interface HistoryProps {
   onOpen: (ref: ObjectRef) => void;
@@ -220,6 +222,7 @@ function mergePages(...pages: HistoryEntry[][]): HistoryEntry[] {
 }
 
 export default function History({ onOpen }: HistoryProps) {
+  const shownCluster = useShownCluster();
   const [source, setSource] = useState<HistorySource>('all');
   const [fleet, setFleet] = useState(false);
   const [older, setOlder] = useState<HistoryEntry[]>([]);
@@ -342,6 +345,7 @@ export default function History({ onOpen }: HistoryProps) {
     <div className="flex h-full min-h-0 flex-col text-xs">
       {error !== null && <StaleBanner what="History" message={error} onRetry={reload} />}
       {notRecording !== '' && <LoadWarning message={notRecording} />}
+      <WorkspaceHeader title="History" scope={shownCluster} />
       <div className="flex shrink-0 items-center gap-2 border-b border-edge px-2 py-1.5">
         <label className="flex items-center gap-1.5 text-fg-soft">
           Showing

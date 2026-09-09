@@ -825,7 +825,7 @@ describe('audit controls', () => {
     render(<Checks onOpen={vi.fn()} />);
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
 
-    expect(await screen.findByText('p-mk1')).toBeTruthy();
+    expect(await screen.findByLabelText('on p-mk1')).toBeTruthy();
     useClustersStore.getState().reset();
   });
 
