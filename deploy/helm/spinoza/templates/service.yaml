@@ -16,5 +16,11 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: http
       protocol: TCP
+    {{- if and .Values.metrics.enabled .Values.metrics.separatePort }}
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "spinoza.selectorLabels" . | nindent 4 }}

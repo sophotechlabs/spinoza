@@ -25,6 +25,8 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "spinoza.serviceAccountName" . }}
+      automountServiceAccountToken: true
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -48,6 +50,7 @@ spec:
             - --unsafe-allow-http
             {{- end }}
             - --log-level={{ .Values.logLevel }}
+            - --log-format={{ .Values.logFormat }}
             - --impersonate={{ .Values.impersonate }}
             - --auth-mode={{ .Values.auth.mode }}
             {{- if .Values.auth.allowAnonymous }}
@@ -118,6 +121,21 @@ spec:
             {{- if .Values.nodeShell }}
             - --node-shell
             {{- end }}
+            {{- if .Values.recordSessions }}
+            - --record-sessions
+            {{- end }}
+            {{- if and .Values.metrics.enabled .Values.metrics.separatePort }}
+            - --metrics-addr=0.0.0.0:{{ .Values.metrics.port }}
+            {{- end }}
+            {{- with .Values.audit.interval }}
+            - --audit-interval={{ . }}
+            {{- end }}
+            {{- with .Values.audit.webhookURL }}
+            - --audit-webhook={{ . }}
+            {{- end }}
+            {{- with .Values.audit.retention }}
+            - --audit-retention={{ . }}
+            {{- end }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -150,6 +168,21 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
+            {{- if and .Values.metrics.enabled .Values.metrics.separatePort }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /healthz
@@ -158,7 +191,7 @@ spec:
             periodSeconds: 20
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
             initialDelaySeconds: 3
             periodSeconds: 10
@@ -176,7 +209,7 @@ spec:
         - name: state
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
-            claimName: {{ include "spinoza.fullname" . }}
+            claimName: {{ .Values.persistence.existingClaim | default (include "spinoza.fullname" .) }}
           {{- else }}
           emptyDir: {}
           {{- end }}

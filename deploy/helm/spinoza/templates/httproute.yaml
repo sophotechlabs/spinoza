@@ -1,0 +1,34 @@
+{{- if .Values.httpRoute.enabled }}
+{{- if .Values.ingress.enabled }}
+{{- fail "ingress.enabled and httpRoute.enabled would give spinoza two front doors for one publicURL, and it refuses a request whose Origin is the other one; pick one" }}
+{{- end }}
+{{- if not .Values.httpRoute.parentRefs }}
+{{- fail "httpRoute.enabled needs httpRoute.parentRefs naming the Gateway that carries it" }}
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "spinoza.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spinoza.labels" . | nindent 4 }}
+  {{- with .Values.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.httpRoute.parentRefs | nindent 4 }}
+  {{- with .Values.httpRoute.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "spinoza.fullname" . }}
+          port: {{ .Values.service.port }}
+{{- end }}

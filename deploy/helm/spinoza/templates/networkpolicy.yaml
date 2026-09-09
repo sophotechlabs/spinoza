@@ -1,0 +1,63 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- if not .Values.networkPolicy.ingressFrom }}
+{{- fail "networkPolicy.enabled with an empty networkPolicy.ingressFrom would select spinoza and allow nothing to reach it; name the ingress controller or whatever fronts it" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "spinoza.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spinoza.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "spinoza.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        {{- toYaml .Values.networkPolicy.ingressFrom | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: http
+        {{- if and .Values.metrics.enabled .Values.metrics.separatePort }}
+        - protocol: TCP
+          port: metrics
+        {{- end }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- if .Values.networkPolicy.apiServerCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.apiServerCIDR }}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    {{- else }}
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    {{- end }}
+    {{- if .Values.networkPolicy.allowInternet }}
+    - ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
+    {{- with .Values.networkPolicy.egressTo }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

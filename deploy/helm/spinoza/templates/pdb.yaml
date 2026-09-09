@@ -1,0 +1,27 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- $min := .Values.podDisruptionBudget.minAvailable }}
+{{- $max := .Values.podDisruptionBudget.maxUnavailable }}
+{{- $hasMin := and (not (kindIs "invalid" $min)) (ne (toString $min) "") }}
+{{- $hasMax := and (not (kindIs "invalid" $max)) (ne (toString $max) "") }}
+{{- if and $hasMin $hasMax }}
+{{- fail "podDisruptionBudget takes minAvailable or maxUnavailable, not both" }}
+{{- end }}
+{{- if and (not $hasMin) (not $hasMax) }}
+{{- fail "podDisruptionBudget.enabled needs either minAvailable or maxUnavailable" }}
+{{- end }}
+{{- if $hasMin }}
+{{- fail "spinoza runs as one replica, so minAvailable would refuse every voluntary eviction and a node drain would wait forever; use maxUnavailable: 1" }}
+{{- end }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "spinoza.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spinoza.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: {{ $max }}
+  selector:
+    matchLabels:
+      {{- include "spinoza.selectorLabels" . | nindent 6 }}
+{{- end }}

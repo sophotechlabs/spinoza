@@ -21,6 +21,9 @@ impersonate: false
 
 logLevel: info
 
+# json or text. Cluster mode defaults to json so a log pipeline can parse it.
+logFormat: json
+
 # Prometheus for the metrics history charts, as namespace/service:port.
 # Discovered when empty.
 prometheus: ""
@@ -28,6 +31,32 @@ prometheus: ""
 # Allow a root shell on a node, which creates a privileged pod. Admins only,
 # and still subject to the signed-in user's own rbac.
 nodeShell: false
+
+# Keep a transcript of every exec and node shell beside its audit entry.
+# Admins read them. Off unless you need the record.
+recordSessions: false
+
+# Spinoza's own prometheus metrics. On the main port they answer to admins
+# only; a separate port answers a scrape with no session.
+metrics:
+  enabled: true
+  port: 9090
+  # Listen on the separate port. Leave off and only the admin-gated route
+  # on the main port serves them.
+  separatePort: false
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+
+# Re-run the cluster audit on a timer and keep what each run found.
+audit:
+  # A duration such as 1h. Empty runs the audit only when somebody opens it.
+  interval: ""
+  # Posts a json summary when a run's findings differ from the baseline.
+  webhookURL: ""
+  # How long recorded changes and audit runs are kept. Empty keeps them.
+  retention: ""
 
 auth:
   mode: ""
@@ -121,9 +150,41 @@ ingress:
   hosts: []
   tls: []
 
+# Gateway API, as an alternative to the ingress above.
+httpRoute:
+  enabled: false
+  parentRefs: []
+  hostnames: []
+  annotations: {}
+
+# Lets nothing reach spinoza but the ingress controller, and lets spinoza
+# reach nothing but the apiserver, dns, your identity provider and your chart
+# repositories.
+networkPolicy:
+  enabled: false
+  # Selects the namespace and pods allowed to reach spinoza.
+  ingressFrom: []
+  # Extra egress rules, for a chart repository or an identity provider that
+  # is not reachable through the defaults below.
+  egressTo: []
+  # The apiserver spinoza talks to. Empty allows every address on 443 and 6443.
+  apiServerCIDR: ""
+  # Allow egress to the internet on 443, which chart repositories and a hosted
+  # identity provider need.
+  allowInternet: true
+
+# Spinoza runs as one replica, so only maxUnavailable makes sense here:
+# minAvailable would refuse every voluntary eviction and hang a node drain.
+podDisruptionBudget:
+  enabled: false
+  minAvailable: ""
+  maxUnavailable: 1
+
 # Keeps per-user settings, audit baselines and the timeline across restarts.
 persistence:
   enabled: false
+  # Use a claim you made yourself instead of the one the chart renders.
+  existingClaim: ""
   size: 1Gi
   storageClass: ""
   accessModes:
@@ -154,10 +215,15 @@ securityContext:
     drop:
       - ALL
 
+# How long the pod gets to close open views, log streams and terminals.
+terminationGracePeriodSeconds: 45
+
 extraArgs: []
 extraEnv: []
 extraVolumes: []
 extraVolumeMounts: []
+# Rendered as they are, after everything else.
+extraObjects: []
 
 nodeSelector: {}
 tolerations: []

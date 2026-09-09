@@ -27,6 +27,8 @@ refuses to render without it, and Spinoza refuses invalid values at startup.
 | `image.tag` | chart `appVersion` | |
 | `impersonate` | `false` | Act on the cluster as the signed-in user. Requires an explicit impersonation scope. |
 | `logLevel` | `info` | `debug`, `info`, `warn` or `error`. |
+| `logFormat` | `json` | `json` or `text`. A log pipeline parses `json`. |
+| `recordSessions` | `false` | Keep a transcript of every exec and node shell beside its audit entry. Admins read them. |
 | `prometheus` | `""` | `namespace/service:port` for metric history; discovered when empty. |
 | `nodeShell` | `false` | Allow a root shell on a node, which creates a privileged pod. |
 | `auth.mode` | `""` | Required: `none`, `proxy` or `oidc`. |
@@ -76,7 +78,29 @@ refuses to render without it, and Spinoza refuses invalid values at startup.
 | `serviceAccount.create` | `true` | |
 | `service.port` | `8080` | |
 | `ingress.enabled` | `false` | |
+| `httpRoute.enabled` | `false` | Gateway API instead of an Ingress. Needs `httpRoute.parentRefs`. |
+| `httpRoute.parentRefs` | `[]` | The Gateway that carries the route. |
+| `httpRoute.hostnames` | `[]` | |
+| `metrics.enabled` | `true` | Spinoza's own metrics at `/metrics`. |
+| `metrics.separatePort` | `false` | Also listen on `metrics.port` with no session, for a scrape. |
+| `metrics.port` | `9090` | |
+| `metrics.serviceMonitor.enabled` | `false` | Needs `metrics.separatePort`. |
+| `metrics.serviceMonitor.interval` | `30s` | |
+| `metrics.serviceMonitor.labels` | `{}` | What your Prometheus operator selects on. |
+| `audit.interval` | `""` | Re-run the checks on a timer, as a duration such as `1h`. |
+| `audit.webhookURL` | `""` | Posts a JSON summary when a run differs from the baseline. |
+| `audit.retention` | `""` | How long recorded changes and audit runs are kept. Empty keeps them. |
+| `networkPolicy.enabled` | `false` | Needs `networkPolicy.ingressFrom`. |
+| `networkPolicy.ingressFrom` | `[]` | Peers allowed to reach spinoza, usually your ingress controller. |
+| `networkPolicy.apiServerCIDR` | `""` | Narrow egress to your apiserver. Empty allows 443 and 6443 anywhere. |
+| `networkPolicy.allowInternet` | `true` | Egress on 443, which a hosted provider and chart repositories need. |
+| `networkPolicy.egressTo` | `[]` | Extra egress rules, rendered as given. |
+| `podDisruptionBudget.enabled` | `false` | |
+| `podDisruptionBudget.maxUnavailable` | `1` | |
+| `terminationGracePeriodSeconds` | `45` | How long the pod gets to close views, log streams and terminals. |
 | `persistence.enabled` | `false` | Keeps per-user settings, baselines and the timeline across restarts. |
+| `persistence.existingClaim` | `""` | Use a claim you made yourself; the chart then renders none. |
+| `extraObjects` | `[]` | Rendered through `tpl` after everything else. |
 | `resources` | 100m / 256Mi requested, 1Gi limit | |
 | `extraArgs`, `extraEnv`, `extraVolumes`, `extraVolumeMounts` | `[]` | |
 
@@ -96,6 +120,33 @@ behave the way they do in every other chart.
 - A plaintext OIDC issuer without `auth.oidc.unsafeAllowHTTP: true`.
 - `impersonate: true` without an exact username list or the explicit
   `rbac.impersonation.unsafeAllowAnyUser` compatibility mode.
+- `networkPolicy.enabled` with an empty `ingressFrom`. A policy that selects the
+  pod and names no peer denies everything to it, so an empty list would take
+  spinoza off the network rather than protect it.
+- `podDisruptionBudget` with both `minAvailable` and `maxUnavailable`, or with
+  neither.
+- `podDisruptionBudget.minAvailable`. Spinoza runs as one replica, so a budget
+  that keeps one pod available refuses every voluntary eviction and a node drain
+  waits forever. `maxUnavailable: 1` is the one that makes sense here: it lets
+  the node drain, and the browser reconnects when the pod comes back.
+- `metrics.serviceMonitor.enabled` without `metrics.separatePort`. On the main
+  port `/metrics` answers admins only, and a scrape carries no session.
+- `ingress.enabled` and `httpRoute.enabled` together, or `httpRoute.enabled`
+  with no `parentRefs`. Two front doors for one `publicURL` means spinoza
+  refuses whichever request arrives with the other origin.
+
+## What a NetworkPolicy will break
+
+The rendered policy lets in only the peers you name and lets out DNS, the
+apiserver, and — while `allowInternet` is on — anything on 443. If your identity
+provider, your chart repositories or your Prometheus sit somewhere else, name
+them in `networkPolicy.egressTo` before you turn the policy on. A sign-in that
+hangs at the provider and a Helm view with no charts are both what this looks
+like when a rule is missing.
+
+`metrics.separatePort` opens an unauthenticated port. Keep it inside the
+cluster: reach it with a ServiceMonitor or a scrape annotation, and never
+through the ingress.
 
 ## Security default migration
 

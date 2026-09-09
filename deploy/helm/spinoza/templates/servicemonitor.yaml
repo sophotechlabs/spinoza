@@ -1,0 +1,26 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+{{- if not .Values.metrics.separatePort }}
+{{- fail "a ServiceMonitor scrapes without a session, and /metrics on the main port answers admins only; set metrics.separatePort" }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "spinoza.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spinoza.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "spinoza.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+{{- end }}
