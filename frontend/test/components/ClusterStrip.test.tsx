@@ -255,6 +255,19 @@ describe('the strip of open clusters', () => {
     expect(screen.getByRole('button', { name: 'Colour 8' })).toBeInTheDocument();
   });
 
+  it('hangs the tab settings outside the strip that scrolls', async () => {
+    const user = userEvent.setup();
+    open(MK1);
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
+
+    const menu = screen.getByRole('group', { name: 'Settings for p-mk1' });
+    const scroller = screen.getByRole('navigation', { name: 'Open clusters' });
+    expect(scroller).not.toContainElement(menu);
+    expect(scroller.parentElement).toContainElement(menu);
+  });
+
   it('puts the settings away when the swatch is clicked again', async () => {
     const user = userEvent.setup();
     open(MK1);

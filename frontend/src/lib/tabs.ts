@@ -73,6 +73,14 @@ export function tabWidth(open: number): string {
   return 'max-w-56';
 }
 
+export function anchorOf(swatch: HTMLElement, strip: HTMLElement | null): number {
+  const box = swatch.parentElement;
+  if (strip === null || box === null) {
+    return 0;
+  }
+  return box.getBoundingClientRect().left - strip.getBoundingClientRect().left;
+}
+
 export async function reopenTab(tab: Tab): Promise<void> {
   await closeCluster(tab.id);
   forgetTab(tab.id);

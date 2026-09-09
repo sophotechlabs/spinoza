@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  anchorOf,
   attachedTo,
   contextOf,
   displayName,
@@ -188,5 +189,34 @@ describe('reconnecting one open cluster', () => {
     expect(calls[1].method).toBe('POST');
     expect(calls[1].url).toContain('/api/clusters?kubeconfig=');
     expect(useRecentsStore.getState().byCluster[MK1]).toBeUndefined();
+  });
+});
+
+describe('anchorOf', () => {
+  it('measures the tab from the left edge of the strip', () => {
+    const strip = document.createElement('div');
+    const box = document.createElement('span');
+    const swatch = document.createElement('button');
+    box.append(swatch);
+    strip.append(box);
+    vi.spyOn(strip, 'getBoundingClientRect').mockReturnValue({ left: 12 } as DOMRect);
+    vi.spyOn(box, 'getBoundingClientRect').mockReturnValue({ left: 140 } as DOMRect);
+
+    expect(anchorOf(swatch, strip)).toBe(128);
+  });
+
+  it('falls back to the strip edge before the strip is on the page', () => {
+    const swatch = document.createElement('button');
+    const box = document.createElement('span');
+    box.append(swatch);
+
+    expect(anchorOf(swatch, null)).toBe(0);
+  });
+
+  it('falls back to the strip edge for a swatch with no tab around it', () => {
+    const strip = document.createElement('div');
+    const swatch = document.createElement('button');
+
+    expect(anchorOf(swatch, strip)).toBe(0);
   });
 });

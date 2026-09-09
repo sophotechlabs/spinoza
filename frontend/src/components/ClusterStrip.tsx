@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { activateCluster, closeCluster, clusterFailure } from '../lib/clusters';
 import { colorVar } from '../lib/clusterColor';
-import { attachedTo, forgetTab, tabWidth } from '../lib/tabs';
+import { anchorOf, attachedTo, forgetTab, tabWidth } from '../lib/tabs';
 import { nameOf, useActiveCluster, useTabs } from '../store/clusters';
 import type { Tab } from '../store/clusters';
 import TabMenu from './TabMenu';
@@ -29,6 +29,15 @@ function showing(open: string, wanted: string): string {
     return '';
   }
   return wanted;
+}
+
+function openMenu(tabs: Tab[], id: string): Tab | null {
+  for (const tab of tabs) {
+    if (tab.id === id) {
+      return tab;
+    }
+  }
+  return null;
 }
 
 function inGroups(tabs: Tab[]): { name: string; tabs: Tab[] }[] {
@@ -80,6 +89,9 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
   const working = useRef(false);
   const [asking, setAsking] = useState<Tab | null>(null);
   const [painting, setPainting] = useState('');
+  const [paintAt, setPaintAt] = useState(0);
+  const strip = useRef<HTMLDivElement>(null);
+  const painted = openMenu(tabs, painting);
 
   useEffect(() => {
     if (painting === '') {
@@ -140,7 +152,10 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
   }
 
   return (
-    <div className="flex shrink-0 items-end gap-1 border-b border-edge bg-surface px-2 pt-1 text-xs">
+    <div
+      ref={strip}
+      className="relative flex shrink-0 items-end gap-1 border-b border-edge bg-surface px-2 pt-1 text-xs"
+    >
       <nav
         aria-label="Open clusters"
         className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto"
@@ -161,7 +176,8 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
                   onPointerDown={(event) => {
                     event.stopPropagation();
                   }}
-                  onClick={() => {
+                  onClick={(event) => {
+                    setPaintAt(anchorOf(event.currentTarget, strip.current));
                     setPainting(showing(painting, tab.id));
                   }}
                   style={{ backgroundColor: colorVar(tab.color) }}
@@ -189,20 +205,22 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
                 >
                   ×
                 </button>
-                {painting === tab.id && (
-                  <TabMenu
-                    tab={tab}
-                    onDone={() => {
-                      setPainting('');
-                    }}
-                  />
-                )}
               </span>
             ))}
           </span>
         ))}
         {tabs.length === 0 && <span className="pb-1.5 text-fg-muted">no cluster</span>}
       </nav>
+      {painted !== null && (
+        <span className="absolute top-full z-30" style={{ left: `${String(paintAt)}px` }}>
+          <TabMenu
+            tab={painted}
+            onDone={() => {
+              setPainting('');
+            }}
+          />
+        </span>
+      )}
       <span className="flex shrink-0 items-center pb-1">
         <ContextPicker onSwitched={onShown} />
       </span>

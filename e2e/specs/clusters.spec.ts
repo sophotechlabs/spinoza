@@ -318,3 +318,27 @@ test('the plus opens the context list clear of the strip', async ({ page }) => {
   expect(menu.y).toBeGreaterThan(bar.y + bar.height - 1);
   expect(menu.height).toBeGreaterThan(0);
 });
+
+test('the tab swatch opens its menu clear of the strip', async ({ page }) => {
+  await openHome(page);
+  const strip = page.getByRole('navigation', { name: 'Open clusters' });
+  await expect(strip).toBeVisible({ timeout: 30_000 });
+
+  await page
+    .getByRole('button', { name: /open its tab menu$/ })
+    .first()
+    .click();
+
+  const menu = page.getByRole('group', { name: `Settings for ${CONTEXT}` });
+  await expect(menu).toBeVisible();
+  const box = await menu.boundingBox();
+  const bar = await strip.boundingBox();
+  expect(box).not.toBeNull();
+  expect(bar).not.toBeNull();
+  if (box === null || bar === null) {
+    throw new Error('the strip or its menu has no measurable box');
+  }
+  expect(box.y).toBeGreaterThan(bar.y + bar.height - 1);
+  expect(box.height).toBeGreaterThan(0);
+  await expect(strip.getByRole('group', { name: /^Settings for / })).toHaveCount(0);
+});
